@@ -8,6 +8,7 @@ const session: SessionSummary = {
   name: 'review 81',
   slug: 'review-81',
   repo: 'acme/site',
+  repoIdentity: 'acme/site',
   state: 'active',
   canvasOwner: 'acme/site',
   createdAt: '2026-10-01T12:00:00Z',

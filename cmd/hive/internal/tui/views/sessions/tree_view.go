@@ -202,7 +202,7 @@ func BuildTreeItems(groups []RepoGroup, localRemote string, workspaceRepos []wor
 			RepoName:      group.Name,
 			RepoRemote:    group.Remote,
 			RootPath:      rootPaths[git.RemoteIdentity(group.Remote)],
-			IsCurrentRepo: group.Remote == localRemote,
+			IsCurrentRepo: git.EquivalentRemote(group.Remote, localRemote),
 		}
 		items = append(items, header)
 

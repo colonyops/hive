@@ -315,13 +315,13 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                 >{{ group.sessions.length }}</span
               >
               <IconButton
-                v-if="group.kind === 'repo' && group.key"
+                v-if="group.kind === 'repo' && group.sessions[0]?.repo"
                 :label="`New session in ${group.name}`"
                 :icon="IconPlus"
                 size="sm"
                 class="row-action group-add"
                 data-testid="terminal-repo-new-session"
-                @click="openNewSession(group.key)"
+                @click="openNewSession(group.sessions[0].repo)"
               />
             </div>
             <component
@@ -419,7 +419,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     <span
                       class="min-w-0 flex-1 truncate text-body"
                       :class="{ 'text-text-3': tree.rowIdle(row) }"
-                      :title="row.slug"
+                      :title="row.repo ? `${row.slug}\n${row.repo}` : row.slug"
                       >{{ row.name }}</span
                     >
                     <BaseBadge

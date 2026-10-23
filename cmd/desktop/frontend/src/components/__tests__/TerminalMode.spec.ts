@@ -326,8 +326,22 @@ describe('TerminalMode', () => {
       windowForeground: vi.fn().mockResolvedValue({ running: false, command: '' }),
     })
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' },
+      {
+        id: '1',
+        name: 'fix the parser',
+        slug: 'hive-fix-parser',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
+      {
+        id: '2',
+        name: 'bump deps',
+        slug: 'hive-bump-deps',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
     ])
     // Both fixtures run, which is what keeps their repo group expanded by
     // default — a group with nothing live in it opens only on a click.
@@ -436,6 +450,7 @@ describe('TerminalMode', () => {
         name: 'old session',
         slug: 'old-session',
         repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
         createdAt: new Date(Date.now() - 6 * day).toISOString(),
       },
@@ -444,6 +459,7 @@ describe('TerminalMode', () => {
         name: 'recent session',
         slug: 'recent-session',
         repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
         createdAt: new Date(Date.now() - 2 * day).toISOString(),
       },
@@ -470,8 +486,15 @@ describe('TerminalMode', () => {
 
   it('shows session liveness on sessions and agent activity on windows with icons', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'live', slug: 'live', repo: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'stopped', slug: 'stopped', repo: 'hay-kot/hive', state: 'active' },
+      { id: '1', name: 'live', slug: 'live', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      {
+        id: '2',
+        name: 'stopped',
+        slug: 'stopped',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
     ])
     mocks.createTerminalClient.mockReturnValue({
       listWindows: fakeListWindows({
@@ -612,6 +635,46 @@ describe('TerminalMode', () => {
     const { wrapper } = await mountAvailable()
     await wrapper.get('[data-testid="terminal-repo-new-session"]').trigger('click')
     expect(mocks.openBlank).toHaveBeenCalledWith('hay-kot/hive')
+  })
+
+  it.each([
+    'git://github.com/grafana/ai-sdk.git',
+    'git@github.com:grafana/ai-sdk.git',
+    'https://github.com/grafana/ai-sdk.git',
+  ])('starts sessions with the original remote %s from a normalized group', async (remote) => {
+    mocks.ListSessions.mockResolvedValue([
+      {
+        id: '1',
+        name: 'alpha',
+        slug: 'alpha',
+        repo: remote,
+        repoIdentity: 'github.com/grafana/ai-sdk',
+        state: 'active',
+        canvasOwner: '',
+        createdAt: '',
+      },
+      {
+        id: '2',
+        name: 'zeta',
+        slug: 'zeta',
+        repo: 'ssh://git@github.com/grafana/ai-sdk.git',
+        repoIdentity: 'github.com/grafana/ai-sdk',
+        state: 'active',
+        canvasOwner: '',
+        createdAt: '',
+      },
+    ])
+    const { wrapper } = await mountAvailable()
+    expect(wrapper.findAll('[data-testid="terminal-repo-group"]')).toHaveLength(1)
+    expect(wrapper.get('[data-testid="terminal-repo-group"]').attributes('data-repo')).toBe('github.com/grafana/ai-sdk')
+    await wrapper.get('[data-testid="terminal-repo-new-session"]').trigger('click')
+    expect(mocks.openBlank).toHaveBeenCalledWith(remote)
+    const group = wrapper.get('[data-testid="terminal-repo-group"]')
+    if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
+    expect(sessionRows(wrapper).map((row) => row.get('span[title]').attributes('title'))).toEqual([
+      `alpha\n${remote}`,
+      'zeta\nssh://git@github.com/grafana/ai-sdk.git',
+    ])
   })
 
   // The group stays collapsed-or-not: the button is inside the header, and a
@@ -935,10 +998,10 @@ describe('TerminalMode', () => {
 
   it('detaches the least recently used session past the pool limit', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'aaa', slug: 'hive-aaa', repo: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'bbb', slug: 'hive-bbb', repo: 'hay-kot/hive', state: 'active' },
-      { id: '3', name: 'ccc', slug: 'hive-ccc', repo: 'hay-kot/hive', state: 'active' },
-      { id: '4', name: 'ddd', slug: 'hive-ddd', repo: 'hay-kot/hive', state: 'active' },
+      { id: '1', name: 'aaa', slug: 'hive-aaa', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '2', name: 'bbb', slug: 'hive-bbb', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '3', name: 'ccc', slug: 'hive-ccc', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '4', name: 'ddd', slug: 'hive-ddd', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
     ])
     const sessions = [fakeSession(), fakeSession(), fakeSession(), fakeSession()]
     for (const session of sessions) mocks.useTerminalWindows.mockReturnValueOnce(session)
@@ -957,10 +1020,10 @@ describe('TerminalMode', () => {
 
   it('does not bring back a window closed while attached once the session is evicted', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'aaa', slug: 'hive-aaa', repo: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'bbb', slug: 'hive-bbb', repo: 'hay-kot/hive', state: 'active' },
-      { id: '3', name: 'ccc', slug: 'hive-ccc', repo: 'hay-kot/hive', state: 'active' },
-      { id: '4', name: 'ddd', slug: 'hive-ddd', repo: 'hay-kot/hive', state: 'active' },
+      { id: '1', name: 'aaa', slug: 'hive-aaa', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '2', name: 'bbb', slug: 'hive-bbb', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '3', name: 'ccc', slug: 'hive-ccc', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '4', name: 'ddd', slug: 'hive-ddd', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
     ])
     const tmux: Record<string, FakeWindow[]> = {
       'hive-aaa': [
@@ -1818,9 +1881,30 @@ describe('TerminalMode', () => {
 
   it('keeps sessions that cannot be attached out of the tree', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'old work', slug: 'hive-old-work', repo: 'hay-kot/hive', state: 'recycled' },
-      { id: '3', name: 'broken', slug: 'hive-broken', repo: 'hay-kot/hive', state: 'corrupted' },
+      {
+        id: '1',
+        name: 'fix the parser',
+        slug: 'hive-fix-parser',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
+      {
+        id: '2',
+        name: 'old work',
+        slug: 'hive-old-work',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'recycled',
+      },
+      {
+        id: '3',
+        name: 'broken',
+        slug: 'hive-broken',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'corrupted',
+      },
     ])
     const { wrapper } = await mountAvailable()
 
@@ -1838,6 +1922,7 @@ describe('TerminalMode', () => {
       name: 'fix the parser',
       slug: 'hive-fix-parser',
       repo: 'hay-kot/hive',
+      repoIdentity: 'hay-kot/hive',
       state: 'active',
       path: '/tmp/hive-fix-parser',
       cloneStrategy: 'full',
@@ -1999,6 +2084,7 @@ describe('TerminalMode', () => {
       name: 'parse it',
       slug: 'parse-it',
       repo: 'hay-kot/hive',
+      repoIdentity: 'hay-kot/hive',
       state: 'active',
     })
     const { wrapper, router } = await mountAvailable()
@@ -2015,8 +2101,22 @@ describe('TerminalMode', () => {
     // The list still holds the old slug at this point, which is what lets the
     // rename recognise the renamed session as the attached one.
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'parse it', slug: 'parse-it', repo: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' },
+      {
+        id: '1',
+        name: 'parse it',
+        slug: 'parse-it',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
+      {
+        id: '2',
+        name: 'bump deps',
+        slug: 'hive-bump-deps',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
     ])
     document.querySelector<HTMLButtonElement>('[data-testid="session-rename-save"]')!.click()
     await flushPromises()
@@ -2030,9 +2130,30 @@ describe('TerminalMode', () => {
 
   it('prunes from the sidebar header, naming how many sessions go', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'old work', slug: 'hive-old-work', repo: 'hay-kot/hive', state: 'recycled' },
-      { id: '3', name: 'broken', slug: 'hive-broken', repo: 'hay-kot/hive', state: 'corrupted' },
+      {
+        id: '1',
+        name: 'fix the parser',
+        slug: 'hive-fix-parser',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
+      {
+        id: '2',
+        name: 'old work',
+        slug: 'hive-old-work',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'recycled',
+      },
+      {
+        id: '3',
+        name: 'broken',
+        slug: 'hive-broken',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'corrupted',
+      },
     ])
     const { wrapper } = await mountAvailable()
 
@@ -2052,12 +2173,38 @@ describe('TerminalMode', () => {
   })
 
   it.each([
-    ['deleted', [{ id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' }]],
+    [
+      'deleted',
+      [
+        {
+          id: '2',
+          name: 'bump deps',
+          slug: 'hive-bump-deps',
+          repo: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
+          state: 'active',
+        },
+      ],
+    ],
     [
       'recycled',
       [
-        { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'recycled' },
-        { id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' },
+        {
+          id: '1',
+          name: 'fix the parser',
+          slug: 'hive-fix-parser',
+          repo: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
+          state: 'recycled',
+        },
+        {
+          id: '2',
+          name: 'bump deps',
+          slug: 'hive-bump-deps',
+          repo: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
+          state: 'active',
+        },
       ],
     ],
   ])('closes the attach when the attached session is %s', async (_case, listing) => {
@@ -2084,9 +2231,30 @@ describe('TerminalMode', () => {
     expect(handler).toBeDefined()
 
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' },
-      { id: '3', name: 'task1', slug: 'hive-task1', repo: 'hay-kot/hive', state: 'active' },
+      {
+        id: '1',
+        name: 'fix the parser',
+        slug: 'hive-fix-parser',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
+      {
+        id: '2',
+        name: 'bump deps',
+        slug: 'hive-bump-deps',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
+      {
+        id: '3',
+        name: 'task1',
+        slug: 'hive-task1',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
     ])
     handler!()
     await flushPromises()
@@ -2757,8 +2925,22 @@ describe('TerminalMode', () => {
 
     it('carries a whole repo when the repo itself matches', async () => {
       mocks.ListSessions.mockResolvedValue([
-        { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
-        { id: '3', name: 'landing copy', slug: 'site-landing-copy', repo: 'hay-kot/haykot.dev', state: 'active' },
+        {
+          id: '1',
+          name: 'fix the parser',
+          slug: 'hive-fix-parser',
+          repo: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
+          state: 'active',
+        },
+        {
+          id: '3',
+          name: 'landing copy',
+          slug: 'site-landing-copy',
+          repo: 'hay-kot/haykot.dev',
+          repoIdentity: 'hay-kot/haykot.dev',
+          state: 'active',
+        },
       ])
       const { wrapper } = await mountAvailable()
 
@@ -2856,8 +3038,22 @@ describe('TerminalMode', () => {
   // picks by whether tmux is holding one.
   describe('narrowing the tree to what is running', () => {
     const TWO_REPOS = [
-      { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
-      { id: '3', name: 'landing copy', slug: 'site-landing-copy', repo: 'hay-kot/haykot.dev', state: 'active' },
+      {
+        id: '1',
+        name: 'fix the parser',
+        slug: 'hive-fix-parser',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
+      {
+        id: '3',
+        name: 'landing copy',
+        slug: 'site-landing-copy',
+        repo: 'hay-kot/haykot.dev',
+        repoIdentity: 'hay-kot/haykot.dev',
+        state: 'active',
+      },
     ]
 
     function running(byID: Record<string, boolean>) {
@@ -3343,7 +3539,14 @@ describe('TerminalMode', () => {
       // Deleted (or recycled) elsewhere; the next reload drops it from the
       // listing, and the same pool cleanup that runs in mode lets it go.
       mocks.ListSessions.mockResolvedValue([
-        { id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' },
+        {
+          id: '2',
+          name: 'bump deps',
+          slug: 'hive-bump-deps',
+          repo: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
+          state: 'active',
+        },
       ])
       await useTerminalSessions().reload()
       await flushPromises()
