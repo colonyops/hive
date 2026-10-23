@@ -1,0 +1,29 @@
+name: PR body
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-body-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  template:
+    # Renovate writes its own body.
+    if: github.event.pull_request.user.login != 'renovate[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            .github
+            scripts
+
+      - name: Check the body against the template
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n' "$BODY" | scripts/check-pr-body.sh

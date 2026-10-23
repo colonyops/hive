@@ -60,6 +60,7 @@ For an internal change with no user effect, say so in one sentence.
 <!--
 Anything a reviewer cannot get from the diff: tradeoffs, rejected approaches,
 code that looks wrong on purpose, known limits, follow-up issues, stacked PRs.
+Say what you are not sure about and where you want the reviewer to look.
 Write "None." if there is nothing.
 -->
 
@@ -69,8 +70,8 @@ Write "None." if there is nothing.
 How you know this change works. Name the tests that cover the new behavior
 (file and test name) and say what each one proves. For a manual check, give the
 steps and what you saw. In Hive Desktop, do manual checks through the dev MCP
-servers (CONTRIBUTING.md > Test in the running app) and name the tools you
-used. Say what you did not test and why.
+servers (cmd/desktop/AGENTS.md > "Test in the running app") and name the tools
+you used. Say what you did not test and why.
 
 Do not list the gates you ran or count tests. The checklist covers the gates,
 and CI shows the counts.
@@ -81,8 +82,7 @@ and CI shows the counts.
 <!--
 Tick a box only for work this branch did. When an item does not apply, leave
 it unticked and add "n/a: <reason>" at the end of the line. An unticked box
-with no reason is open work. CONTRIBUTING.md > "What a change owes" says when
-each item applies.
+with no reason is open work, and the PR body check fails on it.
 -->
 
 - [ ] Tests: unit tests cover the new logic

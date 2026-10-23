@@ -7,13 +7,14 @@ how to run the hive CLI and Hive Desktop.
 
 Run `mise run ci`. It runs every gate, including the desktop e2e suite that
 GitHub CI does not run. `mise run check` is the fast Go-only subset for the
-edit loop.
+edit loop. If you changed config behavior, also run `mise run cli:validate`.
 
-The pull request template has the title format, the scope list, the body
-sections, and a checklist. Most of this repository's code comes from coding
-agents, so the checklist makes each obligation below visible to the reviewer.
-Tick an item only for work the branch did. For an item that does not apply,
-write `n/a: <reason>`.
+Fill in the pull request template. It has the title format, the scope list,
+the body sections, and a checklist. Tick an item only for work the branch did.
+For an item that does not apply, write `n/a: <reason>`. The `PR body` workflow
+fails a body that is missing a section, keeps a template comment, or has an
+unticked item with no reason. To check a body before you push it, run
+`scripts/check-pr-body.sh <file>`.
 
 ## Keep the interfaces aligned
 
@@ -22,59 +23,6 @@ change to how one of them behaves applies to all three. Put the behavior in
 `internal/hive` so each interface gets it from the same code. If the change
 lands in only one interface, add it to the others in the same pull request, or
 open an issue for the gap and link it.
-
-## What a change owes
-
-Check each of these before you open a pull request.
-
-- If you add or change logic, add unit tests. Store tests use real SQLite
-  (`db.Open(t.TempDir(), ...)`).
-- If you add or change a Hive Desktop user flow, add a Playwright spec in
-  `cmd/desktop/e2e/tests/`.
-- If you change CLI flags, stdin/stdout behavior, or a multi-command flow, add
-  a test in `test/integration/`.
-- If you change what a user can see, set, or do, update the pages under
-  `docs/docs/`. The `docs-audit` skill finds them.
-- If you change how the code is structured, update `docs/architecture.md`.
-- If you make an architecture or infrastructure decision, write an ADR with
-  `mise run adr:new -- "The decision, as a sentence"`.
-- If users of a program will notice the change, add a release-notes fragment
-  with `mise run changelog:new`.
-- If you add a Hive Desktop view, object, or verb, add command palette and
-  keybinding entries. The `desktop-commands-audit` skill lists them.
-- If you change an MCP tool or what agents in a workspace can do, update the
-  MCP catalog docs and the shipped skills (`desktop-shipped-skills` skill).
-- If you change behavior in one interface, check the other two.
-- If you change persisted data, add a migration.
-- If you change config behavior, run `mise run cli:validate`.
-
-## Test in the running app
-
-A Hive Desktop dev build serves MCP tools, so an agent can drive and inspect
-the real app. Use them to verify a change by hand, not clicks in a window. For a
-frontend-only change, the headless `mise run desktop:serve` build is faster.
-
-1. Run `mise run desktop:dev:prepare`. It writes `launch.env` and `.mcp.json`
-   at the worktree root.
-2. Run `mise run desktop:dev` in a terminal you can see. It opens the app
-   window.
-3. Start the agent session in the worktree and approve the `hive-desktop-ui`
-   server from `.mcp.json`.
-
-Two servers do the work:
-
-- `hive-desktop-ui` is the Wails MCP server in every dev build. It queries the
-  DOM, clicks, types, and takes screenshots of the native window. The
-  `desktop-ui-audit` skill covers it.
-- `hive-desktop` is the app's own MCP server. It reads the inbox and pipeline
-  state and forces a re-poll. Its port is `HIVE_DESKTOP_HTTP_PORT` in
-  `launch.env`. Add it with
-  `claude mcp add --transport http hive-desktop http://127.0.0.1:<port>/mcp`.
-  The `desktop-api` skill covers it.
-
-To make GitHub send an event, use the devserver (`desktop-devserver` skill).
-Each worktree gets its own ports, so these tools never reach the installed
-Hive.app.
 
 ## Writing style
 

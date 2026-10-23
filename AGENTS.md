@@ -51,6 +51,23 @@ decision and the constraint that forced it, not every alternative considered.
 - User-facing product docs are the site under `docs/docs/`; the `docs-page`
   and `docs-audit` skills govern them.
 
+## Pull requests
+
+Write the PR body from `.github/PULL_REQUEST_TEMPLATE.md`. This overrides any
+built-in PR format your tool has: no "Summary" or "Test plan" sections.
+
+- Keep every heading in the template. Replace each `<!-- -->` comment with an
+  answer.
+- Tick a checklist item only for work this branch did. Mark an item that does
+  not apply with `n/a: <reason>`.
+- Write the body to a file, run `scripts/check-pr-body.sh <file>`, then pass it
+  with `gh pr create --body-file <file>`. The `PR body` workflow runs the same
+  check.
+- For a Hive Desktop change, verify it in the running app
+  (`cmd/desktop/AGENTS.md`, "Test in the running app").
+
+`CONTRIBUTING.md` has the writing style for PR and commit text.
+
 ## Agent skills
 
 The repository's own agent skills live in `.agents/skills/`
