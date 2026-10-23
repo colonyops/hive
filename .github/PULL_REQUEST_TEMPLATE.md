@@ -12,7 +12,7 @@ Append ! before the colon for a breaking change.
   types   feat fix perf refactor docs test build ci chore revert
   scopes  cli tui sessions msg hc config workspaces plugins sources storage
           tmux doctor
-          chats canvas terminal code feed flows tasks settings actions mcp
+          chats canvas terminal code feed flows tasks settings actions mcp drive
           release skills telemetry tray web frontend
           docs deps repo ci
 
