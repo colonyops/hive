@@ -30,6 +30,16 @@ See CONTRIBUTING.md > Writing style.
 Keep every heading. Replace each comment with your answer, then delete the
 comment. Write each paragraph on one line; GitHub renders a hard wrap as a
 line break.
+
+Format for a reader who scans:
+- Use a bullet list for two or more separate points.
+- Bold the key term at the start of a bullet: **Breaking:** ...
+- Use a GitHub alert for something a reviewer must not miss, such as a
+  breaking change, a manual step after merge, or a migration:
+  > [!WARNING]
+  > Existing agents need a relaunch.
+- Describe the change at the level of design, not test by test or file by
+  file. CI shows what the tests cover.
 -->
 
 ## Problem
@@ -51,47 +61,57 @@ Good: With the installed app and a dev build both open, an agent that ran in
 
 <!--
 What is different after this PR, from the user's side first, then the design
-decision a reviewer needs to judge the diff. Do not list files or functions.
-For an internal change with no user effect, say so in one sentence.
+decisions a reviewer needs to judge the diff. Use a bullet per decision. Do
+not list files, functions, or tests. For an internal change with no user
+effect, say so in one sentence.
 -->
 
 ## Review notes
 
 <!--
-Anything a reviewer cannot get from the diff: tradeoffs, rejected approaches,
-code that looks wrong on purpose, known limits, follow-up issues, stacked PRs.
-Say what you are not sure about and where you want the reviewer to look.
-Write "None." if there is nothing.
--->
-
-## Verification
-
-<!--
-How you know this change works. Name the tests that cover the new behavior
-(file and test name) and say what each one proves. For a manual check, give the
-steps and what you saw. In Hive Desktop, do manual checks through the dev MCP
-servers (cmd/desktop/AGENTS.md > "Test in the running app") and name the tools
-you used. Say what you did not test and why.
+A bullet list of what a reviewer cannot get from the diff: tradeoffs, rejected
+approaches, code that looks wrong on purpose, known limits, follow-up issues,
+stacked PRs, and anything you checked by hand that CI does not cover. Say what
+you are not sure about and where you want the reviewer to look. Write "None."
+if there is nothing.
 -->
 
 ## Checklist
 
 <!--
 Tick a box only for work this branch did. When an item does not apply, leave
-it unticked and add "n/a: <reason>" at the end of the line. An unticked box
-with no reason is open work, and the PR body check fails on it.
+it unticked and add "n/a: <reason>" after the label. An unticked box with no
+reason is open work, and the PR body check fails on it.
+
+- Unit tests: cover the new logic.
+- E2E tests: cover a new or changed user flow, in cmd/desktop/e2e/tests/ or
+  test/integration/.
+- Docs site: the pages under docs/docs/ match the new behavior (docs-audit
+  skill).
+- Architecture doc: docs/architecture.md matches the new shape.
+- ADR: docs/decisions/ records an architecture or infrastructure decision
+  (mise run adr:new).
+- Release notes: a fragment in each changed program's changelog (mise run
+  changelog:new).
+- Command palette: the palette and keybindings reach a new Desktop feature
+  (desktop-commands-audit skill).
+- Agent docs: the MCP catalog docs and shipped skills match a changed tool
+  (desktop-shipped-skills skill).
+- Interface parity: the CLI, TUI, and Desktop behave the same way, or a linked
+  issue tracks the gap.
+- Migration: a migration handles changed persisted state.
 -->
 
-- [ ] Tests: unit tests cover the new logic
-- [ ] Tests: an end-to-end test covers a new or changed user flow (`cmd/desktop/e2e/tests/` or `test/integration/`)
-- [ ] Docs: the hivedesktop.com pages under `docs/docs/` match the new behavior (`docs-audit` skill)
-- [ ] Docs: `docs/architecture.md` matches the new shape
-- [ ] ADR: `docs/decisions/` records the architecture or infrastructure decision (`mise run adr:new`)
-- [ ] Release notes: a fragment in each changed program's changelog (`mise run changelog:new`)
-- [ ] Desktop: the command palette and keybindings reach the new feature (`desktop-commands-audit` skill)
-- [ ] Agents: the MCP catalog docs and shipped skills match the new tool behavior (`desktop-shipped-skills` skill)
-- [ ] Interfaces: the CLI, TUI, and Desktop behave the same way after this change, or a linked issue tracks the gap
-- [ ] Data: a migration handles changed persisted state
-- [ ] Gates: `mise run ci` passes on this branch
+- [ ] **Unit tests**
+- [ ] **E2E tests**
+- [ ] **Docs site**
+- [ ] **Architecture doc**
+- [ ] **ADR**
+- [ ] **Release notes**
+- [ ] **Command palette**
+- [ ] **Agent docs**
+- [ ] **Interface parity**
+- [ ] **Migration**
+- [ ] **`mise run ci` passes**
 
 Closes #

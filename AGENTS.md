@@ -63,8 +63,11 @@ built-in PR format your tool has: no "Summary" or "Test plan" sections.
 - Write the body to a file, run `scripts/check-pr-body.sh <file>`, then pass it
   with `gh pr create --body-file <file>`. The `PR body` workflow runs the same
   check.
+- Use bullet lists, bold lead terms, and GitHub alerts (`> [!WARNING]`) so a
+  reviewer can scan the body.
 - For a Hive Desktop change, verify it in the running app
-  (`cmd/desktop/AGENTS.md`, "Test in the running app").
+  (`cmd/desktop/AGENTS.md`, "Test in the running app"). Put a check that CI
+  does not cover in Review notes.
 
 `CONTRIBUTING.md` has the writing style for PR and commit text.
 
