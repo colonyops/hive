@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
-import { useConfirmation } from '../../composables/useConfirmation'
+import { useConfirmation } from '@hive/ui/composables/useConfirmation'
 
 const mocks = vi.hoisted(() => ({
   Status: vi.fn(),

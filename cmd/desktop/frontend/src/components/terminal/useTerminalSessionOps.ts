@@ -1,7 +1,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { SessionLaunchOptions } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
-import type { useConfirmation } from '../../composables/useConfirmation'
+import type { useConfirmation } from '@hive/ui/composables/useConfirmation'
 import { useTerminalActions } from '../../composables/useTerminalActions'
 import { useWailsEvent } from '../../composables/useWailsEvent'
 import { appErrorMessage, errorText } from '../../lib/appError'

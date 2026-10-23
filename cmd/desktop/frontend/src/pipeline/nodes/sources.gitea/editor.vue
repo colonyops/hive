@@ -8,7 +8,7 @@
 // no search syntax — its endpoint takes discrete parameters — so the fields
 // here are the whole vocabulary a search has.
 import { computed } from 'vue'
-import FormField from '../../../components/ui/FormField.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
 import {
   CredentialField,
   GlobListField,

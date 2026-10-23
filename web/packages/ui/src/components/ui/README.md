@@ -1,0 +1,321 @@
+# UI building blocks
+
+This folder holds the app's reusable building blocks: buttons, overlays,
+form controls, badges, banners. A building block knows nothing about feeds,
+flows, sessions, or settings. Feature components compose them; they do not
+copy them. Before you write a `<button>`, a dialog, an error line, or an
+empty state, find the block below and use it.
+
+## Where does a component go?
+
+- **`components/ui/`**: a generic building block with no feature knowledge.
+  It takes props and slots, renders, and emits. It imports no store, no
+  binding, and no feature module. Two unrelated views could use it.
+- **`components/`**: a feature component. It belongs to one surface of the
+  app (`FeedList`, `TerminalMode`, `SessionLaunchDialog`) and may read
+  stores and call bindings.
+- **A feature folder** (`components/settings/`, `pipeline/`): components that
+  only make sense inside that feature. `settings/` holds the Settings page
+  structure; `pipeline/fields/` holds the flow editor's form kit.
+
+If a feature component turns out to be generic, move it here and add it to
+the table.
+
+## Index
+
+| Block                | Use it for                                                                                                                                                                                       | Key props                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BaseButton`         | Every button with a label.                                                                                                                                                                       | `variant` (`primary`, `secondary`, `danger`, `danger-outline`, `ghost`), `size` (`xs`, `sm`, `md`), `busy` (disables it and puts a `Spinner` in place of the icon), `disabled`, `type`; `#icon` slot                                                                                                                                                                        |
+| `IconButton`         | A button that shows only an icon. `label` is its accessible name and its tooltip.                                                                                                                | `label`, `icon`, `tooltip` (longer hover text), `size` (`sm` 18px, `md` 24px, `lg` 28px, `xl` 34px), `variant` (`ghost`, `outline`), `tone` (`danger`), `active`, `busy`, `disabled`; default slot for a badge dot                                                                                                                                                          |
+| `BaseModal`          | A centered dialog.                                                                                                                                                                               | `title`, `icon`, `tone`, `width`, `ariaRole`, `busy`, `closeOnBackdrop`, `closeOnEscape`, `testid`; emits `close`; `#footer`, `#header-actions`                                                                                                                                                                                                                             |
+| `DrawerSheet`        | A side sheet (editors, integration setup). Resizable unless `width` is set. Draws its own header.                                                                                                | `title`, `subtitle`, `icon`, `headerSize` (`sm` default, `lg` for editors), `closable`, `closeDisabled`, `ariaLabel` (defaults to `title`), `testid` (adds `-title`, `-subtitle`, `-close`, `-backdrop`), `width`, `storageKey`, `closeOnEscape`, `closeOnBackdrop`, `trapFocus`, `returnFocusTo`; emits `close`; `#icon` (replaces the tile), `#header-actions`, `#footer` |
+| `HubOverlay`         | The large panel a hub view (Tasks, Activity) opens in. It does not register in the open-modal count; the view inside handles Escape.                                                             | `label`, `testid`; emits `close`; default slot                                                                                                                                                                                                                                                                                                                              |
+| `ConfirmationDialog` | A modal "are you sure" with optional detail rows.                                                                                                                                                | `title`, `description`, `details`, `confirmLabel`, `busy`, `error`, `testid`; emits `confirm`, `cancel`                                                                                                                                                                                                                                                                     |
+| `ConfirmationHost`   | The `ConfirmationDialog` for a `useConfirmation()` instance. Request a confirm with `request({ title, description, onConfirm, testid })`; a throw from `onConfirm` keeps it open with the error. | `confirmation`, `testid` (fallback when the request has none)                                                                                                                                                                                                                                                                                                               |
+| `InlineConfirm`      | A confirm that replaces a row or card in place, no overlay.                                                                                                                                      | `title`, `description`, `confirmLabel`, `cancelLabel`, `busy`, `error`, `testid`; emits `confirm`, `cancel`                                                                                                                                                                                                                                                                 |
+| `RenameDialog`       | A dialog that edits one name: focuses and selects it, trims it, Enter submits.                                                                                                                   | `title`, `label`, `name`, `hint`, `icon`, `confirmLabel`, `busy`, `error`, `locked` (form inert, no footer, stays open), `testid`, `testids`; emits `close`, `save(name)`; default slot under the field, `#footer-start`                                                                                                                                                    |
+| `InlineError`        | Any error message shown in a view, form, or sheet; renders `role="alert"`.                                                                                                                       | `message` (accepts `null`), `variant` (`banner`, `line`), `testid`; default slot                                                                                                                                                                                                                                                                                            |
+| `EmptyState`         | "Nothing here yet" text in a list or pane.                                                                                                                                                       | `message`, `variant` (`plain` centered, `boxed` as a card, `inline` as a left-aligned note the caller pads); default slot                                                                                                                                                                                                                                                   |
+| `ViewHeader`         | The title strip of a full-frame view (Settings, Activity, Dev).                                                                                                                                  | `#title` slot                                                                                                                                                                                                                                                                                                                                                               |
+| `FormField`          | A label above a control, with a hint or an error below.                                                                                                                                          | `label`, `hint`, `error` (accepts `null`), `testid`; `#default="{ id }"` (bind `:id="id"` on the control), `#label`                                                                                                                                                                                                                                                         |
+| `TextInput`          | A one-line text field. Other attributes (`id`, `placeholder`, `data-testid`, `@keydown`) go to the `<input>`.                                                                                    | `v-model` (always a string), `type`, `monospace`, `size` (`sm`, `md`), `invalid`; exposes `focus()`, `select()`                                                                                                                                                                                                                                                             |
+| `TextArea`           | A multi-line text field, styled like `TextInput`.                                                                                                                                                | `v-model`, `rows`, `monospace`, `size`, `invalid`; exposes `focus()`, `select()`                                                                                                                                                                                                                                                                                            |
+| `AppDateTimePicker`  | A themed local date and time field with an anchored calendar.                                                                                                                                    | `v-model` (`YYYY-MM-DDTHH:mm`), `label`, `testid`                                                                                                                                                                                                                                                                                                                           |
+| `SearchField`        | A filter or search box with a search icon. Escape with text clears it; Escape when empty passes through.                                                                                         | `v-model`, `variant` (`boxed`, `bar`), `placeholder`, `ariaLabel`, `testid`; emits `escape` (on an empty field); `@keydown` and other attributes go to the `<input>`, `class` to the field; exposes `focus()`, `select()`                                                                                                                                                   |
+| `AppSelect`          | A dropdown or combobox. An option's `group` draws a header over each run of options that share it.                                                                                               | `modelValue`, `options`, `placeholder`, `searchable`, `editable`, `disabled`, `size`, `variant` (`outlined`, or `flat` for a trigger that heads the surface it sits in), `testid`, `ariaLabel`, `id`                                                                                                                                                                        |
+| `AppCheckbox`        | A labelled checkbox.                                                                                                                                                                             | `modelValue`, `label`, `hint`, `disabled`, `testid`                                                                                                                                                                                                                                                                                                                         |
+| `AppSwitch`          | An on/off toggle that applies at once.                                                                                                                                                           | `modelValue`, `label`, `hint`, `ariaLabel`, `disabled`, `size`, `testid`                                                                                                                                                                                                                                                                                                    |
+| `SegmentedControl`   | A choice from a few named options, shown as a strip. `compact` is the bare strip of a toolbar, the title bar, or a dialog header.                                                                | `v-model`, `options` (`value`, `label`, `title`), `variant` (`field`, `compact`), `size` (`sm`, `md`; compact only), `label`, `hint`, `columns`, `ariaLabel`, `testid`; `#option="{ option, selected }"` for icons or counts                                                                                                                                                |
+| `AppMenu`            | A dropdown menu of actions. An entry with `checked` toggles; a `submenu` entry opens a nested menu beside it, with an optional filter box (`search`); `hint` adds a second line.                 | `entries`, `anchor`, `flip`, `width`, `ignore`, `testid`, `search`; emits `select` (a nested choice too), `close`                                                                                                                                                                                                                                                           |
+| `AppTooltip`         | A hover or focus hint on any trigger.                                                                                                                                                            | `text` (empty renders no tooltip), `delay`; default slot is the trigger                                                                                                                                                                                                                                                                                                     |
+| `BaseBadge`          | A status pill or chip.                                                                                                                                                                           | `tone`, `variant` (`pill`, `chip`), `dot`                                                                                                                                                                                                                                                                                                                                   |
+| `CopyButton`         | A secondary button that copies a value and shows "Copied" for a moment.                                                                                                                          | `text` (empty does nothing), `label` (default `Copy`), `size` (`sm` or `xs`)                                                                                                                                                                                                                                                                                                |
+| `Spinner`            | A decorative wait indicator beside text that says what is happening. Inside a button, use `BaseButton`'s `busy`.                                                                                 | none                                                                                                                                                                                                                                                                                                                                                                        |
+| `Kbd`                | A key or shortcut hint (`⌘K`, `esc`, `↵`).                                                                                                                                                       | `variant` (`plain` mono text in the surrounding color, the default; `boxed` key cap; `on-accent` inside a primary button)                                                                                                                                                                                                                                                   |
+| `BaseCard`           | A bordered card, optionally clickable.                                                                                                                                                           | `as` (`article`, `button`), `interactive`, `padded`; `#icon`, `#actions`                                                                                                                                                                                                                                                                                                    |
+| `BaseIconBadge`      | A square tile behind an icon.                                                                                                                                                                    | `size` (px), `rounded`                                                                                                                                                                                                                                                                                                                                                      |
+| `PanelResizeHandle`  | The drag edge of a resizable panel, wired to `useResizablePanel`.                                                                                                                                | `edge`, `name`, `start`, `step`                                                                                                                                                                                                                                                                                                                                             |
+| `SparkLine`          | A small trend line under a number. Set its height with a class.                                                                                                                                  | `values`, `capacity`                                                                                                                                                                                                                                                                                                                                                        |
+| `TreeRail`           | The traveling selection mark of a tree sidebar, measured by `useSelectionRail`. Place it last inside the `relative` box the rows sit in.                                                         | `rail`; `data-testid` passes through                                                                                                                                                                                                                                                                                                                                        |
+
+### Also available outside this folder
+
+The flow editor's form kit, `pipeline/fields/` (import from
+`pipeline/fields`). Each is a control inside a `FormField` and takes
+`label`, `hint`, `error`, `testid` and a `v-model`:
+
+| Field            | Use it for                                            |
+| ---------------- | ----------------------------------------------------- |
+| `TextField`      | A one-line text input; `monospace` for ids and globs. |
+| `TextareaField`  | A multi-line input; `rows`, `monospace`.              |
+| `NumberField`    | A number input; `min`, `max`, `step`.                 |
+| `SelectField`    | `AppSelect` inside a `FormField`.                     |
+| `ToggleField`    | `AppCheckbox` with field props.                       |
+| `GlobListField`  | One glob per line, bound to `string[]`.               |
+| `IntervalField`  | A source node's poll interval.                        |
+| `CodeField`      | A syntax-colored code editor.                         |
+| `MarkImageField` | A source's feed-mark image picker.                    |
+
+The Settings page structure, `components/settings/`:
+
+| Component                | Use it for                                                                                                                                                                                                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SettingsLayout`         | The Settings frame: nav plus content, closes on Escape.                                                                                                                                                                                                                 |
+| `SettingsNavItem`        | One entry in the Settings nav.                                                                                                                                                                                                                                          |
+| `SettingsPage`           | The content column of one settings page.                                                                                                                                                                                                                                |
+| `SettingsSection`        | A titled group of settings; `boxed` stacks rows into one card.                                                                                                                                                                                                          |
+| `SettingsHeading`        | A section or group label.                                                                                                                                                                                                                                               |
+| `SettingsRow`            | One setting: label on the left, control on the right.                                                                                                                                                                                                                   |
+| `SettingsPathRow`        | An on-disk path with copy, open, and reveal actions.                                                                                                                                                                                                                    |
+| `SettingsStepper`        | A number setting stepped between `min` and `max`.                                                                                                                                                                                                                       |
+| `ConfigItemCard`         | One item of a configured list (actions, quick terminals): accent icon, title, `#badges`, `#leading`, Edit and Delete; emits `edit`, `delete`. A reorderable list passes `draggable="true"`, its drag handlers, and the `dragging`, `drop-before`, `drop-after` classes. |
+| `TokenConnectDrawer`     | The settings drawer of a provider connected with a URL and a token. Takes a `provider` config; the default slot is the help text, `#extra-step` replaces the Connect button.                                                                                            |
+| `ConnectedAccountsField` | A provider's connected accounts, each with Disconnect.                                                                                                                                                                                                                  |
+
+The tree sidebars (Code and Chats), `components/sidebar/`:
+
+| Component        | Use it for                                                                                                                          | Key props                                                                                                                                                                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SidebarToolbar` | The bar over a tree sidebar: a flush filter, reload, new, and the list menu. Other attributes and listeners go to the filter input. | `v-model` (the filter), `filterLabel`, `reloadLabel`, `newLabel`, `menuLabel`, `menuEntries`, `loading`, `creating`, `testid` (derives `-filter`, `-menu`, `-menu-toggle`), `reloadTestid`, `newTestid`; emits `reload`, `new`, `select`; exposes `focus()`, `select()` |
+
+Composables for lists and trees, `composables/`:
+
+| Composable           | Use it for                                                                                                                                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useListKeyboardNav` | The up/down walk of a highlighted row: wrap or clamp, skip disabled rows, Home/End, clamp the index when the list shrinks, scroll the row into view. Enter and other keys stay with the host.        |
+| `useDragReorder`     | Native drag-to-reorder: the dragged item and the drop target, plus `dropEdge(event)` and `dropClass(target, id)` for the `drop-before`/`drop-after` marker. Pair it with `moveId` (`lib/listOrder`). |
+| `useTreeExpansion`   | Stored fold state of a tree's groups: a default for never-toggled groups, everything open while filtering, `setAll` for Collapse/Expand all.                                                         |
+| `useSelectionRail`   | Measures one `TreeRail` per selector; `settle` re-measures for a few frames while rows animate.                                                                                                      |
+
+`lib/agentActivity.ts` holds `activityIndicator(status, tool)`, the icon,
+color, and label for an agent's activity status in both sidebars.
+
+## Rules
+
+### Overlays are `BaseModal` or `DrawerSheet`
+
+Never hand-roll a `role="dialog"`. Both blocks do three things a copy forgets:
+
+- **Escape closes only the top overlay.** `useEscapeToClose` keeps one stack
+  of enabled callers and fires only the topmost, so a confirm inside a drawer
+  inside Settings closes one layer per keypress. A caller moves to the top
+  when it registers and again each time its `enabled` turns true.
+- **Global keys stop while an overlay is open.** Both register with
+  `useRegisterOpenModal`; `useOpenModalCount()` is the shared count, and
+  `App.vue` and `TasksView` skip their keybindings while it is above zero.
+- **Focus.** They trap focus inside and return it to the trigger on close.
+
+`HubOverlay` is the one exception: it traps and returns focus but does not
+register, because App.vue and TasksView read a non-zero count as a dialog
+stacked over the hub and would never let it close.
+
+A popover (`AppMenu`, `AppSelect`, `AppTooltip`) is not a modal and does not
+register.
+
+### Buttons are `BaseButton`
+
+A labelled button is a `BaseButton`. A button that shows only an icon is
+an `IconButton`: its `label` is the accessible name and the tooltip, so do
+not add `aria-label` or `title`. `md` is the default; `sm` fits a tree row,
+`lg` a title bar or a dialog header, `xl` the height of a `TextInput`. Pass
+`active` while a toggle's menu is open. A host can style an `IconButton` by
+class from its scoped CSS (a row action that fades in on hover), because
+scoped CSS wins over Tailwind's utility layer.
+
+`busy` is for the button whose action is running: it draws the spinner. A
+Cancel beside it that must not fire meanwhile takes `disabled`, not `busy`.
+`xs` is the compact button of a toolbar or a settings row.
+
+### Tooltips: `AppTooltip` or `title`
+
+WebKit shows a native `title` only after a second or two, so a hint that
+names something is an `AppTooltip` (`IconButton` has one built in):
+
+- the name of an icon-only control or a status icon
+- a warning or a state that the element shows only as a color or a glyph
+
+`AppTooltip` wraps its trigger in a `<span>`. Where a wrapper would break
+the layout (a `w-full` nav item, the segments of a `SegmentedControl`),
+bind `useTooltip`'s `triggers` on the element and render a `TooltipBubble`
+while its `anchor` is set.
+
+A native `title` is still right for the full text of content that the
+layout truncates or abbreviates: a long path, a name in a narrow row, the
+exact time behind "3m ago". A delayed hint is fine there.
+
+A status mark in a row of a hot list (the feed, the Code and Chats sidebar
+trees) keeps a native `title`, or none where the row's own `title` states
+it. Those marks sit in overlapped grid cells that a wrapper would break,
+and a mark under a hover control is `pointer-events: none`, so it never
+gets a hover at all.
+
+### Form fields are `FormField` plus `TextInput`
+
+A labelled control is a `FormField` around the control, and a text field
+is a `TextInput` or a `TextArea`. Do not write a `<div class="mb-1.5 ...">`
+label, a `<label>` that wraps its input, or a `rounded-lg border ...` class
+list on a raw `<input>`. Take the `id` from the default slot and bind it on
+the control, so a click on the label focuses it:
+
+```vue
+<FormField v-slot="{ id }" label="Name" :error="nameError" testid="thing-name">
+  <TextInput :id="id" v-model="name" data-testid="thing-name-input" />
+</FormField>
+```
+
+Use `size="sm"` in drawers and in a row beside a small button. Layout
+classes (`flex-1`, `mb-3`) go on the component; for a fixed width, wrap it
+in a `<div>`, because `TextInput` is `w-full`.
+
+Use `#label` when the label needs markup, such as an "(optional)" suffix.
+A field that has no single control (a group of switches, a list) can still
+use `FormField` for its label and hint.
+
+### Search boxes are `SearchField`
+
+Use `boxed` in a view toolbar and `bar` inside a flush `h-9 border-b` row
+that the host draws. Escape behaves the same in every search box: with
+text, it clears the text and stops there, so the view or overlay stays
+open; on an empty field it passes through to the Escape stack, and the
+field emits `escape` for a host that moves focus out. The search inside a
+popover (`AppSelect`, `RepositorySelect`) stays part of that popover,
+because there Escape closes the popover.
+
+### Errors are `InlineError`, empty states are `EmptyState`
+
+Do not style a red `<p>` or a grey "No items" line by hand. Pass a nullable
+error ref straight to `InlineError`'s `message` and gate it with `v-if`.
+
+`InlineError` has two forms. The default `banner` boxes the message; use it
+for a failure that belongs to a whole view, form, or sheet. `line` is bare
+text; use it under a field, inside a list row, or beside a button. Both use
+`text-severity-error` and nothing else: never `text-kind-issue` for an error.
+Pass spacing (`mt-2`, `px-3`) and `leading-relaxed` as a class.
+
+`EmptyState` sets the color and the size of the message, so do not pass
+those as a class. Use `plain` where the list or pane itself is empty and
+`inline` for a note in a card or a sidebar section, padded like its rows.
+An empty pane with a heading and an action (the feed's "You're all caught
+up", the chat pane's "No chat open") is a panel of its own, not an
+`EmptyState`.
+
+### Key hints are `Kbd`
+
+A shortcut shown to the user is a `Kbd`, never a styled `<kbd>` or
+`<span>`. The default `plain` sets only the mono font; pass the color the line needs
+as a class. The key caps in Settings > Keyboard are the binding editor's
+own capture surface, not hints, and keep their local style.
+
+### Test ids
+
+`data-testid` is the API for both the e2e suite and agents driving the app.
+Naming follows `<surface>-<object>[-<verb>]` in kebab case; see
+`.agents/skills/desktop-ui-audit/SKILL.md` ("Authoring views an agent can
+drive") for the full convention.
+
+- A **compound** block takes a `testid` prop and derives its parts from it:
+  `BaseModal` renders `${testid}`, `${testid}-backdrop`, `${testid}-close`;
+  `InlineConfirm` adds `-confirm`, `-cancel`, `-error`. One prop names the
+  whole widget.
+- A **leaf** block (`BaseButton`, `BaseBadge`, `BaseCard`) takes no `testid`
+  prop. Put `data-testid` on it and it passes through to the root element.
+- Never rename an existing id without grepping `cmd/desktop/e2e/tests` and
+  the unit specs.
+
+### Icons
+
+Icons come from `~icons/lucide/*` (`import IconX from '~icons/lucide/x'`).
+Do not paste SVG markup for an icon Lucide has.
+
+### Styling
+
+Tailwind utilities only. Add a scoped `<style>` block only for a selector
+Tailwind cannot express (a pseudo-element, a keyframe, a child of
+`v-html`), as `TooltipBubble` and `PanelResizeHandle` do.
+
+## Tokens
+
+All tokens live in `src/styles/theme.css` under `@theme`. Use them instead of
+arbitrary values; the lint rejects `text-[Npx]`, `rounded-[Npx]`, and
+`shadow-[...]` in a `.vue` file. In a scoped `<style>` block, use the
+variables: `var(--text-small)`, `var(--radius-lg)`, `var(--shadow-popover)`.
+
+**Color.** `bg-raised`, `text-text-2`, `border-card`, `text-severity-error`,
+and the rest of `--color-*` are the only colors to use.
+
+**Text.** A `text-*` size token sets only `font-size`, so the element keeps
+the line-height it inherits; set one with `leading-*` where it matters.
+Tailwind's `text-xs` (12px, line-height 1.333) and `text-sm` still exist and
+still set their own line-height.
+
+| Token             | Size | Was           |
+| ----------------- | ---- | ------------- |
+| `text-micro`      | 10.5 | 9.5, 10, 10.5 |
+| `text-caption`    | 11.5 | 11, 11.5      |
+| `text-small`      | 12.5 | 12, 12.5      |
+| `text-body`       | 13.5 | 13, 13.5      |
+| `text-reading`    | 14   | 14            |
+| `text-title`      | 15   | 15            |
+| `text-lead`       | 16   | 16            |
+| `text-heading`    | 17   | 16.5, 17      |
+| `text-display`    | 28   | 26, 28        |
+| `text-display-lg` | 32   | 32            |
+
+**Radius.** These replace Tailwind's radius scale. Bare `rounded` is the
+same 4px as `rounded-sm`.
+
+| Token         | Size | Was                       |
+| ------------- | ---- | ------------------------- |
+| `rounded-xs`  | 2    | 1, 2                      |
+| `rounded-sm`  | 4    | 3, 4                      |
+| `rounded-md`  | 6    | 5, 6                      |
+| `rounded-lg`  | 8    | 7, 8, 9                   |
+| `rounded-xl`  | 11   | 10, 11, 12 (`rounded-xl`) |
+| `rounded-2xl` | 14   | 14, 15                    |
+
+**Shadow.** One per role, for elevation. A focus ring or an inset accent
+bar in a scoped style is not elevation and keeps its own `box-shadow`.
+
+| Token            | Use it for                                                    |
+| ---------------- | ------------------------------------------------------------- |
+| `shadow-popover` | Menus, selects, tooltips, toasts, floating toolbars           |
+| `shadow-drawer`  | `DrawerSheet`                                                 |
+| `shadow-modal`   | The command palette                                           |
+| `shadow-rail`    | A 2px inset left rail; pair it with a color (`shadow-accent`) |
+
+The lint reads static `class` attributes and the string literals of a
+`:class` object or array. It does not see a ternary, a script constant, or
+a computed, so keep those on the tokens by hand.
+
+## Adding a building block
+
+1. Confirm nothing in the index already does the job. Extend a block with a
+   prop before you add a near-copy.
+2. Put it in `components/ui/`. It must not import a store, a binding, or a
+   feature module.
+3. Follow the test-id rule: compound blocks take `testid`, leaves pass
+   `data-testid` through.
+4. Add a spec in `components/ui/__tests__/` that covers behavior: emits,
+   `v-model`, disabled and busy states, derived test ids. Do not assert on
+   classes.
+5. Add a row to the index above.

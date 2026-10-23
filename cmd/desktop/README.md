@@ -511,7 +511,7 @@ The desktop icon masters live in `build/icons/`: `hive-mark.svg` is the
 Regenerate every committed desktop icon with `mise run desktop:icons`.
 
 The mark's amber is `#f5b23f` — the same value as the app's `--hv-accent` in
-`frontend/src/styles/main.css`. Keep the two in step.
+`web/packages/ui/src/styles/theme.css`. Keep the two in step.
 
 The tray master is **not** a scaled `hive-mark.svg`. At 18-44px the app mark's
 connector strokes fall below a pixel and its hexagons close up, so the tray

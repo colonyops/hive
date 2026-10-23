@@ -33,8 +33,8 @@ export interface NodeTypeDefinition<C = Record<string, any>> {
   logoMark?: boolean
   /**
    * Per-type accent color for the canvas card's role cap + glyph icon (a CSS
-   * color value, e.g. `var(--color-node-blue)` — see styles/main.css's
-   * node-* tokens). Falls back to the generic `var(--color-accent)` when
+   * color value, e.g. `var(--color-node-blue)` — see @hive/ui's
+   * styles/theme.css node-* tokens). Falls back to the generic `var(--color-accent)` when
    * unset.
    */
   accentToken?: string

@@ -7,7 +7,7 @@ import NumberField from '../NumberField.vue'
 import ToggleField from '../ToggleField.vue'
 import GlobListField from '../GlobListField.vue'
 import CodeField from '../CodeField.vue'
-import { chooseOption, openSelect } from '../../../test-utils/select'
+import { chooseOption, openSelect } from '@hive/ui/test-utils/select'
 
 function fire(el: Element, type: string) {
   el.dispatchEvent(new Event(type, { bubbles: true }))

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import Editor from '../editor.vue'
 import { defaults, validate, type Config } from '../config'
-import { chooseOption } from '../../../../test-utils/select'
+import { chooseOption } from '@hive/ui/test-utils/select'
 
 const mocks = vi.hoisted(() => ({ List: vi.fn(), On: vi.fn() }))
 

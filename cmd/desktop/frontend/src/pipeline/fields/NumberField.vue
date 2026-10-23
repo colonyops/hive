@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import FormField from '../../components/ui/FormField.vue'
-import TextInput from '../../components/ui/TextInput.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
+import TextInput from '@hive/ui/components/ui/TextInput.vue'
 
 const props = defineProps<{
   label?: string

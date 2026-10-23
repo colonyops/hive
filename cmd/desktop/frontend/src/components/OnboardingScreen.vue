@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import InlineError from './ui/InlineError.vue'
-import TextInput from './ui/TextInput.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
+import TextInput from '@hive/ui/components/ui/TextInput.vue'
 import { computed, ref, watch } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import IconAlertTriangle from '~icons/lucide/alert-triangle'
@@ -14,8 +14,8 @@ import type { DeviceFlowInfo } from '../types/github'
 import type { ConnectCard } from '../composables/useGitHubConnection'
 import type { NotificationPermission } from '../composables/useNotificationSettings'
 import type { useHiveSetup } from '../composables/useHiveSetup'
-import { useClipboard } from '../composables/useClipboard'
-import BaseButton from './ui/BaseButton.vue'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 
 const props = defineProps<{
   card: ConnectCard | 'hive' | 'permissions' | 'agent'

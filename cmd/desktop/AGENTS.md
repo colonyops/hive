@@ -114,10 +114,11 @@ batch of messages, and the exact `CommitBatch` they are worth.
 ## Frontend lint and format
 
 `mise run desktop:frontend:lint` and `mise run desktop:frontend:format:check`
-gate the frontend; `npm run format` fixes formatting. Every lint rule is an
-error. `frontend/eslint-suppressions.json` holds the violations that existed
-when the lint landed: fix one, then run `npx eslint --prune-suppressions .`
-in `frontend/`, because a stale entry fails the lint. Never add entries to it
+gate the frontend; `npm run format -w frontend` fixes formatting. Every lint
+rule is an error. `frontend/eslint-suppressions.json` holds the violations that
+existed when the lint landed: fix one, then run `npx eslint --prune-suppressions .`
+in `frontend/`, because a stale entry fails the lint. `@hive/ui` has its own
+`eslint-suppressions.json` under the same rule. Never add entries to it
 or `--suppress-all` new code; fix the code or disable the rule on that line
 with a reason.
 
@@ -134,10 +135,15 @@ The lint enforces the split; the composables that predate it sit in
 
 ## Frontend components
 
-Reusable building blocks (buttons, overlays, form controls, banners) live in
-`frontend/src/components/ui/`; feature components stay in `components/` or a
-feature folder. `frontend/src/components/ui/README.md` is the index and the
-rules: which block to use, the overlay and test-id conventions, and how to add
+The frontend builds from the repo-root npm workspace, and the reusable
+building blocks (buttons, overlays, form controls, banners), the theme, and the
+base CSS live in the `@hive/ui` package at `web/packages/ui/`. Import them as
+`@hive/ui/components/ui/BaseButton.vue`, `@hive/ui/composables/useFocusTrap`,
+and so on. The package cannot import Wails, so a host-specific call goes
+through `HiveUiPlatform`, which `frontend/src/lib/hiveUiPlatform.ts` fills in
+and `main.ts` installs. Feature components stay in `frontend/src/components/`
+or a feature folder. `web/packages/ui/src/components/ui/README.md` is the index
+and the rules: which block to use, the overlay and test-id conventions, and how to add
 a block. Read it before writing a button, a dialog, or an error line.
 
 ## Frontend DOM, timers, and storage
@@ -164,9 +170,10 @@ focuses components that expose `focus()`), `useAnchoredPopover`,
 `useResizablePanel`, and `useEscapeToClose` (one Escape stack: only the
 topmost enabled caller fires, so a stacked overlay never closes the one under
 it). Every modal surface is a `BaseModal` or a `DrawerSheet`; both register in
-`useOpenModalCount`, which gates the global keybindings. `useClipboard` goes
-through the Wails clipboard because `navigator.clipboard` no-ops in WKWebView
-when the document is not focused.
+`useOpenModalCount`, which gates the global keybindings. These composables
+live in `@hive/ui`. `useClipboard` goes through the Wails clipboard (by way of
+`HiveUiPlatform`) because `navigator.clipboard` no-ops in WKWebView when the
+document is not focused.
 
 ## Mock modes
 

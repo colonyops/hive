@@ -7,7 +7,7 @@ import {
   quoteRange,
   selectionToRange,
 } from '../driveReviewSelection'
-import { renderCanvasMarkdown } from '../githubMarkdown'
+import { renderCanvasMarkdown } from '@hive/ui/lib/githubMarkdown'
 
 function mountRoot(html: string): HTMLElement {
   const root = document.createElement('div')

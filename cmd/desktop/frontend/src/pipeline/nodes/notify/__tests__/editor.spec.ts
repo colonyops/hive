@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import Editor from '../editor.vue'
 import { bodyMaxLen, defaultCooldownSeconds, defaults, titleMaxLen, validate } from '../config'
-import { chooseOption } from '../../../../test-utils/select'
+import { chooseOption } from '@hive/ui/test-utils/select'
 
 describe('notify editor', () => {
   it('renders the notify node body with its template and delivery fields', () => {

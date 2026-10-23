@@ -1,0 +1,13 @@
+{
+  "name": "hive",
+  "private": true,
+  "workspaces": [
+    "web/packages/*",
+    "cmd/desktop/frontend"
+  ],
+  "scripts": {
+    "ui:test": "npm run test -w @hive/ui",
+    "ui:lint": "npm run lint -w @hive/ui",
+    "ui:format:check": "npm run format:check -w @hive/ui"
+  }
+}

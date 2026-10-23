@@ -8,8 +8,8 @@ import type { TerminalTarget } from '../../bindings/github.com/colonyops/hive/cm
 import { appErrorMessage } from '../lib/appError'
 import { actionTypeMeta } from '../lib/actionPresentation'
 import type { ActionView } from '../types/action'
-import type { MenuEntry } from '../types/menu'
-import { useClipboard } from './useClipboard'
+import type { MenuEntry } from '@hive/ui/types/menu'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useToasts } from './useToasts'
 
 /** The two terminal surfaces an action can declare in `targets:`. */

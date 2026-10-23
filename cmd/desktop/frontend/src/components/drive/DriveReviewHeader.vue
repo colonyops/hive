@@ -4,7 +4,7 @@
 import { computed, ref } from 'vue'
 import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
-import IconButton from '../ui/IconButton.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { useToasts } from '../../composables/useToasts'
 import { useDriveReview } from '../../stores/useDriveReview'
 

@@ -4,8 +4,8 @@
 // on demand rather than shipped with every row.
 import { computed } from 'vue'
 import IconTerminal from '~icons/lucide/terminal'
-import BaseButton from './ui/BaseButton.vue'
-import BaseModal from './ui/BaseModal.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import BaseModal from '@hive/ui/components/ui/BaseModal.vue'
 import type { SessionDetail } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{ detail: SessionDetail }>()

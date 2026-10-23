@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import IconTrash2 from '~icons/lucide/trash-2'
-import IconButton from '../ui/IconButton.vue'
-import BaseButton from '../ui/BaseButton.vue'
-import BaseCard from '../ui/BaseCard.vue'
-import BaseIconBadge from '../ui/BaseIconBadge.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import BaseCard from '@hive/ui/components/ui/BaseCard.vue'
+import BaseIconBadge from '@hive/ui/components/ui/BaseIconBadge.vue'
 
 defineProps<{
   title: string

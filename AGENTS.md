@@ -7,6 +7,7 @@ One repository, one Go module, four things in it:
 | `cmd/hive/` | The **hive CLI/TUI**: a tmux-native command center that runs coding agents in isolated git clones with live status, shared context, tasks, and inter-agent messaging. The root program (`main.go` keeps `go install github.com/colonyops/hive@latest` working). | This file |
 | `cmd/desktop/` | **Hive Desktop**, the Wails v3 app: an inbox that collects work into feeds, a Code area on the CLI's session engine, and agent chat workspaces. | [`cmd/desktop/AGENTS.md`](cmd/desktop/AGENTS.md) |
 | `internal/` | The hive engine both programs run on, in layers: `domain` (pure models), `platform` (git, tmux, SQLite and other drivers), `store` (`hive.db`), `config` (the engine sections of `config.yaml`), and `hive` (the application services and `hive.Engine`). | [`docs/architecture.md`](docs/architecture.md) |
+| `web/packages/ui/` | `@hive/ui`: the theme, base CSS, and UI primitives that Hive Desktop and web UIs share. A member of the repo-root npm workspace, with no Wails imports (an ESLint rule enforces it). | [`docs/architecture.md`](docs/architecture.md), "Shared frontend package" |
 | `docs/` | hivedesktop.com: the landing page and the product docs for both programs (Zensical; pages under `docs/docs/`). The contributor docs sit beside it: `docs/architecture.md`, `docs/decisions/`, `docs/distribution.md`. | [`docs/AGENTS.md`](docs/AGENTS.md) |
 | `cmd/tools/` | Development and release binaries that never ship: `adr` (decision records) and `release` (the one release run for every program: the changelog commands, the desktop publisher, and the tag and workflow dispatch that ship the CLI). | |
 
@@ -75,6 +76,14 @@ To verify a change, run `mise run check` (the Go gate, seconds) and then
 `mise run ci` (every gate, minutes; needs Docker, Node, Python, and the
 network).
 
+The repo root is an npm workspace (`package.json`, `package-lock.json`,
+`.npmrc`) with two members: `cmd/desktop/frontend` and `web/packages/ui`
+(`@hive/ui`). Run `npm ci` once at the root; `mise run desktop:frontend:install`
+does it when `node_modules` is missing. `mise run ui:test`, `ui:lint`, and
+`ui:format:check` gate `@hive/ui`; the `desktop:frontend:*` tasks gate the
+desktop. `@hive/ui` must not import `@wailsio/*`, Wails bindings, or an app
+(`docs/architecture.md`, "Shared frontend package").
+
 lefthook runs the relevant gates as git hooks; `mise install` wires them up
 (`postinstall` → `scripts/hooks/install.sh`).
 
@@ -83,8 +92,8 @@ lefthook runs the relevant gates as git hooks; `mise install` wires them up
   differs.
 - **pre-push**: `mise run check` (generated code, ADRs, desktop migrations,
   tidy, lint, Go tests, goreleaser config), plus the frontend unit tests when
-  the push touches `cmd/desktop/frontend/`. `check` needs no Python, Node, or
-  Docker.
+  the push touches `cmd/desktop/frontend/` or `web/`. `check` needs no
+  Python, Node, or Docker.
 - **CI-only**: `check:deadcode`, `check:vuln`, `lint:workflows`,
   `desktop:check:bindings`, the frontend build and tests, the site build, and
   the CLI's Docker integration tests.

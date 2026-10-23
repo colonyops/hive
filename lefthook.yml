@@ -71,28 +71,64 @@ pre-push:
         mise run check
 
     - name: frontend-test
-      glob: "cmd/desktop/frontend/*"
+      glob:
+        - "cmd/desktop/frontend/*"
+        - "web/**"
+        - "package.json"
+        - "package-lock.json"
       run: |
-        if [ ! -d cmd/desktop/frontend/node_modules ]; then
-          echo "SKIP frontend tests: cmd/desktop/frontend/node_modules is missing (run 'mise run desktop:frontend:install')." >&2
+        if [ ! -d node_modules ]; then
+          echo "SKIP frontend tests: node_modules is missing (run 'mise run desktop:frontend:install')." >&2
           exit 0
         fi
         mise run desktop:frontend:test
 
     - name: frontend-format
-      glob: "cmd/desktop/frontend/*"
+      glob:
+        - "cmd/desktop/frontend/*"
+        - "web/**"
+        - "package.json"
+        - "package-lock.json"
       run: |
-        if [ ! -d cmd/desktop/frontend/node_modules ]; then
-          echo "SKIP frontend format check: cmd/desktop/frontend/node_modules is missing (run 'mise run desktop:frontend:install')." >&2
+        if [ ! -d node_modules ]; then
+          echo "SKIP frontend format check: node_modules is missing (run 'mise run desktop:frontend:install')." >&2
           exit 0
         fi
         mise run desktop:frontend:format:check
 
     - name: frontend-lint
-      glob: "cmd/desktop/frontend/*"
+      glob:
+        - "cmd/desktop/frontend/*"
+        - "web/**"
+        - "package.json"
+        - "package-lock.json"
       run: |
-        if [ ! -d cmd/desktop/frontend/node_modules ]; then
-          echo "SKIP frontend lint: cmd/desktop/frontend/node_modules is missing (run 'mise run desktop:frontend:install')." >&2
+        if [ ! -d node_modules ]; then
+          echo "SKIP frontend lint: node_modules is missing (run 'mise run desktop:frontend:install')." >&2
           exit 0
         fi
         mise run desktop:frontend:lint
+
+    - name: ui-test
+      glob:
+        - "web/**"
+        - "package.json"
+        - "package-lock.json"
+      run: |
+        if [ ! -d node_modules ]; then
+          echo "SKIP ui tests: node_modules is missing (run 'mise run desktop:frontend:install')." >&2
+          exit 0
+        fi
+        mise run ui:test
+
+    - name: ui-lint
+      glob:
+        - "web/**"
+        - "package.json"
+        - "package-lock.json"
+      run: |
+        if [ ! -d node_modules ]; then
+          echo "SKIP ui lint: node_modules is missing (run 'mise run desktop:frontend:install')." >&2
+          exit 0
+        fi
+        mise run ui:lint

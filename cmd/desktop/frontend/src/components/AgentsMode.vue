@@ -10,7 +10,7 @@
 // TerminalMode.vue is narrower — the aside/main split, plus (since ADR agent-workspace-sessions-are-tmux-sessions)
 // the pane's xterm wiring itself: a session is a tmux session, addressed and
 // framed exactly like a hive one, just not discovered through hive.
-import InlineError from './ui/InlineError.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDocumentVisibility } from '@vueuse/core'
@@ -20,8 +20,8 @@ import IconMessagesSquare from '~icons/lucide/messages-square'
 import AgentsSidebar from './AgentsSidebar.vue'
 import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
 import DrivePane from './drive/DrivePane.vue'
-import BaseButton from './ui/BaseButton.vue'
-import RenameDialog from './ui/RenameDialog.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
@@ -39,7 +39,7 @@ import { pasteTerminalImage } from '../lib/terminalImagesClient'
 import { silenceDeviceReports } from '../lib/terminalReports'
 import { watchTailPin } from '../lib/terminalTail'
 import type { AgentSession, AgentWorkspace, WorkspaceEditRequest } from '../lib/agentWorkspacesClient'
-import Spinner from './ui/Spinner.vue'
+import Spinner from '@hive/ui/components/ui/Spinner.vue'
 import '@xterm/xterm/css/xterm.css'
 
 /** Poll period for the M2 approval indicator (hc-ou4o02zx §5), while active. */
