@@ -123,6 +123,7 @@ run = "go test ./cmd/desktop/... ./internal/... ./pkg/..."
 
 ["desktop:e2e"]
 description = "Run desktop e2e tests in the pinned Docker/Playwright environment"
+depends = ["desktop:frontend:install"]
 run = "./cmd/desktop/e2e/scripts/run-docker.sh"
 
 ["desktop:frontend:build"]

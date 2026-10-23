@@ -97,6 +97,7 @@ jobs:
               - 'package-lock.json'
               - '.npmrc'
               - '.github/workflows/ci.yml'
+              - '.github/actions/**'
 
   go:
     needs: changes
@@ -297,9 +298,23 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      # run-docker.sh builds the frontend and the headless server on the
+      # runner, with these caches, before the image build. The server has no
+      # cgo, so the job needs no Linux packages.
+      - uses: ./.github/actions/setup-go-env
         with:
-          install: false
+          cache-name: e2e
+          desktop-deps: "false"
+          mise-install-args: go
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
 
       - name: Run desktop e2e tests
         run: mise run desktop:e2e
