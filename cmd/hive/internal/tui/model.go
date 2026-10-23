@@ -36,6 +36,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/platform/git"
+	"github.com/colonyops/hive/internal/platform/workspace"
 
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/command"
@@ -112,7 +113,6 @@ type Deps struct {
 // Opts holds runtime options that are not service dependencies.
 type Opts struct {
 	LocalRemote string
-	Source      string // Source directory for file copying (cwd)
 	Warnings    []string
 	ConfigPath  string
 }
@@ -132,9 +132,6 @@ type Model struct {
 	spinner        spinner.Model
 	loadingMessage string
 	quitting       bool
-
-	// Source directory for file copying during session creation
-	source string
 
 	// actionedSessions records when a user action on a session last completed,
 	// so a terminal end that action caused is not announced.
@@ -383,7 +380,6 @@ func New(deps Deps, opts Opts) Model {
 		handler:          handler,
 		state:            stateNormal,
 		spinner:          s,
-		source:           opts.Source,
 		actionedSessions: make(map[string]time.Time),
 		modals:           NewModalCoordinator(),
 		sessionsView:     sessionsView,
@@ -794,7 +790,7 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.modals.NewSession.Submitted() {
 		result := m.modals.NewSession.Result()
 		m.modals.NewSession = nil
-		return m, m.startCreate(result.SessionName, result.Repo.Remote, result.AgentKey)
+		return m, m.startCreate(result.SessionName, result.Repo, result.AgentKey)
 	}
 
 	if m.modals.NewSession.Cancelled() {
@@ -2023,12 +2019,12 @@ func (m Model) startRecycle(sessionID string) tea.Cmd {
 }
 
 // startCreate returns a command that starts session creation with streaming output.
-func (m Model) startCreate(name, remote, agentKey string) tea.Cmd {
+func (m Model) startCreate(name string, repo workspace.DiscoveredRepo, agentKey string) tea.Cmd {
 	return func() tea.Msg {
 		exec := m.cmdService.NewCreateExecutor(sessionsvc.CreateOptions{
 			Name:       name,
-			Remote:     remote,
-			Source:     m.source,
+			Remote:     repo.Remote,
+			Source:     repo.Path,
 			Background: true,
 			AgentKey:   agentKey,
 		})
