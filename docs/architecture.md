@@ -2894,7 +2894,7 @@ These are deliberately unresolved; revisit when the relevant work starts.
 - **Command placement** — per-domain service methods with request structs
   (current plan, matching the CLI's `cmd/hive/internal/app/app.go`) versus a flat
   `app/command` + `app/query` package that gives MCP and CLI generation one
-  place to enumerate. The httpapi operations table (ADR self-describing-agent-api) is an
+  place to enumerate. The httpapi operations table is an
   adapter-local precedent for the enumeration side, not a resolution of where
   the commands live.
 - **`adapter/` as a grouping directory** versus flat `internal/wailsui`,

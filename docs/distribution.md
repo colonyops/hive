@@ -1,6 +1,6 @@
 # Distribution Reference
 
-Concrete infrastructure and runbook for shipping the desktop app, and the one release run that ships it with the hive CLI. Decisions behind this: [r2-manifest-distribution](decisions/2026-07-23-r2-manifest-distribution.md) (R2 + manifests), [release-channels](decisions/2026-07-23-release-channels.md) (the manifest layout), [every-program-ships-under-one-shared-version](decisions/2026-10-01-every-program-ships-under-one-shared-version.md) (one version, one release run), [in-app-problem-reporting](decisions/2026-07-27-in-app-problem-reporting.md) (problem reporting).
+Concrete infrastructure and runbook for shipping the desktop app, and the one release run that ships it with the hive CLI. Decisions behind this: [r2-manifest-distribution](decisions/2026-07-23-r2-manifest-distribution.md) (R2 + manifests), [release-channels](decisions/2026-07-23-release-channels.md) (the manifest layout), [every-program-ships-under-one-shared-version](decisions/2026-10-01-every-program-ships-under-one-shared-version.md) (one version, one release run), [problem-reports-are-github-issues](decisions/2026-09-14-problem-reports-are-github-issues.md) (problem reporting).
 
 ## Infrastructure
 

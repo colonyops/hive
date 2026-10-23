@@ -125,7 +125,7 @@ func (c *Control) Push(w http.ResponseWriter, r *http.Request) error {
 
 // validateLoopbackURL rejects an inline webhook target that is not a loopback
 // http(s) URL. devserver POSTs a secret-bearing body to it, and the desktop's
-// listener binds loopback only (ADR local-webhook-listener, 0017), so a non-loopback target is
+// listener binds loopback only (ADR local-webhook-listener), so a non-loopback target is
 // either a mistake or an attempt to make dev tooling reach off the machine.
 func validateLoopbackURL(raw string) error {
 	parsed, err := url.Parse(raw)
