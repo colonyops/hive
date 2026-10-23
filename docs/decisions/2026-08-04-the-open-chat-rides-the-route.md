@@ -5,42 +5,27 @@
 
 ## Context
 
-The Agents pane's attachment — which chat is open — lived only in webview
-memory, so a reload or relaunch always came back to an idle pane even though
-the session itself, being a tmux session (ADR agent-workspace-sessions-are-tmux-sessions), was still running.
-Terminal mode already puts its whole surface in the URL (`/terminal/:slug`,
-`?window`) so history traversal and mode re-entry restore it; the agents
-route carried only the focus filter. The standing rule was that nothing
-attaches unprompted on a fresh load: re-entering a mode is what resumes it.
-
-The complication is that `ResumeSession` is two different actions behind one
-call: for a live tmux session it only attaches, but for a dead one it
-*relaunches* the agent. An automatic resume on reload must never be the thing
-that starts a process.
+A chat's session is a tmux session that outlives a webview reload
+(ADR agent-workspace-sessions-are-tmux-sessions), so the open chat should
+survive one too. `ResumeSession` is two actions behind one call: for a live
+tmux session it attaches, for a dead one it relaunches the agent. A reload must
+never start a process.
 
 ## Decision
 
 The chat open in the pane is named in the route as `?chat=<id>` on
-`/workspaces/:workspace?`, kept in sync declaratively: the pane going live
-writes the id, the pane going idle (exit, failure, close) removes it, and
-moving the focus filter carries it along — the two are independent axes.
-Since the mode toggle's remembered agents path persists across reloads
-(localStorage), the query survives both a webview reload and a relaunch.
+`/workspaces/:workspace?`. The pane going live writes the id; the pane going
+idle removes it. The workspace focus and the chat are independent, and the mode
+toggle's remembered path keeps the query across reloads and relaunches.
 
-Re-entering the area with `?chat` present auto-resumes the chat **only if
-the sessions listing reports its tmux session live** (`terminalId` set — the
-listing probes tmux per row). A dead or unknown chat's param is stripped
-instead: resuming it would relaunch, and a relaunch stays a deliberate click
-on the row. The beat between listing and resuming, in which the session
-could die and the resume relaunch it, is an accepted race.
+When the route names a chat other than the open one, the pane switches to it,
+but only if the sessions listing reports its tmux session live (`terminalId`
+set). Otherwise the param is reset to whatever the pane holds: a relaunch stays
+a deliberate click on the row. An in-flight launch is never interrupted. The
+gap between listing and resuming, in which the session could die and the resume
+relaunch it, is an accepted race (`AgentsMode.vue`).
 
 ## Consequences
 
-- A reload lands back in the same workspace with the same chat attached; the
-  "never attach unprompted" rule is softened to "reattach what was
-  attached" — an attach can now follow a reload, a process launch never can.
-- The launch default is unchanged: a relaunch still lands on the hub, and
-  only the Workspaces toggle carries the stored path back into the area.
-- The chat's presence in the URL makes it history-traversable, but the pane
-  is deliberately conservative: `?chat` is only acted on when the pane is
-  idle, so history moves never tear down a live chat.
+- A reload can attach a chat; it never launches one.
+- Closing a chat also drops `?doc`, which names a view of the open chat.

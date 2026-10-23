@@ -58,7 +58,7 @@ func newReleaseCommand() *cli.Command {
 			{
 				Name:  "next",
 				Usage: "print the version the next release would take",
-				Description: "Bumps the newest version across every v* and desktop-v* tag and the live desktop manifests. " +
+				Description: "Bumps the newest version across every v* tag and the live desktop manifests. " +
 					"A missing live manifest (HTTP 404) is an empty channel.",
 				Flags: []cli.Flag{bumpFlag()},
 				Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {

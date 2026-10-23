@@ -2,75 +2,42 @@
 
 - **Status:** accepted
 - **Date:** 2026-07-30
-- **Amends:** [terminal-atlas-renderer](2026-07-29-terminal-atlas-renderer.md) decision 1
 
 ## Context
 
-ADR terminal-atlas-renderer put every pane on an atlas renderer and loaded it in `attachTab`, the
-moment the pane mounts. ADR terminal-attach-pool then made the terminal view hold several
-sessions attached at once, and every pooled session mounts a pane per tmux
-window so its screen survives a switch. The two compose badly: the number of
-live WebGL contexts is the *total window count across the pool*, not the one
-pane on screen. At the shipped defaults — pool of 3, agent sessions carrying
-four windows — that is a dozen contexts to display one.
-
-WebKit reports the result on every cold attach:
-
-```
-There are too many active WebGL contexts on this page, the oldest context
-will be lost.
-```
-
-ADR terminal-atlas-renderer decision 3 anticipated exactly this and is why it is not a
-correctness bug: the pane whose context is taken claims the canvas renderer,
-which shares `TextureAtlas` with the WebGL one, so #131 does not come back.
-What decision 3 could not fix is the cost of getting there. Each attach now
-takes a context away from a pane in a *different* session, which disposes its
-addon and re-rasterises a glyph atlas on the main thread — during the switch
-the user is waiting on.
-
-`@xterm/addon-webgl` never calls `WEBGL_lose_context.loseContext()`, so
-disposal only drops references and reclamation waits for GC. Evicted sessions'
-contexts therefore outlive their eviction, which is why the limit is reached on
-every attach rather than occasionally.
+ADR terminal-atlas-renderer puts every pane on an atlas renderer. ADR
+terminal-attach-pool keeps several sessions attached, each mounting a pane per
+tmux window. Claiming a WebGL context on mount makes the live context count the
+total pane count across the pool, and WebKit then reports "too many active
+WebGL contexts" on every cold attach and takes a context from a pane in a
+different session. That pane falls back to the canvas renderer and
+re-rasterises a glyph atlas on the main thread, during the switch the user is
+waiting on. `@xterm/addon-webgl` never calls `loseContext()`, so evicted
+contexts linger until GC.
 
 ## Decision
 
-1. **A pane claims its renderer when its window is first shown, not when its
-   pane mounts.** `attachTab` claims one only for the window that is already
-   active; `setActive` claims one for any window that has a mounted host and no
-   renderer yet. This supersedes ADR terminal-atlas-renderer decision 1's *timing* — that every
-   pane loads an atlas renderer — and keeps its substance: no pane is ever
-   *displayed* on the DOM renderer. A window nobody opens costs no context.
+1. **A pane claims its renderer when its window is first shown, not when it
+   mounts** (`useTerminalWindows.ts`). `attachPane` claims one only for a pane
+   of the active window; `setActive` claims one for every mounted pane of the
+   newly active window that has none. No pane is ever displayed on the DOM
+   renderer, and a window nobody opens costs no context.
 
-   Contexts are not released on deactivation. Unloading on the way out would
-   put a context teardown and a fresh atlas rasterisation on every tab flip,
-   which is the hot path the pool exists to keep instant. The bound moves from
-   "every window of every pooled session" to "every window actually visited in
-   a pooled session", which is the smaller number in every real layout.
+   Contexts are not released on deactivation: unloading would put a teardown
+   and a fresh atlas on every tab flip, the hot path the pool keeps instant.
 
-2. **A failed canvas claim is recorded, and the next activation retries.**
-   `loadRendererAddon` swallows a throw and returns `undefined`, so before this
-   a pane whose post-context-loss canvas claim failed sat on the DOM renderer
-   permanently and silently — the one path by which #131 could still reach a
-   user. `TabRuntime.rendered` tracks whether an atlas renderer is live, and a
-   false value makes the next activation try again.
+2. **A failed claim is recorded, and the next activation retries.**
+   `PaneRuntime.rendered` tracks whether an atlas renderer is live. A failed
+   canvas claim after a context loss would otherwise leave the pane on the DOM
+   renderer for good, the one path by which #131 could still reach a user.
 
 ## Consequences
 
-- **Fewer contexts, and no cross-session eviction on the common path.** One
-  visited window per pooled session rather than every window of it, so the
-  per-page limit is reached far later, and an attach stops taking a context
-  away from a pane in another session.
-- **The renderer load moves off the attach and onto the first activation of
-  each window.** It was 4–6ms per window measured; a four-window attach stops
-  paying three of them. That is small next to the attach itself — the reason
-  for this change is the context budget, not the milliseconds.
-- **A background window renders through the DOM renderer until it is first
-  shown.** It is not on screen, and the atlas renderer repaints the viewport
-  from the buffer when it takes over, so nothing is displayed through it. Note
-  that a background pane still *renders* — this bounds the GL cost, not the
-  work xterm does for hidden panes.
-- **`rendered` is the pane's renderer state and has to stay truthful.** Any new
-  path that loads or drops a renderer addon must maintain it, or a pane will
-  either be skipped by the retry or claim a second context.
+- The context bound is the panes actually visited per pooled session, and an
+  attach stops taking a context from another session on the common path.
+- A background window renders through the DOM renderer until first shown. The
+  atlas renderer repaints from the buffer when it takes over. This bounds the
+  GL cost, not xterm's work for hidden panes.
+- `rendered` must stay truthful. Any new path that loads or drops a renderer
+  addon must maintain it, or a pane is skipped by the retry or claims a second
+  context.

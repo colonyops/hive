@@ -18,7 +18,7 @@
 // (ADR a-scheduled-chat-ends-itself-through-a-capability-token-its-launch-handed-it).
 //
 // What is *not* here any more is the agent-facing control surface this package
-// began as (ADR agent-http-api, ADR self-describing-agent-api). Inbox, feeds, profiles, actions, source
+// began as (ADR agent-http-api). Inbox, feeds, profiles, actions, source
 // refresh and flow dry runs are tools on the MCP server now
 // (cmd/desktop/internal/adapter/mcpsrv, ADR mcp-replaces-the-agent-facing-http-api), and so is the self-description the
 // OpenAPI document used to provide.

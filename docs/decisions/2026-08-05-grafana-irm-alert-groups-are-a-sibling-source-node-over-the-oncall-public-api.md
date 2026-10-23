@@ -5,57 +5,36 @@
 
 ## Context
 
-`sources.grafana_alerts` reads a stack's Grafana Alertmanager. For a feed meant
-to mirror an on-call channel that is the wrong set. Measured against one squad's
-IRM integration on a Grafana Cloud ops stack, of 31 live alert groups 14 never
-reached the stack's Alertmanager at all — they are evaluated in another Mimir and
-POSTed straight to the IRM integration — and 4 more carried no team label to
-scope on. Grouping differs too: IRM collapses related alerts, so the
-Alertmanager node emits roughly twice the items an on-call channel shows.
-
-IRM exposes alert groups through two surfaces, both authenticating with the
-Grafana service-account token the `grafana/<account>` credential already holds:
-the documented OnCall v1 API on its own regional host, and the stack-local
-plugin resource proxy at `/api/plugins/grafana-irm-app/resources/alertgroups/`.
+`sources.grafana_alerts` reads a stack's Grafana Alertmanager. That is the
+wrong set for a feed that mirrors an on-call channel: many alerts are evaluated
+elsewhere and POSTed straight to an IRM integration, never reaching the stack's
+Alertmanager, and IRM groups related alerts that Alertmanager reports
+separately.
 
 ## Decision
 
-IRM alert groups are `sources.grafana_irm_alerts`, a distinct connector rather
-than a mode of `sources.grafana_alerts`, polled over the **OnCall public v1
-API**. The OnCall host is read from the stack's IRM plugin settings
-(`jsonData.onCallApiUrl`) and cached per connected stack, so the extra hop is
-paid once per connection rather than once per poll.
+IRM alert groups are `sources.grafana_irm_alerts`, a separate connector, polled
+over the documented OnCall public v1 API with the same `grafana/<account>`
+credential. The OnCall host comes from the stack's IRM plugin settings
+(`jsonData.onCallApiUrl`) and is cached per connected stack.
 
-Three things follow from choosing the documented surface:
+- Scoping is the API's own `integration` and `team` filters.
+- The payload carries the group's IRM labels plus the common labels and
+  annotations from `last_alert`, so the item explains what is firing without a
+  request per group.
+- Upstream's `new` is emitted as `firing`, so both Grafana nodes share one
+  `state` vocabulary.
 
-- Scoping is `integration` and `team`, the API's own filter parameters, so a
-  feed pins to a squad without restating upstream routing locally.
-- The payload carries the group's **IRM** labels plus the common labels and
-  annotations from `last_alert.payload`. The public list serializer embeds that
-  latest source notification, so the connector can explain what is firing
-  without scraping `render_for_web` or issuing one request per group. Labels
-  that vary between alert instances are not presented as group facts.
-- Upstream's `new` is emitted as `firing`, so both Grafana source nodes share
-  one `state` vocabulary and a `function` node can route on it without knowing
-  which produced the item.
-
-Separately, `sources.grafana_alerts` gained a `matchers` field that passes
-Alertmanager label matchers through verbatim as repeated `filter` params.
+`sources.grafana_alerts` takes `matchers`, Alertmanager label matchers passed
+through as `filter` params.
 
 ## Consequences
 
-Both nodes now claim a *filtered* set, and absence is still authoritative
-against it: a poll that fetches the complete matching set may treat anything
-missing as resolved. This is what makes editing `matchers`, `integration` or
-`team` reconcile items out of the feed — correct, because they are no longer in
-the set the node claims, but it means scope edits archive live alerts and should
-be deliberate.
-
-The same invariant is why the alert-group page walk fails rather than truncates.
-A short snapshot is indistinguishable from "these groups resolved", so
-exhausting the page bound returns an error and leaves the previous snapshot
-standing instead of archiving everything past the cut.
-
-Reading the OnCall API needs `grafana-irm-app.alert-groups:read`, which a
-Viewer-role service account may not carry — unlike the other Grafana source
-nodes, a working credential can still be refused.
+- Both nodes claim a filtered set, and absence is authoritative against it.
+  Editing `matchers`, `integration`, or `team` therefore archives items that
+  leave the set, so scope edits should be deliberate.
+- The alert-group page walk fails instead of truncating when it hits its page
+  bound. A short snapshot would read as "these groups resolved".
+- Reading the OnCall API needs an IRM alert-group read permission that a
+  Viewer-role service account may lack, so a credential that works for the
+  other Grafana nodes can still be refused here.

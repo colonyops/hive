@@ -340,7 +340,7 @@ func (s *SessionsService) ItemChats(ctx context.Context, itemID int64) ([]ItemCh
 
 // ItemSessions returns the hive sessions an inbox item spawned, newest first,
 // joined to the state hive reports for them now. The read is also what
-// reconciles (ADR macos-dmg-installer).
+// reconciles (ADR a-session-can-link-to-many-inbox-items).
 func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]ItemSessionView, error) {
 	ref, err := s.items.RefByID(ctx, itemID)
 	if err != nil {

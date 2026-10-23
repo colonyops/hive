@@ -5,76 +5,51 @@
 
 ## Context
 
-The desktop can now rename a hive session (#144). Hive's `RenameSession`
-recomputes the slug from the new name and saves the record. The slug is also the
-**tmux session name** — hive's spawner creates the tmux session as `slug`, and
-every attach path in both products targets it: hive's TUI, `tmux attach -t
-<slug>`, and this app's `tmuxcc` client map, control-plane routes, WebSocket
-URL, `/terminal/:slug` route and resume snapshot.
-
-So an unaccompanied rename leaves the stored slug naming a tmux session that
-does not exist, and terminal attach silently fails from then on. The session
-directory keeps its original slug in `Path`, so only the tmux name actually
-diverges.
-
-Hive Desktop and the CLI now share `internal/hive` in this repository. Hive's
-session service receives a multiplexer lifecycle adapter, so it can keep the
-persisted target in step instead of leaving Desktop to compensate for an opaque
-vendored implementation.
+Renaming a hive session (#144) recomputes its slug from the new name. The
+slug is also the tmux session name: the spawner creates the tmux session as
+`slug`, and every attach path targets it (the CLI TUI, `tmux attach -t
+<slug>`, and the desktop's control clients, terminal routes, WebSocket URL,
+`/terminal/:slug` route and resume snapshot). A rename that leaves tmux alone
+makes the slug name a tmux session that does not exist, and attach silently
+fails.
 
 ## Decision
 
-**The invariant is `session.Slug == the live tmux session name`.** The shared
-Hive service now renames through its injected multiplexer and records the actual
-tmux target in `MetaTmuxSession`. Desktop keeps its stricter preflight around
-that operation: `app.SessionsService.RenameSession` renames the tmux session and
-then asks Hive to update the record, in that order:
+**The invariant is that the session's slug is its live tmux session name,
+and `MetaTmuxSession` records the actual tmux target.** The shared
+`internal/hive/session` service renames through its injected multiplexer
+lifecycle and writes `MetaTmuxSession`; when the tmux rename fails it keeps
+the old target there so lifecycle operations still find it.
 
-1. Validate the name and slugify it; a slug equal to the current one skips the
-   tmux step entirely (a name-only change).
-2. Reject a slug already held by another session. Hive validates the new name
-   but checks no collision, and the session table has no uniqueness constraint,
-   so nothing upstream prevents two sessions sharing one tmux name and one
-   directory slug.
-3. `tmuxcc.Manager.RenameSessionIfPresent` probes the persisted tmux target
-   with `has-session`, then runs `rename-session` and reports whether it changed
-   tmux. An absent tmux session (never spawned, or its server
-   restarted) is success, not an error, and so is tmux being unusable: a hive
-   session exists independently of terminal mode. Existence is *probed* rather
-   than inferred from `rename-session`'s stderr, because the alternative is
-   matching on tmux's message text.
-4. Ask Hive to write the record and persisted multiplexer target. Its lifecycle
-   call sees the already-renamed source as absent and succeeds without another
-   rename. If the write fails, Desktop rolls back only when the preflight
-   changed a live tmux session.
+Desktop's `app.SessionsService.RenameSession` adds a preflight, in this order:
 
-tmux goes first so the failures that are actually likely — a name collision, no
-tmux — abort before anything is written, leaving one step that can fail and one
-compensating action. The manager also drops the control client registered under
-the old slug, so no live client keeps addressing a name tmux has dropped; the
-frontend re-attaches under the new one.
+1. Validate and slugify the name. A slug equal to the current one skips tmux.
+2. Reject a slug another session holds. Hive checks no collision and the
+   session table has no uniqueness constraint.
+3. `control.Manager.RenameSessionIfPresent` probes the current target with
+   `has-session`, runs `rename-session`, and drops the control client
+   registered under the old slug. An absent tmux session or unusable tmux is
+   success: a hive session exists independently of terminal mode. Existence
+   is probed rather than read from tmux's stderr text.
+4. Ask hive to write the record. Its lifecycle call sees the source already
+   renamed and succeeds. If the write fails, Desktop renames tmux back, but
+   only when step 3 changed a live session.
 
-The frontend follows the rename by **session id**: a reload whose attached slug
-is missing looks the id up, re-navigating if it reappears under a new slug and
-closing the attach only when the session is really gone. That covers a rename
-made from the hive CLI as well as one made here, and it is the same rule that
-handles a delete or recycle finishing as a job.
+tmux goes first so the likely failures (a collision, no tmux) abort before
+anything is written.
+
+The frontend follows a rename by session id: when the attached slug
+disappears on reload, it looks up the id and re-navigates if the session
+reappears under a new slug. That covers a rename from the CLI too.
 
 ## Consequences
 
-- Rename is safe for an attached session: the terminal reconnects under the new
-  slug rather than breaking silently.
-- Two writes are involved, so a rename is not atomic. The rollback narrows the
-  window to a failed store write *and* a failed rollback, which is reported with
-  the tmux name it was left at.
-- `tmuxcc` now runs one-shot tmux commands as well as control clients. They go
-  through the same `$TMUX` socket resolution as an attach, or they would address
-  a different server.
-- `Path` still keeps the slug the session was cloned under, so after a rename the
-  directory name and the slug differ. That is hive's behaviour and nothing reads
-  the path *as* a slug; it is left alone rather than compensated for, because
-  moving a live worktree or clone is a much bigger operation than renaming a tmux
-  session.
-- Hive writes `MetaTmuxSession` so lifecycle operations can still find a target
-  when a best-effort rename fails. Desktop keeps that second identity out of
-  its frontend DTOs but uses it for status, collision checks, and rename repair.
+- Rename is two writes and not atomic. A failed store write plus a failed
+  rollback is reported with the tmux name it was left at.
+- One-shot tmux commands go through the same `$TMUX` socket resolution as an
+  attach, or they would address a different server.
+- `Path` keeps the slug the session was cloned under, so after a rename the
+  directory name and the slug differ. Nothing reads the path as a slug, and
+  moving a live checkout is a much bigger operation.
+- Desktop keeps `MetaTmuxSession` out of its frontend DTOs but uses it for
+  status, collision checks and rename repair.

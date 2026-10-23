@@ -5,23 +5,23 @@
 
 ## Context
 
-The session header can add a shell, but running two different agents on the
-same checkout requires selecting another configured profile. Creating a Hive
-session would create a separate checkout; replaying its spawn rules would
-also recreate auxiliary windows.
+Running a second agent on the same checkout needs another configured
+profile. Creating a Hive session would create a separate checkout, and
+replaying its spawn rules would recreate auxiliary windows.
 
 ## Decision
 
-Offer configured agent profiles beside the terminal option in the header's
-new-window menu. `SessionsService` validates the Hive session and resolves
-the selected profile's current command and flags. `tmuxcc` starts that command
-in a peer window at the checkout root, using its existing login-shell and
-resolved-environment contract. The operation uses the authenticated terminal
-HTTP surface and requires the tmux session to be running.
+The session header's new-window menu offers the configured agent profiles
+beside the terminal option. `SessionsService.NewAgentWindow` validates the
+Hive session and resolves the profile's current command line, and the tmux
+control client (`internal/platform/tmux/control`) starts it in a peer window
+at the checkout root with its login-shell and resolved-environment contract.
+The operation goes through the authenticated terminal HTTP surface and needs
+the tmux session to be running.
 
 ## Consequences
 
-Peers share files, branch state, and the Hive session record. Each window has
-its own agent process. The launch does not run checkout setup hooks or replay
-the repository's initial window layout. Agent choices and commands follow
-the reloaded Hive configuration.
+Peers share files, branch state, and the Hive session record; each window
+has its own agent process. The launch runs no checkout setup hooks and does
+not replay the initial window layout. Agent choices follow the reloaded Hive
+config.

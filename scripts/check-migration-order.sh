@@ -33,7 +33,7 @@ done <<< "$current"
 
 base_ref=${MIGRATION_BASE_REF:-}
 if [[ -z $base_ref ]]; then
-  base_ref=$(git describe --tags --match 'v[0-9]*' --match 'desktop-v*' --abbrev=0 HEAD 2>/dev/null || true)
+  base_ref=$(git describe --tags --match 'v[0-9]*' --abbrev=0 HEAD 2>/dev/null || true)
 fi
 if [[ -z $base_ref ]]; then
   echo "migration order valid; no prior release tag found"

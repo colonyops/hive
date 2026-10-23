@@ -54,10 +54,10 @@ the version, and there is one release line.
    ```
 
    `prepare` takes the version from the promoted entries and refuses one that
-   does not advance every `v*` and `desktop-v*` tag and every live manifest,
+   does not advance every `v*` tag and every live manifest,
    that lacks an entry with a summary for any program, or whose tag exists
    locally or on `origin`. It also runs
-   `cmd/desktop/scripts/check-migration-order.sh`, which rejects gaps and any
+   `scripts/check-migration-order.sh`, which rejects gaps and any
    change to a SQLite migration already present in the latest reachable release
    tag.
 
@@ -142,6 +142,5 @@ the version, and there is one release line.
   `go run ./cmd/tools/release next` prints the version it would take.
 - A major bump to 2 or more needs a `/vN` module path for the CLI's Go module.
   Never bump past 1 without that change.
-- A release must advance every `v*` tag, every `desktop-v*` tag, and every live
-  manifest. Including the manifests matters because the R2 history predates
-  this repository.
+- A release must advance every `v*` tag and every live manifest. Including the
+  manifests matters because the R2 history predates this repository.

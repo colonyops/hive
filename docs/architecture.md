@@ -827,7 +827,7 @@ stored in the OS keychain. Two constraints drive the design:
   the cost of not prompting.
 - **Config holds refs, never tokens.** `flows/*.yaml` is explicitly
   dotfiles-managed, so a token in a node's config is a token in a git repo. A
-  source node carries `credential: cmd/desktop/grafana/prod`, resolved at construction —
+  source node carries `credential: grafana/prod`, resolved at construction —
   and re-read on every use, so connecting, rotating or disconnecting an
   account takes effect on the next fetch with nothing to invalidate.
 
@@ -2884,7 +2884,7 @@ replayable. Migrations are not squashed, because a squashed `0001` would not
 match existing `schema_migrations` rows. Once a migration appears in a
 release, its filename and contents are immutable; later migrations append
 contiguous versions above it. `scripts/check-migration-order.sh` compares
-the tree with the latest reachable `v*` or `desktop-v*` release tag, and both the normal
+the tree with the latest reachable `v*` release tag, and both the normal
 quality gate and the release CLI run it.
 
 ## Open questions
@@ -2894,7 +2894,7 @@ These are deliberately unresolved; revisit when the relevant work starts.
 - **Command placement** — per-domain service methods with request structs
   (current plan, matching the CLI's `cmd/hive/internal/app/app.go`) versus a flat
   `app/command` + `app/query` package that gives MCP and CLI generation one
-  place to enumerate. The httpapi operations table (ADR self-describing-agent-api) is an
+  place to enumerate. The httpapi operations table is an
   adapter-local precedent for the enumeration side, not a resolution of where
   the commands live.
 - **`adapter/` as a grouping directory** versus flat `internal/wailsui`,
