@@ -2,9 +2,12 @@ package app
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 
 	"github.com/rs/zerolog"
+
+	"github.com/colonyops/hive/pkg/tmpl"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/ptyterm"
 )
@@ -39,6 +42,10 @@ func (s *SessionsService) NewAgentWindow(ctx context.Context, slug, agent string
 	dir, err := s.SessionDirectory(ctx, slug)
 	if err != nil {
 		return "", err
+	}
+	executable, _, _ := strings.Cut(command, " ")
+	for _, arg := range s.launchAgentArgs(ctx)[filepath.Base(executable)] {
+		command += " " + tmpl.ShellQuote(arg)
 	}
 	id, err := s.agentWindows.NewCommandWindow(ctx, slug, dir, agent, command, []string{ptyterm.ImageProtocolEnv})
 	if err != nil {

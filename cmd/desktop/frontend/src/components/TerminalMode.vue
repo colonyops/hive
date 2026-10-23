@@ -73,7 +73,7 @@ const context = { pool, tree, view, nav, attach, ops, rename, sessions }
 provideTerminalMode(context)
 useTerminalCommands(context, active)
 
-const { pane: drivePane, docPath, syncDocQuery } = useTerminalDrive(toRef(props, 'drive'), active)
+const { pane: drivePane, docPath, syncDocQuery } = useTerminalDrive(toRef(props, 'drive'))
 
 // Hive does not configure a Code session's agent, so the empty pane leads to
 // the page that says how.

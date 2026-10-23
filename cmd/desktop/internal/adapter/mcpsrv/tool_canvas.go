@@ -226,7 +226,9 @@ type openCanvasInput struct {
 }
 
 type paneResult struct {
-	Requested string `json:"requested" jsonschema:"The request handed to the UI: open or close. Delivery is best-effort — it applies only while the user is viewing this chat or session, and there is no acknowledgment either way."`
+	Status      string `json:"status"      jsonschema:"UI outcome: opened, closed, session_not_visible, no_ui_response, or navigation_failed. Only opened confirms the pane became visible. If the session is visible in another Hive instance, configure this agent to use that instance’s MCP endpoint."`
+	InstanceURL string `json:"instanceUrl" jsonschema:"Base URL of the Hive instance that handled this request. Compare this with the instance you are viewing."`
+	Requested   string `json:"requested"   jsonschema:"The request handed to the UI: open or close. Read status for the UI outcome; requested alone does not confirm visibility."`
 }
 
 func (ctrl *DriveController) PutBlock(ctx context.Context, _ *mcp.CallToolRequest, in putBlockInput) (*mcp.CallToolResult, canvasWriteResult, error) {
@@ -291,17 +293,19 @@ func (ctrl *DriveController) ReadCanvas(ctx context.Context, _ *mcp.CallToolRequ
 }
 
 func (ctrl *DriveController) OpenCanvas(ctx context.Context, _ *mcp.CallToolRequest, in openCanvasInput) (*mcp.CallToolResult, paneResult, error) {
-	if err := ctrl.core.Drive.SetPaneOpen(ctx, in.Session, in.Canvas, true); err != nil {
+	status, err := ctrl.core.Drive.SetPaneOpen(ctx, in.Session, in.Canvas, true)
+	if err != nil {
 		return nil, paneResult{}, ctrl.toolError(err)
 	}
-	return nil, paneResult{Requested: "open"}, nil
+	return nil, paneResult{Requested: "open", Status: status, InstanceURL: ctrl.core.MCPBaseURL(ctx)}, nil
 }
 
 func (ctrl *DriveController) CloseCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasSessionInput) (*mcp.CallToolResult, paneResult, error) {
-	if err := ctrl.core.Drive.SetPaneOpen(ctx, in.Session, "", false); err != nil {
+	status, err := ctrl.core.Drive.SetPaneOpen(ctx, in.Session, "", false)
+	if err != nil {
 		return nil, paneResult{}, ctrl.toolError(err)
 	}
-	return nil, paneResult{Requested: "close"}, nil
+	return nil, paneResult{Requested: "close", Status: status, InstanceURL: ctrl.core.MCPBaseURL(ctx)}, nil
 }
 
 func (ctrl *DriveController) ListCanvases(ctx context.Context, _ *mcp.CallToolRequest, in canvasSessionInput) (*mcp.CallToolResult, canvasListResult, error) {

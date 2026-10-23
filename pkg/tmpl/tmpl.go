@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+	"path/filepath"
 	"strings"
 	"text/template"
 )
@@ -80,6 +81,15 @@ func (r *Renderer) WithAgent(command, window, flags string) *Renderer {
 	cfg.AgentCommand = command
 	cfg.AgentWindow = window
 	cfg.AgentFlags = flags
+	return New(cfg)
+}
+
+// WithAgentArgs adds arguments for the selected executable without changing the base renderer.
+func (r *Renderer) WithAgentArgs(args map[string][]string) *Renderer {
+	cfg := r.cfg
+	for _, arg := range args[filepath.Base(stringOrDefault(cfg.AgentCommand, "claude"))] {
+		cfg.AgentFlags = strings.TrimSpace(cfg.AgentFlags + " " + ShellQuote(arg))
+	}
 	return New(cfg)
 }
 

@@ -17,6 +17,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
+export function AcknowledgePane(requestID: string, status: string): $CancellablePromise<void> {
+    return $Call.ByID(448718267, requestID, status);
+}
+
 export function CreateFolder(space: string, path: string): $CancellablePromise<$models.EntryWire> {
     return $Call.ByID(3569237839, space, path);
 }

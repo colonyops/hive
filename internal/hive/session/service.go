@@ -71,6 +71,8 @@ type CreateOptions struct {
 	// Env holds KEY=VALUE pairs for the session's tmux environment. Only a
 	// windows: spawn applies them; spawn: commands run the user's own scripts.
 	Env []string
+	// AgentArgs adds shell-quoted arguments by executable for this launch only.
+	AgentArgs map[string][]string
 	// CollisionSuffix is appended to a Name whose slug is taken. Use an id that
 	// is stable across retries, so a retry collides with its own earlier session.
 	CollisionSuffix string
@@ -368,6 +370,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		if err != nil {
 			return nil, err
 		}
+		renderer = renderer.WithAgentArgs(opts.AgentArgs)
 		switch {
 		case strategy.IsWindows():
 			if err := s.spawner.SpawnWindowsWith(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background, renderer, opts.Env); err != nil {
@@ -973,6 +976,11 @@ func (s *Service) KillTmuxWindow(ctx context.Context, target multiplexer.Target)
 // OpenTmuxSession opens (or creates) a tmux session for the given session parameters.
 // It resolves the spawn strategy, renders window templates, and delegates to the spawner.
 func (s *Service) OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) (multiplexer.LaunchResult, error) {
+	return s.OpenTmuxSessionWithAgentArgs(ctx, name, path, remote, targetWindow, background, nil)
+}
+
+// OpenTmuxSessionWithAgentArgs applies process-local arguments when starting agent windows.
+func (s *Service) OpenTmuxSessionWithAgentArgs(ctx context.Context, name, path, remote, targetWindow string, background bool, agentArgs map[string][]string) (multiplexer.LaunchResult, error) {
 	strategy := config.ResolveSpawn(s.config.Rules, remote, false)
 	if !strategy.IsWindows() {
 		return multiplexer.LaunchResult{}, fmt.Errorf("tmux action requires windows config (legacy spawn commands should use shell executor)")
@@ -1004,6 +1012,7 @@ func (s *Service) OpenTmuxSession(ctx context.Context, name, path, remote, targe
 		return multiplexer.LaunchResult{}, err
 	}
 
+	renderer = renderer.WithAgentArgs(agentArgs)
 	return s.spawner.OpenWindowsWith(ctx, strategy.Windows, data, background, targetWindow, renderer)
 }
 
