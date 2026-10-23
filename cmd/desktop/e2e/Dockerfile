@@ -1,26 +1,17 @@
 # Browser image version matches cmd/desktop/e2e/package-lock.json's @playwright/test.
 # Index digests retain the upstream multi-architecture manifests.
-FROM golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132 AS go
-
 FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
-COPY --from=go /usr/local/go /usr/local/go
-ENV PATH=/usr/local/go/bin:${PATH} \
-    CI=1
+ENV CI=1
 
 # The server-build action runtime uses git and tmux; bash, curl, and coreutils
 # are used by the isolated e2e harness. The Playwright base image already has
-# the matching browser system dependencies installed.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      git tmux bash curl ca-certificates \
+# the browser system dependencies and all of these but tmux. Naming the others
+# here upgrades them, and the image's Azure mirror has served those downloads
+# at 45 kB/s.
+RUN apt-get update && apt-get install -y --no-install-recommends tmux \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
-COPY go.mod go.sum ./
-RUN go mod download
-COPY package.json package-lock.json .npmrc ./
-COPY web/packages/ui/package.json ./web/packages/ui/
-COPY cmd/desktop/frontend/package.json ./cmd/desktop/frontend/
-RUN npm ci
 COPY cmd/desktop/e2e/package.json cmd/desktop/e2e/package-lock.json ./cmd/desktop/e2e/
 RUN cd cmd/desktop/e2e && npm ci
 COPY . .
@@ -29,12 +20,10 @@ COPY . .
 # otherwise surface mid-suite.
 RUN cd cmd/desktop/e2e && npx tsc --noEmit
 
-# Build the frontend and the headless server at image-build time rather than
-# inside Playwright's webServer launcher: compile failures surface here with
-# clean attribution instead of as a mysterious "webServer was not able to
-# start", and the webServer timeout then covers server startup alone.
-RUN cd cmd/desktop/frontend && npm run build
-RUN CGO_ENABLED=0 go build -tags server -o cmd/desktop/bin/hive-desktop-server ./cmd/desktop
+# run-docker.sh builds the server before the image, so compile failures surface
+# there with clean attribution, and the webServer timeout covers server startup
+# alone.
+COPY cmd/desktop/e2e/.build/hive-desktop-server cmd/desktop/bin/hive-desktop-server
 
 # Entrypoint validates the per-run harness marker minted by run-docker.sh,
 # then execs its arguments from cmd/desktop/e2e. The default CMD is the full

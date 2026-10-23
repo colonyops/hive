@@ -9,9 +9,9 @@ if [[ ! "${HIVE_DESKTOP_E2E_HARNESS:-}" =~ ^[[:xdigit:]]{64}$ ]]; then
 fi
 
 cd "$(dirname "$0")/../../../.."
-# The image prebuilds the server, so the webServer timeout covers startup only.
+# run-docker.sh prebuilds the server, so the webServer timeout covers startup only.
 if [[ ! -x cmd/desktop/bin/hive-desktop-server ]]; then
-  echo "error: cmd/desktop/bin/hive-desktop-server missing; the e2e image must prebuild it (cmd/desktop/e2e/Dockerfile)" >&2
+  echo "error: cmd/desktop/bin/hive-desktop-server missing; run-docker.sh must prebuild it (cmd/desktop/e2e/scripts/run-docker.sh)" >&2
   exit 1
 fi
 
