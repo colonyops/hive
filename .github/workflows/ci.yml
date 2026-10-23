@@ -188,15 +188,19 @@ jobs:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.cli-integration == 'true'
     runs-on: ubuntu-latest
+    env:
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The CLI and the drive server build with CGO_ENABLED=0, and tmux runs
-      # inside the test container, so this job needs no Linux packages.
+      # inside the test container, so this job needs no Linux packages. The
+      # tool list leaves out wails3, whose install links GTK.
       - uses: ./.github/actions/setup-go-env
         with:
           cache-name: integration
           desktop-deps: "false"
+          mise-install-args: go goreleaser go:github.com/abice/go-enum github:sqlc-dev/sqlc github:hay-kot/gobusgen
 
       - name: Run integration tests
         run: mise run cli:integration
