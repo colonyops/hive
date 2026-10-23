@@ -26,7 +26,7 @@ actions:
     type: launch-session
     show_in_detail: true
     applies_to: [pr]
-    repo_template: "https://github.com/{{ .Payload.repo }}.git"
+    repo_template: "{{ .ItemRemote }}"
     prompt_template: |
       Review pull request #{{ .Payload.num }} in {{ .Payload.repo }}.
       {{ .Payload.url }}
@@ -56,7 +56,7 @@ actions:
     type: launch-session
     show_in_detail: true
     applies_to: [pr]
-    repo_template: "https://github.com/{{ .Payload.repo }}.git"
+    repo_template: "{{ .ItemRemote }}"
     prompt_template: |
       Address the review feedback on pull request #{{ .Payload.num }} in {{ .Payload.repo }}.
       {{ .Payload.url }}
@@ -82,7 +82,7 @@ actions:
     type: launch-session
     show_in_detail: true
     applies_to: [issue]
-    repo_template: "https://github.com/{{ .Payload.repo }}.git"
+    repo_template: "{{ .ItemRemote }}"
     prompt_template: |
       Start work on issue #{{ .Payload.num }} in {{ .Payload.repo }}.
       {{ .Payload.url }}

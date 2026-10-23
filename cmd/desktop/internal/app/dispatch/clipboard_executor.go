@@ -18,7 +18,7 @@ import (
 // It is the single renderer both the detail-pane render-only path
 // (InboxService.RenderClipboardAction) and ClipboardExecutor call, so the text
 // a user copies can never drift from what a durable dispatch would produce.
-func RenderClipboardText(action actions.Action, key string, payload []byte, inputs map[string]string) (string, error) {
+func RenderClipboardText(action actions.Action, key string, payload []byte, inputs map[string]string, remotes RemoteGenerator) (string, error) {
 	var decoded map[string]any
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		return "", fmt.Errorf("clipboard: decode payload: %w", err)
@@ -28,6 +28,7 @@ func RenderClipboardText(action actions.Action, key string, payload []byte, inpu
 		Payload: decoded,
 		Raw:     json.RawMessage(payload),
 		Inputs:  inputs,
+		remotes: remotes,
 	})
 }
 

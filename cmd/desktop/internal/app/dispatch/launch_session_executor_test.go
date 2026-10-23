@@ -27,12 +27,14 @@ import (
 type fakeSessionLauncher struct {
 	calls []LaunchSessionRequest
 	path  string
-	err   error
+	// remote is the stored remote the fake reports for the created session.
+	remote string
+	err    error
 }
 
 func (f *fakeSessionLauncher) LaunchSession(_ context.Context, req LaunchSessionRequest) (SessionExecutionOutcome, error) {
 	f.calls = append(f.calls, req)
-	return SessionExecutionOutcome{ID: "session-1", Name: req.Name, Slug: "slug-1", Path: f.path}, f.err
+	return SessionExecutionOutcome{ID: "session-1", Name: req.Name, Slug: "slug-1", Path: f.path, Remote: f.remote}, f.err
 }
 
 type fakeWorkspaceSessionLauncher struct {

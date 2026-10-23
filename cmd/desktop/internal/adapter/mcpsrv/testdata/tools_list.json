@@ -418,6 +418,9 @@
                     "path": {
                       "type": "string"
                     },
+                    "remote": {
+                      "type": "string"
+                    },
                     "slug": {
                       "type": "string"
                     }

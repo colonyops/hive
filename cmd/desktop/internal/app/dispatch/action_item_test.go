@@ -100,7 +100,7 @@ func TestActionApplicability_LaunchSessionWithRepoTemplateSatisfied(t *testing.T
 	action := probeLaunchSessionAction("deploy", "{{ .Payload.repo }}", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{"repo":"acme/site"}`)}
 
-	ok, reason := ActionApplicability(action, item)
+	ok, reason := ActionApplicability(action, item, nil)
 	assert.True(t, ok)
 	assert.Empty(t, reason)
 }
@@ -109,7 +109,7 @@ func TestActionApplicability_PayloadMissingRepoIsRenderErrorAndInapplicable(t *t
 	action := probeLaunchSessionAction("deploy", "{{ .Payload.repo }}", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{"title":"no repo key"}`)}
 
-	ok, reason := ActionApplicability(action, item)
+	ok, reason := ActionApplicability(action, item, nil)
 	assert.False(t, ok)
 	assert.Contains(t, reason, "repo_template", "the reason surfaces the underlying template error")
 }
@@ -118,7 +118,7 @@ func TestActionApplicability_BareTemplateOverBlankRepoIsInapplicable(t *testing.
 	action := probeLaunchSessionAction("deploy", "{{ .Payload.repo }}", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{"repo":""}`)}
 
-	ok, reason := ActionApplicability(action, item)
+	ok, reason := ActionApplicability(action, item, nil)
 	assert.False(t, ok)
 	assert.Contains(t, reason, "repo_template")
 }
@@ -132,7 +132,7 @@ func TestActionApplicability_LiteralWrappedEmptyRepoStaysApplicableByDesign(t *t
 	action := probeLaunchSessionAction("deploy", "https://github.com/{{ .Payload.repo }}.git", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{"repo":""}`)}
 
-	ok, reason := ActionApplicability(action, item)
+	ok, reason := ActionApplicability(action, item, nil)
 	assert.True(t, ok, "https://github.com/.git is a non-blank render")
 	assert.Empty(t, reason)
 }
@@ -141,7 +141,7 @@ func TestActionApplicability_WhitespaceOnlyRenderIsInapplicable(t *testing.T) {
 	action := probeLaunchSessionAction("deploy", "   {{ .Payload.repo }}   ", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{"repo":""}`)}
 
-	ok, reason := ActionApplicability(action, item)
+	ok, reason := ActionApplicability(action, item, nil)
 	assert.False(t, ok)
 	assert.Contains(t, reason, "repo_template")
 }
@@ -150,7 +150,7 @@ func TestActionApplicability_InteractiveLaunchSessionImposesNoRequirement(t *tes
 	action := probeLaunchSessionAction("launch", "", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{}`)}
 
-	ok, reason := ActionApplicability(action, item)
+	ok, reason := ActionApplicability(action, item, nil)
 	assert.True(t, ok)
 	assert.Empty(t, reason)
 }
@@ -163,11 +163,11 @@ func TestActionApplicability_ShellAndPublishMessageImposeNoRequirement(t *testin
 	// probed for applicability (they fail visibly at run time instead).
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{}`)}
 
-	ok, reason := ActionApplicability(shell, item)
+	ok, reason := ActionApplicability(shell, item, nil)
 	assert.True(t, ok)
 	assert.Empty(t, reason)
 
-	ok, reason = ActionApplicability(publish, item)
+	ok, reason = ActionApplicability(publish, item, nil)
 	assert.True(t, ok)
 	assert.Empty(t, reason)
 }
@@ -176,11 +176,11 @@ func TestActionApplicability_AppliesToMatchingIsCaseInsensitive(t *testing.T) {
 	action := probeLaunchSessionAction("deploy", "", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{}`)}
 
-	ok, _ := ActionApplicability(action, item)
+	ok, _ := ActionApplicability(action, item, nil)
 	assert.True(t, ok, "applies_to matches the canonical kind case-insensitively")
 
 	item.Kind = "Issue"
-	ok, reason := ActionApplicability(action, item)
+	ok, reason := ActionApplicability(action, item, nil)
 	assert.False(t, ok)
 	assert.Contains(t, reason, "does not apply")
 }
@@ -190,7 +190,7 @@ func TestActionApplicability_EmptyAppliesToMatchesAnyKind(t *testing.T) {
 	action.AppliesTo = nil
 	item := DecodedActionItem{ID: "1", Kind: "anything", Payload: []byte(`{}`)}
 
-	ok, _ := ActionApplicability(action, item)
+	ok, _ := ActionApplicability(action, item, nil)
 	assert.True(t, ok)
 }
 
@@ -204,19 +204,19 @@ func TestActionApplicability_UntypedItemIsTargetableByDefaultKind(t *testing.T) 
 	require.NoError(t, err)
 
 	anyKind := probeLaunchSessionAction("any", "")
-	ok, _ := ActionApplicability(anyKind, item)
+	ok, _ := ActionApplicability(anyKind, item, nil)
 	assert.True(t, ok, "empty applies_to still matches everything")
 
 	byDefault := probeLaunchSessionAction("untyped", "", DefaultItemKind)
-	ok, _ = ActionApplicability(byDefault, item)
+	ok, _ = ActionApplicability(byDefault, item, nil)
 	assert.True(t, ok, "applies_to: [Item] targets untyped items")
 
 	lowercase := probeLaunchSessionAction("untyped-lower", "", "item")
-	ok, _ = ActionApplicability(lowercase, item)
+	ok, _ = ActionApplicability(lowercase, item, nil)
 	assert.True(t, ok, "applies_to matching stays case-insensitive")
 
 	scoped := probeLaunchSessionAction("scoped", "", "pr")
-	ok, reason := ActionApplicability(scoped, item)
+	ok, reason := ActionApplicability(scoped, item, nil)
 	assert.False(t, ok, "an untyped item is not swept up by unrelated kinds")
 	assert.Contains(t, reason, "does not apply")
 }

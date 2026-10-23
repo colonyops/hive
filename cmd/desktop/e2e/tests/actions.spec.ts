@@ -222,7 +222,7 @@ test('publishes rendered message and launches templated and dialog sessions agai
   await expect.poll(async () => (await smoke(page)).outputCommands.find((command) => command.actionId === templated)).toEqual(expect.objectContaining({
     key: 'pr2841',
     status: 'done',
-    result: { session: { id: expect.any(String), name: `${templated}-pr2841`, slug: nonEmpty, path: nonEmpty } },
+    result: { session: { id: expect.any(String), name: `${templated}-pr2841`, slug: nonEmpty, path: nonEmpty, remote: expect.stringContaining('remote.git') } },
     stdout: `post-hook pr2841 ${templated}-pr2841`,
   }))
 
@@ -237,7 +237,7 @@ test('publishes rendered message and launches templated and dialog sessions agai
   await expect.poll(async () => (await smoke(page)).outputCommands.find((command) => command.actionId === action(state.runId, 'dialog-launch'))).toEqual(expect.objectContaining({
     key: 'iss1190',
     status: 'done',
-    result: { session: { id: expect.any(String), name: interactiveName, slug: nonEmpty, path: nonEmpty } },
+    result: { session: { id: expect.any(String), name: interactiveName, slug: nonEmpty, path: nonEmpty, remote: expect.stringContaining('remote.git') } },
   }))
 })
 
