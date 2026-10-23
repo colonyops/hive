@@ -106,6 +106,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-go-env
+        with:
+          cache-name: test
 
       - name: Check generated files are up-to-date
         run: mise run check:generate
@@ -128,12 +130,23 @@ jobs:
       - name: Build
         run: go build ./...
 
+      # main runs the same non-race tests as a pull request so that the cache
+      # it saves holds the test results a pull request can reuse.
       - name: Test
-        if: github.event_name == 'pull_request'
         run: mise run test
 
+  go-race:
+    needs: changes
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-go-env
+        with:
+          cache-name: race
+
       - name: Test with the race detector
-        if: github.event_name != 'pull_request'
         run: mise run test:race
 
   go-lint:
@@ -144,12 +157,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-go-env
+        with:
+          cache-name: lint
 
+      # setup-go-env caches ~/.cache/golangci-lint with the Go cache. The
+      # action's own cache keys on the week and go.mod and never saves on a hit.
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.14.0
           args: --timeout=6m
+          skip-cache: true
 
       - name: Lint workflows
         run: mise run lint:workflows
@@ -173,7 +191,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The CLI and the drive server build with CGO_ENABLED=0, and tmux runs
+      # inside the test container, so this job needs no Linux packages.
       - uses: ./.github/actions/setup-go-env
+        with:
+          cache-name: integration
+          desktop-deps: "false"
 
       - name: Run integration tests
         run: mise run cli:integration
@@ -297,8 +320,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        env:
+          MISE_LOCK_HASH: ${{ hashFiles('mise.lock') }}
         with:
           install_args: python uv
+          cache_key: "{{cache_key_prefix}}-{{platform}}-{{install_args_hash}}-{{env.MISE_LOCK_HASH}}"
 
       - name: Build the site
         run: mise run docs:build
@@ -308,7 +334,7 @@ jobs:
   # fails here.
   ci-ok:
     if: always()
-    needs: [changes, go, go-lint, integration, desktop-frontend-build, desktop-frontend-test, drive-server-frontend, desktop-e2e, site]
+    needs: [changes, go, go-race, go-lint, integration, desktop-frontend-build, desktop-frontend-test, drive-server-frontend, desktop-e2e, site]
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
