@@ -270,7 +270,7 @@ compiles `winid.swift` with the system `swiftc`.
 ## 5. Authoring views an agent can drive
 
 The `data-testid` is the agent API and the Playwright API at once: a flow
-proven here ports to `cmd/desktop/e2e/tests/*.spec.ts` with the same
+proven here ports to `cmd/desktop/e2e/tests/**/*.spec.ts` with the same
 `getByTestId` selectors, and a renamed id breaks both. Before a PR that adds or
 changes a view, run the grouped listing above on it and check every step a
 smoke test would take has a handle.

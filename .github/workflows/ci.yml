@@ -28,6 +28,7 @@ jobs:
       site: ${{ steps.filter.outputs.site }}
       desktop-frontend: ${{ steps.filter.outputs.desktop-frontend }}
       drive-server-frontend: ${{ steps.filter.outputs.drive-server-frontend }}
+      desktop-e2e: ${{ steps.filter.outputs.desktop-e2e }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -84,6 +85,17 @@ jobs:
               - 'web/**'
               - 'package.json'
               - 'package-lock.json'
+              - '.github/workflows/ci.yml'
+            desktop-e2e:
+              - 'cmd/desktop/**'
+              - 'internal/**'
+              - 'pkg/**'
+              - 'web/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.npmrc'
               - '.github/workflows/ci.yml'
 
   go:
@@ -246,6 +258,33 @@ jobs:
       - name: Test frontend
         run: npm test -w drive-server-frontend
 
+  # The whole suite runs inside the image that run-docker.sh builds, so the
+  # job needs Docker and mise, not Go or Node.
+  desktop-e2e:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.desktop-e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          install: false
+
+      - name: Run desktop e2e tests
+        run: mise run desktop:e2e
+
+      - name: Upload traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-e2e-test-results
+          path: cmd/desktop/e2e/test-results/
+          retention-days: 7
+
   site:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.site == 'true'
@@ -269,7 +308,7 @@ jobs:
   # fails here.
   ci-ok:
     if: always()
-    needs: [changes, go, go-lint, integration, desktop-frontend-build, desktop-frontend-test, drive-server-frontend, site]
+    needs: [changes, go, go-lint, integration, desktop-frontend-build, desktop-frontend-test, drive-server-frontend, desktop-e2e, site]
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')

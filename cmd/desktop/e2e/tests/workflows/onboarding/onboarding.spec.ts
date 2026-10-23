@@ -1,19 +1,7 @@
-import { expect, test, type Page } from '@playwright/test'
-import { mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const here = dirname(fileURLToPath(import.meta.url))
-const screenshotsDir = join(here, '..', 'screenshots')
-
-// Dedicated onboarding-mode servers, one per browser project: the mock GitHub
-// connection is a per-process singleton that stays connected once the fake
-// device flow grants, so projects must not share an instance. Ports match
-// scripts/serve.sh.
-const onboardingPorts: Record<string, number> = {
-  chromium: 8932,
-  webkit: 8933,
-}
+import type { Page } from '@playwright/test'
+import { screenshotPath } from '../../../fixtures/paths.js'
+import { serverURL } from '../../../fixtures/servers.js'
+import { expect, tag, test } from '../../../fixtures/test.js'
 
 // The first-run story is one ordered walk on a per-browser onboarding server.
 // Splitting it into named steps pins failures to a specific transition instead
@@ -32,18 +20,18 @@ const onboardingPorts: Record<string, number> = {
 // reload/bind ordering this flow exercises is covered deterministically by
 // unit tests (useFeedState, useFlowsSession); this suite is the real-stack
 // integration smoke on top.
-test.describe.serial('first-run onboarding, then profile and flow management', () => {
+test.describe.serial('first-run onboarding, then profile and flow management', { tag: [tag.onboarding, tag.flows, tag.critical] }, () => {
+  // Dedicated onboarding-mode servers, one per browser: the mock GitHub
+  // connection is a per-process singleton that stays connected once the fake
+  // device flow grants, so browsers must not share an instance.
+  test.use({ server: 'onboarding', serverStateReset: 'off' })
   test.describe.configure({ retries: 0 })
 
   let page: Page
-  let projectName: string
 
-  test.beforeAll(async ({ browser }, testInfo) => {
-    projectName = testInfo.project.name
-    const port = onboardingPorts[projectName]
-    if (!port) throw new Error(`no onboarding server port for project ${projectName}`)
+  test.beforeAll(async ({ browser, browserName }) => {
     page = await browser.newPage({
-      baseURL: `http://127.0.0.1:${port}`,
+      baseURL: serverURL('onboarding', browserName),
       viewport: { width: 1360, height: 864 },
     })
   })
@@ -56,7 +44,7 @@ test.describe.serial('first-run onboarding, then profile and flow management', (
   // The folder is typed rather than picked. The native directory dialog needs
   // a GUI, and this suite drives the headless server build, which has none;
   // the typed input exists for that reason as much as for keyboard users.
-  test('starts at the hive setup step and writes a config from it', async () => {
+  test('starts at the hive setup step and writes a config from it', async ({ browserName }) => {
     await page.goto('/')
 
     const onboarding = page.getByTestId('onboarding')
@@ -74,8 +62,7 @@ test.describe.serial('first-run onboarding, then profile and flow management', (
     await expect(claude).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('onboarding-hive-submit')).toBeDisabled()
 
-    await mkdir(screenshotsDir, { recursive: true })
-    await page.screenshot({ path: join(screenshotsDir, `onboarding-hive-${projectName}.png`), fullPage: true })
+    await page.screenshot({ path: screenshotPath(`onboarding-hive-${browserName}.png`), fullPage: true })
 
     // /tmp exists in the container, is not a repository, and should report no
     // repositories of its own.
@@ -114,19 +101,19 @@ test.describe.serial('first-run onboarding, then profile and flow management', (
     await expect(page.getByTestId('onboarding-connect')).toBeVisible()
   })
 
-  test('grants through the device flow, which seeds the profile it made', async () => {
+  test('grants through the device flow, which seeds the profile it made', async ({ browserName }) => {
     // Device flow: the mock backend grants after ~1.5s.
     await page.getByTestId('onboarding-connect').click()
     await expect(page.getByTestId('onboarding-user-code')).toHaveText('7B4C-Q22F')
     await expect(page.getByTestId('onboarding')).toContainText('Waiting for authorization…')
-    await page.screenshot({ path: join(screenshotsDir, `onboarding-device-flow-${projectName}.png`), fullPage: true })
+    await page.screenshot({ path: screenshotPath(`onboarding-device-flow-${browserName}.png`), fullPage: true })
 
     // A headless run can neither grant OS permission nor rely on an agent
     // binary, so it skips both steps.
     await expect(page.getByTestId('onboarding-permissions-skip')).toHaveText('Not now')
     await page.getByTestId('onboarding-permissions-skip').click()
     await expect(page.getByTestId('onboarding-agent-start')).toBeVisible()
-    await page.screenshot({ path: join(screenshotsDir, `onboarding-agent-${projectName}.png`), fullPage: true })
+    await page.screenshot({ path: screenshotPath(`onboarding-agent-${browserName}.png`), fullPage: true })
     await page.getByTestId('onboarding-agent-skip').click()
 
     // The starter graph is three sources.github -> feed pairs plus a "Review

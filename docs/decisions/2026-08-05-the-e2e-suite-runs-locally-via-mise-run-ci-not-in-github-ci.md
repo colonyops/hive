@@ -1,6 +1,6 @@
 # The e2e suite runs locally via mise run ci, not in GitHub CI
 
-- **Status:** accepted
+- **Status:** superseded by [the-full-desktop-e2e-suite-runs-in-github-ci](2026-10-23-the-full-desktop-e2e-suite-runs-in-github-ci.md)
 - **Date:** 2026-08-05
 
 ## Context
