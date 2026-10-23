@@ -43,6 +43,13 @@ pre-commit:
         - "cmd/hive/internal/sources/backend.go"
         - "cmd/desktop/internal/app/data/queries/queries/*.sql"
         - "cmd/desktop/internal/app/data/queries/migrations/*.sql"
+        - "cmd/drive-server/internal/store/control/queries/*.sql"
+        - "cmd/drive-server/internal/store/control/migrations/*.sql"
+        - "cmd/drive-server/internal/store/userdb/queries/*.sql"
+        - "cmd/drive-server/internal/store/userdb/migrations/*.sql"
+        - "cmd/drive-server/internal/core/scope.go"
+        - "internal/platform/driveapi/wire.go"
+        - "tygo.yaml"
         - "cmd/desktop/internal/app/activity/activity.go"
         - "cmd/desktop/internal/app/jobs/jobs.go"
         - "cmd/desktop/internal/app/data/models/classify.go"
@@ -108,6 +115,45 @@ pre-push:
           exit 0
         fi
         mise run desktop:frontend:lint
+
+    - name: drive-server-frontend-test
+      glob:
+        - "cmd/drive-server/frontend/*"
+        - "web/**"
+        - "package.json"
+        - "package-lock.json"
+      run: |
+        if [ ! -d node_modules ]; then
+          echo "SKIP drive server frontend tests: node_modules is missing (run 'mise run drive-server:frontend:install')." >&2
+          exit 0
+        fi
+        mise run drive-server:frontend:test
+
+    - name: drive-server-frontend-format
+      glob:
+        - "cmd/drive-server/frontend/*"
+        - "web/**"
+        - "package.json"
+        - "package-lock.json"
+      run: |
+        if [ ! -d node_modules ]; then
+          echo "SKIP drive server frontend format check: node_modules is missing (run 'mise run drive-server:frontend:install')." >&2
+          exit 0
+        fi
+        mise run drive-server:frontend:format:check
+
+    - name: drive-server-frontend-lint
+      glob:
+        - "cmd/drive-server/frontend/*"
+        - "web/**"
+        - "package.json"
+        - "package-lock.json"
+      run: |
+        if [ ! -d node_modules ]; then
+          echo "SKIP drive server frontend lint: node_modules is missing (run 'mise run drive-server:frontend:install')." >&2
+          exit 0
+        fi
+        mise run drive-server:frontend:lint
 
     - name: ui-test
       glob:

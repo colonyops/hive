@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "web/packages/*",
-    "cmd/desktop/frontend"
+    "cmd/desktop/frontend",
+    "cmd/drive-server/frontend"
   ],
   "scripts": {
     "ui:test": "npm run test -w @hive/ui",

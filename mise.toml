@@ -3,10 +3,11 @@
 # program in the module (`generate`, `test`, `lint`, `check`, `ci`). Each
 # program's own tasks live in a task file beside it and carry its prefix:
 # `cli:*` from cmd/hive/tasks.toml, `desktop:*` from cmd/desktop/tasks.toml,
-# and `docs:*` from docs/tasks.toml.
+# `drive-server:*` from cmd/drive-server/tasks.toml, and `docs:*` from
+# docs/tasks.toml.
 
 [task_config]
-includes = ["cmd/hive/tasks.toml", "cmd/desktop/tasks.toml", "docs/tasks.toml"]
+includes = ["cmd/hive/tasks.toml", "cmd/desktop/tasks.toml", "cmd/drive-server/tasks.toml", "docs/tasks.toml"]
 
 [tools]
 # Go Tools
@@ -67,25 +68,36 @@ sources = [
   "internal/domain/drive/space.go",
   "internal/domain/drive/kind.go",
   "internal/domain/session/clone_protocol.go",
+  "cmd/drive-server/internal/core/scope.go",
 ]
 outputs = { auto = true }
-run = "go-enum --nocase --names --marshal -f internal/platform/tmux/exec/launch.go -f cmd/hive/internal/action/type.go -f internal/domain/hc/item.go -f internal/domain/notify/store.go -f internal/domain/todo/todo.go -f cmd/hive/internal/sources/backend.go -f cmd/desktop/internal/app/activity/activity.go -f cmd/desktop/internal/app/jobs/jobs.go -f cmd/desktop/internal/app/data/models/classify.go -f cmd/desktop/internal/app/flow/flow.go -f cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go -f cmd/desktop/internal/app/agentws/workspace.go -f cmd/desktop/internal/app/schedule/spec.go -f internal/domain/deeplink/deeplink.go -f internal/domain/drive/space.go -f internal/domain/drive/kind.go -f internal/domain/session/clone_protocol.go"
+run = "go-enum --nocase --names --marshal -f internal/platform/tmux/exec/launch.go -f cmd/hive/internal/action/type.go -f internal/domain/hc/item.go -f internal/domain/notify/store.go -f internal/domain/todo/todo.go -f cmd/hive/internal/sources/backend.go -f cmd/desktop/internal/app/activity/activity.go -f cmd/desktop/internal/app/jobs/jobs.go -f cmd/desktop/internal/app/data/models/classify.go -f cmd/desktop/internal/app/flow/flow.go -f cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go -f cmd/desktop/internal/app/agentws/workspace.go -f cmd/desktop/internal/app/schedule/spec.go -f internal/domain/deeplink/deeplink.go -f internal/domain/drive/space.go -f internal/domain/drive/kind.go -f internal/domain/session/clone_protocol.go -f cmd/drive-server/internal/core/scope.go"
 
 [tasks."generate:sqlc"]
-description = "Generate both store layers (hive.db and the desktop pipeline) from sqlc.yaml"
+description = "Generate every store layer (hive.db, the desktop pipeline, and the drive server) from sqlc.yaml"
 sources = [
   "internal/store/db/queries/*.sql",
   "internal/store/db/migrations/*.up.sql",
   "cmd/desktop/internal/app/data/queries/queries/*.sql",
   "cmd/desktop/internal/app/data/queries/migrations/*.up.sql",
+  "cmd/drive-server/internal/store/control/queries/*.sql",
+  "cmd/drive-server/internal/store/control/migrations/*.up.sql",
+  "cmd/drive-server/internal/store/userdb/queries/*.sql",
+  "cmd/drive-server/internal/store/userdb/migrations/*.up.sql",
   "sqlc.yaml",
 ]
 outputs = { auto = true }
 run = "sqlc generate"
 
+[tasks."generate:tygo"]
+description = "Generate the drive server web UI's wire types from internal/platform/driveapi"
+sources = ["internal/platform/driveapi/wire.go", "tygo.yaml"]
+outputs = ["cmd/drive-server/frontend/src/wire.gen.ts"]
+run = "go tool tygo generate"
+
 [tasks.generate]
 description = "Run all code generators"
-depends = ["generate:enums", "generate:sqlc"]
+depends = ["generate:enums", "generate:sqlc", "generate:tygo"]
 sources = ["internal/hive/events/events.go"]
 outputs = ["internal/hive/events/eventbus.gen.go"]
 run = "go generate ./..."
@@ -136,15 +148,15 @@ go mod tidy -diff || {
 """
 
 [tasks."check:generate"]
-description = "Verify generated code (enums, sqlc, gobusgen) matches its sources"
+description = "Verify generated code (enums, sqlc, gobusgen, tygo) matches its sources"
 run = """
 mise run --force generate
 # -N registers files the generators created that the checkout lacks: plain
 # git diff cannot see an untracked file, so a brand-new enum or query output
 # would pass unnoticed. The diff is against the index, not HEAD, so it also
 # answers correctly as a pre-commit hook.
-git add -N internal cmd/hive/internal cmd/desktop/internal
-git diff --exit-code -- '*_enum.go' '*.gen.go' 'internal/store/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' || {
+git add -N internal cmd/hive/internal cmd/desktop/internal cmd/drive-server/internal cmd/drive-server/frontend/src/wire.gen.ts
+git diff --exit-code -- '*_enum.go' '*.gen.go' 'cmd/drive-server/frontend/src/wire.gen.ts' 'internal/store/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' 'cmd/drive-server/internal/store/*/db/*.go' || {
   echo "Generated files are out of date. Run 'mise run generate' and commit the result." >&2
   exit 1
 }
@@ -186,7 +198,7 @@ run = "govulncheck ./..."
 description = "The Go gate: generated code, ADRs, migrations, tidy, lint, tests, goreleaser config. Needs no Python, Node, or Docker"
 run = [
   { tasks = ["check:generate"] },
-  { tasks = ["check:adr", "desktop:check:migrations", "check:tidy", "lint", "test", "cli:check:goreleaser"] },
+  { tasks = ["check:adr", "desktop:check:migrations", "drive-server:check:migrations", "check:tidy", "lint", "test", "cli:check:goreleaser"] },
 ]
 
 # @hive/ui (web/packages/ui) is a member of the repo-root npm workspace; the
@@ -215,16 +227,17 @@ run = "actionlint"
 # dropped from CI for being too slow, so local is the only place it runs.
 # Needs Docker, Node, Python, and the network.
 [tasks.ci]
-description = "Run every gate locally: Go, the desktop bindings and frontend, the site, the CLI integration tests, and the e2e suite CI does not run"
+description = "Run every gate locally: Go, the desktop bindings and frontend, the drive server frontend, the site, the CLI integration tests, and the e2e suites CI does not run"
 run = [
   { tasks = ["check:generate"] },
-  { tasks = ["desktop:check:bindings", "check:adr", "desktop:check:migrations", "check:tidy"] },
+  { tasks = ["desktop:check:bindings", "check:adr", "desktop:check:migrations", "drive-server:check:migrations", "check:tidy"] },
   # docs:build replaces docs/site while Go tools walk ./..., so these batches
   # must not overlap.
   { tasks = ["lint", "lint:workflows", "test", "check:deadcode", "check:vuln", "cli:check:goreleaser"] },
   { tasks = ["docs:build", "desktop:frontend:install"] },
   { tasks = ["desktop:frontend:build", "desktop:frontend:test", "desktop:frontend:format:check", "desktop:frontend:lint"] },
   { tasks = ["ui:test", "ui:format:check", "ui:lint"] },
+  { tasks = ["drive-server:frontend:build", "drive-server:frontend:test", "drive-server:frontend:format:check", "drive-server:frontend:lint"] },
   { tasks = ["cli:integration"] },
   { tasks = ["desktop:e2e"] },
 ]
@@ -249,7 +262,7 @@ description = "List commits since the latest release"
 run = "git log $(git describe --tags --abbrev=0 --match 'v[0-9]*' --match 'desktop-v*')..HEAD --pretty=format:'- %s (%h)'"
 
 [tasks."changelog:new"]
-description = 'Add one release note to a changelog draft: mise run changelog:new -- --product <cli|desktop> --kind <added|changed|fixed> "The note"'
+description = 'Add one release note to a changelog draft: mise run changelog:new -- --product <cli|desktop|drive-server> --kind <added|changed|fixed> "The note"'
 run = "go run ./cmd/tools/release changelog new"
 
 [tasks."changelog:promote"]

@@ -11,7 +11,7 @@ const props = withDefaults(
     icon: Component
     /** Tooltip text when it says more than the accessible name should. */
     tooltip?: string
-    size?: 'sm' | 'md' | 'lg' | 'xl'
+    size?: 'sm' | 'md' | 'lg' | 'xl' | 'control'
     variant?: 'ghost' | 'outline'
     tone?: 'default' | 'danger'
     /** A pressed look: the open menu of a toggle, the current page of a nav button. */
@@ -29,8 +29,9 @@ const SIZES = {
   md: 'size-6 rounded-lg',
   lg: 'size-7 rounded-lg',
   xl: 'size-8.5 rounded-lg',
+  control: 'size-9 rounded-lg',
 }
-const ICON_SIZES = { sm: 'size-3', md: 'size-3.5', lg: 'size-3.5', xl: 'size-4' }
+const ICON_SIZES = { sm: 'size-3', md: 'size-3.5', lg: 'size-3.5', xl: 'size-4', control: 'size-4' }
 </script>
 
 <template>

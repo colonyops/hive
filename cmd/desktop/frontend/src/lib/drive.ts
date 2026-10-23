@@ -113,7 +113,6 @@ function isoOrUndefined(unixMs: number): string | undefined {
   return unixMs > 0 ? new Date(unixMs).toISOString() : undefined
 }
 
-/** The reader's view of a document, or null for a kind the reader does not render (a plain file). */
 export function toReaderDocument(doc: DocumentWire): ReaderDocument | null {
   const { entry, canvas } = doc
   if (entry.kind !== 'markdown' && entry.kind !== 'html' && entry.kind !== 'canvas') return null

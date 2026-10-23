@@ -5,14 +5,12 @@ type LogMethod = (msg: string, fields?: object) => void
 
 /**
  * Everything `@hive/ui` needs from the app that hosts it and cannot get from
- * the browser alone. The desktop fills it with Wails calls; the web server
- * fills it with plain browser APIs.
+ * the browser alone.
  */
 export interface HiveUiPlatform {
   clipboard: { writeText(text: string): Promise<void> }
   log(name: string): { debug: LogMethod; warn: LogMethod; error: LogMethod }
   perf?: { start(name: string, attrs?: object): unknown; end(handle: unknown, attrs?: object): void }
-  /** The live app theme; the highlighter and diagrams follow it. */
   theme: Readonly<Ref<Theme>>
   toast?(msg: string): void
 }

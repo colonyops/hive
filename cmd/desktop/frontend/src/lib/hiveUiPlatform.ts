@@ -5,11 +5,8 @@ import { usePerf } from '../composables/usePerf'
 import { useToasts } from '../composables/useToasts'
 import { createLogger } from './log'
 
-// The native Wails clipboard (Clipboard.SetText), NOT navigator.clipboard /
-// vueuse's useClipboard, which are built on it: in the WKWebView that browser
-// API silently no-ops when the document is not focused, so copy worked only on
-// every other click. Routing through the Wails runtime writes to the OS
-// clipboard regardless of webview focus.
+// The Wails clipboard, not navigator.clipboard: in WKWebView that API silently
+// no-ops when the document is not focused.
 export const hiveUiPlatform: HiveUiPlatform = {
   clipboard: { writeText: (text) => Clipboard.SetText(text) },
   log(name) {

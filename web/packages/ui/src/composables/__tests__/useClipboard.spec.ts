@@ -29,7 +29,7 @@ describe('useClipboard', () => {
     mocks.SetText.mockResolvedValue(undefined)
     const { api, scope } = inScope()
 
-    await api.copy('hello')
+    expect(await api.copy('hello')).toBe(true)
     expect(mocks.SetText).toHaveBeenCalledWith('hello')
     expect(api.status.value).toBe('success')
     expect(api.copied.value).toBe(true)
@@ -45,7 +45,7 @@ describe('useClipboard', () => {
     mocks.SetText.mockRejectedValue(new Error('no clipboard'))
     const { api, scope } = inScope()
 
-    await api.copy('x')
+    expect(await api.copy('x')).toBe(false)
     expect(api.status.value).toBe('error')
     expect(api.copied.value).toBe(false)
 

@@ -1,0 +1,131 @@
+import { fakePlatform } from '@hive/ui/test-utils/platform'
+import { flushPromises } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import DriveListing from '../components/DriveListing.vue'
+import { documentEntries, folderContents } from '../lib/entries'
+import { spaceFromKey } from '../lib/space'
+import { useViewMode } from '../lib/viewMode'
+import { mountWithRouter } from '../test-utils/mount'
+import { doc } from './fixtures'
+
+const api = vi.hoisted(() => ({ share: vi.fn(), unshare: vi.fn(), deleteDocument: vi.fn() }))
+vi.mock('../api', async (importOriginal) => ({ ...(await importOriginal<typeof import('../api')>()), api }))
+
+const space = spaceFromKey('acme/notes')
+const docs = [
+  doc({ path: 'plan.md', title: 'Plan', shared: { url: 'http://drive.test/s/x', expires_in: '' } }),
+  doc({ path: 'docs/guide.md', title: 'Guide' }),
+]
+
+function mountListing(entries = folderContents(docs, space, '')) {
+  return mountWithRouter(DriveListing, {
+    path: '/repos/acme/notes',
+    props: { crumbs: [{ label: 'acme/notes', to: '/repos/acme/notes' }], entries, emptyMessage: 'Nothing here.' },
+  })
+}
+
+describe('DriveListing', () => {
+  beforeEach(() => {
+    Object.values(api).forEach((m) => m.mockReset())
+  })
+
+  it('lists folders first with the title as name and the file name as tooltip', async () => {
+    const { wrapper } = await mountListing()
+
+    const rows = wrapper.findAll('[data-testid="entry"]')
+    expect(rows.map((r) => r.attributes('data-kind'))).toEqual(['dir', 'doc'])
+    expect(rows[1].text()).toContain('Plan')
+    expect(rows[1].text()).not.toContain('plan.md')
+    expect(rows[1].attributes('title')).toBe('plan.md')
+    expect(rows[1].text()).toContain('Shared')
+    expect(rows[0].text()).not.toContain('Shared')
+  })
+
+  it('shows a Location column only in cross-space listings', async () => {
+    const across = await mountListing(documentEntries([doc({ space: 'acme/notes', path: 'docs/guide.md' })]))
+    expect(across.wrapper.get('[data-testid="entry-location"]').text()).toBe('acme/notes / docs')
+  })
+
+  it('opens a folder or a document on double click', async () => {
+    const { wrapper, router } = await mountListing()
+    const rows = wrapper.findAll('[data-testid="entry"]')
+
+    await rows[0].trigger('dblclick')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/repos/acme/notes/docs')
+
+    await rows[1].trigger('dblclick')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/repos/acme/notes/plan.md')
+  })
+
+  it('opens the active entry with Enter and walks with the arrow keys', async () => {
+    const { wrapper, router } = await mountListing()
+    const list = wrapper.get('[data-testid="entries"]')
+
+    await list.trigger('keydown', { key: 'ArrowDown' })
+    await list.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/repos/acme/notes/plan.md')
+  })
+
+  it('switches between list and grid and remembers the choice', async () => {
+    const { wrapper } = await mountListing()
+    expect(wrapper.get('[data-testid="entries"]').attributes('data-mode')).toBe('list')
+
+    await wrapper.get('[data-testid="view-toggle-grid"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="entries"]').attributes('data-mode')).toBe('grid')
+    expect(localStorage.getItem('drive.view')).toBe('grid')
+    expect(useViewMode().mode.value).toBe('grid')
+  })
+
+  it('falls back to the list when storage is blocked', () => {
+    const spy = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+
+    expect(useViewMode().mode.value).toBe('list')
+    spy.mockRestore()
+  })
+
+  it('opens the share popover from the row menu and shares', async () => {
+    api.share.mockResolvedValue({ url: 'http://drive.test/s/new', expires_in: '' })
+    const entries = documentEntries([doc({ path: 'a.md' })])
+    const { wrapper } = await mountListing(entries)
+
+    await wrapper.get('[data-testid="entry-menu"]').trigger('click')
+    expect(document.body.querySelector('[data-testid="menu-copy-link"]')).toBeNull()
+    document.body.querySelector<HTMLElement>('[data-testid="menu-share"]')!.click()
+    await flushPromises()
+    document.body.querySelector<HTMLElement>('[data-testid="share-create"]')!.click()
+    await flushPromises()
+
+    expect(api.share).toHaveBeenCalledWith('/api/v1/repos/acme/notes', 'a.md', '')
+    expect(wrapper.emitted('changed')).toBeTruthy()
+  })
+
+  async function copyFromRowMenu() {
+    const mounted = await mountListing()
+    await mounted.wrapper.findAll('[data-testid="entry-menu"]')[1].trigger('click')
+    document.body.querySelector<HTMLElement>('[data-testid="menu-copy-link"]')!.click()
+    await flushPromises()
+    return mounted
+  }
+
+  it('copies the link of a shared document from the row menu', async () => {
+    const { toast } = await copyFromRowMenu()
+
+    expect(fakePlatform.clipboard.writeText).toHaveBeenCalledWith('http://drive.test/s/x')
+    expect(toast.show).toHaveBeenCalledWith('Link copied')
+  })
+
+  it('reports a copy the clipboard refused instead of claiming success', async () => {
+    fakePlatform.clipboard.writeText.mockRejectedValueOnce(new Error('denied'))
+    const { toast } = await copyFromRowMenu()
+
+    expect(toast.show).toHaveBeenCalledWith('Could not copy the link')
+    expect(toast.show).not.toHaveBeenCalledWith('Link copied')
+  })
+})

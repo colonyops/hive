@@ -113,7 +113,7 @@ git diff HEAD --exit-code -- cmd/desktop/frontend/bindings || {
 
 ["desktop:check:migrations"]
 description = "Verify the desktop's SQLite migrations are ordered and released history is immutable"
-run = "./cmd/desktop/scripts/check-migration-order.sh"
+run = "./scripts/check-migration-order.sh cmd/desktop/internal/app/data/queries/migrations"
 
 ["desktop:test"]
 description = "Run the desktop slice: frontend vitest + the app's Go packages and the shared packages it runs on"

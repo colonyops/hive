@@ -12,7 +12,7 @@ const copiedFor = 1500
  * click was a copy, so the host leaves links and everything else alone.
  */
 export function useCodeCopy() {
-  const { copy, status } = useClipboard()
+  const { copy } = useClipboard()
   const platform = useHiveUiPlatform()
   const timers = new Set<ReturnType<typeof setTimeout>>()
 
@@ -28,8 +28,7 @@ export function useCodeCopy() {
   }
 
   async function copyAndMark(button: HTMLElement, code: string): Promise<void> {
-    await copy(code)
-    if (status.value !== 'success') {
+    if (!(await copy(code))) {
       platform.toast?.('Could not copy to the clipboard')
       return
     }

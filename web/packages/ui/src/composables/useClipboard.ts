@@ -30,12 +30,15 @@ export function useClipboard(options: { resetDelay?: number } = {}) {
     }, resetDelay)
   }
 
-  async function copy(text: string): Promise<void> {
+  /** Resolves to whether the text reached the clipboard; it never rejects. */
+  async function copy(text: string): Promise<boolean> {
     try {
       await platform.clipboard.writeText(text)
       setStatus('success')
+      return true
     } catch {
       setStatus('error')
+      return false
     }
   }
 

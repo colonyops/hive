@@ -4,6 +4,7 @@ package extractors
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/colonyops/hive/internal/web"
@@ -18,12 +19,16 @@ type Validator interface {
 }
 
 // Body decodes a JSON request body into T, capped at 1 MiB with unknown
-// fields rejected, then validates it.
+// fields rejected, then validates it. A body over the cap returns the
+// *http.MaxBytesError itself, which mid.Errors renders as 413.
 func Body[T any](w http.ResponseWriter, r *http.Request) (T, error) {
 	var v T
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&v); err != nil {
+		if tooLarge, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			return v, tooLarge
+		}
 		return v, &web.BadRequestError{Msg: "invalid request body", Err: err}
 	}
 	return v, validate(v)

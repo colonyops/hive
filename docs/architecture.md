@@ -252,8 +252,11 @@ Dependencies point down. A program may import any shared layer except the
 stores, not only the engine: the desktop needs `platform/tmux/control` for terminal streaming and
 `platform/sqlite` for its own database. Nothing in `internal/` imports a
 program. Go's `internal` visibility keeps `cmd/hive/internal` and
-`cmd/desktop/internal` apart, and `cli-no-desktop-deps` keeps the CLI off the
-desktop's dependencies.
+`cmd/desktop/internal`, and `cmd/drive-server/internal` apart.
+`cli-no-desktop-deps` keeps the CLI off the desktop's dependencies, and
+`drive-server-no-program-deps` keeps the drive server off both programs, the
+Wails runtime, and the terminal UI libraries (ADR
+hive-drive-server-is-a-multi-tenant-program-with-one-sqlite-database-per-user).
 
 `internal/` is the hive engine both programs run on (ADR
 both-programs-run-on-one-layered-hive-engine). A package's path names its
@@ -269,7 +272,7 @@ needs no lint edit:
 | Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer | `pkg/`, `domain/` | `config-is-data` |
 | Web | `internal/web/` | Shared HTTP plumbing every program's HTTP surface uses: the error wire shape, `mid/` middleware, `extractors/` input decoding | everything except `hive/` and `store/` | `web-is-plumbing` |
 | Engine | `internal/hive/` | One subpackage per application service (`drive` owns the document tree under the context root), the event bus, and `hive.Engine`, which composes them | everything above | |
-| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features, program-only config | any shared layer except the stores, their own tree | `core`, `programs-use-services`, `cli-no-desktop-deps`, `desktop-no-cli-deps` |
+| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/`, `cmd/drive-server/internal/` | Input, rendering, program-only features, program-only config | any shared layer except the stores, their own tree | `core`, `programs-use-services`, `cli-no-desktop-deps`, `desktop-no-cli-deps`, `drive-server-no-program-deps` |
 
 `shared-surface-free` keeps charm, Wails and both programs out of all of
 `internal/`.
@@ -334,6 +337,20 @@ web/packages/ui/                  # @hive/ui: theme, base CSS, and UI primitives
                                   #   (Shared frontend package)
 package.json  package-lock.json   # the repo-root npm workspace
 main.go  go.mod                   # one module for every program
+
+cmd/drive-server/                 # Hive Drive Server: `hive-drive-server`, the shared-document server
+  main.go                         # urfave/cli root: serve
+  tasks.toml                      # the drive-server:* mise tasks
+  dev/drive-server.yaml           # the dev policy set `drive-server:dev` loads
+  frontend/                       # the embedded Vue SPA
+  internal/
+    config/                       # Config, Policy, Size: env, flags, and drive-server.yaml
+    app/                          # composition root: the appkit/plugs manager
+    core/                         # accounts, sign-in, tokens, documents, shares
+    store/                        # control/ (control.db), userdb/ (users/<id>.db)
+    httpapi/                      # ServeMux routes over httpkit errchain and internal/web/mid
+    guard/                        # rate limits and client IP
+    mail/                         # the SMTP sender and the outbox
 
 cmd/desktop/                      # Wails app package — stays `main`, stays here
   main.go                         # bootstrap → build App → mount adapters → run
@@ -2866,7 +2883,7 @@ Everything else (`event_log`, `feed_membership_claim`, `node_run`,
 replayable. Migrations are not squashed, because a squashed `0001` would not
 match existing `schema_migrations` rows. Once a migration appears in a
 release, its filename and contents are immutable; later migrations append
-contiguous versions above it. `cmd/desktop/scripts/check-migration-order.sh` compares
+contiguous versions above it. `scripts/check-migration-order.sh` compares
 the tree with the latest reachable `v*` or `desktop-v*` release tag, and both the normal
 quality gate and the release CLI run it.
 

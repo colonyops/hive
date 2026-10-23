@@ -14,10 +14,12 @@ const props = withDefaults(
   { label: 'Copy', size: 'sm' },
 )
 
+const emit = defineEmits<{ copy: [ok: boolean] }>()
+
 const { copy, copied } = useClipboard()
 
-function onCopy(): void {
-  if (props.text) void copy(props.text)
+async function onCopy(): Promise<void> {
+  if (props.text) emit('copy', await copy(props.text))
 }
 </script>
 

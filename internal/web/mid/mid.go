@@ -17,8 +17,9 @@ import (
 // to report ok wins.
 type Mapper func(err error) (status int, body any, ok bool)
 
-// Errors turns handler errors into responses: unreadable body 400, validation
-// failure 422, then mappers, then an opaque logged 500.
+// Errors turns handler errors into responses: unreadable body 400, body over
+// its http.MaxBytesReader cap 413, validation failure 422, then mappers, then
+// an opaque logged 500.
 func Errors(log zerolog.Logger, mappers ...Mapper) errchain.ErrorHandler {
 	return func(h errchain.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -28,11 +29,16 @@ func Errors(log zerolog.Logger, mappers ...Mapper) errchain.ErrorHandler {
 			}
 
 			var badReq *web.BadRequestError
+			var tooLarge *http.MaxBytesError
 			var fieldErrs criterio.FieldErrors
 			switch {
 			case errors.As(err, &badReq):
 				_ = server.JSON(w, http.StatusBadRequest, web.ErrorBody{
 					Kind: "invalid", Message: badReq.Error(),
+				})
+			case errors.As(err, &tooLarge):
+				_ = server.JSON(w, http.StatusRequestEntityTooLarge, web.ErrorBody{
+					Kind: "too_large", Message: "request body too large",
 				})
 			case errors.As(err, &fieldErrs):
 				fields := make(map[string]string, len(fieldErrs))

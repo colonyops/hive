@@ -1,0 +1,68 @@
+<script setup lang="ts">
+import AuthLayout from '../components/AuthLayout.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
+import TextInput from '@hive/ui/components/ui/TextInput.vue'
+import { ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { api, describeApiError } from '../api'
+import { redirectQuery, safeRedirect } from '../lib/redirect'
+import { forgetSignIn } from '../router'
+
+const route = useRoute()
+const router = useRouter()
+const email = ref(typeof route.query.email === 'string' ? route.query.email : '')
+const code = ref('')
+const busy = ref(false)
+const error = ref<string | null>(null)
+const destination = safeRedirect(route.query.redirect)
+
+async function submit(): Promise<void> {
+  if (busy.value || !email.value.trim() || !code.value.trim()) return
+  busy.value = true
+  error.value = null
+  try {
+    await api.verifySignIn(email.value.trim(), code.value.trim())
+    forgetSignIn()
+    await router.replace(destination ?? { name: 'recent' })
+  } catch (cause) {
+    error.value = describeApiError(cause, 'Could not verify the code.')
+  } finally {
+    busy.value = false
+  }
+}
+</script>
+
+<template>
+  <AuthLayout title="Enter your code" subtitle="Use the 8-digit code we mailed to you. It expires soon.">
+    <form class="flex flex-col gap-4" data-testid="verify-form" @submit.prevent="submit">
+      <FormField label="Email">
+        <template #default="{ id }">
+          <TextInput :id="id" v-model="email" type="email" autocomplete="email" data-testid="verify-email" />
+        </template>
+      </FormField>
+      <FormField label="Code">
+        <template #default="{ id }">
+          <TextInput
+            :id="id"
+            v-model="code"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            monospace
+            data-testid="verify-code"
+          />
+        </template>
+      </FormField>
+      <InlineError v-if="error" :message="error" testid="verify-error" />
+      <BaseButton type="submit" :busy="busy" :disabled="!email.trim() || !code.trim()" data-testid="verify-submit">
+        Sign in
+      </BaseButton>
+      <RouterLink
+        :to="{ name: 'sign-in', query: redirectQuery(destination) }"
+        class="text-small text-text-3 hover:text-text"
+        >Send a new code</RouterLink
+      >
+    </form>
+  </AuthLayout>
+</template>

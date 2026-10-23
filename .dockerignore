@@ -11,3 +11,5 @@
 !pkg/
 !pkg/**
 !test/integration/
+!cmd/drive-server/
+!cmd/drive-server/**
