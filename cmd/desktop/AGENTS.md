@@ -37,6 +37,32 @@ mise run desktop:devserver     # the shared GitHub proxy `dev` routes through
 `desktop:dev:prepare` / `desktop:dev:fresh` / `desktop:dev:reset` manage this worktree's isolated
 instance. `svx up` brings up devserver + app together from `svx.yaml`.
 
+## Test in the running app
+
+A dev build serves MCP tools, so an agent can drive and inspect the real app.
+For a frontend-only change, the headless `mise run desktop:serve` build is
+faster.
+
+1. Run `mise run desktop:dev:prepare`. It writes `launch.env` and `.mcp.json`
+   at the worktree root.
+2. Ask the user to run `mise run desktop:dev`. It opens a window, so do not
+   start it from a background shell.
+3. Start the agent session in the worktree and approve the `hive-desktop-ui`
+   server from `.mcp.json`.
+
+- `hive-desktop-ui` is the Wails MCP server in every dev build: DOM queries,
+  clicks, typing, and screenshots of the native window. The `desktop-ui-audit`
+  skill covers it.
+- `hive-desktop` is the app's own MCP server: inbox and pipeline state, and a
+  forced re-poll. `.mcp.json` does not register it. Add it with
+  `claude mcp add --transport http hive-desktop http://127.0.0.1:<port>/mcp`,
+  where the port is `HIVE_DESKTOP_HTTP_PORT` in `launch.env`. The
+  `desktop-api` skill covers it.
+- The `desktop-devserver` skill makes GitHub send an event.
+
+Each worktree gets its own ports, so these tools never reach the installed
+Hive.app.
+
 ## Never
 
 - **Never run Playwright or the e2e harness on the host.** `mise run desktop:e2e` is
