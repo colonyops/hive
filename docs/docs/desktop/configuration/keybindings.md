@@ -64,6 +64,6 @@ On Linux, a shortcut whose first key already uses Shift, such as `mod+shift+b`, 
 
 **Toggle sidebar** (`terminal.toggle-sidebar`) shows or hides the sidebar in Inbox, Code, Chats, and the Drive page's folder tree. It uses <kbd>⌘B</kbd> on macOS and <kbd>Ctrl+B</kbd> on Windows and Linux, including inside a focused terminal. On macOS, <kbd>Ctrl+B</kbd> still reaches the terminal. On Windows and Linux, rebind this command in **Settings ▸ Keyboard** if you need <kbd>Ctrl+B</kbd> for tmux.
 
-**Toggle right panel** (`view.toggle-panel`) is the same for the right edge, like the title bar's right button: the preview in Inbox, the Drive pane in Code and Chats, and the comments column on the Drive page. **Toggle comments** (`drive.toggle-comments`) shows or hides the comments of the document on screen, on the Drive page or in the Drive pane.
+**Toggle right panel** (`view.toggle-panel`) is the same for the right edge, like the title bar's right button: the preview in Inbox, the Drive pane in Code and Chats, and the comments column on the Drive page. **Toggle comments** (`drive.toggle-comments`) shows or hides the comments column on the Drive page.
 
 Check **Settings ▸ Keyboard** before assigning a Control shortcut that your shell or terminal program already uses.

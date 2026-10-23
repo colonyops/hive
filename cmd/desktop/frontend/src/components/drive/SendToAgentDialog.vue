@@ -13,16 +13,11 @@ import { activityIndicator } from '../../lib/agentActivity'
 import { errorText } from '../../lib/appError'
 import { useDriveReview } from '../../stores/useDriveReview'
 import { AgentTargets } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reviewservice'
-import type {
-  AgentTarget,
-  AgentTargetRef,
-} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import type { AgentTarget } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const props = defineProps<{
   space: string
   path: string
-  /** The agent of the surface the drive is open beside, listed first. A session ref with no pane matches any of its panes. */
-  agent?: AgentTargetRef | null
   /** Derives `-send-dialog`, `-send-target-<index>`, `-send-warning`, `-send-error`, `-send-empty`, and `-send-submit`. */
   testid: string
 }>()
@@ -38,22 +33,13 @@ const sending = ref(false)
 const sendError = ref<string | null>(null)
 const picked = ref<AgentTarget | null>(null)
 
-function preferred(target: AgentTarget): boolean {
-  const agent = props.agent
-  if (!agent || target.kind !== agent.kind || target.id !== agent.id) return false
-  return !agent.pane || target.pane === agent.pane
-}
-
 const groups = computed(() => {
-  const ordered = [...targets.value].sort((a, b) => Number(preferred(b)) - Number(preferred(a)))
-  const code = ordered.filter((target) => target.kind === 'session')
-  const chats = ordered.filter((target) => target.kind === 'chat')
-  const list = [
+  const code = targets.value.filter((target) => target.kind === 'session')
+  const chats = targets.value.filter((target) => target.kind === 'chat')
+  return [
     { label: 'Code', targets: code },
     { label: 'Chats', targets: chats },
-  ]
-  if (props.agent?.kind === 'chat') list.reverse()
-  return list.filter((group) => group.targets.length)
+  ].filter((group) => group.targets.length)
 })
 
 const rows = computed(() => groups.value.flatMap((group) => group.targets))
@@ -68,7 +54,6 @@ const indexOf = (target: AgentTarget) => rows.value.indexOf(target)
 onMounted(async () => {
   try {
     targets.value = (await AgentTargets()) ?? []
-    picked.value = rows.value.find((target) => preferred(target) && target.status !== 'approval') ?? null
   } catch (err) {
     loadError.value = errorText(err, 'Could not list the running agents.')
   } finally {

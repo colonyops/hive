@@ -154,8 +154,8 @@ const commentCount = computed(() =>
 watch(commentCount, (count, before) => {
   if (count > before) review.showPageComments()
 })
-watch(reviewed, (next) => review.setReviewed('page', !!next), { immediate: true })
-onBeforeUnmount(() => review.setReviewed('page', false))
+watch(reviewed, (next) => review.setPageReviewed(!!next), { immediate: true })
+onBeforeUnmount(() => review.setPageReviewed(false))
 watch(shown, () => {
   if (reader.value) reader.value.scrollTop = 0
 })
@@ -286,6 +286,7 @@ useEscapeToClose(() => emit('close'))
                 :paths="paths"
                 :loading="loading"
                 :error="error"
+                commentable
                 testid="drive-page"
                 @open-url="emit('open-url', $event)"
                 @open="openDocument"

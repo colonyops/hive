@@ -1,10 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SendToAgentDialog from '../SendToAgentDialog.vue'
-import type {
-  AgentTarget,
-  AgentTargetRef,
-} from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import type { AgentTarget } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 vi.mock('../../../composables/useWailsEvent', () => ({ useWailsEvent: vi.fn() }))
 
@@ -31,9 +28,9 @@ const targets = [
   target('chat', 'c1', '', 'ws / chat', 'active'),
 ]
 
-async function mountDialog(agent: AgentTargetRef | null = null) {
+async function mountDialog() {
   const wrapper = mount(SendToAgentDialog, {
-    props: { space: 'workspaces/ws', path: 'plans/p.md', agent, testid: 'r' },
+    props: { space: 'workspaces/ws', path: 'plans/p.md', testid: 'r' },
     attachTo: document.body,
   })
   await flushPromises()
@@ -58,20 +55,17 @@ describe('SendToAgentDialog', () => {
     expect(row(0).getAttribute('aria-selected')).toBe('false')
   })
 
-  it('lists and preselects the surface agent first', async () => {
-    await mountDialog({ kind: 'chat', id: 'c1', pane: '' })
-    expect(row(0).textContent).toContain('ws / chat')
-    expect(row(0).getAttribute('aria-selected')).toBe('true')
+  it('warns that an active agent gets the feedback mid-turn', async () => {
+    await mountDialog()
+    row(2).click()
+    await flushPromises()
     expect(document.querySelector('[data-testid="r-send-warning"]')!.textContent).toContain('mid-turn')
   })
 
-  it('does not preselect an agent on a prompt', async () => {
-    await mountDialog({ kind: 'session', id: 's2', pane: '' })
-    expect(document.querySelector('[aria-selected="true"]')).toBeNull()
-  })
-
   it('sends to the pick and closes', async () => {
-    const wrapper = await mountDialog({ kind: 'session', id: 's1', pane: '' })
+    const wrapper = await mountDialog()
+    row(0).click()
+    await flushPromises()
     document.querySelector<HTMLButtonElement>('[data-testid="r-send-submit"]')!.click()
     await flushPromises()
     expect(reviews.Send).toHaveBeenCalledWith('workspaces/ws', 'plans/p.md', '', {
@@ -85,7 +79,9 @@ describe('SendToAgentDialog', () => {
 
   it('shows a failed send inline and stays open', async () => {
     reviews.Send.mockRejectedValue(new Error('pane gone'))
-    const wrapper = await mountDialog({ kind: 'session', id: 's1', pane: '' })
+    const wrapper = await mountDialog()
+    row(0).click()
+    await flushPromises()
     document.querySelector<HTMLButtonElement>('[data-testid="r-send-submit"]')!.click()
     await flushPromises()
     expect(document.querySelector('[data-testid="r-send-error"]')!.textContent).toContain('pane gone')

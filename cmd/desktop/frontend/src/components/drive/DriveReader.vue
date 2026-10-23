@@ -30,6 +30,8 @@ const props = defineProps<{
   paths: ReadonlySet<string>
   loading: boolean
   error: string | null
+  /** Lets the user select text to comment on and shows the document's comments. */
+  commentable?: boolean
   /**
    * Derives `-document`, `-markdown`, `-block-<id>` (with `-html` and `-link`), `-frame`, `-file`, `-error`,
    * `-empty`, `-block-comment`, and the comment popover's ids (DriveCommentPopover).
@@ -52,7 +54,9 @@ function follow(href: string): void {
 const reviewStore = useDriveReview()
 const reviewed = computed(() => {
   const doc = props.document
-  return doc && doc.entry.kind === 'markdown' ? { space: doc.space.key, path: doc.entry.path } : null
+  return props.commentable && doc && doc.entry.kind === 'markdown'
+    ? { space: doc.space.key, path: doc.entry.path }
+    : null
 })
 const review = computed(() => (reviewed.value ? reviewStore.review(reviewed.value.space, reviewed.value.path) : null))
 const comments = computed(() => review.value?.data.value.comments ?? [])
@@ -206,7 +210,7 @@ const hideHandle = useTimeoutFn(() => pointBlock(null), 300, { immediate: false 
 
 useEventListener(root, 'mousemove', (event: MouseEvent) => {
   hideHandle.stop()
-  if (!body.value || !current.value || drafting.value || event.buttons) {
+  if (!reviewed.value || !body.value || !current.value || drafting.value || event.buttons) {
     if (pickedBlock.value) pointBlock(null)
     return
   }

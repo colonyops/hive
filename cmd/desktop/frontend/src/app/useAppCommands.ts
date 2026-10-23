@@ -134,10 +134,7 @@ export function useAppCommands(deps: AppCommandDeps) {
     'terminal.popup.toggle': togglePopupTerminal,
     'terminal.toggle-sidebar': appMode.toggleSidebar,
     'view.toggle-panel': appMode.togglePreview,
-    'drive.toggle-comments': () => {
-      if (appMode.driveActive.value) review.togglePageComments()
-      else review.setPaneCommentsOpen(!review.paneCommentsOpen.value)
-    },
+    'drive.toggle-comments': review.togglePageComments,
     'terminal.focus-sidebar': () => revealSidebar(terminalSidebarCollapsed, focusTerminalTree),
     'terminal.focus-pane': focusTerminalPane,
     // One combo, dispatched on whichever surface is on screen.
@@ -211,7 +208,7 @@ export function useAppCommands(deps: AppCommandDeps) {
       case 'panel':
         return appMode.canTogglePreview.value
       case 'review':
-        return appMode.driveActive.value ? review.pageReviewed.value : review.paneReviewed.value
+        return appMode.driveActive.value && review.pageReviewed.value
       // Excludes the session picker for terminal-session's reason: with no
       // emulator drawn, the chord would change a size nobody can see.
       case 'any-terminal':
