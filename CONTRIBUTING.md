@@ -17,35 +17,27 @@ write `n/a: <reason>`.
 
 ## What a change owes
 
-A change to each item below owes what follows the colon.
+The template checklist has one item for each of these.
 
-- **Logic**: unit tests. Store tests use real SQLite
+- If you add or change logic, add unit tests. Store tests use real SQLite
   (`db.Open(t.TempDir(), ...)`).
-- **A Hive Desktop user flow**: a Playwright spec in `cmd/desktop/e2e/tests/`
-  (`mise run desktop:e2e`).
-- **CLI flag wiring, stdin/stdout, or a multi-command flow**: a test in
-  `test/integration/` (`mise run cli:integration`).
-- **What a user can see, set, or do**: a page update under `docs/docs/`
-  (`.agents/skills/docs-audit/SKILL.md`).
-- **The shape the architecture describes**: an update to
-  `docs/architecture.md`. It is reviewed as a spec.
-- **An architecture or infrastructure decision**: an ADR
-  (`mise run adr:new -- "The decision, as a sentence"`).
-- **Anything users of a program notice**: a release-notes fragment
-  (`mise run changelog:new`; `.agents/skills/release-notes/SKILL.md`).
-- **A Wails service surface**: regenerated bindings
-  (`mise run desktop:bindings`; `cmd/desktop/AGENTS.md`).
-- **A Hive Desktop view, object, or verb**: command palette and keybinding
-  entries (`.agents/skills/desktop-commands-audit/SKILL.md`).
-- **An MCP tool, or what agents in a workspace can do**: updated MCP catalog
-  docs and shipped skills (`.agents/skills/desktop-shipped-skills/SKILL.md`).
-- **Persisted data**: a new migration. Released migrations never change
-  (`mise run check` verifies).
-- **Config behavior**: `mise run cli:validate`.
-
-A test proves a behavior, not a gate count. The Verification section of the
-template asks which tests cover the change and what each one proves. A list of
-gates that passed does not answer it.
+- If you add or change a Hive Desktop user flow, add a Playwright spec in
+  `cmd/desktop/e2e/tests/`.
+- If you change CLI flags, stdin/stdout behavior, or a multi-command flow, add
+  a test in `test/integration/`.
+- If you change what a user can see, set, or do, update the pages under
+  `docs/docs/`. The `docs-audit` skill finds them.
+- If you change how the code is structured, update `docs/architecture.md`.
+- If you make an architecture or infrastructure decision, write an ADR with
+  `mise run adr:new -- "The decision, as a sentence"`.
+- If users of a program will notice the change, add a release-notes fragment
+  with `mise run changelog:new`.
+- If you add a Hive Desktop view, object, or verb, add command palette and
+  keybinding entries. The `desktop-commands-audit` skill lists them.
+- If you change an MCP tool or what agents in a workspace can do, update the
+  MCP catalog docs and the shipped skills (`desktop-shipped-skills` skill).
+- If you change persisted data, add a migration.
+- If you change config behavior, run `mise run cli:validate`.
 
 ## Writing style
 

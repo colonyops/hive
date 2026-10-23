@@ -89,10 +89,9 @@ each item applies.
 - [ ] Docs: `docs/architecture.md` matches the new shape
 - [ ] ADR: `docs/decisions/` records the architecture or infrastructure decision (`mise run adr:new`)
 - [ ] Release notes: a fragment in each changed program's changelog (`mise run changelog:new`)
-- [ ] Desktop: the Wails bindings match the service surface (`mise run desktop:bindings`)
 - [ ] Desktop: the command palette and keybindings reach the new feature (`desktop-commands-audit` skill)
 - [ ] Agents: the MCP catalog docs and shipped skills match the new tool behavior (`desktop-shipped-skills` skill)
-- [ ] Data: a migration handles persisted state, and released migrations did not change
+- [ ] Data: a migration handles changed persisted state
 - [ ] Gates: `mise run ci` passes on this branch
 
 Closes #
