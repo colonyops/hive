@@ -21,6 +21,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/platform/observe"
+	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 )
 
@@ -728,7 +729,9 @@ func (m *Manager) remove(slug string, gen uint64) {
 }
 
 func tmuxVersion(ctx context.Context, binary string) (string, error) {
-	out, err := exec.CommandContext(ctx, binary, "-V").Output()
+	cmd := exec.CommandContext(ctx, binary, "-V")
+	cmd.Dir = tmuxbin.WorkDir()
+	out, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
