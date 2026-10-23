@@ -1,6 +1,7 @@
 package executil
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,18 +16,18 @@ import (
 func TestRunSh_StderrCappedAtMaxLen(t *testing.T) {
 	ctx := context.Background()
 
-	// Write twice the cap to stderr; only the first maxStderrLen bytes should appear in the error.
-	longStderr := strings.Repeat("A", maxStderrLen*2)
+	// Write twice the cap to stderr with a distinct tail diagnostic.
+	prefix := strings.Repeat("A", maxStderrLen)
+	diagnostic := "FATAL_DIAGNOSTIC_TAIL"
+	longStderr := prefix + diagnostic
 	cmd := fmt.Sprintf("printf '%%s' '%s' >&2; exit 1", longStderr)
 
 	err := RunSh(ctx, "", cmd)
 	require.Error(t, err)
 
 	errMsg := err.Error()
-	// Error format: "<stderr prefix>: exit status 1"
-	// The stderr portion must not exceed maxStderrLen bytes.
-	assert.LessOrEqual(t, len(errMsg), maxStderrLen+20, "error message should be capped")
-	assert.Equal(t, strings.Repeat("A", maxStderrLen), errMsg[:maxStderrLen], "first %d bytes should be the capped stderr", maxStderrLen)
+	assert.Contains(t, errMsg, diagnostic, "capped error should retain the trailing diagnostic")
+	assert.NotContains(t, errMsg, strings.Repeat("A", maxStderrLen), "leading progress should be truncated")
 }
 
 func TestRunSh_PreservesExitError(t *testing.T) {
@@ -65,14 +66,29 @@ func TestRunSh_NoStderrReturnsExitError(t *testing.T) {
 }
 
 func TestCommandError_CapsErrorMessageAfterConstruction(t *testing.T) {
+	output := append(bytes.Repeat([]byte("B"), maxStderrLen), []byte("TAIL_FAIL")...)
 	err := &CommandError{
 		Command: "build",
-		Output:  []byte(strings.Repeat("B", maxStderrLen*2)),
+		Output:  output,
 		Err:     errors.New("exit status 1"),
 	}
 
-	assert.Contains(t, err.Error(), strings.Repeat("B", maxStderrLen))
-	assert.NotContains(t, err.Error(), strings.Repeat("B", maxStderrLen+1))
+	msg := err.Error()
+	assert.Contains(t, msg, "TAIL_FAIL")
+	assert.Contains(t, msg, "...")
+	assert.LessOrEqual(t, len(msg), maxStderrLen+len("exec build: ")+len(": exit status 1")+5)
+}
+
+func TestCommandError_RetainsTrailingDiagnostic(t *testing.T) {
+	progress := bytes.Repeat([]byte("P"), maxStderrLen*3)
+	diagnostic := []byte("mise ERROR Config files are not trusted.\nfatal: remote hung up")
+	err := NewCommandError("git", "/repo", append(progress, diagnostic...), errors.New("exit status 128"))
+	msg := err.Error()
+	assert.Contains(t, msg, "mise ERROR")
+	assert.Contains(t, msg, "fatal: remote hung up")
+	assert.Contains(t, msg, "exit status 128")
+	assert.Contains(t, msg, "...")
+	assert.NotContains(t, msg, strings.Repeat("P", maxStderrLen))
 }
 
 func TestRealExecutor_Run(t *testing.T) {
@@ -110,15 +126,16 @@ func TestRealExecutor_Run(t *testing.T) {
 	})
 
 	t.Run("failure output is capped", func(t *testing.T) {
-		childOutput := strings.Repeat("A", maxStderrLen*2)
+		childOutput := strings.Repeat("A", maxStderrLen) + "TAIL_DIAG"
 		out, err := exec.Run(ctx, "sh", "-c", fmt.Sprintf("printf '%%s' '%s' >&2; exit 1", childOutput))
 		require.Error(t, err)
 		assert.Equal(t, childOutput, string(out))
 
 		var commandErr *CommandError
 		require.ErrorAs(t, err, &commandErr)
-		assert.Len(t, commandErr.Output, maxStderrLen)
-		assert.NotContains(t, err.Error(), strings.Repeat("A", maxStderrLen+1))
+		assert.LessOrEqual(t, len(commandErr.Output), maxStderrLen)
+		assert.Contains(t, err.Error(), "TAIL_DIAG")
+		assert.NotContains(t, err.Error(), strings.Repeat("A", maxStderrLen))
 	})
 }
 
