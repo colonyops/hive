@@ -116,11 +116,10 @@ lefthook runs the relevant gates as git hooks; `mise install` wires them up
   the push touches `cmd/desktop/frontend/` or `web/`. `check` needs no
   Python, Node, or Docker.
 - **CI-only**: `check:deadcode`, `check:vuln`, `lint:workflows`,
-  `desktop:check:bindings`, the frontend build and tests, the site build, and
-  the CLI's Docker integration tests.
+  `desktop:check:bindings`, the frontend build and tests, the site build, the
+  CLI's Docker integration tests, and the desktop e2e suite.
 
-**`mise run ci` runs every gate, including the desktop e2e suite that GitHub
-CI does not run.** Prefer it over pushing to find out.
+**`mise run ci` runs every gate CI runs.** Prefer it over pushing to find out.
 
 Wails TS bindings are deliberately not hooked: they need a full app build. Run
 `mise run desktop:bindings` when a service surface changes; CI checks them.

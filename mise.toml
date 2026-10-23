@@ -223,11 +223,10 @@ run = "npm run ui:format:check"
 description = "Lint GitHub workflows and local actions"
 run = "actionlint"
 
-# Everything CI runs, in one command. e2e is here and nowhere else: it was
-# dropped from CI for being too slow, so local is the only place it runs.
-# Needs Docker, Node, Python, and the network.
+# Everything CI runs, in one command. Needs Docker, Node, Python, and the
+# network.
 [tasks.ci]
-description = "Run every gate locally: Go, the desktop bindings and frontend, the drive server frontend, the site, the CLI integration tests, and the e2e suites CI does not run"
+description = "Run every gate locally: Go, the desktop bindings and frontend, the drive server frontend, the site, the CLI integration tests, and the desktop e2e suite"
 run = [
   { tasks = ["check:generate"] },
   { tasks = ["desktop:check:bindings", "check:adr", "desktop:check:migrations", "drive-server:check:migrations", "check:tidy"] },
