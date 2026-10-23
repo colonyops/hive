@@ -17,7 +17,7 @@ write `n/a: <reason>`.
 
 ## What a change owes
 
-The template checklist has one item for each of these.
+Check each of these before you open a pull request.
 
 - If you add or change logic, add unit tests. Store tests use real SQLite
   (`db.Open(t.TempDir(), ...)`).
