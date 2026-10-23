@@ -1,4 +1,4 @@
-import { expect, test } from "../../fixtures/test.js";
+import { expect, tag, test } from "../../fixtures/test.js";
 
 // The e2e lane is the `-tags server` build, where ptyterm's buildSupportsTerminal
 // compiles to false (cmd/desktop/internal/app/ptyterm/supported_server.go). That makes it
@@ -20,50 +20,52 @@ const feedItemCount = 6;
 // one" rather than "some text is on screen"; the exact Go copy stays unpinned.
 const frontendFallbackReason = "The Chats area is not available in this build.";
 
-test("the Chats area explains its own unavailability and hands the frame back", async ({
-  page,
-}) => {
-  // AgentsMode is an async component, so a failed chunk load or a throwing
-  // probe shows up here rather than as a missing element.
-  const appConsoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() !== "error") return;
-    if (message.text().startsWith("Failed to load resource")) return;
-    appConsoleErrors.push(message.text());
+test.describe('chats unavailable', { tag: [tag.chats, tag.critical] }, () => {
+  test("the Chats area explains its own unavailability and hands the frame back", async ({
+    page,
+  }) => {
+    // AgentsMode is an async component, so a failed chunk load or a throwing
+    // probe shows up here rather than as a missing element.
+    const appConsoleErrors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() !== "error") return;
+      if (message.text().startsWith("Failed to load resource")) return;
+      appConsoleErrors.push(message.text());
+    });
+
+    await page.goto("/");
+    await expect(page.getByTestId("feed-item")).toHaveCount(feedItemCount);
+
+    const hubToggle = page.getByTestId("titlebar-mode-hub");
+    const agentsToggle = page.getByTestId("titlebar-mode-agents");
+    await expect(agentsToggle).toBeEnabled();
+    await expect(agentsToggle).toHaveAttribute("aria-pressed", "false");
+
+    await agentsToggle.click();
+    await expect(agentsToggle).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("agents-mode")).toBeVisible();
+
+    await expect(page.getByTestId("agents-unavailable")).toBeVisible();
+    const reason = page.getByTestId("agents-unavailable-reason");
+    await expect(reason).not.toBeEmpty();
+    await expect(reason).not.toHaveText(frontendFallbackReason);
+    await expect(page.getByTestId("agents-workspace-sidebar")).toHaveCount(0);
+
+    // Retry re-probes rather than wedging the panel; the server build answers
+    // unavailable again.
+    await page.getByTestId("agents-retry").click();
+    await expect(page.getByTestId("agents-unavailable")).toBeVisible();
+    await expect(reason).not.toBeEmpty();
+
+    // Hidden, not unmounted (ADR terminal-mode-is-hidden-not-unmounted): a trip to the hub is a display flip.
+    await hubToggle.click();
+    await expect(page.getByTestId("agents-mode")).toBeHidden();
+    await expect(hubToggle).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("feed-item")).toHaveCount(feedItemCount);
+
+    expect(
+      appConsoleErrors,
+      "an unavailable Chats area is a rendered state, not a failure",
+    ).toEqual([]);
   });
-
-  await page.goto("/");
-  await expect(page.getByTestId("feed-item")).toHaveCount(feedItemCount);
-
-  const hubToggle = page.getByTestId("titlebar-mode-hub");
-  const agentsToggle = page.getByTestId("titlebar-mode-agents");
-  await expect(agentsToggle).toBeEnabled();
-  await expect(agentsToggle).toHaveAttribute("aria-pressed", "false");
-
-  await agentsToggle.click();
-  await expect(agentsToggle).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("agents-mode")).toBeVisible();
-
-  await expect(page.getByTestId("agents-unavailable")).toBeVisible();
-  const reason = page.getByTestId("agents-unavailable-reason");
-  await expect(reason).not.toBeEmpty();
-  await expect(reason).not.toHaveText(frontendFallbackReason);
-  await expect(page.getByTestId("agents-workspace-sidebar")).toHaveCount(0);
-
-  // Retry re-probes rather than wedging the panel; the server build answers
-  // unavailable again.
-  await page.getByTestId("agents-retry").click();
-  await expect(page.getByTestId("agents-unavailable")).toBeVisible();
-  await expect(reason).not.toBeEmpty();
-
-  // Hidden, not unmounted (ADR terminal-mode-is-hidden-not-unmounted): a trip to the hub is a display flip.
-  await hubToggle.click();
-  await expect(page.getByTestId("agents-mode")).toBeHidden();
-  await expect(hubToggle).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("feed-item")).toHaveCount(feedItemCount);
-
-  expect(
-    appConsoleErrors,
-    "an unavailable Chats area is a rendered state, not a failure",
-  ).toEqual([]);
-});
+})

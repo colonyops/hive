@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { testdataPath } from '../../../fixtures/paths.js'
-import { expect, test } from '../../../fixtures/test.js'
+import { expect, tag, test } from '../../../fixtures/test.js'
 import { bindingID } from '../../../fixtures/wails.js'
 
 // Server builds cannot run terminals. Only the terminal control/stream is
@@ -75,29 +75,31 @@ async function imageGesture(page: Page, kind: 'paste' | 'drop') {
   }, { kind, png })
 }
 
-for (const surface of ['Code', 'Chats', 'popup'] as const) {
-  test(`${surface} image input uploads bytes and pastes a path without submitting (mock terminal)`, async ({ page }) => {
-    const { pastes, ptyInput } = await terminalFixture(page)
-    await page.goto(surface === 'Code' ? '/#/terminal/image-session' : surface === 'Chats' ? '/#/workspaces/images?chat=42' : '/')
-    if (surface === 'popup') await page.keyboard.press('Control+Backquote')
-    await imageGesture(page, 'paste')
-    if (surface === 'popup') {
-      await expect.poll(() => Buffer.concat(ptyInput).toString()).toContain('terminal-images/')
-      const input = Buffer.concat(ptyInput).toString()
-      expect(input).toContain('\x1b[200~')
-      expect(input).not.toContain('\r')
-      expect(input).not.toContain('\n')
-    } else {
-      await expect.poll(() => pastes.length).toBe(1)
-      expect(pastes[0].slug).toBe(surface === 'Code' ? 'image-session' : session.terminalId)
-      expect(pastes[0].paneId).toBe('%1')
-      expect(pastes[0].text).toContain('terminal-images/')
-      expect(pastes[0].text).not.toMatch(/[\r\n]/)
-    }
-    await imageGesture(page, 'drop')
-    if (surface !== 'popup') await expect.poll(() => pastes.length).toBe(2)
-    await page.route('**/api/terminal/images/upload', (route) => route.fulfill({ status: 400, headers: { 'Access-Control-Allow-Origin': '*' }, json: { kind: 'invalid', message: 'Image rejected for testing' } }))
-    await imageGesture(page, 'paste')
-    await expect(page.getByText('Image rejected for testing')).toBeVisible()
-  })
-}
+test.describe('terminal images', { tag: [tag.terminal] }, () => {
+  for (const surface of ['Code', 'Chats', 'popup'] as const) {
+    test(`${surface} image input uploads bytes and pastes a path without submitting (mock terminal)`, async ({ page }) => {
+      const { pastes, ptyInput } = await terminalFixture(page)
+      await page.goto(surface === 'Code' ? '/#/terminal/image-session' : surface === 'Chats' ? '/#/workspaces/images?chat=42' : '/')
+      if (surface === 'popup') await page.keyboard.press('Control+Backquote')
+      await imageGesture(page, 'paste')
+      if (surface === 'popup') {
+        await expect.poll(() => Buffer.concat(ptyInput).toString()).toContain('terminal-images/')
+        const input = Buffer.concat(ptyInput).toString()
+        expect(input).toContain('\x1b[200~')
+        expect(input).not.toContain('\r')
+        expect(input).not.toContain('\n')
+      } else {
+        await expect.poll(() => pastes.length).toBe(1)
+        expect(pastes[0].slug).toBe(surface === 'Code' ? 'image-session' : session.terminalId)
+        expect(pastes[0].paneId).toBe('%1')
+        expect(pastes[0].text).toContain('terminal-images/')
+        expect(pastes[0].text).not.toMatch(/[\r\n]/)
+      }
+      await imageGesture(page, 'drop')
+      if (surface !== 'popup') await expect.poll(() => pastes.length).toBe(2)
+      await page.route('**/api/terminal/images/upload', (route) => route.fulfill({ status: 400, headers: { 'Access-Control-Allow-Origin': '*' }, json: { kind: 'invalid', message: 'Image rejected for testing' } }))
+      await imageGesture(page, 'paste')
+      await expect(page.getByText('Image rejected for testing')).toBeVisible()
+    })
+  }
+})

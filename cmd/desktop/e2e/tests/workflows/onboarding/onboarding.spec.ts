@@ -1,12 +1,7 @@
 import type { Page } from '@playwright/test'
 import { screenshotPath } from '../../../fixtures/paths.js'
 import { serverURL } from '../../../fixtures/servers.js'
-import { expect, test } from '../../../fixtures/test.js'
-
-// Dedicated onboarding-mode servers, one per browser: the mock GitHub
-// connection is a per-process singleton that stays connected once the fake
-// device flow grants, so browsers must not share an instance.
-test.use({ server: 'onboarding', serverStateReset: 'off' })
+import { expect, tag, test } from '../../../fixtures/test.js'
 
 // The first-run story is one ordered walk on a per-browser onboarding server.
 // Splitting it into named steps pins failures to a specific transition instead
@@ -25,7 +20,11 @@ test.use({ server: 'onboarding', serverStateReset: 'off' })
 // reload/bind ordering this flow exercises is covered deterministically by
 // unit tests (useFeedState, useFlowsSession); this suite is the real-stack
 // integration smoke on top.
-test.describe.serial('first-run onboarding, then profile and flow management', () => {
+test.describe.serial('first-run onboarding, then profile and flow management', { tag: [tag.onboarding, tag.flows, tag.critical] }, () => {
+  // Dedicated onboarding-mode servers, one per browser: the mock GitHub
+  // connection is a per-process singleton that stays connected once the fake
+  // device flow grants, so browsers must not share an instance.
+  test.use({ server: 'onboarding', serverStateReset: 'off' })
   test.describe.configure({ retries: 0 })
 
   let page: Page

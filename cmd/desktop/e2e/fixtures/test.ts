@@ -1,5 +1,6 @@
 import { request as apiRequest, test as base, expect } from '@playwright/test'
 import { serverURL, type ServerName } from './servers.js'
+import { tag, tagProblems, type Kind } from './tags.js'
 
 // A retry gets a fresh worker and browser but the same servers, so durable
 // rows and config edits from one attempt would leak into the next. Every
@@ -38,7 +39,20 @@ type Options = {
   serverStateReset: ServerStateResetMode
 }
 
-export const test = base.extend<Options & { autoResetServerState: void }>({
+type InternalFixtures = {
+  autoResetServerState: void
+  enforceTags: void
+}
+
+const kinds: Kind[] = ['smoke', 'workflows', 'features']
+
+function kindOf(projectName: string): Kind {
+  const kind = kinds.find((k) => projectName.startsWith(`${k}-`))
+  if (!kind) throw new Error(`project '${projectName}' does not start with a test kind (${kinds.join(', ')})`)
+  return kind
+}
+
+export const test = base.extend<Options & InternalFixtures>({
   server: ['feed', { option: true }],
   serverStateReset: ['per-test', { option: true }],
   baseURL: async ({ server, browserName }, use) => {
@@ -51,6 +65,16 @@ export const test = base.extend<Options & { autoResetServerState: void }>({
     },
     { auto: true },
   ],
+  enforceTags: [
+    async ({}, use, testInfo) => {
+      const problems = tagProblems(testInfo.tags, kindOf(testInfo.project.name))
+      if (problems.length > 0) {
+        throw new Error(`tags on '${testInfo.title}' break the rules in fixtures/tags.ts:\n- ${problems.join('\n- ')}`)
+      }
+      await use()
+    },
+    { auto: true },
+  ],
 })
 
-export { expect }
+export { expect, tag }
