@@ -18,7 +18,7 @@ stay on the last v0 release.
 
 - **One semver version, bumped in lockstep.** Every program takes the same
   version, tagged `v<version>`. The next version bumps the newest one across
-  every `v*` and `desktop-v*` tag and every live desktop manifest, by minor
+  every `v*` tag and every live desktop manifest, by minor
   unless the release asks for patch or major.
 - **Promotion picks the version.** `release changelog promote` names it, and
   `release run` publishes the newest version that every program has an entry

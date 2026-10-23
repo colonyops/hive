@@ -80,8 +80,7 @@ jobs:
           version: "2.17.1"
           args: release --clean --config cmd/hive/.goreleaser.yml --release-notes ${{ runner.temp }}/release-notes.md ${{ inputs.dry_run && '--skip=publish,announce,validate' || '' }}
         env:
-          # GoReleaser does not look for the tag itself when this is set. The
-          # repository still holds the desktop-v* tags, which it must not use.
+          # GoReleaser does not look for the tag itself when this is set.
           GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
