@@ -115,7 +115,12 @@ func (c *Client) redrawImageWindows(ctx context.Context) {
 			c.log.Debug().Err(err).Str("window", id).Msg("reading an image window's size option failed")
 			continue
 		}
-		if _, err := c.gw.Send(ctx, fmt.Sprintf("resize-window -t %s -x %d", id, w.Width-1)); err != nil {
+		// Not cancelled by Close: tmux can apply the resize before a cancelled
+		// Send returns, and a window treated as never narrowed is never restored.
+		narrow, cancel := context.WithTimeout(context.WithoutCancel(ctx), imageRestoreTimeout)
+		_, err = c.gw.Send(narrow, fmt.Sprintf("resize-window -t %s -x %d", id, w.Width-1))
+		cancel()
+		if err != nil {
 			c.log.Debug().Err(err).Str("window", id).Msg("narrowing an image window failed")
 			continue
 		}

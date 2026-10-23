@@ -2,6 +2,8 @@ package tmuxcc
 
 import (
 	"slices"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -94,10 +96,23 @@ func TestClosingDuringARedrawRestoresTheWindow(t *testing.T) {
 
 	f := newFakeTmux(t, "hive-demo")
 	f.setPanes("", "@1 1")
+	// tmux answers the narrowing resize only after Close has cancelled the
+	// client: the window is narrow, and the cancelled Send must not hide that.
+	cancelled := make(chan struct{})
+	var holdOnce sync.Once
+	f.setOnCommand(func(cmd string) {
+		if strings.HasPrefix(cmd, "resize-window -t @1") {
+			holdOnce.Do(func() { <-cancelled })
+		}
+	})
 	client := attachFake(t, f, Options{})
 	f.awaitCommands(t, "resize-window -t @1", 1)
 
-	require.NoError(t, client.Close(t.Context()))
+	closed := make(chan error, 1)
+	go func() { closed <- client.Close(t.Context()) }()
+	<-client.lifeCtx.Done()
+	close(cancelled)
+	require.NoError(t, <-closed)
 
 	sent := f.sentCommands()
 	restore := slices.Index(sent, "set-option -w -t @1 -u window-size")
