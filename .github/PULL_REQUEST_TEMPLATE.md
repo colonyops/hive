@@ -68,7 +68,9 @@ Write "None." if there is nothing.
 <!--
 How you know this change works. Name the tests that cover the new behavior
 (file and test name) and say what each one proves. For a manual check, give the
-steps and what you saw. Say what you did not test and why.
+steps and what you saw. In Hive Desktop, do manual checks through the dev MCP
+servers (CONTRIBUTING.md > Test in the running app) and name the tools you
+used. Say what you did not test and why.
 
 Do not list the gates you ran or count tests. The checklist covers the gates,
 and CI shows the counts.
@@ -91,6 +93,7 @@ each item applies.
 - [ ] Release notes: a fragment in each changed program's changelog (`mise run changelog:new`)
 - [ ] Desktop: the command palette and keybindings reach the new feature (`desktop-commands-audit` skill)
 - [ ] Agents: the MCP catalog docs and shipped skills match the new tool behavior (`desktop-shipped-skills` skill)
+- [ ] Interfaces: the CLI, TUI, and Desktop behave the same way after this change, or a linked issue tracks the gap
 - [ ] Data: a migration handles changed persisted state
 - [ ] Gates: `mise run ci` passes on this branch
 
