@@ -72,9 +72,6 @@ How you know this change works. Name the tests that cover the new behavior
 steps and what you saw. In Hive Desktop, do manual checks through the dev MCP
 servers (cmd/desktop/AGENTS.md > "Test in the running app") and name the tools
 you used. Say what you did not test and why.
-
-Do not list the gates you ran or count tests. The checklist covers the gates,
-and CI shows the counts.
 -->
 
 ## Checklist
