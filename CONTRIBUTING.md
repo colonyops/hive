@@ -17,20 +17,31 @@ write `n/a: <reason>`.
 
 ## What a change owes
 
-| When the change... | It owes |
-| --- | --- |
-| adds or changes logic | Unit tests. Store tests use real SQLite (`db.Open(t.TempDir(), ...)`). |
-| adds or changes a user flow in Hive Desktop | A Playwright spec in `cmd/desktop/e2e/tests/` (`mise run desktop:e2e`). |
-| adds or changes CLI flag wiring, stdin/stdout, or a multi-command flow | A test in `test/integration/` (`mise run cli:integration`). |
-| changes what a user can see, set, or do | A page update under `docs/docs/` (`.agents/skills/docs-audit/SKILL.md`). |
-| changes the shape the architecture describes | An update to `docs/architecture.md`. It is reviewed as a spec. |
-| makes an architecture or infrastructure decision | An ADR (`mise run adr:new -- "The decision, as a sentence"`). |
-| is visible to users of a program | A release-notes fragment (`mise run changelog:new`; `.agents/skills/release-notes/SKILL.md`). |
-| changes a Wails service surface | Regenerated bindings (`mise run desktop:bindings`; `cmd/desktop/AGENTS.md`). |
-| adds a Hive Desktop view, object, or verb | Command palette and keybinding entries (`.agents/skills/desktop-commands-audit/SKILL.md`). |
-| changes an MCP tool or what agents in a workspace can do | Updated MCP catalog docs and shipped skills (`.agents/skills/desktop-shipped-skills/SKILL.md`). |
-| changes persisted data | A new migration. Released migrations never change (`mise run check` verifies). |
-| changes config behavior | `mise run cli:validate`. |
+A change to each item below owes what follows the colon.
+
+- **Logic**: unit tests. Store tests use real SQLite
+  (`db.Open(t.TempDir(), ...)`).
+- **A Hive Desktop user flow**: a Playwright spec in `cmd/desktop/e2e/tests/`
+  (`mise run desktop:e2e`).
+- **CLI flag wiring, stdin/stdout, or a multi-command flow**: a test in
+  `test/integration/` (`mise run cli:integration`).
+- **What a user can see, set, or do**: a page update under `docs/docs/`
+  (`.agents/skills/docs-audit/SKILL.md`).
+- **The shape the architecture describes**: an update to
+  `docs/architecture.md`. It is reviewed as a spec.
+- **An architecture or infrastructure decision**: an ADR
+  (`mise run adr:new -- "The decision, as a sentence"`).
+- **Anything users of a program notice**: a release-notes fragment
+  (`mise run changelog:new`; `.agents/skills/release-notes/SKILL.md`).
+- **A Wails service surface**: regenerated bindings
+  (`mise run desktop:bindings`; `cmd/desktop/AGENTS.md`).
+- **A Hive Desktop view, object, or verb**: command palette and keybinding
+  entries (`.agents/skills/desktop-commands-audit/SKILL.md`).
+- **An MCP tool, or what agents in a workspace can do**: updated MCP catalog
+  docs and shipped skills (`.agents/skills/desktop-shipped-skills/SKILL.md`).
+- **Persisted data**: a new migration. Released migrations never change
+  (`mise run check` verifies).
+- **Config behavior**: `mise run cli:validate`.
 
 A test proves a behavior, not a gate count. The Verification section of the
 template asks which tests cover the change and what each one proves. A list of
