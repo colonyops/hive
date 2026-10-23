@@ -42,9 +42,9 @@ import (
 // Ports are the drivers and process-lived handles a program gives the engine.
 // None of them is rebuilt on Reload.
 type Ports struct {
-	// DB is hive.db, opened with OpenDB. The program closes it.
-	DB *db.DB
-	// Bus is the event bus. The program starts and stops it.
+	// DB is hive.db and Bus the event bus. StartRuntime opens, starts, and
+	// closes both; a program never sets them.
+	DB       *db.DB
 	Bus      *events.EventBus
 	Executor executil.Executor
 	Mux      sessionsvc.Multiplexer
@@ -236,7 +236,7 @@ func (e *Engine) Status() *statussvc.Service { return e.load().status }
 // HC returns the honeycomb service. It reads no config, so Reload keeps it.
 func (e *Engine) HC() *hcsvc.Service { return e.hc }
 
-// KV returns the persistent key-value store. Reload keeps it. The program
+// KV returns the persistent key-value store. Reload keeps it. The runtime
 // runs SweepKV.
 func (e *Engine) KV() kv.KV { return e.kv }
 
