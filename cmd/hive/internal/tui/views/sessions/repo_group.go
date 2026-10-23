@@ -44,9 +44,6 @@ func GroupSessionsByRepo(sessions []session.Session, localRemote string) []RepoG
 	for _, group := range groups {
 		sortSessions(group.Sessions)
 		group.Remote = group.Sessions[0].Remote
-		if group.Remote == "" {
-			group.Remote = "(no remote)"
-		}
 		group.Name = extractGroupName(group.Remote)
 
 		activeSessions := make([]session.Session, 0, len(group.Sessions))
@@ -71,7 +68,7 @@ func GroupSessionsByRepo(sessions []session.Session, localRemote string) []RepoG
 
 // extractGroupName returns the display name for a repository group.
 func extractGroupName(remote string) string {
-	if remote == "" || remote == "(no remote)" {
+	if remote == "" {
 		return "(no remote)"
 	}
 	return git.ExtractRepoName(remote)

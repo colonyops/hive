@@ -117,12 +117,21 @@ type Opts struct {
 	ConfigPath  string
 }
 
+// launchResolver turns an item's repository into the remote and local checkout
+// a session launch uses. *sessionsvc.Service implements it.
+type launchResolver interface {
+	GeneratedRemote(repo, itemURL string) string
+	PreferredRemote(repo, itemURL string) string
+	ResolveSessionLaunchRepository(ctx context.Context, remote string) (sessionsvc.LaunchRepository, error)
+}
+
 // Model is the main Bubble Tea model for the TUI.
 type Model struct {
 	logger         zerolog.Logger
 	baseLogger     zerolog.Logger // no cmp label; handed to the components the model creates later
 	cfg            *config.Config
 	service        *sessionsvc.Service
+	launches       launchResolver
 	drive          DriveSource
 	cmdService     *command.Service
 	handler        *KeybindingResolver
@@ -376,6 +385,7 @@ func New(deps Deps, opts Opts) Model {
 		cfg:              cfg,
 		drive:            deps.Drive,
 		service:          service,
+		launches:         service,
 		cmdService:       cmdService,
 		handler:          handler,
 		state:            stateNormal,
