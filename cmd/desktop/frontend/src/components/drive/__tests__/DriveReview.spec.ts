@@ -102,6 +102,35 @@ describe('DriveReviewCards', () => {
     expect(wrapper.get('[data-testid="r-review-card-2"]').classes()).not.toContain('border-strong')
   })
 
+  it('places the cards of a newly opened document without sliding them', async () => {
+    reviews.Review.mockImplementation((_space: string, path: string) =>
+      Promise.resolve(
+        path === 'plans/p.md'
+          ? reviewOf()
+          : reviewOf({ comments: [{ id: 'c3', startLine: 1, endLine: 1, context: '', text: 'New', createdAt: '' }] }),
+      ),
+    )
+    const reader = document.createElement('div')
+    reader.innerHTML = '<div data-testid="r-document"><p data-review-ids="c1"></p><p data-review-ids="c2"></p></div>'
+    document.body.append(reader)
+    const wrapper = mount(DriveReviewCards, { props: { ...props, alignTo: reader }, attachTo: document.body })
+    await flushPromises()
+    await wrapper.get('[data-testid="r-review-card-1"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="r-review-card-1"]').classes()).toContain(
+      'transition-[top,border-color,background-color]',
+    )
+
+    await wrapper.setProps({ path: 'plans/q.md' })
+    await flushPromises()
+    reader.innerHTML = '<div data-testid="r-document"><p data-review-ids="c3"></p></div>'
+    await flushPromises()
+    const card = wrapper.get('[data-testid="r-review-card-1"]')
+    expect(card.text()).toContain('New')
+    expect(card.classes()).not.toContain('transition-[top,border-color,background-color]')
+    reader.remove()
+  })
+
   it('shows comments on an earlier version with a way to discard them', async () => {
     reviews.Review.mockResolvedValue(reviewOf({ current: false }))
     const wrapper = await mountPart(DriveReviewCards)

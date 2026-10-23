@@ -90,6 +90,11 @@ const cardElements = new Map<string, HTMLElement>()
 const tops = ref<ReadonlyMap<string, number>>(new Map())
 const height = ref(0)
 const CARD_GAP = 8
+// Only a card already on its block slides. One that just mounted, or that
+// waited at a fallback slot while a newly opened document rendered, would
+// otherwise fly across the sidebar to its first real position.
+let anchored = new Set<string>()
+const sliding = ref<ReadonlySet<string>>(new Set())
 
 function cardRef(id: string, element: unknown): void {
   if (element instanceof HTMLElement) cardElements.set(id, element)
@@ -101,14 +106,18 @@ function layout(): void {
   if (!props.alignTo || !box) return
   const base = box.getBoundingClientRect().top
   const next = new Map<string, number>()
+  const nextAnchored = new Set<string>()
   let floor = 0
   for (const comment of comments.value) {
     const target = block(comment.id)
+    if (target) nextAnchored.add(comment.id)
     const wanted = target ? target.getBoundingClientRect().top - base : floor
     const top = Math.max(wanted, floor)
     next.set(comment.id, top)
     floor = top + (cardElements.get(comment.id)?.offsetHeight ?? 0) + CARD_GAP
   }
+  sliding.value = new Set([...anchored].filter((id) => nextAnchored.has(id)))
+  anchored = nextAnchored
   tops.value = next
   height.value = floor
 }
@@ -182,7 +191,10 @@ function cardStyle(id: string): Record<string, string> | undefined {
         class="flex cursor-pointer flex-col gap-2 rounded-lg border px-3.5 py-3"
         :class="[
           alignTo ? 'absolute inset-x-0' : 'relative',
-          'transition-[top,border-color,background-color] duration-150',
+          sliding.has(comment.id)
+            ? 'transition-[top,border-color,background-color]'
+            : 'transition-[border-color,background-color]',
+          'duration-150',
           store.active.value === comment.id
             ? 'border-accent/45 bg-raised'
             : store.hovered.value === comment.id
