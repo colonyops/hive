@@ -283,6 +283,19 @@ engine root, so the root composes them without a cycle. A service declares
 the ports it consumes, and `platform` and `store` satisfy them structurally,
 the [Go amendment](#the-go-amendment-to-hexagonal) applied to the engine.
 
+`hive.StartRuntime` is the one startup path for the engine, and both
+programs call it. The returned `hive.Runtime` owns what lives for the whole
+process: `hive.db`, the event bus and its goroutine, the engine, and the KV
+sweep. The program supplies the rest as `hive.Ports` (executor, multiplexer,
+pane source, logger, data dir, output styler and streams, credentials) and
+keeps its own tmux, environment, and output adapters. A failed startup step
+closes what the earlier steps opened. `Runtime.Close` is idempotent: it stops
+the drive watcher, cancels and joins the bus and the sweep, and only then
+closes `hive.db`. A config reload goes through `Engine().Reload` and keeps
+every runtime resource. A new database-bound shared service or background job
+belongs in the engine or the runtime, never in one program's composition
+root. The CLI does not start the runtime for shell completion or `hive init`.
+
 Loggers are passed down, never global: depguard denies the zerolog global
 logger in the whole module, because no program assigns it. A `zerolog.Logger`
 is the first parameter of what takes one, or the second after a
@@ -562,6 +575,8 @@ internal/                         # the hive engine both programs run on (see
   hive/                           # the engine
     engine.go                     #   hive.Engine: New(cfg, Ports), Reload(cfg),
                                   #   one accessor per service
+    runtime.go                    #   hive.Runtime: StartRuntime opens hive.db, the
+                                  #   bus, the engine, the KV sweep; Close unwinds
     events/                       #   the domain event bus
     session/  status/  hc/        #   one subpackage per application service
     messaging/  drive/            #   drive: the document tree under the context root

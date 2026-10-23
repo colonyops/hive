@@ -50,13 +50,11 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	hiveevents "github.com/colonyops/hive/internal/hive/events"
-	"github.com/colonyops/hive/internal/hive/session/scripts"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/platform/execenv"
 	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
 	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
-	"github.com/colonyops/hive/internal/store/db"
 )
 
 // Config is everything App needs that it cannot resolve itself.
@@ -211,9 +209,9 @@ type App struct {
 	webhookPort int
 
 	// hive owns the config-derived services and swaps them on Reload.
-	hive     *hive.Engine
-	hiveDB   *db.DB
-	launcher *dispatch.RepositoryLauncher
+	hive        *hive.Engine
+	hiveRuntime *hive.Runtime
+	launcher    *dispatch.RepositoryLauncher
 
 	hiveDataDir string
 	// reloadMu serializes ReloadHiveRuntime, so the engine, the agent command
@@ -271,7 +269,6 @@ type App struct {
 	actionsWatcher         *dirwatch.Watcher
 	agentWorkspacesWatcher *dirwatch.Watcher
 	hiveWatcher            *hivewatch.Watcher
-	hiveBusCancel          context.CancelFunc
 }
 
 // New builds the core: the store, the domain stores and their watchers, the
@@ -691,10 +688,10 @@ func (a *App) MCPBaseURL(ctx context.Context) string {
 // HiveConn exposes hive.db (sessions, messages) as a plain *sql.DB for the
 // e2e harness's table resets and read-only snapshots.
 func (a *App) HiveConn() *sql.DB {
-	if a.hiveDB == nil {
+	if a.hiveRuntime == nil {
 		return nil
 	}
-	return a.hiveDB.Conn()
+	return a.hiveRuntime.DB().Conn()
 }
 
 // Close stops the background subsystems and releases resources. It is the
@@ -790,9 +787,10 @@ func (a *App) Close() error {
 	if a.hiveWatcher != nil {
 		a.hiveWatcher.Stop()
 	}
-	if a.hive != nil {
-		if err := a.hive.Drive().Close(); err != nil {
-			a.logger.Warn().Err(err).Msg("drive watcher shutdown")
+	var err error
+	if a.hiveRuntime != nil {
+		if closeErr := a.hiveRuntime.Close(); closeErr != nil {
+			err = fmt.Errorf("close hive runtime: %w", closeErr)
 		}
 	}
 	a.Events.Close()
@@ -803,16 +801,6 @@ func (a *App) Close() error {
 		}
 	}
 
-	if a.hiveBusCancel != nil {
-		a.hiveBusCancel()
-	}
-
-	var err error
-	if a.hiveDB != nil {
-		if closeErr := a.hiveDB.Close(); closeErr != nil {
-			err = fmt.Errorf("close hive action database: %w", closeErr)
-		}
-	}
 	if closeErr := a.db.Close(); closeErr != nil && err == nil {
 		err = fmt.Errorf("close desktop store: %w", closeErr)
 	}
@@ -1271,27 +1259,11 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return err
 	}
-	if err := scripts.EnsureExtracted(dataDir, "desktop"); err != nil {
-		cfg.Logger.Warn().Err(err).Msg("extract hive action scripts failed")
-	}
-
-	database, err := hive.OpenDB(ctx, dataDir, hiveCfg.Database)
-	if err != nil {
-		return fmt.Errorf("open hive action database: %w", err)
-	}
-
-	bus := hiveevents.New(64)
-	logDroppedHiveEvents(a.logger, bus)
-	busCtx, cancel := context.WithCancel(ctx)
-	go bus.Start(busCtx)
-
 	tmuxBinary := func(ctx context.Context) (string, error) {
 		return a.resolveTmuxBinary(ctx)
 	}
 	tmuxClient := tmuxexec.New(a.logger, newTmuxRunner(tmuxBinary, a.execEnv.Environ))
 	ports := hive.Ports{
-		DB:       database,
-		Bus:      bus,
 		Executor: newEnvExecutor(a.execEnv),
 		Mux:      hiveMultiplexer{Client: tmuxClient, renamer: a.terminals},
 		DataDir:  dataDir,
@@ -1303,26 +1275,32 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	if a.mock == "" {
 		ports.PaneSource = tmuxClient
 	}
-	engine, err := hive.New(hiveCfg, ports)
+	hiveRuntime, err := hive.StartRuntime(ctx, hiveCfg, hive.RuntimeOptions{Ports: ports, ScriptsVersion: "desktop"})
 	if err != nil {
-		cancel()
-		_ = database.Close()
-		return fmt.Errorf("start hive engine: %w", err)
+		return hiveStartError(err)
 	}
-	a.hive = engine
-	a.hiveDB = database
-	a.hiveBusCancel = cancel
-	forwardDriveChanges(busCtx, bus, a.Events)
+	a.hiveRuntime = hiveRuntime
+	a.hive = hiveRuntime.Engine()
+	logDroppedHiveEvents(a.logger, hiveRuntime.Bus())
+	forwardDriveChanges(ctx, hiveRuntime.Bus(), a.Events)
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
 	a.launcher = dispatch.NewRepositoryLauncher(
 		func() dispatch.SessionCreator { return a.hive.Sessions() },
 		a.Stores.ItemSessions, a.Activity, cfg.Logger,
 	)
-	// After hive.New so the canvases land under the engine's context root.
+	// After StartRuntime so the canvases land under the engine's context root.
 	// It runs once per process: ReloadHiveRuntime never repeats it, so a
 	// legacy canvas that appears later moves on the next launch.
 	importLegacyCanvases(ctx, a.logger, a.hive, cfg.Paths)
 	return nil
+}
+
+func hiveStartError(err error) error {
+	var startErr *hive.StartError
+	if errors.As(err, &startErr) && startErr.Step == hive.StartStepDatabase {
+		return fmt.Errorf("open hive action database: %w", err)
+	}
+	return fmt.Errorf("start hive engine: %w", err)
 }
 
 // logDroppedHiveEvents surfaces what the engine bus drops when its buffer is
