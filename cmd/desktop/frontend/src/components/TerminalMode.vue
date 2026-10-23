@@ -130,7 +130,6 @@ const { confirmation, detail, closeDetail, renaming, renameBusy, renameError, ca
         :space="drivePane.space"
         :path="docPath"
         :agent-setup="spaceGroup(drivePane.space) === 'Repositories'"
-        :agent="{ kind: 'session', id: drivePane.session, pane: '' }"
         @setup="openMcpSettings"
         @close="syncDocQuery(false)"
         @open-url="openLink"

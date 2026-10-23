@@ -11,13 +11,10 @@ import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useToasts } from '../../composables/useToasts'
 import { errorText } from '../../lib/appError'
 import { useDriveReview } from '../../stores/useDriveReview'
-import type { AgentTargetRef } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const props = defineProps<{
   space: string
   path: string
-  /** The agent Send to Agent offers first. */
-  agent?: AgentTargetRef | null
   /** Derives `-review-footer`, `-review-note`, `-review-ready`, `-review-copy`, `-review-send`, and the dialog's ids. */
   testid: string
 }>()
@@ -86,13 +83,6 @@ function onKeydown(event: KeyboardEvent): void {
         <Kbd class="text-accent/70">⌘↵</Kbd>
       </BaseButton>
     </div>
-    <SendToAgentDialog
-      v-if="sending"
-      :space="space"
-      :path="path"
-      :agent="agent"
-      :testid="testid"
-      @close="sending = false"
-    />
+    <SendToAgentDialog v-if="sending" :space="space" :path="path" :testid="testid" @close="sending = false" />
   </div>
 </template>

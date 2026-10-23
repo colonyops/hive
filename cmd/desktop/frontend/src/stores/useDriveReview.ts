@@ -38,22 +38,14 @@ export const useDriveReview = defineStore('driveReview', () => {
     active.value = id
   }
 
-  // Which surface has a reviewed document on screen, so the title bar, the
-  // palette, and the keybindings know there are comments to show or hide.
-  // The Drive page's column is a layout choice that persists; the pane's
-  // overlay covers the document, so it opens per visit.
+  // Whether the Drive page has a reviewed document on screen, so the title
+  // bar, the palette, and the keybindings know there are comments to show or
+  // hide. The column is a layout choice that persists.
   const pageReviewed = shallowRef(false)
-  const paneReviewed = shallowRef(false)
   const pageCommentsCollapsed = useStorage('hive.panel.drive.comments.collapsed', false)
-  const paneCommentsOpen = shallowRef(false)
 
-  function setReviewed(surface: 'page' | 'pane', reviewed: boolean): void {
-    if (surface === 'page') pageReviewed.value = reviewed
-    else paneReviewed.value = reviewed
-  }
-
-  function setPaneCommentsOpen(open: boolean): void {
-    paneCommentsOpen.value = open
+  function setPageReviewed(reviewed: boolean): void {
+    pageReviewed.value = reviewed
   }
 
   function togglePageComments(): void {
@@ -185,13 +177,10 @@ export const useDriveReview = defineStore('driveReview', () => {
 
   return {
     pageReviewed: computed(() => pageReviewed.value),
-    paneReviewed: computed(() => paneReviewed.value),
-    setReviewed,
+    setPageReviewed,
     pageCommentsCollapsed: computed(() => pageCommentsCollapsed.value),
     togglePageComments,
     showPageComments,
-    paneCommentsOpen: computed(() => paneCommentsOpen.value),
-    setPaneCommentsOpen,
     active: computed(() => active.value),
     setActive,
     hovered: computed(() => hovered.value),

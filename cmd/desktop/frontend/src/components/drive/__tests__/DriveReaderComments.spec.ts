@@ -27,6 +27,7 @@ describe('DriveReader comments', () => {
         paths: new Set(['plans/p.md']),
         loading: false,
         error: null,
+        commentable: true,
         testid: 'r',
       },
       attachTo: document.body,
@@ -70,6 +71,7 @@ describe('DriveReader comments', () => {
         paths: new Set(['plans/p.md']),
         loading: false,
         error: null,
+        commentable: true,
         testid: 'r',
       },
       attachTo: document.body,
@@ -96,6 +98,25 @@ describe('DriveReader comments', () => {
       context: 'a\nb',
       text: 'Split this',
     })
+    wrapper.unmount()
+  })
+
+  it('offers no comments where the reader is not commentable', async () => {
+    const wrapper = mount(DriveReader, {
+      props: {
+        document: documentFor('e2e/repo', doc('plans/p.md'), { markdown: '# P\n\n```\na\nb\n```\n' }),
+        paths: new Set(['plans/p.md']),
+        loading: false,
+        error: null,
+        testid: 'r',
+      },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    wrapper.get('[data-testid="r-markdown"] code').element.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="r-block-comment"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })
