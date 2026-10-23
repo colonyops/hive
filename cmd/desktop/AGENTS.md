@@ -45,8 +45,7 @@ faster.
 
 1. Run `mise run desktop:dev:prepare`. It writes `launch.env` and `.mcp.json`
    at the worktree root.
-2. Ask the user to run `mise run desktop:dev`. It opens a window, so do not
-   start it from a background shell.
+2. Run `mise run desktop:dev`.
 3. Start the agent session in the worktree and approve the `hive-desktop-ui`
    server from `.mcp.json`.
 
