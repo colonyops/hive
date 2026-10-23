@@ -4,7 +4,7 @@ A **Grafana metrics source** node runs a PromQL query against a connected Grafan
 
 ## Fields
 
-- `credential` — required. The connected Grafana stack to fetch as, written as `cmd/desktop/grafana/<account>` (the account is the stack host and org, resolved when you connect). Connect a stack under Settings ▸ Integrations by pasting its URL and a service-account token; a Viewer-role service account is enough to query metrics.
+- `credential` — required. The connected Grafana stack to fetch as, written as `grafana/<account>` (the account is the stack host and org, resolved when you connect). Connect a stack under Settings ▸ Integrations by pasting its URL and a service-account token; a Viewer-role service account is enough to query metrics.
 - `datasource_uid` — required. The uid of the Prometheus-compatible datasource the query runs against.
 - `expr` — required. A PromQL expression, for example `up` or `sum(rate(http_requests_total[5m]))`.
 - `title` — optional. The feed item's title. Defaults to the query when empty.
