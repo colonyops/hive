@@ -5,9 +5,10 @@ ENV CI=1
 
 # The server-build action runtime uses git and tmux; bash, curl, and coreutils
 # are used by the isolated e2e harness. The Playwright base image already has
-# the matching browser system dependencies installed.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      git tmux bash curl ca-certificates \
+# the browser system dependencies and all of these but tmux. Naming the others
+# here upgrades them, and the image's Azure mirror has served those downloads
+# at 45 kB/s.
+RUN apt-get update && apt-get install -y --no-install-recommends tmux \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
