@@ -8,7 +8,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 )
 
-// RepoLocation is a forge host and repository path a clone URL can be built for.
+// RepoLocation is a forge host and repository path that a clone URL can be built for.
 type RepoLocation struct {
 	// Host is the hostname plus a non-default port. Only HTTPS URLs use the port.
 	Host string
