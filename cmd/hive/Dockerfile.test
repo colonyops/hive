@@ -14,10 +14,11 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:${PATH}"
 
-# Copy built hive binary (supports multiple TARGETARCH values)
+# Copy built binaries (supports multiple TARGETARCH values). The remote-drive
+# tests run hive-drive-server.
 ARG TARGETARCH
-COPY dist/hive_linux_${TARGETARCH}_*/hive /usr/local/bin/hive
-RUN chmod +x /usr/local/bin/hive
+COPY --chmod=755 dist/hive_linux_${TARGETARCH}_*/hive /usr/local/bin/hive
+COPY --chmod=755 dist/hive-drive-server_linux_${TARGETARCH}_*/hive-drive-server /usr/local/bin/hive-drive-server
 
 # Signal to tests that they're running inside the integration container
 ENV HIVE_INTEGRATION=1
@@ -31,10 +32,6 @@ RUN go mod download
 # Copy integration tests and the internal packages they exercise directly.
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
-COPY cmd/drive-server/ ./cmd/drive-server/
 COPY test/integration/ ./test/integration/
-
-# The drive server is a separate binary that the remote-drive tests run.
-RUN go build -o /usr/local/bin/hive-drive-server ./cmd/drive-server
 
 CMD ["go", "test", "-v", "-tags", "integration", "-count=1", "./test/integration/..."]

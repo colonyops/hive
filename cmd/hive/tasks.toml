@@ -54,7 +54,7 @@ run = "podman run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CL
 
 ["cli:integration"]
 description = "Run the CLI integration tests inside Docker (never on the host)"
-depends = ["cli:build"]
+depends = ["cli:build:container"]
 run = "docker build -f cmd/hive/Dockerfile.test -t hive-integration-test . && docker run --rm hive-integration-test"
 
 # ── Gates ────────────────────────────────────────────────────────────────────
