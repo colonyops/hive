@@ -42,8 +42,8 @@ import (
 // Ports are the drivers and process-lived handles a program gives the engine.
 // None of them is rebuilt on Reload.
 type Ports struct {
-	// DB is hive.db and Bus the event bus. StartRuntime opens, starts, and
-	// closes both; a program never sets them.
+	// DB is hive.db and Bus the event bus. New requires both; StartRuntime
+	// opens them itself and rejects ones the caller sets.
 	DB       *db.DB
 	Bus      *events.EventBus
 	Executor executil.Executor

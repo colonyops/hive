@@ -790,7 +790,7 @@ func (a *App) Close() error {
 	var err error
 	if a.hiveRuntime != nil {
 		if closeErr := a.hiveRuntime.Close(); closeErr != nil {
-			err = fmt.Errorf("close hive action database: %w", closeErr)
+			err = fmt.Errorf("close hive runtime: %w", closeErr)
 		}
 	}
 	a.Events.Close()

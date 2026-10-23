@@ -147,7 +147,8 @@ func TestRuntimeBackgroundWorkStopsWithItsContext(t *testing.T) {
 func TestRuntimeReloadKeepsTheDatabaseAndBus(t *testing.T) {
 	cfg := loadConfig(t, t.TempDir())
 	rt := startRuntime(t, t.Context(), cfg)
-	db, bus, sessions := rt.DB(), rt.Bus(), rt.Engine().Sessions()
+	bus, sessions := rt.Bus(), rt.Engine().Sessions()
+	require.NoError(t, rt.Engine().KV().Set(t.Context(), "before.reload", "kept"))
 
 	next := loadConfig(t, cfg.DataDir)
 	next.GitPath = "/opt/git/bin/git"
@@ -155,7 +156,11 @@ func TestRuntimeReloadKeepsTheDatabaseAndBus(t *testing.T) {
 
 	assert.Same(t, next, rt.Engine().Config())
 	assert.NotSame(t, sessions, rt.Engine().Sessions())
-	assert.Same(t, db, rt.DB())
 	assert.Same(t, bus, rt.Engine().Bus())
-	require.NoError(t, rt.DB().Conn().PingContext(t.Context()))
+
+	var got string
+	require.NoError(t, rt.Engine().KV().Get(t.Context(), "before.reload", &got))
+	assert.Equal(t, "kept", got)
+	_, err := rt.Engine().Sessions().ListSessions(t.Context())
+	require.NoError(t, err, "the rebuilt session service reads the runtime's database")
 }

@@ -29,9 +29,8 @@ const (
 	StartStepEngine   StartStep = "engine"
 )
 
-// StartError is a StartRuntime failure. Its message is the cause's own, so a
-// program that wraps nothing reports what it always did; Step lets a program
-// that adds context pick it per step.
+// StartError is a StartRuntime failure. Error returns the cause's message
+// unchanged; Step lets a caller add context per step.
 type StartError struct {
 	Step StartStep
 	Err  error
