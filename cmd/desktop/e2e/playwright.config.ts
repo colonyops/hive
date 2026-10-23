@@ -9,30 +9,19 @@ const webkit = { browserName: 'webkit' as const }
 
 export default defineConfig({
   timeout: 30_000,
-  // Some fixture tests mutate a server-local flow through a watcher. Keep the
-  // Docker acceptance suite ordered so a slow WebKit watcher cannot race a
-  // concurrent project while it is asserting its own isolated state.
+  // Tests share the servers, and some mutate a flow through a watcher, so a
+  // second worker could race another test's state.
   workers: 1,
-  // Real browsers + six concurrent Go servers on a shared CI runner make some
-  // timing jitter irreducible (a slow server response, a GC pause). Retry in
-  // CI so that jitter does not red a build; a genuine regression still fails
-  // every attempt. Local runs get 0 so flakes surface loudly. The onboarding
-  // suite opts out (retries: 0) — its device-flow grant is a one-way server
-  // state change a retry cannot replay. Set via env so `mise run desktop:e2e`
-  // (CI=1 in the image) and ad-hoc local runs differ automatically.
+  // Browsers and seven Go servers in one container leave some timing jitter;
+  // a real regression still fails every attempt. The image sets CI=1.
   retries: process.env.CI ? 2 : 0,
-  // Set PW_FAIL_ON_FLAKY (forwarded into the container by run-docker.sh) for a
-  // strict flake hunt: a test that only passes on retry then fails the run
-  // instead of hiding as "flaky".
   failOnFlakyTests: !!process.env.PW_FAIL_ON_FLAKY,
   expect: { timeout: 10_000 },
   outputDir: 'test-results',
-  // Each spec picks its server with test.use({ server }); fixtures/test.ts
-  // derives baseURL from it.
+  // No baseURL: fixtures/test.ts derives it from the spec's server.
   use: {
     viewport: { width: 1360, height: 864 },
-    // Traces are the only forensic record of a flake: run-docker.sh mounts
-    // test-results/ out of the container so they survive the run.
+    // run-docker.sh mounts test-results/ out of the container.
     trace: 'retain-on-failure',
   },
   webServer: {

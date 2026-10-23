@@ -66,7 +66,8 @@ Hive.app.
 ## Never
 
 - **Never run Playwright or the e2e harness on the host.** `mise run desktop:e2e` is
-  Docker-only and there is no host fallback.
+  Docker-only and there is no host fallback. To write or place a test, read
+  `cmd/desktop/e2e/AGENTS.md`.
 - **Never verify UI by hand in a GUI build.** The headless `mise run desktop:serve`
   build driven with browser tooling is the default loop. When the question is
   about the real app (the native window, the WKWebView, shell integration),

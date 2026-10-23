@@ -605,8 +605,11 @@ private data/config root. Fixture-driven servers receive private flow/action
 copies and a run id; onboarding deliberately receives no injected fixture env,
 and action-seed deliberately starts without an action fixture to verify exact
 first-run seeding. Action smoke also gets a local bare Git remote. This keeps
-parallel browser projects from mutating checked-in fixtures or sharing
+browser projects from mutating checked-in fixtures or sharing
 SQLite/action state. Docker must be available; there is no host fallback.
+
+[`e2e/AGENTS.md`](e2e/AGENTS.md) is the guide for the suite: how to filter a
+run, where a test goes, which server it picks, and how to tag it.
 
 ## Reading what the app costs
 
@@ -645,7 +648,6 @@ Recording UI spans to `perf.jsonl` is the `usePerf` hook, on in `dev` via
 ui-performance-spans-are-recorded-to-jsonl). The **desktop-ui-perf** agent skill carries
 the full loop: the naming rules and the jq recipes for percentiles, outliers,
 and grouping by attribute.
-
 
 ## Diagnostics
 
