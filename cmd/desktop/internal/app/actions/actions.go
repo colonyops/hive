@@ -37,9 +37,12 @@ const (
 	TargetSession = "session"
 	// TargetWindow is a terminal window's row menu, inside its session.
 	TargetWindow = "window"
+	// TargetStatusBar is a button in the Code view's session status bar. It
+	// runs against the session, like TargetSession.
+	TargetStatusBar = "statusbar"
 )
 
-var targetNames = map[string]bool{TargetItem: true, TargetSession: true, TargetWindow: true}
+var targetNames = map[string]bool{TargetItem: true, TargetSession: true, TargetWindow: true, TargetStatusBar: true}
 
 // View is the complete action contract exposed to the desktop frontend. It
 // deliberately excludes executable configuration: the frontend can present
@@ -49,6 +52,7 @@ type View struct {
 	ID                   string      `json:"id"`
 	Label                string      `json:"label"`
 	Type                 string      `json:"type"`
+	Icon                 string      `json:"icon,omitempty"`
 	ShowInDetail         bool        `json:"showInDetail"`
 	RequiresSessionInput bool        `json:"requiresSessionInput"`
 	Inputs               []InputSpec `json:"inputs,omitempty"`
@@ -66,6 +70,9 @@ type Action struct {
 	// Type is the action kind discriminator: "launch-session", "shell",
 	// "publish-message", or "clipboard".
 	Type string
+	// Icon is the glyph a status bar button shows, from the launcher set in
+	// cmd/desktop/internal/app/icons. Empty means the terminal glyph.
+	Icon string
 	// Targets are the surfaces this action is offered on: TargetItem,
 	// TargetSession, TargetWindow. Empty means TargetItem alone.
 	Targets []string
@@ -91,6 +98,7 @@ func (a Action) View() View {
 		ID:                   a.ID,
 		Label:                a.Label,
 		Type:                 a.Type,
+		Icon:                 a.Icon,
 		ShowInDetail:         a.ShowInDetail,
 		RequiresSessionInput: a.RequiresSessionInput(),
 		Inputs:               cloneInputs(a.Inputs),
@@ -126,6 +134,7 @@ type actionHeader struct {
 	ID           string      `yaml:"id"`
 	Label        string      `yaml:"label"`
 	Type         string      `yaml:"type"`
+	Icon         string      `yaml:"icon"`
 	Targets      []string    `yaml:"targets"`
 	AppliesTo    []string    `yaml:"applies_to"`
 	ShowInDetail bool        `yaml:"show_in_detail"`
@@ -140,6 +149,7 @@ var reservedActionKeys = map[string]bool{
 	"id":             true,
 	"label":          true,
 	"type":           true,
+	"icon":           true,
 	"targets":        true,
 	"applies_to":     true,
 	"show_in_detail": true,
@@ -185,6 +195,7 @@ func (a *Action) UnmarshalYAML(value *yaml.Node) error {
 	a.ID = header.ID
 	a.Label = header.Label
 	a.Type = header.Type
+	a.Icon = header.Icon
 	a.Targets = normalizeTargets(header.Targets)
 	a.AppliesTo = header.AppliesTo
 	a.ShowInDetail = header.ShowInDetail
@@ -251,10 +262,10 @@ func (a Action) HasTarget(target string) bool {
 	return slices.Contains(a.Targets, target)
 }
 
-// TargetsTerminal reports whether this action is offered on either terminal
+// TargetsTerminal reports whether this action is offered on any terminal
 // surface.
 func (a Action) TargetsTerminal() bool {
-	return a.HasTarget(TargetSession) || a.HasTarget(TargetWindow)
+	return a.HasTarget(TargetSession) || a.HasTarget(TargetWindow) || a.HasTarget(TargetStatusBar)
 }
 
 // TerminalCapable reports whether this action's type can run against a

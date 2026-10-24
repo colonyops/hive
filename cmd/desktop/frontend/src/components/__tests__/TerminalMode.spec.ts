@@ -4026,6 +4026,30 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
+    it('renders status bar actions as buttons that run against the session', async () => {
+      const openRepo = {
+        id: 'open-ci',
+        label: 'Open CI',
+        type: 'shell',
+        icon: 'globe',
+        showInDetail: false,
+        requiresSessionInput: false,
+      }
+      mocks.TerminalActionViews.mockImplementation((target: string) =>
+        Promise.resolve(target === 'statusbar' ? [openRepo] : []),
+      )
+
+      const { wrapper } = await mountWithStatusBar()
+      const button = wrapper.get('[data-testid="terminal-statusbar-action-open-ci"]')
+      expect(button.attributes('aria-label')).toBe('Open CI')
+      await button.trigger('click')
+      await flushPromises()
+
+      expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith('open-ci', { slug: 'hive-fix-parser', windowId: '' }, {})
+
+      wrapper.unmount()
+    })
+
     it('offers no repository button for a remote that names no host', async () => {
       mocks.SessionGitStatus.mockResolvedValue({
         path: '/tmp/fix-parser',

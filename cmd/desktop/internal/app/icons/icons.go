@@ -34,26 +34,31 @@ var feed = map[string]bool{
 }
 
 // launcher is the scoped set of glyphs a pop-up terminal launcher may carry in
-// the command palette. It is its own set rather than a share of feed's: these
-// name programs and tasks, not the kinds of thing a feed carries. It must stay
-// in sync with cmd/desktop/frontend/src/lib/launcherIcons.ts.
+// the command palette, and a status bar action on its button. It is its own set
+// rather than a share of feed's: these name programs and tasks, not the kinds
+// of thing a feed carries. It must stay in sync with
+// cmd/desktop/frontend/src/lib/launcherIcons.ts.
 var launcher = map[string]bool{
-	"terminal":      true,
-	"git-branch":    true,
-	"git-compare":   true,
-	"folder":        true,
-	"file-text":     true,
-	"search":        true,
-	"database":      true,
-	"gauge":         true,
-	"activity":      true,
-	"flask-conical": true,
-	"hammer":        true,
-	"container":     true,
-	"cloud":         true,
-	"bug":           true,
-	"zap":           true,
-	"package":       true,
+	"terminal":         true,
+	"git-branch":       true,
+	"git-compare":      true,
+	"folder":           true,
+	"file-text":        true,
+	"search":           true,
+	"database":         true,
+	"gauge":            true,
+	"activity":         true,
+	"flask-conical":    true,
+	"hammer":           true,
+	"container":        true,
+	"cloud":            true,
+	"bug":              true,
+	"zap":              true,
+	"package":          true,
+	"globe":            true,
+	"external-link":    true,
+	"git-pull-request": true,
+	"play":             true,
 }
 
 // ValidFeed reports whether name is a supported feed glyph. The empty string
