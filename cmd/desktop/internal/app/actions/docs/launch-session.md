@@ -105,7 +105,7 @@ log instead, under the item it ran for.
 ## Item target only
 
 A launch-session action creates a *new* session, so it cannot declare
-`targets: [session]` or `targets: [window]` — the terminal's row menus have no
+`targets: [session]`, `[window]`, or `[statusbar]` — the terminal surfaces have no
 New Session form to collect the interactive variant's repository and name, and
 the headless variant's `repo_template` renders over a feed item's payload,
 which a terminal target carries none of. Declaring one is rejected when the
