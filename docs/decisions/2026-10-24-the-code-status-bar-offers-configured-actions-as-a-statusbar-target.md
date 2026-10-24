@@ -25,9 +25,10 @@ actions in the row menu only.
    draws it. The label is the button's tooltip.
 
 3. **Configured buttons come after the built-in ones.** The editor, file
-   manager, repository, and Tasks buttons are not configurable and are not
+   manager, and Tasks buttons are not configurable and are not
    actions. A config file adds to the bar; it cannot remove or reorder what
-   ships.
+   ships. Opening the repository is not built in: it is a one-line
+   `statusbar` action over `.Session.WebURL`.
 
 4. **`.Session.WebURL` is the repository's web page, resolved by the forge
    that serves the remote.** A connected Gitea instance answers with its own

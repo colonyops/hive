@@ -38,7 +38,6 @@ const mocks = vi.hoisted(() => ({
   SessionPullRequest: vi.fn(),
   OpenSessionInEditor: vi.fn(),
   RevealSession: vi.fn(),
-  OpenSessionRepo: vi.fn(),
   SessionRisk: vi.fn(),
   RenameSession: vi.fn(),
   DeleteSession: vi.fn(),
@@ -113,7 +112,6 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   SessionPullRequest: mocks.SessionPullRequest,
   OpenSessionInEditor: mocks.OpenSessionInEditor,
   RevealSession: mocks.RevealSession,
-  OpenSessionRepo: mocks.OpenSessionRepo,
   SessionRisk: mocks.SessionRisk,
   RenameSession: mocks.RenameSession,
   DeleteSession: mocks.DeleteSession,
@@ -4016,16 +4014,6 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
-    it('opens the repository on its forge from the status bar', async () => {
-      const { wrapper } = await mountWithStatusBar()
-
-      await wrapper.get('[data-testid="terminal-statusbar-open-repo"]').trigger('click')
-      await flushPromises()
-      expect(mocks.OpenSessionRepo).toHaveBeenCalledWith('1')
-
-      wrapper.unmount()
-    })
-
     it('renders status bar actions as buttons that run against the session', async () => {
       const openRepo = {
         id: 'open-ci',
@@ -4046,28 +4034,6 @@ describe('TerminalMode', () => {
       await flushPromises()
 
       expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith('open-ci', { slug: 'hive-fix-parser', windowId: '' }, {})
-
-      wrapper.unmount()
-    })
-
-    it('offers no repository button for a remote that names no host', async () => {
-      mocks.SessionGitStatus.mockResolvedValue({
-        path: '/tmp/fix-parser',
-        branch: 'feat/parser',
-        dirty: false,
-        unpushed: false,
-        additions: 0,
-        deletions: 0,
-        host: '',
-        owner: '',
-        repo: '',
-        resolved: true,
-        error: '',
-      })
-
-      const { wrapper } = await mountWithStatusBar()
-
-      expect(wrapper.find('[data-testid="terminal-statusbar-open-repo"]').exists()).toBe(false)
 
       wrapper.unmount()
     })

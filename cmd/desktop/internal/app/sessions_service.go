@@ -471,20 +471,6 @@ func (s *SessionsService) RevealSession(ctx context.Context, id string) error {
 	return Wrap(osopen.Open(dir), KindInternal, "opening %s", dir)
 }
 
-// OpenSessionRepo opens the web page of the repository the session's remote
-// names, on whichever forge serves it.
-func (s *SessionsService) OpenSessionRepo(ctx context.Context, id string) error {
-	detail, err := s.SessionDetail(ctx, id)
-	if err != nil {
-		return err
-	}
-	url := s.repoURL(detail.Remote)
-	if url == "" {
-		return Errorf(KindConflict, "session %q has no remote with a web address", detail.Name)
-	}
-	return Wrap(osopen.Open(url), KindInternal, "opening %s", url)
-}
-
 func (s *SessionsService) repoURL(remote string) string {
 	if s.forges == nil {
 		return git.WebURL(remote)

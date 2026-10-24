@@ -132,13 +132,15 @@ Use `targets` to choose where an action appears:
 A status bar button shows its `label` as a tooltip and takes an optional `icon`, from the same set as launchers plus `globe`, `external-link`, `git-pull-request`, and `play`. Terminal targets can read `{{ .Session.WebURL }}`, the repository's page on GitHub or on the connected Gitea or Forgejo instance:
 
 ```yaml
-- id: open-pulls
-  label: Open pull requests
+- id: open-repo
+  label: Open repository
   type: shell
   targets: [statusbar]
-  icon: git-pull-request
-  command_template: 'open {{ printf "%s/pulls" .Session.WebURL | shq }}'
+  icon: globe
+  command_template: 'open {{ .Session.WebURL | shq }}'
 ```
+
+Append a path for a page inside the repository, such as `{{ printf "%s/pulls" .Session.WebURL | shq }}`.
 
 Item actions run independently. A long shell action stays **Running** until its command exits, while later manual and flow actions can continue. Hiding the window leaves it running; quitting Hive cancels it. Shell actions capture output but do not provide terminal input.
 

@@ -95,13 +95,6 @@ export function OpenSessionInEditor(id: string): $CancellablePromise<void> {
 }
 
 /**
- * OpenSessionRepo opens the session's repository on its forge's website.
- */
-export function OpenSessionRepo(id: string): $CancellablePromise<void> {
-    return $Call.ByID(1290228533, id);
-}
-
-/**
  * PruneSessions starts the prune of every recycled and corrupted session as a
  * background job and returns the job id.
  */

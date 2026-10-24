@@ -82,11 +82,6 @@ func (s *SessionService) RevealSession(ctx context.Context, id string) error {
 	return s.sessions.RevealSession(ctx, id)
 }
 
-// OpenSessionRepo opens the session's repository on its forge's website.
-func (s *SessionService) OpenSessionRepo(ctx context.Context, id string) error {
-	return s.sessions.OpenSessionRepo(ctx, id)
-}
-
 // ItemSessions returns the sessions an inbox item spawned, newest first, with
 // the state hive reports for each now. Slug is the attach target.
 func (s *SessionService) ItemSessions(ctx context.Context, itemID int64) ([]app.ItemSessionView, error) {
