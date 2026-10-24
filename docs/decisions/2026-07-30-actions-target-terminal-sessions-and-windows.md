@@ -53,7 +53,8 @@ terminal actions would duplicate all of it and give users two vocabularies for
 
 7. **The surface is the row menu.** Session actions go in `SessionRowMenu`'s
    host-contributed section. A window row gets a menu only when some action
-   targets a window.
+   targets a window. The Code status bar became a third terminal surface
+   later (ADR the-code-status-bar-offers-configured-actions-as-a-statusbar-target).
 
 ## Consequences
 

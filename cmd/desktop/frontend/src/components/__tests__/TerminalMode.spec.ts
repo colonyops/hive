@@ -4014,6 +4014,30 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
+    it('renders status bar actions as buttons that run against the session', async () => {
+      const openRepo = {
+        id: 'open-ci',
+        label: 'Open CI',
+        type: 'shell',
+        icon: 'globe',
+        showInDetail: false,
+        requiresSessionInput: false,
+      }
+      mocks.TerminalActionViews.mockImplementation((target: string) =>
+        Promise.resolve(target === 'statusbar' ? [openRepo] : []),
+      )
+
+      const { wrapper } = await mountWithStatusBar()
+      const button = wrapper.get('[data-testid="terminal-statusbar-action-open-ci"]')
+      expect(button.attributes('aria-label')).toBe('Open CI')
+      await button.trigger('click')
+      await flushPromises()
+
+      expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith('open-ci', { slug: 'hive-fix-parser', windowId: '' }, {})
+
+      wrapper.unmount()
+    })
+
     // The button only signals the click; App.vue reads the repo to scope to
     // off the session-repo-key it has already been keeping current.
     it('emits open-tasks, carrying no payload of its own, when the tasks button is clicked', async () => {

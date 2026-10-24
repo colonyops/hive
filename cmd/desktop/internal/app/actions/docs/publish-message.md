@@ -16,5 +16,5 @@ another agent or process that is listening on a topic.
 
 `message_template` is a Go `text/template` rendered over the target's data (see
 "Template data" above). On an `item` target the payload is at `.Payload` — e.g.
-`{{ .Payload.title }} ({{ .Payload.url }})`; on a `session` or `window` target
+`{{ .Payload.title }} ({{ .Payload.url }})`; on a `session`, `window`, or `statusbar` target
 the session is at `.Session` — e.g. `{{ .Session.Name }} needs a look`.

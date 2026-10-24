@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/icons"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/slug"
 )
 
@@ -130,6 +131,9 @@ func validateActions(actionList []Action) error {
 		if err := validateTargets(a); err != nil {
 			return fmt.Errorf("action %q: %w", a.ID, err)
 		}
+		if !icons.ValidLauncher(a.Icon) {
+			return fmt.Errorf("action %q: unknown icon %q", a.ID, a.Icon)
+		}
 		if err := a.Config.Validate(); err != nil {
 			return fmt.Errorf("action %q (%s): %w", a.ID, a.Type, err)
 		}
@@ -145,7 +149,7 @@ func validateTargets(a Action) error {
 	seen := make(map[string]bool, len(a.Targets))
 	for _, target := range a.Targets {
 		if !targetNames[target] {
-			return fmt.Errorf("unknown target %q (expected %s, %s or %s)", target, TargetItem, TargetSession, TargetWindow)
+			return fmt.Errorf("unknown target %q (expected %s, %s, %s or %s)", target, TargetItem, TargetSession, TargetWindow, TargetStatusBar)
 		}
 		if seen[target] {
 			return fmt.Errorf("duplicate target %q", target)

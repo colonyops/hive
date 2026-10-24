@@ -45,7 +45,7 @@ A setup command that exits successfully does not stop healthy panes. If every co
 
 **Kill terminal** stops the tmux session and its processes while keeping the checkout and Hive session record. **Recycle** and **Delete** also change or remove the checkout.
 
-For repository sessions, the optional status bar shows the branch, changes against the default branch, uncommitted work, and unpushed commits. Connected GitHub, Gitea, and Forgejo repositories also show pull request, review, and check state. Use the status bar to open the checkout in your editor or file manager.
+For repository sessions, the optional status bar shows the branch, changes against the default branch, uncommitted work, and unpushed commits. Connected GitHub, Gitea, and Forgejo repositories also show pull request, review, and check state. Use the status bar to open the checkout in your editor or file manager. Actions that target `statusbar` add buttons of their own; see [Where actions run](../inbox/actions.md#where-actions-run).
 
 ## Scratch terminals
 

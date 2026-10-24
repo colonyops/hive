@@ -10,6 +10,7 @@ export interface EditableAction {
     "id": string;
     "label": string;
     "type": string;
+    "icon"?: string;
     "showInDetail": boolean;
 
     /**
@@ -169,6 +170,7 @@ export interface View {
     "id": string;
     "label": string;
     "type": string;
+    "icon"?: string;
     "showInDetail": boolean;
     "requiresSessionInput": boolean;
     "inputs"?: InputSpec[] | null;

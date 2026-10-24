@@ -506,6 +506,9 @@ func actionNode(a Action) (*yaml.Node, error) {
 	add("id", a.ID)
 	add("label", a.Label)
 	add("type", a.Type)
+	if a.Icon != "" {
+		add("icon", a.Icon)
+	}
 	if a.ShowInDetail {
 		n.Content = append(n.Content, scalar("show_in_detail"), &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"})
 	}

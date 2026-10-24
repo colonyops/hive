@@ -7,7 +7,7 @@ script, a `curl` to an internal service.
 ## Fields
 
 - `command_template` (required) — the command line to run.
-- `cwd` — working directory. On a `session` or `window` target it defaults to
+- `cwd` — working directory. On a terminal target (`session`, `window`, `statusbar`) it defaults to
   the session's checkout, so `mise run test` is a complete action; on an `item`
   target it defaults to the desktop process's own. Setting it wins either way.
 - `timeout` — a duration string like `"30s"` bounding the run. Must be quoted:
@@ -50,7 +50,7 @@ show its queued or running state and allow cancellation. Its stdout and stderr,
 interleaved in the order they were written, are kept in the run's log in
 **Action runs**, along with the command line and exit status.
 
-A `session` or `window` run is deliberately not durable — it is a manual
+A terminal-target run is deliberately not durable — it is a manual
 operation against live local state, so it must stay repeatable and must not
 replay after a restart. There is no record to hold its streams, so its failure
 reason carries the tail of stderr instead, in the jobs list.

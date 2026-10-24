@@ -53,3 +53,21 @@ func TestRemoteIdentity_ReturnsUnrecognizedRemotesUnchanged(t *testing.T) {
 	}
 	assert.Equal(t, "example.test:2222/owner/repo", RemoteIdentity("ssh://git@example.test:2222/owner/repo.git"))
 }
+
+func TestWebURL(t *testing.T) {
+	for remote, want := range map[string]string{
+		"https://github.com/owner/repo.git":             "https://github.com/owner/repo",
+		"git@github.com:owner/repo.git":                 "https://github.com/owner/repo",
+		"ssh://git@git.example.test:2222/team/sub/repo": "https://git.example.test/team/sub/repo",
+		"git@git.example.test:team/repo.git":            "https://git.example.test/team/repo",
+		"https://git.example.test:3000/team/repo.git":   "https://git.example.test:3000/team/repo",
+		"http://user@git.example.test/team/repo":        "http://git.example.test/team/repo",
+		"git://git.example.test/team/repo.git/":         "https://git.example.test/team/repo",
+		"alice@git.example.test:repo.git":               "https://git.example.test/repo",
+		"/repos/owner/repo":                             "",
+		"":                                              "",
+		"https://git.example.test/":                     "",
+	} {
+		assert.Equal(t, want, WebURL(remote), remote)
+	}
+}

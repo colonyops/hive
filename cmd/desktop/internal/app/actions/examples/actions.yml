@@ -57,6 +57,12 @@ actions:
     targets: [session]
     timeout: "10m"
     command_template: 'mise run test'
+  - id: open-ci
+    label: Open CI
+    type: shell
+    targets: [statusbar]
+    icon: activity
+    command_template: 'open {{ printf "%s/actions" .Session.WebURL | shq }}'
   - id: interrupt-window
     label: Interrupt agent
     type: shell

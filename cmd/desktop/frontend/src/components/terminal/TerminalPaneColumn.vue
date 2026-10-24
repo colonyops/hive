@@ -22,6 +22,7 @@ import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useEditorSettings } from '../../composables/useEditorSettings'
 import { useSessionStatus } from '../../composables/useSessionStatus'
 import { activePaneOf } from '../../lib/terminalLayout'
+import { launcherIconComponent } from '../../lib/launcherIcons'
 import { useTerminalStatusBar } from '../../stores/useTerminalStatusBar'
 import {
   OpenSessionInEditor,
@@ -169,6 +170,14 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
         @refresh-pull-request="refreshSessionStatus({ refreshPullRequest: true })"
       />
       <template #actions>
+        <IconButton
+          v-for="action in ops.actions.statusBarActions.value"
+          :key="action.id"
+          :label="action.label"
+          :icon="launcherIconComponent(action.icon)"
+          :data-testid="`terminal-statusbar-action-${action.id}`"
+          @click="ops.actions.invoke(action, { slug: statusBarRow.slug, windowId: '' })"
+        />
         <IconButton
           label="Tasks"
           :icon="IconListTodo"
