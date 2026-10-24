@@ -505,7 +505,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		AgentWindows: a.terminals, AgentCommands: a.profileCommands,
 		Jobs: a.Jobs, Items: a.Stores.InboxItems, Links: a.Stores.ItemSessions, Catalog: a.actionStore, Dispatcher: a.dispatcher,
 		Recorder: a.Activity, Events: a.Events, Logger: cfg.Logger,
-		PullRequests: newSessionPullRequests(
+		Forges: newSessionForges(
 			newGitHubForge(gitHubClient, a.credentials),
 			newGiteaForge(gitea.NewPullRequests(giteaInstances, a.credentials, a.giteaFetchers)),
 		),

@@ -6,6 +6,7 @@ import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronUp from '~icons/lucide/chevron-up'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconCopy from '~icons/lucide/copy'
+import IconGlobe from '~icons/lucide/globe'
 import IconInfo from '~icons/lucide/info'
 import IconListTodo from '~icons/lucide/list-todo'
 import IconPlay from '~icons/lucide/play'
@@ -25,6 +26,7 @@ import { activePaneOf } from '../../lib/terminalLayout'
 import { useTerminalStatusBar } from '../../stores/useTerminalStatusBar'
 import {
   OpenSessionInEditor,
+  OpenSessionRepo,
   RevealSession,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { useTerminalModeContext } from './terminalModeContext'
@@ -169,6 +171,13 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
         @refresh-pull-request="refreshSessionStatus({ refreshPullRequest: true })"
       />
       <template #actions>
+        <IconButton
+          v-if="sessionGit?.host"
+          label="Open repository in browser"
+          :icon="IconGlobe"
+          data-testid="terminal-statusbar-open-repo"
+          @click="runStatusBarAction(OpenSessionRepo)"
+        />
         <IconButton
           label="Tasks"
           :icon="IconListTodo"

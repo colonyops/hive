@@ -56,10 +56,7 @@ func RemoteIdentity(remote string) string {
 	if !ok {
 		return remote
 	}
-	path = strings.Trim(path, "/")
-	if len(path) >= len(".git") && strings.EqualFold(path[len(path)-len(".git"):], ".git") {
-		path = strings.TrimRight(path[:len(path)-len(".git")], "/")
-	}
+	path = repositoryPath(path)
 	if path == "" {
 		return remote
 	}
@@ -75,6 +72,37 @@ func RemoteIdentity(remote string) string {
 func EquivalentRemote(left, right string) bool {
 	leftID, rightID := RemoteIdentity(left), RemoteIdentity(right)
 	return leftID != "" && leftID == rightID
+}
+
+// WebURL returns the browser address of the repository a remote names:
+// https://host/path, without ".git". An http(s) remote keeps its scheme and
+// port, which are the web server's. Any other transport's port belongs to git,
+// so WebURL drops it. A local path or a remote that does not parse returns "".
+func WebURL(remote string) string {
+	remote = strings.TrimSpace(remote)
+	host, path, ok := remoteHostPath(remote)
+	if !ok {
+		return ""
+	}
+	path = repositoryPath(path)
+	if path == "" {
+		return ""
+	}
+	if u, err := url.Parse(remote); err == nil && (u.Scheme == "http" || u.Scheme == "https") {
+		return u.Scheme + "://" + host + "/" + path
+	}
+	if at := strings.LastIndex(host, "@"); at != -1 {
+		host = host[at+1:]
+	}
+	return "https://" + stripPort(host) + "/" + path
+}
+
+func repositoryPath(path string) string {
+	path = strings.Trim(path, "/")
+	if len(path) >= len(".git") && strings.EqualFold(path[len(path)-len(".git"):], ".git") {
+		path = strings.TrimRight(path[:len(path)-len(".git")], "/")
+	}
+	return path
 }
 
 var defaultRemotePorts = map[string]string{"ssh": "22", "git": "9418", "http": "80", "https": "443"}
