@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   OpenURL: vi.fn(),
 }))
 
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/tasksservice', () => ({
+vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/tasksservice', () => ({
   ListTasks: mocks.ListTasks,
   TaskDetail: mocks.ReadTaskDetail,
   SetTaskStatus: mocks.SetTaskStatus,
@@ -33,8 +33,8 @@ vi.mock('@wailsio/runtime', () => ({
 }))
 
 import TasksView from '../TasksView.vue'
-import { useTasks } from '../../stores/useTasks'
-import { resetToastsForTests, useToasts } from '../../composables/useToasts'
+import { useTasks } from '../../../stores/useTasks'
+import { resetToastsForTests, useToasts } from '../../../composables/useToasts'
 
 interface TaskOverrides {
   status: string
@@ -44,6 +44,7 @@ interface TaskOverrides {
   sessionId: string
   repoKey: string
   title: string
+  updatedAt: string
 }
 
 function task(id: string, overrides: Partial<TaskOverrides> = {}) {
@@ -59,7 +60,7 @@ function task(id: string, overrides: Partial<TaskOverrides> = {}) {
     blocked: overrides.blocked ?? false,
     depth: 0,
     createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
+    updatedAt: overrides.updatedAt ?? '2026-01-01T00:00:00Z',
   }
 }
 
@@ -71,7 +72,7 @@ function detailFrom(
 }
 
 async function selectRow(wrapper: ReturnType<typeof mount>, id: string): Promise<void> {
-  await wrapper.get(`[data-testid="task-tree-row"][data-id="${id}"]`).trigger('click')
+  await wrapper.get(`[data-testid="task-row"][data-id="${id}"]`).trigger('click')
   await flushPromises()
 }
 
@@ -93,7 +94,7 @@ describe('TasksView', () => {
     const wrapper = mount(TasksView)
     await flushPromises()
 
-    const rows = wrapper.findAll('[data-testid="task-tree-row"]')
+    const rows = wrapper.findAll('[data-testid="task-row"]')
     expect(rows).toHaveLength(2)
     expect(rows[0].text()).toContain('Task e1')
     expect(rows[1].text()).toContain('Task t1')
@@ -569,10 +570,10 @@ describe('TasksView', () => {
     mocks.ReadTaskDetail.mockImplementation((id: string) => Promise.resolve(detailFrom(task(id))))
     const wrapper = mount(TasksView)
     await flushPromises()
-    expect(wrapper.findAll('[data-testid="task-tree-row"]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-testid="task-row"]')).toHaveLength(3)
 
     await wrapper.get('[data-testid="tasks-search"]').setValue('parser')
-    const rows = wrapper.findAll('[data-testid="task-tree-row"]')
+    const rows = wrapper.findAll('[data-testid="task-row"]')
     expect(rows.map((row) => row.attributes('data-id'))).toEqual(['e1', 'c1'])
 
     await wrapper.get('[data-testid="tasks-search"]').setValue('zzz')
@@ -587,7 +588,7 @@ describe('TasksView', () => {
     const wrapper = mount(TasksView)
     await flushPromises()
     // The first row (e1) is auto-selected; both rows render while expanded.
-    expect(wrapper.findAll('[data-testid="task-tree-row"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="task-row"]')).toHaveLength(2)
 
     async function press(key: string): Promise<void> {
       window.dispatchEvent(new KeyboardEvent('keydown', { key }))
@@ -595,9 +596,9 @@ describe('TasksView', () => {
     }
 
     await press('ArrowLeft')
-    expect(wrapper.findAll('[data-testid="task-tree-row"]')).toHaveLength(1)
+    expect(wrapper.findAll('[data-testid="task-row"]')).toHaveLength(1)
     await press('l')
-    expect(wrapper.findAll('[data-testid="task-tree-row"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="task-row"]')).toHaveLength(2)
     await press('ArrowRight') // expanded: step into the first child
     expect(wrapper.get('[data-testid="task-detail-title"]').text()).toBe('Task c1')
     await press('h') // leaf: walk back up to the parent
@@ -619,7 +620,7 @@ describe('TasksView', () => {
     await wrapper.get('[data-testid="tasks-empty-show-all"]').trigger('click')
     await flushPromises()
     expect(useTasks().repoKey.value).toBe('')
-    expect(wrapper.findAll('[data-testid="task-tree-row"]')).toHaveLength(1)
+    expect(wrapper.findAll('[data-testid="task-row"]')).toHaveLength(1)
 
     wrapper.unmount()
   })
@@ -652,7 +653,7 @@ describe('TasksView', () => {
 
     press('ArrowLeft')
     await flushPromises()
-    expect(wrapper.findAll('[data-testid="task-tree-row"]')).toHaveLength(2) // the epic did not fold
+    expect(wrapper.findAll('[data-testid="task-row"]')).toHaveLength(2) // the epic did not fold
 
     press('j')
     await flushPromises()
@@ -683,6 +684,168 @@ describe('TasksView', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
     expect(wrapper.emitted('close')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  describe('board', () => {
+    beforeEach(() => {
+      localStorage.setItem('hive.tasks.view', 'board')
+    })
+
+    async function dropOn(wrapper: ReturnType<typeof mount>, id: string, status: string): Promise<void> {
+      await wrapper.get(`[data-testid="task-card"][data-id="${id}"]`).trigger('dragstart')
+      const column = wrapper.get(`[data-testid="tasks-board-column-${status}"]`)
+      await column.trigger('dragover')
+      await column.trigger('drop')
+      await flushPromises()
+    }
+
+    it('draws a column for every status whatever the filter, and hides the filter', async () => {
+      localStorage.setItem('hive.tasks.filter', 'open')
+      mocks.ListTasks.mockResolvedValue([task('t1'), task('t2', { status: 'done' })])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      const columns = wrapper.findAll('section[data-testid^="tasks-board-column-"]')
+      expect(columns.map((column) => column.attributes('data-status'))).toEqual([
+        'open',
+        'in_progress',
+        'done',
+        'cancelled',
+      ])
+      expect(wrapper.find('[data-testid="tasks-board-column-done"] [data-testid="task-card"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="tasks-filter"]').exists()).toBe(false)
+    })
+
+    it('moves a card into a column that is empty', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1')])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await dropOn(wrapper, 't1', 'done')
+
+      expect(mocks.SetTaskStatus).toHaveBeenCalledWith('t1', 'done')
+    })
+
+    it('moves a card to the column it is dropped on', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1')])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await dropOn(wrapper, 't1', 'in_progress')
+
+      expect(mocks.SetTaskStatus).toHaveBeenCalledWith('t1', 'in_progress')
+    })
+
+    it('ignores a drop on the column the card is already in', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1')])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await dropOn(wrapper, 't1', 'open')
+
+      expect(mocks.SetTaskStatus).not.toHaveBeenCalled()
+    })
+
+    it('confirms a drop on Cancelled before applying it', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1')])
+      const wrapper = mount(TasksView, { attachTo: document.body })
+      await flushPromises()
+
+      await dropOn(wrapper, 't1', 'cancelled')
+      expect(mocks.SetTaskStatus).not.toHaveBeenCalled()
+
+      document.querySelector<HTMLElement>('[data-testid="task-cancel-confirm-confirm"]')?.click()
+      await flushPromises()
+      expect(mocks.SetTaskStatus).toHaveBeenCalledWith('t1', 'cancelled')
+
+      wrapper.unmount()
+    })
+
+    it('opens the detail pane as a peek on click, and closes the peek on Escape before the overlay', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1')])
+      mocks.ReadTaskDetail.mockResolvedValue(detailFrom(task('t1')))
+      const wrapper = mount(TasksView)
+      await flushPromises()
+      expect(wrapper.find('[data-testid="task-detail-pane"]').exists()).toBe(false)
+
+      await wrapper.get('[data-testid="task-card"][data-id="t1"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[data-testid="task-detail-title"]').text()).toBe('Task t1')
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      await flushPromises()
+      expect(wrapper.find('[data-testid="task-detail-pane"]').exists()).toBe(false)
+      expect(wrapper.emitted('close')).toBeUndefined()
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      await flushPromises()
+      expect(wrapper.emitted('close')).toHaveLength(1)
+
+      wrapper.unmount()
+    })
+
+    it('steps between columns with h/l, keeping the row position where the column allows', async () => {
+      mocks.ListTasks.mockResolvedValue([
+        task('o1', { updatedAt: '2026-01-03T00:00:00Z' }),
+        task('o2', { updatedAt: '2026-01-02T00:00:00Z' }),
+        task('p1', { status: 'in_progress', updatedAt: '2026-01-03T00:00:00Z' }),
+      ])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+      const selected = () => wrapper.find('[data-testid="task-card"][aria-selected="true"]').attributes('data-id')
+      expect(selected()).toBe('o1')
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j' }))
+      await flushPromises()
+      expect(selected()).toBe('o2')
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l' }))
+      await flushPromises()
+      expect(selected()).toBe('p1')
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h' }))
+      await flushPromises()
+      expect(selected()).toBe('o1')
+
+      wrapper.unmount()
+    })
+  })
+
+  it('lists an epic sub-tasks in the detail pane and opens one on click', async () => {
+    const epic = task('e1', { type: 'epic' })
+    mocks.ListTasks.mockResolvedValue([
+      epic,
+      task('t1', { parentId: 'e1', status: 'done' }),
+      task('t2', { parentId: 'e1' }),
+    ])
+    mocks.ReadTaskDetail.mockImplementation((id: string) =>
+      Promise.resolve(detailFrom(id === 'e1' ? epic : task(id, { parentId: 'e1' }))),
+    )
+    const wrapper = mount(TasksView)
+    await flushPromises()
+
+    const section = wrapper.get('[data-testid="task-subtasks"]')
+    expect(section.text()).toContain('1/2')
+    expect(section.findAll('[data-testid="task-subtask"]').map((row) => row.attributes('data-id'))).toEqual([
+      't1',
+      't2',
+    ])
+
+    await section.get('[data-testid="task-subtask"][data-id="t2"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="task-detail-title"]').text()).toBe('Task t2')
+    expect(wrapper.get('[data-testid="task-detail-parent"]').text()).toBe('Task e1')
+  })
+
+  it('makes the repository picker searchable', async () => {
+    mocks.TaskRepoKeys.mockResolvedValue(['acme/site', 'acme/api'])
+    const wrapper = mount(TasksView, { attachTo: document.body })
+    await flushPromises()
+
+    await openSelect(wrapper, 'tasks-repo-select')
+    expect(document.querySelector('[data-testid="tasks-repo-select-search"]')).not.toBeNull()
 
     wrapper.unmount()
   })
