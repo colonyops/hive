@@ -82,7 +82,7 @@ describe('DocumentReader', () => {
     expect(frame.attributes('referrerpolicy')).toBe('no-referrer')
     expect(frame.attributes('srcdoc')).toContain('<body>Hi</body>')
     expect(frame.attributes('src')).toBeUndefined()
-    expect(wrapper.get('[data-testid="r-document"]').classes()).toContain('flex-1')
+    expect(wrapper.get('[data-testid="r-document"]').classes()).toContain('absolute')
     expect(wrapper.find('[data-testid="r-frontmatter"]').exists()).toBe(false)
   })
 

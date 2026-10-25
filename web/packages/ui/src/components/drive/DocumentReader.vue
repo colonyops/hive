@@ -80,8 +80,8 @@ function onBodyClick(event: MouseEvent): void {
 <template>
   <div
     ref="root"
-    class="canvas-reader relative isolate flex min-h-0 flex-col"
-    :class="{ 'flex-1': kind === 'html' }"
+    class="canvas-reader isolate flex min-h-0 flex-col"
+    :class="kind === 'html' ? 'absolute inset-0' : 'relative'"
     :style="readerStyle"
     :data-testid="`${testid}-document`"
   >
