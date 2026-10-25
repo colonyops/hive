@@ -14,7 +14,7 @@ import type {
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { appErrorKind } from '../lib/appError'
-import { DEFAULT_TASK_FILTER, type TaskFilterId } from '../lib/tasksPresentation'
+import { DEFAULT_TASK_FILTER, DEFAULT_TASK_VIEW, type TaskFilterId, type TaskViewMode } from '../lib/tasksPresentation'
 import { defineStore } from './defineStore'
 import { useResource } from './useResource'
 import { createLogger } from '../lib/log'
@@ -27,6 +27,7 @@ export const useTasks = defineStore('tasks', () => {
   // Epics default-expanded, so this persists the exception (which ids are
   // collapsed) rather than which are open.
   const collapsedIds = useStorage<string[]>('hive.tasks.collapsed', [])
+  const view = useStorage<TaskViewMode>('hive.tasks.view', DEFAULT_TASK_VIEW)
 
   const repoKeys = ref<string[]>([])
   const selectedId = ref<string | null>(null)
@@ -124,6 +125,10 @@ export const useTasks = defineStore('tasks', () => {
     filter.value = next
   }
 
+  function setView(next: TaskViewMode): void {
+    view.value = next
+  }
+
   function select(id: string | null): void {
     selectedId.value = id
     if (id === null) {
@@ -166,6 +171,7 @@ export const useTasks = defineStore('tasks', () => {
 
   return {
     repoKey: readonly(repoKey),
+    view: readonly(view),
     filter: readonly(filter),
     collapsedIds: readonly(collapsedIds),
     items: readonly(list.data),
@@ -177,6 +183,7 @@ export const useTasks = defineStore('tasks', () => {
     error: list.error,
     setRepoKey,
     setFilter,
+    setView,
     startLiveUpdates,
     stopLiveUpdates,
     reload,

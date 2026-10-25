@@ -29,7 +29,7 @@ vi.mock('@wailsio/runtime', () => ({
 
 import { h } from 'vue'
 import HubOverlay from '@hive/ui/components/ui/HubOverlay.vue'
-import TasksView from '../../TasksView.vue'
+import TasksView from '../../tasks/TasksView.vue'
 
 function el<T extends HTMLElement>(testid: string): T {
   const element = document.querySelector<T>(`[data-testid="${testid}"]`)
