@@ -50,13 +50,14 @@ export function attachedSessionCommands(context: TerminalModeContext, attached: 
         icon: IconPlay,
         run: () => void attach.startSession(attached.slug),
       },
-    terminal && {
-      id: 'terminal:session:kill',
-      title: 'Kill terminal…',
-      keywords: ['session', 'stop'],
-      icon: IconSquare,
-      run: () => ops.requestKill(attached),
-    },
+    terminal &&
+      running && {
+        id: 'terminal:session:kill',
+        title: 'Kill terminal…',
+        keywords: ['session', 'stop'],
+        icon: IconSquare,
+        run: () => ops.requestKill(attached),
+      },
     ...agents.map((agent) => ({
       id: `terminal:session:agent:${agent}`,
       title: `New ${agent} agent`,

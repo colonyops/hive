@@ -51,6 +51,20 @@ describe('SessionRowMenu', () => {
     expect(recycled.find('[data-testid="session-menu-delete"]').exists()).toBe(true)
   })
 
+  it('offers Start only while the terminal is stopped and Kill only while it runs', () => {
+    const running = mountMenu({ terminal: 'running' })
+    expect(running.find('[data-testid="session-menu-start"]').exists()).toBe(false)
+    expect(running.find('[data-testid="session-menu-kill"]').exists()).toBe(true)
+
+    const stopped = mountMenu({ terminal: 'stopped' })
+    expect(stopped.find('[data-testid="session-menu-start"]').exists()).toBe(true)
+    expect(stopped.find('[data-testid="session-menu-kill"]').exists()).toBe(false)
+
+    const scratch = mountMenu({ scratch: true, terminal: 'running' })
+    expect(scratch.find('[data-testid="session-menu-start"]').exists()).toBe(false)
+    expect(scratch.find('[data-testid="session-menu-kill"]').exists()).toBe(true)
+  })
+
   // The scratch terminal's tmux session is the whole thing: there is no record
   // to rename or delete, and no checkout to recycle or read details of.
   it('carries only the terminal lifecycle for the scratch terminal', async () => {

@@ -76,11 +76,13 @@ describe('attachedSessionCommands', () => {
 
   it('offers a start and no agents while nothing runs', () => {
     expect(ids(hive, false)).toContain('terminal:session:start')
+    expect(ids(hive, false)).not.toContain('terminal:session:kill')
     expect(ids(hive, false)).not.toContain('terminal:session:agent:claude')
   })
 
   it('gives the scratch terminal its terminal operations only', () => {
-    expect(ids(scratch, false)).toEqual(['terminal:session:start', 'terminal:session:kill'])
+    expect(ids(scratch, false)).toEqual(['terminal:session:start'])
+    expect(ids(scratch, true)).toEqual(['terminal:session:kill'])
   })
 
   it("gives a pinned chat the pin's two operations, grouped under its name", () => {

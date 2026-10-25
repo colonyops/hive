@@ -118,6 +118,11 @@ function onChatMenuSelect(row: TerminalSessionRow, id: string): void {
   else if (id === 'open-in-agents') ops.openChatInAgents(row)
 }
 
+function terminalState(row: TerminalSessionRow): 'running' | 'stopped' | undefined {
+  if (tree.rowRunning(row)) return 'running'
+  return tree.rowIdle(row) ? 'stopped' : undefined
+}
+
 function runWindowAction(row: TerminalSessionRow, windowId: string, entryID: string): void {
   menus.openWindow = ''
   ops.runWindowAction(row, windowId, entryID)
@@ -384,6 +389,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                   v-if="menus.openRow === row.id"
                   :session="row"
                   scratch
+                  :terminal="terminalState(row)"
                   :flip="menus.rowFlip"
                   :ignore="[menus.rowToggle(row.id)]"
                   @close="menus.openRow = ''"
@@ -495,6 +501,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                       <SessionRowMenu
                         v-else-if="menus.openRow === row.id"
                         :session="row"
+                        :terminal="terminalState(row)"
                         :extra="ops.sessionActionEntries"
                         :flip="menus.rowFlip"
                         :ignore="[menus.rowToggle(row.id)]"

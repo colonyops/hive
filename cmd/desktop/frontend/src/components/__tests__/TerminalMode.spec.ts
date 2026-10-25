@@ -2040,6 +2040,13 @@ describe('TerminalMode', () => {
   it('starts a session from its row menu and attaches to it', async () => {
     const start = vi.fn().mockResolvedValue({ started: true })
     mocks.createTerminalClient.mockReturnValue({ start })
+    mocks.SessionStatuses.mockResolvedValue({
+      items: [
+        { sessionId: '1', running: true, windows: [] },
+        { sessionId: '2', running: false, windows: [] },
+      ],
+      pollIntervalMs: 60_000,
+    })
     const { wrapper, router } = await mountAvailable()
 
     await openRowMenu(wrapper, 'hive-bump-deps')
@@ -2542,11 +2549,12 @@ describe('TerminalMode', () => {
       mocks.TerminalActionViews.mockResolvedValue([
         { id: 'open-in-zed', label: 'Open in Zed', type: 'shell', showInDetail: false, requiresSessionInput: false },
       ])
+      mocks.createTerminalClient.mockReturnValue({ listWindows: fakeListWindows({ [SCRATCH_SLUG]: [oneTab] }) })
       const { wrapper } = await mountAvailable()
 
       await heading(wrapper).get('[data-testid="terminal-session-menu-toggle"]').trigger('click')
 
-      expect(wrapper.find('[data-testid="session-menu-start"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="session-menu-start"]').exists()).toBe(false)
       expect(wrapper.find('[data-testid="session-menu-kill"]').exists()).toBe(true)
       for (const entry of ['detail', 'rename', 'recycle', 'delete']) {
         expect(wrapper.find(`[data-testid="session-menu-${entry}"]`).exists()).toBe(false)
@@ -2556,7 +2564,10 @@ describe('TerminalMode', () => {
     })
 
     it('names the tabs rather than a checkout when killed', async () => {
-      mocks.createTerminalClient.mockReturnValue({ kill: vi.fn().mockResolvedValue({ killed: true }) })
+      mocks.createTerminalClient.mockReturnValue({
+        kill: vi.fn().mockResolvedValue({ killed: true }),
+        listWindows: fakeListWindows({ [SCRATCH_SLUG]: [oneTab] }),
+      })
       const { wrapper } = await mountAvailable()
 
       await heading(wrapper).get('[data-testid="terminal-session-menu-toggle"]').trigger('click')
