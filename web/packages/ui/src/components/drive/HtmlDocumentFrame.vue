@@ -5,9 +5,9 @@
 // is left out until it is verified on WKWebView (ADR
 // hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it).
 //
-// The frame fills the positioned DocumentReader. DocumentReader stretches to
-// the available height for HTML because this absolute frame contributes no
-// layout height.
+// The frame fills DocumentReader, and for HTML DocumentReader fills the host's
+// nearest positioned ancestor, so the document takes the whole view rather
+// than the padded reading column.
 //
 // The wrapper is its own stacking context. The frame must paint over the
 // reader's content, but a z-index set on the frame itself competes with menus
