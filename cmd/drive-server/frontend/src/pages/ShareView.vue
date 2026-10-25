@@ -24,18 +24,17 @@ const readerDocument = computed<ReaderDocument | null>(() => {
   const entry = { path: value.document.path, kind: value.document.kind, modified: value.document.updated_at }
   return value.document.kind === 'markdown' ? { entry, markdown: value.body ?? '' } : { entry }
 })
-const htmlSrc = computed(() =>
-  shared.value?.document.kind === 'html' ? `/s/${encodeURIComponent(props.slug)}/raw` : undefined,
-)
+const isHtml = computed(() => shared.value?.document.kind === 'html')
+const htmlSrc = computed(() => (isHtml.value ? `/s/${encodeURIComponent(props.slug)}/raw` : undefined))
 </script>
 
 <template>
-  <div class="min-h-screen bg-app">
+  <div class="bg-app" :class="isHtml ? 'flex h-screen flex-col' : 'min-h-screen'">
     <header class="flex h-12 items-center gap-2 border-b border-row bg-sidebar px-4 text-title font-semibold text-text">
       <HiveMark :size="22" />
       Hive Drive
     </header>
-    <main class="mx-auto max-w-4xl px-4 py-8">
+    <main :class="isHtml ? 'flex min-h-0 flex-1 flex-col p-4' : 'mx-auto max-w-4xl px-4 py-8'">
       <EmptyState
         v-if="missing"
         variant="boxed"
@@ -51,7 +50,7 @@ const htmlSrc = computed(() =>
             Shared by {{ shared.owner_email }}. This is user content. Hive does not review it.
           </p>
         </header>
-        <div class="relative" :class="shared.document.kind === 'html' ? 'h-[70vh] min-h-96' : ''">
+        <div class="relative" :class="isHtml ? 'min-h-96 flex-1' : ''">
           <DocumentReader
             :document="readerDocument"
             :font-size-px="prefs.fontSizePx"
