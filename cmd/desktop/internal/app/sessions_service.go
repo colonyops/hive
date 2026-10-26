@@ -765,7 +765,7 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 func (s *SessionsService) EditSession(ctx context.Context, id, name string, tags []string) (session.Session, error) {
 	normalized, err := session.NormalizeTags(tags)
 	if err != nil {
-		return session.Session{}, Wrap(err, KindInvalid, "session tags")
+		return session.Session{}, Errorf(KindInvalid, "%s", err)
 	}
 	current, err := s.hive.Sessions().GetSession(ctx, id)
 	if err != nil {
@@ -810,7 +810,7 @@ func (s *SessionsService) saveTags(id string, save func(*sessionsvc.Service) (se
 	saved, err := save(s.hive.Sessions())
 	switch {
 	case errors.Is(err, session.ErrInvalidTag):
-		return session.Session{}, Wrap(err, KindInvalid, "session tags")
+		return session.Session{}, Errorf(KindInvalid, "%s", err)
 	case errors.Is(err, session.ErrNotFound):
 		return session.Session{}, Wrap(err, KindNotFound, "session %q not found", id)
 	case err != nil:

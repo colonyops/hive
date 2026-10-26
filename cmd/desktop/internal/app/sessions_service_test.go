@@ -1080,6 +1080,9 @@ func TestSessionsService_EditSessionTagsClassifiesErrors(t *testing.T) {
 
 	_, err := svc.EditSessionTags(t.Context(), "s1", []string{"a,b"}, nil)
 	assert.Equal(t, KindInvalid, KindOf(err), "%v", err)
+	appErr, ok := errors.AsType[*Error](err)
+	require.True(t, ok)
+	assert.Contains(t, appErr.Msg, `"a,b"`, "the frontend shows only Msg, so it names the bad tag")
 	_, err = svc.EditSessionTags(t.Context(), "missing", []string{"auto"}, nil)
 	assert.Equal(t, KindNotFound, KindOf(err), "%v", err)
 

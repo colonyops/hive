@@ -21,13 +21,13 @@ var ErrInvalidTag = errors.New("invalid tag")
 func ValidateTag(tag string) error {
 	tag = strings.TrimSpace(tag)
 	if tag == "" {
-		return fmt.Errorf("%w: tag cannot be empty", ErrInvalidTag)
+		return fmt.Errorf("%w: it is empty", ErrInvalidTag)
 	}
 	if n := utf8.RuneCountInString(tag); n > MaxTagLength {
-		return fmt.Errorf("%w: tag %q is %d characters; the maximum is %d", ErrInvalidTag, tag, n, MaxTagLength)
+		return fmt.Errorf("%w: %q is %d characters; the maximum is %d", ErrInvalidTag, tag, n, MaxTagLength)
 	}
 	if strings.ContainsRune(tag, ',') || strings.ContainsFunc(tag, unicode.IsControl) {
-		return fmt.Errorf("%w: tag %q cannot contain commas or control characters", ErrInvalidTag, tag)
+		return fmt.Errorf("%w: %q contains a comma or a control character", ErrInvalidTag, tag)
 	}
 	return nil
 }
