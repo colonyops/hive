@@ -757,6 +757,45 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 	return renamed, nil
 }
 
+// SetSessionLabels replaces a session's labels and returns the session.
+func (s *SessionsService) SetSessionLabels(ctx context.Context, id string, labels []string) (session.Session, error) {
+	if _, err := session.NormalizeLabels(labels); err != nil {
+		return session.Session{}, Wrap(err, KindInvalid, "session labels")
+	}
+	return s.saveLabels(ctx, id, func(sessions *sessionsvc.Service) (session.Session, error) {
+		return sessions.SetSessionLabels(ctx, id, labels)
+	})
+}
+
+// EditSessionLabels adds and then removes labels on a session, leaving its
+// other labels in place, and returns the session.
+func (s *SessionsService) EditSessionLabels(ctx context.Context, id string, add, remove []string) (session.Session, error) {
+	if _, err := session.NormalizeLabels(add); err != nil {
+		return session.Session{}, Wrap(err, KindInvalid, "session labels")
+	}
+	return s.saveLabels(ctx, id, func(sessions *sessionsvc.Service) (session.Session, error) {
+		return sessions.EditSessionLabels(ctx, id, add, remove)
+	})
+}
+
+func (s *SessionsService) saveLabels(ctx context.Context, id string, save func(*sessionsvc.Service) (session.Session, error)) (session.Session, error) {
+	if strings.TrimSpace(id) == "" {
+		return session.Session{}, Errorf(KindInvalid, "session id is required")
+	}
+	sessions := s.hive.Sessions()
+	if _, err := sessions.GetSession(ctx, id); err != nil {
+		if errors.Is(err, session.ErrNotFound) {
+			return session.Session{}, Wrap(err, KindNotFound, "session %q not found", id)
+		}
+		return session.Session{}, Wrap(err, KindInternal, "reading session %q", id)
+	}
+	saved, err := save(sessions)
+	if err != nil {
+		return session.Session{}, Wrap(err, KindInternal, "updating labels on session %q", id)
+	}
+	return saved, nil
+}
+
 // StartTmuxSession spawns the tmux session a slug names. A session hive knows
 // about does not have to have one — its tmux server was restarted, the machine
 // rebooted, or it was created by something that never spawned one — and this is

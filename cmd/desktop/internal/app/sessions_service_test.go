@@ -1050,3 +1050,22 @@ func TestSessionsService_SessionDraftFromActivityRefusesAnUnrelatedRow(t *testin
 	_, err := svc.SessionDraftFromActivity(t.Context(), map[string]string{"rule": "auto-triage"})
 	assert.Equal(t, KindInvalid, KindOf(err), "a row with nothing to retry is refused, not silently empty")
 }
+
+func TestSessionsService_EditsSessionLabels(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{})
+	h.save(t, session.Session{ID: "s1", Name: "review", Slug: "review", State: session.StateActive, Labels: []string{"auto"}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine})
+
+	got, err := svc.EditSessionLabels(t.Context(), "s1", []string{"orchestrated"}, []string{"Auto"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"orchestrated"}, got.Labels)
+
+	got, err = svc.SetSessionLabels(t.Context(), "s1", []string{"backend", "BACKEND"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"backend"}, got.Labels)
+
+	_, err = svc.SetSessionLabels(t.Context(), "s1", []string{"a,b"})
+	assert.Equal(t, KindInvalid, KindOf(err), "an invalid label is the caller's mistake: %v", err)
+	_, err = svc.EditSessionLabels(t.Context(), "missing", []string{"x"}, nil)
+	assert.Equal(t, KindNotFound, KindOf(err), "%v", err)
+}
