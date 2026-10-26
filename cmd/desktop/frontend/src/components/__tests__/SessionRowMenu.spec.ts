@@ -27,15 +27,14 @@ describe('SessionRowMenu', () => {
       ['session-menu-start', 'start'],
       ['session-menu-kill', 'kill'],
       ['session-menu-detail', 'detail'],
-      ['session-menu-rename', 'rename'],
-      ['session-menu-tags', 'tags'],
+      ['session-menu-edit', 'edit'],
       ['session-menu-recycle', 'recycle'],
       ['session-menu-delete', 'delete'],
     ] as const) {
       await wrapper.get(`[data-testid="${testid}"]`).trigger('click')
       expect(wrapper.emitted(event), testid).toHaveLength(1)
     }
-    expect(wrapper.emitted('close')).toHaveLength(7)
+    expect(wrapper.emitted('close')).toHaveLength(6)
     expect(wrapper.emitted('extra'), "tags is the menu's own entry").toBeUndefined()
   })
 
@@ -69,12 +68,12 @@ describe('SessionRowMenu', () => {
   })
 
   // The scratch terminal's tmux session is the whole thing: there is no record
-  // to rename or delete, and no checkout to recycle or read details of.
+  // to edit or delete, and no checkout to recycle or read details of.
   it('carries only the terminal lifecycle for the scratch terminal', async () => {
     const wrapper = mountMenu({ scratch: true })
 
     expect(wrapper.get('[data-testid="session-menu-start"]').text()).toBe('Start terminal')
-    for (const entry of ['detail', 'rename', 'recycle', 'delete']) {
+    for (const entry of ['detail', 'edit', 'recycle', 'delete']) {
       expect(wrapper.find(`[data-testid="session-menu-${entry}"]`).exists()).toBe(false)
     }
 

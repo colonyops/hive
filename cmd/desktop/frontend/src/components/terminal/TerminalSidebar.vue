@@ -512,8 +512,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                         @start="attach.startSession(row.slug)"
                         @kill="ops.requestKill(row)"
                         @detail="sessions.openDetail(row)"
-                        @rename="sessions.requestRename(row)"
-                        @tags="sessions.requestTags(row)"
+                        @edit="sessions.requestEdit(row)"
                         @recycle="sessions.requestRecycle(row)"
                         @delete="sessions.requestDelete(row)"
                       />

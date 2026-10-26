@@ -7,10 +7,9 @@ const mocks = vi.hoisted(() => ({
   DeleteSession: vi.fn(),
   PruneSessions: vi.fn(),
   RecycleSession: vi.fn(),
-  RenameSession: vi.fn(),
+  EditSession: vi.fn(),
   SessionDetail: vi.fn(),
   SessionRisk: vi.fn(),
-  SetSessionTags: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => mocks)
@@ -136,33 +135,40 @@ describe('useSessionActions destructive operations', () => {
   })
 })
 
-describe('useSessionActions rename and read', () => {
-  it('renames the session and asks the host to re-read the list', async () => {
-    mocks.RenameSession.mockResolvedValue({ ...session, name: 'review 82', slug: 'review-82' })
+describe('useSessionActions edit and read', () => {
+  it('saves the name and tags and asks the host to re-read the list', async () => {
+    mocks.EditSession.mockResolvedValue({ ...session, name: 'review 82', slug: 'review-82', tags: ['auto'] })
     const onChanged = vi.fn()
     const actions = useSessionActions({ onChanged })
 
-    actions.requestRename(session)
-    expect(actions.renaming.value?.name).toBe('review 81')
+    actions.requestEdit(session)
+    expect(actions.editing.value?.name).toBe('review 81')
+    expect(actions.editFocus.value).toBe('name')
 
-    await actions.submitRename('  review 82  ')
+    await actions.submitEdit('  review 82  ', ['auto'])
 
-    expect(mocks.RenameSession).toHaveBeenCalledWith('s1', 'review 82')
+    expect(mocks.EditSession).toHaveBeenCalledWith('s1', 'review 82', ['auto'])
     // The re-read is how the new slug reaches the host: it is the tmux target.
     expect(onChanged).toHaveBeenCalled()
-    expect(actions.renaming.value).toBeNull()
+    expect(actions.editing.value).toBeNull()
   })
 
-  it('keeps the rename dialog open with the reason a name was rejected', async () => {
-    mocks.RenameSession.mockRejectedValue(new Error('a session named "review 82" already exists'))
+  it('opens on the field the caller asked for', () => {
+    const actions = useSessionActions()
+    actions.requestEdit(session, 'tags')
+    expect(actions.editFocus.value).toBe('tags')
+  })
+
+  it('keeps the dialog open with the reason an edit was refused', async () => {
+    mocks.EditSession.mockRejectedValue(new Error('a session named "review 82" already exists'))
     const onChanged = vi.fn()
     const actions = useSessionActions({ onChanged })
 
-    actions.requestRename(session)
-    await actions.submitRename('review 82')
+    actions.requestEdit(session)
+    await actions.submitEdit('review 82', [])
 
-    expect(actions.renaming.value).not.toBeNull()
-    expect(actions.renameError.value).toContain('already exists')
+    expect(actions.editing.value).not.toBeNull()
+    expect(actions.editError.value).toContain('already exists')
     expect(onChanged).not.toHaveBeenCalled()
   })
 
@@ -175,34 +181,5 @@ describe('useSessionActions rename and read', () => {
 
     actions.closeDetail()
     expect(actions.detail.value).toBeNull()
-  })
-})
-
-describe('useSessionActions tags', () => {
-  it('saves the tags and asks the host to re-read the list', async () => {
-    mocks.SetSessionTags.mockResolvedValue({ ...session, tags: ['auto'] })
-    const onChanged = vi.fn()
-    const actions = useSessionActions({ onChanged })
-
-    actions.requestTags(session)
-    expect(actions.tagging.value?.id).toBe('s1')
-    await actions.submitTags(['auto'])
-
-    expect(mocks.SetSessionTags).toHaveBeenCalledWith('s1', ['auto'])
-    expect(onChanged).toHaveBeenCalled()
-    expect(actions.tagging.value).toBeNull()
-  })
-
-  it('keeps the dialog open with the reason a tag was refused', async () => {
-    mocks.SetSessionTags.mockRejectedValue(new Error('tag "a,b" cannot contain commas'))
-    const onChanged = vi.fn()
-    const actions = useSessionActions({ onChanged })
-
-    actions.requestTags(session)
-    await actions.submitTags(['a,b'])
-
-    expect(actions.tagging.value).not.toBeNull()
-    expect(actions.tagsError.value).toContain('commas')
-    expect(onChanged).not.toHaveBeenCalled()
   })
 })

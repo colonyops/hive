@@ -759,6 +759,35 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 	return renamed, nil
 }
 
+// EditSession renames a session and replaces its tags, writing only what
+// changed, and returns the session. The tags are checked before the rename,
+// so a bad tag cannot leave the edit half done.
+func (s *SessionsService) EditSession(ctx context.Context, id, name string, tags []string) (session.Session, error) {
+	normalized, err := session.NormalizeTags(tags)
+	if err != nil {
+		return session.Session{}, Wrap(err, KindInvalid, "session tags")
+	}
+	current, err := s.hive.Sessions().GetSession(ctx, id)
+	if err != nil {
+		if errors.Is(err, session.ErrNotFound) {
+			return session.Session{}, Wrap(err, KindNotFound, "session %q not found", id)
+		}
+		return session.Session{}, Wrap(err, KindInternal, "reading session %q", id)
+	}
+	edited := current
+	if strings.TrimSpace(name) != current.Name {
+		if edited, err = s.RenameSession(ctx, id, name); err != nil {
+			return session.Session{}, err
+		}
+	}
+	if !slices.Equal(normalized, current.Tags) {
+		if edited, err = s.SetSessionTags(ctx, id, normalized); err != nil {
+			return session.Session{}, err
+		}
+	}
+	return edited, nil
+}
+
 // SetSessionTags replaces a session's tags and returns the session.
 func (s *SessionsService) SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error) {
 	if _, err := session.NormalizeTags(tags); err != nil {

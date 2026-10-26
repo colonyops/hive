@@ -2,11 +2,10 @@ import { ref, type DeepReadonly } from 'vue'
 import {
   DeleteSession,
   PruneSessions,
+  EditSession,
   RecycleSession,
-  RenameSession,
   SessionDetail,
   SessionRisk,
-  SetSessionTags,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type {
   SessionDetail as SessionDetailView,
@@ -19,6 +18,9 @@ import { useToasts } from './useToasts'
 
 /** A session as the session list hands it out: deep-readonly. */
 export type SessionRow = DeepReadonly<SessionSummary>
+
+/** The field the edit dialog opens on. */
+export type EditFocus = 'name' | 'tags'
 
 export interface SessionActionOptions {
   /**
@@ -62,7 +64,7 @@ export function riskDetails(risk: SessionRiskView): ConfirmationDetail[] {
 }
 
 /**
- * The session row's operations: read, rename, tag, recycle, delete, and the list-wide
+ * The session row's operations: read, edit, recycle, delete, and the list-wide
  * prune. Destructive ones are gated on a risk pre-flight and run as background
  * jobs, so what they report is that the job started — `jobs:updated` is what
  * tells the list to re-read.
@@ -72,12 +74,10 @@ export function useSessionActions(options: SessionActionOptions = {}) {
   const confirmation = useConfirmation()
 
   const detail = ref<SessionDetailView | null>(null)
-  const renaming = ref<SessionRow | null>(null)
-  const renameBusy = ref(false)
-  const renameError = ref<string | null>(null)
-  const tagging = ref<SessionRow | null>(null)
-  const tagsBusy = ref(false)
-  const tagsError = ref<string | null>(null)
+  const editing = ref<SessionRow | null>(null)
+  const editFocus = ref<EditFocus>('name')
+  const editBusy = ref(false)
+  const editError = ref<string | null>(null)
 
   async function openDetail(session: SessionRow): Promise<void> {
     try {
@@ -91,61 +91,33 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     detail.value = null
   }
 
-  function requestRename(session: SessionRow): void {
-    renaming.value = session
-    renameError.value = null
+  function requestEdit(session: SessionRow, focus: EditFocus = 'name'): void {
+    editing.value = session
+    editFocus.value = focus
+    editError.value = null
   }
 
-  function cancelRename(): void {
-    if (renameBusy.value) return
-    renaming.value = null
-    renameError.value = null
+  function cancelEdit(): void {
+    if (editBusy.value) return
+    editing.value = null
+    editError.value = null
   }
 
-  // A failed rename keeps the dialog open with its reason: the name is almost
-  // always nearly right — one hive rejects, or a slug already taken by another
-  // session.
-  async function submitRename(name: string): Promise<void> {
-    const session = renaming.value
-    if (!session || renameBusy.value) return
-    renameBusy.value = true
-    renameError.value = null
+  // A refused edit keeps the dialog open with hive's reason: the name or a tag
+  // is almost always nearly right, or the slug is taken by another session.
+  async function submitEdit(name: string, tags: string[]): Promise<void> {
+    const session = editing.value
+    if (!session || editBusy.value) return
+    editBusy.value = true
+    editError.value = null
     try {
-      await RenameSession(session.id, name.trim())
-      renaming.value = null
+      await EditSession(session.id, name.trim(), tags)
+      editing.value = null
       options.onChanged?.()
     } catch (e) {
-      renameError.value = message(e, 'Could not rename that session.')
+      editError.value = message(e, 'Could not save that session.')
     } finally {
-      renameBusy.value = false
-    }
-  }
-
-  function requestTags(session: SessionRow): void {
-    tagging.value = session
-    tagsError.value = null
-  }
-
-  function cancelTags(): void {
-    if (tagsBusy.value) return
-    tagging.value = null
-    tagsError.value = null
-  }
-
-  // Like a rename, a refused tag keeps the dialog open with hive's reason.
-  async function submitTags(tags: string[]): Promise<void> {
-    const session = tagging.value
-    if (!session || tagsBusy.value) return
-    tagsBusy.value = true
-    tagsError.value = null
-    try {
-      await SetSessionTags(session.id, tags)
-      tagging.value = null
-      options.onChanged?.()
-    } catch (e) {
-      tagsError.value = message(e, 'Could not save those tags.')
-    } finally {
-      tagsBusy.value = false
+      editBusy.value = false
     }
   }
 
@@ -202,18 +174,13 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     detail,
     openDetail,
     closeDetail,
-    renaming,
-    renameBusy,
-    renameError,
-    requestRename,
-    cancelRename,
-    submitRename,
-    tagging,
-    tagsBusy,
-    tagsError,
-    requestTags,
-    cancelTags,
-    submitTags,
+    editing,
+    editFocus,
+    editBusy,
+    editError,
+    requestEdit,
+    cancelEdit,
+    submitEdit,
     requestDelete,
     requestRecycle,
     requestPrune,

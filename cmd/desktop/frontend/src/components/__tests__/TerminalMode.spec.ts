@@ -39,8 +39,7 @@ const mocks = vi.hoisted(() => ({
   OpenSessionInEditor: vi.fn(),
   RevealSession: vi.fn(),
   SessionRisk: vi.fn(),
-  RenameSession: vi.fn(),
-  SetSessionTags: vi.fn(),
+  EditSession: vi.fn(),
   DeleteSession: vi.fn(),
   RecycleSession: vi.fn(),
   PruneSessions: vi.fn(),
@@ -114,8 +113,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   OpenSessionInEditor: mocks.OpenSessionInEditor,
   RevealSession: mocks.RevealSession,
   SessionRisk: mocks.SessionRisk,
-  RenameSession: mocks.RenameSession,
-  SetSessionTags: mocks.SetSessionTags,
+  EditSession: mocks.EditSession,
   DeleteSession: mocks.DeleteSession,
   RecycleSession: mocks.RecycleSession,
   PruneSessions: mocks.PruneSessions,
@@ -2090,7 +2088,7 @@ describe('TerminalMode', () => {
   })
 
   it('re-attaches under the new slug when the attached session is renamed', async () => {
-    mocks.RenameSession.mockResolvedValue({
+    mocks.EditSession.mockResolvedValue({
       id: '1',
       name: 'parse it',
       slug: 'parse-it',
@@ -2103,10 +2101,10 @@ describe('TerminalMode', () => {
     await flushPromises()
 
     await openRowMenu(wrapper, 'hive-fix-parser')
-    await wrapper.get('[data-testid="session-menu-rename"]').trigger('click')
+    await wrapper.get('[data-testid="session-menu-edit"]').trigger('click')
     await flushPromises()
 
-    const input = document.querySelector<HTMLInputElement>('[data-testid="session-rename-input"]')!
+    const input = document.querySelector<HTMLInputElement>('[data-testid="session-edit-name"]')!
     input.value = 'parse it'
     input.dispatchEvent(new Event('input'))
     // The list still holds the old slug at this point, which is what lets the
@@ -2129,10 +2127,10 @@ describe('TerminalMode', () => {
         state: 'active',
       },
     ])
-    document.querySelector<HTMLButtonElement>('[data-testid="session-rename-save"]')!.click()
+    document.querySelector<HTMLButtonElement>('[data-testid="session-edit-save"]')!.click()
     await flushPromises()
 
-    expect(mocks.RenameSession).toHaveBeenCalledWith('1', 'parse it')
+    expect(mocks.EditSession).toHaveBeenCalledWith('1', 'parse it', expect.any(Array))
     // The slug is the tmux target, so the attach has to follow it.
     expect(router.currentRoute.value.params.slug).toBe('parse-it')
     expect(mocks.useTerminalWindows).toHaveBeenLastCalledWith('parse-it', expect.anything())
@@ -2160,29 +2158,29 @@ describe('TerminalMode', () => {
         tags: ['backend'],
       },
     ])
-    mocks.SetSessionTags.mockResolvedValue({})
+    mocks.EditSession.mockResolvedValue({})
     const { wrapper } = await mountAvailable()
     const row = wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"]')
     expect(row.get('[data-testid="session-tags"]').attributes('aria-label')).toBe('Tags: auto')
 
     await openRowMenu(wrapper, 'hive-fix-parser')
-    await wrapper.get('[data-testid="session-menu-tags"]').trigger('click')
+    await wrapper.get('[data-testid="session-menu-edit"]').trigger('click')
     await flushPromises()
 
-    expect(document.querySelector('[data-testid="session-tags-input-token-auto"]')).not.toBeNull()
-    const input = document.querySelector<HTMLInputElement>('[data-testid="session-tags-input"]')!
+    expect(document.querySelector('[data-testid="session-edit-tags-token-auto"]')).not.toBeNull()
+    const input = document.querySelector<HTMLInputElement>('[data-testid="session-edit-tags"]')!
     input.value = 'b'
     input.dispatchEvent(new Event('input'))
     await flushPromises()
     // Tags already on other sessions are offered, so one spelling spreads.
-    expect(document.querySelector('[data-testid="session-tags-input-option-backend"]')).not.toBeNull()
+    expect(document.querySelector('[data-testid="session-edit-tags-option-backend"]')).not.toBeNull()
     input.value = 'review'
     input.dispatchEvent(new Event('input'))
-    document.querySelector<HTMLButtonElement>('[data-testid="session-tags-save"]')!.click()
+    document.querySelector<HTMLButtonElement>('[data-testid="session-edit-save"]')!.click()
     await flushPromises()
 
-    expect(mocks.SetSessionTags).toHaveBeenCalledWith('1', ['auto', 'review'])
-    expect(document.querySelector('[data-testid="session-tags-dialog"]')).toBeNull()
+    expect(mocks.EditSession).toHaveBeenCalledWith('1', 'fix the parser', ['auto', 'review'])
+    expect(document.querySelector('[data-testid="session-edit-dialog"]')).toBeNull()
     wrapper.unmount()
   })
 
@@ -3686,7 +3684,7 @@ describe('TerminalMode', () => {
       for (const id of [
         'terminal:session:kill',
         'terminal:session:detail',
-        'terminal:session:rename',
+        'terminal:session:edit',
         'terminal:session:recycle',
         'terminal:session:delete',
       ]) {

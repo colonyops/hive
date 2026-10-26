@@ -1069,3 +1069,23 @@ func TestSessionsService_EditsSessionTags(t *testing.T) {
 	_, err = svc.EditSessionTags(t.Context(), "missing", []string{"x"}, nil)
 	assert.Equal(t, KindNotFound, KindOf(err), "%v", err)
 }
+
+func TestSessionsService_EditSessionChecksTagsBeforeRenaming(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{})
+	h.save(t, session.Session{ID: "s1", Name: "review", Slug: "review", State: session.StateRecycled, Tags: []string{"auto"}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine})
+
+	_, err := svc.EditSession(t.Context(), "s1", "renamed", []string{"a,b"})
+	assert.Equal(t, KindInvalid, KindOf(err), "%v", err)
+	got, err := svc.SessionDetail(t.Context(), "s1")
+	require.NoError(t, err)
+	assert.Equal(t, "review", got.Name, "a bad tag must not leave the rename applied")
+
+	edited, err := svc.EditSession(t.Context(), "s1", "review", []string{"backend"})
+	require.NoError(t, err)
+	assert.Equal(t, "review", edited.Name)
+	assert.Equal(t, []string{"backend"}, edited.Tags)
+
+	_, err = svc.EditSession(t.Context(), "missing", "x", nil)
+	assert.Equal(t, KindNotFound, KindOf(err), "%v", err)
+}

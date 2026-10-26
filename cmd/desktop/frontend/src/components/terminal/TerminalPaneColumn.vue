@@ -170,7 +170,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
         :pull-request-error="sessionPullRequestError"
         @refresh-pull-request="refreshSessionStatus({ refreshPullRequest: true })"
       />
-      <SessionTagsStatus :tags="statusBarRow.tags" @edit="sessions.requestTags(statusBarRow)" />
+      <SessionTagsStatus :tags="statusBarRow.tags" @edit="sessions.requestEdit(statusBarRow, 'tags')" />
       <template #actions>
         <IconButton
           v-for="action in ops.actions.statusBarActions.value"

@@ -4,10 +4,9 @@ import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
 import ActionInputsDialog from './ActionInputsDialog.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
-import SessionTagsDialog from './SessionTagsDialog.vue'
+import SessionEditDialog from './SessionEditDialog.vue'
 import DrivePane from './drive/DrivePane.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
-import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
 import TerminalPaneColumn from './terminal/TerminalPaneColumn.vue'
 import TerminalSidebar from './terminal/TerminalSidebar.vue'
 import { provideTerminalMode } from './terminal/terminalModeContext'
@@ -88,21 +87,7 @@ const { prefetch: prefetchNewSession } = useNewSession()
 onMounted(prefetchNewSession)
 
 const { pendingInputs: actionInputs, inputsBusy, inputsError, cancelInputs, submitInputs } = ops.actions
-const {
-  confirmation,
-  detail,
-  closeDetail,
-  renaming,
-  renameBusy,
-  renameError,
-  cancelRename,
-  submitRename,
-  tagging,
-  tagsBusy,
-  tagsError,
-  cancelTags,
-  submitTags,
-} = sessions
+const { confirmation, detail, closeDetail, editing, editFocus, editBusy, editError, cancelEdit, submitEdit } = sessions
 
 // Every tag already in use is offered, so one spelling spreads instead of
 // near-duplicates.
@@ -175,27 +160,16 @@ const knownTags = computed(() => {
       @submit="submitInputs"
     />
     <SessionDetailDialog v-if="detail" :detail="detail" @close="closeDetail" />
-    <RenameDialog
-      v-if="renaming"
-      title="Rename session"
-      label="Session name"
-      hint="Its terminal session is renamed too, so an open terminal reconnects."
-      testid="session-rename"
-      :name="renaming.name"
-      :busy="renameBusy"
-      :error="renameError"
-      @close="cancelRename"
-      @save="submitRename"
-    />
-    <SessionTagsDialog
-      v-if="tagging"
-      :name="tagging.name"
-      :tags="tagging.tags"
+    <SessionEditDialog
+      v-if="editing"
+      :name="editing.name"
+      :tags="editing.tags"
+      :focus="editFocus"
       :suggestions="knownTags"
-      :busy="tagsBusy"
-      :error="tagsError"
-      @close="cancelTags"
-      @save="submitTags"
+      :busy="editBusy"
+      :error="editError"
+      @close="cancelEdit"
+      @save="submitEdit"
     />
     <ConfirmationHost :confirmation="confirmation" testid="session-confirmation" />
   </div>

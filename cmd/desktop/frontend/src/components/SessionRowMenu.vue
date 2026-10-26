@@ -3,7 +3,6 @@ import { computed } from 'vue'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconInfo from '~icons/lucide/info'
 import IconPencil from '~icons/lucide/pencil'
-import IconTag from '~icons/lucide/tag'
 import IconPlay from '~icons/lucide/play'
 import IconRecycle from '~icons/lucide/recycle'
 import IconSquare from '~icons/lucide/square'
@@ -19,7 +18,7 @@ const props = defineProps<{
   session: SessionRow
   /**
    * The scratch terminal, which has no hive session behind it: its tmux session
-   * is the whole thing, so there is nothing to rename, recycle, delete or show
+   * is the whole thing, so there is nothing to edit, recycle, delete or show
    * details of.
    */
   scratch?: boolean
@@ -40,8 +39,7 @@ const emit = defineEmits<{
   start: []
   kill: []
   detail: []
-  rename: []
-  tags: []
+  edit: []
   recycle: []
   delete: []
   extra: [id: string]
@@ -70,8 +68,7 @@ const entries = computed<MenuEntry[]>(() => {
   }
   list.push(
     { kind: 'action', id: 'detail', label: 'Session details…', icon: IconInfo, testid: 'session-menu-detail' },
-    { kind: 'action', id: 'rename', label: 'Rename…', icon: IconPencil, testid: 'session-menu-rename' },
-    { kind: 'action', id: 'tags', label: 'Edit tags…', icon: IconTag, testid: 'session-menu-tags' },
+    { kind: 'action', id: 'edit', label: 'Edit session…', icon: IconPencil, testid: 'session-menu-edit' },
     { kind: 'separator' },
   )
   // Only an active session has a clone to reset; recycling a recycled one is
@@ -86,14 +83,13 @@ const entries = computed<MenuEntry[]>(() => {
   return list
 })
 
-const own = new Set(['start', 'kill', 'detail', 'rename', 'tags', 'recycle', 'delete'])
+const own = new Set(['start', 'kill', 'detail', 'edit', 'recycle', 'delete'])
 
 function onSelect(id: string): void {
   if (id === 'start') emit('start')
   else if (id === 'kill') emit('kill')
   else if (id === 'detail') emit('detail')
-  else if (id === 'rename') emit('rename')
-  else if (id === 'tags') emit('tags')
+  else if (id === 'edit') emit('edit')
   else if (id === 'recycle') emit('recycle')
   else if (id === 'delete') emit('delete')
   if (!own.has(id)) emit('extra', id)
