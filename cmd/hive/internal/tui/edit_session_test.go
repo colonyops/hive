@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 )
 
 func newEditSessionTestModel(t *testing.T) Model {
@@ -146,4 +149,31 @@ func TestEditSessionEnterSavesAndUnchangedEnterOnlyCloses(t *testing.T) {
 	assert.Equal(t, stateNormal, m.state)
 	assert.Empty(t, m.modals.EditSessionID)
 	require.NotNil(t, cmd)
+}
+
+func TestExecuteEditSessionSkipsTagsWhenTheRenameFails(t *testing.T) {
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = database.Close() })
+	sessionStore := store.NewSessionStore(database)
+	now := time.Now()
+	for _, sess := range []session.Session{
+		{ID: "s1", Name: "alpha", Slug: "alpha", Path: "/tmp/alpha", State: session.StateActive, Tags: []string{"auto"}, CreatedAt: now, UpdatedAt: now},
+		{ID: "s2", Name: "beta", Slug: "beta", Path: "/tmp/beta", State: session.StateActive, CreatedAt: now, UpdatedAt: now},
+	} {
+		require.NoError(t, sessionStore.Save(t.Context(), sess))
+	}
+	m := newEditSessionTestModel(t)
+	m.service = newTestSessionService(t, sessionStore)
+
+	msg := m.executeEditSession(editSessionRequest{
+		sessionID: "s1", name: "beta", rename: true, tags: []string{"review"}, setTags: true,
+	})()
+
+	completed, ok := msg.(editSessionCompleteMsg)
+	require.True(t, ok)
+	require.Error(t, completed.err, "beta is taken")
+	got, err := sessionStore.Get(t.Context(), "s1")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"auto"}, got.Tags)
 }

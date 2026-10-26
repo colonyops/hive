@@ -86,18 +86,15 @@ func (mc *ModalCoordinator) editSessionRequest() (editSessionRequest, error) {
 	if err != nil {
 		return editSessionRequest{}, err
 	}
-	// Tags stored before validation existed may not normalize; compare them
-	// as stored, so saving them unchanged is still a no-op.
+	// A stored tag that predates validation does not normalize, and the
+	// parsed tags can never equal it, so any save rewrites the tags.
 	original, err := session.NormalizeTags(mc.EditOrigTags)
-	if err != nil {
-		original = mc.EditOrigTags
-	}
 	return editSessionRequest{
 		sessionID: mc.EditSessionID,
 		name:      name,
 		rename:    name != mc.EditOrigName,
 		tags:      tags,
-		setTags:   !slices.Equal(tags, original),
+		setTags:   err != nil || !slices.Equal(tags, original),
 	}, nil
 }
 
