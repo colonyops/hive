@@ -47,11 +47,11 @@ A setup command that exits successfully does not stop healthy panes. If every co
 
 For repository sessions, the optional status bar shows the branch, changes against the default branch, uncommitted work, and unpushed commits. Connected GitHub, Gitea, and Forgejo repositories also show pull request, review, and check state. Use the status bar to open the checkout in your editor or file manager. Actions that target `statusbar` add buttons of their own; see [Where actions run](../inbox/actions.md#where-actions-run).
 
-### Labels
+### Tags
 
-Labels are short tags you put on a session, such as `auto` or `backend`. A session row with labels shows a tag icon; hover it to read them. The status bar above the terminal lists the attached session's labels, and clicking them opens the editor. You can also choose **Edit labels…** from the session menu or the command palette. Press <kbd>Enter</kbd> or type a comma to add a label, and <kbd>Backspace</kbd> to remove the last one. Labels already used on other sessions are suggested.
+Tags are short words you put on a session, such as `auto` or `backend`. A session row with tags shows a tag icon; hover it to read them. The status bar above the terminal lists the attached session's tags, and clicking them opens the editor. You can also choose **Edit tags…** from the session menu or the command palette. Press <kbd>Enter</kbd> or type a comma to add a tag, and <kbd>Backspace</kbd> to remove the last one. Tags already used on other sessions are suggested.
 
-Labels ignore case, so `Auto` and `auto` are the same label, and a label cannot contain a comma. The sidebar filter matches labels as well as names. The hive CLI reads and writes the same labels; see [Sessions](../../cli/getting-started/sessions.md).
+Tags ignore case, so `Auto` and `auto` are the same tag, and a tag cannot contain a comma. The sidebar filter matches tags as well as names. The hive CLI reads and writes the same tags; see [Sessions](../../cli/getting-started/sessions.md).
 
 ## Scratch terminals
 

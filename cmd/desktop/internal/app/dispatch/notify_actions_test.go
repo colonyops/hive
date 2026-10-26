@@ -190,7 +190,7 @@ func launchFlows() flowListerTest {
 		Nodes: []flow.Node{
 			{ID: "review", Type: "launch-session", Name: "Review PRs", Config: &flow.LaunchSessionConfig{
 				Repo: "{{ .Payload.repo }}", Agent: "claude", SessionName: "review-{{ .Payload.num }}", Prompt: "Review {{ .Payload.num }}",
-				Labels: []string{"auto", "pr-{{ .Payload.num }}"},
+				Tags: []string{"auto", "pr-{{ .Payload.num }}"},
 			}},
 			{ID: "chat", Type: "launch-chat", Config: &flow.LaunchChatConfig{Workspace: "incident-triage", Prompt: "Triage {{ .Payload.title }}"}},
 			{ID: "tell-me", Type: "notify", Config: &flow.NotifyConfig{Title: "hi"}},
@@ -205,7 +205,7 @@ func TestFlowActions_ProjectsALaunchSessionNode(t *testing.T) {
 		ID: models.LaunchActionID("triage/review"), Label: "Review PRs", Type: ActionTypeLaunchSession,
 		Config: &LaunchNodeActionConfig{
 			PromptTemplate: "Review {{ .Payload.num }}", RepoTemplate: "{{ .Payload.repo }}", Agent: "claude",
-			Labels:       []string{"auto", "pr-{{ .Payload.num }}"},
+			Tags:         []string{"auto", "pr-{{ .Payload.num }}"},
 			NameTemplate: "review-{{ .Payload.num }}",
 		},
 	}, action)

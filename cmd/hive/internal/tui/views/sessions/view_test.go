@@ -174,16 +174,16 @@ func TestRenderPreviewHeader_SelectedPaneUsesDisplayID(t *testing.T) {
 	assert.NotContains(t, got, "[%12]")
 }
 
-func TestRenderPreviewHeader_ShowsLabels(t *testing.T) {
+func TestRenderPreviewHeader_ShowsTags(t *testing.T) {
 	v := newTestView([]list.Item{TreeItem{Session: session.Session{ID: "s1", Name: "my-session"}}}, 0)
 	cfg := config.DefaultConfig()
 	v.cfg = &cfg
 
-	withLabels := session.Session{ID: "s1", Name: "my-session", Labels: []string{"auto", "backend"}}
-	assert.Contains(t, terminal.StripANSI(v.renderPreviewHeader(&withLabels, 80)), "Labels: auto · backend")
+	withTags := session.Session{ID: "s1", Name: "my-session", Tags: []string{"auto", "backend"}}
+	assert.Contains(t, terminal.StripANSI(v.renderPreviewHeader(&withTags, 80)), "Tags: auto · backend")
 
 	without := session.Session{ID: "s1", Name: "my-session"}
-	assert.NotContains(t, terminal.StripANSI(v.renderPreviewHeader(&without, 80)), "Labels:")
+	assert.NotContains(t, terminal.StripANSI(v.renderPreviewHeader(&without, 80)), "Tags:")
 }
 
 func TestExpandWindowItems_MultipleWindows(t *testing.T) {

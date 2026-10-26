@@ -70,7 +70,7 @@ const (
 	stateShowingInfo
 	stateRenaming
 	stateSettingGroup
-	stateEditingLabels
+	stateEditingTags
 	stateFormInput
 	stateShowingTodos
 	stateSelectingRepo
@@ -618,8 +618,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleRenameComplete(msg)
 	case setGroupCompleteMsg:
 		model, cmd = m.handleSetGroupComplete(msg)
-	case setLabelsCompleteMsg:
-		model, cmd = m.handleSetLabelsComplete(msg)
+	case setTagsCompleteMsg:
+		model, cmd = m.handleSetTagsComplete(msg)
 	case actionCompleteMsg:
 		model, cmd = m.handleActionComplete(msg)
 	case doctorResultsMsg:
@@ -755,8 +755,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.state == stateSettingGroup {
 		return m.handleGroupKey(msg, keyStr)
 	}
-	if m.state == stateEditingLabels {
-		return m.handleLabelsKey(msg, keyStr)
+	if m.state == stateEditingTags {
+		return m.handleTagsKey(msg, keyStr)
 	}
 	if m.state == stateStreaming {
 		return m.handleStreamingModalKey(keyStr)
@@ -1321,12 +1321,12 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			return m.openGroupInput(selected)
 		}
 
-		if entry.Command.Action == act.TypeLabelsEdit {
+		if entry.Command.Action == act.TypeTagsEdit {
 			m.state = stateNormal
 			if selected == nil {
 				return m, nil
 			}
-			return m.openLabelsInput(selected)
+			return m.openTagsInput(selected)
 		}
 
 		// SetTheme doesn't require a session
@@ -1958,8 +1958,8 @@ func (m Model) delegateToComponent(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case stateSettingGroup:
 		m.modals.GroupInput, cmd = m.modals.GroupInput.Update(msg)
 		return m, cmd
-	case stateEditingLabels:
-		m.modals.LabelsInput, cmd = m.modals.LabelsInput.Update(msg)
+	case stateEditingTags:
+		m.modals.TagsInput, cmd = m.modals.TagsInput.Update(msg)
 		return m, cmd
 	case stateFormInput:
 		if m.modals.FormDialog != nil {

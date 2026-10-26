@@ -347,7 +347,7 @@ func TestSessionsService_SessionDetailReadsWorktreeMetadata(t *testing.T) {
 	sess := session.Session{
 		ID: "s1", Name: "review 81", Slug: "review-81", Path: "/tmp/review-81",
 		Remote: "acme/site", State: session.StateActive, CloneStrategy: session.CloneStrategyWorktree,
-		Labels: []string{"pr-81"},
+		Tags: []string{"pr-81"},
 	}
 	sess.SetMeta(session.MetaWorktreeBranch, "hive/review-81")
 	h.save(t, sess)
@@ -356,7 +356,7 @@ func TestSessionsService_SessionDetailReadsWorktreeMetadata(t *testing.T) {
 	got, err := svc.SessionDetail(t.Context(), "s1")
 	require.NoError(t, err)
 	assert.Equal(t, "hive/review-81", got.GetMeta(session.MetaWorktreeBranch))
-	assert.Equal(t, []string{"pr-81"}, got.Labels)
+	assert.Equal(t, []string{"pr-81"}, got.Tags)
 	assert.Equal(t, "/tmp/review-81", got.Path)
 
 	_, err = svc.SessionDetail(t.Context(), "gone")
@@ -1051,21 +1051,21 @@ func TestSessionsService_SessionDraftFromActivityRefusesAnUnrelatedRow(t *testin
 	assert.Equal(t, KindInvalid, KindOf(err), "a row with nothing to retry is refused, not silently empty")
 }
 
-func TestSessionsService_EditsSessionLabels(t *testing.T) {
+func TestSessionsService_EditsSessionTags(t *testing.T) {
 	h := newHiveHarness(t, engineOptions{})
-	h.save(t, session.Session{ID: "s1", Name: "review", Slug: "review", State: session.StateActive, Labels: []string{"auto"}})
+	h.save(t, session.Session{ID: "s1", Name: "review", Slug: "review", State: session.StateActive, Tags: []string{"auto"}})
 	svc := newSessionsService(SessionsDeps{Hive: h.engine})
 
-	got, err := svc.EditSessionLabels(t.Context(), "s1", []string{"orchestrated"}, []string{"Auto"})
+	got, err := svc.EditSessionTags(t.Context(), "s1", []string{"orchestrated"}, []string{"Auto"})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"orchestrated"}, got.Labels)
+	assert.Equal(t, []string{"orchestrated"}, got.Tags)
 
-	got, err = svc.SetSessionLabels(t.Context(), "s1", []string{"backend", "BACKEND"})
+	got, err = svc.SetSessionTags(t.Context(), "s1", []string{"backend", "BACKEND"})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"backend"}, got.Labels)
+	assert.Equal(t, []string{"backend"}, got.Tags)
 
-	_, err = svc.SetSessionLabels(t.Context(), "s1", []string{"a,b"})
-	assert.Equal(t, KindInvalid, KindOf(err), "an invalid label is the caller's mistake: %v", err)
-	_, err = svc.EditSessionLabels(t.Context(), "missing", []string{"x"}, nil)
+	_, err = svc.SetSessionTags(t.Context(), "s1", []string{"a,b"})
+	assert.Equal(t, KindInvalid, KindOf(err), "an invalid tag is the caller's mistake: %v", err)
+	_, err = svc.EditSessionTags(t.Context(), "missing", []string{"x"}, nil)
 	assert.Equal(t, KindNotFound, KindOf(err), "%v", err)
 }

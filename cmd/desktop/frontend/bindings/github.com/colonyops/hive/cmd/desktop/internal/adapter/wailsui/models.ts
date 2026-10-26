@@ -606,7 +606,7 @@ export interface SessionDetail {
     "path": string;
     "cloneStrategy": string;
     "worktreeBranch": string;
-    "labels": string[] | null;
+    "tags": string[] | null;
     "createdAt": string;
     "updatedAt": string;
 }
@@ -651,7 +651,7 @@ export interface SessionSummary {
     "repoIdentity": string;
     "state": string;
     "canvasOwner": string;
-    "labels": string[] | null;
+    "tags": string[] | null;
     "createdAt": string;
 }
 

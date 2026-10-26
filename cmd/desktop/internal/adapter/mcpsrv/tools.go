@@ -101,19 +101,19 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 	addTool(srv, &mcp.Tool{
 		Name:  "list_sessions",
 		Title: "List hive sessions",
-		Description: "List hive sessions newest first, with each one's labels and state; slug is the tmux session name an attach targets. " +
-			"labels keeps only sessions that carry every label given, compared case-insensitively, so polling with a label such as auto finds the sessions waiting for an agent to pick them up. " +
+		Description: "List hive sessions newest first, with each one's tags and state; slug is the tmux session name an attach targets. " +
+			"tags keeps only sessions that carry every tag given, compared case-insensitively, so polling with a tag such as auto finds the sessions waiting for an agent to pick them up. " +
 			"state keeps only active, recycled or corrupted sessions. An empty list means no session matched, not that hive is unreachable: a failed read is an error.",
 	}, ctrl.ListSessions)
 
 	addTool(srv, &mcp.Tool{
-		Name:  "edit_session_labels",
-		Title: "Add and remove a session's labels",
-		Description: "Add labels to one hive session and then remove labels from it, leaving its other labels in place, and return the session. " +
-			"Use one call to swap a label, for example remove auto and add claimed when an orchestrator picks a session up; two agents that each add a label both keep theirs. " +
-			"Labels compare case-insensitively, keep the first spelling, are at most 40 characters and cannot contain commas. " +
+		Name:  "edit_session_tags",
+		Title: "Add and remove a session's tags",
+		Description: "Add tags to one hive session and then remove tags from it, leaving its other tags in place, and return the session. " +
+			"Use one call to swap a tag, for example remove auto and add claimed when an orchestrator picks a session up; two agents that each add a tag both keep theirs. " +
+			"Tags compare case-insensitively, keep the first spelling, are at most 40 characters and cannot contain commas. " +
 			"This changes the session record only: it starts, stops and attaches nothing.",
-	}, ctrl.EditSessionLabels)
+	}, ctrl.EditSessionTags)
 
 	addTool(srv, &mcp.Tool{
 		Name:  "list_actions",

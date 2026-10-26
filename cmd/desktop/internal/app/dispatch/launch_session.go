@@ -64,7 +64,7 @@ func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessio
 		Agent:           req.Agent,
 		Repo:            req.Repo,
 		CollisionSuffix: req.CollisionSuffix,
-		Labels:          req.Labels,
+		Tags:            req.Tags,
 		Env:             []string{ptyterm.ImageProtocolEnv},
 	})
 	if err != nil {

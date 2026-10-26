@@ -51,7 +51,7 @@ export interface EditableLaunchConfig {
     "agent"?: string;
     "repoTemplate"?: string;
     "workspace"?: string;
-    "labels"?: string[] | null;
+    "tags"?: string[] | null;
     "postHook"?: string;
     "postHookTimeout"?: string;
 }

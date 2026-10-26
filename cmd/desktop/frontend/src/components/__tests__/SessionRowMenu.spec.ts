@@ -11,7 +11,7 @@ const session: SessionSummary = {
   repoIdentity: 'acme/site',
   state: 'active',
   canvasOwner: 'acme/site',
-  labels: [],
+  tags: [],
   createdAt: '2026-10-01T12:00:00Z',
 }
 
@@ -28,7 +28,7 @@ describe('SessionRowMenu', () => {
       ['session-menu-kill', 'kill'],
       ['session-menu-detail', 'detail'],
       ['session-menu-rename', 'rename'],
-      ['session-menu-labels', 'labels'],
+      ['session-menu-tags', 'tags'],
       ['session-menu-recycle', 'recycle'],
       ['session-menu-delete', 'delete'],
     ] as const) {
@@ -36,7 +36,7 @@ describe('SessionRowMenu', () => {
       expect(wrapper.emitted(event), testid).toHaveLength(1)
     }
     expect(wrapper.emitted('close')).toHaveLength(7)
-    expect(wrapper.emitted('extra'), "labels is the menu's own entry").toBeUndefined()
+    expect(wrapper.emitted('extra'), "tags is the menu's own entry").toBeUndefined()
   })
 
   it('offers the terminal lifecycle and recycle only for an active session', () => {

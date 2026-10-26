@@ -41,7 +41,7 @@ const emit = defineEmits<{
   kill: []
   detail: []
   rename: []
-  labels: []
+  tags: []
   recycle: []
   delete: []
   extra: [id: string]
@@ -71,7 +71,7 @@ const entries = computed<MenuEntry[]>(() => {
   list.push(
     { kind: 'action', id: 'detail', label: 'Session details…', icon: IconInfo, testid: 'session-menu-detail' },
     { kind: 'action', id: 'rename', label: 'Rename…', icon: IconPencil, testid: 'session-menu-rename' },
-    { kind: 'action', id: 'labels', label: 'Edit labels…', icon: IconTag, testid: 'session-menu-labels' },
+    { kind: 'action', id: 'tags', label: 'Edit tags…', icon: IconTag, testid: 'session-menu-tags' },
     { kind: 'separator' },
   )
   // Only an active session has a clone to reset; recycling a recycled one is
@@ -86,14 +86,14 @@ const entries = computed<MenuEntry[]>(() => {
   return list
 })
 
-const own = new Set(['start', 'kill', 'detail', 'rename', 'labels', 'recycle', 'delete'])
+const own = new Set(['start', 'kill', 'detail', 'rename', 'tags', 'recycle', 'delete'])
 
 function onSelect(id: string): void {
   if (id === 'start') emit('start')
   else if (id === 'kill') emit('kill')
   else if (id === 'detail') emit('detail')
   else if (id === 'rename') emit('rename')
-  else if (id === 'labels') emit('labels')
+  else if (id === 'tags') emit('tags')
   else if (id === 'recycle') emit('recycle')
   else if (id === 'delete') emit('delete')
   if (!own.has(id)) emit('extra', id)

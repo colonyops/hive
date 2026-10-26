@@ -263,30 +263,30 @@ func repositoryLauncher(creator SessionCreator, links ItemSessionLinker) *Reposi
 	return NewRepositoryLauncher(func() SessionCreator { return creator }, links, nil, zerolog.Nop())
 }
 
-func TestLaunchSessionExecutor_RendersLabelTemplates(t *testing.T) {
+func TestLaunchSessionExecutor_RendersTagTemplates(t *testing.T) {
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action := actions.Action{ID: "spawn", Type: "launch-session", Config: &actions.LaunchSessionConfig{
 		PromptTemplate: "go", RepoTemplate: "acme/repo",
-		Labels: []string{"auto", " {{ .Payload.team }} ", "{{ .Payload.none }}", "AUTO"},
+		Tags: []string{"auto", " {{ .Payload.team }} ", "{{ .Payload.none }}", "AUTO"},
 	}}
 	data := OutputData{Key: "k", Payload: map[string]any{"team": "Backend", "none": ""}, Raw: json.RawMessage(`{}`)}
 
 	_, err := exec.Execute(t.Context(), action, data, ActionInvocationInput{})
 	require.NoError(t, err)
 	require.Len(t, launcher.calls, 1)
-	assert.Equal(t, []string{"auto", "Backend"}, launcher.calls[0].Labels, "blank and repeated labels are dropped")
+	assert.Equal(t, []string{"auto", "Backend"}, launcher.calls[0].Tags, "blank and repeated tags are dropped")
 }
 
-func TestLaunchSessionExecutor_InvalidRenderedLabelFailsTheLaunch(t *testing.T) {
+func TestLaunchSessionExecutor_InvalidRenderedTagFailsTheLaunch(t *testing.T) {
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action := actions.Action{ID: "spawn", Type: "launch-session", Config: &actions.LaunchSessionConfig{
-		PromptTemplate: "go", RepoTemplate: "acme/repo", Labels: []string{"{{ .Payload.title }}"},
+		PromptTemplate: "go", RepoTemplate: "acme/repo", Tags: []string{"{{ .Payload.title }}"},
 	}}
 
 	_, err := exec.Execute(t.Context(), action, OutputData{Key: "k", Payload: map[string]any{"title": "a, b"}, Raw: json.RawMessage(`{}`)}, ActionInvocationInput{})
-	require.ErrorContains(t, err, "launch-session: labels")
+	require.ErrorContains(t, err, "launch-session: tags")
 	assert.Empty(t, launcher.calls)
 }
 
@@ -296,13 +296,13 @@ func TestRepositoryLauncher_MapsRequestToSessionService(t *testing.T) {
 
 	_, err := launcher.LaunchSession(t.Context(), LaunchSessionRequest{
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git", CollisionSuffix: "7",
-		Labels: []string{"auto"},
+		Tags: []string{"auto"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, []sessionsvc.LaunchRequest{{
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git", CollisionSuffix: "7",
-		Labels: []string{"auto"},
-		Env:    []string{ptyterm.ImageProtocolEnv},
+		Tags: []string{"auto"},
+		Env:  []string{ptyterm.ImageProtocolEnv},
 	}}, creator.calls)
 }
 
@@ -379,10 +379,10 @@ func TestRepositoryLauncher_LinksTheCreatedSessionToItsItem(t *testing.T) {
 	_, err := launcher.LaunchSession(t.Context(), LaunchSessionRequest{Name: "review-1", Prompt: "go", Repo: "r", Origins: []models.ItemRef{ref}})
 	require.NoError(t, err)
 	assert.Equal(t, map[string][]models.ItemRef{"session-1": {ref}}, linker.links)
-	// The link is the association; the item id is not copied into labels,
+	// The link is the association; the item id is not copied into tags,
 	// which belong to the user.
 	require.Len(t, creator.calls, 1)
-	assert.Empty(t, creator.calls[0].Labels)
+	assert.Empty(t, creator.calls[0].Tags)
 }
 
 // A session with no item behind it — the blank New Session form, an action run
@@ -589,5 +589,5 @@ func TestLaunchSessionExecutor_RunsALaunchNodeProjection(t *testing.T) {
 
 	_, err := exec.Execute(t.Context(), action, reviewItem(), ActionInvocationInput{})
 	require.NoError(t, err)
-	require.Equal(t, []LaunchSessionRequest{{Name: "review-42", Prompt: "Review 42", Agent: "claude", Repo: "example/repo", Labels: []string{"auto", "pr-42"}}}, launcher.calls)
+	require.Equal(t, []LaunchSessionRequest{{Name: "review-42", Prompt: "Review 42", Agent: "claude", Repo: "example/repo", Tags: []string{"auto", "pr-42"}}}, launcher.calls)
 }

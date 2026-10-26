@@ -105,7 +105,7 @@ type Session struct {
 	CreatedAt     int64          `json:"created_at"`
 	UpdatedAt     int64          `json:"updated_at"`
 	CloneStrategy string         `json:"clone_strategy"`
-	Labels        sql.NullString `json:"labels"`
+	Tags          sql.NullString `json:"tags"`
 }
 
 type TodoItem struct {

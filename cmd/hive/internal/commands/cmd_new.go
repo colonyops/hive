@@ -21,7 +21,7 @@ type createSessionFlags struct {
 	background    bool
 	cloneStrategy string
 	agent         string
-	labels        []string
+	tags          []string
 }
 
 // sessionCreateFlags returns the flag set shared by 'hive new' and
@@ -58,10 +58,10 @@ func sessionCreateFlags(f *createSessionFlags) []cli.Flag {
 			Destination: &f.agent,
 		},
 		&cli.StringSliceFlag{
-			Name:        "label",
-			Aliases:     []string{"l"},
-			Usage:       "label to attach to the session (repeatable)",
-			Destination: &f.labels,
+			Name:        "tags",
+			Aliases:     []string{"t"},
+			Usage:       "tags to attach to the session (repeatable)",
+			Destination: &f.tags,
 		},
 	}
 }
@@ -92,7 +92,7 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 		Background:    f.background,
 		CloneStrategy: f.cloneStrategy,
 		AgentKey:      f.agent,
-		Labels:        f.labels,
+		Tags:          f.tags,
 		Progress:      progress,
 	})
 	if err != nil {

@@ -40,7 +40,7 @@ const mocks = vi.hoisted(() => ({
   RevealSession: vi.fn(),
   SessionRisk: vi.fn(),
   RenameSession: vi.fn(),
-  SetSessionLabels: vi.fn(),
+  SetSessionTags: vi.fn(),
   DeleteSession: vi.fn(),
   RecycleSession: vi.fn(),
   PruneSessions: vi.fn(),
@@ -115,7 +115,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   RevealSession: mocks.RevealSession,
   SessionRisk: mocks.SessionRisk,
   RenameSession: mocks.RenameSession,
-  SetSessionLabels: mocks.SetSessionLabels,
+  SetSessionTags: mocks.SetSessionTags,
   DeleteSession: mocks.DeleteSession,
   RecycleSession: mocks.RecycleSession,
   PruneSessions: mocks.PruneSessions,
@@ -653,7 +653,7 @@ describe('TerminalMode', () => {
         repoIdentity: 'github.com/grafana/ai-sdk',
         state: 'active',
         canvasOwner: '',
-        labels: [],
+        tags: [],
         createdAt: '',
       },
       {
@@ -664,7 +664,7 @@ describe('TerminalMode', () => {
         repoIdentity: 'github.com/grafana/ai-sdk',
         state: 'active',
         canvasOwner: '',
-        labels: [],
+        tags: [],
         createdAt: '',
       },
     ])
@@ -2139,7 +2139,7 @@ describe('TerminalMode', () => {
     wrapper.unmount()
   })
 
-  it("shows a session row's labels and edits them from the row menu", async () => {
+  it("shows a session row's tags and edits them from the row menu", async () => {
     mocks.ListSessions.mockResolvedValue([
       {
         id: '1',
@@ -2148,7 +2148,7 @@ describe('TerminalMode', () => {
         repo: 'hay-kot/hive',
         repoIdentity: 'hay-kot/hive',
         state: 'active',
-        labels: ['auto'],
+        tags: ['auto'],
       },
       {
         id: '2',
@@ -2157,32 +2157,32 @@ describe('TerminalMode', () => {
         repo: 'hay-kot/hive',
         repoIdentity: 'hay-kot/hive',
         state: 'active',
-        labels: ['backend'],
+        tags: ['backend'],
       },
     ])
-    mocks.SetSessionLabels.mockResolvedValue({})
+    mocks.SetSessionTags.mockResolvedValue({})
     const { wrapper } = await mountAvailable()
     const row = wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"]')
-    expect(row.get('[data-testid="session-labels"]').attributes('aria-label')).toBe('Labels: auto')
+    expect(row.get('[data-testid="session-tags"]').attributes('aria-label')).toBe('Tags: auto')
 
     await openRowMenu(wrapper, 'hive-fix-parser')
-    await wrapper.get('[data-testid="session-menu-labels"]').trigger('click')
+    await wrapper.get('[data-testid="session-menu-tags"]').trigger('click')
     await flushPromises()
 
-    expect(document.querySelector('[data-testid="session-labels-input-token-auto"]')).not.toBeNull()
-    const input = document.querySelector<HTMLInputElement>('[data-testid="session-labels-input"]')!
+    expect(document.querySelector('[data-testid="session-tags-input-token-auto"]')).not.toBeNull()
+    const input = document.querySelector<HTMLInputElement>('[data-testid="session-tags-input"]')!
     input.value = 'b'
     input.dispatchEvent(new Event('input'))
     await flushPromises()
-    // Labels already on other sessions are offered, so one spelling spreads.
-    expect(document.querySelector('[data-testid="session-labels-input-option-backend"]')).not.toBeNull()
+    // Tags already on other sessions are offered, so one spelling spreads.
+    expect(document.querySelector('[data-testid="session-tags-input-option-backend"]')).not.toBeNull()
     input.value = 'review'
     input.dispatchEvent(new Event('input'))
-    document.querySelector<HTMLButtonElement>('[data-testid="session-labels-save"]')!.click()
+    document.querySelector<HTMLButtonElement>('[data-testid="session-tags-save"]')!.click()
     await flushPromises()
 
-    expect(mocks.SetSessionLabels).toHaveBeenCalledWith('1', ['auto', 'review'])
-    expect(document.querySelector('[data-testid="session-labels-dialog"]')).toBeNull()
+    expect(mocks.SetSessionTags).toHaveBeenCalledWith('1', ['auto', 'review'])
+    expect(document.querySelector('[data-testid="session-tags-dialog"]')).toBeNull()
     wrapper.unmount()
   })
 

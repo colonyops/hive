@@ -248,7 +248,7 @@ export interface ItemSessionView {
     "slug": string;
     "repo": string;
     "state": string;
-    "labels": string[] | null;
+    "tags": string[] | null;
     "running": boolean;
     "createdAt": string;
 }

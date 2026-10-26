@@ -31,7 +31,7 @@ describe('useTerminalSessions', () => {
         repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
-        labels: [],
+        tags: [],
         createdAt: '2026-10-01T12:00:00Z',
       },
       {
@@ -42,7 +42,7 @@ describe('useTerminalSessions', () => {
         repoIdentity: 'hay-kot/hive',
         state: 'recycled',
         canvasOwner: '',
-        labels: [],
+        tags: [],
         createdAt: '2026-09-01T12:00:00Z',
       },
     ])
@@ -75,7 +75,7 @@ describe('useTerminalSessions', () => {
         repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
-        labels: [],
+        tags: [],
       },
     ])
     const { sessions, error, reload } = useTerminalSessions()
@@ -107,7 +107,7 @@ describe('useTerminalSessions', () => {
       repoIdentity: '',
       state: 'active',
       canvasOwner: '',
-      labels: [],
+      tags: [],
       createdAt: '',
     })
     expect(mocks.Scratch).toHaveBeenCalledTimes(1)
@@ -123,7 +123,7 @@ describe('useTerminalSessions', () => {
         repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
-        labels: [],
+        tags: [],
       },
     ])
     mocks.Scratch.mockRejectedValue(new Error('the terminal is unavailable'))
@@ -152,7 +152,7 @@ describe('sessionRepository', () => {
         repoIdentity: 'https://github.com/hay-kot/hive.git',
         state: 'active',
         canvasOwner: '',
-        labels: [],
+        tags: [],
       },
     ])
     const { reload, sessionRepository } = useTerminalSessions()
@@ -171,7 +171,7 @@ describe('sessionRepository', () => {
         repoIdentity: '',
         state: 'active',
         canvasOwner: '',
-        labels: [],
+        tags: [],
         createdAt: '',
       },
     ])
@@ -194,7 +194,7 @@ describe('groupTerminalSessions', () => {
       repoIdentity,
       state: 'active',
       canvasOwner: '',
-      labels: [],
+      tags: [],
       createdAt: '',
     }
   }
@@ -241,7 +241,7 @@ describe('terminalSessionGroups', () => {
       repoIdentity,
       state: 'active',
       canvasOwner: '',
-      labels: [],
+      tags: [],
       createdAt: '',
     }
   }

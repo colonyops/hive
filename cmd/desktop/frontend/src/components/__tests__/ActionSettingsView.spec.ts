@@ -97,16 +97,16 @@ describe('ActionSettingsView', () => {
     wrapper.unmount()
   })
 
-  it('saves launch labels one per line', async () => {
+  it('saves launch tags one per line', async () => {
     mocks.UpdateAction.mockResolvedValue(launch)
     const wrapper = mountSettings()
     await flushPromises()
     await wrapper.get('[data-testid="action-row-review"] button').trigger('click')
-    await setValue(editor<HTMLTextAreaElement>('action-launch-labels'), 'auto\n issue-{{ .Payload.num }}\n')
+    await setValue(editor<HTMLTextAreaElement>('action-launch-tags'), 'auto\n issue-{{ .Payload.num }}\n')
     editor<HTMLButtonElement>('action-save').click()
     await flushPromises()
     expect(mocks.UpdateAction.mock.calls[0][1].launch).toEqual(
-      expect.objectContaining({ labels: ['auto', 'issue-{{ .Payload.num }}'] }),
+      expect.objectContaining({ tags: ['auto', 'issue-{{ .Payload.num }}'] }),
     )
     wrapper.unmount()
   })

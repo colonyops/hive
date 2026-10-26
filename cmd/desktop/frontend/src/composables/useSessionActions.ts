@@ -6,7 +6,7 @@ import {
   RenameSession,
   SessionDetail,
   SessionRisk,
-  SetSessionLabels,
+  SetSessionTags,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type {
   SessionDetail as SessionDetailView,
@@ -62,7 +62,7 @@ export function riskDetails(risk: SessionRiskView): ConfirmationDetail[] {
 }
 
 /**
- * The session row's operations: read, rename, label, recycle, delete, and the list-wide
+ * The session row's operations: read, rename, tag, recycle, delete, and the list-wide
  * prune. Destructive ones are gated on a risk pre-flight and run as background
  * jobs, so what they report is that the job started — `jobs:updated` is what
  * tells the list to re-read.
@@ -75,9 +75,9 @@ export function useSessionActions(options: SessionActionOptions = {}) {
   const renaming = ref<SessionRow | null>(null)
   const renameBusy = ref(false)
   const renameError = ref<string | null>(null)
-  const labelling = ref<SessionRow | null>(null)
-  const labelsBusy = ref(false)
-  const labelsError = ref<string | null>(null)
+  const tagging = ref<SessionRow | null>(null)
+  const tagsBusy = ref(false)
+  const tagsError = ref<string | null>(null)
 
   async function openDetail(session: SessionRow): Promise<void> {
     try {
@@ -121,31 +121,31 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     }
   }
 
-  function requestLabels(session: SessionRow): void {
-    labelling.value = session
-    labelsError.value = null
+  function requestTags(session: SessionRow): void {
+    tagging.value = session
+    tagsError.value = null
   }
 
-  function cancelLabels(): void {
-    if (labelsBusy.value) return
-    labelling.value = null
-    labelsError.value = null
+  function cancelTags(): void {
+    if (tagsBusy.value) return
+    tagging.value = null
+    tagsError.value = null
   }
 
-  // Like a rename, a refused label keeps the dialog open with hive's reason.
-  async function submitLabels(labels: string[]): Promise<void> {
-    const session = labelling.value
-    if (!session || labelsBusy.value) return
-    labelsBusy.value = true
-    labelsError.value = null
+  // Like a rename, a refused tag keeps the dialog open with hive's reason.
+  async function submitTags(tags: string[]): Promise<void> {
+    const session = tagging.value
+    if (!session || tagsBusy.value) return
+    tagsBusy.value = true
+    tagsError.value = null
     try {
-      await SetSessionLabels(session.id, labels)
-      labelling.value = null
+      await SetSessionTags(session.id, tags)
+      tagging.value = null
       options.onChanged?.()
     } catch (e) {
-      labelsError.value = message(e, 'Could not save those labels.')
+      tagsError.value = message(e, 'Could not save those tags.')
     } finally {
-      labelsBusy.value = false
+      tagsBusy.value = false
     }
   }
 
@@ -208,12 +208,12 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     requestRename,
     cancelRename,
     submitRename,
-    labelling,
-    labelsBusy,
-    labelsError,
-    requestLabels,
-    cancelLabels,
-    submitLabels,
+    tagging,
+    tagsBusy,
+    tagsError,
+    requestTags,
+    cancelTags,
+    submitTags,
     requestDelete,
     requestRecycle,
     requestPrune,

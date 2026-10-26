@@ -12,13 +12,13 @@ function row(id: string, name: string, repo = 'github.com/acme/site'): TerminalS
     repoIdentity: repo,
     state: 'active',
     canvasOwner: '',
-    labels: [],
+    tags: [],
     createdAt: '',
   }
 }
 
 const parser = row('1', 'parser')
-const docs = { ...row('2', 'docs'), labels: ['Auto'] }
+const docs = { ...row('2', 'docs'), tags: ['Auto'] }
 const api = row('3', 'api', 'github.com/acme/api')
 const scratch = row('s', 'scratch', '')
 
@@ -65,7 +65,7 @@ describe('useSessionTreeView', () => {
     expect(names(view.groups.value)).toEqual([['parser', 'docs']])
   })
 
-  it('narrows sessions by label, ignoring case', () => {
+  it('narrows sessions by tag, ignoring case', () => {
     const { view } = setup()
     view.query.value = 'auto'
     expect(names(view.groups.value)).toEqual([['docs']])

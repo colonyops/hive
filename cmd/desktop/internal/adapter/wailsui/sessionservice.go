@@ -135,9 +135,9 @@ func (s *SessionService) RenameSession(ctx context.Context, id, name string) (Se
 	return sessionSummaryOf(s.sessions.CanonicalSpace, renamed), nil
 }
 
-// SetSessionLabels replaces a session's labels and returns its new summary.
-func (s *SessionService) SetSessionLabels(ctx context.Context, id string, labels []string) (SessionSummary, error) {
-	saved, err := s.sessions.SetSessionLabels(ctx, id, labels)
+// SetSessionTags replaces a session's tags and returns its new summary.
+func (s *SessionService) SetSessionTags(ctx context.Context, id string, tags []string) (SessionSummary, error) {
+	saved, err := s.sessions.SetSessionTags(ctx, id, tags)
 	if err != nil {
 		return SessionSummary{}, err
 	}

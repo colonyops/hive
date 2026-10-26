@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   RenameSession: vi.fn(),
   SessionDetail: vi.fn(),
   SessionRisk: vi.fn(),
-  SetSessionLabels: vi.fn(),
+  SetSessionTags: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => mocks)
@@ -23,7 +23,7 @@ const session: SessionSummary = {
   repoIdentity: 'acme/site',
   state: 'active',
   canvasOwner: '',
-  labels: [],
+  tags: [],
   createdAt: '2026-10-01T12:00:00Z',
 }
 
@@ -178,31 +178,31 @@ describe('useSessionActions rename and read', () => {
   })
 })
 
-describe('useSessionActions labels', () => {
-  it('saves the labels and asks the host to re-read the list', async () => {
-    mocks.SetSessionLabels.mockResolvedValue({ ...session, labels: ['auto'] })
+describe('useSessionActions tags', () => {
+  it('saves the tags and asks the host to re-read the list', async () => {
+    mocks.SetSessionTags.mockResolvedValue({ ...session, tags: ['auto'] })
     const onChanged = vi.fn()
     const actions = useSessionActions({ onChanged })
 
-    actions.requestLabels(session)
-    expect(actions.labelling.value?.id).toBe('s1')
-    await actions.submitLabels(['auto'])
+    actions.requestTags(session)
+    expect(actions.tagging.value?.id).toBe('s1')
+    await actions.submitTags(['auto'])
 
-    expect(mocks.SetSessionLabels).toHaveBeenCalledWith('s1', ['auto'])
+    expect(mocks.SetSessionTags).toHaveBeenCalledWith('s1', ['auto'])
     expect(onChanged).toHaveBeenCalled()
-    expect(actions.labelling.value).toBeNull()
+    expect(actions.tagging.value).toBeNull()
   })
 
-  it('keeps the dialog open with the reason a label was refused', async () => {
-    mocks.SetSessionLabels.mockRejectedValue(new Error('label "a,b" cannot contain commas'))
+  it('keeps the dialog open with the reason a tag was refused', async () => {
+    mocks.SetSessionTags.mockRejectedValue(new Error('tag "a,b" cannot contain commas'))
     const onChanged = vi.fn()
     const actions = useSessionActions({ onChanged })
 
-    actions.requestLabels(session)
-    await actions.submitLabels(['a,b'])
+    actions.requestTags(session)
+    await actions.submitTags(['a,b'])
 
-    expect(actions.labelling.value).not.toBeNull()
-    expect(actions.labelsError.value).toContain('commas')
+    expect(actions.tagging.value).not.toBeNull()
+    expect(actions.tagsError.value).toContain('commas')
     expect(onChanged).not.toHaveBeenCalled()
   })
 })

@@ -84,7 +84,7 @@ type ItemSessionView struct {
 	Slug      string    `json:"slug"`
 	Repo      string    `json:"repo"`
 	State     string    `json:"state"`
-	Labels    []string  `json:"labels"`
+	Tags      []string  `json:"tags"`
 	Running   bool      `json:"running"`
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -384,7 +384,7 @@ func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]Ite
 			Slug:      summary.Slug,
 			Repo:      summary.Remote,
 			State:     string(summary.State),
-			Labels:    append([]string{}, summary.Labels...),
+			Tags:      append([]string{}, summary.Tags...),
 			CreatedAt: time.UnixMilli(link.CreatedAt),
 		})
 	}
@@ -759,28 +759,28 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 	return renamed, nil
 }
 
-// SetSessionLabels replaces a session's labels and returns the session.
-func (s *SessionsService) SetSessionLabels(ctx context.Context, id string, labels []string) (session.Session, error) {
-	if _, err := session.NormalizeLabels(labels); err != nil {
-		return session.Session{}, Wrap(err, KindInvalid, "session labels")
+// SetSessionTags replaces a session's tags and returns the session.
+func (s *SessionsService) SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error) {
+	if _, err := session.NormalizeTags(tags); err != nil {
+		return session.Session{}, Wrap(err, KindInvalid, "session tags")
 	}
-	return s.saveLabels(ctx, id, func(sessions *sessionsvc.Service) (session.Session, error) {
-		return sessions.SetSessionLabels(ctx, id, labels)
+	return s.saveTags(ctx, id, func(sessions *sessionsvc.Service) (session.Session, error) {
+		return sessions.SetSessionTags(ctx, id, tags)
 	})
 }
 
-// EditSessionLabels adds and then removes labels on a session, leaving its
-// other labels in place, and returns the session.
-func (s *SessionsService) EditSessionLabels(ctx context.Context, id string, add, remove []string) (session.Session, error) {
-	if _, err := session.NormalizeLabels(add); err != nil {
-		return session.Session{}, Wrap(err, KindInvalid, "session labels")
+// EditSessionTags adds and then removes tags on a session, leaving its
+// other tags in place, and returns the session.
+func (s *SessionsService) EditSessionTags(ctx context.Context, id string, add, remove []string) (session.Session, error) {
+	if _, err := session.NormalizeTags(add); err != nil {
+		return session.Session{}, Wrap(err, KindInvalid, "session tags")
 	}
-	return s.saveLabels(ctx, id, func(sessions *sessionsvc.Service) (session.Session, error) {
-		return sessions.EditSessionLabels(ctx, id, add, remove)
+	return s.saveTags(ctx, id, func(sessions *sessionsvc.Service) (session.Session, error) {
+		return sessions.EditSessionTags(ctx, id, add, remove)
 	})
 }
 
-func (s *SessionsService) saveLabels(ctx context.Context, id string, save func(*sessionsvc.Service) (session.Session, error)) (session.Session, error) {
+func (s *SessionsService) saveTags(ctx context.Context, id string, save func(*sessionsvc.Service) (session.Session, error)) (session.Session, error) {
 	if strings.TrimSpace(id) == "" {
 		return session.Session{}, Errorf(KindInvalid, "session id is required")
 	}
@@ -793,7 +793,7 @@ func (s *SessionsService) saveLabels(ctx context.Context, id string, save func(*
 	}
 	saved, err := save(sessions)
 	if err != nil {
-		return session.Session{}, Wrap(err, KindInternal, "updating labels on session %q", id)
+		return session.Session{}, Wrap(err, KindInternal, "updating tags on session %q", id)
 	}
 	return saved, nil
 }

@@ -10,21 +10,21 @@ import { seedRef } from '@hive/ui/lib/seedRef'
 const props = withDefaults(
   defineProps<{
     name: string
-    labels: readonly string[] | null
+    tags: readonly string[] | null
     suggestions?: string[]
     busy?: boolean
     error?: string | null
   }>(),
   { suggestions: () => [], busy: false, error: null },
 )
-const emit = defineEmits<{ close: []; save: [labels: string[]] }>()
+const emit = defineEmits<{ close: []; save: [tags: string[]] }>()
 
-const draft = seedRef<string[]>(() => [...(props.labels ?? [])])
+const draft = seedRef<string[]>(() => [...(props.tags ?? [])])
 const field = ref<{ flush: () => void; focus: () => void } | null>(null)
 
 function submit(): void {
   if (props.busy) return
-  // A typed label that was never committed with Enter is still meant. The
+  // A typed tag that was never committed with Enter is still meant. The
   // flush updates draft synchronously through v-model.
   field.value?.flush()
   emit('save', [...draft.value])
@@ -38,39 +38,39 @@ onMounted(async () => {
 
 <template>
   <BaseModal
-    title="Edit labels"
+    title="Edit tags"
     :icon="IconTag"
     :width="440"
     :busy="busy"
-    testid="session-labels-dialog"
+    testid="session-tags-dialog"
     @close="emit('close')"
   >
     <div class="flex flex-col gap-3 px-5 py-4">
-      <p class="truncate text-caption text-text-3" :title="name" data-testid="session-labels-session">{{ name }}</p>
+      <p class="truncate text-caption text-text-3" :title="name" data-testid="session-tags-session">{{ name }}</p>
       <FormField
         v-slot="{ id }"
-        label="Labels"
-        hint="Enter or a comma adds a label. Labels ignore case."
+        label="Tags"
+        hint="Enter or a comma adds a tag. Tags ignore case."
         :error="error"
-        testid="session-labels"
+        testid="session-tags"
       >
         <TokenInput
           :id="id"
           ref="field"
           v-model="draft"
           :suggestions="suggestions"
-          placeholder="Add label…"
-          testid="session-labels-input"
+          placeholder="Add tag…"
+          testid="session-tags-input"
           @keydown.meta.enter="submit"
         />
       </FormField>
     </div>
     <template #footer>
       <div class="flex-1" />
-      <BaseButton variant="secondary" :disabled="busy" data-testid="session-labels-cancel" @click="emit('close')"
+      <BaseButton variant="secondary" :disabled="busy" data-testid="session-tags-cancel" @click="emit('close')"
         >Cancel</BaseButton
       >
-      <BaseButton :busy="busy" data-testid="session-labels-save" @click="submit">Save</BaseButton>
+      <BaseButton :busy="busy" data-testid="session-tags-save" @click="submit">Save</BaseButton>
     </template>
   </BaseModal>
 </template>

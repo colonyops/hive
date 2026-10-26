@@ -97,7 +97,7 @@ func TestActionTypesRoundTripThroughTheYAMLWriterAndLoader(t *testing.T) {
 				launch.Agent = ""
 				launch.PostHook = ""
 				launch.PostHookTimeout = 0
-				launch.Labels = nil
+				launch.Tags = nil
 			}
 			require.NoErrorf(t, cfg.Validate(), "populated %q config must satisfy its own Validate", actionType)
 
@@ -146,12 +146,12 @@ func TestEditableFromActionFailsClosedOnAConfigTypeItDoesNotKnow(t *testing.T) {
 	assert.Contains(t, err.Error(), "mystery")
 }
 
-func TestLaunchLabelsRoundTripThroughTheWriterAndTheEditableCatalog(t *testing.T) {
+func TestLaunchTagsRoundTripThroughTheWriterAndTheEditableCatalog(t *testing.T) {
 	original := Action{
 		ID:     "spawn",
 		Label:  "Spawn",
 		Type:   "launch-session",
-		Config: &LaunchSessionConfig{PromptTemplate: "go", RepoTemplate: "acme/repo", Labels: []string{"auto", "pr-{{ .Payload.number }}"}},
+		Config: &LaunchSessionConfig{PromptTemplate: "go", RepoTemplate: "acme/repo", Tags: []string{"auto", "pr-{{ .Payload.number }}"}},
 	}
 
 	s := NewActionStore(filepath.Join(t.TempDir(), "actions.yml"))
@@ -166,7 +166,7 @@ func TestLaunchLabelsRoundTripThroughTheWriterAndTheEditableCatalog(t *testing.T
 
 	editable, err := editableFromAction(reloaded)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"auto", "pr-{{ .Payload.number }}"}, editable.Launch.Labels)
+	assert.Equal(t, []string{"auto", "pr-{{ .Payload.number }}"}, editable.Launch.Tags)
 	back, err := actionFromEditable(editable)
 	require.NoError(t, err)
 	assert.Equal(t, original.Config, back.Config)

@@ -59,7 +59,7 @@ type Session struct {
 	Remote        string            `json:"remote"`
 	State         State             `json:"state"`
 	CloneStrategy string            `json:"clone_strategy,omitempty"` // "full" (default) or "worktree"
-	Labels        []string          `json:"labels,omitempty"`
+	Tags          []string          `json:"tags,omitempty"`
 	Metadata      map[string]string `json:"metadata,omitempty"` // integration data (e.g., tmux session name)
 	CreatedAt     time.Time         `json:"created_at"`
 	UpdatedAt     time.Time         `json:"updated_at"`

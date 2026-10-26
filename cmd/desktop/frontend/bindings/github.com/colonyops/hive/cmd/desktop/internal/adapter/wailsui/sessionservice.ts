@@ -198,10 +198,10 @@ export function SessionStatuses(): $CancellablePromise<app$0.SessionStatusSnapsh
 }
 
 /**
- * SetSessionLabels replaces a session's labels and returns its new summary.
+ * SetSessionTags replaces a session's tags and returns its new summary.
  */
-export function SetSessionLabels(id: string, labels: string[] | null): $CancellablePromise<$models.SessionSummary> {
-    return $Call.ByID(1612728116, id, labels);
+export function SetSessionTags(id: string, tags: string[] | null): $CancellablePromise<$models.SessionSummary> {
+    return $Call.ByID(1745506058, id, tags);
 }
 
 /**

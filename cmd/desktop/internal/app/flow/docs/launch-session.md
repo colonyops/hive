@@ -19,16 +19,16 @@ launch is also offered from the item menu.
 - `sessionName` — the session's name, a Go template. The rendered text is
   turned into a valid session name. Omit it to derive one from the node id and
   the item key.
-- `labels` — labels for the new session, a list of Go templates. An entry that
-  renders blank is dropped. Labels let a later step find the session, such as
-  an agent that lists the sessions labeled `auto`.
+- `tags` — tags for the new session, a list of Go templates. An entry that
+  renders blank is dropped. Tags let a later step find the session, such as
+  an agent that lists the sessions taged `auto`.
 
 ```yaml
 - id: review-prs
   type: launch-session
   repo: "{{ .ItemRemote }}"
   sessionName: "review-{{ .Payload.num }}"
-  labels: [review, "pr-{{ .Payload.num }}"]
+  tags: [review, "pr-{{ .Payload.num }}"]
   prompt: |
     Review pull request #{{ .Payload.num }} in {{ .Payload.repo }}.
 
@@ -54,7 +54,7 @@ Fence outside content in the prompt with `{{ untrustedStart }}` and
 `launch-session` action docs describe. Hive does not fence anything for you.
 
 A prompt or repository that renders blank fails the launch rather than
-starting an empty session. A label longer than 40 characters, or one with a
+starting an empty session. A tag longer than 40 characters, or one with a
 comma, fails it too.
 
 ## One launch per item

@@ -84,11 +84,11 @@ These actions are provided by the tmux plugin and require tmux to be available.
 | `GroupSet`    | Set/clear the selected session's group     |
 | `GroupToggle` | Toggle between repo and group tree view    |
 
-### Labels
+### Tags
 
 | Action       | Description                                      |
 | ------------ | ------------------------------------------------ |
-| `LabelsEdit` | Edit the selected session's labels, comma separated |
+| `TagsEdit`   | Edit the selected session's tags, comma separated |
 
 ### Navigation
 

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
 import ActionInputsDialog from './ActionInputsDialog.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
-import SessionLabelsDialog from './SessionLabelsDialog.vue'
+import SessionTagsDialog from './SessionTagsDialog.vue'
 import DrivePane from './drive/DrivePane.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
 import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
@@ -97,20 +97,20 @@ const {
   renameError,
   cancelRename,
   submitRename,
-  labelling,
-  labelsBusy,
-  labelsError,
-  cancelLabels,
-  submitLabels,
+  tagging,
+  tagsBusy,
+  tagsError,
+  cancelTags,
+  submitTags,
 } = sessions
 
-// Every label already in use is offered, so one spelling spreads instead of
+// Every tag already in use is offered, so one spelling spreads instead of
 // near-duplicates.
 const { sessions: sessionRows } = useTerminalSessions()
-const knownLabels = computed(() => {
+const knownTags = computed(() => {
   const seen = new Map<string, string>()
   for (const row of sessionRows.value) {
-    for (const label of row.labels ?? []) if (!seen.has(label.toLowerCase())) seen.set(label.toLowerCase(), label)
+    for (const tag of row.tags ?? []) if (!seen.has(tag.toLowerCase())) seen.set(tag.toLowerCase(), tag)
   }
   return [...seen.values()].sort((a, b) => a.localeCompare(b))
 })
@@ -187,15 +187,15 @@ const knownLabels = computed(() => {
       @close="cancelRename"
       @save="submitRename"
     />
-    <SessionLabelsDialog
-      v-if="labelling"
-      :name="labelling.name"
-      :labels="labelling.labels"
-      :suggestions="knownLabels"
-      :busy="labelsBusy"
-      :error="labelsError"
-      @close="cancelLabels"
-      @save="submitLabels"
+    <SessionTagsDialog
+      v-if="tagging"
+      :name="tagging.name"
+      :tags="tagging.tags"
+      :suggestions="knownTags"
+      :busy="tagsBusy"
+      :error="tagsError"
+      @close="cancelTags"
+      @save="submitTags"
     />
     <ConfirmationHost :confirmation="confirmation" testid="session-confirmation" />
   </div>

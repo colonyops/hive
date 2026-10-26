@@ -1218,38 +1218,38 @@ func TestSetSessionGroup_TrimWhitespace(t *testing.T) {
 	assert.Equal(t, "backend", updated.Group())
 }
 
-func TestSetSessionLabels(t *testing.T) {
+func TestSetSessionTags(t *testing.T) {
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 	past := time.Now().Add(-1 * time.Hour)
-	require.NoError(t, store.Save(t.Context(), session.Session{ID: "test1", Name: "s", Labels: []string{"old"}, UpdatedAt: past}))
+	require.NoError(t, store.Save(t.Context(), session.Session{ID: "test1", Name: "s", Tags: []string{"old"}, UpdatedAt: past}))
 
-	got, err := svc.SetSessionLabels(t.Context(), "test1", []string{" auto ", "Auto", "backend"})
+	got, err := svc.SetSessionTags(t.Context(), "test1", []string{" auto ", "Auto", "backend"})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"auto", "backend"}, got.Labels)
+	assert.Equal(t, []string{"auto", "backend"}, got.Tags)
 
 	stored, err := store.Get(t.Context(), "test1")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"auto", "backend"}, stored.Labels)
+	assert.Equal(t, []string{"auto", "backend"}, stored.Tags)
 	assert.True(t, stored.UpdatedAt.After(past))
 
-	_, err = svc.SetSessionLabels(t.Context(), "test1", []string{"a,b"})
+	_, err = svc.SetSessionTags(t.Context(), "test1", []string{"a,b"})
 	require.Error(t, err)
 	stored, err = store.Get(t.Context(), "test1")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"auto", "backend"}, stored.Labels, "an invalid label saves nothing")
+	assert.Equal(t, []string{"auto", "backend"}, stored.Tags, "an invalid tag saves nothing")
 }
 
-func TestEditSessionLabels(t *testing.T) {
+func TestEditSessionTags(t *testing.T) {
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
-	require.NoError(t, store.Save(t.Context(), session.Session{ID: "test1", Name: "s", Labels: []string{"auto", "backend"}}))
+	require.NoError(t, store.Save(t.Context(), session.Session{ID: "test1", Name: "s", Tags: []string{"auto", "backend"}}))
 
-	got, err := svc.EditSessionLabels(t.Context(), "test1", []string{"orchestrated"}, []string{"AUTO"})
+	got, err := svc.EditSessionTags(t.Context(), "test1", []string{"orchestrated"}, []string{"AUTO"})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"backend", "orchestrated"}, got.Labels)
+	assert.Equal(t, []string{"backend", "orchestrated"}, got.Tags)
 
-	_, err = svc.EditSessionLabels(t.Context(), "missing", []string{"x"}, nil)
+	_, err = svc.EditSessionTags(t.Context(), "missing", []string{"x"}, nil)
 	assert.Error(t, err)
 }
 

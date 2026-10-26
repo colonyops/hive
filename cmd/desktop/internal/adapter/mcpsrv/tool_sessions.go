@@ -11,8 +11,8 @@ import (
 )
 
 type listSessionsInput struct {
-	Labels []string `json:"labels,omitempty" jsonschema:"Only sessions carrying every one of these labels. Labels compare case-insensitively."`
-	State  string   `json:"state,omitempty"  jsonschema:"Only sessions in this state: active, recycled or corrupted."`
+	Tags  []string `json:"tags,omitempty"  jsonschema:"Only sessions carrying every one of these tags. Tags compare case-insensitively."`
+	State string   `json:"state,omitempty" jsonschema:"Only sessions in this state: active, recycled or corrupted."`
 }
 
 type sessionView struct {
@@ -21,7 +21,7 @@ type sessionView struct {
 	Slug      string    `json:"slug"`
 	Repo      string    `json:"repo"`
 	State     string    `json:"state"`
-	Labels    []string  `json:"labels"`
+	Tags      []string  `json:"tags"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -32,11 +32,11 @@ type listSessionsResult struct {
 func sessionViewOf(s session.Session) sessionView {
 	return sessionView{
 		ID: s.ID, Name: s.Name, Slug: s.Slug, Repo: s.Remote, State: string(s.State),
-		Labels: append([]string{}, s.Labels...), CreatedAt: s.CreatedAt,
+		Tags: append([]string{}, s.Tags...), CreatedAt: s.CreatedAt,
 	}
 }
 
-// ListSessions reports hive sessions, newest first, filtered by labels and
+// ListSessions reports hive sessions, newest first, filtered by tags and
 // state.
 func (ctrl *Controller) ListSessions(ctx context.Context, _ *mcp.CallToolRequest, in listSessionsInput) (*mcp.CallToolResult, any, error) {
 	switch session.State(in.State) {
@@ -53,7 +53,7 @@ func (ctrl *Controller) ListSessions(ctx context.Context, _ *mcp.CallToolRequest
 		if in.State != "" && string(s.State) != in.State {
 			continue
 		}
-		if !s.HasAllLabels(in.Labels) {
+		if !s.HasAllTags(in.Tags) {
 			continue
 		}
 		views = append(views, sessionViewOf(s))
@@ -61,25 +61,25 @@ func (ctrl *Controller) ListSessions(ctx context.Context, _ *mcp.CallToolRequest
 	return nil, listSessionsResult{Sessions: views}, nil
 }
 
-type editSessionLabelsInput struct {
+type editSessionTagsInput struct {
 	SessionID string   `json:"sessionId"        jsonschema:"Session id, from list_sessions."`
-	Add       []string `json:"add,omitempty"    jsonschema:"Labels to add. A label the session already carries is kept as it is."`
-	Remove    []string `json:"remove,omitempty" jsonschema:"Labels to remove, after the adds. A label the session does not carry is ignored."`
+	Add       []string `json:"add,omitempty"    jsonschema:"Tags to add. A tag the session already carries is kept as it is."`
+	Remove    []string `json:"remove,omitempty" jsonschema:"Tags to remove, after the adds. A tag the session does not carry is ignored."`
 }
 
-type editSessionLabelsResult struct {
+type editSessionTagsResult struct {
 	Session sessionView `json:"session"`
 }
 
-// EditSessionLabels adds and removes labels on one session. It changes the
+// EditSessionTags adds and removes tags on one session. It changes the
 // session record only; nothing is spawned or attached.
-func (ctrl *Controller) EditSessionLabels(ctx context.Context, _ *mcp.CallToolRequest, in editSessionLabelsInput) (*mcp.CallToolResult, any, error) {
+func (ctrl *Controller) EditSessionTags(ctx context.Context, _ *mcp.CallToolRequest, in editSessionTagsInput) (*mcp.CallToolResult, any, error) {
 	if len(in.Add) == 0 && len(in.Remove) == 0 {
 		return nil, nil, ctrl.toolError(app.Errorf(app.KindInvalid, "provide add or remove"))
 	}
-	saved, err := ctrl.core.Sessions.EditSessionLabels(ctx, in.SessionID, in.Add, in.Remove)
+	saved, err := ctrl.core.Sessions.EditSessionTags(ctx, in.SessionID, in.Add, in.Remove)
 	if err != nil {
 		return nil, nil, ctrl.toolError(err)
 	}
-	return nil, editSessionLabelsResult{Session: sessionViewOf(saved)}, nil
+	return nil, editSessionTagsResult{Session: sessionViewOf(saved)}, nil
 }

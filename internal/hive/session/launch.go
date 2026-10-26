@@ -22,7 +22,7 @@ type LaunchRequest struct {
 	Agent           string
 	Repo            string
 	CollisionSuffix string
-	Labels          []string
+	Tags            []string
 	// Env holds KEY=VALUE pairs for the session's tmux environment.
 	Env []string
 }
@@ -69,7 +69,7 @@ func (req LaunchRequest) createOptions(repo LaunchRepository, progress io.Writer
 		AgentKey:        req.Agent,
 		Background:      true,
 		CollisionSuffix: req.CollisionSuffix,
-		Labels:          req.Labels,
+		Tags:            req.Tags,
 		Env:             req.Env,
 		Progress:        progress,
 	}

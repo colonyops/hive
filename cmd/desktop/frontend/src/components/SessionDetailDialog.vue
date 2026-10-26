@@ -28,7 +28,7 @@ const rows = computed(() => {
     list.push({ label: 'Worktree branch', value: props.detail.worktreeBranch, mono: true, testid: 'worktree-branch' })
   }
   list.push(
-    { label: 'Labels', value: props.detail.labels?.length ? props.detail.labels.join(', ') : '—', testid: 'labels' },
+    { label: 'Tags', value: props.detail.tags?.length ? props.detail.tags.join(', ') : '—', testid: 'tags' },
     { label: 'Created', value: timestamp(props.detail.createdAt), testid: 'created' },
     { label: 'Updated', value: timestamp(props.detail.updatedAt), testid: 'updated' },
     { label: 'Id', value: props.detail.id, mono: true, testid: 'id' },

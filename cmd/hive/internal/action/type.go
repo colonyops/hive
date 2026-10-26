@@ -28,7 +28,7 @@ package action
 //	HiveDoctor
 //	GroupSet
 //	GroupToggle
-//	LabelsEdit
+//	TagsEdit
 //	TodoPanel
 //	TasksRefresh
 //	TasksFilter

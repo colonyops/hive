@@ -132,12 +132,12 @@ function set<K extends keyof Config>(key: K, value: Config[K]) {
     />
 
     <GlobListField
-      label="Labels"
-      :model-value="config.labels ?? []"
+      label="Tags"
+      :model-value="config.tags ?? []"
       placeholder="auto&#10;pr-{{ .Payload.num }}"
-      hint="One label per line, each a Go template. A label that renders blank is dropped."
-      testid="launch-session-node-editor-labels"
-      @update:model-value="set('labels', $event.length ? $event : undefined)"
+      hint="One tag per line, each a Go template. A tag that renders blank is dropped."
+      testid="launch-session-node-editor-tags"
+      @update:model-value="set('tags', $event.length ? $event : undefined)"
     />
 
     <TextareaField

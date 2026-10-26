@@ -46,7 +46,7 @@ type EditableLaunchConfig struct {
 	Agent           string   `json:"agent,omitempty"`
 	RepoTemplate    string   `json:"repoTemplate,omitempty"`
 	Workspace       string   `json:"workspace,omitempty"`
-	Labels          []string `json:"labels,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
 	PostHook        string   `json:"postHook,omitempty"`
 	PostHookTimeout string   `json:"postHookTimeout,omitempty"`
 }
@@ -75,7 +75,7 @@ func editableFromAction(a Action) (EditableAction, error) {
 		if c.PostHookTimeout != 0 {
 			postHookTimeout = c.PostHookTimeout.String()
 		}
-		out.Launch = &EditableLaunchConfig{PromptTemplate: c.PromptTemplate, Agent: c.Agent, RepoTemplate: c.RepoTemplate, Workspace: c.Workspace, Labels: slices.Clone(c.Labels), PostHook: c.PostHook, PostHookTimeout: postHookTimeout}
+		out.Launch = &EditableLaunchConfig{PromptTemplate: c.PromptTemplate, Agent: c.Agent, RepoTemplate: c.RepoTemplate, Workspace: c.Workspace, Tags: slices.Clone(c.Tags), PostHook: c.PostHook, PostHookTimeout: postHookTimeout}
 	case *ShellConfig:
 		timeout := ""
 		if c.Timeout != 0 {
@@ -127,7 +127,7 @@ func actionFromEditable(e EditableAction) (Action, error) {
 			}
 			postHookTimeout = d
 		}
-		a.Config = &LaunchSessionConfig{PromptTemplate: e.Launch.PromptTemplate, Agent: e.Launch.Agent, RepoTemplate: e.Launch.RepoTemplate, Workspace: e.Launch.Workspace, Labels: slices.Clone(e.Launch.Labels), PostHook: e.Launch.PostHook, PostHookTimeout: postHookTimeout}
+		a.Config = &LaunchSessionConfig{PromptTemplate: e.Launch.PromptTemplate, Agent: e.Launch.Agent, RepoTemplate: e.Launch.RepoTemplate, Workspace: e.Launch.Workspace, Tags: slices.Clone(e.Launch.Tags), PostHook: e.Launch.PostHook, PostHookTimeout: postHookTimeout}
 	case "shell":
 		if e.Shell == nil {
 			return Action{}, fmt.Errorf("action %q: shell config is required for shell", e.ID)

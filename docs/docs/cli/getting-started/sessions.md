@@ -57,15 +57,15 @@ A session has a display name and a slug. You type the name; hive derives the slu
 - Two active sessions cannot share a slug, so `Fix Bug` and `fix-bug` count as the same name. `hive new`, `hive batch`, the TUI, and a rename all reject a duplicate.
 - A name that hive generates, from a [source](../configuration/sources.md) template or a Hive Desktop launch node, is turned into a slug and cut to 60 characters at a word boundary. When its slug is already taken, hive adds an id from where the name came from (the item id for a source, the command id for a launch node) instead of failing.
 
-### Labels
+### Tags
 
-Labels are short tags you attach to a session, such as `auto` or `backend`. Scripts and agents can use them to find the sessions they should act on.
+Tags are short words you attach to a session, such as `auto` or `backend`. Scripts and agents can use them to find the sessions they should act on.
 
-- A label is 1 to 40 characters and cannot contain a comma. Labels compare without case, so `Auto` and `auto` are the same label, and the first spelling is kept.
-- Add labels when you create a session with `hive new --label auto --label backend`, or from a [source](../configuration/sources.md) with `templates.labels`.
-- Change them later with `hive session update <id> --add-label <label>`, `--remove-label <label>`, or `--clear-labels`. The flags repeat. `--clear-labels` applies first, then the additions, then the removals.
-- List the sessions that carry every given label with `hive ls --label auto`. `--json` output includes a `labels` array.
-- In the TUI, press <kbd>L</kbd> to edit the selected session's labels as a comma-separated list. The tree shows labels at the end of each row and in the preview header, and <kbd>/</kbd> matches them.
+- A tag is 1 to 40 characters and cannot contain a comma. Tags compare without case, so `Auto` and `auto` are the same tag, and the first spelling is kept.
+- Add tags when you create a session with `hive new --tags auto --tags backend`, or from a [source](../configuration/sources.md) with `templates.tags`.
+- Change them later with `hive session update <id> --add-tag <tag>`, `--remove-tag <tag>`, or `--clear-tags`. The flags repeat. `--clear-tags` applies first, then the additions, then the removals.
+- List the sessions that carry every given tag with `hive ls --tags auto`. `--json` output includes a `tags` array.
+- In the TUI, press <kbd>ctrl+t</kbd> to edit the selected session's tags as a comma-separated list. The tree shows tags at the end of each row and in the preview header, and <kbd>/</kbd> matches them.
 
 [Hive Desktop](../../desktop/code/terminal-mode.md) shows the same sessions in its Code area when both use the same Hive data root, which is the default.
 

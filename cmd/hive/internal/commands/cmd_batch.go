@@ -64,7 +64,7 @@ Input JSON schema:
         "remote": "optional-url",
         "source": "optional-path",
         "agent": "optional-agent-key",
-        "labels": ["optional", "labels"]
+        "tags": ["optional", "tags"]
       }
     ]
   }
@@ -76,7 +76,7 @@ Fields:
   remote     - Optional. Git remote URL (auto-detected from current dir if empty).
   source     - Optional. Directory to copy files from (per copy rules in config).
   agent      - Optional. Agent profile key from agents config.
-  labels     - Optional. Session labels (filterable via hive ls --label).
+  tags       - Optional. Session tags (filterable via hive ls --tags).
 
 Config example (in ~/.config/hive/config.yaml):
   rules:
@@ -212,7 +212,7 @@ func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) Batch
 		UseBatchSpawn: true,
 		CloneStrategy: sess.CloneStrategy,
 		AgentKey:      cmd.agentForSession(sess),
-		Labels:        sess.Labels,
+		Tags:          sess.Tags,
 	}
 
 	created, err := cmd.app.Sessions().CreateSession(ctx, opts)
@@ -304,7 +304,7 @@ type BatchSession struct {
 	Source        string   `json:"source,omitempty"`
 	CloneStrategy string   `json:"clone_strategy,omitempty"`
 	Agent         string   `json:"agent,omitempty"`
-	Labels        []string `json:"labels,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
 }
 
 // BatchResult is the output for a single session creation attempt.

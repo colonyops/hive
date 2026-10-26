@@ -97,9 +97,9 @@ Hive does not fence anything for you. Every value goes into the prompt exactly a
 
 Fence only text an agent reads, such as `prompt_template`. In a shell command a fence does nothing; quote values with `shq` instead. The starter actions and the New Session draft built from an item already fence the item's text.
 
-## Label the session
+## Tag the session
 
-A repository `launch-session` action can put labels on the session it starts. Labels let a later step find the session, for example an agent that lists the sessions labeled `auto` and works on them:
+A repository `launch-session` action can put tags on the session it starts. Tags let a later step find the session, for example an agent that lists the sessions taged `auto` and works on them:
 
 ```yaml
 - id: implement-issue
@@ -108,10 +108,10 @@ A repository `launch-session` action can put labels on the session it starts. La
   applies_to: [issue]
   repo_template: "{{ .ItemRemote }}"
   prompt_template: "Work on the issue at {{ .Payload.url }}"
-  labels: [auto, "issue-{{ .Payload.num }}"]
+  tags: [auto, "issue-{{ .Payload.num }}"]
 ```
 
-Each entry is a template, rendered over the same item fields as the prompt. An entry that renders blank is dropped, and labels that differ only in case count as one. A label can have at most 40 characters and no commas; a rendered label that breaks either rule fails the launch before Hive creates a session. A `workspace` action cannot set labels, because a chat is not a hive session.
+Each entry is a template, rendered over the same item fields as the prompt. An entry that renders blank is dropped, and tags that differ only in case count as one. A tag can have at most 40 characters and no commas; a rendered tag that breaks either rule fails the launch before Hive creates a session. A `workspace` action cannot set tags, because a chat is not a hive session.
 
 ## Run a command after the session starts
 

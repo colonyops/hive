@@ -67,7 +67,7 @@ describe('useTerminalPinnedChats', () => {
         repoIdentity: '',
         state: 'active',
         canvasOwner: '',
-        labels: [],
+        tags: [],
         createdAt: '',
       },
     ])

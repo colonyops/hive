@@ -93,7 +93,7 @@ function setLaunchTarget(value: string): void {
     action.value.launch.agent = ''
     action.value.launch.postHook = ''
     action.value.launch.postHookTimeout = ''
-    action.value.launch.labels = undefined
+    action.value.launch.tags = undefined
   }
 }
 
@@ -241,12 +241,12 @@ onMounted(async () => {
         <template v-if="launchTarget !== 'workspace'">
           <TextField v-model="action.launch.agent" label="Agent (optional)" testid="action-launch-agent" />
           <GlobListField
-            label="Labels"
-            :model-value="action.launch.labels ?? []"
+            label="Tags"
+            :model-value="action.launch.tags ?? []"
             placeholder="auto&#10;issue-{{ .Payload.num }}"
-            hint="One label per line, each a Go template. A label that renders blank is dropped."
-            testid="action-launch-labels"
-            @update:model-value="action.launch.labels = $event.length ? $event : undefined"
+            hint="One tag per line, each a Go template. A tag that renders blank is dropped."
+            testid="action-launch-tags"
+            @update:model-value="action.launch.tags = $event.length ? $event : undefined"
           />
           <TextareaField
             :model-value="action.launch.postHook ?? ''"

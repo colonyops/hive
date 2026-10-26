@@ -179,9 +179,9 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
-	"LabelsEdit": {
-		Action: action.TypeLabelsEdit,
-		Help:   "edit session labels",
+	"TagsEdit": {
+		Action: action.TypeTagsEdit,
+		Help:   "edit session tags",
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
@@ -519,11 +519,11 @@ type SourcesConfig struct {
 }
 
 // SourceTemplateConfig holds the templates rendering a selected item
-// into session Name/Prompt/Labels.
+// into session Name/Prompt/Tags.
 type SourceTemplateConfig struct {
 	Name   string   `json:"name"   yaml:"name"`
 	Prompt string   `json:"prompt" yaml:"prompt"`
-	Labels []string `json:"labels" yaml:"labels"`
+	Tags   []string `json:"tags"   yaml:"tags"`
 }
 
 // BuiltinSourceConfig configures one built-in source (issues, prs).
@@ -620,14 +620,14 @@ func DefaultConfig() Config {
 					// an empty detail. Rendered prompts are trimmed, so an
 					// empty detail leaves no dangling blank lines.
 					Prompt: "Work on {{ .Title }}\n\n{{ .Fields.url }}\n\n{{ .Detail }}",
-					Labels: []string{"github", "issue-{{ .Fields.number }}"},
+					Tags:   []string{"github", "issue-{{ .Fields.number }}"},
 				},
 			},
 			PRs: BuiltinSourceConfig{
 				Templates: SourceTemplateConfig{
 					Name:   "gh-pr-{{ .Fields.number }}-{{ .Title }}",
 					Prompt: "Review pull request {{ .Title }}\n\n{{ .Fields.url }}",
-					Labels: []string{"github", "pr-{{ .Fields.number }}"},
+					Tags:   []string{"github", "pr-{{ .Fields.number }}"},
 				},
 			},
 		},

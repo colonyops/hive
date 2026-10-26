@@ -23,9 +23,9 @@ type LaunchSessionConfig struct {
 	// Workspace names an agent workspace by its directory under the configured
 	// workspace root.
 	Workspace string `yaml:"workspace,omitempty"`
-	// Labels are templates, each rendered into one label on the new
-	// session. A label that renders blank is dropped.
-	Labels []string `yaml:"labels,omitempty"`
+	// Tags are templates, each rendered into one tag on the new
+	// session. A tag that renders blank is dropped.
+	Tags []string `yaml:"tags,omitempty"`
 	// PostHook is a shell command rendered over the same data as the templates
 	// above plus `.Session`, then run in the new checkout.
 	PostHook string `yaml:"post_hook,omitempty"`
@@ -48,10 +48,10 @@ func (c *LaunchSessionConfig) Validate() error {
 	if workspace != "" && strings.TrimSpace(c.PostHook) != "" {
 		return fmt.Errorf("launch-session: post_hook cannot be set with workspace")
 	}
-	if workspace != "" && len(c.Labels) > 0 {
-		return fmt.Errorf("launch-session: labels cannot be set with workspace; a chat is not a hive session")
+	if workspace != "" && len(c.Tags) > 0 {
+		return fmt.Errorf("launch-session: tags cannot be set with workspace; a chat is not a hive session")
 	}
-	if err := ValidateLabelTemplates(c.Labels); err != nil {
+	if err := ValidateTagTemplates(c.Tags); err != nil {
 		return fmt.Errorf("launch-session: %w", err)
 	}
 	if c.PostHookTimeout < 0 {
@@ -63,15 +63,15 @@ func (c *LaunchSessionConfig) Validate() error {
 	return nil
 }
 
-// ValidateLabelTemplates checks each label template's syntax. What a template
+// ValidateTagTemplates checks each tag template's syntax. What a template
 // renders to is checked at launch, when the data exists.
-func ValidateLabelTemplates(labels []string) error {
-	for i, label := range labels {
-		if strings.TrimSpace(label) == "" {
-			return fmt.Errorf("labels[%d] is blank", i)
+func ValidateTagTemplates(tags []string) error {
+	for i, tag := range tags {
+		if strings.TrimSpace(tag) == "" {
+			return fmt.Errorf("tags[%d] is blank", i)
 		}
-		if err := tmpl.NewValidation().ValidateSyntax(label); err != nil {
-			return fmt.Errorf("labels[%d]: %w", i, err)
+		if err := tmpl.NewValidation().ValidateSyntax(tag); err != nil {
+			return fmt.Errorf("tags[%d]: %w", i, err)
 		}
 	}
 	return nil

@@ -158,12 +158,12 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		}
 		return m.openGroupInput(sess)
 	}
-	if action.Type == act.TypeLabelsEdit {
+	if action.Type == act.TypeTagsEdit {
 		sess := m.sessionsView.SelectedSession()
 		if sess == nil {
 			return m, nil
 		}
-		return m.openLabelsInput(sess)
+		return m.openTagsInput(sess)
 	}
 	if action.Type == act.TypeGroupToggle {
 		cmd := m.sessionsView.ToggleGroupBy()
@@ -1177,7 +1177,7 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 		UseBatchSpawn:   true,
 		Background:      true,
 		CollisionSuffix: session.Slugify(result.Item.ID),
-		Labels:          rendered.Labels,
+		Tags:            rendered.Tags,
 	})
 
 	output, done, cancel := exec.Execute(ctx)

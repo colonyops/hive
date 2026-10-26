@@ -81,11 +81,11 @@ export function attachedSessionCommands(context: TerminalModeContext, attached: 
       run: () => sessions.requestRename(attached),
     },
     hive && {
-      id: 'terminal:session:labels',
-      title: 'Edit labels…',
-      keywords: ['session', 'label', 'tag'],
+      id: 'terminal:session:tags',
+      title: 'Edit tags…',
+      keywords: ['session', 'tag', 'tag'],
       icon: IconTag,
-      run: () => sessions.requestLabels(attached),
+      run: () => sessions.requestTags(attached),
     },
     hive &&
       live && {

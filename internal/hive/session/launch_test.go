@@ -109,7 +109,7 @@ func TestLaunchRequestMapsOntoCreateOptions(t *testing.T) {
 	progress := &progressLog{}
 	req := LaunchRequest{
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://github.com/colonyops/hive.git",
-		CollisionSuffix: "7", Labels: []string{"auto"}, Env: []string{"A=1"},
+		CollisionSuffix: "7", Tags: []string{"auto"}, Env: []string{"A=1"},
 	}
 
 	got := req.createOptions(LaunchRepository{Remote: "git@github.com:colonyops/hive.git", Source: "/work/hive"}, progress)
@@ -122,7 +122,7 @@ func TestLaunchRequestMapsOntoCreateOptions(t *testing.T) {
 		AgentKey:        "claude",
 		Background:      true,
 		CollisionSuffix: "7",
-		Labels:          []string{"auto"},
+		Tags:            []string{"auto"},
 		Env:             []string{"A=1"},
 		Progress:        progress,
 	}, got)
@@ -139,12 +139,12 @@ func TestCreateFromRequestPrefersAnEquivalentConfiguredCheckout(t *testing.T) {
 
 	sess, err := svc.CreateFromRequest(t.Context(), LaunchRequest{
 		Name: "review-pr-1", Prompt: "Review this", Repo: "https://github.com/colonyops/hive.git",
-		Labels: []string{"auto", "", " Auto ", "backend"},
+		Tags: []string{"auto", "", " Auto ", "backend"},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "git@github.com:colonyops/hive.git", sess.Remote, "the configured checkout's spelling wins")
 	assert.Equal(t, "review-pr-1", sess.Name)
-	assert.Equal(t, []string{"auto", "backend"}, sess.Labels, "labels are trimmed and deduplicated ignoring case")
+	assert.Equal(t, []string{"auto", "backend"}, sess.Tags, "tags are trimmed and deduplicated ignoring case")
 }
 
 func TestCreateFromRequestKeepsTheRequestedSpellingWhenAProtocolIsSet(t *testing.T) {

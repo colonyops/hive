@@ -81,6 +81,6 @@ func sourceTemplateConfig(cfg config.SourceTemplateConfig) sources.TemplateConfi
 	return sources.TemplateConfig{
 		Name:   cfg.Name,
 		Prompt: cfg.Prompt,
-		Labels: cfg.Labels,
+		Tags:   cfg.Tags,
 	}
 }

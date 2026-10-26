@@ -13,7 +13,7 @@ const running = {
   repoIdentity: 'r',
   state: 'active',
   canvasOwner: '',
-  labels: [],
+  tags: [],
   createdAt: '',
 }
 const idle = {
@@ -24,7 +24,7 @@ const idle = {
   repoIdentity: 'r',
   state: 'active',
   canvasOwner: '',
-  labels: [],
+  tags: [],
   createdAt: '',
 }
 

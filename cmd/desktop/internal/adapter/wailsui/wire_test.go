@@ -46,14 +46,14 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 		v    any
 		want []string
 	}{
-		{"SessionSummary", SessionSummary{}, sorted("id", "name", "slug", "repo", "repoIdentity", "state", "canvasOwner", "labels", "createdAt")},
-		{"SessionDetail", SessionDetail{}, sorted("id", "name", "slug", "repo", "state", "path", "cloneStrategy", "worktreeBranch", "labels", "createdAt", "updatedAt")},
+		{"SessionSummary", SessionSummary{}, sorted("id", "name", "slug", "repo", "repoIdentity", "state", "canvasOwner", "tags", "createdAt")},
+		{"SessionDetail", SessionDetail{}, sorted("id", "name", "slug", "repo", "state", "path", "cloneStrategy", "worktreeBranch", "tags", "createdAt", "updatedAt")},
 		{"SessionRisk", app.SessionRisk{}, sorted("uncommittedChanges", "unpushedCommits", "recycleDeletes")},
 		{"SessionGitStatus", SessionGitStatus{}, sorted("path", "branch", "dirty", "unpushed", "additions", "deletions", "host", "owner", "repo", "resolved", "error")},
 		{"SessionWindowStatus", app.SessionWindowStatus{}, sorted("windowId", "status", "tool")},
 		{"SessionStatus", app.SessionStatus{}, sorted("sessionId", "running", "windows")},
 		{"SessionStatusSnapshot", app.SessionStatusSnapshot{}, sorted("items", "pollIntervalMs")},
-		{"ItemSessionView", app.ItemSessionView{}, sorted("id", "name", "slug", "repo", "state", "labels", "running", "createdAt")},
+		{"ItemSessionView", app.ItemSessionView{}, sorted("id", "name", "slug", "repo", "state", "tags", "running", "createdAt")},
 		{"ItemChatView", app.ItemChatView{}, sorted("id", "workspace", "name", "createdAt")},
 		{"SessionPullRequestKey", app.SessionPullRequestKey{}, sorted("host", "owner", "repo", "branch")},
 		{"SessionPullRequest", app.SessionPullRequest{}, sorted("status", "number", "title", "state", "isDraft", "url", "reviewDecision", "checks", "additions", "deletions", "cached")},
@@ -86,17 +86,17 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 // so a swapped field breaks attach with every key still present.
 func TestSessionSummaryOfMapsEachField(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 1, 12, 0, 0, 0, time.UTC)
-	s := session.Session{ID: "s1", Name: "review 81", Slug: "review-81", Remote: "git@github.com:acme/site.git", Path: "/repos/site", State: session.StateRecycled, Labels: []string{"auto"}, CreatedAt: createdAt}
+	s := session.Session{ID: "s1", Name: "review 81", Slug: "review-81", Remote: "git@github.com:acme/site.git", Path: "/repos/site", State: session.StateRecycled, Tags: []string{"auto"}, CreatedAt: createdAt}
 
 	assert.Equal(t, SessionSummary{
 		ID: "s1", Name: "review 81", Slug: "review-81", Repo: "git@github.com:acme/site.git", RepoIdentity: "github.com/acme/site", State: "recycled",
-		CanvasOwner: "acme/site", Labels: []string{"auto"}, CreatedAt: createdAt,
+		CanvasOwner: "acme/site", Tags: []string{"auto"}, CreatedAt: createdAt,
 	}, sessionSummaryOf(sameSpace, s))
 }
 
-func TestSessionWireLabelsAreNeverNull(t *testing.T) {
-	assert.Equal(t, []string{}, sessionSummaryOf(sameSpace, session.Session{}).Labels)
-	assert.Equal(t, []string{}, sessionDetailOf(session.Session{}).Labels)
+func TestSessionWireTagsAreNeverNull(t *testing.T) {
+	assert.Equal(t, []string{}, sessionSummaryOf(sameSpace, session.Session{}).Tags)
+	assert.Equal(t, []string{}, sessionDetailOf(session.Session{}).Tags)
 }
 
 func TestSessionSummaryOfHasNoCanvasOwnerForARemoteWithNoRepository(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 type TemplateConfig struct {
 	Name   string
 	Prompt string
-	Labels []string
+	Tags   []string
 }
 
 // RenderedSession is the result of rendering a TemplateConfig against a
@@ -21,7 +21,7 @@ type TemplateConfig struct {
 type RenderedSession struct {
 	Name   string
 	Prompt string
-	Labels []string
+	Tags   []string
 }
 
 // templateData is the value exposed to source session templates. Fields
@@ -35,7 +35,7 @@ type templateData struct {
 	Fields   map[string]any
 }
 
-// RenderSessionTemplates renders cfg's Name, Prompt, and Labels templates
+// RenderSessionTemplates renders cfg's Name, Prompt, and Tags templates
 // against item and detail, returning the rendered session fields. Each
 // template is rendered independently so an error identifies which template
 // failed.
@@ -64,19 +64,19 @@ func RenderSessionTemplates(cfg TemplateConfig, item Item, detail Detail) (Rende
 	// {{ .Detail }} that rendered empty) don't leave dangling blank lines.
 	prompt = strings.TrimSpace(prompt)
 
-	labels := make([]string, 0, len(cfg.Labels))
-	for i, labelTmpl := range cfg.Labels {
-		label, err := renderer.Render(labelTmpl, data)
+	tags := make([]string, 0, len(cfg.Tags))
+	for i, tagTmpl := range cfg.Tags {
+		tag, err := renderer.Render(tagTmpl, data)
 		if err != nil {
-			return RenderedSession{}, fmt.Errorf("labels[%d] template: %w", i, err)
+			return RenderedSession{}, fmt.Errorf("tags[%d] template: %w", i, err)
 		}
-		labels = append(labels, label)
+		tags = append(tags, tag)
 	}
 
 	return RenderedSession{
 		Name:   name,
 		Prompt: prompt,
-		Labels: labels,
+		Tags:   tags,
 	}, nil
 }
 

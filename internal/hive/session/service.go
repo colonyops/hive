@@ -66,9 +66,9 @@ type CreateOptions struct {
 	// When non-empty, the spawn templates use that profile's command/flags instead
 	// of the process-wide default. Must match a key in config.Agents.Profiles.
 	AgentKey string
-	// Labels are normalized with session.NormalizeLabels; an invalid label
+	// Tags are normalized with session.NormalizeTags; an invalid tag
 	// fails the create.
-	Labels []string
+	Tags []string
 	// Env holds KEY=VALUE pairs for the session's tmux environment. Only a
 	// windows: spawn applies them; spawn: commands run the user's own scripts.
 	Env []string
@@ -122,7 +122,7 @@ type Service struct {
 	out        *switchWriter
 	err        *switchWriter
 	bareMu     sync.Map // map[remote → *sync.Mutex]
-	labelsMu   sync.Mutex
+	tagsMu     sync.Mutex
 }
 
 // NewService creates a new Service.
@@ -238,7 +238,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	if err := session.ValidateName(opts.Name); err != nil {
 		return nil, err
 	}
-	labels, err := session.NormalizeLabels(opts.Labels)
+	tags, err := session.NormalizeTags(opts.Tags)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +275,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		sess = *recyclable
 		sess.Name = opts.Name
 		sess.Slug = slug
-		sess.Labels = labels
+		sess.Tags = tags
 		sess.MarkActive(time.Now())
 	} else {
 		// Create new session (either no recyclable found or it was corrupted)
@@ -304,7 +304,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 			Path:          path,
 			Remote:        remote,
 			CloneStrategy: cloneStrategy,
-			Labels:        labels,
+			Tags:          tags,
 			CreatedAt:     now,
 		}
 		sess.MarkActive(now)
@@ -596,30 +596,30 @@ func (s *Service) SetSessionGroup(ctx context.Context, id, group string) error {
 	return nil
 }
 
-// SetSessionLabels replaces a session's labels.
-func (s *Service) SetSessionLabels(ctx context.Context, id string, labels []string) (session.Session, error) {
-	normalized, err := session.NormalizeLabels(labels)
+// SetSessionTags replaces a session's tags.
+func (s *Service) SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error) {
+	normalized, err := session.NormalizeTags(tags)
 	if err != nil {
 		return session.Session{}, err
 	}
-	return s.saveLabels(ctx, id, func(sess *session.Session) error {
-		sess.Labels = normalized
+	return s.saveTags(ctx, id, func(sess *session.Session) error {
+		sess.Tags = normalized
 		return nil
 	})
 }
 
-// EditSessionLabels adds and then removes labels, leaving the others in
-// place. Two writers that each add a label both keep theirs, which a
+// EditSessionTags adds and then removes tags, leaving the others in
+// place. Two writers that each add a tag both keep theirs, which a
 // read-modify-replace by the caller would not.
-func (s *Service) EditSessionLabels(ctx context.Context, id string, add, remove []string) (session.Session, error) {
-	return s.saveLabels(ctx, id, func(sess *session.Session) error {
-		return sess.EditLabels(add, remove)
+func (s *Service) EditSessionTags(ctx context.Context, id string, add, remove []string) (session.Session, error) {
+	return s.saveTags(ctx, id, func(sess *session.Session) error {
+		return sess.EditTags(add, remove)
 	})
 }
 
-func (s *Service) saveLabels(ctx context.Context, id string, edit func(*session.Session) error) (session.Session, error) {
-	s.labelsMu.Lock()
-	defer s.labelsMu.Unlock()
+func (s *Service) saveTags(ctx context.Context, id string, edit func(*session.Session) error) (session.Session, error) {
+	s.tagsMu.Lock()
+	defer s.tagsMu.Unlock()
 
 	sess, err := s.sessions.Get(ctx, id)
 	if err != nil {
@@ -632,7 +632,7 @@ func (s *Service) saveLabels(ctx context.Context, id string, edit func(*session.
 	if err := s.sessions.Save(ctx, sess); err != nil {
 		return session.Session{}, fmt.Errorf("save session: %w", err)
 	}
-	s.log.Info().Str("session_id", id).Strs("labels", sess.Labels).Msg("session labels updated")
+	s.log.Info().Str("session_id", id).Strs("tags", sess.Tags).Msg("session tags updated")
 	return sess, nil
 }
 

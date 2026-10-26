@@ -74,13 +74,13 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 		metadataJSON = sql.NullString{String: string(data), Valid: true}
 	}
 
-	var labelsJSON sql.NullString
-	if len(sess.Labels) > 0 {
-		data, err := json.Marshal(sess.Labels)
+	var tagsJSON sql.NullString
+	if len(sess.Tags) > 0 {
+		data, err := json.Marshal(sess.Tags)
 		if err != nil {
-			return fmt.Errorf("failed to marshal labels: %w", err)
+			return fmt.Errorf("failed to marshal tags: %w", err)
 		}
-		labelsJSON = sql.NullString{String: string(data), Valid: true}
+		tagsJSON = sql.NullString{String: string(data), Valid: true}
 	}
 
 	strategy := sess.CloneStrategy
@@ -97,7 +97,7 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 		State:         string(sess.State),
 		CloneStrategy: strategy,
 		Metadata:      metadataJSON,
-		Labels:        labelsJSON,
+		Tags:          tagsJSON,
 		CreatedAt:     sess.CreatedAt.UnixNano(),
 		UpdatedAt:     sess.UpdatedAt.UnixNano(),
 	})
@@ -137,10 +137,10 @@ func rowToSession(row db.Session) (session.Session, error) {
 		}
 	}
 
-	var labels []string
-	if row.Labels.Valid {
-		if err := json.Unmarshal([]byte(row.Labels.String), &labels); err != nil {
-			return session.Session{}, fmt.Errorf("failed to unmarshal labels: %w", err)
+	var tags []string
+	if row.Tags.Valid {
+		if err := json.Unmarshal([]byte(row.Tags.String), &tags); err != nil {
+			return session.Session{}, fmt.Errorf("failed to unmarshal tags: %w", err)
 		}
 	}
 
@@ -152,7 +152,7 @@ func rowToSession(row db.Session) (session.Session, error) {
 		Remote:        row.Remote,
 		State:         session.State(row.State),
 		CloneStrategy: row.CloneStrategy,
-		Labels:        labels,
+		Tags:          tags,
 		Metadata:      metadata,
 		CreatedAt:     time.Unix(0, row.CreatedAt),
 		UpdatedAt:     time.Unix(0, row.UpdatedAt),
