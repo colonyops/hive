@@ -51,7 +51,7 @@ func (c *LaunchSessionConfig) Validate() error {
 	if workspace != "" && len(c.Tags) > 0 {
 		return fmt.Errorf("launch-session: tags cannot be set with workspace; a chat is not a hive session")
 	}
-	if err := ValidateTagTemplates(c.Tags); err != nil {
+	if err := validateTagTemplates(c.Tags); err != nil {
 		return fmt.Errorf("launch-session: %w", err)
 	}
 	if c.PostHookTimeout < 0 {
@@ -63,9 +63,9 @@ func (c *LaunchSessionConfig) Validate() error {
 	return nil
 }
 
-// ValidateTagTemplates checks each tag template's syntax. What a template
+// validateTagTemplates checks each tag template's syntax. What a template
 // renders to is checked at launch, when the data exists.
-func ValidateTagTemplates(tags []string) error {
+func validateTagTemplates(tags []string) error {
 	for i, tag := range tags {
 		if strings.TrimSpace(tag) == "" {
 			return fmt.Errorf("tags[%d] is blank", i)
