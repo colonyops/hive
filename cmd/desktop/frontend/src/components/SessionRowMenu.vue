@@ -45,26 +45,26 @@ const emit = defineEmits<{
   extra: [id: string]
 }>()
 
-function lifecycleEntries(startLabel: string): MenuEntry[] {
+function lifecycleEntries(noun: 'session' | 'terminal'): MenuEntry[] {
   const list: MenuEntry[] = []
   if (props.terminal !== 'running') {
-    list.push({ kind: 'action', id: 'start', label: startLabel, icon: IconPlay, testid: 'session-menu-start' })
+    list.push({ kind: 'action', id: 'start', label: `Start ${noun}`, icon: IconPlay, testid: 'session-menu-start' })
   }
   if (props.terminal !== 'stopped') {
-    list.push({ kind: 'action', id: 'kill', label: 'Kill terminal…', icon: IconSquare, testid: 'session-menu-kill' })
+    list.push({ kind: 'action', id: 'kill', label: `Stop ${noun}…`, icon: IconSquare, testid: 'session-menu-kill' })
   }
   return list
 }
 
 const entries = computed<MenuEntry[]>(() => {
-  if (props.scratch) return lifecycleEntries('Start terminal')
+  if (props.scratch) return lifecycleEntries('terminal')
   const list: MenuEntry[] = []
   // The terminal's own lifecycle leads: starting a stopped session is also an
   // attach, and killing ends the terminal without touching the session itself —
   // which is what separates it from Recycle and Delete below. Only an active
   // session has a checkout to run one in.
   if (props.session.state === 'active') {
-    list.push(...lifecycleEntries('Start session'), { kind: 'separator' })
+    list.push(...lifecycleEntries('session'), { kind: 'separator' })
   }
   list.push(
     { kind: 'action', id: 'detail', label: 'Session details…', icon: IconInfo, testid: 'session-menu-detail' },

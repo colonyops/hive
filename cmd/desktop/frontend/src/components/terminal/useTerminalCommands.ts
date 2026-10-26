@@ -53,7 +53,7 @@ export function attachedSessionCommands(context: TerminalModeContext, attached: 
     terminal &&
       running && {
         id: 'terminal:session:kill',
-        title: 'Kill terminal…',
+        title: scratch ? 'Stop terminal…' : 'Stop session…',
         keywords: ['session', 'stop'],
         icon: IconSquare,
         run: () => ops.requestKill(attached),
