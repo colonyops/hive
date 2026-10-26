@@ -53,7 +53,7 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 		{"SessionWindowStatus", app.SessionWindowStatus{}, sorted("windowId", "status", "tool")},
 		{"SessionStatus", app.SessionStatus{}, sorted("sessionId", "running", "windows")},
 		{"SessionStatusSnapshot", app.SessionStatusSnapshot{}, sorted("items", "pollIntervalMs")},
-		{"ItemSessionView", app.ItemSessionView{}, sorted("id", "name", "slug", "repo", "state", "running", "createdAt")},
+		{"ItemSessionView", app.ItemSessionView{}, sorted("id", "name", "slug", "repo", "state", "labels", "running", "createdAt")},
 		{"ItemChatView", app.ItemChatView{}, sorted("id", "workspace", "name", "createdAt")},
 		{"SessionPullRequestKey", app.SessionPullRequestKey{}, sorted("host", "owner", "repo", "branch")},
 		{"SessionPullRequest", app.SessionPullRequest{}, sorted("status", "number", "title", "state", "isDraft", "url", "reviewDecision", "checks", "additions", "deletions", "cached")},

@@ -81,6 +81,7 @@ describe('DetailPane', () => {
     slug: 'review-42',
     repo: 'colonyops/hive',
     state: 'active',
+    labels: [],
     running: true,
     createdAt: new Date().toISOString(),
     ...patch,

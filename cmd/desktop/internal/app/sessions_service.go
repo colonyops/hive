@@ -84,6 +84,7 @@ type ItemSessionView struct {
 	Slug      string    `json:"slug"`
 	Repo      string    `json:"repo"`
 	State     string    `json:"state"`
+	Labels    []string  `json:"labels"`
 	Running   bool      `json:"running"`
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -383,6 +384,7 @@ func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]Ite
 			Slug:      summary.Slug,
 			Repo:      summary.Remote,
 			State:     string(summary.State),
+			Labels:    append([]string{}, summary.Labels...),
 			CreatedAt: time.UnixMilli(link.CreatedAt),
 		})
 	}
