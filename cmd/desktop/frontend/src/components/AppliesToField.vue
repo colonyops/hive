@@ -29,6 +29,7 @@ defineExpose({ flush: () => field.value?.flush() })
       :model-value="modelValue"
       :suggestions="knownTypes"
       :flag="flag"
+      auto-pick
       monospace
       placeholder="Add type…"
       aria-label="Applies to"

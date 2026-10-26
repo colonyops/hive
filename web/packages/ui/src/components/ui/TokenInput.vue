@@ -17,6 +17,10 @@ const props = withDefaults(
     monospace?: boolean
     // Returns a non-empty explanation for a token to draw as flagged.
     flag?: (token: string) => string
+    // Enter takes the first matching suggestion without the user moving to
+    // it. For a field whose values come from a known set; a free-text field
+    // would turn a typed prefix into a longer value.
+    autoPick?: boolean
     id?: string
     ariaLabel?: string
     testid?: string
@@ -26,6 +30,7 @@ const props = withDefaults(
     placeholder: 'Add…',
     monospace: false,
     flag: undefined,
+    autoPick: false,
     id: undefined,
     ariaLabel: undefined,
     testid: 'token-input',
@@ -39,6 +44,8 @@ const list = ref<HTMLElement | null>(null)
 const draft = ref('')
 const open = ref(false)
 const active = ref(0)
+const navigated = ref(false)
+const picking = computed(() => props.autoPick || navigated.value)
 
 const tokens = computed(() => props.modelValue ?? [])
 const canonical = (value: string): string | undefined =>
@@ -63,13 +70,16 @@ function highlight(label: string): { pre: string; mid: string; post: string } {
 }
 
 function add(raw?: string): void {
-  const value = (raw ?? draft.value).trim().replace(/,+$/, '').trim()
+  const values = (raw ?? draft.value).split(',').map((value) => value.trim())
   draft.value = ''
   open.value = false
-  if (!value) return
-  const normalized = canonical(value) ?? value
-  if (!tokens.value.some((token) => token.toLowerCase() === normalized.toLowerCase()))
-    emit('update:modelValue', [...tokens.value, normalized])
+  const next = [...tokens.value]
+  for (const value of values) {
+    if (!value) continue
+    const normalized = canonical(value) ?? value
+    if (!next.some((token) => token.toLowerCase() === normalized.toLowerCase())) next.push(normalized)
+  }
+  if (next.length > tokens.value.length) emit('update:modelValue', next)
 }
 function remove(token: string): void {
   emit(
@@ -77,9 +87,10 @@ function remove(token: string): void {
     tokens.value.filter((item) => item !== token),
   )
 }
-function onInput(): void {
+function openList(): void {
   open.value = true
   active.value = 0
+  navigated.value = false
 }
 // Teleported, because the input usually sits in a modal or drawer that
 // scrolls and would clip an absolute list.
@@ -94,16 +105,25 @@ watch([showList, () => options.value.length, () => tokens.value.length], async (
 
 const nav = useListKeyboardNav({ active, count: () => options.value.length, wrap: false })
 function onKeydown(event: KeyboardEvent): void {
+  // WebKit sends the Enter that commits an IME candidate with keyCode 229
+  // and does not always set isComposing; no other field identifies it.
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- see above
+  if (event.isComposing || event.keyCode === 229) return
   if (event.key === 'ArrowDown' && !open.value) {
     event.preventDefault()
-    open.value = true
-    active.value = 0
+    openList()
+    navigated.value = true
     return
   }
-  if (nav.onKeydown(event)) return
+  if (nav.onKeydown(event)) {
+    navigated.value = true
+    return
+  }
+  // A modified Enter belongs to the host form, such as Cmd+Enter to save.
+  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) return
   if (event.key === 'Enter' || event.key === ',') {
     event.preventDefault()
-    const pick = open.value ? options.value[active.value] : undefined
+    const pick = open.value && picking.value ? options.value[active.value] : undefined
     add(pick)
   } else if (event.key === 'Escape' && open.value) {
     event.preventDefault()
@@ -113,9 +133,13 @@ function onKeydown(event: KeyboardEvent): void {
     remove(tokens.value[tokens.value.length - 1])
   }
 }
+function hover(index: number): void {
+  active.value = index
+  navigated.value = true
+}
 function onBoxClick(): void {
   input.value?.focus()
-  open.value = true
+  openList()
 }
 function onBlur(): void {
   open.value = false
@@ -162,7 +186,7 @@ defineExpose({ flush: () => add(), focus: () => input.value?.focus() })
         :class="monospace ? 'font-mono' : ''"
         role="combobox"
         :aria-expanded="open"
-        @input="onInput"
+        @input="openList"
         @keydown="onKeydown"
         @blur="onBlur"
       />
@@ -177,14 +201,14 @@ defineExpose({ flush: () => add(), focus: () => input.value?.focus() })
         role="listbox"
         :data-testid="`${testid}-suggestions`"
       >
-        <li v-for="(option, index) in options" :key="option" role="option" :aria-selected="index === active">
+        <li v-for="(option, index) in options" :key="option" role="option" :aria-selected="picking && index === active">
           <button
             type="button"
             class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left"
-            :class="index === active ? 'bg-hover' : ''"
+            :class="picking && index === active ? 'bg-hover' : ''"
             :data-testid="`${testid}-option-${option}`"
             @mousedown.prevent="add(option)"
-            @mousemove="active = index"
+            @mousemove="hover(index)"
           >
             <span class="text-small text-text-2" :class="monospace ? 'font-mono' : ''"
               ><span>{{ highlight(option).pre }}</span
@@ -192,7 +216,7 @@ defineExpose({ flush: () => add(), focus: () => input.value?.focus() })
               ><span>{{ highlight(option).post }}</span></span
             >
             <span class="flex-1" />
-            <IconCornerDownLeft v-if="index === active" class="size-3 text-text-4" />
+            <IconCornerDownLeft v-if="picking && index === active" class="size-3 text-text-4" />
           </button>
         </li>
       </ul>
