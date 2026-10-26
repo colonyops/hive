@@ -182,7 +182,7 @@ func printSessionHuman(out io.Writer, sess session.Session) {
 		_, _ = fmt.Fprintf(out, "Group:       %s\n", group)
 	}
 	if len(sess.Tags) > 0 {
-		_, _ = fmt.Fprintf(out, "Tags:      %s\n", strings.Join(sess.Tags, ", "))
+		_, _ = fmt.Fprintf(out, "Tags:        %s\n", strings.Join(sess.Tags, ", "))
 	}
 }
 
@@ -374,6 +374,11 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 	if cmd.updateName == "" && cmd.updateGroup == "" && !cmd.updateClearGroup && !editsTags {
 		return fmt.Errorf("nothing to update: provide --name, --group, --clear-group, or a tag flag")
 	}
+	// Checked before any write, so a bad tag leaves the session untouched.
+	addTags, err := session.NormalizeTags(cmd.updateAddTags)
+	if err != nil {
+		return err
+	}
 
 	if cmd.updateName != "" {
 		if err := cmd.app.Sessions().RenameSession(ctx, id, cmd.updateName); err != nil {
@@ -391,13 +396,18 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 		}
 	}
 
-	if cmd.updateClearTags {
-		if _, err := cmd.app.Sessions().SetSessionTags(ctx, id, nil); err != nil {
-			return fmt.Errorf("clear session tags: %w", err)
+	switch {
+	case cmd.updateClearTags:
+		tags := slices.DeleteFunc(addTags, func(tag string) bool {
+			return slices.ContainsFunc(cmd.updateRemoveTags, func(remove string) bool {
+				return strings.EqualFold(strings.TrimSpace(remove), tag)
+			})
+		})
+		if _, err := cmd.app.Sessions().SetSessionTags(ctx, id, tags); err != nil {
+			return fmt.Errorf("set session tags: %w", err)
 		}
-	}
-	if len(cmd.updateAddTags) > 0 || len(cmd.updateRemoveTags) > 0 {
-		if _, err := cmd.app.Sessions().EditSessionTags(ctx, id, cmd.updateAddTags, cmd.updateRemoveTags); err != nil {
+	case len(addTags) > 0 || len(cmd.updateRemoveTags) > 0:
+		if _, err := cmd.app.Sessions().EditSessionTags(ctx, id, addTags, cmd.updateRemoveTags); err != nil {
 			return fmt.Errorf("edit session tags: %w", err)
 		}
 	}

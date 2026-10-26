@@ -5,6 +5,7 @@ package integration
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -199,6 +200,29 @@ func TestSessionUpdateGroup(t *testing.T) {
 	require.NoError(t, err)
 	_, hasGroup := entry["group"]
 	assert.False(t, hasGroup, "group should be omitted after clearing")
+}
+
+func TestSessionUpdateTags(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "tags-repo")
+
+	created, err := h.RunJSON("session", "create", "--json", "--remote", repo, "--tags", "a", "--tags", "b", "tagged")
+	require.NoError(t, err)
+	id := created["id"].(string)
+
+	entry, err := h.RunJSON("session", "update", id, "--add-tag", "c", "--remove-tag", "A", "--json")
+	require.NoError(t, err)
+	assert.Equal(t, []any{"b", "c"}, entry["tags"])
+
+	entry, err = h.RunJSON("session", "update", id, "--clear-tags", "--add-tag", "x", "--add-tag", "Y", "--remove-tag", "y", "--json")
+	require.NoError(t, err)
+	assert.Equal(t, []any{"x"}, entry["tags"])
+
+	_, err = h.Run("session", "update", id, "--clear-tags", "--add-tag", strings.Repeat("x", 41))
+	require.Error(t, err)
+	entry, err = h.RunJSON("session", "update", id, "--remove-tag", "missing", "--json")
+	require.NoError(t, err, "a tag flag alone is an update")
+	assert.Equal(t, []any{"x"}, entry["tags"], "an invalid tag must not clear the tags first")
 }
 
 func TestSessionUpdateNoFlags(t *testing.T) {
