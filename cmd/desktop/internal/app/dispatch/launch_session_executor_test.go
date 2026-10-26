@@ -263,17 +263,46 @@ func repositoryLauncher(creator SessionCreator, links ItemSessionLinker) *Reposi
 	return NewRepositoryLauncher(func() SessionCreator { return creator }, links, nil, zerolog.Nop())
 }
 
+func TestLaunchSessionExecutor_RendersLabelTemplates(t *testing.T) {
+	launcher := &fakeSessionLauncher{}
+	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
+	action := actions.Action{ID: "spawn", Type: "launch-session", Config: &actions.LaunchSessionConfig{
+		PromptTemplate: "go", RepoTemplate: "acme/repo",
+		Labels: []string{"auto", " {{ .Payload.team }} ", "{{ .Payload.none }}", "AUTO"},
+	}}
+	data := OutputData{Key: "k", Payload: map[string]any{"team": "Backend", "none": ""}, Raw: json.RawMessage(`{}`)}
+
+	_, err := exec.Execute(t.Context(), action, data, ActionInvocationInput{})
+	require.NoError(t, err)
+	require.Len(t, launcher.calls, 1)
+	assert.Equal(t, []string{"auto", "Backend"}, launcher.calls[0].Labels, "blank and repeated labels are dropped")
+}
+
+func TestLaunchSessionExecutor_InvalidRenderedLabelFailsTheLaunch(t *testing.T) {
+	launcher := &fakeSessionLauncher{}
+	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
+	action := actions.Action{ID: "spawn", Type: "launch-session", Config: &actions.LaunchSessionConfig{
+		PromptTemplate: "go", RepoTemplate: "acme/repo", Labels: []string{"{{ .Payload.title }}"},
+	}}
+
+	_, err := exec.Execute(t.Context(), action, OutputData{Key: "k", Payload: map[string]any{"title": "a, b"}, Raw: json.RawMessage(`{}`)}, ActionInvocationInput{})
+	require.ErrorContains(t, err, "launch-session: labels")
+	assert.Empty(t, launcher.calls)
+}
+
 func TestRepositoryLauncher_MapsRequestToSessionService(t *testing.T) {
 	creator := &fakeSessionCreator{}
 	launcher := repositoryLauncher(creator, nil)
 
 	_, err := launcher.LaunchSession(t.Context(), LaunchSessionRequest{
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git", CollisionSuffix: "7",
+		Labels: []string{"auto"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, []sessionsvc.LaunchRequest{{
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git", CollisionSuffix: "7",
-		Env: []string{ptyterm.ImageProtocolEnv},
+		Labels: []string{"auto"},
+		Env:    []string{ptyterm.ImageProtocolEnv},
 	}}, creator.calls)
 }
 
@@ -560,5 +589,5 @@ func TestLaunchSessionExecutor_RunsALaunchNodeProjection(t *testing.T) {
 
 	_, err := exec.Execute(t.Context(), action, reviewItem(), ActionInvocationInput{})
 	require.NoError(t, err)
-	require.Equal(t, []LaunchSessionRequest{{Name: "review-42", Prompt: "Review 42", Agent: "claude", Repo: "example/repo"}}, launcher.calls)
+	require.Equal(t, []LaunchSessionRequest{{Name: "review-42", Prompt: "Review 42", Agent: "claude", Repo: "example/repo", Labels: []string{"auto", "pr-42"}}}, launcher.calls)
 }

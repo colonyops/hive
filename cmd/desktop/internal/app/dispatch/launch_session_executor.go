@@ -34,6 +34,7 @@ type LaunchSessionRequest struct {
 	Agent           string
 	Repo            string
 	CollisionSuffix string
+	Labels          []string
 	// Origins are the inbox items the session is being created for. An empty
 	// slice means the session has no inbox item behind it.
 	Origins []models.ItemRef
@@ -101,6 +102,10 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 	if err != nil {
 		return ExecutionResult{}, fmt.Errorf("launch-session: %s: %w", repoField, err)
 	}
+	labels, err := renderLabels(cfg.Labels, data)
+	if err != nil {
+		return ExecutionResult{}, err
+	}
 	workspace := strings.TrimSpace(cfg.Workspace)
 	agent := cfg.Agent
 	var collisionSuffix string
@@ -150,6 +155,9 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 	runLog := RunLogFrom(ctx)
 	var outcome SessionExecutionOutcome
 	if workspace != "" {
+		if len(labels) > 0 {
+			runLog.Systemf("Ignoring labels: a workspace chat is not a hive session")
+		}
 		runLog.Systemf("Starting chat %q in workspace %s", name, workspace)
 		outcome, err = e.launchWorkspace(ctx, LaunchWorkspaceSessionRequest{Workspace: workspace, Name: name, Prompt: prompt, Origins: origins})
 	} else {
@@ -158,7 +166,7 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 		} else {
 			runLog.Systemf("Creating session %q from %s with the default agent", name, repo)
 		}
-		outcome, err = e.launchRepository(ctx, LaunchSessionRequest{Name: name, Prompt: prompt, Agent: agent, Repo: repo, CollisionSuffix: collisionSuffix, Origins: origins})
+		outcome, err = e.launchRepository(ctx, LaunchSessionRequest{Name: name, Prompt: prompt, Agent: agent, Repo: repo, CollisionSuffix: collisionSuffix, Labels: labels, Origins: origins})
 	}
 	if err != nil {
 		return ExecutionResult{Attempted: true}, err
@@ -169,6 +177,24 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 		result.Log = e.runPostHook(ctx, action, cfg, data, repo, outcome)
 	}
 	return result, nil
+}
+
+// renderLabels renders each label template. A blank result is dropped, so a
+// template can add a label only when the item has a value for it.
+func renderLabels(templates []string, data OutputData) ([]string, error) {
+	rendered := make([]string, 0, len(templates))
+	for i, t := range templates {
+		label, err := tmpl.New(tmpl.Config{}).Render(t, data)
+		if err != nil {
+			return nil, fmt.Errorf("launch-session: labels[%d]: %w", i, err)
+		}
+		rendered = append(rendered, label)
+	}
+	labels, err := session.NormalizeLabels(rendered)
+	if err != nil {
+		return nil, fmt.Errorf("launch-session: labels: %w", err)
+	}
+	return labels, nil
 }
 
 func sessionName(actionID, nameTemplate string, data OutputData) (string, error) {

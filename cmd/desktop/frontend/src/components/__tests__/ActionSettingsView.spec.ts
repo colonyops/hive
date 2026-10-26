@@ -97,6 +97,20 @@ describe('ActionSettingsView', () => {
     wrapper.unmount()
   })
 
+  it('saves launch labels one per line', async () => {
+    mocks.UpdateAction.mockResolvedValue(launch)
+    const wrapper = mountSettings()
+    await flushPromises()
+    await wrapper.get('[data-testid="action-row-review"] button').trigger('click')
+    await setValue(editor<HTMLTextAreaElement>('action-launch-labels'), 'auto\n issue-{{ .Payload.num }}\n')
+    editor<HTMLButtonElement>('action-save').click()
+    await flushPromises()
+    expect(mocks.UpdateAction.mock.calls[0][1].launch).toEqual(
+      expect.objectContaining({ labels: ['auto', 'issue-{{ .Payload.num }}'] }),
+    )
+    wrapper.unmount()
+  })
+
   it('saves a workspace target and clears repository-only fields', async () => {
     mocks.UpdateAction.mockResolvedValue(launch)
     const wrapper = mountSettings()

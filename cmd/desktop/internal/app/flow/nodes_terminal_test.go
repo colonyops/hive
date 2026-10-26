@@ -197,12 +197,13 @@ func TestNotifyConfig_OmitsEmptyFields(t *testing.T) {
 }
 
 func TestLaunchSessionConfig_Validate(t *testing.T) {
-	valid := LaunchSessionConfig{Repo: "{{ .Payload.repo }}", Prompt: "Review"}
+	valid := LaunchSessionConfig{Repo: "{{ .Payload.repo }}", Prompt: "Review", Labels: []string{"auto", "pr-{{ .Payload.num }}"}}
 	require.NoError(t, valid.Validate(nil))
 
 	for name, cfg := range map[string]LaunchSessionConfig{
 		"repo":   {Prompt: "Review"},
 		"prompt": {Repo: "acme/api", Prompt: "  "},
+		"labels": {Repo: "acme/api", Prompt: "Review", Labels: []string{"{{ .Payload"}},
 	} {
 		err := cfg.Validate(nil)
 		require.Errorf(t, err, "missing %s", name)
@@ -233,11 +234,12 @@ nodes:
     repo: "{{ .Payload.repo }}"
     sessionName: "review-{{ .Payload.num }}"
     prompt: Review it
+    labels: [auto]
 wires:
   - { from: src, to: review }
 `), nil)
 	require.NoError(t, err)
 	node := f.Nodes[1]
 	assert.Equal(t, "Review PRs", node.Name)
-	assert.Equal(t, &LaunchSessionConfig{Repo: "{{ .Payload.repo }}", SessionName: "review-{{ .Payload.num }}", Prompt: "Review it"}, node.Config)
+	assert.Equal(t, &LaunchSessionConfig{Repo: "{{ .Payload.repo }}", SessionName: "review-{{ .Payload.num }}", Prompt: "Review it", Labels: []string{"auto"}}, node.Config)
 }

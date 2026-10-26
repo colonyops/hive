@@ -97,6 +97,7 @@ func TestActionTypesRoundTripThroughTheYAMLWriterAndLoader(t *testing.T) {
 				launch.Agent = ""
 				launch.PostHook = ""
 				launch.PostHookTimeout = 0
+				launch.Labels = nil
 			}
 			require.NoErrorf(t, cfg.Validate(), "populated %q config must satisfy its own Validate", actionType)
 
@@ -143,6 +144,32 @@ func TestEditableFromActionFailsClosedOnAConfigTypeItDoesNotKnow(t *testing.T) {
 	_, err := editableFromAction(Action{ID: "mystery", Type: "mystery", Config: fakeUnregisteredConfig{}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mystery")
+}
+
+func TestLaunchLabelsRoundTripThroughTheWriterAndTheEditableCatalog(t *testing.T) {
+	original := Action{
+		ID:     "spawn",
+		Label:  "Spawn",
+		Type:   "launch-session",
+		Config: &LaunchSessionConfig{PromptTemplate: "go", RepoTemplate: "acme/repo", Labels: []string{"auto", "pr-{{ .Payload.number }}"}},
+	}
+
+	s := NewActionStore(filepath.Join(t.TempDir(), "actions.yml"))
+	s.mu.Lock()
+	_, err := s.mutateLocked("create", original.ID, original)
+	s.mu.Unlock()
+	require.NoError(t, err)
+
+	reloaded, ok := s.Get(original.ID)
+	require.True(t, ok)
+	assert.Equal(t, original.Config, reloaded.Config)
+
+	editable, err := editableFromAction(reloaded)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"auto", "pr-{{ .Payload.number }}"}, editable.Launch.Labels)
+	back, err := actionFromEditable(editable)
+	require.NoError(t, err)
+	assert.Equal(t, original.Config, back.Config)
 }
 
 func TestActionIconRoundTripsThroughTheWriterAndTheEditableCatalog(t *testing.T) {

@@ -541,6 +541,13 @@ func actionNode(a Action) (*yaml.Node, error) {
 		if c.Agent != "" {
 			add("agent", c.Agent)
 		}
+		if len(c.Labels) > 0 {
+			seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+			for _, v := range c.Labels {
+				seq.Content = append(seq.Content, scalar(v))
+			}
+			n.Content = append(n.Content, scalar("labels"), seq)
+		}
 		if c.PostHook != "" {
 			add("post_hook", c.PostHook)
 		}

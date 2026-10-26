@@ -33,7 +33,7 @@ function agentSelect(wrapper: ReturnType<typeof mount>) {
 describe('launch-session editor', () => {
   it('renders every launch field', () => {
     const wrapper = mount(Editor, { props: { config: { ...defaults, repo: 'x/{{ .Key }}' } } })
-    for (const field of ['repo-mode', 'repo', 'agent', 'session-name', 'prompt']) {
+    for (const field of ['repo-mode', 'repo', 'agent', 'session-name', 'labels', 'prompt']) {
       expect(wrapper.find(`[data-testid="launch-session-node-editor-${field}"]`).exists(), field).toBe(true)
     }
   })
@@ -125,6 +125,19 @@ describe('launch-session editor', () => {
     expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ ...config, agent: undefined })
     await wrapper.get('[data-testid="launch-session-node-editor-session-name"]').setValue('')
     expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ ...config, sessionName: undefined })
+  })
+
+  it('edits labels one per line and clears an empty list', async () => {
+    const config = { repo: 'r', prompt: 'p' }
+    const wrapper = mount(Editor, { props: { config } })
+    const labels = wrapper.get('textarea[data-testid="launch-session-node-editor-labels"]')
+    await labels.setValue('auto\n\n pr-{{ .Payload.num }} ')
+    expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({
+      ...config,
+      labels: ['auto', 'pr-{{ .Payload.num }}'],
+    })
+    await labels.setValue('')
+    expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ ...config, labels: undefined })
   })
 
   it('requires a repo and a prompt', () => {

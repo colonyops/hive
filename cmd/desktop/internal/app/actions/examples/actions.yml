@@ -17,6 +17,7 @@ actions:
     applies_to: [issue]
     agent: claude
     repo_template: "{{ .ItemRemote }}"
+    labels: [auto, "issue-{{ .Payload.num }}"]
     prompt_template: |
       Work on the issue at {{ .Payload.url }}.
 

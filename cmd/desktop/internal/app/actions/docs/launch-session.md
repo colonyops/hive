@@ -13,6 +13,8 @@ manual item handoffs and flow `action` nodes that start agents automatically.
 - `agent` — a non-default Hive agent profile (e.g. `claude`, `aider`). Omit for
   the launcher's default. Agent workspaces select their agent in `command:` and
   cannot use this field.
+- `labels` — a list of labels for the new repository session, each a Go
+  template. A workspace target cannot use it. See below.
 - `post_hook` — a shell command to run once a repository session exists, in its
   checkout. A workspace target cannot use it. See below.
 - `post_hook_timeout` — how long the hook may run, as a duration string
@@ -72,6 +74,26 @@ on a webhook item, whose sender chooses the id. On a GitHub or Gitea item,
 the fence to name the work. `.Inputs` and `.Session` come
 from the user and from Hive, and need no fence.
 
+## Labels
+
+`labels` puts labels on the new session, so a later step can find it: a
+filter, a view, or an agent that lists sessions by label. Each entry renders
+over the same data as the other templates. An entry that renders blank is
+dropped, and labels that differ only in case collapse to the first one.
+
+```yaml
+- id: implement-issue
+  label: Implement issue
+  type: launch-session
+  applies_to: [issue]
+  repo_template: "{{ .ItemRemote }}"
+  prompt_template: "Work on the issue at {{ .Payload.url }}"
+  labels: [auto, "issue-{{ .Payload.num }}"]
+```
+
+A label is at most 40 characters and cannot contain a comma. A rendered label
+that breaks either rule fails the launch, before any session is created.
+
 ## Post hook
 
 `post_hook` runs after the session is created, through `sh -c`, with the new
@@ -113,7 +135,7 @@ catalog is parsed.
 
 ## Templates
 
-`prompt_template` and `repo_template` are Go `text/template` strings rendered
+`prompt_template`, `repo_template`, and each of `labels` are Go `text/template` strings rendered
 over the triggering message (see "Template data" above). A GitHub-shaped item
 exposes `{{ .Payload.repo }}`, `{{ .Payload.title }}`, `{{ .Payload.url }}`,
 `{{ .Payload.body }}`, `{{ .Payload.num }}`, and `{{ .Payload.author }}`. `{{ .ItemRemote }}` is the clone URL of the item's

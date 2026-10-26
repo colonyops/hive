@@ -606,7 +606,7 @@ export interface SessionDetail {
     "path": string;
     "cloneStrategy": string;
     "worktreeBranch": string;
-    "tags": string[] | null;
+    "labels": string[] | null;
     "createdAt": string;
     "updatedAt": string;
 }

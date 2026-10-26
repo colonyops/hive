@@ -4,7 +4,7 @@ import { SessionLaunchOptions } from '../../../../bindings/github.com/colonyops/
 import type { SessionLaunchRepository } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import RepositorySelect from '../../../components/RepositorySelect.vue'
 import FormField from '@hive/ui/components/ui/FormField.vue'
-import { SelectField, TextField, TextareaField } from '../../fields'
+import { GlobListField, SelectField, TextField, TextareaField } from '../../fields'
 import { ITEM_REMOTE, repoMode, type Config, type RepoMode } from './config'
 import { createLogger } from '../../../lib/log'
 
@@ -63,7 +63,7 @@ function fieldError(key: keyof Config): string | undefined {
 }
 
 function set<K extends keyof Config>(key: K, value: Config[K]) {
-  if (key === 'repo') emittedRepo = value
+  if (key === 'repo') emittedRepo = value as string
   emit('update:config', { ...props.config, [key]: value })
 }
 </script>
@@ -129,6 +129,15 @@ function set<K extends keyof Config>(key: K, value: Config[K]) {
       monospace
       testid="launch-session-node-editor-session-name"
       @update:model-value="set('sessionName', $event || undefined)"
+    />
+
+    <GlobListField
+      label="Labels"
+      :model-value="config.labels ?? []"
+      placeholder="auto&#10;pr-{{ .Payload.num }}"
+      hint="One label per line, each a Go template. A label that renders blank is dropped."
+      testid="launch-session-node-editor-labels"
+      @update:model-value="set('labels', $event.length ? $event : undefined)"
     />
 
     <TextareaField

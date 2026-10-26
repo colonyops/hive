@@ -8,7 +8,7 @@ import AppSelect, { type AppSelectOption } from '@hive/ui/components/ui/AppSelec
 import ActionInputsEditor from './ActionInputsEditor.vue'
 import AppliesToField from './AppliesToField.vue'
 import DrawerSheet from '@hive/ui/components/ui/DrawerSheet.vue'
-import { SelectField, TextareaField, TextField } from '../pipeline/fields'
+import { GlobListField, SelectField, TextareaField, TextField } from '../pipeline/fields'
 import { launcherIconOptions } from '../lib/launcherIcons'
 import type { EditableAction } from '../composables/useActionsSettings'
 import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
@@ -93,6 +93,7 @@ function setLaunchTarget(value: string): void {
     action.value.launch.agent = ''
     action.value.launch.postHook = ''
     action.value.launch.postHookTimeout = ''
+    action.value.launch.labels = undefined
   }
 }
 
@@ -239,6 +240,14 @@ onMounted(async () => {
         </div>
         <template v-if="launchTarget !== 'workspace'">
           <TextField v-model="action.launch.agent" label="Agent (optional)" testid="action-launch-agent" />
+          <GlobListField
+            label="Labels"
+            :model-value="action.launch.labels ?? []"
+            placeholder="auto&#10;issue-{{ .Payload.num }}"
+            hint="One label per line, each a Go template. A label that renders blank is dropped."
+            testid="action-launch-labels"
+            @update:model-value="action.launch.labels = $event.length ? $event : undefined"
+          />
           <TextareaField
             :model-value="action.launch.postHook ?? ''"
             label="Post hook"

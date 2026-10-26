@@ -117,6 +117,12 @@ func TestLaunchSessionConfig_PostHookTimeoutNeedsAPostHook(t *testing.T) {
 	require.NoError(t, (&LaunchSessionConfig{PromptTemplate: "go", PostHook: "zed ."}).Validate())
 }
 
+func TestLaunchSessionConfig_LabelTemplates(t *testing.T) {
+	require.NoError(t, (&LaunchSessionConfig{PromptTemplate: "go", RepoTemplate: "r", Labels: []string{"auto", "pr-{{ .Payload.number }}"}}).Validate())
+	require.ErrorContains(t, (&LaunchSessionConfig{PromptTemplate: "go", RepoTemplate: "r", Labels: []string{"{{ .Payload"}}).Validate(), "labels[0]")
+	require.ErrorContains(t, (&LaunchSessionConfig{PromptTemplate: "go", RepoTemplate: "r", Labels: []string{"auto", " "}}).Validate(), "labels[1] is blank")
+}
+
 func TestLaunchSessionConfig_WorkspaceTarget(t *testing.T) {
 	workspace := Action{Config: &LaunchSessionConfig{PromptTemplate: "triage", Workspace: "alerts"}}
 	require.NoError(t, workspace.Config.Validate())
@@ -131,6 +137,7 @@ func TestLaunchSessionConfig_WorkspaceTarget(t *testing.T) {
 		"repository": {PromptTemplate: "triage", RepoTemplate: "repo", Workspace: "alerts"},
 		"agent":      {PromptTemplate: "triage", Workspace: "alerts", Agent: "claude"},
 		"post hook":  {PromptTemplate: "triage", Workspace: "alerts", PostHook: "zed ."},
+		"labels":     {PromptTemplate: "triage", Workspace: "alerts", Labels: []string{"auto"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			require.Error(t, cfg.Validate())
