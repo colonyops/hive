@@ -43,7 +43,7 @@ Startup failures stay in a copyable report with the failed command and available
 
 A setup command that exits successfully does not stop healthy panes. If every configured command finishes successfully and no terminal remains, the panel shows **Session completed**.
 
-**Kill terminal** stops the tmux session and its processes while keeping the checkout and Hive session record. **Recycle** and **Delete** also change or remove the checkout.
+**Stop session** stops the tmux session and its processes while keeping the checkout and Hive session record. **Recycle** and **Delete** also change or remove the checkout.
 
 For repository sessions, the optional status bar shows the branch, changes against the default branch, uncommitted work, and unpushed commits. Connected GitHub, Gitea, and Forgejo repositories also show pull request, review, and check state. Use the status bar to open the checkout in your editor or file manager. Actions that target `statusbar` add buttons of their own; see [Where actions run](../inbox/actions.md#where-actions-run).
 
@@ -51,7 +51,7 @@ For repository sessions, the optional status bar shows the branch, changes again
 
 The **Terminals** section holds a scratch tmux session for shells that are not tied to a repository. Use its `+` button or <kbd>⌘T</kbd> to add tabs.
 
-Scratch tabs can be selected, renamed, reordered, and closed. The session keeps running when Hive closes. **Kill terminal** stops every scratch tab.
+Scratch tabs can be selected, renamed, reordered, and closed. The session keeps running when Hive closes. **Stop terminal** stops every scratch tab.
 
 ## Pop-up terminal
 

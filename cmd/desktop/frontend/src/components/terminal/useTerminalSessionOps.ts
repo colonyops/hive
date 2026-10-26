@@ -75,11 +75,11 @@ export function useTerminalSessionOps(options: {
   // scratch terminal *is* its tmux session, so there the dialog names the tabs.
   function requestKill(row: TerminalSessionRow): void {
     confirmation.request({
-      title: 'Kill this terminal?',
+      title: tree.isScratch(row) ? 'Stop the scratch terminal?' : 'Stop this session?',
       description: tree.isScratch(row)
         ? 'Every tab in the scratch terminal is closed and whatever is running in them stops. Starting it again opens an empty one.'
         : `The tmux session behind ${row.name} is killed, stopping the agent and anything else running in it. Its checkout and its work are untouched, and you can start it again from here.`,
-      confirmLabel: 'Kill',
+      confirmLabel: 'Stop',
       onConfirm: () => killSession(row.slug),
     })
   }

@@ -22,6 +22,11 @@ const props = defineProps<{
    * details of.
    */
   scratch?: boolean
+  /**
+   * Whether the terminal behind the row runs. Left unset until its state is
+   * known, when both Start and Kill are offered rather than guessing one.
+   */
+  terminal?: 'running' | 'stopped'
   /** Host-contributed entries, appended under `extraLabel`. */
   extra?: MenuEntry[]
   extraLabel?: string
@@ -40,28 +45,29 @@ const emit = defineEmits<{
   extra: [id: string]
 }>()
 
-const entries = computed<MenuEntry[]>(() => {
+function lifecycleEntries(noun: 'session' | 'terminal'): MenuEntry[] {
   const list: MenuEntry[] = []
-  if (props.scratch) {
-    return [
-      { kind: 'action', id: 'start', label: 'Start terminal', icon: IconPlay, testid: 'session-menu-start' },
-      { kind: 'action', id: 'kill', label: 'Kill terminal…', icon: IconSquare, testid: 'session-menu-kill' },
-    ]
+  if (props.terminal !== 'running') {
+    list.push({ kind: 'action', id: 'start', label: `Start ${noun}`, icon: IconPlay, testid: 'session-menu-start' })
   }
+  if (props.terminal !== 'stopped') {
+    list.push({ kind: 'action', id: 'kill', label: `Stop ${noun}…`, icon: IconSquare, testid: 'session-menu-kill' })
+  }
+  return list
+}
+
+const entries = computed<MenuEntry[]>(() => {
+  if (props.scratch) return lifecycleEntries('terminal')
+  const list: MenuEntry[] = []
   // The terminal's own lifecycle leads: starting a stopped session is also an
   // attach, and killing ends the terminal without touching the session itself —
   // which is what separates it from Recycle and Delete below. Only an active
   // session has a checkout to run one in.
   if (props.session.state === 'active') {
-    list.push(
-      { kind: 'action', id: 'start', label: 'Start session', icon: IconPlay, testid: 'session-menu-start' },
-      { kind: 'action', id: 'kill', label: 'Kill terminal…', icon: IconSquare, testid: 'session-menu-kill' },
-      { kind: 'separator' },
-    )
+    list.push(...lifecycleEntries('session'), { kind: 'separator' })
   }
   list.push(
     { kind: 'action', id: 'detail', label: 'Session details…', icon: IconInfo, testid: 'session-menu-detail' },
-    { kind: 'separator' },
     { kind: 'action', id: 'rename', label: 'Rename…', icon: IconPencil, testid: 'session-menu-rename' },
     { kind: 'separator' },
   )
