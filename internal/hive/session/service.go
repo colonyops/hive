@@ -122,7 +122,6 @@ type Service struct {
 	out        *switchWriter
 	err        *switchWriter
 	bareMu     sync.Map // map[remote → *sync.Mutex]
-	tagsMu     sync.Mutex
 }
 
 // NewService creates a new Service.
@@ -618,19 +617,15 @@ func (s *Service) EditSessionTags(ctx context.Context, id string, add, remove []
 }
 
 func (s *Service) saveTags(ctx context.Context, id string, edit func(*session.Session) error) (session.Session, error) {
-	s.tagsMu.Lock()
-	defer s.tagsMu.Unlock()
-
-	sess, err := s.sessions.Get(ctx, id)
+	sess, err := s.sessions.Update(ctx, id, func(sess *session.Session) error {
+		if err := edit(sess); err != nil {
+			return err
+		}
+		sess.UpdatedAt = time.Now()
+		return nil
+	})
 	if err != nil {
-		return session.Session{}, fmt.Errorf("get session: %w", err)
-	}
-	if err := edit(&sess); err != nil {
-		return session.Session{}, err
-	}
-	sess.UpdatedAt = time.Now()
-	if err := s.sessions.Save(ctx, sess); err != nil {
-		return session.Session{}, fmt.Errorf("save session: %w", err)
+		return session.Session{}, fmt.Errorf("update session tags: %w", err)
 	}
 	s.log.Info().Str("session_id", id).Strs("tags", sess.Tags).Msg("session tags updated")
 	return sess, nil

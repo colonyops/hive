@@ -55,6 +55,18 @@ func (m *mockStore) Save(_ context.Context, s session.Session) error {
 	return nil
 }
 
+func (m *mockStore) Update(_ context.Context, id string, edit func(*session.Session) error) (session.Session, error) {
+	s, ok := m.sessions[id]
+	if !ok {
+		return session.Session{}, session.ErrNotFound
+	}
+	if err := edit(&s); err != nil {
+		return session.Session{}, err
+	}
+	m.sessions[id] = s
+	return s, nil
+}
+
 func (m *mockStore) Delete(_ context.Context, id string) error {
 	delete(m.sessions, id)
 	return nil

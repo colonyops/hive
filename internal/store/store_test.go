@@ -2,6 +2,9 @@ package store
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -203,4 +206,65 @@ func TestStore(t *testing.T) {
 		// Verify both nil and empty behave the same way
 		assert.Equal(t, gotNil.Metadata == nil, gotEmpty.Metadata == nil, "nil and empty metadata should both round-trip the same way")
 	})
+}
+
+// TestSessionStoreUpdate_SerializesWritersOnSeparateConnections stands in
+// for two hive processes: each opens its own pool on the same hive.db.
+func TestSessionStoreUpdate_SerializesWritersOnSeparateConnections(t *testing.T) {
+	dir := t.TempDir()
+	open := func() *SessionStore {
+		database, err := db.Open(dir, db.DefaultOpenOptions())
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = database.Close() })
+		return NewSessionStore(database)
+	}
+	first, second := open(), open()
+	now := time.Now()
+	require.NoError(t, first.Save(t.Context(), session.Session{
+		ID: "s", Name: "s", Path: "/tmp/s", State: session.StateActive, CreatedAt: now, UpdatedAt: now,
+	}))
+
+	const writers = 10
+	var wg sync.WaitGroup
+	for i := range writers {
+		store := first
+		if i%2 == 1 {
+			store = second
+		}
+		wg.Go(func() {
+			_, err := store.Update(t.Context(), "s", func(sess *session.Session) error {
+				return sess.EditTags([]string{fmt.Sprintf("tag-%d", i)}, nil)
+			})
+			assert.NoError(t, err)
+		})
+	}
+	wg.Wait()
+
+	got, err := first.Get(t.Context(), "s")
+	require.NoError(t, err)
+	assert.Len(t, got.Tags, writers)
+}
+
+func TestSessionStoreUpdate_LeavesTheSessionAloneWhenTheEditFails(t *testing.T) {
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = database.Close() })
+	store := NewSessionStore(database)
+
+	_, err = store.Update(t.Context(), "missing", func(*session.Session) error { return nil })
+	require.ErrorIs(t, err, session.ErrNotFound)
+
+	now := time.Now()
+	require.NoError(t, store.Save(t.Context(), session.Session{
+		ID: "s", Name: "s", Path: "/tmp/s", State: session.StateActive, Tags: []string{"auto"}, CreatedAt: now, UpdatedAt: now,
+	}))
+	sentinel := errors.New("edit failed")
+	_, err = store.Update(t.Context(), "s", func(sess *session.Session) error {
+		sess.Tags = nil
+		return sentinel
+	})
+	require.ErrorIs(t, err, sentinel)
+	got, err := store.Get(t.Context(), "s")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"auto"}, got.Tags)
 }
