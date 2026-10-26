@@ -1649,6 +1649,7 @@ describe('App', () => {
           repoIdentity: 'hay-kot/hive',
           state: 'active',
           canvasOwner: 'hay-kot/hive',
+          labels: [],
           createdAt: '2026-10-01T12:00:00Z',
         },
       ])
@@ -3440,6 +3441,7 @@ describe('App', () => {
         repoIdentity: 'git@github.com:hay-kot/hive.git',
         state: 'active',
         canvasOwner: 'hay-kot/hive',
+        labels: [],
         createdAt: '2026-10-01T12:00:00Z',
       },
     ])

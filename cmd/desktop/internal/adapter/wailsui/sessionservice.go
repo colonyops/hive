@@ -135,6 +135,15 @@ func (s *SessionService) RenameSession(ctx context.Context, id, name string) (Se
 	return sessionSummaryOf(s.sessions.CanonicalSpace, renamed), nil
 }
 
+// SetSessionLabels replaces a session's labels and returns its new summary.
+func (s *SessionService) SetSessionLabels(ctx context.Context, id string, labels []string) (SessionSummary, error) {
+	saved, err := s.sessions.SetSessionLabels(ctx, id, labels)
+	if err != nil {
+		return SessionSummary{}, err
+	}
+	return sessionSummaryOf(s.sessions.CanonicalSpace, saved), nil
+}
+
 // DeleteSession starts the delete as a background job and returns the job id.
 func (s *SessionService) DeleteSession(ctx context.Context, id string) (int64, error) {
 	return s.sessions.DeleteSession(ctx, id)

@@ -31,6 +31,7 @@ describe('useTerminalSessions', () => {
         repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
+        labels: [],
         createdAt: '2026-10-01T12:00:00Z',
       },
       {
@@ -41,6 +42,7 @@ describe('useTerminalSessions', () => {
         repoIdentity: 'hay-kot/hive',
         state: 'recycled',
         canvasOwner: '',
+        labels: [],
         createdAt: '2026-09-01T12:00:00Z',
       },
     ])
@@ -73,6 +75,7 @@ describe('useTerminalSessions', () => {
         repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
+        labels: [],
       },
     ])
     const { sessions, error, reload } = useTerminalSessions()
@@ -104,6 +107,7 @@ describe('useTerminalSessions', () => {
       repoIdentity: '',
       state: 'active',
       canvasOwner: '',
+      labels: [],
       createdAt: '',
     })
     expect(mocks.Scratch).toHaveBeenCalledTimes(1)
@@ -119,6 +123,7 @@ describe('useTerminalSessions', () => {
         repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
+        labels: [],
       },
     ])
     mocks.Scratch.mockRejectedValue(new Error('the terminal is unavailable'))
@@ -147,6 +152,7 @@ describe('sessionRepository', () => {
         repoIdentity: 'https://github.com/hay-kot/hive.git',
         state: 'active',
         canvasOwner: '',
+        labels: [],
       },
     ])
     const { reload, sessionRepository } = useTerminalSessions()
@@ -165,6 +171,7 @@ describe('sessionRepository', () => {
         repoIdentity: '',
         state: 'active',
         canvasOwner: '',
+        labels: [],
         createdAt: '',
       },
     ])
@@ -179,7 +186,17 @@ describe('sessionRepository', () => {
 
 describe('groupTerminalSessions', () => {
   function row(name: string, repo: string, repoIdentity = repo): TerminalSessionRow {
-    return { id: name, name, slug: `slug-${name}`, repo, repoIdentity, state: 'active', canvasOwner: '', createdAt: '' }
+    return {
+      id: name,
+      name,
+      slug: `slug-${name}`,
+      repo,
+      repoIdentity,
+      state: 'active',
+      canvasOwner: '',
+      labels: [],
+      createdAt: '',
+    }
   }
 
   it('groups by remote with readable names, both levels alphabetical', () => {
@@ -216,7 +233,17 @@ describe('groupTerminalSessions', () => {
 
 describe('terminalSessionGroups', () => {
   function row(name: string, repo: string, repoIdentity = repo): TerminalSessionRow {
-    return { id: name, name, slug: `slug-${name}`, repo, repoIdentity, state: 'active', canvasOwner: '', createdAt: '' }
+    return {
+      id: name,
+      name,
+      slug: `slug-${name}`,
+      repo,
+      repoIdentity,
+      state: 'active',
+      canvasOwner: '',
+      labels: [],
+      createdAt: '',
+    }
   }
 
   it('pins the scratch terminal above the repositories, in a section of its own', () => {

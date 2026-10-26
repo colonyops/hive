@@ -198,6 +198,13 @@ export function SessionStatuses(): $CancellablePromise<app$0.SessionStatusSnapsh
 }
 
 /**
+ * SetSessionLabels replaces a session's labels and returns its new summary.
+ */
+export function SetSessionLabels(id: string, labels: string[] | null): $CancellablePromise<$models.SessionSummary> {
+    return $Call.ByID(1612728116, id, labels);
+}
+
+/**
  * TerminalActionViews returns the configured actions the terminal offers on
  * one of its surfaces — "session" for a session row, "window" for a window
  * row.

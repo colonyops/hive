@@ -21,6 +21,7 @@ import Kbd from '@hive/ui/components/ui/Kbd.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import TreeRail from '@hive/ui/components/ui/TreeRail.vue'
 import NewWindowMenu from '../NewWindowMenu.vue'
+import SessionLabelChips from '../SessionLabelChips.vue'
 import SessionRowMenu from '../SessionRowMenu.vue'
 import SidebarToolbar from '../sidebar/SidebarToolbar.vue'
 import { dropClass, dropEdge, useDragReorder } from '../../composables/useDragReorder'
@@ -428,6 +429,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                       :title="row.repo ? `${row.slug}\n${row.repo}` : row.slug"
                       >{{ row.name }}</span
                     >
+                    <SessionLabelChips v-if="group.kind === 'repo'" :labels="row.labels" />
                     <BaseBadge
                       v-if="sessionAgeBadges[row.id]"
                       tone="accent"
@@ -511,6 +513,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                         @kill="ops.requestKill(row)"
                         @detail="sessions.openDetail(row)"
                         @rename="sessions.requestRename(row)"
+                        @labels="sessions.requestLabels(row)"
                         @recycle="sessions.requestRecycle(row)"
                         @delete="sessions.requestDelete(row)"
                       />

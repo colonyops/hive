@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   RenameSession: vi.fn(),
   SessionDetail: vi.fn(),
   SessionRisk: vi.fn(),
+  SetSessionLabels: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => mocks)
@@ -22,6 +23,7 @@ const session: SessionSummary = {
   repoIdentity: 'acme/site',
   state: 'active',
   canvasOwner: '',
+  labels: [],
   createdAt: '2026-10-01T12:00:00Z',
 }
 
@@ -173,5 +175,34 @@ describe('useSessionActions rename and read', () => {
 
     actions.closeDetail()
     expect(actions.detail.value).toBeNull()
+  })
+})
+
+describe('useSessionActions labels', () => {
+  it('saves the labels and asks the host to re-read the list', async () => {
+    mocks.SetSessionLabels.mockResolvedValue({ ...session, labels: ['auto'] })
+    const onChanged = vi.fn()
+    const actions = useSessionActions({ onChanged })
+
+    actions.requestLabels(session)
+    expect(actions.labelling.value?.id).toBe('s1')
+    await actions.submitLabels(['auto'])
+
+    expect(mocks.SetSessionLabels).toHaveBeenCalledWith('s1', ['auto'])
+    expect(onChanged).toHaveBeenCalled()
+    expect(actions.labelling.value).toBeNull()
+  })
+
+  it('keeps the dialog open with the reason a label was refused', async () => {
+    mocks.SetSessionLabels.mockRejectedValue(new Error('label "a,b" cannot contain commas'))
+    const onChanged = vi.fn()
+    const actions = useSessionActions({ onChanged })
+
+    actions.requestLabels(session)
+    await actions.submitLabels(['a,b'])
+
+    expect(actions.labelling.value).not.toBeNull()
+    expect(actions.labelsError.value).toContain('commas')
+    expect(onChanged).not.toHaveBeenCalled()
   })
 })

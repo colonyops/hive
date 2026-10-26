@@ -4,11 +4,21 @@ import type { TerminalSessionGroup, TerminalSessionRow } from '../../../stores/u
 import { useSessionTreeView } from '../useSessionTreeView'
 
 function row(id: string, name: string, repo = 'github.com/acme/site'): TerminalSessionRow {
-  return { id, name, slug: `${name}-${id}`, repo, repoIdentity: repo, state: 'active', canvasOwner: '', createdAt: '' }
+  return {
+    id,
+    name,
+    slug: `${name}-${id}`,
+    repo,
+    repoIdentity: repo,
+    state: 'active',
+    canvasOwner: '',
+    labels: [],
+    createdAt: '',
+  }
 }
 
 const parser = row('1', 'parser')
-const docs = row('2', 'docs')
+const docs = { ...row('2', 'docs'), labels: ['Auto'] }
 const api = row('3', 'api', 'github.com/acme/api')
 const scratch = row('s', 'scratch', '')
 
@@ -53,6 +63,12 @@ describe('useSessionTreeView', () => {
     expect(names(view.groups.value)).toEqual([['docs']])
     view.query.value = 'acme/site'
     expect(names(view.groups.value)).toEqual([['parser', 'docs']])
+  })
+
+  it('narrows sessions by label, ignoring case', () => {
+    const { view } = setup()
+    view.query.value = 'auto'
+    expect(names(view.groups.value)).toEqual([['docs']])
   })
 
   it('keeps the pinned sections when narrowing to running sessions, and says how many it hid', () => {

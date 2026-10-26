@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   RevealSession: vi.fn(),
   SessionRisk: vi.fn(),
   RenameSession: vi.fn(),
+  SetSessionLabels: vi.fn(),
   DeleteSession: vi.fn(),
   RecycleSession: vi.fn(),
   PruneSessions: vi.fn(),
@@ -114,6 +115,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   RevealSession: mocks.RevealSession,
   SessionRisk: mocks.SessionRisk,
   RenameSession: mocks.RenameSession,
+  SetSessionLabels: mocks.SetSessionLabels,
   DeleteSession: mocks.DeleteSession,
   RecycleSession: mocks.RecycleSession,
   PruneSessions: mocks.PruneSessions,
@@ -651,6 +653,7 @@ describe('TerminalMode', () => {
         repoIdentity: 'github.com/grafana/ai-sdk',
         state: 'active',
         canvasOwner: '',
+        labels: [],
         createdAt: '',
       },
       {
@@ -661,6 +664,7 @@ describe('TerminalMode', () => {
         repoIdentity: 'github.com/grafana/ai-sdk',
         state: 'active',
         canvasOwner: '',
+        labels: [],
         createdAt: '',
       },
     ])
@@ -2132,6 +2136,52 @@ describe('TerminalMode', () => {
     // The slug is the tmux target, so the attach has to follow it.
     expect(router.currentRoute.value.params.slug).toBe('parse-it')
     expect(mocks.useTerminalWindows).toHaveBeenLastCalledWith('parse-it', expect.anything())
+    wrapper.unmount()
+  })
+
+  it("shows a session row's labels and edits them from the row menu", async () => {
+    mocks.ListSessions.mockResolvedValue([
+      {
+        id: '1',
+        name: 'fix the parser',
+        slug: 'hive-fix-parser',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+        labels: ['auto'],
+      },
+      {
+        id: '2',
+        name: 'bump deps',
+        slug: 'hive-bump-deps',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+        labels: ['backend'],
+      },
+    ])
+    mocks.SetSessionLabels.mockResolvedValue({})
+    const { wrapper } = await mountAvailable()
+    const row = wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"]')
+    expect(row.findAll('[data-testid="session-label"]').map((chip) => chip.text())).toEqual(['auto'])
+
+    await openRowMenu(wrapper, 'hive-fix-parser')
+    await wrapper.get('[data-testid="session-menu-labels"]').trigger('click')
+    await flushPromises()
+
+    expect(document.querySelector('[data-testid="session-labels-input-token-auto"]')).not.toBeNull()
+    const input = document.querySelector<HTMLInputElement>('[data-testid="session-labels-input"]')!
+    input.dispatchEvent(new Event('focus'))
+    await flushPromises()
+    // Labels already on other sessions are offered, so one spelling spreads.
+    expect(document.querySelector('[data-testid="session-labels-input-option-backend"]')).not.toBeNull()
+    input.value = 'review'
+    input.dispatchEvent(new Event('input'))
+    document.querySelector<HTMLButtonElement>('[data-testid="session-labels-save"]')!.click()
+    await flushPromises()
+
+    expect(mocks.SetSessionLabels).toHaveBeenCalledWith('1', ['auto', 'review'])
+    expect(document.querySelector('[data-testid="session-labels-dialog"]')).toBeNull()
     wrapper.unmount()
   })
 

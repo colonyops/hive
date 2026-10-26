@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, toRef } from 'vue'
+import { computed, onMounted, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
 import ActionInputsDialog from './ActionInputsDialog.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
+import SessionLabelsDialog from './SessionLabelsDialog.vue'
 import DrivePane from './drive/DrivePane.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
 import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
@@ -25,6 +26,7 @@ import { openLink } from '../composables/useXtermPane'
 import { spaceGroup, type DriveScope } from '../lib/drive'
 import { useTerminalAvailability } from '../stores/useTerminalAvailability'
 import { useTerminalPoolSize } from '../stores/useTerminalPoolSize'
+import { useTerminalSessions } from '../stores/useTerminalSessions'
 import '@xterm/xterm/css/xterm.css'
 
 // `active` is whether this mode is the surface on screen. The component is
@@ -86,7 +88,32 @@ const { prefetch: prefetchNewSession } = useNewSession()
 onMounted(prefetchNewSession)
 
 const { pendingInputs: actionInputs, inputsBusy, inputsError, cancelInputs, submitInputs } = ops.actions
-const { confirmation, detail, closeDetail, renaming, renameBusy, renameError, cancelRename, submitRename } = sessions
+const {
+  confirmation,
+  detail,
+  closeDetail,
+  renaming,
+  renameBusy,
+  renameError,
+  cancelRename,
+  submitRename,
+  labelling,
+  labelsBusy,
+  labelsError,
+  cancelLabels,
+  submitLabels,
+} = sessions
+
+// Every label already in use is offered, so one spelling spreads instead of
+// near-duplicates.
+const { sessions: sessionRows } = useTerminalSessions()
+const knownLabels = computed(() => {
+  const seen = new Map<string, string>()
+  for (const row of sessionRows.value) {
+    for (const label of row.labels ?? []) if (!seen.has(label.toLowerCase())) seen.set(label.toLowerCase(), label)
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b))
+})
 </script>
 
 <template>
@@ -159,6 +186,16 @@ const { confirmation, detail, closeDetail, renaming, renameBusy, renameError, ca
       :error="renameError"
       @close="cancelRename"
       @save="submitRename"
+    />
+    <SessionLabelsDialog
+      v-if="labelling"
+      :name="labelling.name"
+      :labels="labelling.labels"
+      :suggestions="knownLabels"
+      :busy="labelsBusy"
+      :error="labelsError"
+      @close="cancelLabels"
+      @save="submitLabels"
     />
     <ConfirmationHost :confirmation="confirmation" testid="session-confirmation" />
   </div>

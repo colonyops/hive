@@ -20,6 +20,7 @@ type SessionSummary struct {
 	RepoIdentity string    `json:"repoIdentity"`
 	State        string    `json:"state"`
 	CanvasOwner  string    `json:"canvasOwner"`
+	Labels       []string  `json:"labels"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
@@ -30,8 +31,16 @@ func sessionSummaryOf(canonical func(drive.Space) drive.Space, s session.Session
 	}
 	return SessionSummary{
 		ID: s.ID, Name: s.Name, Slug: s.Slug, Repo: s.Remote, RepoIdentity: git.RemoteIdentity(s.Remote), State: string(s.State),
-		CanvasOwner: space.Key, CreatedAt: s.ActivatedAt(),
+		CanvasOwner: space.Key, Labels: labelsOf(s), CreatedAt: s.ActivatedAt(),
 	}
+}
+
+// labelsOf keeps the wire field an array, so the frontend never sees null.
+func labelsOf(s session.Session) []string {
+	if s.Labels == nil {
+		return []string{}
+	}
+	return s.Labels
 }
 
 func sessionSummariesOf(canonical func(drive.Space) drive.Space, sessions []session.Session) []SessionSummary {
@@ -67,7 +76,7 @@ func sessionDetailOf(s session.Session) SessionDetail {
 		Path:           s.Path,
 		CloneStrategy:  s.CloneStrategy,
 		WorktreeBranch: s.GetMeta(session.MetaWorktreeBranch),
-		Labels:         s.Labels,
+		Labels:         labelsOf(s),
 		CreatedAt:      s.CreatedAt,
 		UpdatedAt:      s.UpdatedAt,
 	}

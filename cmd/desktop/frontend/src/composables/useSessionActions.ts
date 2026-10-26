@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, type DeepReadonly } from 'vue'
 import {
   DeleteSession,
   PruneSessions,
@@ -6,6 +6,7 @@ import {
   RenameSession,
   SessionDetail,
   SessionRisk,
+  SetSessionLabels,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type {
   SessionDetail as SessionDetailView,
@@ -15,6 +16,9 @@ import type { SessionRisk as SessionRiskView } from '../../bindings/github.com/c
 import { appErrorMessage } from '../lib/appError'
 import { useConfirmation, type ConfirmationDetail } from '@hive/ui/composables/useConfirmation'
 import { useToasts } from './useToasts'
+
+/** A session as the session list hands it out: deep-readonly. */
+export type SessionRow = DeepReadonly<SessionSummary>
 
 export interface SessionActionOptions {
   /**
@@ -58,7 +62,7 @@ export function riskDetails(risk: SessionRiskView): ConfirmationDetail[] {
 }
 
 /**
- * The session row's operations: read, rename, recycle, delete, and the list-wide
+ * The session row's operations: read, rename, label, recycle, delete, and the list-wide
  * prune. Destructive ones are gated on a risk pre-flight and run as background
  * jobs, so what they report is that the job started — `jobs:updated` is what
  * tells the list to re-read.
@@ -68,11 +72,14 @@ export function useSessionActions(options: SessionActionOptions = {}) {
   const confirmation = useConfirmation()
 
   const detail = ref<SessionDetailView | null>(null)
-  const renaming = ref<SessionSummary | null>(null)
+  const renaming = ref<SessionRow | null>(null)
   const renameBusy = ref(false)
   const renameError = ref<string | null>(null)
+  const labelling = ref<SessionRow | null>(null)
+  const labelsBusy = ref(false)
+  const labelsError = ref<string | null>(null)
 
-  async function openDetail(session: SessionSummary): Promise<void> {
+  async function openDetail(session: SessionRow): Promise<void> {
     try {
       detail.value = await SessionDetail(session.id)
     } catch (e) {
@@ -84,7 +91,7 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     detail.value = null
   }
 
-  function requestRename(session: SessionSummary): void {
+  function requestRename(session: SessionRow): void {
     renaming.value = session
     renameError.value = null
   }
@@ -114,7 +121,35 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     }
   }
 
-  async function requestDestructive(session: SessionSummary, operation: 'delete' | 'recycle'): Promise<void> {
+  function requestLabels(session: SessionRow): void {
+    labelling.value = session
+    labelsError.value = null
+  }
+
+  function cancelLabels(): void {
+    if (labelsBusy.value) return
+    labelling.value = null
+    labelsError.value = null
+  }
+
+  // Like a rename, a refused label keeps the dialog open with hive's reason.
+  async function submitLabels(labels: string[]): Promise<void> {
+    const session = labelling.value
+    if (!session || labelsBusy.value) return
+    labelsBusy.value = true
+    labelsError.value = null
+    try {
+      await SetSessionLabels(session.id, labels)
+      labelling.value = null
+      options.onChanged?.()
+    } catch (e) {
+      labelsError.value = message(e, 'Could not save those labels.')
+    } finally {
+      labelsBusy.value = false
+    }
+  }
+
+  async function requestDestructive(session: SessionRow, operation: 'delete' | 'recycle'): Promise<void> {
     let risk: SessionRiskView
     try {
       risk = await SessionRisk(session.id)
@@ -138,11 +173,11 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     })
   }
 
-  function requestDelete(session: SessionSummary): Promise<void> {
+  function requestDelete(session: SessionRow): Promise<void> {
     return requestDestructive(session, 'delete')
   }
 
-  function requestRecycle(session: SessionSummary): Promise<void> {
+  function requestRecycle(session: SessionRow): Promise<void> {
     return requestDestructive(session, 'recycle')
   }
 
@@ -173,6 +208,12 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     requestRename,
     cancelRename,
     submitRename,
+    labelling,
+    labelsBusy,
+    labelsError,
+    requestLabels,
+    cancelLabels,
+    submitLabels,
     requestDelete,
     requestRecycle,
     requestPrune,

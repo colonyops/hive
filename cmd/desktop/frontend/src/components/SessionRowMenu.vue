@@ -3,11 +3,12 @@ import { computed } from 'vue'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconInfo from '~icons/lucide/info'
 import IconPencil from '~icons/lucide/pencil'
+import IconTag from '~icons/lucide/tag'
 import IconPlay from '~icons/lucide/play'
 import IconRecycle from '~icons/lucide/recycle'
 import IconSquare from '~icons/lucide/square'
 import IconTrash from '~icons/lucide/trash-2'
-import type { SessionSummary } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { SessionRow } from '../composables/useSessionActions'
 import type { MenuEntry } from '@hive/ui/types/menu'
 
 // The one menu for a hive session, opened from the session row. It owns the
@@ -15,7 +16,7 @@ import type { MenuEntry } from '@hive/ui/types/menu'
 // configured agent, a user-defined action — arrives as `extra` and lands in its
 // own labelled section, so a second menu never has to be built beside this one.
 const props = defineProps<{
-  session: SessionSummary
+  session: SessionRow
   /**
    * The scratch terminal, which has no hive session behind it: its tmux session
    * is the whole thing, so there is nothing to rename, recycle, delete or show
@@ -40,6 +41,7 @@ const emit = defineEmits<{
   kill: []
   detail: []
   rename: []
+  labels: []
   recycle: []
   delete: []
   extra: [id: string]
@@ -69,6 +71,7 @@ const entries = computed<MenuEntry[]>(() => {
   list.push(
     { kind: 'action', id: 'detail', label: 'Session details…', icon: IconInfo, testid: 'session-menu-detail' },
     { kind: 'action', id: 'rename', label: 'Rename…', icon: IconPencil, testid: 'session-menu-rename' },
+    { kind: 'action', id: 'labels', label: 'Edit labels…', icon: IconTag, testid: 'session-menu-labels' },
     { kind: 'separator' },
   )
   // Only an active session has a clone to reset; recycling a recycled one is
@@ -83,13 +86,14 @@ const entries = computed<MenuEntry[]>(() => {
   return list
 })
 
-const own = new Set(['start', 'kill', 'detail', 'rename', 'recycle', 'delete'])
+const own = new Set(['start', 'kill', 'detail', 'rename', 'labels', 'recycle', 'delete'])
 
 function onSelect(id: string): void {
   if (id === 'start') emit('start')
   else if (id === 'kill') emit('kill')
   else if (id === 'detail') emit('detail')
   else if (id === 'rename') emit('rename')
+  else if (id === 'labels') emit('labels')
   else if (id === 'recycle') emit('recycle')
   else if (id === 'delete') emit('delete')
   if (!own.has(id)) emit('extra', id)

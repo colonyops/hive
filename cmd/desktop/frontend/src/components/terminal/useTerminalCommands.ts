@@ -7,6 +7,7 @@ import IconPlay from '~icons/lucide/play'
 import IconPlus from '~icons/lucide/plus'
 import IconRecycle from '~icons/lucide/recycle'
 import IconSquare from '~icons/lucide/square'
+import IconTag from '~icons/lucide/tag'
 import IconTerminal from '~icons/lucide/terminal'
 import IconTrash from '~icons/lucide/trash-2'
 import { useCommands, useShellEscape, type Command } from '../../composables/useCommands'
@@ -78,6 +79,13 @@ export function attachedSessionCommands(context: TerminalModeContext, attached: 
       keywords: ['session'],
       icon: IconPencil,
       run: () => sessions.requestRename(attached),
+    },
+    hive && {
+      id: 'terminal:session:labels',
+      title: 'Edit labels…',
+      keywords: ['session', 'label', 'tag'],
+      icon: IconTag,
+      run: () => sessions.requestLabels(attached),
     },
     hive &&
       live && {

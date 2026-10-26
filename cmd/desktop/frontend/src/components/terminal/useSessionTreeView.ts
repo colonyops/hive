@@ -63,7 +63,7 @@ export function useSessionTreeView(
 
   // A repo match carries its whole group, which makes typing a repo name a way
   // to narrow to it. Sessions also match on the slug, the tmux target that a
-  // deep link or a script names.
+  // deep link or a script names, and on their labels.
   const groups = computed<TerminalSessionGroup[]>(() => {
     const needle = query.value.trim().toLowerCase()
     if (!needle) return runningGroups.value
@@ -74,7 +74,10 @@ export function useSessionTreeView(
         continue
       }
       const sessions = group.sessions.filter(
-        (row) => row.name.toLowerCase().includes(needle) || row.slug.toLowerCase().includes(needle),
+        (row) =>
+          row.name.toLowerCase().includes(needle) ||
+          row.slug.toLowerCase().includes(needle) ||
+          (row.labels ?? []).some((label) => label.toLowerCase().includes(needle)),
       )
       if (sessions.length) groups.push({ ...group, sessions })
     }
