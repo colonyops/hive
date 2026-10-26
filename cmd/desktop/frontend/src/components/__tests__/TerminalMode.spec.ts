@@ -2163,7 +2163,7 @@ describe('TerminalMode', () => {
     mocks.SetSessionLabels.mockResolvedValue({})
     const { wrapper } = await mountAvailable()
     const row = wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"]')
-    expect(row.findAll('[data-testid="session-label"]').map((chip) => chip.text())).toEqual(['auto'])
+    expect(row.get('[data-testid="session-labels"]').attributes('aria-label')).toBe('Labels: auto')
 
     await openRowMenu(wrapper, 'hive-fix-parser')
     await wrapper.get('[data-testid="session-menu-labels"]').trigger('click')
@@ -2171,7 +2171,8 @@ describe('TerminalMode', () => {
 
     expect(document.querySelector('[data-testid="session-labels-input-token-auto"]')).not.toBeNull()
     const input = document.querySelector<HTMLInputElement>('[data-testid="session-labels-input"]')!
-    input.dispatchEvent(new Event('focus'))
+    input.value = 'b'
+    input.dispatchEvent(new Event('input'))
     await flushPromises()
     // Labels already on other sessions are offered, so one spelling spreads.
     expect(document.querySelector('[data-testid="session-labels-input-option-backend"]')).not.toBeNull()

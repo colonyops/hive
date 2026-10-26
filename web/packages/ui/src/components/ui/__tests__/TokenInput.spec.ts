@@ -1,7 +1,10 @@
-import { mount } from '@vue/test-utils'
+import { DOMWrapper, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TokenInput from '../TokenInput.vue'
 import AppTooltip from '../AppTooltip.vue'
+
+// The suggestion list is teleported to <body>.
+const body = () => new DOMWrapper(document.body)
 
 function mountInput(props: Partial<InstanceType<typeof TokenInput>['$props']> = {}) {
   return mount(TokenInput, {
@@ -41,16 +44,25 @@ describe('TokenInput', () => {
   it('lists suggestions not already chosen, narrowed by the draft, and adds a picked one', async () => {
     const wrapper = mountInput({ modelValue: ['auto'] })
     const input = wrapper.get('[data-testid="labels"]')
-    await input.trigger('focus')
-    expect(wrapper.find('[data-testid="labels-option-auto"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="labels-option-Backend"]').exists()).toBe(true)
+    await input.trigger('click')
+    expect(body().find('[data-testid="labels-option-auto"]').exists()).toBe(false)
+    expect(body().find('[data-testid="labels-option-Backend"]').exists()).toBe(true)
 
     await input.setValue('zzz')
-    expect(wrapper.find('[data-testid="labels-suggestions"]').exists()).toBe(false)
+    expect(body().find('[data-testid="labels-suggestions"]').exists()).toBe(false)
 
     await input.setValue('back')
-    await wrapper.get('[data-testid="labels-option-Backend"]').trigger('mousedown')
+    await body().get('[data-testid="labels-option-Backend"]').trigger('mousedown')
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([['auto', 'Backend']])
+    wrapper.unmount()
+  })
+
+  it('keeps the list closed when the input is only focused', async () => {
+    const wrapper = mountInput()
+    await wrapper.get('[data-testid="labels"]').trigger('focus')
+    expect(body().find('[data-testid="labels-suggestions"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="labels"]').trigger('keydown', { key: 'ArrowDown' })
+    expect(body().find('[data-testid="labels-option-auto"]').exists()).toBe(true)
     wrapper.unmount()
   })
 

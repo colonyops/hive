@@ -38,31 +38,33 @@ onMounted(async () => {
 
 <template>
   <BaseModal
-    :title="`Labels for ${name}`"
+    title="Edit labels"
     :icon="IconTag"
     :width="440"
     :busy="busy"
     testid="session-labels-dialog"
     @close="emit('close')"
   >
-    <FormField
-      v-slot="{ id }"
-      label="Labels"
-      hint="Enter or a comma adds a label. Labels ignore case."
-      :error="error"
-      testid="session-labels"
-      class="px-5 py-4"
-    >
-      <TokenInput
-        :id="id"
-        ref="field"
-        v-model="draft"
-        :suggestions="suggestions"
-        placeholder="Add label…"
-        testid="session-labels-input"
-        @keydown.meta.enter="submit"
-      />
-    </FormField>
+    <div class="flex flex-col gap-3 px-5 py-4">
+      <p class="truncate text-caption text-text-3" :title="name" data-testid="session-labels-session">{{ name }}</p>
+      <FormField
+        v-slot="{ id }"
+        label="Labels"
+        hint="Enter or a comma adds a label. Labels ignore case."
+        :error="error"
+        testid="session-labels"
+      >
+        <TokenInput
+          :id="id"
+          ref="field"
+          v-model="draft"
+          :suggestions="suggestions"
+          placeholder="Add label…"
+          testid="session-labels-input"
+          @keydown.meta.enter="submit"
+        />
+      </FormField>
+    </div>
     <template #footer>
       <div class="flex-1" />
       <BaseButton variant="secondary" :disabled="busy" data-testid="session-labels-cancel" @click="emit('close')"

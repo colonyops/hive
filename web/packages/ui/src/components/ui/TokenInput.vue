@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // A typed value that matches a suggestion ignoring case takes the
 // suggestion's spelling, so a list never holds "pr" next to "PR".
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import IconX from '~icons/lucide/x'
 import IconCornerDownLeft from '~icons/lucide/corner-down-left'
+import { useAnchoredPopover } from '../../composables/useAnchoredPopover'
 import { useListKeyboardNav } from '../../composables/useListKeyboardNav'
 import AppTooltip from './AppTooltip.vue'
 import IconButton from './IconButton.vue'
@@ -33,6 +34,8 @@ const props = withDefaults(
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 
 const input = ref<HTMLInputElement | null>(null)
+const box = ref<HTMLElement | null>(null)
+const list = ref<HTMLElement | null>(null)
 const draft = ref('')
 const open = ref(false)
 const active = ref(0)
@@ -78,9 +81,25 @@ function onInput(): void {
   open.value = true
   active.value = 0
 }
+// Teleported, because the input usually sits in a modal or drawer that
+// scrolls and would clip an absolute list.
+const showList = computed(() => open.value && options.value.length > 0)
+const { style: listStyle, measure } = useAnchoredPopover(box, list, showList)
+watch([showList, () => options.value.length, () => tokens.value.length], async () => {
+  if (!showList.value) return
+  measure()
+  await nextTick()
+  measure()
+})
+
 const nav = useListKeyboardNav({ active, count: () => options.value.length, wrap: false })
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'ArrowDown') open.value = true
+  if (event.key === 'ArrowDown' && !open.value) {
+    event.preventDefault()
+    open.value = true
+    active.value = 0
+    return
+  }
   if (nav.onKeydown(event)) return
   if (event.key === 'Enter' || event.key === ',') {
     event.preventDefault()
@@ -94,6 +113,10 @@ function onKeydown(event: KeyboardEvent): void {
     remove(tokens.value[tokens.value.length - 1])
   }
 }
+function onBoxClick(): void {
+  input.value?.focus()
+  open.value = true
+}
 function onBlur(): void {
   open.value = false
   add()
@@ -106,10 +129,10 @@ defineExpose({ flush: () => add(), focus: () => input.value?.focus() })
 <template>
   <div class="relative">
     <div
-      class="flex flex-wrap items-center gap-1.5 rounded border bg-app px-2 py-1.5"
-      :class="open ? 'border-accent' : 'border-border'"
+      ref="box"
+      class="flex flex-wrap items-center gap-1.5 rounded border border-border bg-app px-2 py-1.5 focus-within:border-accent"
       :data-testid="`${testid}-tokens`"
-      @click="input?.focus()"
+      @click="onBoxClick"
     >
       <span
         v-for="token in tokens"
@@ -139,37 +162,40 @@ defineExpose({ flush: () => add(), focus: () => input.value?.focus() })
         :class="monospace ? 'font-mono' : ''"
         role="combobox"
         :aria-expanded="open"
-        @focus="onInput"
         @input="onInput"
         @keydown="onKeydown"
         @blur="onBlur"
       />
     </div>
 
-    <ul
-      v-if="open && options.length"
-      class="absolute inset-x-0 top-[calc(100%+6px)] z-20 flex max-h-60 flex-col gap-0.5 overflow-y-auto rounded-lg border border-card bg-raised p-[5px] shadow-popover"
-      role="listbox"
-      :data-testid="`${testid}-suggestions`"
-    >
-      <li v-for="(option, index) in options" :key="option" role="option" :aria-selected="index === active">
-        <button
-          type="button"
-          class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left"
-          :class="index === active ? 'bg-hover' : ''"
-          :data-testid="`${testid}-option-${option}`"
-          @mousedown.prevent="add(option)"
-          @mousemove="active = index"
-        >
-          <span class="text-small text-text-2" :class="monospace ? 'font-mono' : ''"
-            ><span>{{ highlight(option).pre }}</span
-            ><span class="text-accent">{{ highlight(option).mid }}</span
-            ><span>{{ highlight(option).post }}</span></span
+    <Teleport to="body">
+      <ul
+        v-if="showList"
+        ref="list"
+        class="fixed z-50 flex flex-col gap-0.5 overflow-y-auto rounded-lg border border-card bg-raised p-[5px] shadow-popover"
+        :style="listStyle"
+        role="listbox"
+        :data-testid="`${testid}-suggestions`"
+      >
+        <li v-for="(option, index) in options" :key="option" role="option" :aria-selected="index === active">
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left"
+            :class="index === active ? 'bg-hover' : ''"
+            :data-testid="`${testid}-option-${option}`"
+            @mousedown.prevent="add(option)"
+            @mousemove="active = index"
           >
-          <span class="flex-1" />
-          <IconCornerDownLeft v-if="index === active" class="size-3 text-text-4" />
-        </button>
-      </li>
-    </ul>
+            <span class="text-small text-text-2" :class="monospace ? 'font-mono' : ''"
+              ><span>{{ highlight(option).pre }}</span
+              ><span class="text-accent">{{ highlight(option).mid }}</span
+              ><span>{{ highlight(option).post }}</span></span
+            >
+            <span class="flex-1" />
+            <IconCornerDownLeft v-if="index === active" class="size-3 text-text-4" />
+          </button>
+        </li>
+      </ul>
+    </Teleport>
   </div>
 </template>
