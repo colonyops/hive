@@ -17,7 +17,6 @@ const text = computed(() => (props.tags ?? []).join(', '))
       class="flex shrink-0 items-center text-text-4"
       role="img"
       :aria-label="`Tags: ${text}`"
-      :data-count="tags.length > 1 ? 'many' : 'one'"
       data-testid="session-tags"
     >
       <component :is="tags.length > 1 ? IconTags : IconTag" class="size-3" aria-hidden="true" />

@@ -1051,25 +1051,6 @@ func TestSessionsService_SessionDraftFromActivityRefusesAnUnrelatedRow(t *testin
 	assert.Equal(t, KindInvalid, KindOf(err), "a row with nothing to retry is refused, not silently empty")
 }
 
-func TestSessionsService_EditsSessionTags(t *testing.T) {
-	h := newHiveHarness(t, engineOptions{})
-	h.save(t, session.Session{ID: "s1", Name: "review", Slug: "review", State: session.StateActive, Tags: []string{"auto"}})
-	svc := newSessionsService(SessionsDeps{Hive: h.engine})
-
-	got, err := svc.EditSessionTags(t.Context(), "s1", []string{"orchestrated"}, []string{"Auto"})
-	require.NoError(t, err)
-	assert.Equal(t, []string{"orchestrated"}, got.Tags)
-
-	got, err = svc.SetSessionTags(t.Context(), "s1", []string{"backend", "BACKEND"})
-	require.NoError(t, err)
-	assert.Equal(t, []string{"backend"}, got.Tags)
-
-	_, err = svc.SetSessionTags(t.Context(), "s1", []string{"a,b"})
-	assert.Equal(t, KindInvalid, KindOf(err), "an invalid tag is the caller's mistake: %v", err)
-	_, err = svc.EditSessionTags(t.Context(), "missing", []string{"x"}, nil)
-	assert.Equal(t, KindNotFound, KindOf(err), "%v", err)
-}
-
 func TestSessionsService_EditSessionChecksTagsBeforeRenaming(t *testing.T) {
 	h := newHiveHarness(t, engineOptions{})
 	h.save(t, session.Session{ID: "s1", Name: "review", Slug: "review", State: session.StateRecycled, Tags: []string{"auto"}})

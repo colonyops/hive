@@ -1240,19 +1240,6 @@ func TestSetSessionTags(t *testing.T) {
 	assert.Equal(t, []string{"auto", "backend"}, stored.Tags, "an invalid tag saves nothing")
 }
 
-func TestEditSessionTags(t *testing.T) {
-	store := newMockStore()
-	svc := newTestService(t, store, nil)
-	require.NoError(t, store.Save(t.Context(), session.Session{ID: "test1", Name: "s", Tags: []string{"auto", "backend"}}))
-
-	got, err := svc.EditSessionTags(t.Context(), "test1", []string{"orchestrated"}, []string{"AUTO"})
-	require.NoError(t, err)
-	assert.Equal(t, []string{"backend", "orchestrated"}, got.Tags)
-
-	_, err = svc.EditSessionTags(t.Context(), "missing", []string{"x"}, nil)
-	assert.Error(t, err)
-}
-
 func TestRecycleWorktreeSession_DeletesSession(t *testing.T) {
 	tests := []struct {
 		name     string

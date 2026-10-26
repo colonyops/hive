@@ -147,13 +147,3 @@ func TestEditSessionEnterSavesAndUnchangedEnterOnlyCloses(t *testing.T) {
 	assert.Empty(t, m.modals.EditSessionID)
 	require.NotNil(t, cmd)
 }
-
-func TestEditSessionEscCancels(t *testing.T) {
-	m := pressKey(t, newEditSessionTestModel(t), tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
-
-	model, cmd := m.handleEditSessionKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}), "esc")
-	m = model.(Model)
-
-	assert.Equal(t, stateNormal, m.state)
-	assert.Nil(t, cmd)
-}

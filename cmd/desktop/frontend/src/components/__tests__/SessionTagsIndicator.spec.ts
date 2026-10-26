@@ -4,17 +4,9 @@ import SessionTagsIndicator from '../SessionTagsIndicator.vue'
 import SessionTagsStatus from '../SessionTagsStatus.vue'
 
 describe('SessionTagsIndicator', () => {
-  it('names every tag for assistive tech and switches to the multiple-tags icon', () => {
+  it('names every tag for assistive tech', () => {
     const wrapper = mount(SessionTagsIndicator, { props: { tags: ['auto', 'backend', 'review'] } })
-    const indicator = wrapper.get('[data-testid="session-tags"]')
-    expect(indicator.attributes('aria-label')).toBe('Tags: auto, backend, review')
-    expect(indicator.attributes('data-count')).toBe('many')
-    expect(indicator.text()).toBe('')
-  })
-
-  it('shows the single-tag icon for one tag', () => {
-    const wrapper = mount(SessionTagsIndicator, { props: { tags: ['auto'] } })
-    expect(wrapper.get('[data-testid="session-tags"]').attributes('data-count')).toBe('one')
+    expect(wrapper.get('[data-testid="session-tags"]').attributes('aria-label')).toBe('Tags: auto, backend, review')
   })
 
   it('renders nothing for a session without tags', () => {
