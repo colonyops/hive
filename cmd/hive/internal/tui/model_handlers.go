@@ -149,7 +149,7 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		if sess == nil {
 			return m, nil
 		}
-		return m.openRenameInput(sess)
+		return m.openEditSession(sess, editFieldName)
 	}
 	if action.Type == act.TypeGroupSet {
 		sess := m.sessionsView.SelectedSession()
@@ -163,7 +163,7 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		if sess == nil {
 			return m, nil
 		}
-		return m.openTagsInput(sess)
+		return m.openEditSession(sess, editFieldTags)
 	}
 	if action.Type == act.TypeGroupToggle {
 		cmd := m.sessionsView.ToggleGroupBy()
@@ -203,7 +203,7 @@ func (m Model) handleSessionNewSession() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSessionRename(msg sessions.RenameRequestMsg) (tea.Model, tea.Cmd) {
-	return m.openRenameInput(msg.Session)
+	return m.openEditSession(msg.Session, editFieldName)
 }
 
 func (m Model) handleSessionDocReview() (tea.Model, tea.Cmd) {
@@ -481,16 +481,6 @@ func (m Model) handleReviewCommandPalette() (tea.Model, tea.Cmd) {
 }
 
 // --- Action results ---
-
-func (m Model) handleRenameComplete(msg renameCompleteMsg) (tea.Model, tea.Cmd) {
-	if msg.err != nil {
-		m.logger.Error().Err(msg.err).Msg("rename failed")
-		m.state = stateNormal
-		m.notifyErrorf("rename failed: %v", msg.err)
-		return m, nil
-	}
-	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
-}
 
 func (m Model) handleSetGroupComplete(msg setGroupCompleteMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {

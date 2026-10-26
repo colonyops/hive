@@ -141,7 +141,7 @@ var defaultUserCommands = map[string]UserCommand{
 	},
 	"RenameSession": {
 		Action: action.TypeRenameSession,
-		Help:   "rename session",
+		Help:   "edit session (name)",
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
@@ -181,7 +181,7 @@ var defaultUserCommands = map[string]UserCommand{
 	},
 	"TagsEdit": {
 		Action: action.TypeTagsEdit,
-		Help:   "edit session tags",
+		Help:   "edit session (tags)",
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},

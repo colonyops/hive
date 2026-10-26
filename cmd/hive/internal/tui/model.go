@@ -68,9 +68,8 @@ const (
 	stateShowingHelp
 	stateShowingNotifications
 	stateShowingInfo
-	stateRenaming
 	stateSettingGroup
-	stateEditingTags
+	stateEditingSession
 	stateFormInput
 	stateShowingTodos
 	stateSelectingRepo
@@ -614,12 +613,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleDocsRepoKeysLoaded(msg)
 
 	// Action results
-	case renameCompleteMsg:
-		model, cmd = m.handleRenameComplete(msg)
+	case editSessionCompleteMsg:
+		model, cmd = m.handleEditSessionComplete(msg)
 	case setGroupCompleteMsg:
 		model, cmd = m.handleSetGroupComplete(msg)
-	case setTagsCompleteMsg:
-		model, cmd = m.handleSetTagsComplete(msg)
 	case actionCompleteMsg:
 		model, cmd = m.handleActionComplete(msg)
 	case doctorResultsMsg:
@@ -749,14 +746,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.state == stateShowingInfo {
 		return m.handleInfoDialogKey(keyStr)
 	}
-	if m.state == stateRenaming {
-		return m.handleRenameKey(msg, keyStr)
+	if m.state == stateEditingSession {
+		return m.handleEditSessionKey(msg, keyStr)
 	}
 	if m.state == stateSettingGroup {
 		return m.handleGroupKey(msg, keyStr)
-	}
-	if m.state == stateEditingTags {
-		return m.handleTagsKey(msg, keyStr)
 	}
 	if m.state == stateStreaming {
 		return m.handleStreamingModalKey(keyStr)
@@ -1302,7 +1296,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			if selected == nil {
 				return m, nil
 			}
-			return m.openRenameInput(selected)
+			return m.openEditSession(selected, editFieldName)
 		}
 
 		// GroupToggle doesn't require a session
@@ -1326,7 +1320,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			if selected == nil {
 				return m, nil
 			}
-			return m.openTagsInput(selected)
+			return m.openEditSession(selected, editFieldTags)
 		}
 
 		// SetTheme doesn't require a session
@@ -1658,69 +1652,9 @@ func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 	return m.switchToView(tabs[next])
 }
 
-// renameCompleteMsg is sent when a rename operation completes.
-type renameCompleteMsg struct {
-	err error
-}
-
 // setGroupCompleteMsg is sent when a set-group operation completes.
 type setGroupCompleteMsg struct {
 	err error
-}
-
-// openRenameInput initializes the rename text input with the current session name.
-func (m Model) openRenameInput(sess *session.Session) (tea.Model, tea.Cmd) {
-	input := textinput.New()
-	input.SetValue(sess.Name)
-	input.Focus()
-	input.CharLimit = 64
-	input.Prompt = ""
-	input.SetWidth(40)
-	input.KeyMap.Paste.SetEnabled(true)
-	inputStyles := textinput.DefaultStyles(true)
-	inputStyles.Cursor.Color = styles.ColorPrimary
-	input.SetStyles(inputStyles)
-
-	m.modals.RenameInput = input
-	m.modals.RenameSessionID = sess.ID
-	m.state = stateRenaming
-	return m, nil
-}
-
-// handleRenameKey handles keys when the rename input is active.
-func (m Model) handleRenameKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, tea.Cmd) {
-	switch keyStr {
-	case keyCtrlC:
-		return m.quit()
-	case "esc":
-		m.state = stateNormal
-		m.modals.RenameSessionID = ""
-		return m, nil
-	case keyEnter:
-		newName := strings.TrimSpace(m.modals.RenameInput.Value())
-		if newName == "" {
-			m.state = stateNormal
-			m.modals.RenameSessionID = ""
-			return m, nil
-		}
-		sessionID := m.modals.RenameSessionID
-		m.state = stateNormal
-		m.modals.RenameSessionID = ""
-		return m, m.executeRename(sessionID, newName)
-	}
-
-	// Forward to textinput
-	var cmd tea.Cmd
-	m.modals.RenameInput, cmd = m.modals.RenameInput.Update(msg)
-	return m, cmd
-}
-
-// executeRename returns a command that renames a Hive and multiplexer session.
-func (m Model) executeRename(sessionID, newName string) tea.Cmd {
-	return func() tea.Msg {
-		err := m.service.RenameSession(context.Background(), sessionID, newName)
-		return renameCompleteMsg{err: err}
-	}
 }
 
 // openGroupInput initializes the group text input with the current session group.
@@ -1952,14 +1886,15 @@ func (m Model) delegateToComponent(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			*m.modals.NewSession, cmd = m.modals.NewSession.Update(msg)
 		}
 		return m, cmd
-	case stateRenaming:
-		m.modals.RenameInput, cmd = m.modals.RenameInput.Update(msg)
+	case stateEditingSession:
+		if m.modals.EditFocus == editFieldName {
+			m.modals.EditName, cmd = m.modals.EditName.Update(msg)
+		} else {
+			m.modals.EditTags, cmd = m.modals.EditTags.Update(msg)
+		}
 		return m, cmd
 	case stateSettingGroup:
 		m.modals.GroupInput, cmd = m.modals.GroupInput.Update(msg)
-		return m, cmd
-	case stateEditingTags:
-		m.modals.TagsInput, cmd = m.modals.TagsInput.Update(msg)
 		return m, cmd
 	case stateFormInput:
 		if m.modals.FormDialog != nil {

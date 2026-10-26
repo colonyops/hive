@@ -65,7 +65,7 @@ Tags are short words you attach to a session, such as `auto` or `backend`. Scrip
 - Add tags when you create a session with `hive new --tags auto --tags backend`, or from a [source](../configuration/sources.md) with `templates.tags`.
 - Change them later with `hive session update <id> --add-tag <tag>`, `--remove-tag <tag>`, or `--clear-tags`. The flags repeat. `--clear-tags` applies first, then the additions, then the removals.
 - List the sessions that carry every given tag with `hive ls --tags auto`. `--json` output includes a `tags` array.
-- In the TUI, press <kbd>ctrl+t</kbd> to edit the selected session's tags as a comma-separated list. The tree shows tags at the end of each row and in the preview header, and <kbd>/</kbd> matches them.
+- In the TUI, press <kbd>ctrl+t</kbd> or <kbd>R</kbd> to open **Edit Session**, which edits the name and the tags (comma separated) together. <kbd>Tab</kbd> moves between the fields and <kbd>Enter</kbd> saves. The tree shows tags at the end of each row and in the preview header, and <kbd>/</kbd> matches them.
 
 [Hive Desktop](../../desktop/code/terminal-mode.md) shows the same sessions in its Code area when both use the same Hive data root, which is the default.
 

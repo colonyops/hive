@@ -57,7 +57,7 @@ Actions are built-in behaviors that can be assigned to user commands via the `ac
 | `Recycle`       | Recycle the selected session       |
 | `Delete`        | Delete the selected session        |
 | `NewSession`    | Create a new session               |
-| `RenameSession` | Rename the selected session        |
+| `RenameSession` | Open Edit Session on the name field |
 
 ### Tmux
 
@@ -88,7 +88,7 @@ These actions are provided by the tmux plugin and require tmux to be available.
 
 | Action       | Description                                      |
 | ------------ | ------------------------------------------------ |
-| `TagsEdit`   | Edit the selected session's tags, comma separated |
+| `TagsEdit`   | Open Edit Session on the tags field              |
 
 ### Navigation
 
