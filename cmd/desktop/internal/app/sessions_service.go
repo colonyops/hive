@@ -790,10 +790,7 @@ func (s *SessionsService) EditSession(ctx context.Context, id, name string, tags
 
 // SetSessionTags replaces a session's tags and returns the session.
 func (s *SessionsService) SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error) {
-	if _, err := session.NormalizeTags(tags); err != nil {
-		return session.Session{}, Wrap(err, KindInvalid, "session tags")
-	}
-	return s.saveTags(ctx, id, func(sessions *sessionsvc.Service) (session.Session, error) {
+	return s.saveTags(id, func(sessions *sessionsvc.Service) (session.Session, error) {
 		return sessions.SetSessionTags(ctx, id, tags)
 	})
 }
@@ -801,27 +798,22 @@ func (s *SessionsService) SetSessionTags(ctx context.Context, id string, tags []
 // EditSessionTags adds and then removes tags on a session, leaving its
 // other tags in place, and returns the session.
 func (s *SessionsService) EditSessionTags(ctx context.Context, id string, add, remove []string) (session.Session, error) {
-	if _, err := session.NormalizeTags(add); err != nil {
-		return session.Session{}, Wrap(err, KindInvalid, "session tags")
-	}
-	return s.saveTags(ctx, id, func(sessions *sessionsvc.Service) (session.Session, error) {
+	return s.saveTags(id, func(sessions *sessionsvc.Service) (session.Session, error) {
 		return sessions.EditSessionTags(ctx, id, add, remove)
 	})
 }
 
-func (s *SessionsService) saveTags(ctx context.Context, id string, save func(*sessionsvc.Service) (session.Session, error)) (session.Session, error) {
+func (s *SessionsService) saveTags(id string, save func(*sessionsvc.Service) (session.Session, error)) (session.Session, error) {
 	if strings.TrimSpace(id) == "" {
 		return session.Session{}, Errorf(KindInvalid, "session id is required")
 	}
-	sessions := s.hive.Sessions()
-	if _, err := sessions.GetSession(ctx, id); err != nil {
-		if errors.Is(err, session.ErrNotFound) {
-			return session.Session{}, Wrap(err, KindNotFound, "session %q not found", id)
-		}
-		return session.Session{}, Wrap(err, KindInternal, "reading session %q", id)
-	}
-	saved, err := save(sessions)
-	if err != nil {
+	saved, err := save(s.hive.Sessions())
+	switch {
+	case errors.Is(err, session.ErrInvalidTag):
+		return session.Session{}, Wrap(err, KindInvalid, "session tags")
+	case errors.Is(err, session.ErrNotFound):
+		return session.Session{}, Wrap(err, KindNotFound, "session %q not found", id)
+	case err != nil:
 		return session.Session{}, Wrap(err, KindInternal, "updating tags on session %q", id)
 	}
 	return saved, nil

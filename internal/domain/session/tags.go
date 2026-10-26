@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -12,18 +13,21 @@ import (
 // session name.
 const MaxTagLength = 40
 
+// ErrInvalidTag wraps every error ValidateTag returns.
+var ErrInvalidTag = errors.New("invalid tag")
+
 // ValidateTag checks one tag. A comma is refused because editors and
 // command lines use it to separate tags.
 func ValidateTag(tag string) error {
 	tag = strings.TrimSpace(tag)
 	if tag == "" {
-		return fmt.Errorf("tag cannot be empty")
+		return fmt.Errorf("%w: tag cannot be empty", ErrInvalidTag)
 	}
 	if n := utf8.RuneCountInString(tag); n > MaxTagLength {
-		return fmt.Errorf("tag %q is %d characters; the maximum is %d", tag, n, MaxTagLength)
+		return fmt.Errorf("%w: tag %q is %d characters; the maximum is %d", ErrInvalidTag, tag, n, MaxTagLength)
 	}
 	if strings.ContainsRune(tag, ',') || strings.ContainsFunc(tag, unicode.IsControl) {
-		return fmt.Errorf("tag %q cannot contain commas or control characters", tag)
+		return fmt.Errorf("%w: tag %q cannot contain commas or control characters", ErrInvalidTag, tag)
 	}
 	return nil
 }
@@ -69,14 +73,21 @@ func (s *Session) HasAllTags(required []string) bool {
 }
 
 // EditTags adds and then removes tags. Removing a tag the session does
-// not carry is not an error.
+// not carry is not an error. Only the added tags are validated, so a tag
+// stored before validation existed can still be removed.
 func (s *Session) EditTags(add, remove []string) error {
-	added, err := NormalizeTags(append(slices.Clone(s.Tags), add...))
+	added, err := NormalizeTags(add)
 	if err != nil {
 		return err
 	}
-	s.Tags = slices.DeleteFunc(added, func(tag string) bool {
-		return containsTag(remove, tag)
+	tags := slices.Clone(s.Tags)
+	for _, tag := range added {
+		if !containsTag(tags, tag) {
+			tags = append(tags, tag)
+		}
+	}
+	s.Tags = slices.DeleteFunc(tags, func(tag string) bool {
+		return containsTag(remove, strings.TrimSpace(tag))
 	})
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/colonyops/hive/internal/config"
@@ -1069,4 +1070,20 @@ func TestSessionsService_EditSessionChecksTagsBeforeRenaming(t *testing.T) {
 
 	_, err = svc.EditSession(t.Context(), "missing", "x", nil)
 	assert.Equal(t, KindNotFound, KindOf(err), "%v", err)
+}
+
+func TestSessionsService_EditSessionTagsClassifiesErrors(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{})
+	legacy := strings.Repeat("x", session.MaxTagLength+1)
+	h.save(t, session.Session{ID: "s1", Name: "review", Slug: "review", State: session.StateRecycled, Tags: []string{"auto", legacy}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine})
+
+	_, err := svc.EditSessionTags(t.Context(), "s1", []string{"a,b"}, nil)
+	assert.Equal(t, KindInvalid, KindOf(err), "%v", err)
+	_, err = svc.EditSessionTags(t.Context(), "missing", []string{"auto"}, nil)
+	assert.Equal(t, KindNotFound, KindOf(err), "%v", err)
+
+	edited, err := svc.EditSessionTags(t.Context(), "s1", []string{"claimed"}, []string{legacy})
+	require.NoError(t, err, "a tag stored before validation can be removed")
+	assert.Equal(t, []string{"auto", "claimed"}, edited.Tags)
 }

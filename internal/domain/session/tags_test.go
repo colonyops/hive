@@ -21,7 +21,7 @@ func TestNormalizeTags(t *testing.T) {
 func TestNormalizeTagsRejectsInvalidTags(t *testing.T) {
 	for _, tag := range []string{"a,b", "tab\ttag", strings.Repeat("x", MaxTagLength+1)} {
 		_, err := NormalizeTags([]string{tag})
-		require.Error(t, err, "tag %q", tag)
+		require.ErrorIs(t, err, ErrInvalidTag, "tag %q", tag)
 	}
 	_, err := NormalizeTags([]string{strings.Repeat("é", MaxTagLength)})
 	assert.NoError(t, err, "the limit counts characters, not bytes")
@@ -48,4 +48,11 @@ func TestSessionEditTags(t *testing.T) {
 
 	require.Error(t, s.EditTags([]string{"a,b"}, nil))
 	assert.Equal(t, []string{"backend", "orchestrated"}, s.Tags, "a failed edit leaves the tags alone")
+}
+
+func TestSessionEditTagsRemovesATagStoredBeforeValidation(t *testing.T) {
+	legacy := strings.Repeat("x", MaxTagLength+1)
+	s := Session{Tags: []string{"auto", legacy}}
+	require.NoError(t, s.EditTags([]string{"claimed"}, []string{legacy}))
+	assert.Equal(t, []string{"auto", "claimed"}, s.Tags)
 }
