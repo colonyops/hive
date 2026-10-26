@@ -27,7 +27,7 @@ sources:
         {{ .Fields.url }}
 
         {{ .Detail }}
-      tags: ["github", "issue-{{ .Fields.number }}"]
+      labels: ["github", "issue-{{ .Fields.number }}"]
   prs:
     enabled: true
     templates:
@@ -36,7 +36,7 @@ sources:
         Review pull request {{ .Title }}
 
         {{ .Fields.url }}
-      tags: ["github", "pr-{{ .Fields.number }}"]
+      labels: ["github", "pr-{{ .Fields.number }}"]
 ```
 
 !!! warning "Remote content in templates"
@@ -57,7 +57,7 @@ Rules:
   `PATH`), `true`/`false` explicitly enables/disables registration. The
   `enabled` flag applies to a source id across both backends.
 - Every source configures `templates.name`, `templates.prompt`, and optional
-  `templates.tags` — Go templates rendered against the selected item. Templates
+  `templates.labels` — Go templates rendered against the selected item. Templates
   are shared across backends, so keep them forge-neutral (all backends populate
   `.Fields.number`, `.Fields.url`, and `.Detail`).
 - The rendered name becomes a slug of at most 60 characters. When it has no

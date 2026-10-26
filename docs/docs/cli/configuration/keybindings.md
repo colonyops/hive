@@ -53,6 +53,7 @@ views:
 | `A`        | AgentSend            | Send Enter to agent                  |
 | `R`        | RenameSession        | Rename session                       |
 | `ctrl+g`   | GroupSet             | Set session group                    |
+| `L`        | LabelsEdit           | Edit session labels                  |
 | `J`        | NextActive           | Jump to next active session          |
 | `K`        | PrevActive           | Jump to previous active session      |
 | `t`        | TodoPanel            | Open todo panel                      |
