@@ -110,6 +110,7 @@ var defaultViewsConfig = ViewsConfig{
 			"p":      {Cmd: "SourcePRs"},
 			"R":      {Cmd: "RenameSession"},
 			"ctrl+g": {Cmd: "GroupSet"},
+			"L":      {Cmd: "LabelsEdit"},
 			"J":      {Cmd: "NextActive"},
 			"K":      {Cmd: "PrevActive"},
 			"t":      {Cmd: "TodoPanel"},

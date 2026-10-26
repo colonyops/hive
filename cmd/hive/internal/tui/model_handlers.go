@@ -158,6 +158,13 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		}
 		return m.openGroupInput(sess)
 	}
+	if action.Type == act.TypeLabelsEdit {
+		sess := m.sessionsView.SelectedSession()
+		if sess == nil {
+			return m, nil
+		}
+		return m.openLabelsInput(sess)
+	}
 	if action.Type == act.TypeGroupToggle {
 		cmd := m.sessionsView.ToggleGroupBy()
 		return m, cmd

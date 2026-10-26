@@ -39,6 +39,8 @@ type ModalCoordinator struct {
 	RenameSessionID string
 	GroupInput      textinput.Model
 	GroupSessionID  string
+	LabelsInput     textinput.Model
+	LabelsSessionID string
 
 	// Pending action state
 	Pending                 Action
@@ -167,6 +169,21 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 		)
 		return centeredOverlay(bg, styles.ModalStyle.Width(50).Render(groupContent), w, h)
 
+	case state == stateEditingLabels:
+		labelsContent := lipgloss.JoinVertical(
+			lipgloss.Left,
+			styles.ModalTitleStyle.Render("Edit Labels"),
+			"",
+			mc.LabelsInput.View(),
+			"",
+			styles.ModalHelpStyle.Render(components.KeyHints(
+				components.HelpEntry{Key: "enter", Desc: "confirm"},
+				components.HelpEntry{Key: "esc", Desc: "cancel"},
+				components.HelpEntry{Key: ",", Desc: "separate labels"},
+			)),
+		)
+		return centeredOverlay(bg, styles.ModalStyle.Width(60).Render(labelsContent), w, h)
+
 	case state == stateShowingTodos && mc.TodoPanel != nil:
 		return mc.TodoPanel.Overlay(bg, w, h)
 
@@ -248,7 +265,7 @@ func (mc *ModalCoordinator) ClearFormState() {
 // HasEditorFocus returns true if a modal with text input is active.
 func (mc *ModalCoordinator) HasEditorFocus(state UIState) bool {
 	switch state { //nolint:exhaustive // only editor-bearing states return true
-	case stateCommandPalette, stateCreatingSession, stateRenaming, stateSettingGroup, stateFormInput, stateSelectingRepo, stateSourcePicker:
+	case stateCommandPalette, stateCreatingSession, stateRenaming, stateSettingGroup, stateEditingLabels, stateFormInput, stateSelectingRepo, stateSourcePicker:
 		return true
 	}
 	return false

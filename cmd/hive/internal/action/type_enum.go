@@ -59,6 +59,8 @@ const (
 	TypeGroupSet Type = "GroupSet"
 	// TypeGroupToggle is a Type of type GroupToggle.
 	TypeGroupToggle Type = "GroupToggle"
+	// TypeLabelsEdit is a Type of type LabelsEdit.
+	TypeLabelsEdit Type = "LabelsEdit"
 	// TypeTodoPanel is a Type of type TodoPanel.
 	TypeTodoPanel Type = "TodoPanel"
 	// TypeTasksRefresh is a Type of type TasksRefresh.
@@ -152,6 +154,7 @@ var _TypeNames = []string{
 	string(TypeHiveDoctor),
 	string(TypeGroupSet),
 	string(TypeGroupToggle),
+	string(TypeLabelsEdit),
 	string(TypeTodoPanel),
 	string(TypeTasksRefresh),
 	string(TypeTasksFilter),
@@ -254,6 +257,8 @@ var _TypeValue = map[string]Type{
 	"groupset":                   TypeGroupSet,
 	"GroupToggle":                TypeGroupToggle,
 	"grouptoggle":                TypeGroupToggle,
+	"LabelsEdit":                 TypeLabelsEdit,
+	"labelsedit":                 TypeLabelsEdit,
 	"TodoPanel":                  TypeTodoPanel,
 	"todopanel":                  TypeTodoPanel,
 	"TasksRefresh":               TypeTasksRefresh,

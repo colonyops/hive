@@ -156,7 +156,8 @@ func (i TreeItem) IsSession() bool {
 
 // FilterValue returns the value used for filtering.
 // Headers are not filterable (return empty).
-// Sessions return "repoName sessionName" to allow searching by either.
+// Sessions return "repoName sessionName labels..." to allow searching by any
+// of them. The labels follow the name so the name's match offsets stay put.
 // Recycled placeholders return "repoName recycled" to allow filtering.
 func (i TreeItem) FilterValue() string {
 	if i.IsHeader {
@@ -171,7 +172,11 @@ func (i TreeItem) FilterValue() string {
 	if i.IsWindowItem {
 		return i.RepoPrefix + " " + i.ParentSession.Name + " " + i.WindowName
 	}
-	return i.RepoPrefix + " " + i.Session.Name
+	value := i.RepoPrefix + " " + i.Session.Name
+	if len(i.Session.Labels) > 0 {
+		value += " " + strings.Join(i.Session.Labels, " ")
+	}
+	return value
 }
 
 // BuildTreeItems converts repo groups into tree items for the list.
@@ -234,6 +239,7 @@ type TreeDelegateStyles struct {
 	SessionName    lipgloss.Style
 	SessionBranch  lipgloss.Style
 	SessionID      lipgloss.Style
+	SessionLabels  lipgloss.Style
 	StatusActive   lipgloss.Style
 	StatusApproval lipgloss.Style
 	StatusReady    lipgloss.Style
@@ -258,6 +264,7 @@ func DefaultTreeDelegateStyles() TreeDelegateStyles {
 		SessionName:    lipgloss.NewStyle().Foreground(styles.ColorForeground),
 		SessionBranch:  lipgloss.NewStyle().Foreground(styles.ColorMuted),
 		SessionID:      lipgloss.NewStyle().Foreground(styles.ColorSecondary),
+		SessionLabels:  lipgloss.NewStyle().Foreground(styles.ColorMuted),
 		StatusActive:   lipgloss.NewStyle().Foreground(styles.ColorSuccess),
 		StatusApproval: lipgloss.NewStyle().Foreground(styles.ColorWarning),
 		StatusReady:    lipgloss.NewStyle().Foreground(styles.ColorSecondary),
@@ -493,11 +500,16 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, id)
 	}
 
-	// Full mode: show ID, git status, and plugin statuses
+	// Labels go last: their width varies per row, and the git status column
+	// stays aligned only if nothing variable comes before it.
 	gitInfo := d.renderGitStatus(item.Session.Path)
 	pluginInfo := d.renderPluginStatuses(item.Session.ID)
+	var labels string
+	if len(item.Session.Labels) > 0 {
+		labels = " " + d.Styles.SessionLabels.Render(FormatLabels(item.Session.Labels))
+	}
 
-	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
+	return fmt.Sprintf("%s %s %s%s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo, labels)
 }
 
 // renderPane renders a pane sub-item nested under a window.

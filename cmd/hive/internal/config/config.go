@@ -179,6 +179,12 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
+	"LabelsEdit": {
+		Action: action.TypeLabelsEdit,
+		Help:   "edit session labels",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
 	"TodoPanel": {
 		Action: action.TypeTodoPanel,
 		Help:   "open todo panel",

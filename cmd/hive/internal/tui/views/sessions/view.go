@@ -1188,6 +1188,10 @@ func (v *View) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	if status != "" {
 		parts = append(parts, status)
 	}
+	if len(sess.Labels) > 0 {
+		labels := separatorStyle.Render("Labels: ") + styles.TextSecondaryStyle.Render(FormatLabels(sess.Labels))
+		parts = append(parts, ansi.TruncateWc(labels, maxWidth, "…"))
+	}
 	parts = append(parts, "")
 	parts = append(parts, styles.TextMutedStyle.Render("Output"))
 	parts = append(parts, dividerStyle.Render(divider))
