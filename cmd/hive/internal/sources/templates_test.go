@@ -16,7 +16,7 @@ func TestRenderSessionTemplates(t *testing.T) {
 		detail     sources.Detail
 		wantName   string
 		wantPrompt string
-		wantTags   []string
+		wantLabels []string
 		wantErr    string
 	}{
 		{
@@ -24,7 +24,7 @@ func TestRenderSessionTemplates(t *testing.T) {
 			cfg: sources.TemplateConfig{
 				Name:   "gh-{{ .Fields.number }}-{{ .Title }}",
 				Prompt: "Work on {{ .Title }}\n\n{{ .Fields.url }}",
-				Tags:   []string{"github", "issue-{{ .Fields.number }}"},
+				Labels: []string{"github", "issue-{{ .Fields.number }}"},
 			},
 			item: sources.Item{
 				ID:    "1",
@@ -36,7 +36,7 @@ func TestRenderSessionTemplates(t *testing.T) {
 			},
 			wantName:   "gh-42-fix-bug",
 			wantPrompt: "Work on Fix bug\n\nhttps://example.com/1",
-			wantTags:   []string{"github", "issue-42"},
+			wantLabels: []string{"github", "issue-42"},
 		},
 		{
 			name: "kebab cases punctuation and colons in names",
@@ -50,7 +50,7 @@ func TestRenderSessionTemplates(t *testing.T) {
 			},
 			wantName:   "area-fix-http-2-bug",
 			wantPrompt: "ok",
-			wantTags:   []string{},
+			wantLabels: []string{},
 		},
 		{
 			name: "truncates long names at a word boundary",
@@ -67,7 +67,7 @@ func TestRenderSessionTemplates(t *testing.T) {
 			},
 			wantName:   "gh-1234-add-support-for-configuring-session-name-truncation",
 			wantPrompt: "ok",
-			wantTags:   []string{},
+			wantLabels: []string{},
 		},
 		{
 			name: "truncates hard at limit when no hyphen boundary exists",
@@ -81,7 +81,7 @@ func TestRenderSessionTemplates(t *testing.T) {
 			},
 			wantName:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"[:60],
 			wantPrompt: "ok",
-			wantTags:   []string{},
+			wantLabels: []string{},
 		},
 		{
 			name: "renders detail content",
@@ -93,7 +93,7 @@ func TestRenderSessionTemplates(t *testing.T) {
 			detail:     sources.Detail{Markdown: &sources.MarkdownDetail{Content: "body text"}},
 			wantName:   "1",
 			wantPrompt: "body text",
-			wantTags:   []string{},
+			wantLabels: []string{},
 		},
 		{
 			name: "missing field errors on name template",
@@ -114,14 +114,14 @@ func TestRenderSessionTemplates(t *testing.T) {
 			wantErr: "prompt template",
 		},
 		{
-			name: "missing field errors on tags template",
+			name: "missing field errors on labels template",
 			cfg: sources.TemplateConfig{
 				Name:   "ok",
 				Prompt: "ok",
-				Tags:   []string{"{{ .Fields.missing }}"},
+				Labels: []string{"{{ .Fields.missing }}"},
 			},
 			item:    sources.Item{ID: "1", Title: "Item", Fields: map[string]any{}},
-			wantErr: "tags[0] template",
+			wantErr: "labels[0] template",
 		},
 	}
 
@@ -136,7 +136,7 @@ func TestRenderSessionTemplates(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantName, got.Name)
 			assert.Equal(t, tt.wantPrompt, got.Prompt)
-			assert.Equal(t, tt.wantTags, got.Tags)
+			assert.Equal(t, tt.wantLabels, got.Labels)
 		})
 	}
 }

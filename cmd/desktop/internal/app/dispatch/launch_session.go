@@ -57,20 +57,13 @@ func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessio
 		}
 	}()
 
-	// Tags are presentational, for a reader inside hive, and are never read
-	// back. ItemSessionLinker writes the associations this app queries.
 	origins := uniqueKnownOrigins(req.Origins)
-	var tags []string
-	for _, origin := range origins {
-		tags = append(tags, origin.ExternalID)
-	}
 	s, err := l.sessions().CreateFromRequest(ctx, sessionsvc.LaunchRequest{
 		Name:            req.Name,
 		Prompt:          prepared.Prompt,
 		Agent:           req.Agent,
 		Repo:            req.Repo,
 		CollisionSuffix: req.CollisionSuffix,
-		Tags:            tags,
 		Env:             []string{ptyterm.ImageProtocolEnv},
 	})
 	if err != nil {

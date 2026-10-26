@@ -1218,6 +1218,41 @@ func TestSetSessionGroup_TrimWhitespace(t *testing.T) {
 	assert.Equal(t, "backend", updated.Group())
 }
 
+func TestSetSessionLabels(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+	past := time.Now().Add(-1 * time.Hour)
+	require.NoError(t, store.Save(t.Context(), session.Session{ID: "test1", Name: "s", Labels: []string{"old"}, UpdatedAt: past}))
+
+	got, err := svc.SetSessionLabels(t.Context(), "test1", []string{" auto ", "Auto", "backend"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"auto", "backend"}, got.Labels)
+
+	stored, err := store.Get(t.Context(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"auto", "backend"}, stored.Labels)
+	assert.True(t, stored.UpdatedAt.After(past))
+
+	_, err = svc.SetSessionLabels(t.Context(), "test1", []string{"a,b"})
+	require.Error(t, err)
+	stored, err = store.Get(t.Context(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"auto", "backend"}, stored.Labels, "an invalid label saves nothing")
+}
+
+func TestEditSessionLabels(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+	require.NoError(t, store.Save(t.Context(), session.Session{ID: "test1", Name: "s", Labels: []string{"auto", "backend"}}))
+
+	got, err := svc.EditSessionLabels(t.Context(), "test1", []string{"orchestrated"}, []string{"AUTO"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"backend", "orchestrated"}, got.Labels)
+
+	_, err = svc.EditSessionLabels(t.Context(), "missing", []string{"x"}, nil)
+	assert.Error(t, err)
+}
+
 func TestRecycleWorktreeSession_DeletesSession(t *testing.T) {
 	tests := []struct {
 		name     string

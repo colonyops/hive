@@ -66,8 +66,9 @@ type CreateOptions struct {
 	// When non-empty, the spawn templates use that profile's command/flags instead
 	// of the process-wide default. Must match a key in config.Agents.Profiles.
 	AgentKey string
-	// Tags are user-defined labels attached to the session for external provider tracking.
-	Tags []string
+	// Labels are normalized with session.NormalizeLabels; an invalid label
+	// fails the create.
+	Labels []string
 	// Env holds KEY=VALUE pairs for the session's tmux environment. Only a
 	// windows: spawn applies them; spawn: commands run the user's own scripts.
 	Env []string
@@ -121,6 +122,7 @@ type Service struct {
 	out        *switchWriter
 	err        *switchWriter
 	bareMu     sync.Map // map[remote → *sync.Mutex]
+	labelsMu   sync.Mutex
 }
 
 // NewService creates a new Service.
@@ -236,6 +238,10 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	if err := session.ValidateName(opts.Name); err != nil {
 		return nil, err
 	}
+	labels, err := session.NormalizeLabels(opts.Labels)
+	if err != nil {
+		return nil, err
+	}
 	name, err := s.claimName(ctx, opts.Name, "", opts.CollisionSuffix)
 	if err != nil {
 		return nil, err
@@ -269,7 +275,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		sess = *recyclable
 		sess.Name = opts.Name
 		sess.Slug = slug
-		sess.Tags = opts.Tags
+		sess.Labels = labels
 		sess.MarkActive(time.Now())
 	} else {
 		// Create new session (either no recyclable found or it was corrupted)
@@ -298,7 +304,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 			Path:          path,
 			Remote:        remote,
 			CloneStrategy: cloneStrategy,
-			Tags:          opts.Tags,
+			Labels:        labels,
 			CreatedAt:     now,
 		}
 		sess.MarkActive(now)
@@ -588,6 +594,46 @@ func (s *Service) SetSessionGroup(ctx context.Context, id, group string) error {
 
 	s.log.Info().Str("session_id", id).Str("group", group).Msg("session group updated")
 	return nil
+}
+
+// SetSessionLabels replaces a session's labels.
+func (s *Service) SetSessionLabels(ctx context.Context, id string, labels []string) (session.Session, error) {
+	normalized, err := session.NormalizeLabels(labels)
+	if err != nil {
+		return session.Session{}, err
+	}
+	return s.saveLabels(ctx, id, func(sess *session.Session) error {
+		sess.Labels = normalized
+		return nil
+	})
+}
+
+// EditSessionLabels adds and then removes labels, leaving the others in
+// place. Two writers that each add a label both keep theirs, which a
+// read-modify-replace by the caller would not.
+func (s *Service) EditSessionLabels(ctx context.Context, id string, add, remove []string) (session.Session, error) {
+	return s.saveLabels(ctx, id, func(sess *session.Session) error {
+		return sess.EditLabels(add, remove)
+	})
+}
+
+func (s *Service) saveLabels(ctx context.Context, id string, edit func(*session.Session) error) (session.Session, error) {
+	s.labelsMu.Lock()
+	defer s.labelsMu.Unlock()
+
+	sess, err := s.sessions.Get(ctx, id)
+	if err != nil {
+		return session.Session{}, fmt.Errorf("get session: %w", err)
+	}
+	if err := edit(&sess); err != nil {
+		return session.Session{}, err
+	}
+	sess.UpdatedAt = time.Now()
+	if err := s.sessions.Save(ctx, sess); err != nil {
+		return session.Session{}, fmt.Errorf("save session: %w", err)
+	}
+	s.log.Info().Str("session_id", id).Strs("labels", sess.Labels).Msg("session labels updated")
+	return sess, nil
 }
 
 // Risk describes uncommitted or unpushed work that would be lost if a session

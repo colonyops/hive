@@ -513,11 +513,11 @@ type SourcesConfig struct {
 }
 
 // SourceTemplateConfig holds the templates rendering a selected item
-// into session Name/Prompt/Tags.
+// into session Name/Prompt/Labels.
 type SourceTemplateConfig struct {
 	Name   string   `json:"name"   yaml:"name"`
 	Prompt string   `json:"prompt" yaml:"prompt"`
-	Tags   []string `json:"tags"   yaml:"tags"`
+	Labels []string `json:"labels" yaml:"labels"`
 }
 
 // BuiltinSourceConfig configures one built-in source (issues, prs).
@@ -614,14 +614,14 @@ func DefaultConfig() Config {
 					// an empty detail. Rendered prompts are trimmed, so an
 					// empty detail leaves no dangling blank lines.
 					Prompt: "Work on {{ .Title }}\n\n{{ .Fields.url }}\n\n{{ .Detail }}",
-					Tags:   []string{"github", "issue-{{ .Fields.number }}"},
+					Labels: []string{"github", "issue-{{ .Fields.number }}"},
 				},
 			},
 			PRs: BuiltinSourceConfig{
 				Templates: SourceTemplateConfig{
 					Name:   "gh-pr-{{ .Fields.number }}-{{ .Title }}",
 					Prompt: "Review pull request {{ .Title }}\n\n{{ .Fields.url }}",
-					Tags:   []string{"github", "pr-{{ .Fields.number }}"},
+					Labels: []string{"github", "pr-{{ .Fields.number }}"},
 				},
 			},
 		},

@@ -1170,7 +1170,7 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 		UseBatchSpawn:   true,
 		Background:      true,
 		CollisionSuffix: session.Slugify(result.Item.ID),
-		Tags:            rendered.Tags,
+		Labels:          rendered.Labels,
 	})
 
 	output, done, cancel := exec.Execute(ctx)

@@ -26,7 +26,7 @@ sources:
 
 	assert.Equal(t, "custom-{{ .Title }}", cfg.Sources.Issues.Templates.Name)
 	assert.NotEmpty(t, cfg.Sources.Issues.Templates.Prompt, "unset prompt must keep its default")
-	assert.NotEmpty(t, cfg.Sources.Issues.Templates.Tags, "unset tags must keep their defaults")
+	assert.NotEmpty(t, cfg.Sources.Issues.Templates.Labels, "unset labels must keep their defaults")
 	assert.NotEmpty(t, cfg.Sources.PRs.Templates.Name, "untouched source must keep its defaults")
 }
 
@@ -71,7 +71,7 @@ func TestValidateSources_ValidBuiltins(t *testing.T) {
 			Templates: SourceTemplateConfig{
 				Name:   "gh-{{ .Fields.number }}-{{ .Title }}",
 				Prompt: "Work on {{ .Title }}\n\n{{ .Fields.url }}",
-				Tags:   []string{"github", "issue-{{ .Fields.number }}"},
+				Labels: []string{"github", "issue-{{ .Fields.number }}"},
 			},
 		},
 		PRs: BuiltinSourceConfig{
@@ -79,7 +79,7 @@ func TestValidateSources_ValidBuiltins(t *testing.T) {
 			Templates: SourceTemplateConfig{
 				Name:   "gh-pr-{{ .Fields.number }}",
 				Prompt: "Review {{ .Title }}",
-				Tags:   []string{"pr"},
+				Labels: []string{"pr"},
 			},
 		},
 	}

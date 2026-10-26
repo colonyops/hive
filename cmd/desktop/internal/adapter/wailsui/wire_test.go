@@ -47,7 +47,7 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 		want []string
 	}{
 		{"SessionSummary", SessionSummary{}, sorted("id", "name", "slug", "repo", "repoIdentity", "state", "canvasOwner", "createdAt")},
-		{"SessionDetail", SessionDetail{}, sorted("id", "name", "slug", "repo", "state", "path", "cloneStrategy", "worktreeBranch", "tags", "createdAt", "updatedAt")},
+		{"SessionDetail", SessionDetail{}, sorted("id", "name", "slug", "repo", "state", "path", "cloneStrategy", "worktreeBranch", "labels", "createdAt", "updatedAt")},
 		{"SessionRisk", app.SessionRisk{}, sorted("uncommittedChanges", "unpushedCommits", "recycleDeletes")},
 		{"SessionGitStatus", SessionGitStatus{}, sorted("path", "branch", "dirty", "unpushed", "additions", "deletions", "host", "owner", "repo", "resolved", "error")},
 		{"SessionWindowStatus", app.SessionWindowStatus{}, sorted("windowId", "status", "tool")},

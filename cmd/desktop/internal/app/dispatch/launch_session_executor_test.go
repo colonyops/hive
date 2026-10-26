@@ -350,10 +350,10 @@ func TestRepositoryLauncher_LinksTheCreatedSessionToItsItem(t *testing.T) {
 	_, err := launcher.LaunchSession(t.Context(), LaunchSessionRequest{Name: "review-1", Prompt: "go", Repo: "r", Origins: []models.ItemRef{ref}})
 	require.NoError(t, err)
 	assert.Equal(t, map[string][]models.ItemRef{"session-1": {ref}}, linker.links)
-	// The item id also goes on the session as a hive tag, for a reader inside
-	// hive. It is presentational and never read back.
+	// The link is the association; the item id is not copied into labels,
+	// which belong to the user.
 	require.Len(t, creator.calls, 1)
-	assert.Equal(t, []string{"acme/repo#1"}, creator.calls[0].Tags)
+	assert.Empty(t, creator.calls[0].Labels)
 }
 
 // A session with no item behind it — the blank New Session form, an action run
@@ -369,7 +369,6 @@ func TestRepositoryLauncher_LinksOneCreatedSessionToEveryUniqueOrigin(t *testing
 	_, err := launcher.LaunchSession(t.Context(), LaunchSessionRequest{Name: "review", Origins: []models.ItemRef{first, second, first}})
 	require.NoError(t, err)
 	require.Len(t, creator.calls, 1)
-	assert.Equal(t, []string{"acme/repo#1", "acme/repo#2"}, creator.calls[0].Tags)
 	assert.Equal(t, []models.ItemRef{first, second}, linker.links["session-1"])
 }
 
@@ -382,7 +381,6 @@ func TestRepositoryLauncher_LinksNothingWithoutAnOrigin(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, linker.links)
 	require.Len(t, creator.calls, 1)
-	assert.Empty(t, creator.calls[0].Tags)
 }
 
 // The session exists either way, so reporting the launch as failed would be a

@@ -25,17 +25,20 @@ type SessionCmd struct {
 	// per-subcommand flags
 	infoJSON bool
 	lsJSON   bool
-	lsTags   []string
+	lsLabels []string
 
 	showJSON bool
 
 	createJSON  bool
 	createFlags createSessionFlags
 
-	updateJSON       bool
-	updateName       string
-	updateGroup      string
-	updateClearGroup bool
+	updateJSON         bool
+	updateName         string
+	updateGroup        string
+	updateClearGroup   bool
+	updateAddLabels    []string
+	updateRemoveLabels []string
+	updateClearLabels  bool
 
 	deleteJSON  bool
 	deleteForce bool
@@ -101,10 +104,10 @@ Use --json for LLM-friendly output with additional fields like inbox topic and u
 				Destination: &cmd.lsJSON,
 			},
 			&cli.StringSliceFlag{
-				Name:        "tags",
-				Aliases:     []string{"t"},
-				Usage:       "filter sessions by tag (repeatable, all tags must match)",
-				Destination: &cmd.lsTags,
+				Name:        "label",
+				Aliases:     []string{"l"},
+				Usage:       "filter sessions by label (repeatable, all labels must match, case-insensitive)",
+				Destination: &cmd.lsLabels,
 			},
 		},
 		Action: cmd.runLs,
@@ -145,16 +148,12 @@ type sessionJSON struct {
 	State         string    `json:"state"`
 	Group         string    `json:"group,omitempty"`
 	CloneStrategy string    `json:"clone_strategy,omitempty"`
-	Tags          []string  `json:"tags"`
+	Labels        []string  `json:"labels"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func buildSessionJSON(s session.Session) sessionJSON {
-	tags := s.Tags
-	if tags == nil {
-		tags = []string{}
-	}
 	return sessionJSON{
 		ID:            s.ID,
 		Name:          s.Name,
@@ -166,7 +165,7 @@ func buildSessionJSON(s session.Session) sessionJSON {
 		State:         string(s.State),
 		Group:         s.GetMeta(session.MetaGroup),
 		CloneStrategy: s.CloneStrategy,
-		Tags:          tags,
+		Labels:        nonNilLabels(s.Labels),
 		CreatedAt:     s.CreatedAt,
 		UpdatedAt:     s.UpdatedAt,
 	}
@@ -182,8 +181,8 @@ func printSessionHuman(out io.Writer, sess session.Session) {
 	if group := sess.GetMeta(session.MetaGroup); group != "" {
 		_, _ = fmt.Fprintf(out, "Group:       %s\n", group)
 	}
-	if len(sess.Tags) > 0 {
-		_, _ = fmt.Fprintf(out, "Tags:        %s\n", strings.Join(sess.Tags, ", "))
+	if len(sess.Labels) > 0 {
+		_, _ = fmt.Fprintf(out, "Labels:      %s\n", strings.Join(sess.Labels, ", "))
 	}
 }
 
@@ -307,16 +306,20 @@ func (cmd *SessionCmd) runCreate(ctx context.Context, c *cli.Command) error {
 func (cmd *SessionCmd) updateCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "update",
-		Usage:     "Update a session's name or group",
-		UsageText: "hive session update <id> [--name <name>] [--group <group> | --clear-group] [--json]",
+		Usage:     "Update a session's name, group, or labels",
+		UsageText: "hive session update <id> [--name <name>] [--group <group> | --clear-group] [--add-label <label>]... [--remove-label <label>]... [--clear-labels] [--json]",
 		Description: `Updates mutable fields on an existing session.
 
-At least one of --name, --group, or --clear-group is required.
+At least one flag that changes the session is required. Label flags apply in
+order: --clear-labels, then --add-label, then --remove-label. Labels compare
+case-insensitively.
 
 Examples:
   hive session update abc123 --name "New Name"
   hive session update abc123 --group backend
-  hive session update abc123 --clear-group`,
+  hive session update abc123 --clear-group
+  hive session update abc123 --add-label auto --add-label backend
+  hive session update abc123 --remove-label auto --add-label orchestrated`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "name",
@@ -332,6 +335,21 @@ Examples:
 				Name:        "clear-group",
 				Usage:       "clear the session's group assignment",
 				Destination: &cmd.updateClearGroup,
+			},
+			&cli.StringSliceFlag{
+				Name:        "add-label",
+				Usage:       "add a label (repeatable)",
+				Destination: &cmd.updateAddLabels,
+			},
+			&cli.StringSliceFlag{
+				Name:        "remove-label",
+				Usage:       "remove a label (repeatable)",
+				Destination: &cmd.updateRemoveLabels,
+			},
+			&cli.BoolFlag{
+				Name:        "clear-labels",
+				Usage:       "remove every label",
+				Destination: &cmd.updateClearLabels,
 			},
 			&cli.BoolFlag{
 				Name:        "json",
@@ -352,8 +370,9 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 	if cmd.updateGroup != "" && cmd.updateClearGroup {
 		return fmt.Errorf("--group and --clear-group are mutually exclusive")
 	}
-	if cmd.updateName == "" && cmd.updateGroup == "" && !cmd.updateClearGroup {
-		return fmt.Errorf("nothing to update: provide --name, --group, or --clear-group")
+	editsLabels := len(cmd.updateAddLabels) > 0 || len(cmd.updateRemoveLabels) > 0 || cmd.updateClearLabels
+	if cmd.updateName == "" && cmd.updateGroup == "" && !cmd.updateClearGroup && !editsLabels {
+		return fmt.Errorf("nothing to update: provide --name, --group, --clear-group, or a label flag")
 	}
 
 	if cmd.updateName != "" {
@@ -369,6 +388,17 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 		}
 		if err := cmd.app.Sessions().SetSessionGroup(ctx, id, group); err != nil {
 			return fmt.Errorf("set session group: %w", err)
+		}
+	}
+
+	if cmd.updateClearLabels {
+		if _, err := cmd.app.Sessions().SetSessionLabels(ctx, id, nil); err != nil {
+			return fmt.Errorf("clear session labels: %w", err)
+		}
+	}
+	if len(cmd.updateAddLabels) > 0 || len(cmd.updateRemoveLabels) > 0 {
+		if _, err := cmd.app.Sessions().EditSessionLabels(ctx, id, cmd.updateAddLabels, cmd.updateRemoveLabels); err != nil {
+			return fmt.Errorf("edit session labels: %w", err)
 		}
 	}
 
@@ -393,7 +423,7 @@ type lsSessionInfo struct {
 	Inbox  string   `json:"inbox"`
 	State  string   `json:"state"`
 	Unread int      `json:"unread"`
-	Tags   []string `json:"tags"`
+	Labels []string `json:"labels"`
 }
 
 func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
@@ -416,7 +446,7 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 			corrupted = append(corrupted, s)
 			continue
 		}
-		if len(cmd.lsTags) > 0 && !sessionHasAllTags(s, cmd.lsTags) {
+		if !s.HasAllLabels(cmd.lsLabels) {
 			continue
 		}
 		normal = append(normal, s)
@@ -586,10 +616,6 @@ func (cmd *SessionCmd) runRecycle(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session) lsSessionInfo {
-	tags := s.Tags
-	if tags == nil {
-		tags = []string{}
-	}
 	info := lsSessionInfo{
 		ID:     s.ID,
 		Name:   s.Name,
@@ -597,7 +623,7 @@ func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session
 		Inbox:  s.InboxTopic(),
 		State:  string(s.State),
 		Unread: 0,
-		Tags:   tags,
+		Labels: nonNilLabels(s.Labels),
 	}
 
 	// Count unread inbox messages
@@ -628,16 +654,10 @@ func (cmd *SessionCmd) checkRisk(ctx context.Context, id, action string) error {
 	return fmt.Errorf("session %s has %s; use --force to %s anyway", id, strings.Join(reasons, " and "), action)
 }
 
-// sessionHasAllTags returns true if the session has every tag in required.
-func sessionHasAllTags(s session.Session, required []string) bool {
-	tagSet := make(map[string]struct{}, len(s.Tags))
-	for _, t := range s.Tags {
-		tagSet[t] = struct{}{}
+// nonNilLabels keeps JSON output an array, never null.
+func nonNilLabels(labels []string) []string {
+	if labels == nil {
+		return []string{}
 	}
-	for _, r := range required {
-		if _, ok := tagSet[r]; !ok {
-			return false
-		}
-	}
-	return true
+	return labels
 }

@@ -347,7 +347,7 @@ func TestSessionsService_SessionDetailReadsWorktreeMetadata(t *testing.T) {
 	sess := session.Session{
 		ID: "s1", Name: "review 81", Slug: "review-81", Path: "/tmp/review-81",
 		Remote: "acme/site", State: session.StateActive, CloneStrategy: session.CloneStrategyWorktree,
-		Tags: []string{"pr-81"},
+		Labels: []string{"pr-81"},
 	}
 	sess.SetMeta(session.MetaWorktreeBranch, "hive/review-81")
 	h.save(t, sess)
@@ -356,7 +356,7 @@ func TestSessionsService_SessionDetailReadsWorktreeMetadata(t *testing.T) {
 	got, err := svc.SessionDetail(t.Context(), "s1")
 	require.NoError(t, err)
 	assert.Equal(t, "hive/review-81", got.GetMeta(session.MetaWorktreeBranch))
-	assert.Equal(t, []string{"pr-81"}, got.Tags)
+	assert.Equal(t, []string{"pr-81"}, got.Labels)
 	assert.Equal(t, "/tmp/review-81", got.Path)
 
 	_, err = svc.SessionDetail(t.Context(), "gone")

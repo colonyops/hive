@@ -52,7 +52,7 @@ type SessionDetail struct {
 	Path           string    `json:"path"`
 	CloneStrategy  string    `json:"cloneStrategy"`
 	WorktreeBranch string    `json:"worktreeBranch"`
-	Tags           []string  `json:"tags"`
+	Labels         []string  `json:"labels"`
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
@@ -67,7 +67,7 @@ func sessionDetailOf(s session.Session) SessionDetail {
 		Path:           s.Path,
 		CloneStrategy:  s.CloneStrategy,
 		WorktreeBranch: s.GetMeta(session.MetaWorktreeBranch),
-		Tags:           s.Tags,
+		Labels:         s.Labels,
 		CreatedAt:      s.CreatedAt,
 		UpdatedAt:      s.UpdatedAt,
 	}

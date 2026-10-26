@@ -41,7 +41,7 @@ func (c *Config) validateSources() error {
 	return errs.ToError()
 }
 
-// validateSourceTemplateSet syntax-checks the name/prompt/tags templates
+// validateSourceTemplateSet syntax-checks the name/prompt/labels templates
 // of a single source's SourceTemplateConfig.
 func validateSourceTemplateSet(field string, cfg SourceTemplateConfig) error {
 	if err := validateSourceTemplate(cfg.Name); err != nil {
@@ -50,9 +50,9 @@ func validateSourceTemplateSet(field string, cfg SourceTemplateConfig) error {
 	if err := validateSourceTemplate(cfg.Prompt); err != nil {
 		return fmt.Errorf("%s.prompt: %w", field, err)
 	}
-	for i, tag := range cfg.Tags {
-		if err := validateSourceTemplate(tag); err != nil {
-			return fmt.Errorf("%s.tags[%d]: %w", field, i, err)
+	for i, label := range cfg.Labels {
+		if err := validateSourceTemplate(label); err != nil {
+			return fmt.Errorf("%s.labels[%d]: %w", field, i, err)
 		}
 	}
 	return nil
