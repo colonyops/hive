@@ -418,7 +418,7 @@ type docsRepoKeysLoadedMsg struct {
 }
 
 func (m Model) loadDocsRepoKeys() tea.Cmd {
-	svc := m.service
+	svc := m.sessions
 	cfg := m.cfg
 	drv := m.drive
 	return func() tea.Msg {
@@ -603,7 +603,11 @@ func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) 
 	if msg.message != "" {
 		m.publishNotificationf(notify.LevelInfo, "%s", msg.message)
 	}
-	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
+	if msg.switchTo != nil {
+		m.sessionsView.SelectOnNextRefresh(msg.switchTo.ID)
+		return m, tea.Batch(m.refreshSessions(), m.switchTmuxSession(msg.switchTo.Slug))
+	}
+	return m, m.refreshSessions()
 }
 
 // actionEndGrace is the shortest time after a user action on a session during

@@ -11,6 +11,8 @@ import (
 	"unsafe"
 
 	"github.com/colonyops/hive/internal/hive/gitstatus"
+	"github.com/colonyops/hive/internal/hive/hivetest"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -27,9 +29,7 @@ import (
 	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive/events/testbus"
-	statussvc "github.com/colonyops/hive/internal/hive/status"
 	todosvc "github.com/colonyops/hive/internal/hive/todo"
 	"github.com/colonyops/hive/internal/store"
 	"github.com/colonyops/hive/internal/store/db"
@@ -70,7 +70,7 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 		Config:        cfg,
 		Service:       newMouseTestSessionService(t),
 		Renderer:      testRenderer,
-		Status:        statussvc.NewService(zerolog.Nop(), terminal.NewManager(nil), 1),
+		Sessions:      sessionapi.NewLocal(hivetest.NewEngine(t, hivetest.Options{}).Engine),
 		GitStatus:     gitstatus.NewService(zerolog.Nop(), nil, 1),
 		PluginManager: pluginManager,
 		CommandSet:    commandSet,
@@ -156,7 +156,7 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 		Config:        cfg,
 		Service:       newMouseTestSessionService(t),
 		Renderer:      testRenderer,
-		Status:        statussvc.NewService(zerolog.Nop(), terminal.NewManager(nil), 1),
+		Sessions:      sessionapi.NewLocal(hivetest.NewEngine(t, hivetest.Options{}).Engine),
 		GitStatus:     gitstatus.NewService(zerolog.Nop(), nil, 1),
 		PluginManager: pluginManager,
 		CommandSet:    commandSet,

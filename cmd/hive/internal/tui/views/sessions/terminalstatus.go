@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 	statussvc "github.com/colonyops/hive/internal/hive/status"
 )
 
@@ -22,8 +23,8 @@ const terminalStatusBatchTimeout = 5 * time.Second
 
 // FetchTerminalStatusBatch returns a command that fetches terminal status for
 // sessions and workspace root checkouts in a single batch.
-func FetchTerminalStatusBatch(status *statussvc.Service, sessions []*session.Session, roots []statussvc.RootRepoTarget) tea.Cmd {
-	if (len(sessions) == 0 && len(roots) == 0) || !status.Available() {
+func FetchTerminalStatusBatch(status sessionapi.API, sessions []*session.Session, roots []statussvc.RootRepoTarget) tea.Cmd {
+	if (len(sessions) == 0 && len(roots) == 0) || !status.StatusAvailable() {
 		return nil
 	}
 

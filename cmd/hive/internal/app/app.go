@@ -15,6 +15,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/doctor"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 )
 
 // BuildInfo holds build-time metadata set by the main package.
@@ -75,4 +76,10 @@ func NewApp(
 		Plugins:     pluginMgr,
 		CommandSet:  commandSet,
 	}
+}
+
+// SessionAPI is the path for session writes, session reads, and session-view
+// status. Tmux-only helpers and git reads stay on Sessions().
+func (a *App) SessionAPI() sessionapi.API {
+	return sessionapi.NewLocal(a.Engine)
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
@@ -85,7 +86,7 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 		}
 	}
 
-	sess, err := app.Sessions().CreateSession(ctx, sessionsvc.CreateOptions{
+	opts := sessionsvc.CreateOptions{
 		Name:          name,
 		Remote:        f.remote,
 		Source:        source,
@@ -94,11 +95,35 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 		AgentKey:      f.agent,
 		Tags:          f.tags,
 		Progress:      progress,
-	})
+	}
+	if err := resolveCreateLocation(ctx, app, &opts); err != nil {
+		return nil, err
+	}
+	sess, err := app.SessionAPI().CreateSession(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
 	return sess, nil
+}
+
+// resolveCreateLocation fills in what depends on where the CLI runs, because
+// the session API may run in a daemon with another working directory.
+func resolveCreateLocation(ctx context.Context, app *app.App, opts *sessionsvc.CreateOptions) error {
+	if opts.Remote == "" {
+		remote, err := app.Sessions().DetectRemote(ctx, ".")
+		if err != nil {
+			return fmt.Errorf("detect remote: %w", err)
+		}
+		opts.Remote = remote
+	}
+	if opts.Source != "" {
+		source, err := filepath.Abs(opts.Source)
+		if err != nil {
+			return fmt.Errorf("resolve source directory: %w", err)
+		}
+		opts.Source = source
+	}
+	return nil
 }
 
 type NewCmd struct {

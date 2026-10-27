@@ -50,7 +50,7 @@ import (
 	hcsvc "github.com/colonyops/hive/internal/hive/hc"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
-	statussvc "github.com/colonyops/hive/internal/hive/status"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 	todosvc "github.com/colonyops/hive/internal/hive/todo"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
@@ -87,11 +87,13 @@ type Deps struct {
 	// Logger carries no cmp label. The model and each view add their own.
 	Logger zerolog.Logger
 
-	// Required; nil causes a panic at construction time.
+	// Required; nil causes a panic at construction time. Service runs the
+	// tmux and git helpers in this process; Sessions is the session API for
+	// reads, writes, and status.
 	Config        *config.Config
 	Service       *sessionsvc.Service
+	Sessions      sessionapi.API
 	Renderer      *tmpl.Renderer
-	Status        *statussvc.Service
 	GitStatus     *gitstatus.Service
 	PluginManager *plugins.Manager
 	CommandSet    *plugins.CommandSet
@@ -131,6 +133,7 @@ type Model struct {
 	baseLogger     zerolog.Logger // no cmp label; handed to the components the model creates later
 	cfg            *config.Config
 	service        *sessionsvc.Service
+	sessions       sessionapi.API
 	launches       launchResolver
 	drive          DriveSource
 	cmdService     *command.Service
@@ -202,6 +205,7 @@ type Model struct {
 type actionCompleteMsg struct {
 	sessionID string
 	message   string
+	switchTo  *session.Session
 	err       error
 }
 
@@ -277,8 +281,8 @@ type todoCreatedMsg struct {
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
 func New(deps Deps, opts Opts) Model {
-	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.Status == nil || deps.GitStatus == nil || deps.PluginManager == nil || deps.CommandSet == nil || deps.TodoService == nil || deps.Notifications == nil {
-		panic("tui.New: Config, Service, Renderer, Status, GitStatus, PluginManager, CommandSet, TodoService, and DB are required")
+	if deps.Config == nil || deps.Service == nil || deps.Sessions == nil || deps.Renderer == nil || deps.GitStatus == nil || deps.PluginManager == nil || deps.CommandSet == nil || deps.TodoService == nil || deps.Notifications == nil {
+		panic("tui.New: Config, Service, Sessions, Renderer, GitStatus, PluginManager, CommandSet, TodoService, and DB are required")
 	}
 	cfg := deps.Config
 	service := deps.Service
@@ -291,14 +295,23 @@ func New(deps Deps, opts Opts) Model {
 		"review":   cfg.Views.Review.Keybindings,
 	}
 	handler := NewKeybindingResolver(deps.Logger, viewKBs, deps.CommandSet, deps.Renderer)
-	cmdService := command.NewService(service, service, service, service, service, service)
+	cmdService := command.NewService(command.Deps{
+		Deleter:       deps.Sessions,
+		Recycler:      deps.Sessions,
+		Creator:       deps.Sessions,
+		WindowCreator: deps.Sessions,
+		TmuxOpener:    service,
+		WindowAdder:   service,
+		WindowKiller:  service,
+		LocalRemote:   opts.LocalRemote,
+	})
 
 	sessionsView := sessions.New(sessions.ViewOpts{
 		Logger:        deps.Logger,
 		Cfg:           cfg,
 		Service:       service,
+		Sessions:      deps.Sessions,
 		Handler:       handler,
-		Status:        deps.Status,
 		GitStatus:     deps.GitStatus,
 		PluginManager: deps.PluginManager,
 		LocalRemote:   opts.LocalRemote,
@@ -385,6 +398,7 @@ func New(deps Deps, opts Opts) Model {
 		cfg:              cfg,
 		drive:            deps.Drive,
 		service:          service,
+		sessions:         deps.Sessions,
 		launches:         service,
 		cmdService:       cmdService,
 		handler:          handler,
@@ -492,6 +506,9 @@ func (m Model) executeAction(a Action) tea.Cmd {
 		msg := actionCompleteMsg{sessionID: a.SessionID, err: err}
 		if messenger, ok := exec.(command.ResultMessenger); ok && err == nil {
 			msg.message = messenger.ResultMessage()
+		}
+		if spawner, ok := exec.(*command.SpawnWindowsExecutor); ok && err == nil {
+			msg.switchTo = spawner.SessionToSwitchTo()
 		}
 		return msg
 	}
@@ -979,7 +996,7 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 		sessionID := action.SessionID
 		return m, tea.Batch(
 			func() tea.Msg {
-				risk, _ := m.service.CheckSessionRisk(context.Background(), action.SessionID)
+				risk, _ := m.sessions.CheckSessionRisk(context.Background(), action.SessionID)
 				return sessionRiskCheckedMsg{action: action, risk: risk}
 			},
 			func() tea.Msg {
@@ -1704,7 +1721,7 @@ func (m Model) handleRenameKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 // executeRename returns a command that renames a Hive and multiplexer session.
 func (m Model) executeRename(sessionID, newName string) tea.Cmd {
 	return func() tea.Msg {
-		err := m.service.RenameSession(context.Background(), sessionID, newName)
+		err := m.sessions.RenameSession(context.Background(), sessionID, newName)
 		return renameCompleteMsg{err: err}
 	}
 }
@@ -1755,7 +1772,7 @@ func (m Model) handleGroupKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, te
 func (m Model) executeSetGroup(sessionID, group string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
-		if err := m.service.SetSessionGroup(ctx, sessionID, group); err != nil {
+		if err := m.sessions.SetSessionGroup(ctx, sessionID, group); err != nil {
 			return setGroupCompleteMsg{err: err}
 		}
 		return setGroupCompleteMsg{err: nil}

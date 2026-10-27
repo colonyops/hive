@@ -215,7 +215,15 @@ func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) Batch
 		Tags:          sess.Tags,
 	}
 
-	created, err := cmd.app.Sessions().CreateSession(ctx, opts)
+	if err := resolveCreateLocation(ctx, cmd.app, &opts); err != nil {
+		return BatchResult{
+			Name:   sess.Name,
+			Status: StatusFailed,
+			Error:  err.Error(),
+		}
+	}
+
+	created, err := cmd.app.SessionAPI().CreateSession(ctx, opts)
 	if err != nil {
 		return BatchResult{
 			Name:   sess.Name,

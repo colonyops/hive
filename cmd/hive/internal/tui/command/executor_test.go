@@ -348,7 +348,7 @@ func (m *mockWindowSpawner) KillTmuxWindow(_ context.Context, target multiplexer
 
 func TestService_CreateExecutor(t *testing.T) {
 	windowService := &mockWindowSpawner{}
-	svc := NewService(&mockDeleter{}, &mockRecycler{}, &mockTmuxOpener{}, windowService, windowService, nil)
+	svc := NewService(Deps{Deleter: &mockDeleter{}, Recycler: &mockRecycler{}, TmuxOpener: &mockTmuxOpener{}, WindowAdder: windowService, WindowCreator: windowService, WindowKiller: windowService})
 
 	tests := []struct {
 		name    string
@@ -421,7 +421,7 @@ func TestService_CreateExecutor(t *testing.T) {
 
 func TestServiceKillWindowExecutorDelegatesTypedTarget(t *testing.T) {
 	windowService := &mockWindowSpawner{}
-	svc := NewService(nil, nil, nil, nil, windowService, nil)
+	svc := NewService(Deps{WindowKiller: windowService})
 	target := multiplexer.Target{Session: "sess", Window: "2"}
 
 	executor, err := svc.CreateExecutor(Action{Type: action.TypeKillWindow, WindowTarget: &target})
@@ -439,9 +439,29 @@ func TestSpawnWindowsExecutorNewSessionCarriesShCmd(t *testing.T) {
 			NewSessionName:   "pr-1",
 			NewSessionRemote: "https://github.com/o/r",
 		},
-		spawner: spawner,
+		creator: spawner,
 	}
 
 	require.NoError(t, exec.run(context.Background()))
 	assert.Equal(t, []sessionsvc.NewSessionRequest{{Name: "pr-1", Remote: "https://github.com/o/r", ShCmd: "gh pr checkout 1"}}, spawner.created)
+}
+
+func TestSpawnWindowsExecutorSwitchesOnlyToAForegroundSession(t *testing.T) {
+	for _, background := range []bool{false, true} {
+		spawner := &mockWindowSpawner{}
+		exec := &SpawnWindowsExecutor{
+			payload:     &action.SpawnWindowsPayload{NewSession: true, NewSessionName: "pr-1", Background: background},
+			creator:     spawner,
+			localRemote: "https://github.com/o/local",
+		}
+
+		require.NoError(t, exec.run(context.Background()))
+		assert.Equal(t, "https://github.com/o/local", spawner.created[0].Remote, "an empty remote falls back to the TUI's own")
+		if background {
+			assert.Nil(t, exec.SessionToSwitchTo())
+		} else {
+			require.NotNil(t, exec.SessionToSwitchTo())
+			assert.Equal(t, "pr-1", exec.SessionToSwitchTo().Name)
+		}
+	}
 }

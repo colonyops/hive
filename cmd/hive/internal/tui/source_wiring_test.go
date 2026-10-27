@@ -161,7 +161,7 @@ func (f *fakeLaunchResolver) ResolveSessionLaunchRepository(_ context.Context, r
 }
 
 func newCreateModel(creator *fakeSessionCreator, resolver *fakeLaunchResolver) Model {
-	return Model{cmdService: command.NewService(nil, nil, nil, nil, nil, creator), launches: resolver}
+	return Model{cmdService: command.NewService(command.Deps{Creator: creator}), launches: resolver}
 }
 
 func multiResult(id, nameTemplate string) sourcepicker.Result {
