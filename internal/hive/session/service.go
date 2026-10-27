@@ -1286,14 +1286,14 @@ func (s *Service) AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir
 
 // CreateSessionWithWindows creates a new Hive session, optionally runs shCmd in its directory,
 // then opens tmux windows in it. Non-zero shCmd exit aborts window creation.
-func (s *Service) CreateSessionWithWindows(ctx context.Context, req NewSessionRequest, windows []multiplexer.WindowSpec, background bool) error {
+func (s *Service) CreateSessionWithWindows(ctx context.Context, req NewSessionRequest, windows []multiplexer.WindowSpec, background bool) (*session.Session, error) {
 	sess, err := s.CreateSession(ctx, CreateOptions{
 		Name:      req.Name,
 		Remote:    req.Remote,
 		SkipSpawn: true,
 	})
 	if err != nil {
-		return fmt.Errorf("create session: %w", err)
+		return nil, fmt.Errorf("create session: %w", err)
 	}
 
 	cleanup := func() {
@@ -1305,7 +1305,7 @@ func (s *Service) CreateSessionWithWindows(ctx context.Context, req NewSessionRe
 	if req.ShCmd != "" {
 		if err := executil.RunSh(ctx, sess.Path, req.ShCmd); err != nil {
 			cleanup()
-			return fmt.Errorf("sh: %w", err)
+			return nil, fmt.Errorf("sh: %w", err)
 		}
 	}
 
@@ -1316,7 +1316,7 @@ func (s *Service) CreateSessionWithWindows(ctx context.Context, req NewSessionRe
 		Background:       background,
 	}); err != nil {
 		cleanup()
-		return fmt.Errorf("create tmux session: %w", err)
+		return nil, fmt.Errorf("create tmux session: %w", err)
 	}
-	return nil
+	return sess, nil
 }

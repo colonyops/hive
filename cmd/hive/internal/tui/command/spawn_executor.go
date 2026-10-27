@@ -31,7 +31,8 @@ func (e *SpawnWindowsExecutor) run(ctx context.Context) error {
 
 	if p.NewSession {
 		req := sessionsvc.NewSessionRequest{Name: p.NewSessionName, Remote: p.NewSessionRemote, ShCmd: p.ShCmd}
-		return e.spawner.CreateSessionWithWindows(ctx, req, p.Windows, p.Background)
+		_, err := e.spawner.CreateSessionWithWindows(ctx, req, p.Windows, p.Background)
+		return err
 	}
 
 	if p.ShCmd != "" {

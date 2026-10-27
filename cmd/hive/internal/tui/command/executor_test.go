@@ -8,6 +8,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -333,9 +334,9 @@ func (m *mockWindowSpawner) AddWindowsToTmuxSession(_ context.Context, _, _ stri
 	return nil
 }
 
-func (m *mockWindowSpawner) CreateSessionWithWindows(_ context.Context, req sessionsvc.NewSessionRequest, _ []multiplexer.WindowSpec, _ bool) error {
+func (m *mockWindowSpawner) CreateSessionWithWindows(_ context.Context, req sessionsvc.NewSessionRequest, _ []multiplexer.WindowSpec, _ bool) (*session.Session, error) {
 	m.created = append(m.created, req)
-	return nil
+	return &session.Session{ID: "new", Name: req.Name}, nil
 }
 
 func (m *mockWindowSpawner) KillTmuxWindow(_ context.Context, target multiplexer.Target) error {
