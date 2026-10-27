@@ -28,4 +28,3 @@ case "${1:-serve}" in
   cli) shift; exec "$prefix/bin/hive" "$@" ;;
   *) echo 'Usage: launch.sh [serve|tmux|wait-tmux|cli ...]' >&2; exit 1 ;;
 esac
-
