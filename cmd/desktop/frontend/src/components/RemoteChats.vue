@@ -2,10 +2,10 @@
 import { computed, ref } from 'vue'
 import { useRemoteConnection } from '../stores/useRemoteConnection'
 import { useRemoteCatalog } from '../stores/useRemoteCatalog'
-import BaseButton from './ui/BaseButton.vue'
-import TextInput from './ui/TextInput.vue'
-import InlineError from './ui/InlineError.vue'
-import EmptyState from './ui/EmptyState.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import TextInput from '@hive/ui/components/ui/TextInput.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
+import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import RemoteTerminal from './RemoteTerminal.vue'
 
 const props = defineProps<{ active: boolean }>()

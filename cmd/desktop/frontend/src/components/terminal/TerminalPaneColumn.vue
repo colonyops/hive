@@ -13,15 +13,16 @@ import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconSearch from '~icons/lucide/search'
 import IconTerminal from '~icons/lucide/terminal'
 import IconX from '~icons/lucide/x'
-import IconButton from '../ui/IconButton.vue'
-import BaseButton from '../ui/BaseButton.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import PaneStatusBar from '../PaneStatusBar.vue'
 import SessionStatusChips from '../SessionStatusChips.vue'
 import TerminalTab from '../TerminalTab.vue'
-import { useClipboard } from '../../composables/useClipboard'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useEditorSettings } from '../../composables/useEditorSettings'
 import { useSessionStatus } from '../../composables/useSessionStatus'
 import { activePaneOf } from '../../lib/terminalLayout'
+import { launcherIconComponent } from '../../lib/launcherIcons'
 import { useTerminalStatusBar } from '../../stores/useTerminalStatusBar'
 import {
   OpenSessionInEditor,
@@ -169,6 +170,14 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
         @refresh-pull-request="refreshSessionStatus({ refreshPullRequest: true })"
       />
       <template #actions>
+        <IconButton
+          v-for="action in ops.actions.statusBarActions.value"
+          :key="action.id"
+          :label="action.label"
+          :icon="launcherIconComponent(action.icon)"
+          :data-testid="`terminal-statusbar-action-${action.id}`"
+          @click="ops.actions.invoke(action, { slug: statusBarRow.slug, windowId: '' })"
+        />
         <IconButton
           label="Tasks"
           :icon="IconListTodo"

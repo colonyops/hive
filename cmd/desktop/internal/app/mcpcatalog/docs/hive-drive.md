@@ -47,8 +47,10 @@ What a document is follows from its name:
 - **html**, `.html`: a page of its own, shown in a sandboxed frame. Inline
   styles and scripts run. Scripts, styles and fetches load only over `https`;
   images, fonts and media load over `https` or as a `data:` URL. Forms and
-  frames do not work. It is not sanitized the way
-  a canvas html block is, and the `hv-` classes below do not apply to it.
+  frames do not work. A `#fragment` link scrolls the page; a relative link
+  does nothing, so link to other documents from markdown or a canvas. It is
+  not sanitized the way a canvas html block is, and the `hv-` classes below
+  do not apply to it.
 - **canvas**, `.canvas.json`: an ordered list of blocks that you edit one
   block at a time with the canvas tools.
 - **file**: anything else in the folder. Hive lists it and leaves it alone,
@@ -372,7 +374,7 @@ point.
 Hive reaches it over Streamable HTTP on the loopback server that also hosts
 the webhook listener:
 
-```
+```text
 http://127.0.0.1:<port>/mcp/drive
 ```
 

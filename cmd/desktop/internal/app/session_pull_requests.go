@@ -4,6 +4,9 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/colonyops/hive/internal/hive/gitstatus"
+	"github.com/colonyops/hive/internal/platform/git"
 )
 
 // SessionPullRequestKey addresses the pull request a session's branch has.
@@ -59,20 +62,25 @@ type SessionPullRequest struct {
 const sessionPRCacheTTL = 5 * time.Minute
 
 // forge is one hosting service's answer to "what is this branch's pull
-// request". The status bar renders the view, not the forge, so a new one is an
-// implementation here and nothing else.
+// request" and "where does this repository live on the web". The status bar
+// renders the view, not the forge, so a new one is an implementation here and
+// nothing else.
 type forge interface {
 	// serves reports whether this forge answers for a remote's host. A host no
 	// forge serves is what makes a session's lookup unsupported.
 	serves(host string) bool
 	pullRequest(ctx context.Context, key SessionPullRequestKey) (SessionPullRequest, error)
+	// repoURL returns the repository's web address, or "" when the remote's own
+	// address is already the right one.
+	repoURL(host, owner, repo string) string
 }
 
-// sessionPullRequests answers "what is this branch's pull request" for the
-// session status bar, over the app's own API clients rather than a forge CLI —
+// sessionForges answers "what is this branch's pull request" and "what is
+// this repository's web address" for the session status bar. Pull requests are
+// read over the app's own API clients rather than a forge CLI —
 // which caches an empty result on error and so cannot keep "no pull request"
 // apart from "the lookup failed".
-type sessionPullRequests struct {
+type sessionForges struct {
 	forges []forge
 
 	mu     sync.Mutex
@@ -86,8 +94,8 @@ type cachedPullRequest struct {
 	readAt time.Time
 }
 
-func newSessionPullRequests(forges ...forge) *sessionPullRequests {
-	return &sessionPullRequests{
+func newSessionForges(forges ...forge) *sessionForges {
+	return &sessionForges{
 		forges: forges,
 		cached: map[SessionPullRequestKey]cachedPullRequest{},
 		now:    time.Now,
@@ -97,7 +105,7 @@ func newSessionPullRequests(forges ...forge) *sessionPullRequests {
 // Lookup resolves one branch's pull request, answering from cache while the
 // entry is fresh. refresh discards the cached entry first, which is what a
 // user clicking the badge asks for.
-func (p *sessionPullRequests) Lookup(ctx context.Context, key SessionPullRequestKey, refresh bool) (SessionPullRequest, error) {
+func (p *sessionForges) Lookup(ctx context.Context, key SessionPullRequestKey, refresh bool) (SessionPullRequest, error) {
 	if key.Host == "" || key.Owner == "" || key.Repo == "" || key.Branch == "" {
 		// A remote that named no repository, or a branch that did not resolve —
 		// neither is a failure the bar should report as one.
@@ -120,7 +128,7 @@ func (p *sessionPullRequests) Lookup(ctx context.Context, key SessionPullRequest
 	return view, nil
 }
 
-func (p *sessionPullRequests) fresh(key SessionPullRequestKey) (SessionPullRequest, bool) {
+func (p *sessionForges) fresh(key SessionPullRequestKey) (SessionPullRequest, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	entry, ok := p.cached[key]
@@ -134,11 +142,32 @@ func (p *sessionPullRequests) fresh(key SessionPullRequestKey) (SessionPullReque
 	return view, true
 }
 
-func (p *sessionPullRequests) fetch(ctx context.Context, key SessionPullRequestKey) (SessionPullRequest, error) {
+func (p *sessionForges) fetch(ctx context.Context, key SessionPullRequestKey) (SessionPullRequest, error) {
 	for _, f := range p.forges {
 		if f.serves(key.Host) {
 			return f.pullRequest(ctx, key)
 		}
 	}
 	return SessionPullRequest{Status: PullRequestStatusUnsupported}, nil
+}
+
+// RepoURL returns the web address of the repository a remote names, or "" for
+// a remote with no host, such as a local path. A host no forge serves still
+// gets an address read off the remote: most self-hosted forges serve their web
+// UI at the remote's host.
+func (p *sessionForges) RepoURL(remote string) string {
+	host, owner, repo := gitstatus.RemoteCoordinates(remote)
+	if host == "" {
+		return ""
+	}
+	for _, f := range p.forges {
+		if !f.serves(host) {
+			continue
+		}
+		if url := f.repoURL(host, owner, repo); url != "" {
+			return url
+		}
+		break
+	}
+	return git.WebURL(remote)
 }

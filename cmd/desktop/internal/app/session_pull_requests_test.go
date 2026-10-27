@@ -38,7 +38,7 @@ const openPRBody = `{"data":{"r0":{"pullRequests":{"nodes":[{"number":311,"state
 
 func TestSessionPullRequestsAnswersFromCacheUntilRefreshed(t *testing.T) {
 	server, calls := graphQLServer(t, openPRBody)
-	lookup := newSessionPullRequests(newGitHubForge(ghclient.NewClient(ghclient.WithAPIBase(server.URL)), connectedStore(t)))
+	lookup := newSessionForges(newGitHubForge(ghclient.NewClient(ghclient.WithAPIBase(server.URL)), connectedStore(t)))
 	key := SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
 
 	first, err := lookup.Lookup(t.Context(), key, false)
@@ -64,7 +64,7 @@ func TestSessionPullRequestsAnswersFromCacheUntilRefreshed(t *testing.T) {
 
 func TestSessionPullRequestsRereadsOnceTheEntryIsStale(t *testing.T) {
 	server, calls := graphQLServer(t, openPRBody)
-	lookup := newSessionPullRequests(newGitHubForge(ghclient.NewClient(ghclient.WithAPIBase(server.URL)), connectedStore(t)))
+	lookup := newSessionForges(newGitHubForge(ghclient.NewClient(ghclient.WithAPIBase(server.URL)), connectedStore(t)))
 	now := time.Now()
 	lookup.now = func() time.Time { return now }
 	key := SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
@@ -86,22 +86,22 @@ func TestSessionPullRequestsKeepsItsEmptyAnswersDistinct(t *testing.T) {
 	client := ghclient.NewClient(ghclient.WithAPIBase(server.URL))
 	key := SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
 
-	none, err := newSessionPullRequests(newGitHubForge(client, connectedStore(t))).Lookup(t.Context(), key, false)
+	none, err := newSessionForges(newGitHubForge(client, connectedStore(t))).Lookup(t.Context(), key, false)
 	require.NoError(t, err)
 	assert.Equal(t, PullRequestStatusNone, none.Status)
 
-	disconnected, err := newSessionPullRequests(newGitHubForge(client, credentials.NewMemoryStore())).Lookup(t.Context(), key, false)
+	disconnected, err := newSessionForges(newGitHubForge(client, credentials.NewMemoryStore())).Lookup(t.Context(), key, false)
 	require.NoError(t, err)
 	assert.Equal(t, PullRequestStatusDisconnected, disconnected.Status)
 
-	unsupported, err := newSessionPullRequests(newGitHubForge(client, connectedStore(t))).Lookup(t.Context(),
+	unsupported, err := newSessionForges(newGitHubForge(client, connectedStore(t))).Lookup(t.Context(),
 		SessionPullRequestKey{Branch: "feat/bar"}, false)
 	require.NoError(t, err)
 	assert.Equal(t, PullRequestStatusUnsupported, unsupported.Status)
 
 	// A host no forge serves is unsupported too, and never disconnected: a
 	// remote is not evidence that its host is a forge the app can ask.
-	unknownHost, err := newSessionPullRequests(newGitHubForge(client, connectedStore(t))).Lookup(t.Context(),
+	unknownHost, err := newSessionForges(newGitHubForge(client, connectedStore(t))).Lookup(t.Context(),
 		SessionPullRequestKey{Host: "git.example.test", Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
 	require.NoError(t, err)
 	assert.Equal(t, PullRequestStatusUnsupported, unknownHost.Status)
@@ -118,7 +118,7 @@ func TestSessionPullRequestsReportsAFailedLookupAndCachesNothing(t *testing.T) {
 	}))
 	defer server.Close()
 
-	lookup := newSessionPullRequests(newGitHubForge(ghclient.NewClient(ghclient.WithAPIBase(server.URL)), connectedStore(t)))
+	lookup := newSessionForges(newGitHubForge(ghclient.NewClient(ghclient.WithAPIBase(server.URL)), connectedStore(t)))
 	key := SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
 
 	_, err := lookup.Lookup(t.Context(), key, false)

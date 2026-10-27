@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import FormField from '../../components/ui/FormField.vue'
-import TextArea from '../../components/ui/TextArea.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
+import TextArea from '@hive/ui/components/ui/TextArea.vue'
 
 withDefaults(
   defineProps<{

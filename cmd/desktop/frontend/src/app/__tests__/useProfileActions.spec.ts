@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
-import { useConfirmation } from '../../composables/useConfirmation'
+import { useConfirmation } from '@hive/ui/composables/useConfirmation'
 import type { AppNavigation, FeedState } from '../useAppNavigation'
 import { useProfileActions } from '../useProfileActions'
 

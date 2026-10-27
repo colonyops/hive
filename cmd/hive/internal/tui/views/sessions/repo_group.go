@@ -16,9 +16,10 @@ type RepoGroup struct {
 	RecycledCount    int               // Number of recycled sessions (displayed as collapsed)
 }
 
-// GroupSessionsByRepo groups sessions by their repository remote URL.
-// Sessions are grouped by their Remote field. Returns groups sorted with:
-// - Current repository (matching localRemote) first
+// GroupSessionsByRepo groups sessions by repository, so remotes that differ
+// only by transport (git.RemoteIdentity) share a group. A group's Remote is
+// the remote of its first session by name. Returns groups sorted with:
+// - Current repository (equivalent to localRemote) first
 // - Other repositories sorted alphabetically by name
 //
 // Within each group, sessions are sorted by name.
@@ -27,22 +28,13 @@ func GroupSessionsByRepo(sessions []session.Session, localRemote string) []RepoG
 		return nil
 	}
 
-	// Group sessions by remote URL
 	groups := make(map[string]*RepoGroup)
 	for _, s := range sessions {
-		remote := s.Remote
-		if remote == "" {
-			remote = "(no remote)"
-		}
-
-		group, exists := groups[remote]
+		key := git.RemoteIdentity(s.Remote)
+		group, exists := groups[key]
 		if !exists {
-			group = &RepoGroup{
-				Remote:   remote,
-				Name:     extractGroupName(remote),
-				Sessions: make([]session.Session, 0, 4),
-			}
-			groups[remote] = group
+			group = &RepoGroup{Sessions: make([]session.Session, 0, 4)}
+			groups[key] = group
 		}
 		group.Sessions = append(group.Sessions, s)
 	}
@@ -50,7 +42,10 @@ func GroupSessionsByRepo(sessions []session.Session, localRemote string) []RepoG
 	// Convert to slice, separate recycled sessions, and sort active sessions
 	result := make([]RepoGroup, 0, len(groups))
 	for _, group := range groups {
-		// Separate active and recycled sessions
+		sortSessions(group.Sessions)
+		group.Remote = group.Sessions[0].Remote
+		group.Name = extractGroupName(group.Remote)
+
 		activeSessions := make([]session.Session, 0, len(group.Sessions))
 		recycledSessions := make([]session.Session, 0)
 		for _, s := range group.Sessions {
@@ -63,11 +58,9 @@ func GroupSessionsByRepo(sessions []session.Session, localRemote string) []RepoG
 		group.Sessions = activeSessions
 		group.RecycledSessions = recycledSessions
 		group.RecycledCount = len(recycledSessions)
-		sortSessions(group.Sessions)
 		result = append(result, *group)
 	}
 
-	// Sort groups: local repo first, then alphabetically by name
 	sortRepoGroups(result, localRemote)
 
 	return result
@@ -75,7 +68,7 @@ func GroupSessionsByRepo(sessions []session.Session, localRemote string) []RepoG
 
 // extractGroupName returns the display name for a repository group.
 func extractGroupName(remote string) string {
-	if remote == "" || remote == "(no remote)" {
+	if remote == "" {
 		return "(no remote)"
 	}
 	return git.ExtractRepoName(remote)
@@ -84,15 +77,18 @@ func extractGroupName(remote string) string {
 // sortSessions sorts sessions alphabetically by name.
 func sortSessions(sessions []session.Session) {
 	sort.Slice(sessions, func(i, j int) bool {
-		return sessions[i].Name < sessions[j].Name
+		if sessions[i].Name != sessions[j].Name {
+			return sessions[i].Name < sessions[j].Name
+		}
+		return sessions[i].ID < sessions[j].ID
 	})
 }
 
 // sortRepoGroups sorts repository groups with local repo first, then alphabetically.
 func sortRepoGroups(groups []RepoGroup, localRemote string) {
 	sort.Slice(groups, func(i, j int) bool {
-		iLocal := groups[i].Remote == localRemote
-		jLocal := groups[j].Remote == localRemote
+		iLocal := git.EquivalentRemote(groups[i].Remote, localRemote)
+		jLocal := git.EquivalentRemote(groups[j].Remote, localRemote)
 
 		if iLocal != jLocal {
 			return iLocal

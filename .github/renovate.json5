@@ -18,7 +18,7 @@
   prConcurrentLimit: 5,
   prHourlyLimit: 0,
 
-  // Mirror the local supply-chain policy: cmd/desktop/frontend/.npmrc refuses
+  // Mirror the local supply-chain policy: .npmrc at the repo root refuses
   // installs of releases younger than 7 days, so a bot PR proposing one would
   // be uninstallable by anyone honouring that setting (pnpm/bun) and would
   // reintroduce the exposure the setting exists to block. `strict` withholds

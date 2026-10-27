@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import InlineError from './ui/InlineError.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { ref } from 'vue'
 import IconCopy from '~icons/lucide/copy'
 import IconPlay from '~icons/lucide/play'
 import ActionInputFields from './ActionInputFields.vue'
-import BaseButton from './ui/BaseButton.vue'
-import BaseModal from './ui/BaseModal.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import BaseModal from '@hive/ui/components/ui/BaseModal.vue'
 import type { InputSpec } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/actions/models'
 import { type ActionInputValues, initialActionInputs, validateActionInputs } from '../lib/actionInputs'
-import { seedRef } from '../lib/seedRef'
+import { seedRef } from '@hive/ui/lib/seedRef'
 
 const props = withDefaults(
   defineProps<{

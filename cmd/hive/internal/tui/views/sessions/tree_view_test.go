@@ -104,6 +104,18 @@ func TestBuildTreeItems_HeaderFields(t *testing.T) {
 	assert.Empty(t, header.RootPath)
 }
 
+func TestBuildTreeItems_CurrentRepoMatchesAnotherTransport(t *testing.T) {
+	groups := []RepoGroup{{
+		Remote:   "https://github.com/user/local.git",
+		Name:     "local",
+		Sessions: []session.Session{{ID: "abc1", Name: "active1", State: session.StateActive}},
+	}}
+
+	items := BuildTreeItems(groups, "git@github.com:user/local.git", nil)
+	require.NotEmpty(t, items)
+	assert.True(t, items[0].(TreeItem).IsCurrentRepo)
+}
+
 func TestBuildTreeItems_RootPathFromWorkspaceRepos(t *testing.T) {
 	groups := []RepoGroup{
 		{

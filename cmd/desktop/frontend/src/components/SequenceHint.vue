@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
 import { commandById } from '../keybindings/catalog'
-import Kbd from './ui/Kbd.vue'
+import Kbd from '@hive/ui/components/ui/Kbd.vue'
 
 const { pendingSequence } = useKeybindings()
 

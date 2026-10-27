@@ -46,7 +46,8 @@ func (ctrl *DriveController) registerDocuments(srv *mcp.Server) {
 			"body may open with YAML front matter between --- lines; title sets the name the user sees, and front matter that " +
 			"does not parse is refused rather than saved. An html document renders as a page of its own in a sandboxed frame: " +
 			"inline styles and scripts run; other scripts, styles and fetches load only over https; images, fonts and media " +
-			"load over https or as data: URLs; forms and frames do not work. It is not sanitized like a canvas html block, " +
+			"load over https or as data: URLs; forms and frames do not work; a #fragment link scrolls the page and a relative " +
+			"link does nothing. It is not sanitized like a canvas html block, " +
 			"and the canvas hv- classes do not apply. The body is capped at 2 MiB. A .canvas.json path is refused: write " +
 			"canvas blocks with put_blocks. Answers with the entry as stored. The pane does not open by itself; use " +
 			"open_document when the user should look now.",

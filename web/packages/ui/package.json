@@ -1,0 +1,50 @@
+{
+  "name": "@hive/ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./platform": "./src/platform.ts",
+    "./components/*": "./src/components/*",
+    "./composables/*": "./src/composables/*.ts",
+    "./lib/*": "./src/lib/*.ts",
+    "./styles/*": "./src/styles/*",
+    "./test-utils/*": "./src/test-utils/*.ts",
+    "./types/*": "./src/types/*.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "vue-tsc",
+    "format": "prettier --write \"**/*.{ts,js,vue,css,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,vue,css,json}\"",
+    "lint": "eslint --max-warnings 0 ."
+  },
+  "dependencies": {
+    "@vueuse/core": "^14.3.0",
+    "markdown-it": "^14.3.0",
+    "markdown-it-task-lists": "^2.1.1",
+    "mermaid": "11.17.2",
+    "shiki": "4.5.0",
+    "vue": "^3.2.45"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@iconify-json/lucide": "1.2.144",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "24.19.2",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "@vue/test-utils": "2.5.1",
+    "eslint": "10.12.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-vue": "10.11.1",
+    "happy-dom": "20.14.6",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2",
+    "unplugin-icons": "23.0.1",
+    "vite": "^8.0.5",
+    "vitest": "4.1.11",
+    "vue-eslint-parser": "10.4.1",
+    "vue-tsc": "3.3.13"
+  }
+}

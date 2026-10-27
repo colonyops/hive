@@ -4,7 +4,7 @@
 // shape and the matches()/glob semantics this only edits, never evaluates).
 import { GlobListField, ToggleField } from '../../fields'
 import type { Config } from './config'
-import AppCheckbox from '../../../components/ui/AppCheckbox.vue'
+import AppCheckbox from '@hive/ui/components/ui/AppCheckbox.vue'
 
 const props = defineProps<{ config: Config; errors?: string[] }>()
 const emit = defineEmits<{ 'update:config': [config: Config] }>()

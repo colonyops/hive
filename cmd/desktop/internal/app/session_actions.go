@@ -20,7 +20,7 @@ const terminalFailureStderrBytes = 400
 
 // TerminalActionViews returns the configured actions offered on one terminal
 // surface: actions.TargetSession for a session row, actions.TargetWindow for a
-// window row inside it.
+// window row inside it, actions.TargetStatusBar for the session status bar.
 //
 // Unlike a feed item's, the set does not depend on which session: a terminal
 // action declares the surface it belongs on and there is no item kind to
@@ -118,14 +118,15 @@ func (s *SessionsService) terminalActionContext(
 	}
 	// The window id is what makes an invocation a window invocation, so a
 	// session-only action reached from a window row is refused rather than
-	// silently run against the session.
-	surface := actions.TargetSession
+	// silently run against the session. The status bar runs against the
+	// session too, so either session surface admits a session invocation.
 	windowID := strings.TrimSpace(target.WindowID)
 	if windowID != "" {
-		surface = actions.TargetWindow
-	}
-	if !action.HasTarget(surface) {
-		return actions.Action{}, dispatch.OutputData{}, Errorf(KindInvalid, "action %q is not offered on a terminal %s", actionID, surface)
+		if !action.HasTarget(actions.TargetWindow) {
+			return actions.Action{}, dispatch.OutputData{}, Errorf(KindInvalid, "action %q is not offered on a terminal window", actionID)
+		}
+	} else if !action.HasTarget(actions.TargetSession) && !action.HasTarget(actions.TargetStatusBar) {
+		return actions.Action{}, dispatch.OutputData{}, Errorf(KindInvalid, "action %q is not offered on a terminal session", actionID)
 	}
 
 	detail, err := s.detailBySlug(ctx, slug)
@@ -151,6 +152,7 @@ func (s *SessionsService) terminalActionContext(
 			Repo:   detail.Remote,
 			Path:   detail.Path,
 			Branch: detail.GetMeta(session.MetaWorktreeBranch),
+			WebURL: s.repoURL(detail.Remote),
 		},
 	}
 	if windowID != "" {
@@ -166,8 +168,8 @@ func (s *SessionsService) record(ctx context.Context, e activity.Event) {
 }
 
 func validateTerminalSurface(target string) error {
-	if target != actions.TargetSession && target != actions.TargetWindow {
-		return Errorf(KindInvalid, "unknown terminal target %q (expected %s or %s)", target, actions.TargetSession, actions.TargetWindow)
+	if target != actions.TargetSession && target != actions.TargetWindow && target != actions.TargetStatusBar {
+		return Errorf(KindInvalid, "unknown terminal target %q (expected %s, %s or %s)", target, actions.TargetSession, actions.TargetWindow, actions.TargetStatusBar)
 	}
 	return nil
 }

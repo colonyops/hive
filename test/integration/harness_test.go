@@ -24,6 +24,7 @@ type Harness struct {
 	dataDir    string
 	homeDir    string
 	configPath string
+	extraEnv   []string
 }
 
 // NewHarness creates a new test harness with isolated temp directories.
@@ -172,6 +173,12 @@ func (h *Harness) WithConfig(yaml string) *Harness {
 	return h
 }
 
+// WithEnv adds an environment variable to every later hive invocation.
+func (h *Harness) WithEnv(key, value string) *Harness {
+	h.extraEnv = append(h.extraEnv, key+"="+value)
+	return h
+}
+
 // DataDir returns the isolated data directory path.
 func (h *Harness) DataDir() string { return h.dataDir }
 
@@ -194,6 +201,7 @@ func (h *Harness) command(args ...string) *exec.Cmd {
 		"HIVE_LOG_FILE=" + filepath.Join(h.dataDir, "hive.log"),
 		"NO_COLOR=1",
 	}
+	cmd.Env = append(cmd.Env, h.extraEnv...)
 	// Propagate tmux socket isolation if set
 	if tmuxDir := os.Getenv("TMUX_TMPDIR"); tmuxDir != "" {
 		cmd.Env = append(cmd.Env, "TMUX_TMPDIR="+tmuxDir)

@@ -31,11 +31,12 @@ import (
 // still demands the Docker harness marker.
 const stateResetPath = "/_e2e/reset"
 
-// coreResetTables is the subset of hive.db tables the desktop's action path
-// writes (launch-session creates sessions; publish-message creates messages,
-// which readers acknowledge in message_reads). Other hive.db tables are
-// never touched by the desktop app, so a reset leaves them alone.
-var coreResetTables = []string{"message_reads", "messages", "sessions"}
+// coreResetTables is the subset of hive.db tables the desktop writes: the
+// action path (launch-session creates sessions; publish-message creates
+// messages, which readers acknowledge in message_reads) and Drive document
+// review (review_sessions and their review_comments). A reset leaves the
+// other hive.db tables alone.
+var coreResetTables = []string{"message_reads", "messages", "review_comments", "review_sessions", "sessions"}
 
 // pristineFile is one mutable config file captured at harness construction
 // (post-startup). A nil content means the file did not exist at boot and must

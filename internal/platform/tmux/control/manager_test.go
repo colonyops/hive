@@ -789,7 +789,7 @@ func TestManagerNewCommandWindowPreservesCommandAndDirectory(t *testing.T) {
 	cmds := &fakeTmuxCommands{windows: []string{"@7"}}
 	m := newTestManager(t, nil, ManagerOptions{runTmux: cmds.run})
 	command := "wrapper codex --model 'custom model'"
-	id, err := m.NewCommandWindow(t.Context(), "hive-demo", "/work/shared checkout", "codex", command)
+	id, err := m.NewCommandWindow(t.Context(), "hive-demo", "/work/shared checkout", "codex", command, nil)
 	require.NoError(t, err)
 	require.Equal(t, "@7", id)
 	require.Equal(t, [][]string{
@@ -798,11 +798,23 @@ func TestManagerNewCommandWindowPreservesCommandAndDirectory(t *testing.T) {
 	}, cmds.calls)
 }
 
+func TestManagerNewCommandWindowSetsEnvForTheWindowOnly(t *testing.T) {
+	t.Parallel()
+	cmds := &fakeTmuxCommands{windows: []string{"@7"}}
+	m := newTestManager(t, nil, ManagerOptions{runTmux: cmds.run})
+	_, err := m.NewCommandWindow(t.Context(), "hive-demo", "/work", "codex", "codex", []string{"A=1", "B=two words"})
+	require.NoError(t, err)
+	require.Equal(t, []string{
+		"new-window", "-t", "=hive-demo:", "-c", "/work", "-n", "codex", "-P", "-F", "#{window_id}",
+		"-e", "A=1", "-e", "B=two words", "--", resolveLoginShell(), "-l", "-c", "codex",
+	}, cmds.calls[1])
+}
+
 func TestManagerNewCommandWindowDoesNotCreateAMissingSession(t *testing.T) {
 	t.Parallel()
 	cmds := &fakeTmuxCommands{absent: true}
 	m := newTestManager(t, nil, ManagerOptions{runTmux: cmds.run})
-	_, err := m.NewCommandWindow(t.Context(), "hive-demo", "/work", "codex", "codex")
+	_, err := m.NewCommandWindow(t.Context(), "hive-demo", "/work", "codex", "codex", nil)
 	require.ErrorIs(t, err, ErrNotAttached)
 	require.Len(t, cmds.calls, 1)
 }

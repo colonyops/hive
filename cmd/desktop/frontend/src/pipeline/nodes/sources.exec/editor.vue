@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // sources.exec has no runtime.ts: the command runs in Go, on the poll tick.
 import { computed } from 'vue'
-import IconButton from '../../../components/ui/IconButton.vue'
-import BaseButton from '../../../components/ui/BaseButton.vue'
-import FormField from '../../../components/ui/FormField.vue'
-import TextInput from '../../../components/ui/TextInput.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
+import TextInput from '@hive/ui/components/ui/TextInput.vue'
 import { defaultExecSourceIcon, feedIconComponent, feedIconOptions } from '../../../lib/feedIcons'
 import {
   IntervalField,

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, nextTick, ref } from 'vue'
-import { useOpenModalCount } from '../../../composables/useOpenModalCount'
-import DrawerSheet from '../DrawerSheet.vue'
+import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
+import DrawerSheet from '@hive/ui/components/ui/DrawerSheet.vue'
 import SettingsLayout from '../../settings/SettingsLayout.vue'
 
 function el<T extends HTMLElement>(testid: string): T {

@@ -66,6 +66,13 @@ func (e *Executor) RemoteURL(ctx context.Context, dir string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+func (e *Executor) SetRemoteURL(ctx context.Context, dir, url string) error {
+	if out, err := e.exec.RunDir(ctx, dir, e.gitPath, "remote", "set-url", "origin", url); err != nil {
+		return e.commandError("git remote set-url", dir, out, err)
+	}
+	return nil
+}
+
 func (e *Executor) IsClean(ctx context.Context, dir string) (bool, error) {
 	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "status", "--porcelain")
 	if err != nil {

@@ -74,6 +74,27 @@ const xterm = vi.hoisted(() => {
 })
 
 vi.mock('@xterm/xterm', () => ({ Terminal: xterm.FakeTerminal }))
+
+// The renderer itself is covered against a real xterm in kittyGraphics.spec.ts;
+// these fakes have none of the parser or render surface it registers on.
+const kitty = vi.hoisted(() => {
+  const installed: {
+    filter: { rewrite: ReturnType<typeof vi.fn>; reset: ReturnType<typeof vi.fn> }
+    clear: ReturnType<typeof vi.fn>
+    dispose: ReturnType<typeof vi.fn>
+  }[] = []
+  const installKittyGraphics = vi.fn(() => {
+    const graphics = {
+      filter: { rewrite: vi.fn((data: Uint8Array) => data), reset: vi.fn() },
+      clear: vi.fn(),
+      dispose: vi.fn(),
+    }
+    installed.push(graphics)
+    return graphics
+  })
+  return { installed, installKittyGraphics }
+})
+vi.mock('../../lib/kitty/kittyGraphics', () => ({ installKittyGraphics: kitty.installKittyGraphics }))
 vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: xterm.FakeAddon }))
 vi.mock('@wailsio/runtime', () => ({
   Browser: { OpenURL: vi.fn().mockResolvedValue(undefined) },
@@ -81,7 +102,6 @@ vi.mock('@wailsio/runtime', () => ({
 }))
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: xterm.FakeAddon }))
 vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: xterm.FakeAddon }))
-vi.mock('@xterm/addon-canvas', () => ({ CanvasAddon: xterm.FakeAddon }))
 
 const mocks = vi.hoisted(() => ({
   Available: vi.fn(),
@@ -204,6 +224,7 @@ describe('PopupTerminal', () => {
   })
 
   beforeEach(() => {
+    kitty.installed.length = 0
     vi.useRealTimers()
     xterm.FakeTerminal.instances = []
     FakeSocket.instances = []
@@ -373,6 +394,21 @@ describe('PopupTerminal', () => {
     xterm.FakeTerminal.instances[0].type('ls\n')
     expect(socket.sent[0][0]).toBe(0x10)
     expect(new TextDecoder().decode(socket.sent[0].subarray(1))).toBe('ls\n')
+  })
+
+  it('runs output through the Kitty graphics filter and disposes it with the shell', async () => {
+    await mountPanel()
+    usePopupTerminal().show()
+    await flushPromises()
+
+    FakeSocket.instances[0].onmessage?.({ data: new Uint8Array([0x00, ...encoder.encode('hello')]) })
+    expect(kitty.installed[0].filter.rewrite).toHaveBeenCalledWith(encoder.encode('hello'))
+
+    FakeSocket.instances[0].onmessage?.({
+      data: new Uint8Array([0x01, ...encoder.encode(JSON.stringify({ reason: 'exited with status 0' }))]),
+    })
+    await flushPromises()
+    expect(kitty.installed[0].dispose).toHaveBeenCalled()
   })
 
   it('forwards Shift+Enter to the shell as a CSI u modified-enter', async () => {

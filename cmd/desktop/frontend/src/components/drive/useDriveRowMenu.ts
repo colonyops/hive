@@ -5,7 +5,7 @@ import IconFolderOpen from '~icons/lucide/folder-open'
 import IconFolderPlus from '~icons/lucide/folder-plus'
 import IconPencil from '~icons/lucide/pencil'
 import IconTrash2 from '~icons/lucide/trash-2'
-import type { MenuActionEntry, MenuEntry } from '../../types/menu'
+import type { MenuActionEntry, MenuEntry } from '@hive/ui/types/menu'
 import type { EntryWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 export type DriveRowAction = 'new-folder' | 'rename' | 'move' | 'reveal' | 'copy-path' | 'delete'

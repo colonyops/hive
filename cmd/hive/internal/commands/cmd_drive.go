@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/drive"
+	"github.com/colonyops/hive/internal/hive/driveremote"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
@@ -17,11 +19,16 @@ type DriveCmd struct {
 	flags *Flags
 	app   *app.App
 
-	repo      string
-	shared    bool
-	all       bool
-	json      bool
-	olderThan string
+	repo       string
+	workspace  string
+	shared     bool
+	all        bool
+	json       bool
+	olderThan  string
+	server     string
+	force      bool
+	tokenStdin bool
+	expires    string
 }
 
 // NewDriveCmd creates a new drive command.
@@ -57,12 +64,22 @@ in a git repository to create a .hive symlink pointing to its space.
 				Usage:       "use the shared space",
 				Destination: &cmd.shared,
 			},
+			&cli.StringFlag{
+				Name:        "workspace",
+				Aliases:     []string{"w"},
+				Usage:       "target a Chats workspace space by name",
+				Destination: &cmd.workspace,
+			},
 		},
 		Commands: []*cli.Command{
 			cmd.initCmd(),
 			cmd.lsCmd(),
 			cmd.spacesCmd(),
 			cmd.pruneCmd(),
+			cmd.loginCmd(),
+			cmd.pushCmd(),
+			cmd.pullCmd(),
+			cmd.shareCmd(),
 		},
 	})
 
@@ -112,13 +129,13 @@ Example: hive drive ls`,
 
 func (cmd *DriveCmd) runLs(ctx context.Context, c *cli.Command) error {
 	if cmd.all {
-		if cmd.repo != "" || cmd.shared {
-			return fmt.Errorf("--all cannot be combined with --repo or --shared")
+		if cmd.repo != "" || cmd.shared || cmd.workspace != "" {
+			return fmt.Errorf("--all cannot be combined with --repo, --shared, or --workspace")
 		}
 		return cmd.runLsAll(ctx)
 	}
 
-	space, err := cmd.app.Drive().ResolveSpace(ctx, cmd.repo, cmd.shared)
+	space, err := cmd.space(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,8 +160,27 @@ func (cmd *DriveCmd) runLs(ctx context.Context, c *cli.Command) error {
 		return writeEntries(root, func(e drive.Entry) any { return e })
 	}
 	fmt.Println(dir)
-	printEntries(root)
+	printEntries(root, cmd.uploadStatus(ctx, space))
 	return nil
+}
+
+// uploadStatus is nil unless a drive server is known, so a machine that never
+// logged in sees the plain listing.
+func (cmd *DriveCmd) uploadStatus(ctx context.Context, space drive.Space) map[string]driveremote.UploadStatus {
+	remote := cmd.app.DriveRemote()
+	if remote == nil {
+		return nil
+	}
+	server, err := remote.DefaultServer("")
+	if err != nil {
+		return nil
+	}
+	status, err := remote.Status(ctx, server, space)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: upload status unavailable: %v\n", err)
+		return nil
+	}
+	return status
 }
 
 func (cmd *DriveCmd) runLsAll(ctx context.Context) error {
@@ -170,15 +206,20 @@ func (cmd *DriveCmd) runLsAll(ctx context.Context) error {
 			continue
 		}
 		fmt.Println(space.Key)
-		printEntries(root)
+		printEntries(root, nil)
 	}
 	return nil
 }
 
-func printEntries(root drive.Entry) {
+// A non-nil status adds a column for the uploaded or changed documents.
+func printEntries(root drive.Entry, status map[string]driveremote.UploadStatus) {
 	for _, entry := range root.Children {
-		fmt.Printf("%-8s  %s\n", entry.Kind, entry.Path)
-		printEntries(entry)
+		if status == nil {
+			fmt.Printf("%-8s  %s\n", entry.Kind, entry.Path)
+		} else {
+			fmt.Printf("%-8s  %-8s  %s\n", entry.Kind, status[entry.Path], entry.Path)
+		}
+		printEntries(entry, status)
 	}
 }
 
@@ -307,11 +348,23 @@ func (cmd *DriveCmd) runPrune(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *DriveCmd) resolveContextDir(ctx context.Context) (string, error) {
-	space, err := cmd.app.Drive().ResolveSpace(ctx, cmd.repo, cmd.shared)
+	space, err := cmd.space(ctx)
 	if err != nil {
 		return "", err
 	}
 	return cmd.app.Drive().SpaceDir(space)
+}
+
+// space is the space a command targets: --workspace, else what ResolveSpace
+// makes of --repo, --shared, and the current directory.
+func (cmd *DriveCmd) space(ctx context.Context) (drive.Space, error) {
+	if cmd.workspace == "" {
+		return cmd.app.Drive().ResolveSpace(ctx, cmd.repo, cmd.shared)
+	}
+	if cmd.repo != "" || cmd.shared {
+		return drive.Space{}, errors.New("--workspace cannot be combined with --repo or --shared")
+	}
+	return drive.WorkspaceSpace(cmd.workspace)
 }
 
 func parseDuration(s string) (time.Duration, error) {

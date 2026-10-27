@@ -4,7 +4,7 @@
 import { computed, markRaw, ref } from 'vue'
 import IconPencil from '~icons/lucide/pencil'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
-import AppSelect, { type AppSelectOption } from '../ui/AppSelect.vue'
+import AppSelect, { type AppSelectOption } from '@hive/ui/components/ui/AppSelect.vue'
 import SettingsSection from '../settings/SettingsSection.vue'
 import { agentIcon } from '../../lib/agentIcon'
 import { useAgentWorkspaces } from '../../stores/useAgentWorkspaces'

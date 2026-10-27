@@ -98,7 +98,7 @@ resolve_from_channel() {
       return
     fi
   done
-  die "the $CHANNEL channel has no ${OS}-${ARCH} build yet. macOS is the only published platform"
+  die "the $CHANNEL channel has no ${OS}-${ARCH} build yet"
 }
 
 verify_sha() {

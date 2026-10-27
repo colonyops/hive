@@ -25,6 +25,7 @@ type InboxService struct {
 	nodeRuns *stores.NodeRunStore
 	actions  *actions.ActionStore
 	worker   *dispatch.Worker
+	remotes  dispatch.RemoteGenerator
 }
 
 type InboxDeps struct {
@@ -33,10 +34,11 @@ type InboxDeps struct {
 	NodeRuns *stores.NodeRunStore
 	Catalog  *actions.ActionStore
 	Worker   *dispatch.Worker
+	Remotes  dispatch.RemoteGenerator
 }
 
 func newInboxService(d InboxDeps) *InboxService {
-	return &InboxService{items: d.Items, commands: d.Commands, nodeRuns: d.NodeRuns, actions: d.Catalog, worker: d.Worker}
+	return &InboxService{items: d.Items, commands: d.Commands, nodeRuns: d.NodeRuns, actions: d.Catalog, worker: d.Worker, remotes: d.Remotes}
 }
 
 func (s *InboxService) ListByFeed(ctx context.Context, profileID, feedID string, limit int) ([]stores.InboxItem, error) {
@@ -162,7 +164,7 @@ func (s *InboxService) ActionViews(ctx context.Context, itemID int64) ([]actions
 		if !action.ShowInDetail {
 			continue
 		}
-		if ok, _ := dispatch.ActionApplicability(action, item); !ok {
+		if ok, _ := dispatch.ActionApplicability(action, item, s.remotes); !ok {
 			continue
 		}
 		views = append(views, action.View())
@@ -193,7 +195,7 @@ func (s *InboxService) NewSessionDraft(ctx context.Context, itemIDs []int64) (di
 		orderedIDs = append(orderedIDs, itemID)
 		items = append(items, dispatch.SessionDraftItem{Title: item.Title, URL: item.URL, Payload: item.Payload})
 	}
-	draft, err := dispatch.RenderSessionDraftItems(items)
+	draft, err := dispatch.RenderSessionDraftItems(items, s.remotes)
 	if err != nil {
 		return dispatch.SessionDraft{}, Wrap(err, KindInternal, "rendering session draft for %d items", len(items))
 	}
@@ -232,7 +234,7 @@ func (s *InboxService) InvokeAction(ctx context.Context, req InvokeActionRequest
 		// worker never sees it and re-copying never prompts for a rerun.
 		return dispatch.ActionRunView{}, Errorf(KindInvalid, "action %q is a clipboard action; copy it from the detail pane instead", req.ActionID)
 	}
-	if applicable, reason := dispatch.ActionApplicability(action, item); !applicable {
+	if applicable, reason := dispatch.ActionApplicability(action, item, s.remotes); !applicable {
 		return dispatch.ActionRunView{}, Errorf(KindInvalid, "action %q does not apply to item %d: %s", req.ActionID, req.ItemID, reason)
 	}
 	if item.ID == "" {
@@ -285,13 +287,13 @@ func (s *InboxService) RenderClipboardAction(ctx context.Context, actionID strin
 		if err != nil {
 			return "", err
 		}
-		if applicable, reason := dispatch.ActionApplicability(action, item); !applicable {
+		if applicable, reason := dispatch.ActionApplicability(action, item, s.remotes); !applicable {
 			return "", Errorf(KindInvalid, "action %q does not apply to item %d: %s", actionID, itemID, reason)
 		}
 		if item.ID == "" {
 			return "", Errorf(KindInvalid, "action %q: item id is required", actionID)
 		}
-		text, err := dispatch.RenderClipboardText(action, item.ID, item.Payload, resolved)
+		text, err := dispatch.RenderClipboardText(action, item.ID, item.Payload, resolved, s.remotes)
 		if err != nil {
 			return "", Wrap(err, KindInvalid, "rendering clipboard action %q for item %d", actionID, itemID)
 		}

@@ -395,3 +395,21 @@ func TestExecutor_DiffStats(t *testing.T) {
 		})
 	}
 }
+
+func TestExecutor_SetRemoteURL(t *testing.T) {
+	mock := &mockExecutor{
+		runDirFunc: func(_ context.Context, dir, cmd string, args ...string) ([]byte, error) {
+			assert.Equal(t, "/repo", dir)
+			assert.Equal(t, []string{"remote", "set-url", "origin", "git@github.com:acme/site.git"}, args)
+			return nil, nil
+		},
+	}
+	require.NoError(t, NewExecutor("git", mock).SetRemoteURL(context.Background(), "/repo", "git@github.com:acme/site.git"))
+
+	failing := &mockExecutor{
+		runDirFunc: func(context.Context, string, string, ...string) ([]byte, error) {
+			return []byte("fatal"), fmt.Errorf("exit 1")
+		},
+	}
+	require.Error(t, NewExecutor("git", failing).SetRemoteURL(context.Background(), "/repo", "x"))
+}

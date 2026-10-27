@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/jobs"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/platform/observe"
 )
 
@@ -35,6 +38,24 @@ var ErrDispatchBusy = errors.New("action dispatch is busy")
 
 const ActionTypeLaunchSession = "launch-session"
 
+// RemoteGenerator turns an item's repo and web URL into the clone URL hive
+// generates (session.Service.GeneratedRemote).
+type RemoteGenerator func(repo, itemURL string) string
+
+// httpsRemote is the generator used when none is injected: it has no access to
+// the clone policy, so it always builds HTTPS URLs.
+func httpsRemote(repo, itemURL string) string {
+	repo = strings.TrimSpace(repo)
+	if git.IsExplicitRemote(repo) {
+		return repo
+	}
+	loc, ok := git.ItemRepoLocation(repo, itemURL)
+	if !ok {
+		return ""
+	}
+	return loc.CloneURL(session.CloneProtocolHttps)
+}
+
 type OutputData struct {
 	Key       string
 	Payload   map[string]any
@@ -46,22 +67,31 @@ type OutputData struct {
 	CommandID int64
 	IsRerun   bool
 	Origin    models.ItemRef
+
+	remotes RemoteGenerator
 }
 
+// ItemRemote is the clone URL for the item's repo, as templates see it.
 func (d OutputData) ItemRemote() string {
 	repo, _ := d.Payload["repo"].(string)
 	itemURL, _ := d.Payload["url"].(string)
-	return draftRepository(repo, itemURL)
+	if d.remotes == nil {
+		return httpsRemote(repo, itemURL)
+	}
+	return d.remotes(repo, itemURL)
 }
 
 type Executor interface {
 	Execute(context.Context, actions.Action, OutputData, ActionInvocationInput) (ExecutionResult, error)
 }
 
-type Dispatcher struct{ executors map[string]Executor }
+type Dispatcher struct {
+	executors map[string]Executor
+	remotes   RemoteGenerator
+}
 
-func NewDispatcher(executors map[string]Executor) *Dispatcher {
-	return &Dispatcher{executors: executors}
+func NewDispatcher(executors map[string]Executor, remotes RemoteGenerator) *Dispatcher {
+	return &Dispatcher{executors: executors, remotes: remotes}
 }
 
 func (d *Dispatcher) Execute(ctx context.Context, a actions.Action, data OutputData, input ActionInvocationInput) (result ExecutionResult, err error) {
@@ -78,6 +108,7 @@ func (d *Dispatcher) Execute(ctx context.Context, a actions.Action, data OutputD
 	if !ok {
 		return ExecutionResult{}, fmt.Errorf("dispatcher: no executor registered for action type %q", a.Type)
 	}
+	data.remotes = d.remotes
 	result, err = ex.Execute(ctx, a, data, input)
 	span.SetAttributes(attribute.Bool(attrAttempted, result.Attempted))
 	return result, err

@@ -43,15 +43,15 @@ Startup failures stay in a copyable report with the failed command and available
 
 A setup command that exits successfully does not stop healthy panes. If every configured command finishes successfully and no terminal remains, the panel shows **Session completed**.
 
-**Kill terminal** stops the tmux session and its processes while keeping the checkout and Hive session record. **Recycle** and **Delete** also change or remove the checkout.
+**Stop session** stops the tmux session and its processes while keeping the checkout and Hive session record. **Recycle** and **Delete** also change or remove the checkout.
 
-For repository sessions, the optional status bar shows the branch, changes against the default branch, uncommitted work, and unpushed commits. Connected GitHub, Gitea, and Forgejo repositories also show pull request, review, and check state. Use the status bar to open the checkout in your editor or file manager.
+For repository sessions, the optional status bar shows the branch, changes against the default branch, uncommitted work, and unpushed commits. Connected GitHub, Gitea, and Forgejo repositories also show pull request, review, and check state. Use the status bar to open the checkout in your editor or file manager. Actions that target `statusbar` add buttons of their own; see [Where actions run](../inbox/actions.md#where-actions-run).
 
 ## Scratch terminals
 
 The **Terminals** section holds a scratch tmux session for shells that are not tied to a repository. Use its `+` button or <kbd>⌘T</kbd> to add tabs.
 
-Scratch tabs can be selected, renamed, reordered, and closed. The session keeps running when Hive closes. **Kill terminal** stops every scratch tab.
+Scratch tabs can be selected, renamed, reordered, and closed. The session keeps running when Hive closes. **Stop terminal** stops every scratch tab.
 
 ## Pop-up terminal
 
@@ -80,6 +80,19 @@ conversations can still read them. Storage is limited to 1 GiB. Remove files
 you no longer need from that directory to free space; conversations that still
 reference removed files cannot read them again. Dragged files stay at their
 original location.
+
+### Images in output
+
+Images that Pi draws with the Kitty graphics protocol show in Chats, Code
+panes, and pop-up terminals. Hive Desktop sets `PI_IMAGE_PROTOCOL=kitty` on the
+chats, sessions, agent windows, and pop-ups it starts. A session started from
+the hive CLI, or from a rule that uses `spawn:` commands instead of `windows:`,
+does not get it: set `PI_IMAGE_PROTOCOL=kitty` in that session's environment
+yourself.
+
+When you reopen a session or the terminal resyncs, Hive narrows the window by
+one column for a moment so Pi redraws its images. A program that does not
+redraw on a resize shows its text without the image.
 
 ### Navigation
 
@@ -111,7 +124,14 @@ On Linux, <kbd>Ctrl+Shift+D</kbd> splits right, <kbd>Ctrl+Shift+O</kbd> splits d
 
 Open **Tasks** from the Code status bar, the command palette, or its configured shortcut. It reads the same `hive hc` task tree used by coding agents and the CLI. See the hive CLI [task tracking guide](../../cli/getting-started/task-tracking.md) for the shared task model.
 
-Filter by status or repository, search by title or ID, and inspect epics, subtasks, blockers, comments, checkpoints, and linked sessions. You can change task status, follow blocker links, and prune completed work from the Tasks toolbar.
+Switch between two layouts at the top of the view:
+
+- **List** shows epics with their subtasks nested under them. Filter it by status with the tabs on the right of the toolbar.
+- **Board** shows a column for every status (Open, In Progress, Done, Cancelled). Drag a card to another column to change its status. Click a card to open its details beside the board, and press <kbd>Esc</kbd> to close them.
+
+Search by title or ID, pick a repository (type in the picker to find one), and inspect epics, subtasks, blockers, comments, checkpoints, and linked sessions. You can change task status, follow blocker links, and prune completed work from the Tasks toolbar. Cancelling a task, or closing an epic that still has open subtasks, asks you to confirm first.
+
+Use <kbd>J</kbd> and <kbd>K</kbd> (or the arrow keys) to move the selection. On the board, <kbd>H</kbd> and <kbd>L</kbd> move between columns. In the list, they fold and unfold epics. <kbd>Y</kbd> copies the selected task's ID.
 
 ## Drive
 
@@ -134,6 +154,12 @@ An agent outside any chat or Code session, such as one you start in a plain term
 **Settings ▸ Terminal** controls the terminal font, size, weight, line height, letter spacing, visible windows, status bar, and session age badges. Age badges are on by default with a five-day threshold and appear once a Hive session reaches the configured number of whole days since creation. Scratch terminals and pinned chats do not get one.
 
 <kbd>⌘+</kbd> and <kbd>⌘-</kbd> step the text size by 2px from a terminal without opening Settings, up to 64px, and <kbd>⌘0</kbd> puts it back to 13px. On Linux, use <kbd>Ctrl+Shift</kbd> with the same keys.
+
+Enable **Show scrollbars** in **Settings ▸ Terminal** to drag through scrollback
+in single-pane and zoomed Code terminals. It is off by default and applies to
+open terminals immediately. Scrollbars stay hidden while split panes are visible;
+wheel scrolling and **Scroll to bottom** remain available. Programs using an
+alternate screen may have no scrollback.
 
 ## Shared tmux sizing
 

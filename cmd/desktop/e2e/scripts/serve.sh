@@ -1,35 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# This launcher is only valid under run-docker.sh. Validate before any build or
-# server process starts so a direct host `npx playwright test` cannot fall back
-# to local browsers or a local server.
+# Refuse to start outside run-docker.sh, so a host `npx playwright test` cannot
+# fall back to local servers.
 if [[ ! "${HIVE_DESKTOP_E2E_HARNESS:-}" =~ ^[[:xdigit:]]{64}$ ]]; then
   echo "error: desktop e2e must run through mise run desktop:e2e (Docker harness marker missing)" >&2
   exit 1
 fi
 
 cd "$(dirname "$0")/../../../.."
-# The frontend and server binary are built at image-build time
-# (cmd/desktop/e2e/Dockerfile), so this launcher only starts servers and the
-# Playwright webServer timeout covers startup alone, not compilation.
+# run-docker.sh prebuilds the server, so the webServer timeout covers startup only.
 if [[ ! -x cmd/desktop/bin/hive-desktop-server ]]; then
-  echo "error: cmd/desktop/bin/hive-desktop-server missing; the e2e image must prebuild it (cmd/desktop/e2e/Dockerfile)" >&2
+  echo "error: cmd/desktop/bin/hive-desktop-server missing; run-docker.sh must prebuild it (cmd/desktop/e2e/scripts/run-docker.sh)" >&2
   exit 1
 fi
 
-# Each server owns its complete mutable config/data tree. Standard fixture
-# servers receive private fixture copies, while onboarding deliberately uses no
-# injected fixture env and action-seed deliberately starts without actions.yml.
-# Editor writes and watcher reloads therefore cannot mutate checked-in YAML or
-# leak between Playwright projects.
+# Each server gets a private copy of testdata/, so editor writes and watcher
+# reloads never touch checked-in files or another server.
 tmp_base="${TMPDIR:-/tmp}"
 tmp_base="${tmp_base%/}"
 E2E_DATA_ROOT="$(mktemp -d "${tmp_base}/hive-desktop-e2e.XXXXXX")"
 # Action ids are slug-limited to 64 bytes. Derive a short, deterministic id
 # from this unique temp root rather than embedding its long basename.
 RUN_ID="$(printf '%s' "${E2E_DATA_ROOT}" | cksum | awk '{print "r" $1}')"
-FIXTURES="$(pwd)/cmd/desktop/e2e/fixtures"
+FIXTURES="$(pwd)/cmd/desktop/e2e/testdata"
 
 pids=()
 pid_names=()
@@ -103,8 +97,8 @@ prepare_server_files() {
     prepare_action_runtime "${data_dir}"
   fi
   if [[ "${mode}" == "action-smoke" ]]; then
-    # Substitute only in the private copy. IDs, session names, and message
-    # topic are all run-scoped so the smoke reader cannot see foreign rows.
+    # Run-scoped IDs, session names, and topic keep foreign rows out of the
+    # smoke reader.
     sed -e "s|__RUN_ID__|${RUN_ID}-${mode}|g" \
         -e "s|__REMOTE__|${data_dir}/remote.git|g" \
         -e "s|__MISSING_REMOTE__|${data_dir}/missing.git|g" \
@@ -116,9 +110,10 @@ prepare_server_files() {
     # hive-e2e.yaml sets no context.base_dir, so the drive root is
     # ${data_dir}/context and this is the e2e/repo space.
     local space_dir="${data_dir}/context/e2e/repo"
-    mkdir -p "${space_dir}/plans" "${space_dir}/canvases"
+    mkdir -p "${space_dir}/plans" "${space_dir}/canvases" "${space_dir}/pages"
     cp "${FIXTURES}/drive/plans/2026-10-11-plan.md" "${space_dir}/plans/"
     cp "${FIXTURES}/drive/canvases/report.canvas.json" "${space_dir}/canvases/"
+    cp "${FIXTURES}/drive/pages/links.html" "${space_dir}/pages/"
   fi
 }
 
@@ -186,6 +181,8 @@ wait_ready() {
   exit 1
 }
 
+# Ports must match fixtures/servers.ts. The chromium feed server starts last
+# because playwright.config.ts polls it as the readiness sentinel.
 for port in 8931 8932 8933 8934 8935 8936 8937; do check_port_free "${port}"; done
 start_server onboarding 8932 onboarding-chromium
 start_server onboarding 8933 onboarding-webkit

@@ -4,13 +4,13 @@
 // records the hash, so this field emits a hash and never a file. Backend access
 // goes through the `client` prop (defaulting to the generated Wails bindings) so
 // tests inject fakes instead of mocking module imports.
-import FormField from '../../components/ui/FormField.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
 import { ref, watch, type Component } from 'vue'
 import {
   MarkImages,
   SetMarkImage,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/flowsservice'
-import BaseButton from '../../components/ui/BaseButton.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import { appErrorMessage } from '../../lib/appError'
 import { fileToImageBase64, ImageUploadError, imageUploadAccept } from '../../lib/imageUpload'
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/ptyterm"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/promptfile"
@@ -26,12 +27,14 @@ import (
 type fakeSessionLauncher struct {
 	calls []LaunchSessionRequest
 	path  string
-	err   error
+	// remote is the stored remote the fake reports for the created session.
+	remote string
+	err    error
 }
 
 func (f *fakeSessionLauncher) LaunchSession(_ context.Context, req LaunchSessionRequest) (SessionExecutionOutcome, error) {
 	f.calls = append(f.calls, req)
-	return SessionExecutionOutcome{ID: "session-1", Name: req.Name, Slug: "slug-1", Path: f.path}, f.err
+	return SessionExecutionOutcome{ID: "session-1", Name: req.Name, Slug: "slug-1", Path: f.path, Remote: f.remote}, f.err
 }
 
 type fakeWorkspaceSessionLauncher struct {
@@ -270,6 +273,7 @@ func TestRepositoryLauncher_MapsRequestToSessionService(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []sessionsvc.LaunchRequest{{
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git", CollisionSuffix: "7",
+		Env: []string{ptyterm.ImageProtocolEnv},
 	}}, creator.calls)
 }
 

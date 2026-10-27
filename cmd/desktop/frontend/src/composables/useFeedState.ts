@@ -38,7 +38,7 @@ import type {
   SessionLaunchOptions as SessionLaunchOptionsView,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { appErrorKind, appErrorMessage, errorText } from '../lib/appError'
-import { useConfirmation } from './useConfirmation'
+import { useConfirmation } from '@hive/ui/composables/useConfirmation'
 import {
   canonicalPayload,
   clipboardText,
@@ -46,7 +46,7 @@ import {
   sourceKindForNodeType,
   sourceSummary,
 } from '../lib/itemPresentation'
-import { useClipboard } from './useClipboard'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useNotify } from './useNotify'
 import { useToasts } from './useToasts'
 import { useWailsEvent } from './useWailsEvent'

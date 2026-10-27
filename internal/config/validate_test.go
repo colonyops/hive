@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/hay-kot/criterio"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1016,6 +1017,84 @@ func TestValidateCloneStrategy(t *testing.T) {
 		err := ValidateCloneStrategy("invalid")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid clone_strategy")
+	})
+}
+
+func TestGetCloneProtocol(t *testing.T) {
+	const (
+		httpsURL = "https://git.example.com/acme/site.git"
+		sshURL   = "git@git.example.com:acme/site.git"
+	)
+	tests := []struct {
+		name     string
+		global   session.CloneProtocol
+		rules    []Rule
+		expected session.CloneProtocol
+	}{
+		{name: "unset is no preference", expected: ""},
+		{name: "global", global: session.CloneProtocolSsh, expected: session.CloneProtocolSsh},
+		{
+			name:     "rule overrides global",
+			global:   session.CloneProtocolSsh,
+			rules:    []Rule{{Pattern: `.*[:/]git\.example\.com[:/].*`, CloneProtocol: session.CloneProtocolHttps}},
+			expected: session.CloneProtocolHttps,
+		},
+		{
+			name: "last matching rule wins",
+			rules: []Rule{
+				{Pattern: "", CloneProtocol: session.CloneProtocolSsh},
+				{Pattern: `git\.example\.com`, CloneProtocol: session.CloneProtocolHttps},
+			},
+			expected: session.CloneProtocolHttps,
+		},
+		{
+			name:     "pattern written for ssh matches through the candidates",
+			rules:    []Rule{{Pattern: `^git@git\.example\.com:`, CloneProtocol: session.CloneProtocolSsh}},
+			expected: session.CloneProtocolSsh,
+		},
+		{
+			name:     "non-matching rule is ignored",
+			global:   session.CloneProtocolSsh,
+			rules:    []Rule{{Pattern: `other\.example\.com`, CloneProtocol: session.CloneProtocolHttps}},
+			expected: session.CloneProtocolSsh,
+		},
+		{
+			name:     "rule without a protocol does not reset the global",
+			global:   session.CloneProtocolSsh,
+			rules:    []Rule{{Pattern: "", CloneStrategy: CloneStrategyFull}},
+			expected: session.CloneProtocolSsh,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Git.CloneProtocol = tt.global
+			cfg.Rules = tt.rules
+			assert.Equal(t, tt.expected, cfg.GetCloneProtocol(httpsURL, sshURL))
+		})
+	}
+}
+
+func TestValidateCloneProtocols(t *testing.T) {
+	t.Run("empty and known values are valid", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Git.CloneProtocol = session.CloneProtocolSsh
+		cfg.Rules = []Rule{{CloneProtocol: session.CloneProtocolHttps}, {}}
+		assert.NoError(t, cfg.Validate())
+	})
+	t.Run("global git is rejected", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Git.CloneProtocol = "git"
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "git.clone_protocol")
+	})
+	t.Run("rule git is rejected", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{{CloneProtocol: "git"}}
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "rules[0].clone_protocol")
 	})
 }
 
