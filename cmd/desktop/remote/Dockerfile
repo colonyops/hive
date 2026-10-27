@@ -1,10 +1,14 @@
 FROM node:22-bookworm AS frontend
-WORKDIR /src/cmd/desktop/frontend
-COPY cmd/desktop/frontend/package*.json cmd/desktop/frontend/.npmrc ./
+WORKDIR /src
+COPY package.json package-lock.json .npmrc ./
+COPY web/packages/ui/package.json ./web/packages/ui/
+COPY cmd/desktop/frontend/package.json ./cmd/desktop/frontend/
+COPY cmd/drive-server/frontend/package.json ./cmd/drive-server/frontend/
 RUN npm ci
-COPY cmd/desktop/frontend/ ./
-COPY cmd/desktop/internal/app/flow/docs/ /src/cmd/desktop/internal/app/flow/docs/
-RUN npm run build
+COPY web/packages/ui/ ./web/packages/ui/
+COPY cmd/desktop/frontend/ ./cmd/desktop/frontend/
+COPY cmd/desktop/internal/app/flow/docs/ ./cmd/desktop/internal/app/flow/docs/
+RUN npm run build -w frontend
 
 FROM golang:1.27-bookworm AS build
 WORKDIR /src
