@@ -85,7 +85,7 @@ about, then open an editor on it:
   label: Review PR
   type: launch-session
   applies_to: [pr]
-  repo_template: "https://github.com/{{ .Payload.repo }}.git"
+  repo_template: "{{ .ItemRemote }}"
   prompt_template: "Review pull request #{{ .Payload.num }}"
   post_hook: "gh pr checkout {{ .Payload.num }} && zed ."
 ```
@@ -105,7 +105,7 @@ log instead, under the item it ran for.
 ## Item target only
 
 A launch-session action creates a *new* session, so it cannot declare
-`targets: [session]` or `targets: [window]` — the terminal's row menus have no
+`targets: [session]`, `[window]`, or `[statusbar]` — the terminal surfaces have no
 New Session form to collect the interactive variant's repository and name, and
 the headless variant's `repo_template` renders over a feed item's payload,
 which a terminal target carries none of. Declaring one is rejected when the
@@ -116,6 +116,8 @@ catalog is parsed.
 `prompt_template` and `repo_template` are Go `text/template` strings rendered
 over the triggering message (see "Template data" above). A GitHub-shaped item
 exposes `{{ .Payload.repo }}`, `{{ .Payload.title }}`, `{{ .Payload.url }}`,
-`{{ .Payload.body }}`, `{{ .Payload.num }}`, and `{{ .Payload.author }}`. A
+`{{ .Payload.body }}`, `{{ .Payload.num }}`, and `{{ .Payload.author }}`. `{{ .ItemRemote }}` is the clone URL of the item's
+repository, spelled as HTTPS or SSH by `git.clone_protocol` and
+`rules[].clone_protocol`. A
 webhook-sourced item exposes whatever its payload carries, so reshape it with a
 `function` node first if you want stable names.

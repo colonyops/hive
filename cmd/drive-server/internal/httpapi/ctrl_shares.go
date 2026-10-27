@@ -1,0 +1,120 @@
+package httpapi
+
+import (
+	"errors"
+	"io"
+	"net/http"
+	"strconv"
+
+	"github.com/hay-kot/httpkit/errchain"
+	"github.com/hay-kot/httpkit/server"
+
+	"github.com/colonyops/hive/cmd/drive-server/internal/core"
+	"github.com/colonyops/hive/internal/domain/drive"
+	"github.com/colonyops/hive/internal/platform/driveapi"
+	"github.com/colonyops/hive/internal/web/extractors"
+)
+
+// rawCSP lets a shared HTML page run its own inline script and style and
+// nothing else: no network, no forms, no framing by other origins.
+const rawCSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'self'; sandbox allow-scripts"
+
+func registerShareRoutes(mux router, chain *errchain.ErrChain, authenticated authenticatedFunc, shares *core.Shares) {
+	h := shareHandlers{shares}
+	for _, sr := range spaceRoutes {
+		route := sr.prefix + "/shares/{path...}"
+		mux.HandleFunc("POST "+route, authenticated(core.ScopePush, authed(http.StatusOK, h.create(sr.space))))
+		mux.HandleFunc("DELETE "+route, authenticated(core.ScopePush, authedNoContent(h.revoke(sr.space))))
+	}
+	mux.HandleFunc("GET /s/{slug}/raw", chain.ToHandlerFunc(h.raw))
+	mux.HandleFunc("GET /api/v1/public/{slug}", chain.ToHandlerFunc(h.public))
+}
+
+type shareHandlers struct{ shares *core.Shares }
+
+func (h shareHandlers) create(space spaceFunc) func(http.ResponseWriter, *http.Request, core.Principal) (driveapi.Share, error) {
+	return func(w http.ResponseWriter, r *http.Request, p core.Principal) (driveapi.Share, error) {
+		s, err := spaceOf(r, space)
+		if err != nil {
+			return driveapi.Share{}, err
+		}
+		req, err := extractors.Body[driveapi.ShareRequest](w, r)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return driveapi.Share{}, err
+		}
+		return h.shares.Create(r.Context(), p, s, r.PathValue("path"), req.ExpiresIn)
+	}
+}
+
+func (h shareHandlers) revoke(space spaceFunc) func(*http.Request, core.Principal) error {
+	return func(r *http.Request, p core.Principal) error {
+		s, err := spaceOf(r, space)
+		if err != nil {
+			return err
+		}
+		return h.shares.Revoke(r.Context(), p, s, r.PathValue("path"))
+	}
+}
+
+func (h shareHandlers) raw(w http.ResponseWriter, r *http.Request) error {
+	w.Header().Set("X-Robots-Tag", "noindex")
+	_, doc, body, err := h.shares.Resolve(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		return err
+	}
+	return writeRaw(w, r, doc, body)
+}
+
+func (h shareHandlers) public(w http.ResponseWriter, r *http.Request) error {
+	w.Header().Set("X-Robots-Tag", "noindex")
+	w.Header().Set("Cache-Control", "private, no-store")
+	owner, doc, body, err := h.shares.Resolve(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		return err
+	}
+	out := driveapi.PublicDocument{OwnerEmail: owner.Email, Document: doc}
+	if doc.Kind == drive.KindMarkdown {
+		out.Body = string(body)
+	}
+	return server.JSON(w, http.StatusOK, out)
+}
+
+func mayRenderHTML(dest string) bool {
+	switch dest {
+	case "", "iframe", "empty":
+		return true
+	default:
+		return false
+	}
+}
+
+func contentType(k drive.Kind) string {
+	if k == drive.KindHtml {
+		return "text/html; charset=utf-8"
+	}
+	return "text/markdown; charset=utf-8"
+}
+
+// writeRaw sends a stored body under the raw rules: a browser that renders
+// it gets no access to the server's origin or the network.
+//
+// A CSP sandbox cannot stop a document from navigating itself, so an HTML
+// document opened as a page, not framed, could send what a visitor types to
+// any URL. Browsers label such a request Sec-Fetch-Dest: document, and the
+// route refuses it. Clients that send no label, such as the CLI, still get
+// the body.
+func writeRaw(w http.ResponseWriter, r *http.Request, doc driveapi.Document, body []byte) error {
+	if doc.Kind == drive.KindHtml && !mayRenderHTML(r.Header.Get("Sec-Fetch-Dest")) {
+		return core.NewError(core.KindForbidden, "HTML documents open only inside the Hive Drive page")
+	}
+	hdr := w.Header()
+	hdr.Set("Content-Type", contentType(doc.Kind))
+	hdr.Set("Content-Length", strconv.Itoa(len(body)))
+	hdr.Set("X-Content-Type-Options", "nosniff")
+	hdr.Set("X-Robots-Tag", "noindex")
+	hdr.Set("Referrer-Policy", "no-referrer")
+	hdr.Set("Cache-Control", "private, no-store")
+	hdr.Set("Content-Security-Policy", rawCSP)
+	_, err := w.Write(body)
+	return err
+}

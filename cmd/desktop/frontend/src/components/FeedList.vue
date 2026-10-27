@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import AppTooltip from './ui/AppTooltip.vue'
-import IconButton from './ui/IconButton.vue'
-import AppMenu from './ui/AppMenu.vue'
-import SearchField from './ui/SearchField.vue'
+import AppTooltip from '@hive/ui/components/ui/AppTooltip.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
+import SearchField from '@hive/ui/components/ui/SearchField.vue'
 import FeedListItem from './FeedListItem.vue'
 import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
@@ -22,9 +22,9 @@ import IconArchive from '~icons/lucide/archive'
 import { groupItemsByDate } from '../lib/dateGroups'
 import type { ActionView } from '../types/action'
 import type { FeedSort, InboxItem } from '../types/feed'
-import type { MenuEntry } from '../types/menu'
-import Spinner from './ui/Spinner.vue'
-import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedControl.vue'
+import type { MenuEntry } from '@hive/ui/types/menu'
+import Spinner from '@hive/ui/components/ui/Spinner.vue'
+import SegmentedControl, { type SegmentedControlOption } from '@hive/ui/components/ui/SegmentedControl.vue'
 
 // Presentation-only: the store (useFeedState) owns the search text and the
 // filtered `visibleItems`, so keyboard navigation and this list render the

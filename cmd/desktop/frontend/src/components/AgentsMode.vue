@@ -11,7 +11,7 @@ import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 // TerminalMode.vue is narrower — the aside/main split, plus (since ADR agent-workspace-sessions-are-tmux-sessions)
 // the pane's xterm wiring itself: a session is a tmux session, addressed and
 // framed exactly like a hive one, just not discovered through hive.
-import InlineError from './ui/InlineError.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDocumentVisibility } from '@vueuse/core'
@@ -21,8 +21,8 @@ import IconMessagesSquare from '~icons/lucide/messages-square'
 import AgentsSidebar from './AgentsSidebar.vue'
 import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
 import DrivePane from './drive/DrivePane.vue'
-import BaseButton from './ui/BaseButton.vue'
-import RenameDialog from './ui/RenameDialog.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
@@ -35,11 +35,12 @@ import { decodeFrame, encodeInputFrames, encodePasteFrames } from '../lib/agentW
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { isEditableTarget } from '../lib/isEditableTarget'
 import { installTerminalImages } from '../lib/terminalImages'
+import { installKittyGraphics } from '../lib/kitty/kittyGraphics'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
 import { silenceDeviceReports } from '../lib/terminalReports'
 import { watchTailPin } from '../lib/terminalTail'
 import type { AgentSession, AgentWorkspace, WorkspaceEditRequest } from '../lib/agentWorkspacesClient'
-import Spinner from './ui/Spinner.vue'
+import Spinner from '@hive/ui/components/ui/Spinner.vue'
 import '@xterm/xterm/css/xterm.css'
 
 /** Poll period for the M2 approval indicator (hc-ou4o02zx §5), while active. */
@@ -592,6 +593,8 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
   paneWindowId = windowId
   panePaneId = paneId
   pane.track(silenceDeviceReports(created))
+  const graphics = installKittyGraphics(created)
+  pane.track(graphics)
   pane.track(created.onData((data) => send(data)))
   pane.track({
     dispose: installTerminalImages(paneHost.value, {
@@ -612,7 +615,7 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
     }),
   })
   pane.track(
-    watchTailPin(created, paneHost.value, (scrolledUp) => {
+    watchTailPin(created, (scrolledUp) => {
       paneScrolledUp.value = scrolledUp
     }),
   )
@@ -636,8 +639,15 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
       }
       return
     }
+    // Degraded names no window: the client lost output for all of them, and
+    // the repaint that follows replaces the stream the images were placed from.
+    if (frame.type === 'lifecycle' && frame.kind === 'degraded') {
+      graphics.filter.reset()
+      graphics.clear()
+      return
+    }
     if (frame.windowId !== paneWindowId) return
-    if (frame.type === 'output') created.write(frame.data)
+    if (frame.type === 'output') created.write(graphics.filter.rewrite(frame.data))
     else if (frame.kind === 'exited' || frame.kind === 'error') exited()
   }
   opened.onerror = () => fail('The session connection dropped.')

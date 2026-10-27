@@ -13,7 +13,7 @@ import (
 
 func TestMigrationOrderScript(t *testing.T) {
 	repoRoot := testCommandOutput(t, "", "git", "rev-parse", "--show-toplevel")
-	script, err := os.ReadFile(filepath.Join(repoRoot, "cmd", "desktop", "scripts", "check-migration-order.sh"))
+	script, err := os.ReadFile(filepath.Join(repoRoot, "scripts", "check-migration-order.sh"))
 	require.NoError(t, err)
 
 	dir := t.TempDir()
@@ -46,7 +46,7 @@ func TestMigrationOrderScript(t *testing.T) {
 
 func testMigrationOrder(t *testing.T, dir string) (string, error) {
 	t.Helper()
-	cmd := exec.Command(filepath.Join(dir, "scripts", "check-migration-order.sh"))
+	cmd := exec.Command(filepath.Join(dir, "scripts", "check-migration-order.sh"), filepath.Join("cmd", "desktop", "internal", "app", "data", "queries", "migrations"))
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
 	return string(output), err

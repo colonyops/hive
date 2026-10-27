@@ -175,7 +175,7 @@ func TestRejectedHTMLNamesTheFirstOffender(t *testing.T) {
 // nobody can use. The stylesheet is held the other way too: a class it styles
 // but the sanitizer strips is a layout the agent cannot see failing.
 func TestHTMLVocabularyIsStyledAndDocumented(t *testing.T) {
-	css := readDesktopFile(t, "frontend/src/styles/canvas-html.css")
+	css := readDesktopFile(t, "../../web/packages/ui/src/styles/canvas-html.css")
 	doc := readDesktopFile(t, "internal/app/mcpcatalog/docs/hive-drive.md")
 
 	for _, class := range HTMLClasses() {

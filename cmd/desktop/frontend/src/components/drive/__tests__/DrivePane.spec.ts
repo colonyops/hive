@@ -49,6 +49,7 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   AppearanceSettings: vi.fn().mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' }),
+  ReviewLabels: vi.fn().mockResolvedValue(null),
 }))
 
 const plan = doc('plans/plan.md', { title: 'The Plan', modified: '2026-10-03T00:00:00Z' })
@@ -289,7 +290,7 @@ describe('DrivePane', () => {
     drive.Document.mockResolvedValue(documentFor('workspaces/web-app', page, { html: '<p>hi</p>' }))
     const wrapper = await mountPane()
     expect(wrapper.find('[data-testid="drive-pane-sandbox"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="drive-pane-frame"]').classes()).toContain('absolute')
+    expect(wrapper.get('[data-testid="drive-pane-frame"]').element.parentElement?.classList).toContain('absolute')
   })
 
   it('shows no sandbox notice for a markdown document', async () => {

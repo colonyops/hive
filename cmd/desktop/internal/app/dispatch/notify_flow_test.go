@@ -49,7 +49,7 @@ func TestNotifyTerminal_DeliversThroughTheWorker(t *testing.T) {
 	notifier := &notifierTest{}
 	dispatcher := NewDispatcher(map[string]Executor{
 		ActionTypeNotify: NewNotifyExecutor(notifier, openGate(), stores.New(db, stores.Options{}).InboxItems, zerolog.Nop()),
-	})
+	}, nil)
 	worker := NewWorker(testOutputCommands(db), NewFlowActions(flows, actionListerTest{}), dispatcher, DefaultOutputWorkerInterval, zerolog.Nop())
 	activityRecorder := &notifyActivityRecorder{}
 	worker.SetRecorder(activityRecorder)
@@ -114,7 +114,7 @@ func TestNotifyTerminal_DeletedNodeFailsItsQueuedCommand(t *testing.T) {
 	notifier := &notifierTest{}
 	dispatcher := NewDispatcher(map[string]Executor{
 		ActionTypeNotify: NewNotifyExecutor(notifier, openGate(), stores.New(db, stores.Options{}).InboxItems, zerolog.Nop()),
-	})
+	}, nil)
 	worker := NewWorker(testOutputCommands(db), NewFlowActions(flowListerTest{}, actionListerTest{}), dispatcher, DefaultOutputWorkerInterval, zerolog.Nop())
 
 	require.NoError(t, stores.New(db, stores.Options{}).EventLog.Commit(ctx, models.CommitBatch{

@@ -104,3 +104,15 @@ func TestPullRequestsForBranchTriesEveryAccountOnTheInstance(t *testing.T) {
 	require.True(t, found)
 	assert.Equal(t, 12, pull.Number)
 }
+
+func TestPullRequestsInstanceURLKeepsTheWebPortAndSubpath(t *testing.T) {
+	t.Parallel()
+
+	lookup, host := connectedPullRequests(t, "https://git.example.com:3000/gitea/", "octocat")
+	base, ok := lookup.InstanceURL(host)
+	require.True(t, ok)
+	assert.Equal(t, "https://git.example.com:3000/gitea", base)
+
+	_, ok = lookup.InstanceURL("github.com")
+	assert.False(t, ok)
+}

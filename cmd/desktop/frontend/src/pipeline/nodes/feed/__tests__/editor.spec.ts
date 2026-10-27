@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import Editor from '../editor.vue'
 import { defaults, descriptionMaxLen, validate } from '../config'
-import { chooseOption } from '../../../../test-utils/select'
+import { chooseOption } from '@hive/ui/test-utils/select'
 
 describe('feed editor', () => {
   it('renders the feed node body with icon and description fields', () => {

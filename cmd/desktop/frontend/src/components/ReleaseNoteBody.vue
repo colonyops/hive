@@ -3,9 +3,9 @@
 // the binary — but it goes through the same escaping renderer as issue bodies
 // rather than a second, laxer one.
 import { computed } from 'vue'
-import { useCodeCopy } from '../composables/useCodeCopy'
-import { renderGithubMarkdown } from '../lib/githubMarkdown'
-import { useCodeHighlight } from '../stores/useCodeHighlight'
+import { useCodeCopy } from '@hive/ui/composables/useCodeCopy'
+import { renderGithubMarkdown } from '@hive/ui/lib/githubMarkdown'
+import { useCodeHighlight } from '@hive/ui/lib/highlight'
 
 const props = defineProps<{ body: string }>()
 

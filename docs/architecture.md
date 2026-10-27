@@ -98,7 +98,7 @@ individual choices; this document describes the shape everything fits into.
 
 One headless core, several thin adapters, all in one process.
 
-```
+```text
                     ┌──────────────────────────────┐
    Wails UI ───────►│                              │
    HTTP API ───────►│      cmd/desktop/internal/app (core)     │──► SQLite, GitHub, keychain,
@@ -137,7 +137,7 @@ Domain-Driven Design, (Go) an idiom specific to the language.
 | **Facade** (GoF) — as Application Service | `app.App` | One entry point aggregating per-domain services, so a caller never cherry-picks raw dependencies. Mirrors the CLI's `cmd/hive/internal/app/app.go`: *"App is the central entry point for all hive operations."* |
 | **Store** (Repository, PoEAA) | `app/data/stores`, one type per persisted **aggregate root** | One aggregate's persistence behind hand-written domain types; it publishes nothing and knows nothing about `app.Error`. The placement rules and the transaction contract are in [Stores and services](#stores-and-services). |
 | **Adapter** (GoF) | `wailsui`, `httpapi`, `mcpsrv` | A bound method builds a request and calls a service. More than ~5 lines of logic means it belongs in `app`. Transport vocabulary — status codes, exit codes, wire encodings — stops here. |
-| **Error chain** (httpkit `errchain`) | every HTTP surface: `httpapi`, devserver control | Handlers are `func(w, r) error` behind one `web/mid.Errors` middleware that maps error types to responses exactly once — no handler writes a status inline. Input enters only through `web/extractors` (`Body` decode + the struct's criterio `Validate`). Per-resource `ctrl_*.go` files, routes registered in one place. See ADR http-handler-conventions. |
+| **Error chain** (httpkit `errchain`) | every HTTP surface: `httpapi`, devserver control | Handlers are `func(w, r) error` behind one `internal/web/mid.Errors` middleware that maps error types to responses exactly once — no handler writes a status inline. Input enters only through `internal/web/extractors` (`Body` decode + the struct's criterio `Validate`). Per-resource `ctrl_*.go` files, routes registered in one place. See ADR http-handler-conventions. |
 | **Tool table** | `mcpsrv` | One file declares every MCP tool — name, title, description — and nothing else; the handler beside it is a thin call into `App`. Input schemas are *inferred from the handler's typed input struct*, never hand-written, so a tool cannot advertise a field its handler does not accept. A store type whose `jsonschema` tags were written for the OpenAPI reflector cannot be a tool's input or output type: the SDK's inferrer rejects a `WORD=`-prefixed tag, and `json.RawMessage` infers as an array. Declare an adapter-local type and convert at the seam. Three contracts hold across the whole surface, because an agent has no UI to disambiguate from: an id that resolves to nothing is `not_found` and never an empty collection; a mutation's answer is never a constant, so a caller can tell it happened; and a field whose size the *source* decides — an item payload, an event detail, a dry run's messages — is behind a `detail` argument that defaults to omitting it, with the level echoed on the answer. See ADR mcp-replaces-the-agent-facing-http-api. |
 | **Data-plane mount** | streaming surfaces on the loopback server: the terminal WebSocket | A surface that streams bytes is a raw `http.Handler` mounted at its own prefix via `App.MountAPI` — never a row in the errchain operations table, which cannot frame a hijacked socket. Its request/response half stays REST on `httpapi`; only what needs latency or backpressure rides the socket. It authenticates itself if it must, because the errchain surface around it is deliberately unauthenticated. See ADR terminal-transport. |
 | **Shared Kernel** (DDD) | `internal/`, the hive engine | One model both programs run on. `app` calls `hive.Engine` and its services directly, and domain types (`session.Session`, `hc.Item`) may appear in any `app` signature. Where a transport needs another shape, the adapter converts (`wailsui`, `mcpsrv`), never `app`. A change here changes both programs, and CI builds and tests both. See [Layers and the dependency rule](#layers-and-the-dependency-rule) and ADR both-programs-run-on-one-layered-hive-engine. |
@@ -181,7 +181,7 @@ column is the section that specifies it.
 | A new **bound method / RPC** | Facade, Adapter, Typed errors | [Placement rules](#placement-rules), rules 1–4 |
 | A new **HTTP, MCP or CLI surface** | Adapter, Ports & Adapters (driving side — no interface) | [The Go amendment](#the-go-amendment-to-hexagonal) |
 | A new **agent capability** | Tool table — one row in `mcpsrv/tools.go`, a typed input struct, a thin `App` call | ADR mcp-replaces-the-agent-facing-http-api |
-| A new **HTTP endpoint** | Error chain — `errchain` handler, `web/extractors` input, `ctrl_*.go` + routes in one place. Only for the frontend's own transport: an agent capability is a tool | ADR http-handler-conventions, ADR mcp-replaces-the-agent-facing-http-api |
+| A new **HTTP endpoint** | Error chain — `errchain` handler, `internal/web/extractors` input, `ctrl_*.go` + routes in one place. Only for the frontend's own transport: an agent capability is a tool | ADR http-handler-conventions, ADR mcp-replaces-the-agent-facing-http-api |
 | A new **streaming endpoint** (WebSocket/SSE) | Data-plane mount — raw handler at its own prefix, REST control plane beside it | [Terminal sessions](#terminal-sessions), ADR terminal-transport |
 | A new **event** | Observer — payload in core, degraded to a wake-up in `wailsui` | [Events](#events) |
 | A new **background subsystem** | One instance per process, App-owned lifecycle (plugs once unblocked) | [Background lifecycle](#background-lifecycle) |
@@ -234,7 +234,7 @@ something has gone wrong.
 
 ## Layers and the dependency rule
 
-```
+```text
 desktop adapter/*  ──►  desktop app/*        cmd/hive/internal/*     programs
                              │                     │
                              └──────────┬──────────┘
@@ -252,8 +252,11 @@ Dependencies point down. A program may import any shared layer except the
 stores, not only the engine: the desktop needs `platform/tmux/control` for terminal streaming and
 `platform/sqlite` for its own database. Nothing in `internal/` imports a
 program. Go's `internal` visibility keeps `cmd/hive/internal` and
-`cmd/desktop/internal` apart, and `cli-no-desktop-deps` keeps the CLI off the
-desktop's dependencies.
+`cmd/desktop/internal`, and `cmd/drive-server/internal` apart.
+`cli-no-desktop-deps` keeps the CLI off the desktop's dependencies, and
+`drive-server-no-program-deps` keeps the drive server off both programs, the
+Wails runtime, and the terminal UI libraries (ADR
+hive-drive-server-is-a-multi-tenant-program-with-one-sqlite-database-per-user).
 
 `internal/` is the hive engine both programs run on (ADR
 both-programs-run-on-one-layered-hive-engine). A package's path names its
@@ -267,8 +270,9 @@ needs no lint edit:
 | Platform | `internal/platform/` | Drivers for one outside system each: git, tmux, SQLite, process inspection, the login-shell environment, credentials, secrets, the OTel API, the directory-tree file watcher (`fswatch`) | `pkg/`, `domain/`, other `platform/*` | `platform-is-a-driver` |
 | Store | `internal/store/` | `hive.db`: sqlc output, migrations, one store per aggregate | `pkg/`, `domain/`, `platform/sqlite` | `store-is-persistence` |
 | Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer | `pkg/`, `domain/` | `config-is-data` |
+| Web | `internal/web/` | Shared HTTP plumbing every program's HTTP surface uses: the error wire shape, `mid/` middleware, `extractors/` input decoding | everything except `hive/` and `store/` | `web-is-plumbing` |
 | Engine | `internal/hive/` | One subpackage per application service (`drive` owns the document tree under the context root), the event bus, and `hive.Engine`, which composes them | everything above | |
-| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features, program-only config | any shared layer except the stores, their own tree | `core`, `programs-use-services`, `cli-no-desktop-deps`, `desktop-no-cli-deps` |
+| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/`, `cmd/drive-server/internal/` | Input, rendering, program-only features, program-only config | any shared layer except the stores, their own tree | `core`, `programs-use-services`, `cli-no-desktop-deps`, `desktop-no-cli-deps`, `drive-server-no-program-deps` |
 
 `shared-surface-free` keeps charm, Wails and both programs out of all of
 `internal/`.
@@ -278,6 +282,19 @@ services on `New` and on each `Reload`. Engine subpackages never import the
 engine root, so the root composes them without a cycle. A service declares
 the ports it consumes, and `platform` and `store` satisfy them structurally,
 the [Go amendment](#the-go-amendment-to-hexagonal) applied to the engine.
+
+`hive.StartRuntime` is the one startup path for the engine, and both
+programs call it. The returned `hive.Runtime` owns what lives for the whole
+process: `hive.db`, the event bus and its goroutine, the engine, and the KV
+sweep. The program supplies the rest as `hive.Ports` (executor, multiplexer,
+pane source, logger, data dir, output styler and streams, credentials) and
+keeps its own tmux, environment, and output adapters. A failed startup step
+closes what the earlier steps opened. `Runtime.Close` is idempotent: it stops
+the drive watcher, cancels and joins the bus and the sweep, and only then
+closes `hive.db`. A config reload goes through `Engine().Reload` and keeps
+every runtime resource. A new database-bound shared service or background job
+belongs in the engine or the runtime, never in one program's composition
+root. The CLI does not start the runtime for shell completion or `hive init`.
 
 Loggers are passed down, never global: depguard denies the zerolog global
 logger in the whole module, because no program assigns it. A `zerolog.Logger`
@@ -320,7 +337,7 @@ production program code; the handle (`store/db`) and the migration runner
 
 ## Directory structure
 
-```
+```text
 cmd/hive/                         # the hive CLI/TUI
   releasenotes/                   # the CLI's embedded changelog
   internal/                       # CLI-only: app/ (composition root over
@@ -328,7 +345,25 @@ cmd/hive/                         # the hive CLI/TUI
                                   #   config.yaml), commands/, tui/, action/,
                                   #   theme/, plugins/, sources/
 cmd/tools/                        # repo-wide tooling: adr, release
+web/packages/ui/                  # @hive/ui: theme, base CSS, and UI primitives
+                                  #   shared by the desktop frontend and web UIs
+                                  #   (Shared frontend package)
+package.json  package-lock.json   # the repo-root npm workspace
 main.go  go.mod                   # one module for every program
+
+cmd/drive-server/                 # Hive Drive Server: `hive-drive-server`, the shared-document server
+  main.go                         # urfave/cli root: serve
+  tasks.toml                      # the drive-server:* mise tasks
+  dev/drive-server.yaml           # the dev policy set `drive-server:dev` loads
+  frontend/                       # the embedded Vue SPA
+  internal/
+    config/                       # Config, Policy, Size: env, flags, and drive-server.yaml
+    app/                          # composition root: the appkit/plugs manager
+    core/                         # accounts, sign-in, tokens, documents, shares
+    store/                        # control/ (control.db), userdb/ (users/<id>.db)
+    httpapi/                      # ServeMux routes over httpkit errchain and internal/web/mid
+    guard/                        # rate limits and client IP
+    mail/                         # the SMTP sender and the outbox
 
 cmd/desktop/                      # Wails app package — stays `main`, stays here
   main.go                         # bootstrap → build App → mount adapters → run
@@ -348,10 +383,6 @@ cmd/desktop/                      # Wails app package — stays `main`, stays he
 
 cmd/desktop/internal/
   devproxy/                       # the address-and-health contract devserver and devtools share
-  web/                            # HTTP plumbing httpapi and devserver share
-                                  #   (ADR http-handler-conventions): error wire shape, version
-                                  #   handler; mid/ (error + logger middleware),
-                                  #   extractors/ (Body/Query decode + validate)
   app/                            # THE CORE. No Wails, no transport, no globals.
     app.go                        # App facade
     errors.go                     # Error{Kind, Msg, Err}; Kind enum
@@ -537,9 +568,15 @@ internal/                         # the hive engine both programs run on (see
                                   #   validate, paths (the data-dir resolver),
                                   #   write.go (the comment-preserving writer
                                   #   hive init and first run share)
+  web/                            # HTTP plumbing every program's HTTP surface shares
+                                  #   (ADR http-handler-conventions): error wire shape, version
+                                  #   handler; mid/ (error + logger middleware),
+                                  #   extractors/ (Body/Query decode + validate)
   hive/                           # the engine
     engine.go                     #   hive.Engine: New(cfg, Ports), Reload(cfg),
                                   #   one accessor per service
+    runtime.go                    #   hive.Runtime: StartRuntime opens hive.db, the
+                                  #   bus, the engine, the KV sweep; Close unwinds
     events/                       #   the domain event bus
     session/  status/  hc/        #   one subpackage per application service
     messaging/  drive/            #   drive: the document tree under the context root
@@ -578,7 +615,7 @@ has per-type config.
 | Extension | Registry | Adding one means |
 | --- | --- | --- |
 | **Node type** | `app/flow` + `app/runtime` | config struct + `Inputs`/`Outputs`/`Validate` and one line in `flow`'s registry; one line in `runtime`'s behaviour registry saying what it does with a message (relay, sink, or process); `flow/docs/<type>.md`; plus `nodes/<type>/{config.ts,editor.vue,index.ts}` for the editor. A test fails if a type is in one registry and not the other |
-| **Action type** | `app/actions` | config struct + `Validate`, one registry line, `actions/docs/<type>.md`, an `Executor`, one dispatcher line, the editable-catalog branch, and the YAML writer branch (`actionNode` in `store.go`) — the writer and the editable catalog both fail closed on a registered type with no branch, enforced by a registry-ranging roundtrip test. **Envelope fields are not part of that checklist**: `targets`, `applies_to`, `show_in_detail` and the declared `inputs` a new type inherits for free, because every type renders over the same `OutputData` (ADR action-declared-inputs, ADR actions-target-terminal-sessions-and-windows). A type that cannot serve a terminal target says so in `TerminalCapable`, beside `HeadlessCapable`, and `validateActions` refuses the declaration. A thing that does not dispatch at all is not an action type: the pop-up launchers are their own list in the same file, with their own struct and no envelope (ADR launchers-are-their-own-list-in-actions-yml) |
+| **Action type** | `app/actions` | config struct + `Validate`, one registry line, `actions/docs/<type>.md`, an `Executor`, one dispatcher line, the editable-catalog branch, and the YAML writer branch (`actionNode` in `store.go`) — the writer and the editable catalog both fail closed on a registered type with no branch, enforced by a registry-ranging roundtrip test. **Envelope fields are not part of that checklist**: `targets`, `icon`, `applies_to`, `show_in_detail` and the declared `inputs` a new type inherits for free, because every type renders over the same `OutputData` (ADR action-declared-inputs, ADR actions-target-terminal-sessions-and-windows, ADR the-code-status-bar-offers-configured-actions-as-a-statusbar-target). A type that cannot serve a terminal target says so in `TerminalCapable`, beside `HeadlessCapable`, and `validateActions` refuses the declaration. A thing that does not dispatch at all is not an action type: the pop-up launchers are their own list in the same file, with their own struct and no envelope (ADR launchers-are-their-own-list-in-actions-yml) |
 | **Source connector** | `app/sources` | a `Descriptor`, a config struct with `Validate`, and a `Factory` — plus one line in `sources/registry.go` and one in `app`'s factory map. `flow`'s and `runtime`'s registries derive their entries, so neither is touched, and a test pins the Go registry against the frontend's `nodes/<type>/` directories. Still needs `flow/docs/<type>.md` and a `nodes/<type>/` editor entry until forms are schema-driven — but not a Settings ▸ Integrations entry: its presentation/drawer maps are an optional frontend nicety keyed by connector type, and a type they don't know still renders a generic card rather than being dropped (a spec pins that fallback), so a connector is functional in Settings before its presentation lands |
 | **Script runtime** | `app/runtime` | a `ScriptRuntime` implementation and one registry line |
 | **MCP server type** | `app/mcpcatalog` | a `Descriptor` carrying a fixed `Server` (transport, command/args/env or url/headers) and one registry line, plus `mcpcatalog/docs/<type>.md` — a registry↔docs bijection test fails an entry with no doc. This is the connector precedent (`app/sources`) extended minus its config factory: a shipped entry carries no per-workspace configuration in M1, so there is nothing for a factory to construct |
@@ -805,7 +842,7 @@ stored in the OS keychain. Two constraints drive the design:
   the cost of not prompting.
 - **Config holds refs, never tokens.** `flows/*.yaml` is explicitly
   dotfiles-managed, so a token in a node's config is a token in a git repo. A
-  source node carries `credential: cmd/desktop/grafana/prod`, resolved at construction —
+  source node carries `credential: grafana/prod`, resolved at construction —
   and re-read on every use, so connecting, rotating or disconnecting an
   account takes effect on the next fetch with nothing to invalidate.
 
@@ -1958,28 +1995,40 @@ session:
   window measured, or `0x0`, which sets no client size at all — tmux ignores a
   control client until it sets one, so the session keeps the size its other
   clients gave it. A placeholder would resize the session, and the agent
-  redrawing inside it, before anything had been measured.
+  redrawing inside it, before anything had been measured. The one deliberate
+  exception is the image redraw: after a paint pass the client narrows each
+  window marked `@hive-kitty-images` by a column with `resize-window` and puts
+  its `window-size` back 150 ms later, so Pi draws its images again
+  (ADR kitty-graphics-render-from-the-pane-stream-through-a-private-osc).
 - **A vote tmux does not grant is reported, not retried.** The frontend
   compares its vote against the granted size and names the constraint; nothing
   re-votes to win the size back from the other client.
 
-On the frontend, a pane on screen **always renders through an atlas renderer** —
-WebGL, falling back to 2D canvas — because only an atlas renderer strokes box
+On the frontend, a pane on screen **renders through the WebGL atlas renderer**
+when it can — xterm 6 has no canvas renderer, so the DOM renderer is the only
+fallback — because only an atlas renderer strokes box
 drawing and underlines to the cell's device-pixel bounds; xterm's DOM renderer
 cannot join either across cells at any size or device pixel ratio. Four rules
-follow and are the ones to keep (ADRs terminal-atlas-renderer, terminal-renderer-claimed-on-activation): the renderer is claimed after
+follow and are the ones to keep (ADRs terminal-atlas-renderer, terminal-renderer-claimed-on-activation,
+xterm-6-drops-the-canvas-renderer-so-the-dom-renderer-is-the-only-fallback): the renderer is claimed after
 `term.open()` and never before, and **when the window is first shown rather than
 when a pane mounts** — the pool mounts a host per pane of every window of every
 attached session, and claiming at mount spends a GL context per background pane
 and walks the page past WebKit's per-page limit, where the context it costs is
 another session's pane; a pane that ends up on the DOM renderer is a logged
-degradation path, not a supported one, and a failed canvas claim is recorded so
-the next activation retries rather than stranding the pane there; **do not set
+degradation path, not a supported one, and a failed WebGL claim or a lost
+context is recorded so the next activation retries rather than stranding the
+pane there; **do not set
 `lineHeight` or `letterSpacing`** — every renderer quantises both to whole
 device pixels, so neither can tune a cell onto a cleaner boundary and a
 `lineHeight` above 1 pads the glyph off the edge box drawing has to reach; and
 the addon majors are pinned to the xterm core major, since they reach into
 `Terminal._core` for private services.
+
+Kitty graphics bypass the cells. A stream filter in front of `term.write`
+rewrites each Kitty APC into a private OSC carrying a per-terminal nonce, and
+`lib/kitty` draws its placements on a canvas layer over the screen, anchored to
+xterm markers (ADR kitty-graphics-render-from-the-pane-stream-through-a-private-osc).
 
 #### Pop-up terminals
 
@@ -2424,6 +2473,22 @@ that highlights inline froze the window for as long as its fences took. Reorgani
 folder, rename, move, delete of a document or an empty folder) is the user's
 only write; the app never edits document content.
 
+**Review comments live in `hive.db`, not in the document.** A comment on a
+Markdown document is a `review_comments` row in a review session keyed
+`drive://<space>/<path>` with the sha256 of the raw file, so the rule above
+holds. `app.ReviewService` owns them over `Engine.Reviews()`. The key is apart
+from the TUI's absolute-path key on purpose: the TUI anchors a comment to a
+rendered line and Desktop to a source line, which the reader learns from the
+`data-source-start`/`data-source-end` attributes `renderCanvasMarkdown` adds
+when it is passed `sourceLines`. A review is never finalized and never cleaned
+up as stale: Send and Clear delete it, and a rewritten document keeps its
+comments, shown as on an earlier version. Send resolves its target in Go every
+time, to an agent pane that `status.Service.AgentPanes` classifies or the first
+pane of a running chat, and delivers through `tmuxcc.Manager.SendText`: a
+bracketed paste from a named buffer, then Enter. A pane with no detected agent
+is never a target, because a shell would run the feedback, and an agent on a
+prompt is refused, because the Enter would answer it.
+
 **HTML has two tiers.** A canvas **html block** is the one place
 agent-authored markup reaches the app's DOM
 (ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).
@@ -2444,7 +2509,10 @@ An **`.html` document** is a whole page. `canvas.WrapDocument` injects a CSP
 submission), and the frontend renders it in
 `<iframe sandbox="allow-scripts" srcdoc>` with no `allow-same-origin`. The page
 runs in an opaque origin and cannot call Hive's bindings or send requests to
-localhost. Isolation is the boundary for a document; Hive parses nothing out of it.
+localhost. `WrapDocument` also puts `<base href="about:srcdoc">` ahead of the
+policy: a `srcdoc` frame otherwise resolves links against the app's own URL,
+so a `#fragment` link loaded Hive inside the frame. Against that base a
+fragment scrolls the page and a relative link does nothing. Isolation is the boundary for a document; Hive parses nothing out of it.
 
 A top-level **`mermaid` fence in a markdown block** renders as a diagram. The
 canvas reader splits these fences from the markdown it sends through the shared
@@ -2638,6 +2706,47 @@ because a workspace need not declare the app's server for its schedules to
 work. `prompts.ScheduledRun` frames the prompt with what started it and the
 exact `curl` to run when done
 (ADR a-scheduled-chat-ends-itself-through-a-capability-token-its-launch-handed-it).
+
+### Shared frontend package
+
+The repo root is an npm workspace (`package.json`, `package-lock.json`, and
+`.npmrc` at the root). Its members are `web/packages/*` and
+`cmd/desktop/frontend`. There is one lockfile and one `node_modules`, so
+`npm ci` runs once at the root.
+
+`@hive/ui` (`web/packages/ui`) holds what more than one web surface renders
+alike: the theme tokens and palettes (`styles/theme.css`), the markdown and
+canvas HTML styles, the `components/ui` primitives and `AppIcon`, and the
+composables and helpers they use (focus, popovers, keyboard navigation,
+clipboard, `seedRef`, `errorText`). It also holds the document renderer: the
+markdown and mermaid renderers with the syntax highlighter, and a props-only
+`DocumentReader` that renders a `ReaderDocument` (`lib/document.ts`). It ships
+source, with no build step. The desktop imports it by `@hive/ui/<path>`.
+
+The package never reaches the host directly. Anything that differs by host
+goes through `HiveUiPlatform` (`platform.ts`): the clipboard, a logger, the
+live theme, and optional perf spans and toasts. The host calls `installHiveUi(app, platform)`, which
+`app.provide`s the platform, and the package reads it with
+`useHiveUiPlatform()`, which throws when the app never installed it. The
+desktop's implementation is `cmd/desktop/frontend/src/lib/hiveUiPlatform.ts`
+and is where the Wails calls live.
+
+The boundary is a lint rule. `web/packages/ui/eslint.config.js` forbids
+`@wailsio/*`, any `bindings/` path, and any import of an app
+(`**/cmd/**`, `**/frontend/**`). The package's specs run against a fake
+platform (`src/test-setup.ts`), never the Wails runtime.
+
+The desktop keeps what is specific to it: the `--hv-term-*` ANSI palettes
+(`src/styles/terminal-theme.css`, one block per theme), the terminal fonts,
+and its own `main.css`. `themeCss.spec.ts` stays in the desktop and asserts
+that every registered theme has a block in both the package theme and
+`terminal-theme.css`.
+
+Tailwind v4 does not scan a package it reaches through the workspace symlink,
+so the classes in `@hive/ui` produce no CSS unless the app's stylesheet names
+it. The desktop's `main.css` carries
+`@source "../../../../../web/packages/ui/src"`. Any app that renders `@hive/ui`
+needs the same line, relative to its own stylesheet.
 
 ## Execution model
 
@@ -2844,8 +2953,8 @@ Everything else (`event_log`, `feed_membership_claim`, `node_run`,
 replayable. Migrations are not squashed, because a squashed `0001` would not
 match existing `schema_migrations` rows. Once a migration appears in a
 release, its filename and contents are immutable; later migrations append
-contiguous versions above it. `cmd/desktop/scripts/check-migration-order.sh` compares
-the tree with the latest reachable `v*` or `desktop-v*` release tag, and both the normal
+contiguous versions above it. `scripts/check-migration-order.sh` compares
+the tree with the latest reachable `v*` release tag, and both the normal
 quality gate and the release CLI run it.
 
 ## Open questions
@@ -2855,7 +2964,7 @@ These are deliberately unresolved; revisit when the relevant work starts.
 - **Command placement** — per-domain service methods with request structs
   (current plan, matching the CLI's `cmd/hive/internal/app/app.go`) versus a flat
   `app/command` + `app/query` package that gives MCP and CLI generation one
-  place to enumerate. The httpapi operations table (ADR self-describing-agent-api) is an
+  place to enumerate. The httpapi operations table is an
   adapter-local precedent for the enumeration side, not a resolution of where
   the commands live.
 - **`adapter/` as a grouping directory** versus flat `internal/wailsui`,

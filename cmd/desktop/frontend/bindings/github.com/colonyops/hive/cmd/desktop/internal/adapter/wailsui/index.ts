@@ -28,6 +28,7 @@ import * as PromptsService from "./promptsservice.js";
 import * as ReleaseNotesService from "./releasenotesservice.js";
 import * as RemoteService from "./remoteservice.js";
 import * as ReportService from "./reportservice.js";
+import * as ReviewService from "./reviewservice.js";
 import * as SessionService from "./sessionservice.js";
 import * as SettingsService from "./settingsservice.js";
 import * as SourcesService from "./sourcesservice.js";
@@ -65,6 +66,7 @@ export {
     ReleaseNotesService,
     RemoteService,
     ReportService,
+    ReviewService,
     SessionService,
     SettingsService,
     SourcesService,
@@ -84,7 +86,9 @@ export type {
     BuildInfo,
     CanvasWire,
     ClientLogEntry,
+    CommentWire,
     DevToolsInfo,
+    DocumentReviewWire,
     DocumentWire,
     DriveToggle,
     DriveWrite,
@@ -118,6 +122,7 @@ export type {
     ReportInput,
     ReportPreview,
     ReportResult,
+    ReviewLabel,
     RuntimeStats,
     SessionDetail,
     SessionGitStatus,

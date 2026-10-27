@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/pkg/pathutil"
 	"github.com/hay-kot/criterio"
 	"gopkg.in/yaml.v3"
@@ -190,6 +191,9 @@ type DatabaseConfig struct {
 // GitConfig holds git-related configuration.
 type GitConfig struct {
 	StatusWorkers int `json:"status_workers" yaml:"status_workers"`
+	// CloneProtocol is the transport for clone URLs hive generates from an
+	// item's repository. Empty means no preference.
+	CloneProtocol session.CloneProtocol `json:"clone_protocol" yaml:"clone_protocol"`
 }
 
 // PaneConfig defines a tmux pane to create inside a window.
@@ -237,6 +241,8 @@ type Rule struct {
 	// clone strategy. Available variables: .Name, .Slug, .Owner, .Repo, .ID.
 	// Defaults to "hive/{{ .Slug }}-{{ .ID }}" when empty.
 	BranchTemplate string `json:"branch_template,omitempty" yaml:"branch_template,omitempty"`
+	// CloneProtocol overrides git.clone_protocol for repositories this rule matches.
+	CloneProtocol session.CloneProtocol `json:"clone_protocol,omitempty" yaml:"clone_protocol,omitempty"`
 }
 
 // DefaultWindows returns the default window layout for new sessions.
@@ -435,6 +441,7 @@ func (c *Config) Validate() error {
 		c.validateWindowsBasic(),
 		c.validateTodos(),
 		c.validateCloneStrategies(),
+		c.validateCloneProtocols(),
 		c.validateTerminalConfirm(),
 	)
 }
@@ -476,6 +483,27 @@ func (c *Config) validateCloneStrategies() error {
 		}
 	}
 	return errs.ToError()
+}
+
+// validateCloneProtocols checks git.clone_protocol and clone_protocol on each rule.
+func (c *Config) validateCloneProtocols() error {
+	var errs criterio.FieldErrorsBuilder
+	if err := validateCloneProtocol(c.Git.CloneProtocol); err != nil {
+		errs = errs.Append("git.clone_protocol", err)
+	}
+	for i, rule := range c.Rules {
+		if err := validateCloneProtocol(rule.CloneProtocol); err != nil {
+			errs = errs.Append(fmt.Sprintf("rules[%d].clone_protocol", i), err)
+		}
+	}
+	return errs.ToError()
+}
+
+func validateCloneProtocol(p session.CloneProtocol) error {
+	if p == "" || p.IsValid() {
+		return nil
+	}
+	return fmt.Errorf("invalid clone_protocol %q: must be %q or %q", p, session.CloneProtocolHttps, session.CloneProtocolSsh)
 }
 
 // validateWindowsBasic checks windows config for structural validity.
@@ -610,6 +638,25 @@ func (c *Config) GetCloneStrategy(remote string) string {
 		}
 	}
 	return strategy
+}
+
+// GetCloneProtocol returns the clone protocol for a repository given every
+// spelling of it. The last rule whose pattern matches any candidate and sets
+// clone_protocol wins, then git.clone_protocol; "" means no preference.
+func (c *Config) GetCloneProtocol(candidates ...string) session.CloneProtocol {
+	protocol := c.Git.CloneProtocol
+	for _, rule := range c.Rules {
+		if rule.CloneProtocol == "" {
+			continue
+		}
+		for _, candidate := range candidates {
+			if rule.Matches(candidate) {
+				protocol = rule.CloneProtocol
+				break
+			}
+		}
+	}
+	return protocol
 }
 
 // GetBranchTemplate returns the branch_template for the given remote URL.

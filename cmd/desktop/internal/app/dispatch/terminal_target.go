@@ -21,6 +21,9 @@ type SessionTarget struct {
 	Repo   string
 	Path   string
 	Branch string
+	// WebURL is the repository's web page, resolved through the forge that
+	// serves the remote. It is empty for a remote with no host.
+	WebURL string
 }
 
 // WindowTarget is the window half, reachable as `.Window.<field>`. Only the

@@ -8,7 +8,7 @@ import type { TerminalEndpoint } from '../lib/terminalClient'
 import { useRemoteConnection } from '../stores/useRemoteConnection'
 import PaneStatusBar from './PaneStatusBar.vue'
 import SessionStatusChips from './SessionStatusChips.vue'
-import IconButton from './ui/IconButton.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 
 const props = defineProps<{ endpoint: TerminalEndpoint; sessionId: string }>()
 const router = useRouter()

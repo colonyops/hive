@@ -10,6 +10,15 @@ import (
 	"github.com/colonyops/hive/internal/domain/hc"
 )
 
+type DriveUpload struct {
+	ID         string `json:"id"`
+	Server     string `json:"server"`
+	Space      string `json:"space"`
+	Path       string `json:"path"`
+	Sha256     string `json:"sha256"`
+	UploadedAt int64  `json:"uploaded_at"`
+}
+
 type HcComment struct {
 	ID        string `json:"id"`
 	ItemID    string `json:"item_id"`

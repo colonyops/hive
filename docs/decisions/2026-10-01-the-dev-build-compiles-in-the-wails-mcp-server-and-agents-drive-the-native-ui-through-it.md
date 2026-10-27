@@ -5,69 +5,52 @@
 
 ## Context
 
-The headless server build is the agent UI loop: Playwright drives it in Docker
-and `desktop:serve` drives it by hand. It exercises the frontend and the Go
-core but not the native app: no WKWebView, no window, no shell integration.
-Issue #463 asked how to drive the real app and evaluated a vision-guided
-CGEvent driver, Appium's mac2 driver, a loopback control API, and GUI
-scripting. None of them reaches the page: the WebView is not inspectable, its
-RPC transport is in-process, and macOS exposes its content to the
-accessibility tree only as an empty scroll area.
+The headless server build exercises the frontend and the Go core but not the
+native app: no WKWebView, no window, no shell integration. Outside drivers
+cannot reach the page: the WebView is not inspectable, its RPC transport is
+in-process, and macOS exposes its content to the accessibility tree only as an
+empty scroll area.
 
-Wails v3 (the pinned beta.21) ships a built-in MCP server behind an `mcp`
-build tag. It runs inside the app, executes against the real WebView through
-`window.ExecJS`, and exposes DOM query, JavaScript evaluation, synthesized
-mouse and keyboard input, window control, and event emit/wait over streamable
-HTTP on loopback. Without the tag none of it is compiled.
+Wails v3 ships an MCP server behind the `mcp` build tag. It runs inside the
+app against the real WebView and exposes DOM query, JavaScript evaluation,
+synthesized mouse and keyboard input, window control, and event emit/wait over
+streamable HTTP on loopback. Without the tag none of it is compiled.
 
 ## Decision
 
-1. **Every dev build carries the Wails MCP server.** `devtools prepare`
-   writes `WAILS_MCP=1` into `launch.env`, and `wails3 dev` turns that into
-   the `mcp` tag. A developer who wants a dev build without it sets
-   `WAILS_MCP=` in `overrides.env`. Shipped builds never set the variable, so
-   the server is absent from them rather than disabled.
+1. **Every dev build carries the Wails MCP server.** `devtools prepare` writes
+   `WAILS_MCP=1` into `launch.env`, and `wails3 dev` turns that into the `mcp`
+   tag. Setting `WAILS_MCP=` in `overrides.env` opts out. Shipped builds never
+   set it, so the server is absent from them, not disabled.
 
 2. **The port is allocated per worktree.** `WAILS_MCP_HOST` and
-   `WAILS_MCP_PORT` sit beside the Vite, Wails, and webhook ports in
-   `launch.env` and in the `launchKeys` staleness contract. The upstream
-   default of 9099 would make two worktrees' apps fight over one listener.
-   `fresh` and `reset` treat a bound MCP port as a running app, like the other
-   two.
+   `WAILS_MCP_PORT` sit in `launch.env` and in the `launchKeys` staleness
+   contract, so two worktrees' apps do not fight over one listener. `fresh`
+   and `reset` treat a bound MCP port as a running app.
 
-3. **It is the agent surface for the native UI, and the `desktop-ui-audit`
-   skill is how agents use it.** The skill pairs it with the app's own MCP
-   server: Wails tools drive and read the page, Hive tools read and reload
-   state. `prepare` renders the Wails endpoint into the worktree's gitignored
-   `.mcp.json` as `hive-desktop-ui`, so a Claude Code session started in the
-   worktree sees it with no per-user registration. Pixel screenshots come from
+3. **The `desktop-ui-audit` skill is how agents use it.** It pairs the Wails
+   server (drive and read the page) with the app's own MCP server (read and
+   reload state). `prepare` renders the endpoint into the worktree's
+   gitignored `.mcp.json` as `hive-desktop-ui`. Pixel screenshots come from
    `screencapture` against the window id, because the Wails server has no
    pixel tool.
 
-4. **`call_bound_method` is off limits, and so is importing the runtime from
+4. **Never use `call_bound_method`, and never import the runtime from
    `js_eval`.** Both load a second copy of `@wailsio/runtime`, whose module
    side effect replaces the page's event dispatcher, after which no frontend
-   listener fires (wailsapp/wails#6136). Bound methods are reached through
-   Hive's MCP server or through the UI instead.
+   listener fires (wailsapp/wails#6136). Reach bound methods through Hive's
+   MCP server or the UI.
 
 ## Consequences
 
-- The dev app accepts unauthenticated JavaScript evaluation from any local
-  process on a loopback port. That matches the posture of the app's own MCP
-  server (ADR mcp-replaces-the-agent-facing-http-api) but reaches further: the
-  page holds the terminal bearer token, so this surface can do whatever the UI
-  can. It exists only in a dev build on a developer's machine.
+- A dev app accepts unauthenticated JavaScript evaluation from any local
+  process. The page holds the terminal bearer token, so this surface can do
+  whatever the UI can. It exists only in a dev build.
 - The headless loop stays the default for frontend work. The native loop is
-  for what the headless build cannot show: the real WebView, the window, and
-  shell integration. The "never verify UI with a local GUI build" rule narrows
-  to "never by hand".
-- Native dialogs, the tray, the Dock, and notification banners remain out of
-  reach. An open native panel blocks every evaluation until it closes.
-- Input is synthesized DOM events, not OS events. `isTrusted` is false, and a
-  handler that requires a trusted event will not fire.
-- The screenshot script is macOS-only (`screencapture`,
-  `CGWindowListCopyWindowInfo`); the MCP calls are portable.
-- `.mcp.json` at the worktree root is generated and gitignored. The devtools
-  own that path, so the repository cannot also commit one, and the blank
-  onboarding instance writes none because two instances cannot share the
-  file.
+  for the real WebView, the window, and shell integration.
+- Native dialogs, the tray, the Dock, and notification banners stay out of
+  reach, and an open native panel blocks every evaluation until it closes.
+- Input is synthesized DOM events: `isTrusted` is false, so a handler that
+  requires a trusted event will not fire.
+- `.mcp.json` at the worktree root is owned by the devtools, so the repository
+  cannot commit one. The blank onboarding instance writes none.

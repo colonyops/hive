@@ -40,6 +40,12 @@ actions:
     type: clipboard
     targets: [session, window]
     text_template: '{{ .Session.Path }}'
+  - id: open-repo
+    label: Open repo
+    type: shell
+    icon: globe
+    targets: [statusbar]
+    command_template: 'open {{ .Session.WebURL }}'
   - id: review-pr
     label: Review PR
     type: shell
@@ -52,13 +58,14 @@ func terminalSessionsService(t *testing.T, executor dispatch.Executor) (*Session
 	h := newHiveHarness(t, engineOptions{})
 	sess := reviewSession()
 	sess.Path = "/work/review-81"
+	sess.Remote = "git@github.com:acme/site.git"
 	sess.SetMeta(session.MetaWorktreeBranch, "feat/review")
 	h.save(t, sess)
 	runner := &fakeJobRunner{}
 	dispatcher := dispatch.NewDispatcher(map[string]dispatch.Executor{
 		"shell":     executor,
 		"clipboard": dispatch.NewClipboardExecutor(),
-	})
+	}, nil)
 	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: runner, Catalog: terminalCatalog(t, terminalActionsYAML), Dispatcher: dispatcher})
 	return svc, runner, h
 }
@@ -73,6 +80,25 @@ func TestTerminalActionViews_ScopedToTheSurface(t *testing.T) {
 	windowViews, err := svc.TerminalActionViews(t.Context(), actions.TargetWindow)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"interrupt", "copy-path"}, viewIDs(windowViews))
+
+	barViews, err := svc.TerminalActionViews(t.Context(), actions.TargetStatusBar)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"open-repo"}, viewIDs(barViews))
+	assert.Equal(t, "globe", barViews[0].Icon)
+}
+
+// The status bar runs against the session, but never against a window.
+func TestInvokeTerminalAction_StatusBarActionRunsAgainstTheSession(t *testing.T) {
+	executor := &recordingActionExecutor{}
+	svc, runner, _ := terminalSessionsService(t, executor)
+
+	_, err := svc.InvokeTerminalAction(t.Context(), "open-repo", dispatch.TerminalTarget{Slug: "review-81"}, nil)
+	require.NoError(t, err)
+	require.True(t, runner.ran)
+	assert.Equal(t, "https://github.com/acme/site", executor.data.Session.WebURL)
+
+	_, err = svc.InvokeTerminalAction(t.Context(), "open-repo", dispatch.TerminalTarget{Slug: "review-81", WindowID: "@3"}, nil)
+	assert.Equal(t, KindInvalid, KindOf(err))
 }
 
 func TestTerminalActionViews_UnknownSurfaceIsInvalid(t *testing.T) {
@@ -97,7 +123,8 @@ func TestInvokeTerminalAction_ResolvesTheSessionFromItsSlug(t *testing.T) {
 	require.NotNil(t, executor.data.Session)
 	assert.Equal(t, "/work/review-81", executor.data.Session.Path)
 	assert.Equal(t, "review-81", executor.data.Session.Slug)
-	assert.Equal(t, "acme/site", executor.data.Session.Repo)
+	assert.Equal(t, "git@github.com:acme/site.git", executor.data.Session.Repo)
+	assert.Equal(t, "https://github.com/acme/site", executor.data.Session.WebURL)
 	assert.Equal(t, "feat/review", executor.data.Session.Branch)
 	assert.Nil(t, executor.data.Window, "a session invocation carries no window")
 }

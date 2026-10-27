@@ -3,7 +3,6 @@ package dispatch
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -194,17 +193,20 @@ type SessionDraftItem struct {
 }
 
 // RenderSessionDraft projects one persisted inbox item into a New Session draft.
-func RenderSessionDraft(title, url string, payload []byte) (SessionDraft, error) {
-	return RenderSessionDraftItems([]SessionDraftItem{{Title: title, URL: url, Payload: payload}})
+func RenderSessionDraft(title, url string, payload []byte, remotes RemoteGenerator) (SessionDraft, error) {
+	return RenderSessionDraftItems([]SessionDraftItem{{Title: title, URL: url, Payload: payload}}, remotes)
 }
 
 // RenderSessionDraftItems projects ordered inbox items into one New Session
 // draft and one prompt. A single item retains the established draft exactly.
-func RenderSessionDraftItems(items []SessionDraftItem) (SessionDraft, error) {
+func RenderSessionDraftItems(items []SessionDraftItem, remotes RemoteGenerator) (SessionDraft, error) {
 	if len(items) == 0 {
 		return SessionDraft{}, fmt.Errorf("render session prompt: no items")
 	}
 
+	if remotes == nil {
+		remotes = httpsRemote
+	}
 	renderer := tmpl.New(tmpl.Config{})
 	prompts := make([]string, 0, len(items))
 	repository := ""
@@ -220,7 +222,7 @@ func RenderSessionDraftItems(items []SessionDraftItem) (SessionDraft, error) {
 		}
 		prompts = append(prompts, prompt)
 
-		candidate := draftRepository(data.Repo, data.URL)
+		candidate := remotes(data.Repo, data.URL)
 		if i == 0 {
 			repository = candidate
 		} else if candidate != repository {
@@ -233,27 +235,6 @@ func RenderSessionDraftItems(items []SessionDraftItem) (SessionDraft, error) {
 		name = "inbox-selection-" + uuid.NewString()[:8]
 	}
 	return SessionDraft{Repository: repository, Name: name, Prompt: strings.Join(prompts, "\n\n")}, nil
-}
-
-// draftRepository turns an item's canonical repo (owner/name — never a clone
-// URL) into a cloneable remote using the item URL's host. Cloning owner/name
-// verbatim fails (git exit 128); the derived https URL also shares a
-// configured repo's identity, so submitting reuses that checkout when one
-// exists. A repo that is already a URL or scp remote passes through; anything
-// we cannot turn into a valid remote yields "" so the form defaults instead.
-func draftRepository(repo, itemURL string) string {
-	repo = strings.TrimSpace(repo)
-	if repo == "" || strings.Contains(repo, "://") || strings.Contains(repo, "@") {
-		return repo
-	}
-	if strings.Count(repo, "/") != 1 {
-		return ""
-	}
-	u, err := url.Parse(itemURL)
-	if err != nil || u.Hostname() == "" {
-		return ""
-	}
-	return "https://" + u.Hostname() + "/" + repo + ".git"
 }
 
 func sessionPromptData(title, url string, payload []byte) SessionPromptData {

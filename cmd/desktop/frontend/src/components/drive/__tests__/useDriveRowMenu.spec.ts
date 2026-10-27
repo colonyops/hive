@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { useDriveRowMenu } from '../useDriveRowMenu'
 import { doc, folder, root } from '../../../test-utils/drive'
-import type { MenuEntry } from '../../../types/menu'
+import type { MenuEntry } from '@hive/ui/types/menu'
 import type { EntryWire } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 function shape(entry: EntryWire): string[] {

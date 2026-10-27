@@ -7,9 +7,9 @@
 import { computed, ref } from 'vue'
 import IconX from '~icons/lucide/x'
 import IconCornerDownLeft from '~icons/lucide/corner-down-left'
-import { useListKeyboardNav } from '../composables/useListKeyboardNav'
-import AppTooltip from './ui/AppTooltip.vue'
-import IconButton from './ui/IconButton.vue'
+import { useListKeyboardNav } from '@hive/ui/composables/useListKeyboardNav'
+import AppTooltip from '@hive/ui/components/ui/AppTooltip.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 
 const props = defineProps<{ modelValue: string[] | null; knownTypes: string[] }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()

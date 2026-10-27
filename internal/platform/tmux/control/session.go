@@ -60,8 +60,9 @@ func (m *Manager) NewSession(ctx context.Context, name, dir, command string, env
 }
 
 // NewCommandWindow runs a command in a peer window using the same environment
-// and login-shell contract as NewSession. It never creates a missing session.
-func (m *Manager) NewCommandWindow(ctx context.Context, slug, dir, name, command string) (string, error) {
+// and login-shell contract as NewSession. env entries are KEY=VALUE pairs set
+// for this window only. It never creates a missing session.
+func (m *Manager) NewCommandWindow(ctx context.Context, slug, dir, name, command string, env []string) (string, error) {
 	exists, err := m.HasSession(ctx, slug)
 	if err != nil {
 		return "", err
@@ -69,7 +70,11 @@ func (m *Manager) NewCommandWindow(ctx context.Context, slug, dir, name, command
 	if !exists {
 		return "", fmt.Errorf("%w: %s is not running", ErrNotAttached, slug)
 	}
-	args := []string{"new-window", "-t", "=" + slug + ":", "-c", dir, "-n", name, "-P", "-F", "#{window_id}", "--"}
+	args := []string{"new-window", "-t", "=" + slug + ":", "-c", dir, "-n", name, "-P", "-F", "#{window_id}"}
+	for _, pair := range env {
+		args = append(args, "-e", pair)
+	}
+	args = append(args, "--")
 	args = append(args, loginShellArgv(command)...)
 	lines, err := m.oneShot(ctx, args...)
 	if err != nil {
@@ -93,6 +98,22 @@ func (m *Manager) CapturePane(ctx context.Context, name string) (string, error) 
 	lines, err := m.oneShot(ctx, "capture-pane", "-t", "="+name+":", "-p", "-J")
 	if err != nil {
 		return "", fmt.Errorf("tmuxcc: capture pane %s: %w", name, err)
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+// CapturePaneID is CapturePane for one pane by its id, for a caller that acts
+// on that pane and must judge the same screen whichever pane is active.
+func (m *Manager) CapturePaneID(ctx context.Context, pane string) (string, error) {
+	if !validPaneID(pane) {
+		return "", fmt.Errorf("tmuxcc: capture pane: %q is not a pane id", pane)
+	}
+	if err := m.Available(ctx); err != nil {
+		return "", err
+	}
+	lines, err := m.oneShot(ctx, "capture-pane", "-t", pane, "-p", "-J")
+	if err != nil {
+		return "", fmt.Errorf("tmuxcc: capture pane %s: %w", pane, err)
 	}
 	return strings.Join(lines, "\n"), nil
 }

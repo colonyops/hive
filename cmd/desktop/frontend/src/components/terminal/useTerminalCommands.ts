@@ -14,7 +14,7 @@ import type { TerminalWindowTab } from '../../composables/useTerminalWindows'
 import { activePaneOf } from '../../lib/terminalLayout'
 import { paneMayAutoFocus, setTerminalTreeHandles } from '../../lib/terminalTree'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
-import type { MenuActionEntry, MenuEntry } from '../../types/menu'
+import type { MenuActionEntry, MenuEntry } from '@hive/ui/types/menu'
 import type { TerminalModeContext } from './terminalModeContext'
 import { windowKey } from './useTreeKeyboardNav'
 
@@ -50,13 +50,14 @@ export function attachedSessionCommands(context: TerminalModeContext, attached: 
         icon: IconPlay,
         run: () => void attach.startSession(attached.slug),
       },
-    terminal && {
-      id: 'terminal:session:kill',
-      title: 'Kill terminal…',
-      keywords: ['session', 'stop'],
-      icon: IconSquare,
-      run: () => ops.requestKill(attached),
-    },
+    terminal &&
+      running && {
+        id: 'terminal:session:kill',
+        title: scratch ? 'Stop terminal…' : 'Stop session…',
+        keywords: ['session', 'stop'],
+        icon: IconSquare,
+        run: () => ops.requestKill(attached),
+      },
     ...agents.map((agent) => ({
       id: `terminal:session:agent:${agent}`,
       title: `New ${agent} agent`,

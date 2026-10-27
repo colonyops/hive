@@ -5,21 +5,30 @@
 
 ## Context
 
-This repo is private, so GitHub Releases cannot serve public downloads, and the in-app updater would need a PAT on every user machine. Distribution needs public, unauthenticated HTTPS with URLs stable enough to bake into shipped binaries. App-update downloads are pure egress.
+Desktop downloads and auto-update need public, unauthenticated HTTPS with URLs stable enough to bake into
+shipped binaries, and the in-app updater must hold no credentials. App-update downloads are pure egress.
 
 ## Decision
 
-Releases are distributed from a Cloudflare R2 bucket behind a domain we own:
+Desktop releases are served from a Cloudflare R2 bucket behind a domain we own:
 
-- **Versioned, immutable artifacts** under `desktop/releases/<semver>/` plus a small **mutable manifest** per channel (`desktop/channels/<channel>/latest.json`: version, per-platform URL, sha256, size). The app fetches the manifest — it never lists the bucket and holds no credentials.
-- **The fronting domain is the hard requirement:** the manifest URL baked into binaries is `dl.hivedesktop.com`, never a raw bucket URL, so storage stays swappable forever.
-- **R2 over AWS S3:** S3-compatible API (identical tooling) with zero egress fees, and it pairs with the Cloudflare-hosted landing page.
-- **Updater:** the Wails `pkg/updater` `Provider` is implemented as a simple static-manifest poller (GET manifest → semver compare → download → verify sha256), replacing the custom GitHub provider and its tag-namespace workarounds. TLS + sha256-in-manifest is the integrity baseline; the notarized Developer ID signature is the trust anchor. Hardening follow-up: sign the manifest (minisign/EdDSA) so a compromised bucket cannot push updates.
-- **Cache rules:** artifacts `public, max-age=31536000, immutable`; manifests `no-cache`. Set per-object at upload.
-- Git tags (`desktop-v*`) remain the source-side version anchor and changelog record; nothing user-facing reads GitHub.
+- **Versioned, immutable artifacts** under `desktop/releases/<version>/` plus a small **mutable manifest**
+  per channel (`desktop/channels/<channel>/latest.json`: version, per-platform URL, sha256, size). The app
+  fetches the manifest; it never lists the bucket.
+- **The fronting domain is the hard requirement.** Binaries bake in `https://dl.hivedesktop.com`, never a
+  raw bucket URL, so storage stays swappable without an app update.
+- **R2 over S3** for the S3-compatible API with zero egress fees.
+- **Updater:** the Wails `pkg/updater` `Provider` is a static-manifest poller
+  (`cmd/desktop/internal/adapter/wailsui/updater_provider.go`): GET manifest, semver compare, download,
+  verify sha256. TLS plus the manifest sha256 is the integrity baseline; the notarized Developer ID
+  signature is the trust anchor. The manifest itself is not signed.
+- **Cache rules** are set per object at upload: artifacts `public, max-age=31536000, immutable`,
+  manifests `no-cache`.
 
 ## Consequences
 
-- Landing-page downloads, auto-update, and (later) license-aware serving all flow through one URL scheme; the future admin server can take over manifest serving without moving the artifact store.
-- Rollback and channel management are manifest rewrites, never artifact changes.
-- Release CI needs R2 write credentials (dashboard-created API token).
+- Rollback and channel management are manifest rewrites, never artifact changes. `cmd/tools/release`
+  refuses to overwrite an existing release prefix without `--force`.
+- Publishing needs R2 write credentials (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) on the machine that
+  runs the release.
+- `docs/distribution.md` holds the bucket, domain, and manifest schema.

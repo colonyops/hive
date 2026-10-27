@@ -1,7 +1,7 @@
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import { useAgentSchedules } from './useAgentSchedules'
 import { buildCron, defaultShape, parseCron, type ScheduleShape } from '../lib/scheduleShape'
-import { seedRef } from '../lib/seedRef'
+import { seedRef } from '@hive/ui/lib/seedRef'
 import type { AgentSchedule, AgentScheduleRun, ScheduleEdit } from '../lib/agentWorkspacesClient'
 
 // A schedule is a manifest key like the workspace's other lists, so the

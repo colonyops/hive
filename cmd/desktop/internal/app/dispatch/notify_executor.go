@@ -169,6 +169,7 @@ func (e *NotifyExecutor) Execute(ctx context.Context, action actions.Action, dat
 		CommandID: data.CommandID,
 		CreatedAt: data.CreatedAt,
 		IsRerun:   data.IsRerun,
+		remotes:   data.remotes,
 	}
 	if len(cmd.Item) > 0 {
 		if err := json.Unmarshal(cmd.Item, &item.Payload); err != nil {

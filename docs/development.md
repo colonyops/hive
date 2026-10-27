@@ -64,7 +64,7 @@ namespace, then runs the real GitHub connection flow without mock providers.
 
 Every gate is a mise task, and lefthook runs the relevant ones as git hooks.
 Run `mise run check` before you push, and `mise run ci` for every gate,
-including the e2e suite that GitHub CI does not run. The root
+including the desktop e2e suite. The root
 [`AGENTS.md`](../AGENTS.md) lists what each hook runs and why.
 
 Never bypass a hook. A failing gate is a task to finish, not a flag to add.

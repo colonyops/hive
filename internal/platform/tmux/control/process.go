@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
 	"github.com/colonyops/hive/pkg/executil"
 )
 
@@ -61,6 +62,7 @@ func (p *execProcess) Start(context.Context) (io.Writer, io.Reader, error) {
 		args = append([]string{"-S", socket}, args...)
 	}
 	cmd := exec.Command(p.binary, args...) //nolint:noctx // lifetime is teardown-managed, see above
+	cmd.Dir = tmuxbin.WorkDir()
 	cmd.Env = p.env
 	cmd.Stderr = p.stderr
 
@@ -144,6 +146,7 @@ func inputTmux(ctx context.Context, binary string, env []string, stdin io.Reader
 		args = append([]string{"-S", socket}, args...)
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.Dir = tmuxbin.WorkDir()
 	cmd.Env = withoutTmuxClient(env)
 	cmd.Stdin = stdin
 	stderr := &executil.HeadWriter{Max: 4 << 10}
@@ -165,6 +168,7 @@ func outputTmux(ctx context.Context, binary string, env []string, args ...string
 		args = append([]string{"-S", socket}, args...)
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.Dir = tmuxbin.WorkDir()
 	cmd.Env = withoutTmuxClient(env)
 	stderr := &executil.HeadWriter{Max: 4 << 10}
 	cmd.Stderr = stderr

@@ -5,21 +5,20 @@
 
 ## Context
 
-`hive.log` had no size cap. Every `hive` CLI invocation, the TUI, agents
-calling `hive hc`, and Hive Desktop append to the same file at the same time,
-and the desktop holds it open for days. A single-process rotator such as
-lumberjack counts its own writes and renames the file under the others, so
-the processes that still hold the old file keep writing to a backup.
+Every `hive` CLI invocation, the TUI, agents calling `hive hc`, and Hive
+Desktop append to the same `hive.log` at the same time, and the desktop holds
+it open for days. A single-process rotator such as lumberjack counts its own
+writes and renames the file under the others, so the processes that still hold
+the old file keep writing to a backup.
 
 ## Decision
 
-`logutils.NewRoot` writes the file through a rotating writer:
+`logutils.NewRoot` (`pkg/logutils`) writes the file through a rotating writer:
 
 1. **Size is read from disk, not counted.** A process checks when it opens
    the log, then on the first write after five minutes. It stats the path and
    its open file; when they are the same file and the file has reached
-   10 MiB, it rotates. Five minutes is enough: hive writes on the order of
-   150 KB a day, and a late rotation costs only some overshoot.
+   10 MiB, it rotates.
 2. **Rotation holds an exclusive `flock` on `hive.log.lock`** and re-checks
    the size under it, so concurrent writers rotate once. It renames
    `hive.log` to `hive.log.1` and shifts older backups up, keeping three.

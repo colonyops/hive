@@ -10,9 +10,9 @@ import {
   getPopupTerminalEndpoint,
   type PopupTerminalClient,
 } from '../lib/popupTerminalClient'
-import BaseBadge from './ui/BaseBadge.vue'
-import IconButton from './ui/IconButton.vue'
-import InlineError from './ui/InlineError.vue'
+import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import '@xterm/xterm/css/xterm.css'
 
 const props = defineProps<{ command: string; dir: string }>()

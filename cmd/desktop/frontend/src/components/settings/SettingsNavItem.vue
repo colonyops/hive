@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
-import { useTooltip } from '../../composables/useTooltip'
-import TooltipBubble from '../ui/TooltipBubble.vue'
+import { useTooltip } from '@hive/ui/composables/useTooltip'
+import TooltipBubble from '@hive/ui/components/ui/TooltipBubble.vue'
 
 const props = withDefaults(
   defineProps<{

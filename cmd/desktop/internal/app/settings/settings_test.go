@@ -89,6 +89,39 @@ func TestTerminalSessionAgeThresholdValidation(t *testing.T) {
 	require.NoError(t, cfg.Validate())
 }
 
+func TestReviewLabelsValidation(t *testing.T) {
+	cfg := DefaultSettings()
+	assert.Equal(t, DefaultReviewLabels, cfg.Review.EffectiveLabels())
+
+	for name, labels := range map[string][]ReviewLabel{
+		"at most 4":       {{Title: "a"}, {Title: "b"}, {Title: "c"}, {Title: "d"}, {Title: "e"}},
+		"needs a title":   {{Title: " "}},
+		"trailing space":  {{Title: "a "}},
+		"is listed twice": {{Title: "a"}, {Title: "a"}},
+	} {
+		cfg.Review.Labels = labels
+		require.ErrorContains(t, cfg.Validate(), "review.labels", name)
+	}
+
+	cfg.Review.Labels = []ReviewLabel{{Title: "Nit"}}
+	require.NoError(t, cfg.Validate())
+	assert.Equal(t, []ReviewLabel{{Title: "Nit"}}, cfg.Review.EffectiveLabels())
+}
+
+func TestReviewLabelsLoadFromYAML(t *testing.T) {
+	path := isolateSettings(t)
+	require.NoError(t, os.WriteFile(path, []byte("review:\n  labels:\n    - title: Nit\n      icon: tag\n"), 0o600))
+
+	cfg, err := LoadSettings()
+	require.NoError(t, err)
+	assert.Equal(t, []ReviewLabel{{Title: "Nit", Icon: "tag"}}, cfg.Review.EffectiveLabels())
+
+	require.NoError(t, SaveSettings(DefaultSettings()))
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "review:", "the shipped labels are not written out")
+}
+
 func TestProfilesOrderRoundTrips(t *testing.T) {
 	path := isolateSettings(t)
 	require.NoError(t, os.WriteFile(path, []byte("profiles:\n  order: [personal, hive]\n"), 0o600))

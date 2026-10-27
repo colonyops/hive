@@ -777,7 +777,7 @@ func TestDriveDocumentByKind(t *testing.T) {
 	page, err := f.svc.Document(ctx, "workspaces/ws", "page.html")
 	require.NoError(t, err)
 	assert.Equal(t, drive.KindHtml, page.Entry.Kind)
-	assert.True(t, strings.HasPrefix(page.HTML, `<html><head><meta http-equiv="Content-Security-Policy"`), page.HTML)
+	assert.True(t, strings.HasPrefix(page.HTML, `<html><head><base href="about:srcdoc"><meta http-equiv="Content-Security-Policy"`), page.HTML)
 	assert.Contains(t, page.HTML, "<p>x</p>")
 	assert.Empty(t, page.Markdown)
 

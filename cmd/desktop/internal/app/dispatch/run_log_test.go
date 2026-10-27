@@ -90,7 +90,7 @@ func TestWorker_RecordsShellOutputAndOutcomeInTheRunLog(t *testing.T) {
 	db := openTestPipelineDB(t)
 	st := stores.New(db, stores.Options{})
 	worker := NewWorker(st.OutputCommands, fakeActionLister{"build": shellAction("build", "echo out; echo err >&2; exit 3")},
-		NewDispatcher(map[string]Executor{"shell": NewShellExecutor(zerolog.Nop(), hostEnvironment{})}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"shell": NewShellExecutor(zerolog.Nop(), hostEnvironment{})}, nil), 0, zerolog.Nop())
 	worker.SetRunLogSink(st.ActionRuns)
 
 	view, err := worker.Confirm(t.Context(), "build", "item-1", []byte(`{}`), models.ItemRef{}, ActionInvocationInput{})
@@ -117,7 +117,7 @@ func TestWorker_RunLogIsReadableWhileTheCommandRuns(t *testing.T) {
 	db := openTestPipelineDB(t)
 	st := stores.New(db, stores.Options{})
 	worker := NewWorker(st.OutputCommands, fakeActionLister{"wait": shellAction("wait", "echo started; sleep 5")},
-		NewDispatcher(map[string]Executor{"shell": NewShellExecutor(zerolog.Nop(), hostEnvironment{})}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"shell": NewShellExecutor(zerolog.Nop(), hostEnvironment{})}, nil), 0, zerolog.Nop())
 	worker.SetRunLogSink(st.ActionRuns)
 
 	view, err := worker.Confirm(t.Context(), "wait", "item-1", []byte(`{}`), models.ItemRef{}, ActionInvocationInput{})
@@ -147,7 +147,7 @@ func TestWorker_RetryAttemptsLogUnderTheirOwnAttempt(t *testing.T) {
 	enqueueTestCommand(t, db, "flaky", "item-1", `{}`)
 	exec := &fakeExecutor{err: fmt.Errorf("not yet")}
 	worker := NewWorker(st.OutputCommands, fakeActionLister{"flaky": launchSessionAction("flaky", true)},
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 	worker.SetRunLogSink(st.ActionRuns)
 	worker.retryDelay = 0
 
@@ -183,7 +183,7 @@ func TestWorker_NodeCommandsWriteNoRunLogAndAreNotListed(t *testing.T) {
 	nodeID := models.NotifyActionID("flow/notify")
 	enqueueTestCommand(t, db, nodeID, "item-1", `{}`)
 	worker := NewWorker(st.OutputCommands, fakeActionLister{nodeID: launchSessionAction(nodeID, true)},
-		NewDispatcher(map[string]Executor{"launch-session": &fakeExecutor{}}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": &fakeExecutor{}}, nil), 0, zerolog.Nop())
 	worker.SetRunLogSink(st.ActionRuns)
 
 	worker.Tick(t.Context())

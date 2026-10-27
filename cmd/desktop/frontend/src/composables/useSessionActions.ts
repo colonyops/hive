@@ -13,7 +13,7 @@ import type {
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import type { SessionRisk as SessionRiskView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { appErrorMessage } from '../lib/appError'
-import { useConfirmation, type ConfirmationDetail } from './useConfirmation'
+import { useConfirmation, type ConfirmationDetail } from '@hive/ui/composables/useConfirmation'
 import { useToasts } from './useToasts'
 
 export interface SessionActionOptions {

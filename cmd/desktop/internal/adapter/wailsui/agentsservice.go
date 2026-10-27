@@ -34,9 +34,9 @@ type AgentsEndpoint struct {
 	Token       string `json:"token"`
 }
 
-// AgentsService is gate and bootstrap only, mirroring TerminalService: the
-// control plane and the stream both ride loopback HTTP, so neither crosses
-// the Wails bridge. webhooks is here for the same reason it is in
+// AgentsService gates and bootstraps the Agents area, and installs app-hosted
+// MCP servers into supported CLI configs. The control plane and the stream
+// both ride loopback HTTP, so neither crosses the Wails bridge. webhooks is here for the same reason it is in
 // TerminalService's signature — WebhookService.Endpoint is the authority on
 // whether the loopback server is running and on which port, which is what
 // Endpoint builds its base URLs from.
@@ -78,4 +78,13 @@ func (s *AgentsService) Endpoint(ctx context.Context) (AgentsEndpoint, error) {
 		WSURL:       "ws://" + authority + s.transport.StreamPath,
 		Token:       s.transport.Token,
 	}, nil
+}
+
+// AddDriveMCP installs Hive Drive in the selected CLI's user configuration.
+func (s *AgentsService) AddDriveMCP(ctx context.Context, agent string) error {
+	endpoint, err := s.Endpoint(ctx)
+	if err != nil {
+		return err
+	}
+	return s.workspaces.AddDriveMCP(ctx, agent, endpoint.HTTPBaseURL+"/mcp/drive")
 }

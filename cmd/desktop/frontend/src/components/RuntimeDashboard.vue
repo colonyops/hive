@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import InlineError from './ui/InlineError.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { computed, onMounted, onUnmounted } from 'vue'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import { startFrameStats, stopFrameStats, useFrameStats } from '../composables/useFrameStats'
 import { useRuntimeStats } from '../composables/useRuntimeStats'
 import { formatBytes, formatBytesParts } from '../lib/bytes'
 import SettingsSection from './settings/SettingsSection.vue'
-import SparkLine from './ui/SparkLine.vue'
+import SparkLine from '@hive/ui/components/ui/SparkLine.vue'
 
 const { stats, rssHistory, cpuHistory, error, start, stop } = useRuntimeStats()
 const { stats: frames } = useFrameStats()

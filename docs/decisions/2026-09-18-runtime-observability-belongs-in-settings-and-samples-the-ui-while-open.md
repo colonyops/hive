@@ -5,61 +5,49 @@
 
 ## Context
 
-The runtime dashboard was part of developer tools and therefore hidden behind
-`development.devtools.enabled`. The process sampler also registers the gauges
-exported through OpenTelemetry for every run, so the data was already a product
-observability concern even when its only UI was developer-only.
-
-Telemetry export is configured through `settings.yaml`, but the app did not
-show whether OTLP or continuous profiles were enabled and complete, whether
-their exporters started, or whether an edit needed a restart. The
-developer-tools pane mixed runtime observability with notification tests and a
-Wails boundary benchmark.
-
-The UI frame sampler has a different cost from process sampling. Its
-`requestAnimationFrame` loop keeps the webview active and prevents it from
-idling while the app is otherwise still.
+The process sampler registers the gauges exported through OpenTelemetry on
+every run, so runtime data is a product concern, not a developer tool.
+Users also need to see whether OTLP or profile export is enabled,
+configured, started, or waiting on a restart. The UI frame sampler has a
+different cost: its `requestAnimationFrame` loop keeps the webview from
+idling.
 
 ## Decision
 
 1. **Settings ▸ Observability is the user surface.** It shows the runtime
-   dashboard and reports enabled, configured, startup, and restart-required
-   state for Grafana Cloud OTLP and Profiles destinations. "Exporting" means
-   the SDK pipeline started; it does not claim that the remote backend accepted
-   data.
+   dashboard and, for the OTLP and Profiles destinations, whether each is
+   enabled, configured, running, and needs a restart. "Running" means the
+   SDK pipeline started, not that the backend accepted data.
 
-2. **`app.ObservabilityService` owns process sampling and export settings.** It
-   registers the existing process gauges for the process lifetime and combines
-   the effective settings with the startup result passed from the composition
-   root. The Wails adapter only converts its types.
+2. **`app.ObservabilityService` owns process sampling and export status.**
+   It registers the process gauges for the process lifetime and combines the
+   effective settings with the startup result (`TelemetryRuntime`) passed in
+   from the composition root.
 
-3. **Exporter changes apply after restart.** Telemetry participates in logger
-   construction before `app.App` exists, so it stays constructed in
-   `desktop/main.go`. The core receives a startup status snapshot rather than
-   the provider itself.
+3. **Exporter changes apply after restart.** Telemetry is built in
+   `cmd/desktop/main.go` before `app.App` exists, because the logger needs
+   it, so the core receives a startup snapshot rather than the provider.
 
-4. **Configuration remains file-owned.** The page exposes no destination or
-   credential fields. It links to the product guide for editing `settings.yaml`,
-   where credentials remain `env:`, `file:`, or `op://` references.
+4. **Configuration stays file-owned.** The page has no destination or
+   credential fields; it links to the guide for editing `settings.yaml`,
+   where credentials are `env:`, `file:`, or `op://` references.
 
-5. **UI frame sampling runs only while Observability is open.** Process
-   sampling is pull-based and stops with the page's poll. Scoping the animation
-   loop to the page gives up historical jank from other views so the shipped app
-   can idle when nobody is reading the dashboard.
+5. **UI frame sampling runs only while the dashboard is open.** This gives
+   up history of jank in other views so the app can idle when nobody is
+   reading it.
 
-This supersedes decisions 4 and 5 of ADR
-[developer-tools-are-reachable-in-a-shipped-build-behind-a-setting](2026-08-10-developer-tools-are-reachable-in-a-shipped-build-behind-a-setting.md).
-The developer-tools gate, route, strip, and Wails round-trip benchmark remain as
-specified there.
+The developer-tools gate itself stays as in
+ADR developer-tools-are-reachable-in-a-shipped-build-behind-a-setting; this
+replaces its decisions 4 and 5.
 
 ## Consequences
 
-- Every user can inspect CPU, resident memory, process-tree cost, Go runtime
-  state, and current UI frame behavior without enabling developer tools.
-- OTLP and Profiles remain independent gates, but the current provider startup
-  is all-or-nothing. A failure in either leaves both inactive and the page shows
-  the startup error.
-- Delivery failures after startup remain in logs and backend diagnostics. The
-  UI does not present a connection-health claim the SDK cannot support.
-- `perf.jsonl` receives long-frame and event-loop samples only while the runtime
-  page is open. The page is a live instrument, not a background profiler.
+- Every user can inspect CPU, memory, process-tree cost, Go runtime state,
+  and UI frame behaviour without enabling developer tools.
+- OTLP and Profiles are independent gates, but provider startup is
+  all-or-nothing: a failure in either leaves both inactive, and the page
+  shows the error.
+- Delivery failures after startup stay in logs. The UI makes no
+  connection-health claim the SDK cannot support.
+- `perf.jsonl` gets long-frame and event-loop samples only while the
+  dashboard is open.

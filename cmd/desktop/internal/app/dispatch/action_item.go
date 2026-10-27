@@ -82,15 +82,15 @@ func DecodeActionItem(payload []byte, externalID string) (DecodedActionItem, err
 // executes. Actions without a repo_template (interactive or workspace
 // launch-session actions, and every other type) render "" with no error;
 // they impose no repository requirement on the payload.
-func RenderRepoTarget(action actions.Action, key string, payload []byte, inputs map[string]string) (string, error) {
+func RenderRepoTarget(action actions.Action, key string, payload []byte, inputs map[string]string, remotes RemoteGenerator) (string, error) {
 	cfg, ok := action.Config.(*actions.LaunchSessionConfig)
 	if !ok {
 		return "", nil
 	}
-	return renderRepoTemplate(cfg.RepoTemplate, key, payload, inputs)
+	return renderRepoTemplate(cfg.RepoTemplate, key, payload, inputs, remotes)
 }
 
-func renderRepoTemplate(repoTemplate, key string, payload []byte, inputs map[string]string) (string, error) {
+func renderRepoTemplate(repoTemplate, key string, payload []byte, inputs map[string]string, remotes RemoteGenerator) (string, error) {
 	if repoTemplate == "" {
 		return "", nil
 	}
@@ -106,6 +106,7 @@ func renderRepoTemplate(repoTemplate, key string, payload []byte, inputs map[str
 		Payload: decoded,
 		Raw:     json.RawMessage(payload),
 		Inputs:  inputs,
+		remotes: remotes,
 	})
 	if err != nil {
 		return "", err
@@ -122,7 +123,7 @@ func renderRepoTemplate(repoTemplate, key string, payload []byte, inputs map[str
 // types impose payload requirements next to the type definitions in package
 // actions. All other action types and templates impose no applicability
 // requirement.
-func ActionApplicability(action actions.Action, item DecodedActionItem) (ok bool, reason string) {
+func ActionApplicability(action actions.Action, item DecodedActionItem, remotes RemoteGenerator) (ok bool, reason string) {
 	if !actions.AppliesTo(action, item.Kind) {
 		return false, fmt.Sprintf("action %q does not apply to kind %q", action.ID, item.Kind)
 	}
@@ -140,7 +141,7 @@ func ActionApplicability(action actions.Action, item DecodedActionItem) (ok bool
 	if err != nil {
 		return false, fmt.Sprintf("action %q: inputs: %v", action.ID, err)
 	}
-	repo, err := RenderRepoTarget(action, item.ID, item.Payload, inputs)
+	repo, err := RenderRepoTarget(action, item.ID, item.Payload, inputs, remotes)
 	if err != nil {
 		return false, fmt.Sprintf("action %q: repo_template: %v", action.ID, err)
 	}

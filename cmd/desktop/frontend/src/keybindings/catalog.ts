@@ -4,6 +4,7 @@ import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
 import IconArrowUp from '~icons/lucide/arrow-up'
 import IconFolderTree from '~icons/lucide/folder-tree'
+import IconMessageSquare from '~icons/lucide/message-square'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconBug from '~icons/lucide/bug'
 import IconLifeBuoy from '~icons/lucide/life-buoy'
@@ -51,7 +52,9 @@ import type { CommandScope } from '../palette/scopes'
 // only run when the feed is actually on screen, `terminal` commands only inside
 // terminal mode, `terminal-session` commands only while a session is attached
 // there, `agents` commands only inside the Agents area, `sidebar` commands in
-// any view with a left panel, `any-terminal` commands wherever an emulator is
+// any view with a left panel, `panel` commands in any view with a right-hand
+// panel, `review` commands while a Drive document with comments is on screen,
+// `any-terminal` commands wherever an emulator is
 // drawn — an attached Code session, the Agents area, or the pop-up panel over
 // any view; `global` commands run anywhere.
 // `defaultCombos` are canonical combo strings (see useKeybindings.comboFromEvent)
@@ -75,7 +78,16 @@ import type { CommandScope } from '../palette/scopes'
 // `terminal-pane` is narrower than `terminal-session`: one of the attached Code
 // session's panes has focus, not the session tree beside it.
 export type CommandContext =
-  'global' | 'feed' | 'terminal' | 'terminal-session' | 'terminal-pane' | 'any-terminal' | 'agents' | 'sidebar'
+  | 'global'
+  | 'feed'
+  | 'terminal'
+  | 'terminal-session'
+  | 'terminal-pane'
+  | 'any-terminal'
+  | 'agents'
+  | 'sidebar'
+  | 'panel'
+  | 'review'
 
 export interface BindableCommand {
   id: string
@@ -307,6 +319,28 @@ export const commandCatalog: BindableCommand[] = [
     defaultCombos: ['mod+b'],
     context: 'sidebar',
     piercesPane: 'non-mac',
+  },
+  {
+    // The right-hand twin of the sidebar toggle: the title bar's right
+    // button in every view, the preview in Inbox, the drive in Chats and
+    // Code, the comments on the Drive page.
+    id: 'view.toggle-panel',
+    title: 'Toggle right panel',
+    group: 'View',
+    keywords: ['panel', 'right', 'preview', 'drive', 'comments', 'show', 'hide', 'collapse'],
+    icon: IconPanelRight,
+    defaultCombos: ['mod+alt+b'],
+    context: 'panel',
+    piercesPane: 'non-mac',
+  },
+  {
+    id: 'drive.toggle-comments',
+    title: 'Toggle comments',
+    group: 'View',
+    keywords: ['comments', 'review', 'feedback', 'drive', 'document', 'show', 'hide'],
+    icon: IconMessageSquare,
+    defaultCombos: ['mod+shift+m'],
+    context: 'review',
   },
   // Directional rather than one toggle: which pane you land on should be
   // readable off the chord, not off where focus happened to be.

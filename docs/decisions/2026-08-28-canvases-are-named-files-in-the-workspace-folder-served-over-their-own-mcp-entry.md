@@ -1,97 +1,51 @@
-# Canvases are named files in the workspace folder, served over their own MCP entry
+# Canvases are named files, served over their own MCP entry
 
 - **Status:** accepted
 - **Date:** 2026-08-28
 
 ## Context
 
-A workspace agent's only output channel is terminal scrollback, so anything it
-produces that is meant to be looked at has to be described rather than shown
-(#232). The MCP surface the canvas needs already exists in shape: `mcpsrv`
-serves app tools over Streamable HTTP on the loopback server, and
-`mcpcatalog`'s `RuntimeURL` mechanism resolves an app-hosted entry's address
-at render time (ADR mcp-replaces-the-agent-facing-http-api).
-
-An earlier revision of this decision scoped one canvas to each chat session,
-stored under the app's state directory and deleted with the session record.
-Demo use showed that scope is wrong: a chat produces several distinct
-artifacts, each worth addressing, keeping, and reopening after the chat is
-gone — the session was the author, not the owner.
+A workspace agent's only output channel was terminal scrollback, so anything
+meant to be looked at had to be described rather than shown (#232). `mcpsrv`
+already serves app tools over Streamable HTTP on the loopback server, and
+`mcpcatalog`'s `RuntimeURL` resolves an app-hosted entry's address at render
+time (ADR mcp-replaces-the-agent-facing-http-api).
 
 ## Decision
 
-A **canvas** is a named artifact in a workspace, filled with **blocks** —
-`markdown` (rendered by the frontend's sanitizing GFM renderer; raw HTML is
-escaped, never rendered) and `link` (http/https/mailto only) — and shown in a
-pane in the Agents area. Block ids are agent-chosen and upsert-in-place, so a
-block is revised rather than duplicated. No HTML block kind: rendering
-agent-authored HTML in the webview is a security decision this deliberately
-defers.
+A **canvas** is a named document filled with **blocks** (`markdown`, `link`,
+and `html`; see ADR
+a-canvas-html-block-is-restricted-by-what-it-can-reach-not-by-how-it-looks).
+Block ids are agent-chosen and upsert in place, so a block is revised rather
+than duplicated. Where a canvas file lives is set by ADR
+hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it.
 
-**A canvas is keyed by (workspace, name), not by chat session.** The name is
-an agent-chosen slug (lowercase, filename-like; the store enforces it), the
-canvas carries an optional display title, and a workspace holds as many as
-its chats create. The creating session id is recorded as provenance — it
-labels and default-picks, never authorizes. Deleting a chat or the workspace
-record leaves canvases untouched; `delete_canvas` and the file system are how
-one dies.
+**A canvas is owned by a space, not by a chat session.** The creating session
+is recorded as provenance; it labels, never authorizes. Deleting a chat leaves
+its canvases.
 
-**Content lives in the workspace folder: `<workspace>/canvases/<name>.json`,
-written atomically** (temp+rename), owned by `internal/app/canvas`. The
-workspace folder is already the place where a chat's durable output lands
-(authored `docs/`, the manifest), it survives workspace deletion by standing
-rule, and it travels with the folder — so canvases are browsable in place,
-under version control if the folder is, and shared across machines that share
-the root. The generator's reconcile never touches `canvases/`: it prunes only
-its own subtrees. JSON files keep the block model free to change without
-migrations while it is young.
+**Identity rides the launch environment.** A chat's launch sets
+`HIVE_AGENT_SESSION=<record id>` and `HIVE_AGENT_WORKSPACE`
+(`agent_workspaces_service.go`). Every canvas tool takes that id as its
+`session` argument and the app derives the space from the record; the space is
+never caller-supplied, and an unknown id is `not_found`.
 
-**Identity rides the launch environment.** The session record exists before
-launch, so `launchTerminal` injects `HIVE_AGENT_SESSION=<record id>` (and
-`HIVE_AGENT_WORKSPACE`) via `tmux new-session -e` — set on the session, so
-windows the agent opens later inherit it too. Every canvas tool takes that id
-as its `session` argument, resolves it against the session store, and derives
-the workspace from the record; an unknown id is `not_found` and the workspace
-is never caller-supplied. A session launched by a pre-canvas build lacks the
-variable until relaunched, and the tool descriptions tell the agent to say so
-rather than guess.
+**Canvas tools are their own catalogue entry, not more `hive-desktop` tools.**
+Enabling an output surface must not require granting the app-control tool set,
+and the reverse. Each app-hosted entry joins the loopback base with its own
+`Descriptor.RuntimePath`, and a pinning test holds the catalogue's paths to the
+adapter's mount constants. The server is now `hive-drive` at `/mcp/drive`;
+`hive-canvas` at `/mcp/canvas` stays as the same server at its older address,
+because workspace manifests name it.
 
-**A separate `hive-canvas` catalogue entry, not more `hive-desktop` tools.**
-Enabling an output surface must not require granting the app-control tool
-set, and vice versa. The entry is the second app-hosted server, which is what
-made `RuntimeURL` path-aware: `Descriptor.RuntimePath` joins the loopback
-base per entry (`/mcp`, `/mcp/canvas`), and a pinning test holds the
-catalogue's paths to the adapter's mount constants.
-
-Delivery to the pane is the native wake-up pattern: content is stored state,
-`events.CanvasUpdated` → coalesced `canvas:updated` → the pane re-reads.
-The frontend reads over the token-guarded agents HTTP client, addressed by
-(workspace, name). At introduction it had no mutation surface at all: writes
-existed only as MCP tools, so the pane could not race the agent.
+Delivery to the pane is the native wake-up pattern: content is stored state, a
+change publishes an event, and the pane re-reads.
 
 ## Consequences
 
-- The threat model is unchanged: the canvas server keeps `mcpsrv`'s
-  unauthenticated-behind-loopback posture and spawns nothing, but its writes
-  now land inside the workspace folder — confined to `canvases/` by the
-  store's name and workspace validation. Any local process can claim any
-  session id — the same standing ADR mcp-replaces-the-agent-facing-http-api
-  accepts for the whole surface; what such a write can do is put content in a
-  pane the user reads.
-- Canvases share the workspace folder's lifecycle, not the app's: they
-  survive `DeleteSession` and `DeleteWorkspace` (which never touch the
-  directory), appear in `git status` when the folder is a repository, and
-  follow the folder to other machines.
-- The pane's picker lists canvases by title (falling back to name) rather
-  than by the chat that made them; `?canvas=<name>` on the agents route pins
-  one, so a canvas is linkable.
-- M1 is a viewport with agent read-back: the user cannot edit blocks. If
-  user edits ever land, the read-back tools are where the agent would see
-  them — the tool surface was shaped so that adding this does not change it.
-
-## Evolution
-
-Users can now delete the canvas on screen after confirmation, while block and
-front matter edits remain MCP-only. Canvases also carry agent-editable front
-matter with Hive-owned timestamps (ADR
-[canvases-carry-front-matter-and-users-can-delete-them](2026-10-09-canvases-carry-front-matter-and-users-can-delete-them.md)).
+- The canvas server keeps `mcpsrv`'s unauthenticated-behind-loopback posture.
+  Any local process can claim any session id, as ADR
+  mcp-replaces-the-agent-facing-http-api accepts for the whole surface; what
+  such a write can do is put content in a pane the user reads.
+- Removing the `hive-canvas` entry or the `/mcp/canvas` mount breaks existing
+  workspace manifests.
