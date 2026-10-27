@@ -33,6 +33,18 @@ func TestExecRunnerSeparatesStreamsAndForwardsInput(t *testing.T) {
 	assert.Equal(t, "diagnostic", string(stderr))
 }
 
+func TestExecRunnerRunsTmuxInHome(t *testing.T) {
+	installFakeTmux(t, "/bin/pwd -P\n")
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	t.Setenv("HOME", home)
+	t.Chdir(t.TempDir())
+
+	stdout, _, err := execRunner{}.Capture(context.Background(), "ignored")
+	require.NoError(t, err)
+	assert.Equal(t, home, strings.TrimSpace(string(stdout)))
+}
+
 func TestExecRunnerReturnsBoundedCommandError(t *testing.T) {
 	installFakeTmux(t, "printf '%0600d' 0 >&2\nexit 7\n")
 	runner := execRunner{}

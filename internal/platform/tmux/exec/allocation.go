@@ -20,6 +20,9 @@ func (l *launch) allocateWindow(ctx context.Context, sessionDir string, spec mul
 	args := []string{"new-window", "-d", "-t", "=" + l.name + ":", "-n", spec.Name}
 	if l.ownsSession && l.sessionID == "" {
 		args = []string{"new-session", "-d", "-s", l.name, "-n", spec.Name}
+		for _, kv := range l.env {
+			args = append(args, "-e", kv)
+		}
 	}
 	args = append(args, "-P", "-F", allocationFormat)
 	if dir != "" {

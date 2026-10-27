@@ -209,6 +209,7 @@ appearance:
   terminal_font_weight_bold: 0 # the weight bold cells draw at; 0 means the default, 700
   terminal_line_height: 0 # 1 to 1.6 in tenths; 0 means the default, 1.2 (ADR terminal-line-height-and-letter-spacing)
   terminal_letter_spacing: 0 # extra tracking in device pixels, 0 to 3 (ADR terminal-line-height-and-letter-spacing)
+  terminal_show_scrollbars: false # draggable scrollbars in single-pane and zoomed Code terminals; hidden in splits
   terminal_show_windows: true # list every active session's windows in the terminal sidebar
   terminal_show_status_bar: true # give the attached session a bar carrying its checkout's git and pull-request state (ADR session-git-and-pull-request-status-is-computed-in-app-not-shelled-out-to-hive-or-gh)
   terminal_pool_size: 3 # sessions kept attached for instant switching (1-6, ADR terminal-attach-pool)
@@ -243,6 +244,9 @@ agent_workspaces:
   session_end_delay: 10s # grace between a chat asking to end its own session and the session being ended
 retention:
   action_runs: 100 # finished action runs kept, each with its full log (1-10000)
+review:
+  labels: [] # up to 4 {title, icon} preset comments, keys 1-4 by position;
+             # empty is Clarify this / Verify this / Needs tests / Looks good
 onboarding:
   completed: false # written by the app when first run ends; remove the key to walk first run again
 paths:
@@ -517,7 +521,7 @@ The desktop icon masters live in `build/icons/`: `hive-mark.svg` is the
 Regenerate every committed desktop icon with `mise run desktop:icons`.
 
 The mark's amber is `#f5b23f` — the same value as the app's `--hv-accent` in
-`frontend/src/styles/main.css`. Keep the two in step.
+`web/packages/ui/src/styles/theme.css`. Keep the two in step.
 
 The tray master is **not** a scaled `hive-mark.svg`. At 18-44px the app mark's
 connector strokes fall below a pixel and its hexagons close up, so the tray
@@ -611,8 +615,11 @@ private data/config root. Fixture-driven servers receive private flow/action
 copies and a run id; onboarding deliberately receives no injected fixture env,
 and action-seed deliberately starts without an action fixture to verify exact
 first-run seeding. Action smoke also gets a local bare Git remote. This keeps
-parallel browser projects from mutating checked-in fixtures or sharing
+browser projects from mutating checked-in fixtures or sharing
 SQLite/action state. Docker must be available; there is no host fallback.
+
+[`e2e/AGENTS.md`](e2e/AGENTS.md) is the guide for the suite: how to filter a
+run, where a test goes, which server it picks, and how to tag it.
 
 ## Reading what the app costs
 
@@ -651,7 +658,6 @@ Recording UI spans to `perf.jsonl` is the `usePerf` hook, on in `dev` via
 ui-performance-spans-are-recorded-to-jsonl). The **desktop-ui-perf** agent skill carries
 the full loop: the naming rules and the jq recipes for percentiles, outliers,
 and grouping by attribute.
-
 
 ## Diagnostics
 

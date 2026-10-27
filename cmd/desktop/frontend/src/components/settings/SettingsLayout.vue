@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useEscapeToClose } from '../../composables/useEscapeToClose'
-import ViewHeader from '../ui/ViewHeader.vue'
+import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
+import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 
 const emit = defineEmits<{ close: [] }>()
 

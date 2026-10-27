@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import IconBug from '~icons/lucide/bug'
-import AppSelect, { type AppSelectOption } from '../ui/AppSelect.vue'
-import BaseButton from '../ui/BaseButton.vue'
+import AppSelect, { type AppSelectOption } from '@hive/ui/components/ui/AppSelect.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import TokenConnectDrawer, { type TokenProvider } from './TokenConnectDrawer.vue'
 import {
   Connect,

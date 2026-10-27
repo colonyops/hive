@@ -8,11 +8,11 @@ import (
 	"strings"
 )
 
-// versionPattern reads every version this repository has published: the CLI's
-// v* tags, the desktop's desktop-v* tags, and the dev and beta prereleases the
-// desktop channels carried before every program shared one version. Only a
-// bare X.Y.Z is publishable now (parsePublishVersion).
-var versionPattern = regexp.MustCompile(`^(?:desktop-)?v?([0-9]+)\.([0-9]+)\.([0-9]+)(?:-(dev|beta)\.([0-9]+))?$`)
+// versionPattern reads every version this repository has published: the v*
+// tags, and the dev and beta prereleases the desktop channels carried before
+// every program shared one version. Only a bare X.Y.Z is publishable now
+// (parsePublishVersion).
+var versionPattern = regexp.MustCompile(`^v?([0-9]+)\.([0-9]+)\.([0-9]+)(?:-(dev|beta)\.([0-9]+))?$`)
 
 // manifestChannels are the desktop update manifests every release writes.
 // There is one release line, but installs that follow the beta or dev
@@ -43,7 +43,7 @@ func parsePublishVersion(value string) (releaseVersion, error) {
 		return releaseVersion{}, fmt.Errorf("%s is a prerelease: every release is X.Y.Z", version)
 	}
 	if strings.TrimSpace(value) != version.String() {
-		return releaseVersion{}, errors.New("expected a version without a v or desktop-v prefix")
+		return releaseVersion{}, errors.New("expected a version without a v prefix")
 	}
 	return version, nil
 }

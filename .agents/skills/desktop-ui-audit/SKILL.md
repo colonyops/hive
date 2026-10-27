@@ -40,9 +40,8 @@ jq -r '.mcpServers["hive-desktop-ui"].url' .mcp.json
 - **The tools are missing**: the session predates the file or the approval was
   declined. Restart in the worktree, or register the URL above with
   `claude mcp add --transport http hive-desktop-ui <url>`.
-- **A call cannot connect**: the app is not running. Ask the user to start
-  `mise run desktop:dev`; it opens a window, so do not start it from a
-  background shell they cannot see.
+- **A call cannot connect**: the app is not running. Start
+  `mise run desktop:dev`.
 - **`launch.env` has no `WAILS_MCP_PORT`**: it predates the server.
   `mise run desktop:dev:prepare` regenerates a stale or missing file;
   `desktop:dev:fresh` (the file header's advice) also reseeds the data.
@@ -271,7 +270,7 @@ compiles `winid.swift` with the system `swiftc`.
 ## 5. Authoring views an agent can drive
 
 The `data-testid` is the agent API and the Playwright API at once: a flow
-proven here ports to `cmd/desktop/e2e/tests/*.spec.ts` with the same
+proven here ports to `cmd/desktop/e2e/tests/**/*.spec.ts` with the same
 `getByTestId` selectors, and a renamed id breaks both. Before a PR that adds or
 changes a view, run the grouped listing above on it and check every step a
 smoke test would take has a handle.

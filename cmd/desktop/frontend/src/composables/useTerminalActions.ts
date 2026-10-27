@@ -8,12 +8,12 @@ import type { TerminalTarget } from '../../bindings/github.com/colonyops/hive/cm
 import { appErrorMessage } from '../lib/appError'
 import { actionTypeMeta } from '../lib/actionPresentation'
 import type { ActionView } from '../types/action'
-import type { MenuEntry } from '../types/menu'
-import { useClipboard } from './useClipboard'
+import type { MenuEntry } from '@hive/ui/types/menu'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useToasts } from './useToasts'
 
-/** The two terminal surfaces an action can declare in `targets:`. */
-export type TerminalSurface = 'session' | 'window'
+/** The terminal surfaces an action can declare in `targets:`. */
+export type TerminalSurface = 'session' | 'window' | 'statusbar'
 
 /** Prefix that keeps action entries apart from a menu's own ids. */
 export const TERMINAL_ACTION_PREFIX = 'terminal-action:'
@@ -38,27 +38,25 @@ export function useTerminalActions() {
   const { showToast } = useToasts()
   const clipboard = useClipboard()
 
-  const sessionActions = ref<ActionView[]>([])
-  const windowActions = ref<ActionView[]>([])
+  const views = ref<Record<TerminalSurface, ActionView[]>>({ session: [], window: [], statusbar: [] })
   /** The action awaiting its declared inputs, with the target it will run against. */
   const pendingInputs = ref<{ action: ActionView; target: TerminalTarget } | null>(null)
   const inputsBusy = ref(false)
   const inputsError = ref<string | null>(null)
 
   async function load(): Promise<void> {
-    const [sessions, windows] = await Promise.all([
-      TerminalActionViews('session').catch(() => null),
-      TerminalActionViews('window').catch(() => null),
-    ])
+    const surfaces: TerminalSurface[] = ['session', 'window', 'statusbar']
+    const loaded = await Promise.all(surfaces.map((surface) => TerminalActionViews(surface).catch(() => null)))
     // A catalog read failing leaves the last-known entries in place: the menus
     // they feed have their own operations to offer either way.
-    if (sessions) sessionActions.value = sessions
-    if (windows) windowActions.value = windows
+    surfaces.forEach((surface, index) => {
+      const list = loaded[index]
+      if (list) views.value[surface] = list
+    })
   }
 
   function entriesFor(surface: TerminalSurface): MenuEntry[] {
-    const views = surface === 'session' ? sessionActions.value : windowActions.value
-    return views.map((action) => {
+    return views.value[surface].map((action) => {
       const meta = actionTypeMeta(action.type)
       return {
         kind: 'action',
@@ -75,8 +73,7 @@ export function useTerminalActions() {
   const windowEntries = computed(() => entriesFor('window'))
 
   function actionFor(surface: TerminalSurface, id: string): ActionView | undefined {
-    const views = surface === 'session' ? sessionActions.value : windowActions.value
-    return views.find((action) => action.id === id)
+    return views.value[surface].find((action) => action.id === id)
   }
 
   async function run(
@@ -113,7 +110,11 @@ export function useTerminalActions() {
   async function select(surface: TerminalSurface, entryID: string, target: TerminalTarget): Promise<void> {
     if (!entryID.startsWith(TERMINAL_ACTION_PREFIX)) return
     const action = actionFor(surface, entryID.slice(TERMINAL_ACTION_PREFIX.length))
-    if (!action) return
+    if (action) await invoke(action, target)
+  }
+
+  /** Runs one action, opening the inputs form first when it declares any. */
+  async function invoke(action: ActionView, target: TerminalTarget): Promise<void> {
     if (action.inputs?.length) {
       inputsError.value = null
       pendingInputs.value = { action, target }
@@ -142,8 +143,10 @@ export function useTerminalActions() {
     load,
     sessionEntries,
     windowEntries,
-    hasWindowActions: computed(() => windowActions.value.length > 0),
+    statusBarActions: computed(() => views.value.statusbar),
+    hasWindowActions: computed(() => views.value.window.length > 0),
     select,
+    invoke,
     pendingInputs,
     inputsBusy,
     inputsError,

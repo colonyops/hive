@@ -3,8 +3,8 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRemoteConnection } from '../stores/useRemoteConnection'
 import { useRemoteCatalog } from '../stores/useRemoteCatalog'
-import BaseButton from './ui/BaseButton.vue'
-import InlineError from './ui/InlineError.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 
 const props = defineProps<{ area: 'inbox' | 'chats'; compact?: boolean }>()

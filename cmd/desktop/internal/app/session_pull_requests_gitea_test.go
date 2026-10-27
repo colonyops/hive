@@ -57,7 +57,7 @@ func TestSessionPullRequestsAnswersAGiteaSessionInTheSameView(t *testing.T) {
 	defer server.Close()
 
 	forge, host := giteaInstance(t, server)
-	lookup := newSessionPullRequests(newGitHubForge(nil, nil), forge)
+	lookup := newSessionForges(newGitHubForge(nil, nil), forge)
 
 	view, err := lookup.Lookup(t.Context(),
 		SessionPullRequestKey{Host: host, Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
@@ -90,7 +90,7 @@ func TestSessionPullRequestsSeparatesAGiteaBranchWithNoneFromAnUnservedHost(t *t
 	defer server.Close()
 
 	forge, host := giteaInstance(t, server)
-	lookup := newSessionPullRequests(newGitHubForge(nil, nil), forge)
+	lookup := newSessionForges(newGitHubForge(nil, nil), forge)
 
 	none, err := lookup.Lookup(t.Context(),
 		SessionPullRequestKey{Host: host, Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
@@ -101,4 +101,20 @@ func TestSessionPullRequestsSeparatesAGiteaBranchWithNoneFromAnUnservedHost(t *t
 		SessionPullRequestKey{Host: "git.other.test", Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
 	require.NoError(t, err)
 	assert.Equal(t, PullRequestStatusUnsupported, unsupported.Status)
+}
+
+// A Gitea remote over SSH names git's port, so the repository's address has to
+// come from the connected instance, never the remote.
+func TestSessionForgesRepoURLPrefersTheConnectedInstance(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+	forge, host := giteaInstance(t, server)
+	lookup := newSessionForges(newGitHubForge(nil, nil), forge)
+
+	assert.Equal(t, server.URL+"/acme/site", lookup.RepoURL("ssh://git@"+host+":2222/acme/site.git"))
+	assert.Equal(t, "https://github.com/acme/site", lookup.RepoURL("git@github.com:acme/site.git"))
+	assert.Equal(t, "https://git.other.test/acme/site", lookup.RepoURL("git@git.other.test:acme/site.git"))
+	assert.Empty(t, lookup.RepoURL("/repos/acme/site"))
 }

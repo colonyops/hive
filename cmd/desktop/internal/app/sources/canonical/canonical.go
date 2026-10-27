@@ -1,5 +1,5 @@
 // Package canonical is the item contract a connector uses when its payload is
-// the canonical item shape itself (docs/decisions/0008) rather than a
+// the canonical item shape itself (ADR canonical-item-contract) rather than a
 // provider's own: the top-level `state` vocabulary, the classifier that maps it
 // to lifecycle, and the rewrite an authoritative snapshot mints for an item
 // that left it.

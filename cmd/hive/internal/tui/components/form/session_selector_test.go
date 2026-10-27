@@ -112,3 +112,16 @@ func TestSessionSelectorField_Multi(t *testing.T) {
 		assert.Contains(t, view, "Pick many")
 	})
 }
+
+func TestSessionLabels_OneRepositoryOverTwoTransportsHasNoRepoPrefix(t *testing.T) {
+	labels := sessionLabels([]session.Session{
+		{ID: "s1", Name: "alpha", Remote: "git@github.com:org/alpha.git"},
+		{ID: "s2", Name: "beta", Remote: "https://github.com/org/alpha"},
+	})
+	assert.Equal(t, []string{"alpha", "beta"}, labels)
+}
+
+func TestSessionLabels_SessionsWithoutARemoteHaveNoRepoPrefix(t *testing.T) {
+	labels := sessionLabels([]session.Session{{ID: "s1", Name: "alpha"}, {ID: "s2", Name: "beta"}})
+	assert.Equal(t, []string{"alpha", "beta"}, labels)
+}

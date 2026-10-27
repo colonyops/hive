@@ -13,6 +13,7 @@ type EditableAction struct {
 	ID           string `json:"id"`
 	Label        string `json:"label"`
 	Type         string `json:"type"`
+	Icon         string `json:"icon,omitempty"`
 	ShowInDetail bool   `json:"showInDetail"`
 	// Targets is always explicit on the wire — an action that declares none
 	// is an item action, and the editor renders a checked box rather than an
@@ -65,7 +66,7 @@ type EditableClipboardConfig struct {
 }
 
 func editableFromAction(a Action) (EditableAction, error) {
-	out := EditableAction{ID: a.ID, Label: a.Label, Type: a.Type, ShowInDetail: a.ShowInDetail, Targets: effectiveTargets(a), AppliesTo: append([]string(nil), a.AppliesTo...), Inputs: cloneInputs(a.Inputs)}
+	out := EditableAction{ID: a.ID, Label: a.Label, Type: a.Type, Icon: a.Icon, ShowInDetail: a.ShowInDetail, Targets: effectiveTargets(a), AppliesTo: append([]string(nil), a.AppliesTo...), Inputs: cloneInputs(a.Inputs)}
 	switch c := a.Config.(type) {
 	case *LaunchSessionConfig:
 		postHookTimeout := ""
@@ -110,7 +111,7 @@ func actionFromEditable(e EditableAction) (Action, error) {
 	if branches != 1 {
 		return Action{}, fmt.Errorf("action %q: exactly one matching config branch is required", e.ID)
 	}
-	a := Action{ID: e.ID, Label: e.Label, Type: e.Type, ShowInDetail: e.ShowInDetail, Targets: normalizeTargets(e.Targets), AppliesTo: append([]string(nil), e.AppliesTo...), Inputs: normalizeInputs(cloneInputs(e.Inputs))}
+	a := Action{ID: e.ID, Label: e.Label, Type: e.Type, Icon: e.Icon, ShowInDetail: e.ShowInDetail, Targets: normalizeTargets(e.Targets), AppliesTo: append([]string(nil), e.AppliesTo...), Inputs: normalizeInputs(cloneInputs(e.Inputs))}
 	switch e.Type {
 	case "launch-session":
 		if e.Launch == nil {

@@ -2,7 +2,7 @@
 // Chats settings: where the area's workspaces live.
 // A workspace's agent, launch command, and MCP servers belong to its manifest.
 import { onMounted } from 'vue'
-import InlineError from './ui/InlineError.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsPathRow from './settings/SettingsPathRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'

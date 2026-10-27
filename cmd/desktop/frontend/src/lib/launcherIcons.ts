@@ -1,5 +1,5 @@
 // The scoped set of glyphs a pop-up terminal launcher may show in the command
-// palette. This is the single frontend source of truth: the action editor's
+// palette, and a status bar action on its button. This is the single frontend source of truth: the action editor's
 // icon dropdown and the palette row both read from here, and it must stay in
 // sync with the Go allow-list in cmd/desktop/internal/app/icons (launcher).
 //
@@ -12,14 +12,18 @@ import IconBug from '~icons/lucide/bug'
 import IconCloud from '~icons/lucide/cloud'
 import IconContainer from '~icons/lucide/container'
 import IconDatabase from '~icons/lucide/database'
+import IconExternalLink from '~icons/lucide/external-link'
 import IconFileText from '~icons/lucide/file-text'
 import IconFlaskConical from '~icons/lucide/flask-conical'
 import IconFolder from '~icons/lucide/folder'
 import IconGauge from '~icons/lucide/gauge'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconGitCompare from '~icons/lucide/git-compare'
+import IconGitPullRequest from '~icons/lucide/git-pull-request'
+import IconGlobe from '~icons/lucide/globe'
 import IconHammer from '~icons/lucide/hammer'
 import IconPackage from '~icons/lucide/package'
+import IconPlay from '~icons/lucide/play'
 import IconSearch from '~icons/lucide/search'
 import IconTerminal from '~icons/lucide/terminal'
 import IconZap from '~icons/lucide/zap'
@@ -48,6 +52,10 @@ export const launcherIconOptions: LauncherIconOption[] = [
   { value: 'bug', label: 'Debug', component: IconBug },
   { value: 'zap', label: 'Task', component: IconZap },
   { value: 'package', label: 'Packages', component: IconPackage },
+  { value: 'globe', label: 'Web', component: IconGlobe },
+  { value: 'external-link', label: 'Link', component: IconExternalLink },
+  { value: 'git-pull-request', label: 'Pull request', component: IconGitPullRequest },
+  { value: 'play', label: 'Run', component: IconPlay },
 ]
 
 /** The glyph a launcher with no configured icon shows. */

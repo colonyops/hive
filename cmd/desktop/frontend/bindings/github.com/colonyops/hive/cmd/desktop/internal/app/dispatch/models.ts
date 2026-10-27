@@ -134,6 +134,12 @@ export interface SessionExecutionOutcome {
      */
     "slug"?: string;
     "path"?: string;
+
+    /**
+     * Remote is the session's stored remote; it differs from the request when
+     * launch resolution kept a checkout's spelling.
+     */
+    "remote"?: string;
 }
 
 export interface SessionInvocationInput {

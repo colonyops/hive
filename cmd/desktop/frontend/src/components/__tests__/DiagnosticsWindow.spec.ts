@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import AppDateTimePicker from '../ui/AppDateTimePicker.vue'
+import AppDateTimePicker from '@hive/ui/components/ui/AppDateTimePicker.vue'
 import DiagnosticsWindow from '../DiagnosticsWindow.vue'
 
 const api = vi.hoisted(() => ({

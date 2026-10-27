@@ -1,13 +1,13 @@
 import type { TaskItem } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import type { TaskComment } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
-// Pure presentation helpers for the Tasks view: filter groups, the tree the
-// two-pane view renders, checkpoint-comment parsing, cascade-delete counting,
-// and status styling. Kept framework-free (no Vue) so it is unit-testable in
-// isolation; TasksView/TaskTreeRow/TaskDetailPane consume it. The backend's
-// ListTasks deliberately returns an unsorted flat list (store ordering
-// depends on which filter branch it takes), so every ordering guarantee the
-// tree exposes is owned here, not assumed from RPC order.
+// Pure presentation helpers for the Tasks view (components/tasks/): filters,
+// status groups and board columns, the hierarchy tree, checkpoint-comment
+// parsing, cascade counting, and status styling. Kept framework-free so it is
+// unit-testable in isolation. The backend's ListTasks deliberately returns an
+// unsorted flat list (store ordering depends on which filter branch it
+// takes), so every ordering guarantee the views expose is owned here, not
+// assumed from RPC order.
 
 // ── Filters ──────────────────────────────────────────────────────────────
 
@@ -56,6 +56,55 @@ export function filterCounts(items: readonly TaskItem[]): Record<TaskFilterId, n
       if (matchesTaskFilter(item, filter.id)) counts[filter.id]++
     }
   }
+  return counts
+}
+
+// ── Views ────────────────────────────────────────────────────────────────
+
+export type TaskViewMode = 'list' | 'board'
+
+export const DEFAULT_TASK_VIEW: TaskViewMode = 'list'
+
+// Workflow order: the order board columns appear in.
+export const TASK_STATUSES = ['open', 'in_progress', 'done', 'cancelled'] as const
+export type TaskStatus = (typeof TASK_STATUSES)[number]
+
+export interface TaskBoardColumn {
+  status: TaskStatus
+  /** The cards rendered, a prefix of the column when it is long. */
+  items: TaskItem[]
+  total: number
+}
+
+function byUpdatedAtDesc(a: TaskItem, b: TaskItem): number {
+  return Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+}
+
+// groupByStatus buckets the items matching the search into one group per
+// status, most recently updated first. An unknown status lands in 'open', the
+// same fallback statusMeta uses. Every status gets a group, empty or not: the
+// board's columns are drop targets, so none may disappear.
+export function groupByStatus(items: readonly TaskItem[], search = ''): { status: TaskStatus; items: TaskItem[] }[] {
+  const query = search.trim().toLowerCase()
+  const groups = new Map<TaskStatus, TaskItem[]>(TASK_STATUSES.map((status) => [status, []]))
+  for (const item of items) {
+    if (!matchesQuery(item, query)) continue
+    const status = (TASK_STATUSES as readonly string[]).includes(item.status) ? (item.status as TaskStatus) : 'open'
+    groups.get(status)?.push(item)
+  }
+  return [...groups].map(([status, grouped]) => ({ status, items: grouped.sort(byUpdatedAtDesc) }))
+}
+
+// subtaskCounts is [done/total] over every descendant of each item that has
+// any, the same numbers buildTaskTree computes, for views that render items
+// flat rather than as a tree.
+export function subtaskCounts(items: readonly TaskItem[]): Map<string, { done: number; total: number }> {
+  const counts = new Map<string, { done: number; total: number }>()
+  function collect(node: TaskTreeNode): void {
+    if (node.children.length) counts.set(node.item.id, node.counts)
+    node.children.forEach(collect)
+  }
+  buildTaskTree(items, 'all').forEach(collect)
   return counts
 }
 
@@ -165,6 +214,8 @@ export function cascadeCount(items: readonly TaskItem[], epicId: string): number
 export interface StatusMeta {
   label: string
   classes: string
+  /** Text color for the status icon. */
+  iconClass: string
 }
 
 // Semantic-token classes only (precedent: BaseBadge.vue's tone map) — never
@@ -172,13 +223,21 @@ export interface StatusMeta {
 export function statusMeta(status: string): StatusMeta {
   switch (status) {
     case 'in_progress':
-      return { label: 'In Progress', classes: 'bg-severity-running-tint text-severity-running' }
+      return {
+        label: 'In Progress',
+        classes: 'bg-severity-running-tint text-severity-running',
+        iconClass: 'text-severity-running',
+      }
     case 'done':
-      return { label: 'Done', classes: 'bg-severity-success-tint text-severity-success' }
+      return {
+        label: 'Done',
+        classes: 'bg-severity-success-tint text-severity-success',
+        iconClass: 'text-severity-success',
+      }
     case 'cancelled':
-      return { label: 'Cancelled', classes: 'bg-chip text-text-4' }
+      return { label: 'Cancelled', classes: 'bg-chip text-text-4', iconClass: 'text-text-4' }
     case 'open':
     default:
-      return { label: 'Open', classes: 'bg-chip text-text-3' }
+      return { label: 'Open', classes: 'bg-chip text-text-3', iconClass: 'text-text-3' }
   }
 }

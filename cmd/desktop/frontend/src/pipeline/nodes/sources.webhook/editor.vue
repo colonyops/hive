@@ -11,17 +11,17 @@ import {
   Capture,
   Info,
 } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/webhookservice'
-import IconButton from '../../../components/ui/IconButton.vue'
-import BaseButton from '../../../components/ui/BaseButton.vue'
-import { useClipboard } from '../../../composables/useClipboard'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { defaultWebhookSourceIcon, feedIconComponent, feedIconOptions } from '../../../lib/feedIcons'
 import { MarkImageField, SelectField, TextField, type MarkImageClient } from '../../fields'
 import IconRefresh from '~icons/lucide/refresh-cw'
 import { randomPath, randomSecret } from './config'
 import type { Config } from './config'
 import { renderPrompt } from '../../../composables/usePrompts'
-import EmptyState from '../../../components/ui/EmptyState.vue'
-import CopyButton from '../../../components/ui/CopyButton.vue'
+import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
+import CopyButton from '@hive/ui/components/ui/CopyButton.vue'
 
 export interface WebhookInfoView {
   running: boolean

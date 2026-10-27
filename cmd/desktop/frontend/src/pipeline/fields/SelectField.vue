@@ -2,8 +2,8 @@
 // FormField chrome around the app-wide AppSelect listbox. Everything about the
 // control itself — keyboard handling, popover placement, search, icons — lives
 // in AppSelect; this only adds the label/hint/error layout the field kit shares.
-import AppSelect, { type AppSelectOption } from '../../components/ui/AppSelect.vue'
-import FormField from '../../components/ui/FormField.vue'
+import AppSelect, { type AppSelectOption } from '@hive/ui/components/ui/AppSelect.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
 
 export type SelectOption = AppSelectOption
 

@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import InlineError from './ui/InlineError.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import IconPlay from '~icons/lucide/play'
-import BaseButton from './ui/BaseButton.vue'
-import AppCheckbox from './ui/AppCheckbox.vue'
-import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import AppCheckbox from '@hive/ui/components/ui/AppCheckbox.vue'
+import AppSelect, { type AppSelectOption } from '@hive/ui/components/ui/AppSelect.vue'
 import ActionInputsEditor from './ActionInputsEditor.vue'
 import AppliesToField from './AppliesToField.vue'
-import DrawerSheet from './ui/DrawerSheet.vue'
+import DrawerSheet from '@hive/ui/components/ui/DrawerSheet.vue'
 import { SelectField, TextareaField, TextField } from '../pipeline/fields'
+import { launcherIconOptions } from '../lib/launcherIcons'
 import type { EditableAction } from '../composables/useActionsSettings'
 import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
-import { seedRef } from '../lib/seedRef'
+import { seedRef } from '@hive/ui/lib/seedRef'
 
 const props = withDefaults(
   defineProps<{
@@ -48,6 +49,11 @@ const targetOptions = [
   { value: 'item', label: 'Feed item' },
   { value: 'session', label: 'Terminal session' },
   { value: 'window', label: 'Terminal window' },
+  { value: 'statusbar', label: 'Code status bar' },
+]
+const iconOptions = [
+  { value: '', label: 'Terminal (default)' },
+  ...launcherIconOptions.map((o) => ({ value: o.value, label: o.label })),
 ]
 const launchTargetOptions = [
   { value: 'interactive', label: 'Choose when run' },
@@ -69,6 +75,8 @@ function hasTarget(value: string): boolean {
 function setTarget(value: string, on: boolean): void {
   const next = (action.value.targets ?? []).filter((target) => target !== value)
   if (on) next.push(value)
+  // Only the status bar draws the icon.
+  if (value === 'statusbar' && !on) action.value.icon = undefined
   // An action offered nowhere is unreachable rather than merely quiet, so the
   // item surface is what an emptied set falls back to.
   action.value.targets = next.length
@@ -174,6 +182,14 @@ onMounted(async () => {
           A launch-session action creates a new session, so it is offered on feed items only.
         </p>
       </div>
+      <SelectField
+        v-if="hasTarget('statusbar')"
+        label="Status bar icon"
+        :model-value="action.icon ?? ''"
+        :options="iconOptions"
+        testid="action-icon"
+        @update:model-value="action.icon = $event || undefined"
+      />
       <template v-if="hasTarget('item')">
         <AppCheckbox
           v-model="action.showInDetail"

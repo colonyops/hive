@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import { useConfirmation } from '../../composables/useConfirmation'
+import { useConfirmation } from '@hive/ui/composables/useConfirmation'
 import type { InboxItem, SidebarSelection } from '../../types/feed'
 import type { FeedState } from '../useAppNavigation'
 

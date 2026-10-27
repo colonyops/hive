@@ -116,6 +116,14 @@ func TestCommandRunsThroughTheShell(t *testing.T) {
 	awaitOutput(t, events, "two")
 }
 
+func TestTerminalEnvEnablesPiImages(t *testing.T) {
+	env := terminalEnv([]string{"TMUX=/tmp/tmux-1/default,1,0", "PI_IMAGE_PROTOCOL=none", "HOME=/h"})
+	require.Contains(t, env, "PI_IMAGE_PROTOCOL=kitty")
+	require.NotContains(t, env, "PI_IMAGE_PROTOCOL=none")
+	require.Contains(t, env, "HOME=/h")
+	require.NotContains(t, env, "TMUX=/tmp/tmux-1/default,1,0")
+}
+
 func TestResizeReachesTheProcess(t *testing.T) {
 	m := testManager(t)
 

@@ -7,7 +7,7 @@ import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
 import IconZap from '~icons/lucide/zap'
 import type { ToastActionDef, ToastInstance, ToastSeverity } from '../types/toast'
-import IconButton from './ui/IconButton.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 
 const props = defineProps<{ toast: ToastInstance }>()
 const emit = defineEmits<{ dismiss: [] }>()

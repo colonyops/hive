@@ -2,6 +2,7 @@
 # need to the builder. The build context is the repository root.
 *
 !dist/hive_linux_*/hive
+!dist/hive-drive-server_linux_*/hive-drive-server
 !cmd/hive/dev/config.dev.yaml
 !cmd/hive/dev/docker-entrypoint.sh
 !go.mod

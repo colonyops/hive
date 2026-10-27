@@ -5,13 +5,24 @@ how to run the hive CLI and Hive Desktop.
 
 ## Before you open a pull request
 
-Run `mise run check`. If you changed config behavior, also run
-`mise run cli:validate`. A user-visible change to either program owes a
-release-notes fragment in that program's changelog
-(`mise run changelog:new`; see `.agents/skills/release-notes/SKILL.md`). A
-Wails service change also owes regenerated bindings (`cmd/desktop/AGENTS.md`).
+Run `mise run ci`. It runs every gate, including the desktop e2e suite that
+GitHub CI does not run. `mise run check` is the fast Go-only subset for the
+edit loop. If you changed config behavior, also run `mise run cli:validate`.
 
-The pull request template describes the title format and the scope list.
+Fill in the pull request template. It has the title format, the scope list,
+the body sections, and a checklist. Tick an item only for work the branch did.
+For an item that does not apply, write `n/a: <reason>`. The `PR body` workflow
+fails a body that is missing a section, keeps a template comment, or has an
+unticked item with no reason. To check a body before you push it, run
+`scripts/check-pr-body.sh <file>`.
+
+## Keep the interfaces aligned
+
+The hive CLI, the TUI, and Hive Desktop are three interfaces to one engine. A
+change to how one of them behaves applies to all three. Put the behavior in
+`internal/hive` so each interface gets it from the same code. If the change
+lands in only one interface, add it to the others in the same pull request, or
+open an issue for the gap and link it.
 
 ## Writing style
 

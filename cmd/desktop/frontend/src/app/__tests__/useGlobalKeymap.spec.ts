@@ -12,7 +12,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 type Modules = {
   useGlobalKeymap: typeof import('../useGlobalKeymap').useGlobalKeymap
   useKeybindings: typeof import('../../composables/useKeybindings').useKeybindings
-  useRegisterOpenModal: typeof import('../../composables/useOpenModalCount').useRegisterOpenModal
+  useRegisterOpenModal: typeof import('@hive/ui/composables/useOpenModalCount').useRegisterOpenModal
   SEQUENCE_TIMEOUT_MS: number
 }
 let m: Modules
@@ -28,7 +28,7 @@ beforeEach(async () => {
   vi.resetModules()
   const keymap = await import('../useGlobalKeymap')
   const keybindings = await import('../../composables/useKeybindings')
-  const modals = await import('../../composables/useOpenModalCount')
+  const modals = await import('@hive/ui/composables/useOpenModalCount')
   m = {
     useGlobalKeymap: keymap.useGlobalKeymap,
     useKeybindings: keybindings.useKeybindings,

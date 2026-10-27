@@ -2,7 +2,7 @@
 import IconUnplug from '~icons/lucide/unplug'
 import IconRefresh from '~icons/lucide/refresh-cw'
 import { useRemoteConnection } from '../stores/useRemoteConnection'
-import BaseButton from './ui/BaseButton.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import { useCommands } from '../composables/useCommands'
 
 const { activeProfile, status, error, busy, reconnect } = useRemoteConnection()

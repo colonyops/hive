@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Dock icons are not masked by the system: the rounded-square body must be
+       drawn at the Apple icon-grid inset (824px centered on a 1024 canvas)
+       with transparent margins, or the icon renders oversized in the Dock.
+       The tile is kept off pure black so the square itself still reads against
+       a dark Dock; at #0f0f13 only the glyph was visible and the icon looked
+       smaller than its neighbours. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#33313d"/>
+      <stop offset="0.55" stop-color="#22212a"/>
+      <stop offset="1" stop-color="#17161d"/>
+    </linearGradient>
+    <!-- Rim reads as a lit top edge falling off to nothing at the bottom. -->
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.05"/>
+    </linearGradient>
+    <radialGradient id="ambient" cx="0.5" cy="0.46" r="0.55">
+      <stop offset="0" stop-color="#f5b23f" stop-opacity="0.08"/>
+      <stop offset="0.6" stop-color="#f5b23f" stop-opacity="0.025"/>
+      <stop offset="1" stop-color="#f5b23f" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="bloom" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <clipPath id="body">
+      <rect x="100" y="100" width="824" height="824" rx="210"/>
+    </clipPath>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="210" fill="url(#tile)"/>
+  <!-- Glow is clipped to the tile: an unclipped bloom spills onto the margin
+       the Dock reserves for its shadow and reads as a halo, not a lit icon. -->
+  <g clip-path="url(#body)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#ambient)"/>
+    <g transform="translate(512 512) scale(1.0)" filter="url(#bloom)" opacity="0.28">
+      <path d="M -250.2,-304.9 Q -244.5,-308.2 -238.8,-304.9 L -165.2,-262.4 Q -159.5,-259.1 -159.5,-252.5 L -159.5,-167.5 Q -159.5,-160.9 -165.2,-157.6 L -238.8,-115.1 Q -244.5,-111.8 -250.2,-115.1 L -323.8,-157.6 Q -329.5,-160.9 -329.5,-167.5 L -329.5,-252.5 Q -329.5,-259.1 -323.8,-262.4 Z" fill="#f5b23f"/>
+      <path d="M -5.7,-304.9 Q 0,-308.2 5.7,-304.9 L 79.3,-262.4 Q 85,-259.1 85,-252.5 L 85,-167.5 Q 85,-160.9 79.3,-157.6 L 5.7,-115.1 Q 0,-111.8 -5.7,-115.1 L -79.3,-157.6 Q -85,-160.9 -85,-167.5 L -85,-252.5 Q -85,-259.1 -79.3,-262.4 Z" fill="#f5b23f"/>
+      <path d="M 238.8,-304.9 Q 244.5,-308.2 250.2,-304.9 L 323.8,-262.4 Q 329.5,-259.1 329.5,-252.5 L 329.5,-167.5 Q 329.5,-160.9 323.8,-157.6 L 250.2,-115.1 Q 244.5,-111.8 238.8,-115.1 L 165.2,-157.6 Q 159.5,-160.9 159.5,-167.5 L 159.5,-252.5 Q 159.5,-259.1 165.2,-262.4 Z" fill="#f5b23f"/>
+      <path d="M -5.7,115.1 Q 0,111.8 5.7,115.1 L 79.3,157.6 Q 85,160.9 85,167.5 L 85,252.5 Q 85,259.1 79.3,262.4 L 5.7,304.9 Q 0,308.2 -5.7,304.9 L -79.3,262.4 Q -85,259.1 -85,252.5 L -85,167.5 Q -85,160.9 -79.3,157.6 Z" fill="#f5b23f"/>
+      <rect x="-9" y="-97.5" width="18" height="189" fill="#f5b23f"/>
+    </g>
+  </g>
+  <rect x="106" y="106" width="812" height="812" rx="204" fill="none" stroke="url(#rim)" stroke-width="7"/>
+  <g transform="translate(512 512) scale(1.0)">
+    <path d="M -250.2,-304.9 Q -244.5,-308.2 -238.8,-304.9 L -165.2,-262.4 Q -159.5,-259.1 -159.5,-252.5 L -159.5,-167.5 Q -159.5,-160.9 -165.2,-157.6 L -238.8,-115.1 Q -244.5,-111.8 -250.2,-115.1 L -323.8,-157.6 Q -329.5,-160.9 -329.5,-167.5 L -329.5,-252.5 Q -329.5,-259.1 -323.8,-262.4 Z" fill="#f5b23f"/>
+    <path d="M -5.7,-304.9 Q 0,-308.2 5.7,-304.9 L 79.3,-262.4 Q 85,-259.1 85,-252.5 L 85,-167.5 Q 85,-160.9 79.3,-157.6 L 5.7,-115.1 Q 0,-111.8 -5.7,-115.1 L -79.3,-157.6 Q -85,-160.9 -85,-167.5 L -85,-252.5 Q -85,-259.1 -79.3,-262.4 Z" fill="#f5b23f"/>
+    <path d="M 238.8,-304.9 Q 244.5,-308.2 250.2,-304.9 L 323.8,-262.4 Q 329.5,-259.1 329.5,-252.5 L 329.5,-167.5 Q 329.5,-160.9 323.8,-157.6 L 250.2,-115.1 Q 244.5,-111.8 238.8,-115.1 L 165.2,-157.6 Q 159.5,-160.9 159.5,-167.5 L 159.5,-252.5 Q 159.5,-259.1 165.2,-262.4 Z" fill="#f5b23f"/>
+    <path d="M -5.7,115.1 Q 0,111.8 5.7,115.1 L 79.3,157.6 Q 85,160.9 85,167.5 L 85,252.5 Q 85,259.1 79.3,262.4 L 5.7,304.9 Q 0,308.2 -5.7,304.9 L -79.3,262.4 Q -85,259.1 -85,252.5 L -85,167.5 Q -85,160.9 -79.3,157.6 Z" fill="#f5b23f"/>
+    <g fill="none" stroke="#656362" stroke-width="19.4" stroke-linecap="round">
+      <path d="M -239.5,-88.5 C -223.3,21 -53.6,-68.2 -36.7,96.2"/>
+      <path d="M 239.5,-88.5 C 223.3,21 53.6,-68.2 36.7,96.2"/>
+    </g>
+    <rect x="-9" y="-97.5" width="18" height="189" fill="#f5b23f"/>
+  </g>
+</svg>

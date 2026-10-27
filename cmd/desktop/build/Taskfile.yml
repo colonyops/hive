@@ -17,10 +17,13 @@ tasks:
       - task: install:frontend:deps:{{.PACKAGE_MANAGER}}
 
   install:frontend:deps:npm:
-    dir: frontend
+    # The repo root owns the npm workspace (package.json, package-lock.json).
+    dir: ../..
     sources:
       - package.json
       - package-lock.json
+      - web/packages/ui/package.json
+      - cmd/desktop/frontend/package.json
     # task's fingerprint globber discards directory matches, so a `generates`
     # entry naming node_modules resolves to zero files and the task is never up
     # to date — npm ci then re-runs on every dev rebuild, deleting node_modules
@@ -86,6 +89,7 @@ tasks:
     sources:
       - "**/*"
       - exclude: node_modules/**/*
+      - ../../../web/packages/ui/src/**/*
     generates:
       - dist/**/*
     deps:
@@ -249,7 +253,7 @@ tasks:
       - >-
         docker build
         --build-arg CGO_ENABLED={{.CGO_ENABLED | default "0"}}
-        --build-arg GO_IMAGE={{.GO_IMAGE | default "golang:alpine"}}
+        --build-arg GO_IMAGE={{.GO_IMAGE | default "golang:1.27.3-alpine"}}
         --build-arg RUNTIME_IMAGE={{.RUNTIME_IMAGE | default "gcr.io/distroless/static-debian12"}}
         -t {{.TAG | default (printf "%s:latest" .APP_NAME)}}
         -f build/docker/Dockerfile.server .

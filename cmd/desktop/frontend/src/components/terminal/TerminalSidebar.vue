@@ -14,27 +14,27 @@ import IconPinOff from '~icons/lucide/pin-off'
 import IconPlus from '~icons/lucide/plus'
 import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
-import IconButton from '../ui/IconButton.vue'
-import AppMenu from '../ui/AppMenu.vue'
-import BaseBadge from '../ui/BaseBadge.vue'
-import EmptyState from '../ui/EmptyState.vue'
-import InlineError from '../ui/InlineError.vue'
-import Kbd from '../ui/Kbd.vue'
-import PanelResizeHandle from '../ui/PanelResizeHandle.vue'
-import TreeRail from '../ui/TreeRail.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
+import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
+import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
+import Kbd from '@hive/ui/components/ui/Kbd.vue'
+import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
+import TreeRail from '@hive/ui/components/ui/TreeRail.vue'
 import NewWindowMenu from '../NewWindowMenu.vue'
 import SessionRowMenu from '../SessionRowMenu.vue'
 import SidebarToolbar from '../sidebar/SidebarToolbar.vue'
 import { dropClass, dropEdge, useDragReorder } from '../../composables/useDragReorder'
 import { formatCombo, useKeybindings } from '../../composables/useKeybindings'
 import { useNewSession } from '../../composables/useNewSession'
-import { useResizablePanel } from '../../composables/useResizablePanel'
-import { useSelectionRail } from '../../composables/useSelectionRail'
+import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
+import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
 import { moveId, type OrderDropTarget } from '../../lib/listOrder'
 import { terminalTreeFocused } from '../../lib/terminalTree'
 import { sessionAgeDays, useTerminalSessionAge } from '../../stores/useTerminalSessionAge'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
-import type { MenuEntry } from '../../types/menu'
+import type { MenuEntry } from '@hive/ui/types/menu'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
 
@@ -119,6 +119,11 @@ function onChatMenuSelect(row: TerminalSessionRow, id: string): void {
   menus.openRow = ''
   if (id === 'unpin') tree.unpinSlug(row.slug)
   else if (id === 'open-in-agents') ops.openChatInAgents(row)
+}
+
+function terminalState(row: TerminalSessionRow): 'running' | 'stopped' | undefined {
+  if (tree.rowRunning(row)) return 'running'
+  return tree.rowIdle(row) ? 'stopped' : undefined
 }
 
 function runWindowAction(row: TerminalSessionRow, windowId: string, entryID: string): void {
@@ -318,13 +323,13 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                 >{{ group.sessions.length }}</span
               >
               <IconButton
-                v-if="group.kind === 'repo' && group.key"
+                v-if="group.kind === 'repo' && group.sessions[0]?.repo"
                 :label="`New session in ${group.name}`"
                 :icon="IconPlus"
                 size="sm"
                 class="row-action group-add"
                 data-testid="terminal-repo-new-session"
-                @click="openNewSession(group.key)"
+                @click="openNewSession(group.sessions[0].repo)"
               />
             </div>
             <component
@@ -387,6 +392,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                   v-if="menus.openRow === row.id"
                   :session="row"
                   scratch
+                  :terminal="terminalState(row)"
                   :flip="menus.rowFlip"
                   :ignore="[menus.rowToggle(row.id)]"
                   @close="menus.openRow = ''"
@@ -422,7 +428,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     <span
                       class="min-w-0 flex-1 truncate text-body"
                       :class="{ 'text-text-3': tree.rowIdle(row) }"
-                      :title="row.slug"
+                      :title="row.repo ? `${row.slug}\n${row.repo}` : row.slug"
                       >{{ row.name }}</span
                     >
                     <BaseBadge
@@ -498,6 +504,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                       <SessionRowMenu
                         v-else-if="menus.openRow === row.id"
                         :session="row"
+                        :terminal="terminalState(row)"
                         :extra="ops.sessionActionEntries"
                         :flip="menus.rowFlip"
                         :ignore="[menus.rowToggle(row.id)]"

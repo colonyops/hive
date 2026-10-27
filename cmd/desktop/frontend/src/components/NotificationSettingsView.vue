@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import AppSelect from './ui/AppSelect.vue'
-import AppSwitch from './ui/AppSwitch.vue'
-import BaseBadge from './ui/BaseBadge.vue'
-import InlineError from './ui/InlineError.vue'
+import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
+import AppSwitch from '@hive/ui/components/ui/AppSwitch.vue'
+import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
 import { useNotificationSettings, type NotificationDelivery } from '../composables/useNotificationSettings'
-import BaseButton from './ui/BaseButton.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 
 const {
   notificationsEnabled,

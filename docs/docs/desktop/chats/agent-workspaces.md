@@ -58,6 +58,10 @@ Drag image files or paste clipboard screenshots into a chat's terminal to give
 the agent visual context. See [Image input](../code/terminal-mode.md#image-input)
 for supported formats, limits, and saved clipboard images.
 
+Images that Pi draws show in the chat's terminal. Hive sets
+`PI_IMAGE_PROTOCOL=kitty` for chats it starts. See
+[Images in output](../code/terminal-mode.md#images-in-output).
+
 An Inbox item's **…** menu offers **Create Session** for Code and **Create Chat**
 for Chats. Both open the same dialog on the requested target; use its compact
 **Code** / **Chats** switch to change targets. A chat keeps the generated item
@@ -131,6 +135,22 @@ Use a standalone `mermaid` fence inside a Markdown block for a diagram. Mermaid 
 A Markdown document or a canvas can include front matter such as tags, status, or an owner. Hive displays it above the document. A canvas also shows automatic creation and update times. Collapse **Properties** to hide it; Hive uses that choice for every document. Agents replace a canvas's editable front matter with the `set_frontmatter` tool; `created_at` and `updated_at` are reserved and updated by Hive. Values can be text, numbers, booleans, empty values, or lists of those values. Copy and save include the metadata as YAML front matter and preserve Mermaid source in a fenced `mermaid` block.
 
 **Settings ▸ Drive** changes text size, line spacing, and text width for every document, in Chats and in Code. The text runs at a narrow reading width by default. **Wide** fits HTML laid out in columns, and **Full** runs to the edges of the view.
+
+### Comment on a document
+
+Comments live on the Drive page. The pane beside a chat or a Code session does not show them; open the document with **Open full page** to review it. Select text in a Markdown document and a comment box floats under it with the selection marked; drag it by its top row to move it out of the way. To comment on a whole paragraph, list item, heading, code block, or table, point at it and click the comment button beside it in the margin. While nothing else has focus, the keyboard goes to the box:
+
+- Start typing to write a comment, then press <kbd>⌘↵</kbd> or **Add Comment**.
+- Press <kbd>1</kbd> to <kbd>4</kbd> to apply a label: **Clarify this**, **Verify this**, **Needs tests**, or **Looks good**. The icons in the box are the same labels. Text you typed first follows the label. Change them under **Settings ▸ Drive ▸ Comment labels**, or with `review.labels` in [settings](../configuration/settings.md).
+- Press <kbd>Esc</kbd> to close the box.
+
+A comment is anchored to the text you selected and the lines it is on, and that text is highlighted. Comments sit in a column beside the document, each on the row of its text; drag the column's edge to resize it. The title bar's right button shows or hides the column, and so does **Toggle comments** in the command palette, or <kbd>⌘⇧M</kbd>. Select a comment to scroll to its text, or highlighted text to find its comment; every comment has **Edit** and **Delete**. Write a note for the agent at the bottom of the column.
+
+- **Copy All** puts the feedback on the clipboard: the document's path, then a numbered entry for the note and for each comment in document order, with its lines and the text it is about. The comments stay.
+- **Send to Agent** (<kbd>⌘↵</kbd> in the note) opens a list of the agents running now, in Code sessions and chats, with their status. Sending pastes the feedback into the agent as one message, submits it, and clears the comments. An agent that is working gets it mid-turn; an agent waiting on a prompt cannot be picked until the prompt is answered.
+- **Clear**, the trash button in the comments header, deletes the comments and the note after asking.
+
+Comments are kept in Hive's database, not in the file, and survive a restart. If the document changes after you comment, the panel says the comments are on an earlier version. Send, copy, or discard them before adding new ones. Renaming or moving a document leaves its comments behind.
 
 ### Reorganize
 

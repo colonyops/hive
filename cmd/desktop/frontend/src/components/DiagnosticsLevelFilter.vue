@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'
-import type { MenuEntry } from '../types/menu'
-import AppMenu from './ui/AppMenu.vue'
-import BaseButton from './ui/BaseButton.vue'
+import type { MenuEntry } from '@hive/ui/types/menu'
+import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 
 const props = defineProps<{ modelValue: string[] }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()

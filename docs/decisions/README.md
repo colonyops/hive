@@ -6,4 +6,8 @@ listing is the index: the filename's date orders it, the slug names it.
 Prose cites the slug alone: `(ADR terminal-transport)`. There is no number to
 allocate, so two branches can add an ADR without colliding. Add one with
 `mise run adr:new -- "Title of the decision"`; `mise run check:adr` keeps ids
-and citations consistent. Superseded ADRs are marked, not deleted.
+and citations consistent.
+
+An ADR states the decision as it holds today. When a later decision changes
+it, edit the ADR to match. When nothing in it still holds, delete it and
+repoint its citations.

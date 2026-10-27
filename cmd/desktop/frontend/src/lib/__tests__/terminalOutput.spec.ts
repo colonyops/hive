@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/xterm'
 import { ScreenTitleFilter, TerminalOutputWriter } from '../terminalOutput'
+import { KittyFilter } from '../kitty/kittyFilter'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -111,6 +112,20 @@ describe('TerminalOutputWriter', () => {
     vi.advanceTimersByTime(1000)
 
     expect(chunks.map((chunk) => decoder.decode(chunk))).toEqual(['REPAINTED'])
+  })
+
+  it('runs its stream filter ahead of everything else and resets it with the writer', () => {
+    const chunks: Uint8Array[] = []
+    const filter = new KittyFilter('n')
+    const output = new TerminalOutputWriter((data) => {
+      chunks.push(data)
+    }, filter)
+
+    output.write(encoder.encode('a\x1b_Gi=1;AA\x1b\\\x1bkname\x1b\\b\x1b_'))
+    output.reset()
+    output.write(encoder.encode('Gc'))
+
+    expect(chunks.map((chunk) => decoder.decode(chunk))).toEqual(['a\x1b]71137;n;i=1;AA\x1b\\b', 'Gc'])
   })
 
   it('releases an unterminated redraw instead of stalling the terminal', () => {

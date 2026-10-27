@@ -45,6 +45,8 @@ A space is a folder under the root:
 
 Hive Desktop shows the same tree in its Drive view, so a file you write from a terminal, an editor, or Obsidian appears there, and the reverse. See [Chats](../../desktop/chats/agent-workspaces.md#drive) and [Code](../../desktop/code/terminal-mode.md#drive).
 
+To share documents with other people, [push them to a drive server](../drive-server/cli.md) that you [run yourself](../drive-server/deploy.md).
+
 ### Initialization
 
 Initialize the drive folder for your repository:
@@ -85,7 +87,7 @@ hive drive spaces        # the space keys
 hive drive prune --older-than 30d
 ```
 
-`hive drive spaces` prints each space's kind and key, such as `repository  my-org/my-repo`, `workspace  workspaces/hive`, and `shared  shared`. Another repository or the shared space is `hive drive -r owner/repo ls` or `hive drive -s ls`; `--all` cannot combine with `-r` or `-s`. `prune` removes files older than the given age.
+`hive drive spaces` prints each space's kind and key, such as `repository  my-org/my-repo`, `workspace  workspaces/hive`, and `shared  shared`. Another repository or the shared space is `hive drive -r owner/repo ls` or `hive drive -s ls`. A Chats workspace is `hive drive -w hive ls`. `--all` cannot combine with `-r`, `-s`, or `-w`. `prune` removes files older than the given age.
 
 ### Finding Documents
 

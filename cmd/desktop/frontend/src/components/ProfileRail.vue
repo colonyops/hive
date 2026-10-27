@@ -5,8 +5,8 @@ import IconPlus from '~icons/lucide/plus'
 import { dropClass, dropEdge, useDragReorder } from '../composables/useDragReorder'
 import { moveId, type OrderDropTarget } from '../lib/listOrder'
 import type { Profile } from '../types/feed'
-import AppTooltip from './ui/AppTooltip.vue'
-import IconButton from './ui/IconButton.vue'
+import AppTooltip from '@hive/ui/components/ui/AppTooltip.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 
 const props = defineProps<{ profiles: Profile[]; activeProfileId: string }>()
 const emit = defineEmits<{

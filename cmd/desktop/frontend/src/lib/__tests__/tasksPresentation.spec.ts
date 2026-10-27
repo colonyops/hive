@@ -6,9 +6,11 @@ import {
   cascadeCount,
   checkpointBody,
   filterCounts,
+  groupByStatus,
   isCheckpoint,
   matchesTaskFilter,
   statusMeta,
+  subtaskCounts,
   TASK_FILTERS,
 } from '../tasksPresentation'
 
@@ -238,5 +240,43 @@ describe('statusMeta', () => {
 
   it('falls back to the open styling for an unknown status', () => {
     expect(statusMeta('unknown')).toEqual(statusMeta('open'))
+  })
+})
+
+describe('groupByStatus', () => {
+  it('keeps an empty group for every status, in workflow order, each newest first', () => {
+    const groups = groupByStatus([
+      task({ id: 'a', updatedAt: day(1) }),
+      task({ id: 'b', updatedAt: day(3) }),
+      task({ id: 'c', status: 'done' }),
+    ])
+    expect(groups.map((group) => [group.status, group.items.map((item) => item.id)])).toEqual([
+      ['open', ['b', 'a']],
+      ['in_progress', []],
+      ['done', ['c']],
+      ['cancelled', []],
+    ])
+  })
+
+  it('files an unknown status under open and narrows by the search', () => {
+    const groups = groupByStatus(
+      [task({ id: 'a', status: 'mystery', title: 'Fix login' }), task({ id: 'b', title: 'Write docs' })],
+      'LOGIN',
+    )
+    expect(groups.find((group) => group.status === 'open')?.items.map((item) => item.id)).toEqual(['a'])
+  })
+})
+
+describe('subtaskCounts', () => {
+  it('counts every descendant of each parent and skips leaves', () => {
+    const counts = subtaskCounts([
+      task({ id: 'e', type: 'epic' }),
+      task({ id: 'a', parentId: 'e', status: 'done' }),
+      task({ id: 'b', parentId: 'e' }),
+      task({ id: 'b1', parentId: 'b', status: 'cancelled' }),
+    ])
+    expect(counts.get('e')).toEqual({ done: 2, total: 3 })
+    expect(counts.get('b')).toEqual({ done: 1, total: 1 })
+    expect(counts.has('a')).toBe(false)
   })
 })

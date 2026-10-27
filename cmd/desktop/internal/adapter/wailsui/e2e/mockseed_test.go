@@ -17,7 +17,7 @@ import (
 // fixtureFlowPath is repo-relative from this package: the Playwright
 // harness owns the file, this package owns the seed constants it must agree
 // with, and this test is the bijection between them.
-const fixtureFlowPath = "../../../../e2e/fixtures/flows/frontend-triage.yaml"
+const fixtureFlowPath = "../../../../e2e/testdata/flows/frontend-triage.yaml"
 
 type testFlowRefs struct {
 	actions map[string]bool

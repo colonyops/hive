@@ -8,6 +8,7 @@ import (
 )
 
 const promotedStatus = `?? cmd/desktop/releasenotes/changelog/0.5.0.md
+?? cmd/drive-server/releasenotes/changelog/0.5.0.md
 ?? cmd/hive/releasenotes/changelog/0.5.0.md
  D cmd/desktop/releasenotes/changelog/unreleased/20260912T135002-a-thing.md
  D cmd/hive/releasenotes/changelog/unreleased/20260912T135003-another-thing.md
@@ -25,7 +26,11 @@ func TestParsePromotedStatus(t *testing.T) {
 	for _, entry := range found.entries {
 		paths = append(paths, entry.path)
 	}
-	want := []string{"cmd/desktop/releasenotes/changelog/0.5.0.md", "cmd/hive/releasenotes/changelog/0.5.0.md"}
+	want := []string{
+		"cmd/desktop/releasenotes/changelog/0.5.0.md",
+		"cmd/drive-server/releasenotes/changelog/0.5.0.md",
+		"cmd/hive/releasenotes/changelog/0.5.0.md",
+	}
 	if strings.Join(paths, ",") != strings.Join(want, ",") {
 		t.Errorf("entries = %v, want %v", paths, want)
 	}

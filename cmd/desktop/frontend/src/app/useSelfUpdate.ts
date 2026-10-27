@@ -1,6 +1,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useWailsEvent } from '../composables/useWailsEvent'
-import type { Confirmation } from '../composables/useConfirmation'
+import type { Confirmation } from '@hive/ui/composables/useConfirmation'
 import {
   InstallUpdate,
   Status,

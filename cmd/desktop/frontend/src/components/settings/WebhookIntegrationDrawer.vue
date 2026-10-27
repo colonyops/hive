@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import IconButton from '../ui/IconButton.vue'
-import InlineError from '../ui/InlineError.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 // Local webhook listener settings. Both controls here are startup-time
 // decisions — the listener binds a port and serves flow-declared routes — so
 // the drawer's job is to persist them and be honest about the pending
@@ -8,13 +8,13 @@ import InlineError from '../ui/InlineError.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import IconWebhook from '~icons/lucide/webhook'
 import IconRefresh from '~icons/lucide/refresh-cw'
-import AppSwitch from '../ui/AppSwitch.vue'
-import BaseButton from '../ui/BaseButton.vue'
-import DrawerSheet from '../ui/DrawerSheet.vue'
-import FormField from '../ui/FormField.vue'
-import TextInput from '../ui/TextInput.vue'
+import AppSwitch from '@hive/ui/components/ui/AppSwitch.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import DrawerSheet from '@hive/ui/components/ui/DrawerSheet.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
+import TextInput from '@hive/ui/components/ui/TextInput.vue'
 import { useWebhookSettings } from '../../stores/useWebhookSettings'
-import CopyButton from '../ui/CopyButton.vue'
+import CopyButton from '@hive/ui/components/ui/CopyButton.vue'
 
 const emit = defineEmits<{ close: [] }>()
 

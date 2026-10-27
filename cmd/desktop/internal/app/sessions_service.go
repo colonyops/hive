@@ -25,6 +25,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/execenv"
+	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/platform/promptfile"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/pkg/osopen"
@@ -126,9 +127,9 @@ type SessionsService struct {
 	catalog           *actions.ActionStore
 	dispatcher        *dispatch.Dispatcher
 	recorder          activity.Recorder
-	// pullRequests is nil in a build with no GitHub client, which reads as
+	// forges is nil in a build with no GitHub client, which reads as
 	// disconnected.
-	pullRequests  *sessionPullRequests
+	forges        *sessionForges
 	execEnv       *execenv.Resolver
 	editorCommand EditorCommandReader
 	// defaultAgentEnv is never nil: newSessionsService substitutes
@@ -176,7 +177,7 @@ type SessionsDeps struct {
 	Catalog       *actions.ActionStore
 	Dispatcher    *dispatch.Dispatcher
 	Recorder      activity.Recorder
-	PullRequests  *sessionPullRequests
+	Forges        *sessionForges
 	ExecEnv       *execenv.Resolver
 	// EditorCommand reads the configured editor from settings on every call,
 	// so a settings change applies without restarting. nil means
@@ -210,7 +211,7 @@ func newSessionsService(d SessionsDeps) *SessionsService {
 		catalog:           d.Catalog,
 		dispatcher:        d.Dispatcher,
 		recorder:          d.Recorder,
-		pullRequests:      d.PullRequests,
+		forges:            d.Forges,
 		execEnv:           d.ExecEnv,
 		editorCommand:     d.EditorCommand,
 		defaultAgentEnv:   d.DefaultAgentEnv,
@@ -340,7 +341,7 @@ func (s *SessionsService) ItemChats(ctx context.Context, itemID int64) ([]ItemCh
 
 // ItemSessions returns the hive sessions an inbox item spawned, newest first,
 // joined to the state hive reports for them now. The read is also what
-// reconciles (ADR macos-dmg-installer).
+// reconciles (ADR a-session-can-link-to-many-inbox-items).
 func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]ItemSessionView, error) {
 	ref, err := s.items.RefByID(ctx, itemID)
 	if err != nil {
@@ -440,10 +441,10 @@ func (s *SessionsService) SessionGitStatus(ctx context.Context, id string) (gits
 // costs a git subprocess the caller has just paid for, and the two halves
 // refresh on different cadences.
 func (s *SessionsService) SessionPullRequest(ctx context.Context, key SessionPullRequestKey, refresh bool) (SessionPullRequest, error) {
-	if s.pullRequests == nil {
+	if s.forges == nil {
 		return SessionPullRequest{Status: PullRequestStatusDisconnected}, nil
 	}
-	return s.pullRequests.Lookup(ctx, key, refresh)
+	return s.forges.Lookup(ctx, key, refresh)
 }
 
 // OpenSessionInEditor launches the configured editor on the session's
@@ -468,6 +469,13 @@ func (s *SessionsService) RevealSession(ctx context.Context, id string) error {
 		return err
 	}
 	return Wrap(osopen.Open(dir), KindInternal, "opening %s", dir)
+}
+
+func (s *SessionsService) repoURL(remote string) string {
+	if s.forges == nil {
+		return git.WebURL(remote)
+	}
+	return s.forges.RepoURL(remote)
 }
 
 // sessionCheckout resolves the directory a session's own record names, which

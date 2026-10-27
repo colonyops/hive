@@ -20,6 +20,14 @@ IMAGE_TAG="${HIVE_E2E_IMAGE_TAG:-hive-desktop-e2e:local}"
 # 256-bit marker. A direct host Playwright invocation therefore cannot start
 # the e2e servers.
 E2E_HARNESS_MARKER="$(openssl rand -hex 32)"
+
+# The frontend and the headless server build here, not in the image, so they
+# reuse the host's npm and Go caches. The server embeds the frontend, has no
+# cgo, and cross-compiles for whatever architecture the Docker server runs.
+(cd cmd/desktop/frontend && npm run build)
+CGO_ENABLED=0 GOOS=linux GOARCH="$(docker version --format '{{.Server.Arch}}')" \
+  go build -tags server -o cmd/desktop/e2e/.build/hive-desktop-server ./cmd/desktop
+
 docker build --file cmd/desktop/e2e/Dockerfile --tag "${IMAGE_TAG}" .
 
 # Mount the results dirs out of the --rm container so failure traces and

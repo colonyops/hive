@@ -13,7 +13,7 @@
 # the builder and runtime libc compatible (a glibc builder -> a glibc runtime).
 # The Taskfile passes these through: task build:docker CGO_ENABLED=1 GO_IMAGE=... RUNTIME_IMAGE=...
 
-ARG GO_IMAGE=golang:alpine
+ARG GO_IMAGE=golang:1.27.3-alpine
 ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian12
 ARG CGO_ENABLED=0
 

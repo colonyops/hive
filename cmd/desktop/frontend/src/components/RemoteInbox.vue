@@ -5,9 +5,9 @@ import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { useRemoteConnection } from '../stores/useRemoteConnection'
 import { useResource, type Resource } from '../stores/useResource'
 import type { RemoteInboxItem } from '../lib/remoteInboxClient'
-import BaseButton from './ui/BaseButton.vue'
-import InlineError from './ui/InlineError.vue'
-import EmptyState from './ui/EmptyState.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
+import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 
 const catalog = useRemoteCatalog()
 const { activeProfile, color } = useRemoteConnection()
