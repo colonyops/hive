@@ -5,9 +5,9 @@ import { useRouter } from 'vue-router'
 import { useRemoteConnection } from '../stores/useRemoteConnection'
 import { useIntervalFn } from '@vueuse/core'
 import { useCommands, type Command } from '../composables/useCommands'
-import BaseButton from './ui/BaseButton.vue'
-import EmptyState from './ui/EmptyState.vue'
-import InlineError from './ui/InlineError.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import RemoteTerminal from './RemoteTerminal.vue'
 
 const props = defineProps<{ active: boolean }>()

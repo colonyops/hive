@@ -1,7 +1,13 @@
 name: Set up Go environment
-description: Go from go.mod, then mise tools
+description: Go from go.mod, a Go cache that main keeps fresh, then mise tools
 
 inputs:
+  cache-name:
+    description: Names this job's Go cache. A job that compiles differently (race, lint, cross-builds) needs its own name.
+    required: true
+  desktop-deps:
+    description: Install the GTK4 and WebKitGTK headers. Anything that builds or typechecks the Wails package needs them.
+    default: "true"
   mise-install-args:
     description: Passed to jdx/mise-action install_args. Empty installs every tool.
     default: ""
@@ -9,18 +15,82 @@ inputs:
 runs:
   using: composite
   steps:
-    # Every Go job builds the desktop's Wails package, which needs the GTK4 and
-    # WebKitGTK 6.0 headers on Linux. tmux is a test dependency: the terminal
-    # integration tests attach a real control-mode client and skip without it.
-    - name: Install Linux desktop build dependencies
+    - id: image
       shell: bash
-      run: sudo apt-get update -q && sudo apt-get install -y -q libgtk-4-dev libwebkitgtk-6.0-dev tmux
+      run: echo "id=$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+
+    # The .debs are cached because the Azure mirror sometimes serves them at
+    # 100 kB/s, which turned a 30s install into 12 minutes. The key carries the
+    # runner image so a new image starts from its own package versions.
+    - if: inputs.desktop-deps == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/apt-archives
+        key: apt-${{ runner.arch }}-${{ hashFiles('.github/actions/setup-go-env/action.yml') }}-${{ steps.image.outputs.id }}
+        restore-keys: apt-${{ runner.arch }}-${{ hashFiles('.github/actions/setup-go-env/action.yml') }}-
+
+    # tmux is a test dependency: the terminal integration tests attach a real
+    # control-mode client and skip without it. The runner's Microsoft and
+    # Azure CLI sources hold none of these packages, and a 403 from them has
+    # failed apt-get update for other Wails projects (wailsapp/wails#6040).
+    - if: inputs.desktop-deps == 'true'
+      shell: bash
+      run: |
+        sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list /etc/apt/sources.list.d/azure-cli.list
+        archives="$HOME/.cache/apt-archives"
+        mkdir -p "$archives/partial"
+        sudo apt-get update -q
+        sudo apt-get install -y -q --no-install-recommends -o Dir::Cache::Archives="$archives" \
+          libgtk-4-dev libwebkitgtk-6.0-dev tmux
+        sudo apt-get autoclean -q -o Dir::Cache::Archives="$archives"
+        sudo rm -f "$archives/lock"
+        sudo chown -R "$(id -u):$(id -g)" "$archives"
 
     - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
-        cache-dependency-path: go.sum
+        cache: false
 
+    - id: go
+      shell: bash
+      run: |
+        {
+          echo "version=$(go env GOVERSION)"
+          echo "build-cache=$(go env GOCACHE)"
+          echo "mod-cache=$(go env GOMODCACHE)"
+        } >> "$GITHUB_OUTPUT"
+
+    # Only a push to main saves, under a key unique to the commit, so every
+    # run restores the newest main cache. setup-go's own cache keys on go.sum
+    # alone and never saves on a hit, which froze the build and test cache
+    # until the next dependency change. Restoring an older cache is safe:
+    # Go and golangci-lint address their cache entries by content.
+    - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ${{ steps.go.outputs.build-cache }}
+          ${{ steps.go.outputs.mod-cache }}
+          ~/.cache/golangci-lint
+        key: go-${{ runner.os }}-${{ steps.go.outputs.version }}-${{ inputs.cache-name }}-${{ github.sha }}
+        restore-keys: go-${{ runner.os }}-${{ steps.go.outputs.version }}-${{ inputs.cache-name }}-
+
+    - if: github.event_name != 'push' || github.ref != 'refs/heads/main'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ${{ steps.go.outputs.build-cache }}
+          ${{ steps.go.outputs.mod-cache }}
+          ~/.cache/golangci-lint
+        key: go-${{ runner.os }}-${{ steps.go.outputs.version }}-${{ inputs.cache-name }}-${{ github.sha }}
+        restore-keys: go-${{ runner.os }}-${{ steps.go.outputs.version }}-${{ inputs.cache-name }}-
+
+    # The default key hashes every mise.toml, and the root one holds the task
+    # definitions, so editing a task threw away every installed tool. mise.lock
+    # pins every tool, and `mise install --locked` fails on any drift from it.
     - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      env:
+        MISE_LOCK_HASH: ${{ hashFiles('mise.lock') }}
       with:
         install_args: ${{ inputs.mise-install-args }}
+        cache_key: "{{cache_key_prefix}}-{{platform}}{{#if install_args_hash}}-{{install_args_hash}}{{/if}}-{{env.MISE_LOCK_HASH}}"

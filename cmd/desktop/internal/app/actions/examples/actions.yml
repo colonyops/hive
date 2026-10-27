@@ -5,7 +5,7 @@ actions:
     type: launch-session
     show_in_detail: true
     applies_to: [pr]
-    repo_template: "https://github.com/{{ .Payload.repo }}.git"
+    repo_template: "{{ .ItemRemote }}"
     prompt_template: |
       Review pull request {{ .Payload.title }}
 
@@ -16,7 +16,7 @@ actions:
     show_in_detail: true
     applies_to: [issue]
     agent: claude
-    repo_template: "https://github.com/{{ .Payload.repo }}.git"
+    repo_template: "{{ .ItemRemote }}"
     prompt_template: |
       Work on the issue at {{ .Payload.url }}.
 
@@ -57,6 +57,12 @@ actions:
     targets: [session]
     timeout: "10m"
     command_template: 'mise run test'
+  - id: open-ci
+    label: Open CI
+    type: shell
+    targets: [statusbar]
+    icon: activity
+    command_template: 'open {{ printf "%s/actions" .Session.WebURL | shq }}'
   - id: interrupt-window
     label: Interrupt agent
     type: shell

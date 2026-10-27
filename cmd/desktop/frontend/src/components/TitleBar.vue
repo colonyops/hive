@@ -17,10 +17,10 @@ import IconArrowUpCircle from '~icons/lucide/arrow-up-circle'
 import JobsPopover from './JobsPopover.vue'
 import TitleBarMenu from './TitleBarMenu.vue'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
-import IconButton from './ui/IconButton.vue'
-import Kbd from './ui/Kbd.vue'
-import Spinner from './ui/Spinner.vue'
-import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedControl.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import Kbd from '@hive/ui/components/ui/Kbd.vue'
+import Spinner from '@hive/ui/components/ui/Spinner.vue'
+import SegmentedControl, { type SegmentedControlOption } from '@hive/ui/components/ui/SegmentedControl.vue'
 
 // One button grammar for the whole chrome, with a fixed slot per zone. The bar
 // is two clusters, not three centered columns — a window-centered palette sat
@@ -60,7 +60,7 @@ import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedCon
 // canToggleSidebar disables the toggle in views with no left panel (settings,
 // flows, onboarding). previewCollapsed/canTogglePreview are the same pair for
 // the right-hand pane — the detail preview in Inbox, the drive in Chats and
-// Code. previewUnseen is that pane's attention dot: an agent wrote to a
+// Code, the comments on the Drive page. previewUnseen is that pane's attention dot: an agent wrote to a
 // document that is not on screen. updateAvailable renders a click-to-install chip in
 // the right cluster, independent of profileName so it can show during
 // onboarding too.
@@ -112,7 +112,10 @@ const modeOptions: SegmentedControlOption<'hub' | 'terminal' | 'agents'>[] = [
   { value: 'agents', label: 'Chats', title: 'Chats' },
 ]
 const modeIcons = { hub: IconInbox, terminal: IconCode, agents: IconMessagesSquare }
-const rightPane = computed(() => (props.mode === 'terminal' || props.mode === 'agents' ? 'drive' : 'preview'))
+const rightPane = computed(() => {
+  if (props.mode === 'drive') return 'comments'
+  return props.mode === 'terminal' || props.mode === 'agents' ? 'drive' : 'preview'
+})
 const jobsRoot = ref<HTMLElement | null>(null)
 const jobsOpen = ref(false)
 

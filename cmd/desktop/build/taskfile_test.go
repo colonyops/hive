@@ -32,8 +32,12 @@ func TestFrontendInstallIsSkippableWhenLockfileIsUnchanged(t *testing.T) {
 	}
 	require.NoError(t, node.Decode(&install))
 
-	assert.Equal(t, []string{"package.json", "package-lock.json"}, install.Sources,
-		"npm ci must still re-run when either lockfile input changes")
+	assert.Equal(t, []string{
+		"package.json",
+		"package-lock.json",
+		"web/packages/ui/package.json",
+		"cmd/desktop/frontend/package.json",
+	}, install.Sources, "npm ci must still re-run when a workspace manifest or the lockfile changes")
 	assert.Equal(t, []string{"node_modules/.package-lock.json"}, install.Generates,
 		"generates must name a file npm writes, never the node_modules directory")
 }

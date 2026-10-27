@@ -5,14 +5,18 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/colonyops/hive/pkg/osopen"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
@@ -20,6 +24,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/mcpcatalog"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/prompts"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/ptyterm"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/schedule"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
@@ -216,6 +221,45 @@ func (s *AgentWorkspacesService) lookPath() func(context.Context, string) (strin
 		return nil
 	}
 	return s.execEnv.LookPath
+}
+
+// AddDriveMCP installs Hive Drive in the selected agent's user configuration.
+func (s *AgentWorkspacesService) AddDriveMCP(ctx context.Context, agent, url string) error {
+	var command string
+	var args []string
+	switch agent {
+	case "claude":
+		command = "claude"
+		args = []string{"mcp", "add", "--scope", "user", "--transport", "http", "hive-drive", url}
+	case "codex":
+		command = "codex"
+		args = []string{"mcp", "add", "hive-drive", "--url", url}
+	default:
+		return Errorf(KindInvalid, "MCP setup is not supported for agent %q", agent)
+	}
+	var path string
+	var err error
+	if s.execEnv == nil {
+		path, err = osexec.LookPath(command)
+	} else {
+		path, err = s.execEnv.LookPath(ctx, command)
+	}
+	if err != nil {
+		return Wrap(err, KindUnavailable, "could not find %s on the login-shell PATH", command)
+	}
+	cmd := osexec.CommandContext(ctx, path, args...)
+	if s.execEnv != nil {
+		cmd.Env = s.execEnv.Environ(ctx)
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		message := strings.TrimSpace(string(output))
+		if message == "" {
+			return Wrap(err, KindInternal, "adding Hive Drive to %s", agent)
+		}
+		return Wrap(err, KindInternal, "adding Hive Drive to %s: %s", agent, message)
+	}
+	return nil
 }
 
 // WorkspaceView is one row of the area's list. Command is on it because a
@@ -1543,6 +1587,7 @@ func (s *AgentWorkspacesService) launchTerminal(ctx context.Context, rec stores.
 	env := []string{
 		"HIVE_AGENT_SESSION=" + rec.ID,
 		"HIVE_AGENT_WORKSPACE=" + opts.dir,
+		ptyterm.ImageProtocolEnv,
 	}
 	if rec.EndToken != "" {
 		env = append(env, "HIVE_AGENT_SESSION_TOKEN="+rec.EndToken)
@@ -1825,6 +1870,75 @@ func skillIDFromSlug(slug string) (id string, ok bool) {
 	}
 	id = strings.TrimPrefix(slug, prefix)
 	return id, id != ""
+}
+
+// RunningChat is a chat whose tmux session is live, with its agent's pane
+// and status.
+type RunningChat struct {
+	ID        string
+	Workspace string
+	Name      string
+	// Pane is the first pane of the chat's tmux session, where the agent was
+	// launched.
+	Pane   string
+	Status terminal.Status
+}
+
+// RunningChats lists the live chats with their agent pane and status. One
+// tmux call finds the live sessions, so the cost follows the running chats
+// rather than every chat ever saved. A chat whose pane cannot be read is
+// left out.
+func (s *AgentWorkspacesService) RunningChats(ctx context.Context) ([]RunningChat, error) {
+	records, err := s.sessions.ListAll(ctx)
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "listing all sessions")
+	}
+	names := make([]string, 0, len(records))
+	for _, rec := range records {
+		names = append(names, sessionName(rec))
+	}
+	live, err := s.terminals.ListIndexedWindows(ctx, names)
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "listing running chats")
+	}
+
+	var (
+		mu      sync.Mutex
+		running []RunningChat
+		group   errgroup.Group
+	)
+	group.SetLimit(maxConcurrentAgentSessions)
+	for _, rec := range records {
+		name := sessionName(rec)
+		if len(live[name]) == 0 {
+			continue
+		}
+		group.Go(func() error {
+			pane, err := s.terminals.FirstPane(ctx, name)
+			if err != nil {
+				return nil
+			}
+			screen, err := s.terminals.CapturePaneID(ctx, pane)
+			if err != nil {
+				return nil
+			}
+			chat := RunningChat{
+				ID: rec.ID, Workspace: rec.Workspace, Name: rec.Name,
+				Pane: pane, Status: classifyAgentScreen(rec.Agent, screen),
+			}
+			mu.Lock()
+			running = append(running, chat)
+			mu.Unlock()
+			return nil
+		})
+	}
+	_ = group.Wait()
+	order := make(map[string]int, len(records))
+	for i, rec := range records {
+		order[rec.ID] = i
+	}
+	slices.SortFunc(running, func(a, b RunningChat) int { return order[a.ID] - order[b.ID] })
+	return running, nil
 }
 
 // AllSessions lists every session across every workspace, newest record

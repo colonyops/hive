@@ -4,7 +4,8 @@
 // second copy of the colours in TypeScript to drift from the stylesheet.
 // The selected ring sits on the outer button, outside that scope, so it stays
 // in the *current* theme's accent rather than the one being previewed.
-import { themeLabels, themes, type Theme } from '../../composables/useTheme'
+import { themes, type Theme } from '@hive/ui/lib/themes'
+import { themeLabels } from '../../composables/useTheme'
 
 defineProps<{
   modelValue: Theme

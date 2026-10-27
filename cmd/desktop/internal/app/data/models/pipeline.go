@@ -206,7 +206,7 @@ type FeedClaim struct {
 
 // ItemRef identifies an inbox item by inbox_item's own UNIQUE key rather than
 // by its row id, which ActivateReplay does not preserve (ADR
-// an-item-session-link-is-desktop-state-keyed-on-item-coordinates).
+// a-session-can-link-to-many-inbox-items).
 type ItemRef struct {
 	ProfileID   string `json:"profileId"`
 	SourceKind  string `json:"sourceKind"`

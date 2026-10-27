@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import InlineError from './ui/InlineError.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { computed, onMounted, ref } from 'vue'
 import IconLifeBuoy from '~icons/lucide/life-buoy'
 import IconCheck from '~icons/lucide/check'
-import BaseButton from './ui/BaseButton.vue'
-import BaseModal from './ui/BaseModal.vue'
-import AppSwitch from './ui/AppSwitch.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import BaseModal from '@hive/ui/components/ui/BaseModal.vue'
+import AppSwitch from '@hive/ui/components/ui/AppSwitch.vue'
 import { useReportProblem } from '../composables/useReportProblem'
 
 const emit = defineEmits<{ close: [] }>()

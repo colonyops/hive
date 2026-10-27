@@ -104,7 +104,7 @@ func TestGroupSessionsByRepo(t *testing.T) {
 				remote   string
 				sessions []string
 			}{
-				{name: "(no remote)", remote: "(no remote)", sessions: []string{"s1", "s3"}},
+				{name: "(no remote)", remote: "", sessions: []string{"s1", "s3"}},
 				{name: "repo", remote: "git@github.com:user/repo.git", sessions: []string{"s2"}},
 			},
 		},
@@ -119,6 +119,25 @@ func TestGroupSessionsByRepo(t *testing.T) {
 				sessions []string
 			}{
 				{name: "my-repo", remote: "https://github.com/user/my-repo.git", sessions: []string{"s1"}},
+			},
+		},
+		{
+			name: "equivalent remotes share a group led by the local repo",
+			sessions: []session.Session{
+				{Name: "s1", Remote: "git@github.com:user/alpha.git"},
+				{Name: "zeta", Remote: "https://gitlab.com/team/repo.git"},
+				{Name: "beta", Remote: "git@gitlab.com:team/repo.git"},
+				{Name: "other-host", Remote: "git@github.com:team/repo.git"},
+			},
+			localRemote: "ssh://git@gitlab.com/team/repo",
+			wantGroups: []struct {
+				name     string
+				remote   string
+				sessions []string
+			}{
+				{name: "repo", remote: "git@gitlab.com:team/repo.git", sessions: []string{"beta", "zeta"}},
+				{name: "alpha", remote: "git@github.com:user/alpha.git", sessions: []string{"s1"}},
+				{name: "repo", remote: "git@github.com:team/repo.git", sessions: []string{"other-host"}},
 			},
 		},
 	}
@@ -303,7 +322,6 @@ func TestExtractGroupName(t *testing.T) {
 		{"git@github.com:user/hive.git", "hive"},
 		{"https://github.com/user/my-repo.git", "my-repo"},
 		{"", "(no remote)"},
-		{"(no remote)", "(no remote)"},
 	}
 
 	for _, tt := range tests {

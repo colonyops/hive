@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import IconTerminal from '~icons/lucide/terminal'
-import AppMenu from './ui/AppMenu.vue'
+import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import { agentIcon } from '../lib/agentIcon'
-import type { MenuEntry } from '../types/menu'
+import type { MenuEntry } from '@hive/ui/types/menu'
 
 const props = defineProps<{
   running: boolean

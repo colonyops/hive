@@ -14,11 +14,11 @@ import IconFileText from '~icons/lucide/file-text'
 import IconFolder from '~icons/lucide/folder'
 import IconFolderOpen from '~icons/lucide/folder-open'
 import IconRotateCcw from '~icons/lucide/rotate-ccw'
-import { useClipboard } from '../../composables/useClipboard'
-import IconButton from '../ui/IconButton.vue'
-import BaseBadge from '../ui/BaseBadge.vue'
-import BaseIconBadge from '../ui/BaseIconBadge.vue'
-import BaseButton from '../ui/BaseButton.vue'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
+import BaseIconBadge from '@hive/ui/components/ui/BaseIconBadge.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 
 const props = withDefaults(
   defineProps<{

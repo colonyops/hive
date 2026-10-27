@@ -12,12 +12,12 @@ import type {
   Profile,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf/models'
 import type { DraftWorkspace } from '../composables/useHiveSetup'
-import IconButton from './ui/IconButton.vue'
-import AppCheckbox from './ui/AppCheckbox.vue'
-import AppSelect from './ui/AppSelect.vue'
-import TextInput from './ui/TextInput.vue'
-import BaseButton from './ui/BaseButton.vue'
-import BaseBadge from './ui/BaseBadge.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import AppCheckbox from '@hive/ui/components/ui/AppCheckbox.vue'
+import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
+import TextInput from '@hive/ui/components/ui/TextInput.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
 
 const props = defineProps<{
   agents: AgentOption[]

@@ -3,8 +3,8 @@
 // FeedEditorSheet's filter groups. Globs may contain commas via brace
 // expansion ("acme/{a,b}"), so lines are never comma-split.
 import { computed } from 'vue'
-import FormField from '../../components/ui/FormField.vue'
-import TextArea from '../../components/ui/TextArea.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
+import TextArea from '@hive/ui/components/ui/TextArea.vue'
 
 const props = defineProps<{
   label?: string

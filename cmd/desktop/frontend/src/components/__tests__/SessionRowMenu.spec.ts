@@ -8,6 +8,7 @@ const session: SessionSummary = {
   name: 'review 81',
   slug: 'review-81',
   repo: 'acme/site',
+  repoIdentity: 'acme/site',
   state: 'active',
   canvasOwner: 'acme/site',
   createdAt: '2026-10-01T12:00:00Z',
@@ -48,6 +49,20 @@ describe('SessionRowMenu', () => {
     expect(recycled.find('[data-testid="session-menu-kill"]').exists()).toBe(false)
     expect(recycled.find('[data-testid="session-menu-recycle"]').exists()).toBe(false)
     expect(recycled.find('[data-testid="session-menu-delete"]').exists()).toBe(true)
+  })
+
+  it('offers Start only while the terminal is stopped and Kill only while it runs', () => {
+    const running = mountMenu({ terminal: 'running' })
+    expect(running.find('[data-testid="session-menu-start"]').exists()).toBe(false)
+    expect(running.get('[data-testid="session-menu-kill"]').text()).toBe('Stop session…')
+
+    const stopped = mountMenu({ terminal: 'stopped' })
+    expect(stopped.get('[data-testid="session-menu-start"]').text()).toBe('Start session')
+    expect(stopped.find('[data-testid="session-menu-kill"]').exists()).toBe(false)
+
+    const scratch = mountMenu({ scratch: true, terminal: 'running' })
+    expect(scratch.find('[data-testid="session-menu-start"]').exists()).toBe(false)
+    expect(scratch.get('[data-testid="session-menu-kill"]').text()).toBe('Stop terminal…')
   })
 
   // The scratch terminal's tmux session is the whole thing: there is no record

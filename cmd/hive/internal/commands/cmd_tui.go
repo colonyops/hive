@@ -79,8 +79,6 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	// Detect current repository remote for highlighting current repo
 	localRemote, _ := cmd.app.Sessions().DetectRemote(ctx, ".")
 
-	source, _ := os.Getwd()
-
 	deps := tui.Deps{
 		Logger:        cmd.app.Logger,
 		Config:        cmd.app.Config,
@@ -108,7 +106,6 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	}
 	opts := tui.Opts{
 		LocalRemote: localRemote,
-		Source:      source,
 		Warnings:    warnings,
 		ConfigPath:  cmd.flags.ConfigPath,
 	}

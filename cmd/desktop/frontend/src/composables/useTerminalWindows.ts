@@ -1,4 +1,4 @@
-import { effectScope, markRaw, nextTick, ref, type Ref } from 'vue'
+import { effectScope, markRaw, nextTick, ref, watch, type Ref } from 'vue'
 import { SearchAddon, type ISearchOptions } from '@xterm/addon-search'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 // Rides the async terminal chunk on purpose: ~10MB of glyphs nobody pays for
@@ -16,12 +16,14 @@ import {
   type WindowState,
 } from '../lib/terminalClient'
 import { resetTerminalFacesForTests } from '../lib/terminalFaces'
+import { scrollbarWidthFor, useTerminalScrollbars } from '../stores/useTerminalScrollbars'
 import { proposeGrid, terminalCellSize, type CellSize } from '../lib/terminalGrid'
 import { activePaneOf, paneGrids, windowPanes } from '../lib/terminalLayout'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
 import { TerminalOutputWriter } from '../lib/terminalOutput'
 import { interceptPaste } from '../lib/terminalPaste'
 import { installTerminalImages } from '../lib/terminalImages'
+import { installKittyGraphics, type KittyGraphics } from '../lib/kitty/kittyGraphics'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
 import { appClaimsPaneKey, claimsShiftEnter } from '../lib/terminalKeys'
 import { silenceDeviceReports } from '../lib/terminalReports'
@@ -174,10 +176,11 @@ interface PaneRuntime {
   term: Terminal
   finder: SearchAddon
   output: TerminalOutputWriter
+  graphics: KittyGraphics
   disposers: IDisposable[]
-  // An atlas renderer is live on this terminal. False after a context loss the
-  // canvas claim did not survive, which is what makes the next activation
-  // retry instead of leaving the pane on the DOM renderer. ADR terminal-renderer-claimed-on-activation.
+  // An atlas renderer is live on this terminal. False after a failed claim or a
+  // context loss, which is what makes the next activation retry instead of
+  // leaving the pane on the DOM renderer. ADR terminal-renderer-claimed-on-activation.
   rendered?: boolean
   // The last value written to the pane's reactive `scrolledUp`, held raw so the
   // per-line refresh can tell "unchanged" without touching a Vue proxy. See
@@ -241,6 +244,7 @@ export function useTerminalWindows(
   const cell = ref<CellSize | null>(null)
   const search = ref<TerminalSearch>({ open: false, query: '', matches: 0, index: 0 })
 
+  const { showScrollbars } = useTerminalScrollbars()
   const windows = new Map<string, WindowRuntime>()
   const panes = new Map<string, PaneRuntime>()
   const expectedWindowClosures = new Set<string>()
@@ -270,6 +274,13 @@ export function useTerminalWindows(
   let pendingActivate = ''
   // New-window commands deferred until tmux reports the target pane.
   const pendingCommands = new Map<string, () => boolean>()
+
+  scope.run(() => {
+    watch(() => {
+      const tab = findTab(activeWindowId.value)
+      return tab ? scrollbarWidthFor(tab, showScrollbars.value) : 0
+    }, scheduleVote)
+  })
 
   // New cell metrics change how many cells fit the same box, so the vote
   // must re-run; the grid itself stays at tmux's size until tmux answers.
@@ -325,6 +336,7 @@ export function useTerminalWindows(
     const term = createTerminal({ allowProposedApi: true })
     const finder = markRaw(new SearchAddon())
     term.loadAddon(finder)
+    const graphics = markRaw(installKittyGraphics(term))
     const output = markRaw(
       new TerminalOutputWriter((data) => {
         if (painted.value) term.write(data)
@@ -332,7 +344,7 @@ export function useTerminalWindows(
           term.write(data, () => {
             painted.value = true
           })
-      }),
+      }, graphics.filter),
     )
     // Before any output reaches it: xterm re-wraps its buffer on resize, so a
     // grid sized after the first paint mangles the snapshot it just drew.
@@ -352,16 +364,13 @@ export function useTerminalWindows(
       term,
       finder,
       output,
+      graphics,
       disposers: [
         finder,
         { dispose: () => output.dispose() },
+        graphics,
         silenceDeviceReports(term),
         term.onData((data: string) => sendInput(paneId, data)),
-        // onScroll covers what output does to the buffer — the auto-pin to the
-        // tail, and a trim moving it — but *not* the user scrolling: xterm's
-        // viewport syncs the buffer from its own DOM scroll handler and
-        // suppresses the event to avoid feeding itself. attachPane listens to
-        // that DOM scroll for the other half.
         term.onScroll(() => refreshScrolledUp(paneId)),
         // Entering the alternate screen has no scrollback and fires no scroll
         // event on the way in.
@@ -523,7 +532,6 @@ export function useTerminalWindows(
     if (!found || !state || state.host) return
     state.host = host
     state.term.open(host)
-    watchViewportScroll(state, paneId, host)
     const releasePaste =
       options.localImages === false
         ? interceptPaste(
@@ -577,21 +585,6 @@ export function useTerminalWindows(
     return !!host && host.contains(document.activeElement)
   }
 
-  // The only signal that the user scrolled. xterm's own onScroll is suppressed
-  // on this path — the viewport reads its DOM scrollTop, syncs the buffer, and
-  // swallows the event so it cannot feed itself — so a wheel, a trackpad or a
-  // dragged scrollbar moves the viewport off the tail silently, and nothing
-  // would ever offer the way back. The element only exists after open(), and
-  // xterm's own listener is registered inside it, so ours runs second and reads
-  // a buffer already synced.
-  function watchViewportScroll(state: PaneRuntime, paneId: string, host: HTMLElement): void {
-    const viewport = host.querySelector('.xterm-viewport')
-    if (!viewport) return
-    const onScroll = (): void => refreshScrolledUp(paneId)
-    viewport.addEventListener('scroll', onScroll, { passive: true })
-    state.disposers.push({ dispose: () => viewport.removeEventListener('scroll', onScroll) })
-  }
-
   function scheduleVote(): void {
     clearTimeout(resizeTimer)
     resizeTimer = setTimeout(voteSize, RESIZE_DEBOUNCE_MS)
@@ -631,7 +624,7 @@ export function useTerminalWindows(
   }
 
   // Vote the whole window box against shared cell metrics; tmux remains
-  // authoritative for the actual grid. Hidden scrollbars reserve no column.
+  // authoritative for the actual grid. Only a single visible pane gets a gutter.
   function voteSize(): void {
     const tab = findTab(activeWindowId.value)
     const host = tab ? windows.get(tab.windowId)?.host : undefined
@@ -643,7 +636,10 @@ export function useTerminalWindows(
     if (!host.clientWidth || !host.clientHeight) return
     const measured = measureCell()
     if (!measured) return
-    const proposed = proposeGrid({ width: host.clientWidth, height: host.clientHeight }, measured)
+    const proposed = proposeGrid(
+      { width: host.clientWidth - scrollbarWidthFor(tab, showScrollbars.value), height: host.clientHeight },
+      measured,
+    )
     if (!proposed) return
     scheduleConstraintCheck()
     if (vote && proposed.cols === vote.cols && proposed.rows === vote.rows) return
@@ -722,6 +718,7 @@ export function useTerminalWindows(
     for (const [paneId, state] of panes) {
       state.output.reset()
       state.term.reset()
+      state.graphics.clear()
       refreshScrolledUp(paneId)
     }
   }

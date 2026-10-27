@@ -81,11 +81,12 @@ func (s *Spawner) SpawnWith(ctx context.Context, commands []string, data SpawnDa
 
 // SpawnWindows renders window templates and creates a tmux session.
 func (s *Spawner) SpawnWindows(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool) error {
-	return s.SpawnWindowsWith(ctx, windows, data, background, s.renderer)
+	return s.SpawnWindowsWith(ctx, windows, data, background, s.renderer, nil)
 }
 
-// SpawnWindowsWith renders window templates using the given renderer and creates a tmux session.
-func (s *Spawner) SpawnWindowsWith(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, renderer *tmpl.Renderer) error {
+// SpawnWindowsWith renders window templates using the given renderer and creates a tmux session
+// whose environment includes env.
+func (s *Spawner) SpawnWindowsWith(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, renderer *tmpl.Renderer, env []string) error {
 	rendered, err := RenderWindows(renderer, windows, data)
 	if err != nil {
 		return err
@@ -98,6 +99,7 @@ func (s *Spawner) SpawnWindowsWith(ctx context.Context, windows []config.WindowC
 		WorkingDirectory: data.Path,
 		Windows:          rendered,
 		Background:       background,
+		Env:              env,
 	}); err != nil {
 		return fmt.Errorf("create tmux session: %w", err)
 	}

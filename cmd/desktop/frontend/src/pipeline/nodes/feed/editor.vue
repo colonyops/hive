@@ -2,8 +2,8 @@
 // A feed node's identity is still its node id — the fields here are purely
 // cosmetic sidebar presentation: the glyph shown in the tree and a hover
 // tooltip that explains the feed's context (handy for LLM-generated feeds).
-import FormField from '../../../components/ui/FormField.vue'
-import TextArea from '../../../components/ui/TextArea.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
+import TextArea from '@hive/ui/components/ui/TextArea.vue'
 import { SelectField } from '../../fields'
 import { defaultFeedIcon, feedIconOptions } from '../../../lib/feedIcons'
 import { descriptionMaxLen, type Config } from './config'

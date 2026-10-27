@@ -46,7 +46,7 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 		v    any
 		want []string
 	}{
-		{"SessionSummary", SessionSummary{}, sorted("id", "name", "slug", "repo", "state", "canvasOwner", "createdAt")},
+		{"SessionSummary", SessionSummary{}, sorted("id", "name", "slug", "repo", "repoIdentity", "state", "canvasOwner", "createdAt")},
 		{"SessionDetail", SessionDetail{}, sorted("id", "name", "slug", "repo", "state", "path", "cloneStrategy", "worktreeBranch", "tags", "createdAt", "updatedAt")},
 		{"SessionRisk", app.SessionRisk{}, sorted("uncommittedChanges", "unpushedCommits", "recycleDeletes")},
 		{"SessionGitStatus", SessionGitStatus{}, sorted("path", "branch", "dirty", "unpushed", "additions", "deletions", "host", "owner", "repo", "resolved", "error")},
@@ -89,7 +89,7 @@ func TestSessionSummaryOfMapsEachField(t *testing.T) {
 	s := session.Session{ID: "s1", Name: "review 81", Slug: "review-81", Remote: "git@github.com:acme/site.git", Path: "/repos/site", State: session.StateRecycled, CreatedAt: createdAt}
 
 	assert.Equal(t, SessionSummary{
-		ID: "s1", Name: "review 81", Slug: "review-81", Repo: "git@github.com:acme/site.git", State: "recycled",
+		ID: "s1", Name: "review 81", Slug: "review-81", Repo: "git@github.com:acme/site.git", RepoIdentity: "github.com/acme/site", State: "recycled",
 		CanvasOwner: "acme/site", CreatedAt: createdAt,
 	}, sessionSummaryOf(sameSpace, s))
 }

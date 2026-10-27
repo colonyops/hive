@@ -31,9 +31,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Same key as the site job in ci.yml: tools from mise.lock, not the tasks.
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        env:
+          MISE_LOCK_HASH: ${{ hashFiles('mise.lock') }}
         with:
           install_args: python uv
+          cache_key: "{{cache_key_prefix}}-{{platform}}-{{install_args_hash}}-{{env.MISE_LOCK_HASH}}"
 
       - name: Build the site
         run: mise run docs:build

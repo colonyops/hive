@@ -57,38 +57,58 @@ function captureViewportAnchor(term: Terminal): ViewportAnchor {
 
 function restoreViewportAnchor(term: Terminal, anchor: ViewportAnchor): void {
   if (anchor.atTail) {
-    term.scrollToBottom()
+    scrollViewportTo(term, term.buffer.active.baseY)
     return
   }
 
   const buffer = term.buffer.active
   const viewportMarkerLine = anchor.viewportMarker?.line ?? -1
   if (buffer.type === 'normal' && viewportMarkerLine >= 0) {
-    term.scrollToLine(viewportMarkerLine)
+    scrollViewportTo(term, viewportMarkerLine)
     return
   }
 
   const startMarkerLine = anchor.startMarker?.line ?? -1
   if (buffer.type === 'normal' && startMarkerLine >= 0) {
-    term.scrollToLine(lineAtCellOffset(buffer, startMarkerLine, anchor.logicalCellOffset, term.cols))
+    scrollViewportTo(term, lineAtCellOffset(buffer, startMarkerLine, anchor.logicalCellOffset, term.cols))
     return
   }
 
   const nextMarkerLine = anchor.nextMarker?.line ?? -1
   if (buffer.type === 'normal' && nextMarkerLine >= 0) {
     if (nextMarkerLine === 0) {
-      term.scrollToLine(0)
+      scrollViewportTo(term, 0)
       return
     }
     const survivingStart = findLogicalStart(buffer, nextMarkerLine - 1)
     const survivingLength = logicalLineCellCount(buffer, survivingStart, nextMarkerLine - 1, term.cols)
     const trimmedCells = Math.max(0, anchor.logicalCellLength - survivingLength)
     const survivingOffset = Math.max(0, anchor.logicalCellOffset - trimmedCells)
-    term.scrollToLine(lineAtCellOffset(buffer, survivingStart, survivingOffset, term.cols))
+    scrollViewportTo(term, lineAtCellOffset(buffer, survivingStart, survivingOffset, term.cols))
     return
   }
 
-  term.scrollToLine(0)
+  scrollViewportTo(term, 0)
+}
+
+interface TerminalCore {
+  _bufferService?: { scrollLines(disp: number): void }
+}
+
+// xterm 6 scrolls an opened terminal through its viewport, in pixels against a
+// scroll height it re-syncs only on the frame after a resize, so scrollToLine
+// straight after a resize clamps to the old buffer's end. Scrolling the buffer
+// fires the scroll event the viewport re-syncs from synchronously.
+function scrollViewportTo(term: Terminal, line: number): void {
+  const disp = line - term.buffer.active.viewportY
+  if (!disp) return
+  const buffers = (term as unknown as { _core?: TerminalCore })._core?._bufferService
+  if (!buffers) {
+    term.scrollToLine(line)
+    return
+  }
+  buffers.scrollLines(disp)
+  term.refresh(0, term.rows - 1)
 }
 
 function findLogicalStart(buffer: IBuffer, line: number): number {

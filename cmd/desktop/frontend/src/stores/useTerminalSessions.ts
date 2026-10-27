@@ -16,6 +16,8 @@ export interface TerminalSessionRow {
   name: string
   slug: string
   repo: string
+  /** git.RemoteIdentity of repo: rows that share it are one repository over different transports. */
+  repoIdentity: string
   state: string
   /** The owner key of the session's canvases, its repository as owner/repo. Empty for a row with none. */
   canvasOwner: string
@@ -41,26 +43,27 @@ export interface TerminalSessionGroup {
   kind: TerminalSectionKind
 }
 
-// The non-repo sections' keys. A repo group is keyed by its remote, which can
-// never collide with either of these.
 const CHATS_GROUP_KEY = 'chats'
 const SCRATCH_GROUP_KEY = 'scratch'
 
-// Mirrors the TUI's GroupSessionsByRepo: one group per remote, a "(no remote)"
-// group for sessions without one, groups and sessions alphabetical.
 export function groupTerminalSessions(rows: readonly TerminalSessionRow[]): TerminalSessionGroup[] {
   const groups = new Map<string, TerminalSessionGroup>()
   for (const row of rows) {
-    let group = groups.get(row.repo)
+    const key = row.repoIdentity
+    let group = groups.get(key)
     if (!group) {
-      group = { key: row.repo, name: groupDisplayName(row.repo), sessions: [], kind: 'repo' }
-      groups.set(row.repo, group)
+      group = { key, name: '', sessions: [], kind: 'repo' }
+      groups.set(key, group)
     }
     group.sessions.push(row)
   }
-  const sorted = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name))
-  for (const group of sorted) group.sessions.sort((a, b) => a.name.localeCompare(b.name))
-  return sorted
+  // Remotes in one group can be spelled differently, so the first session by
+  // name picks the label, as the TUI's GroupSessionsByRepo does.
+  for (const group of groups.values()) {
+    group.sessions.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+    group.name = groupDisplayName(group.sessions[0].repo)
+  }
+  return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 function groupDisplayName(remote: string): string {
@@ -123,6 +126,7 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
         name: declared.name,
         slug: declared.slug,
         repo: '',
+        repoIdentity: '',
         state: 'active',
         canvasOwner: '',
         createdAt: '',

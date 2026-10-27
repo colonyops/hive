@@ -27,6 +27,8 @@ jobs:
       cli-integration: ${{ steps.filter.outputs.cli-integration }}
       site: ${{ steps.filter.outputs.site }}
       desktop-frontend: ${{ steps.filter.outputs.desktop-frontend }}
+      drive-server-frontend: ${{ steps.filter.outputs.drive-server-frontend }}
+      desktop-e2e: ${{ steps.filter.outputs.desktop-e2e }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -50,6 +52,7 @@ jobs:
               - 'mise.toml'
               - 'mise.lock'
               - 'cmd/desktop/tasks.toml'
+              - 'cmd/drive-server/**'
               - '.github/workflows/**'
               - '.github/actions/**'
             cli-integration:
@@ -73,7 +76,28 @@ jobs:
             desktop-frontend:
               - 'cmd/desktop/frontend/**'
               - 'cmd/desktop/internal/app/flow/docs/**'
+              - 'web/**'
+              - 'package.json'
+              - 'package-lock.json'
               - '.github/workflows/ci.yml'
+            drive-server-frontend:
+              - 'cmd/drive-server/frontend/**'
+              - 'web/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/ci.yml'
+            desktop-e2e:
+              - 'cmd/desktop/**'
+              - 'internal/**'
+              - 'pkg/**'
+              - 'web/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.npmrc'
+              - '.github/workflows/ci.yml'
+              - '.github/actions/**'
 
   go:
     needs: changes
@@ -83,6 +107,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-go-env
+        with:
+          cache-name: test
 
       - name: Check generated files are up-to-date
         run: mise run check:generate
@@ -105,12 +131,23 @@ jobs:
       - name: Build
         run: go build ./...
 
+      # main runs the same non-race tests as a pull request so that the cache
+      # it saves holds the test results a pull request can reuse.
       - name: Test
-        if: github.event_name == 'pull_request'
         run: mise run test
 
+  go-race:
+    needs: changes
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-go-env
+        with:
+          cache-name: race
+
       - name: Test with the race detector
-        if: github.event_name != 'pull_request'
         run: mise run test:race
 
   go-lint:
@@ -121,12 +158,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-go-env
+        with:
+          cache-name: lint
 
+      # setup-go-env caches ~/.cache/golangci-lint with the Go cache. The
+      # action's own cache keys on the week and go.mod and never saves on a hit.
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.14.0
           args: --timeout=6m
+          skip-cache: true
 
       - name: Lint workflows
         run: mise run lint:workflows
@@ -147,10 +189,19 @@ jobs:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.cli-integration == 'true'
     runs-on: ubuntu-latest
+    env:
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The CLI and the drive server build with CGO_ENABLED=0, and tmux runs
+      # inside the test container, so this job needs no Linux packages. The
+      # tool list leaves out wails3, whose install links GTK.
       - uses: ./.github/actions/setup-go-env
+        with:
+          cache-name: integration
+          desktop-deps: "false"
+          mise-install-args: go goreleaser go:github.com/abice/go-enum github:sqlc-dev/sqlc github:hay-kot/gobusgen
 
       - name: Run integration tests
         run: mise run cli:integration
@@ -161,9 +212,6 @@ jobs:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.desktop-frontend == 'true'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cmd/desktop/frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -171,27 +219,28 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: cmd/desktop/frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
 
       - name: Check formatting
-        run: npm run format:check
+        run: |
+          npm run format:check -w frontend
+          npm run ui:format:check
 
       - name: Lint
-        run: npm run lint
+        run: |
+          npm run lint -w frontend
+          npm run ui:lint
 
       - name: Build frontend
-        run: npm run build
+        run: npm run build -w frontend
 
   desktop-frontend-test:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.desktop-frontend == 'true'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cmd/desktop/frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -199,13 +248,84 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: cmd/desktop/frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
 
       - name: Test frontend
-        run: npm test
+        run: |
+          npm test -w frontend
+          npm run ui:test
+
+  drive-server-frontend:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.drive-server-frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check -w drive-server-frontend
+
+      - name: Lint
+        run: npm run lint -w drive-server-frontend
+
+      - name: Build frontend
+        run: npm run build -w drive-server-frontend
+
+      - name: Test frontend
+        run: npm test -w drive-server-frontend
+
+  # The whole suite runs inside the image that run-docker.sh builds, so the
+  # job needs Docker and mise, not Go or Node.
+  desktop-e2e:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.desktop-e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # run-docker.sh builds the frontend and the headless server on the
+      # runner, with these caches, before the image build. The server has no
+      # cgo, so the job needs no Linux packages.
+      - uses: ./.github/actions/setup-go-env
+        with:
+          cache-name: e2e
+          desktop-deps: "false"
+          mise-install-args: go
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run desktop e2e tests
+        run: mise run desktop:e2e
+
+      - name: Upload traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-e2e-test-results
+          path: cmd/desktop/e2e/test-results/
+          retention-days: 7
 
   site:
     needs: changes
@@ -219,8 +339,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        env:
+          MISE_LOCK_HASH: ${{ hashFiles('mise.lock') }}
         with:
           install_args: python uv
+          cache_key: "{{cache_key_prefix}}-{{platform}}-{{install_args_hash}}-{{env.MISE_LOCK_HASH}}"
 
       - name: Build the site
         run: mise run docs:build
@@ -230,7 +353,7 @@ jobs:
   # fails here.
   ci-ok:
     if: always()
-    needs: [changes, go, go-lint, integration, desktop-frontend-build, desktop-frontend-test, site]
+    needs: [changes, go, go-race, go-lint, integration, desktop-frontend-build, desktop-frontend-test, drive-server-frontend, desktop-e2e, site]
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')

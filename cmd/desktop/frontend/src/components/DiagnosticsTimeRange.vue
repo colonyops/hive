@@ -2,11 +2,11 @@
 import { onClickOutside } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
 import IconClock3 from '~icons/lucide/clock-3'
-import { useAnchoredPopover } from '../composables/useAnchoredPopover'
-import { useEscapeToClose } from '../composables/useEscapeToClose'
-import AppDateTimePicker from './ui/AppDateTimePicker.vue'
-import BaseButton from './ui/BaseButton.vue'
-import InlineError from './ui/InlineError.vue'
+import { useAnchoredPopover } from '@hive/ui/composables/useAnchoredPopover'
+import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
+import AppDateTimePicker from '@hive/ui/components/ui/AppDateTimePicker.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 
 const period = defineModel<string>('period', { required: true })
 const since = defineModel<string>('since', { required: true })

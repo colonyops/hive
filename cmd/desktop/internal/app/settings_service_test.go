@@ -189,6 +189,7 @@ func TestSettingsServiceAppearanceSettingsDefaultsToUnset(t *testing.T) {
 	require.Empty(t, got.CanvasFontSize)
 	require.Empty(t, got.CanvasLineSpacing)
 	require.Empty(t, got.CanvasPageWidth)
+	require.False(t, got.TerminalShowScrollbars, "terminal scrollbars ship hidden")
 	require.True(t, got.TerminalShowWindows, "the terminal window listing ships on")
 	require.True(t, got.TerminalShowStatusBar, "the session status bar ships on")
 	require.Equal(t, 3, got.TerminalPoolSize, "the attach pool ships at three sessions")
@@ -268,4 +269,47 @@ func TestSettingsServiceTerminalShowWindowsOffSurvivesUnrelatedSaves(t *testing.
 	got, err := service.Appearance(t.Context())
 	require.NoError(t, err)
 	require.False(t, got.TerminalShowWindows)
+}
+
+func TestSettingsServiceSetReviewLabels(t *testing.T) {
+	t.Setenv(settings.EnvConfigDir, filepath.Join(t.TempDir(), "config"))
+	service := NewSettingsService(settings.NewStore(settings.SettingsPath()))
+	ctx := t.Context()
+
+	require.NoError(t, service.SetReviewLabels(ctx, []settings.ReviewLabel{{Title: " Nit ", Icon: "scissors"}}))
+	got, err := service.ReviewLabels(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []settings.ReviewLabel{{Title: "Nit", Icon: "scissors"}}, got)
+
+	err = service.SetReviewLabels(ctx, []settings.ReviewLabel{{Title: "a"}, {Title: "a"}})
+	require.Equal(t, KindInvalid, KindOf(err))
+
+	require.NoError(t, service.SetReviewLabels(ctx, settings.DefaultReviewLabels))
+	data, err := os.ReadFile(settings.SettingsPath())
+	require.NoError(t, err)
+	require.NotContains(t, string(data), "review:", "the shipped labels are stored as no labels")
+	got, err = service.ReviewLabels(ctx)
+	require.NoError(t, err)
+	require.Equal(t, settings.DefaultReviewLabels, got)
+}
+
+func TestSettingsServiceTerminalScrollbarsPersistAndRespectEnvironment(t *testing.T) {
+	t.Setenv(settings.EnvConfigDir, filepath.Join(t.TempDir(), "config"))
+	service := newSettingsService(SettingsDeps{Store: settings.NewStore(settings.SettingsPath())})
+	for _, show := range []bool{true, false} {
+		require.NoError(t, service.SetTerminalShowScrollbars(t.Context(), show))
+		require.NoError(t, service.SetTheme(t.Context(), "midnight"))
+		reopened := newSettingsService(SettingsDeps{Store: settings.NewStore(settings.SettingsPath())})
+		got, err := reopened.Appearance(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, show, got.TerminalShowScrollbars)
+	}
+	t.Setenv("HIVE_DESKTOP_APPEARANCE_TERMINAL_SHOW_SCROLLBARS", "true")
+	require.NoError(t, service.SetTheme(t.Context(), "dark"))
+	got, err := service.Appearance(t.Context())
+	require.NoError(t, err)
+	require.True(t, got.TerminalShowScrollbars)
+	stored, err := settings.LoadPersistedSettings()
+	require.NoError(t, err)
+	require.False(t, stored.Appearance.TerminalShowScrollbars)
 }

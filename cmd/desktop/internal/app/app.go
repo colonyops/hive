@@ -50,13 +50,11 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	hiveevents "github.com/colonyops/hive/internal/hive/events"
-	"github.com/colonyops/hive/internal/hive/session/scripts"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/platform/execenv"
 	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
 	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
-	"github.com/colonyops/hive/internal/store/db"
 )
 
 // Config is everything App needs that it cannot resolve itself.
@@ -135,6 +133,7 @@ type App struct {
 	AgentWorkspaces *AgentWorkspacesService
 	Tasks           *TasksService
 	Drive           *DriveService
+	Review          *ReviewService
 	Schedules       *SchedulesService
 
 	// Events is the typed bus adapters project into transport-specific events.
@@ -210,9 +209,9 @@ type App struct {
 	webhookPort int
 
 	// hive owns the config-derived services and swaps them on Reload.
-	hive     *hive.Engine
-	hiveDB   *db.DB
-	launcher *dispatch.RepositoryLauncher
+	hive        *hive.Engine
+	hiveRuntime *hive.Runtime
+	launcher    *dispatch.RepositoryLauncher
 
 	hiveDataDir string
 	// reloadMu serializes ReloadHiveRuntime, so the engine, the agent command
@@ -270,7 +269,6 @@ type App struct {
 	actionsWatcher         *dirwatch.Watcher
 	agentWorkspacesWatcher *dirwatch.Watcher
 	hiveWatcher            *hivewatch.Watcher
-	hiveBusCancel          context.CancelFunc
 }
 
 // New builds the core: the store, the domain stores and their watchers, the
@@ -491,7 +489,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.outputs = a.buildOutputWorker(cfg)
 	a.Jobs.setCommandCanceller(a.outputs.Cancel)
 	a.ActionRuns = newActionRunsService(a.Stores.ActionRuns, dispatch.NewFlowActions(a.flowStore, a.actionStore))
-	a.Inbox = newInboxService(InboxDeps{Items: a.Stores.InboxItems, Commands: a.Stores.OutputCommands, NodeRuns: a.Stores.NodeRuns, Catalog: a.actionStore, Worker: a.outputs})
+	a.Inbox = newInboxService(InboxDeps{Items: a.Stores.InboxItems, Commands: a.Stores.OutputCommands, NodeRuns: a.Stores.NodeRuns, Catalog: a.actionStore, Worker: a.outputs, Remotes: a.generatedRemote})
 	a.MenuBar = newMenuBarService(MenuBarDeps{
 		Settings: cfg.SettingsStore,
 		Flows:    a.flowStore,
@@ -499,6 +497,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Catalog:  a.actionStore,
 		Polls:    a.lastTicker(),
 		Events:   a.Events,
+		Remotes:  a.generatedRemote,
 	})
 	a.Sessions = newSessionsService(SessionsDeps{
 		Hive: a.hive, Launcher: a.launcher, WorkspaceLauncher: a.AgentWorkspaces,
@@ -506,7 +505,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		AgentWindows: a.terminals, AgentCommands: a.profileCommands,
 		Jobs: a.Jobs, Items: a.Stores.InboxItems, Links: a.Stores.ItemSessions, Catalog: a.actionStore, Dispatcher: a.dispatcher,
 		Recorder: a.Activity, Events: a.Events, Logger: cfg.Logger,
-		PullRequests: newSessionPullRequests(
+		Forges: newSessionForges(
 			newGitHubForge(gitHubClient, a.credentials),
 			newGiteaForge(gitea.NewPullRequests(giteaInstances, a.credentials, a.giteaFetchers)),
 		),
@@ -518,6 +517,14 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.PopupTerminals = newPopupTerminalsService(PopupTerminalsDeps{Manager: a.popupTerminals, Terminals: a.Terminals, Directory: a.Sessions, Catalog: a.actionStore})
 	a.Diagnostics = &DiagnosticsService{paths: cfg.Paths, jobs: a.Jobs, build: cfg.Build, environ: a.execEnv.Environ, hive: a.HiveConfig, commands: a.profileCommands, webhooks: a.Webhooks, reveal: a.System.revealPath}
 	a.Tasks = newTasksService(a.hive)
+	a.Review = newReviewService(ReviewDeps{
+		Reviews: a.hive.Reviews(),
+		Drive:   a.Drive,
+		Code:    engineCodeAgents{engine: a.hive},
+		Chats:   a.AgentWorkspaces,
+		Input:   a.terminals,
+		Logger:  cfg.Logger,
+	})
 
 	// After AgentWorkspaces: the scheduler launches chats through it, and the
 	// service reads the same workspace store the scheduler takes its specs
@@ -681,10 +688,10 @@ func (a *App) MCPBaseURL(ctx context.Context) string {
 // HiveConn exposes hive.db (sessions, messages) as a plain *sql.DB for the
 // e2e harness's table resets and read-only snapshots.
 func (a *App) HiveConn() *sql.DB {
-	if a.hiveDB == nil {
+	if a.hiveRuntime == nil {
 		return nil
 	}
-	return a.hiveDB.Conn()
+	return a.hiveRuntime.DB().Conn()
 }
 
 // Close stops the background subsystems and releases resources. It is the
@@ -780,9 +787,10 @@ func (a *App) Close() error {
 	if a.hiveWatcher != nil {
 		a.hiveWatcher.Stop()
 	}
-	if a.hive != nil {
-		if err := a.hive.Drive().Close(); err != nil {
-			a.logger.Warn().Err(err).Msg("drive watcher shutdown")
+	var err error
+	if a.hiveRuntime != nil {
+		if closeErr := a.hiveRuntime.Close(); closeErr != nil {
+			err = fmt.Errorf("close hive runtime: %w", closeErr)
 		}
 	}
 	a.Events.Close()
@@ -793,16 +801,6 @@ func (a *App) Close() error {
 		}
 	}
 
-	if a.hiveBusCancel != nil {
-		a.hiveBusCancel()
-	}
-
-	var err error
-	if a.hiveDB != nil {
-		if closeErr := a.hiveDB.Close(); closeErr != nil {
-			err = fmt.Errorf("close hive action database: %w", closeErr)
-		}
-	}
 	if closeErr := a.db.Close(); closeErr != nil && err == nil {
 		err = fmt.Errorf("close desktop store: %w", closeErr)
 	}
@@ -1106,13 +1104,19 @@ func (a *App) buildProducer(logger zerolog.Logger) *ingest.Producer {
 	return producer
 }
 
+// generatedRemote reads the engine per call so a config reload changes the
+// clone policy without rebuilding the services that hold this method value.
+func (a *App) generatedRemote(repo, itemURL string) string {
+	return a.hive.Sessions().GeneratedRemote(repo, itemURL)
+}
+
 // buildOutputWorker wires the output worker. Mock modes keep the worker for
 // explicit detail-pane confirmation RPCs but never start its loop: that keeps
 // the configured action path real in e2e while stopping a background shell
 // action from compromising fixture determinism.
 func (a *App) buildOutputWorker(cfg Config) *dispatch.Worker {
 	messages := func() dispatch.MessageService { return a.hive.Messages() }
-	a.dispatcher = dispatch.NewDispatcher(outputExecutors(a.launcher, a.AgentWorkspaces, messages, a.observedNotifier(cfg.Notifier), cfg.Gate, a.Stores.InboxItems, a.execEnv, cfg.Logger))
+	a.dispatcher = dispatch.NewDispatcher(outputExecutors(a.launcher, a.AgentWorkspaces, messages, a.observedNotifier(cfg.Notifier), cfg.Gate, a.Stores.InboxItems, a.execEnv, cfg.Logger), a.generatedRemote)
 	worker := dispatch.NewWorker(a.Stores.OutputCommands, dispatch.NewFlowActions(a.flowStore, a.actionStore), a.dispatcher, dispatch.DefaultOutputWorkerInterval, cfg.Logger)
 	worker.SetRecorder(a.Activity)
 	worker.SetJobRecorder(a.Jobs)
@@ -1255,56 +1259,48 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return err
 	}
-	if err := scripts.EnsureExtracted(dataDir, "desktop"); err != nil {
-		cfg.Logger.Warn().Err(err).Msg("extract hive action scripts failed")
-	}
-
-	database, err := hive.OpenDB(ctx, dataDir, hiveCfg.Database)
-	if err != nil {
-		return fmt.Errorf("open hive action database: %w", err)
-	}
-
-	bus := hiveevents.New(64)
-	logDroppedHiveEvents(a.logger, bus)
-	busCtx, cancel := context.WithCancel(ctx)
-	go bus.Start(busCtx)
-
 	tmuxBinary := func(ctx context.Context) (string, error) {
 		return a.resolveTmuxBinary(ctx)
 	}
 	tmuxClient := tmuxexec.New(a.logger, newTmuxRunner(tmuxBinary, a.execEnv.Environ))
 	ports := hive.Ports{
-		DB:       database,
-		Bus:      bus,
 		Executor: newEnvExecutor(a.execEnv),
 		Mux:      hiveMultiplexer{Client: tmuxClient, renamer: a.terminals},
 		DataDir:  dataDir,
 		Logger:   a.logger,
+
+		Credentials: a.credentials,
 	}
 	// Mock modes have no tmux to read, so status stays off.
 	if a.mock == "" {
 		ports.PaneSource = tmuxClient
 	}
-	engine, err := hive.New(hiveCfg, ports)
+	hiveRuntime, err := hive.StartRuntime(ctx, hiveCfg, hive.RuntimeOptions{Ports: ports, ScriptsVersion: "desktop"})
 	if err != nil {
-		cancel()
-		_ = database.Close()
-		return fmt.Errorf("start hive engine: %w", err)
+		return hiveStartError(err)
 	}
-	a.hive = engine
-	a.hiveDB = database
-	a.hiveBusCancel = cancel
-	forwardDriveChanges(busCtx, bus, a.Events)
+	a.hiveRuntime = hiveRuntime
+	a.hive = hiveRuntime.Engine()
+	logDroppedHiveEvents(a.logger, hiveRuntime.Bus())
+	forwardDriveChanges(ctx, hiveRuntime.Bus(), a.Events)
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
 	a.launcher = dispatch.NewRepositoryLauncher(
 		func() dispatch.SessionCreator { return a.hive.Sessions() },
 		a.Stores.ItemSessions, a.Activity, cfg.Logger,
 	)
-	// After hive.New so the canvases land under the engine's context root.
+	// After StartRuntime so the canvases land under the engine's context root.
 	// It runs once per process: ReloadHiveRuntime never repeats it, so a
 	// legacy canvas that appears later moves on the next launch.
 	importLegacyCanvases(ctx, a.logger, a.hive, cfg.Paths)
 	return nil
+}
+
+func hiveStartError(err error) error {
+	var startErr *hive.StartError
+	if errors.As(err, &startErr) && startErr.Step == hive.StartStepDatabase {
+		return fmt.Errorf("open hive action database: %w", err)
+	}
+	return fmt.Errorf("start hive engine: %w", err)
 }
 
 // logDroppedHiveEvents surfaces what the engine bus drops when its buffer is

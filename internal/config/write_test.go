@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/colonyops/hive/internal/config"
 )
@@ -116,16 +117,19 @@ workspaces:
 	require.NoError(t, err)
 	assert.Equal(t, `# my hive setup
 copy_command: pbcopy
+
 # these matter to me
 rules:
   - pattern: ""
     max_recycled: 3
+
 agents:
   default: codex
   agent_selector: true
   codex:
     command: codex
     flags: [--full-auto]
+
 workspaces:
   - `+repos+`
 `, string(raw))
@@ -503,4 +507,66 @@ func TestYAMLScalarQuotesWhatWouldChangeMeaning(t *testing.T) {
 	assert.Equal(t, "plain", config.YAMLScalar("plain"))
 	assert.Equal(t, `'a: b'`, config.YAMLScalar("a: b"))
 	assert.Equal(t, `"yes"`, config.YAMLScalar("yes"))
+}
+
+func TestApplyKeepsBlankLinesInsideABlockScalarOnce(t *testing.T) {
+	repos := workspaceDir(t, 1)
+	path := write(t, t.TempDir(), `commands:
+  share:
+    sh: |
+      one
+
+      two
+
+workspaces:
+  - /old/place
+`)
+
+	require.NoError(t, apply(t, path, config.Edit{
+		DefaultAgent: "codex",
+		Profiles:     []config.EditProfile{{Name: "codex", Command: "codex"}},
+		Workspaces:   []string{repos},
+	}))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(string(raw), "commands:\n  share:\n    sh: |\n      one\n\n      two\n\nworkspaces:\n"), string(raw))
+}
+
+func TestApplyReindentKeepsBlockScalarsAndSectionBreaks(t *testing.T) {
+	repos := workspaceDir(t, 1)
+	path := write(t, t.TempDir(), `commands:
+    share:
+        sh: |
+            one
+
+            two
+        help: x
+
+rules:
+- pattern: a
+  max_recycled: 1
+
+- pattern: b
+  max_recycled: 2
+
+workspaces:
+    - /old/place
+`)
+
+	require.NoError(t, apply(t, path, config.Edit{
+		DefaultAgent: "codex",
+		Profiles:     []config.EditProfile{{Name: "codex", Command: "codex"}},
+		Workspaces:   []string{repos},
+	}))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var got struct {
+		Commands map[string]struct{ Sh string } `yaml:"commands"`
+	}
+	require.NoError(t, yaml.Unmarshal(raw, &got))
+	assert.Equal(t, "one\n\ntwo\n", got.Commands["share"].Sh)
+	assert.Contains(t, string(raw), "help: x\n\nrules:\n", "a section break survives re-indentation")
+	assert.Contains(t, string(raw), "max_recycled: 1\n\n  - pattern: b", "a break between list items stays in place")
 }

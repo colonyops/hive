@@ -85,6 +85,27 @@ const xterm = vi.hoisted(() => {
 })
 
 vi.mock('@xterm/xterm', () => ({ Terminal: xterm.FakeTerminal }))
+
+// The renderer itself is covered against a real xterm in kittyGraphics.spec.ts;
+// these fakes have none of the parser or render surface it registers on.
+const kitty = vi.hoisted(() => {
+  const installed: {
+    filter: { rewrite: ReturnType<typeof vi.fn>; reset: ReturnType<typeof vi.fn> }
+    clear: ReturnType<typeof vi.fn>
+    dispose: ReturnType<typeof vi.fn>
+  }[] = []
+  const installKittyGraphics = vi.fn(() => {
+    const graphics = {
+      filter: { rewrite: vi.fn((data: Uint8Array) => data), reset: vi.fn() },
+      clear: vi.fn(),
+      dispose: vi.fn(),
+    }
+    installed.push(graphics)
+    return graphics
+  })
+  return { installed, installKittyGraphics }
+})
+vi.mock('../../lib/kitty/kittyGraphics', () => ({ installKittyGraphics: kitty.installKittyGraphics }))
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: xterm.FakeAddon }))
 vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: xterm.FakeAddon }))
 
@@ -163,6 +184,28 @@ function windowFrame(state: Record<string, unknown>): ArrayBuffer {
   const body = new TextEncoder().encode(JSON.stringify(state))
   const bytes = new Uint8Array(1 + body.length)
   bytes[0] = 0x01
+  bytes.set(body, 1)
+  return bytes.buffer
+}
+
+function outputFrame(windowId: string, paneId: string, data: string): ArrayBuffer {
+  const encoder = new TextEncoder()
+  const win = encoder.encode(windowId)
+  const pane = encoder.encode(paneId)
+  const body = encoder.encode(data)
+  const bytes = new Uint8Array(3 + win.length + pane.length + body.length)
+  bytes[1] = win.length
+  bytes.set(win, 2)
+  bytes[2 + win.length] = pane.length
+  bytes.set(pane, 3 + win.length)
+  bytes.set(body, 3 + win.length + pane.length)
+  return bytes.buffer
+}
+
+function lifecycleFrame(payload: Record<string, unknown>): ArrayBuffer {
+  const body = new TextEncoder().encode(JSON.stringify(payload))
+  const bytes = new Uint8Array(1 + body.length)
+  bytes[0] = 0x02
   bytes.set(body, 1)
   return bytes.buffer
 }
@@ -336,6 +379,7 @@ function setHidden(hidden: boolean): void {
 describe('AgentsMode', () => {
   beforeEach(() => {
     xterm.FakeTerminal.instances = []
+    kitty.installed.length = 0
     wailsEvents.handlers = []
     globalThis.ResizeObserver = FakeResizeObserver as unknown as typeof ResizeObserver
     mocks.Available.mockResolvedValue({ available: true, reason: '' })
@@ -711,6 +755,30 @@ describe('AgentsMode', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="agents-scroll-to-bottom"]').exists()).toBe(false)
+  })
+
+  it('runs pane output through the Kitty graphics filter', async () => {
+    const { client } = await mountWithOpenChat()
+
+    openedSocket(client).onmessage?.({ data: outputFrame('w1', '%1', 'hello') })
+
+    const written = kitty.installed[0].filter.rewrite.mock.calls[0][0] as Uint8Array
+    expect(new TextDecoder().decode(written)).toBe('hello')
+    expect(xterm.FakeTerminal.instances.at(-1)!.write).toHaveBeenCalledWith(written)
+  })
+
+  // A degraded frame names no window, and the repaint behind it replaces the
+  // stream the images were placed from.
+  it('drops Kitty images on a degraded stream and keeps the chat open', async () => {
+    const { wrapper, client } = await mountWithOpenChat()
+
+    openedSocket(client).onmessage?.({ data: lifecycleFrame({ kind: 'degraded', windowId: '', message: 'overflow' }) })
+    await flushPromises()
+
+    expect(kitty.installed[0].filter.reset).toHaveBeenCalled()
+    expect(kitty.installed[0].clear).toHaveBeenCalled()
+    expect(kitty.installed[0].dispose).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="agents-pane-statusbar"]').exists()).toBe(true)
   })
 
   it('frames keystrokes for the pane the launch named', async () => {

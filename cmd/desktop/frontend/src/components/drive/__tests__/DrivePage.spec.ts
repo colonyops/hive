@@ -4,7 +4,7 @@ import { defineComponent, h, ref } from 'vue'
 import DrivePage from '../DrivePage.vue'
 import type { DriveScope } from '../../../lib/drive'
 import type { EntryWire } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
-import { chooseOption, openSelect } from '../../../test-utils/select'
+import { chooseOption, openSelect } from '@hive/ui/test-utils/select'
 import { doc, documentFor, folder, root, space } from '../../../test-utils/drive'
 
 const wailsEvents = vi.hoisted(() => ({
@@ -39,7 +39,10 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({
   Focused: vi.fn().mockResolvedValue(true),
 }))
-const settingsBindings = vi.hoisted(() => ({ AppearanceSettings: vi.fn() }))
+const settingsBindings = vi.hoisted(() => ({
+  AppearanceSettings: vi.fn(),
+  ReviewLabels: vi.fn().mockResolvedValue(null),
+}))
 vi.mock(
   '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice',
   () => settingsBindings,

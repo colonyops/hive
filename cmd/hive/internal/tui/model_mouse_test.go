@@ -46,6 +46,7 @@ func (g *mouseTestGit) Checkout(_ context.Context, _, _ string) error         { 
 func (g *mouseTestGit) Pull(_ context.Context, _ string) error                { return nil }
 func (g *mouseTestGit) ResetHard(_ context.Context, _ string) error           { return nil }
 func (g *mouseTestGit) RemoteURL(_ context.Context, _ string) (string, error) { return "", nil }
+func (g *mouseTestGit) SetRemoteURL(_ context.Context, _, _ string) error     { return nil }
 func (g *mouseTestGit) IsClean(_ context.Context, _ string) (bool, error)     { return true, nil }
 
 func (g *mouseTestGit) Branch(_ context.Context, _ string) (string, error) { return "main", nil }

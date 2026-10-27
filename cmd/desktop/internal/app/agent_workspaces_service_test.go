@@ -798,6 +798,28 @@ func TestAllSessionsSpansEveryWorkspaceInStableCreationOrder(t *testing.T) {
 	assert.Equal(t, "demo-a", all[1].Workspace)
 }
 
+func TestRunningChatsListsOnlyLiveChatsWithTheirPane(t *testing.T) {
+	isolateConfig(t)
+	root := t.TempDir()
+	agentCmd := fakeAgentBinary(t, "claude", "cat")
+	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
+	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": agentCmd})
+
+	live, err := svc.StartSession(t.Context(), StartSession{Workspace: "demo", Name: "live", Cols: 80, Rows: 24})
+	require.NoError(t, err)
+	closed, err := svc.StartSession(t.Context(), StartSession{Workspace: "demo", Name: "closed", Cols: 80, Rows: 24})
+	require.NoError(t, err)
+	_, err = svc.CloseSession(t.Context(), closed.ID)
+	require.NoError(t, err)
+
+	running, err := svc.RunningChats(t.Context())
+	require.NoError(t, err)
+	require.Len(t, running, 1)
+	assert.Equal(t, live.ID, running[0].ID)
+	assert.Equal(t, "demo", running[0].Workspace)
+	assert.Equal(t, live.PaneID, running[0].Pane)
+}
+
 func TestRenameSession(t *testing.T) {
 	isolateConfig(t)
 	root := t.TempDir()
@@ -1084,6 +1106,7 @@ func TestStartScheduledSessionFramesThePromptAndHandsOutTheToken(t *testing.T) {
 	assert.Contains(t, args, `scheduled task "Weekly summary" in the "Demo" workspace`)
 	assert.Contains(t, args, "Summarize the week.")
 	assert.Contains(t, args, "you MUST end this session")
+	assert.Contains(t, env, "PI_IMAGE_PROTOCOL=kitty\n")
 	assert.Contains(t, env, "HIVE_AGENT_SESSION_TOKEN="+rec.EndToken+"\n")
 	assert.Contains(t, env, "HIVE_AGENT_SESSION_END_URL=http://127.0.0.1:4321"+AgentSessionEndPath+"\n")
 }

@@ -31,10 +31,16 @@ site/
 .venv/
 .cache/
 
+# Hive Drive Server (cmd/drive-server)
+/hive-drive-server
+cmd/drive-server/bin/
+
 # Hive Desktop (cmd/desktop)
 .DS_Store
 *.log
 bin/
+# A Go package, not build output.
+!/internal/platform/tmux/bin/
 node_modules/
 # `wails3 generate bindings` stages into a temp directory beside the frontend
 # and swaps it into cmd/desktop/frontend/bindings/. An interrupted run leaves

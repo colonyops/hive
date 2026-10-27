@@ -7,8 +7,8 @@ import IconSquareTerminal from '~icons/lucide/square-terminal'
 import IconX from '~icons/lucide/x'
 import { Cancel } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/jobservice'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
-import IconButton from './ui/IconButton.vue'
-import Spinner from './ui/Spinner.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import Spinner from '@hive/ui/components/ui/Spinner.vue'
 import { createLogger } from '../lib/log'
 
 const log = createLogger('jobs-popover')
