@@ -24,6 +24,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/platform/execenv"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/platform/promptfile"
@@ -115,6 +116,7 @@ type SessionRisk struct {
 // reload reaches the next call.
 type SessionsService struct {
 	hive              *hive.Engine
+	sessions          sessionapi.API
 	launcher          sessionLauncher
 	workspaceLauncher workspaceSessionLauncher
 	windows           sessionWindowSource
@@ -162,7 +164,10 @@ type NopEditorCommandReader struct{}
 func (NopEditorCommandReader) Editor(context.Context) (string, error) { return "", nil }
 
 type SessionsDeps struct {
-	Hive              *hive.Engine
+	Hive *hive.Engine
+	// Sessions is the session API for reads, writes, and status. nil means
+	// the in-process engine. Tmux helpers and git reads stay on Hive.
+	Sessions          sessionapi.API
 	Launcher          sessionLauncher
 	WorkspaceLauncher workspaceSessionLauncher
 	// Windows maps a session's windows to their stable tmux ids. nil leaves
@@ -197,8 +202,12 @@ func newSessionsService(d SessionsDeps) *SessionsService {
 	if d.DefaultAgentEnv == nil {
 		d.DefaultAgentEnv = NopDefaultAgentReader{}
 	}
+	if d.Sessions == nil {
+		d.Sessions = sessionapi.NewLocal(d.Hive)
+	}
 	return &SessionsService{
 		hive:              d.Hive,
+		sessions:          d.Sessions,
 		launcher:          d.Launcher,
 		workspaceLauncher: d.WorkspaceLauncher,
 		windows:           d.Windows,
@@ -225,7 +234,7 @@ func newSessionsService(d SessionsDeps) *SessionsService {
 //
 // Local source paths stay here: the form gets labels, remotes, and agent keys.
 func (s *SessionsService) SessionLaunchOptions(ctx context.Context) (dispatch.SessionLaunchOptions, error) {
-	options, err := s.hive.Sessions().SessionLaunchOptions(ctx)
+	options, err := s.sessions.SessionLaunchOptions(ctx)
 	if err != nil {
 		return dispatch.SessionLaunchOptions{}, Wrap(err, KindInternal, "resolving session launch options")
 	}
@@ -309,7 +318,7 @@ func (s *SessionsService) CanonicalSpace(space drive.Space) drive.Space {
 }
 
 func (s *SessionsService) ListSessions(ctx context.Context) ([]session.Session, error) {
-	sessions, err := s.hive.Sessions().ListSessions(ctx)
+	sessions, err := s.sessions.ListSessions(ctx)
 	if err != nil {
 		return nil, Wrap(err, KindInternal, "listing sessions")
 	}
@@ -411,7 +420,7 @@ func (s *SessionsService) SessionDetail(ctx context.Context, id string) (session
 	if strings.TrimSpace(id) == "" {
 		return session.Session{}, Errorf(KindInvalid, "session id is required")
 	}
-	detail, err := s.hive.Sessions().GetSession(ctx, id)
+	detail, err := s.sessions.GetSession(ctx, id)
 	if err != nil {
 		return session.Session{}, Wrap(err, KindNotFound, "reading session %q", id)
 	}
@@ -429,7 +438,7 @@ func (s *SessionsService) SessionGitStatus(ctx context.Context, id string) (gits
 	if strings.TrimSpace(id) == "" {
 		return gitstatus.Status{}, Errorf(KindInvalid, "session id is required")
 	}
-	sess, err := s.hive.Sessions().GetSession(ctx, id)
+	sess, err := s.sessions.GetSession(ctx, id)
 	if err != nil {
 		return gitstatus.Status{}, Wrap(err, KindNotFound, "reading git status for session %q", id)
 	}
@@ -499,12 +508,14 @@ func (s *SessionsService) SessionRisk(ctx context.Context, id string) (SessionRi
 	if strings.TrimSpace(id) == "" {
 		return SessionRisk{}, Errorf(KindInvalid, "session id is required")
 	}
-	sessions := s.hive.Sessions()
-	sess, err := sessions.GetSession(ctx, id)
+	sess, err := s.sessions.GetSession(ctx, id)
 	if err != nil {
 		return SessionRisk{}, Wrap(err, KindNotFound, "checking session %q", id)
 	}
-	risk := sessions.CheckRisk(ctx, sess)
+	risk, err := s.sessions.CheckSessionRisk(ctx, id)
+	if err != nil {
+		return SessionRisk{}, Wrap(err, KindNotFound, "checking session %q", id)
+	}
 	return SessionRisk{
 		UncommittedChanges: risk.UncommittedChanges,
 		UnpushedCommits:    risk.UnpushedCommits,
@@ -724,8 +735,7 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 		return session.Session{}, Wrap(err, KindInvalid, "session name")
 	}
 
-	sessions := s.hive.Sessions()
-	current, err := sessions.GetSession(ctx, id)
+	current, err := s.sessions.GetSession(ctx, id)
 	if err != nil {
 		return session.Session{}, Wrap(err, KindNotFound, "reading session %q", id)
 	}
@@ -739,7 +749,7 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 	if err != nil {
 		return session.Session{}, Wrap(err, KindConflict, "renaming the terminal session for %q", current.Name)
 	}
-	if err := sessions.RenameSession(ctx, id, name); err != nil {
+	if err := s.sessions.RenameSession(ctx, id, name); err != nil {
 		if tmuxRenamed {
 			rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionRenameRollbackTimeout)
 			defer cancel()
@@ -750,7 +760,7 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 		return session.Session{}, Wrap(err, KindInternal, "renaming session %q", current.Name)
 	}
 
-	renamed, err := sessions.GetSession(ctx, id)
+	renamed, err := s.sessions.GetSession(ctx, id)
 	if err != nil {
 		return session.Session{}, Wrap(err, KindInternal, "re-reading renamed session %q", id)
 	}
@@ -838,7 +848,7 @@ func (s *SessionsService) detailBySlug(ctx context.Context, slug string) (sessio
 // block on. The caller is expected to have confirmed against SessionRisk first.
 func (s *SessionsService) DeleteSession(ctx context.Context, id string) (int64, error) {
 	return s.destructiveJob(ctx, id, "Delete session", deleteSessionJobActionID, func(ctx context.Context, id string) error {
-		if err := s.hive.Sessions().DeleteSession(ctx, id); err != nil {
+		if err := s.sessions.DeleteSession(ctx, id); err != nil {
 			return fmt.Errorf("delete hive session: %w", err)
 		}
 		return nil
@@ -854,7 +864,7 @@ func (s *SessionsService) DeleteSession(ctx context.Context, id string) (int64, 
 // their stdout would need a job log to stream into.
 func (s *SessionsService) RecycleSession(ctx context.Context, id string) (int64, error) {
 	return s.destructiveJob(ctx, id, "Recycle session", recycleSessionJobActionID, func(ctx context.Context, id string) error {
-		if err := s.hive.Sessions().RecycleSession(ctx, id, io.Discard); err != nil {
+		if err := s.sessions.RecycleSession(ctx, id, io.Discard); err != nil {
 			return fmt.Errorf("recycle hive session: %w", err)
 		}
 		return nil
@@ -870,7 +880,7 @@ func (s *SessionsService) RecycleSession(ctx context.Context, id string) (int64,
 // can honestly name, so the desktop exposes the unambiguous one.
 func (s *SessionsService) PruneSessions(ctx context.Context) (int64, error) {
 	return s.jobs.Track(ctx, "Prune sessions", pruneSessionsJobActionID, "", func(bg context.Context) error {
-		if _, err := s.hive.Sessions().Prune(bg, true); err != nil {
+		if _, err := s.sessions.Prune(bg, true); err != nil {
 			return fmt.Errorf("prune hive sessions: %w", err)
 		}
 		return nil
@@ -884,7 +894,7 @@ func (s *SessionsService) destructiveJob(ctx context.Context, id, label, actionI
 	if strings.TrimSpace(id) == "" {
 		return 0, Errorf(KindInvalid, "session id is required")
 	}
-	detail, err := s.hive.Sessions().GetSession(ctx, id)
+	detail, err := s.sessions.GetSession(ctx, id)
 	if err != nil {
 		return 0, Wrap(err, KindNotFound, "reading session %q", id)
 	}
@@ -897,7 +907,7 @@ func (s *SessionsService) destructiveJob(ctx context.Context, id, label, actionI
 // or live tmux target. Hive validates the new name but does not check it for
 // collisions, and the session table has no uniqueness constraint.
 func (s *SessionsService) assertSlugFree(ctx context.Context, id, slug string) error {
-	sessions, err := s.hive.Sessions().ListSessions(ctx)
+	sessions, err := s.sessions.ListSessions(ctx)
 	if err != nil {
 		return Wrap(err, KindInternal, "checking existing session names")
 	}

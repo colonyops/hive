@@ -47,9 +47,9 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/terminalimg"
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
-	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	hiveevents "github.com/colonyops/hive/internal/hive/events"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/platform/execenv"
 	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
@@ -210,6 +210,7 @@ type App struct {
 
 	// hive owns the config-derived services and swaps them on Reload.
 	hive        *hive.Engine
+	sessions    sessionapi.API
 	hiveRuntime *hive.Runtime
 	launcher    *dispatch.RepositoryLauncher
 
@@ -352,7 +353,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		return nil, err
 	}
 	a.hiveWatcher = hivewatch.New(hiveWatchInterval, cfg.Logger,
-		sessionsProbe(func(ctx context.Context) ([]session.Session, error) { return a.hive.Sessions().ListSessions(ctx) }, a.Events),
+		sessionsProbe(a.sessions.ListSessions, a.Events),
 		tasksProbe(a.hive.HC().Fingerprint, a.Events),
 	)
 	a.popupTerminals = ptyterm.NewManager(ptyterm.ManagerOptions{Environ: a.execEnv.Environ})
@@ -500,7 +501,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Remotes:  a.generatedRemote,
 	})
 	a.Sessions = newSessionsService(SessionsDeps{
-		Hive: a.hive, Launcher: a.launcher, WorkspaceLauncher: a.AgentWorkspaces,
+		Hive: a.hive, Sessions: a.sessions, Launcher: a.launcher, WorkspaceLauncher: a.AgentWorkspaces,
 		Windows: a.terminals, Tmux: a.terminals,
 		AgentWindows: a.terminals, AgentCommands: a.profileCommands,
 		Jobs: a.Jobs, Items: a.Stores.InboxItems, Links: a.Stores.ItemSessions, Catalog: a.actionStore, Dispatcher: a.dispatcher,
@@ -1281,11 +1282,12 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	}
 	a.hiveRuntime = hiveRuntime
 	a.hive = hiveRuntime.Engine()
+	a.sessions = sessionapi.NewLocal(a.hive)
 	logDroppedHiveEvents(a.logger, hiveRuntime.Bus())
 	forwardDriveChanges(ctx, hiveRuntime.Bus(), a.Events)
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
 	a.launcher = dispatch.NewRepositoryLauncher(
-		func() dispatch.SessionCreator { return a.hive.Sessions() },
+		func() dispatch.SessionCreator { return a.sessions },
 		a.Stores.ItemSessions, a.Activity, cfg.Logger,
 	)
 	// After StartRuntime so the canvases land under the engine's context root.
