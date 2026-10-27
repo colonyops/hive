@@ -1,6 +1,7 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { Window } from '@wailsio/runtime'
+import { useDrivePaneRequests } from '../composables/useDrivePaneRequests'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
@@ -173,6 +174,11 @@ export function useAppMode(
   // One control per frame edge: the right toggle names the detail preview in
   // Inbox and the drive pane in Chats and Code (hay-kot/hive-desktop#432).
   const agentsDriveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
+  useDrivePaneRequests(
+    () => (agentsDriveAvailable.value ? routeChatId.value : (codeDrive.value?.session ?? null)),
+    syncDocQuery,
+  )
+
   const driveAvailable = computed(() => agentsDriveAvailable.value || codeDrive.value !== null)
   const previewToggleCollapsed = computed(() => {
     if (driveActive.value) return review.pageCommentsCollapsed.value
@@ -187,8 +193,9 @@ export function useAppMode(
 
   function togglePreview(): void {
     if (driveActive.value) review.togglePageComments()
-    else if (driveAvailable.value) syncDocQuery(!docRequested.value)
-    else previewCollapsed.value = !previewCollapsed.value
+    else if (driveAvailable.value) {
+      void syncDocQuery(!docRequested.value).catch((error: unknown) => log.warn('Could not toggle Drive pane', error))
+    } else previewCollapsed.value = !previewCollapsed.value
   }
 
   // What the drive pane beside the open chat or Code session shows, or would

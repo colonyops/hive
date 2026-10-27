@@ -121,6 +121,7 @@ type SessionsService struct {
 	tmux              sessionTmux
 	agentWindows      sessionAgentWindows
 	agentCommands     func() map[string]string
+	agentArgs         func(context.Context) map[string][]string
 	jobs              sessionJobRunner
 	items             inboxItemRefReader
 	links             itemSessionStore
@@ -171,6 +172,7 @@ type SessionsDeps struct {
 	Tmux          sessionTmux
 	AgentWindows  sessionAgentWindows
 	AgentCommands func() map[string]string
+	AgentArgs     func(context.Context) map[string][]string
 	Jobs          sessionJobRunner
 	Items         inboxItemRefReader
 	Links         itemSessionStore
@@ -205,6 +207,7 @@ func newSessionsService(d SessionsDeps) *SessionsService {
 		tmux:              d.Tmux,
 		agentWindows:      d.AgentWindows,
 		agentCommands:     d.AgentCommands,
+		agentArgs:         d.AgentArgs,
 		jobs:              d.Jobs,
 		items:             d.Items,
 		links:             d.Links,
@@ -787,7 +790,7 @@ func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) (mu
 	// Detached: the desktop attaches over control mode, and an attaching spawn
 	// would hand the session to whatever terminal launched the app, or fail
 	// for a launcher that has none.
-	result, err := s.hive.Sessions().OpenTmuxSession(ctx, detail.Name, detail.Path, detail.Remote, "", true)
+	result, err := s.hive.Sessions().OpenTmuxSessionWithAgentArgs(ctx, detail.Name, detail.Path, detail.Remote, "", true, s.launchAgentArgs(ctx))
 	if err != nil {
 		return multiplexer.LaunchResult{}, sessionStartError(detail.Name, err)
 	}
@@ -907,4 +910,11 @@ func (s *SessionsService) assertSlugFree(ctx context.Context, id, slug string) e
 		}
 	}
 	return nil
+}
+
+func (s *SessionsService) launchAgentArgs(ctx context.Context) map[string][]string {
+	if s.agentArgs == nil {
+		return nil
+	}
+	return s.agentArgs(ctx)
 }

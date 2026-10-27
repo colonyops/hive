@@ -221,6 +221,7 @@ export interface DocumentWire {
  * leaves the pane's pick).
  */
 export interface DriveToggle {
+    "requestId": string;
     "session": string;
     "hiveSession": string;
     "space": string;

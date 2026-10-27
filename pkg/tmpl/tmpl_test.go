@@ -1,6 +1,7 @@
 package tmpl
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -272,5 +273,22 @@ func TestRenderer_UntrustedAttributesAndNotice(t *testing.T) {
 	} {
 		_, err := r.Render(bad, nil)
 		assert.Errorf(t, err, name)
+	}
+}
+
+func TestWithAgentArgsAreIsolatedAndShellQuoted(t *testing.T) {
+	base := New(Config{AgentCommand: "claude", AgentFlags: "--verbose"})
+	payload := `{"url":"http://localhost:1234", "literal":"$HOME $(echo unsafe) '"}`
+	args := map[string][]string{"codex": {"-c", payload}}
+	configured := base.WithAgent("/usr/local/bin/codex", "codex", "--quiet").WithAgentArgs(args)
+	rendered, err := configured.Render(`printf '%s\n' {{ agentFlags }}`, nil)
+	require.NoError(t, err)
+	output, err := exec.Command("sh", "-c", rendered).Output()
+	require.NoError(t, err)
+	require.Equal(t, "--quiet\n-c\n"+payload+"\n", string(output))
+	for _, r := range []*Renderer{base, base.WithAgentArgs(args)} {
+		got, err := r.Render(`{{ agentFlags }}`, nil)
+		require.NoError(t, err)
+		require.Equal(t, "--verbose", got)
 	}
 }

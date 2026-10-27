@@ -125,6 +125,7 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 	})
 	t.Cleanup(cancelUpdated)
 	cancelToggled := events.Subscribe(t.Context(), bus, "test.canvas-toggled", events.Buffer(64), func(_ context.Context, e events.DriveToggleRequested) {
+		e.RequestID = ""
 		signals.addToggle(e)
 	})
 	t.Cleanup(cancelToggled)
@@ -139,6 +140,15 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 		Sessions: fakeCanvasSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
 		Events:   bus,
 	})
+	cancelAck := events.Subscribe(t.Context(), bus, "test.pane-ack", events.Buffer(64), func(ctx context.Context, e events.DriveToggleRequested) {
+		status := "closed"
+		if e.Open {
+			status = "opened"
+		}
+		assert.NoError(t, svc.AcknowledgePane(ctx, e.RequestID, status))
+	})
+	t.Cleanup(cancelAck)
+
 	return driveFixture{svc: svc, signals: signals, harness: h}
 }
 
@@ -429,16 +439,16 @@ func TestCanvasSetPaneOpen(t *testing.T) {
 	f := newDriveFixture(t)
 	ctx := t.Context()
 
-	require.NoError(t, f.svc.SetPaneOpen(ctx, "1", "", true), "opening without a name leaves the pane's own pick")
-	err := f.svc.SetPaneOpen(ctx, "1", "ghost", true)
+	require.NoError(t, setTestPane(f.svc, ctx, "1", "", true), "opening without a name leaves the pane's own pick")
+	err := setTestPane(f.svc, ctx, "1", "ghost", true)
 	assert.Equal(t, KindNotFound, KindOf(err), "opening pinned to a canvas requires it to exist")
 
 	_, err = f.svc.PutBlock(ctx, "1", "plan", "", "", markdownBlock("a", "x"))
 	require.NoError(t, err)
-	require.NoError(t, f.svc.SetPaneOpen(ctx, "1", "plan", true))
-	require.NoError(t, f.svc.SetPaneOpen(ctx, "1", "canvases/plan.canvas.json", true), "a document path pins the same canvas")
-	require.NoError(t, f.svc.SetPaneOpen(ctx, "1", "", false))
-	err = f.svc.SetPaneOpen(ctx, "99", "", true)
+	require.NoError(t, setTestPane(f.svc, ctx, "1", "plan", true))
+	require.NoError(t, setTestPane(f.svc, ctx, "1", "canvases/plan.canvas.json", true), "a document path pins the same canvas")
+	require.NoError(t, setTestPane(f.svc, ctx, "1", "", false))
+	err = setTestPane(f.svc, ctx, "99", "", true)
 	assert.Equal(t, KindNotFound, KindOf(err))
 
 	assert.Equal(t, []events.DriveToggleRequested{
@@ -628,14 +638,14 @@ func TestAgentsOutsideEverySessionShareTheSharedSpace(t *testing.T) {
 	notes := events.DriveChanged{Space: drive.SharedKey, Paths: []string{"canvases/notes.canvas.json"}}
 	assert.Equal(t, []events.DriveChanged{notes, notes}, updates, "shared writes still wake the readers, with no author")
 
-	err = f.svc.SetPaneOpen(ctx, "global", "notes", true)
+	err = setTestPane(f.svc, ctx, "global", "notes", true)
 	assert.Equal(t, KindInvalid, KindOf(err), "a shared canvas has no pane")
 }
 
 func TestCanvasPaneToggleNamesTheHiveSession(t *testing.T) {
 	f := newDriveFixture(t, siteSession)
 
-	require.NoError(t, f.svc.SetPaneOpen(t.Context(), siteSession.Path, "", true))
+	require.NoError(t, setTestPane(f.svc, t.Context(), siteSession.Path, "", true))
 
 	toggles := f.signals.waitToggles(t, 1)
 	assert.Equal(t, events.DriveToggleRequested{HiveSession: "abc123", Space: "acme/site", Open: true}, toggles[0])
@@ -1043,4 +1053,9 @@ func TestDriveLocateAndReveal(t *testing.T) {
 	assert.Equal(t, []string{filepath.Join(spaceDir, "plans")}, revealed)
 	assert.Equal(t, KindNotFound, KindOf(f.svc.Reveal(ctx, "workspaces/ws", "ghost.md")))
 	assert.Len(t, revealed, 1, "a path that is not there is never handed to the file manager")
+}
+
+func setTestPane(s *DriveService, ctx context.Context, session, canvas string, open bool) error {
+	_, err := s.SetPaneOpen(ctx, session, canvas, open)
+	return err
 }

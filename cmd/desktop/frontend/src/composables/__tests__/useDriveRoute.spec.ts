@@ -71,7 +71,7 @@ describe('useDriveRoute', () => {
     expect(api.routeChatId.value).toBeNull()
     expect(api.docRequested.value).toBe(false)
 
-    api.syncDocQuery(true)
+    await api.syncDocQuery(true)
     await flushPromises()
     expect(router.currentRoute.value.query.doc).toBeUndefined()
   })
@@ -80,15 +80,15 @@ describe('useDriveRoute', () => {
     const { api, router } = await mountAt('/workspaces/web-app?chat=7')
     const depth = window.history.length
 
-    api.syncDocQuery(true)
+    await api.syncDocQuery(true)
     await flushPromises()
     expect(router.currentRoute.value.query.doc).toBe('1')
 
-    api.syncDocQuery(true, 'plans/x.md')
+    await api.syncDocQuery(true, 'plans/x.md')
     await flushPromises()
     expect(router.currentRoute.value.query.doc).toBe('plans/x.md')
 
-    api.syncDocQuery(false)
+    await api.syncDocQuery(false)
     await flushPromises()
     expect(router.currentRoute.value.query.doc).toBeUndefined()
     expect(window.history.length).toBe(depth)
@@ -97,7 +97,7 @@ describe('useDriveRoute', () => {
   // A bare open after a named one keeps the path rather than resetting the pick.
   it('keeps the pinned path on a bare reopen', async () => {
     const { api, router } = await mountAt('/workspaces/web-app?chat=7&doc=plans%2Fx.md')
-    api.syncDocQuery(true)
+    await api.syncDocQuery(true)
     await flushPromises()
     expect(router.currentRoute.value.query.doc).toBe('plans/x.md')
   })
@@ -125,7 +125,7 @@ describe('useDriveRoute', () => {
     const { api, router } = await mountAt('/terminal/fix-login?window=%402')
     expect(api.docRequested.value).toBe(false)
 
-    api.syncDocQuery(true)
+    await api.syncDocQuery(true)
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('terminal')
     expect(router.currentRoute.value.params.slug).toBe('fix-login')
@@ -133,7 +133,7 @@ describe('useDriveRoute', () => {
     expect(api.docRequested.value).toBe(true)
     expect(api.docVisible.value).toBe(false)
 
-    api.syncDocQuery(false)
+    await api.syncDocQuery(false)
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({ window: '@2' })
   })

@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { isNavigationFailure, useRoute, useRouter } from 'vue-router'
 import { useDriveActivity } from '../stores/useDriveActivity'
 
 // The drive pane rides the route in Chats and in Code alike: ?doc opens it
@@ -31,12 +31,17 @@ export function useDriveRoute() {
 
   // Written with replace so history never stacks. A bare open (no path) keeps
   // whatever path the query already carried, falling back to '1': "you pick".
-  function syncDocQuery(open: boolean, path?: string | null): void {
+  async function syncDocQuery(open: boolean, path?: string | null): Promise<void> {
     if (!onDriveRoute.value) return
     const current = typeof route.query.doc === 'string' && route.query.doc !== '' ? route.query.doc : '1'
     const next = open ? (path === null ? '1' : (path ?? current)) : undefined
     if (route.query.doc === next) return
-    void router.replace({ name: route.name, params: route.params, query: { ...route.query, doc: next } })
+    const failure = await router.replace({
+      name: route.name,
+      params: route.params,
+      query: { ...route.query, doc: next },
+    })
+    if (isNavigationFailure(failure)) throw new Error(failure.message)
   }
 
   const docUnseen = computed(() => activity.isUnseen(routeChatId.value))

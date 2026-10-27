@@ -135,7 +135,7 @@ Use <kbd>J</kbd> and <kbd>K</kbd> (or the arrow keys) to move the selection. On 
 
 ## Drive
 
-An agent in a Code session can publish documents to Drive the same way a chat does. Hive does not change your agent's configuration, so add the server yourself. **Settings ▸ MCP servers** shows the address of the Hive Drive server and the command or config entry for Claude Code, Codex, and other agents. For Claude Code it is:
+An agent in a Code session can publish documents to Drive the same way a chat does. New Claude Code and Codex processes launched by Hive receive the launching app's Drive and desktop MCP addresses as command-line overrides. This keeps a development build separate from an installed app without editing global agent configuration. Relaunch an existing agent to receive these overrides. Custom wrappers, agents started outside Hive, and spawn templates that omit `agentFlags` need manual configuration. **Settings ▸ MCP servers** shows the address of the Hive Drive server and the command or config entry for Claude Code, Codex, and other agents. For Claude Code it is:
 
 ```bash
 claude mcp add --scope user --transport http hive-drive http://127.0.0.1:<port>/mcp/drive
@@ -144,6 +144,8 @@ claude mcp add --scope user --transport http hive-drive http://127.0.0.1:<port>/
 The address stays the same across restarts. An agent already set up with `/mcp/canvas` keeps working. The server needs the local HTTP server, which is enabled by default. An empty Drive pane in Code links to the same settings page.
 
 Open the Drive pane beside a session with the right-panel button in the title bar. A session's documents belong to its repository, so every session of that repository shows the same ones, and they remain after the session is deleted. They are in `<root>/<owner>/<repo>/` under the hive context directory, which `hive drive init` links into a checkout as `.hive`, so a file you write to `.hive/plans/` shows in the pane within a second.
+
+An agent can open a collapsed pane while you view its session. The open result reports whether the pane opened, the session is not visible, navigation failed, or the app did not respond. Its `instanceUrl` identifies the app that handled the request.
 
 The pane, the Drive page, search, reorganizing, and the document tools work as they do in [Chats](../chats/agent-workspaces.md#drive). A scratch terminal has no Drive pane.
 

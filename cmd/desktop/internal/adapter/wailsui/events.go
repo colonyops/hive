@@ -143,9 +143,10 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		events.Subscribe(ctx, bus, "wailsui.drive", events.Buffer(64), func(_ context.Context, e events.DriveChanged) {
 			emitDriveUpdated(DriveWrite{Space: e.Space, Paths: e.Paths, Session: e.Session, HiveSession: e.HiveSession})
 		}),
-		events.Subscribe(ctx, bus, "wailsui.drive-toggle", events.Coalesce(), func(_ context.Context, e events.DriveToggleRequested) {
+		events.Subscribe(ctx, bus, "wailsui.drive-toggle", events.Buffer(64), func(_ context.Context, e events.DriveToggleRequested) {
 			emitDriveToggle(DriveToggle{
-				Session: e.Session, HiveSession: e.HiveSession,
+				RequestID: e.RequestID,
+				Session:   e.Session, HiveSession: e.HiveSession,
 				Space: e.Space, Path: e.Path, Open: e.Open,
 			})
 		}),
@@ -232,6 +233,7 @@ func emitDriveUpdated(write DriveWrite) {
 // chat's or a hive session's, and the document to pin when opening (empty
 // leaves the pane's pick).
 type DriveToggle struct {
+	RequestID   string `json:"requestId"`
 	Session     string `json:"session"`
 	HiveSession string `json:"hiveSession"`
 	Space       string `json:"space"`

@@ -502,7 +502,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.Sessions = newSessionsService(SessionsDeps{
 		Hive: a.hive, Launcher: a.launcher, WorkspaceLauncher: a.AgentWorkspaces,
 		Windows: a.terminals, Tmux: a.terminals,
-		AgentWindows: a.terminals, AgentCommands: a.profileCommands,
+		AgentWindows: a.terminals, AgentCommands: a.profileCommands, AgentArgs: a.codeAgentArgs,
 		Jobs: a.Jobs, Items: a.Stores.InboxItems, Links: a.Stores.ItemSessions, Catalog: a.actionStore, Dispatcher: a.dispatcher,
 		Recorder: a.Activity, Events: a.Events, Logger: cfg.Logger,
 		Forges: newSessionForges(
@@ -1286,7 +1286,7 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
 	a.launcher = dispatch.NewRepositoryLauncher(
 		func() dispatch.SessionCreator { return a.hive.Sessions() },
-		a.Stores.ItemSessions, a.Activity, cfg.Logger,
+		a.Stores.ItemSessions, a.Activity, cfg.Logger, a.codeAgentArgs,
 	)
 	// After StartRuntime so the canvases land under the engine's context root.
 	// It runs once per process: ReloadHiveRuntime never repeats it, so a

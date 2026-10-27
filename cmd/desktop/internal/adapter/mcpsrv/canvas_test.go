@@ -1,6 +1,7 @@
 package mcpsrv_test
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -14,6 +15,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/adapter/mcpsrv"
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/mcpcatalog"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 )
@@ -35,6 +37,15 @@ func testCanvasSession(t *testing.T) (*app.App, *mcp.ClientSession) {
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
+
+	cancelAck := events.Subscribe(t.Context(), core.Events, "test.pane-ack", events.Buffer(64), func(ctx context.Context, e events.DriveToggleRequested) {
+		status := "closed"
+		if e.Open {
+			status = "opened"
+		}
+		assert.NoError(t, core.Drive.AcknowledgePane(ctx, e.RequestID, status))
+	})
+	t.Cleanup(cancelAck)
 
 	srv := mcpsrv.NewDrive(core, zerolog.Nop(), mcpsrv.Options{Version: "test"}).Server()
 
@@ -220,10 +231,14 @@ func TestCanvasPaneToggle(t *testing.T) {
 	id := seedAgentSession(t, core, "demo", "chat")
 
 	var pane struct {
-		Requested string `json:"requested"`
+		Requested   string `json:"requested"`
+		Status      string `json:"status"`
+		InstanceURL string `json:"instanceUrl"`
 	}
 	call(t, session, "open_canvas", map[string]any{"session": id}, &pane)
-	assert.Equal(t, "open", pane.Requested, "the result reports the ask, not a pane state nothing acknowledges")
+	assert.Equal(t, "open", pane.Requested)
+	assert.Equal(t, "opened", pane.Status)
+	assert.Equal(t, core.MCPBaseURL(t.Context()), pane.InstanceURL)
 
 	text := callErr(t, session, "open_canvas", map[string]any{"session": id, "canvas": "ghost"})
 	assert.Contains(t, text, "not_found", "pinning the pane to a canvas requires it to exist")
@@ -235,6 +250,7 @@ func TestCanvasPaneToggle(t *testing.T) {
 
 	call(t, session, "close_canvas", map[string]any{"session": id}, &pane)
 	assert.Equal(t, "close", pane.Requested)
+	assert.Equal(t, "closed", pane.Status)
 }
 
 func TestCanvasToolErrors(t *testing.T) {

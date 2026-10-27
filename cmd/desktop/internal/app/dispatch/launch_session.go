@@ -31,16 +31,17 @@ type ItemSessionLinker interface {
 // it to the inbox items it came from and records it in the activity log. It
 // calls sessions once per launch, so a hive config reload reaches the next one.
 type RepositoryLauncher struct {
-	sessions func() SessionCreator
-	links    ItemSessionLinker
-	recorder activity.Recorder
-	logger   zerolog.Logger
+	sessions  func() SessionCreator
+	links     ItemSessionLinker
+	recorder  activity.Recorder
+	logger    zerolog.Logger
+	agentArgs func(context.Context) map[string][]string
 }
 
 // NewRepositoryLauncher returns a launcher over sessions. links and recorder
 // may be nil: the session is still created, with no link and no activity row.
-func NewRepositoryLauncher(sessions func() SessionCreator, links ItemSessionLinker, recorder activity.Recorder, logger zerolog.Logger) *RepositoryLauncher {
-	return &RepositoryLauncher{sessions: sessions, links: links, recorder: recorder, logger: logger}
+func NewRepositoryLauncher(sessions func() SessionCreator, links ItemSessionLinker, recorder activity.Recorder, logger zerolog.Logger, agentArgs func(context.Context) map[string][]string) *RepositoryLauncher {
+	return &RepositoryLauncher{sessions: sessions, links: links, recorder: recorder, logger: logger, agentArgs: agentArgs}
 }
 
 func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessionRequest) (SessionExecutionOutcome, error) {
@@ -64,6 +65,10 @@ func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessio
 	for _, origin := range origins {
 		tags = append(tags, origin.ExternalID)
 	}
+	var args map[string][]string
+	if l.agentArgs != nil {
+		args = l.agentArgs(ctx)
+	}
 	s, err := l.sessions().CreateFromRequest(ctx, sessionsvc.LaunchRequest{
 		Name:            req.Name,
 		Prompt:          prepared.Prompt,
@@ -72,6 +77,7 @@ func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessio
 		CollisionSuffix: req.CollisionSuffix,
 		Tags:            tags,
 		Env:             []string{ptyterm.ImageProtocolEnv},
+		AgentArgs:       args,
 	})
 	if err != nil {
 		return SessionExecutionOutcome{}, err
