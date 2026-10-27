@@ -9,110 +9,38 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/messaging"
-	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/domain/review"
-	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
-	"github.com/colonyops/hive/internal/hive/events/testbus"
+	"github.com/colonyops/hive/internal/hive/hivetest"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
-	"github.com/colonyops/hive/internal/store/db"
-	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
 
-type stubMux struct{}
-
-func (stubMux) CreateSession(context.Context, multiplexer.SessionSpec) error { return nil }
-func (stubMux) OpenSession(context.Context, multiplexer.SessionSpec, multiplexer.Target) (multiplexer.LaunchResult, error) {
-	return multiplexer.LaunchResult{Created: true}, nil
-}
-
-func (stubMux) AddWindows(context.Context, multiplexer.Target, []multiplexer.WindowSpec) error {
-	return nil
-}
-
-func (stubMux) AttachOrSwitch(context.Context, multiplexer.Target, multiplexer.AttachStreams) error {
-	return nil
-}
-
-func (stubMux) CurrentSession(context.Context) (multiplexer.Target, error) {
-	return multiplexer.Target{}, nil
-}
-func (stubMux) RenameSession(context.Context, multiplexer.Target, string) error { return nil }
-func (stubMux) KillSession(context.Context, multiplexer.Target) error           { return nil }
-func (stubMux) KillWindow(context.Context, multiplexer.Target) error            { return nil }
-
-var _ sessionsvc.Multiplexer = stubMux{}
-
-type stubPanes struct{}
-
-func (stubPanes) ListPanes(context.Context) ([]multiplexer.Pane, error) { return nil, nil }
-
-func (stubPanes) CapturePane(context.Context, multiplexer.Target, multiplexer.CaptureOptions) (string, error) {
-	return "", nil
-}
-
-func loadConfig(t *testing.T, dataDir string) *config.Config {
-	t.Helper()
-	t.Setenv("HIVE_DEFAULT_AGENT", "")
-	cfg, err := config.Load("", dataDir)
-	require.NoError(t, err)
-	return cfg
-}
-
-type harness struct {
-	engine *hive.Engine
-	db     *db.DB
-	exec   *executiltest.Exec
-	bus    *testbus.Bus
-}
-
-func newEngine(t *testing.T, cfg *config.Config, panes terminal.PaneSource) harness {
-	t.Helper()
-	database, err := hive.OpenDB(t.Context(), t.TempDir(), cfg.Database)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
-
-	h := harness{db: database, exec: &executiltest.Exec{}, bus: testbus.New(t)}
-	h.engine, err = hive.New(cfg, hive.Ports{
-		DB:         database,
-		Bus:        h.bus.EventBus,
-		Executor:   h.exec,
-		Mux:        stubMux{},
-		PaneSource: panes,
-		DataDir:    t.TempDir(),
-		Logger:     zerolog.Nop(),
-	})
-	require.NoError(t, err)
-	return h
-}
-
 func TestEngineReloadRebuildsTheConfigDerivedServices(t *testing.T) {
-	before := loadConfig(t, t.TempDir())
-	h := newEngine(t, before, nil)
+	before := hivetest.LoadConfig(t, t.TempDir())
+	h := hivetest.NewEngine(t, hivetest.Options{Config: before})
 
-	after := loadConfig(t, t.TempDir())
+	after := hivetest.LoadConfig(t, t.TempDir())
 	after.GitPath = "/opt/git/bin/git"
-	require.NoError(t, h.engine.Reload(after))
+	require.NoError(t, h.Engine.Reload(after))
 
-	assert.Same(t, after, h.engine.Config())
+	assert.Same(t, after, h.Engine.Config())
 
-	sess, err := h.engine.Sessions().CreateSession(t.Context(), sessionsvc.CreateOptions{
+	sess, err := h.Engine.Sessions().CreateSession(t.Context(), sessionsvc.CreateOptions{
 		Name: "review", Remote: "https://github.com/acme/site", SkipSpawn: true,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, after.ReposDir(), filepath.Dir(sess.Path), "the session service reads the reloaded ReposDir")
 
-	_, _ = h.engine.Git().Branch(t.Context(), sess.Path)
-	calls := h.exec.Calls()
+	_, _ = h.Engine.Git().Branch(t.Context(), sess.Path)
+	calls := h.Exec.Calls()
 	require.NotEmpty(t, calls)
 	assert.Equal(t, "/opt/git/bin/git", calls[len(calls)-1].Cmd, "Git uses the reloaded GitPath")
 	for _, call := range calls {
@@ -121,14 +49,14 @@ func TestEngineReloadRebuildsTheConfigDerivedServices(t *testing.T) {
 }
 
 func TestEngineReloadPublishesConfigReloadedOnce(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
-	next := loadConfig(t, t.TempDir())
+	h := hivetest.NewEngine(t, hivetest.Options{})
+	next := hivetest.LoadConfig(t, t.TempDir())
 
-	require.NoError(t, h.engine.Reload(next))
+	require.NoError(t, h.Engine.Reload(next))
 
-	require.True(t, h.bus.WaitFor(events.EventConfigReloaded, time.Second))
+	require.True(t, h.Bus.WaitFor(events.EventConfigReloaded, time.Second))
 	var reloads []events.ConfigReloadedPayload
-	for _, recorded := range h.bus.Events() {
+	for _, recorded := range h.Bus.Events() {
 		if recorded.Event == events.EventConfigReloaded {
 			reloads = append(reloads, recorded.Payload.(events.ConfigReloadedPayload))
 		}
@@ -140,54 +68,54 @@ func TestEngineReloadPublishesConfigReloadedOnce(t *testing.T) {
 // The desktop's mock mode runs with no tmux to read, and status must stay off
 // across a reload rather than come back with a nil source.
 func TestEngineWithoutAPaneSourceHasNoStatus(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
-	assert.Nil(t, h.engine.Status())
-	assert.Nil(t, h.engine.Terminal())
+	h := hivetest.NewEngine(t, hivetest.Options{})
+	assert.Nil(t, h.Engine.Status())
+	assert.Nil(t, h.Engine.Terminal())
 
-	require.NoError(t, h.engine.Reload(loadConfig(t, t.TempDir())))
-	assert.Nil(t, h.engine.Status())
-	assert.Nil(t, h.engine.Terminal())
+	require.NoError(t, h.Engine.Reload(hivetest.LoadConfig(t, t.TempDir())))
+	assert.Nil(t, h.Engine.Status())
+	assert.Nil(t, h.Engine.Terminal())
 }
 
 func TestEngineWithAPaneSourceHasStatus(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), stubPanes{})
-	require.NotNil(t, h.engine.Status())
-	assert.True(t, h.engine.Status().Available())
+	h := hivetest.NewEngine(t, hivetest.Options{PaneSource: hivetest.PaneSource{}})
+	require.NotNil(t, h.Engine.Status())
+	assert.True(t, h.Engine.Status().Available())
 
-	before := h.engine.Status()
-	require.NoError(t, h.engine.Reload(loadConfig(t, t.TempDir())))
-	assert.NotSame(t, before, h.engine.Status(), "status options come from config, so a reload rebuilds them")
+	before := h.Engine.Status()
+	require.NoError(t, h.Engine.Reload(hivetest.LoadConfig(t, t.TempDir())))
+	assert.NotSame(t, before, h.Engine.Status(), "status options come from config, so a reload rebuilds them")
 }
 
 // A save with a typo must not leave the program with no session service.
 func TestEngineFailedReloadKeepsTheOldServices(t *testing.T) {
-	original := loadConfig(t, t.TempDir())
-	h := newEngine(t, original, nil)
-	sessions, messages, gitExec := h.engine.Sessions(), h.engine.Messages(), h.engine.Git()
+	original := hivetest.LoadConfig(t, t.TempDir())
+	h := hivetest.NewEngine(t, hivetest.Options{Config: original})
+	sessions, messages, gitExec := h.Engine.Sessions(), h.Engine.Messages(), h.Engine.Git()
 
-	broken := loadConfig(t, t.TempDir())
+	broken := hivetest.LoadConfig(t, t.TempDir())
 	broken.GitPath = ""
-	require.Error(t, h.engine.Reload(broken))
+	require.Error(t, h.Engine.Reload(broken))
 
-	assert.Same(t, original, h.engine.Config())
-	assert.Same(t, sessions, h.engine.Sessions())
-	assert.Same(t, messages, h.engine.Messages())
-	assert.Equal(t, gitExec, h.engine.Git())
-	h.bus.AssertNotPublished(t, events.EventConfigReloaded, 50*time.Millisecond)
+	assert.Same(t, original, h.Engine.Config())
+	assert.Same(t, sessions, h.Engine.Sessions())
+	assert.Same(t, messages, h.Engine.Messages())
+	assert.Equal(t, gitExec, h.Engine.Git())
+	h.Bus.AssertNotPublished(t, events.EventConfigReloaded, 50*time.Millisecond)
 }
 
 func TestEngineCapsMessagesPerTopic(t *testing.T) {
-	cfg := loadConfig(t, t.TempDir())
+	cfg := hivetest.LoadConfig(t, t.TempDir())
 	assert.Equal(t, 100, cfg.Messaging.MaxMessages)
 
 	cfg.Messaging.MaxMessages = 2
-	h := newEngine(t, cfg, nil)
+	h := hivetest.NewEngine(t, hivetest.Options{Config: cfg})
 	for _, payload := range []string{"one", "two", "three"} {
-		_, err := h.engine.Messages().Publish(t.Context(), messaging.Message{Payload: payload}, []string{"inbox"})
+		_, err := h.Engine.Messages().Publish(t.Context(), messaging.Message{Payload: payload}, []string{"inbox"})
 		require.NoError(t, err)
 	}
 
-	kept, err := h.engine.Messages().Subscribe(t.Context(), "inbox", time.Time{})
+	kept, err := h.Engine.Messages().Subscribe(t.Context(), "inbox", time.Time{})
 	require.NoError(t, err)
 	assert.Len(t, kept, 2)
 }
@@ -202,9 +130,9 @@ func (failingValidator) Warnings() []config.ValidationWarning { return nil }
 // A program's config can have sections the engine does not read, so doctor
 // checks with the validator the program hands it.
 func TestEngineDoctorChecksWithTheProgramsValidator(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	h := hivetest.NewEngine(t, hivetest.Options{})
 
-	results := h.engine.Doctor(failingValidator{}, nil).RunChecks(t.Context(), "", false)
+	results := h.Engine.Doctor(failingValidator{}, nil).RunChecks(t.Context(), "", false)
 
 	var details []string
 	for _, result := range results {
@@ -224,29 +152,29 @@ func TestEngineDoctorChecksWithTheProgramsValidator(t *testing.T) {
 // The drive service holds the snapshot of the context root, so a reload
 // keeps it and re-roots it rather than building a blank one.
 func TestEngineDriveSurvivesAReloadAndFollowsTheContextDir(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
-	drive := h.engine.Drive()
+	h := hivetest.NewEngine(t, hivetest.Options{})
+	drive := h.Engine.Drive()
 
-	next := loadConfig(t, t.TempDir())
-	require.NoError(t, h.engine.Reload(next))
-	assert.Same(t, drive, h.engine.Drive())
-	assert.Equal(t, next.ContextDir(), h.engine.Drive().Root())
+	next := hivetest.LoadConfig(t, t.TempDir())
+	require.NoError(t, h.Engine.Reload(next))
+	assert.Same(t, drive, h.Engine.Drive())
+	assert.Equal(t, next.ContextDir(), h.Engine.Drive().Root())
 }
 
 func TestEngineHoneycombSurvivesAReload(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
-	hc := h.engine.HC()
+	h := hivetest.NewEngine(t, hivetest.Options{})
+	hc := h.Engine.HC()
 
-	require.NoError(t, h.engine.Reload(loadConfig(t, t.TempDir())))
-	assert.Same(t, hc, h.engine.HC())
+	require.NoError(t, h.Engine.Reload(hivetest.LoadConfig(t, t.TempDir())))
+	assert.Same(t, hc, h.Engine.HC())
 }
 
 // Run under -race: readers fetch a service per call while reloads swap the set.
 func TestEngineServesConcurrentReadersDuringReload(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), stubPanes{})
+	h := hivetest.NewEngine(t, hivetest.Options{PaneSource: hivetest.PaneSource{}})
 	configs := make([]*config.Config, 20)
 	for i := range configs {
-		configs[i] = loadConfig(t, t.TempDir())
+		configs[i] = hivetest.LoadConfig(t, t.TempDir())
 	}
 
 	var wg sync.WaitGroup
@@ -259,67 +187,67 @@ func TestEngineServesConcurrentReadersDuringReload(t *testing.T) {
 					return
 				default:
 				}
-				if _, err := h.engine.Sessions().ListSessions(context.Background()); err != nil {
+				if _, err := h.Engine.Sessions().ListSessions(context.Background()); err != nil {
 					t.Error(err)
 					return
 				}
-				assert.NotNil(t, h.engine.Status())
-				assert.NotNil(t, h.engine.Git())
-				_ = h.engine.Config().ReposDir()
+				assert.NotNil(t, h.Engine.Status())
+				assert.NotNil(t, h.Engine.Git())
+				_ = h.Engine.Config().ReposDir()
 			}
 		})
 	}
 	for _, cfg := range configs {
-		require.NoError(t, h.engine.Reload(cfg))
+		require.NoError(t, h.Engine.Reload(cfg))
 	}
 	close(stop)
 	wg.Wait()
-	assert.Same(t, configs[len(configs)-1], h.engine.Config())
+	assert.Same(t, configs[len(configs)-1], h.Engine.Config())
 }
 
 func TestNewRejectsMissingPorts(t *testing.T) {
-	_, err := hive.New(loadConfig(t, t.TempDir()), hive.Ports{})
+	_, err := hive.New(hivetest.LoadConfig(t, t.TempDir()), hive.Ports{})
 	require.Error(t, err)
 }
 
 func TestEnginePersistenceSurvivesAReload(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
-	kvSvc, notifications, reviews := h.engine.KV(), h.engine.Notifications(), h.engine.Reviews()
+	h := hivetest.NewEngine(t, hivetest.Options{})
+	kvSvc, notifications, reviews := h.Engine.KV(), h.Engine.Notifications(), h.Engine.Reviews()
 
-	require.NoError(t, h.engine.Reload(loadConfig(t, t.TempDir())))
-	assert.Equal(t, kvSvc, h.engine.KV())
-	assert.Equal(t, notifications, h.engine.Notifications())
-	assert.Equal(t, reviews, h.engine.Reviews())
+	require.NoError(t, h.Engine.Reload(hivetest.LoadConfig(t, t.TempDir())))
+	assert.Equal(t, kvSvc, h.Engine.KV())
+	assert.Equal(t, notifications, h.Engine.Notifications())
+	assert.Equal(t, reviews, h.Engine.Reviews())
 }
 
 func TestEngineKVPersists(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	h := hivetest.NewEngine(t, hivetest.Options{})
 	ctx := t.Context()
 
-	require.NoError(t, h.engine.KV().Set(ctx, "plugin.cache", "fresh"))
+	require.NoError(t, h.Engine.KV().Set(ctx, "plugin.cache", "fresh"))
 
 	var got string
-	require.NoError(t, h.engine.KV().Get(ctx, "plugin.cache", &got))
+	require.NoError(t, h.Engine.KV().Get(ctx, "plugin.cache", &got))
 	assert.Equal(t, "fresh", got)
 }
 
 // Reads already hide an expired entry, so only the table shows the sweep.
 func TestEngineSweepKVDeletesExpiredRows(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	h := hivetest.NewEngine(t, hivetest.Options{})
 	ctx, cancel := context.WithCancel(t.Context())
 
-	require.NoError(t, h.engine.KV().Set(ctx, "plugin.cache", "fresh"))
-	require.NoError(t, h.engine.KV().SetTTL(ctx, "update.check", "stale", time.Nanosecond))
+	require.NoError(t, h.Engine.KV().Set(ctx, "plugin.cache", "fresh"))
+	require.NoError(t, h.Engine.KV().SetTTL(ctx, "update.check", "stale", time.Nanosecond))
 
 	done := make(chan struct{})
 	go func() {
-		h.engine.SweepKV(ctx, time.Millisecond)
+		h.Engine.SweepKV(ctx, time.Millisecond)
 		close(done)
 	}()
 
 	assert.Eventually(t, func() bool {
 		var rows int
-		require.NoError(t, h.db.Conn().QueryRowContext(t.Context(), "SELECT count(*) FROM kv_store").Scan(&rows))
+		require.NoError(t, h.DB.Conn().QueryRowContext(t.Context(), "SELECT count(*) FROM kv_store").Scan(&rows))
 		return rows == 1
 	}, time.Second, time.Millisecond)
 
@@ -332,35 +260,35 @@ func TestEngineSweepKVDeletesExpiredRows(t *testing.T) {
 }
 
 func TestEngineNotificationsPersist(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	h := hivetest.NewEngine(t, hivetest.Options{})
 	ctx := t.Context()
 
-	_, err := h.engine.Notifications().Save(ctx, notify.Notification{
+	_, err := h.Engine.Notifications().Save(ctx, notify.Notification{
 		Level: notify.LevelError, Message: "spawn failed", CreatedAt: time.Now(),
 	})
 	require.NoError(t, err)
 
-	saved, err := h.engine.Notifications().List(ctx)
+	saved, err := h.Engine.Notifications().List(ctx)
 	require.NoError(t, err)
 	require.Len(t, saved, 1)
 	assert.Equal(t, "spawn failed", saved[0].Message)
 }
 
 func TestEngineReviewsPersist(t *testing.T) {
-	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	h := hivetest.NewEngine(t, hivetest.Options{})
 	ctx := t.Context()
 
-	created, err := h.engine.Reviews().CreateSession(ctx, "/ctx/plan.md", "abc123")
+	created, err := h.Engine.Reviews().CreateSession(ctx, "/ctx/plan.md", "abc123")
 	require.NoError(t, err)
-	require.NoError(t, h.engine.Reviews().SaveComment(ctx, review.Comment{
+	require.NoError(t, h.Engine.Reviews().SaveComment(ctx, review.Comment{
 		ID: "c1", SessionID: created.ID, StartLine: 1, EndLine: 1, CommentText: "tighten this",
 		CreatedAt: time.Now(),
 	}))
 
-	found, err := h.engine.Reviews().GetSessionByHash(ctx, "/ctx/plan.md", "abc123")
+	found, err := h.Engine.Reviews().GetSessionByHash(ctx, "/ctx/plan.md", "abc123")
 	require.NoError(t, err)
 	assert.Equal(t, created.ID, found.ID)
-	comments, err := h.engine.Reviews().ListComments(ctx, created.ID)
+	comments, err := h.Engine.Reviews().ListComments(ctx, created.ID)
 	require.NoError(t, err)
 	require.Len(t, comments, 1)
 	assert.Equal(t, "tighten this", comments[0].CommentText)
