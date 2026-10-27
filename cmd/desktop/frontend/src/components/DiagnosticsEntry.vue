@@ -4,8 +4,8 @@ import IconCheck from '~icons/lucide/check'
 import IconCopy from '~icons/lucide/copy'
 import IconSparkles from '~icons/lucide/sparkles'
 import type { Entry as DiagnosticEntry } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/diagnostics/models'
-import BaseBadge from './ui/BaseBadge.vue'
-import IconButton from './ui/IconButton.vue'
+import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 
 const props = defineProps<{
   entry: DiagnosticEntry

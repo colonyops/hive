@@ -10,6 +10,7 @@ import { TERMINAL_FONT } from '../../lib/terminalFaces'
 import { resetInstalledFontsForTests } from '../../composables/useInstalledFonts'
 
 const mocks = vi.hoisted(() => ({
+  SetTerminalShowScrollbars: vi.fn().mockResolvedValue(undefined),
   SetTerminalShowWindows: vi.fn(),
   SetTerminalPoolSize: vi.fn(),
   SetTerminalSessionAge: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   SetTerminalFontSize: vi.fn(),
   SetTerminalFontFamily: mocks.SetTerminalFontFamily,
   SetTerminalFontWeights: mocks.SetTerminalFontWeights,
+  SetTerminalShowScrollbars: mocks.SetTerminalShowScrollbars,
   SetTerminalShowWindows: mocks.SetTerminalShowWindows,
   SetTerminalPoolSize: mocks.SetTerminalPoolSize,
   SetTerminalSessionAge: mocks.SetTerminalSessionAge,
@@ -50,6 +52,21 @@ beforeEach(() => {
 })
 
 describe('TerminalSettingsView', () => {
+  it('toggles terminal scrollbars and persists the choice', async () => {
+    const wrapper = mount(TerminalSettingsView)
+    await flushPromises()
+    const toggle = wrapper.get('[data-testid="settings-terminal-show-scrollbars"]')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(mocks.SetTerminalShowScrollbars).toHaveBeenLastCalledWith(true)
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(mocks.SetTerminalShowScrollbars).toHaveBeenLastCalledWith(false)
+    wrapper.unmount()
+  })
+
   it('nudges the terminal font size by the ladder step', async () => {
     const wrapper = mount(TerminalSettingsView)
     const value = (): string => wrapper.find('[data-testid="settings-terminal-font-size-value"]').text()

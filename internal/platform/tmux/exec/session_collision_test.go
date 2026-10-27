@@ -50,7 +50,7 @@ func TestSessionNamesDoNotMatchPrefixes(t *testing.T) {
 	require.Error(t, err)
 	_, err = manager.NewWindow(t.Context(), short.Session)
 	require.ErrorIs(t, err, tmuxcc.ErrNotAttached)
-	_, err = manager.NewCommandWindow(t.Context(), short.Session, t.TempDir(), "agent", "sleep 300")
+	_, err = manager.NewCommandWindow(t.Context(), short.Session, t.TempDir(), "agent", "sleep 300", nil)
 	require.ErrorIs(t, err, tmuxcc.ErrNotAttached)
 	renamed, err := manager.RenameSessionIfPresent(t.Context(), short.Session, "renamed")
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestSessionNamesDoNotMatchPrefixes(t *testing.T) {
 	require.Equal(t, "long", longWindows[0].Name)
 	require.NotEqual(t, shortWindows[0].ID, longWindows[0].ID)
 
-	_, err = manager.NewCommandWindow(t.Context(), short.Session, t.TempDir(), "extra", "sleep 300")
+	_, err = manager.NewCommandWindow(t.Context(), short.Session, t.TempDir(), "extra", "sleep 300", nil)
 	require.NoError(t, err)
 	renamed, err = manager.RenameSessionIfPresent(t.Context(), short.Session, "renamed")
 	require.NoError(t, err)

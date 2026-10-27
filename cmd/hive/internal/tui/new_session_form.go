@@ -9,6 +9,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/platform/workspace"
 )
 
@@ -101,7 +102,7 @@ type NewSessionFormResult struct {
 func NewNewSessionForm(repos []workspace.DiscoveredRepo, preselectedRemote string, existingSlugs map[string]bool, agentKeys []string) *NewSessionForm {
 	selectedIdx := 0
 	for i, r := range repos {
-		if r.Remote == preselectedRemote {
+		if git.EquivalentRemote(r.Remote, preselectedRemote) {
 			selectedIdx = i
 			break
 		}

@@ -80,6 +80,19 @@ Change any of it later by editing the file yourself, then restarting Hive Deskto
 
 `HIVE_DEFAULT_AGENT` takes precedence over the default agent you choose, when it names a configured profile. The screen says so when the variable is set.
 
+### Clone protocol
+
+Hive builds a clone URL for the repository of an inbox item, such as a pull request or issue. It uses HTTPS unless you set `git.clone_protocol` in the hive CLI config, then restart Hive Desktop:
+
+```yaml
+git:
+  clone_protocol: ssh # or https
+```
+
+With the key unset, a repository you already have on disk keeps the remote it was cloned with. A `rules[].clone_protocol` entry overrides the key for the repositories it matches. Neither one rewrites a remote you spell out in an action. The built-in actions in a new `actions.yml` follow the key. Hive writes that file only once, so if yours came from an earlier version, its `launch-session` actions still have a fixed URL such as `https://github.com/{{ .Payload.repo }}.git`. Change each `repo_template` to `"{{ .ItemRemote }}"` to make them follow the key.
+
+See the hive CLI [configuration reference](../../cli/configuration/index.md) and [clone protocol rules](../../cli/configuration/rules.md#clone-protocol) for how the key and the per-rule override resolve.
+
 ## Advanced configuration
 
 Most users can use the Settings screens. Edit `settings.yaml` for values that are not exposed there or when you manage configuration with dotfiles.
@@ -102,6 +115,12 @@ appearance:
   terminal_session_age_threshold_days: 5
 retention:
   action_runs: 100
+review:
+  labels:
+    - title: Clarify this
+      icon: circle-help
+    - title: Needs tests
+      icon: flask-conical
 ```
 
 - `polling.interval` has a minimum of 60 seconds.
@@ -110,6 +129,7 @@ retention:
 - `editor.command` accepts an executable name or absolute path without arguments.
 - `agent_workspaces.dir` changes where Chats workspaces are stored.
 - `retention.action_runs` is how many finished action runs **Action runs** keeps, each with its full log. It defaults to 100 and accepts 1 through 10,000. A change takes effect the next time Hive starts.
+- `review.labels` replaces the labels the comment box on a Drive document offers, up to four. **Settings ▸ Drive ▸ Comment labels** edits the same list. Keys <kbd>1</kbd> to <kbd>4</kbd> follow the list order. `icon` is one of `circle-help`, `search-check`, `flask-conical`, `check`, `tag`, `triangle-alert`, `lightbulb`, `scissors`, or `x`; any other value shows a tag. Titles must be unique. Leave the key out for the default four. A change shows the next time the comment box opens.
 - `appearance.terminal_show_session_age` shows a whole-day age badge in the Code sidebar after `terminal_session_age_threshold_days` days. It defaults to on with a five-day threshold. The threshold accepts 1 through 365.
 
 Every scalar setting can be overridden for one launch with an environment variable based on its YAML path. For example, `polling.interval` becomes `HIVE_DESKTOP_POLLING_INTERVAL`.

@@ -21,6 +21,7 @@ type MenuBarService struct {
 	actions  *actions.ActionStore
 	polls    LastTicker
 	events   *events.Bus
+	remotes  dispatch.RemoteGenerator
 }
 
 type LastTicker interface {
@@ -34,10 +35,11 @@ type MenuBarDeps struct {
 	Catalog  *actions.ActionStore
 	Polls    LastTicker
 	Events   *events.Bus
+	Remotes  dispatch.RemoteGenerator
 }
 
 func newMenuBarService(d MenuBarDeps) *MenuBarService {
-	return &MenuBarService{settings: d.Settings, flows: d.Flows, items: d.Items, actions: d.Catalog, polls: d.Polls, events: d.Events}
+	return &MenuBarService{settings: d.Settings, flows: d.Flows, items: d.Items, actions: d.Catalog, polls: d.Polls, events: d.Events, remotes: d.Remotes}
 }
 
 type MenuBarPin struct {
@@ -165,7 +167,7 @@ func (s *MenuBarService) Snapshot(ctx context.Context) (MenuBarSnapshot, error) 
 			Items: make([]MenuBarItem, 0, len(rows)),
 		}
 		for _, row := range rows {
-			view.Items = append(view.Items, menuBarItem(row, runnable))
+			view.Items = append(view.Items, menuBarItem(row, runnable, s.remotes))
 		}
 		snapshot.Pinned = append(snapshot.Pinned, view)
 	}
@@ -191,7 +193,7 @@ func (s *MenuBarService) runnableActions() []actions.Action {
 	return out
 }
 
-func menuBarItem(row stores.InboxItem, runnable []actions.Action) MenuBarItem {
+func menuBarItem(row stores.InboxItem, runnable []actions.Action, remotes dispatch.RemoteGenerator) MenuBarItem {
 	item := MenuBarItem{
 		ID: row.ID, Title: row.Title, URL: row.URL, Unread: row.Unread,
 		Actions: []MenuBarAction{},
@@ -201,7 +203,7 @@ func menuBarItem(row stores.InboxItem, runnable []actions.Action) MenuBarItem {
 		return item
 	}
 	for _, action := range runnable {
-		if ok, _ := dispatch.ActionApplicability(action, decoded); !ok {
+		if ok, _ := dispatch.ActionApplicability(action, decoded, remotes); !ok {
 			continue
 		}
 		_, clipboard := action.Config.(*actions.ClipboardConfig)

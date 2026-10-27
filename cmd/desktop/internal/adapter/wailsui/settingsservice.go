@@ -6,6 +6,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/fonts"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 )
 
 // SettingsService exposes user-tunable settings to the frontend. The JSON
@@ -59,8 +60,9 @@ type AppearanceSettings struct {
 	TerminalFontWeightBold int `json:"terminalFontWeightBold"`
 	// TerminalLineHeight multiplies the cell height; TerminalLetterSpacing
 	// widens the cell by whole device pixels. Zero means nothing persisted.
-	TerminalLineHeight    float64 `json:"terminalLineHeight"`
-	TerminalLetterSpacing int     `json:"terminalLetterSpacing"`
+	TerminalLineHeight     float64 `json:"terminalLineHeight"`
+	TerminalLetterSpacing  int     `json:"terminalLetterSpacing"`
+	TerminalShowScrollbars bool    `json:"terminalShowScrollbars"`
 	// TerminalShowWindows lists every active session's tmux windows in the
 	// terminal sidebar, not just the attached session's. Ships on.
 	TerminalShowWindows bool `json:"terminalShowWindows"`
@@ -104,6 +106,34 @@ func (s *SettingsService) SetKeybindingSettings(ctx context.Context, in Keybindi
 	return s.settings.SetKeybindings(ctx, in.Overrides)
 }
 
+// ReviewLabel is a preset comment the Drive comment composer applies with
+// the key of its position, 1 to 4. Icon is carried verbatim: the frontend
+// owns the icon set and draws an unknown name as a tag.
+type ReviewLabel struct {
+	Title string `json:"title"`
+	Icon  string `json:"icon"`
+}
+
+func (s *SettingsService) ReviewLabels(ctx context.Context) ([]ReviewLabel, error) {
+	labels, err := s.settings.ReviewLabels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ReviewLabel, 0, len(labels))
+	for _, label := range labels {
+		out = append(out, ReviewLabel{Title: label.Title, Icon: label.Icon})
+	}
+	return out, nil
+}
+
+func (s *SettingsService) SetReviewLabels(ctx context.Context, labels []ReviewLabel) error {
+	in := make([]settings.ReviewLabel, 0, len(labels))
+	for _, label := range labels {
+		in = append(in, settings.ReviewLabel{Title: label.Title, Icon: label.Icon})
+	}
+	return s.settings.SetReviewLabels(ctx, in)
+}
+
 func (s *SettingsService) AppearanceSettings(ctx context.Context) (AppearanceSettings, error) {
 	current, err := s.settings.Appearance(ctx)
 	if err != nil {
@@ -119,6 +149,7 @@ func (s *SettingsService) AppearanceSettings(ctx context.Context) (AppearanceSet
 		TerminalFontWeightBold:          current.TerminalFontWeightBold,
 		TerminalLineHeight:              current.TerminalLineHeight,
 		TerminalLetterSpacing:           current.TerminalLetterSpacing,
+		TerminalShowScrollbars:          current.TerminalShowScrollbars,
 		TerminalShowWindows:             current.TerminalShowWindows,
 		TerminalShowStatusBar:           current.TerminalShowStatusBar,
 		TerminalPoolSize:                current.TerminalPoolSize,
@@ -180,6 +211,10 @@ func (s *SettingsService) SetTerminalLineHeight(ctx context.Context, lineHeight 
 
 func (s *SettingsService) SetTerminalLetterSpacing(ctx context.Context, spacing int) error {
 	return s.settings.SetTerminalLetterSpacing(ctx, spacing)
+}
+
+func (s *SettingsService) SetTerminalShowScrollbars(ctx context.Context, show bool) error {
+	return s.settings.SetTerminalShowScrollbars(ctx, show)
 }
 
 func (s *SettingsService) SetTerminalShowWindows(ctx context.Context, show bool) error {

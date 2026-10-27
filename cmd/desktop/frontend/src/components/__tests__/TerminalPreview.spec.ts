@@ -49,7 +49,6 @@ const xterm = vi.hoisted(() => {
 
 vi.mock('@xterm/xterm', () => ({ Terminal: xterm.FakeTerminal }))
 vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: xterm.FakeAddon }))
-vi.mock('@xterm/addon-canvas', () => ({ CanvasAddon: xterm.FakeAddon }))
 
 const mocks = vi.hoisted(() => ({ loadTerminalFaces: vi.fn() }))
 

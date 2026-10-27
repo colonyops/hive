@@ -1,4 +1,3 @@
-import { CanvasAddon } from '@xterm/addon-canvas'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { ITerminalAddon, Terminal } from '@xterm/xterm'
 import { createLogger } from './log'
@@ -6,63 +5,44 @@ import { createLogger } from './log'
 const log = createLogger('terminal-renderer')
 
 /**
- * Put an atlas renderer on `term` — WebGL, falling back to canvas, with xterm's
- * DOM renderer only as the last resort.
- *
- * The DOM renderer paints box drawing from the font's own glyphs and underlines
- * as text-decoration on per-cell inline-block spans, so neither joins across
- * cells at any font size or device pixel ratio. An atlas renderer strokes both
- * to the cell's own device-pixel bounds. ADR terminal-atlas-renderer.
+ * Put the WebGL atlas renderer on `term`, leaving xterm's DOM renderer as the
+ * fallback. The DOM renderer cannot join box drawing or underlines across
+ * cells (ADR terminal-atlas-renderer), and xterm 6 removed the canvas renderer
+ * that used to sit between the two (ADR
+ * xterm-6-drops-the-canvas-renderer-so-the-dom-renderer-is-the-only-fallback).
  *
  * Call this **after** `term.open(host)`, never before: an unopened Terminal
  * makes the addon defer its activation to `open()` via `onWillOpen`, which
  * throws the missing-context error out of `open()` rather than out of
  * `loadAddon` — past the `try` the fallback depends on.
  *
- * `track` takes every addon loaded. They must be disposed with the caller and
- * ahead of the Terminal: xterm disposes its core before its addons, and these
- * restore a renderer on the way out. `record` reports whether one is live, on
- * the claim and again after a context loss — a failed claim is recorded rather
- * than swallowed so the caller's next reveal can retry it, which is the
- * invariant ADR terminal-renderer-claimed-on-activation asks of every path that claims a renderer.
+ * `track` takes the addon. It must be disposed with the caller and ahead of
+ * the Terminal: xterm disposes its core before its addons, and the addon
+ * restores the DOM renderer on the way out. `record` reports whether WebGL is
+ * live, on the claim and again after a context loss, so the caller's next
+ * reveal can retry a failed claim (ADR terminal-renderer-claimed-on-activation).
  */
 export function claimAtlasRenderer(
   term: Terminal,
   track: (addon: ITerminalAddon) => void,
   record: (rendered: boolean) => void,
 ): void {
-  const webgl = loadAddon(term, track, () => new WebglAddon())
-  if (!webgl) {
-    record(claimCanvas(term, track))
+  let webgl: WebglAddon
+  try {
+    webgl = new WebglAddon()
+    term.loadAddon(webgl)
+  } catch (error) {
+    log.warn('WebGL renderer unavailable, using the DOM renderer', error)
+    record(false)
     return
   }
+  track(webgl)
   record(true)
-  // Fires only when the browser did not restore the context on its own. The
-  // addon puts the DOM renderer back as it goes, so claim the canvas instead.
-  // This is also the path a session with many windows takes: one WebGL context
-  // per open tab, and past the browser's limit the oldest is dropped.
+  // Fires only when the browser did not restore the context on its own; past
+  // the browser's context limit the oldest pane's context is the one dropped.
   webgl.onContextLoss(() => {
+    log.warn('WebGL context lost, using the DOM renderer')
     webgl.dispose()
-    record(claimCanvas(term, track))
+    record(false)
   })
-}
-
-function claimCanvas(term: Terminal, track: (addon: ITerminalAddon) => void): boolean {
-  return loadAddon(term, track, () => new CanvasAddon()) !== undefined
-}
-
-function loadAddon<T extends ITerminalAddon>(
-  term: Terminal,
-  track: (addon: ITerminalAddon) => void,
-  create: () => T,
-): T | undefined {
-  try {
-    const addon = create()
-    term.loadAddon(addon)
-    track(addon)
-    return addon
-  } catch (error) {
-    log.warn('terminal renderer unavailable, falling back', error)
-    return undefined
-  }
 }

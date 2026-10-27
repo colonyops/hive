@@ -28,6 +28,7 @@ describe('useTerminalSessions', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
         createdAt: '2026-10-01T12:00:00Z',
@@ -37,6 +38,7 @@ describe('useTerminalSessions', () => {
         name: 'old work',
         slug: 'old-work',
         repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'recycled',
         canvasOwner: '',
         createdAt: '2026-09-01T12:00:00Z',
@@ -68,6 +70,7 @@ describe('useTerminalSessions', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
       },
@@ -98,6 +101,7 @@ describe('useTerminalSessions', () => {
       name: 'Terminals',
       slug: 'Scratch',
       repo: '',
+      repoIdentity: '',
       state: 'active',
       canvasOwner: '',
       createdAt: '',
@@ -112,6 +116,7 @@ describe('useTerminalSessions', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
       },
@@ -139,6 +144,7 @@ describe('sessionRepository', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'https://github.com/hay-kot/hive.git',
+        repoIdentity: 'https://github.com/hay-kot/hive.git',
         state: 'active',
         canvasOwner: '',
       },
@@ -151,7 +157,16 @@ describe('sessionRepository', () => {
 
   it('is empty for an unknown slug, no slug, and a session without a remote', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'scratch', slug: 'scratch', repo: '', state: 'active', canvasOwner: '', createdAt: '' },
+      {
+        id: '1',
+        name: 'scratch',
+        slug: 'scratch',
+        repo: '',
+        repoIdentity: '',
+        state: 'active',
+        canvasOwner: '',
+        createdAt: '',
+      },
     ])
     const { reload, sessionRepository } = useTerminalSessions()
     await reload()
@@ -163,8 +178,8 @@ describe('sessionRepository', () => {
 })
 
 describe('groupTerminalSessions', () => {
-  function row(name: string, repo: string): TerminalSessionRow {
-    return { id: name, name, slug: `slug-${name}`, repo, state: 'active', canvasOwner: '', createdAt: '' }
+  function row(name: string, repo: string, repoIdentity = repo): TerminalSessionRow {
+    return { id: name, name, slug: `slug-${name}`, repo, repoIdentity, state: 'active', canvasOwner: '', createdAt: '' }
   }
 
   it('groups by remote with readable names, both levels alphabetical', () => {
@@ -178,6 +193,20 @@ describe('groupTerminalSessions', () => {
     expect(groups[1].sessions.map((s) => s.name)).toEqual(['alpha', 'zeta'])
   })
 
+  it('groups by repository identity and names the group after its first session by name', () => {
+    const groups = groupTerminalSessions([
+      row('zeta', 'github.com:Grafana/AI-SDK.git', 'github.com/grafana/ai-sdk'),
+      row('alpha', 'https://github.com/grafana/ai-sdk.git', 'github.com/grafana/ai-sdk'),
+    ])
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0]).toMatchObject({ key: 'github.com/grafana/ai-sdk', name: 'grafana/ai-sdk' })
+    expect(groups[0].sessions.map((s) => s.repo)).toEqual([
+      'https://github.com/grafana/ai-sdk.git',
+      'github.com:Grafana/AI-SDK.git',
+    ])
+  })
+
   it('collects sessions without a remote under one label', () => {
     const groups = groupTerminalSessions([row('scratch', ''), row('local', '/Users/x/repos/scratchpad')])
 
@@ -186,8 +215,8 @@ describe('groupTerminalSessions', () => {
 })
 
 describe('terminalSessionGroups', () => {
-  function row(name: string, repo: string): TerminalSessionRow {
-    return { id: name, name, slug: `slug-${name}`, repo, state: 'active', canvasOwner: '', createdAt: '' }
+  function row(name: string, repo: string, repoIdentity = repo): TerminalSessionRow {
+    return { id: name, name, slug: `slug-${name}`, repo, repoIdentity, state: 'active', canvasOwner: '', createdAt: '' }
   }
 
   it('pins the scratch terminal above the repositories, in a section of its own', () => {

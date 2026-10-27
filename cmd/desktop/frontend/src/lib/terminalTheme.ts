@@ -1,7 +1,7 @@
 import type { ITheme } from '@xterm/xterm'
 
 // The app's palette lives in CSS custom properties that the theme switcher
-// swaps on <html> (src/styles/main.css). xterm.js paints to a canvas and can
+// swaps on <html> (@hive/ui theme.css, plus src/styles/terminal-theme.css for the ANSI set). xterm.js paints to a canvas and can
 // not read them, so every colour it needs — chrome and the 16-colour ANSI
 // set — is sampled here and re-applied whenever the theme changes.
 const ANSI_VARS = {

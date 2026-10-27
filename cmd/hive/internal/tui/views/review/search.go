@@ -1,11 +1,14 @@
 package review
 
 import (
+	"regexp"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 )
+
+var ansiStripPattern = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
 // SearchMode handles document search functionality.
 type SearchMode struct {

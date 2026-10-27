@@ -4,11 +4,11 @@
 // ScheduleShape (lib/scheduleShape.ts), with the cron box reserved for
 // expressions no shape can state.
 import { computed, ref } from 'vue'
-import FormField from '../ui/FormField.vue'
-import InlineError from '../ui/InlineError.vue'
-import TextInput from '../ui/TextInput.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
+import TextInput from '@hive/ui/components/ui/TextInput.vue'
 import { SelectField, TextareaField, TextField, type SelectOption } from '../../pipeline/fields'
-import { useAutofocus } from '../../composables/useAutofocus'
+import { useAutofocus } from '@hive/ui/composables/useAutofocus'
 import { QUARTER_MINUTES, type ScheduleDraft } from '../../composables/useScheduleDraft'
 import { buildCron, clock, dayAbbreviation, pad, WEEK_ORDER, type ScheduleShape } from '../../lib/scheduleShape'
 import { occurrence, reasonLabel, runStamp, statusDot } from '../../lib/scheduleRuns'

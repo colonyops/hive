@@ -60,6 +60,18 @@ func (p *PullRequests) ForBranch(ctx context.Context, host, owner, repo, branch 
 	return giteaclient.PullRequest{}, false, lastErr
 }
 
+// InstanceURL returns the web base URL of the connected instance that serves
+// host. A remote cannot supply it: its port is the git transport's, and it
+// does not carry a subpath that the instance is served under.
+func (p *PullRequests) InstanceURL(host string) (string, bool) {
+	for _, ref := range p.accounts(host) {
+		if binding, err := p.instances.Get(ref); err == nil {
+			return strings.TrimRight(binding.URL, "/"), true
+		}
+	}
+	return "", false
+}
+
 // accounts lists every connected account whose instance is hosted at host.
 // The comparison drops the port: a remote carries the git transport's port,
 // which is not the one the API is served on.

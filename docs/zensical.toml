@@ -76,6 +76,12 @@ nav = [
       "cli/recipes/ralph-loop.md",
       "cli/recipes/git-backed-context.md",
     ]},
+    { "Drive Server" = [
+      "cli/drive-server/deploy.md",
+      "cli/drive-server/policies.md",
+      "cli/drive-server/cli.md",
+      "cli/drive-server/sharing.md",
+    ]},
     { "FAQ" = "cli/faq.md" },
   ]},
 ]

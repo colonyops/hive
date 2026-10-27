@@ -99,7 +99,7 @@ Code is a desktop control surface for parallel coding-agent sessions. Each task 
 
     ---
 
-    Inspect the same `hive hc` task tree used by coding agents, including epics, subtasks, blockers, comments, checkpoints, and linked sessions.
+    Inspect the same `hive hc` task tree used by coding agents as a nested list or a board you can drag cards across, including epics, subtasks, blockers, comments, checkpoints, and linked sessions.
 
 -   :lucide-pin:{ .lg .middle } __Pinned chats__
 

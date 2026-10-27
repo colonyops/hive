@@ -3,13 +3,6 @@ import type { Terminal } from '@xterm/xterm'
 import { TAIL_SLACK_ROWS, scrolledOffTail, watchTailPin } from '../terminalTail'
 
 function pane() {
-  const host = document.createElement('div')
-  // xterm's own scroll container: the only place the user's scrolling shows up,
-  // because xterm suppresses onScroll on that path.
-  const viewport = document.createElement('div')
-  viewport.className = 'xterm-viewport'
-  host.append(viewport)
-
   const handlers: Record<'scroll' | 'bufferChange', (() => void) | undefined> = {
     scroll: undefined,
     bufferChange: undefined,
@@ -35,7 +28,7 @@ function pane() {
     term.buffer.active.viewportY = viewportY
   }
 
-  return { host, viewport, term: term as unknown as Terminal, handlers, place, disposeScroll, disposeBufferChange }
+  return { term: term as unknown as Terminal, handlers, place, disposeScroll, disposeBufferChange }
 }
 
 describe('scrolledOffTail', () => {
@@ -52,12 +45,12 @@ describe('scrolledOffTail', () => {
 
 describe('watchTailPin', () => {
   it('reports every event that moves the viewport, and only on a change', () => {
-    const { host, viewport, term, handlers, place } = pane()
+    const { term, handlers, place } = pane()
     const reported: boolean[] = []
-    const watch = watchTailPin(term, host, (scrolledUp) => reported.push(scrolledUp))
+    const watch = watchTailPin(term, (scrolledUp) => reported.push(scrolledUp))
 
     place(100, 20)
-    viewport.dispatchEvent(new Event('scroll'))
+    handlers.scroll?.()
     expect(reported).toEqual([true])
 
     // The same answer twice is not news — this runs once per rendered line.
@@ -76,27 +69,11 @@ describe('watchTailPin', () => {
   })
 
   it('stops on dispose', () => {
-    const { host, viewport, term, handlers, place, disposeScroll, disposeBufferChange } = pane()
-    const reported: boolean[] = []
-    const watch = watchTailPin(term, host, (scrolledUp) => reported.push(scrolledUp))
+    const { term, disposeScroll, disposeBufferChange } = pane()
+    const watch = watchTailPin(term, () => {})
 
     watch.dispose()
     expect(disposeScroll).toHaveBeenCalled()
     expect(disposeBufferChange).toHaveBeenCalled()
-
-    place(100, 20)
-    viewport.dispatchEvent(new Event('scroll'))
-    expect(reported).toEqual([])
-    expect(handlers.scroll).toBeDefined()
-  })
-
-  it('still tracks the buffer when the host has no viewport yet', () => {
-    const { term, handlers, place } = pane()
-    const reported: boolean[] = []
-    watchTailPin(term, document.createElement('div'), (scrolledUp) => reported.push(scrolledUp))
-
-    place(100, 20)
-    handlers.scroll?.()
-    expect(reported).toEqual([true])
   })
 })

@@ -1,6 +1,7 @@
 package dispatch
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -96,7 +97,7 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 		return ExecutionResult{}, err
 	}
 
-	repo, err := renderRepoTemplate(cfg.RepoTemplate, data.Key, data.Raw, data.Inputs)
+	repo, err := renderRepoTemplate(cfg.RepoTemplate, data.Key, data.Raw, data.Inputs, data.remotes)
 	if err != nil {
 		return ExecutionResult{}, fmt.Errorf("launch-session: %s: %w", repoField, err)
 	}
@@ -237,7 +238,7 @@ func (e *LaunchSessionExecutor) runPostHook(
 	}
 	// Branch is absent: hive reports none for a fresh session, and a hook that
 	// wants one is already a shell in the checkout.
-	data.Session = &SessionTarget{ID: outcome.ID, Name: outcome.Name, Slug: outcome.Slug, Repo: repo, Path: outcome.Path}
+	data.Session = &SessionTarget{ID: outcome.ID, Name: outcome.Name, Slug: outcome.Slug, Repo: cmp.Or(outcome.Remote, repo), Path: outcome.Path}
 	command, err := tmpl.New(tmpl.Config{}).Render(cfg.PostHook, data)
 	if err != nil {
 		return failed(err)
@@ -265,6 +266,9 @@ func launchedLine(outcome SessionExecutionOutcome) string {
 	line := fmt.Sprintf("Created %q (%s)", outcome.Name, outcome.ID)
 	if outcome.Path != "" {
 		line += " at " + outcome.Path
+	}
+	if outcome.Remote != "" {
+		line += " from " + outcome.Remote
 	}
 	return line
 }

@@ -1,5 +1,4 @@
-import { useStorage } from '@vueuse/core'
-import { computed, readonly } from 'vue'
+import { computed } from 'vue'
 import {
   AppearanceSettings as GetAppearanceSettings,
   SetCanvasFontSize as PersistCanvasFontSize,
@@ -105,7 +104,6 @@ export const useCanvasSettings = defineStore('canvasSettings', () => {
     write: (next) => PersistCanvasPageWidth(next),
     label: 'the canvas page width',
   })
-  const frontmatterExpanded = useStorage('hive.canvas.frontmatter.expanded', true)
 
   return {
     fontSize: fontSize.value,
@@ -117,9 +115,5 @@ export const useCanvasSettings = defineStore('canvasSettings', () => {
     pageWidth: pageWidth.value,
     pageWidthClass: computed(() => canvasPageWidthClasses[pageWidth.value.value]),
     setPageWidth: pageWidth.set,
-    frontmatterExpanded: readonly(frontmatterExpanded),
-    toggleFrontmatter: () => {
-      frontmatterExpanded.value = !frontmatterExpanded.value
-    },
   }
 })

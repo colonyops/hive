@@ -20,7 +20,7 @@ import (
 )
 
 // DefaultManifestBaseURL is the public download domain fronting the release
-// bucket (docs/distribution.md). Decision 0003 makes the fronting domain the
+// bucket (docs/distribution.md). ADR r2-manifest-distribution makes the fronting domain the
 // hard requirement: binaries bake in dl.hivedesktop.com, never a raw bucket
 // URL, so storage stays swappable without an app update.
 const DefaultManifestBaseURL = "https://dl.hivedesktop.com"
@@ -33,7 +33,7 @@ const artifactURLKey = "manifest.artifact.url"
 // published by cmd/tools/release: GET
 // <base>/desktop/channels/<channel>/latest.json, compare semver, download the
 // manifest's artifact URL, and let the Updater verify the manifest's sha256
-// (decisions 0003/0004; schema in docs/distribution.md). The provider holds no
+// (ADR r2-manifest-distribution and release-channels; schema in docs/distribution.md). The provider holds no
 // credentials and never lists the bucket.
 type manifestProvider struct {
 	base    string // fronting domain, no trailing slash
@@ -65,7 +65,7 @@ func (p *manifestProvider) Check(ctx context.Context, req updater.CheckRequest) 
 	if m == nil {
 		return nil, nil
 	}
-	// Defense-in-depth per decision 0004: the manifest states which channel it
+	// Defense-in-depth per ADR release-channels: the manifest states which channel it
 	// was written for; a mismatch means a misrouted publish or a swapped file.
 	if m.Channel != p.channel {
 		return nil, fmt.Errorf("desktop updater: manifest channel %q does not match configured channel %q", m.Channel, p.channel)

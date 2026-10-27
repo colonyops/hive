@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import type { Confirmation } from '../composables/useConfirmation'
+import type { Confirmation } from '@hive/ui/composables/useConfirmation'
 import { useNewSession } from '../composables/useNewSession'
 import type { FeedState } from './useAppNavigation'
 

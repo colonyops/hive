@@ -2,7 +2,7 @@
 // Appearance: how the app's own chrome is drawn, everywhere. A terminal draws
 // itself from Settings ▸ Terminal and takes nothing from here (ADR settings-sections-name-the-surface-they-change).
 import { computed, onMounted } from 'vue'
-import AppSelect from './ui/AppSelect.vue'
+import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
@@ -17,7 +17,8 @@ import {
   SYSTEM_SANS,
   useAppFont,
 } from '../composables/useAppFont'
-import { setTheme, useTheme, type Theme } from '../composables/useTheme'
+import type { Theme } from '@hive/ui/lib/themes'
+import { setTheme, useTheme } from '../composables/useTheme'
 
 const { theme } = useTheme()
 const { sans, mono } = useAppFont()

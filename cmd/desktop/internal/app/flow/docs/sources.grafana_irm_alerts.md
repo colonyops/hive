@@ -4,7 +4,7 @@ A **Grafana IRM alerts source** node emits one item per active Grafana IRM (OnCa
 
 ## Fields
 
-- `credential` — required. The connected Grafana stack to fetch as, written as `cmd/desktop/grafana/<account>` — the same credential the other Grafana source nodes use. The token needs `grafana-irm-app.alert-groups:read`; if the stack answers `403`, the service account's role is too low rather than the token being wrong.
+- `credential` — required. The connected Grafana stack to fetch as, written as `grafana/<account>` — the same credential the other Grafana source nodes use. The token needs `grafana-irm-app.alert-groups:read`; if the stack answers `403`, the service account's role is too low rather than the token being wrong.
 - `integration` — optional. An IRM integration id (e.g. `CFRPV98RPR1U8`), found on the integration's page in Grafana. This is usually what pins a feed to one squad, because the integration is the unit the upstream routes deliver to. Empty fetches every integration.
 - `team` — optional. An IRM team id. Empty fetches every team.
 - `interval` — optional, e.g. `1h`. The shortest time between fetches, for a source that costs more than its freshness is worth. It still only runs on a poll tick, so the real cadence rounds up to the next one; empty fetches every tick. A manual refresh ignores it, and it is not persisted — a restart fetches once from every source.

@@ -12,10 +12,10 @@ import IconExternalLink from '~icons/lucide/external-link'
 import IconX from '~icons/lucide/x'
 import { useActivity } from '../stores/useActivity'
 import { useNewSession } from '../composables/useNewSession'
-import { useEscapeToClose } from '../composables/useEscapeToClose'
-import IconButton from './ui/IconButton.vue'
-import ViewHeader from './ui/ViewHeader.vue'
-import SearchField from './ui/SearchField.vue'
+import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
+import SearchField from '@hive/ui/components/ui/SearchField.vue'
 import {
   ACTIVITY_FILTERS,
   activityLinks,
@@ -30,8 +30,8 @@ import {
   type ActivityItemLink,
   type ActivityStyleKey,
 } from '../lib/activityPresentation'
-import EmptyState from './ui/EmptyState.vue'
-import SegmentedControl from './ui/SegmentedControl.vue'
+import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
+import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
 
 const emit = defineEmits<{
   close: []

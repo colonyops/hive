@@ -1,20 +1,27 @@
 package tmuxcc
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/colonyops/hive/pkg/randid"
 
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/platform/observe"
+	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 )
 
@@ -45,6 +52,7 @@ type ManagerOptions struct {
 	newProcess   func(Options) process
 	onEmit       func()
 	runTmux      func(context.Context, string, []string, ...string) ([]string, error)
+	inputTmux    func(context.Context, string, []string, io.Reader, ...string) error
 }
 
 // managedClient carries the generation its registration was made under, so a
@@ -64,6 +72,7 @@ type Manager struct {
 	newProcess  func(Options) process
 	onEmit      func()
 	run         func(context.Context, string, []string, ...string) ([]string, error)
+	input       func(context.Context, string, []string, io.Reader, ...string) error
 	bufferBytes int
 
 	// The app-lifetime context lives in this closure rather than in a field:
@@ -96,6 +105,7 @@ func NewManager(ctx context.Context, opts ManagerOptions) *Manager {
 		newProcess:  opts.newProcess,
 		onEmit:      opts.onEmit,
 		run:         opts.runTmux,
+		input:       opts.inputTmux,
 		bufferBytes: opts.BufferBytes,
 		cancelAll:   cancel,
 		derive:      func() (context.Context, context.CancelFunc) { return context.WithCancel(lifetime) },
@@ -112,6 +122,9 @@ func NewManager(ctx context.Context, opts ManagerOptions) *Manager {
 	}
 	if m.run == nil {
 		m.run = runTmux
+	}
+	if m.input == nil {
+		m.input = inputTmux
 	}
 	return m
 }
@@ -544,6 +557,84 @@ func (m *Manager) ListAllWindows(ctx context.Context, slugs []string) (map[strin
 	return windows, nil
 }
 
+// SendText pastes text into a pane as one bracketed paste and presses Enter
+// after submitDelay. It needs no attached client. The program in the pane
+// decides whether the paste stays one message: it must have turned on
+// bracketed paste, or each newline submits.
+func (m *Manager) SendText(ctx context.Context, pane string, text []byte, submitDelay time.Duration) error {
+	if !validPaneID(pane) {
+		return fmt.Errorf("tmuxcc: send text: %q is not a pane id", pane)
+	}
+	if err := m.Available(ctx); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	binary := m.binary
+	m.mu.Unlock()
+
+	buffer := "hive-send-" + randid.Generate(12)
+	if err := m.input(ctx, binary, m.environ(ctx), bytes.NewReader(text), "load-buffer", "-b", buffer, "-"); err != nil {
+		return fmt.Errorf("tmuxcc: send text: load buffer: %w", err)
+	}
+	if _, err := m.oneShot(ctx, "paste-buffer", "-d", "-p", "-b", buffer, "-t", pane); err != nil {
+		if _, delErr := m.oneShot(context.WithoutCancel(ctx), "delete-buffer", "-b", buffer); delErr != nil {
+			m.log.Debug().Ctx(ctx).Err(delErr).Str("buffer", buffer).Msg("delete send buffer after failed paste")
+		}
+		return fmt.Errorf("tmuxcc: send text: paste into %s: %w", pane, err)
+	}
+
+	timer := time.NewTimer(submitDelay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+	}
+
+	if _, err := m.oneShot(ctx, "send-keys", "-t", pane, "Enter"); err != nil {
+		return fmt.Errorf("tmuxcc: send text: submit in %s: %w", pane, err)
+	}
+	return nil
+}
+
+// FirstPane returns the pane id of the first pane of session's first window.
+func (m *Manager) FirstPane(ctx context.Context, session string) (string, error) {
+	if session == "" {
+		return "", fmt.Errorf("%w: empty session", ErrNotAttached)
+	}
+	if err := m.Available(ctx); err != nil {
+		return "", err
+	}
+	lines, err := m.oneShot(ctx, "list-panes", "-s", "-t", "="+session, "-F", "#{window_index} #{pane_index} #{pane_id}")
+	if err != nil {
+		return "", fmt.Errorf("tmuxcc: first pane of %s: %w", session, err)
+	}
+	type pane struct {
+		window, index int
+		id            string
+	}
+	panes := make([]pane, 0, len(lines))
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) != 3 || !validPaneID(fields[2]) {
+			continue
+		}
+		window, werr := strconv.Atoi(fields[0])
+		index, ierr := strconv.Atoi(fields[1])
+		if werr != nil || ierr != nil {
+			continue
+		}
+		panes = append(panes, pane{window, index, fields[2]})
+	}
+	if len(panes) == 0 {
+		return "", fmt.Errorf("tmuxcc: first pane of %s: no panes", session)
+	}
+	first := slices.MinFunc(panes, func(a, b pane) int {
+		return cmp.Or(cmp.Compare(a.window, b.window), cmp.Compare(a.index, b.index))
+	})
+	return first.id, nil
+}
+
 // oneShot runs a one-shot tmux command with the binary the availability probe
 // resolved (ADR tmux-discovery) — never a bare "tmux", which a desktop launch may not
 // have on $PATH. Callers go through Available first, which is what sets it.
@@ -638,7 +729,9 @@ func (m *Manager) remove(slug string, gen uint64) {
 }
 
 func tmuxVersion(ctx context.Context, binary string) (string, error) {
-	out, err := exec.CommandContext(ctx, binary, "-V").Output()
+	cmd := exec.CommandContext(ctx, binary, "-V")
+	cmd.Dir = tmuxbin.WorkDir()
+	out, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}

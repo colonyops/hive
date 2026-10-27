@@ -1,6 +1,7 @@
 package dispatch
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 
@@ -8,6 +9,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/ptyterm"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/promptfile"
@@ -69,6 +71,7 @@ func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessio
 		Repo:            req.Repo,
 		CollisionSuffix: req.CollisionSuffix,
 		Tags:            tags,
+		Env:             []string{ptyterm.ImageProtocolEnv},
 	})
 	if err != nil {
 		return SessionExecutionOutcome{}, err
@@ -89,9 +92,9 @@ func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessio
 		if s.Name != "" {
 			name = s.Name
 		}
-		l.recorder.Record(ctx, activity.SessionCreated(name, req.Agent, req.Repo))
+		l.recorder.Record(ctx, activity.SessionCreated(name, req.Agent, cmp.Or(s.Remote, req.Repo)))
 	}
-	return SessionExecutionOutcome{ID: s.ID, Name: s.Name, Slug: s.Slug, Path: s.Path}, nil
+	return SessionExecutionOutcome{ID: s.ID, Name: s.Name, Slug: s.Slug, Path: s.Path, Remote: s.Remote}, nil
 }
 
 func uniqueKnownOrigins(origins []models.ItemRef) []models.ItemRef {

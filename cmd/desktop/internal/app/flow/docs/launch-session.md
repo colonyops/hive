@@ -10,7 +10,8 @@ launch is also offered from the item menu.
 
 - `repo` (required) — the remote URL of the repository the session is
   created against, a Go template. `{{ .ItemRemote }}` is the item's own
-  repository, such as a pull request's; a plain URL launches every item in
+  repository, such as a pull request's, spelled as HTTPS or SSH
+  by `git.clone_protocol` and `rules[].clone_protocol`; a plain URL launches every item in
   one repository. A remote that matches a configured checkout reuses it.
 - `prompt` (required) — the session's initial prompt, a Go template.
 - `agent` — a Hive agent profile (e.g. `claude`, `aider`). Omit it for the

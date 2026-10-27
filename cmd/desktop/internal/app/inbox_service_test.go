@@ -140,7 +140,7 @@ func TestPipelineService_ActionViewsAndInvocationUseActionStore(t *testing.T) {
 	executor := &recordingActionExecutor{}
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{
 		"launch-session": executor,
-	}), 0, zerolog.Nop())
+	}, nil), 0, zerolog.Nop())
 	service := newTestInboxService(db, actionStore, worker)
 	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 	issueID := insertActionItem(t, db, "issue-1", "Issue", "")
@@ -201,7 +201,7 @@ func TestPipelineService_RenderClipboardActionIsRenderOnlyAndRepeatable(t *testi
 
 	// A dispatcher with no clipboard executor: the render path must never route
 	// a clipboard action through the worker.
-	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{}), 0, zerolog.Nop())
+	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{}, nil), 0, zerolog.Nop())
 	service := newTestInboxService(db, actionStore, worker)
 	prID := insertActionItemSource(t, db, "github", "pr-9", "PR", "Title", map[string]any{"num": 9, "repo": "acme/app"})
 
@@ -233,7 +233,7 @@ func TestPipelineService_RenderClipboardActionAppliesToWholeSelection(t *testing
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 
-	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{}), 0, zerolog.Nop())
+	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{}, nil), 0, zerolog.Nop())
 	service := newTestInboxService(db, actionStore, worker)
 	firstID := insertActionItemSource(t, db, "github", "pr-1", "PR", "First", map[string]any{"num": 1, "repo": "acme/app"})
 	secondID := insertActionItemSource(t, db, "github", "pr-2", "PR", "Second", map[string]any{"num": 2, "repo": "acme/api"})
@@ -267,7 +267,7 @@ func TestPipelineService_ActionViewsAndInvokeAreCapabilityGatedNotSourceGated(t 
 	executor := &recordingActionExecutor{}
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{
 		"launch-session": executor,
-	}), 0, zerolog.Nop())
+	}, nil), 0, zerolog.Nop())
 	service := newTestInboxService(db, actionStore, worker)
 
 	t.Run("webhook item with a matching repo_template action gets and runs it", func(t *testing.T) {
@@ -334,7 +334,7 @@ func TestPipelineService_AttemptedFailureReturnsPersistedActionRun(t *testing.T)
 
 	// Use a dispatcher executor that records a dispatched side effect failure.
 	failed := &attemptedFailureExecutor{}
-	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{"launch-session": failed}), 0, zerolog.Nop())
+	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{"launch-session": failed}, nil), 0, zerolog.Nop())
 	service := newTestInboxService(db, actionStore, worker)
 	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 
@@ -364,7 +364,7 @@ func TestPipelineService_ActionRunSurvivesDatabaseReopen(t *testing.T) {
 	db, err := queries.Open(t.Context(), dir, queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	failed := &attemptedFailureExecutor{}
-	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{"launch-session": failed}), 0, zerolog.Nop())
+	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{"launch-session": failed}, nil), 0, zerolog.Nop())
 	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 	view, err := newTestInboxService(db, actionStore, worker).InvokeAction(t.Context(), InvokeActionRequest{ActionID: "review-pr", ItemID: prID})
 	require.NoError(t, err)
@@ -389,7 +389,7 @@ func TestPipelineService_ActionRunLocationResolvesTheOriginatingItem(t *testing.
 
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{
 		"shell": &recordingActionExecutor{},
-	}), 0, zerolog.Nop())
+	}, nil), 0, zerolog.Nop())
 	service := newTestInboxService(db, actionStore, worker)
 	itemID := insertActionItem(t, db, "item-key-is-not-a-row-id", "Item", "Try it")
 	st := stores.New(db, stores.Options{})
@@ -414,7 +414,7 @@ func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing
 	launcher := &recordingSessionLauncher{}
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{
 		"launch-session": dispatch.NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, stubExecEnv{}),
-	}), 0, zerolog.Nop())
+	}, nil), 0, zerolog.Nop())
 	service := newTestInboxService(db, actionStore, worker)
 	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 
@@ -430,6 +430,23 @@ func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing
 	require.NoError(t, db.Conn().QueryRowContext(t.Context(),
 		`SELECT status FROM output_command WHERE action_id = ? AND key = ?`, "review-pr", "pr-1").Scan(&status))
 	assert.Equal(t, "done", status)
+}
+
+func TestInboxService_NewSessionDraftUsesTheInjectedRemoteGenerator(t *testing.T) {
+	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	st := stores.New(db, stores.Options{})
+	service := newInboxService(InboxDeps{
+		Items: st.InboxItems, Commands: st.OutputCommands, NodeRuns: st.NodeRuns, Catalog: configuredActionStore(t),
+		Remotes: func(repo, _ string) string { return "git@github.com:" + repo + ".git" },
+	})
+	itemID := insertActionItemSource(t, db, "github", "pr-1", "PR", "Fix the crash",
+		map[string]any{"repo": "acme/site", "url": "https://github.com/acme/site/issues/1"})
+
+	draft, err := service.NewSessionDraft(t.Context(), []int64{itemID})
+	require.NoError(t, err)
+	assert.Equal(t, "git@github.com:acme/site.git", draft.Repository)
 }
 
 func TestInboxService_NewSessionDraft(t *testing.T) {
@@ -503,7 +520,7 @@ actions:
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 
 	executor := &recordingActionExecutor{}
-	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{"shell": executor}), 0, zerolog.Nop())
+	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{"shell": executor}, nil), 0, zerolog.Nop())
 	service := newTestInboxService(db, actionStore, worker)
 	itemID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 
@@ -557,7 +574,7 @@ func TestInboxService_MissingRowsMapOntoKinds(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{
 		"launch-session": &recordingActionExecutor{},
-	}), 0, zerolog.Nop())
+	}, nil), 0, zerolog.Nop())
 	service := newTestInboxService(db, actionStore, worker)
 	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 

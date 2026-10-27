@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "devDependencies": {
-    "@playwright/test": "1.62.1"
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3"
   }
 }

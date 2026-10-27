@@ -1129,11 +1129,44 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 		return "", "", err
 	}
 
+	itemURL, _ := result.Item.Fields["url"].(string)
+	// The scope remote is a spelling that already works for this user (an SSH
+	// host alias, a custom port); a preference replaces it only to change the
+	// protocol.
+	request := m.launches.PreferredRemote(scope.Search, itemURL)
+	if request == "" || sameProtocol(request, scope.Remote) {
+		request = scope.Remote
+	}
+	if request == "" {
+		request = m.launches.GeneratedRemote(scope.Search, itemURL)
+	}
+	// An unscoped picker lists the items of the cwd repository, and
+	// CreateSession clones the cwd origin for an empty remote.
+	var launch sessionsvc.LaunchRepository
+	switch {
+	case request != "":
+		launch, err = m.launches.ResolveSessionLaunchRepository(ctx, request)
+		if err != nil {
+			return "", "", fmt.Errorf("resolve launch repository for %q: %w", request, err)
+		}
+	case scope.Search != "":
+		return "", "", fmt.Errorf("cannot determine a clone URL for %q: the item has no url and the scope has no remote", scope.Search)
+	}
+	if request == scope.Remote {
+		// The resolver swaps in an equivalent checkout's spelling when no
+		// preference applies; the scope's own spelling must still win.
+		launch.Remote = scope.Remote
+	}
+	source := scope.Source
+	if source == "" {
+		source = launch.Source
+	}
+
 	exec := m.cmdService.NewCreateExecutor(sessionsvc.CreateOptions{
 		Name:            rendered.Name,
 		Prompt:          rendered.Prompt,
-		Remote:          scope.Remote,
-		Source:          scope.Source,
+		Remote:          launch.Remote,
+		Source:          source,
 		UseBatchSpawn:   true,
 		Background:      true,
 		CollisionSuffix: session.Slugify(result.Item.ID),
@@ -1896,4 +1929,10 @@ func renderCustomAction(tmplStr string, ref todo.Ref) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("render action template: %w", err)
 	}
 	return exec.Command("sh", "-c", rendered), nil
+}
+
+func sameProtocol(left, right string) bool {
+	l, lok := git.RemoteProtocol(left)
+	r, rok := git.RemoteProtocol(right)
+	return lok && rok && l == r
 }

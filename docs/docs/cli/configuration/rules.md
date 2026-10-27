@@ -44,6 +44,7 @@ rules:
 | ------------------ | -------------- | ---------------------------- | ------------------------------------------------- |
 | `pattern`          | string         | `""`                         | Regex pattern to match remote URL                 |
 | `clone_strategy`   | string         | —                            | Override clone strategy for matching repos: `full` or `worktree` |
+| `clone_protocol`   | string         | —                            | Override `git.clone_protocol` for matching repos: `https` or `ssh`. See [Clone protocol](#clone-protocol) |
 | `branch_template`  | string         | `hive/{{ .Slug }}-{{ .ID }}` | Go template for the git branch name (worktree only). Variables: `.Name`, `.Slug`, `.Owner`, `.Repo`, `.ID`. The rendered value must be a valid git branch name (no spaces, colons, `~`, `^`, etc.) — session creation fails with a clear error if it isn't. |
 | `agent`            | string         | —                            | Agent profile override for matching repos. Must match a key under `agents`. |
 | `windows`          | []WindowConfig | see below                    | Declarative tmux window layout (recommended)      |
@@ -56,6 +57,26 @@ rules:
 
 !!! warning "`windows` vs `spawn`/`batch_spawn`"
     A rule must use either `windows` or `spawn`/`batch_spawn`, not both. If neither is set, the default window layout is used (agent window + shell window). A rule can set `agent` with or without custom `windows`/`spawn` config.
+
+## Clone Protocol
+
+When hive builds a clone URL from an issue or pull request, such as in the TUI issue picker, it picks HTTPS or SSH from `git.clone_protocol`. A rule with `clone_protocol` overrides that for the repositories it matches. With no setting, the TUI issue picker clones the remote of the selected session or repository. Elsewhere, hive builds HTTPS URLs and keeps the spelling of a matching local checkout.
+
+```yaml
+git:
+  clone_protocol: ssh
+
+rules:
+  # Keep HTTPS for this host.
+  - pattern: ".*[:/]gitea\\.example\\.com[:/].*"
+    clone_protocol: https
+```
+
+When a protocol is set, hive clones with the URL it built, even if a local checkout uses the other spelling. The checkout still supplies the files that `copy` rules copy. In the TUI issue picker, a selected session or repository whose remote already uses that protocol keeps its remote, so an SSH host alias still works. Hive never rewrites a remote you give it: a URL you type, a hard-coded `repo_template`, `hive new --remote`, or the checkout chosen in the new-session form.
+
+A `clone_protocol` rule matches if its pattern matches either the HTTPS or the SSH spelling, so patterns like `git@host:` and `https://host/` both work. Every other rule field matches the final URL, which can be either spelling. Write those patterns to work with both, for example `.*[:/]owner/repo`.
+
+SSH URLs never carry a port. For a forge whose SSH host or port differs from its web address, add a rule that sets `clone_protocol: https` for it. In Hive Desktop, an action can also spell out the URL in its `repo_template`.
 
 ## Agent Overrides
 

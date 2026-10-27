@@ -5,12 +5,12 @@
 // writes the draft before proceeding, Discard drops it (App.vue calls
 // session.discardDraft(), which reloads the flow fresh from disk), Cancel
 // aborts the navigation entirely and leaves the draft untouched.
-import InlineError from './ui/InlineError.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { ref } from 'vue'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
-import BaseButton from './ui/BaseButton.vue'
-import BaseModal from './ui/BaseModal.vue'
-import { useAutofocus } from '../composables/useAutofocus'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import BaseModal from '@hive/ui/components/ui/BaseModal.vue'
+import { useAutofocus } from '@hive/ui/composables/useAutofocus'
 
 const props = defineProps<{ busy: boolean; error?: string | null }>()
 const emit = defineEmits<{ close: []; deploy: []; discard: [] }>()

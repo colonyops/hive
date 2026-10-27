@@ -34,6 +34,22 @@ func TestCreateSessionCreatesPanesAndFocus(t *testing.T) {
 	assert.Contains(t, runner.calls, []string{"select-window", "-t", "@1"})
 }
 
+func TestCreateSessionSetsTheSessionEnvironment(t *testing.T) {
+	runner := &startupRunner{}
+	client := newStartupClient(runner, 0)
+	client.getenv = func(string) string { return "" }
+	spec := multiplexer.SessionSpec{
+		Target:     multiplexer.Target{Session: "work"},
+		Background: true,
+		Env:        []string{"A=1", "B=2"},
+		Windows:    []multiplexer.WindowSpec{{Name: "agent", Command: "pi"}, {Name: "shell", Command: "sh"}},
+	}
+
+	require.NoError(t, client.CreateSession(context.Background(), spec))
+	assert.Equal(t, []string{"new-session", "-d", "-s", "work", "-n", "agent", "-e", "A=1", "-e", "B=2", "-P", "-F", allocationFormat, "--", "cat", ";", "set-option", "-t", "=work:", launchMarker, "1"}, runner.calls[0])
+	assert.Contains(t, runner.calls, []string{"new-window", "-d", "-t", "=work:", "-n", "shell", "-P", "-F", allocationFormat, "--", "cat"})
+}
+
 func TestCreateSessionCleansPartialSession(t *testing.T) {
 	runner := &startupRunner{failure: func(_ context.Context, args []string) error {
 		if args[0] == "split-window" {
