@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/colonyops/hive/pkg/atomicfile"
@@ -16,7 +17,8 @@ import (
 // Edit is the set of config fields a setup flow owns: the workspaces the
 // session launcher scans, the agent profiles it offers, and which of them is
 // the default. Comments, key order and keys this build does not know survive a
-// write as parsed; blank lines and indentation are re-emitted by yaml.v3.
+// write as parsed, and so do the blank lines around them; indentation is
+// re-emitted by yaml.v3.
 //
 // Profiles and Workspaces are each the whole set, not a delta: the editor
 // holds every entry while it is open, so a write reconciles the file to
@@ -199,7 +201,7 @@ func ApplyEdit(path string, edit Edit, check Check) error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(path, out, check)
+	return writeFileAtomic(path, keepBlankLines(raw, out), check)
 }
 
 // CreateFile writes the commented header and nothing else, for a user who
@@ -457,6 +459,87 @@ func encodeDoc(doc *yaml.Node) ([]byte, error) {
 		return nil, fmt.Errorf("encode the Hive config: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+// keepBlankLines puts the blank lines of the original file back into its
+// re-encoded form. yaml.v3 drops them between nodes (it keeps those inside a
+// block scalar), and the file is often hand-kept in a dotfiles repository
+// where losing every section break on a settings save is a diff nobody asked
+// for. The two files are aligned by a longest common subsequence of lines,
+// compared without indentation because yaml.v3 re-indents, and only the
+// original's unmatched blank lines are added back. A blank line that would
+// land inside a block scalar changes its value, so a result that does not
+// decode to the same values as out is dropped for out.
+func keepBlankLines(orig, out []byte) []byte {
+	merged := mergeBlankLines(orig, out)
+	var want, got any
+	if yaml.Unmarshal(out, &want) != nil || yaml.Unmarshal(merged, &got) != nil || !reflect.DeepEqual(want, got) {
+		return out
+	}
+	return merged
+}
+
+func mergeBlankLines(orig, out []byte) []byte {
+	before := strings.Split(strings.TrimSuffix(string(orig), "\n"), "\n")
+	after := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
+
+	lcs := make([][]int, len(before)+1)
+	for i := range lcs {
+		lcs[i] = make([]int, len(after)+1)
+	}
+	for i := len(before) - 1; i >= 0; i-- {
+		for j := len(after) - 1; j >= 0; j-- {
+			if sameLine(before[i], after[j]) {
+				lcs[i][j] = lcs[i+1][j+1] + 1
+			} else {
+				lcs[i][j] = max(lcs[i+1][j], lcs[i][j+1])
+			}
+		}
+	}
+
+	// Between two matched lines, the original's leading blanks stay above the
+	// replacement and the rest follow it, so a section break keeps its place
+	// whether the section above or below it changed.
+	var b strings.Builder
+	var removed, added []string
+	flush := func() {
+		lead := 0
+		for lead < len(removed) && strings.TrimSpace(removed[lead]) == "" {
+			lead++
+		}
+		b.WriteString(strings.Repeat("\n", lead))
+		for _, line := range added {
+			b.WriteString(line + "\n")
+		}
+		for _, line := range removed[lead:] {
+			if strings.TrimSpace(line) == "" {
+				b.WriteString("\n")
+			}
+		}
+		removed, added = removed[:0], added[:0]
+	}
+	i, j := 0, 0
+	for i < len(before) || j < len(after) {
+		switch {
+		case i < len(before) && j < len(after) && sameLine(before[i], after[j]):
+			flush()
+			b.WriteString(after[j] + "\n")
+			i++
+			j++
+		case i < len(before) && (j == len(after) || lcs[i+1][j] >= lcs[i][j+1]):
+			removed = append(removed, before[i])
+			i++
+		default:
+			added = append(added, after[j])
+			j++
+		}
+	}
+	flush()
+	return []byte(b.String())
+}
+
+func sameLine(a, b string) bool {
+	return strings.TrimSpace(a) == strings.TrimSpace(b)
 }
 
 // writeFileAtomic runs check against a candidate file before the real write,

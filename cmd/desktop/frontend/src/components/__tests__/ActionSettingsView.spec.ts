@@ -205,6 +205,38 @@ describe('ActionSettingsView', () => {
     await wrapper.get('[data-testid="action-create"]').trigger('click')
     expect(editor<HTMLInputElement>('action-target-session').disabled).toBe(true)
     expect(editor<HTMLInputElement>('action-target-window').disabled).toBe(true)
+    expect(editor<HTMLInputElement>('action-target-statusbar').disabled).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('offers an icon for a status bar action', async () => {
+    mocks.CreateAction.mockResolvedValue({ id: 'open-repo', label: 'Open repo', type: 'shell' })
+    const wrapper = mountSettings([])
+    await flushPromises()
+    await wrapper.get('[data-testid="action-create"]').trigger('click')
+    await setValue(editor<HTMLInputElement>('action-id'), 'open-repo')
+    await setValue(editor<HTMLInputElement>('action-label'), 'Open repo')
+    editor<HTMLButtonElement>('action-type').click()
+    await flushPromises()
+    editor<HTMLButtonElement>('action-type-option-shell').click()
+    await flushPromises()
+    await setValue(editor<HTMLTextAreaElement>('action-shell-command'), 'open {{ .Session.WebURL }}')
+
+    expect(document.querySelector('[data-testid="action-icon"]')).toBeNull()
+    editor<HTMLInputElement>('action-target-statusbar').click()
+    await flushPromises()
+    editor<HTMLInputElement>('action-target-item').click()
+    await flushPromises()
+    editor<HTMLButtonElement>('action-icon').click()
+    await flushPromises()
+    editor<HTMLButtonElement>('action-icon-option-globe').click()
+    await flushPromises()
+
+    editor<HTMLButtonElement>('action-save').click()
+    await flushPromises()
+    expect(mocks.CreateAction).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'open-repo', targets: ['statusbar'], icon: 'globe' }),
+    )
     wrapper.unmount()
   })
 

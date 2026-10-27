@@ -57,7 +57,7 @@ func (c *Client) CreateSession(ctx context.Context, spec multiplexer.SessionSpec
 }
 
 func (c *Client) createSession(ctx context.Context, spec multiplexer.SessionSpec) (bool, error) {
-	l := &launch{client: c, name: spec.Target.Session, ownsSession: true, phase: LaunchPhaseAllocating}
+	l := &launch{client: c, name: spec.Target.Session, ownsSession: true, env: spec.Env, phase: LaunchPhaseAllocating}
 	for _, window := range spec.Windows {
 		if err := l.allocateWindow(ctx, spec.WorkingDirectory, window); err != nil {
 			return false, l.fail(ctx, err)

@@ -144,3 +144,32 @@ func TestEditableFromActionFailsClosedOnAConfigTypeItDoesNotKnow(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mystery")
 }
+
+func TestActionIconRoundTripsThroughTheWriterAndTheEditableCatalog(t *testing.T) {
+	original := Action{
+		ID:      "open-repo",
+		Label:   "Open repo",
+		Type:    "shell",
+		Icon:    "globe",
+		Targets: []string{TargetStatusBar},
+		Config:  &ShellConfig{CommandTemplate: "true"},
+	}
+
+	s := NewActionStore(filepath.Join(t.TempDir(), "actions.yml"))
+	s.mu.Lock()
+	_, err := s.mutateLocked("create", original.ID, original)
+	s.mu.Unlock()
+	require.NoError(t, err)
+
+	reloaded, ok := s.Get(original.ID)
+	require.True(t, ok)
+	assert.Equal(t, "globe", reloaded.Icon)
+	assert.Equal(t, []string{TargetStatusBar}, reloaded.Targets)
+
+	editable, err := editableFromAction(reloaded)
+	require.NoError(t, err)
+	assert.Equal(t, "globe", editable.Icon)
+	back, err := actionFromEditable(editable)
+	require.NoError(t, err)
+	assert.Equal(t, "globe", back.Icon)
+}

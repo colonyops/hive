@@ -54,6 +54,9 @@ type SessionExecutionOutcome struct {
 	// Slug names the tmux session; Path is the checkout a post hook runs in.
 	Slug string `json:"slug,omitempty"`
 	Path string `json:"path,omitempty"`
+	// Remote is the session's stored remote; it differs from the request when
+	// launch resolution kept a checkout's spelling.
+	Remote string `json:"remote,omitempty"`
 }
 
 type MessageExecutionOutcome struct {

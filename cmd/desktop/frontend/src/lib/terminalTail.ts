@@ -16,22 +16,11 @@ export function scrolledOffTail(term: Terminal): boolean {
 
 /**
  * Reports `term`'s tail pin to `report` on every event that can move it, and
- * says how to stop.
- *
- * `host` is the element xterm opened into. The user's own scrolling reaches
- * this only as a DOM scroll on `.xterm-viewport`: xterm's viewport reads its
- * own scrollTop, syncs the buffer, and suppresses onScroll so it cannot feed
- * itself, so a wheel, a trackpad or a dragged scrollbar leaves the tail
- * silently. onScroll covers the other half — what output does to the buffer,
- * the auto-pin to the tail and a trim moving it — and onBufferChange covers
- * the alternate screen, which has no scrollback and fires no scroll event on
- * the way in.
- *
- * Call it after `term.open(host)`: `.xterm-viewport` does not exist before,
- * and xterm registers its own listener inside it, so this one runs second and
- * reads a buffer already synced.
+ * says how to stop. onScroll covers the user's own scrolling and what output
+ * does to the buffer; onBufferChange covers the alternate screen, which has no
+ * scrollback and fires no scroll event on the way in.
  */
-export function watchTailPin(term: Terminal, host: HTMLElement, report: (scrolledUp: boolean) => void): IDisposable {
+export function watchTailPin(term: Terminal, report: (scrolledUp: boolean) => void): IDisposable {
   let last: boolean | undefined
   const refresh = (): void => {
     const scrolledUp = scrolledOffTail(term)
@@ -41,13 +30,9 @@ export function watchTailPin(term: Terminal, host: HTMLElement, report: (scrolle
   }
 
   const handles = [term.onScroll(refresh), term.buffer.onBufferChange(refresh)]
-  const viewport = host.querySelector('.xterm-viewport')
-  viewport?.addEventListener('scroll', refresh, { passive: true })
-
   return {
     dispose: () => {
       for (const handle of handles) handle.dispose()
-      viewport?.removeEventListener('scroll', refresh)
     },
   }
 }

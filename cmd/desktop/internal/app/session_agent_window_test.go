@@ -12,11 +12,13 @@ import (
 
 type fakeAgentWindows struct {
 	calls [][4]string
+	envs  [][]string
 	err   error
 }
 
-func (f *fakeAgentWindows) NewCommandWindow(_ context.Context, slug, dir, name, command string) (string, error) {
+func (f *fakeAgentWindows) NewCommandWindow(_ context.Context, slug, dir, name, command string, env []string) (string, error) {
 	f.calls = append(f.calls, [4]string{slug, dir, name, command})
+	f.envs = append(f.envs, env)
 	return "@42", f.err
 }
 
@@ -36,6 +38,7 @@ func TestNewAgentWindowSharesCheckoutAndReadsCurrentProfile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "@42", id)
 	require.Equal(t, [][4]string{{detail.Slug, detail.Path, "codex", commands["codex"]}}, windows.calls)
+	require.Equal(t, [][]string{{"PI_IMAGE_PROTOCOL=kitty"}}, windows.envs)
 	require.Empty(t, h.mux.opened)
 
 	commands = map[string]string{"codex": "new-wrapper codex"}

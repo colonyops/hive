@@ -110,6 +110,17 @@ rules:
 !!! note
     Recycling a worktree session removes its checkout and session record, just like deleting it. The next session gets a fresh path and branch while continuing to reuse the shared bare clone. This keeps the usual recycle workflow without retaining stale worktree state.
 
+### Remote spellings and hosts
+
+Hive treats the SSH and HTTPS URLs of one repository as the same repository. `git@github.com:acme/site.git` and `https://github.com/acme/site` share recycled clones, the `max_recycled` pool, and the worktree bare clone.
+
+When a recycled clone is reused for a different spelling, hive points its `origin` at the URL you asked for and pulls. If that fails, hive restores the old `origin`, keeps the clone recycled, and creates a fresh clone instead.
+
+Bare clones are stored per host and path, in `.bare/<host>/<path>` under the repos directory. Repositories with the same `owner/repo` on different hosts get separate bare clones. A bare clone created by an older version at `.bare/<owner>/<repo>` is still used while its `origin` is the same repository. Its `origin` follows the URL of the latest request.
+
+!!! note
+    A host with a non-default web port, such as `https://git.example.com:8443/acme/site`, is not matched with its SSH spelling `git@git.example.com:acme/site`. Hive treats them as different repositories.
+
 ## Session Lifecycle
 
 Sessions move through a managed lifecycle:

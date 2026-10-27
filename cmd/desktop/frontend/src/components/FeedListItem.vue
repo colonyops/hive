@@ -22,7 +22,7 @@ import IconEye from '~icons/lucide/eye'
 import type { InboxItem } from '../types/feed'
 import FeedKindPill from './FeedKindPill.vue'
 import FeedSourceBadge from './FeedSourceBadge.vue'
-import IconButton from './ui/IconButton.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 
 const props = defineProps<{
   item: InboxItem

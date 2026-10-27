@@ -19,6 +19,7 @@ import (
 	appstores "github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/internal/domain/messaging"
+	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/store"
 	coredb "github.com/colonyops/hive/internal/store/db"
@@ -112,6 +113,10 @@ func TestStateResetRestoresFreshlySeededBaseline(t *testing.T) {
 	}))
 	_, err = store.NewMessageStore(core, 0).Publish(ctx, messaging.Message{Payload: "mutated", Sender: "test"}, []string{"smoke.reset"})
 	require.NoError(t, err)
+	reviews := store.NewReviewStore(core)
+	reviewSession, err := reviews.CreateSession(ctx, "drive://shared/plan.md", "hash")
+	require.NoError(t, err)
+	require.NoError(t, reviews.SaveComment(ctx, review.Comment{ID: "c1", SessionID: reviewSession.ID, StartLine: 1, EndLine: 1, CommentText: "x", CreatedAt: now}))
 
 	// Mutate config: rewrite tracked files, mint an untracked flow, create
 	// settings.yaml.
@@ -139,6 +144,8 @@ func TestStateResetRestoresFreshlySeededBaseline(t *testing.T) {
 	assert.Zero(t, countRows(t, core, "sessions"))
 	assert.Zero(t, countRows(t, core, "messages"))
 	assert.Zero(t, countRows(t, core, "message_reads"))
+	assert.Zero(t, countRows(t, core, "review_sessions"))
+	assert.Zero(t, countRows(t, core, "review_comments"))
 
 	// Config files are back to the captured baseline.
 	restoredFlow, err := os.ReadFile(flowPath)

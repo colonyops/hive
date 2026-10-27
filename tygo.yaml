@@ -1,0 +1,11 @@
+# Generates the drive server web UI's wire types from internal/platform/driveapi.
+# Run through `mise run generate:tygo`; the output is committed.
+packages:
+  - path: github.com/colonyops/hive/internal/platform/driveapi
+    output_path: cmd/drive-server/frontend/src/wire.gen.ts
+    indent: "  "
+    fallback_type: unknown
+    exclude_files:
+      - client.go
+    type_mappings:
+      time.Time: string

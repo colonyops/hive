@@ -67,6 +67,33 @@ command_template: "true"
 	assert.Contains(t, err.Error(), "unknown target")
 }
 
+func TestValidateActions_StatusBarIsATerminalTargetWithAnIcon(t *testing.T) {
+	a, err := decodeAction(t, `id: open-repo
+label: Open repo
+type: shell
+icon: globe
+targets: [statusbar]
+command_template: "true"
+`)
+	require.NoError(t, err)
+	require.NoError(t, validateActions([]Action{a}))
+	assert.True(t, a.TargetsTerminal())
+	assert.Equal(t, "globe", a.View().Icon)
+
+	a.Icon = "nope"
+	require.ErrorContains(t, validateActions([]Action{a}), "unknown icon")
+}
+
+func TestValidateActions_RejectsALaunchSessionOnTheStatusBar(t *testing.T) {
+	a, err := decodeAction(t, `id: launch
+label: Launch
+type: launch-session
+targets: [statusbar]
+`)
+	require.NoError(t, err)
+	require.ErrorContains(t, validateActions([]Action{a}), "cannot run against a terminal")
+}
+
 func TestValidateActions_RejectsADuplicateTarget(t *testing.T) {
 	a, err := decodeAction(t, `id: open
 label: Open

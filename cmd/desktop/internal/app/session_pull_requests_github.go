@@ -22,6 +22,8 @@ func newGitHubForge(client *ghclient.Client, creds credentials.Store) *gitHubFor
 
 func (g *gitHubForge) serves(host string) bool { return host == "github.com" }
 
+func (g *gitHubForge) repoURL(string, string, string) string { return "" }
+
 func (g *gitHubForge) pullRequest(ctx context.Context, key SessionPullRequestKey) (SessionPullRequest, error) {
 	if g.client == nil || g.creds == nil {
 		return SessionPullRequest{Status: PullRequestStatusDisconnected}, nil

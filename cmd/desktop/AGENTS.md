@@ -37,10 +37,36 @@ mise run desktop:devserver     # the shared GitHub proxy `dev` routes through
 `desktop:dev:prepare` / `desktop:dev:fresh` / `desktop:dev:reset` manage this worktree's isolated
 instance. `svx up` brings up devserver + app together from `svx.yaml`.
 
+## Test in the running app
+
+A dev build serves MCP tools, so an agent can drive and inspect the real app.
+For a frontend-only change, the headless `mise run desktop:serve` build is
+faster.
+
+1. Run `mise run desktop:dev:prepare`. It writes `launch.env` and `.mcp.json`
+   at the worktree root.
+2. Run `mise run desktop:dev`.
+3. Start the agent session in the worktree and approve the `hive-desktop-ui`
+   server from `.mcp.json`.
+
+- `hive-desktop-ui` is the Wails MCP server in every dev build: DOM queries,
+  clicks, typing, and screenshots of the native window. The `desktop-ui-audit`
+  skill covers it.
+- `hive-desktop` is the app's own MCP server: inbox and pipeline state, and a
+  forced re-poll. `.mcp.json` does not register it. Add it with
+  `claude mcp add --transport http hive-desktop http://127.0.0.1:<port>/mcp`,
+  where the port is `HIVE_DESKTOP_HTTP_PORT` in `launch.env`. The
+  `desktop-api` skill covers it.
+- The `desktop-devserver` skill makes GitHub send an event.
+
+Each worktree gets its own ports, so these tools never reach the installed
+Hive.app.
+
 ## Never
 
 - **Never run Playwright or the e2e harness on the host.** `mise run desktop:e2e` is
-  Docker-only and there is no host fallback.
+  Docker-only and there is no host fallback. To write or place a test, read
+  `cmd/desktop/e2e/AGENTS.md`.
 - **Never verify UI by hand in a GUI build.** The headless `mise run desktop:serve`
   build driven with browser tooling is the default loop. When the question is
   about the real app (the native window, the WKWebView, shell integration),
@@ -114,10 +140,11 @@ batch of messages, and the exact `CommitBatch` they are worth.
 ## Frontend lint and format
 
 `mise run desktop:frontend:lint` and `mise run desktop:frontend:format:check`
-gate the frontend; `npm run format` fixes formatting. Every lint rule is an
-error. `frontend/eslint-suppressions.json` holds the violations that existed
-when the lint landed: fix one, then run `npx eslint --prune-suppressions .`
-in `frontend/`, because a stale entry fails the lint. Never add entries to it
+gate the frontend; `npm run format -w frontend` fixes formatting. Every lint
+rule is an error. `frontend/eslint-suppressions.json` holds the violations that
+existed when the lint landed: fix one, then run `npx eslint --prune-suppressions .`
+in `frontend/`, because a stale entry fails the lint. `@hive/ui` has its own
+`eslint-suppressions.json` under the same rule. Never add entries to it
 or `--suppress-all` new code; fix the code or disable the rule on that line
 with a reason.
 
@@ -134,10 +161,15 @@ The lint enforces the split; the composables that predate it sit in
 
 ## Frontend components
 
-Reusable building blocks (buttons, overlays, form controls, banners) live in
-`frontend/src/components/ui/`; feature components stay in `components/` or a
-feature folder. `frontend/src/components/ui/README.md` is the index and the
-rules: which block to use, the overlay and test-id conventions, and how to add
+The frontend builds from the repo-root npm workspace, and the reusable
+building blocks (buttons, overlays, form controls, banners), the theme, and the
+base CSS live in the `@hive/ui` package at `web/packages/ui/`. Import them as
+`@hive/ui/components/ui/BaseButton.vue`, `@hive/ui/composables/useFocusTrap`,
+and so on. The package cannot import Wails, so a host-specific call goes
+through `HiveUiPlatform`, which `frontend/src/lib/hiveUiPlatform.ts` fills in
+and `main.ts` installs. Feature components stay in `frontend/src/components/`
+or a feature folder. `web/packages/ui/src/components/ui/README.md` is the index
+and the rules: which block to use, the overlay and test-id conventions, and how to add
 a block. Read it before writing a button, a dialog, or an error line.
 
 ## Frontend DOM, timers, and storage
@@ -164,9 +196,10 @@ focuses components that expose `focus()`), `useAnchoredPopover`,
 `useResizablePanel`, and `useEscapeToClose` (one Escape stack: only the
 topmost enabled caller fires, so a stacked overlay never closes the one under
 it). Every modal surface is a `BaseModal` or a `DrawerSheet`; both register in
-`useOpenModalCount`, which gates the global keybindings. `useClipboard` goes
-through the Wails clipboard because `navigator.clipboard` no-ops in WKWebView
-when the document is not focused.
+`useOpenModalCount`, which gates the global keybindings. These composables
+live in `@hive/ui`. `useClipboard` goes through the Wails clipboard (by way of
+`HiveUiPlatform`) because `navigator.clipboard` no-ops in WKWebView when the
+document is not focused.
 
 ## Mock modes
 

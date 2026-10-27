@@ -65,7 +65,10 @@ func TestDefaultActionsYAMLParsesValidatesAndRenders(t *testing.T) {
 		case *LaunchSessionConfig:
 			render(t, a.ID+".prompt_template", c.PromptTemplate)
 			if c.RepoTemplate != "" {
-				render(t, a.ID+".repo_template", c.RepoTemplate)
+				assert.Equalf(t, "{{ .ItemRemote }}", c.RepoTemplate, "%s must follow the clone policy", a.ID)
+				out, err := renderer.Render(c.RepoTemplate, map[string]any{"ItemRemote": "git@github.com:colonyops/hive.git"})
+				require.NoError(t, err)
+				assert.Equal(t, "git@github.com:colonyops/hive.git", out)
 			}
 		case *ShellConfig:
 			render(t, a.ID+".command_template", c.CommandTemplate)

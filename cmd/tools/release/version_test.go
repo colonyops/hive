@@ -49,7 +49,7 @@ func TestParseBumpLevel(t *testing.T) {
 func TestParseVersion(t *testing.T) {
 	t.Parallel()
 
-	for _, value := range []string{"0.1.0", "10.20.30-beta.2", "desktop-v1.2.3-dev.4", "v0.59.0", "v0.60.0"} {
+	for _, value := range []string{"0.1.0", "10.20.30-beta.2", "v0.59.0", "v0.60.0"} {
 		t.Run(value, func(t *testing.T) {
 			t.Parallel()
 			if _, err := parseVersion(value); err != nil {
@@ -57,7 +57,7 @@ func TestParseVersion(t *testing.T) {
 			}
 		})
 	}
-	for _, value := range []string{"", "1.2", "1.2.3-rc.1", "1.2.3-dev.0", "v2-experiment"} {
+	for _, value := range []string{"", "1.2", "1.2.3-rc.1", "1.2.3-dev.0", "v2-experiment", "desktop-v1.2.3"} {
 		t.Run("invalid-"+value, func(t *testing.T) {
 			t.Parallel()
 			if _, err := parseVersion(value); err == nil {
@@ -73,7 +73,7 @@ func TestParsePublishVersion(t *testing.T) {
 	if _, err := parsePublishVersion("0.60.0"); err != nil {
 		t.Fatalf("parsePublishVersion rejected a version: %v", err)
 	}
-	for _, value := range []string{"v0.60.0", "desktop-v1.2.3", "1.2.3-dev.4", "1.2.3-beta.1"} {
+	for _, value := range []string{"v0.60.0", "1.2.3-dev.4", "1.2.3-beta.1"} {
 		if _, err := parsePublishVersion(value); err == nil {
 			t.Fatalf("parsePublishVersion(%q) unexpectedly succeeded", value)
 		}

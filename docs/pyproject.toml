@@ -4,7 +4,7 @@ version = "0.0.0"
 description = "hivedesktop.com, built with Zensical"
 requires-python = ">=3.13"
 dependencies = [
-  "zensical==0.0.59",
+  "zensical==0.0.70",
 ]
 
 [tool.uv]

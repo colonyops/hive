@@ -37,14 +37,15 @@ node:
 - `{{"{{ .Payload.<field> }}"}}` — the item's payload. GitHub items carry `repo`, `title`, `url`, `num`, `author`, `body`, `labels`, and `state`; webhook items carry whatever was POSTed.
 - `{{"{{ .Key }}"}}` — the item's stable identity, e.g. `colonyops/hive#2841`.
 - `{{"{{ .Raw }}"}}` — the payload as raw JSON.
-- `{{"{{ .ItemRemote }}"}}` — the clone URL of the item's repository, built from its `repo` and `url`; empty when the item names no repository.
+- `{{"{{ .ItemRemote }}"}}` — the clone URL of the item's repository, built from its `repo` and `url` and spelled as HTTPS or SSH by `git.clone_protocol` and `rules[].clone_protocol` in the hive config; empty when the item names no repository.
 
-On the `session` and `window` targets — a terminal session row, or a window row
-inside it:
+On the `session`, `window`, and `statusbar` targets — a terminal session row, a
+window row inside it, or the session's status bar:
 
 - `{{"{{ .Session.Path }}"}}` — the session's checkout on disk. This is also the default working directory of a `shell` action run from a terminal target, so a command that just works in the checkout does not have to name it.
 - `{{"{{ .Session.Slug }}"}}` — the session's slug, which is also its tmux session name.
 - `{{"{{ .Session.Name }}"}}`, `{{"{{ .Session.ID }}"}}`, `{{"{{ .Session.Repo }}"}}`, `{{"{{ .Session.Branch }}"}}` — the session's name, hive id, remote, and worktree branch (blank for a session that is not a worktree).
+- `{{"{{ .Session.WebURL }}"}}` — the repository's web page, on GitHub or on the connected Gitea or Forgejo instance that serves the remote; blank for a remote with no host. `open {{"{{ .Session.WebURL | shq }}"}}` opens it, and a path after it reaches a page inside the repository.
 - `{{"{{ .Window.ID }}"}}` — the tmux window id, on the `window` target only. Addressed as `{{"{{ .Session.Slug }}"}}:{{"{{ .Window.ID }}"}}` in a tmux command. There is no window name: the id survives a rename and the name does not.
 - `{{"{{ .Key }}"}}` — the session's slug.
 

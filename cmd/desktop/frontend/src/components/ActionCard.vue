@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import AppIcon from './AppIcon.vue'
+import AppIcon from '@hive/ui/components/AppIcon.vue'
 import { actionTypeMeta } from '../lib/actionPresentation'
 import type { ActionView } from '../types/action'
 import type { ActionRunView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'

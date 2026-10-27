@@ -76,7 +76,7 @@ fi
 # not leave the tree dirty — even when the build fails, hence the exit trap.
 # Restore only if it was clean to begin with, so a genuine in-progress lockfile
 # edit is never discarded.
-LOCKFILE="cmd/desktop/frontend/package-lock.json"
+LOCKFILE="package-lock.json"
 lock_was_clean=0
 git diff --quiet -- "$LOCKFILE" 2>/dev/null && lock_was_clean=1
 restore_lockfile() {
@@ -104,7 +104,7 @@ docker run --rm \
   --platform "linux/$ARCH" \
   -v "$PWD:/src" -w /src/cmd/desktop \
   -v "$(go env GOMODCACHE):/gomod:ro" \
-  -v "$NODE_VOLUME:/src/cmd/desktop/frontend/node_modules" \
+  -v "$NODE_VOLUME:/src/node_modules" \
   -e GOMODCACHE=/gomod -e GOFLAGS=-mod=mod \
   -e GOPROXY=off \
   -e GOPRIVATE="${GOPRIVATE:-}" \

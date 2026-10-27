@@ -52,6 +52,10 @@ export function OnboardingSettings(): $CancellablePromise<$models.OnboardingSett
     return $Call.ByID(3457698538);
 }
 
+export function ReviewLabels(): $CancellablePromise<$models.ReviewLabel[] | null> {
+    return $Call.ByID(2130138097);
+}
+
 export function SetCanvasFontSize(size: string): $CancellablePromise<void> {
     return $Call.ByID(1474669462, size);
 }
@@ -100,6 +104,10 @@ export function SetOnboardingCompleted(): $CancellablePromise<void> {
     return $Call.ByID(1041406544);
 }
 
+export function SetReviewLabels(labels: $models.ReviewLabel[] | null): $CancellablePromise<void> {
+    return $Call.ByID(678699441, labels);
+}
+
 export function SetTerminalFontFamily(family: string): $CancellablePromise<void> {
     return $Call.ByID(2172269859, family);
 }
@@ -126,6 +134,10 @@ export function SetTerminalPoolSize(size: number): $CancellablePromise<void> {
 
 export function SetTerminalSessionAge(enabled: boolean, thresholdDays: number): $CancellablePromise<void> {
     return $Call.ByID(1787640393, enabled, thresholdDays);
+}
+
+export function SetTerminalShowScrollbars(show: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3661089012, show);
 }
 
 export function SetTerminalShowStatusBar(show: boolean): $CancellablePromise<void> {

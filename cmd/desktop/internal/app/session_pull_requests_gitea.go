@@ -23,6 +23,17 @@ func (g *giteaForge) serves(host string) bool {
 	return g.pulls != nil && g.pulls.Serves(host)
 }
 
+// repoURL builds on the instance's base URL rather than the remote: an SSH
+// remote names git's port, and no remote names the subpath an instance may be
+// served under.
+func (g *giteaForge) repoURL(host, owner, repo string) string {
+	base, ok := g.pulls.InstanceURL(host)
+	if !ok || owner == "" || repo == "" {
+		return ""
+	}
+	return base + "/" + owner + "/" + repo
+}
+
 func (g *giteaForge) pullRequest(ctx context.Context, key SessionPullRequestKey) (SessionPullRequest, error) {
 	pull, found, err := g.pulls.ForBranch(ctx, key.Host, key.Owner, key.Repo, key.Branch)
 	if err != nil {

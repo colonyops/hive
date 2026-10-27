@@ -109,7 +109,7 @@ func TestLaunchRequestMapsOntoCreateOptions(t *testing.T) {
 	progress := &progressLog{}
 	req := LaunchRequest{
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://github.com/colonyops/hive.git",
-		CollisionSuffix: "7", Tags: []string{"acme/repo#1", "", "acme/repo#1"},
+		CollisionSuffix: "7", Tags: []string{"acme/repo#1", "", "acme/repo#1"}, Env: []string{"A=1"},
 	}
 
 	got := req.createOptions(LaunchRepository{Remote: "git@github.com:colonyops/hive.git", Source: "/work/hive"}, progress)
@@ -123,6 +123,7 @@ func TestLaunchRequestMapsOntoCreateOptions(t *testing.T) {
 		Background:      true,
 		CollisionSuffix: "7",
 		Tags:            []string{"acme/repo#1"},
+		Env:             []string{"A=1"},
 		Progress:        progress,
 	}, got)
 }
@@ -144,6 +145,25 @@ func TestCreateFromRequestPrefersAnEquivalentConfiguredCheckout(t *testing.T) {
 	assert.Equal(t, "git@github.com:colonyops/hive.git", sess.Remote, "the configured checkout's spelling wins")
 	assert.Equal(t, "review-pr-1", sess.Name)
 	assert.Equal(t, []string{"acme/repo#1", "acme/repo#2"}, sess.Tags)
+}
+
+func TestCreateFromRequestKeepsTheRequestedSpellingWhenAProtocolIsSet(t *testing.T) {
+	workspaceDir := filepath.Join(t.TempDir(), "workspaces")
+	require.NoError(t, mkdirGitDir(filepath.Join(workspaceDir, "hive")))
+
+	cfg := &config.Config{
+		DataDir:    t.TempDir(),
+		Workspaces: []string{workspaceDir},
+		Git:        config.GitConfig{CloneProtocol: session.CloneProtocolSsh},
+	}
+	svc := newTestService(t, newMockStore(), cfg)
+	svc.git = &launchOptionsGit{remote: "https://github.com/colonyops/hive.git"}
+
+	sess, err := svc.CreateFromRequest(t.Context(), LaunchRequest{
+		Name: "review-pr-2", Repo: "git@github.com:colonyops/hive.git",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "git@github.com:colonyops/hive.git", sess.Remote)
 }
 
 // A taken name is the caller's to resolve with another name, so it arrives

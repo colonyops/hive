@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import InlineError from './ui/InlineError.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { computed, ref, watch } from 'vue'
 import IconSlidersHorizontal from '~icons/lucide/sliders-horizontal'
 import IconTrash2 from '~icons/lucide/trash-2'
-import AppSwitch from './ui/AppSwitch.vue'
-import FormField from './ui/FormField.vue'
-import TextInput from './ui/TextInput.vue'
-import BaseButton from './ui/BaseButton.vue'
+import AppSwitch from '@hive/ui/components/ui/AppSwitch.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
+import TextInput from '@hive/ui/components/ui/TextInput.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import SettingsLayout from './settings/SettingsLayout.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsNavItem from './settings/SettingsNavItem.vue'
 import { fileToImageBase64, ImageUploadError, imageUploadAccept } from '../lib/imageUpload'
 import type { Profile } from '../types/feed'
 import type { ProfileSettingsSection } from '../router'
-import { seedRef } from '../lib/seedRef'
+import { seedRef } from '@hive/ui/lib/seedRef'
 
 const props = withDefaults(
   defineProps<{

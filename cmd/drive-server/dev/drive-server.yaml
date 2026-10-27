@@ -1,0 +1,6 @@
+user_policies:
+  - name: dev
+    matches:
+      - "*@example.com"
+    quotas:
+      limit: 1GiB

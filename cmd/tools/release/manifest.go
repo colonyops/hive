@@ -186,12 +186,11 @@ func validateManifestAdvancement(candidate releaseVersion, manifests map[string]
 	return nil
 }
 
-// releaseTagVersions reads every release tag: the shared v* tags and the
-// desktop-v* tags the desktop used before it shared a version with the CLI.
-// A tag the pattern matches but that is not a version, such as
-// v2-experiment, is not a release and is skipped.
+// releaseTagVersions reads every v* release tag. A tag the pattern matches
+// but that is not a version, such as v2-experiment, is not a release and is
+// skipped.
 func releaseTagVersions(ctx context.Context) ([]releaseVersion, error) {
-	output, err := exec.CommandContext(ctx, "git", "tag", "--list", "v[0-9]*", "desktop-v*").Output()
+	output, err := exec.CommandContext(ctx, "git", "tag", "--list", "v[0-9]*").Output()
 	if err != nil {
 		return nil, fmt.Errorf("list release tags: %w", err)
 	}

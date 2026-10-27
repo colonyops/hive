@@ -2,11 +2,11 @@
 import { computed, ref } from 'vue'
 import ActionCard from './ActionCard.vue'
 import ItemActionMenu from './ItemActionMenu.vue'
-import IconButton from './ui/IconButton.vue'
-import PanelResizeHandle from './ui/PanelResizeHandle.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import PullRequestMetadata from './PullRequestMetadata.vue'
-import { useCodeCopy } from '../composables/useCodeCopy'
-import { useResizablePanel } from '../composables/useResizablePanel'
+import { useCodeCopy } from '@hive/ui/composables/useCodeCopy'
+import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import {
   body,
   byline,
@@ -19,9 +19,9 @@ import {
   presentationFor,
 } from '../lib/itemPresentation'
 import { relativeAge, relativeAgo } from '../lib/age'
-import { renderGithubMarkdown } from '../lib/githubMarkdown'
-import { useCodeHighlight } from '../stores/useCodeHighlight'
-import { externalMarkdownHref } from '../lib/markdownLinks'
+import { renderGithubMarkdown } from '@hive/ui/lib/githubMarkdown'
+import { useCodeHighlight } from '@hive/ui/lib/highlight'
+import { externalMarkdownHref } from '@hive/ui/lib/markdownLinks'
 import IconEllipsisVertical from '~icons/lucide/ellipsis-vertical'
 import IconSettings from '~icons/lucide/settings'
 import type { InboxEvent, InboxItem } from '../types/feed'

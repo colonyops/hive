@@ -5,10 +5,12 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+
+	"github.com/colonyops/hive/cmd/desktop/internal/app/ptyterm"
 )
 
 type sessionAgentWindows interface {
-	NewCommandWindow(ctx context.Context, slug, dir, name, command string) (string, error)
+	NewCommandWindow(ctx context.Context, slug, dir, name, command string, env []string) (string, error)
 }
 
 // NewAgentWindow starts a configured profile beside the session's existing
@@ -38,7 +40,7 @@ func (s *SessionsService) NewAgentWindow(ctx context.Context, slug, agent string
 	if err != nil {
 		return "", err
 	}
-	id, err := s.agentWindows.NewCommandWindow(ctx, slug, dir, agent, command)
+	id, err := s.agentWindows.NewCommandWindow(ctx, slug, dir, agent, command, []string{ptyterm.ImageProtocolEnv})
 	if err != nil {
 		return "", terminalError(err, "starting agent %q in session %q", agent, slug)
 	}

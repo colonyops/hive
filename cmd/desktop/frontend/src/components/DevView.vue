@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { errorText } from '../lib/appError'
-import InlineError from './ui/InlineError.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { useIntervalFn } from '@vueuse/core'
 import { computed, ref } from 'vue'
 import IconBell from '~icons/lucide/bell'
@@ -10,15 +10,15 @@ import { notifySeverityMapping, useNotify, type NotifySeverity } from '../compos
 import { PAYLOAD_BYTES, useWailsLatency } from '../composables/useWailsLatency'
 import { useToasts } from '../composables/useToasts'
 import { formatBytes } from '../lib/bytes'
-import AppCheckbox from './ui/AppCheckbox.vue'
-import AppSelect from './ui/AppSelect.vue'
-import BaseButton from './ui/BaseButton.vue'
-import BaseCard from './ui/BaseCard.vue'
-import FormField from './ui/FormField.vue'
+import AppCheckbox from '@hive/ui/components/ui/AppCheckbox.vue'
+import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import BaseCard from '@hive/ui/components/ui/BaseCard.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsSection from './settings/SettingsSection.vue'
-import { useEscapeToClose } from '../composables/useEscapeToClose'
-import ViewHeader from './ui/ViewHeader.vue'
+import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
+import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 
 const emit = defineEmits<{ close: [] }>()
 

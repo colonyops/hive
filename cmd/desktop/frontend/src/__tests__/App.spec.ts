@@ -280,6 +280,12 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   TaskRepoKeys: mocks.TaskRepoKeys,
 }))
 
+// usePerf flushes on a timer, which can fire while this file runs.
+vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/perfservice', () => ({
+  Info: vi.fn().mockResolvedValue({ enabled: false }),
+  Record: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
   Window: { Hide: mocks.Hide },
@@ -1654,6 +1660,7 @@ describe('App', () => {
           name: 'fix the parser',
           slug: 'hive-fix-parser',
           repo: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
           state: 'active',
           canvasOwner: 'hay-kot/hive',
           createdAt: '2026-10-01T12:00:00Z',
@@ -3468,6 +3475,7 @@ describe('App', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'git@github.com:hay-kot/hive.git',
+        repoIdentity: 'git@github.com:hay-kot/hive.git',
         state: 'active',
         canvasOwner: 'hay-kot/hive',
         createdAt: '2026-10-01T12:00:00Z',

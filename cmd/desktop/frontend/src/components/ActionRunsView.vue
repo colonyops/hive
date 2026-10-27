@@ -24,8 +24,8 @@ import type {
   ActionRunLogLine,
   ActionRunSummary,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
-import { useClipboard } from '../composables/useClipboard'
-import { useEscapeToClose } from '../composables/useEscapeToClose'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
+import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { relativeAgo } from '../lib/age'
 import { timeLabel } from '../lib/activityPresentation'
@@ -42,12 +42,12 @@ import {
   runStatusLabel,
   type RunFilter,
 } from '../lib/actionRunPresentation'
-import EmptyState from './ui/EmptyState.vue'
-import IconButton from './ui/IconButton.vue'
-import SearchField from './ui/SearchField.vue'
-import SegmentedControl from './ui/SegmentedControl.vue'
-import Spinner from './ui/Spinner.vue'
-import ViewHeader from './ui/ViewHeader.vue'
+import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import SearchField from '@hive/ui/components/ui/SearchField.vue'
+import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
+import Spinner from '@hive/ui/components/ui/Spinner.vue'
+import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 
 const props = defineProps<{ initialRunId?: number | null }>()
 const emit = defineEmits<{

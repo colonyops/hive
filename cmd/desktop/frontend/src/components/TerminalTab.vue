@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import TerminalPane from './TerminalPane.vue'
-import { startDrag } from '../composables/useDragGesture'
+import { scrollbarWidthFor, useTerminalScrollbars } from '../stores/useTerminalScrollbars'
+import { startDrag } from '@hive/ui/composables/useDragGesture'
 import type { TerminalWindowTab, UseTerminalWindows } from '../composables/useTerminalWindows'
 import { dividerTouches, draggedExtent, paneDividers, visiblePaneRects, type PaneDivider } from '../lib/terminalLayout'
 
@@ -12,6 +13,9 @@ const host = ref<HTMLElement | null>(null)
 onMounted(() => {
   if (host.value) props.session.attachTab(props.tab.windowId, host.value)
 })
+
+const { showScrollbars } = useTerminalScrollbars()
+const scrollbarWidth = computed(() => scrollbarWidthFor(props.tab, showScrollbars.value))
 
 const cell = computed(() => props.session.cell.value)
 const dividers = computed(() => paneDividers(props.tab))
@@ -26,7 +30,7 @@ const placements = computed(() => {
       placed.set(rect.paneId, {
         left: `${rect.x * size.width}px`,
         top: `${rect.y * size.height}px`,
-        width: `${rect.width * size.width}px`,
+        width: `${rect.width * size.width + scrollbarWidth.value}px`,
         height: `${rect.height * size.height}px`,
       })
     } else if (rect.paneId === props.tab.activePane) {
@@ -117,6 +121,7 @@ function startDividerDrag(divider: PaneDivider, event: PointerEvent): void {
         :key="pane.uid"
         v-show="placements.has(pane.paneId)"
         :pane="pane"
+        :scrollbar-width="scrollbarWidth"
         :active="split && pane.paneId === tab.activePane"
         :style="placements.get(pane.paneId)"
         @mount="session.attachPane"

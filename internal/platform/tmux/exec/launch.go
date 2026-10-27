@@ -65,6 +65,7 @@ type launch struct {
 	name        string
 	sessionID   string
 	ownsSession bool
+	env         []string
 	phase       LaunchPhase
 	windows     []*launchWindow
 }

@@ -24,7 +24,7 @@ import { useReveal } from './app/useReveal'
 import { useSelectedItemDetail } from './app/useSelectedItemDetail'
 import { useSelfUpdate } from './app/useSelfUpdate'
 import { useCommandPalette } from './composables/useCommands'
-import { useConfirmation } from './composables/useConfirmation'
+import { useConfirmation } from '@hive/ui/composables/useConfirmation'
 import { useFeedState } from './composables/useFeedState'
 import { useGitHubConnection } from './composables/useGitHubConnection'
 import { useWailsEvent } from './composables/useWailsEvent'
@@ -186,6 +186,7 @@ useWailsEvent('flows:updated', () => {
       <DrivePage
         v-if="driveActive"
         :scope="appMode.driveScope.value"
+        :sidebar-collapsed="appMode.driveSidebarCollapsed.value"
         @update:scope="appMode.updateDriveScope"
         @close="appMode.closeDrive"
         @open-url="feed.openUrl"
