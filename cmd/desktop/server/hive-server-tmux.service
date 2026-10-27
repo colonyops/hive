@@ -12,4 +12,3 @@ ExecStartPost=%h/.local/share/hive-server/launch.sh wait-tmux
 Restart=on-failure
 RestartSec=5
 UMask=0077
-

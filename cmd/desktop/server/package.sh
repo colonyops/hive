@@ -15,4 +15,3 @@ archive="${out}.tar.gz"
 tar -czf "$archive" -C "$out" .
 (cd "$(dirname "$archive")" && shasum -a 256 "$(basename "$archive")" > "$(basename "$archive").sha256")
 echo "$archive"
-

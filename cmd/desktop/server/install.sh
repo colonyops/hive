@@ -38,4 +38,3 @@ echo "Credentials and overrides: $config/environment"
 echo 'For startup at boot and operation after logout, run:'
 printf '  sudo loginctl enable-linger %q\n' "$(id -un)"
 echo 'Desktop connection file: ~/.local/share/hive-server/connection.json'
-
