@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/urfave/cli/v3"
@@ -102,6 +103,13 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 	sess, err := app.SessionAPI().CreateSession(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
+	}
+	// The daemon always creates in the background: it has no terminal. The
+	// caller has one, so it attaches here.
+	if app.Config.Experimental.Daemon && !f.background {
+		if err := app.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(*sess), multiplexer.AttachStreams{}); err != nil {
+			return sess, fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
+		}
 	}
 	return sess, nil
 }
