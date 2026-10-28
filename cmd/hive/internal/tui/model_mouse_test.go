@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/hive/gitstatus"
+	"github.com/colonyops/hive/internal/hive/hivetest"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog"
@@ -19,10 +21,8 @@ import (
 	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive/events/testbus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
-	statussvc "github.com/colonyops/hive/internal/hive/status"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -130,13 +130,12 @@ func newMouseTestSessionsView(t *testing.T) *sessions.View {
 	svc := newMouseTestSessionService(t)
 	cfg := &config.Config{}
 	handler := NewKeybindingResolver(zerolog.Nop(), nil, plugins.NewCommandSet(nil, nil), testRenderer)
-	status := statussvc.NewService(zerolog.Nop(), terminal.NewManager(nil), 1)
 	pm := plugins.NewManager(zerolog.Nop(), plugins.NewWorkerPool(0), plugins.NewCommandSet(nil, nil))
 	return sessions.New(sessions.ViewOpts{
 		Cfg:           cfg,
 		Service:       svc,
+		Sessions:      sessionapi.NewLocal(hivetest.NewEngine(t, hivetest.Options{}).Engine),
 		Handler:       handler,
-		Status:        status,
 		GitStatus:     gitstatus.NewService(zerolog.Nop(), svc.Git(), 1),
 		PluginManager: pm,
 	})

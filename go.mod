@@ -8,6 +8,7 @@ require (
 	charm.land/glamour/v2 v2.0.1
 	charm.land/huh/v2 v2.0.3
 	charm.land/lipgloss/v2 v2.0.6
+	connectrpc.com/connect v1.21.1
 	github.com/bmatcuk/doublestar/v4 v4.10.2
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/charmbracelet/x/ansi v0.11.8
@@ -57,6 +58,7 @@ require (
 	golang.org/x/term v0.47.0
 	golang.org/x/text v0.43.0
 	golang.org/x/time v0.15.0
+	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.0
 )
@@ -143,7 +145,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/grpc v1.83.1 // indirect
-	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
@@ -152,4 +153,8 @@ require (
 
 ignore node_modules
 
-tool github.com/gzuidhof/tygo
+tool (
+	connectrpc.com/connect/cmd/protoc-gen-connect-go
+	github.com/gzuidhof/tygo
+	google.golang.org/protobuf/cmd/protoc-gen-go
+)

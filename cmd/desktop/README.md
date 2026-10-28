@@ -159,6 +159,13 @@ Hive Desktop resolves both `HIVE_CONFIG` and `HIVE_DEFAULT_AGENT` through the
 user's login-shell environment so a Dock launch sees the same exported values
 as a terminal.
 
+With `experimental: { daemon: true }` in the Hive config, Hive Desktop sends
+session reads, writes, and agent status to `hive daemon` instead of its own
+engine, and starts the daemon when none is running. That needs an installed
+`hive` CLI: on the login-shell PATH, or at the absolute path in
+`daemon.hive_path`. Terminal panes still attach to tmux directly. The flag is
+experimental and read at startup, so restart after changing it.
+
 ## Desktop settings
 
 `settings.yaml` is decoded into a nested typed schema. Resolution is
@@ -241,6 +248,8 @@ onboarding:
   completed: false # written by the app when first run ends; remove the key to walk first run again
 paths:
   tmux: "" # absolute path to tmux; empty discovers it (ADR tmux-discovery)
+daemon:
+  hive_path: "" # absolute path to hive for the daemon; empty searches PATH
 development:
   mocks:
     mode: live # live, feed, pipeline, onboarding, or action-smoke

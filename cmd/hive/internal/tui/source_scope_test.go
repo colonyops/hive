@@ -24,7 +24,7 @@ func TestWithDiscoveredRepoForRemote_MatchesAnotherTransport(t *testing.T) {
 
 func TestStartCreate_CopiesFromTheChosenCheckout(t *testing.T) {
 	creator := &fakeSessionCreator{}
-	m := Model{cmdService: command.NewService(nil, nil, nil, nil, nil, creator)}
+	m := Model{cmdService: command.NewService(command.Deps{Creator: creator})}
 	repo := workspace.DiscoveredRepo{Name: "beta", Path: "/src/beta", Remote: "git@github.com:user/beta.git"}
 
 	started, ok := m.startCreate("fix-it", repo, "")().(streamStartedMsg)

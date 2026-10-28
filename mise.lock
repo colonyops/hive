@@ -49,6 +49,52 @@ url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_
 url_api = "https://api.github.com/repos/rhysd/actionlint/releases/assets/384924919"
 provenance = "github-attestations"
 
+[[tools."github:bufbuild/buf"]]
+version = "1.74.0"
+backend = "github:bufbuild/buf"
+specifiers = ["v1.74.0"]
+
+[tools."github:bufbuild/buf"."platforms.linux-arm64"]
+checksum = "sha256:54a5d5500992deb3239bfee61c9f0ef7646b6f6b231d2c255fdfc16eeb50564c"
+checksum_source = "mise-versions"
+url = "https://github.com/bufbuild/buf/releases/download/v1.74.0/buf-Linux-aarch64.tar.gz"
+url_api = "https://api.github.com/repos/bufbuild/buf/releases/assets/641110968"
+
+[tools."github:bufbuild/buf"."platforms.linux-arm64-musl"]
+checksum = "sha256:54a5d5500992deb3239bfee61c9f0ef7646b6f6b231d2c255fdfc16eeb50564c"
+checksum_source = "mise-versions"
+url = "https://github.com/bufbuild/buf/releases/download/v1.74.0/buf-Linux-aarch64.tar.gz"
+url_api = "https://api.github.com/repos/bufbuild/buf/releases/assets/641110968"
+
+[tools."github:bufbuild/buf"."platforms.linux-x64"]
+checksum = "sha256:cc482285b2c388c93f8bed0a972330695c1c8dd121d5ece460d25ceed93f21ac"
+checksum_source = "mise-versions"
+url = "https://github.com/bufbuild/buf/releases/download/v1.74.0/buf-Linux-x86_64.tar.gz"
+url_api = "https://api.github.com/repos/bufbuild/buf/releases/assets/641111222"
+
+[tools."github:bufbuild/buf"."platforms.linux-x64-musl"]
+checksum = "sha256:cc482285b2c388c93f8bed0a972330695c1c8dd121d5ece460d25ceed93f21ac"
+checksum_source = "mise-versions"
+url = "https://github.com/bufbuild/buf/releases/download/v1.74.0/buf-Linux-x86_64.tar.gz"
+url_api = "https://api.github.com/repos/bufbuild/buf/releases/assets/641111222"
+
+[tools."github:bufbuild/buf"."platforms.macos-arm64"]
+checksum = "sha256:4bc72e8d823e3b0e27df1715dec2c0c7a1a533bc07b67f98f8fdfbc4007a82ca"
+url = "https://github.com/bufbuild/buf/releases/download/v1.74.0/buf-Darwin-arm64.tar.gz"
+url_api = "https://api.github.com/repos/bufbuild/buf/releases/assets/641110844"
+
+[tools."github:bufbuild/buf"."platforms.macos-x64"]
+checksum = "sha256:1a8d6778176f8d6dfc9182342109a44a8dfafb73f91f5d297276f25960589483"
+checksum_source = "mise-versions"
+url = "https://github.com/bufbuild/buf/releases/download/v1.74.0/buf-Darwin-x86_64.tar.gz"
+url_api = "https://api.github.com/repos/bufbuild/buf/releases/assets/641110851"
+
+[tools."github:bufbuild/buf"."platforms.windows-x64"]
+checksum = "sha256:b0e26af2a4bef62724f6a58114a6027e3a19bdf98033b2107995bc243d7c8c97"
+checksum_source = "mise-versions"
+url = "https://github.com/bufbuild/buf/releases/download/v1.74.0/buf-Windows-x86_64.zip"
+url_api = "https://api.github.com/repos/bufbuild/buf/releases/assets/641111438"
+
 [[tools."github:hay-kot/gobusgen"]]
 version = "0.3.0"
 backend = "github:hay-kot/gobusgen"

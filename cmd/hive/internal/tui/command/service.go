@@ -7,6 +7,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 )
 
@@ -28,41 +29,52 @@ type TmuxOpener interface {
 	OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) (multiplexer.LaunchResult, error)
 }
 
-// WindowSpawner handles window operations for SpawnWindows actions.
-type WindowSpawner interface {
-	// AddWindowsToTmuxSession adds windows to an existing tmux session.
+// WindowAdder adds windows to an existing tmux session.
+type WindowAdder interface {
 	AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []multiplexer.WindowSpec, background bool) error
-	// CreateSessionWithWindows creates a new Hive session, optionally runs shCmd in its directory,
-	// then opens windows in it. Non-zero shCmd exit aborts window creation.
-	CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec, background bool) error
+}
+
+// SessionWindowCreator creates a Hive session, optionally runs shCmd in its
+// directory, then opens windows in it. Non-zero shCmd exit aborts window
+// creation.
+type SessionWindowCreator interface {
+	CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec) (*session.Session, error)
+}
+
+// Deps are the collaborators executors call. Deleter, Recycler, Creator, and
+// WindowCreator are the session API, which may run in a daemon; the rest run
+// in the TUI's process. Only WindowKiller may be nil, which disables
+// KillWindow.
+type Deps struct {
+	Deleter       SessionDeleter
+	Recycler      SessionRecycler
+	Creator       SessionCreator
+	WindowCreator SessionWindowCreator
+	TmuxOpener    TmuxOpener
+	WindowAdder   WindowAdder
+	WindowKiller  WindowKiller
+	// LocalRemote is the remote of the TUI's working directory. It fills an
+	// empty remote on a new session, because the session API may run in a
+	// process with another working directory.
+	LocalRemote string
 }
 
 // Service creates command executors based on action type.
 type Service struct {
-	deleter       SessionDeleter
-	recycler      SessionRecycler
-	tmuxOpener    TmuxOpener
-	windowSpawner WindowSpawner
-	windowKiller  WindowKiller
-	creator       SessionCreator
+	deps Deps
 }
 
-// NewService creates a new command service with the given dependencies.
-func NewService(deleter SessionDeleter, recycler SessionRecycler, tmuxOpener TmuxOpener, windowSpawner WindowSpawner, windowKiller WindowKiller, creator SessionCreator) *Service {
-	return &Service{
-		deleter:       deleter,
-		recycler:      recycler,
-		tmuxOpener:    tmuxOpener,
-		windowSpawner: windowSpawner,
-		windowKiller:  windowKiller,
-		creator:       creator,
-	}
+func NewService(deps Deps) *Service {
+	return &Service{deps: deps}
 }
 
 // NewCreateExecutor creates a CreateExecutor for streaming session creation.
 func (s *Service) NewCreateExecutor(opts sessionsvc.CreateOptions) *CreateExecutor {
+	if opts.Remote == "" {
+		opts.Remote = s.deps.LocalRemote
+	}
 	return &CreateExecutor{
-		creator: s.creator,
+		creator: s.deps.Creator,
 		opts:    opts,
 	}
 }
@@ -73,12 +85,12 @@ func (s *Service) CreateExecutor(a Action) (Executor, error) {
 	switch a.Type {
 	case action.TypeDelete:
 		return &DeleteExecutor{
-			deleter:   s.deleter,
+			deleter:   s.deps.Deleter,
 			sessionID: a.SessionID,
 		}, nil
 	case action.TypeRecycle:
 		return &RecycleExecutor{
-			recycler:  s.recycler,
+			recycler:  s.deps.Recycler,
 			sessionID: a.SessionID,
 		}, nil
 	case action.TypeShell:
@@ -90,21 +102,23 @@ func (s *Service) CreateExecutor(a Action) (Executor, error) {
 		if a.WindowTarget == nil {
 			return nil, fmt.Errorf("KillWindow action missing target")
 		}
-		if s.windowKiller == nil {
+		if s.deps.WindowKiller == nil {
 			return nil, fmt.Errorf("KillWindow service unavailable")
 		}
-		return &killWindowExecutor{killer: s.windowKiller, target: *a.WindowTarget}, nil
+		return &killWindowExecutor{killer: s.deps.WindowKiller, target: *a.WindowTarget}, nil
 	case action.TypeSpawnWindows:
 		if a.SpawnWindows == nil {
 			return nil, fmt.Errorf("SpawnWindows action missing payload")
 		}
 		return &SpawnWindowsExecutor{
-			payload: a.SpawnWindows,
-			spawner: s.windowSpawner,
+			payload:     a.SpawnWindows,
+			adder:       s.deps.WindowAdder,
+			creator:     s.deps.WindowCreator,
+			localRemote: s.deps.LocalRemote,
 		}, nil
 	case action.TypeTmuxOpen:
 		return &TmuxExecutor{
-			opener:       s.tmuxOpener,
+			opener:       s.deps.TmuxOpener,
 			name:         a.SessionName,
 			path:         a.SessionPath,
 			remote:       a.SessionRemote,
@@ -113,7 +127,7 @@ func (s *Service) CreateExecutor(a Action) (Executor, error) {
 		}, nil
 	case action.TypeTmuxStart:
 		return &TmuxExecutor{
-			opener:       s.tmuxOpener,
+			opener:       s.deps.TmuxOpener,
 			name:         a.SessionName,
 			path:         a.SessionPath,
 			remote:       a.SessionRemote,

@@ -28,6 +28,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 	statussvc "github.com/colonyops/hive/internal/hive/status"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/platform/workspace"
@@ -49,8 +50,8 @@ type ViewOpts struct {
 	// Required — nil causes a panic at construction time.
 	Cfg           *config.Config
 	Service       *sessionsvc.Service
+	Sessions      sessionapi.API
 	Handler       KeyResolver
-	Status        *statussvc.Service
 	GitStatus     *gitstatus.Service
 	PluginManager *plugins.Manager
 
@@ -86,7 +87,7 @@ type View struct {
 	gitStatus   *gitstatus.Service
 
 	// Terminal integration
-	status             *statussvc.Service
+	sessions           sessionapi.API
 	terminalStatuses   *kvcache.Store[string, statussvc.TerminalStatus]
 	previewEnabled     bool
 	previewTemplates   *PreviewTemplates
@@ -100,6 +101,7 @@ type View struct {
 
 	// Status animation
 	animationFrame int
+	animating      bool
 
 	// Focus mode filtering
 	focusMode        bool
@@ -130,8 +132,8 @@ type View struct {
 // initialized here so the parent Model can pass them through ViewOpts without
 // constructing them itself.
 func New(opts ViewOpts) *View {
-	if opts.Cfg == nil || opts.Service == nil || opts.Handler == nil || opts.Status == nil || opts.GitStatus == nil || opts.PluginManager == nil {
-		panic("sessions.New: Cfg, Service, Handler, Status, GitStatus, and PluginManager are required")
+	if opts.Cfg == nil || opts.Service == nil || opts.Sessions == nil || opts.Handler == nil || opts.GitStatus == nil || opts.PluginManager == nil {
+		panic("sessions.New: Cfg, Service, Sessions, Handler, GitStatus, and PluginManager are required")
 	}
 	cfg := opts.Cfg
 	logger := logutils.Component(opts.Logger, "tui.sessions")
@@ -211,7 +213,7 @@ func New(opts ViewOpts) *View {
 		gitStatuses: gitStatuses,
 		gitStatus:   opts.GitStatus,
 
-		status:             opts.Status,
+		sessions:           opts.Sessions,
 		terminalStatuses:   terminalStatuses,
 		previewEnabled:     cfg.Views.Sessions.PreviewEnabled,
 		previewTemplates:   previewTemplates,
@@ -238,10 +240,10 @@ func (v *View) Init() tea.Cmd {
 		cmds = append(cmds, v.startWorkspaceWatcher())
 	}
 
-	if v.status.Available() {
-		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
-		cmds = append(cmds, scheduleAnimationTick())
-	}
+	// The ticker runs even while status is unavailable: the daemon client
+	// answers false until its first Hello returns, and a later tick must see
+	// the change.
+	cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval), v.startAnimation())
 
 	if len(v.pluginStatuses) > 0 {
 		cmds = append(cmds, v.startPluginWorker())
@@ -313,12 +315,12 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 	}
 	// Immediately fetch terminal status so newly created sessions are detected
 	// without waiting for the next scheduled poll tick (up to 1500ms delay).
-	if v.status.Available() && len(v.allSessions) > 0 {
+	if v.sessions.StatusAvailable() && len(v.allSessions) > 0 {
 		sessPtrs := make([]*session.Session, len(v.allSessions))
 		for i := range v.allSessions {
 			sessPtrs[i] = &v.allSessions[i]
 		}
-		cmds = append(cmds, FetchTerminalStatusBatch(v.status, sessPtrs, v.rootRepoTargets()))
+		cmds = append(cmds, FetchTerminalStatusBatch(v.sessions, sessPtrs, v.rootRepoTargets()))
 	}
 	return tea.Batch(cmds...)
 }
@@ -385,11 +387,21 @@ func (v *View) handleTerminalPollTick() tea.Cmd {
 	for i := range allSess {
 		sessPtrs[i] = &v.allSessions[i]
 	}
-	cmds = append(cmds, FetchTerminalStatusBatch(v.status, sessPtrs, v.rootRepoTargets()))
-	if v.status.Available() {
-		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
-	}
+	cmds = append(cmds,
+		FetchTerminalStatusBatch(v.sessions, sessPtrs, v.rootRepoTargets()),
+		StartTerminalPollTicker(v.cfg.Tmux.PollInterval),
+		v.startAnimation(),
+	)
 	return tea.Batch(cmds...)
+}
+
+// startAnimation starts the status animation once status is available.
+func (v *View) startAnimation() tea.Cmd {
+	if v.animating || !v.sessions.StatusAvailable() {
+		return nil
+	}
+	v.animating = true
+	return scheduleAnimationTick()
 }
 
 // rootRepoTargets collects workspace checkouts currently shown as repo headers.
@@ -443,7 +455,7 @@ func (v *View) handleReposDiscovered(msg RepositoriesDiscoveredMsg) tea.Cmd {
 	// tick — this is the first moment root targets exist.
 	return tea.Batch(
 		v.applyFilter(),
-		FetchTerminalStatusBatch(v.status, nil, v.rootRepoTargets()),
+		FetchTerminalStatusBatch(v.sessions, nil, v.rootRepoTargets()),
 	)
 }
 
@@ -1390,7 +1402,7 @@ func (v *View) selectedWindowStatus() *statussvc.WindowStatus {
 // loadSessions returns a command that loads sessions from the service.
 func (v *View) loadSessions() tea.Cmd {
 	return func() tea.Msg {
-		sessions, err := v.service.ListSessions(context.Background())
+		sessions, err := v.sessions.ListSessions(context.Background())
 		return sessionsLoadedMsg{sessions: sessions, err: err}
 	}
 }
@@ -1715,7 +1727,7 @@ func (v *View) ApplyStatusFilter(actionType act.Type) {
 
 // HasTerminalIntegration returns true if a terminal manager is configured with enabled integrations.
 func (v *View) HasTerminalIntegration() bool {
-	return v.status.Available()
+	return v.sessions.StatusAvailable()
 }
 
 // TogglePreview toggles the preview sidebar on/off.

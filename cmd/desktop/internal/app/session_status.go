@@ -49,12 +49,11 @@ func (s *SessionsService) SessionStatuses(ctx context.Context) (SessionStatusSna
 		Items:          []SessionStatus{},
 		PollIntervalMS: s.hive.Config().Tmux.PollInterval.Milliseconds(),
 	}
-	statuses := s.hive.Status()
-	if !statuses.Available() {
+	if !s.sessions.StatusAvailable() {
 		return snapshot, nil
 	}
 
-	sessions, err := s.hive.Sessions().ListSessions(ctx)
+	sessions, err := s.sessions.ListSessions(ctx)
 	if err != nil {
 		return SessionStatusSnapshot{}, Wrap(err, KindInternal, "reading session status")
 	}
@@ -64,7 +63,7 @@ func (s *SessionsService) SessionStatuses(ctx context.Context) (SessionStatusSna
 			active = append(active, &sessions[i])
 		}
 	}
-	terminalStatuses := statuses.FetchBatch(ctx, active, nil)
+	terminalStatuses := s.sessions.FetchBatch(ctx, active, nil)
 	windowSets, err := s.sessionWindows(ctx, active)
 	if err != nil {
 		return SessionStatusSnapshot{}, Wrap(err, KindInternal, "listing tmux windows for status")
@@ -126,8 +125,7 @@ func projectSessionStatuses(
 // running, which is what "we cannot see tmux from here" honestly looks like.
 func (s *SessionsService) runningSessions(ctx context.Context, sessions []session.Session, ids []string) (map[string]bool, error) {
 	running := map[string]bool{}
-	statuses := s.hive.Status()
-	if len(ids) == 0 || !statuses.Available() {
+	if len(ids) == 0 || !s.sessions.StatusAvailable() {
 		return running, nil
 	}
 	wanted := make(map[string]struct{}, len(ids))
@@ -142,7 +140,7 @@ func (s *SessionsService) runningSessions(ctx context.Context, sessions []sessio
 		subset = append(subset, &sessions[i])
 	}
 	if s.windows == nil {
-		for id, status := range statuses.FetchBatch(ctx, subset, nil) {
+		for id, status := range s.sessions.FetchBatch(ctx, subset, nil) {
 			running[id] = status.Status != terminal.StatusMissing
 		}
 		return running, nil

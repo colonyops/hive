@@ -141,7 +141,7 @@ func (m Model) executeEditSession(req editSessionRequest) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		if req.rename {
-			if err := m.service.RenameSession(ctx, req.sessionID, req.name); err != nil {
+			if err := m.sessions.RenameSession(ctx, req.sessionID, req.name); err != nil {
 				return editSessionCompleteMsg{err: fmt.Errorf("rename: %w", err)}
 			}
 		}

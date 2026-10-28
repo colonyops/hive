@@ -92,24 +92,46 @@ func isShellCompletion(args []string) bool {
 	return true
 }
 
-// isInitCommand reports whether the subcommand is "init", scanning past any
-// leading flags. hive init must run before any config exists, so Before()
-// skips full app initialisation when this returns true.
-//
-// Only --flag=value style global flags are handled correctly here; space-separated
-// --flag value pairs would cause the value to be mistaken for a subcommand. Use
-// --flag=value syntax when passing global flags before init.
-func isInitCommand(args []string) bool {
-	if len(args) == 0 {
-		return false
-	}
-	for _, arg := range args[1:] {
-		if strings.HasPrefix(arg, "-") {
+// commandPath returns the subcommand words in args, such as ["daemon", "run"]
+// for `hive --config x daemon run --wait-lock`. It skips the root command's
+// flags and the values of the ones that take a value.
+func commandPath(root *cli.Command, args []string) []string {
+	takesValue := map[string]bool{}
+	for _, flag := range root.Flags {
+		if _, isBool := flag.(*cli.BoolFlag); isBool {
 			continue
 		}
-		return arg == "init"
+		for _, name := range flag.Names() {
+			takesValue[name] = true
+		}
 	}
-	return false
+
+	var path []string
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			break
+		}
+		if !strings.HasPrefix(arg, "-") {
+			path = append(path, arg)
+			continue
+		}
+		if len(path) > 0 {
+			break
+		}
+		name := strings.TrimLeft(arg, "-")
+		if !strings.Contains(name, "=") && takesValue[name] {
+			i++
+		}
+	}
+	return path
+}
+
+// skipsEngine reports whether a command runs without the hive runtime:
+// daemon and servers reach a daemon or are one, so opening hive.db and the
+// plugins in the client is wasted work.
+func skipsEngine(path []string) bool {
+	return len(path) > 0 && (path[0] == "daemon" || path[0] == "servers")
 }
 
 // Main runs the hive CLI and exits the process.
@@ -179,7 +201,9 @@ Run 'hive new' to create a new session from the current repository.`,
 			if isShellCompletion(os.Args) {
 				return ctx, nil
 			}
-			if isInitCommand(os.Args) {
+			path := commandPath(c, os.Args)
+			// init runs before any config exists, so it skips the config load too.
+			if len(path) > 0 && path[0] == "init" {
 				hiveApp.Build = hiveBuildInfo()
 				return ctx, nil
 			}
@@ -209,6 +233,14 @@ Run 'hive new' to create a new session from the current repository.`,
 			// Apply configured theme (validation ensures name is valid)
 			palette, _ := theme.Get(cfg.TUI.Theme)
 			styles.SetTheme(palette)
+
+			if skipsEngine(path) {
+				hiveApp.Logger = logger
+				hiveApp.Config = cfg
+				hiveApp.ConfigPath = flags.ConfigPath
+				hiveApp.Build = hiveBuildInfo()
+				return ctx, nil
+			}
 
 			exec := &executil.RealExecutor{}
 			tmuxClient := tmuxexec.NewDefault(logger)
@@ -282,7 +314,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 
 			// Populate the pre-allocated App struct (commands already hold a pointer to it)
-			*hiveApp = *app.NewApp(logger, engine, cfg, tmuxClient, pluginMgr, commandSet, pluginInfos)
+			*hiveApp = *app.NewApp(logger, engine, cfg, tmuxClient, pluginMgr, commandSet, pluginInfos, flags.ConfigPath)
 			hiveApp.Build = hiveBuildInfo()
 			hiveApp.Sources = app.BuildSourceRegistry(logger, cfg, exec, kvStore)
 
@@ -328,6 +360,8 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewInitCmd(flags, hiveApp).Register(app)
 	app = commands.NewDesktopCmd(flags, hiveApp).Register(app)
 	app = commands.NewExperimentalCmd(flags, hiveApp).Register(app)
+	app = commands.NewDaemonCmd(flags, hiveApp).Register(app)
+	app = commands.NewServersCmd(flags, hiveApp).Register(app)
 
 	// Register TUI flags on root command
 	app.Flags = append(app.Flags, tuiCmd.Flags()...)

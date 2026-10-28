@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
+	hiveconfig "github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/urfave/cli/v3"
+	"golang.org/x/term"
 )
 
 // createSessionFlags holds the flag values shared by 'hive new' and
@@ -85,7 +89,7 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 		}
 	}
 
-	sess, err := app.Sessions().CreateSession(ctx, sessionsvc.CreateOptions{
+	opts := sessionsvc.CreateOptions{
 		Name:          name,
 		Remote:        f.remote,
 		Source:        source,
@@ -94,11 +98,54 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 		AgentKey:      f.agent,
 		Tags:          f.tags,
 		Progress:      progress,
-	})
+	}
+	if err := resolveCreateLocation(ctx, app, &opts); err != nil {
+		return nil, err
+	}
+	sess, err := app.SessionAPI().CreateSession(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
+	if !f.background && createsTmuxSession(app, opts.Remote) && canAttach() {
+		if err := app.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(*sess), multiplexer.AttachStreams{}); err != nil {
+			return sess, fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
+		}
+	}
 	return sess, nil
+}
+
+// createsTmuxSession reports whether the spawn strategy for remote creates
+// the tmux session Target names. Legacy spawn commands run whatever the user
+// wrote, which may open a terminal tab instead, so there is nothing to attach.
+func createsTmuxSession(app *app.App, remote string) bool {
+	return hiveconfig.ResolveSpawn(app.Config.Rules, remote, false).IsWindows()
+}
+
+// canAttach reports whether a tmux client can show the new session: inside
+// tmux the CLI switches the client, and outside it attaches on the terminal.
+// A script with neither gets the session created and left in the background.
+func canAttach() bool {
+	return os.Getenv("TMUX") != "" || term.IsTerminal(int(os.Stdin.Fd())) //nolint:gosec // a file descriptor fits in int
+}
+
+// resolveCreateLocation fills in what depends on where the CLI runs, because
+// the session API may run in a daemon with another working directory.
+func resolveCreateLocation(ctx context.Context, app *app.App, opts *sessionsvc.CreateOptions) error {
+	if opts.Remote == "" {
+		remote, err := app.Sessions().DetectRemote(ctx, ".")
+		if err != nil {
+			return fmt.Errorf("detect remote: %w", err)
+		}
+		opts.Remote = remote
+	}
+	if opts.Source != "" {
+		source, err := filepath.Abs(opts.Source)
+		if err != nil {
+			return fmt.Errorf("resolve source directory: %w", err)
+		}
+		opts.Source = source
+	}
+	return nil
 }
 
 type NewCmd struct {

@@ -3,22 +3,15 @@
 package logutils
 
 import (
-	"os"
+	"context"
 
-	"golang.org/x/sys/unix"
+	"github.com/colonyops/hive/pkg/flock"
 )
 
 func lockFile(path string) (func(), error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	unlock, err := flock.Lock(context.Background(), path, true)
 	if err != nil {
 		return nil, err
 	}
-	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX); err != nil {
-		_ = f.Close()
-		return nil, err
-	}
-	return func() {
-		_ = unix.Flock(int(f.Fd()), unix.LOCK_UN)
-		_ = f.Close()
-	}, nil
+	return func() { _ = unlock() }, nil
 }

@@ -250,6 +250,14 @@ type PathsSettings struct {
 	Tmux string `yaml:"tmux,omitempty" env:"HIVE_DESKTOP_PATHS_TMUX"`
 }
 
+// DaemonSettings configures the experimental hive daemon, which Hive Desktop
+// uses when experimental.daemon is on in the Hive config.
+type DaemonSettings struct {
+	// HivePath is the hive binary that runs the daemon. Empty looks hive up
+	// on the login-shell PATH.
+	HivePath string `yaml:"hive_path,omitempty" env:"HIVE_DESKTOP_DAEMON_HIVE_PATH"`
+}
+
 // EditorSettings names the editor "Open in editor" actions launch on a
 // directory. Command is a single word — a CLI launcher name (zed, code) or an
 // absolute path — never a command line: the same rule agent commands follow
@@ -418,6 +426,7 @@ type Settings struct {
 	Telemetry       TelemetrySettings       `yaml:"telemetry"`
 	Keybindings     map[string][]string     `yaml:"keybindings,omitempty"`
 	Paths           PathsSettings           `yaml:"paths,omitempty"`
+	Daemon          DaemonSettings          `yaml:"daemon,omitempty"`
 	Editor          EditorSettings          `yaml:"editor,omitempty"`
 	Retention       RetentionSettings       `yaml:"retention,omitempty"`
 	AgentWorkspaces AgentWorkspacesSettings `yaml:"agent_workspaces,omitempty"`
@@ -512,6 +521,9 @@ func (s Settings) Validate() error {
 	}
 	if s.Paths.Tmux != "" && !filepath.IsAbs(s.Paths.Tmux) {
 		return fmt.Errorf("paths.tmux must be an absolute path")
+	}
+	if s.Daemon.HivePath != "" && !filepath.IsAbs(s.Daemon.HivePath) {
+		return fmt.Errorf("daemon.hive_path must be an absolute path")
 	}
 	if s.Appearance.TerminalSessionAgeThresholdDays < MinTerminalSessionAgeThresholdDays || s.Appearance.TerminalSessionAgeThresholdDays > MaxTerminalSessionAgeThresholdDays {
 		return fmt.Errorf("appearance.terminal_session_age_threshold_days must be between %d and %d", MinTerminalSessionAgeThresholdDays, MaxTerminalSessionAgeThresholdDays)

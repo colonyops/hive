@@ -148,6 +148,21 @@ func TestUnsetProfilesOrderIsNotSerialized(t *testing.T) {
 	assert.NotContains(t, string(data), "profiles:")
 }
 
+func TestDaemonHivePathYAMLThenEnvironment(t *testing.T) {
+	path := isolateSettings(t)
+	require.NoError(t, os.WriteFile(path, []byte("daemon:\n  hive_path: /opt/homebrew/bin/hive\n"), 0o600))
+
+	cfg, err := LoadSettings()
+	require.NoError(t, err)
+	assert.Equal(t, "/opt/homebrew/bin/hive", cfg.Daemon.HivePath)
+
+	t.Setenv("HIVE_DESKTOP_DAEMON_HIVE_PATH", "/usr/local/bin/hive")
+	cfg, err = LoadSettings()
+	require.NoError(t, err)
+	assert.Equal(t, "/usr/local/bin/hive", cfg.Daemon.HivePath)
+	assert.True(t, cfg.EnvironmentOverridden("HIVE_DESKTOP_DAEMON_HIVE_PATH"))
+}
+
 func TestPathsTmuxYAMLThenEnvironment(t *testing.T) {
 	path := isolateSettings(t)
 	require.NoError(t, os.WriteFile(path, []byte("paths:\n  tmux: /opt/homebrew/bin/tmux\n"), 0o600))
@@ -317,6 +332,7 @@ func TestSettingsValidation(t *testing.T) {
 		}},
 		{"relative tmux path", func(s *Settings) { s.Paths.Tmux = "bin/tmux" }},
 		{"bare tmux name", func(s *Settings) { s.Paths.Tmux = "tmux" }},
+		{"relative hive path", func(s *Settings) { s.Daemon.HivePath = "bin/hive" }},
 		{"telemetry without endpoint", func(s *Settings) {
 			s.Telemetry = telemetryFixture(func(t *TelemetrySettings) { t.Endpoint = "" })
 		}},

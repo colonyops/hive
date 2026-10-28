@@ -14,13 +14,14 @@ import (
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/events"
+	"github.com/colonyops/hive/internal/hive/hivetest"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
 
 func runtimePorts(dataDir string) hive.Ports {
 	return hive.Ports{
 		Executor: &executiltest.Exec{},
-		Mux:      stubMux{},
+		Mux:      hivetest.Mux{},
 		DataDir:  dataDir,
 		Logger:   zerolog.Nop(),
 	}
@@ -53,7 +54,7 @@ func waitBackground(t *testing.T, rt *hive.Runtime) {
 }
 
 func TestRuntimeStartsTheEngineOnAnOpenDatabaseAndBus(t *testing.T) {
-	cfg := loadConfig(t, t.TempDir())
+	cfg := hivetest.LoadConfig(t, t.TempDir())
 	rt := startRuntime(t, t.Context(), cfg)
 
 	require.NotNil(t, rt.Engine())
@@ -75,7 +76,7 @@ func TestRuntimeStartsTheEngineOnAnOpenDatabaseAndBus(t *testing.T) {
 }
 
 func TestRuntimeRejectsAProgramSuppliedDatabaseOrBus(t *testing.T) {
-	cfg := loadConfig(t, t.TempDir())
+	cfg := hivetest.LoadConfig(t, t.TempDir())
 	ports := runtimePorts(cfg.DataDir)
 	ports.Bus = events.New(1)
 
@@ -86,7 +87,7 @@ func TestRuntimeRejectsAProgramSuppliedDatabaseOrBus(t *testing.T) {
 func TestRuntimeDatabaseFailureReportsTheDatabaseStep(t *testing.T) {
 	blocker := filepath.Join(t.TempDir(), "file")
 	require.NoError(t, os.WriteFile(blocker, nil, 0o600))
-	cfg := loadConfig(t, filepath.Join(blocker, "data"))
+	cfg := hivetest.LoadConfig(t, filepath.Join(blocker, "data"))
 
 	_, err := hive.StartRuntime(t.Context(), cfg, hive.RuntimeOptions{Ports: runtimePorts(t.TempDir())})
 
@@ -96,7 +97,7 @@ func TestRuntimeDatabaseFailureReportsTheDatabaseStep(t *testing.T) {
 }
 
 func TestRuntimeEngineFailureClosesTheDatabase(t *testing.T) {
-	cfg := loadConfig(t, t.TempDir())
+	cfg := hivetest.LoadConfig(t, t.TempDir())
 	ports := runtimePorts(cfg.DataDir)
 	ports.Mux = nil
 
@@ -111,7 +112,7 @@ func TestRuntimeEngineFailureClosesTheDatabase(t *testing.T) {
 }
 
 func TestRuntimeCloseIsIdempotent(t *testing.T) {
-	cfg := loadConfig(t, t.TempDir())
+	cfg := hivetest.LoadConfig(t, t.TempDir())
 	rt := startRuntime(t, t.Context(), cfg)
 
 	require.NoError(t, rt.Close())
@@ -123,7 +124,7 @@ func TestRuntimeCloseIsIdempotent(t *testing.T) {
 }
 
 func TestRuntimeDoesNotStartOnACanceledContext(t *testing.T) {
-	cfg := loadConfig(t, t.TempDir())
+	cfg := hivetest.LoadConfig(t, t.TempDir())
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -134,7 +135,7 @@ func TestRuntimeDoesNotStartOnACanceledContext(t *testing.T) {
 }
 
 func TestRuntimeBackgroundWorkStopsWithItsContext(t *testing.T) {
-	cfg := loadConfig(t, t.TempDir())
+	cfg := hivetest.LoadConfig(t, t.TempDir())
 	ctx, cancel := context.WithCancel(t.Context())
 	rt := startRuntime(t, ctx, cfg)
 
@@ -145,12 +146,12 @@ func TestRuntimeBackgroundWorkStopsWithItsContext(t *testing.T) {
 }
 
 func TestRuntimeReloadKeepsTheDatabaseAndBus(t *testing.T) {
-	cfg := loadConfig(t, t.TempDir())
+	cfg := hivetest.LoadConfig(t, t.TempDir())
 	rt := startRuntime(t, t.Context(), cfg)
 	bus, sessions := rt.Bus(), rt.Engine().Sessions()
 	require.NoError(t, rt.Engine().KV().Set(t.Context(), "before.reload", "kept"))
 
-	next := loadConfig(t, cfg.DataDir)
+	next := hivetest.LoadConfig(t, cfg.DataDir)
 	next.GitPath = "/opt/git/bin/git"
 	require.NoError(t, rt.Engine().Reload(next))
 

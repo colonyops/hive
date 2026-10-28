@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -11,15 +12,17 @@ import (
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/kvcache"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 	statussvc "github.com/colonyops/hive/internal/hive/status"
 	"github.com/colonyops/hive/internal/platform/workspace"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // newTestView creates a minimal View with a list for navigation tests.
@@ -245,6 +248,7 @@ func newFilterTestView(sessions []session.Session, statusFilter terminal.Status,
 		gitStatuses:      gitStatuses,
 		columnWidths:     columnWidths,
 		service:          new(sessionsvc.Service),
+		sessions:         statusOnlyAPI{},
 		gitStatus:        gitstatus.NewService(zerolog.Nop(), nil, 1),
 		cfg:              &config.Config{Views: config.ViewsConfig{Sessions: config.SessionsViewConfig{GroupBy: config.GroupByRepo}}},
 	}
@@ -415,6 +419,19 @@ func (m *mockIntegration) GetStatus(_ context.Context, _ *terminal.SessionInfo) 
 	return terminal.StatusMissing, nil
 }
 
+// statusOnlyAPI answers status from a real status service. The tests that use
+// it call no session method.
+type statusOnlyAPI struct {
+	sessionapi.API
+	status *statussvc.Service
+}
+
+func (a statusOnlyAPI) StatusAvailable() bool { return a.status.Available() }
+
+func (a statusOnlyAPI) FetchBatch(ctx context.Context, sessions []*session.Session, roots []statussvc.RootRepoTarget) map[string]statussvc.TerminalStatus {
+	return a.status.FetchBatch(ctx, sessions, roots)
+}
+
 func newViewWithTerminalMgr(sessions []session.Session) *View {
 	mgr := terminal.NewManager([]string{"mock"})
 	mgr.Register(&mockIntegration{})
@@ -429,7 +446,7 @@ func newViewWithTerminalMgr(sessions []session.Session) *View {
 		gitStatuses:      kvcache.New[string, GitStatus](),
 		columnWidths:     &ColumnWidths{},
 		service:          new(sessionsvc.Service),
-		status:           statussvc.NewService(zerolog.Nop(), mgr, 1),
+		sessions:         statusOnlyAPI{status: statussvc.NewService(zerolog.Nop(), mgr, 1)},
 		gitStatus:        gitstatus.NewService(zerolog.Nop(), nil, 1),
 		cfg:              &config.Config{},
 	}
@@ -621,4 +638,49 @@ func TestSelectAtRow_PreviewEnabled_ClickInList_Selects(t *testing.T) {
 	// x=10 is inside the list pane
 	v.SelectAtRow(10, 1)
 	assert.Equal(t, 1, v.list.Index(), "click in list pane should select item")
+}
+
+// lateStatusAPI reports status unavailable until available is set, as the
+// daemon client does before its first Hello returns.
+type lateStatusAPI struct {
+	sessionapi.API
+	available *atomic.Bool
+}
+
+func (a lateStatusAPI) StatusAvailable() bool { return a.available.Load() }
+
+func (a lateStatusAPI) FetchBatch(context.Context, []*session.Session, []statussvc.RootRepoTarget) map[string]statussvc.TerminalStatus {
+	return map[string]statussvc.TerminalStatus{}
+}
+
+// runCmd runs cmd and every command a batch holds, and returns the messages
+// they produce.
+func runCmd(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		return []tea.Msg{msg}
+	}
+	var msgs []tea.Msg
+	for _, c := range batch {
+		msgs = append(msgs, runCmd(c)...)
+	}
+	return msgs
+}
+
+func TestPollTickerKeepsRunningUntilStatusBecomesAvailable(t *testing.T) {
+	available := &atomic.Bool{}
+	v := newViewWithTerminalMgr([]session.Session{{ID: "s1", State: session.StateActive}})
+	v.sessions = lateStatusAPI{available: available}
+	v.cfg.Tmux.PollInterval = time.Millisecond
+
+	assert.Contains(t, runCmd(v.handleTerminalPollTick()), tea.Msg(TerminalPollTickMsg{}), "the ticker re-arms while status is unavailable")
+	assert.False(t, v.animating)
+
+	available.Store(true)
+	v.handleTerminalPollTick()
+	assert.True(t, v.animating, "the animation starts once status is available")
 }

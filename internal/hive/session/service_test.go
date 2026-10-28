@@ -1151,7 +1151,7 @@ func TestCreateSessionWithWindows_RollbackOnRunShFailure(t *testing.T) {
 		ShCmd:  "exit 1", // fails: directory won't exist since mockGit.Clone is a no-op
 	}
 
-	err := svc.CreateSessionWithWindows(context.Background(), req, nil, false)
+	_, err := svc.CreateSessionWithWindows(context.Background(), req, nil, false)
 	require.Error(t, err)
 
 	// Session must be cleaned up from the store after RunSh failure.
