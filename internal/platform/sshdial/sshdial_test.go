@@ -45,19 +45,19 @@ func TestArgs(t *testing.T) {
 	assert.Equal(t, "'/usr/local/bin/hive'", args[len(args)-3])
 }
 
-// fakeSSH puts an ssh on PATH that echoes stdin and records its pid.
-func fakeSSH(t *testing.T) (pidFile string) {
+// fakeSSH puts an ssh on PATH that records its pid and then runs body.
+func fakeSSH(t *testing.T, body string) (pidFile string) {
 	t.Helper()
 	dir := t.TempDir()
 	pidFile = filepath.Join(dir, "pid")
-	script := "#!/bin/sh\necho $$ > " + pidFile + "\nexec cat\n"
+	script := "#!/bin/sh\necho $$ > " + pidFile + "\n" + body + "\n"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "ssh"), []byte(script), 0o755))
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return pidFile
 }
 
 func TestDialStdioRoundTripsAndKillsSSHOnClose(t *testing.T) {
-	pidFile := fakeSSH(t)
+	pidFile := fakeSSH(t, "exec cat")
 	c, err := DialStdio(t.Context(), Host{Name: "fixture"}, nil)
 	require.NoError(t, err)
 
@@ -79,5 +79,24 @@ func TestDialStdioRoundTripsAndKillsSSHOnClose(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("a second Close blocked")
+	}
+}
+
+func TestDialStdioReportsEOFWhenSSHExits(t *testing.T) {
+	fakeSSH(t, "exit 255")
+	c, err := DialStdio(t.Context(), Host{Name: "fixture"}, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = c.Close() })
+
+	read := make(chan error, 1)
+	go func() {
+		_, err := c.Read(make([]byte, 1))
+		read <- err
+	}()
+	select {
+	case err := <-read:
+		require.Error(t, err, "a client must not wait on a dead ssh")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Read blocked after ssh exited")
 	}
 }
