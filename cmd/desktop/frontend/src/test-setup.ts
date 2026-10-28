@@ -13,6 +13,13 @@ vi.mock('../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wail
   Write: vi.fn(() => Promise.resolve()),
 }))
 
+// usePerf flushes on a timer, so a component that records a sample can reach
+// the binding mid-spec, where a spec's own @wailsio/runtime mock has no Call.
+vi.mock('../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/perfservice', () => ({
+  Info: vi.fn(() => Promise.resolve({ enabled: false })),
+  Record: vi.fn(() => Promise.resolve()),
+}))
+
 // Every `mount` is torn down between tests. Leaked wrappers stay attached to
 // the document, and each carries its own Vue app whose `useId()` counter
 // restarts at the same value — so a stale wrapper's `id` shadows the live one

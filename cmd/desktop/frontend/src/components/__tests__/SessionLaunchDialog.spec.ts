@@ -114,6 +114,20 @@ describe('SessionLaunchDialog: new session', () => {
     ])
   })
 
+  it('offers to pin a chat to Code and emits the choice', async () => {
+    const wrapper = mountNew({ initial: { ...blank, name: 'incident' }, initialTarget: 'workspace' })
+    await wrapper.get('[data-testid="new-session-pin-to-code"]').setValue(true)
+    await wrapper.get('[data-testid="new-session-submit"]').trigger('click')
+    expect(wrapper.emitted('submit')).toEqual([
+      [{ workspace: 'alerts', pinToCode: true, name: 'incident', prompt: '', inputs: {} }],
+    ])
+  })
+
+  it('offers no pin for a repository session', () => {
+    const wrapper = mountNew()
+    expect(wrapper.find('[data-testid="new-session-pin-to-code"]').exists()).toBe(false)
+  })
+
   it('restores a workspace target and preserves the name and prompt when switching targets', async () => {
     const wrapper = mountNew({
       initial: { ...blank, workspace: 'alerts', name: 'incident', prompt: 'Triage this alert' },
@@ -275,6 +289,7 @@ describe('SessionLaunchDialog: launched from an action', () => {
     expect(wrapper.emitted('submit')).toEqual([[{ name: 'triage-alert', workspace: 'alerts', inputs: {} }]])
     expect(wrapper.find('[data-testid="session-repository"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="session-agent"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="session-pin-to-code"]').exists()).toBe(false)
   })
 
   it('defaults to the first workspace that accepts an opening prompt', async () => {

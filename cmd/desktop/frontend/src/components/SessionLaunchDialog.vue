@@ -9,6 +9,7 @@ import IconX from '~icons/lucide/x'
 import ActionInputFields from './ActionInputFields.vue'
 import RepositorySelect from './RepositorySelect.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import AppCheckbox from '@hive/ui/components/ui/AppCheckbox.vue'
 import AppSelect, { type AppSelectOption } from '@hive/ui/components/ui/AppSelect.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import BaseModal from '@hive/ui/components/ui/BaseModal.vue'
@@ -37,6 +38,7 @@ interface SessionLaunchInput {
   name: string
   prompt?: string
   agent?: string
+  pinToCode?: boolean
   inputs: ActionInputValues
 }
 
@@ -94,6 +96,7 @@ const workspace = seedRef(() => {
 const name = seedRef(() => props.initial.name ?? '')
 const prompt = seedRef(() => props.initial.prompt ?? '')
 const agent = seedRef(() => props.initial.agent ?? '')
+const pinToCode = ref(false)
 const inputValues = seedRef<ActionInputValues>(() => initialActionInputs(inputs.value))
 const validationError = ref('')
 const nameInput = ref<{ focus: () => void } | null>(null)
@@ -143,7 +146,7 @@ function submit() {
   if (validationError.value) return
   emit('submit', {
     ...(target.value === 'workspace'
-      ? { workspace: workspace.value.trim() }
+      ? { workspace: workspace.value.trim(), ...(pinToCode.value ? { pinToCode: true } : {}) }
       : { repository: repository.value.trim(), ...(agent.value ? { agent: agent.value } : {}) }),
     name: sessionName,
     ...(props.withPrompt ? { prompt: prompt.value.trim() } : {}),
@@ -298,6 +301,12 @@ useSubmitShortcut(submit)
           />
         </template>
       </FormField>
+      <AppCheckbox
+        v-if="target === 'workspace' && !action"
+        v-model="pinToCode"
+        label="Pin to Code"
+        :testid="`${fieldId}-pin-to-code`"
+      />
       <ActionInputFields v-if="inputs.length" v-model="inputValues" :inputs="inputs" />
       <InlineError
         v-if="validationError || error"

@@ -259,13 +259,14 @@ function handleStartSessionIn(workspace: string): void {
 
 // Focus follows a new session, which also unfolds the workspace its row lands
 // in (AgentsSidebar watches the prop).
-async function startNewSession(workspace: string, name: string, prompt = ''): Promise<void> {
-  if (startingSession.value) return
+async function startNewSession(workspace: string, name: string, prompt = ''): Promise<string | null> {
+  if (startingSession.value) return null
   startingSession.value = true
   try {
     await selectWorkspace(workspace)
-    await launchIntoPane(workspace, (size) => startSession({ workspace, name, prompt, ...size }))
+    const id = await launchIntoPane(workspace, (size) => startSession({ workspace, name, prompt, ...size }))
     void reloadRecents()
+    return id
   } finally {
     startingSession.value = false
   }
@@ -520,8 +521,8 @@ async function revealPaneWorkspace(): Promise<void> {
 async function launchIntoPane(
   workspace: string,
   action: (size: { cols?: number; rows?: number }) => Promise<AgentSession>,
-): Promise<void> {
-  if (!client.value || paneStatus.value === 'opening') return
+): Promise<string | null> {
+  if (!client.value || paneStatus.value === 'opening') return null
   teardownPane()
   openSessionId.value = null
   paneWorkspaceDir.value = workspace
@@ -538,7 +539,7 @@ async function launchIntoPane(
     if (!created) {
       paneError.value = 'The session pane could not be rendered.'
       paneStatus.value = 'idle'
-      return
+      return null
     }
     const size = pane.measure()
     const result = await action(size ?? {})
@@ -552,7 +553,7 @@ async function launchIntoPane(
       teardownPane()
       paneStatus.value = 'idle'
       paneError.value = result.notice || 'The session exited before it could be opened.'
-      return
+      return result.id
     }
     // The grid opens at the size tmux granted at attach — not the size this
     // launch voted, which tmux's window-size option may have overruled — and
@@ -570,10 +571,12 @@ async function launchIntoPane(
     // that focus -- the sidebar's inline rename can be one keystroke into a
     // field opened by the same double click that started this launch.
     if (!isEditableTarget(document.activeElement)) created.focus()
+    return result.id
   } catch (failure) {
     teardownPane()
     paneStatus.value = 'idle'
     paneError.value = failure instanceof Error ? failure.message : 'The session could not be opened.'
+    return null
   }
 }
 
