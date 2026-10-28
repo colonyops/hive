@@ -24,6 +24,7 @@ import {
   stepTerminalWindow,
 } from '../../lib/terminalTree'
 import { createAppRouter } from '../../router'
+import { resetStores } from '../../stores/defineStore'
 import { tooltipFor } from '../../test-utils/tooltip'
 
 const mocks = vi.hoisted(() => ({
@@ -53,6 +54,7 @@ const mocks = vi.hoisted(() => ({
   openBlank: vi.fn(),
   SetTerminalFontSize: vi.fn(),
   AppearanceSettings: vi.fn(),
+  CodeViews: vi.fn(),
   EditorSettings: vi.fn(),
   OpenURL: vi.fn(),
   AgentsAvailable: vi.fn(),
@@ -92,6 +94,8 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   AppearanceSettings: mocks.AppearanceSettings,
+  CodeViews: mocks.CodeViews,
+  SetCodeViews: vi.fn(),
   EditorSettings: mocks.EditorSettings,
   SetEditor: vi.fn(),
   SetTerminalFontSize: mocks.SetTerminalFontSize,
@@ -354,6 +358,7 @@ describe('TerminalMode', () => {
     })
     mocks.SessionRisk.mockResolvedValue({ uncommittedChanges: false, unpushedCommits: false, recycleDeletes: false })
     mocks.TerminalActionViews.mockResolvedValue([])
+    mocks.CodeViews.mockResolvedValue([])
     // The bar ships on, but the fixture keeps it off so tests that do not care
     // about it see a bare terminal; a test that wants it turns it on.
     mocks.AppearanceSettings.mockResolvedValue({
@@ -3137,19 +3142,25 @@ describe('TerminalMode', () => {
       await flushPromises()
     }
 
+    async function selectView(wrapper: { get: (s: string) => Pick<DOMWrapper<Element>, 'trigger'> }, id: string) {
+      await wrapper.get('[data-testid="code-view-switch"]').trigger('click')
+      await wrapper.get(`[data-testid="code-view-option-${id}"]`).trigger('click')
+      await flushPromises()
+    }
+
     // The repo header is the noise a dormant repository contributes, so it goes
     // with its sessions rather than staying behind as an empty heading.
-    it('drops a repository with nothing running, and brings it back on Show all', async () => {
+    it('drops a repository with nothing running, and brings it back on All sessions', async () => {
       mocks.ListSessions.mockResolvedValue(TWO_REPOS)
       running({ 1: true, 3: false })
       const { wrapper } = await mountAvailable()
       expect(repos(wrapper)).toHaveLength(2)
 
-      await pick(wrapper, 'terminal-sessions-running-only')
+      await selectView(wrapper, 'running')
       expect(repos(wrapper).map((group) => group.attributes('data-repo'))).toEqual(['hay-kot/hive'])
       expect(slugs(wrapper)).toEqual(['hive-fix-parser'])
 
-      await wrapper.get('[data-testid="terminal-sessions-running-clear"]').trigger('click')
+      await selectView(wrapper, 'all')
       expect(repos(wrapper).map((group) => group.attributes('data-repo'))).toEqual([
         'hay-kot/haykot.dev',
         'hay-kot/hive',
@@ -3166,7 +3177,7 @@ describe('TerminalMode', () => {
       await flushPromises()
       expect(router.currentRoute.value.path).toBe('/terminal/hive-bump-deps')
 
-      await pick(wrapper, 'terminal-sessions-running-only')
+      await selectView(wrapper, 'running')
 
       expect(slugs(wrapper)).toEqual(['hive-fix-parser'])
       expect(router.currentRoute.value.path).toBe('/terminal/hive-bump-deps')
@@ -3177,14 +3188,14 @@ describe('TerminalMode', () => {
     // The pinned section is exempt from the filter, so it cannot stand in as
     // something the filter found — the note has to name the reason the tree is
     // bare, and it is not the (empty) query.
-    it('says the tree is bare because nothing is running, not because nothing matched', async () => {
+    it('says the tree is bare because of the view, not because a query found nothing', async () => {
       running({ 1: false, 2: false })
       const { wrapper } = await mountAvailable()
 
-      await pick(wrapper, 'terminal-sessions-running-only')
+      await selectView(wrapper, 'running')
 
       expect(slugs(wrapper)).toEqual([])
-      expect(wrapper.get('[data-testid="terminal-sessions-no-matches"]').text()).toBe('No sessions are running.')
+      expect(wrapper.get('[data-testid="terminal-sessions-no-matches"]').text()).toBe('No sessions match this view.')
       wrapper.unmount()
     })
 
@@ -3194,26 +3205,36 @@ describe('TerminalMode', () => {
       mocks.ListSessions.mockResolvedValue(TWO_REPOS)
       running({ 1: true, 3: false })
       const { wrapper } = await mountAvailable()
-      expect(wrapper.find('[data-testid="terminal-sessions-running-note"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="code-view-hidden"]').exists()).toBe(false)
 
-      await pick(wrapper, 'terminal-sessions-running-only')
-      expect(wrapper.get('[data-testid="terminal-sessions-running-note"]').text()).toContain(
-        'Running sessions only · 1 hidden',
-      )
+      await selectView(wrapper, 'running')
+      expect(wrapper.get('[data-testid="code-view-switch"]').text()).toContain('Running')
+      expect(wrapper.get('[data-testid="code-view-hidden"]').text()).toBe('1 hidden')
 
-      await wrapper.get('[data-testid="terminal-sessions-running-clear"]').trigger('click')
-      expect(wrapper.find('[data-testid="terminal-sessions-running-note"]').exists()).toBe(false)
+      await selectView(wrapper, 'all')
+      expect(wrapper.find('[data-testid="code-view-hidden"]').exists()).toBe(false)
       wrapper.unmount()
     })
 
-    it('keeps the filter across a relaunch', async () => {
+    it('keeps the view across a relaunch', async () => {
       const first = await mountAvailable()
-      await pick(first.wrapper, 'terminal-sessions-running-only')
+      await selectView(first.wrapper, 'running')
       first.wrapper.unmount()
+      resetStores()
 
       const { wrapper } = await mountAvailable()
-      expect(wrapper.get('[data-testid="terminal-sessions-running-note"]').text()).toContain('Running sessions only')
+      expect(wrapper.get('[data-testid="code-view-switch"]').text()).toContain('Running')
       expect(slugs(wrapper)).toEqual(['hive-bump-deps', 'hive-fix-parser'])
+      wrapper.unmount()
+    })
+
+    it('opens on the Running view for someone who had the old running-only toggle on', async () => {
+      localStorage.setItem('hive.terminal.sidebar.running-only', 'true')
+      running({ 1: true, 2: false })
+      const { wrapper } = await mountAvailable()
+      expect(wrapper.get('[data-testid="code-view-switch"]').text()).toContain('Running')
+      expect(slugs(wrapper)).toEqual(['hive-fix-parser'])
+      expect(localStorage.getItem('hive.terminal.sidebar.running-only')).toBeNull()
       wrapper.unmount()
     })
 

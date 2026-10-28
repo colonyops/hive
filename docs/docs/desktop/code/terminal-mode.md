@@ -53,6 +53,16 @@ Tags are short words you put on a session, such as `auto` or `backend`. A sessio
 
 Tags ignore case, so `Auto` and `auto` are the same tag, and a tag cannot contain a comma. The sidebar filter matches tags as well as names. The hive CLI reads and writes the same tags; see [Sessions](../../cli/getting-started/sessions.md).
 
+### Views
+
+The bar under the sidebar toolbar picks a view: a saved filter over your sessions. **All sessions** and **Running** are built in. Running replaces the old **Only running sessions** toggle. If you had that toggle on, Code opens on Running.
+
+Use the filter button to add a condition on a tag, a repository, the run status, the session's age, or text in its name, slug, or tags. Each condition shows as a chip. Click a chip to change it, and click its × to remove it. With two or more chips, **Match all** keeps a session only when every chip matches it. Click it to switch to **Match any**.
+
+When you change a view's chips, a dot appears beside its name. **Save** writes the change to the view, and **Reset** puts the chips back. The built-in views cannot be changed, so on those use **Save view** or **Save as new view…** in the view menu. That menu also renames and deletes the views you made. The bar counts the sessions a view hides. Pinned chats and scratch terminals always stay visible. The sidebar filter searches within the current view.
+
+Saved views live in `settings.yaml` under `views.code`, so they follow your config to other machines. Which view is showing stays per machine.
+
 ## Scratch terminals
 
 The **Terminals** section holds a scratch tmux session for shells that are not tied to a repository. Use its `+` button or <kbd>⌘T</kbd> to add tabs.

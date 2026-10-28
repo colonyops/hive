@@ -23,13 +23,13 @@ const docs = { ...row('2', 'docs'), tags: ['Auto'] }
 const api = row('3', 'api', 'github.com/acme/api')
 const scratch = row('s', 'scratch', '')
 
-function setup(running: string[] = [], settled = true, filter?: SessionFilter) {
+function setup(running: string[] = [], settled = true, filter?: SessionFilter, statusesInitiallyLoaded = true) {
   const groups = ref<TerminalSessionGroup[]>([
     { key: 'scratch', name: 'Scratch', kind: 'scratch', sessions: [scratch] },
     { key: 'github.com/acme/api', name: 'acme/api', kind: 'repo', sessions: [api] },
     { key: 'github.com/acme/site', name: 'acme/site', kind: 'repo', sessions: [parser, docs] },
   ])
-  const statusesLoaded = ref(true)
+  const statusesLoaded = ref(statusesInitiallyLoaded)
   const sessionsLoaded = ref(true)
   const listingsSettled = ref(settled)
   const tree = {
@@ -50,6 +50,8 @@ function setup(running: string[] = [], settled = true, filter?: SessionFilter) {
   const view = effectScope().run(() => useSessionTreeView(tree, { filter: filter && (() => filter) }))!
   return { view, statusesLoaded, listingsSettled }
 }
+
+const RUNNING: SessionFilter = { match: 'all', conditions: [{ field: 'status', op: 'is', value: 'running' }] }
 
 const names = (groups: TerminalSessionGroup[]) => groups.map((group) => group.sessions.map((r) => r.name))
 
@@ -78,30 +80,34 @@ describe('useSessionTreeView', () => {
     expect(names(view.groups.value)).toEqual([['docs']])
   })
 
-  it('keeps the pinned sections when narrowing to running sessions, and says how many it hid', () => {
-    const { view } = setup(['1'])
-    view.runningOnly.value = true
+  it('keeps the pinned sections when a view narrows to running sessions, and counts what it hid', () => {
+    const { view } = setup(['1'], true, RUNNING)
     expect(names(view.groups.value)).toEqual([['scratch'], ['parser']])
-    expect(view.runningNote.value).toBe('Running sessions only · 2 hidden')
+    expect(view.viewHiddenCount.value).toBe(2)
   })
 
   it('does not narrow to running sessions before the first status poll lands', () => {
-    const { view, statusesLoaded } = setup([])
+    const { view, statusesLoaded } = setup([], true, RUNNING)
     statusesLoaded.value = false
-    view.runningOnly.value = true
     expect(names(view.groups.value)).toHaveLength(3)
   })
 
   it('reports no matches when only the pinned sections are left', async () => {
-    const { view } = setup([])
+    const { view } = setup([], true, RUNNING)
     await nextTick()
-    view.runningOnly.value = true
     expect(view.note.value).toBe('no-matches')
-    expect(view.noMatchesNote.value).toBe('No sessions are running.')
-    view.runningOnly.value = false
+    expect(view.noMatchesNote.value).toBe('No sessions match this view.')
     view.query.value = 'zzz'
-    expect(view.note.value).toBe('no-matches')
     expect(view.noMatchesNote.value).toBe('No sessions match “zzz”.')
+  })
+
+  it('holds the first paint for a view that reads status until statuses land', async () => {
+    const { view, statusesLoaded } = setup([], true, RUNNING, false)
+    await nextTick()
+    expect(view.ready.value).toBe(false)
+    statusesLoaded.value = true
+    await nextTick()
+    expect(view.ready.value).toBe(true)
   })
 
   it('holds the first paint until the window sweep it waits on has settled, then never again', async () => {

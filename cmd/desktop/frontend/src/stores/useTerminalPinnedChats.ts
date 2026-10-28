@@ -8,7 +8,7 @@ import type { TerminalSessionRow } from './useTerminalSessions'
 // Which agent chats the Code view lists above its session tree. A pin is an
 // arrangement of that sidebar rather than a fact about the chat, so it is
 // stored beside the tree's other layout state instead of on the chat's record —
-// the same call `hive.terminal.sidebar.groups` and the running-only filter make.
+// the same call `hive.terminal.sidebar.groups` and the active Code view make.
 //
 // Pin order is insertion order, deliberately: the list is the user's, and
 // re-sorting it on activity would move a row out from under the pointer.

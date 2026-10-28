@@ -7,7 +7,10 @@ import {
 import type { SessionView as WireSessionView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import {
   ALL_SESSIONS_VIEW_ID,
+  BUILT_IN_VIEWS,
   cloneSessionFilter,
+  isBuiltInView,
+  RUNNING_VIEW_ID,
   emptySessionFilter,
   sameSessionFilter,
   type SavedSessionView,
@@ -38,6 +41,24 @@ function toWire(views: readonly SavedSessionView[]): WireSessionView[] {
   }))
 }
 
+const LEGACY_RUNNING_ONLY_KEY = 'hive.terminal.sidebar.running-only'
+const ACTIVE_VIEW_KEY = 'hive.code.active-view'
+
+// The sidebar's "only running sessions" toggle became the built-in Running
+// view. Someone who left it on keeps seeing what they saw.
+function adoptRunningOnlyToggle(): void {
+  try {
+    const legacy = localStorage.getItem(LEGACY_RUNNING_ONLY_KEY)
+    if (legacy === null) return
+    if (legacy === 'true' && localStorage.getItem(ACTIVE_VIEW_KEY) === null) {
+      localStorage.setItem(ACTIVE_VIEW_KEY, RUNNING_VIEW_ID)
+    }
+    localStorage.removeItem(LEGACY_RUNNING_ONLY_KEY)
+  } catch {
+    // Storage can be unavailable; the sidebar then opens on All sessions.
+  }
+}
+
 /**
  * The Code sidebar's saved views and the filter on screen. The filter is a
  * draft over the active view: editing it does not touch the saved view until
@@ -51,23 +72,30 @@ export const useCodeViews = defineStore('codeViews', () => {
     label: 'the Code views',
   })
   const views = setting.value
+  adoptRunningOnlyToggle()
   // Device-local, unlike the views: which view a window is on is a fact about
   // this machine. Restored because the bar always names it, so a restored view
   // never hides sessions silently.
-  const activeViewId = useStorage('hive.code.active-view', ALL_SESSIONS_VIEW_ID)
+  const activeViewId = useStorage(ACTIVE_VIEW_KEY, ALL_SESSIONS_VIEW_ID)
 
+  // Built-ins come first, so a hand-written view that reuses a built-in id
+  // cannot shadow one.
+  const allViews = computed<readonly SavedSessionView[]>(() => [...BUILT_IN_VIEWS, ...views.value])
   const activeView = computed<SavedSessionView | null>(
-    () => views.value.find((view) => view.id === activeViewId.value) ?? null,
+    () => allViews.value.find((view) => view.id === activeViewId.value) ?? null,
   )
+  const activeIsBuiltIn = computed(() => isBuiltInView(activeViewId.value))
   const savedFilter = computed<SessionFilter>(() => activeView.value?.filter ?? emptySessionFilter())
 
   const draft = ref<SessionFilter>(emptySessionFilter())
+  // Sync, so an edit made right after a switch is not overwritten by a reset
+  // that lands a tick later.
   watch(
     [activeViewId, setting.hydrated],
     () => {
       draft.value = cloneSessionFilter(savedFilter.value)
     },
-    { immediate: true },
+    { immediate: true, flush: 'sync' },
   )
   // Only once hydrated: before then every stored id looks dangling. A view
   // deleted elsewhere (another window, a synced settings.yaml) falls back to All.
@@ -75,7 +103,7 @@ export const useCodeViews = defineStore('codeViews', () => {
     [views, setting.hydrated],
     () => {
       if (!setting.hydrated.value) return
-      if (activeViewId.value !== ALL_SESSIONS_VIEW_ID && !activeView.value) activeViewId.value = ALL_SESSIONS_VIEW_ID
+      if (!activeView.value) activeViewId.value = ALL_SESSIONS_VIEW_ID
     },
     { immediate: true },
   )
@@ -111,7 +139,7 @@ export const useCodeViews = defineStore('codeViews', () => {
 
   function save(): void {
     const view = activeView.value
-    if (!view) return
+    if (!view || activeIsBuiltIn.value) return
     setting.set(views.value.map((v) => (v.id === view.id ? { ...v, filter: cloneSessionFilter(draft.value) } : v)))
   }
 
@@ -132,6 +160,7 @@ export const useCodeViews = defineStore('codeViews', () => {
   return {
     views,
     hydrated: setting.hydrated,
+    activeIsBuiltIn,
     activeViewId: readonly(activeViewId),
     activeView,
     draft: readonly(draft),

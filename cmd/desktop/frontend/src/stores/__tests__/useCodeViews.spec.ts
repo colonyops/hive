@@ -1,7 +1,7 @@
 import { flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ALL_SESSIONS_VIEW_ID } from '../../lib/sessionViews'
+import { ALL_SESSIONS_VIEW_ID, RUNNING_VIEW_ID } from '../../lib/sessionViews'
 import { useCodeViews } from '../useCodeViews'
 
 const mocks = vi.hoisted(() => ({
@@ -103,6 +103,36 @@ describe('useCodeViews', () => {
     views.select(id)
     views.remove(id)
     await nextTick()
+    expect(views.activeViewId.value).toBe(ALL_SESSIONS_VIEW_ID)
+  })
+
+  it('offers Running as a built-in view that a save cannot change', async () => {
+    const views = useCodeViews()
+    await flushPromises()
+    views.select(RUNNING_VIEW_ID)
+    expect(views.activeIsBuiltIn.value).toBe(true)
+    expect(views.draft.value.conditions).toEqual([{ field: 'status', op: 'is', value: 'running' }])
+
+    views.addCondition({ field: 'tag', op: 'any', values: ['bug'] })
+    views.save()
+    await flushPromises()
+    expect(mocks.SetCodeViews).not.toHaveBeenCalled()
+    expect(views.dirty.value).toBe(true)
+  })
+
+  it('moves the old running-only toggle onto the Running view, once', async () => {
+    localStorage.setItem('hive.terminal.sidebar.running-only', 'true')
+    const views = useCodeViews()
+    await flushPromises()
+    expect(views.activeViewId.value).toBe(RUNNING_VIEW_ID)
+    expect(localStorage.getItem('hive.terminal.sidebar.running-only')).toBeNull()
+  })
+
+  it('does not override a view already chosen when adopting the old toggle', async () => {
+    localStorage.setItem('hive.terminal.sidebar.running-only', 'true')
+    localStorage.setItem('hive.code.active-view', ALL_SESSIONS_VIEW_ID)
+    const views = useCodeViews()
+    await flushPromises()
     expect(views.activeViewId.value).toBe(ALL_SESSIONS_VIEW_ID)
   })
 })

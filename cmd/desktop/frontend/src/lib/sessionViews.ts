@@ -28,9 +28,29 @@ export interface SessionFilterContext {
 }
 
 export const ALL_SESSIONS_VIEW_ID = 'all'
+export const RUNNING_VIEW_ID = 'running'
 
 export function emptySessionFilter(): SessionFilter {
   return { match: 'all', conditions: [] }
+}
+
+/** The views every install has. They lead the switcher and cannot be edited in place, renamed, or deleted. */
+export const BUILT_IN_VIEWS: readonly SavedSessionView[] = [
+  { id: ALL_SESSIONS_VIEW_ID, name: 'All sessions', filter: emptySessionFilter() },
+  {
+    id: RUNNING_VIEW_ID,
+    name: 'Running',
+    filter: { match: 'all', conditions: [{ field: 'status', op: 'is', value: 'running' }] },
+  },
+]
+
+export function isBuiltInView(id: string): boolean {
+  return BUILT_IN_VIEWS.some((view) => view.id === id)
+}
+
+/** Whether the filter reads run status, so the tree has to wait for the first poll before painting. */
+export function filterReadsStatus(filter: SessionFilter): boolean {
+  return filter.conditions.some((condition) => condition.field === 'status')
 }
 
 const dayMilliseconds = 24 * 60 * 60 * 1000

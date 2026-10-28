@@ -14,7 +14,7 @@ import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
 import type { MenuEntry } from '@hive/ui/types/menu'
-import { ALL_SESSIONS_VIEW_ID, describeCondition, type SessionCondition } from '../../lib/sessionViews'
+import { BUILT_IN_VIEWS, describeCondition, type SessionCondition } from '../../lib/sessionViews'
 import { useCodeViews } from '../../stores/useCodeViews'
 import { useTerminalModeContext } from './terminalModeContext'
 
@@ -43,12 +43,14 @@ const chipAnchors = ref<HTMLElement[]>([])
 
 const viewsEntries = computed<MenuEntry[]>(() => [
   { kind: 'label', text: 'Views' },
-  {
+  ...BUILT_IN_VIEWS.map<MenuEntry>((builtIn) => ({
     kind: 'action',
-    id: `view:${ALL_SESSIONS_VIEW_ID}`,
-    label: 'All sessions',
-    checked: views.activeViewId === ALL_SESSIONS_VIEW_ID,
-  },
+    id: `view:${builtIn.id}`,
+    label: builtIn.name,
+    checked: views.activeViewId === builtIn.id,
+    testid: `code-view-option-${builtIn.id}`,
+  })),
+  ...(views.views.length ? ([{ kind: 'label', text: 'Saved' }] satisfies MenuEntry[]) : []),
   ...views.views.map<MenuEntry>((saved) => ({
     kind: 'action',
     id: `view:${saved.id}`,
@@ -58,12 +60,12 @@ const viewsEntries = computed<MenuEntry[]>(() => [
   })),
   { kind: 'separator' },
   { kind: 'action', id: 'save-as', label: 'Save as new view…', icon: IconPlus, testid: 'code-view-save-as' },
-  ...(views.activeView
-    ? ([
+  ...(views.activeIsBuiltIn
+    ? []
+    : ([
         { kind: 'action', id: 'rename', label: 'Rename view…', icon: IconPencil },
         { kind: 'action', id: 'delete', label: 'Delete view', icon: IconTrash, testid: 'code-view-delete' },
-      ] satisfies MenuEntry[])
-    : []),
+      ] satisfies MenuEntry[])),
 ])
 
 function onViewsSelect(id: string): void {
@@ -71,7 +73,7 @@ function onViewsSelect(id: string): void {
   if (id.startsWith('view:')) views.select(id.slice('view:'.length))
   else if (id === 'save-as') dialog.value = { kind: 'save-as' }
   else if (id === 'rename') dialog.value = { kind: 'rename' }
-  else if (id === 'delete' && views.activeView) views.remove(views.activeView.id)
+  else if (id === 'delete' && views.activeView && !views.activeIsBuiltIn) views.remove(views.activeView.id)
 }
 
 const addEntries = computed<MenuEntry[]>(() => [
@@ -236,7 +238,8 @@ function onDialogSave(name: string): void {
   dialog.value = null
   if (!current) return
   if (current.kind === 'save-as') views.saveAs(name)
-  else if (current.kind === 'rename' && views.activeView) views.rename(views.activeView.id, name)
+  else if (current.kind === 'rename' && views.activeView && !views.activeIsBuiltIn)
+    views.rename(views.activeView.id, name)
   else if (current.kind === 'text') {
     if (current.index < 0) views.addCondition({ field: 'text', op: 'contains', value: name })
     else {
@@ -351,7 +354,7 @@ function onDialogSave(name: string): void {
         <span class="flex-1" />
         <button type="button" class="bar-action" data-testid="code-view-reset" @click="views.reset()">Reset</button>
         <button
-          v-if="views.activeView"
+          v-if="!views.activeIsBuiltIn"
           type="button"
           class="bar-action text-accent"
           data-testid="code-view-save"

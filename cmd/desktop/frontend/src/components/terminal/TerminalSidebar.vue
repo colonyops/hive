@@ -6,7 +6,6 @@ import IconChevronRight from '~icons/lucide/chevron-right'
 import IconChevronsDownUp from '~icons/lucide/chevrons-down-up'
 import IconChevronsUpDown from '~icons/lucide/chevrons-up-down'
 import IconEllipsisVertical from '~icons/lucide/ellipsis-vertical'
-import IconListFilter from '~icons/lucide/list-filter'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPinOff from '~icons/lucide/pin-off'
 import IconPlus from '~icons/lucide/plus'
@@ -62,14 +61,6 @@ const sessionAgeBadges = computed<Record<string, { days: number; title: string }
 const sidebarMenuEntries = computed<MenuEntry[]>(() => [
   {
     kind: 'action',
-    id: 'running-only',
-    label: 'Only running sessions',
-    checked: view.runningOnly,
-    testid: 'terminal-sessions-running-only',
-  },
-  { kind: 'separator' },
-  {
-    kind: 'action',
     id: 'collapse-all',
     label: 'Collapse all',
     icon: IconChevronsDownUp,
@@ -93,8 +84,7 @@ const sidebarMenuEntries = computed<MenuEntry[]>(() => [
 ])
 
 function onSidebarMenuSelect(id: string): void {
-  if (id === 'running-only') view.runningOnly = !view.runningOnly
-  else if (id === 'collapse-all' || id === 'expand-all') view.expansion.setAll(id === 'expand-all')
+  if (id === 'collapse-all' || id === 'expand-all') view.expansion.setAll(id === 'expand-all')
   else if (id === 'prune' && tree.prunableCount) sessions.requestPrune(tree.prunableCount)
 }
 
@@ -268,22 +258,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
       @select="onSidebarMenuSelect"
     />
     <SessionViewBar />
-    <div
-      v-if="view.runningNote"
-      class="flex h-7 shrink-0 items-center gap-2 border-b border-border bg-chip px-3"
-      data-testid="terminal-sessions-running-note"
-    >
-      <IconListFilter class="size-3 shrink-0 text-accent" />
-      <span class="min-w-0 flex-1 truncate text-caption text-text-2">{{ view.runningNote }}</span>
-      <button
-        type="button"
-        class="shrink-0 cursor-pointer text-caption text-text-3 hover:text-text"
-        data-testid="terminal-sessions-running-clear"
-        @click="view.runningOnly = false"
-      >
-        Show all
-      </button>
-    </div>
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-4">
       <InlineError
         v-if="tree.sessionsError"

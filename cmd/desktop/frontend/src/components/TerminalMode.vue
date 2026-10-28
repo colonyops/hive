@@ -54,7 +54,10 @@ const { poolSize } = useTerminalPoolSize()
 const pool = useTerminalPool({ size: poolSize, onEvicted: () => tree.sweepListings() })
 const tree = useTerminalTree({ pool, active })
 const codeViews = useCodeViews()
-const view = useSessionTreeView(tree, { filter: () => codeViews.draft.value })
+const view = useSessionTreeView(tree, {
+  filter: () => codeViews.draft.value,
+  filterReady: () => codeViews.hydrated.value,
+})
 const rename = useWindowRename(pool.visible)
 const attach = useTerminalAttach({ pool, tree, active, onSwitch: () => (rename.windowId.value = '') })
 const sessions = useSessionActions({ onChanged: () => void tree.reloadSessions() })

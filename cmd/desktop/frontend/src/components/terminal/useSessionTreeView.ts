@@ -1,7 +1,6 @@
-import { useStorage } from '@vueuse/core'
 import { computed, ref, watchEffect } from 'vue'
 import { useTreeExpansion } from '../../composables/useTreeExpansion'
-import { matchesSessionFilter, type SessionFilter } from '../../lib/sessionViews'
+import { filterReadsStatus, matchesSessionFilter, type SessionFilter } from '../../lib/sessionViews'
 import type { TerminalSessionGroup } from '../../stores/useTerminalSessions'
 import type { TerminalTree } from './useTerminalTree'
 
@@ -12,7 +11,7 @@ function countSessions(groups: TerminalSessionGroup[]): number {
 export type SessionTreeView = ReturnType<typeof useSessionTreeView>
 
 /**
- * What the session tree draws: the name query, the running-only narrowing, the
+ * What the session tree draws: the saved view's narrowing, the name query, the
  * folds, and when the first fill may paint. Narrowing only changes what is
  * drawn; `attachable` keeps every session, because a session filtered off the
  * screen must not read as one that went away.
@@ -34,18 +33,21 @@ export function useSessionTreeView(
     | 'showAllWindowsReady'
     | 'listingsSettled'
   >,
-  options: { filter?: () => SessionFilter } = {},
+  options: {
+    /** The active view's filter. */
+    filter?: () => SessionFilter
+    /** False while the filter may still change under a stored view; the first paint waits for it. */
+    filterReady?: () => boolean
+  } = {},
 ) {
   // Transient on purpose: a filter restored at launch hides sessions the user
-  // has no reason to suspect are there.
+  // has no reason to suspect are there. A saved view may persist because the
+  // view bar always names it and counts what it hides.
   const query = ref('')
-  // Stored, unlike the query, because it is how the user keeps the tree rather
-  // than a search to undo. The running note is the price of that: a narrowed
-  // tree must never read as a short one.
-  const runningOnly = useStorage('hive.terminal.sidebar.running-only', false)
 
-  // The active saved view narrows repo groups only, for the reason the running
-  // filter below gives for the pinned sections.
+  // Taken before the query, so a repo-name match carries what is left. Only
+  // repo groups narrow: scratch is the tree's one always-there way to open a
+  // shell, and a chat was pinned to be kept in view.
   const viewGroups = computed<TerminalSessionGroup[]>(() => {
     const filter = options.filter?.()
     if (!filter?.conditions.length) return tree.sessionGroups.value
@@ -64,33 +66,14 @@ export function useSessionTreeView(
 
   const viewHiddenCount = computed(() => countSessions(tree.sessionGroups.value) - countSessions(viewGroups.value))
 
-  // Taken before the query, so a repo-name match carries what is left. Inert
-  // until the first status poll lands: a session nothing has answered for yet
-  // is not a session doing nothing. The pinned sections stay: scratch is the
-  // tree's one always-there way to open a shell, and a chat was pinned to be
-  // kept in view.
-  const runningGroups = computed<TerminalSessionGroup[]>(() => {
-    if (!runningOnly.value || !tree.statusesLoaded.value) return viewGroups.value
-    const groups: TerminalSessionGroup[] = []
-    for (const group of viewGroups.value) {
-      if (group.kind !== 'repo') {
-        groups.push(group)
-        continue
-      }
-      const sessions = group.sessions.filter(tree.rowRunning)
-      if (sessions.length) groups.push({ ...group, sessions })
-    }
-    return groups
-  })
-
   // A repo match carries its whole group, which makes typing a repo name a way
   // to narrow to it. Sessions also match on the slug, the tmux target that a
   // deep link or a script names, and on their tags.
   const groups = computed<TerminalSessionGroup[]>(() => {
     const needle = query.value.trim().toLowerCase()
-    if (!needle) return runningGroups.value
+    if (!needle) return viewGroups.value
     const groups: TerminalSessionGroup[] = []
-    for (const group of runningGroups.value) {
+    for (const group of viewGroups.value) {
       if (group.name.toLowerCase().includes(needle)) {
         groups.push(group)
         continue
@@ -116,15 +99,9 @@ export function useSessionTreeView(
     nodes: () => tree.sessionGroups.value,
   })
 
-  const runningNote = computed(() => {
-    if (!runningOnly.value) return ''
-    const hidden = countSessions(viewGroups.value) - countSessions(runningGroups.value)
-    return hidden ? `Running sessions only · ${hidden} hidden` : 'Running sessions only'
-  })
-
   const noMatchesNote = computed(() => {
     const needle = query.value.trim()
-    return needle ? `No sessions match “${needle}”.` : 'No sessions are running.'
+    return needle ? `No sessions match “${needle}”.` : 'No sessions match this view.'
   })
 
   // The placeholder holds until every row's final shape is known, so the tree
@@ -133,8 +110,10 @@ export function useSessionTreeView(
   const ready = ref(false)
   watchEffect(() => {
     if (ready.value || !tree.sessionsLoaded.value || !tree.showAllWindowsReady.value) return
-    // The running filter decides which rows exist at all.
-    if (runningOnly.value && !tree.statusesLoaded.value) return
+    // The view decides which rows exist at all.
+    if (options.filterReady && !options.filterReady()) return
+    const filter = options.filter?.()
+    if (filter && filterReadsStatus(filter) && !tree.statusesLoaded.value) return
     const sweeping =
       tree.attachable.value.length > 0 && (tree.showAllWindows.value || tree.alwaysSwept.value.length > 0)
     if (sweeping && !tree.listingsSettled.value) return
@@ -151,5 +130,5 @@ export function useSessionTreeView(
     return found ? '' : 'no-matches'
   })
 
-  return { query, runningOnly, groups, expansion, runningNote, viewHiddenCount, noMatchesNote, ready, note }
+  return { query, groups, expansion, viewHiddenCount, noMatchesNote, ready, note }
 }
