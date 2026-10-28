@@ -236,6 +236,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			if skipsEngine(path) {
 				hiveApp.Logger = logger
 				hiveApp.Config = cfg
+				hiveApp.ConfigPath = flags.ConfigPath
 				hiveApp.Build = hiveBuildInfo()
 				return ctx, nil
 			}
@@ -312,7 +313,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 
 			// Populate the pre-allocated App struct (commands already hold a pointer to it)
-			*hiveApp = *app.NewApp(logger, engine, cfg, tmuxClient, pluginMgr, commandSet, pluginInfos)
+			*hiveApp = *app.NewApp(logger, engine, cfg, tmuxClient, pluginMgr, commandSet, pluginInfos, flags.ConfigPath)
 			hiveApp.Build = hiveBuildInfo()
 			hiveApp.Sources = app.BuildSourceRegistry(logger, cfg, exec, kvStore)
 

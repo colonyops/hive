@@ -32,8 +32,9 @@ type DaemonCmd struct {
 	flags *Flags
 	app   *app.App
 
-	waitLock   bool
-	statusJSON bool
+	waitLock      bool
+	statusJSON    bool
+	statusNoStart bool
 }
 
 func NewDaemonCmd(flags *Flags, app *app.App) *DaemonCmd {
@@ -65,6 +66,7 @@ commands, and Hive Desktop reach it on a unix socket.`,
 				Usage: "Show the running daemon's pid, version, uptime, and health",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "json", Usage: "output as JSON", Destination: &cmd.statusJSON},
+					&cli.BoolFlag{Name: "no-start", Usage: "fail instead of starting a daemon when none is running", Destination: &cmd.statusNoStart},
 				},
 				Action: cmd.status,
 			},
@@ -142,7 +144,7 @@ type daemonStatus struct {
 }
 
 func (cmd *DaemonCmd) status(ctx context.Context, c *cli.Command) error {
-	client := cmd.app.DaemonClient()
+	client := cmd.app.DaemonClient(!cmd.statusNoStart)
 	info, err := client.Hello(ctx)
 	if err != nil {
 		return fmt.Errorf("reach the daemon at %s: %w", daemon.SocketPath(cmd.flags.DataDir), err)
@@ -207,7 +209,7 @@ func okText(ok bool, detail string) string {
 }
 
 func (cmd *DaemonCmd) stop(ctx context.Context, _ *cli.Command) error {
-	if err := cmd.app.DaemonClient().Stop(ctx); err != nil {
+	if err := cmd.app.DaemonClient(false).Stop(ctx); err != nil {
 		return fmt.Errorf("stop the daemon: %w", err)
 	}
 	fmt.Fprintln(os.Stderr, "daemon stopped")

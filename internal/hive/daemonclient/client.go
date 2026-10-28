@@ -51,6 +51,8 @@ const statusTimeout = 5 * time.Second
 
 type Client struct {
 	logger     zerolog.Logger
+	dialer     Dialer
+	starter    *starter
 	httpClient *http.Client
 	sessions   daemonv1connect.SessionServiceClient
 	control    daemonv1connect.DaemonServiceClient
@@ -62,20 +64,24 @@ type Client struct {
 var _ sessionapi.API = (*Client)(nil)
 
 func New(opts Options) *Client {
+	c := &Client{
+		logger: logutils.Component(opts.Logger, "daemon-client"),
+		dialer: opts.Dialer,
+	}
+	if opts.AutoStart != nil {
+		c.starter = &starter{start: opts.AutoStart, now: time.Now}
+	}
 	var protocols http.Protocols
 	protocols.SetUnencryptedHTTP2(true)
-	httpClient := &http.Client{Transport: &http.Transport{
+	c.httpClient = &http.Client{Transport: &http.Transport{
 		Protocols: &protocols,
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return opts.Dialer(ctx)
+			return c.dial(ctx)
 		},
 	}}
-	return &Client{
-		logger:     logutils.Component(opts.Logger, "daemon-client"),
-		httpClient: httpClient,
-		sessions:   daemonv1connect.NewSessionServiceClient(httpClient, baseURL),
-		control:    daemonv1connect.NewDaemonServiceClient(httpClient, baseURL),
-	}
+	c.sessions = daemonv1connect.NewSessionServiceClient(c.httpClient, baseURL)
+	c.control = daemonv1connect.NewDaemonServiceClient(c.httpClient, baseURL)
+	return c
 }
 
 // HTTPClient reaches the daemon's plain HTTP endpoints, such as /healthz.
@@ -107,7 +113,9 @@ type Health struct {
 
 // Hello also refreshes the cached answer StatusAvailable gives.
 func (c *Client) Hello(ctx context.Context) (Info, error) {
-	resp, err := c.control.Hello(ctx, connect.NewRequest(&daemonv1.HelloRequest{}))
+	resp, err := retryRead(func() (*connect.Response[daemonv1.HelloResponse], error) {
+		return c.control.Hello(ctx, connect.NewRequest(&daemonv1.HelloRequest{}))
+	})
 	if err != nil {
 		return Info{}, wire.FromConnectError(err)
 	}
@@ -123,7 +131,9 @@ func (c *Client) Hello(ctx context.Context) (Info, error) {
 }
 
 func (c *Client) Health(ctx context.Context) (Health, error) {
-	resp, err := c.control.Health(ctx, connect.NewRequest(&daemonv1.HealthRequest{}))
+	resp, err := retryRead(func() (*connect.Response[daemonv1.HealthResponse], error) {
+		return c.control.Health(ctx, connect.NewRequest(&daemonv1.HealthRequest{}))
+	})
 	if err != nil {
 		return Health{}, wire.FromConnectError(err)
 	}
@@ -162,7 +172,9 @@ func (c *Client) Reload(ctx context.Context) error {
 }
 
 func (c *Client) ListSessions(ctx context.Context) ([]session.Session, error) {
-	resp, err := c.sessions.List(ctx, connect.NewRequest(&daemonv1.ListRequest{}))
+	resp, err := retryRead(func() (*connect.Response[daemonv1.ListResponse], error) {
+		return c.sessions.List(ctx, connect.NewRequest(&daemonv1.ListRequest{}))
+	})
 	if err != nil {
 		return nil, wire.FromConnectError(err)
 	}
@@ -174,7 +186,9 @@ func (c *Client) ListSessions(ctx context.Context) ([]session.Session, error) {
 }
 
 func (c *Client) GetSession(ctx context.Context, id string) (session.Session, error) {
-	resp, err := c.sessions.Get(ctx, connect.NewRequest(&daemonv1.GetRequest{Id: id}))
+	resp, err := retryRead(func() (*connect.Response[daemonv1.GetResponse], error) {
+		return c.sessions.Get(ctx, connect.NewRequest(&daemonv1.GetRequest{Id: id}))
+	})
 	if err != nil {
 		return session.Session{}, wire.FromConnectError(err)
 	}
@@ -273,7 +287,9 @@ func (c *Client) Prune(ctx context.Context, all bool) (int, error) {
 }
 
 func (c *Client) CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Risk, error) {
-	resp, err := c.sessions.Risk(ctx, connect.NewRequest(&daemonv1.RiskRequest{Id: id}))
+	resp, err := retryRead(func() (*connect.Response[daemonv1.RiskResponse], error) {
+		return c.sessions.Risk(ctx, connect.NewRequest(&daemonv1.RiskRequest{Id: id}))
+	})
 	if err != nil {
 		return sessionsvc.Risk{}, wire.FromConnectError(err)
 	}
@@ -284,7 +300,9 @@ func (c *Client) CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Ri
 }
 
 func (c *Client) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOptions, error) {
-	resp, err := c.sessions.LaunchOptions(ctx, connect.NewRequest(&daemonv1.LaunchOptionsRequest{}))
+	resp, err := retryRead(func() (*connect.Response[daemonv1.LaunchOptionsResponse], error) {
+		return c.sessions.LaunchOptions(ctx, connect.NewRequest(&daemonv1.LaunchOptionsRequest{}))
+	})
 	if err != nil {
 		return sessionsvc.LaunchOptions{}, wire.FromConnectError(err)
 	}
@@ -319,10 +337,10 @@ func (c *Client) FetchBatch(ctx context.Context, sessions []*session.Session, ro
 	}
 	ctx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
-	resp, err := c.sessions.Statuses(ctx, connect.NewRequest(&daemonv1.StatusesRequest{
-		SessionIds: ids,
-		Roots:      wire.RootsToProto(roots),
-	}))
+	req := &daemonv1.StatusesRequest{SessionIds: ids, Roots: wire.RootsToProto(roots)}
+	resp, err := retryRead(func() (*connect.Response[daemonv1.StatusesResponse], error) {
+		return c.sessions.Statuses(ctx, connect.NewRequest(req))
+	})
 	if err != nil {
 		c.logger.Debug().Err(err).Msg("fetch statuses from the daemon")
 		return map[string]status.TerminalStatus{}

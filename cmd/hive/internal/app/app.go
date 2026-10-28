@@ -4,12 +4,15 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/sources"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
@@ -48,7 +51,10 @@ type App struct {
 
 	// Config is the CLI config. It shadows Engine.Config, and its embedded
 	// engine half is the config the engine was built from.
-	Config      *config.Config
+	Config *config.Config
+	// ConfigPath is the config file the CLI loaded, which a daemon it starts
+	// must load too.
+	ConfigPath  string
 	Doctor      *doctor.Service
 	Multiplexer Multiplexer
 	Plugins     *plugins.Manager
@@ -70,18 +76,20 @@ func NewApp(
 	pluginMgr *plugins.Manager,
 	commandSet *plugins.CommandSet,
 	pluginInfos []doctor.PluginInfo,
+	configPath string,
 ) *App {
 	a := &App{
 		Engine:      engine,
 		Logger:      logger,
 		Config:      cfg,
+		ConfigPath:  configPath,
 		Doctor:      engine.Doctor(cfg, pluginInfos),
 		Multiplexer: multiplexer,
 		Plugins:     pluginMgr,
 		CommandSet:  commandSet,
 	}
 	if cfg.Experimental.Daemon {
-		a.sessions = a.DaemonClient()
+		a.sessions = a.DaemonClient(true)
 	} else {
 		a.sessions = sessionapi.NewLocal(engine)
 	}
@@ -96,10 +104,27 @@ func (a *App) SessionAPI() sessionapi.API {
 }
 
 // DaemonClient reaches the daemon for this data directory. It needs only the
-// logger and the config, so commands that skip the engine can call it.
-func (a *App) DaemonClient() *daemonclient.Client {
-	return daemonclient.New(daemonclient.Options{
+// logger, the config, and ConfigPath, so commands that skip the engine can
+// call it. With autoStart, a dial that finds no daemon starts this binary as
+// one.
+func (a *App) DaemonClient(autoStart bool) *daemonclient.Client {
+	opts := daemonclient.Options{
 		Dialer: daemonclient.UnixDialer(daemon.SocketPath(a.Config.DataDir)),
 		Logger: a.Logger,
-	})
+	}
+	if autoStart {
+		dataDir, configPath := a.Config.DataDir, a.ConfigPath
+		opts.AutoStart = func(ctx context.Context) error {
+			binary, err := os.Executable()
+			if err != nil {
+				return fmt.Errorf("find the hive binary: %w", err)
+			}
+			env := os.Environ()
+			if configPath != "" {
+				env = append(env, hiveconfig.EnvConfig+"="+configPath)
+			}
+			return daemonclient.Spawn(ctx, binary, dataDir, env)
+		}
+	}
+	return daemonclient.New(opts)
 }
