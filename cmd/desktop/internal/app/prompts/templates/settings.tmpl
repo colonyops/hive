@@ -60,6 +60,11 @@ keybindings:               # sparse overrides keyed by command id
 paths:
   tmux: ""                 # absolute path to a tmux binary; empty discovers one
 
+daemon:
+  hive_path: ""            # absolute path to the hive binary that runs the
+                           # experimental daemon (experimental.daemon in the
+                           # Hive config); empty looks it up on the login-shell PATH
+
 retention:
   action_runs: 100         # finished action runs kept, each with its full log (1-10000)
 
