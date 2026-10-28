@@ -215,10 +215,10 @@ type ViewsSettings struct {
 	Code []SessionView `yaml:"code,omitempty"`
 }
 
-// SessionView is a named filter over the Code tab's sessions. Conditions are
-// stored verbatim: the frontend owns the set of fields and operators and
-// passes a condition it does not know, so a view a newer build wrote still
-// loads here.
+// SessionView is a named filter over the Code tab's sessions. The frontend
+// owns the set of fields and operators, so a field or operator this build does
+// not know still loads and round-trips. A condition key beyond Values, Value,
+// and Days does not survive a save.
 type SessionView struct {
 	ID     string        `yaml:"id"`
 	Name   string        `yaml:"name"`

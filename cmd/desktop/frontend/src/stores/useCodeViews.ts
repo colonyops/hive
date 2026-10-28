@@ -20,15 +20,30 @@ import {
 import { defineStore } from './defineStore'
 import { usePersistedSetting } from './usePersistedSetting'
 
-// The wire carries conditions as loose records so a field a newer build wrote
-// survives the round trip; the predicate passes one it does not know.
+type WireSessionCondition = NonNullable<WireSessionView['filter']['conditions']>[number]
+
+// Go omits empty values and a zero day count, and settings.yaml can be edited
+// by hand, so a condition can arrive without the keys its field needs. A field
+// this build does not know passes through; the predicate lets it through too.
+function conditionFromWire(condition: WireSessionCondition): SessionCondition {
+  switch (condition.field) {
+    case 'tag':
+    case 'repo':
+      return { ...condition, values: condition.values ?? [] } as SessionCondition
+    case 'age':
+      return { ...condition, days: condition.days ?? 0 } as SessionCondition
+    default:
+      return condition as unknown as SessionCondition
+  }
+}
+
 function fromWire(views: WireSessionView[] | null): SavedSessionView[] {
   return (views ?? []).map((view) => ({
     id: view.id,
     name: view.name,
     filter: {
       match: view.filter.match === 'any' ? 'any' : 'all',
-      conditions: (view.filter.conditions ?? []) as unknown as SessionCondition[],
+      conditions: (view.filter.conditions ?? []).map(conditionFromWire),
     },
   }))
 }
@@ -74,8 +89,8 @@ export const useCodeViews = defineStore('codeViews', () => {
   const views = setting.value
   adoptRunningOnlyToggle()
   // Device-local, unlike the views: which view a window is on is a fact about
-  // this machine. Restored because the bar always names it, so a restored view
-  // never hides sessions silently.
+  // this machine. Restored because the bar always shows its chips and counts
+  // what they hide, so a restored view never hides sessions silently.
   const activeViewId = useStorage(ACTIVE_VIEW_KEY, ALL_SESSIONS_VIEW_ID)
 
   // Built-ins come first, so a hand-written view that reuses a built-in id

@@ -669,8 +669,8 @@ export interface SessionSummary {
 }
 
 /**
- * SessionView is a saved Code tab view. The filter's fields and operators are
- * carried verbatim; the frontend owns their meaning.
+ * SessionView is a saved Code tab view. Field and Op values pass through
+ * unchecked; the frontend owns their meaning.
  */
 export interface SessionView {
     "id": string;

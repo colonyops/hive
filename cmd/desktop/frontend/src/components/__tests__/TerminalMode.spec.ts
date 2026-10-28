@@ -25,6 +25,7 @@ import {
 } from '../../lib/terminalTree'
 import { createAppRouter } from '../../router'
 import { resetStores } from '../../stores/defineStore'
+import { useCodeViews } from '../../stores/useCodeViews'
 import { tooltipFor } from '../../test-utils/tooltip'
 
 const mocks = vi.hoisted(() => ({
@@ -3247,6 +3248,47 @@ describe('TerminalMode', () => {
 
       await wrapper.get('[data-testid="code-view-clear"]').trigger('click')
       expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('edits a chip from its menu, toggling values and keeping them across an op switch', async () => {
+      mocks.ListSessions.mockResolvedValue([{ ...TWO_REPOS[0], tags: ['backend'] }, TWO_REPOS[1]])
+      mocks.CodeViews.mockResolvedValue([
+        { id: 'bugs', name: 'Bugs', filter: { match: 'all', conditions: [{ field: 'tag', op: 'any', values: [] }] } },
+      ])
+      localStorage.setItem('hive.code.active-view', 'bugs')
+      const { wrapper } = await mountAvailable()
+      const chips = () => wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())
+      const pickInChipMenu = async (label: string) => {
+        const entry = wrapper.findAll('[data-testid="code-view-chip-menu"] button').find((b) => b.text() === label)!
+        await entry.trigger('click')
+        await flushPromises()
+      }
+
+      await wrapper.get('[data-testid="code-view-chip"] button').trigger('click')
+      await pickInChipMenu('backend')
+      expect(chips()).toEqual(['tag:backend'])
+      await pickInChipMenu('Is none of')
+      expect(chips()).toEqual(['-tag:backend'])
+      await pickInChipMenu('backend')
+      expect(chips()).toEqual(['-tag:…'])
+      wrapper.unmount()
+    })
+
+    it('closes a chip menu when that chip is removed, rather than moving it to the next chip', async () => {
+      const { wrapper } = await mountAvailable()
+      const views = useCodeViews()
+      views.addCondition({ field: 'status', op: 'is', value: 'running' })
+      views.addCondition({ field: 'age', op: 'older', days: 7 })
+      await flushPromises()
+
+      await wrapper.get('[data-testid="code-view-chip"] button').trigger('click')
+      expect(wrapper.find('[data-testid="code-view-chip-menu"]').exists()).toBe(true)
+      await wrapper.get('[data-testid="code-view-chip-remove"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['age:>7d'])
+      expect(wrapper.find('[data-testid="code-view-chip-menu"]').exists()).toBe(false)
       wrapper.unmount()
     })
 

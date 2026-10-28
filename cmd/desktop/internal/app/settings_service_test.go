@@ -310,7 +310,7 @@ func TestSettingsServiceSetCodeViews(t *testing.T) {
 	reopened := NewSettingsService(settings.NewStore(settings.SettingsPath()))
 	got, err := reopened.CodeViews(ctx)
 	require.NoError(t, err)
-	require.Equal(t, views, got, "conditions round-trip verbatim, including fields this build does not know")
+	require.Equal(t, views, got, "conditions round-trip, including fields this build does not know")
 
 	err = service.SetCodeViews(ctx, []settings.SessionView{{ID: "a", Name: "A"}, {ID: "a", Name: "B"}})
 	require.Equal(t, KindInvalid, KindOf(err))

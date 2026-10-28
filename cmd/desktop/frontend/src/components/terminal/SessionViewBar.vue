@@ -22,6 +22,14 @@ const shown = computed(() => views.draft.conditions.length > 0 || views.dirty)
 const openChip = ref(-1)
 const chipAnchors = ref<HTMLElement[]>([])
 
+// The open menu ignores clicks inside its chip, remove button included, so it
+// never closes itself here; keep openChip on the condition it was opened for.
+function removeChip(index: number): void {
+  if (openChip.value === index) openChip.value = -1
+  else if (openChip.value > index) openChip.value--
+  views.removeCondition(index)
+}
+
 function clear(): void {
   openChip.value = -1
   views.select(ALL_SESSIONS_VIEW_ID)
@@ -68,7 +76,7 @@ function clear(): void {
             class="chip-remove"
             :aria-label="`Remove filter ${index + 1}`"
             data-testid="code-view-chip-remove"
-            @click="views.removeCondition(index)"
+            @click="removeChip(index)"
           >
             <IconX class="size-2.5" />
           </button>
@@ -78,6 +86,7 @@ function clear(): void {
           align="start"
           :entries="viewMenus.chipEntries(condition)"
           :ignore="[chipAnchors[index] ?? null]"
+          testid="code-view-chip-menu"
           width="12rem"
           @close="openChip = -1"
           @select="(id) => viewMenus.onChipSelect(index, id)"

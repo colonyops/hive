@@ -41,6 +41,32 @@ describe('useCodeViews', () => {
     expect(views.dirty.value).toBe(false)
   })
 
+  // Go omits an empty values list and a zero day count, and settings.yaml can be hand-edited.
+  it('fills in condition keys the wire left out', async () => {
+    localStorage.setItem('hive.code.active-view', 'v')
+    mocks.CodeViews.mockResolvedValue([
+      {
+        id: 'v',
+        name: 'V',
+        filter: {
+          match: 'all',
+          conditions: [
+            { field: 'tag', op: 'any' },
+            { field: 'repo', op: 'none', values: null },
+            { field: 'age', op: 'older' },
+          ],
+        },
+      },
+    ])
+    const views = useCodeViews()
+    await flushPromises()
+    expect(views.draft.value.conditions).toEqual([
+      { field: 'tag', op: 'any', values: [] },
+      { field: 'repo', op: 'none', values: [] },
+      { field: 'age', op: 'older', days: 0 },
+    ])
+  })
+
   it('writes saved views through to settings', async () => {
     const views = useCodeViews()
     await flushPromises()

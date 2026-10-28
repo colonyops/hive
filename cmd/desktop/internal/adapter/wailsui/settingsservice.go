@@ -134,8 +134,8 @@ func (s *SettingsService) SetReviewLabels(ctx context.Context, labels []ReviewLa
 	return s.settings.SetReviewLabels(ctx, in)
 }
 
-// SessionView is a saved Code tab view. The filter's fields and operators are
-// carried verbatim; the frontend owns their meaning.
+// SessionView is a saved Code tab view. Field and Op values pass through
+// unchecked; the frontend owns their meaning.
 type SessionView struct {
 	ID     string        `json:"id"`
 	Name   string        `json:"name"`

@@ -42,7 +42,7 @@ export function useSessionTreeView(
 ) {
   // Transient on purpose: a filter restored at launch hides sessions the user
   // has no reason to suspect are there. A saved view may persist because the
-  // view bar always names it and counts what it hides.
+  // view bar always shows its chips and counts what they hide.
   const query = ref('')
 
   // Taken before the query, so a repo-name match carries what is left. Only

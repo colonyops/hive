@@ -6,8 +6,6 @@ export type SessionCondition =
   | { field: 'status'; op: 'is'; value: 'running' | 'stopped' }
   | { field: 'age'; op: 'older' | 'newer'; days: number }
 
-export type SessionConditionField = SessionCondition['field']
-
 export interface SessionFilter {
   match: 'all' | 'any'
   conditions: readonly SessionCondition[]
