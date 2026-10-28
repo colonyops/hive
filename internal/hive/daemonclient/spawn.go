@@ -55,6 +55,7 @@ func Spawn(ctx context.Context, binary, dataDir string, env []string) error {
 	go func() { exited <- cmd.Wait() }()
 
 	client := New(Options{Dialer: UnixDialer(daemon.SocketPath(dataDir))})
+	defer client.HTTPClient().CloseIdleConnections()
 	deadline := time.NewTimer(spawnReadyTimeout)
 	defer deadline.Stop()
 	ticker := time.NewTicker(spawnPollInterval)
