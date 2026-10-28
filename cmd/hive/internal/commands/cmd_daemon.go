@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -384,15 +385,45 @@ func runService(ctx context.Context, name string, args ...string) error {
 	return nil
 }
 
-// newLogWriter turns the session service's terminal output into log lines:
+// maxLogLine splits a line with no newline in sight, so progress output that
+// redraws with \r cannot grow the buffer without bound.
+const maxLogLine = 64 * 1024
+
+// logLineWriter turns the session service's terminal output into log lines:
 // the daemon has no terminal, and its progress goes to the client per call.
-func newLogWriter(logger zerolog.Logger, level zerolog.Level) io.Writer {
-	reader, writer := io.Pipe()
-	go func() {
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			logger.WithLevel(level).Str("stream", "session-service").Msg(scanner.Text())
+// It logs inside Write, so a writer never waits on a reader.
+type logLineWriter struct {
+	logger zerolog.Logger
+	level  zerolog.Level
+
+	mu  sync.Mutex
+	buf []byte
+}
+
+func newLogWriter(logger zerolog.Logger, level zerolog.Level) *logLineWriter {
+	return &logLineWriter{logger: logger, level: level}
+}
+
+func (w *logLineWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.buf = append(w.buf, p...)
+	for {
+		i := bytes.IndexByte(w.buf, '\n')
+		if i < 0 {
+			break
 		}
-	}()
-	return writer
+		w.emit(w.buf[:i])
+		w.buf = w.buf[i+1:]
+	}
+	for len(w.buf) >= maxLogLine {
+		w.emit(w.buf[:maxLogLine])
+		w.buf = w.buf[maxLogLine:]
+	}
+	w.buf = append([]byte(nil), w.buf...)
+	return len(p), nil
+}
+
+func (w *logLineWriter) emit(line []byte) {
+	w.logger.WithLevel(w.level).Str("stream", "session-service").Msg(string(bytes.TrimRight(line, "\r")))
 }
