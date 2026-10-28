@@ -133,7 +133,7 @@ type View struct {
 // constructing them itself.
 func New(opts ViewOpts) *View {
 	if opts.Cfg == nil || opts.Service == nil || opts.Sessions == nil || opts.Handler == nil || opts.GitStatus == nil || opts.PluginManager == nil {
-		panic("sessions.New: Cfg, Service, Handler, Status, GitStatus, and PluginManager are required")
+		panic("sessions.New: Cfg, Service, Sessions, Handler, GitStatus, and PluginManager are required")
 	}
 	cfg := opts.Cfg
 	logger := logutils.Component(opts.Logger, "tui.sessions")

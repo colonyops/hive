@@ -43,7 +43,8 @@ type SessionWindowCreator interface {
 
 // Deps are the collaborators executors call. Deleter, Recycler, Creator, and
 // WindowCreator are the session API, which may run in a daemon; the rest run
-// in the TUI's process. A nil field disables the actions that need it.
+// in the TUI's process. Only WindowKiller may be nil, which disables
+// KillWindow.
 type Deps struct {
 	Deleter       SessionDeleter
 	Recycler      SessionRecycler
