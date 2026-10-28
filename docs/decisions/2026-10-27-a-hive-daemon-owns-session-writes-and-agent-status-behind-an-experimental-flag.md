@@ -55,3 +55,8 @@ Known gaps with the flag on:
 - `hc`, `msg`, `todo`, drive, and Desktop's other services stay in-process.
 - Two creates run one after the other, because `CreateSession` points
   service-wide writers at the caller's progress stream.
+- A daemon never exits on its own while its data dir exists, so each data
+  dir a client touches keeps a daemon (about 40 MB, no CPU when idle). This
+  is on purpose: pipeline flows will move into the daemon and need it to
+  stay up. An idle timeout would break that, so the daemon needs a smarter
+  rule that decides when no work depends on it before it exits on its own.
