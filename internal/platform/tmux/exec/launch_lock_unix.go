@@ -5,14 +5,12 @@ package tmuxexec
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"golang.org/x/sys/unix"
+	"github.com/colonyops/hive/pkg/flock"
 )
 
 func (r execRunner) lockLaunch(ctx context.Context, name string) (func() error, error) {
@@ -24,29 +22,11 @@ func (r execRunner) lockLaunch(ctx context.Context, name string) (func() error, 
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create tmux launch lock directory: %w", err)
 	}
-	file, err := os.OpenFile(filepath.Join(dir, launchLockName(r.socketIdentity(ctx), name)), os.O_CREATE|os.O_RDWR, 0o600)
+	unlock, err := flock.Lock(ctx, filepath.Join(dir, launchLockName(r.socketIdentity(ctx), name)), true)
 	if err != nil {
-		return nil, fmt.Errorf("open tmux launch lock: %w", err)
+		return nil, fmt.Errorf("acquire tmux launch lock: %w", err)
 	}
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil, errors.Join(err, file.Close())
-		}
-		err = unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB)
-		if err == nil {
-			return func() error { return errors.Join(unix.Flock(int(file.Fd()), unix.LOCK_UN), file.Close()) }, nil
-		}
-		if !errors.Is(err, unix.EWOULDBLOCK) && !errors.Is(err, unix.EAGAIN) {
-			return nil, errors.Join(fmt.Errorf("acquire tmux launch lock: %w", err), file.Close())
-		}
-		timer := time.NewTimer(startupPollInterval)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil, errors.Join(ctx.Err(), file.Close())
-		case <-timer.C:
-		}
-	}
+	return unlock, nil
 }
 
 // launchLockBuckets bounds the lock files per tmux server. A lock file cannot
