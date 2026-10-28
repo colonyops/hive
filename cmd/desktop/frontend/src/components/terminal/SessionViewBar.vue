@@ -269,6 +269,7 @@ function onDialogSave(name: string): void {
         </button>
         <AppMenu
           v-if="openMenu === 'views'"
+          align="start"
           :entries="viewsEntries"
           :ignore="[viewsAnchor]"
           width="14rem"
@@ -297,6 +298,7 @@ function onDialogSave(name: string): void {
         />
         <AppMenu
           v-if="openMenu === 'add'"
+          align="start"
           :entries="addEntries"
           :ignore="[addAnchor]"
           width="12rem"
@@ -343,6 +345,7 @@ function onDialogSave(name: string): void {
         </span>
         <AppMenu
           v-if="openMenu === `chip:${index}`"
+          align="start"
           :entries="chipEntries(condition)"
           :ignore="[chipAnchors[index] ?? null]"
           width="12rem"
@@ -350,8 +353,7 @@ function onDialogSave(name: string): void {
           @select="(id) => onChipSelect(index, id)"
         />
       </div>
-      <template v-if="views.dirty">
-        <span class="flex-1" />
+      <div v-if="views.dirty" class="ml-auto flex shrink-0 items-center gap-2">
         <button type="button" class="bar-action" data-testid="code-view-reset" @click="views.reset()">Reset</button>
         <button
           v-if="!views.activeIsBuiltIn"
@@ -371,7 +373,7 @@ function onDialogSave(name: string): void {
         >
           Save view
         </button>
-      </template>
+      </div>
     </div>
 
     <RenameDialog

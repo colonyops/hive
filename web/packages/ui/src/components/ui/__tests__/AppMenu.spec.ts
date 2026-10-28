@@ -49,6 +49,31 @@ describe('AppMenu', () => {
     expect(wrapper.get('[data-testid="entry-off"] span').classes()).toContain('size-3.5')
   })
 
+  // A host at the window's left edge would push an end-aligned panel, and the
+  // submenu that opens leftward from it, off-screen.
+  it('aligns to the start edge, and opens its submenus toward it', async () => {
+    const wrapper = mount(AppMenu, {
+      props: {
+        align: 'start',
+        entries: [
+          {
+            kind: 'submenu',
+            id: 'more',
+            label: 'More',
+            testid: 'entry-more',
+            panelTestid: 'more-panel',
+            entries: [{ kind: 'action', id: 'x', label: 'X' }],
+          },
+        ],
+      },
+    })
+    expect(wrapper.get('[role="menu"]').classes()).toContain('app-menu-start')
+    await wrapper.get('[data-testid="entry-more"]').trigger('click')
+    expect(wrapper.get('[data-testid="more-panel"]').classes()).toEqual(
+      expect.arrayContaining(['app-menu-start', 'app-menu-nested']),
+    )
+  })
+
   it('opens a submenu beside its entry, filters it, and relays its choice', async () => {
     const wrapper = mount(AppMenu, {
       props: {
