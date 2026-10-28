@@ -651,6 +651,7 @@ export interface SessionSummary {
     "repoIdentity": string;
     "state": string;
     "canvasOwner": string;
+    "tags": string[] | null;
     "createdAt": string;
 }
 

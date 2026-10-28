@@ -12,6 +12,7 @@ export interface Config {
   prompt: string
   agent?: string
   sessionName?: string
+  tags?: string[]
 }
 
 export const unread = false

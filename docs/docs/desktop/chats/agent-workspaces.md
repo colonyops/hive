@@ -106,7 +106,7 @@ The built-in Hive package covers:
 
 Hive includes these MCP entries:
 
-- **Hive Desktop** for reading and configuring the running app. It requires the local HTTP server, which is enabled by default.
+- **Hive Desktop** for reading and configuring the running app. It requires the local HTTP server, which is enabled by default. Its `list_sessions` and `edit_session_tags` tools let an agent find hive sessions by tag and add or remove tags, so an orchestrating agent can pick up the sessions taged `auto` and retag each one it takes.
 - **Hive Drive** for durable Markdown, HTML, and canvas documents beside a chat.
 - **Playwright** for browser automation. It requires Node.js and a Playwright browser.
 - **Chrome DevTools** for a running Chrome browser. It requires Node.js 20.19 or newer and Chrome.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/colonyops/hive/internal/config"
@@ -1049,4 +1050,43 @@ func TestSessionsService_SessionDraftFromActivityRefusesAnUnrelatedRow(t *testin
 
 	_, err := svc.SessionDraftFromActivity(t.Context(), map[string]string{"rule": "auto-triage"})
 	assert.Equal(t, KindInvalid, KindOf(err), "a row with nothing to retry is refused, not silently empty")
+}
+
+func TestSessionsService_EditSessionChecksTagsBeforeRenaming(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{})
+	h.save(t, session.Session{ID: "s1", Name: "review", Slug: "review", State: session.StateRecycled, Tags: []string{"auto"}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine})
+
+	_, err := svc.EditSession(t.Context(), "s1", "renamed", []string{"a,b"})
+	assert.Equal(t, KindInvalid, KindOf(err), "%v", err)
+	got, err := svc.SessionDetail(t.Context(), "s1")
+	require.NoError(t, err)
+	assert.Equal(t, "review", got.Name, "a bad tag must not leave the rename applied")
+
+	edited, err := svc.EditSession(t.Context(), "s1", "review", []string{"backend"})
+	require.NoError(t, err)
+	assert.Equal(t, "review", edited.Name)
+	assert.Equal(t, []string{"backend"}, edited.Tags)
+
+	_, err = svc.EditSession(t.Context(), "missing", "x", nil)
+	assert.Equal(t, KindNotFound, KindOf(err), "%v", err)
+}
+
+func TestSessionsService_EditSessionTagsClassifiesErrors(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{})
+	legacy := strings.Repeat("x", session.MaxTagLength+1)
+	h.save(t, session.Session{ID: "s1", Name: "review", Slug: "review", State: session.StateRecycled, Tags: []string{"auto", legacy}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine})
+
+	_, err := svc.EditSessionTags(t.Context(), "s1", []string{"a,b"}, nil)
+	assert.Equal(t, KindInvalid, KindOf(err), "%v", err)
+	appErr, ok := errors.AsType[*Error](err)
+	require.True(t, ok)
+	assert.Contains(t, appErr.Msg, `"a,b"`, "the frontend shows only Msg, so it names the bad tag")
+	_, err = svc.EditSessionTags(t.Context(), "missing", []string{"auto"}, nil)
+	assert.Equal(t, KindNotFound, KindOf(err), "%v", err)
+
+	edited, err := svc.EditSessionTags(t.Context(), "s1", []string{"claimed"}, []string{legacy})
+	require.NoError(t, err, "a tag stored before validation can be removed")
+	assert.Equal(t, []string{"auto", "claimed"}, edited.Tags)
 }

@@ -124,15 +124,15 @@ func (s *SessionService) DismissFailedSession(ctx context.Context) error {
 	return s.sessions.DismissFailedSession(ctx)
 }
 
-// RenameSession renames a session and returns its new summary. The slug in it
-// is the new tmux target: renaming re-slugs, so an attached caller has to
-// re-attach under the name that comes back.
-func (s *SessionService) RenameSession(ctx context.Context, id, name string) (SessionSummary, error) {
-	renamed, err := s.sessions.RenameSession(ctx, id, name)
+// EditSession renames a session and replaces its tags, and returns its new
+// summary. The slug in it is the new tmux target: renaming re-slugs, so an
+// attached caller has to re-attach under the name that comes back.
+func (s *SessionService) EditSession(ctx context.Context, id, name string, tags []string) (SessionSummary, error) {
+	edited, err := s.sessions.EditSession(ctx, id, name, tags)
 	if err != nil {
 		return SessionSummary{}, err
 	}
-	return sessionSummaryOf(s.sessions.CanonicalSpace, renamed), nil
+	return sessionSummaryOf(s.sessions.CanonicalSpace, edited), nil
 }
 
 // DeleteSession starts the delete as a background job and returns the job id.

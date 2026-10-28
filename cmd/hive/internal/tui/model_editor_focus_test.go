@@ -55,9 +55,9 @@ func TestModel_hasEditorFocus(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "renaming state has editor focus",
+			name: "editing session state has editor focus",
 			setupFunc: func(m *Model) {
-				m.state = stateRenaming
+				m.state = stateEditingSession
 			},
 			want: true,
 		},

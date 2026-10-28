@@ -48,6 +48,15 @@ export function DismissFailedSession(): $CancellablePromise<void> {
 }
 
 /**
+ * EditSession renames a session and replaces its tags, and returns its new
+ * summary. The slug in it is the new tmux target: renaming re-slugs, so an
+ * attached caller has to re-attach under the name that comes back.
+ */
+export function EditSession(id: string, name: string, tags: string[] | null): $CancellablePromise<$models.SessionSummary> {
+    return $Call.ByID(3922434109, id, name, tags);
+}
+
+/**
  * FailedSessionDraft returns the last New Session form whose creation failed,
  * with the failure on it. A draft whose Failure is null means none is waiting.
  */
@@ -107,15 +116,6 @@ export function PruneSessions(): $CancellablePromise<number> {
  */
 export function RecycleSession(id: string): $CancellablePromise<number> {
     return $Call.ByID(2142732132, id);
-}
-
-/**
- * RenameSession renames a session and returns its new summary. The slug in it
- * is the new tmux target: renaming re-slugs, so an attached caller has to
- * re-attach under the name that comes back.
- */
-export function RenameSession(id: string, name: string): $CancellablePromise<$models.SessionSummary> {
-    return $Call.ByID(1421514279, id, name);
 }
 
 /**

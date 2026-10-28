@@ -66,7 +66,8 @@ type CreateOptions struct {
 	// When non-empty, the spawn templates use that profile's command/flags instead
 	// of the process-wide default. Must match a key in config.Agents.Profiles.
 	AgentKey string
-	// Tags are user-defined labels attached to the session for external provider tracking.
+	// Tags are normalized with session.NormalizeTags; an invalid tag
+	// fails the create.
 	Tags []string
 	// Env holds KEY=VALUE pairs for the session's tmux environment. Only a
 	// windows: spawn applies them; spawn: commands run the user's own scripts.
@@ -236,6 +237,10 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	if err := session.ValidateName(opts.Name); err != nil {
 		return nil, err
 	}
+	tags, err := session.NormalizeTags(opts.Tags)
+	if err != nil {
+		return nil, err
+	}
 	name, err := s.claimName(ctx, opts.Name, "", opts.CollisionSuffix)
 	if err != nil {
 		return nil, err
@@ -269,7 +274,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		sess = *recyclable
 		sess.Name = opts.Name
 		sess.Slug = slug
-		sess.Tags = opts.Tags
+		sess.Tags = tags
 		sess.MarkActive(time.Now())
 	} else {
 		// Create new session (either no recyclable found or it was corrupted)
@@ -298,7 +303,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 			Path:          path,
 			Remote:        remote,
 			CloneStrategy: cloneStrategy,
-			Tags:          opts.Tags,
+			Tags:          tags,
 			CreatedAt:     now,
 		}
 		sess.MarkActive(now)
@@ -588,6 +593,42 @@ func (s *Service) SetSessionGroup(ctx context.Context, id, group string) error {
 
 	s.log.Info().Str("session_id", id).Str("group", group).Msg("session group updated")
 	return nil
+}
+
+// SetSessionTags replaces a session's tags.
+func (s *Service) SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error) {
+	normalized, err := session.NormalizeTags(tags)
+	if err != nil {
+		return session.Session{}, err
+	}
+	return s.saveTags(ctx, id, func(sess *session.Session) error {
+		sess.Tags = normalized
+		return nil
+	})
+}
+
+// EditSessionTags adds and then removes tags, leaving the others in
+// place. Two writers that each add a tag both keep theirs, which a
+// read-modify-replace by the caller would not.
+func (s *Service) EditSessionTags(ctx context.Context, id string, add, remove []string) (session.Session, error) {
+	return s.saveTags(ctx, id, func(sess *session.Session) error {
+		return sess.EditTags(add, remove)
+	})
+}
+
+func (s *Service) saveTags(ctx context.Context, id string, edit func(*session.Session) error) (session.Session, error) {
+	sess, err := s.sessions.Update(ctx, id, func(sess *session.Session) error {
+		if err := edit(sess); err != nil {
+			return err
+		}
+		sess.UpdatedAt = time.Now()
+		return nil
+	})
+	if err != nil {
+		return session.Session{}, fmt.Errorf("update session tags: %w", err)
+	}
+	s.log.Info().Str("session_id", id).Strs("tags", sess.Tags).Msg("session tags updated")
+	return sess, nil
 }
 
 // Risk describes uncommitted or unpushed work that would be lost if a session

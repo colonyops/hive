@@ -27,6 +27,10 @@ func (m *mockStore) Save(_ context.Context, _ session.Session) error {
 	return nil
 }
 
+func (m *mockStore) Update(_ context.Context, _ string, _ func(*session.Session) error) (session.Session, error) {
+	return session.Session{}, nil
+}
+
 func (m *mockStore) Delete(_ context.Context, _ string) error {
 	return nil
 }

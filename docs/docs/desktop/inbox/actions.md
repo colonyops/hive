@@ -97,6 +97,22 @@ Hive does not fence anything for you. Every value goes into the prompt exactly a
 
 Fence only text an agent reads, such as `prompt_template`. In a shell command a fence does nothing; quote values with `shq` instead. The starter actions and the New Session draft built from an item already fence the item's text.
 
+## Tag the session
+
+A repository `launch-session` action can put tags on the session it starts. Tags let a later step find the session, for example an agent that lists the sessions taged `auto` and works on them:
+
+```yaml
+- id: implement-issue
+  label: Implement issue
+  type: launch-session
+  applies_to: [issue]
+  repo_template: "{{ .ItemRemote }}"
+  prompt_template: "Work on the issue at {{ .Payload.url }}"
+  tags: [auto, "issue-{{ .Payload.num }}"]
+```
+
+Each entry is a template, rendered over the same item fields as the prompt. An entry that renders blank is dropped, and tags that differ only in case count as one. A tag can have at most 40 characters and no commas; a rendered tag that breaks either rule fails the launch before Hive creates a session. A `workspace` action cannot set tags, because a chat is not a hive session.
+
 ## Run a command after the session starts
 
 A `launch-session` action can run a `post_hook` once the session exists. The command runs in the new checkout with your shell's `PATH`, so it can check the pull request out and open your editor on it:

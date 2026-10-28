@@ -359,7 +359,7 @@ export function useAppPaletteRows(
             group: group.name,
             scope: 'goto',
             kind: 'session',
-            keywords: [row.slug, group.name, 'session', 'attach', 'switch', 'open'],
+            keywords: [row.slug, group.name, ...(row.tags ?? []), 'session', 'attach', 'switch', 'open'],
             icon: IconTerminal,
             run: () => void router.push({ name: 'terminal', params: { slug: row.slug } }),
           })

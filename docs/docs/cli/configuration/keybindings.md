@@ -51,8 +51,9 @@ views:
 | `enter`    | TmuxOpen             | Open/attach tmux session             |
 | `ctrl+d`   | TmuxKill             | Kill tmux session                    |
 | `A`        | AgentSend            | Send Enter to agent                  |
-| `R`        | RenameSession        | Rename session                       |
+| `R`        | RenameSession        | Edit session, name field focused     |
 | `ctrl+g`   | GroupSet             | Set session group                    |
+| `ctrl+t`   | TagsEdit             | Edit session, tags field focused     |
 | `J`        | NextActive           | Jump to next active session          |
 | `K`        | PrevActive           | Jump to previous active session      |
 | `t`        | TodoPanel            | Open todo panel                      |
