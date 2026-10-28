@@ -185,4 +185,4 @@ A repository with no documents yet links to the setup in **Settings ▸ MCP serv
 
 ## Use a chat in Code
 
-Pin a chat to the Code session tree when you want it beside repository terminals. It attaches to the same tmux session from either area. Unpinning it does not stop the agent.
+Pin a chat to the Code session tree when you want it beside repository terminals. Use **Pin to Code** on a chat's row menu, or check **Pin to Code** in the New chat dialog to pin it when it starts. It attaches to the same tmux session from either area. Unpinning it does not stop the agent.
