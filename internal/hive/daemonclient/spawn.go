@@ -31,11 +31,10 @@ func Spawn(ctx context.Context, binary, dataDir string, env []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve data directory: %w", err)
 	}
-	logDir := filepath.Join(dataDir, "logs")
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
+	logPath := daemon.OutLogPath(dataDir)
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		return fmt.Errorf("create daemon log directory: %w", err)
 	}
-	logPath := filepath.Join(logDir, "hived.out")
 	out, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return fmt.Errorf("open daemon output log: %w", err)

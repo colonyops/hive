@@ -12,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/colonyops/hive/internal/hive/daemon"
 )
 
 // newDaemonHarness turns experimental.daemon on over the standard fixture and
@@ -84,4 +86,24 @@ func TestDaemonRunRefusesASecondInstance(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, out, "already running")
 	assert.FileExists(t, filepath.Join(h.DataDir(), "hived.lock"))
+}
+
+func TestDaemonServesMetricsAndRemovesItsSocketOnSIGTERM(t *testing.T) {
+	h := newDaemonHarness(t)
+	status, err := h.RunJSON("daemon", "status", "--json")
+	require.NoError(t, err, "status starts the daemon")
+	assert.Equal(t, true, status["db_ok"])
+
+	metrics, err := h.RunStdout("daemon", "metrics")
+	require.NoError(t, err)
+	assert.Contains(t, metrics, "hive_daemon_start_time_seconds")
+	assert.Contains(t, metrics, `hive_daemon_rpc_requests_total{code="ok",procedure="/hive.daemon.v1.DaemonService/Hello"}`)
+
+	socket := daemon.SocketPath(h.DataDir())
+	require.FileExists(t, socket)
+	require.NoError(t, syscall.Kill(daemonPID(t, h), syscall.SIGTERM))
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(socket)
+		return os.IsNotExist(err)
+	}, 15*time.Second, 50*time.Millisecond, "SIGTERM must remove the socket")
 }

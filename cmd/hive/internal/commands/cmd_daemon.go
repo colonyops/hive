@@ -7,7 +7,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -76,6 +82,16 @@ commands, and Hive Desktop reach it on a unix socket.`,
 				Action: cmd.stop,
 			},
 			{
+				Name:   "install",
+				Usage:  "Run the daemon under launchd (macOS) or systemd (Linux) so it restarts on exit",
+				Action: cmd.install,
+			},
+			{
+				Name:   "uninstall",
+				Usage:  "Remove the launchd agent or systemd unit that install wrote",
+				Action: cmd.uninstall,
+			},
+			{
 				Name:   "metrics",
 				Usage:  "Print the running daemon's Prometheus metrics",
 				Action: cmd.metrics,
@@ -86,6 +102,8 @@ commands, and Hive Desktop reach it on a unix socket.`,
 }
 
 func (cmd *DaemonCmd) run(ctx context.Context, _ *cli.Command) error {
+	ctx, stopSignals := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
+	defer stopSignals()
 	logger := cmd.app.Logger
 	// launchd and systemd start the daemon with a bare PATH, and agents it
 	// spawns need the user's tools.
@@ -228,6 +246,117 @@ func (cmd *DaemonCmd) metrics(ctx context.Context, c *cli.Command) error {
 	}
 	_, err = c.Root().Writer.Write(body)
 	return err
+}
+
+func (cmd *DaemonCmd) serviceUnit() (daemon.Unit, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return daemon.Unit{}, err
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		return daemon.Unit{}, fmt.Errorf("find the hive binary: %w", err)
+	}
+	dataDir, err := filepath.Abs(cmd.flags.DataDir)
+	if err != nil {
+		return daemon.Unit{}, err
+	}
+	configPath, err := filepath.Abs(cmd.flags.ConfigPath)
+	if err != nil {
+		return daemon.Unit{}, err
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		return daemon.LaunchdUnit(home, binary, dataDir, configPath), nil
+	case "linux":
+		return daemon.SystemdUnit(home, binary, dataDir, configPath), nil
+	default:
+		return daemon.Unit{}, fmt.Errorf("hive daemon install supports macOS and Linux, not %s", runtime.GOOS)
+	}
+}
+
+func (cmd *DaemonCmd) install(ctx context.Context, c *cli.Command) error {
+	unit, err := cmd.serviceUnit()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(unit.Path), 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", filepath.Dir(unit.Path), err)
+	}
+	// launchd opens the output log itself and fails when its directory is
+	// missing.
+	if err := os.MkdirAll(filepath.Dir(daemon.OutLogPath(cmd.flags.DataDir)), 0o755); err != nil {
+		return fmt.Errorf("create daemon log directory: %w", err)
+	}
+	if err := os.WriteFile(unit.Path, []byte(unit.Contents), 0o644); err != nil { //nolint:gosec // launchd and systemd read unit files the user owns
+		return fmt.Errorf("write %s: %w", unit.Path, err)
+	}
+
+	// A daemon a client spawned keeps the lock, so the supervised one would
+	// wait behind it until it exits.
+	if err := cmd.app.DaemonClient(false).Stop(ctx); err == nil {
+		fmt.Fprintln(os.Stderr, "stopped the running daemon so the service can take over")
+	}
+
+	w := c.Root().Writer
+	switch runtime.GOOS {
+	case "darwin":
+		domain := "gui/" + strconv.Itoa(os.Getuid())
+		// bootstrap fails on a loaded agent; bootout first makes install
+		// repeatable.
+		_ = exec.CommandContext(ctx, "launchctl", "bootout", domain+"/"+daemon.LaunchdLabel).Run()
+		if err := runService(ctx, "launchctl", "bootstrap", domain, unit.Path); err != nil {
+			return err
+		}
+	default:
+		if err := runService(ctx, "systemctl", "--user", "daemon-reload"); err != nil {
+			return err
+		}
+		if err := runService(ctx, "systemctl", "--user", "enable", "--now", daemon.SystemdUnitName); err != nil {
+			return err
+		}
+	}
+	_, _ = fmt.Fprintf(w, "installed %s\n", unit.Path)
+	if runtime.GOOS == "linux" {
+		_, _ = fmt.Fprintln(w, "To keep the daemon running after you log out, run: loginctl enable-linger $USER")
+	}
+	return nil
+}
+
+func (cmd *DaemonCmd) uninstall(ctx context.Context, c *cli.Command) error {
+	unit, err := cmd.serviceUnit()
+	if err != nil {
+		return err
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		target := "gui/" + strconv.Itoa(os.Getuid()) + "/" + daemon.LaunchdLabel
+		if err := runService(ctx, "launchctl", "bootout", target); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		}
+	default:
+		if err := runService(ctx, "systemctl", "--user", "disable", "--now", daemon.SystemdUnitName); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		}
+	}
+	if err := os.Remove(unit.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove %s: %w", unit.Path, err)
+	}
+	if runtime.GOOS == "linux" {
+		if err := runService(ctx, "systemctl", "--user", "daemon-reload"); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		}
+	}
+	_, _ = fmt.Fprintf(c.Root().Writer, "removed %s\n", unit.Path)
+	return nil
+}
+
+func runService(ctx context.Context, name string, args ...string) error {
+	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // newLogWriter turns the session service's terminal output into log lines:
