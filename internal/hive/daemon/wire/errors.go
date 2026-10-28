@@ -17,8 +17,10 @@ var ErrRemoteRequired = errors.New("remote is required: the caller resolves it b
 
 // ToConnectError maps a session API error to a Connect error. A LaunchError
 // or CreateSessionError anywhere in the chain travels as a detail, whatever
-// the code, so the client can rebuild it for errors.As.
-func ToConnectError(err error) *connect.Error {
+// the code, so the client can rebuild it for errors.As. It returns error, not
+// *connect.Error, so a handler can return it for a nil err without sending a
+// typed nil that Connect reports as a failure.
+func ToConnectError(err error) error {
 	if err == nil {
 		return nil
 	}

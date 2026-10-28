@@ -21,6 +21,7 @@ import (
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
 	"github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1/daemonv1connect"
 	"github.com/colonyops/hive/internal/hive/hivetest"
+	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
 
@@ -32,6 +33,7 @@ type running struct {
 
 type daemonOpts struct {
 	waitLock     bool
+	exec         executil.Executor
 	paneSource   terminal.PaneSource
 	pollInterval time.Duration
 }
@@ -44,6 +46,9 @@ func startDaemon(t *testing.T, dataDir string, opts daemonOpts) (running, error)
 	if opts.pollInterval > 0 {
 		cfg.Tmux.PollInterval = opts.pollInterval
 	}
+	if opts.exec == nil {
+		opts.exec = &executiltest.Exec{}
+	}
 	ctx, cancel := context.WithCancel(t.Context())
 	ready := make(chan string, 1)
 	r := running{done: make(chan error, 1), cancel: cancel}
@@ -51,7 +56,7 @@ func startDaemon(t *testing.T, dataDir string, opts daemonOpts) (running, error)
 		r.done <- daemon.Run(ctx, daemon.Options{
 			Config: cfg,
 			Ports: hive.Ports{
-				Executor:   &executiltest.Exec{},
+				Executor:   opts.exec,
 				Mux:        hivetest.Mux{},
 				PaneSource: opts.paneSource,
 				DataDir:    dataDir,
