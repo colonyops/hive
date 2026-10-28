@@ -1,6 +1,7 @@
 import { useStorage } from '@vueuse/core'
 import { computed, ref, watchEffect } from 'vue'
 import { useTreeExpansion } from '../../composables/useTreeExpansion'
+import { matchesSessionFilter, type SessionFilter } from '../../lib/sessionViews'
 import type { TerminalSessionGroup } from '../../stores/useTerminalSessions'
 import type { TerminalTree } from './useTerminalTree'
 
@@ -33,6 +34,7 @@ export function useSessionTreeView(
     | 'showAllWindowsReady'
     | 'listingsSettled'
   >,
+  options: { filter?: () => SessionFilter } = {},
 ) {
   // Transient on purpose: a filter restored at launch hides sessions the user
   // has no reason to suspect are there.
@@ -42,15 +44,35 @@ export function useSessionTreeView(
   // tree must never read as a short one.
   const runningOnly = useStorage('hive.terminal.sidebar.running-only', false)
 
+  // The active saved view narrows repo groups only, for the reason the running
+  // filter below gives for the pinned sections.
+  const viewGroups = computed<TerminalSessionGroup[]>(() => {
+    const filter = options.filter?.()
+    if (!filter?.conditions.length) return tree.sessionGroups.value
+    const ctx = { rowRunning: tree.rowRunning, statusesLoaded: tree.statusesLoaded.value, now: Date.now() }
+    const groups: TerminalSessionGroup[] = []
+    for (const group of tree.sessionGroups.value) {
+      if (group.kind !== 'repo') {
+        groups.push(group)
+        continue
+      }
+      const sessions = group.sessions.filter((row) => matchesSessionFilter(row, filter, ctx))
+      if (sessions.length) groups.push({ ...group, sessions })
+    }
+    return groups
+  })
+
+  const viewHiddenCount = computed(() => countSessions(tree.sessionGroups.value) - countSessions(viewGroups.value))
+
   // Taken before the query, so a repo-name match carries what is left. Inert
   // until the first status poll lands: a session nothing has answered for yet
   // is not a session doing nothing. The pinned sections stay: scratch is the
   // tree's one always-there way to open a shell, and a chat was pinned to be
   // kept in view.
   const runningGroups = computed<TerminalSessionGroup[]>(() => {
-    if (!runningOnly.value || !tree.statusesLoaded.value) return tree.sessionGroups.value
+    if (!runningOnly.value || !tree.statusesLoaded.value) return viewGroups.value
     const groups: TerminalSessionGroup[] = []
-    for (const group of tree.sessionGroups.value) {
+    for (const group of viewGroups.value) {
       if (group.kind !== 'repo') {
         groups.push(group)
         continue
@@ -96,7 +118,7 @@ export function useSessionTreeView(
 
   const runningNote = computed(() => {
     if (!runningOnly.value) return ''
-    const hidden = countSessions(tree.sessionGroups.value) - countSessions(runningGroups.value)
+    const hidden = countSessions(viewGroups.value) - countSessions(runningGroups.value)
     return hidden ? `Running sessions only · ${hidden} hidden` : 'Running sessions only'
   })
 
@@ -129,5 +151,5 @@ export function useSessionTreeView(
     return found ? '' : 'no-matches'
   })
 
-  return { query, runningOnly, groups, expansion, runningNote, noMatchesNote, ready, note }
+  return { query, runningOnly, groups, expansion, runningNote, viewHiddenCount, noMatchesNote, ready, note }
 }

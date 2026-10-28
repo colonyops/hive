@@ -24,6 +24,7 @@ import NewWindowMenu from '../NewWindowMenu.vue'
 import SessionTagsIndicator from '../SessionTagsIndicator.vue'
 import SessionRowMenu from '../SessionRowMenu.vue'
 import SidebarToolbar from '../sidebar/SidebarToolbar.vue'
+import SessionViewBar from './SessionViewBar.vue'
 import { dropClass, dropEdge, useDragReorder } from '../../composables/useDragReorder'
 import { formatCombo, useKeybindings } from '../../composables/useKeybindings'
 import { useNewSession } from '../../composables/useNewSession'
@@ -266,6 +267,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
       @new="openNewSession(tree.sessionRepository(pool.activeSlug))"
       @select="onSidebarMenuSelect"
     />
+    <SessionViewBar />
     <div
       v-if="view.runningNote"
       class="flex h-7 shrink-0 items-center gap-2 border-b border-border bg-chip px-3"

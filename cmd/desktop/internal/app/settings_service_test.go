@@ -293,6 +293,36 @@ func TestSettingsServiceSetReviewLabels(t *testing.T) {
 	require.Equal(t, settings.DefaultReviewLabels, got)
 }
 
+func TestSettingsServiceSetCodeViews(t *testing.T) {
+	t.Setenv(settings.EnvConfigDir, filepath.Join(t.TempDir(), "config"))
+	service := NewSettingsService(settings.NewStore(settings.SettingsPath()))
+	ctx := t.Context()
+
+	views := []settings.SessionView{{
+		ID:   "bugs",
+		Name: "Bugs",
+		Filter: settings.SessionFilter{Match: "all", Conditions: []settings.SessionCondition{
+			{Field: "tag", Op: "any", Values: []string{"bug"}},
+			{Field: "future-field", Op: "whatever", Value: "kept"},
+		}},
+	}}
+	require.NoError(t, service.SetCodeViews(ctx, views))
+	reopened := NewSettingsService(settings.NewStore(settings.SettingsPath()))
+	got, err := reopened.CodeViews(ctx)
+	require.NoError(t, err)
+	require.Equal(t, views, got, "conditions round-trip verbatim, including fields this build does not know")
+
+	err = service.SetCodeViews(ctx, []settings.SessionView{{ID: "a", Name: "A"}, {ID: "a", Name: "B"}})
+	require.Equal(t, KindInvalid, KindOf(err))
+	err = service.SetCodeViews(ctx, []settings.SessionView{{ID: "a", Name: " "}})
+	require.Equal(t, KindInvalid, KindOf(err))
+
+	require.NoError(t, service.SetCodeViews(ctx, nil))
+	data, err := os.ReadFile(settings.SettingsPath())
+	require.NoError(t, err)
+	require.NotContains(t, string(data), "views:", "no views are stored as no key")
+}
+
 func TestSettingsServiceTerminalScrollbarsPersistAndRespectEnvironment(t *testing.T) {
 	t.Setenv(settings.EnvConfigDir, filepath.Join(t.TempDir(), "config"))
 	service := newSettingsService(SettingsDeps{Store: settings.NewStore(settings.SettingsPath())})

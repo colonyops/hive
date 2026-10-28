@@ -127,6 +127,31 @@ func (s *SettingsService) SetReviewLabels(_ context.Context, labels []settings.R
 	return Wrap(err, KindInternal, "saving settings")
 }
 
+// CodeViews are the Code tab's saved views, in the order the switcher lists them.
+func (s *SettingsService) CodeViews(context.Context) ([]settings.SessionView, error) {
+	cfg, err := s.store.Effective()
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "reading settings")
+	}
+	return cfg.Views.Code, nil
+}
+
+// SetCodeViews replaces the Code tab's saved views. An empty list clears the key.
+func (s *SettingsService) SetCodeViews(_ context.Context, views []settings.SessionView) error {
+	next := settings.ViewsSettings{Code: views}
+	if len(views) == 0 {
+		next.Code = nil
+	}
+	if err := next.Validate(); err != nil {
+		return Wrap(err, KindInvalid, "saving the code views")
+	}
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Views = next
+		return nil
+	})
+	return Wrap(err, KindInternal, "saving settings")
+}
+
 func (s *SettingsService) Appearance(context.Context) (AppearanceSettings, error) {
 	cfg, err := s.store.Effective()
 	if err != nil {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { computed, effectScope, nextTick, ref } from 'vue'
 import type { TerminalSessionGroup, TerminalSessionRow } from '../../../stores/useTerminalSessions'
+import type { SessionFilter } from '../../../lib/sessionViews'
 import { useSessionTreeView } from '../useSessionTreeView'
 
 function row(id: string, name: string, repo = 'github.com/acme/site'): TerminalSessionRow {
@@ -22,7 +23,7 @@ const docs = { ...row('2', 'docs'), tags: ['Auto'] }
 const api = row('3', 'api', 'github.com/acme/api')
 const scratch = row('s', 'scratch', '')
 
-function setup(running: string[] = [], settled = true) {
+function setup(running: string[] = [], settled = true, filter?: SessionFilter) {
   const groups = ref<TerminalSessionGroup[]>([
     { key: 'scratch', name: 'Scratch', kind: 'scratch', sessions: [scratch] },
     { key: 'github.com/acme/api', name: 'acme/api', kind: 'repo', sessions: [api] },
@@ -46,7 +47,7 @@ function setup(running: string[] = [], settled = true) {
     showAllWindowsReady: ref(true),
     listingsSettled,
   }
-  const view = effectScope().run(() => useSessionTreeView(tree))!
+  const view = effectScope().run(() => useSessionTreeView(tree, { filter: filter && (() => filter) }))!
   return { view, statusesLoaded, listingsSettled }
 }
 
@@ -55,6 +56,12 @@ const names = (groups: TerminalSessionGroup[]) => groups.map((group) => group.se
 afterEach(() => localStorage.clear())
 
 describe('useSessionTreeView', () => {
+  it('narrows repo groups by the saved-view filter and counts what it hid', () => {
+    const { view } = setup([], true, { match: 'all', conditions: [{ field: 'tag', op: 'any', values: ['auto'] }] })
+    expect(names(view.groups.value)).toEqual([['scratch'], ['docs']])
+    expect(view.viewHiddenCount.value).toBe(2)
+  })
+
   it('narrows sessions by name or slug, and a repo-name match carries its whole group', () => {
     const { view } = setup()
     view.query.value = 'pars'

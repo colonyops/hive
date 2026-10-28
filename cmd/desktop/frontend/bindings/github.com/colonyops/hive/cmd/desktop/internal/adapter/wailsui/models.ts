@@ -594,6 +594,14 @@ export interface RuntimeStats {
     "go": procstats$0.GoRuntime;
 }
 
+export interface SessionCondition {
+    "field": string;
+    "op": string;
+    "values"?: string[] | null;
+    "value"?: string;
+    "days"?: number;
+}
+
 /**
  * SessionDetail is one session read in full, for a detail view.
  */
@@ -609,6 +617,11 @@ export interface SessionDetail {
     "tags": string[] | null;
     "createdAt": string;
     "updatedAt": string;
+}
+
+export interface SessionFilter {
+    "match": string;
+    "conditions": SessionCondition[] | null;
 }
 
 /**
@@ -653,6 +666,16 @@ export interface SessionSummary {
     "canvasOwner": string;
     "tags": string[] | null;
     "createdAt": string;
+}
+
+/**
+ * SessionView is a saved Code tab view. The filter's fields and operators are
+ * carried verbatim; the frontend owns their meaning.
+ */
+export interface SessionView {
+    "id": string;
+    "name": string;
+    "filter": SessionFilter;
 }
 
 /**

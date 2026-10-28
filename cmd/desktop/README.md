@@ -237,6 +237,9 @@ retention:
 review:
   labels: [] # up to 4 {title, icon} preset comments, keys 1-4 by position;
              # empty is Clarify this / Verify this / Needs tests / Looks good
+views:
+  code: [] # saved Code sidebar views: {id, name, filter: {match: all|any, conditions}};
+           # written by the view switcher
 onboarding:
   completed: false # written by the app when first run ends; remove the key to walk first run again
 paths:
