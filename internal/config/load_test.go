@@ -56,6 +56,8 @@ database:
 todos:
   limiter:
     max_pending: 4
+experimental:
+  daemon: true
 `), 0o644))
 
 	dataDir := t.TempDir()
@@ -76,4 +78,11 @@ todos:
 	assert.Equal(t, 100, cfg.Database.BusyTimeout)
 	assert.Equal(t, 2, cfg.Database.MaxOpenConns, "unset values still get defaults")
 	assert.Equal(t, 4, cfg.Todos.Limiter.MaxPending)
+	assert.True(t, cfg.Experimental.Daemon)
+}
+
+func TestLoadLeavesTheDaemonOffByDefault(t *testing.T) {
+	cfg, err := Load("", t.TempDir())
+	require.NoError(t, err)
+	assert.False(t, cfg.Experimental.Daemon)
 }

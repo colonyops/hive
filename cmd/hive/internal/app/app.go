@@ -13,6 +13,8 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/daemon"
+	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/hive/doctor"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
@@ -53,6 +55,8 @@ type App struct {
 	CommandSet  *plugins.CommandSet
 	Build       BuildInfo
 	Sources     *sources.Registry
+
+	sessions sessionapi.API
 }
 
 // NewApp wraps an engine built from &cfg.Config with the CLI pieces. Doctor
@@ -67,7 +71,7 @@ func NewApp(
 	commandSet *plugins.CommandSet,
 	pluginInfos []doctor.PluginInfo,
 ) *App {
-	return &App{
+	a := &App{
 		Engine:      engine,
 		Logger:      logger,
 		Config:      cfg,
@@ -76,10 +80,26 @@ func NewApp(
 		Plugins:     pluginMgr,
 		CommandSet:  commandSet,
 	}
+	if cfg.Experimental.Daemon {
+		a.sessions = a.DaemonClient()
+	} else {
+		a.sessions = sessionapi.NewLocal(engine)
+	}
+	return a
 }
 
 // SessionAPI is the path for session writes, session reads, and session-view
-// status. Tmux-only helpers and git reads stay on Sessions().
+// status: the daemon when experimental.daemon is on, else this process's
+// engine. Tmux-only helpers and git reads stay on Sessions().
 func (a *App) SessionAPI() sessionapi.API {
-	return sessionapi.NewLocal(a.Engine)
+	return a.sessions
+}
+
+// DaemonClient reaches the daemon for this data directory. It needs only the
+// logger and the config, so commands that skip the engine can call it.
+func (a *App) DaemonClient() *daemonclient.Client {
+	return daemonclient.New(daemonclient.Options{
+		Dialer: daemonclient.UnixDialer(daemon.SocketPath(a.Config.DataDir)),
+		Logger: a.Logger,
+	})
 }

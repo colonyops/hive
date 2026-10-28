@@ -36,20 +36,21 @@ const (
 // Config holds the engine configuration. Decoding is not strict, so a file
 // that also carries CLI-only sections loads without error.
 type Config struct {
-	Git                 GitConfig       `json:"git"                   yaml:"git"`
-	GitPath             string          `json:"git_path"              yaml:"git_path"`
-	Rules               []Rule          `json:"rules"                 yaml:"rules"`
-	Agents              AgentsConfig    `json:"agents"                yaml:"agents"`
-	AutoDeleteCorrupted bool            `json:"auto_delete_corrupted" yaml:"auto_delete_corrupted"`
-	Context             ContextConfig   `json:"context"               yaml:"context"`
-	Messaging           MessagingConfig `json:"messaging"             yaml:"messaging"`
-	Tmux                TmuxConfig      `json:"tmux"                  yaml:"tmux"`
-	Terminal            TerminalConfig  `json:"terminal"              yaml:"terminal"`
-	Database            DatabaseConfig  `json:"database"              yaml:"database"`
-	Todos               TodosConfig     `json:"todos"                 yaml:"todos"`
-	Workspaces          []string        `json:"workspaces"            yaml:"workspaces"` // parent directories containing git repository folders for new session dialog
-	RepoDirsCompat      []string        `json:"-"                     yaml:"repo_dirs"`  // deprecated: use workspaces instead (kept for backwards compatibility)
-	DataDir             string          `json:"-"                     yaml:"-"`          // set by caller, not from config file
+	Git                 GitConfig          `json:"git"                   yaml:"git"`
+	GitPath             string             `json:"git_path"              yaml:"git_path"`
+	Rules               []Rule             `json:"rules"                 yaml:"rules"`
+	Agents              AgentsConfig       `json:"agents"                yaml:"agents"`
+	AutoDeleteCorrupted bool               `json:"auto_delete_corrupted" yaml:"auto_delete_corrupted"`
+	Context             ContextConfig      `json:"context"               yaml:"context"`
+	Messaging           MessagingConfig    `json:"messaging"             yaml:"messaging"`
+	Tmux                TmuxConfig         `json:"tmux"                  yaml:"tmux"`
+	Terminal            TerminalConfig     `json:"terminal"              yaml:"terminal"`
+	Database            DatabaseConfig     `json:"database"              yaml:"database"`
+	Todos               TodosConfig        `json:"todos"                 yaml:"todos"`
+	Experimental        ExperimentalConfig `json:"experimental"          yaml:"experimental"`
+	Workspaces          []string           `json:"workspaces"            yaml:"workspaces"` // parent directories containing git repository folders for new session dialog
+	RepoDirsCompat      []string           `json:"-"                     yaml:"repo_dirs"`  // deprecated: use workspaces instead (kept for backwards compatibility)
+	DataDir             string             `json:"-"                     yaml:"-"`          // set by caller, not from config file
 }
 
 // AgentsConfig holds agent profile configuration.
@@ -132,6 +133,14 @@ func (p AgentProfile) ShellFlags() string {
 type ContextConfig struct {
 	BaseDir     string `json:"base_dir"     yaml:"base_dir"`     // override context base path (default: $HIVE_DATA_DIR/context/)
 	SymlinkName string `json:"symlink_name" yaml:"symlink_name"` // default: ".hive"
+}
+
+// ExperimentalConfig turns on features that are not finished. A change takes
+// effect when a program restarts.
+type ExperimentalConfig struct {
+	// Daemon routes session writes and session status through `hive daemon`,
+	// which a client starts on first use.
+	Daemon bool `json:"daemon" yaml:"daemon"`
 }
 
 // MessagingConfig holds messaging-related configuration.
