@@ -39,6 +39,11 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({
   Focused: vi.fn().mockResolvedValue(true),
 }))
+const reviews = vi.hoisted(() => ({ Review: vi.fn() }))
+vi.mock(
+  '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reviewservice',
+  () => reviews,
+)
 const settingsBindings = vi.hoisted(() => ({
   AppearanceSettings: vi.fn(),
   ReviewLabels: vi.fn().mockResolvedValue(null),
@@ -116,6 +121,11 @@ describe('DrivePage', () => {
       return Promise.resolve(documentFor(key, notes, { markdown: '# Notes' }))
     })
     drive.Search.mockResolvedValue([{ space: space('e2e/repo'), entry: plan }])
+    reviews.Review.mockResolvedValue({
+      sessionId: 's',
+      current: true,
+      comments: [{ id: 'c1', startLine: 5, endLine: 5, context: 'E2E Drive Plan', text: 'Rename', createdAt: '' }],
+    })
   })
 
   it("shows the space's tree beside its newest document", async () => {
@@ -282,6 +292,27 @@ describe('DrivePage', () => {
 
     const workspace = await mountPage({ space: 'workspaces/demo' })
     expect(workspace.wrapper.find('[data-testid="drive-page-setup"]').exists()).toBe(false)
+  })
+
+  it('keeps comments hidden until reviewing is turned on, and remembers the choice', async () => {
+    const first = await mountPage()
+    const toggle = first.wrapper.get('[data-testid="drive-page-review-toggle"]')
+    expect(toggle.attributes('aria-pressed')).toBe('false')
+    expect(first.wrapper.find('[data-testid="drive-page-review-header"]').exists()).toBe(false)
+
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(toggle.attributes('aria-pressed')).toBe('true')
+    expect(first.wrapper.get('[data-testid="drive-page-review-count"]').text()).toBe('1')
+    first.wrapper.unmount()
+
+    const second = await mountPage()
+    expect(second.wrapper.find('[data-testid="drive-page-review-header"]').exists()).toBe(true)
+  })
+
+  it('offers no review toggle on a canvas', async () => {
+    const { wrapper } = await mountPage({ path: report.path })
+    expect(wrapper.find('[data-testid="drive-page-review-toggle"]').exists()).toBe(false)
   })
 
   it('closes from its button and on Escape', async () => {

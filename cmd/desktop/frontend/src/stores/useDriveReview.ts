@@ -44,6 +44,14 @@ export const useDriveReview = defineStore('driveReview', () => {
   const pageReviewed = shallowRef(false)
   const pageCommentsCollapsed = useStorage('hive.panel.drive.comments.collapsed', false)
 
+  // Reviewing is opt-in: until the user turns it on, documents take no
+  // comments and show none.
+  const enabled = useStorage('hive.drive.review.enabled', false)
+
+  function toggleEnabled(): void {
+    enabled.value = !enabled.value
+  }
+
   function setPageReviewed(reviewed: boolean): void {
     pageReviewed.value = reviewed
   }
@@ -176,6 +184,8 @@ export const useDriveReview = defineStore('driveReview', () => {
   })
 
   return {
+    enabled: computed(() => enabled.value),
+    toggleEnabled,
     pageReviewed: computed(() => pageReviewed.value),
     setPageReviewed,
     pageCommentsCollapsed: computed(() => pageCommentsCollapsed.value),

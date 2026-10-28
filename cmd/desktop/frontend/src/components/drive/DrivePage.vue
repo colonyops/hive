@@ -6,6 +6,7 @@ import { useElementSize, useResizeObserver } from '@vueuse/core'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import IconCode from '~icons/lucide/code'
 import IconGlobe from '~icons/lucide/globe'
+import IconMessageSquareText from '~icons/lucide/message-square-text'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
@@ -144,7 +145,8 @@ useResizeObserver(measure, measureGutter)
 const review = useDriveReview()
 const reviewed = computed(() => {
   const doc = document.value
-  if (!doc || doc.entry.kind !== 'markdown' || !review.inReview(doc.space.key, doc.entry.path)) return null
+  if (!review.enabled.value || !doc || doc.entry.kind !== 'markdown' || !review.inReview(doc.space.key, doc.entry.path))
+    return null
   return { space: doc.space.key, path: doc.entry.path }
 })
 const commentsShown = computed(() => !!reviewed.value && !review.pageCommentsCollapsed.value)
@@ -238,6 +240,16 @@ useEscapeToClose(() => emit('close'))
               ><template v-if="modified">{{ relativeAge(modified) }}</template></span
             >
             <div class="flex-1" />
+            <IconButton
+              v-if="document?.entry.kind === 'markdown'"
+              :label="review.enabled.value ? 'Turn Off Reviewing' : 'Turn On Reviewing'"
+              :icon="IconMessageSquareText"
+              size="lg"
+              :active="review.enabled.value"
+              :aria-pressed="review.enabled.value"
+              data-testid="drive-page-review-toggle"
+              @click="review.toggleEnabled"
+            />
             <DriveDocumentActions
               v-if="document"
               :space="space"
@@ -286,7 +298,7 @@ useEscapeToClose(() => emit('close'))
                 :paths="paths"
                 :loading="loading"
                 :error="error"
-                commentable
+                :commentable="review.enabled.value"
                 testid="drive-page"
                 @open-url="emit('open-url', $event)"
                 @open="openDocument"
