@@ -27,6 +27,9 @@ type sessionSignature struct {
 	Remote      string
 	State       session.State
 	TmuxSession string
+	// Tags is the tag list joined with NUL, which no tag contains, so
+	// the signature stays comparable.
+	Tags string
 }
 
 func signatureOf(s session.Session) sessionSignature {
@@ -37,6 +40,7 @@ func signatureOf(s session.Session) sessionSignature {
 		Remote:      s.Remote,
 		State:       s.State,
 		TmuxSession: sessionsvc.Target(s).Session,
+		Tags:        strings.Join(s.Tags, "\x00"),
 	}
 }
 

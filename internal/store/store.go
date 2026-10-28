@@ -74,7 +74,6 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 		metadataJSON = sql.NullString{String: string(data), Valid: true}
 	}
 
-	// Marshal tags to JSON
 	var tagsJSON sql.NullString
 	if len(sess.Tags) > 0 {
 		data, err := json.Marshal(sess.Tags)
@@ -109,6 +108,26 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 	return nil
 }
 
+// Update runs the read and the save in one transaction. hive.db opens
+// transactions with BEGIN IMMEDIATE, so a writer in another process waits.
+func (s *SessionStore) Update(ctx context.Context, id string, edit func(*session.Session) error) (session.Session, error) {
+	var sess session.Session
+	err := s.db.WithinTx(ctx, func(ctx context.Context, _ *db.DB) error {
+		var err error
+		if sess, err = s.Get(ctx, id); err != nil {
+			return err
+		}
+		if err := edit(&sess); err != nil {
+			return err
+		}
+		return s.Save(ctx, sess)
+	})
+	if err != nil {
+		return session.Session{}, err
+	}
+	return sess, nil
+}
+
 // Delete removes a session by ID. Returns ErrNotFound if not found.
 func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	// Check if session exists first
@@ -138,7 +157,6 @@ func rowToSession(row db.Session) (session.Session, error) {
 		}
 	}
 
-	// Unmarshal tags from JSON
 	var tags []string
 	if row.Tags.Valid {
 		if err := json.Unmarshal([]byte(row.Tags.String), &tags); err != nil {

@@ -62,6 +62,7 @@ test.describe('drive', { tag: [tag.drive] }, () => {
     );
     const body = page.getByTestId("drive-page-markdown");
     await expect(body.getByRole("heading", { name: planTitle })).toBeVisible();
+    await page.getByTestId("drive-page-review-toggle").click();
 
     // "This plan" is on line 8 of the file: the front matter takes 4.
     await body

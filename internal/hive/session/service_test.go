@@ -55,6 +55,18 @@ func (m *mockStore) Save(_ context.Context, s session.Session) error {
 	return nil
 }
 
+func (m *mockStore) Update(_ context.Context, id string, edit func(*session.Session) error) (session.Session, error) {
+	s, ok := m.sessions[id]
+	if !ok {
+		return session.Session{}, session.ErrNotFound
+	}
+	if err := edit(&s); err != nil {
+		return session.Session{}, err
+	}
+	m.sessions[id] = s
+	return s, nil
+}
+
 func (m *mockStore) Delete(_ context.Context, id string) error {
 	delete(m.sessions, id)
 	return nil
@@ -1216,6 +1228,28 @@ func TestSetSessionGroup_TrimWhitespace(t *testing.T) {
 	updated, err := store.Get(context.Background(), "test1")
 	require.NoError(t, err)
 	assert.Equal(t, "backend", updated.Group())
+}
+
+func TestSetSessionTags(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+	past := time.Now().Add(-1 * time.Hour)
+	require.NoError(t, store.Save(t.Context(), session.Session{ID: "test1", Name: "s", Tags: []string{"old"}, UpdatedAt: past}))
+
+	got, err := svc.SetSessionTags(t.Context(), "test1", []string{" auto ", "Auto", "backend"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"auto", "backend"}, got.Tags)
+
+	stored, err := store.Get(t.Context(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"auto", "backend"}, stored.Tags)
+	assert.True(t, stored.UpdatedAt.After(past))
+
+	_, err = svc.SetSessionTags(t.Context(), "test1", []string{"a,b"})
+	require.Error(t, err)
+	stored, err = store.Get(t.Context(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"auto", "backend"}, stored.Tags, "an invalid tag saves nothing")
 }
 
 func TestRecycleWorktreeSession_DeletesSession(t *testing.T) {

@@ -12,6 +12,7 @@ const hive: TerminalSessionRow = {
   repoIdentity: 'r',
   state: 'active',
   canvasOwner: '',
+  tags: [],
   createdAt: '',
 }
 const scratch: TerminalSessionRow = {
@@ -22,6 +23,7 @@ const scratch: TerminalSessionRow = {
   repoIdentity: '',
   state: 'active',
   canvasOwner: '',
+  tags: [],
   createdAt: '',
 }
 const chat: TerminalSessionRow = {
@@ -32,6 +34,7 @@ const chat: TerminalSessionRow = {
   repoIdentity: '',
   state: 'active',
   canvasOwner: '',
+  tags: [],
   createdAt: '',
 }
 
@@ -66,7 +69,7 @@ describe('attachedSessionCommands', () => {
       'terminal:session:kill',
       'terminal:session:agent:claude',
       'terminal:session:detail',
-      'terminal:session:rename',
+      'terminal:session:edit',
       'terminal:session:recycle',
       'terminal:session:delete',
       'terminal:session:open-pr',

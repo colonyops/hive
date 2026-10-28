@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   Available: vi.fn(),
   getAgentsEndpoint: vi.fn(),
   allSessions: vi.fn(),
+  events: new Map<string, () => void>(),
+}))
+
+vi.mock('../../composables/useWailsEvent', () => ({
+  useWailsEvent: (name: string, handler: () => void) => mocks.events.set(name, handler),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/agentsservice', () => ({
@@ -67,6 +72,7 @@ describe('useTerminalPinnedChats', () => {
         repoIdentity: '',
         state: 'active',
         canvasOwner: '',
+        tags: [],
         createdAt: '',
       },
     ])
@@ -141,5 +147,25 @@ describe('useTerminalPinnedChats', () => {
     await nextTick()
 
     expect(pinnedIds.value).toEqual(['7'])
+  })
+
+  it('pins a chat a background job creates once the listing carries it', async () => {
+    await listed([chat('1', 'triage')])
+    const { pinWhenListed, pinnedIds } = useTerminalPinnedChats()
+
+    pinWhenListed('demo', 'triage')
+    mocks.allSessions.mockResolvedValue([chat('1', 'triage'), chat('2', 'triage')])
+    mocks.events.get('jobs:updated')?.()
+    await vi.waitFor(() => expect(pinnedIds.value).toEqual(['2']))
+  })
+
+  it('does not reload the listing on job updates when no pin is waiting', async () => {
+    await listed([])
+    useTerminalPinnedChats()
+    mocks.allSessions.mockClear()
+
+    mocks.events.get('jobs:updated')?.()
+
+    expect(mocks.allSessions).not.toHaveBeenCalled()
   })
 })

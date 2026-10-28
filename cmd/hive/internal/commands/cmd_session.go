@@ -36,6 +36,9 @@ type SessionCmd struct {
 	updateName       string
 	updateGroup      string
 	updateClearGroup bool
+	updateAddTags    []string
+	updateRemoveTags []string
+	updateClearTags  bool
 
 	deleteJSON  bool
 	deleteForce bool
@@ -103,7 +106,7 @@ Use --json for LLM-friendly output with additional fields like inbox topic and u
 			&cli.StringSliceFlag{
 				Name:        "tags",
 				Aliases:     []string{"t"},
-				Usage:       "filter sessions by tag (repeatable, all tags must match)",
+				Usage:       "filter sessions by tag (repeatable, all tags must match, case-insensitive)",
 				Destination: &cmd.lsTags,
 			},
 		},
@@ -151,10 +154,6 @@ type sessionJSON struct {
 }
 
 func buildSessionJSON(s session.Session) sessionJSON {
-	tags := s.Tags
-	if tags == nil {
-		tags = []string{}
-	}
 	return sessionJSON{
 		ID:            s.ID,
 		Name:          s.Name,
@@ -166,7 +165,7 @@ func buildSessionJSON(s session.Session) sessionJSON {
 		State:         string(s.State),
 		Group:         s.GetMeta(session.MetaGroup),
 		CloneStrategy: s.CloneStrategy,
-		Tags:          tags,
+		Tags:          nonNilTags(s.Tags),
 		CreatedAt:     s.CreatedAt,
 		UpdatedAt:     s.UpdatedAt,
 	}
@@ -307,16 +306,20 @@ func (cmd *SessionCmd) runCreate(ctx context.Context, c *cli.Command) error {
 func (cmd *SessionCmd) updateCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "update",
-		Usage:     "Update a session's name or group",
-		UsageText: "hive session update <id> [--name <name>] [--group <group> | --clear-group] [--json]",
+		Usage:     "Update a session's name, group, or tags",
+		UsageText: "hive session update <id> [--name <name>] [--group <group> | --clear-group] [--add-tag <tag>]... [--remove-tag <tag>]... [--clear-tags] [--json]",
 		Description: `Updates mutable fields on an existing session.
 
-At least one of --name, --group, or --clear-group is required.
+At least one flag that changes the session is required. Tag flags apply in
+order: --clear-tags, then --add-tag, then --remove-tag. Tags compare
+case-insensitively.
 
 Examples:
   hive session update abc123 --name "New Name"
   hive session update abc123 --group backend
-  hive session update abc123 --clear-group`,
+  hive session update abc123 --clear-group
+  hive session update abc123 --add-tag auto --add-tag backend
+  hive session update abc123 --remove-tag auto --add-tag orchestrated`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "name",
@@ -332,6 +335,21 @@ Examples:
 				Name:        "clear-group",
 				Usage:       "clear the session's group assignment",
 				Destination: &cmd.updateClearGroup,
+			},
+			&cli.StringSliceFlag{
+				Name:        "add-tag",
+				Usage:       "add a tag (repeatable)",
+				Destination: &cmd.updateAddTags,
+			},
+			&cli.StringSliceFlag{
+				Name:        "remove-tag",
+				Usage:       "remove a tag (repeatable)",
+				Destination: &cmd.updateRemoveTags,
+			},
+			&cli.BoolFlag{
+				Name:        "clear-tags",
+				Usage:       "remove every tag",
+				Destination: &cmd.updateClearTags,
 			},
 			&cli.BoolFlag{
 				Name:        "json",
@@ -352,8 +370,14 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 	if cmd.updateGroup != "" && cmd.updateClearGroup {
 		return fmt.Errorf("--group and --clear-group are mutually exclusive")
 	}
-	if cmd.updateName == "" && cmd.updateGroup == "" && !cmd.updateClearGroup {
-		return fmt.Errorf("nothing to update: provide --name, --group, or --clear-group")
+	editsTags := len(cmd.updateAddTags) > 0 || len(cmd.updateRemoveTags) > 0 || cmd.updateClearTags
+	if cmd.updateName == "" && cmd.updateGroup == "" && !cmd.updateClearGroup && !editsTags {
+		return fmt.Errorf("nothing to update: provide --name, --group, --clear-group, or a tag flag")
+	}
+	// Checked before any write, so a bad tag leaves the session untouched.
+	addTags, err := session.NormalizeTags(cmd.updateAddTags)
+	if err != nil {
+		return err
 	}
 
 	if cmd.updateName != "" {
@@ -369,6 +393,22 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 		}
 		if err := cmd.app.SessionAPI().SetSessionGroup(ctx, id, group); err != nil {
 			return fmt.Errorf("set session group: %w", err)
+		}
+	}
+
+	switch {
+	case cmd.updateClearTags:
+		tags := slices.DeleteFunc(addTags, func(tag string) bool {
+			return slices.ContainsFunc(cmd.updateRemoveTags, func(remove string) bool {
+				return strings.EqualFold(strings.TrimSpace(remove), tag)
+			})
+		})
+		if _, err := cmd.app.Sessions().SetSessionTags(ctx, id, tags); err != nil {
+			return fmt.Errorf("set session tags: %w", err)
+		}
+	case len(addTags) > 0 || len(cmd.updateRemoveTags) > 0:
+		if _, err := cmd.app.Sessions().EditSessionTags(ctx, id, addTags, cmd.updateRemoveTags); err != nil {
+			return fmt.Errorf("edit session tags: %w", err)
 		}
 	}
 
@@ -416,7 +456,7 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 			corrupted = append(corrupted, s)
 			continue
 		}
-		if len(cmd.lsTags) > 0 && !sessionHasAllTags(s, cmd.lsTags) {
+		if !s.HasAllTags(cmd.lsTags) {
 			continue
 		}
 		normal = append(normal, s)
@@ -586,10 +626,6 @@ func (cmd *SessionCmd) runRecycle(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session) lsSessionInfo {
-	tags := s.Tags
-	if tags == nil {
-		tags = []string{}
-	}
 	info := lsSessionInfo{
 		ID:     s.ID,
 		Name:   s.Name,
@@ -597,7 +633,7 @@ func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session
 		Inbox:  s.InboxTopic(),
 		State:  string(s.State),
 		Unread: 0,
-		Tags:   tags,
+		Tags:   nonNilTags(s.Tags),
 	}
 
 	// Count unread inbox messages
@@ -628,16 +664,10 @@ func (cmd *SessionCmd) checkRisk(ctx context.Context, id, action string) error {
 	return fmt.Errorf("session %s has %s; use --force to %s anyway", id, strings.Join(reasons, " and "), action)
 }
 
-// sessionHasAllTags returns true if the session has every tag in required.
-func sessionHasAllTags(s session.Session, required []string) bool {
-	tagSet := make(map[string]struct{}, len(s.Tags))
-	for _, t := range s.Tags {
-		tagSet[t] = struct{}{}
+// nonNilTags keeps JSON output an array, never null.
+func nonNilTags(tags []string) []string {
+	if tags == nil {
+		return []string{}
 	}
-	for _, r := range required {
-		if _, ok := tagSet[r]; !ok {
-			return false
-		}
-	}
-	return true
+	return tags
 }

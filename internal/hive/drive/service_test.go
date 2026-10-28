@@ -1050,6 +1050,49 @@ func TestSearchMatchesEveryWordAndTreatsHyphensAsSpaces(t *testing.T) {
 	assert.Empty(t, search("session nothing"))
 }
 
+// Recent.
+
+func TestRecentListsDocumentsNewestCreatedFirstAcrossSpaces(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	// Birth time is the file system's own on darwin, which is write order; on
+	// Linux it falls back to the modification time this sets to match.
+	base := time.Now().Add(-time.Hour)
+	for i, doc := range []struct {
+		space drive.Space
+		path  string
+	}{
+		{acme, "plans/old.md"},
+		{drive.Shared, "notes.md"},
+		{ws, "reports/2026/summary.md"},
+		{acme, "canvases/perf.canvas.json"},
+	} {
+		f.write(t, doc.space, doc.path, "x")
+		stamp := base.Add(time.Duration(i) * time.Minute)
+		full := filepath.Join(f.root, filepath.FromSlash(doc.space.Key), filepath.FromSlash(doc.path))
+		require.NoError(t, os.Chtimes(full, stamp, stamp))
+	}
+
+	recent := func(limit int) []string {
+		t.Helper()
+		hits, err := f.svc.Recent(ctx, limit)
+		require.NoError(t, err)
+		got := []string{}
+		for _, hit := range hits {
+			assert.NotEqual(t, drive.KindDir, hit.Entry.Kind, "folders are left out")
+			got = append(got, hit.Space.Key+":"+hit.Entry.Path)
+		}
+		return got
+	}
+	assert.Equal(t, []string{
+		"acme/site:canvases/perf.canvas.json",
+		"workspaces/ws:reports/2026/summary.md",
+		"shared:notes.md",
+		"acme/site:plans/old.md",
+	}, recent(0))
+	assert.Equal(t, []string{"acme/site:canvases/perf.canvas.json", "workspaces/ws:reports/2026/summary.md"}, recent(2))
+}
+
 // Reconfigure.
 
 func TestReconfigureDropsTheSnapshotOnlyWhenTheRootMoves(t *testing.T) {

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/colonyops/hive/pkg/tmpl"
 )
 
 // LaunchSessionConfig is a terminal node that starts a hive session per item,
@@ -14,6 +16,8 @@ type LaunchSessionConfig struct {
 	// Not `name`: that key is the node's own label.
 	SessionName string `json:"sessionName,omitempty" yaml:"sessionName,omitempty"`
 	Prompt      string `json:"prompt"                yaml:"prompt"`
+	// Tags are templates, each rendered into one tag on the session.
+	Tags []string `json:"tags,omitempty" yaml:"tags,omitempty"`
 }
 
 func (c *LaunchSessionConfig) Inputs() int  { return 1 }
@@ -25,6 +29,14 @@ func (c *LaunchSessionConfig) Validate(Refs) error {
 	}
 	if strings.TrimSpace(c.Prompt) == "" {
 		return fmt.Errorf("prompt: prompt is required")
+	}
+	for i, tag := range c.Tags {
+		if strings.TrimSpace(tag) == "" {
+			return fmt.Errorf("tags: tag %d is blank", i+1)
+		}
+		if err := tmpl.NewValidation().ValidateSyntax(tag); err != nil {
+			return fmt.Errorf("tags: tag %d: %w", i+1, err)
+		}
 	}
 	return nil
 }

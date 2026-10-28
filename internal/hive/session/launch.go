@@ -22,9 +22,7 @@ type LaunchRequest struct {
 	Agent           string
 	Repo            string
 	CollisionSuffix string
-	// Tags label the session for a reader inside hive. Empty and repeated
-	// tags are dropped.
-	Tags []string
+	Tags            []string
 	// Env holds KEY=VALUE pairs for the session's tmux environment.
 	Env []string
 }
@@ -71,7 +69,7 @@ func (req LaunchRequest) createOptions(repo LaunchRepository, progress io.Writer
 		AgentKey:        req.Agent,
 		Background:      true,
 		CollisionSuffix: req.CollisionSuffix,
-		Tags:            uniqueTags(req.Tags),
+		Tags:            req.Tags,
 		Env:             req.Env,
 		Progress:        progress,
 	}
@@ -117,16 +115,6 @@ func (s *Service) CreateFromRequest(ctx context.Context, req LaunchRequest) (ses
 		return session.Session{}, failure
 	}
 	return *sess, nil
-}
-
-func uniqueTags(tags []string) []string {
-	var unique []string
-	for _, tag := range tags {
-		if tag != "" && !slices.Contains(unique, tag) {
-			unique = append(unique, tag)
-		}
-	}
-	return unique
 }
 
 func isDir(path string) bool {

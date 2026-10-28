@@ -106,7 +106,7 @@ The built-in Hive package covers:
 
 Hive includes these MCP entries:
 
-- **Hive Desktop** for reading and configuring the running app. It requires the local HTTP server, which is enabled by default.
+- **Hive Desktop** for reading and configuring the running app. It requires the local HTTP server, which is enabled by default. Its `list_sessions` and `edit_session_tags` tools let an agent find hive sessions by tag and add or remove tags, so an orchestrating agent can pick up the sessions taged `auto` and retag each one it takes.
 - **Hive Drive** for durable Markdown, HTML, and canvas documents beside a chat.
 - **Playwright** for browser automation. It requires Node.js and a Playwright browser.
 - **Chrome DevTools** for a running Chrome browser. It requires Node.js 20.19 or newer and Chrome.
@@ -138,7 +138,7 @@ A Markdown document or a canvas can include front matter such as tags, status, o
 
 ### Comment on a document
 
-Comments live on the Drive page. The pane beside a chat or a Code session does not show them; open the document with **Open full page** to review it. Select text in a Markdown document and a comment box floats under it with the selection marked; drag it by its top row to move it out of the way. To comment on a whole paragraph, list item, heading, code block, or table, point at it and click the comment button beside it in the margin. While nothing else has focus, the keyboard goes to the box:
+Comments live on the Drive page. The pane beside a chat or a Code session does not show them; open the document with **Open full page** to review it. Reviewing is off until you turn it on with the comment button in the document's header. Hive remembers the choice, and while it is off documents take no comments and show none. Select text in a Markdown document and a comment box floats under it with the selection marked; drag it by its top row to move it out of the way. To comment on a whole paragraph, list item, heading, code block, or table, point at it and click the comment button beside it in the margin. While nothing else has focus, the keyboard goes to the box:
 
 - Start typing to write a comment, then press <kbd>⌘↵</kbd> or **Add Comment**.
 - Press <kbd>1</kbd> to <kbd>4</kbd> to apply a label: **Clarify this**, **Verify this**, **Needs tests**, or **Looks good**. The icons in the box are the same labels. Text you typed first follows the label. Change them under **Settings ▸ Drive ▸ Comment labels**, or with `review.labels` in [settings](../configuration/settings.md).
@@ -185,4 +185,4 @@ A repository with no documents yet links to the setup in **Settings ▸ MCP serv
 
 ## Use a chat in Code
 
-Pin a chat to the Code session tree when you want it beside repository terminals. It attaches to the same tmux session from either area. Unpinning it does not stop the agent.
+Pin a chat to the Code session tree when you want it beside repository terminals. Use **Pin to Code** on a chat's row menu, or check **Pin to Code** in the New chat dialog to pin it when it starts. It attaches to the same tmux session from either area. Unpinning it does not stop the agent.

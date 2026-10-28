@@ -142,7 +142,7 @@ var defaultUserCommands = map[string]UserCommand{
 	},
 	"RenameSession": {
 		Action: action.TypeRenameSession,
-		Help:   "rename session",
+		Help:   "edit session (name)",
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
@@ -177,6 +177,12 @@ var defaultUserCommands = map[string]UserCommand{
 	"GroupToggle": {
 		Action: action.TypeGroupToggle,
 		Help:   "toggle group/repo view",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"TagsEdit": {
+		Action: action.TypeTagsEdit,
+		Help:   "edit session (tags)",
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},

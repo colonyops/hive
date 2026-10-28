@@ -1,5 +1,6 @@
-import { computed, readonly, watch } from 'vue'
+import { computed, readonly, shallowRef, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
+import { useWailsEvent } from '../composables/useWailsEvent'
 import { defineStore } from './defineStore'
 import { useAgentSessionsAll } from './useAgentSessionsAll'
 import type { TerminalSessionRow } from './useTerminalSessions'
@@ -20,7 +21,7 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
   // Agents area is gated off, and pruning against either would silently discard
   // every pin. The listing keeps its last-good rows on failure, so a failed
   // revalidation cannot look like a deletion here.
-  const { recents, recentsLoaded } = useAgentSessionsAll()
+  const { recents, recentsLoaded, reload: reloadRecents } = useAgentSessionsAll()
   watch(
     [recents, recentsLoaded],
     ([sessions, loaded]) => {
@@ -68,6 +69,7 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
           repoIdentity: '',
           state: 'active',
           canvasOwner: '',
+          tags: [],
           createdAt: '',
         })
     }
@@ -84,11 +86,51 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
     pinnedIds.value = isPinned(id) ? pinnedIds.value.filter((pinned) => pinned !== id) : [...pinnedIds.value, id]
   }
 
+  function pin(id: string): void {
+    if (!isPinned(id)) pinnedIds.value = [...pinnedIds.value, id]
+  }
+
+  // A chat created as a background job has no id until the job lands it in the
+  // listing, so its pin waits for the first chat with its workspace and name
+  // that was not already listed when the pin was asked for.
+  interface AwaitedPin {
+    workspace: string
+    name: string
+    existing: Set<string>
+  }
+  const awaited = shallowRef<AwaitedPin[]>([])
+
+  function pinWhenListed(workspace: string, name: string): void {
+    const existing = new Set(
+      recents.value.filter((session) => session.workspace === workspace && session.name === name).map((s) => s.id),
+    )
+    awaited.value = [...awaited.value, { workspace, name, existing }]
+  }
+
+  watch([recents, awaited], ([sessions, waiting]) => {
+    if (!waiting.length) return
+    const still = waiting.filter((want) => {
+      const match = sessions.find(
+        (session) =>
+          session.workspace === want.workspace && session.name === want.name && !want.existing.has(session.id),
+      )
+      if (match) pin(match.id)
+      return !match
+    })
+    if (still.length !== waiting.length) awaited.value = still
+  })
+
+  // The listing does not reload itself; jobs:updated is what says a create job
+  // finished.
+  useWailsEvent('jobs:updated', () => {
+    if (awaited.value.length) void reloadRecents()
+  })
+
   /** Unpins by slug, which is what the Code view's own rows are keyed on. */
   function unpinSlug(slug: string): void {
     const session = recents.value.find((candidate) => candidate.slug === slug)
     if (session) togglePin(session.id)
   }
 
-  return { pinnedIds: readonly(pinnedIds), rows, slugs, isPinned, togglePin, unpinSlug }
+  return { pinnedIds: readonly(pinnedIds), rows, slugs, isPinned, togglePin, pin, pinWhenListed, unpinSlug }
 })

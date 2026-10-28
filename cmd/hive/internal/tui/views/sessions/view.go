@@ -1200,6 +1200,10 @@ func (v *View) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	if status != "" {
 		parts = append(parts, status)
 	}
+	if len(sess.Tags) > 0 {
+		tags := separatorStyle.Render("Tags: ") + styles.TextSecondaryStyle.Render(FormatTags(sess.Tags))
+		parts = append(parts, ansi.TruncateWc(tags, maxWidth, "…"))
+	}
 	parts = append(parts, "")
 	parts = append(parts, styles.TextMutedStyle.Render("Output"))
 	parts = append(parts, dividerStyle.Render(divider))

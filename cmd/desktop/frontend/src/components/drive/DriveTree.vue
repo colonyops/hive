@@ -2,19 +2,14 @@
 // One space as a folder tree. Rows are the tree flattened through the fold
 // state, so the list stays a plain v-for and keyboard walk; folders come first
 // as the Go side sorts them.
-import { computed, nextTick, ref, watch, type Component } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconEllipsis from '~icons/lucide/ellipsis'
-import IconFile from '~icons/lucide/file'
-import IconFileCode from '~icons/lucide/file-code'
-import IconFileText from '~icons/lucide/file-text'
-import IconFolder from '~icons/lucide/folder'
-import IconFolderOpen from '~icons/lucide/folder-open'
-import IconLayoutDashboard from '~icons/lucide/layout-dashboard'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { useListKeyboardNav } from '@hive/ui/composables/useListKeyboardNav'
 import { useTreeExpansion } from '../../composables/useTreeExpansion'
+import { documentIcon, folderIcon, type DriveIcon } from './driveIcon'
 import { ancestorPaths, entryLabel, entryMatches } from '../../lib/drive'
 import { useDrive } from '../../stores/useDrive'
 import { useDriveActivity } from '../../stores/useDriveActivity'
@@ -149,13 +144,8 @@ function reveal(path: string): void {
   })
 }
 
-function kindIcon(entry: EntryWire): Component {
-  if (entry.kind === 'dir') return expansion.expanded(entry) ? IconFolderOpen : IconFolder
-  return (
-    ({ markdown: IconFileText, html: IconFileCode, canvas: IconLayoutDashboard } as Record<string, Component>)[
-      entry.kind
-    ] ?? IconFile
-  )
+function rowIcon(entry: EntryWire): DriveIcon {
+  return entry.kind === 'dir' ? folderIcon(entry.name, expansion.expanded(entry)) : documentIcon(entry.name, entry.kind)
 }
 
 function activate(row: Row): void {
@@ -385,9 +375,9 @@ defineExpose({ onKeydown, startRename, reveal })
       />
       <span v-else class="size-3 shrink-0" aria-hidden="true" />
       <component
-        :is="kindIcon(row.entry)"
+        :is="rowIcon(row.entry).icon"
         class="size-3.5 shrink-0"
-        :class="row.entry.path === selected ? 'text-accent' : 'text-text-4'"
+        :class="rowIcon(row.entry).color"
         aria-hidden="true"
       />
       <template v-if="renaming === row.entry.path">

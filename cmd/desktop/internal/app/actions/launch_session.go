@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/colonyops/hive/pkg/tmpl"
 )
 
 // LaunchSessionConfig starts either a repository-backed hive session or an
@@ -21,6 +23,9 @@ type LaunchSessionConfig struct {
 	// Workspace names an agent workspace by its directory under the configured
 	// workspace root.
 	Workspace string `yaml:"workspace,omitempty"`
+	// Tags are templates, each rendered into one tag on the new
+	// session. A tag that renders blank is dropped.
+	Tags []string `yaml:"tags,omitempty"`
 	// PostHook is a shell command rendered over the same data as the templates
 	// above plus `.Session`, then run in the new checkout.
 	PostHook string `yaml:"post_hook,omitempty"`
@@ -43,11 +48,31 @@ func (c *LaunchSessionConfig) Validate() error {
 	if workspace != "" && strings.TrimSpace(c.PostHook) != "" {
 		return fmt.Errorf("launch-session: post_hook cannot be set with workspace")
 	}
+	if workspace != "" && len(c.Tags) > 0 {
+		return fmt.Errorf("launch-session: tags cannot be set with workspace; a chat is not a hive session")
+	}
+	if err := validateTagTemplates(c.Tags); err != nil {
+		return fmt.Errorf("launch-session: %w", err)
+	}
 	if c.PostHookTimeout < 0 {
 		return fmt.Errorf("launch-session: post_hook_timeout must be positive")
 	}
 	if strings.TrimSpace(c.PostHook) == "" && c.PostHookTimeout != 0 {
 		return fmt.Errorf("launch-session: post_hook_timeout is set without post_hook")
+	}
+	return nil
+}
+
+// validateTagTemplates checks each tag template's syntax. What a template
+// renders to is checked at launch, when the data exists.
+func validateTagTemplates(tags []string) error {
+	for i, tag := range tags {
+		if strings.TrimSpace(tag) == "" {
+			return fmt.Errorf("tags[%d] is blank", i)
+		}
+		if err := tmpl.NewValidation().ValidateSyntax(tag); err != nil {
+			return fmt.Errorf("tags[%d]: %w", i, err)
+		}
 	}
 	return nil
 }

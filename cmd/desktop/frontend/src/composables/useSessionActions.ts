@@ -1,9 +1,9 @@
-import { ref } from 'vue'
+import { ref, type DeepReadonly } from 'vue'
 import {
   DeleteSession,
   PruneSessions,
+  EditSession,
   RecycleSession,
-  RenameSession,
   SessionDetail,
   SessionRisk,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
@@ -15,6 +15,12 @@ import type { SessionRisk as SessionRiskView } from '../../bindings/github.com/c
 import { appErrorMessage } from '../lib/appError'
 import { useConfirmation, type ConfirmationDetail } from '@hive/ui/composables/useConfirmation'
 import { useToasts } from './useToasts'
+
+/** A session as the session list hands it out: deep-readonly. */
+export type SessionRow = DeepReadonly<SessionSummary>
+
+/** The field the edit dialog opens on. */
+export type EditFocus = 'name' | 'tags'
 
 export interface SessionActionOptions {
   /**
@@ -58,7 +64,7 @@ export function riskDetails(risk: SessionRiskView): ConfirmationDetail[] {
 }
 
 /**
- * The session row's operations: read, rename, recycle, delete, and the list-wide
+ * The session row's operations: read, edit, recycle, delete, and the list-wide
  * prune. Destructive ones are gated on a risk pre-flight and run as background
  * jobs, so what they report is that the job started — `jobs:updated` is what
  * tells the list to re-read.
@@ -68,11 +74,12 @@ export function useSessionActions(options: SessionActionOptions = {}) {
   const confirmation = useConfirmation()
 
   const detail = ref<SessionDetailView | null>(null)
-  const renaming = ref<SessionSummary | null>(null)
-  const renameBusy = ref(false)
-  const renameError = ref<string | null>(null)
+  const editing = ref<SessionRow | null>(null)
+  const editFocus = ref<EditFocus>('name')
+  const editBusy = ref(false)
+  const editError = ref<string | null>(null)
 
-  async function openDetail(session: SessionSummary): Promise<void> {
+  async function openDetail(session: SessionRow): Promise<void> {
     try {
       detail.value = await SessionDetail(session.id)
     } catch (e) {
@@ -84,37 +91,37 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     detail.value = null
   }
 
-  function requestRename(session: SessionSummary): void {
-    renaming.value = session
-    renameError.value = null
+  function requestEdit(session: SessionRow, focus: EditFocus = 'name'): void {
+    editing.value = session
+    editFocus.value = focus
+    editError.value = null
   }
 
-  function cancelRename(): void {
-    if (renameBusy.value) return
-    renaming.value = null
-    renameError.value = null
+  function cancelEdit(): void {
+    if (editBusy.value) return
+    editing.value = null
+    editError.value = null
   }
 
-  // A failed rename keeps the dialog open with its reason: the name is almost
-  // always nearly right — one hive rejects, or a slug already taken by another
-  // session.
-  async function submitRename(name: string): Promise<void> {
-    const session = renaming.value
-    if (!session || renameBusy.value) return
-    renameBusy.value = true
-    renameError.value = null
+  // A refused edit keeps the dialog open with hive's reason: the name or a tag
+  // is almost always nearly right, or the slug is taken by another session.
+  async function submitEdit(name: string, tags: string[]): Promise<void> {
+    const session = editing.value
+    if (!session || editBusy.value) return
+    editBusy.value = true
+    editError.value = null
     try {
-      await RenameSession(session.id, name.trim())
-      renaming.value = null
+      await EditSession(session.id, name.trim(), tags)
+      editing.value = null
       options.onChanged?.()
     } catch (e) {
-      renameError.value = message(e, 'Could not rename that session.')
+      editError.value = message(e, 'Could not save that session.')
     } finally {
-      renameBusy.value = false
+      editBusy.value = false
     }
   }
 
-  async function requestDestructive(session: SessionSummary, operation: 'delete' | 'recycle'): Promise<void> {
+  async function requestDestructive(session: SessionRow, operation: 'delete' | 'recycle'): Promise<void> {
     let risk: SessionRiskView
     try {
       risk = await SessionRisk(session.id)
@@ -138,11 +145,11 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     })
   }
 
-  function requestDelete(session: SessionSummary): Promise<void> {
+  function requestDelete(session: SessionRow): Promise<void> {
     return requestDestructive(session, 'delete')
   }
 
-  function requestRecycle(session: SessionSummary): Promise<void> {
+  function requestRecycle(session: SessionRow): Promise<void> {
     return requestDestructive(session, 'recycle')
   }
 
@@ -167,12 +174,13 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     detail,
     openDetail,
     closeDetail,
-    renaming,
-    renameBusy,
-    renameError,
-    requestRename,
-    cancelRename,
-    submitRename,
+    editing,
+    editFocus,
+    editBusy,
+    editError,
+    requestEdit,
+    cancelEdit,
+    submitEdit,
     requestDelete,
     requestRecycle,
     requestPrune,

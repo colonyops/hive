@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   FailedSessionDraft: vi.fn(),
   DismissFailedSession: vi.fn(),
   SessionDraftFromActivity: vi.fn(),
+  pin: vi.fn(),
+  pinWhenListed: vi.fn(),
+}))
+vi.mock('../../stores/useTerminalPinnedChats', () => ({
+  useTerminalPinnedChats: () => ({ pin: mocks.pin, pinWhenListed: mocks.pinWhenListed }),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   SessionLaunchOptions: mocks.SessionLaunchOptions,
@@ -98,6 +103,36 @@ describe('useNewSession', () => {
     expect(launch).toHaveBeenCalledWith({ workspace: 'alerts', name: 'triage', prompt: 'Look at this' })
     expect(mocks.CreateSession).not.toHaveBeenCalled()
     expect(s.open.value).toBe(false)
+  })
+
+  it('pins a launched chat to Code when asked', async () => {
+    const launch = vi.fn().mockResolvedValue('chat-1')
+    const s = useNewSession()
+    await s.openBlank('', 'workspace', { workspace: 'alerts', launch })
+
+    await s.submit({ workspace: 'alerts', name: 'triage', pinToCode: true })
+
+    expect(mocks.pin).toHaveBeenCalledWith('chat-1')
+  })
+
+  it('does not pin a launched chat unless asked', async () => {
+    const launch = vi.fn().mockResolvedValue('chat-1')
+    const s = useNewSession()
+    await s.openBlank('', 'workspace', { workspace: 'alerts', launch })
+
+    await s.submit({ workspace: 'alerts', name: 'triage' })
+
+    expect(mocks.pin).not.toHaveBeenCalled()
+  })
+
+  it('pins a background chat once it is listed', async () => {
+    mocks.CreateSession.mockResolvedValue(1)
+    const s = useNewSession()
+    await s.openBlank('', 'workspace')
+
+    await s.submit({ workspace: 'alerts', name: 'triage', pinToCode: true })
+
+    expect(mocks.pinWhenListed).toHaveBeenCalledWith('alerts', 'triage')
   })
 
   it('still creates a repository session when a chat opener switched to Code', async () => {

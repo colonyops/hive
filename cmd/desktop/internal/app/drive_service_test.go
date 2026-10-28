@@ -661,6 +661,8 @@ func TestDriveIsUnavailableBeforeTheEngineStarts(t *testing.T) {
 	assert.Equal(t, KindUnavailable, KindOf(err))
 	_, err = svc.Search(ctx, "plan", 0)
 	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = svc.Recent(ctx, 0)
+	assert.Equal(t, KindUnavailable, KindOf(err))
 	_, err = svc.Document(ctx, "workspaces/ws", "a.md")
 	assert.Equal(t, KindUnavailable, KindOf(err))
 	_, err = svc.CreateFolder(ctx, "workspaces/ws", "x")
@@ -836,9 +838,9 @@ func TestDriveMarkdownRefusesHTMLAndPlainFiles(t *testing.T) {
 	}
 }
 
-// Spaces, Tree and Search pass through to the engine, whose tests own their
+// Spaces, Tree, Search and Recent pass through to the engine, whose tests own their
 // behaviour; the facade adds the space-key check and the limit check.
-func TestDriveTreeAndSearchGuardTheirArguments(t *testing.T) {
+func TestDriveTreeSearchAndRecentGuardTheirArguments(t *testing.T) {
 	f := newDriveFixture(t)
 	ctx := t.Context()
 	f.writeDoc(t, "acme/site", "plans/release-plan.md", "---\ntitle: Release\n---\n")
@@ -851,6 +853,13 @@ func TestDriveTreeAndSearchGuardTheirArguments(t *testing.T) {
 	require.Len(t, hits, 1)
 	assert.Equal(t, "plans/release-plan.md", hits[0].Entry.Path)
 	_, err = f.svc.Search(ctx, "plan", -1)
+	assert.Equal(t, KindInvalid, KindOf(err))
+
+	recent, err := f.svc.Recent(ctx, 0)
+	require.NoError(t, err)
+	require.Len(t, recent, 1)
+	assert.Equal(t, "plans/release-plan.md", recent[0].Entry.Path)
+	_, err = f.svc.Recent(ctx, -1)
 	assert.Equal(t, KindInvalid, KindOf(err))
 }
 

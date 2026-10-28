@@ -12,6 +12,7 @@ import type {
   SessionDraft,
   SessionLaunchOptions as SessionLaunchOptionsView,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
 import type { InboxItem } from '../types/feed'
 import { useToasts } from './useToasts'
 
@@ -24,8 +25,8 @@ interface Draft {
 }
 export type SessionTarget = 'repository' | 'workspace'
 
-/** Starts a chat where the opener can show it, instead of as a background job. */
-export type ChatLauncher = (input: { workspace: string; name: string; prompt: string }) => Promise<void>
+/** Starts a chat where the opener can show it, instead of as a background job. Resolves to the chat's id, or null when none was created. */
+export type ChatLauncher = (input: { workspace: string; name: string; prompt: string }) => Promise<string | null>
 
 export interface ChatOpener {
   workspace: string
@@ -305,12 +306,14 @@ export function useNewSession() {
     name: string
     prompt?: string
     agent?: string
+    pinToCode?: boolean
   }): Promise<void> {
     if (busy.value) return
     if (input.workspace && chatLauncher) {
       const launch = chatLauncher
       cancel()
-      await launch({ workspace: input.workspace, name: input.name, prompt: input.prompt ?? '' })
+      const id = await launch({ workspace: input.workspace, name: input.name, prompt: input.prompt ?? '' })
+      if (id && input.pinToCode) useTerminalPinnedChats().pin(id)
       return
     }
     busy.value = true
@@ -327,6 +330,7 @@ export function useNewSession() {
         agent: input.agent ?? '',
         itemIds: [...itemIDs.value],
       })
+      if (input.workspace && input.pinToCode) useTerminalPinnedChats().pinWhenListed(input.workspace, input.name)
       showToast(`Creating session ${input.name}…`, { severity: 'info' })
       open.value = false
       options.value = null

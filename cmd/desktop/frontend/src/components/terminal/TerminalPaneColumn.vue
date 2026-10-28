@@ -16,6 +16,7 @@ import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import PaneStatusBar from '../PaneStatusBar.vue'
+import SessionTagsStatus from '../SessionTagsStatus.vue'
 import SessionStatusChips from '../SessionStatusChips.vue'
 import TerminalTab from '../TerminalTab.vue'
 import { useClipboard } from '@hive/ui/composables/useClipboard'
@@ -33,7 +34,7 @@ import { useTerminalModeContext } from './terminalModeContext'
 const props = defineProps<{ active: boolean }>()
 const emit = defineEmits<{ 'open-tasks': []; 'session-repo-key': [repoKey: string] }>()
 
-const { pool, tree, attach, ops } = useTerminalModeContext()
+const { pool, tree, attach, ops, sessions } = useTerminalModeContext()
 const visible = computed(() => pool.visible)
 
 const tabs = computed(() => visible.value?.tabs.value ?? [])
@@ -169,6 +170,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
         :pull-request-error="sessionPullRequestError"
         @refresh-pull-request="refreshSessionStatus({ refreshPullRequest: true })"
       />
+      <SessionTagsStatus :tags="statusBarRow.tags" @edit="sessions.requestEdit(statusBarRow, 'tags')" />
       <template #actions>
         <IconButton
           v-for="action in ops.actions.statusBarActions.value"

@@ -200,6 +200,14 @@ func TestTreeItem_FilterValue(t *testing.T) {
 			want: "myrepo my-session",
 		},
 		{
+			name: "session tags follow the name",
+			item: TreeItem{
+				RepoPrefix: "myrepo",
+				Session:    session.Session{Name: "my-session", Tags: []string{"auto", "backend"}},
+			},
+			want: "myrepo my-session auto backend",
+		},
+		{
 			name: "recycled placeholder returns repoName + recycled",
 			item: TreeItem{
 				IsRecycledPlaceholder: true,

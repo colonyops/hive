@@ -20,7 +20,7 @@ func launchNodeAction(id string, node flow.Node) (actions.Action, bool) {
 	switch c := node.Config.(type) {
 	case *flow.LaunchSessionConfig:
 		cfg = &LaunchNodeActionConfig{
-			PromptTemplate: c.Prompt, RepoTemplate: c.Repo, Agent: c.Agent,
+			PromptTemplate: c.Prompt, RepoTemplate: c.Repo, Agent: c.Agent, Tags: c.Tags,
 			NameTemplate: c.SessionName,
 		}
 		if label == "" {

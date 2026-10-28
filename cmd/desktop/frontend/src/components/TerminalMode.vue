@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { onMounted, toRef } from 'vue'
+import { computed, onMounted, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
 import ActionInputsDialog from './ActionInputsDialog.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
+import SessionEditDialog from './SessionEditDialog.vue'
 import DrivePane from './drive/DrivePane.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
-import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
 import TerminalPaneColumn from './terminal/TerminalPaneColumn.vue'
 import TerminalSidebar from './terminal/TerminalSidebar.vue'
 import { provideTerminalMode } from './terminal/terminalModeContext'
@@ -25,6 +25,7 @@ import { openLink } from '../composables/useXtermPane'
 import { spaceGroup, type DriveScope } from '../lib/drive'
 import { useTerminalAvailability } from '../stores/useTerminalAvailability'
 import { useTerminalPoolSize } from '../stores/useTerminalPoolSize'
+import { useTerminalSessions } from '../stores/useTerminalSessions'
 import '@xterm/xterm/css/xterm.css'
 
 // `active` is whether this mode is the surface on screen. The component is
@@ -86,7 +87,18 @@ const { prefetch: prefetchNewSession } = useNewSession()
 onMounted(prefetchNewSession)
 
 const { pendingInputs: actionInputs, inputsBusy, inputsError, cancelInputs, submitInputs } = ops.actions
-const { confirmation, detail, closeDetail, renaming, renameBusy, renameError, cancelRename, submitRename } = sessions
+const { confirmation, detail, closeDetail, editing, editFocus, editBusy, editError, cancelEdit, submitEdit } = sessions
+
+// Every tag already in use is offered, so one spelling spreads instead of
+// near-duplicates.
+const { sessions: sessionRows } = useTerminalSessions()
+const knownTags = computed(() => {
+  const seen = new Map<string, string>()
+  for (const row of sessionRows.value) {
+    for (const tag of row.tags ?? []) if (!seen.has(tag.toLowerCase())) seen.set(tag.toLowerCase(), tag)
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b))
+})
 </script>
 
 <template>
@@ -148,17 +160,16 @@ const { confirmation, detail, closeDetail, renaming, renameBusy, renameError, ca
       @submit="submitInputs"
     />
     <SessionDetailDialog v-if="detail" :detail="detail" @close="closeDetail" />
-    <RenameDialog
-      v-if="renaming"
-      title="Rename session"
-      label="Session name"
-      hint="Its terminal session is renamed too, so an open terminal reconnects."
-      testid="session-rename"
-      :name="renaming.name"
-      :busy="renameBusy"
-      :error="renameError"
-      @close="cancelRename"
-      @save="submitRename"
+    <SessionEditDialog
+      v-if="editing"
+      :name="editing.name"
+      :tags="editing.tags"
+      :focus="editFocus"
+      :suggestions="knownTags"
+      :busy="editBusy"
+      :error="editError"
+      @close="cancelEdit"
+      @save="submitEdit"
     />
     <ConfirmationHost :confirmation="confirmation" testid="session-confirmation" />
   </div>

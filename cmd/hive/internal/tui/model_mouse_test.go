@@ -37,7 +37,10 @@ func (s *mouseTestStore) Get(_ context.Context, _ string) (session.Session, erro
 	return session.Session{}, session.ErrNotFound
 }
 func (s *mouseTestStore) Save(_ context.Context, _ session.Session) error { return nil }
-func (s *mouseTestStore) Delete(_ context.Context, _ string) error        { return nil }
+func (s *mouseTestStore) Update(_ context.Context, _ string, _ func(*session.Session) error) (session.Session, error) {
+	return session.Session{}, session.ErrNotFound
+}
+func (s *mouseTestStore) Delete(_ context.Context, _ string) error { return nil }
 
 type mouseTestGit struct{}
 
@@ -98,12 +101,17 @@ var (
 // newMouseTestSessionService creates a minimal SessionService for mouse tests.
 func newMouseTestSessionService(t *testing.T) *sessionsvc.Service {
 	t.Helper()
+	return newTestSessionService(t, &mouseTestStore{})
+}
+
+func newTestSessionService(t *testing.T, store session.Store) *sessionsvc.Service {
+	t.Helper()
 	tb := testbus.New(t)
 	log := zerolog.New(io.Discard)
 	r := tmpl.New(tmpl.Config{})
 	return sessionsvc.NewService(
 		log,
-		&mouseTestStore{},
+		store,
 		&mouseTestGit{},
 		&hiveconfig.Config{DataDir: t.TempDir(), GitPath: "git"},
 		tb.EventBus,

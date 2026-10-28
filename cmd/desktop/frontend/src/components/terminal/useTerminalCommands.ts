@@ -73,11 +73,11 @@ export function attachedSessionCommands(context: TerminalModeContext, attached: 
       run: () => void sessions.openDetail(attached),
     },
     hive && {
-      id: 'terminal:session:rename',
-      title: 'Rename session…',
-      keywords: ['session'],
+      id: 'terminal:session:edit',
+      title: 'Edit session…',
+      keywords: ['session', 'rename', 'name', 'tag', 'tags'],
       icon: IconPencil,
-      run: () => sessions.requestRename(attached),
+      run: () => sessions.requestEdit(attached),
     },
     hive &&
       live && {

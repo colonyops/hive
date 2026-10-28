@@ -53,6 +53,16 @@ func (s *DriveService) Search(ctx context.Context, query string, limit int) ([]H
 	return hitWiresOf(hits), nil
 }
 
+// Recent lists every space's documents, newest created first. limit 0 is
+// the drive's default cap.
+func (s *DriveService) Recent(ctx context.Context, limit int) ([]HitWire, error) {
+	hits, err := s.drive.Recent(ctx, limit)
+	if err != nil {
+		return nil, s.fail(ctx, "recent", err)
+	}
+	return hitWiresOf(hits), nil
+}
+
 func (s *DriveService) Document(ctx context.Context, space, path string) (_ DocumentWire, err error) {
 	ctx, span := startCommand(ctx, "open", space, path)
 	defer observe.End(span, &err)

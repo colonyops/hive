@@ -85,6 +85,7 @@ type ItemSessionView struct {
 	Slug      string    `json:"slug"`
 	Repo      string    `json:"repo"`
 	State     string    `json:"state"`
+	Tags      []string  `json:"tags"`
 	Running   bool      `json:"running"`
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -392,6 +393,7 @@ func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]Ite
 			Slug:      summary.Slug,
 			Repo:      summary.Remote,
 			State:     string(summary.State),
+			Tags:      append([]string{}, summary.Tags...),
 			CreatedAt: time.UnixMilli(link.CreatedAt),
 		})
 	}
@@ -765,6 +767,66 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 		return session.Session{}, Wrap(err, KindInternal, "re-reading renamed session %q", id)
 	}
 	return renamed, nil
+}
+
+// EditSession renames a session and replaces its tags, writing only what
+// changed, and returns the session. The tags are checked before the rename,
+// so a bad tag cannot leave the edit half done.
+func (s *SessionsService) EditSession(ctx context.Context, id, name string, tags []string) (session.Session, error) {
+	normalized, err := session.NormalizeTags(tags)
+	if err != nil {
+		return session.Session{}, Errorf(KindInvalid, "%s", err)
+	}
+	current, err := s.hive.Sessions().GetSession(ctx, id)
+	if err != nil {
+		if errors.Is(err, session.ErrNotFound) {
+			return session.Session{}, Wrap(err, KindNotFound, "session %q not found", id)
+		}
+		return session.Session{}, Wrap(err, KindInternal, "reading session %q", id)
+	}
+	edited := current
+	if strings.TrimSpace(name) != current.Name {
+		if edited, err = s.RenameSession(ctx, id, name); err != nil {
+			return session.Session{}, err
+		}
+	}
+	if !slices.Equal(normalized, current.Tags) {
+		if edited, err = s.SetSessionTags(ctx, id, normalized); err != nil {
+			return session.Session{}, err
+		}
+	}
+	return edited, nil
+}
+
+// SetSessionTags replaces a session's tags and returns the session.
+func (s *SessionsService) SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error) {
+	return s.saveTags(id, func(sessions *sessionsvc.Service) (session.Session, error) {
+		return sessions.SetSessionTags(ctx, id, tags)
+	})
+}
+
+// EditSessionTags adds and then removes tags on a session, leaving its
+// other tags in place, and returns the session.
+func (s *SessionsService) EditSessionTags(ctx context.Context, id string, add, remove []string) (session.Session, error) {
+	return s.saveTags(id, func(sessions *sessionsvc.Service) (session.Session, error) {
+		return sessions.EditSessionTags(ctx, id, add, remove)
+	})
+}
+
+func (s *SessionsService) saveTags(id string, save func(*sessionsvc.Service) (session.Session, error)) (session.Session, error) {
+	if strings.TrimSpace(id) == "" {
+		return session.Session{}, Errorf(KindInvalid, "session id is required")
+	}
+	saved, err := save(s.hive.Sessions())
+	switch {
+	case errors.Is(err, session.ErrInvalidTag):
+		return session.Session{}, Errorf(KindInvalid, "%s", err)
+	case errors.Is(err, session.ErrNotFound):
+		return session.Session{}, Wrap(err, KindNotFound, "session %q not found", id)
+	case err != nil:
+		return session.Session{}, Wrap(err, KindInternal, "updating tags on session %q", id)
+	}
+	return saved, nil
 }
 
 // StartTmuxSession spawns the tmux session a slug names. A session hive knows
