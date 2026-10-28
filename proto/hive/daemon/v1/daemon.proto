@@ -1,0 +1,292 @@
+syntax = "proto3";
+
+package hive.daemon.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// DaemonService describes and controls the daemon process itself.
+service DaemonService {
+  rpc Hello(HelloRequest) returns (HelloResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc Stop(StopRequest) returns (StopResponse);
+  // Reload re-reads config.yaml and rebuilds the engine's services.
+  rpc Reload(ReloadRequest) returns (ReloadResponse);
+}
+
+// SessionService is sessionapi.API over the wire. A create failure carries a
+// LaunchErrorDetail or a CreateSessionErrorDetail as a Connect error detail.
+service SessionService {
+  rpc List(ListRequest) returns (ListResponse);
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc Create(CreateRequest) returns (stream CreateResponse);
+  rpc CreateFromRequest(CreateFromRequestRequest) returns (CreateFromRequestResponse);
+  rpc CreateWithWindows(CreateWithWindowsRequest) returns (CreateWithWindowsResponse);
+  rpc Rename(RenameRequest) returns (RenameResponse);
+  rpc SetGroup(SetGroupRequest) returns (SetGroupResponse);
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+  rpc Recycle(RecycleRequest) returns (stream RecycleResponse);
+  rpc Prune(PruneRequest) returns (PruneResponse);
+  rpc Risk(RiskRequest) returns (RiskResponse);
+  rpc LaunchOptions(LaunchOptionsRequest) returns (LaunchOptionsResponse);
+  // Statuses answers from the daemon's status loop, never from a fetch of
+  // its own, so every client shares one tracker.
+  rpc Statuses(StatusesRequest) returns (StatusesResponse);
+}
+
+message HelloRequest {}
+
+message HelloResponse {
+  string version = 1;
+  int32 pid = 2;
+  string data_dir = 3;
+  google.protobuf.Timestamp started_at = 4;
+  bool status_available = 5;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool db_ok = 1;
+  string db_error = 2;
+  bool tmux_ok = 3;
+  StatusLoopHealth status_loop = 4;
+  map<string, int32> sessions_by_state = 5;
+  google.protobuf.Duration uptime = 6;
+}
+
+message StatusLoopHealth {
+  google.protobuf.Timestamp last_tick = 1;
+  int64 last_duration_ms = 2;
+  int64 errors = 3;
+  bool paused = 4;
+}
+
+message StopRequest {}
+
+message StopResponse {}
+
+message ReloadRequest {}
+
+message ReloadResponse {}
+
+message Session {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  string path = 4;
+  string remote = 5;
+  string state = 6;
+  string clone_strategy = 7;
+  repeated string tags = 8;
+  map<string, string> metadata = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message ListRequest {}
+
+message ListResponse {
+  repeated Session sessions = 1;
+}
+
+message GetRequest {
+  string id = 1;
+}
+
+message GetResponse {
+  Session session = 1;
+}
+
+// CreateRequest mirrors sessionsvc.CreateOptions. The daemon always creates
+// in the background, so the caller attaches itself. remote must be set and
+// source must be absolute: the daemon has its own working directory.
+message CreateRequest {
+  string name = 1;
+  string session_id = 2;
+  string prompt = 3;
+  string remote = 4;
+  string source = 5;
+  bool use_batch_spawn = 6;
+  string clone_strategy = 7;
+  bool skip_spawn = 8;
+  string agent_key = 9;
+  repeated string tags = 10;
+  repeated string env = 11;
+  string collision_suffix = 12;
+}
+
+message CreateResponse {
+  oneof event {
+    // progress_line is one line the create wrote to its progress writer.
+    string progress_line = 1;
+    // session arrives last, once the create succeeded.
+    Session session = 2;
+  }
+}
+
+message CreateFromRequestRequest {
+  string name = 1;
+  string prompt = 2;
+  string agent = 3;
+  string repo = 4;
+  string collision_suffix = 5;
+  repeated string tags = 6;
+  repeated string env = 7;
+}
+
+message CreateFromRequestResponse {
+  Session session = 1;
+}
+
+message PaneSpec {
+  string command = 1;
+  string working_directory = 2;
+  string size = 3;
+  string split = 4;
+}
+
+message WindowSpec {
+  string name = 1;
+  string command = 2;
+  string working_directory = 3;
+  bool focus = 4;
+  repeated PaneSpec panes = 5;
+}
+
+message CreateWithWindowsRequest {
+  string name = 1;
+  string remote = 2;
+  string sh_cmd = 3;
+  repeated WindowSpec windows = 4;
+}
+
+message CreateWithWindowsResponse {
+  Session session = 1;
+}
+
+message RenameRequest {
+  string id = 1;
+  string name = 2;
+}
+
+message RenameResponse {}
+
+message SetGroupRequest {
+  string id = 1;
+  string group = 2;
+}
+
+message SetGroupResponse {}
+
+message DeleteRequest {
+  string id = 1;
+}
+
+message DeleteResponse {}
+
+message RecycleRequest {
+  string id = 1;
+}
+
+message RecycleResponse {
+  string progress_line = 1;
+}
+
+message PruneRequest {
+  bool all = 1;
+}
+
+message PruneResponse {
+  int32 count = 1;
+}
+
+message RiskRequest {
+  string id = 1;
+}
+
+message RiskResponse {
+  bool uncommitted_changes = 1;
+  bool unpushed_commits = 2;
+}
+
+message LaunchOptionsRequest {}
+
+message LaunchRepository {
+  string name = 1;
+  string remote = 2;
+  string source = 3;
+}
+
+message LaunchOptionsResponse {
+  repeated LaunchRepository repositories = 1;
+  string default_repository = 2;
+  repeated string agents = 3;
+  string default_agent = 4;
+}
+
+message RootRepoTarget {
+  string name = 1;
+  string path = 2;
+}
+
+message StatusesRequest {
+  repeated string session_ids = 1;
+  repeated RootRepoTarget roots = 2;
+}
+
+message StatusesResponse {
+  // statuses is keyed like status.Service.FetchBatch: session id, or
+  // status.RootStatusKey for a root.
+  map<string, TerminalStatus> statuses = 1;
+}
+
+message PaneStatus {
+  string pane_id = 1;
+  string status = 2;
+  string tool = 3;
+  string pane_content = 4;
+  bool is_agent = 5;
+}
+
+message WindowStatus {
+  string window_index = 1;
+  string window_name = 2;
+  string status = 3;
+  string tool = 4;
+  string pane_content = 5;
+  repeated PaneStatus panes = 6;
+}
+
+message TerminalStatus {
+  bool session_present = 1;
+  bool presence_known = 2;
+  string status = 3;
+  string tool = 4;
+  string window_name = 5;
+  string pane_content = 6;
+  bool is_loading = 7;
+  string error = 8;
+  repeated WindowStatus windows = 9;
+}
+
+// LaunchErrorDetail carries every sessionsvc.LaunchError field. err is the
+// wrapped error's text.
+message LaunchErrorDetail {
+  string name = 1;
+  string remote = 2;
+  string destination = 3;
+  string clone_strategy = 4;
+  bool leftover_checkout = 5;
+  string step = 6;
+  string output = 7;
+  string err = 8;
+}
+
+// CreateSessionErrorDetail carries every sessionsvc.CreateSessionError field.
+message CreateSessionErrorDetail {
+  string operation = 1;
+  string destination = 2;
+  string clone_strategy = 3;
+  string err = 4;
+}

@@ -104,7 +104,7 @@ run = "buf generate"
 
 [tasks.generate]
 description = "Run all code generators"
-depends = ["generate:enums", "generate:sqlc", "generate:tygo"]
+depends = ["generate:enums", "generate:sqlc", "generate:tygo", "generate:proto"]
 sources = ["internal/hive/events/events.go"]
 outputs = ["internal/hive/events/eventbus.gen.go"]
 run = "go generate ./..."
@@ -129,8 +129,8 @@ env = { HIVE_DEFAULT_AGENT = "" }
 run = "go test -race -coverprofile=coverage.out -covermode=atomic ./... -v -cover"
 
 [tasks.lint]
-description = "Run golangci-lint"
-run = "golangci-lint run ./..."
+description = "Run golangci-lint and buf lint"
+run = ["golangci-lint run ./...", "buf lint"]
 
 [tasks.fmt]
 description = "Run golangci-lint fmt"
