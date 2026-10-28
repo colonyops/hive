@@ -252,7 +252,8 @@ describe('DrivePage', () => {
     expect(scope.value).toEqual({ space: 'shared', path: 'notes.md', session: null })
 
     await wrapper.get('[data-testid="drive-page-recent-toggle"]').trigger('click')
-    expect(wrapper.find('[data-testid="drive-page-recent-shared:notes.md"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="drive-page-recent-body"]').isVisible()).toBe(false)
+    expect(wrapper.get('[data-testid="drive-page-files-body"]').isVisible()).toBe(true)
   })
 
   it('re-reads the recent list when the drive changes, and hides it while a search lists hits', async () => {

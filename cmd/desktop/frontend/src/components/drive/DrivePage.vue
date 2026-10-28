@@ -214,6 +214,7 @@ useEscapeToClose(() => emit('close'))
         :selected="shown"
         :error="treeError"
         search-every-space
+        tree-title="Files"
         testid="drive-page"
         @pick="openDocument"
         @open-hit="openHit"
