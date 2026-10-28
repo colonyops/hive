@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -189,4 +190,23 @@ func TestStatusLoopAnswersNothingWithoutAStatusSource(t *testing.T) {
 	loop := newTestLoop(&fakeClock{now: time.Unix(1000, 0)}, &fakeFetch{})
 	loop.available = func() bool { return false }
 	assert.Empty(t, loop.snapshot([]*session.Session{&active}, nil))
+}
+
+func TestStatusLoopKeepsTheLastSnapshotWhenListingFails(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(1000, 0)}
+	fetch := &fakeFetch{}
+	loop := newTestLoop(clock, fetch)
+	var errorsReported int
+	loop.onError = func() { errorsReported++ }
+
+	loop.tick(t.Context())
+	loop.list = func(context.Context) ([]session.Session, error) { return nil, errors.New("database is locked") }
+	clock.Advance(time.Second)
+	loop.tick(t.Context())
+
+	assert.Equal(t, int64(1), loop.health().GetErrors())
+	assert.Equal(t, 1, errorsReported)
+	assert.Equal(t, 1, fetch.count())
+	assert.True(t, time.Unix(1000, 0).Equal(loop.health().GetLastTick().AsTime()), "a failed tick is not a tick")
+	assert.Equal(t, terminal.StatusReady, loop.snapshot([]*session.Session{&active}, nil)["a"].Status)
 }
