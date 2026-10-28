@@ -92,6 +92,12 @@ commands, and Hive Desktop reach it on a unix socket.`,
 				Action: cmd.uninstall,
 			},
 			{
+				Name:   "dial-stdio",
+				Usage:  "Bridge stdin and stdout to the daemon socket, starting the daemon if needed",
+				Hidden: true,
+				Action: cmd.dialStdio,
+			},
+			{
 				Name:   "metrics",
 				Usage:  "Print the running daemon's Prometheus metrics",
 				Action: cmd.metrics,
@@ -237,6 +243,25 @@ func (cmd *DaemonCmd) stop(ctx context.Context, _ *cli.Command) error {
 	}
 	fmt.Fprintln(os.Stderr, "daemon stopped")
 	return nil
+}
+
+// dialStdio is the remote end of `ssh <host> -- hive daemon dial-stdio`.
+func (cmd *DaemonCmd) dialStdio(ctx context.Context, _ *cli.Command) error {
+	conn, err := cmd.app.DaemonClient(true).Dial(ctx)
+	if err != nil {
+		return fmt.Errorf("reach the daemon at %s: %w", daemon.SocketPath(cmd.flags.DataDir), err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	go func() {
+		_, _ = io.Copy(conn, os.Stdin)
+		// Half-close so the daemon sees EOF and the reply still drains.
+		if cw, ok := conn.(interface{ CloseWrite() error }); ok {
+			_ = cw.CloseWrite()
+		}
+	}()
+	_, err = io.Copy(os.Stdout, conn)
+	return err
 }
 
 func (cmd *DaemonCmd) metrics(ctx context.Context, c *cli.Command) error {

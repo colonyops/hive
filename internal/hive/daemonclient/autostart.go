@@ -61,6 +61,10 @@ func noDaemon(err error) bool {
 	return errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.ECONNREFUSED)
 }
 
+// Dial opens a raw connection to the daemon, starting one when AutoStart is
+// set and none answers. `hive daemon dial-stdio` bridges it to ssh.
+func (c *Client) Dial(ctx context.Context) (net.Conn, error) { return c.dial(ctx) }
+
 func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 	conn, err := c.dialer(ctx)
 	if err == nil || c.starter == nil || !noDaemon(err) {

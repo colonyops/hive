@@ -1,0 +1,83 @@
+package sshdial
+
+import (
+	"io"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestValidateRejectsUnsafeHosts(t *testing.T) {
+	bad := []Host{
+		{Name: "-oProxyCommand=x"},
+		{Name: "a b"},
+		{Name: ""},
+		{Name: "box", Binary: "hive;rm -rf ~"},
+		{Name: "box", Binary: "$(id)"},
+		{Name: "box", ConfigFile: "a\nb"},
+	}
+	for _, h := range bad {
+		require.Error(t, h.Validate(), "%+v", h)
+	}
+	assert.NoError(t, Host{Name: "ada@build-1.lan", Binary: "~/go/bin/hive"}.Validate())
+}
+
+func TestArgs(t *testing.T) {
+	want := []string{
+		"-F", "/state/ssh_config",
+		"-T",
+		"-o", "BatchMode=yes",
+		"-o", "StrictHostKeyChecking=yes",
+		"-o", "ConnectTimeout=10",
+		"-o", "ServerAliveInterval=15",
+		"-o", "ServerAliveCountMax=3",
+		"fixture", "--", `"$HOME"/'go/bin/hive'`, "daemon", "dial-stdio",
+	}
+	assert.Equal(t, want, Args(Host{Name: "fixture", ConfigFile: "/state/ssh_config", Binary: "~/go/bin/hive"}))
+
+	args := Args(Host{Name: "box"})
+	assert.Equal(t, []string{"box", "--", "hive", "daemon", "dial-stdio"}, args[len(args)-5:])
+	args = Args(Host{Name: "box", Binary: "/usr/local/bin/hive"})
+	assert.Equal(t, "'/usr/local/bin/hive'", args[len(args)-3])
+}
+
+// fakeSSH puts an ssh on PATH that echoes stdin and records its pid.
+func fakeSSH(t *testing.T) (pidFile string) {
+	t.Helper()
+	dir := t.TempDir()
+	pidFile = filepath.Join(dir, "pid")
+	script := "#!/bin/sh\necho $$ > " + pidFile + "\nexec cat\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ssh"), []byte(script), 0o755))
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return pidFile
+}
+
+func TestDialStdioRoundTripsAndKillsSSHOnClose(t *testing.T) {
+	pidFile := fakeSSH(t)
+	c, err := DialStdio(t.Context(), Host{Name: "fixture"}, nil)
+	require.NoError(t, err)
+
+	_, err = c.Write([]byte("ping"))
+	require.NoError(t, err)
+	buf := make([]byte, 4)
+	_, err = io.ReadFull(c, buf)
+	require.NoError(t, err)
+	assert.Equal(t, "ping", string(buf))
+
+	sshProc := c.(*conn).cmd
+	require.NoError(t, c.Close())
+	assert.NotNil(t, sshProc.ProcessState, "Close waits for ssh to exit")
+	assert.FileExists(t, pidFile)
+
+	done := make(chan struct{})
+	go func() { _ = c.Close(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("a second Close blocked")
+	}
+}
