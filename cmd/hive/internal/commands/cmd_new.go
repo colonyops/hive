@@ -13,6 +13,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/urfave/cli/v3"
+	"golang.org/x/term"
 )
 
 // createSessionFlags holds the flag values shared by 'hive new' and
@@ -104,12 +105,19 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
-	if !f.background {
+	if !f.background && canAttach() {
 		if err := app.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(*sess), multiplexer.AttachStreams{}); err != nil {
 			return sess, fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
 		}
 	}
 	return sess, nil
+}
+
+// canAttach reports whether a tmux client can show the new session: inside
+// tmux the CLI switches the client, and outside it attaches on the terminal.
+// A script with neither gets the session created and left in the background.
+func canAttach() bool {
+	return os.Getenv("TMUX") != "" || term.IsTerminal(int(os.Stdin.Fd())) //nolint:gosec // a file descriptor fits in int
 }
 
 // resolveCreateLocation fills in what depends on where the CLI runs, because
