@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -44,6 +45,12 @@ func fakeDaemon(t *testing.T, code int, marker string) string {
 	script += fmt.Sprintf("exit %d\n", code)
 	path := filepath.Join(t.TempDir(), "hive")
 	require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
+	// The first run of a new executable can take seconds on a loaded macOS
+	// host, so it runs once here, before a test's timer starts.
+	_ = exec.Command(path).Run() //nolint:noctx // a short local script
+	if marker != "" {
+		require.NoError(t, os.Remove(marker))
+	}
 	return path
 }
 
@@ -74,6 +81,11 @@ func serveHealthz(t *testing.T, socket string) error {
 }
 
 func TestSpawnGivesWayToADaemonAnotherClientStarted(t *testing.T) {
+	original := spawnReadyTimeout
+	t.Cleanup(func() { spawnReadyTimeout = original })
+	// Spawn returns as soon as the rival answers, so a long limit costs
+	// nothing when the test passes.
+	spawnReadyTimeout = 30 * time.Second
 	dataDir := shortDataDir(t)
 	marker := filepath.Join(t.TempDir(), "exited")
 	binary := fakeDaemon(t, 1, marker)
