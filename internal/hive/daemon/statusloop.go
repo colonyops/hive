@@ -107,6 +107,9 @@ func (l *statusLoop) tick(ctx context.Context) {
 			l.logger.Debug().Msg("status loop paused: no client asked recently")
 		}
 		l.paused = true
+		// Nothing polls while paused, so the snapshot ages without bound.
+		// The first request after the pause reads loading, not old statuses.
+		l.snap = map[string]status.TerminalStatus{}
 		l.mu.Unlock()
 		return
 	}

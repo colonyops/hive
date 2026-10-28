@@ -153,10 +153,12 @@ func TestStatusLoopPausesWhenIdleAndResumesOnARequest(t *testing.T) {
 	assert.True(t, loop.health().GetPaused())
 
 	got := loop.snapshot([]*session.Session{&active}, nil)
-	assert.Equal(t, terminal.StatusReady, got["a"].Status, "the waking request gets the current snapshot")
+	assert.True(t, got["a"].IsLoading, "the waking request must not get statuses from before the pause")
+	assert.False(t, got["a"].PresenceKnown)
 	assert.False(t, loop.health().GetPaused())
 	loop.tick(t.Context())
 	assert.Equal(t, 2, fetch.count())
+	assert.Equal(t, terminal.StatusReady, loop.snapshot([]*session.Session{&active}, nil)["a"].Status)
 }
 
 func TestStatusLoopRunWakesFromAPause(t *testing.T) {
