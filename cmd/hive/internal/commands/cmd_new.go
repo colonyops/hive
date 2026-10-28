@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -105,12 +106,19 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
-	if !f.background && canAttach() {
+	if !f.background && createsTmuxSession(app, opts.Remote) && canAttach() {
 		if err := app.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(*sess), multiplexer.AttachStreams{}); err != nil {
 			return sess, fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
 		}
 	}
 	return sess, nil
+}
+
+// createsTmuxSession reports whether the spawn strategy for remote creates
+// the tmux session Target names. Legacy spawn commands run whatever the user
+// wrote, which may open a terminal tab instead, so there is nothing to attach.
+func createsTmuxSession(app *app.App, remote string) bool {
+	return hiveconfig.ResolveSpawn(app.Config.Rules, remote, false).IsWindows()
 }
 
 // canAttach reports whether a tmux client can show the new session: inside
