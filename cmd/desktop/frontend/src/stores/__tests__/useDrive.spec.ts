@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   Spaces: vi.fn(),
   Tree: vi.fn(),
   Search: vi.fn(),
+  Recent: vi.fn(),
   CreateFolder: vi.fn(),
   Rename: vi.fn(),
   Move: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   Spaces: mocks.Spaces,
   Tree: mocks.Tree,
   Search: mocks.Search,
+  Recent: mocks.Recent,
   CreateFolder: mocks.CreateFolder,
   Rename: mocks.Rename,
   Move: mocks.Move,
@@ -107,6 +109,22 @@ describe('useDrive', () => {
     const drive = useDrive()
     expect(await drive.search('plan')).toEqual([])
     expect(mocks.Search).toHaveBeenCalledWith('plan', 50)
+  })
+
+  it('loads the recent documents once asked for, then follows every change to any space', async () => {
+    mocks.Recent.mockResolvedValue([{ space: space('shared', 'Shared'), entry: doc('s.md') }])
+    const drive = useDrive()
+    fire('drive:updated', { space: 'acme/site', paths: ['a.md'], session: '', hiveSession: '' })
+    await flushPromises()
+    expect(mocks.Recent).not.toHaveBeenCalled()
+
+    await Promise.all([drive.ensureRecent(), drive.ensureRecent()])
+    expect(mocks.Recent.mock.calls).toEqual([[8]])
+    expect(drive.recent.value.map((hit) => hit.entry.path)).toEqual(['s.md'])
+
+    fire('drive:updated', { space: 'acme/site', paths: ['b.md'], session: '', hiveSession: '' })
+    await flushPromises()
+    expect(mocks.Recent).toHaveBeenCalledTimes(2)
   })
 
   it('runs each reorganization through its binding and then re-reads the space', async () => {

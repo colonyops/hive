@@ -6,6 +6,7 @@ import { watchDebounced } from '@vueuse/core'
 import { computed, onMounted, ref, shallowRef } from 'vue'
 import IconFolderPlus from '~icons/lucide/folder-plus'
 import DriveEntryMenu from './DriveEntryMenu.vue'
+import DriveSection from './DriveSection.vue'
 import DriveTree from './DriveTree.vue'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
@@ -26,12 +27,14 @@ const props = defineProps<{
   selected: string | null
   error?: string | null
   compact?: boolean
+  /** Heads the tree with a collapsible section of this title, which takes the new folder button. */
+  treeTitle?: string
   /** The field searches every space and lists hits in place of the tree. */
   searchEverySpace?: boolean
   /** Focuses the field on mount, for a browser that opens on request. */
   autofocus?: boolean
   /**
-   * Derives `-browse`, `-search`, `-new-folder-open`, `-tree`, `-row-<path>`, `-hit-<space>:<path>`,
+   * Derives `-browse`, `-search`, `-new-folder-open`, `-files`, `-tree`, `-row-<path>`, `-hit-<space>:<path>`,
    * `-hits-error`, `-tree-error`, `-browse-empty`, and the entry menu's ids (DriveEntryMenu).
    */
   testid: string
@@ -161,14 +164,17 @@ function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | n
         @escape="emit('escape')"
       />
       <IconButton
-        v-if="tree"
+        v-if="tree && !treeTitle"
         label="New folder"
         :icon="IconFolderPlus"
         :data-testid="`${testid}-new-folder-open`"
         @click="entryMenu?.newFolder('')"
       />
     </div>
-    <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-2 pt-1">
+    <div
+      class="hive-scroll flex min-h-0 flex-1 flex-col overflow-y-auto"
+      :class="treeTitle && !searching ? '' : 'pb-2 pt-1'"
+    >
       <template v-if="searching">
         <InlineError
           v-if="hitsError"
@@ -202,33 +208,54 @@ function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | n
         />
       </template>
       <template v-else>
-        <InlineError
-          v-if="error"
-          variant="line"
-          class="px-3 py-2 leading-relaxed"
-          :message="error"
-          :testid="`${testid}-tree-error`"
-        />
-        <DriveTree
-          v-if="tree"
-          ref="treeRef"
-          :space="space"
-          :tree="tree"
-          :selected="selected"
-          :filter="filter"
-          :compact="compact"
-          :testid="testid"
-          @pick="emit('pick', $event)"
-          @menu="openMenu"
-          @moved="(from, to) => emit('moved', from, to)"
-        />
-        <EmptyState
-          v-if="empty || noMatches"
-          variant="inline"
-          class="px-3 py-2"
-          :message="empty ? 'No documents yet.' : 'No documents match.'"
-          :data-testid="`${testid}-browse-empty`"
-        />
+        <!-- Above the tree, and hidden with it while a search lists hits. -->
+        <slot name="before-tree" />
+        <DriveSection
+          :bare="!treeTitle"
+          :title="treeTitle"
+          class="flex-1"
+          storage-key="hive.drive.files.open"
+          :testid="`${testid}-files`"
+        >
+          <template #actions>
+            <IconButton
+              v-if="tree"
+              label="New folder"
+              size="sm"
+              :icon="IconFolderPlus"
+              :data-testid="`${testid}-new-folder-open`"
+              @click="entryMenu?.newFolder('')"
+            />
+          </template>
+          <InlineError
+            v-if="error"
+            variant="line"
+            class="px-3 py-2 leading-relaxed"
+            :message="error"
+            :testid="`${testid}-tree-error`"
+          />
+          <DriveTree
+            v-if="tree"
+            class="flex-1"
+            ref="treeRef"
+            :space="space"
+            :tree="tree"
+            :selected="selected"
+            :filter="filter"
+            :compact="compact"
+            :testid="testid"
+            @pick="emit('pick', $event)"
+            @menu="openMenu"
+            @moved="(from, to) => emit('moved', from, to)"
+          />
+          <EmptyState
+            v-if="empty || noMatches"
+            variant="inline"
+            class="px-3 py-2"
+            :message="empty ? 'No documents yet.' : 'No documents match.'"
+            :data-testid="`${testid}-browse-empty`"
+          />
+        </DriveSection>
       </template>
     </div>
     <DriveEntryMenu

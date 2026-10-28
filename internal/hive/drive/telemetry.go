@@ -64,6 +64,7 @@ const (
 	opMove           = "move"
 	opDelete         = "delete"
 	opSearch         = "search"
+	opRecent         = "recent"
 	opLoadCanvas     = "load_canvas"
 	opUpsertBlocks   = "upsert_blocks"
 	opRemoveBlock    = "remove_block"
@@ -106,7 +107,7 @@ const (
 var (
 	operationAttrs = func() map[[3]string]metric.MeasurementOption {
 		ops := []string{
-			opRead, opWrite, opCreateFolder, opMove, opDelete, opSearch, opLoadCanvas,
+			opRead, opWrite, opCreateFolder, opMove, opDelete, opSearch, opRecent, opLoadCanvas,
 			opUpsertBlocks, opRemoveBlock, opSetFrontmatter, opClearCanvas, opListCanvases,
 		}
 		out := map[[3]string]metric.MeasurementOption{}

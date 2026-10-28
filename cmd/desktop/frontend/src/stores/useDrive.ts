@@ -3,6 +3,7 @@ import {
   CreateFolder,
   Delete,
   Move,
+  Recent,
   Rename,
   Search,
   Spaces,
@@ -22,9 +23,13 @@ import { useWindowFocus } from './useWindowFocus'
 /** What a reorganization produced, or the error text when the drive refused it. */
 export type DriveChange<T> = { result: T; error: null } | { result: null; error: string }
 
+/** How many documents the recent list holds. */
+export const recentLimit = 8
+
 /**
- * Hive Drive as the frontend reads it: the spaces, and each space's tree once
- * something asked for it. A tree is fetched whole and replaced whole; the Go
+ * Hive Drive as the frontend reads it: the spaces, each space's tree once
+ * something asked for it, and the newest documents across every space once
+ * something asked for those. A tree is fetched whole and replaced whole; the Go
  * side keeps the snapshot, so a re-read is cheap.
  */
 export const useDrive = defineStore('drive', () => {
@@ -35,6 +40,11 @@ export const useDrive = defineStore('drive', () => {
   const trees = shallowRef<ReadonlyMap<string, EntryWire>>(new Map())
   const treeErrors = shallowRef<ReadonlyMap<string, string>>(new Map())
   const loaders = new Map<string, Resource<EntryWire | null>>()
+  const recent = useResource(async () => (await Recent(recentLimit)) ?? [], {
+    initial: [] as HitWire[],
+    errorFallback: 'Could not list recent documents.',
+  })
+  let recentWanted = false
   const firstLoads = new Map<string, Promise<void>>()
 
   function loader(space: string): Resource<EntryWire | null> {
@@ -72,13 +82,25 @@ export const useDrive = defineStore('drive', () => {
     return first
   }
 
+  /** Loads the recent documents the first time they are asked for; later reloads keep them current. */
+  function ensureRecent(): Promise<void> {
+    if (recentWanted) return Promise.resolve()
+    recentWanted = true
+    return recent.reload()
+  }
+
+  // Any space's change can reorder the recent list, so it follows every reload.
+  async function reloadRecent(): Promise<void> {
+    if (recentWanted) await recent.reload()
+  }
+
   /** Re-reads one space's tree, or the space list and every tree already loaded. */
   async function reload(space?: string): Promise<void> {
     if (space !== undefined) {
-      if (loaders.has(space)) await reloadTree(space)
+      await Promise.all([loaders.has(space) ? reloadTree(space) : undefined, reloadRecent()])
       return
     }
-    await Promise.all([spaces.reload(), ...[...loaders.keys()].map(reloadTree)])
+    await Promise.all([spaces.reload(), ...[...loaders.keys()].map(reloadTree), reloadRecent()])
   }
 
   /** Matches paths and titles across every space. Rejects when the drive cannot be read. */
@@ -144,6 +166,9 @@ export const useDrive = defineStore('drive', () => {
     trees: computed(() => trees.value),
     treeErrors: computed(() => treeErrors.value),
     ensureTree,
+    recent: shallowReadonly(recent.data),
+    recentError: recent.error,
+    ensureRecent,
     reload,
     search,
     createFolder,
