@@ -13,13 +13,14 @@ import (
 	"time"
 
 	hiveconfig "github.com/colonyops/hive/internal/config"
-	"github.com/colonyops/hive/internal/hive/daemon"
+	"github.com/colonyops/hive/internal/hive/daemon/daemonpath"
 )
 
-const (
-	spawnReadyTimeout = 5 * time.Second
-	spawnPollInterval = 50 * time.Millisecond
-)
+// spawnReadyTimeout is a variable so a test of a daemon that never answers
+// need not wait for it.
+var spawnReadyTimeout = 5 * time.Second
+
+const spawnPollInterval = 50 * time.Millisecond
 
 // Spawn starts `<binary> daemon run` detached from the caller (its own
 // session, stdio to <dataDir>/logs/hived.out) and waits up to 5s for
@@ -31,7 +32,7 @@ func Spawn(ctx context.Context, binary, dataDir string, env []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve data directory: %w", err)
 	}
-	logPath := daemon.OutLogPath(dataDir)
+	logPath := daemonpath.OutLogPath(dataDir)
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		return fmt.Errorf("create daemon log directory: %w", err)
 	}
@@ -54,7 +55,7 @@ func Spawn(ctx context.Context, binary, dataDir string, env []string) error {
 	exited := make(chan error, 1)
 	go func() { exited <- cmd.Wait() }()
 
-	client := New(Options{Dialer: UnixDialer(daemon.SocketPath(dataDir))})
+	client := New(Options{Dialer: LocalDialer(dataDir)})
 	defer client.HTTPClient().CloseIdleConnections()
 	deadline := time.NewTimer(spawnReadyTimeout)
 	defer deadline.Stop()

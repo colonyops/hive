@@ -10,12 +10,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"connectrpc.com/connect"
 
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/daemon/daemonpath"
 	"github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1/daemonv1connect"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/pkg/flock"
@@ -49,12 +51,15 @@ func Run(ctx context.Context, opts Options) error {
 		return errors.New("hive daemon: config is required")
 	}
 	logger := logutils.Component(opts.Ports.Logger, "daemon")
-	dataDir := absolute(opts.Config.DataDir)
+	dataDir, err := filepath.Abs(opts.Config.DataDir)
+	if err != nil {
+		return fmt.Errorf("resolve data directory: %w", err)
+	}
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return fmt.Errorf("create data directory: %w", err)
 	}
 
-	unlock, err := flock.Lock(ctx, LockPath(dataDir), opts.WaitLock)
+	unlock, err := flock.Lock(ctx, daemonpath.LockPath(dataDir), opts.WaitLock)
 	if errors.Is(err, flock.ErrLocked) {
 		return ErrAlreadyRunning
 	}
@@ -67,8 +72,8 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}()
 
-	socketPath := SocketPath(dataDir)
-	if err := prepareSocketDir(socketPath); err != nil {
+	socketPath := daemonpath.SocketPath(dataDir)
+	if err := daemonpath.PrepareSocketDir(socketPath); err != nil {
 		return err
 	}
 	// Holding the lock means no daemon serves this socket, so a leftover file

@@ -48,7 +48,6 @@ import (
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/daemon"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	hiveevents "github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
@@ -1290,7 +1289,7 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 		// The engine stays open for drive, hc, tasks, review, and agent
 		// workspaces; only the session view moves to the daemon.
 		a.hiveDaemon = daemonclient.New(daemonclient.Options{
-			Dialer:    daemonclient.UnixDialer(daemon.SocketPath(dataDir)),
+			Dialer:    daemonclient.LocalDialer(dataDir),
 			Logger:    a.logger,
 			AutoStart: a.startHiveDaemon(dataDir),
 		})

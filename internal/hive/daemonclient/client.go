@@ -16,6 +16,7 @@ import (
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/hive/daemon/daemonpath"
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
 	"github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1/daemonv1connect"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
@@ -28,8 +29,16 @@ import (
 // Dialer opens one connection to a daemon.
 type Dialer func(ctx context.Context) (net.Conn, error)
 
+// LocalDialer reaches the daemon that serves dataDir on this machine.
+func LocalDialer(dataDir string) Dialer {
+	return UnixDialer(daemonpath.SocketPath(dataDir))
+}
+
 func UnixDialer(path string) Dialer {
 	return func(ctx context.Context) (net.Conn, error) {
+		if err := daemonpath.CheckSocketDir(path); err != nil {
+			return nil, err
+		}
 		var d net.Dialer
 		return d.DialContext(ctx, "unix", path)
 	}

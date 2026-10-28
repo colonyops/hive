@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/internal/hive/daemon"
+	"github.com/colonyops/hive/internal/hive/daemon/daemonpath"
 )
 
 // newDaemonHarness turns experimental.daemon on over the standard fixture and
@@ -99,7 +99,7 @@ func TestDaemonServesMetricsAndRemovesItsSocketOnSIGTERM(t *testing.T) {
 	assert.Contains(t, metrics, "hive_daemon_start_time_seconds")
 	assert.Contains(t, metrics, `hive_daemon_rpc_requests_total{code="ok",procedure="/hive.daemon.v1.DaemonService/Hello"}`)
 
-	socket := daemon.SocketPath(h.DataDir())
+	socket := daemonpath.SocketPath(h.DataDir())
 	require.FileExists(t, socket)
 	require.NoError(t, syscall.Kill(daemonPID(t, h), syscall.SIGTERM))
 	require.Eventually(t, func() bool {

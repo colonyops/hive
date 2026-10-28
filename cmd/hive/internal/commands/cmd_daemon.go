@@ -26,6 +26,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemon"
+	"github.com/colonyops/hive/internal/hive/daemon/daemonpath"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/credentials"
@@ -149,7 +150,7 @@ func (cmd *DaemonCmd) run(ctx context.Context, _ *cli.Command) error {
 		},
 	})
 	if errors.Is(err, daemon.ErrAlreadyRunning) {
-		return fmt.Errorf("%w (socket %s)", err, daemon.SocketPath(cmd.flags.DataDir))
+		return fmt.Errorf("%w (socket %s)", err, daemonpath.SocketPath(cmd.flags.DataDir))
 	}
 	return err
 }
@@ -177,7 +178,7 @@ func (cmd *DaemonCmd) status(ctx context.Context, c *cli.Command) error {
 	client := cmd.app.DaemonClient(!cmd.statusNoStart)
 	info, err := client.Hello(ctx)
 	if err != nil {
-		return fmt.Errorf("reach the daemon at %s: %w", daemon.SocketPath(cmd.flags.DataDir), err)
+		return fmt.Errorf("reach the daemon at %s: %w", daemonpath.SocketPath(cmd.flags.DataDir), err)
 	}
 	health, err := client.Health(ctx)
 	if err != nil {
@@ -250,7 +251,7 @@ func (cmd *DaemonCmd) stop(ctx context.Context, _ *cli.Command) error {
 func (cmd *DaemonCmd) dialStdio(ctx context.Context, _ *cli.Command) error {
 	conn, err := cmd.app.DaemonClient(true).Dial(ctx)
 	if err != nil {
-		return fmt.Errorf("reach the daemon at %s: %w", daemon.SocketPath(cmd.flags.DataDir), err)
+		return fmt.Errorf("reach the daemon at %s: %w", daemonpath.SocketPath(cmd.flags.DataDir), err)
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -311,7 +312,7 @@ func (cmd *DaemonCmd) install(ctx context.Context, c *cli.Command) error {
 	}
 	// launchd opens the output log itself and fails when its directory is
 	// missing.
-	if err := os.MkdirAll(filepath.Dir(daemon.OutLogPath(cmd.flags.DataDir)), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(daemonpath.OutLogPath(cmd.flags.DataDir)), 0o755); err != nil {
 		return fmt.Errorf("create daemon log directory: %w", err)
 	}
 	if err := os.WriteFile(unit.Path, []byte(unit.Contents), 0o644); err != nil { //nolint:gosec // launchd and systemd read unit files the user owns

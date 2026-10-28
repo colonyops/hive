@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/colonyops/hive/internal/hive/daemon/daemonpath"
 )
 
 const (
@@ -57,9 +59,9 @@ func LaunchdUnit(home, binary, dataDir, configPath string) Unit {
 	key("AbandonProcessGroup")
 	b.WriteString("\t<true/>\n")
 	key("StandardOutPath")
-	str("\t", OutLogPath(dataDir))
+	str("\t", daemonpath.OutLogPath(dataDir))
 	key("StandardErrorPath")
-	str("\t", OutLogPath(dataDir))
+	str("\t", daemonpath.OutLogPath(dataDir))
 	b.WriteString("</dict>\n</plist>\n")
 
 	return Unit{
@@ -96,11 +98,6 @@ WantedBy=default.target
 		Path:     filepath.Join(home, ".config", "systemd", "user", SystemdUnitName),
 		Contents: contents,
 	}
-}
-
-// OutLogPath is where a detached daemon's stdout and stderr go.
-func OutLogPath(dataDir string) string {
-	return filepath.Join(dataDir, "logs", "hived.out")
 }
 
 func xmlEscape(s string) string {

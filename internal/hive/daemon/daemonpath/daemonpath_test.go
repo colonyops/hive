@@ -1,4 +1,4 @@
-package daemon
+package daemonpath
 
 import (
 	"os"
@@ -25,19 +25,41 @@ func TestSocketPathFallsBackForALongDataDir(t *testing.T) {
 	assert.NotEqual(t, path, SocketPath(long+"x"), "each data dir gets its own socket")
 }
 
-func TestPrepareSocketDirRejectsAFallbackDirOwnedByAnotherUser(t *testing.T) {
+func otherOwner(t *testing.T) {
+	t.Helper()
 	original := fileOwner
 	t.Cleanup(func() { fileOwner = original })
 	fileOwner = func(os.FileInfo) (int, bool) { return os.Getuid() + 1, true }
+}
 
-	err := prepareSocketDir(filepath.Join(fallbackSocketDir(), "x.sock"))
+func TestPrepareSocketDirRejectsAFallbackDirOwnedByAnotherUser(t *testing.T) {
+	otherOwner(t)
+
+	err := PrepareSocketDir(filepath.Join(fallbackSocketDir(), "x.sock"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "belongs to another user")
 }
 
 func TestPrepareSocketDirMakesThePrivateFallbackDir(t *testing.T) {
-	require.NoError(t, prepareSocketDir(filepath.Join(fallbackSocketDir(), "x.sock")))
+	require.NoError(t, PrepareSocketDir(filepath.Join(fallbackSocketDir(), "x.sock")))
 	info, err := os.Stat(fallbackSocketDir())
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
+}
+
+func TestCheckSocketDirRejectsAFallbackDirOwnedByAnotherUser(t *testing.T) {
+	require.NoError(t, PrepareSocketDir(filepath.Join(fallbackSocketDir(), "x.sock")))
+	otherOwner(t)
+
+	err := CheckSocketDir(filepath.Join(fallbackSocketDir(), "x.sock"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "belongs to another user")
+}
+
+func TestCheckSocketDirAcceptsOurFallbackDirAndAnyDataDir(t *testing.T) {
+	require.NoError(t, PrepareSocketDir(filepath.Join(fallbackSocketDir(), "x.sock")))
+	assert.NoError(t, CheckSocketDir(filepath.Join(fallbackSocketDir(), "x.sock")))
+
+	otherOwner(t)
+	assert.NoError(t, CheckSocketDir(filepath.Join(t.TempDir(), "hived.sock")), "only the shared fallback dir is checked")
 }

@@ -16,7 +16,6 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/daemon"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/hive/doctor"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -109,7 +108,7 @@ func (a *App) SessionAPI() sessionapi.API {
 // one.
 func (a *App) DaemonClient(autoStart bool) *daemonclient.Client {
 	opts := daemonclient.Options{
-		Dialer: daemonclient.UnixDialer(daemon.SocketPath(a.Config.DataDir)),
+		Dialer: daemonclient.LocalDialer(a.Config.DataDir),
 		Logger: a.Logger,
 	}
 	if autoStart {

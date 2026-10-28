@@ -1,4 +1,6 @@
-package daemon
+// Package daemonpath names the files of the hive daemon for a data directory,
+// so a client finds them without importing the daemon.
+package daemonpath
 
 import (
 	"crypto/sha256"
@@ -35,6 +37,11 @@ func LockPath(dataDir string) string {
 	return filepath.Join(absolute(dataDir), "hived.lock")
 }
 
+// OutLogPath is where a detached daemon's stdout and stderr go.
+func OutLogPath(dataDir string) string {
+	return filepath.Join(dataDir, "logs", "hived.out")
+}
+
 func fallbackSocketDir() string {
 	return filepath.Join(fallbackSocketRoot, fmt.Sprintf("hive-%d", os.Getuid()))
 }
@@ -55,10 +62,10 @@ var fileOwner = func(info os.FileInfo) (int, bool) {
 	return int(stat.Uid), true
 }
 
-// prepareSocketDir makes the directory a socket lives in. The shared
+// PrepareSocketDir makes the directory a socket lives in. The shared
 // fallback directory must be ours and private: another user who created
 // /tmp/hive-<uid> first could otherwise read the socket's traffic.
-func prepareSocketDir(socketPath string) error {
+func PrepareSocketDir(socketPath string) error {
 	dir := filepath.Dir(socketPath)
 	if dir != fallbackSocketDir() {
 		return os.MkdirAll(dir, 0o755)
@@ -66,16 +73,9 @@ func prepareSocketDir(socketPath string) error {
 	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
 		return fmt.Errorf("create socket directory: %w", err)
 	}
-	info, err := os.Lstat(dir)
+	info, err := ownFallbackDir(dir)
 	if err != nil {
-		return fmt.Errorf("inspect socket directory: %w", err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("socket directory %s is not a directory", dir)
-	}
-	owner, ok := fileOwner(info)
-	if !ok || owner != os.Getuid() {
-		return fmt.Errorf("socket directory %s belongs to another user", dir)
+		return err
 	}
 	if info.Mode().Perm() != 0o700 {
 		if err := os.Chmod(dir, 0o700); err != nil {
@@ -83,4 +83,40 @@ func prepareSocketDir(socketPath string) error {
 		}
 	}
 	return nil
+}
+
+// CheckSocketDir is the client half of PrepareSocketDir: a client must not
+// send its requests to a socket another user planted in the shared fallback
+// directory. A missing directory passes, since the dial then finds no daemon.
+func CheckSocketDir(socketPath string) error {
+	dir := filepath.Dir(socketPath)
+	if dir != fallbackSocketDir() {
+		return nil
+	}
+	info, err := ownFallbackDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("socket directory %s is writable by other users", dir)
+	}
+	return nil
+}
+
+func ownFallbackDir(dir string) (os.FileInfo, error) {
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return nil, fmt.Errorf("inspect socket directory: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("socket directory %s is not a directory", dir)
+	}
+	owner, ok := fileOwner(info)
+	if !ok || owner != os.Getuid() {
+		return nil, fmt.Errorf("socket directory %s belongs to another user", dir)
+	}
+	return info, nil
 }
