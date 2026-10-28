@@ -70,6 +70,11 @@ func Spawn(ctx context.Context, binary, dataDir string, env []string) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline.C:
+			select {
+			case err := <-exited:
+				exitErr = exitError(err)
+			default:
+			}
 			if exitErr != nil {
 				return fmt.Errorf("the daemon exited (%w); see %s", exitErr, logPath)
 			}
@@ -77,13 +82,17 @@ func Spawn(ctx context.Context, binary, dataDir string, env []string) error {
 		case err := <-exited:
 			// Exiting is not yet a failure: a daemon another client started
 			// holds the lock, and this one gives way to it.
-			exitErr = err
-			if exitErr == nil {
-				exitErr = errors.New("exit status 0")
-			}
+			exitErr = exitError(err)
 		case <-ticker.C:
 		}
 	}
+}
+
+func exitError(err error) error {
+	if err == nil {
+		return errors.New("exit status 0")
+	}
+	return err
 }
 
 func healthy(ctx context.Context, client *http.Client) bool {
