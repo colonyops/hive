@@ -272,6 +272,7 @@ needs no lint edit:
 | Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer | `pkg/`, `domain/` | `config-is-data` |
 | Web | `internal/web/` | Shared HTTP plumbing every program's HTTP surface uses: the error wire shape, `mid/` middleware, `extractors/` input decoding | everything except `hive/` and `store/` | `web-is-plumbing` |
 | Engine | `internal/hive/` | One subpackage per application service (`drive` owns the document tree under the context root), the event bus, and `hive.Engine`, which composes them | everything above | |
+| Engine consumers | `internal/hive/sessionapi`, `daemon`, `daemonclient`, `hivetest` | Code both programs share that runs on a whole `hive.Engine`: the session API over the engine or over RPC, the hive daemon that serves it, and the engine test fakes | everything above, including the engine root | |
 | Programs | `cmd/hive/internal/`, `cmd/desktop/internal/`, `cmd/drive-server/internal/` | Input, rendering, program-only features, program-only config | any shared layer except the stores, their own tree | `core`, `programs-use-services`, `cli-no-desktop-deps`, `desktop-no-cli-deps`, `drive-server-no-program-deps` |
 
 `shared-surface-free` keeps charm, Wails and both programs out of all of
@@ -279,7 +280,10 @@ needs no lint edit:
 
 The engine takes its drivers as `hive.Ports` and builds the config-derived
 services on `New` and on each `Reload`. Engine subpackages never import the
-engine root, so the root composes them without a cycle. A service declares
+engine root, so the root composes them without a cycle. Engine consumers are
+the exception: they take a built `hive.Engine` (or a `hive.Runtime`) and wrap
+or serve it, so they import the root, and the root never imports them. A
+package belongs there only when the engine has no reason to call it. A service declares
 the ports it consumes, and `platform` and `store` satisfy them structurally,
 the [Go amendment](#the-go-amendment-to-hexagonal) applied to the engine.
 
