@@ -185,3 +185,37 @@ func TestRunRemovesTheSocketOnExit(t *testing.T) {
 	_, err := os.Stat(d.socket)
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
+
+func waitForExit(t *testing.T, d running) {
+	t.Helper()
+	select {
+	case err := <-d.done:
+		require.NoError(t, err)
+		d.done <- nil
+	case <-time.After(5 * time.Second):
+		t.Fatal("the daemon kept running")
+	}
+}
+
+func TestRunStopsWhenItsDataDirIsDeleted(t *testing.T) {
+	daemon.SetOwnershipCheckInterval(t, 20*time.Millisecond)
+	dataDir := t.TempDir()
+	d := runDaemon(t, dataDir, false)
+
+	require.NoError(t, os.RemoveAll(dataDir))
+
+	waitForExit(t, d)
+}
+
+func TestRunLeavesASocketThatReplacedItsOwn(t *testing.T) {
+	daemon.SetOwnershipCheckInterval(t, 20*time.Millisecond)
+	d := runDaemon(t, t.TempDir(), false)
+
+	require.NoError(t, os.Remove(d.socket))
+	replacement, err := net.Listen("unix", d.socket)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = replacement.Close() })
+
+	waitForExit(t, d)
+	assert.FileExists(t, d.socket, "the old daemon must not remove the new daemon's socket")
+}

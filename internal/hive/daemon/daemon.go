@@ -71,6 +71,10 @@ func Run(ctx context.Context, opts Options) error {
 			logger.Warn().Err(err).Msg("release the daemon lock")
 		}
 	}()
+	lock, err := claimFile(daemonpath.LockPath(dataDir))
+	if err != nil {
+		return err
+	}
 
 	socketPath := daemonpath.SocketPath(dataDir)
 	if err := daemonpath.PrepareSocketDir(socketPath); err != nil {
@@ -135,7 +139,19 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.Remove(socketPath) }()
+	socket, err := claimFile(socketPath)
+	if err != nil {
+		_ = listener.Close()
+		return err
+	}
+	// A socket at the path that is not ours belongs to the daemon that
+	// replaced this one.
+	defer func() {
+		if socket.held() {
+			_ = os.Remove(socketPath)
+		}
+	}()
+	go watchClaims(runCtx, logger, ownershipCheckInterval, stop, lock, socket)
 
 	server := newServer(mux)
 	serveErr := make(chan error, 1)
@@ -188,5 +204,9 @@ func listen(socketPath string) (net.Listener, error) {
 		_ = listener.Close()
 		return nil, fmt.Errorf("restrict socket: %w", err)
 	}
+	// By default Close unlinks the path, which may hold the socket of the
+	// daemon that replaced this one. Run removes the socket only if it is
+	// still this daemon's.
+	listener.(*net.UnixListener).SetUnlinkOnClose(false)
 	return listener, nil
 }
