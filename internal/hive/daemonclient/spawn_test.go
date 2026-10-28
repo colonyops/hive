@@ -98,7 +98,8 @@ func TestSpawnGivesWayToADaemonAnotherClientStarted(t *testing.T) {
 func TestSpawnReportsTheExitWhenNoDaemonAnswers(t *testing.T) {
 	original := spawnReadyTimeout
 	t.Cleanup(func() { spawnReadyTimeout = original })
-	spawnReadyTimeout = time.Second
+	// Long enough for the fake binary to start and exit on a loaded machine.
+	spawnReadyTimeout = 3 * time.Second
 	dataDir := shortDataDir(t)
 
 	err := Spawn(t.Context(), fakeDaemon(t, 3, ""), dataDir, nil)
