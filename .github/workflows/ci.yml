@@ -201,7 +201,7 @@ jobs:
         with:
           cache-name: integration
           desktop-deps: "false"
-          mise-install-args: go goreleaser go:github.com/abice/go-enum github:sqlc-dev/sqlc github:hay-kot/gobusgen
+          mise-install-args: go goreleaser go:github.com/abice/go-enum github:sqlc-dev/sqlc github:hay-kot/gobusgen github:bufbuild/buf
 
       - name: Run integration tests
         run: mise run cli:integration
