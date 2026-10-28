@@ -58,7 +58,10 @@ type Client struct {
 	control    daemonv1connect.DaemonServiceClient
 
 	statusAvailable atomic.Bool
-	helloOnce       sync.Once
+	helloMu         sync.Mutex
+	helloInFlight   bool
+	lastHello       time.Time
+	now             func() time.Time
 }
 
 var _ sessionapi.API = (*Client)(nil)
@@ -67,6 +70,7 @@ func New(opts Options) *Client {
 	c := &Client{
 		logger: logutils.Component(opts.Logger, "daemon-client"),
 		dialer: opts.Dialer,
+		now:    time.Now,
 	}
 	if opts.AutoStart != nil {
 		c.starter = &starter{start: opts.AutoStart, now: time.Now}
@@ -330,20 +334,37 @@ func (c *Client) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOpt
 	return wire.LaunchOptionsFromProto(resp.Msg), nil
 }
 
-// StatusAvailable answers from the last Hello. The first call starts a Hello
-// in the background and answers false, so the TUI's Update never waits on
+// helloRetry spaces background Hellos while status is not yet known
+// available, so a daemon that was down at the first call is seen once it is
+// up.
+const helloRetry = 2 * time.Second
+
+// StatusAvailable answers from the last Hello. Until a Hello reports status
+// available, a call starts one in the background (at most one at a time, and
+// one per helloRetry) and answers false, so the TUI's Update never waits on
 // the socket.
 func (c *Client) StatusAvailable() bool {
-	c.helloOnce.Do(func() {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
-			defer cancel()
-			if _, err := c.Hello(ctx); err != nil {
-				c.logger.Debug().Err(err).Msg("hello for status availability failed")
-			}
-		}()
-	})
-	return c.statusAvailable.Load()
+	if c.statusAvailable.Load() {
+		return true
+	}
+	c.helloMu.Lock()
+	defer c.helloMu.Unlock()
+	if c.helloInFlight || (!c.lastHello.IsZero() && c.now().Sub(c.lastHello) < helloRetry) {
+		return false
+	}
+	c.helloInFlight = true
+	c.lastHello = c.now()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
+		defer cancel()
+		if _, err := c.Hello(ctx); err != nil {
+			c.logger.Debug().Err(err).Msg("hello for status availability failed")
+		}
+		c.helloMu.Lock()
+		c.helloInFlight = false
+		c.helloMu.Unlock()
+	}()
+	return false
 }
 
 // FetchBatch logs a failure and returns no statuses, the same as an

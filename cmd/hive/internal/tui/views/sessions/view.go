@@ -101,6 +101,7 @@ type View struct {
 
 	// Status animation
 	animationFrame int
+	animating      bool
 
 	// Focus mode filtering
 	focusMode        bool
@@ -239,10 +240,10 @@ func (v *View) Init() tea.Cmd {
 		cmds = append(cmds, v.startWorkspaceWatcher())
 	}
 
-	if v.sessions.StatusAvailable() {
-		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
-		cmds = append(cmds, scheduleAnimationTick())
-	}
+	// The ticker runs even while status is unavailable: the daemon client
+	// answers false until its first Hello returns, and a later tick must see
+	// the change.
+	cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval), v.startAnimation())
 
 	if len(v.pluginStatuses) > 0 {
 		cmds = append(cmds, v.startPluginWorker())
@@ -386,11 +387,21 @@ func (v *View) handleTerminalPollTick() tea.Cmd {
 	for i := range allSess {
 		sessPtrs[i] = &v.allSessions[i]
 	}
-	cmds = append(cmds, FetchTerminalStatusBatch(v.sessions, sessPtrs, v.rootRepoTargets()))
-	if v.sessions.StatusAvailable() {
-		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
-	}
+	cmds = append(cmds,
+		FetchTerminalStatusBatch(v.sessions, sessPtrs, v.rootRepoTargets()),
+		StartTerminalPollTicker(v.cfg.Tmux.PollInterval),
+		v.startAnimation(),
+	)
 	return tea.Batch(cmds...)
+}
+
+// startAnimation starts the status animation once status is available.
+func (v *View) startAnimation() tea.Cmd {
+	if v.animating || !v.sessions.StatusAvailable() {
+		return nil
+	}
+	v.animating = true
+	return scheduleAnimationTick()
 }
 
 // rootRepoTargets collects workspace checkouts currently shown as repo headers.

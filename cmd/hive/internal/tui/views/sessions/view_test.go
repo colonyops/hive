@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -625,4 +626,49 @@ func TestSelectAtRow_PreviewEnabled_ClickInList_Selects(t *testing.T) {
 	// x=10 is inside the list pane
 	v.SelectAtRow(10, 1)
 	assert.Equal(t, 1, v.list.Index(), "click in list pane should select item")
+}
+
+// lateStatusAPI reports status unavailable until available is set, as the
+// daemon client does before its first Hello returns.
+type lateStatusAPI struct {
+	sessionapi.API
+	available *atomic.Bool
+}
+
+func (a lateStatusAPI) StatusAvailable() bool { return a.available.Load() }
+
+func (a lateStatusAPI) FetchBatch(context.Context, []*session.Session, []statussvc.RootRepoTarget) map[string]statussvc.TerminalStatus {
+	return map[string]statussvc.TerminalStatus{}
+}
+
+// runCmd runs cmd and every command a batch holds, and returns the messages
+// they produce.
+func runCmd(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		return []tea.Msg{msg}
+	}
+	var msgs []tea.Msg
+	for _, c := range batch {
+		msgs = append(msgs, runCmd(c)...)
+	}
+	return msgs
+}
+
+func TestPollTickerKeepsRunningUntilStatusBecomesAvailable(t *testing.T) {
+	available := &atomic.Bool{}
+	v := newViewWithTerminalMgr([]session.Session{{ID: "s1", State: session.StateActive}})
+	v.sessions = lateStatusAPI{available: available}
+	v.cfg.Tmux.PollInterval = time.Millisecond
+
+	assert.Contains(t, runCmd(v.handleTerminalPollTick()), tea.Msg(TerminalPollTickMsg{}), "the ticker re-arms while status is unavailable")
+	assert.False(t, v.animating)
+
+	available.Store(true)
+	v.handleTerminalPollTick()
+	assert.True(t, v.animating, "the animation starts once status is available")
 }

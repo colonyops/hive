@@ -30,7 +30,9 @@ type API interface {
 	CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Risk, error)
 	SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOptions, error)
 
-	// StatusAvailable must not block: the TUI calls it inside Update.
+	// StatusAvailable must not block: the TUI calls it inside Update. A false
+	// answer can turn true later (the daemon client answers false until its
+	// first Hello returns), so callers ask again instead of caching it.
 	StatusAvailable() bool
 	FetchBatch(ctx context.Context, sessions []*session.Session, roots []status.RootRepoTarget) map[string]status.TerminalStatus
 }

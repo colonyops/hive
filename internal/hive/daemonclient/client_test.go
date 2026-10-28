@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -176,4 +177,50 @@ func TestStarterBacksOffAfterAFailedStart(t *testing.T) {
 func TestStarterSkipsTheStartWhenADaemonAlreadyAnswers(t *testing.T) {
 	s := &starter{start: func(context.Context) error { t.Fatal("started a second daemon"); return nil }, now: time.Now}
 	require.NoError(t, s.ensure(t.Context(), func() bool { return true }))
+}
+
+type helloServer struct {
+	daemonv1connect.UnimplementedDaemonServiceHandler
+	calls atomic.Int32
+}
+
+func (s *helloServer) Hello(context.Context, *connect.Request[daemonv1.HelloRequest]) (*connect.Response[daemonv1.HelloResponse], error) {
+	s.calls.Add(1)
+	return connect.NewResponse(&daemonv1.HelloResponse{StatusAvailable: true}), nil
+}
+
+func TestStatusAvailableRetriesAHelloThatFailed(t *testing.T) {
+	path := socketPath(t)
+	now := time.Unix(1000, 0)
+	var nowMu sync.Mutex
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop()})
+	client.now = func() time.Time { nowMu.Lock(); defer nowMu.Unlock(); return now }
+	idle := func() bool {
+		client.helloMu.Lock()
+		defer client.helloMu.Unlock()
+		return !client.helloInFlight
+	}
+
+	assert.False(t, client.StatusAvailable(), "no daemon answers yet")
+	require.Eventually(t, idle, 5*time.Second, 10*time.Millisecond)
+
+	inner, err := net.Listen("unix", path)
+	require.NoError(t, err)
+	server := &helloServer{}
+	mux := http.NewServeMux()
+	mux.Handle(daemonv1connect.NewDaemonServiceHandler(server))
+	var protocols http.Protocols
+	protocols.SetUnencryptedHTTP2(true)
+	srv := &http.Server{Handler: mux, Protocols: &protocols, ReadHeaderTimeout: time.Second}
+	go func() { _ = srv.Serve(inner) }()
+	t.Cleanup(func() { _ = srv.Close() })
+
+	assert.False(t, client.StatusAvailable())
+	assert.Zero(t, server.calls.Load(), "a retry waits out helloRetry")
+
+	nowMu.Lock()
+	now = now.Add(helloRetry)
+	nowMu.Unlock()
+	require.Eventually(t, client.StatusAvailable, 5*time.Second, 10*time.Millisecond)
+	assert.Equal(t, int32(1), server.calls.Load())
 }
