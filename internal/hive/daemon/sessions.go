@@ -27,7 +27,7 @@ type sessionServer struct {
 	// concurrent creates would interleave their progress.
 	writeMu sync.Mutex
 
-	statuses func(ctx context.Context, sessions []*session.Session, roots []status.RootRepoTarget) map[string]status.TerminalStatus
+	statuses func(sessions []*session.Session, roots []status.RootRepoTarget) map[string]status.TerminalStatus
 }
 
 var _ daemonv1connect.SessionServiceHandler = (*sessionServer)(nil)
@@ -170,7 +170,7 @@ func (s *sessionServer) Statuses(ctx context.Context, req *connect.Request[daemo
 			sessions = append(sessions, &all[i])
 		}
 	}
-	statuses := s.statuses(ctx, sessions, wire.RootsFromProto(req.Msg.GetRoots()))
+	statuses := s.statuses(sessions, wire.RootsFromProto(req.Msg.GetRoots()))
 	return connect.NewResponse(&daemonv1.StatusesResponse{Statuses: wire.StatusesToProto(statuses)}), nil
 }
 

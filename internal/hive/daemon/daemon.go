@@ -89,8 +89,17 @@ func Run(ctx context.Context, opts Options) error {
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
 
-	api := sessionapi.NewLocal(runtime.Engine())
-	sessions := &sessionServer{api: api, logger: logger, statuses: api.FetchBatch}
+	engine := runtime.Engine()
+	api := sessionapi.NewLocal(engine)
+	loop := newStatusLoop(statusLoopDeps{
+		logger:    logger,
+		interval:  func() time.Duration { return engine.Config().Tmux.PollInterval },
+		available: api.StatusAvailable,
+		list:      api.ListSessions,
+		fetch:     api.FetchBatch,
+	})
+	go loop.run(runCtx)
+	sessions := &sessionServer{api: api, logger: logger, statuses: loop.snapshot}
 	control := &controlServer{
 		runtime:   runtime,
 		api:       api,
@@ -101,6 +110,7 @@ func Run(ctx context.Context, opts Options) error {
 		reload:    opts.Reload,
 		stop:      stop,
 		logger:    logger,
+		loop:      loop.health,
 	}
 
 	mux := http.NewServeMux()
