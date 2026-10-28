@@ -135,3 +135,37 @@ func TestAddWindowsPreservesDirectoriesAndFocus(t *testing.T) {
 	assert.Contains(t, runner.calls, []string{"respawn-pane", "-k", "-t", "%2", "-c", "/repo/logs", "--", "sh", "-c", "tail"})
 	assert.Contains(t, runner.calls, []string{"select-window", "-t", "@1"})
 }
+
+func TestRenameSessionAcceptsASessionAlreadyRenamed(t *testing.T) {
+	runner := &fakeRunner{results: []runnerResult{
+		{err: absentSessionError{}}, // rename-session: old is gone
+		{},                          // has-session =new: present
+		{err: absentSessionError{}}, // has-session =old: absent
+	}}
+	client := New(zerolog.Nop(), runner)
+
+	require.NoError(t, client.RenameSession(context.Background(), multiplexer.Target{Session: "old"}, "new"))
+	assert.Equal(t, []string{"has-session", "-t", "=new"}, runner.calls[1].args)
+	assert.Equal(t, []string{"has-session", "-t", "=old"}, runner.calls[2].args)
+}
+
+func TestRenameSessionFailsWhenNeitherSessionExists(t *testing.T) {
+	runner := &fakeRunner{results: []runnerResult{
+		{err: absentSessionError{}},
+		{err: absentSessionError{}},
+	}}
+	client := New(zerolog.Nop(), runner)
+
+	require.Error(t, client.RenameSession(context.Background(), multiplexer.Target{Session: "old"}, "new"))
+}
+
+func TestRenameSessionFailsWhenBothSessionsExist(t *testing.T) {
+	runner := &fakeRunner{results: []runnerResult{
+		{err: assert.AnError}, // rename-session: duplicate name
+		{},                    // has-session =new: present
+		{},                    // has-session =old: present
+	}}
+	client := New(zerolog.Nop(), runner)
+
+	require.ErrorIs(t, client.RenameSession(context.Background(), multiplexer.Target{Session: "old"}, "new"), assert.AnError)
+}

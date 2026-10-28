@@ -144,7 +144,9 @@ func (c *Client) AttachOrSwitch(ctx context.Context, target multiplexer.Target, 
 	return nil
 }
 
-// RenameSession renames a tmux session.
+// RenameSession renames a tmux session. It succeeds when the old session is
+// gone and the new one exists: Hive Desktop renames tmux itself before it
+// asks the session service, which may run in the daemon, to rename the row.
 func (c *Client) RenameSession(ctx context.Context, target multiplexer.Target, newName string) error {
 	oldName, err := renderSessionTarget(target)
 	if err != nil {
@@ -154,10 +156,23 @@ func (c *Client) RenameSession(ctx context.Context, target multiplexer.Target, n
 	if err := newTarget.ValidateSession(); err != nil {
 		return err
 	}
-	if _, _, err := c.runner.Capture(ctx, "rename-session", "-t", oldName, newName); err != nil {
-		return fmt.Errorf("tmux rename-session %q to %q: %w", oldName, newName, err)
+	_, _, renameErr := c.runner.Capture(ctx, "rename-session", "-t", oldName, newName)
+	if renameErr == nil {
+		return nil
 	}
-	return nil
+	if c.alreadyRenamed(ctx, target, newTarget) {
+		return nil
+	}
+	return fmt.Errorf("tmux rename-session %q to %q: %w", oldName, newName, renameErr)
+}
+
+func (c *Client) alreadyRenamed(ctx context.Context, oldTarget, newTarget multiplexer.Target) bool {
+	newPresent, err := c.HasSession(ctx, newTarget)
+	if err != nil || !newPresent {
+		return false
+	}
+	oldPresent, err := c.HasSession(ctx, oldTarget)
+	return err == nil && !oldPresent
 }
 
 // KillSession kills a tmux session.
