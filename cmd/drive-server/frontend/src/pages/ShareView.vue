@@ -39,7 +39,14 @@ const frameLoaded = ref(false)
 <template>
   <div class="bg-app" :class="isHtml ? 'flex h-dvh flex-col' : 'min-h-screen'">
     <header class="flex h-12 shrink-0 items-center gap-3 border-b border-row bg-sidebar px-4">
-      <HiveMark :size="20" />
+      <RouterLink
+        to="/"
+        class="-m-1 flex shrink-0 rounded-md p-1 hover:bg-chip"
+        title="Hive Drive home"
+        data-testid="share-home"
+      >
+        <HiveMark :size="20" />
+      </RouterLink>
       <h1
         class="min-w-0 flex-1 truncate text-title font-semibold text-text"
         :title="shared?.document.path"

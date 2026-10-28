@@ -27,6 +27,7 @@ describe('ShareView', () => {
     const wrapper = await mountShare('abc')
 
     expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/public/abc')
+    expect(wrapper.get('[data-testid="share-home"]').attributes('href')).toBe('/')
     expect(wrapper.get('[data-testid="share-title"]').text()).toBe('a')
     expect(wrapper.get('[data-testid="share-notice"]').text()).toContain('ada@example.com')
     expect(wrapper.find('[aria-label*="user content"]').exists()).toBe(true)
