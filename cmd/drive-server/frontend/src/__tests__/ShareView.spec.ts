@@ -27,8 +27,10 @@ describe('ShareView', () => {
     const wrapper = await mountShare('abc')
 
     expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/public/abc')
+    expect(wrapper.get('[data-testid="share-home"]').attributes('href')).toBe('/')
+    expect(wrapper.get('[data-testid="share-title"]').text()).toBe('a')
     expect(wrapper.get('[data-testid="share-notice"]').text()).toContain('ada@example.com')
-    expect(wrapper.get('[data-testid="share-notice"]').text()).toContain('user content')
+    expect(wrapper.find('[aria-label*="user content"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="document-markdown"]').text()).toContain('Shared body.')
   })
 
@@ -37,6 +39,17 @@ describe('ShareView', () => {
     const wrapper = await mountShare('a b')
 
     expect(wrapper.get('[data-testid="frame"]').attributes('data-src')).toBe('/s/a%20b/raw')
+  })
+
+  it('reveals an html document once its frame loads', async () => {
+    respond(200, { owner_email: 'ada@example.com', document: doc({ path: 'page.html', kind: 'html' }) })
+    const wrapper = await mountShare('abc')
+    const reader = () => wrapper.get('[data-testid="document-document"]')
+
+    expect(reader().classes()).toContain('opacity-0')
+    wrapper.get('[data-testid="frame"]').element.dispatchEvent(new Event('load'))
+    await wrapper.vm.$nextTick()
+    expect(reader().classes()).toContain('opacity-100')
   })
 
   it('shows the dead-link state on 404', async () => {
