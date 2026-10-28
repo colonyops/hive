@@ -4,6 +4,7 @@ import type { SessionTreeView } from './useSessionTreeView'
 import type { TerminalAttach } from './useTerminalAttach'
 import type { TerminalPool } from './useTerminalPool'
 import type { TerminalSessionOps } from './useTerminalSessionOps'
+import type { SessionViewMenus } from './useSessionViewMenus'
 import type { TerminalTree } from './useTerminalTree'
 import type { TreeKeyboardNav } from './useTreeKeyboardNav'
 import type { WindowRename } from './useWindowRename'
@@ -17,6 +18,7 @@ export interface TerminalModeContext {
   pool: TerminalPool
   tree: TerminalTree
   view: SessionTreeView
+  viewMenus: SessionViewMenus
   nav: TreeKeyboardNav
   attach: TerminalAttach
   ops: TerminalSessionOps

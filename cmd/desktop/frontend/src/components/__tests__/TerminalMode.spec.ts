@@ -1192,8 +1192,8 @@ describe('TerminalMode', () => {
 
     expect(second.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
     expect(sessionRows(second)).toHaveLength(2)
-    // The refresh control is the staleness indicator while revalidation runs.
-    expect(second.get('[data-testid="terminal-sessions-refresh"]').find('.animate-spin').exists()).toBe(true)
+    // The toolbar spinner is the staleness indicator while revalidation runs.
+    expect(second.find('[data-testid="terminal-sessions-reloading"]').exists()).toBe(true)
     expect(router.currentRoute.value.params.slug).toBe('hive-bump-deps')
     expect(mocks.useTerminalWindows).toHaveBeenCalledWith('hive-bump-deps', expect.anything())
     second.unmount()
@@ -2276,6 +2276,7 @@ describe('TerminalMode', () => {
     // Delete and recycle finish as jobs, so a jobs:updated reload is how the
     // frontend learns the session it was attached to can no longer be attached.
     mocks.ListSessions.mockResolvedValue(listing)
+    await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
     await wrapper.get('[data-testid="terminal-sessions-refresh"]').trigger('click')
     await flushPromises()
 
@@ -2570,6 +2571,7 @@ describe('TerminalMode', () => {
 
       // The listing is hive's and carries no scratch terminal, so a reload that
       // drops every pooled session it no longer lists must not take this one.
+      await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
       await wrapper.get('[data-testid="terminal-sessions-refresh"]').trigger('click')
       await flushPromises()
       expect(session.dispose).not.toHaveBeenCalled()
@@ -3143,7 +3145,7 @@ describe('TerminalMode', () => {
     }
 
     async function selectView(wrapper: { get: (s: string) => Pick<DOMWrapper<Element>, 'trigger'> }, id: string) {
-      await wrapper.get('[data-testid="code-view-switch"]').trigger('click')
+      await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
       await wrapper.get(`[data-testid="code-view-option-${id}"]`).trigger('click')
       await flushPromises()
     }
@@ -3208,11 +3210,11 @@ describe('TerminalMode', () => {
       expect(wrapper.find('[data-testid="code-view-hidden"]').exists()).toBe(false)
 
       await selectView(wrapper, 'running')
-      expect(wrapper.get('[data-testid="code-view-switch"]').text()).toContain('Running')
+      expect(wrapper.get('[data-testid="code-view-name"]').text()).toBe('Running')
       expect(wrapper.get('[data-testid="code-view-hidden"]').text()).toBe('1 hidden')
 
-      await selectView(wrapper, 'all')
-      expect(wrapper.find('[data-testid="code-view-hidden"]').exists()).toBe(false)
+      await wrapper.get('[data-testid="code-view-clear"]').trigger('click')
+      expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
       wrapper.unmount()
     })
 
@@ -3223,8 +3225,27 @@ describe('TerminalMode', () => {
       resetStores()
 
       const { wrapper } = await mountAvailable()
-      expect(wrapper.get('[data-testid="code-view-switch"]').text()).toContain('Running')
+      expect(wrapper.get('[data-testid="code-view-name"]').text()).toBe('Running')
       expect(slugs(wrapper)).toEqual(['hive-bump-deps', 'hive-fix-parser'])
+      wrapper.unmount()
+    })
+
+    it('shows no view bar until a filter is chosen, and drops it on clear', async () => {
+      mocks.ListSessions.mockResolvedValue(TWO_REPOS)
+      const { wrapper } = await mountAvailable()
+      expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
+
+      await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
+      await wrapper.get('[data-testid="code-filter-status"]').trigger('click')
+      const running = wrapper.findAll('[data-testid="code-view-add-menu"] button').find((b) => b.text() === 'Running')!
+      await running.trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[data-testid="code-view-name"]').text()).toBe('All sessions')
+      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['Status is running'])
+      expect(wrapper.find('[data-testid="code-view-save-new"]').exists()).toBe(true)
+
+      await wrapper.get('[data-testid="code-view-clear"]').trigger('click')
+      expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
       wrapper.unmount()
     })
 
@@ -3232,7 +3253,7 @@ describe('TerminalMode', () => {
       localStorage.setItem('hive.terminal.sidebar.running-only', 'true')
       running({ 1: true, 2: false })
       const { wrapper } = await mountAvailable()
-      expect(wrapper.get('[data-testid="code-view-switch"]').text()).toContain('Running')
+      expect(wrapper.get('[data-testid="code-view-name"]').text()).toBe('Running')
       expect(slugs(wrapper)).toEqual(['hive-fix-parser'])
       expect(localStorage.getItem('hive.terminal.sidebar.running-only')).toBeNull()
       wrapper.unmount()

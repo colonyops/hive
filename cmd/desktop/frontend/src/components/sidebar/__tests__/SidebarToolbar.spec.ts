@@ -61,4 +61,23 @@ describe('SidebarToolbar', () => {
     expect(onKeydown).toHaveBeenCalledOnce()
     wrapper.unmount()
   })
+
+  it('leaves reload out when the host keeps it elsewhere, and spins while loading', () => {
+    const wrapper = mount(SidebarToolbar, {
+      props: {
+        modelValue: '',
+        filterLabel: 'Filter',
+        newLabel: 'New',
+        menuLabel: 'List actions',
+        menuEntries: entries,
+        testid: 'tree',
+        newTestid: 'tree-new',
+        loading: true,
+      },
+      slots: { default: '<button data-testid="extra">x</button>' },
+    })
+    expect(wrapper.find('[data-testid="tree-reload"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="tree-reloading"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="extra"]').exists()).toBe(true)
+  })
 })

@@ -9,6 +9,7 @@ import IconEllipsisVertical from '~icons/lucide/ellipsis-vertical'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPinOff from '~icons/lucide/pin-off'
 import IconPlus from '~icons/lucide/plus'
+import IconRotateCw from '~icons/lucide/rotate-cw'
 import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
@@ -23,7 +24,9 @@ import NewWindowMenu from '../NewWindowMenu.vue'
 import SessionTagsIndicator from '../SessionTagsIndicator.vue'
 import SessionRowMenu from '../SessionRowMenu.vue'
 import SidebarToolbar from '../sidebar/SidebarToolbar.vue'
+import SessionFilterButton from './SessionFilterButton.vue'
 import SessionViewBar from './SessionViewBar.vue'
+import SessionViewDialogs from './SessionViewDialogs.vue'
 import { dropClass, dropEdge, useDragReorder } from '../../composables/useDragReorder'
 import { formatCombo, useKeybindings } from '../../composables/useKeybindings'
 import { useNewSession } from '../../composables/useNewSession'
@@ -37,7 +40,7 @@ import type { MenuEntry } from '@hive/ui/types/menu'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
 
-const { pool, tree, view, nav, attach, ops, rename, sessions } = useTerminalModeContext()
+const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions } = useTerminalModeContext()
 const { openBlank: openNewSession } = useNewSession()
 const menus = proxyRefs(useTreeRowMenus({ windowMenuAllowed: ops.rowHasWindowActions }))
 const sidebarEl = toRef(nav, 'root')
@@ -59,6 +62,17 @@ const sessionAgeBadges = computed<Record<string, { days: number; title: string }
 })
 
 const sidebarMenuEntries = computed<MenuEntry[]>(() => [
+  ...viewMenus.viewEntries,
+  { kind: 'separator' },
+  {
+    kind: 'action',
+    id: 'reload',
+    label: tree.sessionsLoading ? 'Reloading sessions…' : 'Reload sessions',
+    icon: IconRotateCw,
+    disabled: tree.sessionsLoading,
+    testid: 'terminal-sessions-refresh',
+  },
+  { kind: 'separator' },
   {
     kind: 'action',
     id: 'collapse-all',
@@ -84,7 +98,9 @@ const sidebarMenuEntries = computed<MenuEntry[]>(() => [
 ])
 
 function onSidebarMenuSelect(id: string): void {
-  if (id === 'collapse-all' || id === 'expand-all') view.expansion.setAll(id === 'expand-all')
+  if (viewMenus.onViewSelect(id)) return
+  if (id === 'reload') void tree.reloadSessions()
+  else if (id === 'collapse-all' || id === 'expand-all') view.expansion.setAll(id === 'expand-all')
   else if (id === 'prune' && tree.prunableCount) sessions.requestPrune(tree.prunableCount)
 }
 
@@ -242,22 +258,22 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
       ref="filterInput"
       v-model="view.query"
       filter-label="Filter sessions"
-      reload-label="Reload sessions"
       new-label="New session"
       menu-label="Session list actions"
       :menu-entries="sidebarMenuEntries"
       :loading="tree.sessionsLoading"
       testid="terminal-sessions"
-      reload-testid="terminal-sessions-refresh"
       new-testid="terminal-new-session"
       @escape="nav.focusTree"
       @keydown.down.prevent="nav.focusTree"
       @keydown.enter.prevent="nav.focusTree"
-      @reload="tree.reloadSessions"
       @new="openNewSession(tree.sessionRepository(pool.activeSlug))"
       @select="onSidebarMenuSelect"
-    />
+    >
+      <SessionFilterButton />
+    </SidebarToolbar>
     <SessionViewBar />
+    <SessionViewDialogs />
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-4">
       <InlineError
         v-if="tree.sessionsError"
