@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
-import { matchesSessionFilter, type SessionCondition, type SessionFilterContext } from '../sessionViews'
+import {
+  conditionQualifier,
+  matchesSessionFilter,
+  type SessionCondition,
+  type SessionFilterContext,
+} from '../sessionViews'
 
 const now = Date.parse('2026-10-28T12:00:00Z')
 
@@ -73,5 +78,23 @@ describe('unknown conditions', () => {
   it('passes a field this build does not know', () => {
     const unknown = { field: 'future', op: 'is', value: 'x' } as unknown as SessionCondition
     expect(matches([unknown])).toBe(true)
+  })
+})
+
+describe('conditionQualifier', () => {
+  const repoName = (identity: string) => identity.split('/').slice(1).join('/')
+
+  it.each<[SessionCondition, string]>([
+    [{ field: 'status', op: 'is', value: 'running' }, 'status:running'],
+    [{ field: 'tag', op: 'any', values: ['bug', 'ui'] }, 'tag:bug,ui'],
+    [{ field: 'tag', op: 'all', values: ['bug', 'ui'] }, 'tag:bug+ui'],
+    [{ field: 'tag', op: 'none', values: ['wip'] }, '-tag:wip'],
+    [{ field: 'repo', op: 'none', values: ['github.com/acme/site'] }, '-repo:acme/site'],
+    [{ field: 'text', op: 'contains', value: 'fix' }, '"fix"'],
+    [{ field: 'text', op: 'excludes', value: 'fix' }, '-"fix"'],
+    [{ field: 'age', op: 'older', days: 7 }, 'age:>7d'],
+    [{ field: 'age', op: 'newer', days: 1 }, 'age:<1d'],
+  ])('reads %j as %s', (condition, expected) => {
+    expect(conditionQualifier(condition, repoName)).toBe(expected)
   })
 })

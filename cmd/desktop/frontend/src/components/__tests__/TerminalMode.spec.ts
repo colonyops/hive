@@ -3211,7 +3211,7 @@ describe('TerminalMode', () => {
       expect(wrapper.find('[data-testid="code-view-hidden"]').exists()).toBe(false)
 
       await selectView(wrapper, 'running')
-      expect(wrapper.get('[data-testid="code-view-name"]').text()).toBe('Running')
+      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['status:running'])
       expect(wrapper.get('[data-testid="code-view-hidden"]').text()).toBe('1')
       expect(wrapper.get('[data-testid="code-view-hidden"]').attributes('title')).toBe('1 session hidden by this view')
 
@@ -3227,7 +3227,7 @@ describe('TerminalMode', () => {
       resetStores()
 
       const { wrapper } = await mountAvailable()
-      expect(wrapper.get('[data-testid="code-view-name"]').text()).toBe('Running')
+      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['status:running'])
       expect(slugs(wrapper)).toEqual(['hive-bump-deps', 'hive-fix-parser'])
       wrapper.unmount()
     })
@@ -3242,8 +3242,7 @@ describe('TerminalMode', () => {
       const running = wrapper.findAll('[data-testid="code-view-add-menu"] button').find((b) => b.text() === 'Running')!
       await running.trigger('click')
       await flushPromises()
-      expect(wrapper.get('[data-testid="code-view-name"]').text()).toBe('All sessions')
-      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['Status is running'])
+      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['status:running'])
       expect(wrapper.find('[data-testid="code-view-save-new"]').exists()).toBe(true)
 
       await wrapper.get('[data-testid="code-view-clear"]').trigger('click')
@@ -3287,7 +3286,7 @@ describe('TerminalMode', () => {
       localStorage.setItem('hive.terminal.sidebar.running-only', 'true')
       running({ 1: true, 2: false })
       const { wrapper } = await mountAvailable()
-      expect(wrapper.get('[data-testid="code-view-name"]').text()).toBe('Running')
+      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['status:running'])
       expect(slugs(wrapper)).toEqual(['hive-fix-parser'])
       expect(localStorage.getItem('hive.terminal.sidebar.running-only')).toBeNull()
       wrapper.unmount()

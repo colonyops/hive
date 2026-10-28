@@ -11,7 +11,7 @@ import InlineConfirm from '@hive/ui/components/ui/InlineConfirm.vue'
 import TextInput from '@hive/ui/components/ui/TextInput.vue'
 import { dropClass, dropEdge, useDragReorder } from '../../composables/useDragReorder'
 import { moveId, type OrderDropTarget } from '../../lib/listOrder'
-import { describeCondition, type SavedSessionView } from '../../lib/sessionViews'
+import { conditionQualifier, type SavedSessionView } from '../../lib/sessionViews'
 import { useCodeViews } from '../../stores/useCodeViews'
 import { useTerminalModeContext } from './terminalModeContext'
 
@@ -24,8 +24,8 @@ const confirmingId = ref('')
 
 function summary(view: SavedSessionView): string {
   if (!view.filter.conditions.length) return 'No filter'
-  const joiner = view.filter.match === 'any' ? ' or ' : ' · '
-  return view.filter.conditions.map((c) => describeCondition(c, viewMenus.repoName)).join(joiner)
+  const joiner = view.filter.match === 'any' ? ' OR ' : ' '
+  return view.filter.conditions.map((c) => conditionQualifier(c, viewMenus.repoName)).join(joiner)
 }
 
 // Renames commit on blur or Enter, not per keystroke: each commit rewrites settings.yaml.

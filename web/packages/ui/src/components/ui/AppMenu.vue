@@ -196,6 +196,16 @@ useEventListener(anchoredWindow, 'resize', measure)
             </span>
             <span v-else class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
             <Kbd v-if="entry.kbd" class="ml-auto pl-2 text-micro text-text-4">{{ entry.kbd }}</Kbd>
+            <IconCheck
+              v-if="entry.checked && (entry.icon || entry.iconName)"
+              class="size-3.5 shrink-0 text-accent"
+              data-check
+            />
+            <span
+              v-else-if="entry.checked === false && (entry.icon || entry.iconName)"
+              class="size-3.5 shrink-0"
+              aria-hidden="true"
+            />
           </button>
         </template>
         <EmptyState

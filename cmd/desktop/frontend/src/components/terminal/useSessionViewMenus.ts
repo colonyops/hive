@@ -1,12 +1,20 @@
-import { computed, ref } from 'vue'
+import { computed, ref, type Component } from 'vue'
+import IconCirclePlay from '~icons/lucide/circle-play'
+import IconLayers from '~icons/lucide/layers'
+import IconList from '~icons/lucide/list'
 import IconPencil from '~icons/lucide/pencil'
 import IconSettings from '~icons/lucide/settings-2'
 import type { MenuEntry } from '@hive/ui/types/menu'
-import { BUILT_IN_VIEWS, type SessionCondition } from '../../lib/sessionViews'
+import { ALL_SESSIONS_VIEW_ID, BUILT_IN_VIEWS, RUNNING_VIEW_ID, type SessionCondition } from '../../lib/sessionViews'
 import { useCodeViews } from '../../stores/useCodeViews'
 import type { TerminalTree } from './useTerminalTree'
 
 const AGE_PRESETS = [1, 3, 7, 14, 30]
+
+const VIEW_ICONS: Record<string, Component> = {
+  [ALL_SESSIONS_VIEW_ID]: IconList,
+  [RUNNING_VIEW_ID]: IconCirclePlay,
+}
 
 export type SessionViewDialog = { kind: 'save-as' } | { kind: 'text'; index: number }
 
@@ -50,6 +58,7 @@ export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 
       kind: 'action',
       id: `view:${view.id}`,
       label: view.name,
+      icon: VIEW_ICONS[view.id] ?? IconLayers,
       checked: views.activeViewId.value === view.id,
       testid: BUILT_IN_VIEWS.includes(view) ? `code-view-option-${view.id}` : 'code-view-option',
     })),

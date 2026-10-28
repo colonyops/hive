@@ -112,7 +112,32 @@ export function sameSessionFilter(a: SessionFilter, b: SessionFilter): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
-/** A short, human reading of a condition, as its chip shows it. */
+/**
+ * A condition as a GitHub-style search qualifier (`status:running`,
+ * `-tag:wip`, `age:>7d`), which is what a chip shows. A leading `-` negates.
+ */
+export function conditionQualifier(condition: SessionCondition, repoName: (identity: string) => string): string {
+  switch (condition.field) {
+    case 'tag': {
+      const values = condition.values.join(condition.op === 'all' ? '+' : ',') || '…'
+      return `${condition.op === 'none' ? '-' : ''}tag:${values}`
+    }
+    case 'repo':
+      return `${condition.op === 'none' ? '-' : ''}repo:${condition.values.map(repoName).join(',') || '…'}`
+    case 'text':
+      return `${condition.op === 'excludes' ? '-' : ''}"${condition.value}"`
+    case 'status':
+      return `status:${condition.value}`
+    case 'age':
+      return `age:${condition.op === 'older' ? '>' : '<'}${condition.days}d`
+    default: {
+      const unknown = condition as { field: string; op: string }
+      return `${unknown.field}:${unknown.op}?`
+    }
+  }
+}
+
+/** A plain-words reading of a condition, for a chip's tooltip. */
 export function describeCondition(condition: SessionCondition, repoName: (identity: string) => string): string {
   switch (condition.field) {
     case 'tag': {
