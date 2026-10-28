@@ -202,6 +202,8 @@ function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | n
         />
       </template>
       <template v-else>
+        <!-- Above the tree, and hidden with it while a search lists hits. -->
+        <slot name="before-tree" />
         <InlineError
           v-if="error"
           variant="line"

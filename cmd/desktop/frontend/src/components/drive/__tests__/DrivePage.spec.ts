@@ -30,6 +30,7 @@ const drive = vi.hoisted(() => ({
   Spaces: vi.fn(),
   Tree: vi.fn(),
   Search: vi.fn(),
+  Recent: vi.fn(),
   Document: vi.fn(),
   Markdown: vi.fn(),
   Export: vi.fn(),
@@ -126,6 +127,10 @@ describe('DrivePage', () => {
       current: true,
       comments: [{ id: 'c1', startLine: 5, endLine: 5, context: 'E2E Drive Plan', text: 'Rename', createdAt: '' }],
     })
+    drive.Recent.mockResolvedValue([
+      { space: space('shared', 'Shared'), entry: notes },
+      { space: space('e2e/repo'), entry: plan },
+    ])
   })
 
   it("shows the space's tree beside its newest document", async () => {
@@ -226,6 +231,41 @@ describe('DrivePage', () => {
     await flushPromises()
     expect(scope.value).toEqual({ space: 'shared', path: null, session: null })
     expect(drive.Document).toHaveBeenLastCalledWith('shared', 'notes.md')
+  })
+
+  it('lists the newest documents across every space above the tree and opens one in its own space', async () => {
+    const { wrapper, scope } = await mountPage()
+    const recent = wrapper.get('[data-testid="drive-page-recent"]')
+    expect(
+      recent.findAll('button[data-testid^="drive-page-recent-"]').map((row) => row.attributes('data-testid')),
+    ).toEqual([
+      'drive-page-recent-toggle',
+      'drive-page-recent-shared:notes.md',
+      'drive-page-recent-e2e/repo:plans/2026-10-11-plan.md',
+    ])
+    expect(
+      wrapper.get('[data-testid="drive-page-recent-e2e/repo:plans/2026-10-11-plan.md"]').attributes('aria-current'),
+    ).toBe('true')
+
+    await wrapper.get('[data-testid="drive-page-recent-shared:notes.md"]').trigger('click')
+    await flushPromises()
+    expect(scope.value).toEqual({ space: 'shared', path: 'notes.md', session: null })
+
+    await wrapper.get('[data-testid="drive-page-recent-toggle"]').trigger('click')
+    expect(wrapper.find('[data-testid="drive-page-recent-shared:notes.md"]').exists()).toBe(false)
+  })
+
+  it('re-reads the recent list when the drive changes, and hides it while a search lists hits', async () => {
+    const { wrapper } = await mountPage()
+    drive.Recent.mockClear()
+    wailsEvents.fire('drive:updated', { space: 'shared', paths: ['new.md'] })
+    await flushPromises()
+    expect(drive.Recent).toHaveBeenCalledWith(8)
+
+    await wrapper.get('[data-testid="drive-page-search"]').setValue('plan')
+    expect(wrapper.find('[data-testid="drive-page-recent"]').exists()).toBe(false)
+    await vi.waitFor(() => expect(drive.Search).toHaveBeenCalledWith('plan', 50))
+    await flushPromises()
   })
 
   it('searches every space and opens a hit in its own space', async () => {

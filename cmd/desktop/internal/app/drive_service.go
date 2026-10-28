@@ -434,6 +434,23 @@ func (s *DriveService) Search(ctx context.Context, query string, limit int) ([]d
 	return hits, nil
 }
 
+// Recent is every space's documents, newest created first; limit 0 is the
+// drive's default cap.
+func (s *DriveService) Recent(ctx context.Context, limit int) ([]drivesvc.Hit, error) {
+	d, err := s.engineDrive()
+	if err != nil {
+		return nil, err
+	}
+	if limit < 0 {
+		return nil, Errorf(KindInvalid, "recent limit must not be negative")
+	}
+	hits, err := d.Recent(ctx, limit)
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "listing recent drive documents")
+	}
+	return hits, nil
+}
+
 // Document is one document read for the reader. The kind comes from the
 // name, so a plain file is answered from the snapshot without reading what
 // may be a large binary, and a canvas is read once, by the canvas load that

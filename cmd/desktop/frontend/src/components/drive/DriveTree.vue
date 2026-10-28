@@ -5,16 +5,13 @@
 import { computed, nextTick, ref, watch, type Component } from 'vue'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconEllipsis from '~icons/lucide/ellipsis'
-import IconFile from '~icons/lucide/file'
-import IconFileCode from '~icons/lucide/file-code'
-import IconFileText from '~icons/lucide/file-text'
 import IconFolder from '~icons/lucide/folder'
 import IconFolderOpen from '~icons/lucide/folder-open'
-import IconLayoutDashboard from '~icons/lucide/layout-dashboard'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { useListKeyboardNav } from '@hive/ui/composables/useListKeyboardNav'
 import { useTreeExpansion } from '../../composables/useTreeExpansion'
+import { documentIcon } from './documentIcon'
 import { ancestorPaths, entryLabel, entryMatches } from '../../lib/drive'
 import { useDrive } from '../../stores/useDrive'
 import { useDriveActivity } from '../../stores/useDriveActivity'
@@ -151,11 +148,7 @@ function reveal(path: string): void {
 
 function kindIcon(entry: EntryWire): Component {
   if (entry.kind === 'dir') return expansion.expanded(entry) ? IconFolderOpen : IconFolder
-  return (
-    ({ markdown: IconFileText, html: IconFileCode, canvas: IconLayoutDashboard } as Record<string, Component>)[
-      entry.kind
-    ] ?? IconFile
-  )
+  return documentIcon(entry.kind)
 }
 
 function activate(row: Row): void {

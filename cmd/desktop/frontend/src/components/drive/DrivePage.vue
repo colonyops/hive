@@ -12,6 +12,7 @@ import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
 import DriveDocumentActions from './DriveDocumentActions.vue'
 import DriveReader from './DriveReader.vue'
+import DriveRecent from './DriveRecent.vue'
 import DriveReviewCards from './DriveReviewCards.vue'
 import DriveReviewFooter from './DriveReviewFooter.vue'
 import DriveReviewHeader from './DriveReviewHeader.vue'
@@ -218,7 +219,11 @@ useEscapeToClose(() => emit('close'))
         @open-hit="openHit"
         @moved="documentMoved"
         @deleted="documentDeleted"
-      />
+      >
+        <template #before-tree>
+          <DriveRecent :space="space" :selected="shown" testid="drive-page" @open="openHit" />
+        </template>
+      </DriveBrowser>
       <PanelResizeHandle edge="right" name="drive-sidebar" :start="startSidebarResize" :step="stepSidebar" />
     </aside>
 

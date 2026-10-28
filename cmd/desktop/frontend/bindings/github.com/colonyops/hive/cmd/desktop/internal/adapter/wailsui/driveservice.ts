@@ -61,6 +61,14 @@ export function Move(space: string, path: string, dir: string): $CancellableProm
 }
 
 /**
+ * Recent lists every space's documents, newest created first. limit 0 is
+ * the drive's default cap.
+ */
+export function Recent(limit: number): $CancellablePromise<$models.HitWire[] | null> {
+    return $Call.ByID(900806536, limit);
+}
+
+/**
  * Rename gives path a new name in the same folder. A document keeps its
  * kind's extension: "b" renames a.md to b.md.
  */

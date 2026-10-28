@@ -5,6 +5,7 @@
 package drive
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -546,6 +547,50 @@ func searchSnapshot(snap *spaceSnapshot, space drive.Space, terms []string) []Hi
 	}
 	slices.SortFunc(found, func(a, b Hit) int { return strings.Compare(a.Entry.Path, b.Entry.Path) })
 	return found
+}
+
+// Recent answers the documents in every space, newest created first, without
+// children; folders are left out. Ties fall back to the newest modified, then
+// to the space and the path, so the order is stable. limit caps them, and 0
+// means defaultSearchLimit.
+func (s *Service) Recent(ctx context.Context, limit int) (hits []Hit, err error) {
+	defer recordOp(ctx, opRecent, actorNone, time.Now(), &err)
+	defer func() { trace.SpanFromContext(ctx).SetAttributes(attribute.Int(attrHits, len(hits))) }()
+	if limit <= 0 {
+		limit = defaultSearchLimit
+	}
+	spaces, err := s.Spaces(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	hits = []Hit{}
+	for _, space := range spaces {
+		snap, err := s.scanned(space)
+		if err != nil {
+			return nil, err
+		}
+		s.mu.RLock()
+		for _, entry := range flatten(snap.root) {
+			if entry.Kind == drive.KindDir {
+				continue
+			}
+			hits = append(hits, Hit{Space: space, Entry: cloneEntry(entry)})
+		}
+		s.mu.RUnlock()
+	}
+	slices.SortFunc(hits, func(a, b Hit) int {
+		return cmp.Or(
+			b.Entry.Created.Compare(a.Entry.Created),
+			b.Entry.Modified.Compare(a.Entry.Modified),
+			strings.Compare(a.Space.Key, b.Space.Key),
+			strings.Compare(a.Entry.Path, b.Entry.Path),
+		)
+	})
+	if len(hits) > limit {
+		hits = hits[:limit]
+	}
+	return hits, nil
 }
 
 // matchesEvery separates path and title with a newline so no word matches
