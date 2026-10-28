@@ -153,6 +153,14 @@ export const useCodeViews = defineStore('codeViews', () => {
     setting.set(views.value.map((v) => (v.id === id ? { ...v, name } : v)))
   }
 
+  /** Puts the saved views in the order of `ids`; an id it does not know is skipped. */
+  function reorder(ids: readonly string[]): void {
+    const byId = new Map(views.value.map((v) => [v.id, v]))
+    const ordered = ids.flatMap((id) => byId.get(id) ?? [])
+    if (ordered.length !== views.value.length) return
+    setting.set(ordered)
+  }
+
   function remove(id: string): void {
     setting.set(views.value.filter((v) => v.id !== id))
   }
@@ -174,6 +182,7 @@ export const useCodeViews = defineStore('codeViews', () => {
     save,
     saveAs,
     rename,
+    reorder,
     remove,
   }
 })

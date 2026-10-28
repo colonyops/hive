@@ -135,4 +135,17 @@ describe('useCodeViews', () => {
     await flushPromises()
     expect(views.activeViewId.value).toBe(ALL_SESSIONS_VIEW_ID)
   })
+
+  it('reorders saved views and ignores an order that drops one', async () => {
+    mocks.CodeViews.mockResolvedValue([
+      { id: 'a', name: 'A', filter: { match: 'all', conditions: [] } },
+      { id: 'b', name: 'B', filter: { match: 'all', conditions: [] } },
+    ])
+    const views = useCodeViews()
+    await flushPromises()
+    views.reorder(['b', 'a'])
+    expect(views.views.value.map((v) => v.id)).toEqual(['b', 'a'])
+    views.reorder(['a'])
+    expect(views.views.value.map((v) => v.id)).toEqual(['b', 'a'])
+  })
 })

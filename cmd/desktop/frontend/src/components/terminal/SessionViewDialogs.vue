@@ -2,11 +2,10 @@
 import IconLayers from '~icons/lucide/layers'
 import IconListFilter from '~icons/lucide/list-filter'
 import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
-import { useCodeViews } from '../../stores/useCodeViews'
+import SessionViewsDrawer from './SessionViewsDrawer.vue'
 import { useTerminalModeContext } from './terminalModeContext'
 
 const { viewMenus } = useTerminalModeContext()
-const { activeView } = useCodeViews()
 </script>
 
 <template>
@@ -21,15 +20,6 @@ const { activeView } = useCodeViews()
     @save="viewMenus.onDialogSave"
   />
   <RenameDialog
-    v-else-if="viewMenus.dialog?.kind === 'rename'"
-    title="Rename view"
-    label="Name"
-    :name="activeView?.name ?? ''"
-    testid="code-view-rename-dialog"
-    @close="viewMenus.dialog = null"
-    @save="viewMenus.onDialogSave"
-  />
-  <RenameDialog
     v-else-if="viewMenus.dialog?.kind === 'text'"
     title="Filter by text"
     label="Matches name, slug, or tag"
@@ -40,4 +30,5 @@ const { activeView } = useCodeViews()
     @close="viewMenus.dialog = null"
     @save="viewMenus.onDialogSave"
   />
+  <SessionViewsDrawer v-if="viewMenus.managing" @close="viewMenus.managing = false" />
 </template>

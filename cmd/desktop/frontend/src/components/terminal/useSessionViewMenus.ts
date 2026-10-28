@@ -1,7 +1,6 @@
 import { computed, ref } from 'vue'
 import IconPencil from '~icons/lucide/pencil'
-import IconPlus from '~icons/lucide/plus'
-import IconTrash from '~icons/lucide/trash-2'
+import IconSettings from '~icons/lucide/settings-2'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import { BUILT_IN_VIEWS, type SessionCondition } from '../../lib/sessionViews'
 import { useCodeViews } from '../../stores/useCodeViews'
@@ -9,7 +8,7 @@ import type { TerminalTree } from './useTerminalTree'
 
 const AGE_PRESETS = [1, 3, 7, 14, 30]
 
-export type SessionViewDialog = { kind: 'save-as' } | { kind: 'rename' } | { kind: 'text'; index: number }
+export type SessionViewDialog = { kind: 'save-as' } | { kind: 'text'; index: number }
 
 export type SessionViewMenus = ReturnType<typeof useSessionViewMenus>
 
@@ -40,6 +39,11 @@ export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 
 
   const dialog = ref<SessionViewDialog | null>(null)
 
+  /** Whether the drawer that renames, reorders, and deletes saved views is open. */
+  const managing = ref(false)
+
+  // Only the views themselves: saving lives on the bar, which is where a
+  // change to the chips shows, and the rest lives in the manage drawer.
   const viewEntries = computed<MenuEntry[]>(() => [
     { kind: 'label', text: 'Views' },
     ...[...BUILT_IN_VIEWS, ...views.views.value].map<MenuEntry>((view) => ({
@@ -49,24 +53,18 @@ export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 
       checked: views.activeViewId.value === view.id,
       testid: BUILT_IN_VIEWS.includes(view) ? `code-view-option-${view.id}` : 'code-view-option',
     })),
-    { kind: 'action', id: 'view-save-as', label: 'Save as new view…', icon: IconPlus, testid: 'code-view-save-as' },
-    ...(views.activeIsBuiltIn.value
-      ? []
-      : ([
-          { kind: 'action', id: 'view-rename', label: 'Rename view…', icon: IconPencil, testid: 'code-view-rename' },
-          { kind: 'action', id: 'view-delete', label: 'Delete view', icon: IconTrash, testid: 'code-view-delete' },
-        ] satisfies MenuEntry[])),
+    ...(views.views.value.length
+      ? ([
+          { kind: 'action', id: 'view-manage', label: 'Manage views…', icon: IconSettings, testid: 'code-view-manage' },
+        ] satisfies MenuEntry[])
+      : []),
   ])
 
   /** Handles a views-section id from the list menu; false for an id it does not own. */
   function onViewSelect(id: string): boolean {
     if (id.startsWith('view:')) views.select(id.slice('view:'.length))
-    else if (id === 'view-save-as') dialog.value = { kind: 'save-as' }
-    else if (id === 'view-rename') dialog.value = { kind: 'rename' }
-    else if (id === 'view-delete') {
-      const active = views.activeView.value
-      if (active && !views.activeIsBuiltIn.value) views.remove(active.id)
-    } else return false
+    else if (id === 'view-manage') managing.value = true
+    else return false
     return true
   }
 
@@ -230,10 +228,8 @@ export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 
     const current = dialog.value
     dialog.value = null
     if (!current) return
-    const active = views.activeView.value
     if (current.kind === 'save-as') views.saveAs(name)
-    else if (current.kind === 'rename' && active && !views.activeIsBuiltIn.value) views.rename(active.id, name)
-    else if (current.kind === 'text') {
+    else {
       if (current.index < 0) views.addCondition({ field: 'text', op: 'contains', value: name })
       else {
         const condition = views.draft.value.conditions[current.index]
@@ -251,6 +247,7 @@ export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 
     chipEntries,
     onChipSelect,
     dialog,
+    managing,
     textDialogSeed,
     onDialogSave,
   }

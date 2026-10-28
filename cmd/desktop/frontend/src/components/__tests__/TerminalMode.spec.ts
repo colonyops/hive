@@ -55,6 +55,7 @@ const mocks = vi.hoisted(() => ({
   SetTerminalFontSize: vi.fn(),
   AppearanceSettings: vi.fn(),
   CodeViews: vi.fn(),
+  SetCodeViews: vi.fn(),
   EditorSettings: vi.fn(),
   OpenURL: vi.fn(),
   AgentsAvailable: vi.fn(),
@@ -95,7 +96,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   AppearanceSettings: mocks.AppearanceSettings,
   CodeViews: mocks.CodeViews,
-  SetCodeViews: vi.fn(),
+  SetCodeViews: mocks.SetCodeViews,
   EditorSettings: mocks.EditorSettings,
   SetEditor: vi.fn(),
   SetTerminalFontSize: mocks.SetTerminalFontSize,
@@ -3211,7 +3212,8 @@ describe('TerminalMode', () => {
 
       await selectView(wrapper, 'running')
       expect(wrapper.get('[data-testid="code-view-name"]').text()).toBe('Running')
-      expect(wrapper.get('[data-testid="code-view-hidden"]').text()).toBe('1 hidden')
+      expect(wrapper.get('[data-testid="code-view-hidden"]').text()).toBe('1')
+      expect(wrapper.get('[data-testid="code-view-hidden"]').attributes('title')).toBe('1 session hidden by this view')
 
       await wrapper.get('[data-testid="code-view-clear"]').trigger('click')
       expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
@@ -3246,6 +3248,38 @@ describe('TerminalMode', () => {
 
       await wrapper.get('[data-testid="code-view-clear"]').trigger('click')
       expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('lists only views in the list menu, and manages saved ones in a drawer', async () => {
+      mocks.CodeViews.mockResolvedValue([
+        {
+          id: 'bugs',
+          name: 'Bugs',
+          filter: { match: 'all', conditions: [{ field: 'tag', op: 'any', values: ['bug'] }] },
+        },
+      ])
+      const { wrapper } = await mountAvailable()
+      await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
+      const menu = wrapper.get('[data-testid="terminal-sessions-menu"]')
+      expect(menu.find('[data-testid="code-view-save-as"]').exists()).toBe(false)
+      expect(menu.findAll('[data-testid="code-view-option"]').map((b) => b.text())).toEqual(['Bugs'])
+
+      await wrapper.get('[data-testid="code-view-manage"]').trigger('click')
+      await flushPromises()
+      const drawer = () => document.querySelector('[data-testid="code-views-drawer"]')
+      expect(drawer()).not.toBeNull()
+      const name = document.querySelector<HTMLInputElement>('[data-testid="code-views-drawer-name"]')!
+      name.value = 'Open bugs'
+      name.dispatchEvent(new Event('blur'))
+      await flushPromises()
+      expect(mocks.SetCodeViews).toHaveBeenLastCalledWith([expect.objectContaining({ id: 'bugs', name: 'Open bugs' })])
+
+      document.querySelector<HTMLElement>('[data-testid="code-views-drawer-delete"]')!.click()
+      await flushPromises()
+      document.querySelector<HTMLElement>('[data-testid="code-views-drawer-confirm-confirm"]')?.click()
+      await flushPromises()
+      expect(mocks.SetCodeViews).toHaveBeenLastCalledWith([])
       wrapper.unmount()
     })
 
