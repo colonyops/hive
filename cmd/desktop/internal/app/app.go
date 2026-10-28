@@ -48,6 +48,8 @@ import (
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/daemon"
+	"github.com/colonyops/hive/internal/hive/daemonclient"
 	hiveevents "github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/platform/credentials"
@@ -209,8 +211,10 @@ type App struct {
 	webhookPort int
 
 	// hive owns the config-derived services and swaps them on Reload.
-	hive        *hive.Engine
-	sessions    sessionapi.API
+	hive     *hive.Engine
+	sessions sessionapi.API
+	// hiveDaemon is set when experimental.daemon routes sessions to it.
+	hiveDaemon  *daemonclient.Client
 	hiveRuntime *hive.Runtime
 	launcher    *dispatch.RepositoryLauncher
 
@@ -1282,7 +1286,18 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	}
 	a.hiveRuntime = hiveRuntime
 	a.hive = hiveRuntime.Engine()
-	a.sessions = sessionapi.NewLocal(a.hive)
+	if hiveCfg.Experimental.Daemon {
+		// The engine stays open for drive, hc, tasks, review, and agent
+		// workspaces; only the session view moves to the daemon.
+		a.hiveDaemon = daemonclient.New(daemonclient.Options{
+			Dialer:    daemonclient.UnixDialer(daemon.SocketPath(dataDir)),
+			Logger:    a.logger,
+			AutoStart: a.startHiveDaemon(dataDir),
+		})
+		a.sessions = a.hiveDaemon
+	} else {
+		a.sessions = sessionapi.NewLocal(a.hive)
+	}
 	logDroppedHiveEvents(a.logger, hiveRuntime.Bus())
 	forwardDriveChanges(ctx, hiveRuntime.Bus(), a.Events)
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
@@ -1295,6 +1310,27 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	// legacy canvas that appears later moves on the next launch.
 	importLegacyCanvases(ctx, a.logger, a.hive, cfg.Paths)
 	return nil
+}
+
+// startHiveDaemon starts `hive daemon run` the way the user's terminal would:
+// with the login-shell environment and the Hive config this app resolved, so
+// the daemon and Desktop read the same config.yaml and hive.db.
+func (a *App) startHiveDaemon(dataDir string) func(context.Context) error {
+	return func(ctx context.Context) error {
+		binary := a.settings.Daemon.HivePath
+		if binary == "" {
+			found, err := a.execEnv.LookPath(ctx, "hive")
+			if err != nil {
+				return fmt.Errorf("the experimental hive daemon needs the hive CLI on PATH or in daemon.hive_path: %w", err)
+			}
+			binary = found
+		}
+		env := a.execEnv.Environ(ctx)
+		if path := a.HiveConfigLocation().Path; path != "" {
+			env = append(env, config.EnvConfig+"="+path)
+		}
+		return daemonclient.Spawn(ctx, binary, dataDir, env)
+	}
 }
 
 func hiveStartError(err error) error {
@@ -1412,6 +1448,12 @@ func (a *App) ReloadHiveRuntime(ctx context.Context) error {
 	}
 	if err := a.hive.Reload(hiveCfg); err != nil {
 		return Wrap(err, KindInvalid, "reloading the Hive config")
+	}
+	// A change to experimental.daemon itself applies on the next launch.
+	if a.hiveDaemon != nil {
+		if err := a.hiveDaemon.Reload(ctx); err != nil {
+			return Wrap(err, KindInternal, "reloading the Hive config in the hive daemon")
+		}
 	}
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
 	return nil
