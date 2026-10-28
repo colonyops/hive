@@ -3,7 +3,6 @@ import type { TerminalSessionRow } from '../stores/useTerminalSessions'
 export type SessionCondition =
   | { field: 'tag'; op: 'any' | 'all' | 'none'; values: readonly string[] }
   | { field: 'repo'; op: 'any' | 'none'; values: readonly string[] }
-  | { field: 'text'; op: 'contains' | 'excludes'; value: string }
   | { field: 'status'; op: 'is'; value: 'running' | 'stopped' }
   | { field: 'age'; op: 'older' | 'newer'; days: number }
 
@@ -70,12 +69,6 @@ function matchesCondition(row: TerminalSessionRow, condition: SessionCondition, 
       const hit = condition.values.includes(row.repoIdentity)
       return condition.op === 'any' ? hit : !hit
     }
-    case 'text': {
-      const needle = condition.value.trim().toLowerCase()
-      if (!needle) return true
-      const hit = [row.name, row.slug, ...(row.tags ?? [])].some((text) => text.toLowerCase().includes(needle))
-      return condition.op === 'contains' ? hit : !hit
-    }
     case 'status':
       if (!ctx.statusesLoaded) return true
       return ctx.rowRunning(row) === (condition.value === 'running')
@@ -124,8 +117,6 @@ export function conditionQualifier(condition: SessionCondition, repoName: (ident
     }
     case 'repo':
       return `${condition.op === 'none' ? '-' : ''}repo:${condition.values.map(repoName).join(',') || '…'}`
-    case 'text':
-      return `${condition.op === 'excludes' ? '-' : ''}"${condition.value}"`
     case 'status':
       return `status:${condition.value}`
     case 'age':
@@ -146,8 +137,6 @@ export function describeCondition(condition: SessionCondition, repoName: (identi
     }
     case 'repo':
       return `Repo ${condition.op === 'any' ? 'is' : 'is not'} ${condition.values.map(repoName).join(', ') || '…'}`
-    case 'text':
-      return `${condition.op === 'contains' ? 'Contains' : 'Excludes'} “${condition.value}”`
     case 'status':
       return `Status is ${condition.value}`
     case 'age':

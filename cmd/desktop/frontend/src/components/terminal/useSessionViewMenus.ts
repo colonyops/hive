@@ -2,7 +2,6 @@ import { computed, ref, type Component } from 'vue'
 import IconCirclePlay from '~icons/lucide/circle-play'
 import IconLayers from '~icons/lucide/layers'
 import IconList from '~icons/lucide/list'
-import IconPencil from '~icons/lucide/pencil'
 import IconSettings from '~icons/lucide/settings-2'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import { ALL_SESSIONS_VIEW_ID, BUILT_IN_VIEWS, RUNNING_VIEW_ID, type SessionCondition } from '../../lib/sessionViews'
@@ -16,8 +15,6 @@ const VIEW_ICONS: Record<string, Component> = {
   [RUNNING_VIEW_ID]: IconCirclePlay,
 }
 
-export type SessionViewDialog = { kind: 'save-as' } | { kind: 'text'; index: number }
-
 export type SessionViewMenus = ReturnType<typeof useSessionViewMenus>
 
 function splitId(id: string): [string, string] {
@@ -27,9 +24,9 @@ function splitId(id: string): [string, string] {
 
 /**
  * The menus that drive the Code sidebar's views: the views section of the list
- * menu, the toolbar's filter dropdown, each chip's editor, and the dialogs they
- * open. Built once per Code view because the list menu, the filter button, and
- * the bar all open the same dialogs.
+ * menu, the toolbar's filter dropdown, each chip's editor, and the overlays they
+ * open. Built once per Code view because the list menu and the bar open the
+ * same overlays.
  */
 export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 'sessionGroups'>) {
   const views = useCodeViews()
@@ -45,7 +42,8 @@ export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 
     return knownRepos.value.find((group) => group.key === identity)?.name ?? identity
   }
 
-  const dialog = ref<SessionViewDialog | null>(null)
+  /** Whether the dialog that names a new view from the current chips is open. */
+  const saving = ref(false)
 
   /** Whether the drawer that renames, reorders, and deletes saved views is open. */
   const managing = ref(false)
@@ -122,7 +120,6 @@ export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 
         label: `Older than ${days}d`,
       })),
     },
-    { kind: 'action', id: 'text', label: 'Text…', testid: 'code-filter-text' },
   ])
 
   function onFilterSelect(id: string): void {
@@ -132,7 +129,6 @@ export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 
     else if (field === 'status')
       views.addCondition({ field: 'status', op: 'is', value: value as 'running' | 'stopped' })
     else if (field === 'age') views.addCondition({ field: 'age', op: 'older', days: Number(value) })
-    else if (field === 'text') dialog.value = { kind: 'text', index: -1 }
   }
 
   function chipEntries(condition: SessionCondition): MenuEntry[] {
@@ -179,32 +175,18 @@ export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 
             checked: condition.days === days,
           })),
         ]
-      case 'text':
-        return [
-          { kind: 'action', id: 'op:contains', label: 'Contains', checked: condition.op === 'contains' },
-          { kind: 'action', id: 'op:excludes', label: 'Excludes', checked: condition.op === 'excludes' },
-          { kind: 'separator' },
-          { kind: 'action', id: 'edit', label: 'Edit text…', icon: IconPencil },
-        ]
       default:
         return [{ kind: 'action', id: 'noop', label: 'Not supported in this version', disabled: true }]
     }
   }
 
-  /**
-   * Applies a chip editor choice. Returns true when the menu should close:
-   * multi-value toggles keep it open so several values can be picked in one go.
-   */
-  function onChipSelect(index: number, id: string): boolean {
+  // The chip's menu stays open after a choice, so several values can be picked in one go.
+  function onChipSelect(index: number, id: string): void {
     const condition = views.draft.value.conditions[index]
     const [kind, value] = splitId(id)
-    if (kind === 'edit') {
-      dialog.value = { kind: 'text', index }
-      return true
-    }
     if (kind === 'op') {
       views.updateCondition(index, { ...condition, op: value } as SessionCondition)
-      return false
+      return
     }
     switch (condition.field) {
       case 'tag':
@@ -213,38 +195,20 @@ export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 
           ? condition.values.filter((v) => v !== value)
           : [...condition.values, value]
         views.updateCondition(index, { ...condition, values })
-        return false
+        break
       }
       case 'status':
         views.updateCondition(index, { ...condition, value: value as 'running' | 'stopped' })
-        return false
+        break
       case 'age':
         views.updateCondition(index, { ...condition, days: Number(value) })
-        return false
-      case 'text':
-        return false
+        break
     }
   }
 
-  const textDialogSeed = computed(() => {
-    const current = dialog.value
-    if (current?.kind !== 'text' || current.index < 0) return ''
-    const condition = views.draft.value.conditions[current.index]
-    return condition?.field === 'text' ? condition.value : ''
-  })
-
-  function onDialogSave(name: string): void {
-    const current = dialog.value
-    dialog.value = null
-    if (!current) return
-    if (current.kind === 'save-as') views.saveAs(name)
-    else {
-      if (current.index < 0) views.addCondition({ field: 'text', op: 'contains', value: name })
-      else {
-        const condition = views.draft.value.conditions[current.index]
-        if (condition.field === 'text') views.updateCondition(current.index, { ...condition, value: name })
-      }
-    }
+  function onSaveAs(name: string): void {
+    saving.value = false
+    views.saveAs(name)
   }
 
   return {
@@ -255,9 +219,8 @@ export function useSessionViewMenus(tree: Pick<TerminalTree, 'activeSessions' | 
     onFilterSelect,
     chipEntries,
     onChipSelect,
-    dialog,
+    saving,
     managing,
-    textDialogSeed,
-    onDialogSave,
+    onSaveAs,
   }
 }

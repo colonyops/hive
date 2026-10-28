@@ -22,10 +22,6 @@ const shown = computed(() => views.draft.conditions.length > 0 || views.dirty)
 const openChip = ref(-1)
 const chipAnchors = ref<HTMLElement[]>([])
 
-function onChipSelect(index: number, id: string): void {
-  if (viewMenus.onChipSelect(index, id)) openChip.value = -1
-}
-
 function clear(): void {
   openChip.value = -1
   views.select(ALL_SESSIONS_VIEW_ID)
@@ -84,7 +80,7 @@ function clear(): void {
           :ignore="[chipAnchors[index] ?? null]"
           width="12rem"
           @close="openChip = -1"
-          @select="(id) => onChipSelect(index, id)"
+          @select="(id) => viewMenus.onChipSelect(index, id)"
         />
       </div>
     </div>
@@ -113,7 +109,7 @@ function clear(): void {
           size="sm"
           class="text-accent"
           data-testid="code-view-save-new"
-          @click="viewMenus.dialog = { kind: 'save-as' }"
+          @click="viewMenus.saving = true"
         />
       </template>
       <span

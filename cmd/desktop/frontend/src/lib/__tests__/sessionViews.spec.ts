@@ -46,12 +46,6 @@ describe('matchesSessionFilter', () => {
     expect(matches([{ field: 'repo', op: 'none', values: ['github.com/acme/site'] }])).toBe(false)
   })
 
-  it('matches text against name, slug, and tags', () => {
-    expect(matches([{ field: 'text', op: 'contains', value: 'pars' }])).toBe(true)
-    expect(matches([{ field: 'text', op: 'contains', value: 'WIP' }])).toBe(true)
-    expect(matches([{ field: 'text', op: 'excludes', value: 'pars' }])).toBe(false)
-  })
-
   it('ignores a status condition until statuses have loaded', () => {
     const stopped: SessionCondition[] = [{ field: 'status', op: 'is', value: 'stopped' }]
     expect(matches(stopped)).toBe(false)
@@ -67,7 +61,7 @@ describe('matchesSessionFilter', () => {
   it('combines conditions with all or any', () => {
     const conditions: SessionCondition[] = [
       { field: 'tag', op: 'any', values: ['docs'] },
-      { field: 'text', op: 'contains', value: 'parser' },
+      { field: 'repo', op: 'any', values: ['github.com/acme/site'] },
     ]
     expect(matches(conditions, 'all')).toBe(false)
     expect(matches(conditions, 'any')).toBe(true)
@@ -90,8 +84,6 @@ describe('conditionQualifier', () => {
     [{ field: 'tag', op: 'all', values: ['bug', 'ui'] }, 'tag:bug+ui'],
     [{ field: 'tag', op: 'none', values: ['wip'] }, '-tag:wip'],
     [{ field: 'repo', op: 'none', values: ['github.com/acme/site'] }, '-repo:acme/site'],
-    [{ field: 'text', op: 'contains', value: 'fix' }, '"fix"'],
-    [{ field: 'text', op: 'excludes', value: 'fix' }, '-"fix"'],
     [{ field: 'age', op: 'older', days: 7 }, 'age:>7d'],
     [{ field: 'age', op: 'newer', days: 1 }, 'age:<1d'],
   ])('reads %j as %s', (condition, expected) => {
