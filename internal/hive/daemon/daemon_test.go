@@ -2,6 +2,8 @@ package daemon_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -13,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemon"
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
@@ -27,9 +30,20 @@ type running struct {
 	cancel context.CancelFunc
 }
 
-func runDaemon(t *testing.T, dataDir string, waitLock bool) running {
+type daemonOpts struct {
+	waitLock     bool
+	paneSource   terminal.PaneSource
+	pollInterval time.Duration
+}
+
+// startDaemon reports a failure instead of failing the test, so a test can
+// call it off the test goroutine.
+func startDaemon(t *testing.T, dataDir string, opts daemonOpts) (running, error) {
 	t.Helper()
 	cfg := hivetest.LoadConfig(t, dataDir)
+	if opts.pollInterval > 0 {
+		cfg.Tmux.PollInterval = opts.pollInterval
+	}
 	ctx, cancel := context.WithCancel(t.Context())
 	ready := make(chan string, 1)
 	r := running{done: make(chan error, 1), cancel: cancel}
@@ -37,13 +51,14 @@ func runDaemon(t *testing.T, dataDir string, waitLock bool) running {
 		r.done <- daemon.Run(ctx, daemon.Options{
 			Config: cfg,
 			Ports: hive.Ports{
-				Executor: &executiltest.Exec{},
-				Mux:      hivetest.Mux{},
-				DataDir:  dataDir,
-				Logger:   zerolog.Nop(),
+				Executor:   &executiltest.Exec{},
+				Mux:        hivetest.Mux{},
+				PaneSource: opts.paneSource,
+				DataDir:    dataDir,
+				Logger:     zerolog.Nop(),
 			},
 			Version:  "test",
-			WaitLock: waitLock,
+			WaitLock: opts.waitLock,
 			OnReady:  func(path string) { ready <- path },
 		})
 	}()
@@ -57,12 +72,25 @@ func runDaemon(t *testing.T, dataDir string, waitLock bool) running {
 	})
 	select {
 	case r.socket = <-ready:
+		return r, nil
 	case err := <-r.done:
-		t.Fatalf("daemon exited before it listened: %v", err)
+		r.done <- err
+		return r, fmt.Errorf("daemon exited before it listened: %w", err)
 	case <-time.After(5 * time.Second):
-		t.Fatal("daemon did not start listening")
+		return r, errors.New("daemon did not start listening")
 	}
+}
+
+func runDaemonWith(t *testing.T, dataDir string, opts daemonOpts) running {
+	t.Helper()
+	r, err := startDaemon(t, dataDir, opts)
+	require.NoError(t, err)
 	return r
+}
+
+func runDaemon(t *testing.T, dataDir string, waitLock bool) running {
+	t.Helper()
+	return runDaemonWith(t, dataDir, daemonOpts{waitLock: waitLock})
 }
 
 func httpClient(socket string) *http.Client {
@@ -113,8 +141,11 @@ func TestRunWithWaitLockStartsWhenTheFirstExits(t *testing.T) {
 	dataDir := t.TempDir()
 	first := runDaemon(t, dataDir, false)
 
-	second := make(chan running, 1)
-	go func() { second <- runDaemon(t, dataDir, true) }()
+	second := make(chan error, 1)
+	go func() {
+		_, err := startDaemon(t, dataDir, daemonOpts{waitLock: true})
+		second <- err
+	}()
 
 	select {
 	case <-second:
@@ -134,8 +165,9 @@ func TestRunWithWaitLockStartsWhenTheFirstExits(t *testing.T) {
 	}
 
 	select {
-	case <-second:
-	case <-time.After(5 * time.Second):
+	case err := <-second:
+		require.NoError(t, err)
+	case <-time.After(10 * time.Second):
 		t.Fatal("the waiting daemon never started")
 	}
 }
