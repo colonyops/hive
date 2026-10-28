@@ -62,6 +62,7 @@ require (
 )
 
 require (
+	connectrpc.com/connect v1.21.1 // indirect
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/adrg/xdg v0.5.3 // indirect
 	github.com/alecthomas/chroma/v2 v2.23.1 // indirect
@@ -152,4 +153,8 @@ require (
 
 ignore node_modules
 
-tool github.com/gzuidhof/tygo
+tool (
+	connectrpc.com/connect/cmd/protoc-gen-connect-go
+	github.com/gzuidhof/tygo
+	google.golang.org/protobuf/cmd/protoc-gen-go
+)

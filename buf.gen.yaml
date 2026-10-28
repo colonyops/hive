@@ -1,0 +1,15 @@
+# Plugins run from go.mod tool directives, so generation needs no network and
+# no Buf Schema Registry.
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/colonyops/hive/internal/hive/daemon/gen
+plugins:
+  - local: ["go", "tool", "protoc-gen-go"]
+    out: internal/hive/daemon/gen
+    opt: paths=source_relative
+  - local: ["go", "tool", "protoc-gen-connect-go"]
+    out: internal/hive/daemon/gen
+    opt: paths=source_relative

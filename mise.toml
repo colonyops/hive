@@ -17,6 +17,7 @@ go = "1.27.3"
 "go:github.com/abice/go-enum" = "v0.9.4"
 "github:hay-kot/gobusgen" = "v0.3.0"
 "github:sqlc-dev/sqlc" = "v1.31.1"
+"github:bufbuild/buf" = "v1.74.0"
 golangci-lint = "2.14.0"
 "goreleaser" = "2.17.1"
 lefthook = "2.1.17"
@@ -95,6 +96,12 @@ sources = ["internal/platform/driveapi/wire.go", "tygo.yaml"]
 outputs = ["cmd/drive-server/frontend/src/wire.gen.ts"]
 run = "go tool tygo generate"
 
+[tasks."generate:proto"]
+description = "Generate the daemon's protobuf and Connect code with buf and local plugins"
+sources = ["proto/**/*.proto", "buf.yaml", "buf.gen.yaml"]
+outputs = ["internal/hive/daemon/gen/**/*.go"]
+run = "buf generate"
+
 [tasks.generate]
 description = "Run all code generators"
 depends = ["generate:enums", "generate:sqlc", "generate:tygo"]
@@ -148,7 +155,7 @@ go mod tidy -diff || {
 """
 
 [tasks."check:generate"]
-description = "Verify generated code (enums, sqlc, gobusgen, tygo) matches its sources"
+description = "Verify generated code (enums, sqlc, gobusgen, tygo, protobuf) matches its sources"
 run = """
 mise run --force generate
 # -N registers files the generators created that the checkout lacks: plain
@@ -156,7 +163,7 @@ mise run --force generate
 # would pass unnoticed. The diff is against the index, not HEAD, so it also
 # answers correctly as a pre-commit hook.
 git add -N internal cmd/hive/internal cmd/desktop/internal cmd/drive-server/internal cmd/drive-server/frontend/src/wire.gen.ts
-git diff --exit-code -- '*_enum.go' '*.gen.go' 'cmd/drive-server/frontend/src/wire.gen.ts' 'internal/store/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' 'cmd/drive-server/internal/store/*/db/*.go' || {
+git diff --exit-code -- '*_enum.go' '*.gen.go' '*.pb.go' '*.connect.go' 'cmd/drive-server/frontend/src/wire.gen.ts' 'internal/store/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' 'cmd/drive-server/internal/store/*/db/*.go' || {
   echo "Generated files are out of date. Run 'mise run generate' and commit the result." >&2
   exit 1
 }
