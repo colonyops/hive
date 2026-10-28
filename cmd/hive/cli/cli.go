@@ -127,9 +127,9 @@ func commandPath(root *cli.Command, args []string) []string {
 	return path
 }
 
-// skipsEngine reports whether a command runs without the hive runtime. init
-// runs before any config exists. daemon and servers reach a daemon or are
-// one, so opening hive.db and the plugins in the client is wasted work.
+// skipsEngine reports whether a command runs without the hive runtime:
+// daemon and servers reach a daemon or are one, so opening hive.db and the
+// plugins in the client is wasted work.
 func skipsEngine(path []string) bool {
 	return len(path) > 0 && (path[0] == "daemon" || path[0] == "servers")
 }
@@ -202,6 +202,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				return ctx, nil
 			}
 			path := commandPath(c, os.Args)
+			// init runs before any config exists, so it skips the config load too.
 			if len(path) > 0 && path[0] == "init" {
 				hiveApp.Build = hiveBuildInfo()
 				return ctx, nil
