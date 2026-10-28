@@ -14,7 +14,8 @@ import (
 )
 
 // metrics uses a private registry, not observe.Meter: depguard keeps the OTel
-// SDK, and so every exporter, inside Desktop telemetry (ADR on the daemon).
+// SDK, and so every exporter, inside Desktop telemetry
+// (ADR a-hive-daemon-owns-session-writes-and-agent-status-behind-an-experimental-flag).
 type metrics struct {
 	registry     *prometheus.Registry
 	rpcRequests  *prometheus.CounterVec
