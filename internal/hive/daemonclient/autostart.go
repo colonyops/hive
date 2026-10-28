@@ -83,8 +83,11 @@ func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 // transportFailure reports an error that may have come before the daemon
 // saw the request, such as a connection to a daemon that died. A read can
 // run again after one; a mutation cannot, since it may have applied.
+// Connect codes a write to a closed socket as Canceled, so the errno counts
+// too.
 func transportFailure(err error) bool {
-	return connect.CodeOf(err) == connect.CodeUnavailable
+	return connect.CodeOf(err) == connect.CodeUnavailable ||
+		errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
 }
 
 // retryRead runs a read, and once more after a transport failure.
