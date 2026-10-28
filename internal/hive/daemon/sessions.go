@@ -88,7 +88,7 @@ func (s *sessionServer) CreateWithWindows(ctx context.Context, req *connect.Requ
 	}
 	newReq := sessionsvc.NewSessionRequest{Name: req.Msg.GetName(), Remote: req.Msg.GetRemote(), ShCmd: req.Msg.GetShCmd()}
 	s.writeMu.Lock()
-	sess, err := s.api.CreateSessionWithWindows(ctx, newReq, wire.WindowsFromProto(req.Msg.GetWindows()), true)
+	sess, err := s.api.CreateSessionWithWindows(ctx, newReq, wire.WindowsFromProto(req.Msg.GetWindows()))
 	s.writeMu.Unlock()
 	if err != nil {
 		return nil, wire.ToConnectError(err)

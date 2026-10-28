@@ -21,7 +21,7 @@ type SpawnWindowsExecutor struct {
 }
 
 // SessionToSwitchTo is the session a foreground spawn created. The session
-// API may create it in another process, so the TUI switches to it itself.
+// API creates in the background, so the TUI switches to it itself.
 // Read it only after the done channel delivers.
 func (e *SpawnWindowsExecutor) SessionToSwitchTo() *session.Session {
 	return e.switchTo
@@ -47,7 +47,7 @@ func (e *SpawnWindowsExecutor) run(ctx context.Context) error {
 			remote = e.localRemote
 		}
 		req := sessionsvc.NewSessionRequest{Name: p.NewSessionName, Remote: remote, ShCmd: p.ShCmd}
-		sess, err := e.creator.CreateSessionWithWindows(ctx, req, p.Windows, p.Background)
+		sess, err := e.creator.CreateSessionWithWindows(ctx, req, p.Windows)
 		if err != nil {
 			return err
 		}

@@ -81,8 +81,6 @@ func CreateOptionsToProto(o sessionsvc.CreateOptions) *daemonv1.CreateRequest {
 	}
 }
 
-// CreateOptionsFromProto always sets Background: the daemon has no terminal
-// to attach, so the caller attaches itself.
 func CreateOptionsFromProto(p *daemonv1.CreateRequest) sessionsvc.CreateOptions {
 	return sessionsvc.CreateOptions{
 		Name:            p.GetName(),
@@ -91,7 +89,6 @@ func CreateOptionsFromProto(p *daemonv1.CreateRequest) sessionsvc.CreateOptions 
 		Remote:          p.GetRemote(),
 		Source:          p.GetSource(),
 		UseBatchSpawn:   p.GetUseBatchSpawn(),
-		Background:      true,
 		CloneStrategy:   p.GetCloneStrategy(),
 		SkipSpawn:       p.GetSkipSpawn(),
 		AgentKey:        p.GetAgentKey(),

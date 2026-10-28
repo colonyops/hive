@@ -55,7 +55,7 @@ func TestClientDrivesTheSessionAPIThroughTheDaemon(t *testing.T) {
 	assert.NotNil(t, options)
 
 	windowed, err := client.CreateSessionWithWindows(ctx, sessionsvc.NewSessionRequest{Name: "spawned", Remote: remote},
-		[]multiplexer.WindowSpec{{Name: "agent", Command: "true"}}, false)
+		[]multiplexer.WindowSpec{{Name: "agent", Command: "true"}})
 	require.NoError(t, err)
 	assert.Equal(t, "spawned", windowed.Name)
 
@@ -83,7 +83,7 @@ func TestCreateWithoutARemoteIsInvalid(t *testing.T) {
 	_, err := client.CreateSession(t.Context(), sessionsvc.CreateOptions{Name: "x", SkipSpawn: true})
 	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 
-	_, err = client.CreateSessionWithWindows(t.Context(), sessionsvc.NewSessionRequest{Name: "y"}, nil, true)
+	_, err = client.CreateSessionWithWindows(t.Context(), sessionsvc.NewSessionRequest{Name: "y"}, nil)
 	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }
 

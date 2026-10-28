@@ -220,8 +220,6 @@ func (c *Client) GetSession(ctx context.Context, id string) (session.Session, er
 	return wire.SessionFromProto(resp.Msg.GetSession()), nil
 }
 
-// CreateSession always creates in the background, whatever opts.Background
-// says: the caller attaches to the returned session itself.
 func (c *Client) CreateSession(ctx context.Context, opts sessionsvc.CreateOptions) (*session.Session, error) {
 	stream, err := c.sessions.Create(ctx, connect.NewRequest(wire.CreateOptionsToProto(opts)))
 	if err != nil {
@@ -258,9 +256,7 @@ func (c *Client) CreateFromRequest(ctx context.Context, req sessionsvc.LaunchReq
 	return wire.SessionFromProto(resp.Msg.GetSession()), nil
 }
 
-// CreateSessionWithWindows always creates in the background, whatever
-// background says: the caller switches to the returned session itself.
-func (c *Client) CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec, _ bool) (*session.Session, error) {
+func (c *Client) CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec) (*session.Session, error) {
 	resp, err := c.sessions.CreateWithWindows(ctx, connect.NewRequest(&daemonv1.CreateWithWindowsRequest{
 		Name:    req.Name,
 		Remote:  req.Remote,

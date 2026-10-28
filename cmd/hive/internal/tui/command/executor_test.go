@@ -334,7 +334,7 @@ func (m *mockWindowSpawner) AddWindowsToTmuxSession(_ context.Context, _, _ stri
 	return nil
 }
 
-func (m *mockWindowSpawner) CreateSessionWithWindows(_ context.Context, req sessionsvc.NewSessionRequest, _ []multiplexer.WindowSpec, _ bool) (*session.Session, error) {
+func (m *mockWindowSpawner) CreateSessionWithWindows(_ context.Context, req sessionsvc.NewSessionRequest, _ []multiplexer.WindowSpec) (*session.Session, error) {
 	m.created = append(m.created, req)
 	return &session.Session{ID: "new", Name: req.Name}, nil
 }

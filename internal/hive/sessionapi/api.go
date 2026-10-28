@@ -13,6 +13,9 @@ import (
 	"github.com/colonyops/hive/internal/hive/status"
 )
 
+// API creates every session in the background, whatever opts.Background
+// says: the implementation may run in a daemon with no terminal. A caller
+// that wants the session in front attaches or switches to the one returned.
 type API interface {
 	ListSessions(ctx context.Context) ([]session.Session, error)
 	GetSession(ctx context.Context, id string) (session.Session, error)
@@ -21,7 +24,7 @@ type API interface {
 	// the implementation may run in another process.
 	CreateSession(ctx context.Context, opts sessionsvc.CreateOptions) (*session.Session, error)
 	CreateFromRequest(ctx context.Context, req sessionsvc.LaunchRequest) (session.Session, error)
-	CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec, background bool) (*session.Session, error)
+	CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec) (*session.Session, error)
 	RenameSession(ctx context.Context, id, name string) error
 	SetSessionGroup(ctx context.Context, id, group string) error
 	DeleteSession(ctx context.Context, id string) error

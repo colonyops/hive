@@ -38,7 +38,7 @@ type WindowAdder interface {
 // directory, then opens windows in it. Non-zero shCmd exit aborts window
 // creation.
 type SessionWindowCreator interface {
-	CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec, background bool) (*session.Session, error)
+	CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec) (*session.Session, error)
 }
 
 // Deps are the collaborators executors call. Deleter, Recycler, Creator, and

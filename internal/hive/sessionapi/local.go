@@ -31,6 +31,7 @@ func (l *Local) GetSession(ctx context.Context, id string) (session.Session, err
 }
 
 func (l *Local) CreateSession(ctx context.Context, opts sessionsvc.CreateOptions) (*session.Session, error) {
+	opts.Background = true
 	return l.engine.Sessions().CreateSession(ctx, opts)
 }
 
@@ -38,8 +39,8 @@ func (l *Local) CreateFromRequest(ctx context.Context, req sessionsvc.LaunchRequ
 	return l.engine.Sessions().CreateFromRequest(ctx, req)
 }
 
-func (l *Local) CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec, background bool) (*session.Session, error) {
-	return l.engine.Sessions().CreateSessionWithWindows(ctx, req, windows, background)
+func (l *Local) CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec) (*session.Session, error) {
+	return l.engine.Sessions().CreateSessionWithWindows(ctx, req, windows, true)
 }
 
 func (l *Local) RenameSession(ctx context.Context, id, name string) error {

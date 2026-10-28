@@ -104,9 +104,7 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
-	// The daemon always creates in the background: it has no terminal. The
-	// caller has one, so it attaches here.
-	if app.Config.Experimental.Daemon && !f.background {
+	if !f.background {
 		if err := app.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(*sess), multiplexer.AttachStreams{}); err != nil {
 			return sess, fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
 		}
