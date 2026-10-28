@@ -21,9 +21,10 @@ const fallbackSocketRoot = "/tmp"
 
 // SocketPath is where the daemon for dataDir listens: <dataDir>/hived.sock,
 // or /tmp/hive-<uid>/<hash>.sock when that path is too long for a unix
-// socket.
+// socket. Symlinks are resolved first, so every spelling of one data dir
+// gets the same socket.
 func SocketPath(dataDir string) string {
-	dataDir = absolute(dataDir)
+	dataDir = resolved(absolute(dataDir))
 	path := filepath.Join(dataDir, "hived.sock")
 	if len(path) <= maxSocketPath {
 		return path
@@ -44,6 +45,22 @@ func OutLogPath(dataDir string) string {
 
 func fallbackSocketDir() string {
 	return filepath.Join(fallbackSocketRoot, fmt.Sprintf("hive-%d", os.Getuid()))
+}
+
+// resolved evaluates the symlinks in the longest existing prefix of path, so
+// a client that dials before the daemon creates the data dir computes the
+// same socket path as the daemon does after.
+func resolved(path string) string {
+	var rest []string
+	for dir := path; ; dir = filepath.Dir(dir) {
+		if real, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(append([]string{real}, rest...)...)
+		}
+		if filepath.Dir(dir) == dir {
+			return path
+		}
+		rest = append([]string{filepath.Base(dir)}, rest...)
+	}
 }
 
 func absolute(path string) string {

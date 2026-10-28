@@ -11,8 +11,14 @@ import (
 )
 
 func TestSocketPathUsesTheDataDirWhenItFits(t *testing.T) {
-	assert.Equal(t, "/home/u/.local/share/hive/hived.sock", SocketPath("/home/u/.local/share/hive"))
-	assert.Equal(t, "/home/u/.local/share/hive/hived.lock", LockPath("/home/u/.local/share/hive"))
+	dir, err := os.MkdirTemp("/tmp", "dp")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	real, err := filepath.EvalSymlinks(dir)
+	require.NoError(t, err)
+
+	assert.Equal(t, filepath.Join(real, "hived.sock"), SocketPath(dir))
+	assert.Equal(t, filepath.Join(dir, "hived.lock"), LockPath(dir))
 }
 
 func TestSocketPathFallsBackForALongDataDir(t *testing.T) {
@@ -62,4 +68,19 @@ func TestCheckSocketDirAcceptsOurFallbackDirAndAnyDataDir(t *testing.T) {
 
 	otherOwner(t)
 	assert.NoError(t, CheckSocketDir(filepath.Join(t.TempDir(), "hived.sock")), "only the shared fallback dir is checked")
+}
+
+func TestSocketPathIsTheSameThroughASymlink(t *testing.T) {
+	root := t.TempDir()
+	long := filepath.Join(root, strings.Repeat("d", 110))
+	require.NoError(t, os.MkdirAll(long, 0o755))
+	link := filepath.Join(root, "link")
+	require.NoError(t, os.Symlink(long, link))
+
+	assert.Equal(t, SocketPath(long), SocketPath(link), "a long data dir and a symlink to it")
+	assert.Equal(t, SocketPath(filepath.Join(long, "new")), SocketPath(filepath.Join(link, "new")), "a data dir that does not exist yet")
+
+	short := filepath.Join(root, "s")
+	require.NoError(t, os.Symlink(link, short))
+	assert.Equal(t, SocketPath(long), SocketPath(short), "a chain of symlinks")
 }
