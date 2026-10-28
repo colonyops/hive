@@ -1,4 +1,4 @@
-# An ssh host with hive, tmux, and git for `hive servers probe`. The build
+# An ssh host with hive, tmux, and git for the remote tests. The build
 # context is the repository root; run.sh builds the binary first.
 FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 

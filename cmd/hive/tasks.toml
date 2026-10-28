@@ -61,16 +61,21 @@ description = "Run the CLI integration tests inside Docker (never on the host)"
 depends = ["cli:build:container"]
 run = "docker build -f cmd/hive/Dockerfile.test -t hive-integration-test . && docker run --rm hive-integration-test"
 
-# The ssh fixture for `hive servers`. Docker only, and not part of `ci`.
+# The ssh fixture for remote hive servers: two containers, server-a and
+# server-b, and the Go tests in test/remote that drive them.
 ["cli:remote:up"]
-description = "Start the ssh fixture that runs hive in Docker and write its ssh_config"
+description = "Start the two-server ssh fixture that runs hive in Docker and write its ssh_config"
 depends = ["cli:build:container"]
 run = "test/remote/run.sh up"
 
 ["cli:remote:test"]
-description = "Run `hive servers probe` against a fresh ssh fixture, then remove it"
+description = "Run the remote tests against a fresh ssh fixture, then remove it (args go to go test)"
 depends = ["cli:build:container"]
 run = "test/remote/run.sh test"
+
+["cli:remote:run"]
+description = "Run the remote tests against the fixture cli:remote:up started (args go to go test)"
+run = "test/remote/run.sh run"
 
 ["cli:remote:down"]
 description = "Remove the ssh fixture"
