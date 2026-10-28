@@ -53,9 +53,6 @@ Known gaps with the flag on:
 - The first client to spawn the daemon fixes its environment, including the
   `PATH` agents launch with.
 - `hc`, `msg`, `todo`, drive, and Desktop's other services stay in-process.
-- Session tag edits stay in-process in the CLI, the TUI, and Desktop, because
-  `sessionapi.API` has no tag methods. The store edits tags in one
-  transaction, so they do not overwrite a daemon write.
 - Two creates run one after the other, because `CreateSession` points
   service-wide writers at the caller's progress stream.
 - A daemon never exits on its own while its data dir exists, so each data

@@ -87,6 +87,30 @@ func TestClientGetsNotFoundForAMissingSession(t *testing.T) {
 	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 }
 
+func TestClientEditsTagsThroughTheDaemon(t *testing.T) {
+	client := newClient(t)
+	ctx := t.Context()
+	created, err := client.CreateSession(ctx, sessionsvc.CreateOptions{Name: "tagged", Remote: remote, SkipSpawn: true})
+	require.NoError(t, err)
+
+	set, err := client.SetSessionTags(ctx, created.ID, []string{"backend", "urgent"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"backend", "urgent"}, set.Tags)
+
+	edited, err := client.EditSessionTags(ctx, created.ID, []string{"review"}, []string{"urgent"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"backend", "review"}, edited.Tags)
+
+	got, err := client.GetSession(ctx, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, edited.Tags, got.Tags)
+
+	_, err = client.SetSessionTags(ctx, created.ID, []string{"a,b"})
+	require.ErrorIs(t, err, session.ErrInvalidTag)
+	_, err = client.EditSessionTags(ctx, "missing", []string{"x"}, nil)
+	require.ErrorIs(t, err, session.ErrNotFound)
+}
+
 func TestCreateWithoutARemoteIsInvalid(t *testing.T) {
 	client := newClient(t)
 	_, err := client.CreateSession(t.Context(), sessionsvc.CreateOptions{Name: "x", SkipSpawn: true})

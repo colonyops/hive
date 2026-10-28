@@ -24,6 +24,10 @@ service SessionService {
   rpc CreateWithWindows(CreateWithWindowsRequest) returns (CreateWithWindowsResponse);
   rpc Rename(RenameRequest) returns (RenameResponse);
   rpc SetGroup(SetGroupRequest) returns (SetGroupResponse);
+  rpc SetTags(SetTagsRequest) returns (SetTagsResponse);
+  // EditTags adds and then removes tags in one store transaction, so two
+  // clients that each add a tag both keep theirs.
+  rpc EditTags(EditTagsRequest) returns (EditTagsResponse);
   rpc Delete(DeleteRequest) returns (DeleteResponse);
   rpc Recycle(RecycleRequest) returns (stream RecycleResponse);
   rpc Prune(PruneRequest) returns (PruneResponse);
@@ -179,6 +183,25 @@ message SetGroupRequest {
 
 message SetGroupResponse {}
 
+message SetTagsRequest {
+  string id = 1;
+  repeated string tags = 2;
+}
+
+message SetTagsResponse {
+  Session session = 1;
+}
+
+message EditTagsRequest {
+  string id = 1;
+  repeated string add = 2;
+  repeated string remove = 3;
+}
+
+message EditTagsResponse {
+  Session session = 1;
+}
+
 message DeleteRequest {
   string id = 1;
 }
@@ -290,3 +313,7 @@ message CreateSessionErrorDetail {
   string clone_strategy = 3;
   string err = 4;
 }
+
+// InvalidTagDetail marks an INVALID_ARGUMENT error as a rejected tag, so the
+// client can tell it from a create with no remote.
+message InvalidTagDetail {}

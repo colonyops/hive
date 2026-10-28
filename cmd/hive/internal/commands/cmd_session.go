@@ -403,11 +403,11 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 				return strings.EqualFold(strings.TrimSpace(remove), tag)
 			})
 		})
-		if _, err := cmd.app.Sessions().SetSessionTags(ctx, id, tags); err != nil {
+		if _, err := cmd.app.SessionAPI().SetSessionTags(ctx, id, tags); err != nil {
 			return fmt.Errorf("set session tags: %w", err)
 		}
 	case len(addTags) > 0 || len(cmd.updateRemoveTags) > 0:
-		if _, err := cmd.app.Sessions().EditSessionTags(ctx, id, addTags, cmd.updateRemoveTags); err != nil {
+		if _, err := cmd.app.SessionAPI().EditSessionTags(ctx, id, addTags, cmd.updateRemoveTags); err != nil {
 			return fmt.Errorf("edit session tags: %w", err)
 		}
 	}

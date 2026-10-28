@@ -289,6 +289,22 @@ func (c *Client) SetSessionGroup(ctx context.Context, id, group string) error {
 	return wire.FromConnectError(err)
 }
 
+func (c *Client) SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error) {
+	resp, err := c.sessions.SetTags(ctx, connect.NewRequest(&daemonv1.SetTagsRequest{Id: id, Tags: tags}))
+	if err != nil {
+		return session.Session{}, wire.FromConnectError(err)
+	}
+	return wire.SessionFromProto(resp.Msg.GetSession()), nil
+}
+
+func (c *Client) EditSessionTags(ctx context.Context, id string, add, remove []string) (session.Session, error) {
+	resp, err := c.sessions.EditTags(ctx, connect.NewRequest(&daemonv1.EditTagsRequest{Id: id, Add: add, Remove: remove}))
+	if err != nil {
+		return session.Session{}, wire.FromConnectError(err)
+	}
+	return wire.SessionFromProto(resp.Msg.GetSession()), nil
+}
+
 func (c *Client) DeleteSession(ctx context.Context, id string) error {
 	_, err := c.sessions.Delete(ctx, connect.NewRequest(&daemonv1.DeleteRequest{Id: id}))
 	return wire.FromConnectError(err)

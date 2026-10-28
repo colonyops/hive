@@ -83,3 +83,27 @@ func TestSessionsServiceRunsOverTheDaemon(t *testing.T) {
 	assert.Empty(t, remaining)
 	assert.Empty(t, local.mux.renamed, "the local engine saw none of it")
 }
+
+func TestSessionsServiceEditsTagsOverTheDaemon(t *testing.T) {
+	client := runTestDaemon(t, &fakeMux{})
+	created, err := client.CreateSession(t.Context(), sessionsvc.CreateOptions{Name: "review", Remote: "https://github.com/acme/site", SkipSpawn: true})
+	require.NoError(t, err)
+
+	local := newHiveHarness(t, engineOptions{})
+	svc := newSessionsService(SessionsDeps{Hive: local.engine, Sessions: client, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Logger: zerolog.Nop()})
+
+	edited, err := svc.EditSession(t.Context(), created.ID, "review", []string{"backend"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"backend"}, edited.Tags)
+
+	edited, err = svc.EditSessionTags(t.Context(), created.ID, []string{"urgent"}, []string{"backend"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"urgent"}, edited.Tags)
+
+	stored, err := client.GetSession(t.Context(), created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"urgent"}, stored.Tags, "the tags live only in the daemon's hive.db")
+
+	_, err = svc.EditSessionTags(t.Context(), created.ID, []string{"a,b"}, nil)
+	assert.Equal(t, KindInvalid, KindOf(err))
+}

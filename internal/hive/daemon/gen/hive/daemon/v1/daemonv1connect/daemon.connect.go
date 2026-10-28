@@ -59,6 +59,10 @@ const (
 	SessionServiceRenameProcedure = "/hive.daemon.v1.SessionService/Rename"
 	// SessionServiceSetGroupProcedure is the fully-qualified name of the SessionService's SetGroup RPC.
 	SessionServiceSetGroupProcedure = "/hive.daemon.v1.SessionService/SetGroup"
+	// SessionServiceSetTagsProcedure is the fully-qualified name of the SessionService's SetTags RPC.
+	SessionServiceSetTagsProcedure = "/hive.daemon.v1.SessionService/SetTags"
+	// SessionServiceEditTagsProcedure is the fully-qualified name of the SessionService's EditTags RPC.
+	SessionServiceEditTagsProcedure = "/hive.daemon.v1.SessionService/EditTags"
 	// SessionServiceDeleteProcedure is the fully-qualified name of the SessionService's Delete RPC.
 	SessionServiceDeleteProcedure = "/hive.daemon.v1.SessionService/Delete"
 	// SessionServiceRecycleProcedure is the fully-qualified name of the SessionService's Recycle RPC.
@@ -233,6 +237,10 @@ type SessionServiceClient interface {
 	CreateWithWindows(context.Context, *connect.Request[v1.CreateWithWindowsRequest]) (*connect.Response[v1.CreateWithWindowsResponse], error)
 	Rename(context.Context, *connect.Request[v1.RenameRequest]) (*connect.Response[v1.RenameResponse], error)
 	SetGroup(context.Context, *connect.Request[v1.SetGroupRequest]) (*connect.Response[v1.SetGroupResponse], error)
+	SetTags(context.Context, *connect.Request[v1.SetTagsRequest]) (*connect.Response[v1.SetTagsResponse], error)
+	// EditTags adds and then removes tags in one store transaction, so two
+	// clients that each add a tag both keep theirs.
+	EditTags(context.Context, *connect.Request[v1.EditTagsRequest]) (*connect.Response[v1.EditTagsResponse], error)
 	Delete(context.Context, *connect.Request[v1.DeleteRequest]) (*connect.Response[v1.DeleteResponse], error)
 	Recycle(context.Context, *connect.Request[v1.RecycleRequest]) (*connect.ServerStreamForClient[v1.RecycleResponse], error)
 	Prune(context.Context, *connect.Request[v1.PruneRequest]) (*connect.Response[v1.PruneResponse], error)
@@ -296,6 +304,18 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("SetGroup")),
 			connect.WithClientOptions(opts...),
 		),
+		setTags: connect.NewClient[v1.SetTagsRequest, v1.SetTagsResponse](
+			httpClient,
+			baseURL+SessionServiceSetTagsProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("SetTags")),
+			connect.WithClientOptions(opts...),
+		),
+		editTags: connect.NewClient[v1.EditTagsRequest, v1.EditTagsResponse](
+			httpClient,
+			baseURL+SessionServiceEditTagsProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("EditTags")),
+			connect.WithClientOptions(opts...),
+		),
 		delete: connect.NewClient[v1.DeleteRequest, v1.DeleteResponse](
 			httpClient,
 			baseURL+SessionServiceDeleteProcedure,
@@ -344,6 +364,8 @@ type sessionServiceClient struct {
 	createWithWindows *connect.Client[v1.CreateWithWindowsRequest, v1.CreateWithWindowsResponse]
 	rename            *connect.Client[v1.RenameRequest, v1.RenameResponse]
 	setGroup          *connect.Client[v1.SetGroupRequest, v1.SetGroupResponse]
+	setTags           *connect.Client[v1.SetTagsRequest, v1.SetTagsResponse]
+	editTags          *connect.Client[v1.EditTagsRequest, v1.EditTagsResponse]
 	delete            *connect.Client[v1.DeleteRequest, v1.DeleteResponse]
 	recycle           *connect.Client[v1.RecycleRequest, v1.RecycleResponse]
 	prune             *connect.Client[v1.PruneRequest, v1.PruneResponse]
@@ -387,6 +409,16 @@ func (c *sessionServiceClient) SetGroup(ctx context.Context, req *connect.Reques
 	return c.setGroup.CallUnary(ctx, req)
 }
 
+// SetTags calls hive.daemon.v1.SessionService.SetTags.
+func (c *sessionServiceClient) SetTags(ctx context.Context, req *connect.Request[v1.SetTagsRequest]) (*connect.Response[v1.SetTagsResponse], error) {
+	return c.setTags.CallUnary(ctx, req)
+}
+
+// EditTags calls hive.daemon.v1.SessionService.EditTags.
+func (c *sessionServiceClient) EditTags(ctx context.Context, req *connect.Request[v1.EditTagsRequest]) (*connect.Response[v1.EditTagsResponse], error) {
+	return c.editTags.CallUnary(ctx, req)
+}
+
 // Delete calls hive.daemon.v1.SessionService.Delete.
 func (c *sessionServiceClient) Delete(ctx context.Context, req *connect.Request[v1.DeleteRequest]) (*connect.Response[v1.DeleteResponse], error) {
 	return c.delete.CallUnary(ctx, req)
@@ -426,6 +458,10 @@ type SessionServiceHandler interface {
 	CreateWithWindows(context.Context, *connect.Request[v1.CreateWithWindowsRequest]) (*connect.Response[v1.CreateWithWindowsResponse], error)
 	Rename(context.Context, *connect.Request[v1.RenameRequest]) (*connect.Response[v1.RenameResponse], error)
 	SetGroup(context.Context, *connect.Request[v1.SetGroupRequest]) (*connect.Response[v1.SetGroupResponse], error)
+	SetTags(context.Context, *connect.Request[v1.SetTagsRequest]) (*connect.Response[v1.SetTagsResponse], error)
+	// EditTags adds and then removes tags in one store transaction, so two
+	// clients that each add a tag both keep theirs.
+	EditTags(context.Context, *connect.Request[v1.EditTagsRequest]) (*connect.Response[v1.EditTagsResponse], error)
 	Delete(context.Context, *connect.Request[v1.DeleteRequest]) (*connect.Response[v1.DeleteResponse], error)
 	Recycle(context.Context, *connect.Request[v1.RecycleRequest], *connect.ServerStream[v1.RecycleResponse]) error
 	Prune(context.Context, *connect.Request[v1.PruneRequest]) (*connect.Response[v1.PruneResponse], error)
@@ -485,6 +521,18 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("SetGroup")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceSetTagsHandler := connect.NewUnaryHandler(
+		SessionServiceSetTagsProcedure,
+		svc.SetTags,
+		connect.WithSchema(sessionServiceMethods.ByName("SetTags")),
+		connect.WithHandlerOptions(opts...),
+	)
+	sessionServiceEditTagsHandler := connect.NewUnaryHandler(
+		SessionServiceEditTagsProcedure,
+		svc.EditTags,
+		connect.WithSchema(sessionServiceMethods.ByName("EditTags")),
+		connect.WithHandlerOptions(opts...),
+	)
 	sessionServiceDeleteHandler := connect.NewUnaryHandler(
 		SessionServiceDeleteProcedure,
 		svc.Delete,
@@ -537,6 +585,10 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceRenameHandler.ServeHTTP(w, r)
 		case SessionServiceSetGroupProcedure:
 			sessionServiceSetGroupHandler.ServeHTTP(w, r)
+		case SessionServiceSetTagsProcedure:
+			sessionServiceSetTagsHandler.ServeHTTP(w, r)
+		case SessionServiceEditTagsProcedure:
+			sessionServiceEditTagsHandler.ServeHTTP(w, r)
 		case SessionServiceDeleteProcedure:
 			sessionServiceDeleteHandler.ServeHTTP(w, r)
 		case SessionServiceRecycleProcedure:
@@ -584,6 +636,14 @@ func (UnimplementedSessionServiceHandler) Rename(context.Context, *connect.Reque
 
 func (UnimplementedSessionServiceHandler) SetGroup(context.Context, *connect.Request[v1.SetGroupRequest]) (*connect.Response[v1.SetGroupResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.SetGroup is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) SetTags(context.Context, *connect.Request[v1.SetTagsRequest]) (*connect.Response[v1.SetTagsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.SetTags is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) EditTags(context.Context, *connect.Request[v1.EditTagsRequest]) (*connect.Response[v1.EditTagsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.EditTags is not implemented"))
 }
 
 func (UnimplementedSessionServiceHandler) Delete(context.Context, *connect.Request[v1.DeleteRequest]) (*connect.Response[v1.DeleteResponse], error) {

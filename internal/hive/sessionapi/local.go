@@ -51,6 +51,14 @@ func (l *Local) SetSessionGroup(ctx context.Context, id, group string) error {
 	return l.engine.Sessions().SetSessionGroup(ctx, id, group)
 }
 
+func (l *Local) SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error) {
+	return l.engine.Sessions().SetSessionTags(ctx, id, tags)
+}
+
+func (l *Local) EditSessionTags(ctx context.Context, id string, add, remove []string) (session.Session, error) {
+	return l.engine.Sessions().EditSessionTags(ctx, id, add, remove)
+}
+
 func (l *Local) DeleteSession(ctx context.Context, id string) error {
 	return l.engine.Sessions().DeleteSession(ctx, id)
 }

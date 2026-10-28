@@ -40,13 +40,16 @@ func ToConnectError(err error) error {
 		code = connect.CodeNotFound
 	case errors.Is(err, session.ErrDuplicateName):
 		code = connect.CodeAlreadyExists
-	case errors.Is(err, ErrRemoteRequired):
+	case errors.Is(err, ErrRemoteRequired), errors.Is(err, session.ErrInvalidTag):
 		code = connect.CodeInvalidArgument
 	case hasLaunch || hasCreate:
 		code = connect.CodeFailedPrecondition
 	}
 
 	out := connect.NewError(code, err)
+	if errors.Is(err, session.ErrInvalidTag) {
+		addDetail(out, &daemonv1.InvalidTagDetail{})
+	}
 	if hasLaunch {
 		addDetail(out, &daemonv1.LaunchErrorDetail{
 			Name:             launchErr.Name,
@@ -86,17 +89,18 @@ func errText(err error) string {
 
 // FromConnectError rebuilds the Go error a client expects from a Connect
 // error. errors.Is matches session.ErrNotFound, session.ErrDuplicateName,
-// and ErrRemoteRequired by code; errors.As finds a rebuilt LaunchError or
-// CreateSessionError; connect.CodeOf still reads the code.
+// session.ErrInvalidTag, and ErrRemoteRequired by code and detail;
+// errors.As finds a rebuilt LaunchError or CreateSessionError;
+// connect.CodeOf still reads the code.
 func FromConnectError(err error) error {
 	var connectErr *connect.Error
 	if !errors.As(err, &connectErr) {
 		return err
 	}
 
-	var inner error = &remoteError{conn: connectErr, sentinel: sentinelFor(connectErr.Code())}
 	var createDetail *daemonv1.CreateSessionErrorDetail
 	var launchDetail *daemonv1.LaunchErrorDetail
+	invalidTag := false
 	for _, detail := range connectErr.Details() {
 		value, valueErr := detail.Value()
 		if valueErr != nil {
@@ -107,18 +111,22 @@ func FromConnectError(err error) error {
 			createDetail = d
 		case *daemonv1.LaunchErrorDetail:
 			launchDetail = d
+		case *daemonv1.InvalidTagDetail:
+			invalidTag = true
 		}
 	}
+	sentinel := sentinelFor(connectErr.Code(), invalidTag)
+	var inner error = &remoteError{conn: connectErr, sentinel: sentinel}
 	switch {
 	case createDetail != nil:
 		inner = &sessionsvc.CreateSessionError{
 			Operation:     createDetail.GetOperation(),
 			Destination:   createDetail.GetDestination(),
 			CloneStrategy: createDetail.GetCloneStrategy(),
-			Err:           &remoteError{conn: connectErr, sentinel: sentinelFor(connectErr.Code()), text: createDetail.GetErr()},
+			Err:           &remoteError{conn: connectErr, sentinel: sentinel, text: createDetail.GetErr()},
 		}
 	case launchDetail != nil:
-		inner = &remoteError{conn: connectErr, sentinel: sentinelFor(connectErr.Code()), text: launchDetail.GetErr()}
+		inner = &remoteError{conn: connectErr, sentinel: sentinel, text: launchDetail.GetErr()}
 	}
 	if launchDetail == nil {
 		return inner
@@ -135,13 +143,16 @@ func FromConnectError(err error) error {
 	}
 }
 
-func sentinelFor(code connect.Code) error {
+func sentinelFor(code connect.Code, invalidTag bool) error {
 	switch code {
 	case connect.CodeNotFound:
 		return session.ErrNotFound
 	case connect.CodeAlreadyExists:
 		return session.ErrDuplicateName
 	case connect.CodeInvalidArgument:
+		if invalidTag {
+			return session.ErrInvalidTag
+		}
 		return ErrRemoteRequired
 	default:
 		return nil
