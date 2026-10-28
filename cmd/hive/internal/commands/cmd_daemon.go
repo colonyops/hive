@@ -75,6 +75,11 @@ commands, and Hive Desktop reach it on a unix socket.`,
 				Usage:  "Stop the running daemon",
 				Action: cmd.stop,
 			},
+			{
+				Name:   "metrics",
+				Usage:  "Print the running daemon's Prometheus metrics",
+				Action: cmd.metrics,
+			},
 		},
 	})
 	return root
@@ -214,6 +219,15 @@ func (cmd *DaemonCmd) stop(ctx context.Context, _ *cli.Command) error {
 	}
 	fmt.Fprintln(os.Stderr, "daemon stopped")
 	return nil
+}
+
+func (cmd *DaemonCmd) metrics(ctx context.Context, c *cli.Command) error {
+	body, err := cmd.app.DaemonClient(false).Metrics(ctx)
+	if err != nil {
+		return fmt.Errorf("read daemon metrics: %w", err)
+	}
+	_, err = c.Root().Writer.Write(body)
+	return err
 }
 
 // newLogWriter turns the session service's terminal output into log lines:

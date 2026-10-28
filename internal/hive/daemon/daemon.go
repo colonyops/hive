@@ -12,6 +12,8 @@ import (
 	"os"
 	"time"
 
+	"connectrpc.com/connect"
+
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1/daemonv1connect"
@@ -89,14 +91,18 @@ func Run(ctx context.Context, opts Options) error {
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
 
+	startedAt := time.Now()
 	engine := runtime.Engine()
 	api := sessionapi.NewLocal(engine)
+	metrics := newMetrics(logger, startedAt, api.ListSessions)
 	loop := newStatusLoop(statusLoopDeps{
 		logger:    logger,
 		interval:  func() time.Duration { return engine.Config().Tmux.PollInterval },
 		available: api.StatusAvailable,
 		list:      api.ListSessions,
 		fetch:     api.FetchBatch,
+		onTick:    func(d time.Duration) { metrics.loopDuration.Observe(d.Seconds()) },
+		onError:   metrics.loopErrors.Inc,
 	})
 	go loop.run(runCtx)
 	sessions := &sessionServer{api: api, logger: logger, statuses: loop.snapshot}
@@ -106,7 +112,7 @@ func Run(ctx context.Context, opts Options) error {
 		paneOK:    opts.Ports.PaneSource,
 		version:   opts.Version,
 		dataDir:   dataDir,
-		startedAt: time.Now(),
+		startedAt: startedAt,
 		reload:    opts.Reload,
 		stop:      stop,
 		logger:    logger,
@@ -114,9 +120,11 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(daemonv1connect.NewSessionServiceHandler(sessions))
-	mux.Handle(daemonv1connect.NewDaemonServiceHandler(control))
+	interceptors := connect.WithInterceptors(metrics.interceptor())
+	mux.Handle(daemonv1connect.NewSessionServiceHandler(sessions, interceptors))
+	mux.Handle(daemonv1connect.NewDaemonServiceHandler(control, interceptors))
 	mux.HandleFunc("GET /healthz", healthz)
+	mux.Handle("GET /metrics", metrics.handler())
 
 	listener, err := listen(socketPath)
 	if err != nil {

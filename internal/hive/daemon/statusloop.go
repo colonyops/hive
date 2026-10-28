@@ -28,6 +28,9 @@ type statusLoopDeps struct {
 	available func() bool
 	list      func(ctx context.Context) ([]session.Session, error)
 	fetch     func(ctx context.Context, sessions []*session.Session, roots []status.RootRepoTarget) map[string]status.TerminalStatus
+	// onTick and onError feed metrics; either may be nil.
+	onTick  func(time.Duration)
+	onError func()
 }
 
 // statusLoop is the only session-view caller of status.Service.FetchBatch, so
@@ -126,6 +129,9 @@ func (l *statusLoop) tick(ctx context.Context) {
 		l.mu.Lock()
 		l.errors++
 		l.mu.Unlock()
+		if l.onError != nil {
+			l.onError()
+		}
 		return
 	}
 	sessions := make([]*session.Session, 0, len(all))
@@ -138,7 +144,11 @@ func (l *statusLoop) tick(ctx context.Context) {
 	l.snap = results
 	l.lastTick = now
 	l.lastDuration = l.now().Sub(now)
+	took := l.lastDuration
 	l.mu.Unlock()
+	if l.onTick != nil {
+		l.onTick(took)
+	}
 }
 
 // snapshot answers from the last tick. A session or root the loop has not

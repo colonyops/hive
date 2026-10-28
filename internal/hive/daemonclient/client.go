@@ -166,6 +166,27 @@ func (c *Client) Stop(ctx context.Context) error {
 	return wire.FromConnectError(err)
 }
 
+// Metrics returns the daemon's /metrics page in the Prometheus text format.
+func (c *Client) Metrics(ctx context.Context) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/metrics", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("daemon /metrics: %s", resp.Status)
+	}
+	return body, nil
+}
+
 func (c *Client) Reload(ctx context.Context) error {
 	_, err := c.control.Reload(ctx, connect.NewRequest(&daemonv1.ReloadRequest{}))
 	return wire.FromConnectError(err)
