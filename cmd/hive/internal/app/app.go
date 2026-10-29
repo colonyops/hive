@@ -5,8 +5,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"io"
-	"net"
 	"os"
 
 	"github.com/rs/zerolog"
@@ -20,9 +18,9 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/hive/doctor"
+	"github.com/colonyops/hive/internal/hive/servers"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
-	"github.com/colonyops/hive/internal/platform/sshdial"
 )
 
 // BuildInfo holds build-time metadata set by the main package.
@@ -63,6 +61,8 @@ type App struct {
 	CommandSet  *plugins.CommandSet
 	Build       BuildInfo
 	Sources     *sources.Registry
+	// Servers is the local session API and each server under servers:.
+	Servers *servers.Registry
 
 	sessions     sessionapi.API
 	targetServer string
@@ -96,6 +96,7 @@ func NewApp(
 	} else {
 		a.sessions = sessionapi.NewLocal(engine)
 	}
+	a.Servers = servers.New(logger, a.sessions, cfg.Servers)
 	return a
 }
 
@@ -109,11 +110,11 @@ func (a *App) SessionAPI() sessionapi.API {
 // TargetServer points SessionAPI at the daemon on a server under servers:,
 // so session commands act on that server's sessions instead of local ones.
 func (a *App) TargetServer(name string) error {
-	server, ok := a.Config.Server(name)
+	server, ok := a.Servers.Server(name)
 	if !ok {
 		return fmt.Errorf("no server named %q under servers: in config.yaml", name)
 	}
-	a.sessions = RemoteClient(a.Logger, server, os.Stderr)
+	a.sessions = server.Client()
 	a.targetServer = name
 	return nil
 }
@@ -122,19 +123,6 @@ func (a *App) TargetServer(name string) error {
 // tmux sessions on this machine mean nothing.
 func (a *App) TargetsServer() bool {
 	return a.targetServer != ""
-}
-
-// RemoteClient reaches the daemon on server over ssh and copies ssh's
-// stderr to stderr. It never auto-starts: dial-stdio on the remote side
-// starts the daemon there.
-func RemoteClient(logger zerolog.Logger, server config.ServerConfig, stderr io.Writer) *daemonclient.Client {
-	host := server.Host()
-	return daemonclient.New(daemonclient.Options{
-		Logger: logger,
-		Dialer: func(ctx context.Context) (net.Conn, error) {
-			return sshdial.DialStdio(ctx, host, stderr)
-		},
-	})
 }
 
 // DaemonClient reaches the daemon for this data directory. It needs only the

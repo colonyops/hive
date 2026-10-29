@@ -17,7 +17,6 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/cmd/hive/internal/theme"
 	"github.com/colonyops/hive/internal/config"
-	"github.com/colonyops/hive/internal/platform/sshdial"
 	"github.com/hay-kot/criterio"
 	"gopkg.in/yaml.v3"
 )
@@ -433,24 +432,8 @@ type Config struct {
 	Plugins      PluginsConfig          `json:"plugins"      yaml:"plugins"`
 	Sources      SourcesConfig          `json:"sources"      yaml:"sources"`
 	Views        ViewsConfig            `json:"views"        yaml:"views"`
-	Servers      []ServerConfig         `json:"servers"      yaml:"servers"`
 
 	hasLegacyKeybindings bool `json:"-" yaml:"-"`
-}
-
-// ServerConfig names a remote hive daemon that `hive servers` reaches over
-// ssh. It lives in the CLI config, not the engine config, because only the
-// CLI dials remote daemons.
-type ServerConfig struct {
-	Name      string `json:"name"       yaml:"name"`
-	SSH       string `json:"ssh"        yaml:"ssh"`
-	SSHConfig string `json:"ssh_config" yaml:"ssh_config"`
-	Binary    string `json:"binary"     yaml:"binary"`
-}
-
-// Host is the ssh target for s.
-func (s ServerConfig) Host() sshdial.Host {
-	return sshdial.Host{Name: s.SSH, ConfigFile: s.SSHConfig, Binary: s.Binary}
 }
 
 // HistoryConfig holds command history configuration.
@@ -770,7 +753,6 @@ func (c *Config) Validate() error {
 		c.validateKeybindingsBasic(),
 		c.validateUserCommandsBasic(),
 		c.validateSources(),
-		c.validateServers(),
 	)
 }
 

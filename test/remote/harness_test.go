@@ -24,6 +24,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/internal/domain/server"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/platform/sshdial"
@@ -176,7 +177,7 @@ func (s Server) Shell(t *testing.T, command string) Result {
 // the same path a remote client takes.
 func (s Server) API(t *testing.T) *daemonclient.Client {
 	t.Helper()
-	host := sshdial.Host{Name: s.Name, ConfigFile: sshConfig}
+	host := server.Host{Name: s.Name, ConfigFile: sshConfig}
 	client := daemonclient.New(daemonclient.Options{
 		Logger: zerolog.Nop(),
 		Dialer: func(ctx context.Context) (net.Conn, error) {

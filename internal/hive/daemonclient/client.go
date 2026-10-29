@@ -50,6 +50,10 @@ type Options struct {
 	// AutoStart starts a daemon when a dial finds none. nil never starts one,
 	// as for a remote daemon or `hive daemon status --no-start`.
 	AutoStart func(ctx context.Context) error
+	// CallTimeout bounds each unary call that has no earlier deadline, so a
+	// slow remote daemon cannot block a caller. Zero sets no bound. Streams,
+	// such as a create that clones a repository, are never bounded.
+	CallTimeout time.Duration
 }
 
 // baseURL is never resolved: every connection goes through the Dialer.
@@ -92,9 +96,23 @@ func New(opts Options) *Client {
 			return c.dial(ctx)
 		},
 	}}
-	c.sessions = daemonv1connect.NewSessionServiceClient(c.httpClient, baseURL)
-	c.control = daemonv1connect.NewDaemonServiceClient(c.httpClient, baseURL)
+	var clientOpts []connect.ClientOption
+	if opts.CallTimeout > 0 {
+		clientOpts = append(clientOpts, connect.WithInterceptors(callTimeout(opts.CallTimeout)))
+	}
+	c.sessions = daemonv1connect.NewSessionServiceClient(c.httpClient, baseURL, clientOpts...)
+	c.control = daemonv1connect.NewDaemonServiceClient(c.httpClient, baseURL, clientOpts...)
 	return c
+}
+
+func callTimeout(timeout time.Duration) connect.UnaryInterceptorFunc {
+	return func(next connect.UnaryFunc) connect.UnaryFunc {
+		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			ctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			return next(ctx, req)
+		}
+	}
 }
 
 // HTTPClient reaches the daemon's plain HTTP endpoints, such as /healthz.

@@ -4,49 +4,20 @@ package sshdial
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os/exec"
-	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/colonyops/hive/internal/domain/server"
 )
-
-type Host struct {
-	// Name is an ssh host or config alias, optionally with user@.
-	Name string
-	// ConfigFile is passed to ssh as -F when set.
-	ConfigFile string
-	// Binary is the hive path on the remote host. Empty means "hive".
-	Binary string
-}
-
-var (
-	namePattern   = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.@:-]*$`)
-	binaryPattern = regexp.MustCompile(`^[A-Za-z0-9_./~-]+$`)
-)
-
-// Validate keeps Name from reading as an ssh option and Binary from carrying
-// shell syntax, since ssh hands the remote command to a shell.
-func (h Host) Validate() error {
-	if !namePattern.MatchString(h.Name) {
-		return fmt.Errorf("ssh host %q: use a host or config alias, optionally with user@", h.Name)
-	}
-	if strings.ContainsAny(h.ConfigFile, "\x00\r\n") {
-		return errors.New("ssh config path contains a control character")
-	}
-	if h.Binary != "" && !binaryPattern.MatchString(h.Binary) {
-		return fmt.Errorf("remote hive binary %q: use letters, digits, and _ . / ~ - only", h.Binary)
-	}
-	return nil
-}
 
 // Args are the ssh arguments for `<binary> daemon dial-stdio` on h.
 // BatchMode and StrictHostKeyChecking keep ssh from prompting, since no one
 // is at a terminal to answer.
-func Args(h Host) []string {
+func Args(h server.Host) []string {
 	var args []string
 	if h.ConfigFile != "" {
 		args = append(args, "-F", h.ConfigFile)
@@ -78,7 +49,7 @@ func quote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + 
 // DialStdio starts ssh and returns its stdio as a connection. ssh's stderr
 // goes to stderr when it is not nil. Closing the connection kills ssh and
 // waits for it. The connection outlives ctx; ctx bounds only the start.
-func DialStdio(ctx context.Context, h Host, stderr io.Writer) (net.Conn, error) {
+func DialStdio(ctx context.Context, h server.Host, stderr io.Writer) (net.Conn, error) {
 	if err := h.Validate(); err != nil {
 		return nil, err
 	}

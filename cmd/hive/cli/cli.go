@@ -31,6 +31,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
+	"github.com/colonyops/hive/internal/hive/servers"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/pkg/buildinfo"
@@ -248,6 +249,9 @@ Run 'hive new' to create a new session from the current repository.`,
 				hiveApp.Config = cfg
 				hiveApp.ConfigPath = flags.ConfigPath
 				hiveApp.Build = hiveBuildInfo()
+				// No engine, so no local session API: these commands reach
+				// only the daemon on this machine or on a server.
+				hiveApp.Servers = servers.New(logger, nil, cfg.Servers)
 				return ctx, nil
 			}
 
@@ -337,6 +341,9 @@ Run 'hive new' to create a new session from the current repository.`,
 		After: func(ctx context.Context, c *cli.Command) error {
 			if pluginMgr != nil {
 				pluginMgr.CloseAll()
+			}
+			if hiveApp.Servers != nil {
+				hiveApp.Servers.Close()
 			}
 
 			var closeErr error

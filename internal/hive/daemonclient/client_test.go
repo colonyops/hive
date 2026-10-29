@@ -224,3 +224,24 @@ func TestStatusAvailableRetriesAHelloThatFailed(t *testing.T) {
 	require.Eventually(t, client.StatusAvailable, 5*time.Second, 10*time.Millisecond)
 	assert.Equal(t, int32(1), server.calls.Load())
 }
+
+// stuckServer answers List only when the caller gives up.
+type stuckServer struct {
+	daemonv1connect.UnimplementedSessionServiceHandler
+}
+
+func (stuckServer) List(ctx context.Context, _ *connect.Request[daemonv1.ListRequest]) (*connect.Response[daemonv1.ListResponse], error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestClientCallTimeoutBoundsAUnaryCall(t *testing.T) {
+	path := socketPath(t)
+	serve(t, path, stuckServer{}, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop(), CallTimeout: 100 * time.Millisecond})
+
+	began := time.Now()
+	_, err := client.ListSessions(t.Context())
+	require.Error(t, err)
+	assert.Less(t, time.Since(began), 5*time.Second)
+}
