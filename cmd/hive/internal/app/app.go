@@ -64,7 +64,8 @@ type App struct {
 	Build       BuildInfo
 	Sources     *sources.Registry
 
-	sessions sessionapi.API
+	sessions     sessionapi.API
+	targetServer string
 }
 
 // NewApp wraps an engine built from &cfg.Config with the CLI pieces. Doctor
@@ -113,7 +114,14 @@ func (a *App) TargetServer(name string) error {
 		return fmt.Errorf("no server named %q under servers: in config.yaml", name)
 	}
 	a.sessions = RemoteClient(a.Logger, server, os.Stderr)
+	a.targetServer = name
 	return nil
+}
+
+// TargetsServer reports whether SessionAPI reaches a server, where paths and
+// tmux sessions on this machine mean nothing.
+func (a *App) TargetsServer() bool {
+	return a.targetServer != ""
 }
 
 // RemoteClient reaches the daemon on server over ssh and copies ssh's

@@ -126,3 +126,63 @@ func TestServersLs_AStoppedServerIsUnreachableUntilItStarts(t *testing.T) {
 		return b.Reachable
 	}, 20*time.Second, 500*time.Millisecond)
 }
+
+func TestClientCLI_CreatesASessionOnTheServer(t *testing.T) {
+	r := NewClient(t).HiveOn(serverA, "session", "create", "--json", "--background", "--remote", tFixtureRepo, "from-client").Ok(t)
+	created := DecodeJSON[Session](t, r)
+	serverA.DeleteOnCleanup(t, created.ID)
+
+	shown := serverA.Show(t, created.ID)
+	assert.Equal(t, "from-client", shown.Name)
+	assert.Equal(t, tFixtureRepo, shown.Remote)
+}
+
+func TestClientCLI_RefusesASourceDirectoryForTheServer(t *testing.T) {
+	failed := NewClient(t).HiveOn(serverA, "session", "create", "--background", "--remote", tFixtureRepo, "--source", ".", "with-source").Fails(t)
+
+	// hive prints its errors to stdout.
+	assert.Contains(t, failed.Stdout+failed.Stderr, "--source")
+	for _, s := range serverA.List(t) {
+		assert.NotEqual(t, "with-source", s.Name)
+	}
+}
+
+func TestClientCLI_ShowsAndListsServerSessions(t *testing.T) {
+	created := serverA.CreateSession(t, "listed")
+	client := NewClient(t)
+
+	shown := DecodeJSON[Session](t, client.HiveOn(serverA, "session", "show", "--json", created.ID).Ok(t))
+	assert.Equal(t, created.ID, shown.ID)
+	assert.Equal(t, "listed", shown.Name)
+
+	listed := DecodeJSONLines[Session](t, client.HiveOn(serverA, "session", "list", "--json").Ok(t))
+	assert.Contains(t, sessionIDs(listed), created.ID)
+}
+
+func TestClientCLI_RenamesAndGroupsASession(t *testing.T) {
+	created := serverA.CreateSession(t, "before")
+
+	NewClient(t).HiveOn(serverA, "session", "update", created.ID, "--name", "after", "--group", "team").Ok(t)
+
+	shown := serverA.Show(t, created.ID)
+	assert.Equal(t, "after", shown.Name)
+	assert.Equal(t, "team", shown.Group)
+}
+
+func TestClientCLI_RecyclesASession(t *testing.T) {
+	created := serverA.CreateSession(t, "recycle-me")
+
+	NewClient(t).HiveOn(serverA, "session", "recycle", created.ID).Ok(t)
+
+	assert.Equal(t, string(session.StateRecycled), serverA.Show(t, created.ID).State)
+}
+
+func TestClientCLI_DeletesASession(t *testing.T) {
+	created := serverA.CreateSession(t, "delete-me")
+
+	NewClient(t).HiveOn(serverA, "session", "delete", created.ID).Ok(t)
+
+	gone := serverA.Hive(t, "session", "show", "--json", created.ID).Fails(t)
+	// hive prints its errors to stdout.
+	assert.Contains(t, gone.Stdout+gone.Stderr, session.ErrNotFound.Error())
+}
