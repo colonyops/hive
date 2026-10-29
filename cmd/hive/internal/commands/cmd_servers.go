@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -17,7 +16,6 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
-	"github.com/colonyops/hive/internal/platform/sshdial"
 	"github.com/colonyops/hive/pkg/iojson"
 )
 
@@ -226,18 +224,9 @@ func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 	return nil
 }
 
-// remoteClient never auto-starts: dial-stdio on the remote side starts the
-// daemon there.
 func remoteClient(logger zerolog.Logger, server config.ServerConfig) (*daemonclient.Client, *tailBuffer) {
 	stderr := &tailBuffer{}
-	host := server.Host()
-	client := daemonclient.New(daemonclient.Options{
-		Logger: logger,
-		Dialer: func(ctx context.Context) (net.Conn, error) {
-			return sshdial.DialStdio(ctx, host, stderr)
-		},
-	})
-	return client, stderr
+	return app.RemoteClient(logger, server, stderr), stderr
 }
 
 // remoteError adds ssh's last stderr line, since a failed ssh only shows up

@@ -136,6 +136,13 @@ func (c *Client) Hive(args ...string) Result {
 	return r
 }
 
+// HiveOn runs the client hive with --target-server, so session commands act
+// on the server's sessions as they would for a user.
+func (c *Client) HiveOn(s Server, args ...string) Result {
+	c.t.Helper()
+	return c.Hive(append([]string{"--target-server", s.Name}, args...)...)
+}
+
 // Server is one fixture container, reached by its name in the ssh_config
 // run.sh writes.
 type Server struct {

@@ -5,6 +5,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
 	"os"
 
 	"github.com/rs/zerolog"
@@ -20,6 +22,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/doctor"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
+	"github.com/colonyops/hive/internal/platform/sshdial"
 )
 
 // BuildInfo holds build-time metadata set by the main package.
@@ -100,6 +103,30 @@ func NewApp(
 // engine. Tmux-only helpers and git reads stay on Sessions().
 func (a *App) SessionAPI() sessionapi.API {
 	return a.sessions
+}
+
+// TargetServer points SessionAPI at the daemon on a server under servers:,
+// so session commands act on that server's sessions instead of local ones.
+func (a *App) TargetServer(name string) error {
+	server, ok := a.Config.Server(name)
+	if !ok {
+		return fmt.Errorf("no server named %q under servers: in config.yaml", name)
+	}
+	a.sessions = RemoteClient(a.Logger, server, os.Stderr)
+	return nil
+}
+
+// RemoteClient reaches the daemon on server over ssh and copies ssh's
+// stderr to stderr. It never auto-starts: dial-stdio on the remote side
+// starts the daemon there.
+func RemoteClient(logger zerolog.Logger, server config.ServerConfig, stderr io.Writer) *daemonclient.Client {
+	host := server.Host()
+	return daemonclient.New(daemonclient.Options{
+		Logger: logger,
+		Dialer: func(ctx context.Context) (net.Conn, error) {
+			return sshdial.DialStdio(ctx, host, stderr)
+		},
+	})
 }
 
 // DaemonClient reaches the daemon for this data directory. It needs only the
