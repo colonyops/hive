@@ -2,12 +2,9 @@ x-server: &server
   build:
     context: ../..
     dockerfile: test/remote/Dockerfile
-  # One tag per project: a shared tag lets another fixture's build replace
-  # the image, and compose then recreates a restarted server with a new host
-  # key that no longer matches known_hosts.
+  # One tag per project, so another fixture's build cannot replace the binary
+  # a restarted server runs.
   image: hive-remote-fixture:${HIVE_REMOTE_PROJECT:?}
-  volumes:
-    - ${HIVE_REMOTE_STATE:?}/id_ed25519.pub:/run/client.pub:ro
   stop_grace_period: 2s
   healthcheck:
     # A running sshd process is not yet one that accepts connections.
@@ -21,7 +18,13 @@ services:
     <<: *server
     ports:
       - "127.0.0.1:${HIVE_REMOTE_SSH_PORT_A:-19222}:22"
+    volumes:
+      - ${HIVE_REMOTE_STATE:?}/id_ed25519.pub:/run/client.pub:ro
+      - ${HIVE_REMOTE_STATE:?}/server-a_host_ed25519_key:/run/host_key:ro
   server-b:
     <<: *server
     ports:
       - "127.0.0.1:${HIVE_REMOTE_SSH_PORT_B:-19223}:22"
+    volumes:
+      - ${HIVE_REMOTE_STATE:?}/id_ed25519.pub:/run/client.pub:ro
+      - ${HIVE_REMOTE_STATE:?}/server-b_host_ed25519_key:/run/host_key:ro

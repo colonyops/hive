@@ -24,18 +24,19 @@ compose=(docker compose -p "$HIVE_REMOTE_PROJECT" -f test/remote/compose.yaml)
 up() {
   mkdir -p "$HIVE_REMOTE_STATE"
   chmod 700 "$HIVE_REMOTE_STATE"
-  if [[ ! -f "$HIVE_REMOTE_STATE/id_ed25519" ]]; then
-    ssh-keygen -q -t ed25519 -N '' -f "$HIVE_REMOTE_STATE/id_ed25519"
-  fi
+  for key in id_ed25519 server-a_host_ed25519_key server-b_host_ed25519_key; do
+    if [[ ! -f "$HIVE_REMOTE_STATE/$key" ]]; then
+      ssh-keygen -q -t ed25519 -N '' -f "$HIVE_REMOTE_STATE/$key"
+    fi
+  done
   "${compose[@]}" up --build --detach --wait
   : >"$HIVE_REMOTE_STATE/known_hosts"
   : >"$HIVE_REMOTE_STATE/ssh_config"
   for server in server-a server-b; do
     port="$HIVE_REMOTE_SSH_PORT_A"
     [[ "$server" == server-b ]] && port="$HIVE_REMOTE_SSH_PORT_B"
-    # Read the host key through Docker, not from an unauthenticated scan.
-    "${compose[@]}" exec -T "$server" cat /etc/ssh/keys/ssh_host_ed25519_key.pub |
-      awk -v host="[127.0.0.1]:$port" '{print host, $1, $2}' >>"$HIVE_REMOTE_STATE/known_hosts"
+    awk -v host="[127.0.0.1]:$port" '{print host, $1, $2}' \
+      "$HIVE_REMOTE_STATE/${server}_host_ed25519_key.pub" >>"$HIVE_REMOTE_STATE/known_hosts"
     cat >>"$HIVE_REMOTE_STATE/ssh_config" <<CONFIG
 Host $server
   HostName 127.0.0.1

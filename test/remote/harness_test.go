@@ -214,10 +214,12 @@ func (s Server) Stop(t *testing.T) {
 }
 
 // Start starts a stopped server and waits for sshd. Its tmux sessions and
-// daemon are gone; its hive.db is kept.
+// daemon are gone. Compose may recreate the container, which also drops its
+// hive.db; the host key survives because run.sh mounts it.
 func (s Server) Start(t *testing.T) {
 	t.Helper()
-	compose(t, "up", "--detach", "--wait", "--no-build", s.Name).Ok(t)
+	r := compose(t, "up", "--detach", "--wait", "--no-build", s.Name).Ok(t)
+	t.Logf("start %s:\n%s%s", s.Name, r.Stdout, r.Stderr)
 }
 
 func compose(t *testing.T, args ...string) Result {
