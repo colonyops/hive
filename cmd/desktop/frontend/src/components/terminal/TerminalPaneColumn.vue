@@ -113,8 +113,14 @@ watch(
 
 const statusBarRow = computed(() => {
   if (!showStatusBar.value || !pool.visibleSlug) return null
-  return tree.activeSessions.find((row) => row.slug === pool.visibleSlug) ?? null
+  const slug = pool.visibleSlug
+  return (
+    tree.activeSessions.find((row) => row.slug === slug) ?? tree.serverSessions.find((row) => row.slug === slug) ?? null
+  )
 })
+// A server session's checkout is on the server: the editor, Finder, and
+// configured actions all run on this machine.
+const statusBarLocal = computed(() => !!statusBarRow.value && !tree.isServerSession(statusBarRow.value))
 const statusBarSessionId = computed(() => statusBarRow.value?.id ?? '')
 const {
   git: sessionGit,
@@ -161,7 +167,8 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
       v-if="statusBarRow"
       testid="terminal-pane-statusbar"
       :error="statusBarError"
-      :editor-title="editorTitle"
+      :editor-title="statusBarLocal ? editorTitle : ''"
+      :revealable="statusBarLocal"
       @open-editor="runStatusBarAction(OpenSessionInEditor)"
       @reveal="runStatusBarAction(RevealSession)"
     >
@@ -175,7 +182,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
       <SessionTagsStatus :tags="statusBarRow.tags" @edit="sessions.requestEdit(statusBarRow, 'tags')" />
       <template #actions>
         <IconButton
-          v-for="action in ops.actions.statusBarActions.value"
+          v-for="action in statusBarLocal ? ops.actions.statusBarActions.value : []"
           :key="action.id"
           :label="action.label"
           :icon="launcherIconComponent(action.icon)"

@@ -468,9 +468,12 @@ func (s *SessionsService) SessionGitStatus(ctx context.Context, id string) (gits
 	if err != nil {
 		return gitstatus.Status{}, err
 	}
-	// The checkout of a server's session is on the server; #744 reads it there.
 	if !target.local() {
-		return gitstatus.Status{}, nil
+		statuses, err := target.api.GitStatuses(ctx, []string{target.id})
+		if err != nil {
+			return gitstatus.Status{}, Wrap(err, KindUnavailable, "reading git status for session %q", id)
+		}
+		return statuses[target.id], nil
 	}
 	sess, err := s.sessions.GetSession(ctx, target.id)
 	if err != nil {

@@ -83,6 +83,9 @@ const (
 	SessionServiceFileDiffsProcedure = "/hive.daemon.v1.SessionService/FileDiffs"
 	// SessionServiceBranchesProcedure is the fully-qualified name of the SessionService's Branches RPC.
 	SessionServiceBranchesProcedure = "/hive.daemon.v1.SessionService/Branches"
+	// SessionServiceGitStatusesProcedure is the fully-qualified name of the SessionService's
+	// GitStatuses RPC.
+	SessionServiceGitStatusesProcedure = "/hive.daemon.v1.SessionService/GitStatuses"
 )
 
 // DaemonServiceClient is a client for the hive.daemon.v1.DaemonService service.
@@ -260,6 +263,9 @@ type SessionServiceClient interface {
 	Changes(context.Context, *connect.Request[v1.ChangesRequest]) (*connect.Response[v1.ChangesResponse], error)
 	FileDiffs(context.Context, *connect.Request[v1.FileDiffsRequest]) (*connect.Response[v1.FileDiffsResponse], error)
 	Branches(context.Context, *connect.Request[v1.BranchesRequest]) (*connect.Response[v1.BranchesResponse], error)
+	// GitStatuses reads the checkouts of sessions on the daemon's machine. A
+	// read is shared by every client that asks within a few seconds.
+	GitStatuses(context.Context, *connect.Request[v1.GitStatusesRequest]) (*connect.Response[v1.GitStatusesResponse], error)
 }
 
 // NewSessionServiceClient constructs a client for the hive.daemon.v1.SessionService service. By
@@ -381,6 +387,12 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("Branches")),
 			connect.WithClientOptions(opts...),
 		),
+		gitStatuses: connect.NewClient[v1.GitStatusesRequest, v1.GitStatusesResponse](
+			httpClient,
+			baseURL+SessionServiceGitStatusesProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("GitStatuses")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -404,6 +416,7 @@ type sessionServiceClient struct {
 	changes           *connect.Client[v1.ChangesRequest, v1.ChangesResponse]
 	fileDiffs         *connect.Client[v1.FileDiffsRequest, v1.FileDiffsResponse]
 	branches          *connect.Client[v1.BranchesRequest, v1.BranchesResponse]
+	gitStatuses       *connect.Client[v1.GitStatusesRequest, v1.GitStatusesResponse]
 }
 
 // List calls hive.daemon.v1.SessionService.List.
@@ -496,6 +509,11 @@ func (c *sessionServiceClient) Branches(ctx context.Context, req *connect.Reques
 	return c.branches.CallUnary(ctx, req)
 }
 
+// GitStatuses calls hive.daemon.v1.SessionService.GitStatuses.
+func (c *sessionServiceClient) GitStatuses(ctx context.Context, req *connect.Request[v1.GitStatusesRequest]) (*connect.Response[v1.GitStatusesResponse], error) {
+	return c.gitStatuses.CallUnary(ctx, req)
+}
+
 // SessionServiceHandler is an implementation of the hive.daemon.v1.SessionService service.
 type SessionServiceHandler interface {
 	List(context.Context, *connect.Request[v1.ListRequest]) (*connect.Response[v1.ListResponse], error)
@@ -521,6 +539,9 @@ type SessionServiceHandler interface {
 	Changes(context.Context, *connect.Request[v1.ChangesRequest]) (*connect.Response[v1.ChangesResponse], error)
 	FileDiffs(context.Context, *connect.Request[v1.FileDiffsRequest]) (*connect.Response[v1.FileDiffsResponse], error)
 	Branches(context.Context, *connect.Request[v1.BranchesRequest]) (*connect.Response[v1.BranchesResponse], error)
+	// GitStatuses reads the checkouts of sessions on the daemon's machine. A
+	// read is shared by every client that asks within a few seconds.
+	GitStatuses(context.Context, *connect.Request[v1.GitStatusesRequest]) (*connect.Response[v1.GitStatusesResponse], error)
 }
 
 // NewSessionServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -638,6 +659,12 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("Branches")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceGitStatusesHandler := connect.NewUnaryHandler(
+		SessionServiceGitStatusesProcedure,
+		svc.GitStatuses,
+		connect.WithSchema(sessionServiceMethods.ByName("GitStatuses")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/hive.daemon.v1.SessionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SessionServiceListProcedure:
@@ -676,6 +703,8 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceFileDiffsHandler.ServeHTTP(w, r)
 		case SessionServiceBranchesProcedure:
 			sessionServiceBranchesHandler.ServeHTTP(w, r)
+		case SessionServiceGitStatusesProcedure:
+			sessionServiceGitStatusesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -755,4 +784,8 @@ func (UnimplementedSessionServiceHandler) FileDiffs(context.Context, *connect.Re
 
 func (UnimplementedSessionServiceHandler) Branches(context.Context, *connect.Request[v1.BranchesRequest]) (*connect.Response[v1.BranchesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.Branches is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) GitStatuses(context.Context, *connect.Request[v1.GitStatusesRequest]) (*connect.Response[v1.GitStatusesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.GitStatuses is not implemented"))
 }

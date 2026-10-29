@@ -3,6 +3,7 @@ package daemonclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -565,6 +566,27 @@ func (c *Client) SessionBranches(ctx context.Context, id string) ([]string, erro
 		return nil, wire.FromConnectError(err)
 	}
 	return resp.Msg.GetRefs(), nil
+}
+
+// ErrGitStatusUnsupported is a daemon whose hive predates GitStatuses.
+var ErrGitStatusUnsupported = errors.New("the server's hive is too old to report git status; install the same hive version on both machines")
+
+// GitStatuses reports a daemon that predates the RPC as such, so a user
+// knows to upgrade the server rather than look for a fault.
+func (c *Client) GitStatuses(ctx context.Context, ids []string) (map[string]gitstatus.Status, error) {
+	if len(ids) == 0 {
+		return map[string]gitstatus.Status{}, nil
+	}
+	resp, err := retryRead(func() (*connect.Response[daemonv1.GitStatusesResponse], error) {
+		return c.sessions.GitStatuses(ctx, connect.NewRequest(&daemonv1.GitStatusesRequest{SessionIds: ids}))
+	})
+	if err != nil {
+		if connect.CodeOf(err) == connect.CodeUnimplemented {
+			return nil, ErrGitStatusUnsupported
+		}
+		return nil, wire.FromConnectError(err)
+	}
+	return wire.GitStatusesFromProto(resp.Msg.GetStatuses()), nil
 }
 
 // helloRetry spaces background Hellos while status is not yet known

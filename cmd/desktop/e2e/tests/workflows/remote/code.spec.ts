@@ -120,6 +120,12 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
 
     await expect(page).toHaveURL(new RegExp(`/terminal/${SLUG}$`))
     await expect.poll(() => attached).toContain(SLUG)
+
+    // The status bar reads the checkout on the server, and offers nothing
+    // that would act on this machine.
+    await expect(page.getByTestId('session-status-branch')).toHaveText('main', { timeout: 30_000 })
+    await expect(page.getByTestId('terminal-pane-statusbar-reveal')).toHaveCount(0)
+    await expect(page.getByTestId('terminal-pane-statusbar-open-editor')).toHaveCount(0)
   })
 
   test('does not offer Changes for a server session', async ({ page }) => {
