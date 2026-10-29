@@ -31,6 +31,7 @@ nav = [
     ]},
     { "Code" = [
       "desktop/code/terminal-mode.md",
+      "desktop/code/servers.md",
     ]},
     { "Chats" = [
       "desktop/chats/agent-workspaces.md",
@@ -54,6 +55,7 @@ nav = [
       "cli/getting-started/task-tracking.md",
       "cli/getting-started/todos.md",
       "cli/getting-started/session-picker.md",
+      "cli/getting-started/remote-servers.md",
       "cli/getting-started/claude-plugin.md",
     ]},
     { "Configuration" = [
