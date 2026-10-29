@@ -16,23 +16,26 @@ import (
 )
 
 // Args are the ssh arguments for `<binary> daemon dial-stdio` on h.
-// BatchMode and StrictHostKeyChecking keep ssh from prompting, since no one
-// is at a terminal to answer.
 func Args(h server.Host) []string {
+	return append(Options(h), h.Name, "--", remoteBinary(h.Binary), "daemon", "dial-stdio")
+}
+
+// Options are the ssh options every hive connection to h uses, without the
+// host. BatchMode and StrictHostKeyChecking keep ssh from prompting, since no
+// one is at a terminal to answer.
+func Options(h server.Host) []string {
 	var args []string
 	if h.ConfigFile != "" {
 		args = append(args, "-F", h.ConfigFile)
 	}
-	args = append(args,
+	return append(args,
 		"-T",
 		"-o", "BatchMode=yes",
 		"-o", "StrictHostKeyChecking=yes",
 		"-o", "ConnectTimeout=10",
 		"-o", "ServerAliveInterval=15",
 		"-o", "ServerAliveCountMax=3",
-		h.Name, "--", remoteBinary(h.Binary), "daemon", "dial-stdio",
 	)
-	return args
 }
 
 func remoteBinary(binary string) string {
@@ -40,12 +43,13 @@ func remoteBinary(binary string) string {
 		return "hive"
 	}
 	if rest, ok := strings.CutPrefix(binary, "~/"); ok {
-		return `"$HOME"/` + quote(rest)
+		return `"$HOME"/` + Quote(rest)
 	}
-	return quote(binary)
+	return Quote(binary)
 }
 
-func quote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+// Quote quotes s for the remote shell, which ssh hands the command to.
+func Quote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 // DialStdio starts ssh and returns its stdio as a connection. ssh's stderr
 // goes to stderr when it is not nil. Closing the connection kills ssh and

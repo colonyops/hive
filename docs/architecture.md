@@ -1446,6 +1446,10 @@ Terminal mode attaches one tmux control-mode client per Hive session, keyed by
 the session **slug** (the tmux session name). Four pieces, and the split between
 them is the constraint (ADR terminal-transport):
 
+A session on a server is addressed as `<server>:<slug>`. `TerminalsService`
+routes it to a `tmuxcc.Manager` for that server whose `SSHRunner` runs every
+tmux command over ssh (ADR a-server-s-terminal-runs-tmux-control-mode-over-ssh-and-is-addressed-as-server-slug).
+
 - **`internal/platform/tmux/control`** — the protocol: line framer, `%begin`/`%end`/`%error`
   command FIFO, notification dispatch, `%output` octal decode, one client per
   slug over `tmux -C attach`, and a per-session fan-out broker. **No transport

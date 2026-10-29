@@ -1449,6 +1449,67 @@ describe('useTerminalWindows', () => {
     expect(session.error.value).toBe('Terminal connection lost. The tmux session may still be running.')
   })
 
+  describe('a terminal on a server', () => {
+    async function attachedRemote(client: MockedClient = fakeClient()) {
+      const session = useTerminalWindows('box:hive-abc', client as unknown as TerminalClient)
+      await session.start()
+      await flushPromises()
+      sockets[0].onopen?.()
+      return { client, session, socket: sockets[0] }
+    }
+
+    it('attaches again after an ssh drop instead of reading the window list', async () => {
+      vi.useFakeTimers()
+      const { client, session, socket } = await attachedRemote()
+
+      socket.onmessage?.({ data: jsonFrame(0x02, { kind: 'exited', windowId: '', message: 'ssh: connection reset' }) })
+      await flushPromises()
+      expect(session.endReason.value).toBe('exited')
+      expect(client.listWindows).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(client.attach).toHaveBeenCalledTimes(2)
+      expect(client.attach).toHaveBeenLastCalledWith('box:hive-abc', expect.any(Number), expect.any(Number))
+      sockets[1].onopen?.()
+      expect(session.status.value).toBe('live')
+    })
+
+    it('backs off while the server does not answer, then stops trying', async () => {
+      vi.useFakeTimers()
+      const client = fakeClient()
+      const { session, socket } = await attachedRemote(client)
+      client.attach.mockRejectedValue(
+        new TerminalRequestError('ssh: connect to host box: Connection refused', 'internal'),
+      )
+
+      socket.onclose?.()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(client.attach).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(1999)
+      expect(client.attach).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(client.attach).toHaveBeenCalledTimes(3)
+
+      await vi.advanceTimersByTimeAsync(5000 * 20)
+      expect(client.attach).toHaveBeenCalledTimes(13)
+      expect(session.endReason.value).toBe('attach-failed')
+    })
+
+    it('stops when the attach finds the session gone', async () => {
+      vi.useFakeTimers()
+      const client = fakeClient()
+      const { session, socket } = await attachedRemote(client)
+      client.attach.mockRejectedValue(new TerminalRequestError('session "hive-abc" is not running', 'not_found'))
+
+      socket.onclose?.()
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(client.attach).toHaveBeenCalledTimes(2)
+      expect(session.endReason.value).toBe('terminated')
+    })
+  })
+
   it('ends when the attach itself fails', async () => {
     const client = fakeClient()
     client.attach.mockRejectedValue(new Error('no terminal is attached for that slug'))

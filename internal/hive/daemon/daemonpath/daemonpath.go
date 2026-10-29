@@ -87,6 +87,17 @@ func PrepareSocketDir(socketPath string) error {
 	if dir != fallbackSocketDir() {
 		return os.MkdirAll(dir, 0o755)
 	}
+	return preparePrivateDir(dir)
+}
+
+// PrivateTempDir is /tmp/hive-<uid>, made and checked as PrepareSocketDir
+// makes it. A path below it is short enough for a unix socket.
+func PrivateTempDir() (string, error) {
+	dir := fallbackSocketDir()
+	return dir, preparePrivateDir(dir)
+}
+
+func preparePrivateDir(dir string) error {
 	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
 		return fmt.Errorf("create socket directory: %w", err)
 	}

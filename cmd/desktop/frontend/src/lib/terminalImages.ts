@@ -12,6 +12,8 @@ export interface ImagePasteTarget {
 interface ImageInputOptions {
   capture(): ImagePasteTarget | null
   pasteText(text: string): void
+  /** Set when the terminal cannot take images; the toast shows it instead. */
+  refusal?: string
 }
 
 const targets = new Map<string, (paths: string[]) => void>()
@@ -31,6 +33,10 @@ export function installTerminalImages(host: HTMLElement, options: ImageInputOpti
 
   function receive(input: File[] | string[]): void {
     if (!visible() || input.length === 0) return
+    if (options.refusal) {
+      showToast(options.refusal, { severity: 'error' })
+      return
+    }
     const target = options.capture()
     if (!target?.current()) return
     const controller = new AbortController()

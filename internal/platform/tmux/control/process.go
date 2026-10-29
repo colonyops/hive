@@ -26,10 +26,40 @@ type process interface {
 // root's job (ADR tmux-discovery).
 const defaultBinary = "tmux"
 
+// Runner builds the tmux commands a Manager runs. LocalRunner runs this
+// machine's tmux; SSHRunner runs a server's tmux over ssh.
+type Runner interface {
+	// Command returns tmux with args, not started. env is the environment of
+	// the local process.
+	Command(ctx context.Context, binary string, env []string, args ...string) *exec.Cmd
+}
+
+// LocalRunner runs tmux on this machine, on the server $TMUX names when this
+// process is itself inside tmux.
+type LocalRunner struct{}
+
+// Command passes the $TMUX socket explicitly: hive's session-creating commands
+// run with $TMUX intact, so when this process is inside tmux the sessions live
+// on the server $TMUX names, which outranks TMUX_TMPDIR for those commands but
+// not for a scrubbed client. Outside tmux both resolve identically.
+func (LocalRunner) Command(ctx context.Context, binary string, env []string, args ...string) *exec.Cmd {
+	if binary == "" {
+		binary = defaultBinary
+	}
+	if socket := socketFromTMUX(os.Getenv("TMUX")); socket != "" {
+		args = append([]string{"-S", socket}, args...)
+	}
+	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.Dir = tmuxbin.WorkDir()
+	cmd.Env = withoutTmuxClient(env)
+	return cmd
+}
+
 type execProcess struct {
 	slug   string
 	binary string
 	env    []string
+	runner Runner
 
 	mu     sync.Mutex
 	cmd    *exec.Cmd
@@ -43,27 +73,17 @@ func newExecProcess(opts Options) process {
 	return &execProcess{
 		slug:   opts.Slug,
 		binary: opts.Binary,
-		env:    withoutTmuxClient(opts.Environ),
+		env:    opts.Environ,
+		runner: opts.Runner,
 		stderr: &executil.HeadWriter{Max: 4 << 10},
 	}
 }
 
-// Start ignores ctx deliberately: the control client outlives the attach
-// request that spawned it, so it is killed explicitly on teardown rather than
-// bound to a context.
-func (p *execProcess) Start(context.Context) (io.Writer, io.Reader, error) {
-	// Hive's session-creating commands run with $TMUX intact, so when this
-	// process is itself inside tmux the sessions live on the server $TMUX
-	// names — which outranks TMUX_TMPDIR for those commands but not for our
-	// scrubbed client. Passing that socket explicitly keeps attach and create
-	// pointed at the same server; outside tmux both resolve identically.
-	args := []string{"-C", "attach", "-t", "=" + p.slug}
-	if socket := socketFromTMUX(os.Getenv("TMUX")); socket != "" {
-		args = append([]string{"-S", socket}, args...)
-	}
-	cmd := exec.Command(p.binary, args...) //nolint:noctx // lifetime is teardown-managed, see above
-	cmd.Dir = tmuxbin.WorkDir()
-	cmd.Env = p.env
+// Start does not bind the process to ctx's cancellation: the control client
+// outlives the attach request that spawned it, so it is killed explicitly on
+// teardown.
+func (p *execProcess) Start(ctx context.Context) (io.Writer, io.Reader, error) {
+	cmd := p.runner.Command(context.WithoutCancel(ctx), p.binary, p.env, "-C", "attach", "-t", "="+p.slug)
 	cmd.Stderr = p.stderr
 
 	stdin, err := cmd.StdinPipe()
@@ -114,16 +134,15 @@ func (p *execProcess) Kill() error {
 	return cmd.Process.Kill()
 }
 
-// runTmux runs a one-shot tmux command against the same server the control
-// clients attach to — see Start for why the socket is passed explicitly —
-// returning stdout as lines and folding tmux's own complaint into the error,
-// since that is all a failed has-session or rename-session reports.
+// runTmux runs a one-shot tmux command against the server the control clients
+// attach to, returning stdout as lines and folding tmux's own complaint into the
+// error, since that is all a failed has-session or rename-session reports.
 //
 // env is what the command client runs with, and a new-session's pane inherits
 // it: a tmux pane takes its environment from the client that created it, so
 // this is the only place the app can put anything on an agent's PATH.
-func runTmux(ctx context.Context, binary string, env []string, args ...string) ([]string, error) {
-	out, err := outputTmux(ctx, binary, env, args...)
+func runTmux(ctx context.Context, runner Runner, binary string, env []string, args ...string) ([]string, error) {
+	out, err := outputTmux(ctx, runner, binary, env, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -138,16 +157,8 @@ func runTmux(ctx context.Context, binary string, env []string, args ...string) (
 // for load-buffer, the one command this package runs that carries arbitrary
 // bytes rather than arguments: passing pasted text as an argument would publish
 // it in the process table, where anything running as this user can read it.
-func inputTmux(ctx context.Context, binary string, env []string, stdin io.Reader, args ...string) error {
-	if binary == "" {
-		binary = defaultBinary
-	}
-	if socket := socketFromTMUX(os.Getenv("TMUX")); socket != "" {
-		args = append([]string{"-S", socket}, args...)
-	}
-	cmd := exec.CommandContext(ctx, binary, args...)
-	cmd.Dir = tmuxbin.WorkDir()
-	cmd.Env = withoutTmuxClient(env)
+func inputTmux(ctx context.Context, runner Runner, binary string, env []string, stdin io.Reader, args ...string) error {
+	cmd := runner.Command(ctx, binary, env, args...)
 	cmd.Stdin = stdin
 	stderr := &executil.HeadWriter{Max: 4 << 10}
 	cmd.Stderr = stderr
@@ -160,16 +171,8 @@ func inputTmux(ctx context.Context, binary string, env []string, stdin io.Reader
 	return nil
 }
 
-func outputTmux(ctx context.Context, binary string, env []string, args ...string) ([]byte, error) {
-	if binary == "" {
-		binary = defaultBinary
-	}
-	if socket := socketFromTMUX(os.Getenv("TMUX")); socket != "" {
-		args = append([]string{"-S", socket}, args...)
-	}
-	cmd := exec.CommandContext(ctx, binary, args...)
-	cmd.Dir = tmuxbin.WorkDir()
-	cmd.Env = withoutTmuxClient(env)
+func outputTmux(ctx context.Context, runner Runner, binary string, env []string, args ...string) ([]byte, error) {
+	cmd := runner.Command(ctx, binary, env, args...)
 	stderr := &executil.HeadWriter{Max: 4 << 10}
 	cmd.Stderr = stderr
 	out, err := cmd.Output()

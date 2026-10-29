@@ -172,6 +172,11 @@ const RESIZE_DEBOUNCE_MS = 80
 // well inside this; an unanswered vote means something else decided the size.
 const CONSTRAINT_SETTLE_MS = 750
 
+// How long a server's terminal waits before each attach after an ssh drop. The
+// cap gives up after about a minute; the Reconnect button still works after.
+const RECONNECT_DELAYS_MS = [1000, 2000, 5000]
+const MAX_AUTO_RECONNECTS = 12
+
 interface WindowRuntime {
   host?: HTMLElement
   observer?: ResizeObserver
@@ -239,6 +244,8 @@ function validDimension(value: number | undefined): value is number {
 }
 
 export function useTerminalWindows(slug: string, client: TerminalClient): UseTerminalWindows {
+  // "<server>:<slug>" is a session on a server; tmux allows no ":" in a local name.
+  const server = slug.includes(':') ? slug.slice(0, slug.indexOf(':')) : null
   const tabs = ref<TerminalWindowTab[]>([]) as Ref<TerminalWindowTab[]>
   const activeWindowId = ref('')
   const status = ref<TerminalStatus>('connecting')
@@ -271,6 +278,8 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   let vote: TerminalSize | null = rememberedVote(cellMetrics())
   let resizeTimer: ReturnType<typeof setTimeout> | undefined
   let lastResizeAt = Number.NEGATIVE_INFINITY
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined
+  let autoReconnects = 0
   let constraintTimer: ReturnType<typeof setTimeout> | undefined
   let constraintDismissed = false
   // terminalGrid.ts reads xterm's private _core, which no test against a fake
@@ -595,6 +604,8 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     state.probe.opened()
     const releasePaste = installTerminalImages(host, {
       pasteText: (text) => sendPaste(paneId, text),
+      // An image is pasted as a path on this machine, which the server cannot read.
+      refusal: server ? `Images cannot be pasted into a terminal on server ${server}.` : undefined,
       capture: () => {
         const capturedSocket = socket
         return {
@@ -890,6 +901,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     socket.binaryType = 'arraybuffer'
     socket.onopen = () => {
       if (disposed) return
+      autoReconnects = 0
       status.value = 'live'
       endReason.value = null
       error.value = null
@@ -905,7 +917,22 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   function dropped(): void {
     if (disposed || status.value === 'ended') return
     end('disconnected', 'Terminal connection lost. The tmux session may still be running.')
-    void reconcileEnd(connectionEpoch)
+    if (server) scheduleReconnect()
+    else void reconcileEnd(connectionEpoch)
+  }
+
+  // A server's terminal runs over ssh, which drops with the network while the
+  // tmux session on the server lives on. Its window listing cannot tell
+  // "terminated" from "unreachable", so the view attaches again instead, and
+  // the attach answers not_found when the session really is gone.
+  function scheduleReconnect(): void {
+    if (disposed || reconnectTimer || endReason.value === 'stopped' || autoReconnects >= MAX_AUTO_RECONNECTS) return
+    const delay = RECONNECT_DELAYS_MS[Math.min(autoReconnects, RECONNECT_DELAYS_MS.length - 1)]
+    autoReconnects++
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined
+      if (!disposed && status.value === 'ended') void reconnect()
+    }, delay)
   }
 
   function end(reason: TerminalEndReason, detail: string): void {
@@ -924,7 +951,8 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
 
   async function exited(detail: string): Promise<void> {
     end('exited', detail)
-    await reconcileEnd(connectionEpoch)
+    if (server) scheduleReconnect()
+    else await reconcileEnd(connectionEpoch)
   }
 
   async function reconcileEnd(epoch: number): Promise<void> {
@@ -1040,6 +1068,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
         return
       }
       end('attach-failed', message(e, 'Could not attach to this session.'))
+      if (server) scheduleReconnect()
     }
   }
 
@@ -1048,6 +1077,8 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   // the panes again whether or not its client survived the drop, and a reused
   // terminal would paint that capture over a stale screen.
   async function reconnect(): Promise<void> {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = undefined
     closeSocket()
     disposeTabs()
     await start()
@@ -1243,6 +1274,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     disposed = true
     stopAttachSpan()
     clearTimeout(resizeTimer)
+    clearTimeout(reconnectTimer)
     clearTimeout(constraintTimer)
     closeSocket()
     disposeTabs()

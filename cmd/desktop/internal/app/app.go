@@ -244,6 +244,8 @@ type App struct {
 	// terminals owns one tmux control-mode client per attached session slug.
 	// Its context is the app's lifetime, not a request's (ADR terminal-transport).
 	terminals *tmuxcc.Manager
+	// serverTerminals runs the terminals of sessions on servers over ssh.
+	serverTerminals *serverTerminals
 
 	// popupTerminals owns the ephemeral terminals a pop-up opens (ADR ephemeral-popup-terminals).
 	// They are this process's children, so unlike tmux's they end with Close.
@@ -364,6 +366,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		sessionsProbe(a.sessions.ListSessions, a.Events),
 		tasksProbe(a.hive.HC().Fingerprint, a.Events),
 	)
+	a.serverTerminals = newServerTerminals(runCtx, cfg.Logger, a.hiveServers.Load, a.execEnv.Environ, sshControlDir(cfg.Logger))
 	a.popupTerminals = ptyterm.NewManager(ptyterm.ManagerOptions{Environ: a.execEnv.Environ})
 
 	a.openActions(cfg.Paths.ActionsPath, cfg.Logger)
@@ -522,7 +525,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		EditorCommand:   a.Settings,
 		DefaultAgentEnv: defaultAgentEnvReader{env: a.execEnv},
 	})
-	a.Terminals = newTerminalsService(TerminalsDeps{Manager: a.terminals, Starter: a.Sessions, Home: os.UserHomeDir, Logger: cfg.Logger})
+	a.Terminals = newTerminalsService(TerminalsDeps{Manager: a.terminals, Servers: a.serverTerminals, Starter: a.Sessions, Home: os.UserHomeDir, Logger: cfg.Logger})
 	a.PopupTerminals = newPopupTerminalsService(PopupTerminalsDeps{Manager: a.popupTerminals, Terminals: a.Terminals, Directory: a.Sessions, Catalog: a.actionStore})
 	a.Diagnostics = &DiagnosticsService{paths: cfg.Paths, jobs: a.Jobs, build: cfg.Build, environ: a.execEnv.Environ, hive: a.HiveConfig, commands: a.profileCommands, webhooks: a.Webhooks, reveal: a.System.revealPath}
 	a.Tasks = newTasksService(a.hive)
@@ -756,6 +759,11 @@ func (a *App) Close() error {
 	if a.terminals != nil {
 		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(a.ctx), 3*time.Second)
 		_ = a.terminals.Stop(stopCtx)
+		cancel()
+	}
+	if a.serverTerminals != nil {
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(a.ctx), terminalStopBudget)
+		a.serverTerminals.Stop(stopCtx)
 		cancel()
 	}
 	// The pop-up terminals are this process's children rather than another
@@ -1467,6 +1475,9 @@ func (a *App) ReloadHiveRuntime(ctx context.Context) error {
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
 	if old := a.hiveServers.Swap(servers.New(a.logger, a.sessions, hiveCfg.Servers, a.hiveVersion)); old != nil {
 		old.Close()
+	}
+	if a.serverTerminals != nil {
+		a.serverTerminals.Prune(ctx)
 	}
 	return nil
 }

@@ -105,6 +105,8 @@ type Options struct {
 	// withoutTmuxClient drops — execenv's resolved environment in the app, nil
 	// meaning this process's own.
 	Environ []string
+	// Runner builds the tmux commands; nil means LocalRunner.
+	Runner Runner
 
 	// onEmit is a test seam for parking inside the attach sequence's synchronous
 	// first paint, the only way to hold the attach goroutine between a client
@@ -134,13 +136,16 @@ func (o *Options) normalize() error {
 	if o.Binary == "" {
 		o.Binary = defaultBinary
 	}
+	if o.Runner == nil {
+		o.Runner = LocalRunner{}
+	}
 	if o.newProcess == nil {
 		o.newProcess = newExecProcess
 	}
 	if o.loadBuffer == nil {
-		binary, environ := o.Binary, o.Environ
+		runner, binary, environ := o.Runner, o.Binary, o.Environ
 		o.loadBuffer = func(ctx context.Context, name string, content io.Reader) error {
-			return inputTmux(ctx, binary, environ, content, "load-buffer", "-b", name, "-")
+			return inputTmux(ctx, runner, binary, environ, content, "load-buffer", "-b", name, "-")
 		}
 	}
 	return nil
