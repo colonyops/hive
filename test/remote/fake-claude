@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# A stand-in for Claude Code. It draws a snapshot from the status rules'
+# corpus, so the status loop on the server sees an agent in a known state.
+# A test picks the snapshot: it writes the snapshot name to
+# /tmp/fake-claude/<basename of the session path>. The file stays outside
+# the session's clone, so the clone stays clean for recycle and delete.
+set -u
+# The process is bash, so hive finds the agent by the pane title instead.
+printf '\033]2;claude\007'
+snapshots=/usr/local/share/fake-claude
+state_file="/tmp/fake-claude/$(basename "$PWD")"
+shown=""
+while true; do
+  want=idle-empty-box
+  if [[ -s $state_file ]]; then
+    want=$(<"$state_file")
+  fi
+  if [[ $want != "$shown" ]]; then
+    clear
+    cat "$snapshots/$want.txt"
+    shown=$want
+  fi
+  sleep 0.2
+done
