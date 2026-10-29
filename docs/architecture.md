@@ -1488,6 +1488,10 @@ them is the constraint (ADR terminal-transport):
 A session on a server is addressed as `<server>:<slug>`. `TerminalsService`
 routes it to a `tmuxcc.Manager` for that server whose `SSHRunner` runs every
 tmux command over ssh (ADR a-server-s-terminal-runs-tmux-control-mode-over-ssh-and-is-addressed-as-server-slug).
+The Code view lists a server's sessions with their id and slug in the same
+`<server>:` form, from `SessionsService.ListServerSessions`, a call of its own
+so the local list never waits on ssh. `SessionsService` routes an id of that
+form to the server's session API from the server fleet.
 
 **Launches are bounded adapter transactions** (ADR tmux-launches-use-owned-resource-transactions).
 `internal/platform/tmux/exec` shares ownership-based allocation, observation,

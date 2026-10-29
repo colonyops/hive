@@ -70,6 +70,9 @@ const {
   error: newSessionError,
   failure: newSessionFailure,
   formKey: newSessionFormKey,
+  server: newSessionServer,
+  servers: newSessionServers,
+  selectServer: selectNewSessionServer,
   dismissFailure: dismissNewSessionFailure,
   onCreateFailed: onNewSessionFailed,
 } = useNewSession()
@@ -125,6 +128,9 @@ onMounted(() => {
     :busy="newSessionBusy"
     :error="newSessionError"
     :failure="newSessionFailure"
+    :servers="newSessionServers"
+    :server="newSessionServer"
+    @update:server="selectNewSessionServer"
     @close="feedCommands.cancelNewSession"
     @submit="feedCommands.submitNewSession"
     @dismiss-failure="dismissNewSessionFailure"

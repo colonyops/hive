@@ -1,7 +1,10 @@
 package wailsui
 
 import (
+	"strings"
 	"time"
+
+	"github.com/colonyops/hive/cmd/desktop/internal/app"
 
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/domain/session"
@@ -12,7 +15,12 @@ import (
 
 // SessionSummary is the session row shown in Code. CreatedAt starts with the
 // current logical session even when Hive reuses an older clone.
+//
+// A session on a server has Server set, and its ID and Slug carry the
+// "<server>:" prefix, so every id-keyed call and every terminal call reaches
+// that server. The local rows leave Server empty.
 type SessionSummary struct {
+	Server       string    `json:"server"`
 	ID           string    `json:"id"`
 	Name         string    `json:"name"`
 	Slug         string    `json:"slug"`
@@ -35,6 +43,37 @@ func sessionSummaryOf(canonical func(drive.Space) drive.Space, s session.Session
 	}
 }
 
+// serverSummaryOf is s as a row of server. Its repository owns no canvas
+// here: the drive is on this machine.
+func serverSummaryOf(server string, s session.Session) SessionSummary {
+	return SessionSummary{
+		Server: server, ID: server + ":" + s.ID, Name: s.Name, Slug: server + ":" + s.Slug,
+		Repo: s.Remote, RepoIdentity: git.RemoteIdentity(s.Remote), State: string(s.State),
+		Tags: tagsOf(s), CreatedAt: s.ActivatedAt(),
+	}
+}
+
+// ServerSessions is one server's rows for the Code view.
+type ServerSessions struct {
+	Server   string           `json:"server"`
+	SSH      string           `json:"ssh"`
+	State    string           `json:"state"`
+	Error    string           `json:"error"`
+	Sessions []SessionSummary `json:"sessions"`
+}
+
+func serverSessionsOf(lists []app.ServerSessionList) []ServerSessions {
+	out := make([]ServerSessions, 0, len(lists))
+	for _, list := range lists {
+		rows := make([]SessionSummary, 0, len(list.Sessions))
+		for _, s := range list.Sessions {
+			rows = append(rows, serverSummaryOf(list.Server, s))
+		}
+		out = append(out, ServerSessions{Server: list.Server, SSH: list.SSH, State: string(list.State), Error: list.Error, Sessions: rows})
+	}
+	return out
+}
+
 // tagsOf keeps the wire field an array, so the frontend never sees null.
 func tagsOf(s session.Session) []string {
 	if s.Tags == nil {
@@ -53,6 +92,7 @@ func sessionSummariesOf(canonical func(drive.Space) drive.Space, sessions []sess
 
 // SessionDetail is one session read in full, for a detail view.
 type SessionDetail struct {
+	Server         string    `json:"server"`
 	ID             string    `json:"id"`
 	Name           string    `json:"name"`
 	Slug           string    `json:"slug"`
@@ -66,11 +106,15 @@ type SessionDetail struct {
 	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
-func sessionDetailOf(s session.Session) SessionDetail {
+// sessionDetailOf is s as read through id, which keeps the "<server>:" prefix
+// of a session on a server.
+func sessionDetailOf(id string, s session.Session) SessionDetail {
+	server := serverOf(id)
 	return SessionDetail{
-		ID:             s.ID,
+		Server:         server,
+		ID:             qualified(server, s.ID),
 		Name:           s.Name,
-		Slug:           s.Slug,
+		Slug:           qualified(server, s.Slug),
 		Repo:           s.Remote,
 		State:          string(s.State),
 		Path:           s.Path,
@@ -80,6 +124,22 @@ func sessionDetailOf(s session.Session) SessionDetail {
 		CreatedAt:      s.CreatedAt,
 		UpdatedAt:      s.UpdatedAt,
 	}
+}
+
+// serverOf is the server an id from the Code view names, "" for a local id.
+func serverOf(id string) string {
+	server, _, found := strings.Cut(id, ":")
+	if !found {
+		return ""
+	}
+	return server
+}
+
+func qualified(server, value string) string {
+	if server == "" {
+		return value
+	}
+	return server + ":" + value
 }
 
 // SessionGitStatus is one session's checkout as the session status bar reads

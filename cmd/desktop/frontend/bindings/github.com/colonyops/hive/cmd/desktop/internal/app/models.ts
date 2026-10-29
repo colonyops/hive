@@ -7,6 +7,9 @@ import * as diagnostics$0 from "./diagnostics/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as hiveconf$0 from "./hiveconf/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as server$0 from "../../../../internal/domain/server/models.js";
 
 export interface ActionRunLocation {
     "itemId": number;
@@ -307,6 +310,18 @@ export enum PullRequestStatus {
 export interface ScratchTerminal {
     "slug": string;
     "name": string;
+}
+
+/**
+ * ServerStatus is a server under servers: as the last check found it.
+ */
+export interface ServerStatus {
+    "name": string;
+    "ssh": string;
+    "state": server$0.State;
+    "version"?: string;
+    "error"?: string;
+    "roundTripMs": number;
 }
 
 /**

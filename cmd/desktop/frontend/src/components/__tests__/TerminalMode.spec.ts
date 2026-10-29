@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   Available: vi.fn(),
   Scratch: vi.fn(),
   ListSessions: vi.fn(),
+  ListServerSessions: vi.fn(),
   On: vi.fn().mockReturnValue(() => {}),
   SessionStatuses: vi.fn(),
   SessionLaunchOptions: vi.fn(),
@@ -112,6 +113,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   ListSessions: mocks.ListSessions,
+  ListServerSessions: mocks.ListServerSessions,
   SessionStatuses: mocks.SessionStatuses,
   SessionLaunchOptions: mocks.SessionLaunchOptions,
   SessionDetail: mocks.SessionDetail,
@@ -322,6 +324,7 @@ describe('TerminalMode', () => {
     mocks.allSessions.mockResolvedValue([])
     mocks.Available.mockResolvedValue({ available: true, reason: '' })
     mocks.Scratch.mockResolvedValue({ slug: 'Scratch', name: 'Terminals' })
+    mocks.ListServerSessions.mockResolvedValue([])
     mocks.SessionLaunchOptions.mockResolvedValue({ agents: ['claude', 'codex'], defaultAgent: 'claude' })
     mocks.getTerminalEndpoint.mockResolvedValue({
       httpBaseURL: 'http://127.0.0.1:1',
@@ -627,8 +630,8 @@ describe('TerminalMode', () => {
     const { wrapper } = await mountAvailable()
     await wrapper.get('[data-testid="terminal-new-session"]').trigger('click')
     expect(mocks.openBlank).toHaveBeenCalledOnce()
-    // Nothing is attached yet, so there is no repository to inherit.
-    expect(mocks.openBlank).toHaveBeenCalledWith('')
+    // Nothing is attached yet, so there is no repository or server to inherit.
+    expect(mocks.openBlank).toHaveBeenCalledWith('', 'repository', undefined, '')
   })
 
   it('starts a new session in the attached session’s repository', async () => {
@@ -637,7 +640,49 @@ describe('TerminalMode', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="terminal-new-session"]').trigger('click')
-    expect(mocks.openBlank).toHaveBeenCalledWith('hay-kot/hive')
+    expect(mocks.openBlank).toHaveBeenCalledWith('hay-kot/hive', 'repository', undefined, '')
+  })
+
+  it('lists each server with its sessions, and an offline one with its reason', async () => {
+    mocks.ListServerSessions.mockResolvedValue([
+      {
+        server: 'box',
+        ssh: 'ada@box',
+        state: 'connected',
+        error: '',
+        sessions: [
+          {
+            server: 'box',
+            id: 'box:9',
+            name: 'remote work',
+            slug: 'box:remote-work',
+            repo: '/home/hive/repo.git',
+            repoIdentity: '/home/hive/repo.git',
+            state: 'active',
+            canvasOwner: '',
+            tags: [],
+            createdAt: '',
+          },
+        ],
+      },
+      { server: 'down', ssh: 'down', state: 'offline', error: 'ssh: connect refused', sessions: [] },
+    ])
+    const { wrapper } = await mountAvailable()
+
+    const groups = wrapper.findAll('[data-testid="terminal-server-group"]')
+    expect(groups.map((group) => [group.attributes('data-repo'), group.attributes('data-server-state')])).toEqual([
+      ['server:box', 'connected'],
+      ['server:down', 'offline'],
+    ])
+    for (const group of groups) if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
+    expect(wrapper.find('[data-slug="box:remote-work"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="terminal-server-error"]').text()).toBe('ssh: connect refused')
+
+    // Only a connected server takes a new session.
+    const add = wrapper.findAll('[data-testid="terminal-server-new-session"]')
+    expect(add).toHaveLength(1)
+    await add[0].trigger('click')
+    expect(mocks.openBlank).toHaveBeenCalledWith('', 'repository', undefined, 'box')
   })
 
   it('starts a new session in the repository whose header was clicked', async () => {

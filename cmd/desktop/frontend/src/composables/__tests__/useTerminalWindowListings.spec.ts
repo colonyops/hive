@@ -10,6 +10,7 @@ function row(slug: string): TerminalSessionRow {
     name: slug,
     slug,
     repo: 'owner/repo',
+    server: '',
     repoIdentity: 'owner/repo',
     state: 'active',
     canvasOwner: '',

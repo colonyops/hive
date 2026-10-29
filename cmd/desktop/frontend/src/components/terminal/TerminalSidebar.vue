@@ -10,6 +10,7 @@ import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPinOff from '~icons/lucide/pin-off'
 import IconPlus from '~icons/lucide/plus'
 import IconRotateCw from '~icons/lucide/rotate-cw'
+import IconServer from '~icons/lucide/server'
 import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
@@ -36,7 +37,7 @@ import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
 import { moveId, type OrderDropTarget } from '../../lib/listOrder'
 import { terminalTreeFocused } from '../../lib/terminalTree'
 import { sessionAgeDays, useTerminalSessionAge } from '../../stores/useTerminalSessionAge'
-import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
+import type { TerminalSessionGroup, TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
@@ -126,6 +127,18 @@ function onChatMenuSelect(row: TerminalSessionRow, id: string): void {
   menus.openRow = ''
   if (id === 'unpin') tree.unpinSlug(row.slug)
   else if (id === 'open-in-agents') ops.openChatInAgents(row)
+}
+
+function groupTestid(group: TerminalSessionGroup): string {
+  if (group.kind === 'chats') return 'terminal-chats-group'
+  if (group.kind === 'server') return 'terminal-server-group'
+  return 'terminal-repo-group'
+}
+
+function serverStateClass(state: string): string {
+  if (state === 'connected') return 'text-severity-success'
+  if (state === 'incompatible') return 'text-severity-warning'
+  return 'text-severity-error'
 }
 
 function terminalState(row: TerminalSessionRow): 'running' | 'stopped' | undefined {
@@ -275,7 +288,14 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
       @escape="nav.focusTree"
       @keydown.down.prevent="nav.focusTree"
       @keydown.enter.prevent="nav.focusTree"
-      @new="openNewSession(tree.sessionRepository(pool.activeSlug))"
+      @new="
+        openNewSession(
+          tree.sessionRepository(pool.activeSlug),
+          'repository',
+          undefined,
+          tree.sessionServer(pool.activeSlug),
+        )
+      "
       @select="onSidebarMenuSelect"
     >
       <SessionFilterButton />
@@ -303,14 +323,22 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
             class="repo-group"
             role="button"
             tabindex="0"
-            :data-testid="group.kind === 'chats' ? 'terminal-chats-group' : 'terminal-repo-group'"
+            :data-testid="groupTestid(group)"
             :data-repo="group.key"
+            :data-server-state="group.server?.state"
             :aria-expanded="view.expansion.expanded(group)"
             @click="view.expansion.toggle(group)"
             @keydown.enter.self.prevent="view.expansion.toggle(group)"
             @keydown.space.self.prevent="view.expansion.toggle(group)"
           >
-            <span class="min-w-0 truncate text-body text-text">{{ group.name }}</span>
+            <IconServer
+              v-if="group.server"
+              class="size-3 shrink-0"
+              :class="serverStateClass(group.server.state)"
+              :aria-label="`Server ${group.server.state}`"
+              data-testid="terminal-server-state"
+            />
+            <span class="min-w-0 truncate text-body text-text" :title="group.server?.ssh">{{ group.name }}</span>
             <div class="group-trailing" @click.stop>
               <span
                 class="group-count font-mono text-caption"
@@ -325,6 +353,15 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                 class="row-action group-add"
                 data-testid="terminal-repo-new-session"
                 @click="openNewSession(group.sessions[0].repo)"
+              />
+              <IconButton
+                v-if="group.server?.state === 'connected'"
+                :label="`New session on ${group.name}`"
+                :icon="IconPlus"
+                size="sm"
+                class="row-action group-add"
+                data-testid="terminal-server-new-session"
+                @click="openNewSession('', 'repository', undefined, group.name)"
               />
             </div>
             <component
@@ -399,7 +436,19 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
           </template>
           <Transition name="tree-expand" v-bind="expandHooks">
             <div v-if="view.expansion.expanded(group)">
-              <TransitionGroup name="tree" tag="div" class="relative flex flex-col border-t border-border bg-app py-1">
+              <p
+                v-if="group.server && group.server.state !== 'connected'"
+                class="border-t border-border bg-app px-3 py-2 text-caption text-text-3"
+                data-testid="terminal-server-error"
+              >
+                {{ group.server.error || `Server ${group.name} is ${group.server.state}.` }}
+              </p>
+              <TransitionGroup
+                v-else
+                name="tree"
+                tag="div"
+                class="relative flex flex-col border-t border-border bg-app py-1"
+              >
                 <div v-for="row in group.sessions" :key="row.id">
                   <!-- Not a <button>: the row's menu toggle is one, and buttons cannot nest. -->
                   <div
@@ -426,7 +475,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                       :title="row.repo ? `${row.slug}\n${row.repo}` : row.slug"
                       >{{ row.name }}</span
                     >
-                    <SessionTagsIndicator v-if="group.kind === 'repo'" :tags="row.tags" />
+                    <SessionTagsIndicator v-if="group.kind === 'repo' || group.kind === 'server'" :tags="row.tags" />
                     <BaseBadge
                       v-if="sessionAgeBadges[row.id]"
                       tone="accent"
@@ -457,10 +506,10 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                         :running="tree.rowRunning(row)"
                         :flip="menus.newWindowFlip"
                         :ignore="[menus.newWindowToggle]"
-                        :agents="ops.agentProfiles"
+                        :agents="row.server ? [] : ops.agentProfiles"
                         :default-agent="ops.defaultAgentProfile"
-                        :loading="ops.agentProfilesLoading"
-                        :failed="ops.agentProfilesFailed"
+                        :loading="!row.server && ops.agentProfilesLoading"
+                        :failed="!row.server && ops.agentProfilesFailed"
                         @close="menus.openNewWindow = ''"
                         @terminal="ops.newWindowIn(row)"
                         @agent="ops.newAgentWindowIn(row, $event)"
@@ -501,7 +550,8 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                         v-else-if="menus.openRow === row.id"
                         :session="row"
                         :terminal="terminalState(row)"
-                        :extra="ops.sessionActionEntries"
+                        :remote="!!row.server"
+                        :extra="row.server ? [] : ops.sessionActionEntries"
                         :flip="menus.rowFlip"
                         :ignore="[menus.rowToggle(row.id)]"
                         @extra="ops.runSessionAction(row, $event)"

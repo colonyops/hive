@@ -1,3 +1,4 @@
+import { useIntervalFn } from '@vueuse/core'
 import { computed, onScopeDispose, watch } from 'vue'
 import { useSessionStatuses } from '../../composables/useSessionStatuses'
 import { useTerminalWindowListings } from '../../composables/useTerminalWindowListings'
@@ -29,6 +30,8 @@ export interface TreeWindowRow {
 
 export type TerminalTree = ReturnType<typeof useTerminalTree>
 
+const SERVER_POLL_MS = 30_000
+
 /**
  * The session tree's model: which rows exist, whether tmux is holding each one,
  * and the windows under them. Rows come from hive's listing, the scratch
@@ -46,8 +49,11 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     loading: sessionsLoading,
     loaded: sessionsLoaded,
     error: sessionsError,
-    reload: reloadSessions,
+    reload: reloadLocalSessions,
     sessionRepository,
+    sessionServer,
+    servers,
+    reloadServers,
   } = useTerminalSessions()
   const { rows: chatRows, slugs: chatSlugs, unpinSlug } = useTerminalPinnedChats()
   const { recents, reload: reloadRecents } = useAgentSessionsAll()
@@ -64,6 +70,9 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
   // recycled or corrupted one has no checkout left to open a terminal in. They
   // still arrive in the listing, which is what prune counts and acts on.
   const activeSessions = computed(() => sessionRows.value.filter((row) => row.state === 'active'))
+  const serverSessions = computed(() =>
+    servers.value.flatMap((list) => list.sessions.filter((row) => row.state === 'active')),
+  )
 
   // The scratch terminal and the pinned chats are part of this set rather than
   // beside it: the pool, the window sweep and the watcher that lets go of a
@@ -73,13 +82,22 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     ...chatRows.value,
     ...(scratchRow.value ? [scratchRow.value] : []),
     ...activeSessions.value,
+    ...serverSessions.value,
   ])
-  const sessionGroups = computed(() => terminalSessionGroups(activeSessions.value, scratchRow.value, chatRows.value))
+  const sessionGroups = computed(() =>
+    terminalSessionGroups(activeSessions.value, scratchRow.value, chatRows.value, servers.value),
+  )
   const attachedRow = computed(() => attachable.value.find((row) => row.slug === activeSlug.value) ?? null)
 
   // The tree has no other way to learn whether tmux is holding one of these, so
   // the sweep asks about them whatever "always show windows" says.
-  const alwaysSwept = computed(() => [...chatRows.value, ...(scratchRow.value ? [scratchRow.value] : [])])
+  // A server's sessions are swept too: hive's status projection is local, so
+  // the sweep is the one way to know whether a server's terminal runs.
+  const alwaysSwept = computed(() => [
+    ...chatRows.value,
+    ...(scratchRow.value ? [scratchRow.value] : []),
+    ...serverSessions.value,
+  ])
   const prunableCount = computed(() => sessionRows.value.filter((row) => row.state !== 'active').length)
 
   function isScratch(row: TerminalSessionRow): boolean {
@@ -92,6 +110,16 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
 
   function isHiveSession(row: TerminalSessionRow): boolean {
     return !isScratch(row) && !isChat(row)
+  }
+
+  /** A hive session on a server: no local checkout, agents, or status projection. */
+  function isServerSession(row: TerminalSessionRow): boolean {
+    return !!row.server
+  }
+
+  function reloadSessions(): Promise<void> {
+    void reloadServers()
+    return reloadLocalSessions()
   }
 
   // Not keyed on the attached slug: attaching cannot change another session's
@@ -120,11 +148,17 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
         return
       }
       void reloadRecents()
+      void reloadServers()
       startStatusPolling()
     },
     { immediate: true },
   )
   onScopeDispose(stopStatusPolling)
+
+  // Nothing tells this app that a session changed on a server, so the
+  // servers' lists are read again on a timer while the mode is on screen.
+  const serverPoll = useIntervalFn(() => void reloadServers(), SERVER_POLL_MS, { immediate: false })
+  watch(options.active, (active) => (active ? serverPoll.resume() : serverPoll.pause()), { immediate: true })
 
   // Session creation runs as a job, so jobs:updated is what lands a launched
   // session; sessions:updated covers the CLI writing hive.db from another process.
@@ -135,7 +169,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
   // scratch terminal or a pinned chat, so those read their liveness off the
   // window sweep and their own live attach.
   function rowRunning(row: TerminalSessionRow): boolean {
-    if (isHiveSession(row)) return !!sessionStatuses.value[row.id]?.running
+    if (isHiveSession(row) && !isServerSession(row)) return !!sessionStatuses.value[row.id]?.running
     if (sessionWindows.value[row.slug]?.length) return true
     const live = pool.get(row.slug)
     return !!live && live.status.value !== 'ended'
@@ -144,7 +178,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
   // Greyed only once its state is known: undefined until the first status poll
   // (or window sweep) lands.
   function rowIdle(row: TerminalSessionRow): boolean {
-    if (isHiveSession(row)) return sessionStatuses.value[row.id]?.running === false
+    if (isHiveSession(row) && !isServerSession(row)) return sessionStatuses.value[row.id]?.running === false
     return listingsSettled.value && !rowRunning(row)
   }
 
@@ -234,6 +268,9 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     isScratch,
     isChat,
     isHiveSession,
+    isServerSession,
+    serverSessions,
+    sessionServer,
     rowRunning,
     rowIdle,
     groupAttached,

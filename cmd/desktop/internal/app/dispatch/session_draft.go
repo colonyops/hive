@@ -17,6 +17,9 @@ import (
 // inbox items the form was drafted from; the core resolves their identities
 // and never takes item refs from a client.
 type CreateSessionRequest struct {
+	// Server names a server under servers: to create the session on. Empty
+	// means this machine.
+	Server     string  `json:"server,omitempty"`
 	Repository string  `json:"repository,omitempty"`
 	Workspace  string  `json:"workspace,omitempty"`
 	Name       string  `json:"name"`
@@ -30,6 +33,7 @@ type CreateSessionRequest struct {
 // ItemIDs are only meaningful for the second, which has to restore both
 // because the form they came from is gone.
 type SessionDraft struct {
+	Server     string  `json:"server,omitempty"`
 	Repository string  `json:"repository,omitempty"`
 	Workspace  string  `json:"workspace,omitempty"`
 	Name       string  `json:"name"`

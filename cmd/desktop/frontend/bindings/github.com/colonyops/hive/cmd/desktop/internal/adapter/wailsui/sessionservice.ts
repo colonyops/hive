@@ -89,6 +89,15 @@ export function ItemSessions(itemID: number): $CancellablePromise<app$0.ItemSess
 }
 
 /**
+ * ListServerSessions returns the sessions of each server under servers:, in
+ * config order. A server that did not answer has a state, an error, and no
+ * sessions. It is a call of its own so the local list never waits on ssh.
+ */
+export function ListServerSessions(): $CancellablePromise<$models.ServerSessions[] | null> {
+    return $Call.ByID(381432049);
+}
+
+/**
  * ListSessions returns every session in every state; Slug is the tmux target an
  * attach uses, and only an active session has one.
  */
@@ -132,6 +141,20 @@ export function RenderTerminalClipboardAction(actionID: string, target: dispatch
  */
 export function RevealSession(id: string): $CancellablePromise<void> {
     return $Call.ByID(945395014, id);
+}
+
+/**
+ * ServerLaunchOptions returns the New Session form's choices for a server.
+ */
+export function ServerLaunchOptions(server: string): $CancellablePromise<dispatch$0.SessionLaunchOptions> {
+    return $Call.ByID(1957319003, server);
+}
+
+/**
+ * Servers checks every server under servers: and returns its state.
+ */
+export function Servers(): $CancellablePromise<app$0.ServerStatus[] | null> {
+    return $Call.ByID(794598629);
 }
 
 /**

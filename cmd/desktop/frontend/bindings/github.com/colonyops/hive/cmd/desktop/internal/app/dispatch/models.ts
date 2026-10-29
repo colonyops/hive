@@ -41,6 +41,11 @@ export interface ClipboardExecutionOutcome {
  * and never takes item refs from a client.
  */
 export interface CreateSessionRequest {
+    /**
+     * Server names a server under servers: to create the session on. Empty
+     * means this machine.
+     */
+    "server"?: string;
     "repository"?: string;
     "workspace"?: string;
     "name": string;
@@ -111,6 +116,7 @@ export interface SessionCreateFailure {
  * because the form they came from is gone.
  */
 export interface SessionDraft {
+    "server"?: string;
     "repository"?: string;
     "workspace"?: string;
     "name": string;

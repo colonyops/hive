@@ -9,17 +9,20 @@ const hive: TerminalSessionRow = {
   name: 'parser',
   slug: 'parser',
   repo: 'r',
+  server: '',
   repoIdentity: 'r',
   state: 'active',
   canvasOwner: '',
   tags: [],
   createdAt: '',
 }
+const remote: TerminalSessionRow = { ...hive, server: 'box', id: 'box:1', slug: 'box:parser' }
 const scratch: TerminalSessionRow = {
   id: 's',
   name: 'Scratch',
   slug: 'scratch',
   repo: '',
+  server: '',
   repoIdentity: '',
   state: 'active',
   canvasOwner: '',
@@ -31,6 +34,7 @@ const chat: TerminalSessionRow = {
   name: 'chat',
   slug: 'agentws-1',
   repo: '',
+  server: '',
   repoIdentity: '',
   state: 'active',
   canvasOwner: '',
@@ -41,7 +45,8 @@ const chat: TerminalSessionRow = {
 function context(running: boolean): TerminalModeContext {
   return {
     tree: {
-      isHiveSession: (row: TerminalSessionRow) => row === hive,
+      isHiveSession: (row: TerminalSessionRow) => row === hive || row === remote,
+      isServerSession: (row: TerminalSessionRow) => !!row.server,
       isScratch: (row: TerminalSessionRow) => row === scratch,
       isChat: (row: TerminalSessionRow) => row === chat,
       rowRunning: () => running,
@@ -81,6 +86,17 @@ describe('attachedSessionCommands', () => {
     expect(ids(hive, false)).toContain('terminal:session:start')
     expect(ids(hive, false)).not.toContain('terminal:session:kill')
     expect(ids(hive, false)).not.toContain('terminal:session:agent:claude')
+  })
+
+  it("keeps a server session's own operations and drops what runs on this machine", () => {
+    expect(ids(remote, true)).toEqual([
+      'terminal:session:kill',
+      'terminal:session:detail',
+      'terminal:session:edit',
+      'terminal:session:recycle',
+      'terminal:session:delete',
+    ])
+    expect(ids(remote, false)).not.toContain('terminal:session:start')
   })
 
   it('gives the scratch terminal its terminal operations only', () => {

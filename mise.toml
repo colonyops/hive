@@ -234,7 +234,7 @@ run = "actionlint"
 # Everything CI runs, in one command. Needs Docker, Node, Python, and the
 # network.
 [tasks.ci]
-description = "Run every gate locally: Go, the desktop bindings and frontend, the drive server frontend, the site, the CLI integration and remote server tests, the smoke stack, and the desktop e2e suite"
+description = "Run every gate locally: Go, the desktop bindings and frontend, the drive server frontend, the site, the CLI integration and remote server tests, the smoke stack, and the desktop e2e suites"
 run = [
   { tasks = ["check:generate"] },
   { tasks = ["desktop:check:bindings", "check:adr", "desktop:check:migrations", "drive-server:check:migrations", "check:tidy"] },
@@ -249,6 +249,7 @@ run = [
   { tasks = ["cli:remote:test"] },
   { tasks = ["cli:smoke:test"] },
   { tasks = ["desktop:e2e"] },
+  { tasks = ["desktop:e2e:remote"] },
 ]
 
 # ── Repository tooling ───────────────────────────────────────────────────────

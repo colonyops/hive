@@ -1,5 +1,8 @@
 import { readonly, ref } from 'vue'
-import { ListSessions } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
+import {
+  ListServerSessions,
+  ListSessions,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { Scratch } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/terminalservice'
 import { repoDisplayName } from '../lib/repositories'
 import { defineStore } from './defineStore'
@@ -12,6 +15,12 @@ import { useResource } from './useResource'
  * recycled and corrupted ones are listed so they can be read and deleted.
  */
 export interface TerminalSessionRow {
+  /**
+   * The server under servers: the session is on, '' for this machine. A
+   * server's row has "<server>:" in front of its id and slug, which is how
+   * every id- and slug-keyed call reaches that server.
+   */
+  server: string
   id: string
   name: string
   slug: string
@@ -35,7 +44,16 @@ export interface TerminalSessionRow {
  * from tmux directly — and it is a closed union rather than a `pinned` flag
  * because the two non-repo kinds do not render alike.
  */
-export type TerminalSectionKind = 'chats' | 'scratch' | 'repo'
+export type TerminalSectionKind = 'chats' | 'scratch' | 'repo' | 'server'
+
+/** A server under servers: as the last session list found it. */
+export interface TerminalServer {
+  name: string
+  ssh: string
+  /** connected, offline, or incompatible. */
+  state: string
+  error: string
+}
 
 /** One group of the sidebar tree. */
 export interface TerminalSessionGroup {
@@ -43,6 +61,14 @@ export interface TerminalSessionGroup {
   name: string
   sessions: TerminalSessionRow[]
   kind: TerminalSectionKind
+  /** Set on a `server` group. */
+  server?: TerminalServer
+}
+
+/** One server's sessions, as ListServerSessions answers them. */
+export interface TerminalServerSessions {
+  server: TerminalServer
+  sessions: TerminalSessionRow[]
 }
 
 const CHATS_GROUP_KEY = 'chats'
@@ -89,8 +115,23 @@ export function terminalSessionGroups(
   rows: readonly TerminalSessionRow[],
   scratch: TerminalSessionRow | null,
   chats: TerminalSessionRow[],
+  servers: readonly { readonly server: TerminalServer; readonly sessions: readonly TerminalSessionRow[] }[] = [],
 ): TerminalSessionGroup[] {
   const groups = groupTerminalSessions(rows)
+  // A server is one section after the local repositories, in config order, and
+  // stays in the tree while it is offline so its state is in view.
+  for (const { server, sessions } of servers) {
+    const active = sessions
+      .filter((row) => row.state === 'active')
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+    groups.push({
+      key: `server:${server.name}`,
+      name: server.name,
+      sessions: active,
+      kind: 'server',
+      server: { ...server },
+    })
+  }
   if (scratch) groups.unshift({ key: SCRATCH_GROUP_KEY, name: scratch.name, sessions: [scratch], kind: 'scratch' })
   if (chats.length) groups.unshift({ key: CHATS_GROUP_KEY, name: 'Chats', sessions: chats, kind: 'chats' })
   return groups
@@ -116,6 +157,17 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
     { initial: [] as TerminalSessionRow[], errorFallback: 'Could not list sessions.' },
   )
 
+  // Apart from the local rows, so a slow or offline server never holds up the
+  // local tree. Each server answers within a few seconds or reports offline.
+  const servers = useResource(
+    async (): Promise<TerminalServerSessions[]> =>
+      ((await ListServerSessions()) ?? []).map((list) => ({
+        server: { name: list.server, ssh: list.ssh, state: list.state, error: list.error },
+        sessions: list.sessions ?? [],
+      })),
+    { initial: [] as TerminalServerSessions[], errorFallback: 'Could not list the sessions on servers.' },
+  )
+
   // Read once: it is a constant for the run. A failure leaves the tree without
   // its scratch section rather than without its sessions.
   async function loadScratch(): Promise<void> {
@@ -124,6 +176,7 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
       const declared = await Scratch()
       if (!declared?.slug) return
       scratch.value = {
+        server: '',
         id: declared.slug,
         name: declared.name,
         slug: declared.slug,
@@ -147,7 +200,19 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
    */
   function sessionRepository(slug: string): string {
     if (!slug) return ''
-    return rows.data.value.find((row) => row.slug === slug)?.repo ?? ''
+    const local = rows.data.value.find((row) => row.slug === slug)
+    if (local) return local.repo
+    for (const list of servers.data.value) {
+      const row = list.sessions.find((candidate) => candidate.slug === slug)
+      if (row) return row.repo
+    }
+    return ''
+  }
+
+  /** The server of the session at `slug`, '' for this machine. */
+  function sessionServer(slug: string): string {
+    const server = slug.includes(':') ? slug.slice(0, slug.indexOf(':')) : ''
+    return servers.data.value.some((list) => list.server.name === server) ? server : ''
   }
 
   return {
@@ -158,5 +223,9 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
     error: rows.error,
     reload: rows.reload,
     sessionRepository,
+    servers: readonly(servers.data),
+    serversError: servers.error,
+    reloadServers: servers.reload,
+    sessionServer,
   }
 })

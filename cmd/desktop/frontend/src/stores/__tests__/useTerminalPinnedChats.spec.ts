@@ -65,6 +65,7 @@ describe('useTerminalPinnedChats', () => {
 
     expect(rows.value).toEqual([
       {
+        server: '',
         id: 'agentws-7',
         name: 'api-refactor',
         slug: 'agentws-7',

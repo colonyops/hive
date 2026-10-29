@@ -38,6 +38,23 @@ func (s *SessionService) ListSessions(ctx context.Context) ([]SessionSummary, er
 	return sessionSummariesOf(s.sessions.CanonicalSpace, sessions), nil
 }
 
+// ListServerSessions returns the sessions of each server under servers:, in
+// config order. A server that did not answer has a state, an error, and no
+// sessions. It is a call of its own so the local list never waits on ssh.
+func (s *SessionService) ListServerSessions(ctx context.Context) []ServerSessions {
+	return serverSessionsOf(s.sessions.ListServerSessions(ctx))
+}
+
+// Servers checks every server under servers: and returns its state.
+func (s *SessionService) Servers(ctx context.Context) []app.ServerStatus {
+	return s.sessions.Servers(ctx)
+}
+
+// ServerLaunchOptions returns the New Session form's choices for a server.
+func (s *SessionService) ServerLaunchOptions(ctx context.Context, server string) (dispatch.SessionLaunchOptions, error) {
+	return s.sessions.ServerLaunchOptions(ctx, server)
+}
+
 // SessionStatuses returns the current terminal-detected agent state for each
 // active session.
 func (s *SessionService) SessionStatuses(ctx context.Context) (app.SessionStatusSnapshot, error) {
@@ -50,7 +67,7 @@ func (s *SessionService) SessionDetail(ctx context.Context, id string) (SessionD
 	if err != nil {
 		return SessionDetail{}, err
 	}
-	return sessionDetailOf(detail), nil
+	return sessionDetailOf(id, detail), nil
 }
 
 // SessionGitStatus reads the session's checkout for the session status bar.
@@ -131,6 +148,9 @@ func (s *SessionService) EditSession(ctx context.Context, id, name string, tags 
 	edited, err := s.sessions.EditSession(ctx, id, name, tags)
 	if err != nil {
 		return SessionSummary{}, err
+	}
+	if server := serverOf(id); server != "" {
+		return serverSummaryOf(server, edited), nil
 	}
 	return sessionSummaryOf(s.sessions.CanonicalSpace, edited), nil
 }

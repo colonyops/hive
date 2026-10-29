@@ -46,10 +46,21 @@ mkdir -p cmd/desktop/e2e/test-results cmd/desktop/e2e/screenshots
 # entrypoint treats a leading flag as Playwright options, so
 # `./run-docker.sh --grep foo --repeat-each 5` runs
 # `npx playwright test --grep foo --repeat-each 5`. No args = full suite.
-docker run --rm --init --network none --ipc=host \
+#
+# The remote lane (run-remote.sh) sets HIVE_DESKTOP_E2E_REMOTE_NETWORK and
+# HIVE_DESKTOP_E2E_REMOTE_STATE: the container then joins the ssh fixture's
+# network instead of none, and reads the fixture's keys from /remote.
+network=(--network none)
+remote=()
+if [[ -n "${HIVE_DESKTOP_E2E_REMOTE_NETWORK:-}" ]]; then
+  network=(--network "${HIVE_DESKTOP_E2E_REMOTE_NETWORK}")
+  remote=(--env HIVE_DESKTOP_E2E_REMOTE=1 --volume "${HIVE_DESKTOP_E2E_REMOTE_STATE:?}:/remote:ro")
+fi
+docker run --rm --init "${network[@]}" --ipc=host \
   --env HIVE_DESKTOP_E2E_HARNESS="${E2E_HARNESS_MARKER}" \
   --env PW_FAIL_ON_FLAKY \
   --env HIVE_PERF_SCALE \
+  ${remote[@]+"${remote[@]}"} \
   --volume "$(pwd)/cmd/desktop/e2e/test-results:/workspace/cmd/desktop/e2e/test-results" \
   --volume "$(pwd)/cmd/desktop/e2e/screenshots:/workspace/cmd/desktop/e2e/screenshots" \
   "${IMAGE_TAG}" "$@"

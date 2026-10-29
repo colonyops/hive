@@ -3,6 +3,7 @@ import type { InboxItem } from '../../types/feed'
 
 const mocks = vi.hoisted(() => ({
   SessionLaunchOptions: vi.fn(),
+  ServerLaunchOptions: vi.fn(),
   CreateSession: vi.fn(),
   NewSessionDraft: vi.fn(),
   FailedSessionDraft: vi.fn(),
@@ -10,12 +11,17 @@ const mocks = vi.hoisted(() => ({
   SessionDraftFromActivity: vi.fn(),
   pin: vi.fn(),
   pinWhenListed: vi.fn(),
+  servers: { value: [] as { server: { name: string; state: string } }[] },
+}))
+vi.mock('../../stores/useTerminalSessions', () => ({
+  useTerminalSessions: () => ({ servers: mocks.servers }),
 }))
 vi.mock('../../stores/useTerminalPinnedChats', () => ({
   useTerminalPinnedChats: () => ({ pin: mocks.pin, pinWhenListed: mocks.pinWhenListed }),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   SessionLaunchOptions: mocks.SessionLaunchOptions,
+  ServerLaunchOptions: mocks.ServerLaunchOptions,
   CreateSession: mocks.CreateSession,
   FailedSessionDraft: mocks.FailedSessionDraft,
   DismissFailedSession: mocks.DismissFailedSession,
@@ -25,6 +31,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   NewSessionDraft: mocks.NewSessionDraft,
 }))
 
+import { resetStores } from '../../stores/defineStore'
 import { resetNewSessionForTests, useNewSession } from '../useNewSession'
 import { resetToastsForTests, useToasts } from '../useToasts'
 
@@ -65,12 +72,52 @@ beforeEach(() => {
   vi.clearAllMocks()
   resetToastsForTests()
   resetNewSessionForTests()
+  resetStores()
+  mocks.servers.value = []
   mocks.SessionLaunchOptions.mockResolvedValue(options)
   mocks.FailedSessionDraft.mockResolvedValue({ repository: '', name: '', prompt: '' })
   mocks.DismissFailedSession.mockResolvedValue(undefined)
 })
 
 describe('useNewSession', () => {
+  it('offers the connected servers and creates on the one chosen, with its own options', async () => {
+    mocks.servers.value = [
+      { server: { name: 'box', state: 'connected' } },
+      { server: { name: 'down', state: 'offline' } },
+    ]
+    const boxOptions = { ...options, workspaces: [], defaultRepository: '/home/hive/repo.git', agents: ['testbash'] }
+    mocks.ServerLaunchOptions.mockResolvedValue(boxOptions)
+    mocks.CreateSession.mockResolvedValue(1)
+    const s = useNewSession()
+
+    await s.openBlank()
+    expect(s.servers.value).toEqual(['box'])
+    expect(s.server.value).toBe('')
+
+    await s.selectServer('box')
+    expect(mocks.ServerLaunchOptions).toHaveBeenCalledWith('box')
+    expect(s.options.value).toEqual(boxOptions)
+
+    await s.submit({ repository: '/home/hive/repo.git', name: 'remote-one' })
+    expect(mocks.CreateSession).toHaveBeenCalledWith(expect.objectContaining({ server: 'box', name: 'remote-one' }))
+    expect(useToasts().toasts.value.at(-1)?.message).toBe('Creating session remote-one on box…')
+  })
+
+  it('opens on a server when asked, and keeps this machine when the server cannot answer', async () => {
+    mocks.ServerLaunchOptions.mockResolvedValueOnce(options)
+    const s = useNewSession()
+    await s.openBlank('', 'repository', undefined, 'box')
+    expect(s.server.value).toBe('box')
+    expect(s.servers.value).toEqual(['box'])
+    s.cancel()
+
+    mocks.ServerLaunchOptions.mockRejectedValueOnce(new Error('ssh: connect refused'))
+    await s.openBlank()
+    await s.selectServer('box')
+    expect(s.server.value).toBe('')
+    expect(s.error.value).toBe('ssh: connect refused')
+  })
+
   it('opens blank with the default repository', async () => {
     const s = useNewSession()
     await s.openBlank()
@@ -240,6 +287,7 @@ describe('useNewSession', () => {
     await s.openBlank()
     await s.submit({ repository: 'acme/site', name: 'fix-crash', prompt: 'go', agent: 'claude' })
     expect(mocks.CreateSession).toHaveBeenCalledWith({
+      server: '',
       repository: 'acme/site',
       workspace: '',
       name: 'fix-crash',
@@ -258,6 +306,7 @@ describe('useNewSession', () => {
     await s.openFromItem(item)
     await s.submit({ workspace: 'alerts', name: 'incident', prompt: 'Alert context' })
     expect(mocks.CreateSession).toHaveBeenCalledWith({
+      server: '',
       repository: '',
       workspace: 'alerts',
       name: 'incident',

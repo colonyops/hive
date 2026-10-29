@@ -22,6 +22,12 @@ import (
 // client.
 func runTestDaemon(t *testing.T, mux *fakeMux) *daemonclient.Client {
 	t.Helper()
+	return daemonclient.New(daemonclient.Options{Dialer: daemonclient.UnixDialer(runTestDaemonSocket(t, mux)), Logger: zerolog.Nop()})
+}
+
+// runTestDaemonSocket is runTestDaemon's daemon, answered by its socket path.
+func runTestDaemonSocket(t *testing.T, mux *fakeMux) string {
+	t.Helper()
 	dataDir := t.TempDir()
 	ctx, cancel := context.WithCancel(t.Context())
 	ready := make(chan string, 1)
@@ -44,13 +50,13 @@ func runTestDaemon(t *testing.T, mux *fakeMux) *daemonclient.Client {
 	})
 	select {
 	case socket := <-ready:
-		return daemonclient.New(daemonclient.Options{Dialer: daemonclient.UnixDialer(socket), Logger: zerolog.Nop()})
+		return socket
 	case err := <-done:
 		t.Fatalf("daemon exited before it listened: %v", err)
 	case <-time.After(5 * time.Second):
 		t.Fatal("daemon did not start listening")
 	}
-	return nil
+	return ""
 }
 
 func TestSessionsServiceRunsOverTheDaemon(t *testing.T) {

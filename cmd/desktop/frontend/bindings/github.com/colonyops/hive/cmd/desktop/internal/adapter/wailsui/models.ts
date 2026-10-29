@@ -594,18 +594,22 @@ export interface RuntimeStats {
     "go": procstats$0.GoRuntime;
 }
 
-export interface SessionCondition {
-    "field": string;
-    "op": string;
-    "values"?: string[] | null;
-    "value"?: string;
-    "days"?: number;
+/**
+ * ServerSessions is one server's rows for the Code view.
+ */
+export interface ServerSessions {
+    "server": string;
+    "ssh": string;
+    "state": string;
+    "error": string;
+    "sessions": SessionSummary[] | null;
 }
 
 /**
  * SessionDetail is one session read in full, for a detail view.
  */
 export interface SessionDetail {
+    "server": string;
     "id": string;
     "name": string;
     "slug": string;
@@ -617,11 +621,6 @@ export interface SessionDetail {
     "tags": string[] | null;
     "createdAt": string;
     "updatedAt": string;
-}
-
-export interface SessionFilter {
-    "match": string;
-    "conditions": SessionCondition[] | null;
 }
 
 /**
@@ -654,9 +653,14 @@ export interface SessionGitStatus {
 
 /**
  * SessionSummary is the session row shown in Code. CreatedAt starts with the
- * current logical session even when Hive reuses an older clone.
+ * current logical session even when Hive reuses an older clone record.
+ * 
+ * A session on a server has Server set, and its ID and Slug carry the
+ * "<server>:" prefix, so every id-keyed call and every terminal call reaches
+ * that server. The local rows leave Server empty.
  */
 export interface SessionSummary {
+    "server": string;
     "id": string;
     "name": string;
     "slug": string;
@@ -666,16 +670,6 @@ export interface SessionSummary {
     "canvasOwner": string;
     "tags": string[] | null;
     "createdAt": string;
-}
-
-/**
- * SessionView is a saved Code tab view. Field and Op values pass through
- * unchecked; the frontend owns their meaning.
- */
-export interface SessionView {
-    "id": string;
-    "name": string;
-    "filter": SessionFilter;
 }
 
 /**

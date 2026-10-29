@@ -6,6 +6,8 @@
 #   test [...]  run the Go tests against a fresh fixture, then remove it
 #   run [...]   run the Go tests against the fixture that up started
 #   down        remove the fixture
+#   network     print the Docker network the servers are on, for a client
+#               container that reaches them by name (server-a:22)
 #
 # test and run pass their arguments to go test, for example -run TestProbe.
 # The tests build the client hive from source on every run; the servers run
@@ -71,8 +73,9 @@ case "$cmd" in
     ;;
   run) gotest "$@" ;;
   down) down ;;
+  network) echo "${HIVE_REMOTE_PROJECT}_default" ;;
   *)
-    echo "usage: run.sh up|test|run|down [go test args]" >&2
+    echo "usage: run.sh up|test|run|down|network [go test args]" >&2
     exit 2
     ;;
 esac

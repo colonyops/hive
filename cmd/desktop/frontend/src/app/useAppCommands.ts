@@ -63,7 +63,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   const report = useReportDialog()
   const newSession = useNewSession()
   const terminalFont = useTerminalFont()
-  const { sessionRepository } = useTerminalSessions()
+  const { sessionRepository, sessionServer } = useTerminalSessions()
 
   // Mounted on first use and then only hidden, because hiding it must not end
   // the shell inside it. It opens where the terminal on screen is, else in the
@@ -161,7 +161,13 @@ export function useAppCommands(deps: AppCommandDeps) {
     'terminal.focus-pane-down': () => focusTerminalPaneDirection('down'),
     'agents.focus-sidebar': () => revealSidebar(agentsSidebarCollapsed, focusAgentsList),
     'agents.focus-pane': focusAgentsPane,
-    'session.new': () => newSession.openBlank(sessionRepository(onScreenSessionSlug.value)),
+    'session.new': () =>
+      newSession.openBlank(
+        sessionRepository(onScreenSessionSlug.value),
+        'repository',
+        undefined,
+        sessionServer(onScreenSessionSlug.value),
+      ),
     'window.hide': feed.hideWindow,
     'view.go-inbox': () => appMode.setMode('hub'),
     'view.go-code': () => appMode.setMode('terminal'),
