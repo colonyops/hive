@@ -205,7 +205,7 @@ func (s *SessionsService) startServerTmuxSession(ctx context.Context, server, sl
 	}
 	sessions, err := api.ListSessions(ctx)
 	if err != nil {
-		return multiplexer.LaunchResult{}, Wrap(err, KindUnavailable, "reading the sessions of server %q", server)
+		return multiplexer.LaunchResult{}, serverError(err, KindUnavailable, "reading the sessions of server %q", server)
 	}
 	for _, sess := range sessions {
 		if sess.Slug != slug {
@@ -214,9 +214,9 @@ func (s *SessionsService) startServerTmuxSession(ctx context.Context, server, sl
 		result, err := api.StartTmuxSession(ctx, sess.ID)
 		switch {
 		case errors.Is(err, session.ErrNotActive):
-			return multiplexer.LaunchResult{}, Wrap(err, KindConflict, "session %q on server %q", sess.Name, server)
+			return multiplexer.LaunchResult{}, serverError(err, KindConflict, "session %q on server %q", sess.Name, server)
 		case err != nil:
-			return multiplexer.LaunchResult{}, Wrap(err, KindUnavailable, "starting session %q on server %q", sess.Name, server)
+			return multiplexer.LaunchResult{}, serverError(err, KindUnavailable, "starting session %q on server %q", sess.Name, server)
 		}
 		return result, nil
 	}
