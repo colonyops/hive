@@ -114,6 +114,7 @@ func (a *App) TargetServer(name string) error {
 	if !ok {
 		return fmt.Errorf("no server named %q under servers: in config.yaml", name)
 	}
+	server.CopyStderrTo(os.Stderr)
 	a.sessions = server.Client()
 	a.targetServer = name
 	return nil

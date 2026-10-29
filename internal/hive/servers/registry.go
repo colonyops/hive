@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"sync"
@@ -23,9 +24,9 @@ import (
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
-// CallTimeout bounds each unary call to a server, so a slow server cannot
+// ReadTimeout bounds each read-only call to a server, so a slow server cannot
 // block a list of local sessions.
-const CallTimeout = 10 * time.Second
+const ReadTimeout = 10 * time.Second
 
 type Registry struct {
 	local   sessionapi.API
@@ -44,7 +45,8 @@ func New(logger zerolog.Logger, local sessionapi.API, configs []config.ServerCon
 }
 
 // Local is the session API for this machine: the local daemon with
-// experimental.daemon on, else the engine in this process.
+// experimental.daemon on, else the engine in this process. It is nil for a
+// client that starts no engine, such as the hive servers commands.
 func (r *Registry) Local() sessionapi.API {
 	return r.local
 }
@@ -121,7 +123,7 @@ func newServer(logger zerolog.Logger, cfg config.ServerConfig) *Server {
 			s.stderr.reset()
 			return sshdial.DialStdio(ctx, host, s.stderr)
 		},
-		CallTimeout: CallTimeout,
+		ReadTimeout: ReadTimeout,
 	})
 	return s
 }
@@ -166,6 +168,14 @@ func (s *Server) Check(ctx context.Context) Status {
 	return status
 }
 
+// CopyStderrTo also writes ssh's stderr to w, for a CLI command whose
+// errors would otherwise show only a closed connection.
+func (s *Server) CopyStderrTo(w io.Writer) {
+	s.stderr.mu.Lock()
+	defer s.stderr.mu.Unlock()
+	s.stderr.copyTo = w
+}
+
 // Explain adds ssh's last stderr line to err, since a failed ssh shows up
 // only as a closed connection.
 func (s *Server) Explain(err error) error {
@@ -177,13 +187,17 @@ func (s *Server) Explain(err error) error {
 
 // tailBuffer keeps the last 4 KiB written to it.
 type tailBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
+	mu     sync.Mutex
+	buf    bytes.Buffer
+	copyTo io.Writer
 }
 
 func (b *tailBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.copyTo != nil {
+		_, _ = b.copyTo.Write(p)
+	}
 	b.buf.Write(p)
 	if over := b.buf.Len() - 4096; over > 0 {
 		b.buf.Next(over)

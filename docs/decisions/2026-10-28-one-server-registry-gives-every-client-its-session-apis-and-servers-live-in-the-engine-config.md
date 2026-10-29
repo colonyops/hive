@@ -28,10 +28,11 @@ connection to each server and a state it can show for a server that is down.
   `offline`, with ssh's last stderr line as the reason. `incompatible` is
   reserved for the version check of #742. `connecting` means no check has
   answered yet.
-- **A timeout for each call.** Unary calls to a server stop after
-  `servers.CallTimeout`, so a slow server cannot block a list of local
-  sessions. Streams, such as a create that clones a repository, have no
-  bound.
+- **A timeout for each read.** Read-only calls to a server stop after
+  `servers.ReadTimeout`, so a slow server cannot block a list of local
+  sessions. Calls that change sessions have no bound: the deadline reaches
+  the server, and a delete stopped after it removed the clone leaves the
+  session row behind.
 
 ## Consequences
 
@@ -39,5 +40,7 @@ connection to each server and a state it can show for a server that is down.
   Its Code view does not show servers yet (#749).
 - `hive servers` gives no engine to the registry, so `Local` is nil for those
   commands.
+- `--server` copies ssh's stderr to the terminal, so a failed ssh shows its
+  reason. The registry keeps the copy off for Desktop and the TUI.
 - A server's state changes only on `Check`. A failed session call does not
   mark the server offline.

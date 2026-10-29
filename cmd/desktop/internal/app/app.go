@@ -215,8 +215,7 @@ type App struct {
 	sessions sessionapi.API
 	// hiveDaemon is set when experimental.daemon routes sessions to it.
 	hiveDaemon *daemonclient.Client
-	// hiveServers is the registry of servers under servers:. A reload
-	// replaces it, so the Code view (#749) reads the current one.
+	// A config reload swaps in a new registry, so load it on each use.
 	hiveServers atomic.Pointer[servers.Registry]
 	hiveRuntime *hive.Runtime
 	launcher    *dispatch.RepositoryLauncher

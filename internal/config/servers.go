@@ -41,13 +41,3 @@ func (c *Config) validateServers() error {
 	}
 	return errs.ToError()
 }
-
-// Server finds a configured server by name.
-func (c *Config) Server(name string) (ServerConfig, bool) {
-	for _, server := range c.Servers {
-		if server.Name == name {
-			return server, true
-		}
-	}
-	return ServerConfig{}, false
-}

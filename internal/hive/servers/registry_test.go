@@ -46,3 +46,16 @@ func TestCheckReportsAnOfflineServerWithTheSSHError(t *testing.T) {
 	box, _ := r.Server("box")
 	assert.Equal(t, statuses[0], box.Status())
 }
+
+func TestCheckDropsTheSSHErrorOfAnEarlierDial(t *testing.T) {
+	failingSSH(t, "first failure")
+	r := New(zerolog.Nop(), nil, []config.ServerConfig{{Name: "box", SSH: "box"}})
+	box, _ := r.Server("box")
+	require.Contains(t, box.Check(t.Context()).Error, "first failure")
+
+	failingSSH(t, "")
+	status := box.Check(t.Context())
+
+	assert.Equal(t, server.StateOffline, status.State)
+	assert.NotContains(t, status.Error, "first failure")
+}

@@ -225,23 +225,45 @@ func TestStatusAvailableRetriesAHelloThatFailed(t *testing.T) {
 	assert.Equal(t, int32(1), server.calls.Load())
 }
 
-// stuckServer answers List only when the caller gives up.
-type stuckServer struct {
+// slowServer blocks List until the caller gives up, and answers Delete and
+// Recycle only after slow.
+type slowServer struct {
 	daemonv1connect.UnimplementedSessionServiceHandler
+	slow time.Duration
 }
 
-func (stuckServer) List(ctx context.Context, _ *connect.Request[daemonv1.ListRequest]) (*connect.Response[daemonv1.ListResponse], error) {
+func (slowServer) List(ctx context.Context, _ *connect.Request[daemonv1.ListRequest]) (*connect.Response[daemonv1.ListResponse], error) {
 	<-ctx.Done()
 	return nil, ctx.Err()
 }
 
-func TestClientCallTimeoutBoundsAUnaryCall(t *testing.T) {
-	path := socketPath(t)
-	serve(t, path, stuckServer{}, 0)
-	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop(), CallTimeout: 100 * time.Millisecond})
+func (s slowServer) Delete(ctx context.Context, _ *connect.Request[daemonv1.DeleteRequest]) (*connect.Response[daemonv1.DeleteResponse], error) {
+	select {
+	case <-time.After(s.slow):
+		return connect.NewResponse(&daemonv1.DeleteResponse{}), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
 
-	began := time.Now()
+func (s slowServer) Recycle(ctx context.Context, _ *connect.Request[daemonv1.RecycleRequest], stream *connect.ServerStream[daemonv1.RecycleResponse]) error {
+	select {
+	case <-time.After(s.slow):
+		return stream.Send(&daemonv1.RecycleResponse{ProgressLine: "done"})
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func TestClientReadTimeoutBoundsOnlyReads(t *testing.T) {
+	const timeout = 50 * time.Millisecond
+	path := socketPath(t)
+	serve(t, path, slowServer{slow: 4 * timeout}, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop(), ReadTimeout: timeout})
+
 	_, err := client.ListSessions(t.Context())
-	require.Error(t, err)
-	assert.Less(t, time.Since(began), 5*time.Second)
+	assert.Equal(t, connect.CodeDeadlineExceeded, connect.CodeOf(err))
+
+	require.NoError(t, client.DeleteSession(t.Context(), "s1"), "a delete outlives the read timeout")
+	require.NoError(t, client.RecycleSession(t.Context(), "s1", nil), "a stream outlives the read timeout")
 }

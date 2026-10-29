@@ -50,10 +50,11 @@ type Options struct {
 	// AutoStart starts a daemon when a dial finds none. nil never starts one,
 	// as for a remote daemon or `hive daemon status --no-start`.
 	AutoStart func(ctx context.Context) error
-	// CallTimeout bounds each unary call that has no earlier deadline, so a
-	// slow remote daemon cannot block a caller. Zero sets no bound. Streams,
-	// such as a create that clones a repository, are never bounded.
-	CallTimeout time.Duration
+	// ReadTimeout bounds each read-only call, so a slow remote daemon cannot
+	// block a caller. Zero sets no bound. Calls that change sessions are never
+	// bounded: the deadline reaches the daemon, and a delete cut off after it
+	// removed the clone would leave the session's row behind.
+	ReadTimeout time.Duration
 }
 
 // baseURL is never resolved: every connection goes through the Dialer.
@@ -97,17 +98,30 @@ func New(opts Options) *Client {
 		},
 	}}
 	var clientOpts []connect.ClientOption
-	if opts.CallTimeout > 0 {
-		clientOpts = append(clientOpts, connect.WithInterceptors(callTimeout(opts.CallTimeout)))
+	if opts.ReadTimeout > 0 {
+		clientOpts = append(clientOpts, connect.WithInterceptors(readTimeout(opts.ReadTimeout)))
 	}
 	c.sessions = daemonv1connect.NewSessionServiceClient(c.httpClient, baseURL, clientOpts...)
 	c.control = daemonv1connect.NewDaemonServiceClient(c.httpClient, baseURL, clientOpts...)
 	return c
 }
 
-func callTimeout(timeout time.Duration) connect.UnaryInterceptorFunc {
+var readProcedures = map[string]bool{
+	daemonv1connect.DaemonServiceHelloProcedure:          true,
+	daemonv1connect.DaemonServiceHealthProcedure:         true,
+	daemonv1connect.SessionServiceListProcedure:          true,
+	daemonv1connect.SessionServiceGetProcedure:           true,
+	daemonv1connect.SessionServiceRiskProcedure:          true,
+	daemonv1connect.SessionServiceLaunchOptionsProcedure: true,
+	daemonv1connect.SessionServiceStatusesProcedure:      true,
+}
+
+func readTimeout(timeout time.Duration) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			if !readProcedures[req.Spec().Procedure] {
+				return next(ctx, req)
+			}
 			ctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 			return next(ctx, req)
