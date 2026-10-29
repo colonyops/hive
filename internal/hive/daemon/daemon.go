@@ -126,6 +126,8 @@ func Run(ctx context.Context, opts Options) error {
 		stop:      stop,
 		logger:    logger,
 		loop:      loop.health,
+		// Only the OS service units pass WaitLock.
+		supervised: opts.WaitLock,
 	}
 
 	mux := http.NewServeMux()

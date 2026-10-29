@@ -217,6 +217,8 @@ type App struct {
 	hiveDaemon *daemonclient.Client
 	// A config reload swaps in a new fleet, so load it on each use.
 	hiveServers atomic.Pointer[servers.Fleet]
+	// hiveVersion is this build's version, which a server version error names.
+	hiveVersion string
 	hiveRuntime *hive.Runtime
 	launcher    *dispatch.RepositoryLauncher
 
@@ -1303,7 +1305,8 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	} else {
 		a.sessions = sessionapi.NewLocal(a.hive)
 	}
-	a.hiveServers.Store(servers.New(a.logger, a.sessions, hiveCfg.Servers))
+	a.hiveVersion = cfg.Build.Version
+	a.hiveServers.Store(servers.New(a.logger, a.sessions, hiveCfg.Servers, a.hiveVersion))
 	logDroppedHiveEvents(a.logger, hiveRuntime.Bus())
 	forwardDriveChanges(ctx, hiveRuntime.Bus(), a.Events)
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
@@ -1462,7 +1465,7 @@ func (a *App) ReloadHiveRuntime(ctx context.Context) error {
 		}
 	}
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
-	if old := a.hiveServers.Swap(servers.New(a.logger, a.sessions, hiveCfg.Servers)); old != nil {
+	if old := a.hiveServers.Swap(servers.New(a.logger, a.sessions, hiveCfg.Servers, a.hiveVersion)); old != nil {
 		old.Close()
 	}
 	return nil

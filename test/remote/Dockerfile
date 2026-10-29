@@ -29,6 +29,9 @@ USER hive
 RUN git config --global user.name fixture \
     && git config --global user.email fixture@example.invalid \
     && git config --global init.defaultBranch main \
+    # Debian's ~/.profile adds this directory to PATH in a login shell only,
+    # so a test can tell the login PATH from the PATH of a bare ssh command.
+    && mkdir -p /home/hive/.local/bin \
     && git init -q --bare /home/hive/repo.git \
     && git clone -q /home/hive/repo.git /tmp/seed \
     && git -C /tmp/seed commit -q --allow-empty -m seed \

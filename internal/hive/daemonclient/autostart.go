@@ -66,6 +66,9 @@ func noDaemon(err error) bool {
 func (c *Client) Dial(ctx context.Context) (net.Conn, error) { return c.dial(ctx) }
 
 func (c *Client) dial(ctx context.Context) (net.Conn, error) {
+	if c.protocol != nil {
+		c.protocol.reset()
+	}
 	conn, err := c.dialer(ctx)
 	if err == nil || c.starter == nil || !noDaemon(err) {
 		return conn, err

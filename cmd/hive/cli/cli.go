@@ -253,7 +253,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				hiveApp.Build = hiveBuildInfo()
 				// No engine, so no local session API: these commands reach
 				// only the daemon on this machine or on a server.
-				hiveApp.Servers = servers.New(logger, nil, cfg.Servers)
+				hiveApp.Servers = servers.New(logger, nil, cfg.Servers, version)
 				return ctx, nil
 			}
 
@@ -331,6 +331,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			// Populate the pre-allocated App struct (commands already hold a pointer to it)
 			*hiveApp = *app.NewApp(logger, engine, cfg, tmuxClient, pluginMgr, commandSet, pluginInfos, flags.ConfigPath)
 			hiveApp.Build = hiveBuildInfo()
+			hiveApp.Servers = servers.New(logger, hiveApp.SessionAPI(), cfg.Servers, version)
 			hiveApp.Sources = app.BuildSourceRegistry(logger, cfg, exec, kvStore)
 			if flags.TargetServer != "" {
 				if err := hiveApp.TargetServer(flags.TargetServer); err != nil {

@@ -72,6 +72,12 @@ type Options struct {
 	// FailureDetail adds the transport's reason to an error, such as the last
 	// line ssh printed.
 	FailureDetail func() string
+	// CheckProtocol refuses every call to a daemon whose protocol this
+	// client does not support, with an error that names ClientVersion and
+	// the daemon's version. A remote daemon can be any version; a local one
+	// is the binary that spawned it.
+	CheckProtocol bool
+	ClientVersion string
 }
 
 // baseURL is never resolved: every connection goes through the Dialer.
@@ -84,6 +90,7 @@ type Client struct {
 	logger     zerolog.Logger
 	dialer     Dialer
 	starter    *starter
+	protocol   *protocolGate
 	httpClient *http.Client
 	sessions   daemonv1connect.SessionServiceClient
 	control    daemonv1connect.DaemonServiceClient
@@ -138,7 +145,15 @@ func New(opts Options) *Client {
 			return &countedConn{Conn: conn, closed: func() { c.openConns.Add(-1) }}, nil
 		},
 	}}
-	clientOpts := []connect.ClientOption{connect.WithInterceptors(c.explainFailures(), c.callTimeouts())}
+	interceptors := []connect.Interceptor{c.explainFailures()}
+	if opts.CheckProtocol {
+		c.protocol = &protocolGate{client: c, clientVersion: opts.ClientVersion}
+		interceptors = append(interceptors, c.protocol)
+	}
+	// Inside the gate: its Hello has its own limit, so connecting on a slow link
+	// does not use up the limit of the call behind it.
+	interceptors = append(interceptors, c.callTimeouts())
+	clientOpts := []connect.ClientOption{connect.WithInterceptors(interceptors...)}
 	c.sessions = daemonv1connect.NewSessionServiceClient(c.httpClient, baseURL, clientOpts...)
 	c.control = daemonv1connect.NewDaemonServiceClient(c.httpClient, baseURL, clientOpts...)
 	return c
@@ -199,10 +214,19 @@ func (c *Client) HTTPClient() *http.Client { return c.httpClient }
 
 type Info struct {
 	Version         string
+	ProtocolVersion int
 	PID             int
 	DataDir         string
 	StartedAt       time.Time
 	StatusAvailable bool
+}
+
+// AgentCheck is where the daemon finds an agent profile's command. Path is
+// empty when the command is not on the daemon's PATH.
+type AgentCheck struct {
+	Profile string
+	Command string
+	Path    string
 }
 
 type StatusLoopHealth struct {
@@ -213,6 +237,8 @@ type StatusLoopHealth struct {
 }
 
 type Health struct {
+	Supervised      bool
+	Agents          []AgentCheck
 	DBOK            bool
 	DBError         string
 	TmuxOK          bool
@@ -223,9 +249,15 @@ type Health struct {
 
 // Hello also refreshes the cached answer StatusAvailable gives.
 func (c *Client) Hello(ctx context.Context) (Info, error) {
-	resp, err := retryRead(func() (*connect.Response[daemonv1.HelloResponse], error) {
-		return c.control.Hello(ctx, connect.NewRequest(&daemonv1.HelloRequest{}))
-	})
+	info, err := c.helloOnce(ctx)
+	if err != nil && transportFailure(err) {
+		return c.helloOnce(ctx)
+	}
+	return info, err
+}
+
+func (c *Client) helloOnce(ctx context.Context) (Info, error) {
+	resp, err := c.control.Hello(ctx, connect.NewRequest(&daemonv1.HelloRequest{}))
 	if err != nil {
 		return Info{}, wire.FromConnectError(err)
 	}
@@ -237,6 +269,7 @@ func (c *Client) Hello(ctx context.Context) (Info, error) {
 		DataDir:         msg.GetDataDir(),
 		StartedAt:       msg.GetStartedAt().AsTime().Local(),
 		StatusAvailable: msg.GetStatusAvailable(),
+		ProtocolVersion: int(msg.GetProtocolVersion()),
 	}, nil
 }
 
@@ -254,6 +287,10 @@ func (c *Client) Health(ctx context.Context) (Health, error) {
 		TmuxOK:          msg.GetTmuxOk(),
 		SessionsByState: map[string]int{},
 		Uptime:          msg.GetUptime().AsDuration(),
+		Supervised:      msg.GetSupervised(),
+	}
+	for _, agent := range msg.GetAgents() {
+		health.Agents = append(health.Agents, AgentCheck{Profile: agent.GetProfile(), Command: agent.GetCommand(), Path: agent.GetPath()})
 	}
 	for state, n := range msg.GetSessionsByState() {
 		health.SessionsByState[state] = int(n)

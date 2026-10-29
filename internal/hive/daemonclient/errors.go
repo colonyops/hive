@@ -37,6 +37,10 @@ func (c *Client) streamFailure(err error, procedure string, began time.Time) err
 }
 
 func (c *Client) explain(err error, procedure string, elapsed time.Duration) error {
+	var unreachable *wire.UnreachableError
+	if errors.As(err, &unreachable) {
+		return err
+	}
 	// The client's deadline travels with the call, so the daemon's own timeout
 	// can answer first. That is still a daemon that did not answer in time.
 	timedOut := connect.CodeOf(err) == connect.CodeDeadlineExceeded
