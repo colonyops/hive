@@ -114,7 +114,7 @@ func Run(ctx context.Context, opts Options) error {
 		onError:   metrics.loopErrors.Inc,
 	})
 	go loop.run(runCtx)
-	sessions := &sessionServer{api: api, logger: logger, statuses: loop.snapshot}
+	sessions := &sessionServer{api: api, logger: logger, statuses: loop.snapshot, gitStatuses: newGitStatusCache(api.GitStatuses)}
 	control := &controlServer{
 		runtime:   runtime,
 		api:       api,

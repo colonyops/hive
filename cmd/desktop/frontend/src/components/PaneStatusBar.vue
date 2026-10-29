@@ -13,10 +13,12 @@ withDefaults(
     path?: string
     error?: string
     editorTitle?: string
+    /** False for a checkout on another machine, which Finder cannot show. */
+    revealable?: boolean
     /** Prefix for this bar's test ids, so each area keeps its own. */
     testid: string
   }>(),
-  { label: '', path: '', error: '', editorTitle: '' },
+  { label: '', path: '', error: '', editorTitle: '', revealable: true },
 )
 
 defineEmits<{ 'open-editor': []; reveal: [] }>()
@@ -49,6 +51,7 @@ defineEmits<{ 'open-editor': []; reveal: [] }>()
       @click="$emit('open-editor')"
     />
     <IconButton
+      v-if="revealable"
       label="Show in Finder"
       :icon="IconFolderOpen"
       :data-testid="`${testid}-reveal`"
