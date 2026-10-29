@@ -1237,3 +1237,33 @@ func TestKeybindingHandler_PresetArgsReachAction(t *testing.T) {
 		assert.Equal(t, []string{"issues", "owner/repo"}, action.Args)
 	})
 }
+
+func TestKeybindingHandler_Resolve_RefusesLocalCommandsForAServerSession(t *testing.T) {
+	commands := map[string]config.UserCommand{
+		"Delete":   {Action: act.TypeDelete, Help: "delete"},
+		"TmuxOpen": {Action: act.TypeTmuxOpen, Help: "open"},
+		"open":     {Sh: "code {{ .Path }}", Help: "open in vscode"},
+	}
+	keybindings := map[string]config.Keybinding{
+		"d": {Cmd: "Delete"},
+		"t": {Cmd: "TmuxOpen"},
+		"o": {Cmd: "open"},
+	}
+	handler := NewKeybindingResolver(zerolog.Nop(), sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
+	onServer := session.Session{ID: "box:abc123", Name: "remote", Path: "/home/hive/x", State: session.StateActive}
+
+	shell, ok := handler.Resolve("o", onServer)
+	require.True(t, ok)
+	require.ErrorContains(t, shell.Err, "on server box")
+
+	for _, key := range []string{"d", "t"} {
+		a, ok := handler.Resolve(key, onServer)
+		require.True(t, ok, key)
+		require.NoError(t, a.Err, key)
+		assert.Equal(t, "box:abc123", a.SessionID)
+	}
+
+	local, ok := handler.Resolve("o", session.Session{ID: "abc123", Path: "/p", State: session.StateActive})
+	require.True(t, ok)
+	require.NoError(t, local.Err)
+}

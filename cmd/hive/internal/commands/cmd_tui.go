@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/tui"
 	hiveconfig "github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/hive/servers"
 	"github.com/colonyops/hive/pkg/profiler"
 )
 
@@ -79,6 +80,14 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	// Detect current repository remote for highlighting current repo
 	localRemote, _ := cmd.app.Sessions().DetectRemote(ctx, ".")
 
+	sessionAPI := cmd.app.SessionAPI()
+	var serverStates func() []servers.ListState
+	var serverAttach tui.ServerAttacher
+	if len(cmd.app.Servers.Servers()) > 0 {
+		router := servers.NewRouter(cmd.app.Servers)
+		sessionAPI, serverStates, serverAttach = router, router.States, cmd.app
+	}
+
 	deps := tui.Deps{
 		Logger:        cmd.app.Logger,
 		Config:        cmd.app.Config,
@@ -86,7 +95,9 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		MsgStore:      cmd.app.Messages(),
 		TodoService:   cmd.app.Todos(),
 		Bus:           cmd.app.Bus(),
-		Sessions:      cmd.app.SessionAPI(),
+		Sessions:      sessionAPI,
+		ServerStates:  serverStates,
+		ServerAttach:  serverAttach,
 		GitStatus:     cmd.app.GitStatus(),
 		PluginManager: cmd.app.Plugins,
 		CommandSet:    cmd.app.CommandSet,
