@@ -3,7 +3,9 @@ package sessions
 import (
 	"sort"
 
+	"github.com/colonyops/hive/internal/domain/server"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/hive/servers"
 	"github.com/colonyops/hive/internal/platform/git"
 )
 
@@ -14,6 +16,12 @@ type RepoGroup struct {
 	Sessions         []session.Session // Active sessions belonging to this repository
 	RecycledSessions []session.Session // Recycled sessions (stored for deletion support)
 	RecycledCount    int               // Number of recycled sessions (displayed as collapsed)
+
+	// Server is set for the group of one server's sessions, with what the
+	// last list found there.
+	Server      string
+	ServerState server.State
+	ServerError string
 }
 
 // GroupSessionsByRepo groups sessions by repository, so remotes that differ
@@ -29,7 +37,12 @@ func GroupSessionsByRepo(sessions []session.Session, localRemote string) []RepoG
 	}
 
 	groups := make(map[string]*RepoGroup)
+	var serverGroups []RepoGroup
 	for _, s := range sessions {
+		if name := ServerOf(s); name != session.LocalServer {
+			serverGroups = addToServerGroup(serverGroups, name, s)
+			continue
+		}
 		key := git.RemoteIdentity(s.Remote)
 		group, exists := groups[key]
 		if !exists {
@@ -63,7 +76,72 @@ func GroupSessionsByRepo(sessions []session.Session, localRemote string) []RepoG
 
 	sortRepoGroups(result, localRemote)
 
-	return result
+	return append(result, serverGroups...)
+}
+
+// ServerOf names the server a session is on: the server part of its
+// "<server>:<id>" id, or session.LocalServer.
+func ServerOf(s session.Session) string {
+	ref, err := session.ParseRef(s.ID, session.LocalServer)
+	if err != nil {
+		return session.LocalServer
+	}
+	return ref.Server
+}
+
+// gitKey keys a session's git status: its path on this machine, or its
+// qualified id for a server's session, whose path may also exist here.
+func gitKey(s session.Session) string {
+	if ServerOf(s) != session.LocalServer {
+		return s.ID
+	}
+	return s.Path
+}
+
+func addToServerGroup(groups []RepoGroup, name string, s session.Session) []RepoGroup {
+	for i := range groups {
+		if groups[i].Server == name {
+			if s.State == session.StateRecycled {
+				groups[i].RecycledSessions = append(groups[i].RecycledSessions, s)
+				groups[i].RecycledCount++
+			} else {
+				groups[i].Sessions = append(groups[i].Sessions, s)
+				sortSessions(groups[i].Sessions)
+			}
+			return groups
+		}
+	}
+	return addToServerGroup(append(groups, RepoGroup{Name: name, Server: name}), name, s)
+}
+
+// WithServerStates puts a group for every server after the local groups, in
+// config order, with what the last list found there. A server with no
+// sessions, such as one that is offline, still gets its group.
+func WithServerStates(groups []RepoGroup, states []servers.ListState) []RepoGroup {
+	if len(states) == 0 {
+		return groups
+	}
+	byServer := map[string]RepoGroup{}
+	out := make([]RepoGroup, 0, len(groups)+len(states))
+	for _, g := range groups {
+		if g.Server != "" {
+			byServer[g.Server] = g
+			continue
+		}
+		out = append(out, g)
+	}
+	for _, st := range states {
+		g, ok := byServer[st.Name]
+		if !ok {
+			g = RepoGroup{Name: st.Name, Server: st.Name}
+		}
+		g.ServerState = st.State
+		if st.Err != nil {
+			g.ServerError = st.Err.Error()
+		}
+		out = append(out, g)
+	}
+	return out
 }
 
 // extractGroupName returns the display name for a repository group.
