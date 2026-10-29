@@ -527,6 +527,16 @@ func (c *Client) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOpt
 	return wire.LaunchOptionsFromProto(resp.Msg), nil
 }
 
+func (c *Client) SpawnCreatesTmuxSession(ctx context.Context, remote string) (bool, error) {
+	resp, err := retryRead(func() (*connect.Response[daemonv1.SpawnPlanResponse], error) {
+		return c.sessions.SpawnPlan(ctx, connect.NewRequest(&daemonv1.SpawnPlanRequest{Remote: remote}))
+	})
+	if err != nil {
+		return false, wire.FromConnectError(err)
+	}
+	return resp.Msg.GetCreatesTmuxSession(), nil
+}
+
 // helloRetry spaces background Hellos while status is not yet known
 // available, so a daemon that was down at the first call is seen once it is
 // up.

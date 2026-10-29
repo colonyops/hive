@@ -39,6 +39,10 @@ type API interface {
 	Prune(ctx context.Context, all bool) (int, error)
 	CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Risk, error)
 	SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOptions, error)
+	// SpawnCreatesTmuxSession reports whether a create for remote makes a
+	// tmux session a client can attach to, by the rules of the machine that
+	// spawns it.
+	SpawnCreatesTmuxSession(ctx context.Context, remote string) (bool, error)
 
 	// StatusAvailable must not block: the TUI calls it inside Update. A false
 	// answer can turn true later (the daemon client answers false until its
