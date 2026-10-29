@@ -306,6 +306,32 @@ What belongs in integration tests vs unit tests:
 - **Integration**: end-to-end CLI flag wiring, stdin/stdout behavior, multi-command workflows, session detection
 - **Unit**: business logic, validation rules, store behavior (using real SQLite via `db.Open(t.TempDir(), ...)`), service orchestration
 
+#### Remote Server Tests
+
+`test/remote/` tests hive against two real servers, `server-a` and `server-b`:
+Docker containers that run hive behind sshd. The Go tests (build tag
+`remote`) run on the host and reach the servers only over ssh, so they never
+touch host tmux. Add a test here for every remote feature: do the action from
+the client, then check the result with the server's own CLI.
+
+```bash
+mise run cli:remote:test                      # fresh fixture, every test, then remove it (CI runs this)
+mise run cli:remote:up                        # start the fixture and keep it up
+mise run cli:remote:run -- -run TestProbe     # rerun tests against it; the client hive rebuilds each run
+mise run cli:remote:down
+```
+
+Rerun `cli:remote:up` after changing code the servers run. The harness
+(`test/remote/harness_test.go`) gives a test:
+
+- `NewClient(t).Hive(args...)`: the client hive, with a config that lists both servers.
+- `serverA.Hive(t, args...)`, `.Show`, `.List`, `.CreateSession`: the hive CLI on a server.
+- `serverA.API(t)`: `sessionapi.API` on a server over `ssh -- hive daemon dial-stdio`.
+- `serverB.Stop(t)` / `.Start(t)`: take a server down; cleanup starts it again.
+
+Delete what a test creates (`CreateSession` and `DeleteOnCleanup` do), so the
+next test starts from the same server state.
+
 #### Bubble Tea (TUI)
 
 Standard Model/Update/View pattern. Key messages:
