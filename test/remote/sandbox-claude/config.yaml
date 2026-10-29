@@ -1,0 +1,20 @@
+version: "0.2.4"
+git_path: git
+experimental:
+  daemon: true
+workspaces:
+  - /home/hive/src
+agents:
+  default: claude
+  claude:
+    command: claude
+    flags: ["--dangerously-skip-permissions"]
+  bash:
+    command: bash
+rules:
+  - commands:
+      - claude-trust
+    windows:
+      - name: "{{ agentWindow }}"
+        command: "{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
+      - name: shell

@@ -3,7 +3,10 @@
 # hand: N containers from the test/remote image, each running hive behind sshd
 # on 127.0.0.1. Hive Desktop and the CLI reach them as servers under servers:.
 #
-#   up [N]   start N servers (default 3), replacing the ones that run
+#   up [--claude] [N]
+#            start N servers (default 3), replacing the ones that run;
+#            --claude runs real Claude Code with the token in
+#            $state/claude-token (from `claude setup-token`)
 #   status   list the servers and check each one over ssh
 #   down     remove the servers
 #
@@ -44,6 +47,11 @@ wait_for_sshd() {
 }
 
 up() {
+  local claude=""
+  if [[ ${1:-} == --claude ]]; then
+    claude=1
+    shift
+  fi
   local count="${1:-3}"
   if ! [[ "${count}" =~ ^[1-9][0-9]?$ ]]; then
     echo "error: the server count must be 1 to 99, not ${count}" >&2
@@ -54,6 +62,16 @@ up() {
   chmod 700 "${state}"
   [[ -f "${state}/id_ed25519" ]] || ssh-keygen -q -t ed25519 -N '' -C hive-sandbox -f "${state}/id_ed25519"
   docker build --quiet --file test/remote/Dockerfile --tag "${image}" . >/dev/null
+  local run_image="${image}" token_mount=()
+  if [[ -n ${claude} ]]; then
+    if [[ ! -s "${state}/claude-token" ]]; then
+      echo "error: --claude needs a token in ${state}/claude-token; run claude setup-token and save it there" >&2
+      exit 1
+    fi
+    run_image="hive-sandbox-claude:local"
+    docker build --quiet --file test/remote/sandbox-claude/Dockerfile --tag "${run_image}" . >/dev/null
+    token_mount=(--volume "${state}/claude-token:/run/claude-token:ro")
+  fi
 
   : >"${state}/known_hosts"
   : >"${state}/ssh_config"
@@ -65,7 +83,8 @@ up() {
       --publish "127.0.0.1:${port}:22" \
       --volume "${state}/id_ed25519.pub:/run/client.pub:ro" \
       --volume "${host_key}:/run/host_key:ro" \
-      "${image}" >/dev/null
+      ${token_mount[@]+"${token_mount[@]}"} \
+      "${run_image}" >/dev/null
     awk -v host="[127.0.0.1]:${port}" '{print host, $1, $2}' "${host_key}.pub" >>"${state}/known_hosts"
     cat >>"${state}/ssh_config" <<CONFIG
 Host ${name}
@@ -93,6 +112,17 @@ EOF
     ssh_config: ${state}/ssh_config
 EOF
   done
+  if [[ -n ${claude} ]]; then
+    cat <<EOF
+
+Each server runs Claude Code with --dangerously-skip-permissions and lists two
+repositories: hay-kot/appkit and hay-kot/criterio.
+
+Try one:  ssh -F ${state}/ssh_config sandbox-1
+Remove them with: mise run remote:down
+EOF
+    return
+  fi
   cat <<EOF
 
 Each server has two repositories to create sessions from:

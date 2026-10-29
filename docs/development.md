@@ -86,6 +86,13 @@ The ssh keys and `ssh_config` live in `~/.local/share/hive-sandbox` (or
 `$HIVE_SANDBOX_STATE`), outside the checkout, so the printed config works from
 every worktree. `HIVE_SANDBOX_PORT` moves the first port.
 
+To smoke test with real agents, run `mise run remote:up -- --claude 3`. The
+servers then run Claude Code with `--dangerously-skip-permissions` and offer
+two public repositories, `hay-kot/appkit` and `hay-kot/criterio`. Claude
+authenticates with a token from `claude setup-token`, saved as `claude-token`
+in the state directory with mode 600. Do not use a copy of your own login:
+the containers would refresh it and can sign you out.
+
 ## Quality gates
 
 Every gate is a mise task, and lefthook runs the relevant ones as git hooks.
