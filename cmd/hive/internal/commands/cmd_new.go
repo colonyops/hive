@@ -13,7 +13,6 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
-	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
 )
@@ -117,6 +116,10 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 	}
 	switch {
 	case f.background:
+	case app.TargetsServer() && canAttach():
+		if err := app.AttachServerSession(ctx, app.DefaultServer(), *sess); err != nil {
+			return sess, fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
+		}
 	case app.TargetsServer():
 		showRemoteAttach(app, *sess, progress)
 	case canAttach():
@@ -149,23 +152,14 @@ func checkAgent(ctx context.Context, app *app.App, agent string) error {
 	return nil
 }
 
-// showRemoteAttach prints how to reach a new session on a server, which the
-// CLI cannot attach to yet (#745).
+// showRemoteAttach prints how to reach a new session on a server when there
+// is no terminal to attach.
 func showRemoteAttach(app *app.App, sess session.Session, progress io.Writer) {
 	if progress == nil {
 		progress = os.Stderr
 	}
-	server, ok := app.Servers.Server(app.DefaultServer())
-	if !ok {
-		return
-	}
-	cfg := server.Config()
-	args := []string{"ssh", "-t"}
-	if cfg.SSHConfig != "" {
-		args = append(args, "-F", tmpl.ShellQuote(cfg.SSHConfig))
-	}
-	args = append(args, cfg.SSH, "--", "tmux", "attach", "-t", tmpl.ShellQuote(sessionsvc.Target(sess).Session))
-	_, _ = fmt.Fprintf(progress, "Attach with: %s\n", strings.Join(args, " "))
+	ref := session.Ref{Server: app.DefaultServer(), ID: sess.ID}
+	_, _ = fmt.Fprintf(progress, "Attach with: hive session attach %s\n", ref)
 }
 
 // isLocalPath reports whether a git remote names a path on this machine

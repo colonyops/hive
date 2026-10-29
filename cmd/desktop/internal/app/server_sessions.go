@@ -11,6 +11,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/internal/platform/promptfile"
 
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/server"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
@@ -193,6 +194,33 @@ func (s *SessionsService) fleet() *servers.Fleet {
 		return nil
 	}
 	return s.servers()
+}
+
+// startServerTmuxSession starts a server session's terminal on the server,
+// by the server's spawn rules, detached as StartTmuxSession starts a local one.
+func (s *SessionsService) startServerTmuxSession(ctx context.Context, server, slug string) (multiplexer.LaunchResult, error) {
+	api, err := s.serverAPI(server)
+	if err != nil {
+		return multiplexer.LaunchResult{}, err
+	}
+	sessions, err := api.ListSessions(ctx)
+	if err != nil {
+		return multiplexer.LaunchResult{}, Wrap(err, KindUnavailable, "reading the sessions of server %q", server)
+	}
+	for _, sess := range sessions {
+		if sess.Slug != slug {
+			continue
+		}
+		result, err := api.StartTmuxSession(ctx, sess.ID)
+		switch {
+		case errors.Is(err, session.ErrNotActive):
+			return multiplexer.LaunchResult{}, Wrap(err, KindConflict, "session %q on server %q", sess.Name, server)
+		case err != nil:
+			return multiplexer.LaunchResult{}, Wrap(err, KindUnavailable, "starting session %q on server %q", sess.Name, server)
+		}
+		return result, nil
+	}
+	return multiplexer.LaunchResult{}, Errorf(KindNotFound, "no session with slug %q on server %q", slug, server)
 }
 
 // serverError classifies a server's failure and keeps its cause in the

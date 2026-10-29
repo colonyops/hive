@@ -144,7 +144,9 @@ func (c *Client) HiveOn(s Server, args ...string) Result {
 
 func (c *Client) hive(env []string, args ...string) Result {
 	c.t.Helper()
-	env = append([]string{"HIVE_CONFIG=" + c.config, "HIVE_DATA_DIR=" + c.dataDir}, env...)
+	// An empty TMUX keeps the client from opening windows in the tmux that
+	// runs the tests: an attach inside tmux opens a new window there.
+	env = append([]string{"HIVE_CONFIG=" + c.config, "HIVE_DATA_DIR=" + c.dataDir, "TMUX=", "TMUX_PANE="}, env...)
 	r := run(c.t, env, hiveBin, args...)
 	r.Args[0] = "hive"
 	return r

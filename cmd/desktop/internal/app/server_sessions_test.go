@@ -120,6 +120,11 @@ func TestServerSessions_ActOnTheServerOfAQualifiedID(t *testing.T) {
 	assert.True(t, git.Resolved, "the server reads its own checkout")
 	assert.Equal(t, "site", git.Repo)
 
+	_, err = f.svc.StartTmuxSession(t.Context(), "box:renamed")
+	require.NoError(t, err, "the server starts the terminal by its own rules")
+	_, err = f.svc.StartTmuxSession(t.Context(), "box:no-such-slug")
+	assert.Equal(t, KindNotFound, KindOf(err))
+
 	risk, err := f.svc.SessionRisk(t.Context(), ref)
 	require.NoError(t, err)
 	assert.False(t, risk.UncommittedChanges)
@@ -138,10 +143,7 @@ func TestServerSessions_RefuseWhatNeedsTheLocalCheckout(t *testing.T) {
 
 	assert.Equal(t, KindUnavailable, KindOf(f.svc.OpenSessionInEditor(t.Context(), ref)))
 	assert.Equal(t, KindUnavailable, KindOf(f.svc.RevealSession(t.Context(), ref)))
-	_, err := f.svc.StartTmuxSession(t.Context(), "box:review")
-	assert.Equal(t, KindUnavailable, KindOf(err))
-
-	_, err = f.svc.SessionDetail(t.Context(), "gone:"+ref)
+	_, err := f.svc.SessionDetail(t.Context(), "gone:"+ref)
 	assert.Equal(t, KindNotFound, KindOf(err))
 }
 
