@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ARG TARGETARCH
 COPY --chmod=755 dist/hive_linux_${TARGETARCH}_*/hive /usr/local/bin/hive
 COPY test/remote/sshd_config /etc/ssh/sshd_config
+COPY --chmod=755 test/remote/fake-claude /usr/local/bin/claude
+COPY internal/domain/terminal/assess/testdata/claude/ /usr/local/share/fake-claude/
 COPY --chmod=755 test/remote/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chown=hive:hive test/remote/config.yaml /home/hive/.config/hive/config.yaml
 
