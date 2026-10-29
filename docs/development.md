@@ -60,6 +60,32 @@ checkouts never share state. `mise run desktop:dev:fresh` recreates one.
 `mise run desktop:dev:onboarding` recreates a separate blank instance and keychain
 namespace, then runs the real GitHub connection flow without mock providers.
 
+### Remote servers sandbox
+
+To try sessions on remote hive servers by hand, start a few local ones:
+
+```sh
+mise run remote:up        # 3 servers; mise run remote:up 5 starts 5
+mise run remote:status    # list them and check each one over ssh
+mise run remote:down      # remove them
+```
+
+Each server is a Docker container from the `test/remote` image: hive with the
+daemon enabled, tmux, git, and a stand-in `claude`, behind sshd on
+`127.0.0.1:2221` and up. `remote:up` prints a `servers:` block to paste into
+the `config.yaml` that Hive Desktop and the CLI read, and the two repositories
+each server can create sessions from (`/home/hive/repo.git` and
+`/home/hive/windows.git`). Then `hive servers ls` lists them, and the Code view
+in Hive Desktop shows a group for each.
+
+The servers run the Linux binary from `cli:build:container`, which `remote:up`
+builds first. Run `remote:up` again after you change code the servers run; it
+replaces the servers, so their sessions go away.
+
+The ssh keys and `ssh_config` live in `~/.local/share/hive-sandbox` (or
+`$HIVE_SANDBOX_STATE`), outside the checkout, so the printed config works from
+every worktree. `HIVE_SANDBOX_PORT` moves the first port.
+
 ## Quality gates
 
 Every gate is a mise task, and lefthook runs the relevant ones as git hooks.

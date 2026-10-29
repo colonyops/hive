@@ -332,6 +332,10 @@ Rerun `cli:remote:up` after changing code the servers run. The harness
 Delete what a test creates (`CreateSession` and `DeleteOnCleanup` do), so the
 next test starts from the same server state.
 
+To try remote sessions by hand, `mise run remote:up` starts a separate sandbox
+of N servers from the same image and prints the `servers:` config for them
+(`docs/development.md`, "Remote servers sandbox").
+
 #### Smoke Tests
 
 `mise run cli:smoke:up` starts a client and two servers in Docker that an
