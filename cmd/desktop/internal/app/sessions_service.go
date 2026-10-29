@@ -921,7 +921,7 @@ func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) (mu
 	}
 
 	if server, remote := slugServer(slug); remote {
-		return multiplexer.LaunchResult{}, Errorf(KindUnavailable, "session %q is on server %q; start its terminal on that server", slug, server)
+		return s.startServerTmuxSession(ctx, server, strings.TrimPrefix(slug, server+":"))
 	}
 	detail, err := s.detailBySlug(ctx, slug)
 	if err != nil {

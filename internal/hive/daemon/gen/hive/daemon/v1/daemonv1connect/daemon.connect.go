@@ -79,6 +79,9 @@ const (
 	// SessionServiceGitStatusesProcedure is the fully-qualified name of the SessionService's
 	// GitStatuses RPC.
 	SessionServiceGitStatusesProcedure = "/hive.daemon.v1.SessionService/GitStatuses"
+	// SessionServiceStartTmuxProcedure is the fully-qualified name of the SessionService's StartTmux
+	// RPC.
+	SessionServiceStartTmuxProcedure = "/hive.daemon.v1.SessionService/StartTmux"
 )
 
 // DaemonServiceClient is a client for the hive.daemon.v1.DaemonService service.
@@ -255,6 +258,10 @@ type SessionServiceClient interface {
 	// GitStatuses reads the checkouts of sessions on the daemon's machine. A
 	// read is shared by every client that asks within a few seconds.
 	GitStatuses(context.Context, *connect.Request[v1.GitStatusesRequest]) (*connect.Response[v1.GitStatusesResponse], error)
+	// StartTmux opens the tmux session of a session on the daemon's machine
+	// in the background, by that machine's spawn rules. It creates the session
+	// and starts the agent when no tmux session runs.
+	StartTmux(context.Context, *connect.Request[v1.StartTmuxRequest]) (*connect.Response[v1.StartTmuxResponse], error)
 }
 
 // NewSessionServiceClient constructs a client for the hive.daemon.v1.SessionService service. By
@@ -364,6 +371,12 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("GitStatuses")),
 			connect.WithClientOptions(opts...),
 		),
+		startTmux: connect.NewClient[v1.StartTmuxRequest, v1.StartTmuxResponse](
+			httpClient,
+			baseURL+SessionServiceStartTmuxProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("StartTmux")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -385,6 +398,7 @@ type sessionServiceClient struct {
 	launchOptions     *connect.Client[v1.LaunchOptionsRequest, v1.LaunchOptionsResponse]
 	statuses          *connect.Client[v1.StatusesRequest, v1.StatusesResponse]
 	gitStatuses       *connect.Client[v1.GitStatusesRequest, v1.GitStatusesResponse]
+	startTmux         *connect.Client[v1.StartTmuxRequest, v1.StartTmuxResponse]
 }
 
 // List calls hive.daemon.v1.SessionService.List.
@@ -467,6 +481,11 @@ func (c *sessionServiceClient) GitStatuses(ctx context.Context, req *connect.Req
 	return c.gitStatuses.CallUnary(ctx, req)
 }
 
+// StartTmux calls hive.daemon.v1.SessionService.StartTmux.
+func (c *sessionServiceClient) StartTmux(ctx context.Context, req *connect.Request[v1.StartTmuxRequest]) (*connect.Response[v1.StartTmuxResponse], error) {
+	return c.startTmux.CallUnary(ctx, req)
+}
+
 // SessionServiceHandler is an implementation of the hive.daemon.v1.SessionService service.
 type SessionServiceHandler interface {
 	List(context.Context, *connect.Request[v1.ListRequest]) (*connect.Response[v1.ListResponse], error)
@@ -491,6 +510,10 @@ type SessionServiceHandler interface {
 	// GitStatuses reads the checkouts of sessions on the daemon's machine. A
 	// read is shared by every client that asks within a few seconds.
 	GitStatuses(context.Context, *connect.Request[v1.GitStatusesRequest]) (*connect.Response[v1.GitStatusesResponse], error)
+	// StartTmux opens the tmux session of a session on the daemon's machine
+	// in the background, by that machine's spawn rules. It creates the session
+	// and starts the agent when no tmux session runs.
+	StartTmux(context.Context, *connect.Request[v1.StartTmuxRequest]) (*connect.Response[v1.StartTmuxResponse], error)
 }
 
 // NewSessionServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -596,6 +619,12 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("GitStatuses")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceStartTmuxHandler := connect.NewUnaryHandler(
+		SessionServiceStartTmuxProcedure,
+		svc.StartTmux,
+		connect.WithSchema(sessionServiceMethods.ByName("StartTmux")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/hive.daemon.v1.SessionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SessionServiceListProcedure:
@@ -630,6 +659,8 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceStatusesHandler.ServeHTTP(w, r)
 		case SessionServiceGitStatusesProcedure:
 			sessionServiceGitStatusesHandler.ServeHTTP(w, r)
+		case SessionServiceStartTmuxProcedure:
+			sessionServiceStartTmuxHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -701,4 +732,8 @@ func (UnimplementedSessionServiceHandler) Statuses(context.Context, *connect.Req
 
 func (UnimplementedSessionServiceHandler) GitStatuses(context.Context, *connect.Request[v1.GitStatusesRequest]) (*connect.Response[v1.GitStatusesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.GitStatuses is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) StartTmux(context.Context, *connect.Request[v1.StartTmuxRequest]) (*connect.Response[v1.StartTmuxResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.StartTmux is not implemented"))
 }

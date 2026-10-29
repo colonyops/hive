@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
@@ -75,6 +77,7 @@ Use 'hive session info' to get details about the current session.`,
 				cmd.updateCmd(),
 				cmd.deleteCmd(),
 				cmd.recycleCmd(),
+				cmd.attachCmd(),
 			},
 		},
 		// Top-level alias: "hive ls" -> "hive session list"
@@ -781,6 +784,42 @@ func (cmd *SessionCmd) resolve(arg string) (session.Ref, sessionapi.API, error) 
 		return session.Ref{}, nil, err
 	}
 	return ref, api, nil
+}
+
+func (cmd *SessionCmd) attachCmd() *cli.Command {
+	return &cli.Command{
+		Name:      "attach",
+		Usage:     "Open a session's terminal",
+		UsageText: "hive session attach <[server:]id>",
+		Description: `Attaches this terminal to the session's tmux session. When the session's
+spawn rule makes a tmux session and none runs, it starts one first, with the
+agent.
+
+For a session on a server, the terminal runs over ssh. Inside tmux it opens in
+a new window, so you keep the current one.`,
+		Flags:  []cli.Flag{serverFlag(&cmd.server)},
+		Before: targetServer(cmd.app, &cmd.server),
+		Action: cmd.runAttach,
+	}
+}
+
+func (cmd *SessionCmd) runAttach(ctx context.Context, c *cli.Command) error {
+	ref, api, err := cmd.resolve(c.Args().First())
+	if err != nil {
+		return err
+	}
+	sess, err := api.GetSession(ctx, ref.ID)
+	if err != nil {
+		return fmt.Errorf("get session: %w", err)
+	}
+	if ref.Server != session.LocalServer {
+		return cmd.app.AttachServerSession(ctx, ref.Server, sess)
+	}
+	if _, err := api.StartTmuxSession(ctx, sess.ID); err != nil {
+		return fmt.Errorf("start session %s: %w", sess.Name, err)
+	}
+	streams := multiplexer.AttachStreams{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}
+	return cmd.app.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(sess), streams)
 }
 
 // nonNilTags keeps JSON output an array, never null.

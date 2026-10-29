@@ -31,7 +31,7 @@ function actionsOf(entries: MenuEntry[]): MenuActionEntry[] {
 export function attachedSessionCommands(context: TerminalModeContext, attached: TerminalSessionRow): Command[] {
   const { tree, ops, attach, sessions } = context
   const hive = tree.isHiveSession(attached)
-  // A server's session has no local agents, actions, or start.
+  // A server's session has no local agents or actions.
   const local = !tree.isServerSession(attached)
   const scratch = tree.isScratch(attached)
   const chat = tree.isChat(attached)
@@ -45,7 +45,6 @@ export function attachedSessionCommands(context: TerminalModeContext, attached: 
   const activeWindow = hive && local ? tree.windowRowsFor(attached).find((win) => win.active) : undefined
   const rows: (Command | false)[] = [
     terminal &&
-      local &&
       !running && {
         id: 'terminal:session:start',
         title: scratch ? 'Start terminal' : 'Start session',

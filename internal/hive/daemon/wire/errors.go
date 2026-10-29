@@ -42,7 +42,7 @@ func ToConnectError(err error) error {
 		code = connect.CodeAlreadyExists
 	case errors.Is(err, ErrRemoteRequired), errors.Is(err, session.ErrInvalidTag):
 		code = connect.CodeInvalidArgument
-	case hasLaunch || hasCreate:
+	case hasLaunch || hasCreate, errors.Is(err, session.ErrNotActive):
 		code = connect.CodeFailedPrecondition
 	}
 
@@ -89,7 +89,8 @@ func errText(err error) string {
 
 // FromConnectError rebuilds the Go error a client expects from a Connect
 // error. errors.Is matches session.ErrNotFound, session.ErrDuplicateName,
-// session.ErrInvalidTag, and ErrRemoteRequired by code and detail;
+// session.ErrInvalidTag, session.ErrNotActive, and ErrRemoteRequired by code
+// and detail;
 // errors.As finds a rebuilt LaunchError or CreateSessionError;
 // connect.CodeOf still reads the code.
 func FromConnectError(err error) error {
@@ -119,7 +120,7 @@ func FromConnectError(err error) error {
 			invalidTag = true
 		}
 	}
-	sentinel := sentinelFor(connectErr.Code(), invalidTag)
+	sentinel := sentinelFor(connectErr.Code(), invalidTag, createDetail != nil || launchDetail != nil)
 	var inner error = &remoteError{conn: connectErr, sentinel: sentinel}
 	switch {
 	case createDetail != nil:
@@ -147,7 +148,7 @@ func FromConnectError(err error) error {
 	}
 }
 
-func sentinelFor(code connect.Code, invalidTag bool) error {
+func sentinelFor(code connect.Code, invalidTag, launchOrCreate bool) error {
 	switch code {
 	case connect.CodeNotFound:
 		return session.ErrNotFound
@@ -158,6 +159,11 @@ func sentinelFor(code connect.Code, invalidTag bool) error {
 			return session.ErrInvalidTag
 		}
 		return ErrRemoteRequired
+	case connect.CodeFailedPrecondition:
+		if launchOrCreate {
+			return nil
+		}
+		return session.ErrNotActive
 	default:
 		return nil
 	}
