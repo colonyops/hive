@@ -131,7 +131,7 @@ clear_faults() {
 
 selftest() {
   local id
-  id=$(on client hive --target-server server-a session create --json --background \
+  id=$(on client hive session create --server server-a --json --background \
     --remote /home/hive/repo.git selftest | sed -E 's/.*"id":"([^"]*)".*/\1/')
   [[ -n $id ]]
   on client hive session show --json "server-a:$id" | grep -q '"name":"selftest"'
@@ -153,7 +153,7 @@ selftest() {
   fault clear server-b
   fault freeze server-b
   fault clear server-b
-  on client hive --target-server server-b session list --json >/dev/null
+  on client hive session list --server server-b --json >/dev/null
 
   # The internal network must have no way out.
   if on client bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>/dev/null; then
