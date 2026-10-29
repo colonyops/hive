@@ -189,6 +189,14 @@ describe('useReveal', () => {
     expect(openDrive).toHaveBeenLastCalledWith({ space: 'shared', path: null, session: null })
   })
 
+  it('does not open a local session for a code link on another server', async () => {
+    mocks.TakeLink.mockResolvedValueOnce({ area: 'code', slug: 'web', server: 'box-1' })
+    setup()
+    await flushPromises()
+    expect(push).not.toHaveBeenCalled()
+    expect(showToast).toHaveBeenCalledWith('Hive cannot open sessions on server box-1 yet', { severity: 'error' })
+  })
+
   it('says so when a link cannot be read', async () => {
     mocks.TakeLink.mockRejectedValueOnce(new Error('boom'))
     setup()

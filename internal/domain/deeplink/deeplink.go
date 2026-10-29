@@ -3,11 +3,14 @@
 // app, and the app routes to the place they name. The URL is the contract; the
 // desktop's internal routes are not, and they can change under it.
 //
-//	hive://code/<slug>[?window=<id>][&canvas=<name>]
+//	hive://code/<slug>[?server=<name>][&window=<id>][&canvas=<name>]
 //	hive://chats/<workspace>[/<chat>][?canvas=<name>]
 //	hive://inbox/<profile>[/<item>][?feed=<id>]
 //	hive://canvas/<name>?owner=<workspace | owner/repo | @global>
 //	hive://drive/<space-key>[/<path>]
+//
+// A code link without server names a session on this machine. server is a
+// name under servers: in config.yaml, or "local".
 //
 // A drive link's space key is "shared", "workspaces/<name>", or
 // "<owner>/<repo>", and the segments after it are the document or folder
@@ -37,7 +40,7 @@ type Area string
 
 // Location is one place in Hive Desktop. Which fields apply depends on Area:
 //
-//	code    Slug, Window, Canvas
+//	code    Slug, Server, Window, Canvas
 //	chats   Workspace, Chat, Canvas
 //	inbox   Profile, Item, Feed
 //	canvas  Canvas, Owner
@@ -49,6 +52,7 @@ type Area string
 type Location struct {
 	Area      Area   `json:"area"`
 	Slug      string `json:"slug,omitempty"`
+	Server    string `json:"server,omitempty"`
 	Window    string `json:"window,omitempty"`
 	Workspace string `json:"workspace,omitempty"`
 	Chat      string `json:"chat,omitempty"`
@@ -90,6 +94,7 @@ func Parse(raw string) (Location, error) {
 			return Location{}, errors.New("code links name a session slug")
 		}
 		loc.Slug = segments[0]
+		loc.Server = q.Get("server")
 		loc.Window = q.Get("window")
 		loc.Canvas = q.Get("canvas")
 	case AreaChats:

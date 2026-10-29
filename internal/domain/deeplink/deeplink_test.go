@@ -14,6 +14,7 @@ func TestParse(t *testing.T) {
 	}{
 		{"hive://code/hive-fix-auth", Location{Area: AreaCode, Slug: "hive-fix-auth"}},
 		{"hive://code/web?window=@3&canvas=plan", Location{Area: AreaCode, Slug: "web", Window: "@3", Canvas: "plan"}},
+		{"hive://code/web?server=box-1", Location{Area: AreaCode, Slug: "web", Server: "box-1"}},
 		{"hive://code/a%2Fb", Location{Area: AreaCode, Slug: "a/b"}},
 		{"hive://chats/research", Location{Area: AreaChats, Workspace: "research"}},
 		{"hive://chats/research/42?canvas=notes", Location{Area: AreaChats, Workspace: "research", Chat: "42", Canvas: "notes"}},

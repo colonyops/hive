@@ -35,6 +35,14 @@ type probeSession struct {
 	Name string `json:"name"`
 }
 
+// sessionWithServer is the part of the session JSON that names a session
+// among servers.
+type sessionWithServer struct {
+	Server string `json:"server"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+}
+
 func sessionIDs(sessions []Session) []string {
 	ids := make([]string, 0, len(sessions))
 	for _, s := range sessions {
@@ -185,4 +193,33 @@ func TestClientCLI_DeletesASession(t *testing.T) {
 	gone := serverA.Hive(t, "session", "show", "--json", created.ID).Fails(t)
 	// hive prints its errors to stdout.
 	assert.Contains(t, gone.Stdout+gone.Stderr, session.ErrNotFound.Error())
+}
+
+func TestClientCLI_ActsOnTheSessionOnTheServerTheRefNames(t *testing.T) {
+	onA := serverA.CreateSession(t, "twin")
+	onB := serverB.CreateSession(t, "twin")
+	client := NewClient(t)
+
+	shown := DecodeJSON[sessionWithServer](t, client.Hive("session", "show", "--json", serverB.Name+":"+onB.ID).Ok(t))
+	assert.Equal(t, sessionWithServer{Server: serverB.Name, ID: onB.ID, Name: "twin"}, shown)
+
+	client.Hive("session", "update", serverB.Name+":"+onB.ID, "--name", "twin-b").Ok(t)
+
+	assert.Equal(t, "twin", serverA.Show(t, onA.ID).Name)
+	assert.Equal(t, "twin-b", serverB.Show(t, onB.ID).Name)
+}
+
+func TestClientCLI_RefusesARefToAServerNotInTheConfig(t *testing.T) {
+	failed := NewClient(t).Hive("session", "show", "gone:abc123").Fails(t)
+
+	// hive prints its errors to stdout.
+	assert.Contains(t, failed.Stdout+failed.Stderr, `unknown server "gone"`)
+}
+
+func TestClientCLI_ListsSessionsWithTheirServer(t *testing.T) {
+	created := serverA.CreateSession(t, "labeled")
+
+	listed := DecodeJSONLines[sessionWithServer](t, NewClient(t).HiveOn(serverA, "session", "list", "--json").Ok(t))
+
+	assert.Contains(t, listed, sessionWithServer{Server: serverA.Name, ID: created.ID, Name: "labeled"})
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/server"
+	"github.com/colonyops/hive/internal/domain/session"
 )
 
 // failingSSH puts an ssh on PATH that prints line to stderr and exits.
@@ -58,4 +59,21 @@ func TestCheckDropsTheSSHErrorOfAnEarlierDial(t *testing.T) {
 
 	assert.Equal(t, server.StateOffline, status.State)
 	assert.NotContains(t, status.Error, "first failure")
+}
+
+func TestAPIResolvesServerNames(t *testing.T) {
+	fleet := New(zerolog.Nop(), nil, []config.ServerConfig{{Name: "box", SSH: "box"}})
+
+	box, ok := fleet.Server("box")
+	require.True(t, ok)
+	api, err := fleet.API("box")
+	require.NoError(t, err)
+	assert.Same(t, box.Client(), api)
+
+	_, err = fleet.API("gone")
+	require.ErrorIs(t, err, ErrUnknownServer)
+	assert.Contains(t, err.Error(), `"gone"`)
+
+	_, err = fleet.API(session.LocalServer)
+	assert.Error(t, err, "a fleet without a local API reports it")
 }

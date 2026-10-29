@@ -7,6 +7,7 @@ package servers
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/server"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/platform/sshdial"
@@ -63,6 +65,25 @@ func (f *Fleet) Server(name string) (*Server, bool) {
 		}
 	}
 	return nil, false
+}
+
+// ErrUnknownServer is a server name that is not under servers:, such as one
+// a config change renamed or removed.
+var ErrUnknownServer = errors.New("unknown server")
+
+// API is the session API of the named server. session.LocalServer names
+// Local.
+func (f *Fleet) API(name string) (sessionapi.API, error) {
+	if name == session.LocalServer {
+		if f.local == nil {
+			return nil, errors.New("this command has no local session API")
+		}
+		return f.local, nil
+	}
+	if s, ok := f.Server(name); ok {
+		return s.client, nil
+	}
+	return nil, fmt.Errorf("%w %q: it is not under servers: in config.yaml", ErrUnknownServer, name)
 }
 
 // CheckAll checks every server at once and returns their statuses in config

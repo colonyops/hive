@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/sources"
 	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
@@ -118,6 +119,15 @@ func (a *App) TargetServer(name string) error {
 	a.sessions = server.Client()
 	a.targetServer = name
 	return nil
+}
+
+// DefaultServer is the server that SessionAPI reaches and that a bare
+// session id names: the --target-server server, else session.LocalServer.
+func (a *App) DefaultServer() string {
+	if a.targetServer != "" {
+		return a.targetServer
+	}
+	return session.LocalServer
 }
 
 // TargetsServer reports whether SessionAPI reaches a server, where paths and

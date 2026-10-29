@@ -11,7 +11,7 @@ export type Area = string;
 /**
  * Location is one place in Hive Desktop. Which fields apply depends on Area:
  * 
- * 	code    Slug, Window, Canvas
+ * 	code    Slug, Server, Window, Canvas
  * 	chats   Workspace, Chat, Canvas
  * 	inbox   Profile, Item, Feed
  * 	canvas  Canvas, Owner
@@ -24,6 +24,7 @@ export type Area = string;
 export interface Location {
     "area": Area;
     "slug"?: string;
+    "server"?: string;
     "window"?: string;
     "workspace"?: string;
     "chat"?: string;

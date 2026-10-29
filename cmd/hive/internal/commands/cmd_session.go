@@ -13,6 +13,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
@@ -138,6 +139,7 @@ Example output (--json):
 // sessionJSON is the machine-readable representation of a session used by
 // session info/show/create/update/recycle --json output.
 type sessionJSON struct {
+	Server        string    `json:"server"`
 	ID            string    `json:"id"`
 	Name          string    `json:"name"`
 	Slug          string    `json:"slug"`
@@ -153,8 +155,9 @@ type sessionJSON struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-func buildSessionJSON(s session.Session) sessionJSON {
+func buildSessionJSON(server string, s session.Session) sessionJSON {
 	return sessionJSON{
+		Server:        server,
 		ID:            s.ID,
 		Name:          s.Name,
 		Slug:          s.Slug,
@@ -171,7 +174,10 @@ func buildSessionJSON(s session.Session) sessionJSON {
 	}
 }
 
-func printSessionHuman(out io.Writer, sess session.Session) {
+func printSessionHuman(out io.Writer, server string, sess session.Session) {
+	if server != session.LocalServer {
+		_, _ = fmt.Fprintf(out, "Server:      %s\n", server)
+	}
 	_, _ = fmt.Fprintf(out, "Session ID:  %s\n", sess.ID)
 	_, _ = fmt.Fprintf(out, "Name:        %s\n", sess.Name)
 	_, _ = fmt.Fprintf(out, "Repository:  %s\n", git.ExtractRepoName(sess.Remote))
@@ -211,10 +217,10 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	out := c.Root().Writer
 
 	if cmd.infoJSON {
-		return iojson.WriteLine(out, buildSessionJSON(sess))
+		return iojson.WriteLine(out, buildSessionJSON(cmd.app.DefaultServer(), sess))
 	}
 
-	printSessionHuman(out, sess)
+	printSessionHuman(out, cmd.app.DefaultServer(), sess)
 	return nil
 }
 
@@ -222,7 +228,7 @@ func (cmd *SessionCmd) showCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "show",
 		Usage:     "Show details for a session by ID",
-		UsageText: "hive session show <id> [--json]",
+		UsageText: "hive session show <[server:]id> [--json]",
 		Description: `Displays details for a specific session.
 
 Unlike 'hive session info', which detects the session from the current
@@ -239,22 +245,22 @@ working directory, this command looks up a session by its ID.`,
 }
 
 func (cmd *SessionCmd) runShow(ctx context.Context, c *cli.Command) error {
-	id := c.Args().First()
-	if id == "" {
-		return fmt.Errorf("session ID required")
+	ref, api, err := cmd.resolve(c.Args().First())
+	if err != nil {
+		return err
 	}
 
-	sess, err := cmd.app.SessionAPI().GetSession(ctx, id)
+	sess, err := api.GetSession(ctx, ref.ID)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}
 
 	out := c.Root().Writer
 	if cmd.showJSON {
-		return iojson.WriteLine(out, buildSessionJSON(sess))
+		return iojson.WriteLine(out, buildSessionJSON(ref.Server, sess))
 	}
 
-	printSessionHuman(out, sess)
+	printSessionHuman(out, ref.Server, sess)
 	return nil
 }
 
@@ -296,7 +302,7 @@ func (cmd *SessionCmd) runCreate(ctx context.Context, c *cli.Command) error {
 	}
 
 	if cmd.createJSON {
-		return iojson.WriteLine(c.Root().Writer, buildSessionJSON(*sess))
+		return iojson.WriteLine(c.Root().Writer, buildSessionJSON(cmd.app.DefaultServer(), *sess))
 	}
 
 	fmt.Fprintf(os.Stderr, "Session created\n  %s\n", sess.Path)
@@ -307,7 +313,7 @@ func (cmd *SessionCmd) updateCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "update",
 		Usage:     "Update a session's name, group, or tags",
-		UsageText: "hive session update <id> [--name <name>] [--group <group> | --clear-group] [--add-tag <tag>]... [--remove-tag <tag>]... [--clear-tags] [--json]",
+		UsageText: "hive session update <[server:]id> [--name <name>] [--group <group> | --clear-group] [--add-tag <tag>]... [--remove-tag <tag>]... [--clear-tags] [--json]",
 		Description: `Updates mutable fields on an existing session.
 
 At least one flag that changes the session is required. Tag flags apply in
@@ -362,9 +368,9 @@ Examples:
 }
 
 func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
-	id := c.Args().First()
-	if id == "" {
-		return fmt.Errorf("session ID required")
+	ref, api, err := cmd.resolve(c.Args().First())
+	if err != nil {
+		return err
 	}
 
 	if cmd.updateGroup != "" && cmd.updateClearGroup {
@@ -381,7 +387,7 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 	}
 
 	if cmd.updateName != "" {
-		if err := cmd.app.SessionAPI().RenameSession(ctx, id, cmd.updateName); err != nil {
+		if err := api.RenameSession(ctx, ref.ID, cmd.updateName); err != nil {
 			return fmt.Errorf("rename session: %w", err)
 		}
 	}
@@ -391,7 +397,7 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 		if cmd.updateClearGroup {
 			group = ""
 		}
-		if err := cmd.app.SessionAPI().SetSessionGroup(ctx, id, group); err != nil {
+		if err := api.SetSessionGroup(ctx, ref.ID, group); err != nil {
 			return fmt.Errorf("set session group: %w", err)
 		}
 	}
@@ -403,30 +409,31 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 				return strings.EqualFold(strings.TrimSpace(remove), tag)
 			})
 		})
-		if _, err := cmd.app.SessionAPI().SetSessionTags(ctx, id, tags); err != nil {
+		if _, err := api.SetSessionTags(ctx, ref.ID, tags); err != nil {
 			return fmt.Errorf("set session tags: %w", err)
 		}
 	case len(addTags) > 0 || len(cmd.updateRemoveTags) > 0:
-		if _, err := cmd.app.SessionAPI().EditSessionTags(ctx, id, addTags, cmd.updateRemoveTags); err != nil {
+		if _, err := api.EditSessionTags(ctx, ref.ID, addTags, cmd.updateRemoveTags); err != nil {
 			return fmt.Errorf("edit session tags: %w", err)
 		}
 	}
 
-	sess, err := cmd.app.SessionAPI().GetSession(ctx, id)
+	sess, err := api.GetSession(ctx, ref.ID)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}
 
 	if cmd.updateJSON {
-		return iojson.WriteLine(c.Root().Writer, buildSessionJSON(sess))
+		return iojson.WriteLine(c.Root().Writer, buildSessionJSON(ref.Server, sess))
 	}
 
-	fmt.Fprintf(os.Stderr, "Session %s updated\n", id)
+	fmt.Fprintf(os.Stderr, "Session %s updated\n", ref)
 	return nil
 }
 
 // lsSessionInfo is the JSON output format for hive session ls --json.
 type lsSessionInfo struct {
+	Server string   `json:"server"`
 	ID     string   `json:"id"`
 	Name   string   `json:"name"`
 	Repo   string   `json:"repo"`
@@ -511,7 +518,7 @@ func (cmd *SessionCmd) deleteCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "delete",
 		Usage:     "Delete a session and its directory",
-		UsageText: "hive session delete <id>",
+		UsageText: "hive session delete <[server:]id>",
 		Description: `Permanently removes a session, its cloned directory, and any associated tmux session.
 
 If the session has uncommitted changes or unpushed commits, the delete is
@@ -539,26 +546,26 @@ This action cannot be undone. Use 'hive session recycle' to preserve the directo
 }
 
 func (cmd *SessionCmd) runDelete(ctx context.Context, c *cli.Command) error {
-	id := c.Args().First()
-	if id == "" {
-		return fmt.Errorf("session ID required")
+	ref, api, err := cmd.resolve(c.Args().First())
+	if err != nil {
+		return err
 	}
 
 	if !cmd.deleteForce {
-		if err := cmd.checkRisk(ctx, id, "delete"); err != nil {
+		if err := cmd.checkRisk(ctx, api, ref, "delete"); err != nil {
 			return err
 		}
 	}
 
-	if err := cmd.app.SessionAPI().DeleteSession(ctx, id); err != nil {
+	if err := api.DeleteSession(ctx, ref.ID); err != nil {
 		return fmt.Errorf("delete session: %w", err)
 	}
 
 	if cmd.deleteJSON {
-		return iojson.WriteLine(c.Root().Writer, map[string]any{"id": id, "deleted": true})
+		return iojson.WriteLine(c.Root().Writer, map[string]any{"server": ref.Server, "id": ref.ID, "deleted": true})
 	}
 
-	fmt.Fprintf(os.Stderr, "Session %s deleted\n", id)
+	fmt.Fprintf(os.Stderr, "Session %s deleted\n", ref)
 	return nil
 }
 
@@ -566,7 +573,7 @@ func (cmd *SessionCmd) recycleCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "recycle",
 		Usage:     "Recycle a session back to the pool",
-		UsageText: "hive session recycle <id>",
+		UsageText: "hive session recycle <[server:]id>",
 		Description: `Recycles a full-clone session so its checkout can be reused for a new task.
 
 For worktree sessions, removes the checkout and session record while retaining the shared bare clone. This keeps future worktree creation fast without retaining stale session state.
@@ -594,39 +601,40 @@ feature branch that was pushed but not merged still counts as unpushed. Use
 }
 
 func (cmd *SessionCmd) runRecycle(ctx context.Context, c *cli.Command) error {
-	id := c.Args().First()
-	if id == "" {
-		return fmt.Errorf("session ID required")
+	ref, api, err := cmd.resolve(c.Args().First())
+	if err != nil {
+		return err
 	}
 
 	if !cmd.recycleForce {
-		if err := cmd.checkRisk(ctx, id, "recycle"); err != nil {
+		if err := cmd.checkRisk(ctx, api, ref, "recycle"); err != nil {
 			return err
 		}
 	}
 
-	if err := cmd.app.SessionAPI().RecycleSession(ctx, id, os.Stderr); err != nil {
+	if err := api.RecycleSession(ctx, ref.ID, os.Stderr); err != nil {
 		return fmt.Errorf("recycle session: %w", err)
 	}
 
 	if cmd.recycleJSON {
 		// Worktree sessions are deleted on recycle, so the record may be gone.
-		sess, err := cmd.app.SessionAPI().GetSession(ctx, id)
+		sess, err := api.GetSession(ctx, ref.ID)
 		switch {
 		case errors.Is(err, session.ErrNotFound):
-			return iojson.WriteLine(c.Root().Writer, map[string]any{"id": id, "deleted": true})
+			return iojson.WriteLine(c.Root().Writer, map[string]any{"server": ref.Server, "id": ref.ID, "deleted": true})
 		case err != nil:
 			return fmt.Errorf("get session after recycle: %w", err)
 		}
-		return iojson.WriteLine(c.Root().Writer, buildSessionJSON(sess))
+		return iojson.WriteLine(c.Root().Writer, buildSessionJSON(ref.Server, sess))
 	}
 
-	fmt.Fprintf(os.Stderr, "Session %s recycled\n", id)
+	fmt.Fprintf(os.Stderr, "Session %s recycled\n", ref)
 	return nil
 }
 
 func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session) lsSessionInfo {
 	info := lsSessionInfo{
+		Server: cmd.app.DefaultServer(),
 		ID:     s.ID,
 		Name:   s.Name,
 		Repo:   git.ExtractRepoName(s.Remote),
@@ -646,8 +654,8 @@ func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session
 
 // checkRisk returns an error describing uncommitted or unpushed work that
 // would be lost if the session were destroyed by the given action.
-func (cmd *SessionCmd) checkRisk(ctx context.Context, id, action string) error {
-	risk, err := cmd.app.SessionAPI().CheckSessionRisk(ctx, id)
+func (cmd *SessionCmd) checkRisk(ctx context.Context, api sessionapi.API, ref session.Ref, action string) error {
+	risk, err := api.CheckSessionRisk(ctx, ref.ID)
 	if err != nil {
 		return fmt.Errorf("check session risk: %w", err)
 	}
@@ -661,7 +669,24 @@ func (cmd *SessionCmd) checkRisk(ctx context.Context, id, action string) error {
 	if risk.UnpushedCommits {
 		reasons = append(reasons, "unpushed commits")
 	}
-	return fmt.Errorf("session %s has %s; use --force to %s anyway", id, strings.Join(reasons, " and "), action)
+	return fmt.Errorf("session %s has %s; use --force to %s anyway", ref, strings.Join(reasons, " and "), action)
+}
+
+// resolve reads a session argument, "<server>:<id>" or a bare id on the
+// default server, and finds that server's session API.
+func (cmd *SessionCmd) resolve(arg string) (session.Ref, sessionapi.API, error) {
+	if arg == "" {
+		return session.Ref{}, nil, fmt.Errorf("session ID required")
+	}
+	ref, err := session.ParseRef(arg, cmd.app.DefaultServer())
+	if err != nil {
+		return session.Ref{}, nil, err
+	}
+	api, err := cmd.app.Servers.API(ref.Server)
+	if err != nil {
+		return session.Ref{}, nil, err
+	}
+	return ref, api, nil
 }
 
 // nonNilTags keeps JSON output an array, never null.

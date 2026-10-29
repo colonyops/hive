@@ -37,6 +37,8 @@ func TestValidateServers(t *testing.T) {
 		{"valid", []ServerConfig{{Name: "a", SSH: "a"}, {Name: "b", SSH: "ada@b"}}, ""},
 		{"duplicate", []ServerConfig{{Name: "a", SSH: "a"}, {Name: "a", SSH: "b"}}, "duplicate"},
 		{"missing name", []ServerConfig{{SSH: "a"}}, "servers[0].name"},
+		{"local is reserved", []ServerConfig{{Name: "local", SSH: "a"}}, "servers[0].name"},
+		{"separator in name", []ServerConfig{{Name: "a:b", SSH: "a"}}, "servers[0].name"},
 		{"option as host", []ServerConfig{{Name: "a", SSH: "-oProxyCommand=x"}}, "servers[0].ssh"},
 		{"shell in binary", []ServerConfig{{Name: "a", SSH: "a", Binary: "hive;rm -rf ~"}}, "servers[0].ssh"},
 	}
