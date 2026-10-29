@@ -27,6 +27,8 @@ type API interface {
 	CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec) (*session.Session, error)
 	RenameSession(ctx context.Context, id, name string) error
 	SetSessionGroup(ctx context.Context, id, group string) error
+	SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error)
+	EditSessionTags(ctx context.Context, id string, add, remove []string) (session.Session, error)
 	DeleteSession(ctx context.Context, id string) error
 	RecycleSession(ctx context.Context, id string, w io.Writer) error
 	Prune(ctx context.Context, all bool) (int, error)

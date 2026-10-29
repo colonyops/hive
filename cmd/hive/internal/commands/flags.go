@@ -8,6 +8,7 @@ type Flags struct {
 	ConfigPath   string
 	DataDir      string
 	ProfilerPort int
+	TargetServer string
 }
 
 // ResolvedLogFile returns the log file path in use: the explicit --log-file

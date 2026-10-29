@@ -110,6 +110,22 @@ func (s *sessionServer) SetGroup(ctx context.Context, req *connect.Request[daemo
 	return connect.NewResponse(&daemonv1.SetGroupResponse{}), nil
 }
 
+func (s *sessionServer) SetTags(ctx context.Context, req *connect.Request[daemonv1.SetTagsRequest]) (*connect.Response[daemonv1.SetTagsResponse], error) {
+	sess, err := s.api.SetSessionTags(ctx, req.Msg.GetId(), req.Msg.GetTags())
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(&daemonv1.SetTagsResponse{Session: wire.SessionToProto(sess)}), nil
+}
+
+func (s *sessionServer) EditTags(ctx context.Context, req *connect.Request[daemonv1.EditTagsRequest]) (*connect.Response[daemonv1.EditTagsResponse], error) {
+	sess, err := s.api.EditSessionTags(ctx, req.Msg.GetId(), req.Msg.GetAdd(), req.Msg.GetRemove())
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(&daemonv1.EditTagsResponse{Session: wire.SessionToProto(sess)}), nil
+}
+
 func (s *sessionServer) Delete(ctx context.Context, req *connect.Request[daemonv1.DeleteRequest]) (*connect.Response[daemonv1.DeleteResponse], error) {
 	if err := s.api.DeleteSession(ctx, req.Msg.GetId()); err != nil {
 		return nil, wire.ToConnectError(err)

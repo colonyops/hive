@@ -777,7 +777,7 @@ func (s *SessionsService) EditSession(ctx context.Context, id, name string, tags
 	if err != nil {
 		return session.Session{}, Errorf(KindInvalid, "%s", err)
 	}
-	current, err := s.hive.Sessions().GetSession(ctx, id)
+	current, err := s.sessions.GetSession(ctx, id)
 	if err != nil {
 		if errors.Is(err, session.ErrNotFound) {
 			return session.Session{}, Wrap(err, KindNotFound, "session %q not found", id)
@@ -800,24 +800,24 @@ func (s *SessionsService) EditSession(ctx context.Context, id, name string, tags
 
 // SetSessionTags replaces a session's tags and returns the session.
 func (s *SessionsService) SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error) {
-	return s.saveTags(id, func(sessions *sessionsvc.Service) (session.Session, error) {
-		return sessions.SetSessionTags(ctx, id, tags)
+	return s.saveTags(id, func() (session.Session, error) {
+		return s.sessions.SetSessionTags(ctx, id, tags)
 	})
 }
 
 // EditSessionTags adds and then removes tags on a session, leaving its
 // other tags in place, and returns the session.
 func (s *SessionsService) EditSessionTags(ctx context.Context, id string, add, remove []string) (session.Session, error) {
-	return s.saveTags(id, func(sessions *sessionsvc.Service) (session.Session, error) {
-		return sessions.EditSessionTags(ctx, id, add, remove)
+	return s.saveTags(id, func() (session.Session, error) {
+		return s.sessions.EditSessionTags(ctx, id, add, remove)
 	})
 }
 
-func (s *SessionsService) saveTags(id string, save func(*sessionsvc.Service) (session.Session, error)) (session.Session, error) {
+func (s *SessionsService) saveTags(id string, save func() (session.Session, error)) (session.Session, error) {
 	if strings.TrimSpace(id) == "" {
 		return session.Session{}, Errorf(KindInvalid, "session id is required")
 	}
-	saved, err := save(s.hive.Sessions())
+	saved, err := save()
 	switch {
 	case errors.Is(err, session.ErrInvalidTag):
 		return session.Session{}, Errorf(KindInvalid, "%s", err)

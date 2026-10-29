@@ -146,7 +146,7 @@ func (m Model) executeEditSession(req editSessionRequest) tea.Cmd {
 			}
 		}
 		if req.setTags {
-			if _, err := m.service.SetSessionTags(ctx, req.sessionID, req.tags); err != nil {
+			if _, err := m.sessions.SetSessionTags(ctx, req.sessionID, req.tags); err != nil {
 				return editSessionCompleteMsg{err: fmt.Errorf("set tags: %w", err)}
 			}
 		}

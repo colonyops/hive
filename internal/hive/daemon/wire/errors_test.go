@@ -27,6 +27,7 @@ func TestSentinelsSurviveTheWire(t *testing.T) {
 		{fmt.Errorf("get session: %w", session.ErrNotFound), session.ErrNotFound, connect.CodeNotFound},
 		{fmt.Errorf("rename: %w", session.ErrDuplicateName), session.ErrDuplicateName, connect.CodeAlreadyExists},
 		{wire.ErrRemoteRequired, wire.ErrRemoteRequired, connect.CodeInvalidArgument},
+		{fmt.Errorf("%w: it is empty", session.ErrInvalidTag), session.ErrInvalidTag, connect.CodeInvalidArgument},
 		{errors.New("disk full"), nil, connect.CodeInternal},
 	} {
 		got := roundTrip(tc.err)
@@ -36,6 +37,11 @@ func TestSentinelsSurviveTheWire(t *testing.T) {
 			assert.ErrorIs(t, got, tc.sentinel)
 		}
 	}
+}
+
+func TestInvalidArgumentSentinelsStayApart(t *testing.T) {
+	require.NotErrorIs(t, roundTrip(fmt.Errorf("%w: it is empty", session.ErrInvalidTag)), wire.ErrRemoteRequired)
+	require.NotErrorIs(t, roundTrip(wire.ErrRemoteRequired), session.ErrInvalidTag)
 }
 
 func TestLaunchErrorKeepsEveryFieldAndItsCause(t *testing.T) {
