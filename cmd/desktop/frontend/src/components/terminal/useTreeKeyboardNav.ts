@@ -41,6 +41,7 @@ export function useTreeKeyboardNav(options: {
     for (const group of options.groups.value) {
       if (!options.expanded(group)) continue
       for (const row of group.sessions) {
+        if (row.offline) continue
         const windows = options.windowRowsFor(row)
         if (!options.rowRunning(row) || !windows.length) keys.push(sessionKey(row))
         for (const win of windows) keys.push(windowKey(row, win.windowId))

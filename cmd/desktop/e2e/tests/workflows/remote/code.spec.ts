@@ -23,8 +23,8 @@ function onServer(command: string): string {
   }).toString()
 }
 
-function serverGroup(page: Page, name: string) {
-  return page.locator(`[data-testid="terminal-server-group"][data-repo="server:${name}"]`)
+function sessionRow(page: Page) {
+  return page.locator(`[data-testid="terminal-session-row"][data-slug="${SLUG}"]`)
 }
 
 // Records each attach so a test can see which terminal the row opened.
@@ -57,9 +57,10 @@ async function stubTerminals(page: Page): Promise<string[]> {
   return attached
 }
 
-async function expand(page: Page, name: string): Promise<void> {
-  const group = serverGroup(page, name)
-  if ((await group.getAttribute('aria-expanded')) === 'false') await group.click()
+// A query opens every group it matches, so the session's row renders in
+// whichever repository group it joined.
+async function findSession(page: Page): Promise<void> {
+  await page.getByTestId('terminal-sessions-filter').fill(SESSION)
 }
 
 test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () => {
@@ -76,47 +77,43 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
     }
   })
 
-  test('lists each server, and an offline one does not hold up the tree', async ({ page }) => {
+  test('reports an offline server without holding up the tree', async ({ page }) => {
     await stubTerminals(page)
     await page.goto('/#/terminal')
 
     await expect(page.getByTestId('terminal-mode')).toBeVisible()
     await expect(page.getByTestId('terminal-sessions-loading')).toBeHidden()
-    await expect(serverGroup(page, 'server-a')).toHaveAttribute('data-server-state', 'connected', { timeout: 30_000 })
-    await expect(serverGroup(page, 'gone')).toHaveAttribute('data-server-state', 'offline', { timeout: 30_000 })
-    await expand(page, 'gone')
-    await expect(page.getByTestId('terminal-server-error')).toContainText('Connection refused')
+    await expect(page.getByTestId('terminal-server-offline-gone')).toContainText('gone offline', { timeout: 30_000 })
+    await expect(page.getByTestId('terminal-server-offline-server-a')).toHaveCount(0)
   })
 
-  test('creates a session on the server from its group', async ({ page }) => {
+  test('creates a session on the server chosen in the form', async ({ page }) => {
     await stubTerminals(page)
     await page.goto('/#/terminal')
-    const group = serverGroup(page, 'server-a')
-    await expect(group).toHaveAttribute('data-server-state', 'connected', { timeout: 30_000 })
-    await group.hover()
-    await group.getByTestId('terminal-server-new-session').click()
+    await expect(page.getByTestId('terminal-server-offline-gone')).toBeVisible({ timeout: 30_000 })
+    await page.getByTestId('terminal-new-session').click()
 
     await expect(page.getByTestId('new-session-dialog')).toBeVisible()
+    await page.getByTestId('new-session-server').click()
+    await page.getByTestId('new-session-server-option-server-a').click()
     await page.getByTestId('new-session-repository').click()
-    // windows.git's rule makes a tmux session the app can attach to.
-    await page.getByTestId('new-session-repository-search').fill('/home/hive/windows.git')
+    await page.getByTestId('new-session-repository-search').fill('/home/hive/repo.git')
     await page.getByTestId('new-session-repository-custom').click()
     await page.getByTestId('new-session-name').fill(SESSION)
     await page.getByTestId('new-session-submit').click()
     await expect(page.getByTestId('new-session-dialog')).toBeHidden()
 
-    await expand(page, 'server-a')
-    await expect(page.locator(`[data-testid="terminal-session-row"][data-slug="${SLUG}"]`)).toBeVisible({
-      timeout: 60_000,
-    })
+    await findSession(page)
+    await expect(sessionRow(page)).toBeVisible({ timeout: 60_000 })
+    await expect(sessionRow(page).getByTestId('terminal-session-host')).toHaveAttribute('data-server', 'server-a')
     expect(onServer(`hive session list --json`)).toContain(`"name":"${SESSION}"`)
   })
 
   test('opens the session as that server\'s terminal', async ({ page }) => {
     const attached = await stubTerminals(page)
     await page.goto('/#/terminal')
-    await expand(page, 'server-a')
-    await page.locator(`[data-testid="terminal-session-row"][data-slug="${SLUG}"]`).click()
+    await findSession(page)
+    await sessionRow(page).click()
 
     await expect(page).toHaveURL(new RegExp(`/terminal/${SLUG}$`))
     await expect.poll(() => attached).toContain(SLUG)
@@ -125,8 +122,8 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
   test('deletes the session on the server', async ({ page }) => {
     await stubTerminals(page)
     await page.goto('/#/terminal')
-    await expand(page, 'server-a')
-    const row = page.locator(`[data-testid="terminal-session-row"][data-slug="${SLUG}"]`)
+    await findSession(page)
+    const row = sessionRow(page)
     await row.hover()
     await row.getByTestId('terminal-session-menu-toggle').click()
     await expect(page.getByTestId('session-menu-start')).toHaveCount(0)

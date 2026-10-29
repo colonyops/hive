@@ -643,7 +643,7 @@ describe('TerminalMode', () => {
     expect(mocks.openBlank).toHaveBeenCalledWith('hay-kot/hive', 'repository', undefined, '')
   })
 
-  it('lists each server with its sessions, and an offline one with its reason', async () => {
+  it('lists a server session in its repository, marked with its server, and an offline server as a banner', async () => {
     mocks.ListServerSessions.mockResolvedValue([
       {
         server: 'box',
@@ -669,20 +669,61 @@ describe('TerminalMode', () => {
     ])
     const { wrapper } = await mountAvailable()
 
-    const groups = wrapper.findAll('[data-testid="terminal-server-group"]')
-    expect(groups.map((group) => [group.attributes('data-repo'), group.attributes('data-server-state')])).toEqual([
-      ['server:box', 'connected'],
-      ['server:down', 'offline'],
+    const group = wrapper.get('[data-testid="terminal-repo-group"][data-repo="/home/hive/repo.git"]')
+    expect(group.findAll('[data-testid="terminal-repo-hosts"] > span').map((dot) => dot.attributes('title'))).toEqual([
+      'box',
     ])
-    for (const group of groups) if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
-    expect(wrapper.find('[data-slug="box:remote-work"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="terminal-server-error"]').text()).toBe('ssh: connect refused')
+    if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
+    const host = wrapper.get('[data-slug="box:remote-work"] [data-testid="terminal-session-host"]')
+    expect(host.attributes('data-server')).toBe('box')
+    expect(host.attributes('title')).toBe('box · ada@box')
 
-    // Only a connected server takes a new session.
-    const add = wrapper.findAll('[data-testid="terminal-server-new-session"]')
-    expect(add).toHaveLength(1)
-    await add[0].trigger('click')
-    expect(mocks.openBlank).toHaveBeenCalledWith('', 'repository', undefined, 'box')
+    const banner = wrapper.get('[data-testid="terminal-server-offline-down"]')
+    expect(banner.text()).toContain('down offline · 0 sessions')
+    expect(wrapper.find('[data-testid="terminal-server-offline-box"]').exists()).toBe(false)
+    const calls = mocks.ListServerSessions.mock.calls.length
+    await wrapper.get('[data-testid="terminal-server-retry-down"]').trigger('click')
+    expect(mocks.ListServerSessions.mock.calls.length).toBe(calls + 1)
+  })
+
+  it('keeps an offline server’s last sessions in place, inert, until it answers again', async () => {
+    const connected = {
+      server: 'box',
+      ssh: 'ada@box',
+      state: 'connected',
+      error: '',
+      sessions: [
+        {
+          server: 'box',
+          id: 'box:9',
+          name: 'remote work',
+          slug: 'box:remote-work',
+          repo: '/home/hive/repo.git',
+          repoIdentity: '/home/hive/repo.git',
+          state: 'active',
+          canvasOwner: '',
+          tags: [],
+          createdAt: '',
+        },
+      ],
+    }
+    mocks.ListServerSessions.mockResolvedValue([connected])
+    const { wrapper, router } = await mountAvailable()
+    mocks.ListServerSessions.mockResolvedValue([{ ...connected, state: 'offline', error: 'refused', sessions: [] }])
+    await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="terminal-sessions-refresh"]').trigger('click')
+    await flushPromises()
+
+    const group = wrapper.get('[data-testid="terminal-repo-group"][data-repo="/home/hive/repo.git"]')
+    if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
+    const row = wrapper.get('[data-slug="box:remote-work"]')
+    expect(row.attributes('aria-disabled')).toBe('true')
+    expect(row.find('[data-testid="terminal-session-trailing"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="terminal-server-offline-box"]').text()).toContain('box offline · 1 session')
+
+    await row.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.params.slug).toBeFalsy()
   })
 
   it('starts a new session in the repository whose header was clicked', async () => {

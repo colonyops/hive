@@ -59,6 +59,28 @@ func (s *SessionsService) ListServerSessions(ctx context.Context) []ServerSessio
 		wg.Go(func() { out[i] = listServerSessions(ctx, srv) })
 	}
 	wg.Wait()
+	lists := make(map[string]ServerSessionList, len(out))
+	for _, list := range out {
+		lists[list.Server] = list
+	}
+	s.serverMu.Lock()
+	s.serverLists = lists
+	s.serverMu.Unlock()
+	return out
+}
+
+// listedServers is what the last ListServerSessions found on the servers
+// that answered it. A status poll asks only these, so an offline server costs
+// one ssh attempt per list instead of one per poll.
+func (s *SessionsService) listedServers() []ServerSessionList {
+	s.serverMu.Lock()
+	defer s.serverMu.Unlock()
+	out := make([]ServerSessionList, 0, len(s.serverLists))
+	for _, list := range s.serverLists {
+		if list.State == server.StateConnected && len(list.Sessions) > 0 {
+			out = append(out, list)
+		}
+	}
 	return out
 }
 
@@ -73,7 +95,7 @@ func listServerSessions(ctx context.Context, srv *servers.Server) ServerSessionL
 		if _, ok := errors.AsType[*wire.IncompatibleError](err); ok {
 			list.State = server.StateIncompatible
 		}
-		list.Error = srv.Explain(err).Error()
+		list.Error = err.Error()
 		return list
 	}
 	list.Sessions = sessions
@@ -115,7 +137,7 @@ func (s *SessionsService) target(ctx context.Context, id string) (sessionTarget,
 	if err != nil {
 		return sessionTarget{}, Wrap(err, KindInvalid, "session id")
 	}
-	if ref.IsLocal() {
+	if ref.Server == session.LocalServer {
 		return sessionTarget{api: s.sessions, tmux: s.tmux, id: ref.ID, server: ref.Server}, nil
 	}
 	api, err := s.serverAPI(ref.Server)
@@ -138,11 +160,11 @@ func (s *SessionsService) serverAPI(name string) (sessionapi.API, error) {
 	if fleet == nil {
 		return nil, Errorf(KindUnavailable, "the server fleet is not loaded")
 	}
-	api, err := fleet.API(name)
-	if err != nil {
-		return nil, Wrap(err, KindNotFound, "server %q", name)
+	srv, ok := fleet.Server(name)
+	if !ok {
+		return nil, Errorf(KindNotFound, "server %q is not under servers: in config.yaml", name)
 	}
-	return api, nil
+	return srv.Client(), nil
 }
 
 func (s *SessionsService) fleet() *servers.Fleet {
@@ -150,6 +172,13 @@ func (s *SessionsService) fleet() *servers.Fleet {
 		return nil
 	}
 	return s.servers()
+}
+
+// serverError classifies a server's failure and keeps its cause in the
+// message: the ssh error or the server's own refusal is the only part that
+// tells the user what to fix, and Error.MarshalJSON sends the message alone.
+func serverError(err error, kind Kind, format string, args ...any) error {
+	return &Error{Kind: kind, Msg: fmt.Sprintf(format, args...) + ": " + err.Error(), Err: err}
 }
 
 // errLocalOnly is the answer of an action that reads the session's checkout
@@ -167,7 +196,7 @@ func (s *SessionsService) ServerLaunchOptions(ctx context.Context, name string) 
 	}
 	options, err := api.SessionLaunchOptions(ctx)
 	if err != nil {
-		return dispatch.SessionLaunchOptions{}, Wrap(err, KindUnavailable, "reading the launch options of server %q", name)
+		return dispatch.SessionLaunchOptions{}, serverError(err, KindUnavailable, "reading the launch options of server %q", name)
 	}
 	opts := dispatch.SessionLaunchOptions{
 		DefaultRepository:        options.DefaultRepository,

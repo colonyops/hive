@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   groupTerminalSessions,
+  serverHue,
   terminalSessionGroups,
   useTerminalSessions,
   type TerminalSessionRow,
@@ -141,6 +142,35 @@ describe('useTerminalSessions', () => {
     expect(scratch.value).toBeNull()
     expect(error.value).toBeNull()
     expect(sessions.value.map((row) => row.slug)).toEqual(['hive-fix-parser'])
+  })
+
+  it('keeps the sessions an offline server last listed, marked offline', async () => {
+    const session = {
+      server: 'box',
+      id: 'box:9',
+      name: 'remote work',
+      slug: 'box:remote-work',
+      repo: '/home/hive/repo.git',
+      repoIdentity: '/home/hive/repo.git',
+      state: 'active',
+      canvasOwner: '',
+      tags: [],
+      createdAt: '',
+    }
+    const connected = { server: 'box', ssh: 'ada@box', state: 'connected', error: '', sessions: [session] }
+    const { servers, reloadServers } = useTerminalSessions()
+
+    mocks.ListServerSessions.mockResolvedValue([connected])
+    await reloadServers()
+    mocks.ListServerSessions.mockResolvedValue([{ ...connected, state: 'offline', error: 'refused', sessions: [] }])
+    await reloadServers()
+
+    expect(servers.value[0].server.state).toBe('offline')
+    expect(servers.value[0].sessions).toEqual([{ ...session, offline: true }])
+
+    mocks.ListServerSessions.mockResolvedValue([connected])
+    await reloadServers()
+    expect(servers.value[0].sessions).toEqual([session])
   })
 })
 
@@ -293,12 +323,17 @@ describe('terminalSessionGroups', () => {
     expect(groups.map((group) => group.kind)).toEqual(['repo'])
   })
 
-  it('puts each server after the local repositories, with its active sessions only', () => {
-    const remote = (name: string, state = 'active'): TerminalSessionRow => ({
-      ...row(name, 'git@github.com:colonyops/hive.git'),
-      server: 'box',
-      id: `box:${name}`,
-      slug: `box:${name}`,
+  it('merges each server session into its repository, after this machine and in server order', () => {
+    const remote = (
+      server: string,
+      name: string,
+      remote = 'git@github.com:colonyops/hive.git',
+      state = 'active',
+    ): TerminalSessionRow => ({
+      ...row(name, remote),
+      server,
+      id: `${server}:${name}`,
+      slug: `${server}:${name}`,
       state,
     })
     const box = { name: 'box', ssh: 'ada@box', state: 'connected', error: '' }
@@ -308,19 +343,30 @@ describe('terminalSessionGroups', () => {
       null,
       [],
       [
-        { server: box, sessions: [remote('beta'), remote('alpha'), remote('old', 'recycled')] },
-        { server: down, sessions: [] },
+        { server: down, sessions: [remote('down', 'alpha')] },
+        {
+          server: box,
+          sessions: [
+            remote('box', 'beta'),
+            remote('box', 'alpha'),
+            remote('box', 'old', undefined, 'recycled'),
+            remote('box', 'site', 'git@github.com:acme/site.git'),
+          ],
+        },
       ],
     )
 
-    expect(groups.map((group) => [group.kind, group.key])).toEqual([
-      ['repo', 'git@github.com:colonyops/hive.git'],
-      ['server', 'server:box'],
-      ['server', 'server:down'],
+    expect(groups.map((group) => [group.kind, group.key, group.servers])).toEqual([
+      ['repo', 'git@github.com:acme/site.git', ['box']],
+      ['repo', 'git@github.com:colonyops/hive.git', ['down', 'box']],
     ])
-    expect(groups[1].sessions.map((s) => s.id)).toEqual(['box:alpha', 'box:beta'])
-    // An offline server keeps its section, so its state stays in view.
-    expect(groups[2].server).toEqual(down)
-    expect(groups[2].sessions).toEqual([])
+    expect(groups[1].sessions.map((s) => s.id)).toEqual(['zeta', 'down:alpha', 'box:alpha', 'box:beta'])
+  })
+
+  it('colors a server by its place in the config, the same while it is offline', () => {
+    const servers = ['a', 'b', 'c', 'd', 'e', 'f']
+    expect(serverHue(servers, 'b')).toEqual(serverHue(['a', 'b'], 'b'))
+    expect(serverHue(servers, 'a')).not.toEqual(serverHue(servers, 'b'))
+    expect(serverHue(servers, 'f')).toEqual(serverHue(servers, 'a'))
   })
 })

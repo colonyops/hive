@@ -21,6 +21,8 @@ const props = defineProps<{
   repositories: SessionLaunchRepository[] | null | undefined
   testid?: string
   id?: string
+  /** The server the list comes from, '' for this machine. */
+  server?: string
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
@@ -247,7 +249,10 @@ onClickOutside(
                  empty one is a setting, not a missing feature. Someone who
                  skipped the first-run step lands here and would otherwise have
                  nothing to go on. -->
-            <span class="mt-1 block text-caption">Add the folders holding them under Settings ▸ Hive CLI.</span>
+            <span v-if="server" class="mt-1 block text-caption">
+              Type a URL that {{ server }} can clone, or add workspaces to the config.yaml on {{ server }}.
+            </span>
+            <span v-else class="mt-1 block text-caption">Add the folders holding them under Settings ▸ Hive CLI.</span>
           </template>
         </div>
       </div>

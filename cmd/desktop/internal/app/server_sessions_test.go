@@ -26,6 +26,7 @@ type serverFixture struct {
 	box       *daemonclient.Client
 	boxMux    *fakeMux
 	boxTmux   *fakeSessionTmux
+	boxWins   *fakeWindowSource
 	localTmux *fakeSessionTmux
 	jobs      *fakeJobRunner
 }
@@ -34,7 +35,7 @@ type serverFixture struct {
 // reached without ssh, and whose server "down" never answers.
 func newServerFixture(t *testing.T) serverFixture {
 	t.Helper()
-	f := serverFixture{boxMux: &fakeMux{}, boxTmux: &fakeSessionTmux{}, localTmux: &fakeSessionTmux{}, jobs: &fakeJobRunner{}}
+	f := serverFixture{boxMux: &fakeMux{}, boxTmux: &fakeSessionTmux{}, boxWins: &fakeWindowSource{}, localTmux: &fakeSessionTmux{}, jobs: &fakeJobRunner{}}
 	socket := runTestDaemonSocket(t, f.boxMux)
 	f.box = daemonclient.New(daemonclient.Options{Dialer: daemonclient.UnixDialer(socket), Logger: zerolog.Nop()})
 	dial := func(ctx context.Context, cfg config.ServerConfig, stderr io.Writer) (net.Conn, error) {
@@ -52,12 +53,17 @@ func newServerFixture(t *testing.T) serverFixture {
 	f.svc = newSessionsService(SessionsDeps{
 		Hive: local.engine, Tmux: f.localTmux, Jobs: f.jobs, Logger: zerolog.Nop(),
 		Servers: func() *servers.Fleet { return fleet },
-		ServerTmux: func(_ context.Context, name string) (sessionTmux, error) {
+		ServerTmux: func(_ context.Context, name string) (serverSessionTmux, error) {
 			require.Equal(t, "box", name)
-			return f.boxTmux, nil
+			return fakeServerTmux{f.boxTmux, f.boxWins}, nil
 		},
 	})
 	return f
+}
+
+type fakeServerTmux struct {
+	*fakeSessionTmux
+	*fakeWindowSource
 }
 
 func (f serverFixture) create(t *testing.T, name string) string {
@@ -154,4 +160,24 @@ func TestServerSessions_LaunchOptionsComeFromTheServer(t *testing.T) {
 
 	_, err = f.svc.ServerLaunchOptions(t.Context(), "down")
 	assert.Equal(t, KindUnavailable, KindOf(err))
+}
+
+func TestServerSessions_StatusPollAsksOnlyTheServersThatAnswered(t *testing.T) {
+	f := newServerFixture(t)
+	f.create(t, "review")
+
+	_, err := f.svc.SessionStatuses(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, f.boxWins.seen, "no server is polled before the first list")
+
+	f.svc.ListServerSessions(t.Context())
+	listed := f.svc.listedServers()
+	require.Len(t, listed, 1, "the offline server is left out")
+	assert.Equal(t, "box", listed[0].Server)
+
+	snapshot, err := f.svc.SessionStatuses(t.Context())
+	require.NoError(t, err)
+	for _, item := range snapshot.Items {
+		assert.True(t, strings.HasPrefix(item.SessionID, "box:"), item.SessionID)
+	}
 }

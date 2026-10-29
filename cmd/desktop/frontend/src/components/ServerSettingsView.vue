@@ -37,6 +37,17 @@ function tone(state: string): 'success' | 'danger' | 'neutral' {
   return 'neutral'
 }
 
+const stateLabels: Record<string, string> = {
+  connected: 'Connected',
+  offline: 'Offline',
+  incompatible: 'Incompatible',
+  connecting: 'Connecting',
+}
+
+function stateLabel(state: string): string {
+  return stateLabels[state] ?? state
+}
+
 function hint(server: ServerStatus): string {
   const parts = [`ssh ${server.ssh}`]
   if (server.version) parts.push(`hive ${server.version}`)
@@ -52,8 +63,8 @@ onMounted(() => {
 <template>
   <SettingsPage testid="settings-servers">
     <SettingsSection
-      title="Servers"
-      description="Hive reaches each server over ssh and lists its sessions in Code. Add or change servers under servers: in the Hive config.yaml."
+      title="Configured servers"
+      description="From servers: in the Hive config.yaml. Hive reaches each one over ssh."
       boxed
     >
       <template #actions>
@@ -76,9 +87,14 @@ onMounted(() => {
         :hint="server.error || hint(server)"
         :testid="`settings-server-${server.name}`"
       >
-        <BaseBadge :tone="tone(server.state)" dot :data-testid="`settings-server-${server.name}-state`">{{
-          server.state
-        }}</BaseBadge>
+        <BaseBadge
+          :tone="tone(server.state)"
+          variant="pill"
+          dot
+          class="px-2.5 py-0.5 text-caption font-medium"
+          :data-testid="`settings-server-${server.name}-state`"
+          >{{ stateLabel(server.state) }}</BaseBadge
+        >
       </SettingsRow>
     </SettingsSection>
   </SettingsPage>

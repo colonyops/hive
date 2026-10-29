@@ -59,6 +59,13 @@ type sessionTmux interface {
 	RenameSessionIfPresent(ctx context.Context, from, to string) (bool, error)
 }
 
+// serverSessionTmux is a server's tmux: a rename keeps its session in step,
+// and a status poll joins its windows to the server's status.
+type serverSessionTmux interface {
+	sessionTmux
+	sessionWindowSource
+}
+
 // sessionJobRunner runs slow session work as a tracked background job so a
 // clone, a worktree removal or a prune does not block the caller.
 type sessionJobRunner interface {
@@ -124,7 +131,9 @@ type SessionsService struct {
 	windows           sessionWindowSource
 	tmux              sessionTmux
 	servers           func() *servers.Fleet
-	serverTmux        func(ctx context.Context, server string) (sessionTmux, error)
+	serverTmux        func(ctx context.Context, server string) (serverSessionTmux, error)
+	serverMu          sync.Mutex
+	serverLists       map[string]ServerSessionList
 	agentWindows      sessionAgentWindows
 	agentCommands     func() map[string]string
 	jobs              sessionJobRunner
@@ -182,8 +191,8 @@ type SessionsDeps struct {
 	// machine only.
 	Servers func() *servers.Fleet
 	// ServerTmux is the tmux of a server, for a rename that must keep the
-	// server's tmux session in step.
-	ServerTmux    func(ctx context.Context, server string) (sessionTmux, error)
+	// server's tmux session in step and for the windows of a status poll.
+	ServerTmux    func(ctx context.Context, server string) (serverSessionTmux, error)
 	AgentWindows  sessionAgentWindows
 	AgentCommands func() map[string]string
 	Jobs          sessionJobRunner
@@ -515,7 +524,7 @@ func (s *SessionsService) repoURL(remote string) string {
 // sessionCheckout resolves the directory a session's own record names, which
 // is what keeps open and reveal off arbitrary paths.
 func (s *SessionsService) sessionCheckout(ctx context.Context, id string) (string, error) {
-	if ref, err := session.ParseRef(id, session.LocalServer); err == nil && !ref.IsLocal() {
+	if ref, err := session.ParseRef(id, session.LocalServer); err == nil && ref.Server != session.LocalServer {
 		return "", errLocalOnly(id, "opening the checkout")
 	}
 	detail, err := s.SessionDetail(ctx, id)

@@ -80,7 +80,7 @@ function resolveOptions(): Promise<SessionLaunchOptionsView> {
   if (!cachedOptions) return fetchOptions()
   void fetchOptions()
     .then((opts) => {
-      if (open.value) options.value = opts
+      if (open.value && !useNewSessionServer().server.value) options.value = opts
     })
     .catch(() => {})
   return Promise.resolve(cachedOptions)

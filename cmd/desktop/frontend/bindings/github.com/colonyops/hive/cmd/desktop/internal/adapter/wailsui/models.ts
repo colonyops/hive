@@ -605,6 +605,14 @@ export interface ServerSessions {
     "sessions": SessionSummary[] | null;
 }
 
+export interface SessionCondition {
+    "field": string;
+    "op": string;
+    "values"?: string[] | null;
+    "value"?: string;
+    "days"?: number;
+}
+
 /**
  * SessionDetail is one session read in full, for a detail view.
  */
@@ -621,6 +629,11 @@ export interface SessionDetail {
     "tags": string[] | null;
     "createdAt": string;
     "updatedAt": string;
+}
+
+export interface SessionFilter {
+    "match": string;
+    "conditions": SessionCondition[] | null;
 }
 
 /**
@@ -653,7 +666,7 @@ export interface SessionGitStatus {
 
 /**
  * SessionSummary is the session row shown in Code. CreatedAt starts with the
- * current logical session even when Hive reuses an older clone record.
+ * current logical session even when Hive reuses an older clone.
  * 
  * A session on a server has Server set, and its ID and Slug carry the
  * "<server>:" prefix, so every id-keyed call and every terminal call reaches
@@ -670,6 +683,16 @@ export interface SessionSummary {
     "canvasOwner": string;
     "tags": string[] | null;
     "createdAt": string;
+}
+
+/**
+ * SessionView is a saved Code tab view. Field and Op values pass through
+ * unchecked; the frontend owns their meaning.
+ */
+export interface SessionView {
+    "id": string;
+    "name": string;
+    "filter": SessionFilter;
 }
 
 /**

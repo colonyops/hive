@@ -273,6 +273,7 @@ useSubmitShortcut(submit)
           :id="id"
           :model-value="repository"
           :repositories="options.repositories"
+          :server="server"
           :testid="`${fieldId}-repository`"
           @update:model-value="repository = $event"
         />

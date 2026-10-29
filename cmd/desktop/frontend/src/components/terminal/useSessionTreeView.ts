@@ -54,7 +54,7 @@ export function useSessionTreeView(
     const ctx = { rowRunning: tree.rowRunning, statusesLoaded: tree.statusesLoaded.value, now: Date.now() }
     const groups: TerminalSessionGroup[] = []
     for (const group of tree.sessionGroups.value) {
-      if (group.kind !== 'repo' && group.kind !== 'server') {
+      if (group.kind !== 'repo') {
         groups.push(group)
         continue
       }
@@ -125,11 +125,8 @@ export function useSessionTreeView(
   // one has found what it went looking for.
   const note = computed<'' | 'empty' | 'no-matches'>(() => {
     if (tree.sessionsError.value || !ready.value) return ''
-    const hasServers = tree.sessionGroups.value.some((group) => group.kind === 'server')
-    if (!tree.activeSessions.value.length && !hasServers) return 'empty'
-    const found = query.value.trim()
-      ? groups.value.length > 0
-      : groups.value.some((group) => group.kind === 'repo' || group.kind === 'server')
+    if (!tree.sessionGroups.value.some((group) => group.kind === 'repo')) return 'empty'
+    const found = query.value.trim() ? groups.value.length > 0 : groups.value.some((group) => group.kind === 'repo')
     return found ? '' : 'no-matches'
   })
 

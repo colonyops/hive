@@ -361,14 +361,23 @@ export function useAppPaletteRows(
       // itself.
       for (const group of terminalGroups.value) {
         for (const row of group.sessions) {
-          if (row.slug === onScreenSessionSlug.value) continue
+          if (row.slug === onScreenSessionSlug.value || row.offline) continue
           cmds.push({
             id: `terminal:attach:${row.slug}`,
             title: row.name,
             group: group.name,
             scope: 'goto',
             kind: 'session',
-            keywords: [row.slug, group.name, ...(row.tags ?? []), 'session', 'attach', 'switch', 'open'],
+            keywords: [
+              row.slug,
+              group.name,
+              ...(row.server ? [row.server] : []),
+              ...(row.tags ?? []),
+              'session',
+              'attach',
+              'switch',
+              'open',
+            ],
             icon: IconTerminal,
             run: () => void router.push({ name: 'terminal', params: { slug: row.slug } }),
           })

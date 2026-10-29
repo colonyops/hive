@@ -9,8 +9,10 @@ import { useAgentSessionsAll } from '../../stores/useAgentSessionsAll'
 import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
 import { useTerminalPinnedChats } from '../../stores/useTerminalPinnedChats'
 import {
+  serverHue,
   terminalSessionGroups,
   useTerminalSessions,
+  type ServerHue,
   type TerminalSessionGroup,
   type TerminalSessionRow,
 } from '../../stores/useTerminalSessions'
@@ -70,9 +72,25 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
   // recycled or corrupted one has no checkout left to open a terminal in. They
   // still arrive in the listing, which is what prune counts and acts on.
   const activeSessions = computed(() => sessionRows.value.filter((row) => row.state === 'active'))
+  // An offline server's last-known rows stay in the tree but out of this set:
+  // nothing can attach to them until the server answers again.
   const serverSessions = computed(() =>
-    servers.value.flatMap((list) => list.sessions.filter((row) => row.state === 'active')),
+    servers.value.flatMap((list) => list.sessions.filter((row) => row.state === 'active' && !row.offline)),
   )
+  const serverNames = computed(() => servers.value.map((list) => list.server.name))
+  const offlineServers = computed(() =>
+    servers.value
+      .filter((list) => list.server.state !== 'connected')
+      .map((list) => ({ ...list.server, sessions: list.sessions.filter((row) => row.state === 'active').length })),
+  )
+
+  function hue(server: string): ServerHue {
+    return serverHue(serverNames.value, server)
+  }
+
+  function serverConnected(server: string): boolean {
+    return servers.value.some((list) => list.server.name === server && list.server.state === 'connected')
+  }
 
   // The scratch terminal and the pinned chats are part of this set rather than
   // beside it: the pool, the window sweep and the watcher that lets go of a
@@ -91,8 +109,9 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
 
   // The tree has no other way to learn whether tmux is holding one of these, so
   // the sweep asks about them whatever "always show windows" says.
-  // A server's sessions are swept too: hive's status projection is local, so
-  // the sweep is the one way to know whether a server's terminal runs.
+  // A server's sessions are swept too: the status poll reads a server's
+  // windows only after its session list lands, so the sweep is what knows
+  // first whether a server's terminal runs.
   const alwaysSwept = computed(() => [
     ...chatRows.value,
     ...(scratchRow.value ? [scratchRow.value] : []),
@@ -112,7 +131,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     return !isScratch(row) && !isChat(row)
   }
 
-  /** A hive session on a server: no local checkout, agents, or status projection. */
+  /** A hive session on a server: no local checkout or agents. */
   function isServerSession(row: TerminalSessionRow): boolean {
     return !!row.server
   }
@@ -270,6 +289,12 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     isHiveSession,
     isServerSession,
     serverSessions,
+    servers,
+    serverNames,
+    offlineServers,
+    reloadServers,
+    hue,
+    serverConnected,
     sessionServer,
     rowRunning,
     rowIdle,

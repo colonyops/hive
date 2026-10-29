@@ -34,6 +34,12 @@ export interface TerminalSessionRow {
   tags: readonly string[] | null
   /** Start of the current Hive session lifecycle. Empty for scratch terminals and pinned chats. */
   createdAt: string
+  /**
+   * A server's row from its last answer, kept while the server does not
+   * answer: it stays in place so the tree does not reshuffle, but nothing can
+   * attach to it.
+   */
+  offline?: boolean
 }
 
 /**
@@ -44,7 +50,7 @@ export interface TerminalSessionRow {
  * from tmux directly — and it is a closed union rather than a `pinned` flag
  * because the two non-repo kinds do not render alike.
  */
-export type TerminalSectionKind = 'chats' | 'scratch' | 'repo' | 'server'
+export type TerminalSectionKind = 'chats' | 'scratch' | 'repo'
 
 /** A server under servers: as the last session list found it. */
 export interface TerminalServer {
@@ -61,8 +67,8 @@ export interface TerminalSessionGroup {
   name: string
   sessions: TerminalSessionRow[]
   kind: TerminalSectionKind
-  /** Set on a `server` group. */
-  server?: TerminalServer
+  /** The servers with a session in this repository, in config order. */
+  servers?: string[]
 }
 
 /** One server's sessions, as ListServerSessions answers them. */
@@ -74,24 +80,63 @@ export interface TerminalServerSessions {
 const CHATS_GROUP_KEY = 'chats'
 const SCRATCH_GROUP_KEY = 'scratch'
 
-export function groupTerminalSessions(rows: readonly TerminalSessionRow[]): TerminalSessionGroup[] {
+/**
+ * The tree's repositories, each with this machine's sessions first and then
+ * each server's in `servers` order. A server's session joins the group of
+ * its repository, so one repository is one group wherever its sessions run.
+ */
+export function groupTerminalSessions(
+  rows: readonly TerminalSessionRow[],
+  servers: readonly string[] = [],
+): TerminalSessionGroup[] {
   const groups = new Map<string, TerminalSessionGroup>()
   for (const row of rows) {
     const key = row.repoIdentity
     let group = groups.get(key)
     if (!group) {
-      group = { key, name: '', sessions: [], kind: 'repo' }
+      group = { key, name: '', sessions: [], kind: 'repo', servers: [] }
       groups.set(key, group)
     }
     group.sessions.push(row)
   }
+  const hostOrder = (row: TerminalSessionRow) => (row.server ? servers.indexOf(row.server) + 1 : 0)
   // Remotes in one group can be spelled differently, so the first session by
   // name picks the label, as the TUI's GroupSessionsByRepo does.
   for (const group of groups.values()) {
-    group.sessions.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
-    group.name = groupDisplayName(group.sessions[0].repo)
+    const byName = [...group.sessions].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+    group.name = groupDisplayName(byName[0].repo)
+    group.sessions = byName.sort((a, b) => hostOrder(a) - hostOrder(b))
+    group.servers = servers.filter((name) => group.sessions.some((row) => row.server === name))
   }
   return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+// `badge` overrides BaseBadge's own tone colors.
+const SERVER_HUES = [
+  { mark: 'bg-node-blue-tint text-node-blue', fill: 'bg-node-blue', badge: '!bg-node-blue-tint !text-node-blue' },
+  {
+    mark: 'bg-node-purple-tint text-node-purple',
+    fill: 'bg-node-purple',
+    badge: '!bg-node-purple-tint !text-node-purple',
+  },
+  { mark: 'bg-node-teal-tint text-node-teal', fill: 'bg-node-teal', badge: '!bg-node-teal-tint !text-node-teal' },
+  {
+    mark: 'bg-node-orange-tint text-node-orange',
+    fill: 'bg-node-orange',
+    badge: '!bg-node-orange-tint !text-node-orange',
+  },
+  { mark: 'bg-node-green-tint text-node-green', fill: 'bg-node-green', badge: '!bg-node-green-tint !text-node-green' },
+] as const
+
+export type ServerHue = (typeof SERVER_HUES)[number]
+
+/**
+ * A server's color, by its place in `servers`, so it stays put while the
+ * server is offline. Colors repeat after five servers.
+ */
+export function serverHue(servers: readonly string[], name: string): ServerHue {
+  const index = Math.max(servers.indexOf(name), 0)
+  return SERVER_HUES[index % SERVER_HUES.length]
 }
 
 function groupDisplayName(remote: string): string {
@@ -100,7 +145,8 @@ function groupDisplayName(remote: string): string {
 
 /**
  * The tree's groups: pinned chats, then the scratch terminal, then one per
- * repository. The two leading sections are prepended rather than sorted in
+ * repository, holding that repository's sessions here and on every server.
+ * The two leading sections are prepended rather than sorted in
  * because being pinned is the point — they must not move as repositories come
  * and go — and chats lead because a pinned chat is something the user is
  * watching, which is the whole reason it was pinned.
@@ -117,21 +163,11 @@ export function terminalSessionGroups(
   chats: TerminalSessionRow[],
   servers: readonly { readonly server: TerminalServer; readonly sessions: readonly TerminalSessionRow[] }[] = [],
 ): TerminalSessionGroup[] {
-  const groups = groupTerminalSessions(rows)
-  // A server is one section after the local repositories, in config order, and
-  // stays in the tree while it is offline so its state is in view.
-  for (const { server, sessions } of servers) {
-    const active = sessions
-      .filter((row) => row.state === 'active')
-      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
-    groups.push({
-      key: `server:${server.name}`,
-      name: server.name,
-      sessions: active,
-      kind: 'server',
-      server: { ...server },
-    })
-  }
+  const serverRows = servers.flatMap(({ sessions }) => sessions.filter((row) => row.state === 'active'))
+  const groups = groupTerminalSessions(
+    [...rows, ...serverRows],
+    servers.map(({ server }) => server.name),
+  )
   if (scratch) groups.unshift({ key: SCRATCH_GROUP_KEY, name: scratch.name, sessions: [scratch], kind: 'scratch' })
   if (chats.length) groups.unshift({ key: CHATS_GROUP_KEY, name: 'Chats', sessions: chats, kind: 'chats' })
   return groups
@@ -149,7 +185,7 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
   // rather than assumed here, because the slug is what an attach addresses.
   const scratch = ref<TerminalSessionRow | null>(null)
 
-  const rows = useResource(
+  const rows = useResource<TerminalSessionRow[]>(
     async () => {
       const [list] = await Promise.all([ListSessions(), loadScratch()])
       return list ?? []
@@ -159,12 +195,18 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
 
   // Apart from the local rows, so a slow or offline server never holds up the
   // local tree. Each server answers within a few seconds or reports offline.
+  // A server that stops answering keeps the sessions it last listed, marked
+  // offline.
   const servers = useResource(
-    async (): Promise<TerminalServerSessions[]> =>
-      ((await ListServerSessions()) ?? []).map((list) => ({
-        server: { name: list.server, ssh: list.ssh, state: list.state, error: list.error },
-        sessions: list.sessions ?? [],
-      })),
+    async (): Promise<TerminalServerSessions[]> => {
+      const previous = new Map(servers.data.value.map((list) => [list.server.name, list.sessions]))
+      return ((await ListServerSessions()) ?? []).map((list): TerminalServerSessions => {
+        const server = { name: list.server, ssh: list.ssh, state: list.state, error: list.error }
+        if (list.state === 'connected') return { server, sessions: list.sessions ?? [] }
+        const lastKnown = previous.get(list.server) ?? []
+        return { server, sessions: lastKnown.map((row) => ({ ...row, offline: true })) }
+      })
+    },
     { initial: [] as TerminalServerSessions[], errorFallback: 'Could not list the sessions on servers.' },
   )
 

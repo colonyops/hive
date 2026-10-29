@@ -118,6 +118,22 @@ describe('useNewSession', () => {
     expect(s.error.value).toBe('ssh: connect refused')
   })
 
+  it('keeps the server options when the refresh of the local options lands', async () => {
+    const boxOptions = { ...options, workspaces: [], defaultRepository: '/home/hive/repo.git', agents: ['testbash'] }
+    mocks.ServerLaunchOptions.mockResolvedValue(boxOptions)
+    const s = useNewSession()
+    await s.openBlank()
+    s.cancel()
+
+    let refresh: (opts: typeof options) => void = () => {}
+    mocks.SessionLaunchOptions.mockReturnValueOnce(new Promise((resolve) => (refresh = resolve)))
+    await s.openBlank('', 'repository', undefined, 'box')
+    refresh({ ...options, agents: ['claude', 'pi'] })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(s.options.value).toEqual(boxOptions)
+  })
+
   it('opens blank with the default repository', async () => {
     const s = useNewSession()
     await s.openBlank()

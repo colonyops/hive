@@ -119,7 +119,7 @@ func TestTerminals_AttachTellsAGoneSessionFromAnOfflineServer(t *testing.T) {
 	assert.Equal(t, KindNotFound, KindOf(err))
 
 	_, err = terminals.Attach(t.Context(), "offline:hive-there", 100, 30)
-	assert.Equal(t, KindInternal, KindOf(err))
+	assert.Equal(t, KindUnavailable, KindOf(err))
 }
 
 func TestTerminals_SweepKeysServerWindowsByTarget(t *testing.T) {
@@ -282,6 +282,32 @@ func TestTerminals_RefuseToStartAServersSession(t *testing.T) {
 
 	_, err = terminals.Attach(t.Context(), "box:", 100, 30)
 	assert.Equal(t, KindInvalid, KindOf(err))
+}
+
+// unreachableRunner fails every command the way ssh does for a server that
+// does not answer.
+type unreachableRunner struct{}
+
+func (unreachableRunner) Command(ctx context.Context, _ string, _ []string, _ ...string) *exec.Cmd {
+	return exec.CommandContext(ctx, "sh", "-c", "echo 'ssh: connect to host box port 22: Connection refused' >&2; exit 255")
+}
+
+func TestTerminals_AttachToAnUnreachableServerSaysWhy(t *testing.T) {
+	terminals := newTestTerminals(t, nil)
+	down := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{
+		Logger: zerolog.Nop(),
+		Binary: func() (string, error) { return "tmux", nil },
+		Runner: unreachableRunner{},
+	})
+	t.Cleanup(func() { _ = down.Stop(context.WithoutCancel(t.Context())) })
+	terminals.servers = fakeTerminalServers{"down": down}
+
+	_, err := terminals.Attach(t.Context(), "down:hive-there", 100, 30)
+	require.Error(t, err)
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	appErr, ok := errors.AsType[*Error](err)
+	require.True(t, ok)
+	assert.Contains(t, appErr.Msg, "Connection refused", "the message the frontend gets names the ssh failure")
 }
 
 func keys[V any](m map[string]V) []string {

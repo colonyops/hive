@@ -12,6 +12,7 @@ const now = Date.parse('2026-10-28T12:00:00Z')
 function row(overrides: Partial<TerminalSessionRow> = {}): TerminalSessionRow {
   return {
     id: '1',
+    server: '',
     name: 'parser',
     slug: 'parser-1',
     repo: 'github.com/acme/site',
