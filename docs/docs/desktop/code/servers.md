@@ -5,13 +5,15 @@ description: Show, create, and open sessions on other machines in the Code area.
 
 # Servers
 
-Code lists the sessions of each server under `servers:` in the hive `config.yaml`, after your local sessions. A server is another machine that runs hive and that Hive Desktop reaches over ssh. Remote servers are experimental.
+Code lists the sessions of each server under `servers:` in the hive `config.yaml` with your local sessions. A server is another machine that runs hive and that Hive Desktop reaches over ssh. Remote servers are experimental.
 
 To set up a server and add it to `config.yaml`, follow [Remote servers](../../cli/getting-started/remote-servers.md). Hive Desktop and the hive CLI read the same list.
 
 ## Sessions on a server
 
-Each server is one group in the session list, with its state. Hover a connected server's group and click the plus button (**New session on** and the server name) to create a session there, or pick the server in the Server field of the New Session dialog. The dialog then lists that server's repositories and agents.
+A server's session sits in its repository's group, after your local sessions, with a server icon in that server's color. Hover the icon for the server's name. Each repository header has a colored dot for every server with a session in it. When a server session is open, the bar above its terminal names the server.
+
+To create a session on a server, pick it in the Server field of the New Session dialog, or run **New session on** and the server name from the command palette. The dialog then lists that server's repositories and agents.
 
 On a server's session you can:
 
@@ -28,8 +30,8 @@ Open in editor, Show in Finder, agent windows, and configured actions run on you
 
 | State | Meaning | Fix |
 | --- | --- | --- |
-| connected | The server answered | |
-| offline | ssh or the daemon did not answer | Read the ssh error on the server's group. Check that `ssh <host>` logs in without a prompt. |
-| incompatible | The server's hive speaks another protocol version | Install the same hive version on both machines |
+| Connected | The server answered | |
+| Offline | ssh or the daemon did not answer | Read the ssh error on the server's banner in Code. Check that `ssh <host>` logs in without a prompt. |
+| Incompatible | The server's hive speaks another protocol version | Install the same hive version on both machines |
 
-An offline server keeps its group and shows its error. It does not slow down the rest of the list.
+An offline server shows as a banner above the list, with **Retry**. Hover it for the ssh error. Its sessions stay in place, struck through, until it answers again. It does not slow down the rest of the list.
