@@ -11,9 +11,11 @@ import IconListTodo from '~icons/lucide/list-todo'
 import IconPlay from '~icons/lucide/play'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconSearch from '~icons/lucide/search'
+import IconServer from '~icons/lucide/server'
 import IconTerminal from '~icons/lucide/terminal'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import PaneStatusBar from '../PaneStatusBar.vue'
 import SessionTagsStatus from '../SessionTagsStatus.vue'
@@ -121,6 +123,14 @@ const statusBarRow = computed(() => {
 // configured actions all run on this machine.
 const statusBarLocal = computed(() => !!statusBarRow.value && !tree.isServerSession(statusBarRow.value))
 const statusBarSessionId = computed(() => statusBarRow.value?.id ?? '')
+// The server a session runs on is named here, above the terminal, so nobody
+// types into a server's agent thinking it is this machine's.
+const statusBarHost = computed(() => {
+  const server = statusBarRow.value?.server
+  if (!server) return null
+  const ssh = tree.servers.find((list) => list.server.name === server)?.server.ssh ?? ''
+  return { name: server, ssh, hue: tree.hue(server) }
+})
 const {
   git: sessionGit,
   pullRequest: sessionPullRequest,
@@ -171,6 +181,14 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
       @open-editor="runStatusBarAction(OpenSessionInEditor)"
       @reveal="runStatusBarAction(RevealSession)"
     >
+      <BaseBadge
+        v-if="statusBarHost"
+        class="mx-1 h-[18px] shrink-0 px-1.5 font-mono text-micro font-medium"
+        :class="statusBarHost.hue.badge"
+        :title="statusBarHost.ssh ? `${statusBarHost.name} · ${statusBarHost.ssh}` : statusBarHost.name"
+        data-testid="terminal-pane-host"
+        ><IconServer class="size-3" aria-hidden="true" />{{ statusBarHost.name }}</BaseBadge
+      >
       <SessionStatusChips
         :git="sessionGit"
         :pull-request="sessionPullRequest"
