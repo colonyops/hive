@@ -43,7 +43,7 @@ func sessionIDs(sessions []Session) []string {
 	return ids
 }
 
-func TestProbeSeesASessionCreatedOnTheServer(t *testing.T) {
+func TestServersProbe_SeesASessionCreatedOnTheServer(t *testing.T) {
 	created := serverA.CreateSession(t, "probe-me")
 
 	probe := DecodeJSON[probeResult](t, NewClient(t).Hive("servers", "probe", "--json", serverA.Name).Ok(t))
@@ -54,7 +54,7 @@ func TestProbeSeesASessionCreatedOnTheServer(t *testing.T) {
 	assert.Contains(t, probe.Sessions, probeSession{ID: created.ID, Name: "probe-me"})
 }
 
-func TestServersLsReachesBothServers(t *testing.T) {
+func TestServersLs_ReachesBothServers(t *testing.T) {
 	summaries := DecodeJSONLines[serverSummary](t, NewClient(t).Hive("servers", "ls", "--json").Ok(t))
 
 	require.Len(t, summaries, 2)
@@ -64,7 +64,7 @@ func TestServersLsReachesBothServers(t *testing.T) {
 	}
 }
 
-func TestSessionAPIOverSSHChangesTheServer(t *testing.T) {
+func TestSessionAPI_ChangesTheServer(t *testing.T) {
 	api := serverA.API(t)
 	ctx := t.Context()
 
@@ -88,7 +88,7 @@ func TestSessionAPIOverSSHChangesTheServer(t *testing.T) {
 	assert.Contains(t, gone.Stdout+gone.Stderr, session.ErrNotFound.Error())
 }
 
-func TestFixtureAliasesReachDistinctServers(t *testing.T) {
+func TestFixture_AliasesReachDistinctServers(t *testing.T) {
 	onA := serverA.CreateSession(t, "twin")
 	onB := serverB.CreateSession(t, "twin")
 
@@ -100,7 +100,7 @@ func TestFixtureAliasesReachDistinctServers(t *testing.T) {
 	assert.NotContains(t, idsOnB, onA.ID)
 }
 
-func TestAStoppedServerIsUnreachableUntilItStarts(t *testing.T) {
+func TestServersLs_AStoppedServerIsUnreachableUntilItStarts(t *testing.T) {
 	client := NewClient(t)
 	reachable := func() map[string]serverSummary {
 		out := map[string]serverSummary{}
