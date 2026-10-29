@@ -4643,11 +4643,12 @@ describe('TerminalMode', () => {
       })
       useTerminalStatusBar().setShowStatusBar(true)
       const { wrapper } = await mountAvailable()
-      const group = wrapper.get('[data-testid="terminal-server-group"]')
+      const group = wrapper.get('[data-testid="terminal-repo-group"][data-repo="/home/hive/repo.git"]')
       if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
       await wrapper.get('[data-slug="box:remote-work"]').trigger('click')
       await flushPromises()
 
+      expect(wrapper.get('[data-testid="terminal-pane-host"]').text()).toBe('box')
       expect(mocks.SessionGitStatus).toHaveBeenCalledWith('box:9')
       expect(wrapper.get('[data-testid="session-status-branch"]').text()).toBe('remote-branch')
       expect(wrapper.find('[data-testid="session-status-dirty"]').exists()).toBe(true)
