@@ -49,6 +49,7 @@ import (
 
 	hcsvc "github.com/colonyops/hive/internal/hive/hc"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
+	"github.com/colonyops/hive/internal/hive/servers"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	todosvc "github.com/colonyops/hive/internal/hive/todo"
@@ -110,6 +111,10 @@ type Deps struct {
 	DoctorService *doctor.Service
 	Honeycomb     *hcsvc.Service
 	Sources       *sources.Registry
+	// ServerStates and ServerAttach are set when servers are configured and
+	// Sessions routes to them.
+	ServerStates func() []servers.ListState
+	ServerAttach ServerAttacher
 }
 
 // Opts holds runtime options that are not service dependencies.
@@ -134,6 +139,7 @@ type Model struct {
 	cfg            *config.Config
 	service        *sessionsvc.Service
 	sessions       sessionapi.API
+	serverAttach   ServerAttacher
 	launches       launchResolver
 	drive          DriveSource
 	cmdService     *command.Service
@@ -318,6 +324,7 @@ func New(deps Deps, opts Opts) Model {
 		Workspaces:    cfg.Workspaces,
 		Renderer:      deps.Renderer,
 		Bus:           deps.Bus,
+		ServerStates:  deps.ServerStates,
 	})
 
 	// Wire handler lookups through sessions view stores
@@ -399,6 +406,7 @@ func New(deps Deps, opts Opts) Model {
 		drive:            deps.Drive,
 		service:          service,
 		sessions:         deps.Sessions,
+		serverAttach:     deps.ServerAttach,
 		launches:         service,
 		cmdService:       cmdService,
 		handler:          handler,
@@ -634,6 +642,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleEditSessionComplete(msg)
 	case setGroupCompleteMsg:
 		model, cmd = m.handleSetGroupComplete(msg)
+	case serverAttachReadyMsg:
+		return m, m.attachServer(msg)
+	case serverLaunchOptionsMsg:
+		model, cmd = m.openServerNewSessionForm(msg)
 	case actionCompleteMsg:
 		model, cmd = m.handleActionComplete(msg)
 	case doctorResultsMsg:
@@ -817,6 +829,10 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.modals.NewSession.Submitted() {
 		result := m.modals.NewSession.Result()
 		m.modals.NewSession = nil
+		if result.Server != "" {
+			m.state = stateNormal
+			return m, m.createOnServer(result.SessionName, result.Repo, result.AgentKey, result.Server)
+		}
 		return m, m.startCreate(result.SessionName, result.Repo, result.AgentKey)
 	}
 
@@ -985,6 +1001,13 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 		m.state = stateNormal
 		m.notifyErrorf("%v", action.Err)
 		return m, nil
+	}
+
+	if action.Type == act.TypeTmuxOpen && m.serverAttach != nil {
+		if ref, err := session.ParseRef(action.SessionID, session.LocalServer); err == nil && !ref.IsLocal() {
+			m.state = stateNormal
+			return m, m.startServerAttach(ref)
+		}
 	}
 
 	// For delete and recycle on named sessions, run an async git risk check first.
@@ -1729,6 +1752,13 @@ func (m Model) executeSetGroup(sessionID, group string) tea.Cmd {
 
 // openNewSessionForm initializes the new session form and transitions to the creating state.
 func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
+	if name := m.sessionsView.SelectedServer(); name != "" && m.serverAttach != nil {
+		preselected := ""
+		if selected := m.selectedSession(); selected != nil {
+			preselected = selected.Remote
+		}
+		return m, m.loadServerLaunchOptions(name, preselected)
+	}
 	preselectedRemote := m.sessionsView.LocalRemote()
 
 	if treeItem := m.selectedTreeItem(); treeItem != nil {

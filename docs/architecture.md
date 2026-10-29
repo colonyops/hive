@@ -1514,7 +1514,10 @@ on the server through that API (`sessionapi.API.GitStatuses`), never through a
 local path. The daemon shares one git read between the clients that ask within
 a few seconds. Start asks the server to open the session's tmux session by its
 own rules (`sessionapi.API.StartTmuxSession`); the terminal then attaches over
-ssh. A failed list marks a server's rows offline, which is not the
+ssh. The hive TUI reaches servers through `servers.Router`, one `sessionapi.API`
+over this machine and every server: it lists them all, gives a server's session
+the id `<server>:<id>`, and sends a call to the server its id names, so the
+TUI's id-keyed state needs no server field. A failed list marks a server's rows offline, which is not the
 same as gone: an attached terminal stays until the server answers without the
 session.
 

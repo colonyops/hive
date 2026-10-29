@@ -13,6 +13,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
+	"github.com/colonyops/hive/internal/domain/server"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	statussvc "github.com/colonyops/hive/internal/hive/status"
@@ -121,6 +122,11 @@ type TreeItem struct {
 	RepoRemote    string // Git remote URL for the repo group
 	RootPath      string // Path to the workspace checkout this repo was sourced from (empty if none discovered)
 	IsCurrentRepo bool
+	// Server, ServerState, and ServerError are set on the header of a
+	// server's group.
+	Server      string
+	ServerState server.State
+	ServerError string
 
 	// Session fields (only used when IsHeader is false and IsRecycledPlaceholder is false)
 	Session      session.Session
@@ -197,17 +203,22 @@ func BuildTreeItems(groups []RepoGroup, localRemote string, workspaceRepos []wor
 	items := make([]list.Item, 0)
 
 	for _, group := range groups {
-		if len(group.Sessions) == 0 {
+		if len(group.Sessions) == 0 && group.Server == "" {
 			continue
 		}
 
-		// Add header
 		header := TreeItem{
 			IsHeader:      true,
 			RepoName:      group.Name,
 			RepoRemote:    group.Remote,
 			RootPath:      rootPaths[git.RemoteIdentity(group.Remote)],
 			IsCurrentRepo: git.EquivalentRemote(group.Remote, localRemote),
+		}
+		// A server's checkouts are on the server, so no local root or current
+		// repo applies.
+		if group.Server != "" {
+			header.RootPath, header.IsCurrentRepo = "", false
+			header.Server, header.ServerState, header.ServerError = group.Server, group.ServerState, group.ServerError
 		}
 		items = append(items, header)
 
@@ -393,6 +404,18 @@ func (d TreeDelegate) renderHeader(item TreeItem, isSelected bool, _ list.Model,
 	}
 	result := nameStyle.Render(item.RepoName)
 
+	if item.Server != "" {
+		state := string(item.ServerState)
+		if state == "" {
+			state = string(server.StateConnecting)
+		}
+		result += " " + d.Styles.SessionID.Render("server · "+state)
+		if item.ServerError != "" {
+			result += " " + d.Styles.StatusRecycled.Render(item.ServerError)
+		}
+		return result
+	}
+
 	// Append indicator for current repo
 	if item.IsCurrentRepo {
 		result += " " + d.Styles.HeaderStar.Render(currentRepoIndicator)
@@ -502,7 +525,7 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 
 	// Tags go last: their width varies per row, and the git status column
 	// stays aligned only if nothing variable comes before it.
-	gitInfo := d.renderGitStatus(item.Session.Path)
+	gitInfo := d.renderGitStatus(gitKey(item.Session))
 	pluginInfo := d.renderPluginStatuses(item.Session.ID)
 	var tags string
 	if len(item.Session.Tags) > 0 {
