@@ -163,6 +163,15 @@ func (s Server) Hive(t *testing.T, args ...string) Result {
 	return r
 }
 
+// Shell runs a shell command on the server, for state that hive does not
+// expose, such as its tmux sessions.
+func (s Server) Shell(t *testing.T, command string) Result {
+	t.Helper()
+	r := run(t, nil, "ssh", "-F", sshConfig, "-T", "-o", "BatchMode=yes", s.Name, "--", command)
+	r.Args = []string{"ssh", s.Name, command}
+	return r
+}
+
 // API is the session API on the server over `ssh -- hive daemon dial-stdio`,
 // the same path a remote client takes.
 func (s Server) API(t *testing.T) *daemonclient.Client {
