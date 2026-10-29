@@ -40,7 +40,6 @@ var (
 	serverB = Server{Name: "server-b"}
 )
 
-// Result is one finished command.
 type Result struct {
 	Args   []string
 	Stdout string
@@ -48,14 +47,12 @@ type Result struct {
 	Err    error
 }
 
-// Ok fails the test when the command failed, and returns the result.
 func (r Result) Ok(t *testing.T) Result {
 	t.Helper()
 	require.NoError(t, r.Err, "%s\nstdout:\n%s\nstderr:\n%s", strings.Join(r.Args, " "), r.Stdout, r.Stderr)
 	return r
 }
 
-// Fails fails the test when the command succeeded, and returns the result.
 func (r Result) Fails(t *testing.T) Result {
 	t.Helper()
 	require.Error(t, r.Err, "%s should fail\nstdout:\n%s", strings.Join(r.Args, " "), r.Stdout)
@@ -77,7 +74,6 @@ func run(t *testing.T, env []string, name string, args ...string) Result {
 	return Result{Args: append([]string{name}, args...), Stdout: stdout.String(), Stderr: stderr.String(), Err: err}
 }
 
-// DecodeJSON reads the one JSON value a command printed.
 func DecodeJSON[T any](t *testing.T, r Result) T {
 	t.Helper()
 	var v T
@@ -85,7 +81,6 @@ func DecodeJSON[T any](t *testing.T, r Result) T {
 	return v
 }
 
-// DecodeJSONLines reads a command's JSON lines output.
 func DecodeJSONLines[T any](t *testing.T, r Result) []T {
 	t.Helper()
 	var out []T
@@ -200,13 +195,11 @@ func (s Server) DeleteOnCleanup(t *testing.T, id string) {
 	})
 }
 
-// Show returns the session as the server's own CLI sees it.
 func (s Server) Show(t *testing.T, id string) Session {
 	t.Helper()
 	return DecodeJSON[Session](t, s.Hive(t, "session", "show", "--json", id).Ok(t))
 }
 
-// List returns every session the server's own CLI lists.
 func (s Server) List(t *testing.T) []Session {
 	t.Helper()
 	return DecodeJSONLines[Session](t, s.Hive(t, "session", "list", "--json").Ok(t))

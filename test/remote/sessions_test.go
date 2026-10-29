@@ -82,10 +82,12 @@ func TestSessionAPIOverSSHChangesTheServer(t *testing.T) {
 	assert.Equal(t, string(session.StateRecycled), serverA.Show(t, created.ID).State)
 
 	require.NoError(t, api.DeleteSession(ctx, created.ID))
-	serverA.Hive(t, "session", "show", "--json", created.ID).Fails(t)
+	gone := serverA.Hive(t, "session", "show", "--json", created.ID).Fails(t)
+	// hive prints its errors to stdout.
+	assert.Contains(t, gone.Stdout+gone.Stderr, session.ErrNotFound.Error())
 }
 
-func TestEachServerKeepsItsOwnSessions(t *testing.T) {
+func TestFixtureAliasesReachDistinctServers(t *testing.T) {
 	onA := serverA.CreateSession(t, "twin")
 	onB := serverB.CreateSession(t, "twin")
 

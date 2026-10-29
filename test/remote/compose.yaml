@@ -2,7 +2,10 @@ x-server: &server
   build:
     context: ../..
     dockerfile: test/remote/Dockerfile
-  image: hive-remote-fixture:local
+  # One tag per project: a shared tag lets another fixture's build replace
+  # the image, and compose then recreates a restarted server with a new host
+  # key that no longer matches known_hosts.
+  image: hive-remote-fixture:${HIVE_REMOTE_PROJECT:?}
   volumes:
     - ${HIVE_REMOTE_STATE:?}/id_ed25519.pub:/run/client.pub:ro
   stop_grace_period: 2s
