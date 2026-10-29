@@ -110,9 +110,10 @@ func (a *App) SessionAPI() sessionapi.API {
 
 // TargetServer points SessionAPI at the daemon on a server under servers:,
 // so session commands act on that server's sessions instead of local ones.
+// session.LocalServer keeps the local sessions.
 func (a *App) TargetServer(name string) error {
 	if name == session.LocalServer {
-		return fmt.Errorf("--target-server %q names this machine; omit the flag", name)
+		return nil
 	}
 	api, err := a.ServerAPI(name)
 	if err != nil {
@@ -140,7 +141,7 @@ func (a *App) ServerAPI(name string) (sessionapi.API, error) {
 }
 
 // DefaultServer is the server that SessionAPI reaches and that a bare
-// session id names: the --target-server server, else session.LocalServer.
+// session id names: the --server server, else session.LocalServer.
 func (a *App) DefaultServer() string {
 	if a.targetServer != "" {
 		return a.targetServer

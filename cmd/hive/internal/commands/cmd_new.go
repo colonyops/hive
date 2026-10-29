@@ -27,6 +27,7 @@ type createSessionFlags struct {
 	cloneStrategy string
 	agent         string
 	tags          []string
+	server        string
 }
 
 // sessionCreateFlags returns the flag set shared by 'hive new' and
@@ -68,6 +69,7 @@ func sessionCreateFlags(f *createSessionFlags) []cli.Flag {
 			Usage:       "tags to attach to the session (repeatable)",
 			Destination: &f.tags,
 		},
+		serverFlag(&f.server),
 	}
 }
 
@@ -228,8 +230,10 @@ command launches a terminal with the AI tool.
 Example:
   hive new Fix Auth Bug
   hive new --agent claude Refactor Utils
-  hive new bugfix --source /some/path`,
+  hive new bugfix --source /some/path
+  hive new --server box --remote git@github.com:acme/site.git Fix Auth Bug`,
 		Flags:  sessionCreateFlags(&cmd.createFlags),
+		Before: targetServer(cmd.app, &cmd.createFlags.server),
 		Action: cmd.run,
 	})
 

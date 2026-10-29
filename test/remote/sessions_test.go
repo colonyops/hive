@@ -356,3 +356,56 @@ func TestClientCLI_ListsSessionsWithTheirServer(t *testing.T) {
 
 	assert.Contains(t, listed, sessionWithServer{Server: serverA.Name, ID: created.ID, Name: "labeled"})
 }
+
+func TestClientCLI_ListsTheSessionsOfEveryServer(t *testing.T) {
+	onA := serverA.CreateSession(t, "every-a")
+	onB := serverB.CreateSession(t, "every-b")
+	client := NewClient(t)
+
+	listed := DecodeJSONLines[sessionWithServer](t, client.Hive("session", "list", "--json").Ok(t))
+	assert.Contains(t, listed, sessionWithServer{Server: serverA.Name, ID: onA.ID, Name: "every-a"})
+	assert.Contains(t, listed, sessionWithServer{Server: serverB.Name, ID: onB.ID, Name: "every-b"})
+
+	table := client.Hive("session", "list").Ok(t)
+	assert.Contains(t, table.Stdout, "SERVER")
+
+	local := client.Hive("session", "list", "--server", "local", "--json").Ok(t)
+	assert.Empty(t, strings.TrimSpace(local.Stdout), "the client has no sessions of its own")
+}
+
+func TestClientCLI_ListsTheOtherServersWhenOneIsDown(t *testing.T) {
+	onA := serverA.CreateSession(t, "still-listed")
+	serverB.Stop(t)
+
+	r := NewClient(t).Hive("session", "list", "--json").Ok(t)
+
+	listed := DecodeJSONLines[sessionWithServer](t, r)
+	assert.Contains(t, listed, sessionWithServer{Server: serverA.Name, ID: onA.ID, Name: "still-listed"})
+	assert.Contains(t, r.Stderr, "warning: server "+serverB.Name)
+}
+
+func TestClientCLI_ServerFlagPicksTheServer(t *testing.T) {
+	client := NewClient(t)
+
+	created := DecodeJSON[sessionWithServer](t, client.Hive("session", "create", "--server", serverB.Name,
+		"--json", "--background", "--remote", tFixtureRepo, "flagged").Ok(t))
+	serverB.DeleteOnCleanup(t, created.ID)
+	assert.Equal(t, serverB.Name, created.Server)
+	assert.Equal(t, "flagged", serverB.Show(t, created.ID).Name)
+
+	shown := DecodeJSON[sessionWithServer](t, client.Hive("session", "show", "--server", serverB.Name, "--json", created.ID).Ok(t))
+	assert.Equal(t, created.ID, shown.ID)
+
+	failed := client.Hive("session", "show", "--server", "nowhere", created.ID).Fails(t)
+	assert.Contains(t, failed.Stdout+failed.Stderr, `no server named "nowhere"`)
+
+	client.Hive("new", "--server", serverA.Name, "--background", "--remote", tFixtureRepo, "via-new").Ok(t)
+	var made bool
+	for _, s := range serverA.List(t) {
+		if s.Name == "via-new" {
+			made = true
+			serverA.DeleteOnCleanup(t, s.ID)
+		}
+	}
+	assert.True(t, made, "hive new --server creates the session on that server")
+}
