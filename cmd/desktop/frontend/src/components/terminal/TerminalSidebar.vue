@@ -575,7 +575,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                         v-else-if="menus.openRow === row.id"
                         :session="row"
                         :terminal="terminalState(row)"
-                        :remote="!!row.server"
                         :extra="row.server ? [] : ops.sessionActionEntries"
                         :flip="menus.rowFlip"
                         :ignore="[menus.rowToggle(row.id)]"

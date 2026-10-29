@@ -28,12 +28,22 @@ func Args(h server.Host) []string {
 // host. BatchMode and StrictHostKeyChecking keep ssh from prompting, since no
 // one is at a terminal to answer.
 func Options(h server.Host) []string {
+	return options(h, "-T")
+}
+
+// TerminalOptions are Options for a command that needs a terminal on h, such
+// as tmux attach.
+func TerminalOptions(h server.Host) []string {
+	return options(h, "-t")
+}
+
+func options(h server.Host, tty string) []string {
 	var args []string
 	if h.ConfigFile != "" {
 		args = append(args, "-F", h.ConfigFile)
 	}
 	return append(args,
-		"-T",
+		tty,
 		"-o", "BatchMode=yes",
 		"-o", "StrictHostKeyChecking=yes",
 		"-o", "ConnectTimeout=10",

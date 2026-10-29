@@ -28,6 +28,7 @@ func TestSentinelsSurviveTheWire(t *testing.T) {
 		{fmt.Errorf("rename: %w", session.ErrDuplicateName), session.ErrDuplicateName, connect.CodeAlreadyExists},
 		{wire.ErrRemoteRequired, wire.ErrRemoteRequired, connect.CodeInvalidArgument},
 		{fmt.Errorf("%w: it is empty", session.ErrInvalidTag), session.ErrInvalidTag, connect.CodeInvalidArgument},
+		{fmt.Errorf("session is recycled: %w", session.ErrNotActive), session.ErrNotActive, connect.CodeFailedPrecondition},
 		{errors.New("disk full"), nil, connect.CodeInternal},
 	} {
 		got := roundTrip(tc.err)
@@ -54,6 +55,7 @@ func TestLaunchErrorKeepsEveryFieldAndItsCause(t *testing.T) {
 	got := roundTrip(fmt.Errorf("create: %w", original))
 
 	assert.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(got))
+	require.NotErrorIs(t, got, session.ErrNotActive, "a failed launch is not an inactive session")
 	var launch *sessionsvc.LaunchError
 	require.ErrorAs(t, got, &launch)
 	assert.Equal(t, original.Name, launch.Name)

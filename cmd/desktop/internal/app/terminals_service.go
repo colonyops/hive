@@ -171,12 +171,10 @@ func (s *TerminalsService) Attach(ctx context.Context, target string, cols, rows
 //
 // ScratchSlug is the one slug this does not ask hive about — see startScratch.
 //
-// A server's session is started on the server: this app does not have the
-// server's rules to start it with.
-func (s *TerminalsService) Start(ctx context.Context, target string) (multiplexer.LaunchResult, error) {
-	server, slug, remote := splitTarget(target)
-	if remote {
-		return multiplexer.LaunchResult{}, Errorf(KindUnavailable, "session %q is on server %q; start its terminal on that server", target, server)
+// A server's session is started on the server, by the server's own rules.
+func (s *TerminalsService) Start(ctx context.Context, slug string) (multiplexer.LaunchResult, error) {
+	if _, _, remote := splitTarget(slug); remote {
+		return s.starter.StartTmuxSession(ctx, slug)
 	}
 	exists, err := s.manager.HasSession(ctx, slug)
 	if err != nil {

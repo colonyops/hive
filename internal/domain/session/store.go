@@ -9,6 +9,9 @@ import (
 var (
 	ErrNotFound      = errors.New("session not found")
 	ErrDuplicateName = errors.New("session name already exists")
+	// ErrNotActive is a session that is recycled or corrupted, so it has no
+	// checkout to open a terminal in.
+	ErrNotActive = errors.New("session is not active")
 )
 
 // Store defines persistence operations for sessions.

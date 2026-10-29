@@ -569,8 +569,12 @@ func (c *Client) SessionBranches(ctx context.Context, id string) ([]string, erro
 	return resp.Msg.GetRefs(), nil
 }
 
-// ErrGitStatusUnsupported is a daemon whose hive predates GitStatuses.
-var ErrGitStatusUnsupported = errors.New("the server's hive is too old to report git status; install the same hive version on both machines")
+var (
+	// ErrGitStatusUnsupported is a daemon whose hive predates GitStatuses.
+	ErrGitStatusUnsupported = errors.New("the server's hive is too old to report git status; install the same hive version on both machines")
+	// ErrStartTmuxUnsupported is a daemon whose hive predates StartTmux.
+	ErrStartTmuxUnsupported = errors.New("the server's hive is too old to start a terminal; install the same hive version on both machines")
+)
 
 // GitStatuses reports a daemon that predates the RPC as such, so a user
 // knows to upgrade the server rather than look for a fault.
@@ -588,6 +592,19 @@ func (c *Client) GitStatuses(ctx context.Context, ids []string) (map[string]gits
 		return nil, wire.FromConnectError(err)
 	}
 	return wire.GitStatusesFromProto(resp.Msg.GetStatuses()), nil
+}
+
+// StartTmuxSession is not retried: a second start after a lost answer could
+// spawn the agent twice.
+func (c *Client) StartTmuxSession(ctx context.Context, id string) (multiplexer.LaunchResult, error) {
+	resp, err := c.sessions.StartTmux(ctx, connect.NewRequest(&daemonv1.StartTmuxRequest{Id: id}))
+	if err != nil {
+		if connect.CodeOf(err) == connect.CodeUnimplemented {
+			return multiplexer.LaunchResult{}, ErrStartTmuxUnsupported
+		}
+		return multiplexer.LaunchResult{}, wire.FromConnectError(err)
+	}
+	return multiplexer.LaunchResult{Created: resp.Msg.GetCreated(), Completed: resp.Msg.GetCompleted()}, nil
 }
 
 // helloRetry spaces background Hellos while status is not yet known

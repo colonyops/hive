@@ -46,6 +46,10 @@ type API interface {
 	// GitStatuses reads the checkouts of the sessions ids name on the machine
 	// that holds them, keyed by id. An id with no session is absent.
 	GitStatuses(ctx context.Context, ids []string) (map[string]gitstatus.Status, error)
+	// StartTmuxSession opens the tmux session of an active session in the
+	// background on the machine that holds it, and starts its agent when no
+	// tmux session runs. A client attaches to it afterwards.
+	StartTmuxSession(ctx context.Context, id string) (multiplexer.LaunchResult, error)
 
 	// StatusAvailable must not block: the TUI calls it inside Update. A false
 	// answer can turn true later (the daemon client answers false until its
