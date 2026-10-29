@@ -10,7 +10,8 @@ x-server: &server
     - ${HIVE_REMOTE_STATE:?}/id_ed25519.pub:/run/client.pub:ro
   stop_grace_period: 2s
   healthcheck:
-    test: ["CMD", "pgrep", "-x", "sshd"]
+    # A running sshd process is not yet one that accepts connections.
+    test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/22"]
     interval: 1s
     timeout: 2s
     retries: 30

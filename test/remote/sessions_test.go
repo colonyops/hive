@@ -4,6 +4,7 @@ package remote
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -116,5 +117,12 @@ func TestAStoppedServerIsUnreachableUntilItStarts(t *testing.T) {
 	assert.NotEmpty(t, down[serverB.Name].Error)
 
 	serverB.Start(t)
-	assert.True(t, reachable()[serverB.Name].Reachable)
+	// The client may reach the restarted server before its daemon answers.
+	assert.Eventually(t, func() bool {
+		b := reachable()[serverB.Name]
+		if !b.Reachable {
+			t.Logf("server-b not reachable yet: %s", b.Error)
+		}
+		return b.Reachable
+	}, 20*time.Second, 500*time.Millisecond)
 }
