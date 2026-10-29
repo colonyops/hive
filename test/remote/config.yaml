@@ -9,3 +9,7 @@ agents:
 rules:
   - spawn:
       - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
+  # A copy rule makes the server read the create request's source directory,
+  # which must be a directory on the server, not on the client.
+  - copy:
+      - .env

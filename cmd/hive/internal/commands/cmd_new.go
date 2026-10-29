@@ -80,8 +80,14 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 		}
 	}
 
+	// A server cannot read a path on this machine or show this terminal.
+	// Remote create (#743) and remote attach (#745) replace the
+	// TargetsServer checks.
 	source := f.source
-	if source == "" {
+	switch {
+	case source != "" && app.TargetsServer():
+		return nil, fmt.Errorf("--source names a directory on this machine, which the server cannot read")
+	case source == "" && !app.TargetsServer():
 		var err error
 		source, err = os.Getwd()
 		if err != nil {
@@ -106,7 +112,7 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
-	if !f.background && createsTmuxSession(app, opts.Remote) && canAttach() {
+	if !f.background && !app.TargetsServer() && createsTmuxSession(app, opts.Remote) && canAttach() {
 		if err := app.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(*sess), multiplexer.AttachStreams{}); err != nil {
 			return sess, fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
 		}
