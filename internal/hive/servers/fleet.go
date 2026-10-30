@@ -1,7 +1,7 @@
-// Package servers is the registry of hive servers a client works with: the
+// Package servers is the fleet of hive servers a client works with: the
 // local daemon (or engine) and each server under servers: in config.yaml,
 // reached over ssh. The CLI, the TUI, and Desktop get every session API from
-// one registry, so they agree on which servers exist and how each one is.
+// one fleet, so they agree on which servers exist and how each one is.
 package servers
 
 import (
@@ -28,36 +28,36 @@ import (
 // block a list of local sessions.
 const ReadTimeout = 10 * time.Second
 
-type Registry struct {
+type Fleet struct {
 	local   sessionapi.API
 	servers []*Server
 }
 
-// New builds a registry over local and the configured servers. It does not
+// New builds a fleet over local and the configured servers. It does not
 // dial: a server connects on its first call or Check.
-func New(logger zerolog.Logger, local sessionapi.API, configs []config.ServerConfig) *Registry {
+func New(logger zerolog.Logger, local sessionapi.API, configs []config.ServerConfig) *Fleet {
 	logger = logutils.Component(logger, "servers")
-	r := &Registry{local: local}
+	f := &Fleet{local: local}
 	for _, cfg := range configs {
-		r.servers = append(r.servers, newServer(logger, cfg))
+		f.servers = append(f.servers, newServer(logger, cfg))
 	}
-	return r
+	return f
 }
 
 // Local is the session API for this machine: the local daemon with
 // experimental.daemon on, else the engine in this process. It is nil for a
 // client that starts no engine, such as the hive servers commands.
-func (r *Registry) Local() sessionapi.API {
-	return r.local
+func (f *Fleet) Local() sessionapi.API {
+	return f.local
 }
 
 // Servers are the configured servers in config order.
-func (r *Registry) Servers() []*Server {
-	return r.servers
+func (f *Fleet) Servers() []*Server {
+	return f.servers
 }
 
-func (r *Registry) Server(name string) (*Server, bool) {
-	for _, s := range r.servers {
+func (f *Fleet) Server(name string) (*Server, bool) {
+	for _, s := range f.servers {
 		if s.config.Name == name {
 			return s, true
 		}
@@ -67,10 +67,10 @@ func (r *Registry) Server(name string) (*Server, bool) {
 
 // CheckAll checks every server at once and returns their statuses in config
 // order.
-func (r *Registry) CheckAll(ctx context.Context) []Status {
-	out := make([]Status, len(r.servers))
+func (f *Fleet) CheckAll(ctx context.Context) []Status {
+	out := make([]Status, len(f.servers))
 	var wg sync.WaitGroup
-	for i, s := range r.servers {
+	for i, s := range f.servers {
 		wg.Go(func() { out[i] = s.Check(ctx) })
 	}
 	wg.Wait()
@@ -78,8 +78,8 @@ func (r *Registry) CheckAll(ctx context.Context) []Status {
 }
 
 // Close drops every server's ssh connection.
-func (r *Registry) Close() {
-	for _, s := range r.servers {
+func (f *Fleet) Close() {
+	for _, s := range f.servers {
 		s.client.HTTPClient().CloseIdleConnections()
 	}
 }

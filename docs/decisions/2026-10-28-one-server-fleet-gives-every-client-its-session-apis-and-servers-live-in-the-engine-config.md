@@ -1,4 +1,4 @@
-# One server registry gives every client its session APIs, and servers live in the engine config
+# One server fleet gives every client its session APIs, and servers live in the engine config
 
 - **Status:** proposed
 - **Date:** 2026-10-28
@@ -17,13 +17,13 @@ connection to each server and a state it can show for a server that is down.
   programs load from the same `config.yaml`. The YAML key and fields do not
   change. The ssh target and its validation live in `internal/domain/server`,
   because `config-is-data` keeps `internal/config` off `sshdial`.
-- **One registry, in `internal/hive/servers`.** `servers.Registry` holds the
+- **One fleet, in `internal/hive/servers`.** `servers.Fleet` holds the
   local session API (the local daemon, or the engine in-process) and one
   `daemonclient.Client` for each configured server. A client gets every
   session API from it.
 - **One connection for each server.** A server's client keeps one ssh
   connection for all calls and dials a new one on the next call after a drop.
-  The registry does not dial until the first call or check.
+  The fleet does not dial until the first call or check.
 - **A state for each server.** `Check` sends Hello and records `connected` or
   `offline`, with ssh's last stderr line as the reason. `incompatible` is
   reserved for the version check of #742. `connecting` means no check has
@@ -36,11 +36,11 @@ connection to each server and a state it can show for a server that is down.
 
 ## Consequences
 
-- Desktop builds the registry on start and rebuilds it on a config reload.
+- Desktop builds the fleet on start and rebuilds it on a config reload.
   Its Code view does not show servers yet (#749).
-- `hive servers` gives no engine to the registry, so `Local` is nil for those
+- `hive servers` gives no engine to the fleet, so `Local` is nil for those
   commands.
 - `--server` copies ssh's stderr to the terminal, so a failed ssh shows its
-  reason. The registry keeps the copy off for Desktop and the TUI.
+  reason. The fleet keeps the copy off for Desktop and the TUI.
 - A server's state changes only on `Check`. A failed session call does not
   mark the server offline.

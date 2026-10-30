@@ -62,7 +62,7 @@ type App struct {
 	Build       BuildInfo
 	Sources     *sources.Registry
 	// Servers is the local session API and each server under servers:.
-	Servers *servers.Registry
+	Servers *servers.Fleet
 
 	sessions     sessionapi.API
 	targetServer string

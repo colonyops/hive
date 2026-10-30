@@ -215,8 +215,8 @@ type App struct {
 	sessions sessionapi.API
 	// hiveDaemon is set when experimental.daemon routes sessions to it.
 	hiveDaemon *daemonclient.Client
-	// A config reload swaps in a new registry, so load it on each use.
-	hiveServers atomic.Pointer[servers.Registry]
+	// A config reload swaps in a new fleet, so load it on each use.
+	hiveServers atomic.Pointer[servers.Fleet]
 	hiveRuntime *hive.Runtime
 	launcher    *dispatch.RepositoryLauncher
 
@@ -794,8 +794,8 @@ func (a *App) Close() error {
 	if a.hiveWatcher != nil {
 		a.hiveWatcher.Stop()
 	}
-	if registry := a.hiveServers.Load(); registry != nil {
-		registry.Close()
+	if fleet := a.hiveServers.Load(); fleet != nil {
+		fleet.Close()
 	}
 	var err error
 	if a.hiveRuntime != nil {

@@ -15,31 +15,31 @@ import (
 	"github.com/colonyops/hive/internal/hive/servers"
 )
 
-func newRegistry(t *testing.T) *servers.Registry {
+func newFleet(t *testing.T) *servers.Fleet {
 	t.Helper()
 	var configs []config.ServerConfig
 	for _, s := range []Server{serverA, serverB} {
 		configs = append(configs, config.ServerConfig{Name: s.Name, SSH: s.Name, SSHConfig: sshConfig})
 	}
-	r := servers.New(zerolog.Nop(), nil, configs)
-	t.Cleanup(r.Close)
-	return r
+	fleet := servers.New(zerolog.Nop(), nil, configs)
+	t.Cleanup(fleet.Close)
+	return fleet
 }
 
-func TestRegistry_ReconnectsToAServerThatRestarts(t *testing.T) {
-	r := newRegistry(t)
-	b, ok := r.Server(serverB.Name)
+func TestFleet_ReconnectsToAServerThatRestarts(t *testing.T) {
+	fleet := newFleet(t)
+	b, ok := fleet.Server(serverB.Name)
 	require.True(t, ok)
 	require.Equal(t, server.StateConnected, b.Check(t.Context()).State)
 
 	serverB.Stop(t)
-	statuses := r.CheckAll(t.Context())
+	statuses := fleet.CheckAll(t.Context())
 	assert.Equal(t, server.StateConnected, statuses[0].State, "server-a stays connected: %s", statuses[0].Error)
 	assert.Equal(t, server.StateOffline, statuses[1].State)
 	assert.NotEmpty(t, statuses[1].Error)
 
 	serverB.Start(t)
-	// The same client dials a new ssh connection, so the registry recovers
+	// The same client dials a new ssh connection, so the fleet recovers
 	// without a rebuild.
 	assert.Eventually(t, func() bool {
 		return b.Check(t.Context()).State == server.StateConnected
