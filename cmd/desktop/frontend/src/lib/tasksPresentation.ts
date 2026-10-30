@@ -30,8 +30,13 @@ export const DEFAULT_TASK_FILTER: TaskFilterId = 'open'
 
 const TERMINAL_STATUSES = new Set(['done', 'cancelled'])
 
-function isTerminalStatus(status: string): boolean {
+export function isTerminalStatus(status: string): boolean {
   return TERMINAL_STATUSES.has(status)
+}
+
+/** Where the one-step "mark done" action takes a task: closed ones reopen. */
+export function doneToggleStatus(status: string): TaskStatus {
+  return isTerminalStatus(status) ? 'open' : 'done'
 }
 
 export function matchesTaskFilter(item: TaskItem, filter: TaskFilterId): boolean {
@@ -64,6 +69,9 @@ export function filterCounts(items: readonly TaskItem[]): Record<TaskFilterId, n
 export type TaskViewMode = 'list' | 'board'
 
 export const DEFAULT_TASK_VIEW: TaskViewMode = 'list'
+
+// The list's docked pane and the board's drawer share one remembered width.
+export const TASK_DETAIL_PANEL = { storageKey: 'hive.panel.taskdetail', defaultSize: 520, min: 320, max: 1000 }
 
 // Workflow order: the order board columns appear in.
 export const TASK_STATUSES = ['open', 'in_progress', 'done', 'cancelled'] as const

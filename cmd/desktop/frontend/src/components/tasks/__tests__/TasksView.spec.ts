@@ -763,25 +763,91 @@ describe('TasksView', () => {
       wrapper.unmount()
     })
 
-    it('opens the detail pane as a peek on click, and closes the peek on Escape before the overlay', async () => {
+    function drawer(): Element | null {
+      return document.querySelector('[data-testid="task-detail-pane"]')
+    }
+
+    it('opens the detail in a drawer over the board, and closes it on Escape before the overlay', async () => {
       mocks.ListTasks.mockResolvedValue([task('t1')])
       mocks.ReadTaskDetail.mockResolvedValue(detailFrom(task('t1')))
       const wrapper = mount(TasksView)
       await flushPromises()
-      expect(wrapper.find('[data-testid="task-detail-pane"]').exists()).toBe(false)
+      expect(drawer()).toBeNull()
 
       await wrapper.get('[data-testid="task-card"][data-id="t1"]').trigger('click')
       await flushPromises()
-      expect(wrapper.get('[data-testid="task-detail-title"]').text()).toBe('Task t1')
+      expect(drawer()?.querySelector('[data-testid="task-detail-title"]')?.textContent?.trim()).toBe('Task t1')
+      expect(wrapper.find('[data-testid="task-detail-pane"]').exists()).toBe(false)
 
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
       await flushPromises()
-      expect(wrapper.find('[data-testid="task-detail-pane"]').exists()).toBe(false)
+      expect(drawer()).toBeNull()
       expect(wrapper.emitted('close')).toBeUndefined()
 
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
       await flushPromises()
       expect(wrapper.emitted('close')).toHaveLength(1)
+
+      wrapper.unmount()
+    })
+
+    it('closes the drawer from its close button and its backdrop', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1')])
+      mocks.ReadTaskDetail.mockResolvedValue(detailFrom(task('t1')))
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await wrapper.get('[data-testid="task-card"][data-id="t1"]').trigger('click')
+      await flushPromises()
+      document.querySelector<HTMLElement>('[data-testid="task-detail-close"]')!.click()
+      await flushPromises()
+      expect(drawer()).toBeNull()
+
+      await wrapper.get('[data-testid="task-card"][data-id="t1"]').trigger('click')
+      await flushPromises()
+      document.querySelector<HTMLElement>('[data-testid="task-detail-pane-backdrop"]')!.click()
+      await flushPromises()
+      expect(drawer()).toBeNull()
+
+      wrapper.unmount()
+    })
+
+    it('stops the board keys while the drawer is open', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1'), task('t2')])
+      mocks.ReadTaskDetail.mockResolvedValue(detailFrom(task('t1')))
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await wrapper.get('[data-testid="task-card"][data-id="t1"]').trigger('click')
+      await flushPromises()
+      const { selectedId } = useTasks()
+      const before = selectedId.value
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j' }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd' }))
+      await flushPromises()
+      expect(selectedId.value).toBe(before)
+      expect(mocks.SetTaskStatus).not.toHaveBeenCalled()
+
+      wrapper.unmount()
+    })
+
+    it('closes the drawer when its task is deleted, rather than showing the next one', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1'), task('t2')])
+      mocks.ReadTaskDetail.mockResolvedValue(detailFrom(task('t1')))
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await wrapper.get('[data-testid="task-card"][data-id="t1"]').trigger('click')
+      await flushPromises()
+      document.querySelector<HTMLElement>('[data-testid="task-delete"]')!.click()
+      await flushPromises()
+      mocks.ListTasks.mockResolvedValue([task('t2')])
+      document.querySelector<HTMLElement>('[data-testid="task-delete-confirm-confirm"]')!.click()
+      await flushPromises()
+
+      expect(mocks.DeleteTask).toHaveBeenCalledWith('t1')
+      expect(drawer()).toBeNull()
 
       wrapper.unmount()
     })
@@ -809,6 +875,143 @@ describe('TasksView', () => {
       await flushPromises()
       expect(selected()).toBe('o1')
 
+      wrapper.unmount()
+    })
+  })
+
+  describe('row actions', () => {
+    function menuEntry(testid: string): HTMLElement {
+      return document.querySelector<HTMLElement>(`[data-testid="${testid}"]`)!
+    }
+
+    function row(wrapper: ReturnType<typeof mount>, id: string) {
+      return wrapper.get(`[data-testid="task-row"][data-id="${id}"]`)
+    }
+
+    it('marks a task done from its row without selecting it', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1'), task('t2')])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+      const { selectedId } = useTasks()
+      expect(selectedId.value).toBe('t1')
+
+      await row(wrapper, 't2').get('[data-testid="task-row-done"]').trigger('click')
+      await flushPromises()
+
+      expect(mocks.SetTaskStatus).toHaveBeenCalledWith('t2', 'done')
+      expect(selectedId.value).toBe('t1')
+      wrapper.unmount()
+    })
+
+    it('reopens a closed task from its row', async () => {
+      localStorage.setItem('hive.tasks.filter', 'all')
+      mocks.ListTasks.mockResolvedValue([task('t1', { status: 'done' })])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await row(wrapper, 't1').get('[data-testid="task-row-done"]').trigger('click')
+      await flushPromises()
+
+      expect(mocks.SetTaskStatus).toHaveBeenCalledWith('t1', 'open')
+      wrapper.unmount()
+    })
+
+    it('confirms a cascade when an epic is marked done from its row', async () => {
+      mocks.ListTasks.mockResolvedValue([task('e1', { type: 'epic' }), task('t1', { parentId: 'e1' })])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await row(wrapper, 'e1').get('[data-testid="task-row-done"]').trigger('click')
+      await flushPromises()
+
+      expect(mocks.SetTaskStatus).not.toHaveBeenCalled()
+      expect(document.querySelector('[data-testid="task-cascade-confirm"]')).not.toBeNull()
+      wrapper.unmount()
+    })
+
+    it('sets any status from the menu on the status icon', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1')])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await row(wrapper, 't1').get('[data-testid="task-row-status"]').trigger('click')
+      expect(document.querySelector('[data-testid="task-row-menu-delete"]')).toBeNull()
+      menuEntry('task-row-menu-status-in_progress').click()
+      await flushPromises()
+
+      expect(mocks.SetTaskStatus).toHaveBeenCalledWith('t1', 'in_progress')
+      expect(document.querySelector('[data-testid="task-row-menu"]')).toBeNull()
+      wrapper.unmount()
+    })
+
+    it('does nothing when the menu picks the status the task already has', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1')])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await row(wrapper, 't1').get('[data-testid="task-row-status"]').trigger('click')
+      menuEntry('task-row-menu-status-open').click()
+      await flushPromises()
+
+      expect(mocks.SetTaskStatus).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('deletes a task from the context menu after confirming', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1'), task('t2')])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await row(wrapper, 't2').trigger('contextmenu')
+      menuEntry('task-row-menu-delete').click()
+      await flushPromises()
+      expect(mocks.DeleteTask).not.toHaveBeenCalled()
+
+      menuEntry('task-delete-confirm-confirm').click()
+      await flushPromises()
+      expect(mocks.DeleteTask).toHaveBeenCalledWith('t2')
+      wrapper.unmount()
+    })
+
+    it('copies a task id from the more menu', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1')])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+
+      await row(wrapper, 't1').get('[data-testid="task-row-more"]').trigger('click')
+      menuEntry('task-row-menu-copy').click()
+      await flushPromises()
+
+      expect(mocks.SetText).toHaveBeenCalledWith('t1')
+      wrapper.unmount()
+    })
+
+    it('keeps one context menu open when a second row is right-clicked', async () => {
+      mocks.ListTasks.mockResolvedValue([task('t1'), task('t2')])
+      const wrapper = mount(TasksView, { attachTo: document.body })
+      await flushPromises()
+
+      await row(wrapper, 't1').trigger('contextmenu')
+      await row(wrapper, 't2').trigger('contextmenu')
+      await flushPromises()
+
+      expect(document.querySelectorAll('[data-testid="task-row-menu"]')).toHaveLength(1)
+      wrapper.unmount()
+    })
+
+    it('marks the selected task done with d, and moves to the row that takes its place', async () => {
+      localStorage.setItem('hive.tasks.filter', 'open')
+      mocks.ListTasks.mockResolvedValue([task('t1'), task('t2'), task('t3')])
+      const wrapper = mount(TasksView)
+      await flushPromises()
+      await selectRow(wrapper, 't2')
+
+      mocks.ListTasks.mockResolvedValue([task('t1'), task('t2', { status: 'done' }), task('t3')])
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd' }))
+      await flushPromises()
+
+      expect(mocks.SetTaskStatus).toHaveBeenCalledWith('t2', 'done')
+      expect(useTasks().selectedId.value).toBe('t3')
       wrapper.unmount()
     })
   })
