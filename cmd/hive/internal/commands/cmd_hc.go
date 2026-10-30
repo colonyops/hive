@@ -250,6 +250,9 @@ Examples:
 			if !flagAllRepos {
 				repoKey = cmd.detectRepoKey(ctx)
 			}
+			if strings.Contains(flagSession, ":") {
+				fmt.Fprintf(os.Stderr, "warning: --session %q has a server prefix; hc tracks items on this machine by bare session id, so it matches no items\n", flagSession)
+			}
 			filter := hc.ListFilter{
 				RepoKey:   repoKey,
 				EpicID:    c.Args().First(),

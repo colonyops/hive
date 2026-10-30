@@ -101,6 +101,22 @@ func TestHCList(t *testing.T) {
 	require.GreaterOrEqual(t, len(lines), 2)
 }
 
+func TestHCListWarnsAboutAServerPrefix(t *testing.T) {
+	h := NewHarness(t)
+
+	out, err := h.Run("hc", "list", "--session", "box:abc123")
+	require.NoError(t, err)
+	assert.Contains(t, out, "server prefix")
+
+	stdout, err := h.RunStdout("hc", "list", "--session", "box:abc123", "--json")
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(stdout), "the warning stays out of the JSON")
+
+	out, err = h.Run("hc", "list", "--session", "abc123")
+	require.NoError(t, err)
+	assert.NotContains(t, out, "server prefix")
+}
+
 func TestHCListStatusFilter(t *testing.T) {
 	h := NewHarness(t)
 
