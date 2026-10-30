@@ -25,6 +25,8 @@ type Scenario = (pane: BenchPane, options: BenchOptions) => Promise<Record<strin
 export interface BenchOptions {
   /** Multiplies the size of every workload. */
   scale?: number
+  /** Overrides the pane's smoothScrollDuration for the run, to compare settings. */
+  smoothScrollMs?: number
 }
 
 let markerSeq = 0
@@ -182,6 +184,47 @@ function keyStats(samples: KeySample[]): Record<string, number> {
   }
 }
 
+async function fillScrollback(pane: BenchPane): Promise<void> {
+  await settle(pane)
+  const marker = nextMarker()
+  pane.send(`seq 1 4000; ${emitMarker(marker)}\r`)
+  await waitForMarker(pane.term, marker)
+  await sleep(500)
+}
+
+async function driveWheel(
+  pane: BenchPane,
+  deltaY: number,
+  durationMs: number,
+): Promise<Record<string, number | boolean | string>> {
+  const target = pane.term.element?.querySelector('.xterm-screen') ?? pane.term.element
+  if (!target) throw new Error('the pane has no element to scroll')
+  const stopFrames = collectFrames()
+  const stopLag = watchLag()
+  const startedAt = performance.now()
+  let events = 0
+  let moved = 0
+  let renders = 0
+  let last = pane.term.buffer.active.viewportY
+  let furthest = 0
+  const renderHandle = pane.term.onRender(() => {
+    renders++
+  })
+  while (performance.now() - startedAt < durationMs) {
+    const up = Math.floor((performance.now() - startedAt) / 1000) % 2 === 0
+    target.dispatchEvent(new WheelEvent('wheel', { deltaY: up ? -deltaY : deltaY, bubbles: true, cancelable: true }))
+    events++
+    await nextFrame()
+    const y = pane.term.buffer.active.viewportY
+    moved += Math.abs(y - last)
+    last = y
+    furthest = Math.max(furthest, pane.term.buffer.active.baseY - y)
+  }
+  renderHandle.dispose()
+  pane.term.scrollToBottom()
+  return { events, linesMoved: moved, furthestFromTail: furthest, renders, ...stopLag(), ...stopFrames() }
+}
+
 async function measureFlood(
   pane: BenchPane,
   command: string,
@@ -264,41 +307,29 @@ const scenarios: Record<string, Scenario> = {
     return { interruptMs: round(performance.now() - startedAt), backlogAtKey }
   },
 
-  // Wheel through scrollback at one notch per frame, both ways.
+  // A wheel through scrollback at one notch per frame, both ways.
   async scroll(pane, { scale = 1 }) {
-    await settle(pane)
-    const marker = nextMarker()
-    pane.send(`seq 1 4000; ${emitMarker(marker)}\r`)
-    await waitForMarker(pane.term, marker)
-    await sleep(500)
-    const target = pane.term.element?.querySelector('.xterm-screen') ?? pane.term.element
-    if (!target) throw new Error('the pane has no element to scroll')
-    const stopFrames = collectFrames()
-    const stopLag = watchLag()
-    const durationMs = 4000 * scale
-    const startedAt = performance.now()
-    let events = 0
-    let moved = 0
-    let last = pane.term.buffer.active.viewportY
-    const rendered: number[] = []
-    const renderHandle = pane.term.onRender(() => {
-      rendered.push(performance.now())
-    })
-    while (performance.now() - startedAt < durationMs) {
-      const elapsed = performance.now() - startedAt
-      const up = Math.floor(elapsed / 1000) % 2 === 0
-      target.dispatchEvent(
-        new WheelEvent('wheel', { deltaY: up ? -120 : 120, deltaMode: 0, bubbles: true, cancelable: true }),
-      )
-      events++
-      await nextFrame()
-      const y = pane.term.buffer.active.viewportY
-      moved += Math.abs(y - last)
-      last = y
-    }
-    renderHandle.dispose()
-    pane.term.scrollToBottom()
-    return { events, linesMoved: moved, renders: rendered.length, ...stopLag(), ...stopFrames() }
+    await fillScrollback(pane)
+    return driveWheel(pane, 120, 4000 * scale)
+  },
+
+  // Small deltas at frame rate, the way a trackpad reports a two-finger drag.
+  async scrollTrackpad(pane, { scale = 1 }) {
+    await fillScrollback(pane)
+    return driveWheel(pane, 12, 4000 * scale)
+  },
+
+  // Reading history while the pane keeps printing at an agent's pace. The viewport
+  // has to follow the wheel under the parser. A flood is no test of this: it trims
+  // the whole scrollback in about 100ms, which pushes any viewport to the top.
+  async scrollUnderOutput(pane, { scale = 1 }) {
+    await fillScrollback(pane)
+    pane.send('while :; do seq 1 20; sleep 0.05; done\r')
+    await sleep(200)
+    const metrics = await driveWheel(pane, 120, 3000 * scale)
+    pane.send('\x03')
+    await sleep(300)
+    return metrics
   },
 
   // Keystrokes in the visible pane while a pane nobody can see floods the same
@@ -526,6 +557,8 @@ async function run(names: string[], options: BenchOptions): Promise<BenchResult[
       hiddenDuringRun ||= document.hidden
     }
     document.addEventListener('visibilitychange', noteHidden)
+    const smoothScroll = pane.term.options.smoothScrollDuration
+    if (options.smoothScrollMs !== undefined) pane.term.options.smoothScrollDuration = options.smoothScrollMs
     try {
       const metrics = await work(pane, options)
       metrics.hiddenDuringRun = hiddenDuringRun
@@ -537,6 +570,7 @@ async function run(names: string[], options: BenchOptions): Promise<BenchResult[
     } catch (error) {
       results.push({ scenario, ok: false, error: error instanceof Error ? error.message : String(error), metrics: {} })
     } finally {
+      pane.term.options.smoothScrollDuration = smoothScroll
       document.removeEventListener('visibilitychange', noteHidden)
     }
   }

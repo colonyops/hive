@@ -40,6 +40,10 @@ export function createTerminal(options: ITerminalOptions = {}): Terminal {
       lineHeight: font.lineHeight.value,
       letterSpacing: font.letterSpacing.value,
       scrollback: 5000,
+      // Applies to a physical wheel only: xterm's classifier leaves a trackpad,
+      // whose own events are already smooth, tracking the fingers one to one.
+      // Without it a notch jumps three rows in one frame.
+      smoothScrollDuration: 100,
       theme: xtermTheme(),
       linkHandler,
       ...options,
