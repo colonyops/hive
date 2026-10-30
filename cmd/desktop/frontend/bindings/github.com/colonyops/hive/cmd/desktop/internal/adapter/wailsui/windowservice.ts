@@ -11,7 +11,7 @@
 import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
 
 /**
- * Focused reports whether the native application window is currently focused.
+ * Focused reports whether any Hive window is currently focused.
  */
 export function Focused(): $CancellablePromise<boolean> {
     return $Call.ByID(2013678272);

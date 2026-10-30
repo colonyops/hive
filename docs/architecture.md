@@ -188,6 +188,7 @@ column is the section that specifies it.
 | A new **metric, span, or log field** | Package-level instrument via `platform/observe` against the global provider; bounded attributes only; a span is a trigger or a wait; the SDK stays in `app/telemetry` | [Telemetry](#telemetry), ADR a-span-is-a-trigger-or-a-wait-and-its-count-per-trigger-is-bounded-by-configuration |
 | A new **scheduled/recurring launch** | Registry-free, One instance per process, App-owned lifecycle, Consumer-defined interfaces, Store | [Scheduled chats](#scheduled-chats), ADR scheduled-chats-are-declared-in-the-workspace-manifest-and-their-run-state-lives-in-sqlite |
 | A new **app mode** | Closed union over sibling active flags — never an `else` branch | [App modes](#app-modes) |
+| A new **pop-out window** | Registry — a row in `popOutKinds` and in `windows/surfaces.ts`; a surface takes params and re-reads Go | [Pop-out windows](#pop-out-windows), ADR pop-out-windows-host-one-registered-surface-in-their-own-vue-root |
 | A new **persisted field** | Config-vs-data boundary; Value Object for anything secret-bearing. A secret-bearing field holds an `internal/platform/secrets` reference, never a value | [Config versus data](#config-versus-data), [Credentials](#credentials) |
 | A new **persisted entity** | Store, Unit of Work, Options struct, Consumer-defined interface | [Stores and services](#stores-and-services) |
 | An operation **spanning two domains** | Unit of Work — `db.Ctx(ctx)` to join the ambient transaction, never a second one | [Config versus data](#config-versus-data) |
@@ -495,7 +496,7 @@ cmd/desktop/internal/
   adapter/                        # driving adapters, all in-process
     wailsui/                      # Wails service structs; the only Wails imports
       events.go                   # bus subscriber → Emit, per-event delivery policy
-      windowservice.go  tray.go  focusstate.go  updater.go  notify.go
+      windowservice.go  popouts.go  tray.go  focusstate.go  updater.go  notify.go
       terminalservice.go          # Available + Endpoint: the terminal's gate and
                                   #   webview bootstrap (ADR terminal-transport)
       e2e/                        # state-reset and smoke middleware
@@ -1429,6 +1430,26 @@ The routes are internal. Anything outside the app addresses a place with a
 place that turns a `Location` into a route or an overlay. A new area adds an
 `Area` value and a case there, and a link only ever navigates
 ([ADR hive-desktop-is-addressed-by-hive-urls-not-by-its-internal-routes](decisions/2026-10-10-hive-desktop-is-addressed-by-hive-urls-not-by-its-internal-routes.md)).
+
+### Pop-out windows
+
+A pop-out is a native window hosting one **surface**: a view that takes `params`,
+emits `update:params` and `title`, and re-reads Go for its data (ADR
+pop-out-windows-host-one-registered-surface-in-their-own-vue-root). It is not an
+app mode and does not touch `App.vue`.
+
+- `wailsui/popouts.go` declares the kinds and builds each window's URL.
+  `main.ts` picks the Vue root from that URL, and `windows/PopOutHost.vue` loads
+  the surface from `windows/surfaces.ts`.
+- Events reach every window, and each window has its own stores. That is what
+  keeps them consistent: the wake-up contract in [Events](#events) needs no
+  window-to-window sync.
+- `FocusState` means "any Hive window is focused". It answers by reading the
+  windows, never from the order of focus events.
+- Handlers that must run once stay in the main root. A surface does not import
+  `useFeedState`.
+- A view whose backend allows one viewer cannot be a surface. Today that is Code
+  and Chats, because a tmux control client has one subscriber per session.
 
 ### Terminal sessions
 

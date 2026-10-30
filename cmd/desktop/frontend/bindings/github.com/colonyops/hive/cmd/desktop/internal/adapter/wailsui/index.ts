@@ -22,6 +22,7 @@ import * as NotificationService from "./notificationservice.js";
 import * as ObservabilityService from "./observabilityservice.js";
 import * as PerfService from "./perfservice.js";
 import * as PipelineService from "./pipelineservice.js";
+import * as PopOutService from "./popoutservice.js";
 import * as PopupTerminalService from "./popupterminalservice.js";
 import * as PostHogService from "./posthogservice.js";
 import * as PromptsService from "./promptsservice.js";
@@ -59,6 +60,7 @@ export {
     ObservabilityService,
     PerfService,
     PipelineService,
+    PopOutService,
     PopupTerminalService,
     PostHogService,
     PromptsService,
@@ -113,6 +115,8 @@ export type {
     PerfInfo,
     PerfRecordResult,
     PerfSample,
+    PopOutRequest,
+    PopOutResult,
     PopupTerminalAvailability,
     PopupTerminalEndpoint,
     RefreshResult,

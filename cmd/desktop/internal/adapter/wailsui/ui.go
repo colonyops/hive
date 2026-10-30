@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"slices"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -99,10 +100,10 @@ func New(mock string, settingsStore *settings.Store, appIcon []byte, logger zero
 		logger:        logger,
 		mock:          mock,
 		settingsStore: settingsStore,
-		focus:         NewFocusState(),
 		links:         NewLinkService(logger),
 		notifications: NewUnavailableNotificationService(fmt.Errorf("native notifications unavailable in desktop mock mode")),
 	}
+	ui.focus = NewFocusState(focusSettleDelay, ui.anyWindowFocused, emitWindowFocusChange)
 	if mock != "" {
 		return ui
 	}
@@ -204,6 +205,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 	services = append(services,
 		application.NewService(u.notifications),
 		application.NewService(NewWindowService(u.focus)),
+		application.NewService(NewPopOutService(nativeWindows, u.createPopOut)),
 		application.NewService(u.links),
 	)
 
@@ -281,24 +283,9 @@ func (u *UI) buildWindow() {
 		Title:            "Hive",
 		Width:            1360,
 		Height:           864,
-		BackgroundColour: application.NewRGB(16, 19, 24),
+		BackgroundColour: windowBackground,
 		URL:              "/",
-		Mac: application.MacWindow{
-			// HiddenInset with an explicit compact toolbar style: the default
-			// (Automatic) lets AppKit pick the toolbar height, which drifts
-			// across macOS versions. UnifiedCompact pins it — 42pt as measured
-			// on macOS Tahoe — so the traffic lights center on the 42px HTML
-			// titlebar.
-			TitleBar: application.MacTitleBar{
-				AppearsTransparent:   true,
-				HideTitle:            true,
-				FullSizeContent:      true,
-				UseToolbar:           true,
-				HideToolbarSeparator: true,
-				ToolbarStyle:         application.MacToolbarStyleUnifiedCompact,
-			},
-			InvisibleTitleBarHeight: 42,
-		},
+		Mac:              hiddenInsetChrome(),
 	})
 
 	u.window.OnWindowEvent(events.Common.WindowFilesDropped, func(event *application.WindowEvent) {
@@ -320,16 +307,7 @@ func (u *UI) buildWindow() {
 		})
 	}
 
-	u.window.OnWindowEvent(events.Common.WindowFocus, func(*application.WindowEvent) {
-		if u.focus.Set(true) {
-			emitWindowFocus()
-		}
-	})
-	u.window.OnWindowEvent(events.Common.WindowLostFocus, func(*application.WindowEvent) {
-		if u.focus.Set(false) {
-			emitWindowBlur()
-		}
-	})
+	u.trackFocus(u.window)
 
 	// Closing the window keeps the app running in the dock and tray; it can be
 	// reopened from either. Quitting is done via Cmd+Q or the tray menu.
@@ -352,15 +330,46 @@ func (u *UI) buildWindow() {
 			return
 		}
 		u.window.Hide()
-		if u.focus.Set(false) {
-			emitWindowBlur()
-		}
+		u.focus.Changed()
 		e.Cancel()
 	})
 
 	u.app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
 		u.window.Show()
 	})
+}
+
+var windowBackground = application.NewRGB(16, 19, 24)
+
+// hiddenInsetChrome is the Mac title bar every window with an HTML title bar
+// shares. HiddenInset with an explicit compact toolbar style: the default
+// (Automatic) lets AppKit pick the toolbar height, which drifts across macOS
+// versions. UnifiedCompact pins it — 42pt as measured on macOS Tahoe — so the
+// traffic lights center on the 42px HTML titlebar.
+func hiddenInsetChrome() application.MacWindow {
+	return application.MacWindow{
+		TitleBar: application.MacTitleBar{
+			AppearsTransparent:   true,
+			HideTitle:            true,
+			FullSizeContent:      true,
+			UseToolbar:           true,
+			HideToolbarSeparator: true,
+			ToolbarStyle:         application.MacToolbarStyleUnifiedCompact,
+		},
+		InvisibleTitleBarHeight: 42,
+	}
+}
+
+func (u *UI) trackFocus(window *application.WebviewWindow) {
+	window.OnWindowEvent(events.Common.WindowFocus, func(*application.WindowEvent) { u.focus.Changed() })
+	window.OnWindowEvent(events.Common.WindowLostFocus, func(*application.WindowEvent) { u.focus.Changed() })
+}
+
+func (u *UI) anyWindowFocused() bool {
+	if u.app == nil {
+		return false
+	}
+	return slices.ContainsFunc(u.app.Window.GetAll(), application.Window.IsFocused)
 }
 
 // buildTray is not rooted at Mount's ctx: like attachUpdater above, the tray

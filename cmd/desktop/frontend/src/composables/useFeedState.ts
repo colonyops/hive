@@ -1,6 +1,6 @@
 import { computed, onMounted, onScopeDispose, ref } from 'vue'
 import { useStorage } from '@vueuse/core'
-import { Browser, Window } from '@wailsio/runtime'
+import { Window } from '@wailsio/runtime'
 import {
   ClearProfileImage,
   CreateFlow,
@@ -47,6 +47,7 @@ import {
   sourceSummary,
 } from '../lib/itemPresentation'
 import { useClipboard } from '@hive/ui/composables/useClipboard'
+import { useOpenUrl } from './useOpenUrl'
 import { useNotify } from './useNotify'
 import { useToasts } from './useToasts'
 import { useWailsEvent } from './useWailsEvent'
@@ -163,6 +164,7 @@ export function useFeedState() {
   const actionInputsError = ref<string | null>(null)
   const actionRerun = useConfirmation()
   const { toasts, showToast, dismissToast, clearToasts } = useToasts()
+  const openUrl = useOpenUrl()
   const { notify } = useNotify()
   const creatingProfile = ref(false)
   const createProfileError = ref<string | null>(null)
@@ -1329,18 +1331,6 @@ export function useFeedState() {
 
   function notWired() {
     showToast('Not wired up yet')
-  }
-
-  // Opens a URL in the user's default browser via Wails — used for links
-  // rendered inside a feed item's markdown body.
-  async function openUrl(url: string) {
-    if (!url) return
-    try {
-      await Browser.OpenURL(url)
-    } catch (error) {
-      log.warn('unable to open URL', error)
-      showToast('Could not open the link', { severity: 'error' })
-    }
   }
 
   // Opens an item's canonical GitHub URL. The URL comes from the inbox item;

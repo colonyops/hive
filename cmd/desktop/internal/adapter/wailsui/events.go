@@ -334,18 +334,16 @@ func NotificationActivationFrom(result wailsnotify.NotificationResult) (Notifica
 	return activation, true
 }
 
-// emitWindowFocus pushes the current focused state to the frontend. Safe to
-// call from native window event callbacks once the app is running.
-func emitWindowFocus() {
-	if app := application.Get(); app != nil {
-		app.Event.Emit("window:focus", true)
+// emitWindowFocusChange pushes whether any Hive window is focused to the
+// frontend. Safe to call from any goroutine once the app is running.
+func emitWindowFocusChange(focused bool) {
+	app := application.Get()
+	if app == nil {
+		return
 	}
-}
-
-// emitWindowBlur pushes the current unfocused state to the frontend. Safe to
-// call from native window event callbacks once the app is running.
-func emitWindowBlur() {
-	if app := application.Get(); app != nil {
+	if focused {
+		app.Event.Emit("window:focus", true)
+	} else {
 		app.Event.Emit("window:blur", false)
 	}
 }

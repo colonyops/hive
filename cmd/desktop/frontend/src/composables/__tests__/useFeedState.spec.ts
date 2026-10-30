@@ -171,7 +171,7 @@ describe('useFeedState', () => {
   it('keeps durable outcomes on notify and reserves showToast for ephemeral feedback', () => {
     const source = readFileSync('src/composables/useFeedState.ts', 'utf8')
     expect(source).not.toContain('recordActivity')
-    expect(source.match(/showToast\(/g)).toHaveLength(10)
+    expect(source.match(/showToast\(/g)).toHaveLength(9)
     for (const title of [
       'Sidebar layout save failed',
       'Profile renamed',

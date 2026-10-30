@@ -4,6 +4,7 @@
 // copies, exports, and deletes.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'
+import IconExternalLink from '~icons/lucide/external-link'
 import IconMaximize2 from '~icons/lucide/maximize-2'
 import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
@@ -13,6 +14,7 @@ import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import { useDriveDocument } from '../../composables/useDriveDocument'
+import { popOutDrive } from '../../composables/usePopOut'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import { useDriveActivity } from '../../stores/useDriveActivity'
 import { entryLabel, movedPath, newestDocument, type DriveAuthor } from '../../lib/drive'
@@ -135,6 +137,12 @@ const {
         testid="drive-pane"
         @deleted="documentDeleted"
         @moved="documentMoved"
+      />
+      <IconButton
+        label="Open in new window"
+        :icon="IconExternalLink"
+        data-testid="drive-pane-pop-out"
+        @click="popOutDrive({ space, path, session })"
       />
       <IconButton
         label="Open full page"

@@ -3,6 +3,7 @@ import { nextTick, onMounted, ref, type Ref } from 'vue'
 import { useCommandPalette } from '../composables/useCommands'
 import { useLaunchers } from '../composables/useLaunchers'
 import { useNewSession } from '../composables/useNewSession'
+import { popOutDrive } from '../composables/usePopOut'
 import { useReportDialog } from '../composables/useReportDialog'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import {
@@ -135,6 +136,10 @@ export function useAppCommands(deps: AppCommandDeps) {
     'terminal.toggle-sidebar': appMode.toggleSidebar,
     'view.toggle-panel': appMode.togglePreview,
     'drive.toggle-comments': review.togglePageComments,
+    'drive.pop-out': () => {
+      const scope = appMode.popOutScope.value
+      if (scope) popOutDrive(scope)
+    },
     'terminal.focus-sidebar': () => revealSidebar(terminalSidebarCollapsed, focusTerminalTree),
     'terminal.focus-pane': focusTerminalPane,
     // One combo, dispatched on whichever surface is on screen.
@@ -209,6 +214,8 @@ export function useAppCommands(deps: AppCommandDeps) {
         return appMode.canTogglePreview.value
       case 'review':
         return appMode.driveActive.value && review.pageReviewed.value
+      case 'drive-scope':
+        return appMode.popOutScope.value !== null
       // Excludes the session picker for terminal-session's reason: with no
       // emulator drawn, the chord would change a size nobody can see.
       case 'any-terminal':

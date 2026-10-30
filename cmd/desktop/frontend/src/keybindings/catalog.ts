@@ -3,6 +3,7 @@ import IconArrowDown from '~icons/lucide/arrow-down'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
 import IconArrowUp from '~icons/lucide/arrow-up'
+import IconExternalLink from '~icons/lucide/external-link'
 import IconFolderTree from '~icons/lucide/folder-tree'
 import IconMessageSquare from '~icons/lucide/message-square'
 import IconMessagesSquare from '~icons/lucide/messages-square'
@@ -12,7 +13,6 @@ import IconChevronLeft from '~icons/lucide/chevron-left'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconCode from '~icons/lucide/code'
 import IconCommand from '~icons/lucide/command'
-import IconExternalLink from '~icons/lucide/external-link'
 import IconEye from '~icons/lucide/eye'
 import IconInbox from '~icons/lucide/inbox'
 import IconKeyboard from '~icons/lucide/keyboard'
@@ -88,6 +88,7 @@ export type CommandContext =
   | 'sidebar'
   | 'panel'
   | 'review'
+  | 'drive-scope'
 
 export interface BindableCommand {
   id: string
@@ -324,6 +325,15 @@ export const commandCatalog: BindableCommand[] = [
     icon: IconMessageSquare,
     defaultCombos: ['mod+shift+m'],
     context: 'review',
+  },
+  {
+    id: 'drive.pop-out',
+    title: 'Open Drive in new window',
+    group: 'View',
+    keywords: ['drive', 'document', 'pop', 'out', 'window', 'detach', 'separate'],
+    icon: IconExternalLink,
+    defaultCombos: [],
+    context: 'drive-scope',
   },
   // Directional rather than one toggle: which pane you land on should be
   // readable off the chord, not off where focus happened to be.

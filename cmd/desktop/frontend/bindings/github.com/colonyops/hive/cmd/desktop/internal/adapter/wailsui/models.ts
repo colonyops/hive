@@ -506,6 +506,23 @@ export interface PerfSample {
 }
 
 /**
+ * PopOutRequest names a surface and where to point it.
+ */
+export interface PopOutRequest {
+    "kind": string;
+    "params": { [_ in string]?: string } | null;
+}
+
+/**
+ * PopOutResult carries the surface's URL. Opened is false when this build has
+ * no native windows, and the page opens the URL itself.
+ */
+export interface PopOutResult {
+    "url": string;
+    "opened": boolean;
+}
+
+/**
  * PopupTerminalAvailability gates the pop-up terminal. Unlike terminal mode it
  * does not depend on tmux — there is no program to discover — so a machine
  * without one still gets a pop-up shell.

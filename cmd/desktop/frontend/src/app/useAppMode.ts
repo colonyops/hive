@@ -2,7 +2,7 @@ import { computed, ref, watch, type Ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { Window } from '@wailsio/runtime'
 import { useDriveRoute } from '../composables/useDriveRoute'
-import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
+import { workspaceSpaceKey, type DriveAuthor, type DriveScope, driveScopeQuery } from '../lib/drive'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveActivity } from '../stores/useDriveActivity'
 import { useDriveReview } from '../stores/useDriveReview'
@@ -221,11 +221,7 @@ export function useAppMode(
   }))
 
   function driveLocation(scope: DriveScope) {
-    const query: Record<string, string> = {}
-    if (scope.space) query.space = scope.space
-    if (scope.path) query.doc = scope.path
-    if (scope.session) query.session = scope.session
-    return { name: 'drive' as const, query }
+    return { name: 'drive' as const, query: driveScopeQuery(scope) }
   }
 
   function openDrive(scope: DriveScope): void {
@@ -239,6 +235,9 @@ export function useAppMode(
   function closeDrive(): void {
     void router.push(lastOutsideDrivePath || { name: 'feed' })
   }
+
+  // What a pop-out shows from here: the Drive page's scope, or the pane's.
+  const popOutScope = computed(() => (driveActive.value ? driveScope.value : viewDriveScope.value))
 
   // Opening follows the chat or session on screen; from anywhere else it
   // returns to the document last read.
@@ -267,6 +266,7 @@ export function useAppMode(
     settingsActive,
     driveActive,
     driveScope,
+    popOutScope,
     openDrive,
     updateDriveScope,
     closeDrive,

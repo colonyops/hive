@@ -26,6 +26,15 @@ export interface DriveScope {
   session: DriveAuthor | null
 }
 
+/** A scope as the query both the Drive route and the Drive pop-out carry it in. */
+export function driveScopeQuery(scope: DriveScope): Record<string, string> {
+  const query: Record<string, string> = {}
+  if (scope.space) query.space = scope.space
+  if (scope.path) query.doc = scope.path
+  if (scope.session) query.session = scope.session
+  return query
+}
+
 export function workspaceSpaceKey(dir: string): string {
   return `workspaces/${dir}`
 }

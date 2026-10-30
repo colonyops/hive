@@ -1,33 +1,54 @@
 package wailsui
 
 import (
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFocusStateTracksTransitionsOnly(t *testing.T) {
-	state := NewFocusState()
+func TestFocusStateReadsTheWindowsAfterTheDelay(t *testing.T) {
+	var windowFocused atomic.Bool
+	var notified atomic.Int32
+	state := NewFocusState(time.Millisecond, windowFocused.Load, func(bool) { notified.Add(1) })
 
-	assert.False(t, state.Get(), "a hidden window is not focused")
-	assert.False(t, state.Set(false), "unchanged state is a no-op")
-	assert.False(t, state.Get())
+	assert.False(t, state.Get(), "no window has reported focus yet")
 
-	assert.True(t, state.Set(true))
+	windowFocused.Store(true)
+	state.Changed()
+	assert.Eventually(t, state.Get, time.Second, time.Millisecond)
+	assert.EqualValues(t, 1, notified.Load())
+
+	windowFocused.Store(false)
+	state.Changed()
+	assert.Eventually(t, func() bool { return !state.Get() }, time.Second, time.Millisecond)
+	assert.EqualValues(t, 2, notified.Load())
+}
+
+func TestFocusStateStaysFocusedWhileMovingBetweenWindows(t *testing.T) {
+	var notified atomic.Int32
+	state := NewFocusState(time.Millisecond, func() bool { return true }, func(bool) { notified.Add(1) })
+
+	state.Changed()
+	assert.Eventually(t, state.Get, time.Second, time.Millisecond)
+
+	// The resign and the become-key of a move between windows.
+	state.Changed()
+	state.Changed()
+	time.Sleep(20 * time.Millisecond)
+
 	assert.True(t, state.Get())
-	assert.False(t, state.Set(true), "unchanged state is a no-op")
-
-	assert.True(t, state.Set(false))
-	assert.False(t, state.Get())
+	assert.EqualValues(t, 1, notified.Load(), "the move is not a transition")
 }
 
 func TestWindowServiceFocused(t *testing.T) {
-	state := NewFocusState()
+	var windowFocused atomic.Bool
+	state := NewFocusState(time.Millisecond, windowFocused.Load, func(bool) {})
 	service := NewWindowService(state)
 
 	assert.False(t, service.Focused(), "a hidden window is not focused")
-	state.Set(true)
-	assert.True(t, service.Focused())
-	state.Set(false)
-	assert.False(t, service.Focused())
+	windowFocused.Store(true)
+	state.Changed()
+	assert.Eventually(t, service.Focused, time.Second, time.Millisecond)
 }

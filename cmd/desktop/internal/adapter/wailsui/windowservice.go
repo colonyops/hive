@@ -10,7 +10,7 @@ func NewWindowService(focus *FocusState) *WindowService {
 	return &WindowService{focus: focus}
 }
 
-// Focused reports whether the native application window is currently focused.
+// Focused reports whether any Hive window is currently focused.
 func (s *WindowService) Focused() bool {
 	return s.focus.Get()
 }

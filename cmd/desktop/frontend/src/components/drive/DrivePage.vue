@@ -5,6 +5,7 @@
 import { useElementSize, useResizeObserver } from '@vueuse/core'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import IconCode from '~icons/lucide/code'
+import IconExternalLink from '~icons/lucide/external-link'
 import IconGlobe from '~icons/lucide/globe'
 import IconMessageSquareText from '~icons/lucide/message-square-text'
 import IconMessagesSquare from '~icons/lucide/messages-square'
@@ -24,6 +25,7 @@ import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 import { useDriveDocument } from '../../composables/useDriveDocument'
+import { popOutDrive } from '../../composables/usePopOut'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import { relativeAge } from '../../lib/age'
@@ -36,8 +38,16 @@ import { useDriveReview } from '../../stores/useDriveReview'
 const props = defineProps<{
   scope: DriveScope
   sidebarCollapsed?: boolean
+  /** Fills its own window: nothing to close back to, and Settings is in the main window. */
+  windowed?: boolean
 }>()
-const emit = defineEmits<{ close: []; 'open-url': [url: string]; 'update:scope': [scope: DriveScope]; setup: [] }>()
+const emit = defineEmits<{
+  close: []
+  'open-url': [url: string]
+  'update:scope': [scope: DriveScope]
+  setup: []
+  title: [title: string]
+}>()
 
 const { spaces, spacesLoaded, error: spacesError } = useDrive()
 const { document, tree, treeError, paths, shown, loading, error, show } = useDriveDocument({
@@ -99,6 +109,7 @@ function documentMoved(from: string, to: string): void {
 }
 
 const title = computed(() => (document.value ? entryLabel(document.value.entry) : shown.value) || 'Drive')
+watch(title, (next) => emit('title', next), { immediate: true })
 // The title already names the document, so only its folder sits beside it.
 const folder = computed(() => {
   const path = document.value?.entry.path ?? ''
@@ -110,6 +121,7 @@ const modified = computed(() => (document.value ? entryTime(document.value.entry
 // The pane's reason: Hive wires a workspace's agent, never a Code session's.
 const offerSetup = computed(
   () =>
+    !props.windowed &&
     spaceGroup(space.value) === 'Repositories' &&
     !!tree.value &&
     !tree.value.children?.length &&
@@ -180,7 +192,7 @@ const {
 // column alone to say so.
 const browsable = computed(() => !(spacesError.value && !spaces.value.length) && !(spacesLoaded.value && !space.value))
 
-useEscapeToClose(() => emit('close'))
+useEscapeToClose(() => emit('close'), { enabled: () => !props.windowed })
 </script>
 
 <template>
@@ -265,7 +277,16 @@ useEscapeToClose(() => emit('close'))
               @deleted="documentDeleted"
               @moved="documentMoved"
             />
-            <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
+            <template v-if="!windowed">
+              <IconButton
+                label="Open in new window"
+                :icon="IconExternalLink"
+                size="lg"
+                data-testid="drive-page-pop-out"
+                @click="popOutDrive({ ...scope, space })"
+              />
+              <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
+            </template>
           </template>
         </ViewHeader>
         <DriveReviewHeader

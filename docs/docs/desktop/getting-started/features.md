@@ -151,7 +151,7 @@ The Chats area gives ongoing agent work a durable home outside a repository sess
 
     ---
 
-    Let agents publish durable Markdown, HTML, and canvas documents beside a chat or a Code session, then browse the folder tree, search every space, reorganize it, or read a document full page.
+    Let agents publish durable Markdown, HTML, and canvas documents beside a chat or a Code session, then browse the folder tree, search every space, reorganize it, or read a document full page or in its own window.
 
 -   :lucide-panel-left-open:{ .lg .middle } __Code integration__
 
