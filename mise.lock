@@ -214,9 +214,9 @@ backend = "go:github.com/abice/go-enum"
 specifiers = ["v0.9.4"]
 
 [[tools."go:github.com/wailsapp/wails/v3/cmd/wails3"]]
-version = "v3.0.0-beta.21"
+version = "3.0.0-beta.34"
 backend = "go:github.com/wailsapp/wails/v3/cmd/wails3"
-specifiers = ["v3.0.0-beta.21"]
+specifiers = ["v3.0.0-beta.34"]
 
 [[tools."go:golang.org/x/tools/cmd/deadcode"]]
 version = "0.49.0"
