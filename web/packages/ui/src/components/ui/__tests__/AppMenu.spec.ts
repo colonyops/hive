@@ -49,6 +49,47 @@ describe('AppMenu', () => {
     expect(wrapper.get('[data-testid="entry-off"] span').classes()).toContain('size-3.5')
   })
 
+  it('keeps an icon on a toggling entry and moves the check to the trailing end', () => {
+    const wrapper = mount(AppMenu, {
+      props: {
+        entries: [
+          { kind: 'action', id: 'on', label: 'On', icon: IconMail, checked: true, testid: 'entry-on' },
+          { kind: 'action', id: 'off', label: 'Off', icon: IconMail, checked: false, testid: 'entry-off' },
+        ] satisfies MenuEntry[],
+      },
+    })
+    const on = wrapper.get('[data-testid="entry-on"]')
+    expect(on.findAll('svg')).toHaveLength(2)
+    expect(on.element.lastElementChild?.hasAttribute('data-check')).toBe(true)
+    expect(wrapper.find('[data-testid="entry-off"] [data-check]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="entry-off"]').element.lastElementChild?.classList.contains('size-3.5')).toBe(true)
+  })
+
+  // A host at the window's left edge would push an end-aligned panel, and the
+  // submenu that opens leftward from it, off-screen.
+  it('aligns to the start edge, and opens its submenus toward it', async () => {
+    const wrapper = mount(AppMenu, {
+      props: {
+        align: 'start',
+        entries: [
+          {
+            kind: 'submenu',
+            id: 'more',
+            label: 'More',
+            testid: 'entry-more',
+            panelTestid: 'more-panel',
+            entries: [{ kind: 'action', id: 'x', label: 'X' }],
+          },
+        ],
+      },
+    })
+    expect(wrapper.get('[role="menu"]').classes()).toContain('app-menu-start')
+    await wrapper.get('[data-testid="entry-more"]').trigger('click')
+    expect(wrapper.get('[data-testid="more-panel"]').classes()).toEqual(
+      expect.arrayContaining(['app-menu-start', 'app-menu-nested']),
+    )
+  })
+
   it('opens a submenu beside its entry, filters it, and relays its choice', async () => {
     const wrapper = mount(AppMenu, {
       props: {

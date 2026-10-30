@@ -134,6 +134,67 @@ func (s *SettingsService) SetReviewLabels(ctx context.Context, labels []ReviewLa
 	return s.settings.SetReviewLabels(ctx, in)
 }
 
+// SessionView is a saved Code tab view. Field and Op values pass through
+// unchecked; the frontend owns their meaning.
+type SessionView struct {
+	ID     string        `json:"id"`
+	Name   string        `json:"name"`
+	Filter SessionFilter `json:"filter"`
+}
+
+type SessionFilter struct {
+	Match      string             `json:"match"`
+	Conditions []SessionCondition `json:"conditions"`
+}
+
+type SessionCondition struct {
+	Field  string   `json:"field"`
+	Op     string   `json:"op"`
+	Values []string `json:"values,omitempty"`
+	Value  string   `json:"value,omitempty"`
+	Days   int      `json:"days,omitempty"`
+}
+
+func (s *SettingsService) CodeViews(ctx context.Context) ([]SessionView, error) {
+	views, err := s.settings.CodeViews(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SessionView, 0, len(views))
+	for _, view := range views {
+		conditions := make([]SessionCondition, 0, len(view.Filter.Conditions))
+		for _, c := range view.Filter.Conditions {
+			conditions = append(conditions, SessionCondition(c))
+		}
+		match := view.Filter.Match
+		if match == "" {
+			match = "all"
+		}
+		out = append(out, SessionView{
+			ID:     view.ID,
+			Name:   view.Name,
+			Filter: SessionFilter{Match: match, Conditions: conditions},
+		})
+	}
+	return out, nil
+}
+
+func (s *SettingsService) SetCodeViews(ctx context.Context, views []SessionView) error {
+	in := make([]settings.SessionView, 0, len(views))
+	for _, view := range views {
+		conditions := make([]settings.SessionCondition, 0, len(view.Filter.Conditions))
+		for _, c := range view.Filter.Conditions {
+			conditions = append(conditions, settings.SessionCondition(c))
+		}
+		in = append(in, settings.SessionView{
+			ID:     view.ID,
+			Name:   view.Name,
+			Filter: settings.SessionFilter{Match: view.Filter.Match, Conditions: conditions},
+		})
+	}
+	return s.settings.SetCodeViews(ctx, in)
+}
+
 func (s *SettingsService) AppearanceSettings(ctx context.Context) (AppearanceSettings, error) {
 	current, err := s.settings.Appearance(ctx)
 	if err != nil {

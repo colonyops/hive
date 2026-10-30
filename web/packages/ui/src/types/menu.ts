@@ -27,7 +27,8 @@ export interface MenuActionEntry {
   /**
    * A state the entry turns on and off, and whether it is on. Set it even
    * while off: an unchecked entry still reserves the check's width, so its
-   * label lines up with the icon-bearing entries around it.
+   * label lines up with the icon-bearing entries around it. An entry that
+   * also has an icon keeps the icon and shows the check at the trailing end.
    */
   checked?: boolean
   testid?: string

@@ -31,8 +31,13 @@ const props = defineProps<{
   testid?: string
   /** A filter box over the entries. */
   search?: MenuSearch
-  /** Set on the panel a submenu entry opens: it hangs off its entry's left side. */
+  /** Set on the panel a submenu entry opens: it hangs off its entry's side, the one `align` faces. */
   nested?: boolean
+  /** Which anchor edge the panel lines up with. `end` (the default) suits a
+   * host at the right of its pane; `start` suits one at the left edge of the
+   * window, where `end` would push the panel off-screen. Submenus open toward
+   * the same side. Ignored with `anchor`. */
+  align?: 'start' | 'end'
 }>()
 const emit = defineEmits<{ select: [id: string]; close: [] }>()
 
@@ -111,7 +116,12 @@ useEventListener(anchoredWindow, 'resize', measure)
     <div
       ref="root"
       class="app-menu"
-      :class="{ flip: !anchor && flip, 'app-menu-nested': nested, 'app-menu-searchable': search }"
+      :class="{
+        flip: !anchor && flip,
+        'app-menu-start': !anchor && align === 'start',
+        'app-menu-nested': nested,
+        'app-menu-searchable': search,
+      }"
       :style="anchor ? anchoredStyle : width ? { width } : undefined"
       role="menu"
       :data-testid="testid"
@@ -148,6 +158,7 @@ useEventListener(anchoredWindow, 'resize', measure)
             <AppMenu
               v-if="openSubmenu === entry.id"
               nested
+              :align="align"
               :entries="entry.entries"
               :search="entry.search"
               :ignore="[submenuToggle]"
@@ -185,6 +196,16 @@ useEventListener(anchoredWindow, 'resize', measure)
             </span>
             <span v-else class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
             <Kbd v-if="entry.kbd" class="ml-auto pl-2 text-micro text-text-4">{{ entry.kbd }}</Kbd>
+            <IconCheck
+              v-if="entry.checked && (entry.icon || entry.iconName)"
+              class="size-3.5 shrink-0 text-accent"
+              data-check
+            />
+            <span
+              v-else-if="entry.checked === false && (entry.icon || entry.iconName)"
+              class="size-3.5 shrink-0"
+              aria-hidden="true"
+            />
           </button>
         </template>
         <EmptyState
@@ -215,9 +236,17 @@ useEventListener(anchoredWindow, 'resize', measure)
   top: auto;
   bottom: calc(100% + 5px);
 }
+.app-menu-start {
+  right: auto;
+  left: 0;
+}
 .app-menu-nested {
   top: -5px;
   right: calc(100% + 7px);
+}
+.app-menu-start.app-menu-nested {
+  right: auto;
+  left: calc(100% + 7px);
 }
 .app-menu-searchable {
   display: flex;

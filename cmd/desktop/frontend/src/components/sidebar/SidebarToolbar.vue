@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The bar over a tree sidebar (Code and Chats): filter, reload, new, and the
-// list menu. The filter sits flush rather than boxed: the sidebar resizes down
+// list menu. A host can leave reload out (Code keeps it in the list menu) and
+// put controls of its own before new through the default slot. The filter sits flush rather than boxed: the sidebar resizes down
 // narrow, and a bordered field beside three controls leaves the bar looking
 // like nothing but chrome. Attributes and listeners go to the filter's input.
 import { ref, shallowRef } from 'vue'
@@ -10,13 +11,15 @@ import IconRotateCw from '~icons/lucide/rotate-cw'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import SearchField from '@hive/ui/components/ui/SearchField.vue'
+import Spinner from '@hive/ui/components/ui/Spinner.vue'
 import type { MenuEntry } from '@hive/ui/types/menu'
 
 defineOptions({ inheritAttrs: false })
 
 defineProps<{
   filterLabel: string
-  reloadLabel: string
+  /** Leave out to drop the reload button; a spinner then stands in for it while loading. */
+  reloadLabel?: string
   newLabel: string
   menuLabel: string
   menuEntries: MenuEntry[]
@@ -25,7 +28,7 @@ defineProps<{
   creating?: boolean
   /** Names the filter (`${testid}-filter`) and the menu (`${testid}-menu`, `${testid}-menu-toggle`). */
   testid: string
-  reloadTestid: string
+  reloadTestid?: string
   newTestid: string
 }>()
 
@@ -58,12 +61,24 @@ defineExpose({
       :testid="`${testid}-filter`"
     />
     <IconButton
+      v-if="reloadLabel"
       :label="reloadLabel"
       :icon="IconRotateCw"
       :busy="loading"
       :data-testid="reloadTestid"
       @click="emit('reload')"
     />
+    <!-- The tree renders from its last-good rows, so without the reload button's spin something still has to say a re-read is in flight. -->
+    <span
+      v-else-if="loading"
+      class="flex text-text-4"
+      role="status"
+      aria-label="Reloading"
+      :data-testid="`${testid}-reloading`"
+    >
+      <Spinner />
+    </span>
+    <slot />
     <IconButton :label="newLabel" :icon="IconPlus" :busy="creating" :data-testid="newTestid" @click="emit('new')" />
     <div ref="menuWrap" class="relative flex">
       <IconButton

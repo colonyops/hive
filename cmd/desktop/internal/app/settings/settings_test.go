@@ -108,6 +108,23 @@ func TestReviewLabelsValidation(t *testing.T) {
 	assert.Equal(t, []ReviewLabel{{Title: "Nit"}}, cfg.Review.EffectiveLabels())
 }
 
+func TestCodeViewsValidation(t *testing.T) {
+	cfg := DefaultSettings()
+	for name, views := range map[string][]SessionView{
+		"needs an id":     {{Name: "A"}},
+		"is reserved":     {{ID: "running", Name: "Mine"}},
+		"is used twice":   {{ID: "a", Name: "A"}, {ID: "a", Name: "B"}},
+		"needs a name":    {{ID: "a", Name: " "}},
+		"match all | any": {{ID: "a", Name: "A", Filter: SessionFilter{Match: "none"}}},
+	} {
+		cfg.Views.Code = views
+		require.ErrorContains(t, cfg.Validate(), "views.code", name)
+	}
+
+	cfg.Views.Code = []SessionView{{ID: "a", Name: "A"}}
+	require.NoError(t, cfg.Validate(), "an empty match reads as all")
+}
+
 func TestReviewLabelsLoadFromYAML(t *testing.T) {
 	path := isolateSettings(t)
 	require.NoError(t, os.WriteFile(path, []byte("review:\n  labels:\n    - title: Nit\n      icon: tag\n"), 0o600))

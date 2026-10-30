@@ -11,6 +11,7 @@ import TerminalPaneColumn from './terminal/TerminalPaneColumn.vue'
 import TerminalSidebar from './terminal/TerminalSidebar.vue'
 import { provideTerminalMode } from './terminal/terminalModeContext'
 import { useSessionTreeView } from './terminal/useSessionTreeView'
+import { useSessionViewMenus } from './terminal/useSessionViewMenus'
 import { useTerminalAttach } from './terminal/useTerminalAttach'
 import { useTerminalCommands } from './terminal/useTerminalCommands'
 import { useTerminalDrive, type TerminalDriveTarget } from './terminal/useTerminalDrive'
@@ -23,6 +24,7 @@ import { useNewSession } from '../composables/useNewSession'
 import { useSessionActions } from '../composables/useSessionActions'
 import { openLink } from '../composables/useXtermPane'
 import { spaceGroup, type DriveScope } from '../lib/drive'
+import { useCodeViews } from '../stores/useCodeViews'
 import { useTerminalAvailability } from '../stores/useTerminalAvailability'
 import { useTerminalPoolSize } from '../stores/useTerminalPoolSize'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
@@ -52,7 +54,12 @@ const { poolSize } = useTerminalPoolSize()
 
 const pool = useTerminalPool({ size: poolSize, onEvicted: () => tree.sweepListings() })
 const tree = useTerminalTree({ pool, active })
-const view = useSessionTreeView(tree)
+const codeViews = useCodeViews()
+const view = useSessionTreeView(tree, {
+  filter: () => codeViews.draft.value,
+  filterReady: () => codeViews.hydrated.value,
+})
+const viewMenus = useSessionViewMenus(tree)
 const rename = useWindowRename(pool.visible)
 const attach = useTerminalAttach({ pool, tree, active, onSwitch: () => (rename.windowId.value = '') })
 const sessions = useSessionActions({ onChanged: () => void tree.reloadSessions() })
@@ -70,7 +77,7 @@ const nav = useTreeKeyboardNav({
   startSession: attach.startSession,
   goToWindow: attach.goToWindow,
 })
-const context = { pool, tree, view, nav, attach, ops, rename, sessions }
+const context = { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions }
 provideTerminalMode(context)
 useTerminalCommands(context, active)
 

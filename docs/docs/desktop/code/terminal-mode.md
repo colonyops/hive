@@ -53,6 +53,16 @@ Tags are short words you put on a session, such as `auto` or `backend`. A sessio
 
 Tags ignore case, so `Auto` and `auto` are the same tag, and a tag cannot contain a comma. The sidebar filter matches tags as well as names. The hive CLI reads and writes the same tags; see [Sessions](../../cli/getting-started/sessions.md).
 
+### Views
+
+A view is a saved filter over your sessions. Pick one from the **…** menu at the top of the sidebar. **All sessions** and **Running** are built in. Running replaces the old **Only running sessions** toggle. If you had that toggle on, Code opens on Running. **Reload sessions** is in the same menu.
+
+The filter button beside the search box adds a condition on a tag, a repository, the run status, or the session's age. While a filter is active, a bar under the toolbar shows each condition as a chip, written like a GitHub search qualifier: `status:running`, `tag:bug,ui`, `age:>7d`. A leading `-` means "not", as in `-repo:acme/site`. Hover a chip to read it in words. The **…** menu marks the active view. Click a chip to change it, and click its × to remove it. Removing the last chip goes back to All sessions. With two or more chips, **and** between them keeps a session only when every chip matches it. Click it to switch to **or**. The × at the end of the bar goes back to All sessions.
+
+The bottom of the filter menu says how many sessions the view hides. When you change a view's chips, a dot appears on the filter button and the menu offers **Save** and **Reset**. On a built-in view, **Save as new view…** asks for a name and makes a new view. **Manage views…** in the **…** menu opens a drawer where you rename, reorder, and delete the views you made. Pinned chats and scratch terminals always stay visible. The search box searches within the current view.
+
+Saved views live in `settings.yaml` under `views.code`, so they follow your config to other machines. Which view is showing stays per machine.
+
 ## Scratch terminals
 
 The **Terminals** section holds a scratch tmux session for shells that are not tied to a repository. Use its `+` button or <kbd>⌘T</kbd> to add tabs.

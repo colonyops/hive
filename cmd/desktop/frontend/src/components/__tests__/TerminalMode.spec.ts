@@ -24,6 +24,8 @@ import {
   stepTerminalWindow,
 } from '../../lib/terminalTree'
 import { createAppRouter } from '../../router'
+import { resetStores } from '../../stores/defineStore'
+import { useCodeViews } from '../../stores/useCodeViews'
 import { tooltipFor } from '../../test-utils/tooltip'
 
 const mocks = vi.hoisted(() => ({
@@ -53,6 +55,8 @@ const mocks = vi.hoisted(() => ({
   openBlank: vi.fn(),
   SetTerminalFontSize: vi.fn(),
   AppearanceSettings: vi.fn(),
+  CodeViews: vi.fn(),
+  SetCodeViews: vi.fn(),
   EditorSettings: vi.fn(),
   OpenURL: vi.fn(),
   AgentsAvailable: vi.fn(),
@@ -92,6 +96,8 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   AppearanceSettings: mocks.AppearanceSettings,
+  CodeViews: mocks.CodeViews,
+  SetCodeViews: mocks.SetCodeViews,
   EditorSettings: mocks.EditorSettings,
   SetEditor: vi.fn(),
   SetTerminalFontSize: mocks.SetTerminalFontSize,
@@ -354,6 +360,7 @@ describe('TerminalMode', () => {
     })
     mocks.SessionRisk.mockResolvedValue({ uncommittedChanges: false, unpushedCommits: false, recycleDeletes: false })
     mocks.TerminalActionViews.mockResolvedValue([])
+    mocks.CodeViews.mockResolvedValue([])
     // The bar ships on, but the fixture keeps it off so tests that do not care
     // about it see a bare terminal; a test that wants it turns it on.
     mocks.AppearanceSettings.mockResolvedValue({
@@ -1187,8 +1194,8 @@ describe('TerminalMode', () => {
 
     expect(second.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
     expect(sessionRows(second)).toHaveLength(2)
-    // The refresh control is the staleness indicator while revalidation runs.
-    expect(second.get('[data-testid="terminal-sessions-refresh"]').find('.animate-spin').exists()).toBe(true)
+    // The toolbar spinner is the staleness indicator while revalidation runs.
+    expect(second.find('[data-testid="terminal-sessions-reloading"]').exists()).toBe(true)
     expect(router.currentRoute.value.params.slug).toBe('hive-bump-deps')
     expect(mocks.useTerminalWindows).toHaveBeenCalledWith('hive-bump-deps', expect.anything())
     second.unmount()
@@ -2271,6 +2278,7 @@ describe('TerminalMode', () => {
     // Delete and recycle finish as jobs, so a jobs:updated reload is how the
     // frontend learns the session it was attached to can no longer be attached.
     mocks.ListSessions.mockResolvedValue(listing)
+    await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
     await wrapper.get('[data-testid="terminal-sessions-refresh"]').trigger('click')
     await flushPromises()
 
@@ -2565,6 +2573,7 @@ describe('TerminalMode', () => {
 
       // The listing is hive's and carries no scratch terminal, so a reload that
       // drops every pooled session it no longer lists must not take this one.
+      await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
       await wrapper.get('[data-testid="terminal-sessions-refresh"]').trigger('click')
       await flushPromises()
       expect(session.dispose).not.toHaveBeenCalled()
@@ -3137,19 +3146,25 @@ describe('TerminalMode', () => {
       await flushPromises()
     }
 
+    async function selectView(wrapper: { get: (s: string) => Pick<DOMWrapper<Element>, 'trigger'> }, id: string) {
+      await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
+      await wrapper.get(`[data-testid="code-view-option-${id}"]`).trigger('click')
+      await flushPromises()
+    }
+
     // The repo header is the noise a dormant repository contributes, so it goes
     // with its sessions rather than staying behind as an empty heading.
-    it('drops a repository with nothing running, and brings it back on Show all', async () => {
+    it('drops a repository with nothing running, and brings it back on All sessions', async () => {
       mocks.ListSessions.mockResolvedValue(TWO_REPOS)
       running({ 1: true, 3: false })
       const { wrapper } = await mountAvailable()
       expect(repos(wrapper)).toHaveLength(2)
 
-      await pick(wrapper, 'terminal-sessions-running-only')
+      await selectView(wrapper, 'running')
       expect(repos(wrapper).map((group) => group.attributes('data-repo'))).toEqual(['hay-kot/hive'])
       expect(slugs(wrapper)).toEqual(['hive-fix-parser'])
 
-      await wrapper.get('[data-testid="terminal-sessions-running-clear"]').trigger('click')
+      await selectView(wrapper, 'all')
       expect(repos(wrapper).map((group) => group.attributes('data-repo'))).toEqual([
         'hay-kot/haykot.dev',
         'hay-kot/hive',
@@ -3166,7 +3181,7 @@ describe('TerminalMode', () => {
       await flushPromises()
       expect(router.currentRoute.value.path).toBe('/terminal/hive-bump-deps')
 
-      await pick(wrapper, 'terminal-sessions-running-only')
+      await selectView(wrapper, 'running')
 
       expect(slugs(wrapper)).toEqual(['hive-fix-parser'])
       expect(router.currentRoute.value.path).toBe('/terminal/hive-bump-deps')
@@ -3177,14 +3192,14 @@ describe('TerminalMode', () => {
     // The pinned section is exempt from the filter, so it cannot stand in as
     // something the filter found — the note has to name the reason the tree is
     // bare, and it is not the (empty) query.
-    it('says the tree is bare because nothing is running, not because nothing matched', async () => {
+    it('says the tree is bare because of the view, not because a query found nothing', async () => {
       running({ 1: false, 2: false })
       const { wrapper } = await mountAvailable()
 
-      await pick(wrapper, 'terminal-sessions-running-only')
+      await selectView(wrapper, 'running')
 
       expect(slugs(wrapper)).toEqual([])
-      expect(wrapper.get('[data-testid="terminal-sessions-no-matches"]').text()).toBe('No sessions are running.')
+      expect(wrapper.get('[data-testid="terminal-sessions-no-matches"]').text()).toBe('No sessions match this view.')
       wrapper.unmount()
     })
 
@@ -3194,26 +3209,187 @@ describe('TerminalMode', () => {
       mocks.ListSessions.mockResolvedValue(TWO_REPOS)
       running({ 1: true, 3: false })
       const { wrapper } = await mountAvailable()
-      expect(wrapper.find('[data-testid="terminal-sessions-running-note"]').exists()).toBe(false)
+      const hiddenNote = async () => {
+        await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
+        const note = wrapper.find('[data-testid="code-view-hidden"]')
+        const text = note.exists() ? note.text() : null
+        await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
+        return text
+      }
+      expect(await hiddenNote()).toBeNull()
 
-      await pick(wrapper, 'terminal-sessions-running-only')
-      expect(wrapper.get('[data-testid="terminal-sessions-running-note"]').text()).toContain(
-        'Running sessions only · 1 hidden',
-      )
+      await selectView(wrapper, 'running')
+      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['status:running'])
+      expect(await hiddenNote()).toBe('1 session hidden')
 
-      await wrapper.get('[data-testid="terminal-sessions-running-clear"]').trigger('click')
-      expect(wrapper.find('[data-testid="terminal-sessions-running-note"]').exists()).toBe(false)
+      await wrapper.get('[data-testid="code-view-clear"]').trigger('click')
+      expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
       wrapper.unmount()
     })
 
-    it('keeps the filter across a relaunch', async () => {
+    it('keeps the view across a relaunch', async () => {
       const first = await mountAvailable()
-      await pick(first.wrapper, 'terminal-sessions-running-only')
+      await selectView(first.wrapper, 'running')
       first.wrapper.unmount()
+      resetStores()
 
       const { wrapper } = await mountAvailable()
-      expect(wrapper.get('[data-testid="terminal-sessions-running-note"]').text()).toContain('Running sessions only')
+      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['status:running'])
       expect(slugs(wrapper)).toEqual(['hive-bump-deps', 'hive-fix-parser'])
+      wrapper.unmount()
+    })
+
+    it('shows no view bar until a filter is chosen, and drops it on clear', async () => {
+      mocks.ListSessions.mockResolvedValue(TWO_REPOS)
+      const { wrapper } = await mountAvailable()
+      expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
+
+      await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
+      await wrapper.get('[data-testid="code-filter-status"]').trigger('click')
+      const running = wrapper.findAll('[data-testid="code-view-add-menu"] button').find((b) => b.text() === 'Running')!
+      await running.trigger('click')
+      await flushPromises()
+      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['status:running'])
+      expect(wrapper.find('[data-testid="code-view-unsaved"]').exists()).toBe(true)
+      await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
+      expect(wrapper.find('[data-testid="code-view-save-new"]').exists()).toBe(true)
+      await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
+
+      await wrapper.get('[data-testid="code-view-clear"]').trigger('click')
+      expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('goes back to All sessions when the last chip of a view is removed', async () => {
+      const { wrapper } = await mountAvailable()
+      await selectView(wrapper, 'running')
+
+      await wrapper.get('[data-testid="code-view-chip-remove"]').trigger('click')
+      await flushPromises()
+
+      expect(useCodeViews().activeViewId.value).toBe('all')
+      expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="code-view-unsaved"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('saves and resets a changed view from the filter dropdown', async () => {
+      mocks.CodeViews.mockResolvedValue([
+        {
+          id: 'bugs',
+          name: 'Bugs',
+          filter: { match: 'all', conditions: [{ field: 'tag', op: 'any', values: ['bug'] }] },
+        },
+      ])
+      localStorage.setItem('hive.code.active-view', 'bugs')
+      const { wrapper } = await mountAvailable()
+      const views = useCodeViews()
+      const pick = async (testid: string) => {
+        await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
+        await wrapper.get(`[data-testid="${testid}"]`).trigger('click')
+        await flushPromises()
+      }
+
+      views.addCondition({ field: 'age', op: 'older', days: 7 })
+      await flushPromises()
+      await pick('code-view-reset')
+      expect(views.dirty.value).toBe(false)
+
+      views.addCondition({ field: 'age', op: 'older', days: 7 })
+      await flushPromises()
+      await pick('code-view-save')
+      expect(mocks.SetCodeViews).toHaveBeenLastCalledWith([
+        expect.objectContaining({
+          id: 'bugs',
+          filter: expect.objectContaining({
+            conditions: expect.arrayContaining([expect.objectContaining({ field: 'age' })]),
+          }),
+        }),
+      ])
+      expect(wrapper.find('[data-testid="code-view-unsaved"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('edits a chip from its menu, toggling values and keeping them across an op switch', async () => {
+      mocks.ListSessions.mockResolvedValue([{ ...TWO_REPOS[0], tags: ['backend'] }, TWO_REPOS[1]])
+      mocks.CodeViews.mockResolvedValue([
+        { id: 'bugs', name: 'Bugs', filter: { match: 'all', conditions: [{ field: 'tag', op: 'any', values: [] }] } },
+      ])
+      localStorage.setItem('hive.code.active-view', 'bugs')
+      const { wrapper } = await mountAvailable()
+      const chips = () => wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())
+      const pickInChipMenu = async (label: string) => {
+        const entry = wrapper.findAll('[data-testid="code-view-chip-menu"] button').find((b) => b.text() === label)!
+        await entry.trigger('click')
+        await flushPromises()
+      }
+
+      await wrapper.get('[data-testid="code-view-chip"] button').trigger('click')
+      await pickInChipMenu('backend')
+      expect(chips()).toEqual(['tag:backend'])
+      await pickInChipMenu('Is none of')
+      expect(chips()).toEqual(['-tag:backend'])
+      await pickInChipMenu('backend')
+      expect(chips()).toEqual(['-tag:…'])
+      wrapper.unmount()
+    })
+
+    it('closes a chip menu when that chip is removed, rather than moving it to the next chip', async () => {
+      const { wrapper } = await mountAvailable()
+      const views = useCodeViews()
+      views.addCondition({ field: 'status', op: 'is', value: 'running' })
+      views.addCondition({ field: 'age', op: 'older', days: 7 })
+      await flushPromises()
+
+      await wrapper.get('[data-testid="code-view-chip"] button').trigger('click')
+      expect(wrapper.find('[data-testid="code-view-chip-menu"]').exists()).toBe(true)
+      await wrapper.get('[data-testid="code-view-chip-remove"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['age:>7d'])
+      expect(wrapper.find('[data-testid="code-view-chip-menu"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('lists only views in the list menu, and manages saved ones in a drawer', async () => {
+      mocks.CodeViews.mockResolvedValue([
+        {
+          id: 'bugs',
+          name: 'Bugs',
+          filter: { match: 'all', conditions: [{ field: 'tag', op: 'any', values: ['bug'] }] },
+        },
+      ])
+      const { wrapper } = await mountAvailable()
+      await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
+      const menu = wrapper.get('[data-testid="terminal-sessions-menu"]')
+      expect(menu.find('[data-testid="code-view-save-as"]').exists()).toBe(false)
+      expect(menu.findAll('[data-testid="code-view-option"]').map((b) => b.text())).toEqual(['Bugs'])
+
+      await wrapper.get('[data-testid="code-view-manage"]').trigger('click')
+      await flushPromises()
+      const drawer = () => document.querySelector('[data-testid="code-views-drawer"]')
+      expect(drawer()).not.toBeNull()
+      const name = document.querySelector<HTMLInputElement>('[data-testid="code-views-drawer-name"]')!
+      name.value = 'Open bugs'
+      name.dispatchEvent(new Event('blur'))
+      await flushPromises()
+      expect(mocks.SetCodeViews).toHaveBeenLastCalledWith([expect.objectContaining({ id: 'bugs', name: 'Open bugs' })])
+
+      document.querySelector<HTMLElement>('[data-testid="code-views-drawer-delete"]')!.click()
+      await flushPromises()
+      document.querySelector<HTMLElement>('[data-testid="code-views-drawer-confirm-confirm"]')?.click()
+      await flushPromises()
+      expect(mocks.SetCodeViews).toHaveBeenLastCalledWith([])
+      wrapper.unmount()
+    })
+
+    it('opens on the Running view for someone who had the old running-only toggle on', async () => {
+      localStorage.setItem('hive.terminal.sidebar.running-only', 'true')
+      running({ 1: true, 2: false })
+      const { wrapper } = await mountAvailable()
+      expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['status:running'])
+      expect(slugs(wrapper)).toEqual(['hive-fix-parser'])
+      expect(localStorage.getItem('hive.terminal.sidebar.running-only')).toBeNull()
       wrapper.unmount()
     })
 

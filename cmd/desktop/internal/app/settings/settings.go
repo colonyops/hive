@@ -210,6 +210,67 @@ func (r ReviewSettings) EffectiveLabels() []ReviewLabel {
 	return r.Labels
 }
 
+// ViewsSettings holds the user's saved views, one list per surface.
+type ViewsSettings struct {
+	Code []SessionView `yaml:"code,omitempty"`
+}
+
+// SessionView is a named filter over the Code tab's sessions. The frontend
+// owns the set of fields and operators, so a field or operator this build does
+// not know still loads and round-trips. A condition key beyond Values, Value,
+// and Days does not survive a save.
+type SessionView struct {
+	ID     string        `yaml:"id"`
+	Name   string        `yaml:"name"`
+	Filter SessionFilter `yaml:"filter"`
+}
+
+type SessionFilter struct {
+	// Match is "all" or "any"; empty reads as "all".
+	Match      string             `yaml:"match,omitempty"`
+	Conditions []SessionCondition `yaml:"conditions,omitempty"`
+}
+
+// SessionCondition is one filter chip. Which of Values, Value, and Days is
+// set depends on Field.
+type SessionCondition struct {
+	Field  string   `yaml:"field"`
+	Op     string   `yaml:"op"`
+	Values []string `yaml:"values,omitempty"`
+	Value  string   `yaml:"value,omitempty"`
+	Days   int      `yaml:"days,omitempty"`
+}
+
+// builtInCodeViewIDs are the ids the frontend gives its built-in views
+// (ALL_SESSIONS_VIEW_ID and RUNNING_VIEW_ID in lib/sessionViews.ts). A saved
+// view with one of them would sit behind the built-in, unreachable.
+var builtInCodeViewIDs = []string{"all", "running"}
+
+func (v ViewsSettings) Validate() error {
+	seen := make(map[string]bool, len(v.Code))
+	for _, view := range v.Code {
+		if view.ID == "" {
+			return fmt.Errorf("views.code: every view needs an id")
+		}
+		if slices.Contains(builtInCodeViewIDs, view.ID) {
+			return fmt.Errorf("views.code: view id %q is reserved for a built-in view", view.ID)
+		}
+		if seen[view.ID] {
+			return fmt.Errorf("views.code: view id %q is used twice", view.ID)
+		}
+		seen[view.ID] = true
+		if strings.TrimSpace(view.Name) == "" {
+			return fmt.Errorf("views.code: view %q needs a name", view.ID)
+		}
+		switch view.Filter.Match {
+		case "", "all", "any":
+		default:
+			return fmt.Errorf("views.code: view %q match must be all or any", view.ID)
+		}
+	}
+	return nil
+}
+
 func (r ReviewSettings) Validate() error {
 	if len(r.Labels) > MaxReviewLabels {
 		return fmt.Errorf("review.labels allows at most %d labels", MaxReviewLabels)
@@ -431,6 +492,7 @@ type Settings struct {
 	Retention       RetentionSettings       `yaml:"retention,omitempty"`
 	AgentWorkspaces AgentWorkspacesSettings `yaml:"agent_workspaces,omitempty"`
 	Review          ReviewSettings          `yaml:"review,omitempty"`
+	Views           ViewsSettings           `yaml:"views,omitempty"`
 	Onboarding      OnboardingSettings      `yaml:"onboarding,omitempty"`
 	Development     DevelopmentSettings     `yaml:"development"`
 
@@ -535,6 +597,9 @@ func (s Settings) Validate() error {
 		return err
 	}
 	if err := s.Review.Validate(); err != nil {
+		return err
+	}
+	if err := s.Views.Validate(); err != nil {
 		return err
 	}
 	if len(strings.Fields(s.Editor.Command)) > 1 {
