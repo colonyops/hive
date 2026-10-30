@@ -266,6 +266,34 @@ func TestClientCLI_SessionInfoRefusesATargetServer(t *testing.T) {
 	assert.Contains(t, failed.Stdout+failed.Stderr, "session info reads the session of this directory on this machine")
 }
 
+func TestClientCLI_ADeleteFailsOnAStuckDaemonWithoutAChange(t *testing.T) {
+	created := serverA.CreateSession(t, "stuck-daemon")
+	// The bracket keeps pkill from matching the shell that runs it.
+	serverA.Shell(t, "pkill -STOP -f '[h]ive daemon run'").Ok(t)
+	t.Cleanup(func() { serverA.Shell(t, "pkill -CONT -f '[h]ive daemon run'").Ok(t) })
+
+	failed := NewClient(t).Hive("session", "delete", "--force", serverA.Name+":"+created.ID).Fails(t)
+
+	// hive prints its errors to stdout.
+	assert.Contains(t, failed.Stdout+failed.Stderr, "nothing changed")
+	serverA.Shell(t, "pkill -CONT -f '[h]ive daemon run'").Ok(t)
+	assert.Equal(t, "stuck-daemon", serverA.Show(t, created.ID).Name)
+}
+
+func TestClientCLI_WorksWhenTheServerShellPrintsText(t *testing.T) {
+	created := serverB.CreateSession(t, "noisy-shell")
+	serverB.Shell(t, `sed -i '1i echo Welcome to box' ~/.bashrc`).Ok(t)
+	t.Cleanup(func() { serverB.Shell(t, `sed -i '1d' ~/.bashrc`).Ok(t) })
+	client := NewClient(t)
+
+	shown := DecodeJSON[sessionWithServer](t, client.Hive("session", "show", "--json", serverB.Name+":"+created.ID).Ok(t))
+	assert.Equal(t, "noisy-shell", shown.Name)
+
+	client.Hive("session", "update", serverB.Name+":"+created.ID, "--name", "still-works").Ok(t)
+	listed := DecodeJSONLines[sessionWithServer](t, client.HiveOn(serverB, "session", "list", "--json").Ok(t))
+	assert.Contains(t, listed, sessionWithServer{Server: serverB.Name, ID: created.ID, Name: "still-works"})
+}
+
 func TestClientCLI_RefusesARefToAServerNotInTheConfig(t *testing.T) {
 	failed := NewClient(t).Hive("session", "show", "gone:abc123").Fails(t)
 

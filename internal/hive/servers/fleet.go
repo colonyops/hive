@@ -28,6 +28,10 @@ import (
 // block a list of local sessions.
 const ReadTimeout = 10 * time.Second
 
+// DeleteTimeout bounds a delete on a server. It is long because a delete removes
+// a whole clone, and the server finishes the delete after the client gives up.
+const DeleteTimeout = 2 * time.Minute
+
 type Fleet struct {
 	local   sessionapi.API
 	servers []*Server
@@ -123,7 +127,8 @@ func newServer(logger zerolog.Logger, cfg config.ServerConfig) *Server {
 			s.stderr.reset()
 			return sshdial.DialStdio(ctx, host, s.stderr)
 		},
-		ReadTimeout: ReadTimeout,
+		ReadTimeout:   ReadTimeout,
+		DeleteTimeout: DeleteTimeout,
 	})
 	return s
 }

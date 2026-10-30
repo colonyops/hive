@@ -724,6 +724,10 @@ func (s *Service) DeleteSession(ctx context.Context, id string) error {
 		return fmt.Errorf("get session: %w", err)
 	}
 
+	// A caller that gives up or disconnects must not stop the delete midway: a
+	// removed clone with its row left behind is a session no one can open.
+	ctx = context.WithoutCancel(ctx)
+
 	s.log.Info().Str("session_id", id).Str("path", sess.Path).Msg("deleting session")
 
 	// For worktree sessions, remove the worktree via git before os.RemoveAll so

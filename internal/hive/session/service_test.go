@@ -1333,6 +1333,43 @@ func TestDeleteWorktreeSession(t *testing.T) {
 	assert.ErrorIs(t, err, session.ErrNotFound)
 }
 
+// cancelAfterGetStore cancels the caller's context once the session is read,
+// and fails a delete that sees it.
+type cancelAfterGetStore struct {
+	*mockStore
+	cancel context.CancelFunc
+}
+
+func (s *cancelAfterGetStore) Get(ctx context.Context, id string) (session.Session, error) {
+	sess, err := s.mockStore.Get(ctx, id)
+	s.cancel()
+	return sess, err
+}
+
+func (s *cancelAfterGetStore) Delete(ctx context.Context, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.mockStore.Delete(ctx, id)
+}
+
+func TestDeleteSessionFinishesAfterTheCallerGivesUp(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store := &cancelAfterGetStore{mockStore: newMockStore(), cancel: cancel}
+	svc := newTestService(t, store, &config.Config{DataDir: t.TempDir(), GitPath: "git"})
+	sessDir := t.TempDir()
+	require.NoError(t, store.Save(context.Background(), session.Session{
+		ID: "gives-up", Name: "gives-up", Slug: "gives-up", State: session.StateActive, Path: sessDir,
+	}))
+
+	require.NoError(t, svc.DeleteSession(ctx, "gives-up"))
+
+	assert.NoDirExists(t, sessDir)
+	_, err := store.mockStore.Get(context.Background(), "gives-up")
+	assert.ErrorIs(t, err, session.ErrNotFound)
+}
+
 func TestEnforceMaxRecycled_SeparateByStrategy(t *testing.T) {
 	intPtr := func(n int) *int { return &n }
 

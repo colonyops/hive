@@ -72,12 +72,18 @@ func socketPath(t *testing.T) string {
 
 func serve(t *testing.T, path string, handler daemonv1connect.SessionServiceHandler, drops int32) *droppingListener {
 	t.Helper()
+	return serveWithControl(t, path, handler, &helloServer{}, drops)
+}
+
+func serveWithControl(t *testing.T, path string, handler daemonv1connect.SessionServiceHandler, control daemonv1connect.DaemonServiceHandler, drops int32) *droppingListener {
+	t.Helper()
 	inner, err := net.Listen("unix", path)
 	require.NoError(t, err)
 	listener := &droppingListener{Listener: inner}
 	listener.drops.Store(drops)
 	mux := http.NewServeMux()
 	mux.Handle(daemonv1connect.NewSessionServiceHandler(handler))
+	mux.Handle(daemonv1connect.NewDaemonServiceHandler(control))
 	var protocols http.Protocols
 	protocols.SetUnencryptedHTTP2(true)
 	server := &http.Server{Handler: mux, Protocols: &protocols, ReadHeaderTimeout: time.Second}
@@ -266,4 +272,49 @@ func TestClientReadTimeoutBoundsOnlyReads(t *testing.T) {
 
 	require.NoError(t, client.DeleteSession(t.Context(), "s1"), "a delete outlives the read timeout")
 	require.NoError(t, client.RecycleSession(t.Context(), "s1", nil), "a stream outlives the read timeout")
+}
+
+func TestClientDeleteTimeoutBoundsADelete(t *testing.T) {
+	const timeout = 50 * time.Millisecond
+	path := socketPath(t)
+	serve(t, path, slowServer{slow: time.Minute}, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop(), DeleteTimeout: timeout})
+
+	err := client.DeleteSession(t.Context(), "s1")
+
+	assert.ErrorContains(t, err, "the delete may still finish on the server")
+}
+
+type stuckHelloServer struct {
+	daemonv1connect.UnimplementedDaemonServiceHandler
+}
+
+func (stuckHelloServer) Hello(ctx context.Context, _ *connect.Request[daemonv1.HelloRequest]) (*connect.Response[daemonv1.HelloResponse], error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestClientStopsAChangeWhenTheDaemonIsStuck(t *testing.T) {
+	path := socketPath(t)
+	sessions := &countingServer{}
+	serveWithControl(t, path, sessions, stuckHelloServer{}, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop(), ReadTimeout: 50 * time.Millisecond})
+
+	err := client.DeleteSession(t.Context(), "s1")
+
+	require.ErrorContains(t, err, "nothing changed")
+	assert.Zero(t, sessions.deleteCalls.Load())
+}
+
+func TestClientWithoutReadTimeoutSendsNoHelloBeforeAChange(t *testing.T) {
+	path := socketPath(t)
+	sessions := &countingServer{}
+	control := &helloServer{}
+	serveWithControl(t, path, sessions, control, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop()})
+
+	require.NoError(t, client.DeleteSession(t.Context(), "s1"))
+
+	assert.Zero(t, control.calls.Load())
+	assert.Equal(t, int32(1), sessions.deleteCalls.Load())
 }
