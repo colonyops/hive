@@ -107,8 +107,7 @@ function canvasIsBlank(term: Terminal): boolean {
 
 let capturedReveal: string | null = null
 
-// A data URL of the canvas as of the last draw, which is how a run shows real
-// pixels: the page cannot screenshot itself and the window may refuse the OS.
+// The page cannot screenshot itself, and the OS may refuse to.
 function captureCanvas(term: Terminal): string | null {
   return atlasRenderer(term)?._canvas?.toDataURL('image/png') ?? null
 }
@@ -134,7 +133,6 @@ function captureCanvasAtNextDraw(term: Terminal): string | null {
   return captured
 }
 
-// A draw on demand, then the check: the buffer is only defined right after one.
 function blankAfterDraw(term: Terminal): boolean {
   let blank = false
   const handle = term.onRender(() => {
@@ -314,7 +312,6 @@ async function measureFlood(
 // awk rather than a checked-in script: every rig has it, and the producer has
 // to outrun the terminal for the terminal to be what is being measured.
 const scenarios: Record<string, Scenario> = {
-  // A plain wall of text, the `cat large.log` case.
   wall(pane, { scale = 1 }) {
     const lines = Math.round(200_000 * scale)
     const command = `awk 'BEGIN{for(i=0;i<${lines};i++)print i " ${LINE_TEXT}"}'`
@@ -329,8 +326,6 @@ const scenarios: Record<string, Scenario> = {
     return measureFlood(pane, command, lines * 112)
   },
 
-  // Full-screen repaints inside synchronized-output markers, as an agent TUI
-  // draws them, as fast as the producer can go.
   tui(pane, { scale = 1 }) {
     const repaints = Math.round(1500 * scale)
     const { rows, cols } = pane.term
@@ -339,9 +334,7 @@ const scenarios: Record<string, Scenario> = {
     return measureFlood(pane, command, repaints * rows * cols)
   },
 
-  // Keystroke to echo at a person's pace on a quiet pane, split at the socket,
-  // the parser and the renderer. `cat` holds the tty so the shell's own line
-  // editor is not what is being timed.
+  // `cat` holds the tty so the shell's own line editor is not what is being timed.
   async typing(pane, { scale = 1 }) {
     await settle(pane)
     pane.send('cat\r')
@@ -352,9 +345,8 @@ const scenarios: Record<string, Scenario> = {
     return { keys: samples.length, ...keyStats(samples) }
   },
 
-  // Ctrl+C on a pane spewing output: from the key to a prompt that answers. The
-  // gap is everything queued between tmux and the screen, so this is what makes
-  // a runaway `cat` feel stuck.
+  // From Ctrl+C to a prompt that answers: the gap is everything queued between tmux
+  // and the screen.
   async interrupt(pane, { scale = 1 }) {
     await settle(pane)
     pane.send(`yes '${LINE_TEXT}'\r`)
@@ -369,7 +361,6 @@ const scenarios: Record<string, Scenario> = {
     return { interruptMs: round(performance.now() - startedAt), backlogAtKey }
   },
 
-  // A wheel through scrollback at one notch per frame, both ways.
   async scroll(pane, { scale = 1 }) {
     await fillScrollback(pane)
     return driveWheel(pane, 120, 4000 * scale)
@@ -413,8 +404,6 @@ const scenarios: Record<string, Scenario> = {
     return { keys: samples.length, ...keyStats(samples), ...frames }
   },
 
-  // A full re-attach: the control client's first paint of the screen and its
-  // scrollback, through the socket, into a new emulator.
   async attach(pane, { scale = 1 }) {
     await settle(pane)
     const marker = nextMarker()
@@ -535,8 +524,6 @@ const scenarios: Record<string, Scenario> = {
     }
   },
 
-  // A real width change, the way toggling the sidebar makes one: from the click to
-  // the pane at its new grid, repainted. A TUI inside redraws on the way.
   async resize(pane, { scale = 1 }) {
     await settle(pane)
     const toggle = document.querySelector<HTMLElement>('[data-testid="titlebar-toggle-sidebar"]')
@@ -645,8 +632,6 @@ const scenarios: Record<string, Scenario> = {
   },
 }
 
-// The first frame the incoming pane is on screen is the one that matters: a
-// click's feel is the time to it, and its contents are the flash or the lack of one.
 async function clickAndWaitForReveal(
   row: HTMLElement,
   outgoing: BenchPane | undefined,

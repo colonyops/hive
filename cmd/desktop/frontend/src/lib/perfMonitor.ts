@@ -5,8 +5,7 @@ import { collectFrames, percentile, round } from './frameCollector'
 
 const perf = usePerf('ui')
 
-// One span per window keeps a day of idle development to a few thousand lines,
-// and the long frames worth a closer look get their own spans below.
+// One span per window keeps a day of idle development to a few thousand lines.
 const WINDOW_MS = 10_000
 const LAG_PROBE_MS = 250
 const LONG_TASK_MS = 50

@@ -644,8 +644,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
 
   // A resize that follows none votes at once, because until tmux answers the pane
   // shows its old grid in the new box. The debounce still closes it, so a window
-  // being dragged sends its first size, then settles on its last, and asks a TUI
-  // to redraw at each size between only as often as the debounce lets it.
+  // being dragged sends its first size and then its last.
   function voteOnResize(): void {
     const now = performance.now()
     if (now - lastResizeAt >= RESIZE_DEBOUNCE_MS) voteSize()

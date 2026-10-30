@@ -526,8 +526,6 @@ async function launchIntoPane(
   action: (size: { cols?: number; rows?: number }) => Promise<AgentSession>,
 ): Promise<string | null> {
   if (!client.value || paneStatus.value === 'opening') return null
-  // To the pane live on its stream. Unlike the Code view this surface rebuilds its
-  // emulator on every open, so the span is what says what that costs.
   const endOpen = perf.start('chat:open')
   retirePane()
   openSessionId.value = null

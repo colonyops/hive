@@ -20,7 +20,6 @@ const ECHO_GIVE_UP_MS = 2000
  * ui-performance-spans-are-recorded-to-jsonl).
  */
 export interface PaneProbe extends IDisposable {
-  /** Bytes the pane is about to send, as onData gave them. */
   input(data: string): void
   /** Output off the socket, before anything filters it. */
   received(bytes: number): void
@@ -28,7 +27,6 @@ export interface PaneProbe extends IDisposable {
   readonly parsed: ((bytes: number) => void) | null
   /** The bytes off the socket that the emulator has not parsed yet. */
   backlog(): number
-  /** Every output byte off the socket so far. */
   totalReceived(): number
   /** Call after term.open(): the wheel listener needs the element. */
   opened(): void
@@ -231,7 +229,6 @@ export interface BenchPane {
   /** Bytes to the pane as if typed, bypassing the keyboard. */
   send(data: string): void
   backlog(): number
-  /** Output bytes off the socket so far, to see what a switch makes a TUI redraw. */
   received(): number
   webgl(): boolean
   /** Drops the stream and every emulator, then attaches again, resolving at first paint. */

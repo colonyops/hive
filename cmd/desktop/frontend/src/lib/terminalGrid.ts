@@ -82,7 +82,7 @@ export function renderRevealedTerminal(term: Terminal): void {
  * directly. A pane holding a selection refreshes it as output trims its full
  * scrollback, and the DOM renderer a hidden pane sits on measures width 0 inside
  * display:none. Its cache keeps only widths above 0, so it measures every cell
- * again: over 13000 forced measurements for one log tab during a single switch.
+ * again, each time.
  * The state is kept and drawn on reveal. An xterm whose internals moved keeps its
  * own behavior.
  */

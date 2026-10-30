@@ -243,14 +243,13 @@ func (b *broker) coalesceLocked(ev Event, size int) bool {
 const (
 	// burstGap is how soon after the last delivery more output counts as the same
 	// burst. A person cannot type this fast, and a shell's echo arrives in one
-	// write, so nothing interactive is ever held.
+	// write.
 	burstGap = 2 * time.Millisecond
 	// burstHold is how long the pump waits inside a burst for the backlog to fill
 	// a frame. A consumer on loopback takes a frame in tens of microseconds, so
 	// without a wait the backlog never forms and a flood reaches the webview as
 	// about 15000 frames a second of 1.4KB each, which costs a syscall, a process
-	// hop and a main-thread task per frame. Past 4ms a TUI's repaint would start
-	// to straddle display frames.
+	// hop and a main-thread task per frame.
 	burstHold = 3 * time.Millisecond
 )
 
