@@ -72,6 +72,15 @@ func (m *mockStore) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+func (m *mockStore) ReplaceRecycled(_ context.Context, recycledID string, next session.Session) error {
+	if old, ok := m.sessions[recycledID]; !ok || old.State != session.StateRecycled {
+		return session.ErrNotFound
+	}
+	delete(m.sessions, recycledID)
+	m.sessions[next.ID] = next
+	return nil
+}
+
 // mockGit implements git.Git for testing.
 type mockGit struct {
 	// remotes maps a directory to the origin URL RemoteURL reports. SetRemoteURL updates it.
@@ -1039,6 +1048,7 @@ func TestCreateSession_RecycledSessionKeepsPathAndResetsAge(t *testing.T) {
 		State:     session.StateRecycled,
 		Path:      recycledPath,
 		Remote:    "https://github.com/example/repo.git",
+		Metadata:  map[string]string{session.MetaGroup: "old-group"},
 		CreatedAt: previousCreatedAt,
 		UpdatedAt: previousCreatedAt.Add(time.Hour),
 	}
@@ -1050,13 +1060,53 @@ func TestCreateSession_RecycledSessionKeepsPathAndResetsAge(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "abc123", sess.ID, "should reuse the recycled session record")
+	assert.NotEqual(t, "abc123", sess.ID, "the id belongs to the session that ran here before")
 	assert.Equal(t, recycledPath, sess.Path, "path must not change on reactivation")
 	assert.Equal(t, "new-name", sess.Name)
 	assert.Equal(t, session.StateActive, sess.State)
-	assert.Equal(t, previousCreatedAt, sess.CreatedAt)
+	assert.True(t, sess.CreatedAt.After(previousCreatedAt))
+	assert.Empty(t, sess.Group(), "metadata of the earlier session does not carry over")
 	assert.True(t, sess.ActivatedAt().After(previousCreatedAt), "reactivation starts a new session age")
 	assert.True(t, sess.ActivatedAt().Equal(sess.UpdatedAt))
+
+	_, err = store.Get(context.Background(), "abc123")
+	require.ErrorIs(t, err, session.ErrNotFound, "two rows must not share one clone")
+	saved, err := store.Get(context.Background(), sess.ID)
+	require.NoError(t, err)
+	assert.Equal(t, recycledPath, saved.Path)
+}
+
+func TestCreateSession_RecycledCloneTakesTheRequestedID(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
+	svc := newTestService(t, store, cfg)
+	saveRecycled(t, store, "old", filepath.Join(cfg.ReposDir(), "repo-abc"), "https://github.com/example/repo.git", time.Now())
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name: "new", Remote: "https://github.com/example/repo.git", SessionID: "wanted",
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "wanted", sess.ID)
+}
+
+// takenCloneStore is a store where another create takes the recycled clone
+// after this create chose it.
+type takenCloneStore struct{ *mockStore }
+
+func (takenCloneStore) ReplaceRecycled(context.Context, string, session.Session) error {
+	return session.ErrNotFound
+}
+
+func TestCreateSession_FailsWhenAnotherCreateTookTheRecycledClone(t *testing.T) {
+	store := takenCloneStore{newMockStore()}
+	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
+	svc := newTestService(t, store, cfg)
+	saveRecycled(t, store.mockStore, "old", filepath.Join(cfg.ReposDir(), "repo-abc"), "https://github.com/example/repo.git", time.Now())
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{Name: "new", Remote: "https://github.com/example/repo.git"})
+
+	require.ErrorIs(t, err, session.ErrNotFound)
 }
 
 func TestCreateSession_DuplicateNameRejected(t *testing.T) {
@@ -1708,12 +1758,12 @@ func TestCreateSession_RecycledSessionReusedAcrossRemoteSpellings(t *testing.T) 
 	sess, err := svc.CreateSession(context.Background(), CreateOptions{Name: "new", Remote: sshSiteRemote})
 	require.NoError(t, err)
 
-	assert.Equal(t, "r1", sess.ID)
+	assert.Equal(t, path, sess.Path)
 	assert.Equal(t, sshSiteRemote, sess.Remote)
 	assert.Equal(t, []string{path + "=" + sshSiteRemote}, g.setURLCalls)
 	assert.Equal(t, []string{path}, g.pulled)
 	assert.Empty(t, g.cloned)
-	saved, err := store.Get(context.Background(), "r1")
+	saved, err := store.Get(context.Background(), sess.ID)
 	require.NoError(t, err)
 	assert.Equal(t, sshSiteRemote, saved.Remote)
 }

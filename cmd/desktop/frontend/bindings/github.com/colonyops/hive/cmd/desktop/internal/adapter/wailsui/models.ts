@@ -641,7 +641,7 @@ export interface SessionGitStatus {
 
 /**
  * SessionSummary is the session row shown in Code. CreatedAt starts with the
- * current logical session even when Hive reuses an older clone record.
+ * current logical session even when Hive reuses an older clone.
  */
 export interface SessionSummary {
     "id": string;

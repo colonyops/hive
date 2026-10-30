@@ -35,6 +35,10 @@ func (m *mockStore) Delete(_ context.Context, _ string) error {
 	return nil
 }
 
+func (m *mockStore) ReplaceRecycled(context.Context, string, session.Session) error {
+	return nil
+}
+
 func TestOrphanCheck_NoOrphans(t *testing.T) {
 	tmpDir := t.TempDir()
 

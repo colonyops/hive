@@ -11,7 +11,7 @@ import (
 )
 
 // SessionSummary is the session row shown in Code. CreatedAt starts with the
-// current logical session even when Hive reuses an older clone record.
+// current logical session even when Hive reuses an older clone.
 type SessionSummary struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name"`

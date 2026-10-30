@@ -208,6 +208,34 @@ func TestStore(t *testing.T) {
 	})
 }
 
+func TestSessionStoreReplaceRecycled(t *testing.T) {
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = database.Close() })
+	store := NewSessionStore(database)
+	now := time.Now()
+	row := func(id string, state session.State) session.Session {
+		return session.Session{ID: id, Name: id, Path: "/tmp/clone", State: state, CreatedAt: now, UpdatedAt: now}
+	}
+	require.NoError(t, store.Save(t.Context(), row("recycled", session.StateRecycled)))
+	require.NoError(t, store.Save(t.Context(), row("active", session.StateActive)))
+
+	require.NoError(t, store.ReplaceRecycled(t.Context(), "recycled", row("next", session.StateActive)))
+	_, err = store.Get(t.Context(), "recycled")
+	require.ErrorIs(t, err, session.ErrNotFound)
+	_, err = store.Get(t.Context(), "next")
+	require.NoError(t, err)
+
+	for _, taken := range []string{"recycled", "active", "missing"} {
+		err = store.ReplaceRecycled(t.Context(), taken, row("loser", session.StateActive))
+		require.ErrorIs(t, err, session.ErrNotFound, taken)
+	}
+	_, err = store.Get(t.Context(), "active")
+	require.NoError(t, err, "an active session is never replaced")
+	_, err = store.Get(t.Context(), "loser")
+	require.ErrorIs(t, err, session.ErrNotFound, "a lost race saves nothing")
+}
+
 // TestSessionStoreUpdate_SerializesWritersOnSeparateConnections stands in
 // for two hive processes: each opens its own pool on the same hive.db.
 func TestSessionStoreUpdate_SerializesWritersOnSeparateConnections(t *testing.T) {

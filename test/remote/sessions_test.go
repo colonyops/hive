@@ -185,6 +185,26 @@ func TestClientCLI_RecyclesASession(t *testing.T) {
 	assert.Equal(t, string(session.StateRecycled), serverA.Show(t, created.ID).State)
 }
 
+func TestClientCLI_ANewSessionOnARecycledCloneIsANewSession(t *testing.T) {
+	first := serverA.CreateSession(t, "first-task")
+	serverA.Hive(t, "msg", "pub", "--topic", "agent."+first.ID+".inbox", "-m", "for first-task").Ok(t)
+	client := NewClient(t)
+	client.HiveOn(serverA, "session", "recycle", first.ID).Ok(t)
+
+	created := client.HiveOn(serverA, "session", "create", "--json", "--background", "--remote", tFixtureRepo, "second-task").Ok(t)
+	second := DecodeJSON[Session](t, created)
+	serverA.DeleteOnCleanup(t, second.ID)
+
+	assert.NotEqual(t, first.ID, second.ID)
+	assert.Equal(t, first.Path, second.Path, "the clone is reused")
+	gone := client.HiveOn(serverA, "session", "show", first.ID).Fails(t)
+	// hive prints its errors to stdout.
+	assert.Contains(t, gone.Stdout+gone.Stderr, session.ErrNotFound.Error())
+
+	inbox := serverA.Hive(t, "msg", "inbox", "--session", second.ID, "--all").Ok(t)
+	assert.NotContains(t, inbox.Stdout, "for first-task")
+}
+
 func TestClientCLI_DeletesASession(t *testing.T) {
 	created := serverA.CreateSession(t, "delete-me")
 

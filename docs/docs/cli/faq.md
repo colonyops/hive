@@ -38,10 +38,9 @@ See [Messaging](getting-started/messaging.md) for full details on inter-agent co
 When you're done with a session, you can recycle it instead of deleting it. Recycling:
 
 1. Resets the git repository to a clean state
-2. Renames the directory to a recycled pattern
-3. Makes it available for reuse
+2. Makes its checkout available for reuse, in the same directory
 
-When you create a new session, hive will reuse a recycled session if available, avoiding a fresh clone and saving time.
+When you create a new session, hive will reuse a recycled session's checkout if available, avoiding a fresh clone and saving time. The new session gets its own ID, inbox, and group. The recycled session's record is gone, so its ID no longer resolves, and any `hc` task still assigned to it stays assigned until you run `hive hc update <id> --unassign`.
 
 !!! tip
     Use `max_recycled` in your [rules](configuration/rules.md) to control how many recycled sessions are kept per repository. Set to `0` for unlimited.

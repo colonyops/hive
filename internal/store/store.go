@@ -129,6 +129,19 @@ func (s *SessionStore) Update(ctx context.Context, id string, edit func(*session
 }
 
 // Delete removes a session by ID. Returns ErrNotFound if not found.
+func (s *SessionStore) ReplaceRecycled(ctx context.Context, recycledID string, next session.Session) error {
+	return s.db.WithinTx(ctx, func(ctx context.Context, _ *db.DB) error {
+		removed, err := s.db.Ctx(ctx).DeleteRecycledSession(ctx, recycledID)
+		if err != nil {
+			return fmt.Errorf("failed to delete recycled session: %w", err)
+		}
+		if removed == 0 {
+			return session.ErrNotFound
+		}
+		return s.Save(ctx, next)
+	})
+}
+
 func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	// Check if session exists first
 	_, err := s.db.Ctx(ctx).GetSession(ctx, id)
