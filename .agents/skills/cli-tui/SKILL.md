@@ -121,4 +121,4 @@ mise run lint
 mise run cli:dev     # run the TUI against the dev config and .data/
 ```
 
-For anything that needs real tmux sessions, use `mise run cli:container`.
+For anything that needs real tmux sessions, use `mise run cli:container`, or the `cli-smoke` skill when an agent drives it.

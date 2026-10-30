@@ -1,0 +1,15 @@
+version: "0.2.4"
+git_path: git
+agents:
+  default: testbash
+  testbash:
+    command: bash
+rules:
+  - spawn:
+      # claude is the fake agent from the fixture image (fake-claude).
+      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }} claude"
+servers:
+  - name: server-a
+    ssh: server-a
+  - name: server-b
+    ssh: server-b
