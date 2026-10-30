@@ -46,7 +46,7 @@ func serveBoth(t *testing.T, path string, control daemonv1connect.DaemonServiceH
 func TestCheckProtocolRefusesAnIncompatibleDaemon(t *testing.T) {
 	path := socketPath(t)
 	sessions := &countingServer{}
-	serveBoth(t, path, versionedServer{protocol: 0}, sessions)
+	serveBoth(t, path, versionedServer{protocol: wire.ProtocolVersion + 1}, sessions)
 	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop(), CheckProtocol: true, ClientVersion: "v0.9.0"})
 
 	_, err := client.ListSessions(t.Context())
@@ -69,6 +69,18 @@ func TestCheckProtocolPassesACompatibleDaemon(t *testing.T) {
 	_, err = client.ListSessions(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, int32(2), sessions.listCalls.Load())
+}
+
+func TestCheckProtocolPassesADaemonFromBeforeTheField(t *testing.T) {
+	path := socketPath(t)
+	sessions := &countingServer{}
+	serveBoth(t, path, versionedServer{protocol: 0}, sessions)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop(), CheckProtocol: true})
+
+	_, err := client.ListSessions(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), sessions.listCalls.Load())
 }
 
 func TestCheckProtocolDoesNotMultiplyRetries(t *testing.T) {

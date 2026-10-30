@@ -9,8 +9,9 @@ import (
 
 func TestCheckProtocol(t *testing.T) {
 	require.NoError(t, CheckProtocol(ProtocolVersion, "v1", "v1"))
+	require.NoError(t, CheckProtocol(0, "v0.60.0", "v0.68.0"), "a daemon from before the field")
 
-	for _, protocol := range []int{0, ProtocolVersion + 1} {
+	for _, protocol := range []int{MinProtocolVersion - 1, ProtocolVersion + 1} {
 		err := CheckProtocol(protocol, "v0.60.0", "v0.68.0")
 		var incompatible *IncompatibleError
 		require.ErrorAs(t, err, &incompatible, "protocol %d", protocol)

@@ -231,7 +231,8 @@ func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 	}
 	_, _ = fmt.Fprintf(w, "hello   %4dms  version %s, pid %d, data dir %s\n", out.Hello.MS, out.Hello.Version, out.Hello.PID, out.Hello.DataDir)
 	_, _ = fmt.Fprintf(w, "health  %4dms  database %s, tmux %s, up %s\n", out.Health.MS, okText(health.DBOK, health.DBError), okText(health.TmuxOK, ""), health.Uptime.Round(time.Second))
-	if !health.Supervised {
+	// A daemon on protocol 0 does not report this.
+	if !health.Supervised && info.ProtocolVersion > 0 {
 		_, _ = fmt.Fprintln(w, "daemon         not started by `hive daemon install`; it does not start again after the server restarts")
 	}
 	for _, agent := range out.Health.Agents {

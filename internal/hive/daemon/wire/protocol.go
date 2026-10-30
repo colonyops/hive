@@ -2,13 +2,17 @@ package wire
 
 import "fmt"
 
-// ProtocolVersion is the hive.daemon.v1 protocol this build speaks. Raise it
-// when a change would break a client or a daemon of the previous version, and
-// raise MinProtocolVersion when this build can no longer talk to an older
-// daemon.
+// ProtocolVersion is the hive.daemon.v1 protocol this build speaks.
+// MinProtocolVersion is the oldest daemon protocol it still works with. Most
+// releases change neither, so client and server can differ in version. To cut
+// off older daemons, for a change this client cannot work around, raise both
+// in that release: only that release forces an upgrade. A new field or RPC
+// that an older peer can ignore raises neither.
+//
+// Protocol 0 is a daemon from before Hello carried the field.
 const (
 	ProtocolVersion    = 1
-	MinProtocolVersion = 1
+	MinProtocolVersion = 0
 )
 
 // IncompatibleError is a daemon whose protocol this client does not support.
