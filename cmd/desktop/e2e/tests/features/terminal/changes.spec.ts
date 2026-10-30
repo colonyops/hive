@@ -90,7 +90,9 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await page.goto('/#/terminal/review')
     await expect(page.locator('[data-file-drop-target]:visible').last()).toBeVisible()
 
-    await page.keyboard.press('Control+Alt+g')
+    await page.keyboard.press('Meta+k')
+    await page.getByTestId('command-palette-input').fill('Toggle Changes')
+    await page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' }).click()
     const view = page.getByTestId('changes-view')
     await expect(view).toBeVisible()
     await expect(page.getByTestId('changes-branch')).toHaveText('feat/review')
