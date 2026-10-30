@@ -89,8 +89,8 @@ export const useCodeViews = defineStore('codeViews', () => {
   const views = setting.value
   adoptRunningOnlyToggle()
   // Device-local, unlike the views: which view a window is on is a fact about
-  // this machine. Restored because the bar always shows its chips and counts
-  // what they hide, so a restored view never hides sessions silently.
+  // this machine. Restored because the bar always shows its chips, so a
+  // restored view never hides sessions silently.
   const activeViewId = useStorage(ACTIVE_VIEW_KEY, ALL_SESSIONS_VIEW_ID)
 
   // Built-ins come first, so a hand-written view that reuses a built-in id

@@ -1,11 +1,9 @@
 <script setup lang="ts">
-// The active filter under the Code sidebar's toolbar, as chips, with Save /
-// Reset once the chips drift from the saved view. The view's name lives in the
-// list menu; absent when nothing is filtered, so an unfiltered tree carries no chrome.
+// The active filter under the Code sidebar's toolbar, as chips. Saving,
+// resetting, and the hidden count live in the filter dropdown and the view's
+// name in the list menu; absent when nothing is filtered, so an unfiltered tree
+// carries no chrome.
 import { computed, proxyRefs, ref } from 'vue'
-import IconEyeOff from '~icons/lucide/eye-off'
-import IconSave from '~icons/lucide/save'
-import IconUndo from '~icons/lucide/undo-2'
 import IconX from '~icons/lucide/x'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
@@ -13,18 +11,19 @@ import { ALL_SESSIONS_VIEW_ID, conditionQualifier, describeCondition } from '../
 import { useCodeViews } from '../../stores/useCodeViews'
 import { useTerminalModeContext } from './terminalModeContext'
 
-const { view, viewMenus } = useTerminalModeContext()
+const { viewMenus } = useTerminalModeContext()
 const views = proxyRefs(useCodeViews())
 
-// Dirty keeps the bar up on a saved view whose last chip was just removed, so Save and Reset stay in reach.
-const shown = computed(() => views.draft.conditions.length > 0 || views.dirty)
+const shown = computed(() => views.draft.conditions.length > 0)
 
 const openChip = ref(-1)
 const chipAnchors = ref<HTMLElement[]>([])
 
 // The open menu ignores clicks inside its chip, remove button included, so it
 // never closes itself here; keep openChip on the condition it was opened for.
+// An empty filter is All sessions; left on its view it would read as an unsaved change.
 function removeChip(index: number): void {
+  if (views.draft.conditions.length === 1) return clear()
   if (openChip.value === index) openChip.value = -1
   else if (openChip.value > index) openChip.value--
   views.removeCondition(index)
@@ -39,26 +38,25 @@ function clear(): void {
 <template>
   <div
     v-if="shown"
-    class="flex shrink-0 items-start gap-1.5 border-b border-border py-1 pr-1 pl-2"
+    class="flex shrink-0 flex-wrap items-center gap-x-1 gap-y-1.5 border-b border-border px-2 py-1.5"
     data-testid="code-view-bar"
   >
-    <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1" data-testid="code-view-chips">
+    <template v-for="(condition, index) in views.draft.conditions" :key="index">
       <button
-        v-if="views.draft.conditions.length > 1"
+        v-if="index > 0"
         type="button"
-        class="chip text-text-3"
-        :title="views.draft.match === 'all' ? 'Rows must match every filter' : 'Rows may match any filter'"
+        class="joiner"
+        :title="
+          views.draft.match === 'all'
+            ? 'Sessions match every filter. Click to match any.'
+            : 'Sessions match any filter. Click to match every one.'
+        "
         data-testid="code-view-match"
         @click="views.setMatch(views.draft.match === 'all' ? 'any' : 'all')"
       >
-        {{ views.draft.match }}
+        {{ views.draft.match === 'all' ? 'and' : 'or' }}
       </button>
-      <div
-        v-for="(condition, index) in views.draft.conditions"
-        :key="index"
-        ref="chipAnchors"
-        class="relative flex min-w-0 max-w-full"
-      >
+      <div ref="chipAnchors" class="relative flex min-w-0 max-w-full">
         <span
           class="chip min-w-0"
           data-testid="code-view-chip"
@@ -92,45 +90,15 @@ function clear(): void {
           @select="(id) => viewMenus.onChipSelect(index, id)"
         />
       </div>
-    </div>
-    <span class="flex h-5 shrink-0 items-center gap-1">
-      <template v-if="views.dirty">
-        <IconButton
-          label="Reset to the saved view"
-          :icon="IconUndo"
-          size="sm"
-          data-testid="code-view-reset"
-          @click="views.reset()"
-        />
-        <IconButton
-          v-if="!views.activeIsBuiltIn"
-          :label="`Save changes to ${views.activeView?.name}`"
-          :icon="IconSave"
-          size="sm"
-          class="text-accent"
-          data-testid="code-view-save"
-          @click="views.save()"
-        />
-        <IconButton
-          v-else
-          label="Save as a new view…"
-          :icon="IconSave"
-          size="sm"
-          class="text-accent"
-          data-testid="code-view-save-new"
-          @click="viewMenus.saving = true"
-        />
-      </template>
-      <span
-        v-if="view.viewHiddenCount"
-        class="flex items-center gap-0.5 font-mono text-caption text-text-4"
-        data-testid="code-view-hidden"
-        :title="`${view.viewHiddenCount} ${view.viewHiddenCount === 1 ? 'session' : 'sessions'} hidden by this view`"
-      >
-        <IconEyeOff class="size-3" />{{ view.viewHiddenCount }}
-      </span>
-      <IconButton label="Show all sessions" :icon="IconX" size="sm" data-testid="code-view-clear" @click="clear" />
-    </span>
+    </template>
+    <IconButton
+      label="Show all sessions"
+      :icon="IconX"
+      size="sm"
+      class="ml-auto"
+      data-testid="code-view-clear"
+      @click="clear"
+    />
   </div>
 </template>
 
@@ -138,7 +106,7 @@ function clear(): void {
 .chip {
   display: inline-flex;
   max-width: 100%;
-  height: 18px;
+  height: 20px;
   align-items: center;
   gap: 3px;
   border-radius: var(--radius-sm);
@@ -147,6 +115,15 @@ function clear(): void {
   font-size: 11px;
   line-height: 1;
   color: var(--color-text-2);
+}
+.joiner {
+  cursor: pointer;
+  padding: 0 1px;
+  font-size: 11px;
+  color: var(--color-text-4);
+}
+.joiner:hover {
+  color: var(--color-text);
 }
 .chip-remove {
   display: inline-flex;

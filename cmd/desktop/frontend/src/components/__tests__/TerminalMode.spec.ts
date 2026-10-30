@@ -3209,12 +3209,18 @@ describe('TerminalMode', () => {
       mocks.ListSessions.mockResolvedValue(TWO_REPOS)
       running({ 1: true, 3: false })
       const { wrapper } = await mountAvailable()
-      expect(wrapper.find('[data-testid="code-view-hidden"]').exists()).toBe(false)
+      const hiddenNote = async () => {
+        await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
+        const note = wrapper.find('[data-testid="code-view-hidden"]')
+        const text = note.exists() ? note.text() : null
+        await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
+        return text
+      }
+      expect(await hiddenNote()).toBeNull()
 
       await selectView(wrapper, 'running')
       expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['status:running'])
-      expect(wrapper.get('[data-testid="code-view-hidden"]').text()).toBe('1')
-      expect(wrapper.get('[data-testid="code-view-hidden"]').attributes('title')).toBe('1 session hidden by this view')
+      expect(await hiddenNote()).toBe('1 session hidden')
 
       await wrapper.get('[data-testid="code-view-clear"]').trigger('click')
       expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
@@ -3244,10 +3250,63 @@ describe('TerminalMode', () => {
       await running.trigger('click')
       await flushPromises()
       expect(wrapper.findAll('[data-testid="code-view-chip"]').map((c) => c.text())).toEqual(['status:running'])
+      expect(wrapper.find('[data-testid="code-view-unsaved"]').exists()).toBe(true)
+      await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
       expect(wrapper.find('[data-testid="code-view-save-new"]').exists()).toBe(true)
+      await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
 
       await wrapper.get('[data-testid="code-view-clear"]').trigger('click')
       expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('goes back to All sessions when the last chip of a view is removed', async () => {
+      const { wrapper } = await mountAvailable()
+      await selectView(wrapper, 'running')
+
+      await wrapper.get('[data-testid="code-view-chip-remove"]').trigger('click')
+      await flushPromises()
+
+      expect(useCodeViews().activeViewId.value).toBe('all')
+      expect(wrapper.find('[data-testid="code-view-bar"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="code-view-unsaved"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('saves and resets a changed view from the filter dropdown', async () => {
+      mocks.CodeViews.mockResolvedValue([
+        {
+          id: 'bugs',
+          name: 'Bugs',
+          filter: { match: 'all', conditions: [{ field: 'tag', op: 'any', values: ['bug'] }] },
+        },
+      ])
+      localStorage.setItem('hive.code.active-view', 'bugs')
+      const { wrapper } = await mountAvailable()
+      const views = useCodeViews()
+      const pick = async (testid: string) => {
+        await wrapper.get('[data-testid="code-view-add-filter"]').trigger('click')
+        await wrapper.get(`[data-testid="${testid}"]`).trigger('click')
+        await flushPromises()
+      }
+
+      views.addCondition({ field: 'age', op: 'older', days: 7 })
+      await flushPromises()
+      await pick('code-view-reset')
+      expect(views.dirty.value).toBe(false)
+
+      views.addCondition({ field: 'age', op: 'older', days: 7 })
+      await flushPromises()
+      await pick('code-view-save')
+      expect(mocks.SetCodeViews).toHaveBeenLastCalledWith([
+        expect.objectContaining({
+          id: 'bugs',
+          filter: expect.objectContaining({
+            conditions: expect.arrayContaining([expect.objectContaining({ field: 'age' })]),
+          }),
+        }),
+      ])
+      expect(wrapper.find('[data-testid="code-view-unsaved"]').exists()).toBe(false)
       wrapper.unmount()
     })
 
