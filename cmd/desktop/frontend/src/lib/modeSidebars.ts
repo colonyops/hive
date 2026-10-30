@@ -1,6 +1,5 @@
 import type { UseResizablePanelOptions } from '@hive/ui/composables/useResizablePanel'
 
-/** A mode's left panel, shared by the panel and the placeholder that stands in for it. */
 export interface ModeSidebar {
   panel: UseResizablePanelOptions
   collapsedKey: string

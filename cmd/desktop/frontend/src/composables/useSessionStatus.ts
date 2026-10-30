@@ -115,7 +115,6 @@ export function useSessionStatus(
     { immediate: true },
   )
 
-  // The bar shows what it remembers through a mode's reveal, and asks git after.
   watch(revalidating, (ready) => {
     if (ready) void refresh()
   })

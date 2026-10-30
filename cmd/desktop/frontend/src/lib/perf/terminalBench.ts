@@ -372,9 +372,9 @@ const scenarios: Record<string, Scenario> = {
     return driveWheel(pane, 12, 4000 * scale)
   },
 
-  // Reading history while the pane keeps printing at an agent's pace. The viewport
-  // has to follow the wheel under the parser. A flood is no test of this: it trims
-  // the whole scrollback in about 100ms, which pushes any viewport to the top.
+  // Reading history while the pane keeps printing at an agent's pace. A flood is no
+  // test of this: it trims the whole scrollback in about 100ms, which pushes any
+  // viewport to the top.
   async scrollUnderOutput(pane, { scale = 1 }) {
     await fillScrollback(pane)
     pane.send('while :; do seq 1 20; sleep 0.05; done\r')
@@ -385,9 +385,8 @@ const scenarios: Record<string, Scenario> = {
     return metrics
   },
 
-  // Keystrokes in the visible pane while a pane nobody can see floods the same
-  // socket. Hidden panes keep parsing, so this is the contention a background
-  // agent puts on the one being typed into.
+  // Hidden panes keep parsing, so this is the contention a background agent puts
+  // on the one being typed into.
   async typingUnderHiddenFlood(pane, { scale = 1 }) {
     await settle(pane)
     const lines = Math.round(1_200_000 * scale)
@@ -471,10 +470,9 @@ const scenarios: Record<string, Scenario> = {
     }
   },
 
-  // Real full-screen programs instead of a redraw loop. `redrawBytes` is what the
-  // revealed program sent in the 300ms after a switch: more than a screenful means
-  // the switch itself made it repaint, by a resize or a focus report, which no
-  // renderer fix can hide.
+  // `redrawBytes` is what the revealed program sent in the 300ms after a switch:
+  // more than a screenful means the switch itself made it repaint, by a resize or
+  // a focus report, which no renderer fix can hide.
   async switchRealTui(pane, { scale = 1, tuiCommand = 'top' }) {
     await settle(pane)
     const marker = nextMarker()

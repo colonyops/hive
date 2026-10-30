@@ -55,9 +55,8 @@ const running = shallowRef(false)
 
 let frames: Sample[] = []
 let lags: Sample[] = []
-// The median of recent frames, capped at 60Hz. The fastest interval would be no
-// estimate: WebKit clamps its clock to whole milliseconds and sometimes runs two
-// callbacks a beat apart, and one such sample would count every frame as dropped.
+// The median of recent frames, capped at 60Hz; summarizeFrames in
+// lib/frameCollector.ts says why.
 let periodMs = FALLBACK_PERIOD_MS
 let lastFrameAt = 0
 let expectedProbeAt = 0

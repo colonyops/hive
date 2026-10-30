@@ -718,9 +718,8 @@ function fail(why: string): void {
   void reloadRecents()
 }
 
-// The outgoing chat stays on screen until the incoming one has drawn, as a held
-// session does in the Code view. The cap is for a chat with an empty screen, which
-// sends no first paint at all.
+// The outgoing chat stays on screen until the incoming one has drawn. The cap is
+// for a chat with an empty screen, which sends no first paint at all.
 const RETIRED_HOLD_MS = 300
 let retiredHoldTimer: ReturnType<typeof setTimeout> | undefined
 

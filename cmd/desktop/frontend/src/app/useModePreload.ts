@@ -33,9 +33,8 @@ function preload(prepareCode: () => void): void {
 
 /**
  * Readies Code and Chats shortly after the shell is up, so the first entry to
- * either paints its real tree. `prepareCode` mounts the Code view hidden once its
- * chunk is in. This only reads: it attaches no tmux client and resumes no chat,
- * which stay tied to entering the mode.
+ * either paints its real tree. This only reads: it attaches no tmux client and
+ * resumes no chat, which stay tied to entering the mode.
  */
 export function useModePreload(shellReady: () => boolean, prepareCode: () => void): void {
   const { start } = useTimeoutFn(() => preload(prepareCode), PRELOAD_DELAY_MS, { immediate: false })

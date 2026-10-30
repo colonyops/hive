@@ -61,7 +61,6 @@ describe('renderRevealedTerminal', () => {
     expect(renderRows).toHaveBeenCalledWith(0, 23)
     expect(service._isPaused).toBe(false)
     expect(service._needsFullRefresh).toBe(false)
-    // Without this xterm's public onRender stays silent, and the image layer with it.
     expect(service._isNextRenderRedrawOnly).toBe(false)
   })
 

@@ -23,7 +23,7 @@ export interface PaneProbe extends IDisposable {
   input(data: string): void
   /** Output off the socket, before anything filters it. */
   received(bytes: number): void
-  /** Set when the writer should report parsed bytes: null means the probe is off. */
+  /** Null when the probe is off. */
   readonly parsed: ((bytes: number) => void) | null
   /** The bytes off the socket that the emulator has not parsed yet. */
   backlog(): number
@@ -222,7 +222,6 @@ export function probePane(paneId: string, term: Terminal, renderer: () => boolea
   }
 }
 
-/** A pane the benchmark driver can reach; see lib/perf/terminalBench.ts. */
 export interface BenchPane {
   paneId: string
   term: Terminal
@@ -233,7 +232,7 @@ export interface BenchPane {
   webgl(): boolean
   /** Drops the stream and every emulator, then attaches again, resolving at first paint. */
   reattach(): Promise<void>
-  /** Selects the session's next window, resolving once it is on screen. */
+  /** Resolves once the window is on screen. */
   nextWindow(): Promise<void>
 }
 

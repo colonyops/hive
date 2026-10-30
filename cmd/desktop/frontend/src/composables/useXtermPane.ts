@@ -116,7 +116,6 @@ export function useXtermPane(host: Ref<HTMLElement | null>, onResize: () => void
   // terminal-renderer-claimed-on-activation).
   let rendered = false
   const disposers: IDisposable[] = []
-  // The outgoing terminal while its replacement gets its first paint. See retire.
   let retired: { term: Terminal; disposers: IDisposable[] } | null = null
   // The observer keeps the grid on the box as the window changes; it is not
   // what establishes it, so it is armed by attach rather than by build.

@@ -8,7 +8,6 @@ export interface FrameSummary {
   framesDropped: number
 }
 
-/** The period assumed until the display has shown its hand. */
 const FALLBACK_PERIOD_MS = 1000 / 60
 const DROPPED_AT = 2
 

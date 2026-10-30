@@ -12,9 +12,8 @@ const LONG_TASK_MS = 50
 
 /**
  * The continuous half of the frontend's profile: what the whole page does for
- * as long as recording is on, with no interaction instrumented. Frames and
- * event-loop lag per window, every long task, every route change, and every
- * control-plane call. A shipped build returns at the gate and installs nothing.
+ * as long as recording is on, with no interaction instrumented. A shipped build
+ * returns at the gate and installs nothing.
  */
 export async function startPerfMonitor(router?: Router): Promise<void> {
   if (!(await resolvePerfEnabled())) return

@@ -1255,8 +1255,7 @@ describe('TerminalMode', () => {
 
     expect(second.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
     expect(sessionRows(second)).toHaveLength(2)
-    // The toolbar spinner is the staleness indicator while revalidation runs,
-    // which waits for the first paint of a mount that has data to show.
+    // Revalidation waits for the first paint of a mount that has data to show.
     await vi.waitFor(() => expect(second.find('[data-testid="terminal-sessions-reloading"]').exists()).toBe(true))
     expect(router.currentRoute.value.params.slug).toBe('hive-bump-deps')
     expect(mocks.useTerminalWindows).toHaveBeenCalledWith('hive-bump-deps', expect.anything())

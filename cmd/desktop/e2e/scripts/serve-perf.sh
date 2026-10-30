@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Refuse to start outside run-docker.sh, as serve.sh does.
 if [[ ! "${HIVE_DESKTOP_E2E_HARNESS:-}" =~ ^[[:xdigit:]]{64}$ ]]; then
   echo "error: the perf lane must run through mise run desktop:perf:bench (Docker harness marker missing)" >&2
   exit 1

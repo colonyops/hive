@@ -152,15 +152,14 @@ export function usePerf(scope: string): PerfScope {
 }
 
 /**
- * Answers the gate once the backend has. A probe on a hot path asks at
- * creation and installs nothing when it is off, so a shipped build pays no
- * per-frame cost at all.
+ * A probe on a hot path asks at creation and installs nothing when it is off,
+ * so a shipped build pays no per-frame cost at all.
  */
 export function resolvePerfEnabled(): Promise<boolean> {
   return gate()
 }
 
-/** The gate as of now; false until the backend has answered. */
+/** False until the backend has answered. */
 export function perfEnabled(): boolean {
   return enabled === true
 }

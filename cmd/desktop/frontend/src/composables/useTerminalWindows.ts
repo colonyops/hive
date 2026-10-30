@@ -159,7 +159,6 @@ export interface UseTerminalWindows {
   resizePane: (paneId: string, size: { width?: number; height?: number }) => Promise<void>
   focusActive: () => void
   scrollToBottom: () => void
-  /** Draws the shown window now; the caller has just made it visible. */
   renderShown: () => void
   dispose: () => void
 }

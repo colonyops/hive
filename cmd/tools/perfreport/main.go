@@ -64,8 +64,8 @@ type span struct {
 	Attrs      map[string]any `json:"attrs"`
 }
 
-// key is what groups spans. A benchmark span is one scenario, so its scenario
-// belongs in the key or every workload lands in one row.
+// A benchmark span is one scenario, so its scenario belongs in the key or every
+// workload lands in one row.
 func (s span) key() string {
 	key := s.Scope + " " + s.Name
 	if scenario, ok := s.Attrs["scenario"].(string); ok {
