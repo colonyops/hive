@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, useTemplateRef } from 'vue'
+import { computed, defineAsyncComponent, h, useTemplateRef, type Component } from 'vue'
 import TitleBar from './components/TitleBar.vue'
+import ModeSkeleton from './components/ModeSkeleton.vue'
 import ProfileRail from './components/ProfileRail.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
 import ProfileSettingsView from './components/ProfileSettingsView.vue'
@@ -16,6 +17,7 @@ import { useAppNavigation } from './app/useAppNavigation'
 import { useFeedCommands } from './app/useFeedCommands'
 import { useGlobalKeymap } from './app/useGlobalKeymap'
 import { useHubOverlays } from './app/useHubOverlays'
+import { loadAgentsMode, loadTerminalMode, useModePreload } from './app/useModePreload'
 import { useOnboarding } from './app/useOnboarding'
 import { useProfileActions } from './app/useProfileActions'
 import { useReveal } from './app/useReveal'
@@ -30,6 +32,7 @@ import { useFlowsSession } from './pipeline/composables/useFlowsSession'
 import { useActivity } from './stores/useActivity'
 import { useJobs } from './stores/useJobs'
 import { kind } from './lib/itemPresentation'
+import { AGENTS_SIDEBAR, TERMINAL_SIDEBAR, type ModeSidebar } from './lib/modeSidebars'
 
 // The dev strip is a Vite dev build's own chrome and never ships. The developer
 // tools behind it can be turned on in a shipped build (ADR
@@ -39,9 +42,11 @@ const devMode = import.meta.env.DEV
 const DevBar = devMode ? defineAsyncComponent(() => import('./components/DevBar.vue')) : null
 const DevView = defineAsyncComponent(() => import('./components/DevView.vue'))
 // Async so xterm.js stays out of the initial bundle: the hub must not pay for
-// a terminal at startup.
-const TerminalMode = defineAsyncComponent(() => import('./components/TerminalMode.vue'))
-const AgentsMode = defineAsyncComponent(() => import('./components/AgentsMode.vue'))
+// a terminal at startup. useModePreload fetches both once the hub is up.
+const lazyMode = (loader: () => Promise<Component>, sidebar: ModeSidebar) =>
+  defineAsyncComponent({ loader, delay: 0, loadingComponent: () => h(ModeSkeleton, { sidebar }) })
+const TerminalMode = lazyMode(loadTerminalMode, TERMINAL_SIDEBAR)
+const AgentsMode = lazyMode(loadAgentsMode, AGENTS_SIDEBAR)
 const PopupTerminal = defineAsyncComponent(() => import('./components/PopupTerminal.vue'))
 
 const feed = useFeedState()
@@ -62,6 +67,7 @@ const appMode = useAppMode(feed, nav, onboardingActive, shellLoaded)
 const { mode, terminalActive, agentsActive, hubActive, settingsActive, driveActive } = appMode
 const { terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
+useModePreload(() => shellLoaded.value && !onboardingActive.value)
 const overlays = useHubOverlays(terminalActive)
 const { tasksOpen, activityOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
@@ -147,90 +153,94 @@ useWailsEvent('flows:updated', () => {
         @open-palette="palette.toggle()"
         @toggle-maximise="appMode.toggleMaximise"
       />
-      <!-- An empty frame until the profiles resolve, so a returning user never
-           sees onboarding flash by. A load failure falls through to the shell,
-           which renders the error with a retry. -->
-      <div v-if="!shellLoaded" class="flex min-h-0 flex-1 items-center justify-center font-mono text-xs text-text-4">
-        Loading…
-      </div>
-      <OnboardingScreen v-else-if="onboardingActive" v-bind="onboardingScreen" v-on="onboarding.screenEvents" />
-      <!-- v-show, not a branch of the chain above: leaving a mode hides it and
-           never unmounts it (see useAppMode). -->
-      <TerminalMode
-        v-if="terminalMounted"
-        v-show="terminalActive"
-        :active="terminalActive"
-        :sidebar-collapsed="terminalSidebarCollapsed"
-        :drive="appMode.codeDrive.value"
-        @open-drive-page="appMode.openDrive"
-        @open-tasks="overlays.toggleTasks"
-        @session-repo-key="terminalSessionRepoKey = $event"
-      />
-      <AgentsMode
-        v-if="agentsMounted"
-        v-show="agentsActive"
-        :active="agentsActive"
-        :sidebar-collapsed="agentsSidebarCollapsed"
-        @open-drive-page="appMode.openDrive"
-      />
-      <SettingsView
-        v-if="settingsActive"
-        :active-category="nav.applicationSettingsSection.value"
-        :known-feed-types="knownFeedTypes"
-        @close="appMode.closeSettings"
-        @select-category="nav.selectApplicationSettingsSection"
-      />
-      <DrivePage
-        v-if="driveActive"
-        :scope="appMode.driveScope.value"
-        :sidebar-collapsed="appMode.driveSidebarCollapsed.value"
-        @update:scope="appMode.updateDriveScope"
-        @close="appMode.closeDrive"
-        @open-url="feed.openUrl"
-        @setup="nav.selectApplicationSettingsSection('mcp')"
-      />
-      <!-- The profile rail stays mounted across the feed, flows, and profile
-           settings pages, so the flows canvas never strands the user. -->
-      <div v-if="hubActive" class="flex min-h-0 flex-1">
-        <ProfileRail
-          :profiles="profiles"
-          :active-profile-id="activeProfileId"
-          @select="nav.requestSelectProfile"
-          @add="profileActions.openNewProfile"
-          @reorder="feed.reorderProfiles"
+      <!-- Always fills the frame, so the chrome below holds its place whatever a
+           page is doing, including an async page that has not arrived. -->
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <!-- An empty frame until the profiles resolve, so a returning user never
+             sees onboarding flash by. A load failure falls through to the shell,
+             which renders the error with a retry. -->
+        <div v-if="!shellLoaded" class="flex min-h-0 flex-1 items-center justify-center font-mono text-xs text-text-4">
+          Loading…
+        </div>
+        <OnboardingScreen v-else-if="onboardingActive" v-bind="onboardingScreen" v-on="onboarding.screenEvents" />
+        <!-- v-show, not a branch of the chain above: leaving a mode hides it and
+             never unmounts it (see useAppMode). -->
+        <TerminalMode
+          v-if="terminalMounted"
+          v-show="terminalActive"
+          :active="terminalActive"
+          :sidebar-collapsed="terminalSidebarCollapsed"
+          :drive="appMode.codeDrive.value"
+          @open-drive-page="appMode.openDrive"
+          @open-tasks="overlays.toggleTasks"
+          @session-repo-key="terminalSessionRepoKey = $event"
         />
-        <DevView v-if="devActive" @close="nav.openFeed()" />
-        <ProfileSettingsView
-          v-else-if="profileSettingsActive && activeProfile"
-          :profile="activeProfile"
-          :active-section="nav.profileSettingsSection.value"
-          :renaming="feed.renamingProfile.value"
-          :rename-error="feed.renameProfileError.value"
-          :toggling="feed.togglingProfileId.value !== null"
-          :toggle-error="feed.toggleProfileError.value"
-          :setting-image="feed.settingProfileImage.value"
-          :image-error="feed.profileImageError.value"
-          @close="nav.openFeed()"
-          @rename="profileActions.renameProfile"
-          @toggle-enabled="profileActions.setProfileEnabled"
-          @set-image="profileActions.setProfileImage"
-          @clear-image="profileActions.clearProfileImage"
-          @delete="profileActions.openDeleteProfile"
-          @select-section="nav.selectProfileSettingsSection"
+        <AgentsMode
+          v-if="agentsMounted"
+          v-show="agentsActive"
+          :active="agentsActive"
+          :sidebar-collapsed="agentsSidebarCollapsed"
+          @open-drive-page="appMode.openDrive"
         />
-        <FlowsView v-else-if="flowsActive" />
-        <FeedHub
-          v-else
-          ref="feedHub"
-          v-model:preview-collapsed="previewCollapsed"
-          :feed="feed"
-          :nav="nav"
-          :feed-commands="feedCommands"
-          :detail="itemDetail"
-          :sidebar-collapsed="feedSidebarCollapsed"
-          :github-connected="github.connected.value"
-          @open-run-log="overlays.openActionRuns"
+        <SettingsView
+          v-if="settingsActive"
+          :active-category="nav.applicationSettingsSection.value"
+          :known-feed-types="knownFeedTypes"
+          @close="appMode.closeSettings"
+          @select-category="nav.selectApplicationSettingsSection"
         />
+        <DrivePage
+          v-if="driveActive"
+          :scope="appMode.driveScope.value"
+          :sidebar-collapsed="appMode.driveSidebarCollapsed.value"
+          @update:scope="appMode.updateDriveScope"
+          @close="appMode.closeDrive"
+          @open-url="feed.openUrl"
+          @setup="nav.selectApplicationSettingsSection('mcp')"
+        />
+        <!-- The profile rail stays mounted across the feed, flows, and profile
+             settings pages, so the flows canvas never strands the user. -->
+        <div v-if="hubActive" class="flex min-h-0 flex-1">
+          <ProfileRail
+            :profiles="profiles"
+            :active-profile-id="activeProfileId"
+            @select="nav.requestSelectProfile"
+            @add="profileActions.openNewProfile"
+            @reorder="feed.reorderProfiles"
+          />
+          <DevView v-if="devActive" @close="nav.openFeed()" />
+          <ProfileSettingsView
+            v-else-if="profileSettingsActive && activeProfile"
+            :profile="activeProfile"
+            :active-section="nav.profileSettingsSection.value"
+            :renaming="feed.renamingProfile.value"
+            :rename-error="feed.renameProfileError.value"
+            :toggling="feed.togglingProfileId.value !== null"
+            :toggle-error="feed.toggleProfileError.value"
+            :setting-image="feed.settingProfileImage.value"
+            :image-error="feed.profileImageError.value"
+            @close="nav.openFeed()"
+            @rename="profileActions.renameProfile"
+            @toggle-enabled="profileActions.setProfileEnabled"
+            @set-image="profileActions.setProfileImage"
+            @clear-image="profileActions.clearProfileImage"
+            @delete="profileActions.openDeleteProfile"
+            @select-section="nav.selectProfileSettingsSection"
+          />
+          <FlowsView v-else-if="flowsActive" />
+          <FeedHub
+            v-else
+            ref="feedHub"
+            v-model:preview-collapsed="previewCollapsed"
+            :feed="feed"
+            :nav="nav"
+            :feed-commands="feedCommands"
+            :detail="itemDetail"
+            :sidebar-collapsed="feedSidebarCollapsed"
+            :github-connected="github.connected.value"
+            @open-run-log="overlays.openActionRuns"
+          />
+        </div>
       </div>
       <DevBar v-if="devMode" />
       <SequenceHint />

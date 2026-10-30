@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
 import { usePaintedActive } from '../usePaintedActive'
 
-function setup(initial: boolean) {
+function setup(initial: boolean, options?: { preloaded?: boolean }) {
   const active = ref(initial)
   const scope = effectScope()
-  const painted = scope.run(() => usePaintedActive(() => active.value))!
+  const painted = scope.run(() => usePaintedActive(() => active.value, options))!
   return { active, painted, stop: () => scope.stop() }
 }
 
@@ -22,6 +22,15 @@ describe('usePaintedActive', () => {
   it('answers at once on a first load', () => {
     expect(setup(true).painted.value).toBe(true)
     expect(setup(false).painted.value).toBe(false)
+  })
+
+  it('treats a mount with preloaded data as a reveal', async () => {
+    const { painted } = setup(true, { preloaded: true })
+    expect(painted.value).toBe(false)
+    vi.advanceTimersToNextFrame()
+    vi.advanceTimersToNextFrame()
+    await vi.advanceTimersByTimeAsync(50)
+    expect(painted.value).toBe(true)
   })
 
   it('turns true only after the reveal has painted', async () => {

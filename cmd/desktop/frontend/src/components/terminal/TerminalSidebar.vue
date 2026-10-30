@@ -31,6 +31,7 @@ import { dropClass, dropEdge, useDragReorder } from '../../composables/useDragRe
 import { formatCombo, useKeybindings } from '../../composables/useKeybindings'
 import { useNewSession } from '../../composables/useNewSession'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
+import { TERMINAL_SIDEBAR } from '../../lib/modeSidebars'
 import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
 import { moveId, type OrderDropTarget } from '../../lib/listOrder'
 import { terminalTreeFocused } from '../../lib/terminalTree'
@@ -146,17 +147,7 @@ const focusHint = computed(() => {
   return { keys: formatCombo(combo), label: inTree ? 'terminal' : 'tree' }
 })
 
-const {
-  size: sidebarWidth,
-  startResize,
-  step,
-} = useResizablePanel({
-  storageKey: 'hive.panel.terminal.sidebar',
-  defaultSize: 250,
-  min: 180,
-  max: 400,
-  edge: 'right',
-})
+const { size: sidebarWidth, startResize, step } = useResizablePanel(TERMINAL_SIDEBAR.panel)
 
 // The selection markers are two elements that travel: one tracks the attached
 // session, one the active window. Measured off the rows, because row heights

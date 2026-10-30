@@ -591,10 +591,22 @@ describe('AgentsMode', () => {
     const client = fakeClient()
     client.allSessions.mockResolvedValue([{ ...chatRow, terminalId: '' }])
     mocks.createAgentWorkspacesClient.mockReturnValue(client)
-    const { router } = await mountAgentsMode('/workspaces/web-app?chat=7')
+    const { wrapper, router } = await mountAgentsMode('/workspaces/web-app?chat=7')
 
     expect(client.resumeSession).not.toHaveBeenCalled()
     expect(router.currentRoute.value.query.chat).toBeUndefined()
+    expect(wrapper.find('[data-testid="agents-pane-empty"]').exists()).toBe(true)
+  })
+
+  it('holds the opening pane and its status bar while a routed chat resolves', async () => {
+    const client = fakeClient()
+    client.allSessions.mockReturnValue(new Promise(() => {}))
+    mocks.createAgentWorkspacesClient.mockReturnValue(client)
+    const { wrapper } = await mountAgentsMode('/workspaces/web-app?chat=7')
+
+    expect(wrapper.find('[data-testid="agents-pane-empty"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="agents-pane-opening"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="agents-pane-statusbar-workspace"]').text()).toBe('Web App')
   })
 
   // A route naming another chat is a request to switch, whatever the pane is

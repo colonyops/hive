@@ -45,6 +45,7 @@ import TreeRail from '@hive/ui/components/ui/TreeRail.vue'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
+import { AGENTS_SIDEBAR } from '../lib/modeSidebars'
 import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
 import { useTreeExpansion } from '../composables/useTreeExpansion'
 import { activityIndicator, type StatusIndicator } from '../lib/agentActivity'
@@ -501,13 +502,7 @@ const {
   size: sidebarWidth,
   startResize: startSidebarResize,
   step: stepSidebar,
-} = useResizablePanel({
-  storageKey: 'hive.panel.agents.sidebar',
-  defaultSize: 260,
-  min: 180,
-  max: 400,
-  edge: 'right',
-})
+} = useResizablePanel(AGENTS_SIDEBAR.panel)
 
 // ── The selection rail (the Code view's traveling mark) ──────────────────
 const treeContent = ref<HTMLElement | null>(null)

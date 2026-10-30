@@ -6,7 +6,7 @@ import { defineStore } from './defineStore'
 
 // The tmux availability probe's answer and the control client. Both are
 // properties of the backend process rather than of a mounted view: the
-// "Checking tmux…" gate is shown once, and every later probe revalidates the
+// placeholder this gates is shown once, and every later probe revalidates the
 // answer already on screen instead of blanking it. The endpoint (loopback
 // address + bearer token) is stable for the life of that process, so a created
 // client is never re-minted.

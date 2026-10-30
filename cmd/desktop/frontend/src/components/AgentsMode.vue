@@ -20,6 +20,7 @@ import IconMessagesSquare from '~icons/lucide/messages-square'
 import AgentsSidebar from './AgentsSidebar.vue'
 import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
 import DrivePane from './drive/DrivePane.vue'
+import ModeSkeleton from './ModeSkeleton.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
@@ -34,6 +35,7 @@ import { driveEventAuthor, workspaceSpaceKey, type DriveScope } from '../lib/dri
 import { decodeFrame, encodeInputFrames, encodePasteFrames } from '../lib/agentWorkspacesClient'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { isEditableTarget } from '../lib/isEditableTarget'
+import { AGENTS_SIDEBAR } from '../lib/modeSidebars'
 import { installTerminalImages } from '../lib/terminalImages'
 import { installKittyGraphics } from '../lib/kitty/kittyGraphics'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
@@ -132,6 +134,10 @@ const paneWorkspaceName = computed(
 const route = useRoute()
 const router = useRouter()
 const { routeChatId, docVisible, docPath, syncDocQuery } = useDriveRoute()
+// A route naming a chat is a resume on its way. The pane says so from the first
+// frame, or re-entry would pass through the zero state and shift when the status
+// bar arrives. A resume that cannot happen clears ?chat, which ends this.
+const paneResuming = computed(() => paneStatus.value === 'idle' && routeChatId.value !== null && !paneError.value)
 const selectedWorkspace = computed(() =>
   route.name === 'agents' && typeof route.params.workspace === 'string' ? route.params.workspace : '',
 )
@@ -310,6 +316,9 @@ watch(
   ([id, active]) => {
     if (id === null || !active) return
     if (openSessionId.value === id || paneStatus.value === 'opening') return
+    if (paneStatus.value === 'idle') {
+      paneWorkspaceDir.value = recents.value.find((row) => row.id === id)?.workspace ?? selectedWorkspace.value
+    }
     void resumeChatFromRoute(id)
   },
   { immediate: true },
@@ -768,7 +777,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-app" data-testid="agents-mode">
-    <div v-if="checking" class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">Checking…</div>
+    <ModeSkeleton v-if="checking" :sidebar="AGENTS_SIDEBAR" />
 
     <div
       v-else-if="!available"
@@ -841,7 +850,7 @@ onBeforeUnmount(() => {
         </div>
 
         <PaneStatusBar
-          v-if="paneStatus !== 'idle'"
+          v-if="paneStatus !== 'idle' || paneResuming"
           testid="agents-pane-statusbar"
           :label="paneWorkspaceName"
           :path="paneWorkspaceDir"
@@ -887,7 +896,7 @@ onBeforeUnmount(() => {
                most of a start is spent waiting on tmux after the grid is
                built, and a bare dark pane there reads as nothing happening. -->
           <div
-            v-if="paneStatus === 'opening' && !paneHolding"
+            v-if="(paneStatus === 'opening' && !paneHolding) || paneResuming"
             class="absolute inset-0 z-10 flex items-center justify-center bg-app"
             data-testid="agents-pane-opening"
           >

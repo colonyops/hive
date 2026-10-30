@@ -3,6 +3,7 @@ import { computed, onMounted, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
 import ActionInputsDialog from './ActionInputsDialog.vue'
+import ModeSkeleton from './ModeSkeleton.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
 import SessionEditDialog from './SessionEditDialog.vue'
 import DrivePane from './drive/DrivePane.vue'
@@ -25,6 +26,7 @@ import { usePaintedActive } from '../composables/usePaintedActive'
 import { useSessionActions } from '../composables/useSessionActions'
 import { openLink } from '../composables/useXtermPane'
 import { spaceGroup, type DriveScope } from '../lib/drive'
+import { TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 import { useCodeViews } from '../stores/useCodeViews'
 import { useTerminalAvailability } from '../stores/useTerminalAvailability'
 import { useTerminalPoolSize } from '../stores/useTerminalPoolSize'
@@ -49,10 +51,10 @@ const emit = defineEmits<{
   'open-drive-page': [scope: DriveScope]
 }>()
 const active = (): boolean => props.active
-const painted = usePaintedActive(active)
+const { checking, available, reason, client } = useTerminalAvailability()
+const painted = usePaintedActive(active, { preloaded: client.value !== null })
 const revalidating = (): boolean => painted.value
 
-const { checking, available, reason } = useTerminalAvailability()
 const { poolSize } = useTerminalPoolSize()
 
 const pool = useTerminalPool({ size: poolSize, onEvicted: () => tree.sweepListings() })
@@ -113,9 +115,7 @@ const knownTags = computed(() => {
 
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-app" data-testid="terminal-mode">
-    <div v-if="checking" class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">
-      Checking tmux…
-    </div>
+    <ModeSkeleton v-if="checking" :sidebar="TERMINAL_SIDEBAR" />
 
     <div
       v-else-if="!available"

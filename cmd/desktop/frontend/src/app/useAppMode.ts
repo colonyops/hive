@@ -9,6 +9,7 @@ import { useDriveReview } from '../stores/useDriveReview'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 import { createLogger } from '../lib/log'
+import { AGENTS_SIDEBAR, TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 
 const log = createLogger('app-mode')
 
@@ -118,8 +119,8 @@ export function useAppMode(
   )
 
   const feedSidebarCollapsed = useStorage('hive.panel.sidebar.collapsed', false)
-  const terminalSidebarCollapsed = useStorage('hive.panel.terminal.sidebar.collapsed', false)
-  const agentsSidebarCollapsed = useStorage('hive.panel.agents.sidebar.collapsed', false)
+  const terminalSidebarCollapsed = useStorage(TERMINAL_SIDEBAR.collapsedKey, false)
+  const agentsSidebarCollapsed = useStorage(AGENTS_SIDEBAR.collapsedKey, false)
   const driveSidebarCollapsed = useStorage('hive.panel.drive.sidebar.collapsed', false)
   const previewCollapsed = useStorage('hive.panel.detailpane.collapsed', false)
   // Follows the hub's template fallthrough: the feed renders whenever no other
