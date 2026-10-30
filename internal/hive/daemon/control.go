@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -63,7 +64,7 @@ func (c *controlServer) Health(ctx context.Context, _ *connect.Request[daemonv1.
 	}
 	if c.paneOK != nil {
 		_, err := c.paneOK.ListPanes(ctx)
-		resp.TmuxOk = err == nil
+		resp.TmuxOk = err == nil || noTmuxServer(err)
 	}
 	if sessions, err := c.api.ListSessions(ctx); err == nil {
 		for _, sess := range sessions {
@@ -79,6 +80,13 @@ func (c *controlServer) Health(ctx context.Context, _ *connect.Request[daemonv1.
 	resp.Supervised = c.supervised
 	resp.Agents = agentChecks(c.runtime.Engine().Config().Agents)
 	return connect.NewResponse(resp), nil
+}
+
+// noTmuxServer reports a working tmux with no server yet, as on a machine with
+// no sessions. tmux exits 1 for this and for real failures; only stderr differs.
+func noTmuxServer(err error) bool {
+	text := err.Error()
+	return strings.Contains(text, "no server running") || strings.Contains(text, "error connecting to")
 }
 
 // agentChecks looks up each profile's command on the daemon's PATH, which is
