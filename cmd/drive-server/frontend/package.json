@@ -19,24 +19,24 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@iconify-json/lucide": "1.2.140",
-    "@iconify-json/material-symbols": "1.2.95",
+    "@iconify-json/lucide": "1.2.147",
+    "@iconify-json/material-symbols": "1.2.96",
     "@tailwindcss/vite": "4.3.3",
-    "@types/node": "24.19.1",
+    "@types/node": "24.19.2",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/test-utils": "2.5.1",
-    "eslint": "10.12.0",
+    "eslint": "10.13.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-vue": "10.11.1",
-    "happy-dom": "20.14.5",
-    "prettier": "3.9.9",
+    "happy-dom": "20.14.6",
+    "prettier": "3.9.10",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.71.1",
+    "typescript-eslint": "8.72.0",
     "unplugin-icons": "23.0.1",
     "vite": "^8.0.5",
-    "vitest": "4.1.11",
+    "vitest": "4.1.12",
     "vue-eslint-parser": "10.4.1",
-    "vue-tsc": "3.3.12"
+    "vue-tsc": "3.3.13"
   }
 }
