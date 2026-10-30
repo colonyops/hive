@@ -125,8 +125,7 @@ func (a *App) TargetServer(name string) error {
 }
 
 // ServerAPI is the session API of the named server; session.LocalServer
-// names this machine. A server's ssh errors go to stderr, since a failed ssh
-// otherwise shows only as a closed connection.
+// names this machine.
 func (a *App) ServerAPI(name string) (sessionapi.API, error) {
 	if name == session.LocalServer {
 		if local := a.Servers.Local(); local != nil {
@@ -138,7 +137,6 @@ func (a *App) ServerAPI(name string) (sessionapi.API, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown server %q: it is not under servers: in config.yaml", name)
 	}
-	server.CopyStderrTo(os.Stderr)
 	return server.Client(), nil
 }
 

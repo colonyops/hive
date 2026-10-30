@@ -5,6 +5,7 @@ package sessionapi
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
@@ -12,6 +13,10 @@ import (
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/status"
 )
+
+// ErrRiskCheckTimedOut is a risk check that the server began and did not finish,
+// as with a slow repository. A caller can offer to go on without the check.
+var ErrRiskCheckTimedOut = errors.New("the risk check timed out")
 
 // API creates every session in the background, whatever opts.Background
 // says: the implementation may run in a daemon with no terminal. A caller

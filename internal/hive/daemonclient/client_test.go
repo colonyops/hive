@@ -3,6 +3,8 @@ package daemonclient
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -19,6 +21,7 @@ import (
 
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
 	"github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1/daemonv1connect"
+	"github.com/colonyops/hive/internal/hive/daemon/wire"
 )
 
 // countingServer counts the calls that reach it.
@@ -282,7 +285,7 @@ func TestClientDeleteTimeoutBoundsADelete(t *testing.T) {
 
 	err := client.DeleteSession(t.Context(), "s1")
 
-	assert.ErrorContains(t, err, "the delete may still finish on the server")
+	assert.ErrorContains(t, err, "the change may still finish on the server")
 }
 
 type stuckHelloServer struct {
@@ -304,6 +307,83 @@ func TestClientStopsAChangeWhenTheDaemonIsStuck(t *testing.T) {
 
 	require.ErrorContains(t, err, "nothing changed")
 	assert.Zero(t, sessions.deleteCalls.Load())
+}
+
+func TestExplain(t *testing.T) {
+	timedOut := connect.NewError(connect.CodeDeadlineExceeded, context.DeadlineExceeded)
+	refused := connect.NewError(connect.CodeUnavailable, errors.New("dial: EOF"))
+	dropped := connect.NewError(connect.CodeUnknown, fmt.Errorf("protocol error: %w", io.ErrUnexpectedEOF))
+	const read, change = daemonv1connect.SessionServiceGetProcedure, daemonv1connect.SessionServiceRenameProcedure
+
+	tests := []struct {
+		name      string
+		err       error
+		procedure string
+		detail    string
+		want      string
+	}{
+		{"timeout", timedOut, read, "", "box did not answer in 10s"},
+		{"timeout with ssh detail", timedOut, read, "Connection timed out", "box did not answer in 10s: Connection timed out"},
+		{"timeout during a change", timedOut, change, "", "box did not answer in 10s; the change may still finish on the server"},
+		{"no connection", refused, read, "", "could not reach box: dial: EOF"},
+		{"no connection with ssh detail", refused, read, "Permission denied", "could not reach box: Permission denied"},
+		{"dropped connection", dropped, read, "", "lost the connection to box: protocol error: unexpected EOF"},
+		{"dropped connection during a change", dropped, change, "", "lost the connection to box: protocol error: unexpected EOF; the change may still finish on the server"},
+		{"a failed ssh looks like EOF", connect.NewError(connect.CodeUnavailable, io.ErrUnexpectedEOF), read, "Could not resolve hostname", "could not reach box: Could not resolve hostname"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := New(Options{Logger: zerolog.Nop(), Name: "box", FailureDetail: func() string { return tt.detail }})
+
+			err := c.explain(tt.err, tt.procedure, 10*time.Second)
+
+			require.EqualError(t, err, tt.want)
+			var unreachable *wire.UnreachableError
+			require.ErrorAs(t, err, &unreachable)
+			assert.Equal(t, "box", unreachable.Server)
+			assert.Equal(t, connect.CodeOf(tt.err), connect.CodeOf(err))
+			assert.ErrorIs(t, wire.FromConnectError(err), err)
+		})
+	}
+
+	t.Run("an error from the daemon stays as it is", func(t *testing.T) {
+		c := New(Options{Logger: zerolog.Nop()})
+		wireErr := connect.NewWireError(connect.CodeUnavailable, errors.New("tmux is gone"))
+
+		assert.Same(t, wireErr, c.explain(wireErr, read, time.Second))
+	})
+
+	t.Run("a timeout the daemon sent back is still a timeout", func(t *testing.T) {
+		c := New(Options{Logger: zerolog.Nop(), Name: "box"})
+		wireErr := connect.NewWireError(connect.CodeDeadlineExceeded, context.DeadlineExceeded)
+
+		assert.EqualError(t, c.explain(wireErr, read, 10*time.Second), "box did not answer in 10s")
+	})
+
+	t.Run("a local daemon has no server name", func(t *testing.T) {
+		c := New(Options{Logger: zerolog.Nop()})
+
+		assert.EqualError(t, c.explain(timedOut, read, 10*time.Second), "the daemon did not answer in 10s")
+	})
+}
+
+func TestTimeoutFor(t *testing.T) {
+	c := New(Options{
+		Logger:         zerolog.Nop(),
+		ReadTimeout:    time.Second,
+		ConnectTimeout: 2 * time.Second,
+		RiskTimeout:    3 * time.Second,
+		DeleteTimeout:  4 * time.Second,
+	})
+	get := daemonv1connect.SessionServiceGetProcedure
+
+	assert.Equal(t, 2*time.Second, c.timeoutFor(get), "no connection yet")
+	assert.Equal(t, 3*time.Second, c.timeoutFor(daemonv1connect.SessionServiceRiskProcedure))
+	assert.Equal(t, 4*time.Second, c.timeoutFor(daemonv1connect.SessionServiceDeleteProcedure))
+	assert.Zero(t, c.timeoutFor(daemonv1connect.SessionServiceRenameProcedure))
+
+	c.openConns.Add(1)
+	assert.Equal(t, time.Second, c.timeoutFor(get), "has a connection")
 }
 
 func TestClientWithoutReadTimeoutSendsNoHelloBeforeAChange(t *testing.T) {

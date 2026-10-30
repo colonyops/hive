@@ -664,7 +664,10 @@ func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session
 func (cmd *SessionCmd) checkRisk(ctx context.Context, api sessionapi.API, ref session.Ref, action string) error {
 	risk, err := api.CheckSessionRisk(ctx, ref.ID)
 	if err != nil {
-		return fmt.Errorf("check session risk: %w", err)
+		if errors.Is(err, sessionapi.ErrRiskCheckTimedOut) {
+			return fmt.Errorf("check %s for unsaved work: %w; use --force to %s without this check", ref, err, action)
+		}
+		return fmt.Errorf("check %s for unsaved work: %w", ref, err)
 	}
 	if !risk.HasRisk() {
 		return nil

@@ -119,7 +119,7 @@ func summarize(ctx context.Context, server *servers.Server) serverSummary {
 	}
 	sessions, err := server.Client().ListSessions(ctx)
 	if err != nil {
-		out.Error = server.Explain(err).Error()
+		out.Error = err.Error()
 		return out
 	}
 	out.Sessions = len(sessions)
@@ -172,7 +172,6 @@ func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 
 	out := probeResult{Name: name, SSH: server.Config().SSH, Sessions: []probeSession{}}
 	failed := func(step *probeStep, err error) error {
-		err = server.Explain(err)
 		step.Error = err.Error()
 		if cmd.json {
 			_ = iojson.WriteLine(c.Root().Writer, out)

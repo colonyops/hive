@@ -5,6 +5,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/theme"
 	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/daemon/wire"
 	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/servers"
@@ -398,8 +400,11 @@ Run 'hive new' to create a new session from the current repository.`,
 	exitCode := 0
 	runErr := app.Run(ctx, os.Args)
 	if runErr != nil {
-		fmt.Println()
-		fmt.Println(runErr.Error())
+		fmt.Fprintln(os.Stderr, runErr)
+		var unreachable *wire.UnreachableError
+		if errors.As(runErr, &unreachable) && unreachable.Server != "" {
+			fmt.Fprintln(os.Stderr, "Check your servers with: hive servers ls")
+		}
 		exitCode = 1
 	}
 

@@ -7,8 +7,6 @@ package servers
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"io"
 	"net"
 	"strings"
 	"sync"
@@ -24,9 +22,17 @@ import (
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
-// ReadTimeout bounds each read-only call to a server, so a slow server cannot
-// block a list of local sessions.
+// ReadTimeout bounds each read-only call on a connection to a server, so a
+// slow server cannot block a list of local sessions.
 const ReadTimeout = 10 * time.Second
+
+// ConnectTimeout bounds a read-only call that must first connect. ssh gives up
+// on a dead server in 10s by itself (ConnectTimeout in sshdial), so this limit
+// matters for a healthy server on a slow link and for a stuck daemon.
+const ConnectTimeout = 30 * time.Second
+
+// RiskTimeout bounds a risk check, which runs git on the whole clone.
+const RiskTimeout = time.Minute
 
 // DeleteTimeout bounds a delete on a server. It is long because a delete removes
 // a whole clone, and the server finishes the delete after the client gives up.
@@ -127,8 +133,12 @@ func newServer(logger zerolog.Logger, cfg config.ServerConfig) *Server {
 			s.stderr.reset()
 			return sshdial.DialStdio(ctx, host, s.stderr)
 		},
-		ReadTimeout:   ReadTimeout,
-		DeleteTimeout: DeleteTimeout,
+		Name:           cfg.Name,
+		FailureDetail:  s.stderr.lastLine,
+		ReadTimeout:    ReadTimeout,
+		ConnectTimeout: ConnectTimeout,
+		RiskTimeout:    RiskTimeout,
+		DeleteTimeout:  DeleteTimeout,
 	})
 	return s
 }
@@ -165,7 +175,7 @@ func (s *Server) Check(ctx context.Context) Status {
 	if err != nil {
 		status.State = server.StateOffline
 		status.Version = ""
-		status.Error = s.Explain(err).Error()
+		status.Error = err.Error()
 	}
 	s.mu.Lock()
 	s.status = status
@@ -173,36 +183,15 @@ func (s *Server) Check(ctx context.Context) Status {
 	return status
 }
 
-// CopyStderrTo also writes ssh's stderr to w, for a CLI command whose
-// errors would otherwise show only a closed connection.
-func (s *Server) CopyStderrTo(w io.Writer) {
-	s.stderr.mu.Lock()
-	defer s.stderr.mu.Unlock()
-	s.stderr.copyTo = w
-}
-
-// Explain adds ssh's last stderr line to err, since a failed ssh shows up
-// only as a closed connection.
-func (s *Server) Explain(err error) error {
-	if line := s.stderr.lastLine(); line != "" {
-		return fmt.Errorf("%w; %s", err, line)
-	}
-	return err
-}
-
 // tailBuffer keeps the last 4 KiB written to it.
 type tailBuffer struct {
-	mu     sync.Mutex
-	buf    bytes.Buffer
-	copyTo io.Writer
+	mu  sync.Mutex
+	buf bytes.Buffer
 }
 
 func (b *tailBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.copyTo != nil {
-		_, _ = b.copyTo.Write(p)
-	}
 	b.buf.Write(p)
 	if over := b.buf.Len() - 4096; over > 0 {
 		b.buf.Next(over)
