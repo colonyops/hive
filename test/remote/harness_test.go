@@ -198,6 +198,18 @@ func (s Server) CreateSession(t *testing.T, name string) Session {
 	return sess
 }
 
+// CreateSessionWithID creates a session with a chosen id, so a test can put
+// the same id on both servers. `hive session create` cannot choose an id.
+func (s Server) CreateSessionWithID(t *testing.T, name, id string) Session {
+	t.Helper()
+	input := fmt.Sprintf(`{"sessions":[{"name":%q,"session_id":%q,"remote":%q}]}`, name, id, tFixtureRepo)
+	s.Shell(t, "echo "+shellQuote(input)+" | hive batch").Ok(t)
+	s.DeleteOnCleanup(t, id)
+	sess := s.Show(t, id)
+	require.Equal(t, name, sess.Name)
+	return sess
+}
+
 // DeleteOnCleanup deletes a session when the test ends, so the next test
 // starts from the same server state. A session the test already deleted is
 // fine.

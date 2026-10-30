@@ -193,6 +193,13 @@ func printSessionHuman(out io.Writer, server string, sess session.Session) {
 }
 
 func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
+	// The working directory finds a session on this machine. Its id can name
+	// a different session on the server, so a lookup there could answer with
+	// the wrong session.
+	if cmd.app.TargetsServer() {
+		return errors.New("session info reads the session of this directory on this machine; use 'hive session show <server>:<id>' for a session on a server")
+	}
+
 	// Detect session from current working directory
 	sessionID, err := cmd.app.Sessions().DetectSession(ctx)
 	if err != nil {
@@ -217,10 +224,10 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	out := c.Root().Writer
 
 	if cmd.infoJSON {
-		return iojson.WriteLine(out, buildSessionJSON(cmd.app.DefaultServer(), sess))
+		return iojson.WriteLine(out, buildSessionJSON(session.LocalServer, sess))
 	}
 
-	printSessionHuman(out, cmd.app.DefaultServer(), sess)
+	printSessionHuman(out, session.LocalServer, sess)
 	return nil
 }
 

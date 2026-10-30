@@ -195,18 +195,75 @@ func TestClientCLI_DeletesASession(t *testing.T) {
 	assert.Contains(t, gone.Stdout+gone.Stderr, session.ErrNotFound.Error())
 }
 
+const tSharedID = "clash1"
+
+// sharedIDSessions puts a session with the same id on each server.
+func sharedIDSessions(t *testing.T) (refA, refB string) {
+	t.Helper()
+	serverA.CreateSessionWithID(t, "on-a", tSharedID)
+	serverB.CreateSessionWithID(t, "on-b", tSharedID)
+	return serverA.Name + ":" + tSharedID, serverB.Name + ":" + tSharedID
+}
+
 func TestClientCLI_ActsOnTheSessionOnTheServerTheRefNames(t *testing.T) {
-	onA := serverA.CreateSession(t, "twin")
-	onB := serverB.CreateSession(t, "twin")
+	refA, refB := sharedIDSessions(t)
 	client := NewClient(t)
 
-	shown := DecodeJSON[sessionWithServer](t, client.Hive("session", "show", "--json", serverB.Name+":"+onB.ID).Ok(t))
-	assert.Equal(t, sessionWithServer{Server: serverB.Name, ID: onB.ID, Name: "twin"}, shown)
+	shownA := DecodeJSON[sessionWithServer](t, client.Hive("session", "show", "--json", refA).Ok(t))
+	assert.Equal(t, sessionWithServer{Server: serverA.Name, ID: tSharedID, Name: "on-a"}, shownA)
+	shownB := DecodeJSON[sessionWithServer](t, client.Hive("session", "show", "--json", refB).Ok(t))
+	assert.Equal(t, sessionWithServer{Server: serverB.Name, ID: tSharedID, Name: "on-b"}, shownB)
 
-	client.Hive("session", "update", serverB.Name+":"+onB.ID, "--name", "twin-b").Ok(t)
+	client.Hive("session", "update", refB, "--name", "renamed-b").Ok(t)
 
-	assert.Equal(t, "twin", serverA.Show(t, onA.ID).Name)
-	assert.Equal(t, "twin-b", serverB.Show(t, onB.ID).Name)
+	assert.Equal(t, "on-a", serverA.Show(t, tSharedID).Name)
+	assert.Equal(t, "renamed-b", serverB.Show(t, tSharedID).Name)
+}
+
+func TestClientCLI_DeletesOnlyTheSessionTheRefNames(t *testing.T) {
+	refA, _ := sharedIDSessions(t)
+
+	NewClient(t).Hive("session", "delete", refA).Ok(t)
+
+	gone := serverA.Hive(t, "session", "show", "--json", tSharedID).Fails(t)
+	// hive prints its errors to stdout.
+	assert.Contains(t, gone.Stdout+gone.Stderr, session.ErrNotFound.Error())
+	assert.Equal(t, "on-b", serverB.Show(t, tSharedID).Name)
+}
+
+func TestClientCLI_RecyclesOnlyTheSessionTheRefNames(t *testing.T) {
+	_, refB := sharedIDSessions(t)
+
+	NewClient(t).Hive("session", "recycle", refB).Ok(t)
+
+	assert.Equal(t, string(session.StateActive), serverA.Show(t, tSharedID).State)
+	assert.Equal(t, string(session.StateRecycled), serverB.Show(t, tSharedID).State)
+}
+
+func TestClientCLI_ChecksRiskOnTheServerTheRefNames(t *testing.T) {
+	refA, refB := sharedIDSessions(t)
+	serverA.Shell(t, "touch "+shellQuote(serverA.Show(t, tSharedID).Path+"/uncommitted")).Ok(t)
+	client := NewClient(t)
+
+	for _, action := range []string{"delete", "recycle"} {
+		refused := client.Hive("session", action, refA).Fails(t)
+		// hive prints its errors to stdout.
+		assert.Contains(t, refused.Stdout+refused.Stderr, "uncommitted changes", action)
+	}
+	assert.Equal(t, string(session.StateActive), serverA.Show(t, tSharedID).State)
+
+	client.Hive("session", "recycle", refB).Ok(t)
+
+	client.Hive("session", "delete", "--force", refA).Ok(t)
+	gone := serverA.Hive(t, "session", "show", "--json", tSharedID).Fails(t)
+	assert.Contains(t, gone.Stdout+gone.Stderr, session.ErrNotFound.Error())
+}
+
+func TestClientCLI_SessionInfoRefusesATargetServer(t *testing.T) {
+	failed := NewClient(t).HiveOn(serverA, "session", "info", "--json").Fails(t)
+
+	// hive prints its errors to stdout.
+	assert.Contains(t, failed.Stdout+failed.Stderr, "session info reads the session of this directory on this machine")
 }
 
 func TestClientCLI_RefusesARefToAServerNotInTheConfig(t *testing.T) {
