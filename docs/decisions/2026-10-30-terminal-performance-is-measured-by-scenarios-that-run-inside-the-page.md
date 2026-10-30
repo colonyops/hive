@@ -33,6 +33,10 @@ is WKWebView, which Playwright cannot drive.
 
 ## Consequences
 
+- OS input and OS screen capture stay out of reach of these runs. Keys go through
+  xterm's real handlers as DOM events, and pixels come from reading the WebGL
+  canvas right after a draw, which is the only moment its buffer is defined. A real
+  trackpad's feel still takes a person.
 - Native numbers need a visible window, because a covered WKWebView fires no
   animation frames. Runs flag this as `hiddenDuringRun`.
 - Software GL makes the Docker lane's frame times useless as absolutes. It asserts

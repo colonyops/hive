@@ -919,6 +919,42 @@ describe('useTerminalWindows', () => {
     }
   })
 
+  it('votes at once on a lone resize, so the pane does not sit at its old grid for the debounce', async () => {
+    vi.useFakeTimers()
+    const client = fakeClient()
+    const session = open(client)
+    await session.start()
+    await flushPromises()
+    const host = mountWindow(session, '@1')
+    await vi.advanceTimersByTimeAsync(100)
+    client.resize.mockClear()
+
+    resizeHost(host, 120, 40)
+    FakeResizeObserver.instances[0].trigger()
+
+    expect(client.resize).toHaveBeenCalledWith('hive-abc', 120, 40)
+  })
+
+  it('lets a drag of resizes settle on its last size instead of voting each one', async () => {
+    vi.useFakeTimers()
+    const client = fakeClient()
+    const session = open(client)
+    await session.start()
+    await flushPromises()
+    const host = mountWindow(session, '@1')
+    await vi.advanceTimersByTimeAsync(100)
+    client.resize.mockClear()
+
+    for (const width of [110, 112, 114, 116]) {
+      resizeHost(host, width, 40)
+      FakeResizeObserver.instances[0].trigger()
+      await vi.advanceTimersByTimeAsync(10)
+    }
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(client.resize.mock.calls.map((call) => call[1])).toEqual([110, 116])
+  })
+
   it('re-votes when the scrollbar toggles or a split is zoomed, without resizing the authoritative grid', async () => {
     vi.useFakeTimers()
     const { setShowScrollbars } = useTerminalScrollbars()

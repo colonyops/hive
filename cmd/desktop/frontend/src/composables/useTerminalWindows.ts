@@ -264,6 +264,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   // tmux obeys the attach vote and would resize the session to it.
   let vote: TerminalSize | null = rememberedVote(cellMetrics())
   let resizeTimer: ReturnType<typeof setTimeout> | undefined
+  let lastResizeAt = Number.NEGATIVE_INFINITY
   let constraintTimer: ReturnType<typeof setTimeout> | undefined
   let constraintDismissed = false
   // terminalGrid.ts reads xterm's private _core, which no test against a fake
@@ -332,6 +333,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   }
 
   function createPane(windowId: string, paneId: string, grid: TerminalSize | undefined): TerminalPane {
+    const endCreate = perf.start('pane:create')
     // registerDecoration is still proposed API, and every find highlights
     // through it -- without this the first findNext throws and search is dead.
     const term = createTerminal({ allowProposedApi: true })
@@ -347,7 +349,9 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
           else term.write(data)
           return
         }
+        const endPaint = perf.start('paint:parse', { bytes: data.length })
         term.write(data, () => {
+          endPaint()
           painted.value = true
           reportParsed?.(data.length)
         })
@@ -383,6 +387,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
           term,
           send: (data) => sendInput(paneId, data),
           backlog: () => probe.backlog(),
+          received: () => probe.totalReceived(),
           webgl: () => !!panes.get(paneId)?.rendered,
           reattach: async () => {
             painted.value = false
@@ -418,6 +423,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
         }),
       ],
     })
+    endCreate()
     return { uid: nextUID++, paneId, term, scrolledUp: false }
   }
 
@@ -563,7 +569,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const state = windows.get(windowId)
     if (!state || state.host) return
     state.host = host
-    const observer = new ResizeObserver(() => scheduleVote())
+    const observer = new ResizeObserver(() => voteOnResize())
     observer.observe(host)
     state.observer = observer
     scheduleVote()
@@ -574,7 +580,9 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const state = panes.get(paneId)
     if (!found || !state || state.host) return
     state.host = host
+    const endOpen = perf.start('pane:open')
     state.term.open(host)
+    endOpen()
     state.probe.opened()
     const releasePaste = installTerminalImages(host, {
       pasteText: (text) => sendPaste(paneId, text),
@@ -621,6 +629,17 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   function scheduleVote(): void {
     clearTimeout(resizeTimer)
     resizeTimer = setTimeout(voteSize, RESIZE_DEBOUNCE_MS)
+  }
+
+  // A resize that follows none votes at once, because until tmux answers the pane
+  // shows its old grid in the new box. The debounce still closes it, so a window
+  // being dragged sends its first size, then settles on its last, and asks a TUI
+  // to redraw at each size between only as often as the debounce lets it.
+  function voteOnResize(): void {
+    const now = performance.now()
+    if (now - lastResizeAt >= RESIZE_DEBOUNCE_MS) voteSize()
+    lastResizeAt = now
+    scheduleVote()
   }
 
   // All panes share font metrics. Prefer an active-window atlas renderer because
@@ -1297,6 +1316,7 @@ function message(error: unknown, fallback: string): string {
 // A failed claim leaves state.rendered false, which is what makes showRenderer
 // try again the next time the pane is shown (ADR terminal-renderer-claimed-on-activation).
 function loadRenderer(state: PaneRuntime): void {
+  const endClaim = perf.start('renderer:claim')
   claimAtlasRenderer(
     state.term,
     (addon) => state.disposers.push(addon),
@@ -1304,6 +1324,7 @@ function loadRenderer(state: PaneRuntime): void {
       state.rendered = rendered
     },
   )
+  endClaim()
 }
 
 // Re-exported so the pane's own tests keep reaching it through the composable

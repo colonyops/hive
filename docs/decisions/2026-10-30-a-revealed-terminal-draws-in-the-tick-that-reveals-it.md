@@ -24,6 +24,8 @@ every pooled pane's output.
 
 ## Consequences
 
-- Stale frames went from 2 to 0, and a tab switch from 47 ms to 16 ms.
+- Stale frames went from 2 to 0. A tab's flip takes 3 ms and lands on the next
+  frame, 16 ms, in a real session with nvim and top behind the tabs. A switch makes
+  neither program redraw.
 - An xterm upgrade that moves these fields falls back to the flash and nothing
   worse. `switchWindow` in the perf lane asserts 0 stale frames, so it fails loudly.

@@ -1,3 +1,4 @@
+import { nextTick } from 'vue'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import { flushPerf, usePerf } from '../../composables/usePerf'
 import { collectFrames, percentile, round, type FrameSummary } from '../frameCollector'
@@ -75,11 +76,22 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+interface AtlasRenderer {
+  _canvas?: HTMLCanvasElement
+  _gl?: WebGL2RenderingContext
+}
+
+// The renderer's own canvas: a pane holds several, and asking the first one for a
+// webgl2 context either answers null on a 2D canvas or claims a blank one.
+function atlasRenderer(term: Terminal): AtlasRenderer | undefined {
+  const core = term as unknown as { _core?: { _renderService?: { _renderer?: { value?: AtlasRenderer } } } }
+  return core._core?._renderService?._renderer?.value
+}
+
 // Read straight after a draw, before the browser composites and may clear the
 // buffer: a canvas of one color holds no text, which on screen is a blank flash.
 function canvasIsBlank(term: Terminal): boolean {
-  const canvas = term.element?.querySelector('canvas')
-  const gl = canvas?.getContext('webgl2')
+  const { _canvas: canvas, _gl: gl } = atlasRenderer(term) ?? {}
   if (!canvas || !gl) return false
   const width = Math.min(canvas.width, 400)
   const height = Math.min(canvas.height, 300)
@@ -89,6 +101,54 @@ function canvasIsBlank(term: Terminal): boolean {
     if (pixels[i] !== pixels[0] || pixels[i + 1] !== pixels[1] || pixels[i + 2] !== pixels[2]) return false
   }
   return true
+}
+
+let capturedReveal: string | null = null
+
+// A data URL of the canvas as of the last draw, which is how a run shows real
+// pixels: the page cannot screenshot itself and the window may refuse the OS.
+function captureCanvas(term: Terminal): string | null {
+  return atlasRenderer(term)?._canvas?.toDataURL('image/png') ?? null
+}
+
+// The buffer is only defined right after a draw, so this asks for one and reads it
+// in the same callback.
+function captureCanvasAtNextDraw(term: Terminal): string | null {
+  let captured: string | null = null
+  const handle = term.onRender(() => {
+    captured = captureCanvas(term)
+    handle.dispose()
+  })
+  const service = (
+    term as unknown as {
+      _core?: { _renderService?: { _renderRows?: (s: number, e: number) => void; _isNextRenderRedrawOnly?: boolean } }
+    }
+  )._core?._renderService
+  if (service?._renderRows) {
+    service._isNextRenderRedrawOnly = false
+    service._renderRows(0, term.rows - 1)
+  }
+  handle.dispose()
+  return captured
+}
+
+// A draw on demand, then the check: the buffer is only defined right after one.
+function blankAfterDraw(term: Terminal): boolean {
+  let blank = false
+  const handle = term.onRender(() => {
+    blank = canvasIsBlank(term)
+  })
+  const service = (
+    term as unknown as {
+      _core?: { _renderService?: { _renderRows?: (s: number, e: number) => void; _isNextRenderRedrawOnly?: boolean } }
+    }
+  )._core?._renderService
+  if (service?._renderRows) {
+    service._isNextRenderRedrawOnly = false
+    service._renderRows(0, term.rows - 1)
+  }
+  handle.dispose()
+  return blank
 }
 
 async function settle(pane: BenchPane): Promise<void> {
@@ -420,6 +480,93 @@ const scenarios: Record<string, Scenario> = {
     }
   },
 
+  // Real full-screen programs instead of a redraw loop. `redrawBytes` is what the
+  // revealed program sent in the 300ms after a switch: more than a screenful means
+  // the switch itself made it repaint, by a resize or a focus report, which no
+  // renderer fix can hide.
+  async switchRealTui(pane, { scale = 1 }) {
+    await settle(pane)
+    const marker = nextMarker()
+    pane.send(`tmux new-window -d -n bench-top "top"; ${emitMarker(marker)}\r`)
+    await waitForMarker(pane.term, marker)
+    await sleep(300)
+    pane.send("vim -u NONE -c 'set mouse=a' -c 'help' -c 'only'\r")
+    await sleep(1200)
+
+    const redraw: number[] = []
+    const times: number[] = []
+    let blank = 0
+    let resized = 0
+    capturedReveal = null
+    for (let i = 0; i < Math.round(20 * scale); i++) {
+      const outgoing = visibleBenchPane()
+      const sizes = new Map(benchPanes().map((candidate) => [candidate, candidate.term.cols * candidate.term.rows]))
+      const before = new Map(benchPanes().map((candidate) => [candidate, candidate.received()]))
+      const startedAt = performance.now()
+      await outgoing?.nextWindow()
+      await nextFrame()
+      times.push(performance.now() - startedAt)
+      const shown = visibleBenchPane()
+      if (!shown) continue
+      await sleep(300)
+      if (blankAfterDraw(shown.term)) blank++
+      capturedReveal = captureCanvasAtNextDraw(shown.term) ?? capturedReveal
+      redraw.push(shown.received() - (before.get(shown) ?? 0))
+      if (sizes.get(shown) !== shown.term.cols * shown.term.rows) resized++
+    }
+    for (const samples of [redraw, times]) samples.sort((a, b) => a - b)
+    const vimPane = benchPanes().find((candidate) => candidate.term.buffer.active.type === 'alternate')
+    const shown = visibleBenchPane()
+    if (shown && shown !== pane) shown.send('q')
+    vimPane?.send('\x1b:qa!\r')
+    await sleep(400)
+    pane.send('tmux kill-window -t bench-top 2>/dev/null; clear\r')
+    await sleep(300)
+    return {
+      switchP50: round(percentile(times, 50)),
+      switchP95: round(percentile(times, 95)),
+      redrawBytesP50: percentile(redraw, 50),
+      redrawBytesP95: percentile(redraw, 95),
+      screenBytes: pane.term.cols * pane.term.rows,
+      resized,
+      blank,
+    }
+  },
+
+  // A real width change, the way toggling the sidebar makes one: from the click to
+  // the pane at its new grid, repainted. A TUI inside redraws on the way.
+  async resize(pane, { scale = 1 }) {
+    await settle(pane)
+    const toggle = document.querySelector<HTMLElement>('[data-testid="titlebar-toggle-sidebar"]')
+    if (!toggle) throw new Error('no sidebar toggle to resize with')
+    const times: number[] = []
+    for (let i = 0; i < Math.round(10 * scale) * 2; i++) {
+      const cols = pane.term.cols
+      const startedAt = performance.now()
+      toggle.click()
+      const settled = new Promise<boolean>((resolve) => {
+        const handle = pane.term.onResize(() => {
+          handle.dispose()
+          resolve(true)
+        })
+        setTimeout(() => {
+          handle.dispose()
+          resolve(false)
+        }, 2000)
+      })
+      const changed = await settled
+      await nextFrame()
+      if (changed && pane.term.cols !== cols) times.push(performance.now() - startedAt)
+      await sleep(250)
+    }
+    times.sort((a, b) => a - b)
+    return {
+      resizeSamples: times.length,
+      resizeP50: round(percentile(times, 50)),
+      resizeP95: round(percentile(times, 95)),
+    }
+  },
+
   // Tab to tab between two windows that are both redrawing, as agent TUIs do, so
   // the screen a hidden pane last drew is out of date by the time it comes back.
   // `freshFrameP50` counts the frames shown before the pane's current contents:
@@ -436,6 +583,7 @@ const scenarios: Record<string, Scenario> = {
 
     const stopFrames = collectFrames()
     const times: number[] = []
+    const flips: number[] = []
     const freshFrames: number[] = []
     let blankReveals = 0
     for (let i = 0; i < Math.round(30 * scale); i++) {
@@ -458,16 +606,22 @@ const scenarios: Record<string, Scenario> = {
           }),
         )
       })
-      await outgoing?.nextWindow()
-      const fresh = await Promise.race([rendered, sleep(500).then(() => -1)])
-      counting = false
+      // The tmux round trip behind the select is not what the eye waits for, so
+      // the flip and the frame it lands on are timed apart from it.
+      const selected = outgoing?.nextWindow()
+      await nextTick()
+      flips.push(performance.now() - startedAt)
       await nextFrame()
       times.push(performance.now() - startedAt)
+      await selected
+      const fresh = await Promise.race([rendered, sleep(500).then(() => -1)])
+      counting = false
       if (fresh >= 0) freshFrames.push(fresh)
       await sleep(150)
     }
     const frames = stopFrames()
     times.sort((a, b) => a - b)
+    flips.sort((a, b) => a - b)
     freshFrames.sort((a, b) => a - b)
     pane.send('\x03')
     const current = visibleBenchPane() ?? pane
@@ -476,6 +630,8 @@ const scenarios: Record<string, Scenario> = {
     current.send('tmux kill-window -t bench-tab 2>/dev/null; clear\r')
     await sleep(400)
     return {
+      flipP50: round(percentile(flips, 50)),
+      flipP95: round(percentile(flips, 95)),
       switchP50: round(percentile(times, 50)),
       switchP95: round(percentile(times, 95)),
       freshFrameP50: percentile(freshFrames, 50),
@@ -496,6 +652,9 @@ async function clickAndWaitForReveal(
   const startedAt = performance.now()
   let frame = 0
   let renderedAt = -1
+  // Only a draw makes the buffer readable, and a reveal with nothing new to draw
+  // keeps the screen it composited last, so no draw is not a blank.
+  let blank = false
   const watching = new Map<BenchPane, IDisposable>()
   const watchPanes = (): void => {
     for (const candidate of benchPanes()) {
@@ -503,7 +662,9 @@ async function clickAndWaitForReveal(
       watching.set(
         candidate,
         candidate.term.onRender(() => {
-          if (renderedAt < 0 && candidate.term.element?.offsetParent) renderedAt = frame
+          if (renderedAt >= 0 || !candidate.term.element?.offsetParent) return
+          renderedAt = frame
+          blank = canvasIsBlank(candidate.term)
         }),
       )
     }
@@ -517,7 +678,6 @@ async function clickAndWaitForReveal(
       const shown = visibleBenchPane()
       if (shown && shown !== outgoing) {
         const ms = performance.now() - startedAt
-        const blank = canvasIsBlank(shown.term)
         const revealedAt = frame
         while (renderedAt < 0 && frame - revealedAt < 30) {
           await nextFrame()
@@ -584,6 +744,8 @@ export interface TerminalBench {
   start(names?: string[], options?: BenchOptions): void
   /** Null while a run is in flight; a native js_eval call cannot wait out a long one. */
   poll(): BenchResult[] | null
+  /** What the first reveal of the last `switchRealTui` drew, as a data URL. */
+  lastReveal(): string | null
 }
 
 export const terminalBench: TerminalBench = {
@@ -597,4 +759,5 @@ export const terminalBench: TerminalBench = {
     void lastRun
   },
   poll: () => lastResults,
+  lastReveal: () => capturedReveal,
 }

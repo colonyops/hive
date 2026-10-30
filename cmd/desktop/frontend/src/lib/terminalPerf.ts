@@ -28,6 +28,8 @@ export interface PaneProbe extends IDisposable {
   readonly parsed: ((bytes: number) => void) | null
   /** The bytes off the socket that the emulator has not parsed yet. */
   backlog(): number
+  /** Every output byte off the socket so far. */
+  totalReceived(): number
   /** Call after term.open(): the wheel listener needs the element. */
   opened(): void
 }
@@ -37,6 +39,7 @@ const OFF: PaneProbe = {
   received: () => {},
   parsed: null,
   backlog: () => 0,
+  totalReceived: () => 0,
   opened: () => {},
   dispose: () => {},
 }
@@ -202,6 +205,7 @@ export function probePane(paneId: string, term: Terminal, renderer: () => boolea
       if (echo && echo.arrivedAt && !echo.parsedAt && parsed >= echo.target) echo.parsedAt = now
     },
     backlog: () => received - parsed,
+    totalReceived: () => received,
     opened() {
       wheelTarget = term.element ?? null
       wheelTarget?.addEventListener('wheel', onWheel, { capture: true, passive: true })
@@ -224,6 +228,8 @@ export interface BenchPane {
   /** Bytes to the pane as if typed, bypassing the keyboard. */
   send(data: string): void
   backlog(): number
+  /** Output bytes off the socket so far, to see what a switch makes a TUI redraw. */
+  received(): number
   webgl(): boolean
   /** Drops the stream and every emulator, then attaches again, resolving at first paint. */
   reattach(): Promise<void>

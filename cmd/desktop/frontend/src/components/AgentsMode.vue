@@ -28,6 +28,7 @@ import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { useNewSession } from '../composables/useNewSession'
+import { usePerf } from '../composables/usePerf'
 import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXtermPane'
 import { driveEventAuthor, workspaceSpaceKey, type DriveScope } from '../lib/drive'
 import { decodeFrame, encodeInputFrames, encodePasteFrames } from '../lib/agentWorkspacesClient'
@@ -106,6 +107,7 @@ const missingSkillsNotice = computed(() => {
 // ReferenceError even though the function that closes over it is hoisted.
 const paneHost = ref<HTMLElement | null>(null)
 const pane = useXtermPane(paneHost, voteSize)
+const perf = usePerf('terminal')
 const { term } = pane
 const openSessionId = ref<string | null>(null)
 const paneStatus = ref<'idle' | 'opening' | 'live'>('idle')
@@ -523,6 +525,9 @@ async function launchIntoPane(
   action: (size: { cols?: number; rows?: number }) => Promise<AgentSession>,
 ): Promise<string | null> {
   if (!client.value || paneStatus.value === 'opening') return null
+  // To the pane live on its stream. Unlike the Code view this surface rebuilds its
+  // emulator on every open, so the span is what says what that costs.
+  const endOpen = perf.start('chat:open')
   teardownPane()
   openSessionId.value = null
   paneWorkspaceDir.value = workspace
@@ -567,6 +572,7 @@ async function launchIntoPane(
     lastVote = size
     attachStream(created, result.terminalId, result.windowId, result.paneId)
     paneStatus.value = 'live'
+    endOpen()
     // A launch that lands while the user is typing elsewhere must not steal
     // that focus -- the sidebar's inline rename can be one keystroke into a
     // field opened by the same double click that started this launch.
