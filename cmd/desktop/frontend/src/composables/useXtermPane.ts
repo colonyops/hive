@@ -116,6 +116,8 @@ export function useXtermPane(host: Ref<HTMLElement | null>, onResize: () => void
   // terminal-renderer-claimed-on-activation).
   let rendered = false
   const disposers: IDisposable[] = []
+  // The outgoing terminal while its replacement gets its first paint. See retire.
+  let retired: { term: Terminal; disposers: IDisposable[] } | null = null
   // The observer keeps the grid on the box as the window changes; it is not
   // what establishes it, so it is armed by attach rather than by build.
   const observedHost = shallowRef<HTMLElement | null>(null)
@@ -204,6 +206,38 @@ export function useXtermPane(host: Ref<HTMLElement | null>, onResize: () => void
     term.value = null
     fit = null
     rendered = false
+    releaseRetired()
+  }
+
+  // Leaves the current terminal showing, cut off from its stream, while the next
+  // build opens beneath it, so a swap never passes through an empty pane. Pinned
+  // out of flow because the next one lays out in the same host.
+  function retire(): void {
+    const outgoing = term.value
+    if (!outgoing?.element) {
+      teardown()
+      return
+    }
+    releaseRetired()
+    closeStream()
+    clearTimeout(resizeTimer)
+    observedHost.value = null
+    outgoing.blur()
+    outgoing.element.style.position = 'absolute'
+    outgoing.element.style.inset = '0'
+    outgoing.element.style.zIndex = '1'
+    retired = { term: outgoing, disposers: disposers.splice(0) }
+    term.value = null
+    fit = null
+    rendered = false
+  }
+
+  function releaseRetired(): void {
+    if (!retired) return
+    const { term: outgoing, disposers: held } = retired
+    retired = null
+    for (const disposer of held) disposer.dispose()
+    outgoing.dispose()
   }
 
   return {
@@ -218,5 +252,8 @@ export function useXtermPane(host: Ref<HTMLElement | null>, onResize: () => void
     send,
     closeStream,
     teardown,
+    retire,
+    releaseRetired,
+    holding: () => retired !== null,
   }
 }

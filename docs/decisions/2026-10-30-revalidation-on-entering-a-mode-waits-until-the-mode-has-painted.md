@@ -30,3 +30,7 @@ immediate, because a first load has nothing on screen to protect.
 - Data on screen for the first 100 ms of a re-entry is the cached answer. It was
   already, since the old calls took longer than that to return.
 - A new refresh on entering a mode should watch this rather than `active`.
+- Chats swaps its terminal rather than pooling it, so the swap holds the outgoing
+  one on screen until the incoming one draws (`retire` in `useXtermPane`), capped
+  at 300 ms for a chat with an empty screen. The empty pane went from about 90 ms
+  to none, and text from 122 ms to 68 ms.

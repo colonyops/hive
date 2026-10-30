@@ -14,7 +14,7 @@ import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDocumentVisibility } from '@vueuse/core'
-import type { Terminal } from '@xterm/xterm'
+import type { IDisposable, Terminal } from '@xterm/xterm'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import AgentsSidebar from './AgentsSidebar.vue'
@@ -123,6 +123,7 @@ let paneWindowId = ''
 let panePaneId = ''
 
 const paneLaidOut = computed(() => paneStatus.value === 'opening' || term.value !== null)
+const paneHolding = ref(false)
 const paneWorkspaceName = computed(
   () => workspaces.value.find((ws) => ws.dir === paneWorkspaceDir.value)?.name || paneWorkspaceDir.value,
 )
@@ -528,7 +529,7 @@ async function launchIntoPane(
   // To the pane live on its stream. Unlike the Code view this surface rebuilds its
   // emulator on every open, so the span is what says what that costs.
   const endOpen = perf.start('chat:open')
-  teardownPane()
+  retirePane()
   openSessionId.value = null
   paneWorkspaceDir.value = workspace
   paneActionError.value = ''
@@ -595,6 +596,7 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
 
   paneWindowId = windowId
   panePaneId = paneId
+  let firstDraw: IDisposable | undefined
   pane.track(silenceDeviceReports(created))
   const graphics = installKittyGraphics(created)
   pane.track(graphics)
@@ -650,8 +652,17 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
       return
     }
     if (frame.windowId !== paneWindowId) return
-    if (frame.type === 'output') created.write(graphics.filter.rewrite(frame.data))
-    else if (frame.kind === 'exited' || frame.kind === 'error') exited()
+    if (frame.type === 'output') {
+      created.write(graphics.filter.rewrite(frame.data))
+      if (pane.holding() && !firstDraw) {
+        // Its own draw is what clears the outgoing one: both land in one frame.
+        firstDraw = created.onRender(() => {
+          firstDraw?.dispose()
+          releaseRetiredPane()
+        })
+        pane.track(firstDraw)
+      }
+    } else if (frame.kind === 'exited' || frame.kind === 'error') exited()
   }
   opened.onerror = () => fail('The session connection dropped.')
   opened.onclose = () => {
@@ -700,8 +711,34 @@ function fail(why: string): void {
   void reloadRecents()
 }
 
+// The outgoing chat stays on screen until the incoming one has drawn, as a held
+// session does in the Code view. The cap is for a chat with an empty screen, which
+// sends no first paint at all.
+const RETIRED_HOLD_MS = 300
+let retiredHoldTimer: ReturnType<typeof setTimeout> | undefined
+
+function retirePane(): void {
+  pane.retire()
+  paneHolding.value = pane.holding()
+  clearTimeout(retiredHoldTimer)
+  retiredHoldTimer = setTimeout(releaseRetiredPane, RETIRED_HOLD_MS)
+  resetPaneState()
+}
+
+function releaseRetiredPane(): void {
+  clearTimeout(retiredHoldTimer)
+  pane.releaseRetired()
+  paneHolding.value = false
+}
+
 function teardownPane(): void {
   pane.teardown()
+  clearTimeout(retiredHoldTimer)
+  paneHolding.value = false
+  resetPaneState()
+}
+
+function resetPaneState(): void {
   paneWindowId = ''
   lastVote = null
   paneError.value = ''
@@ -724,6 +761,7 @@ onMounted(() => {
   })
 })
 onBeforeUnmount(() => {
+  clearTimeout(retiredHoldTimer)
   setAgentsTreeHandles(null)
   teardownPane()
   stopActivityPolling()
@@ -851,7 +889,7 @@ onBeforeUnmount(() => {
                most of a start is spent waiting on tmux after the grid is
                built, and a bare dark pane there reads as nothing happening. -->
           <div
-            v-if="paneStatus === 'opening'"
+            v-if="paneStatus === 'opening' && !paneHolding"
             class="absolute inset-0 z-10 flex items-center justify-center bg-app"
             data-testid="agents-pane-opening"
           >

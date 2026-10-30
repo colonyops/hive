@@ -26,6 +26,8 @@ type Scenario = (pane: BenchPane, options: BenchOptions) => Promise<Record<strin
 export interface BenchOptions {
   /** Multiplies the size of every workload. */
   scale?: number
+  /** The program switchRealTui runs behind its second tab, instead of top. */
+  tuiCommand?: string
   /** Overrides the pane's smoothScrollDuration for the run, to compare settings. */
   smoothScrollMs?: number
 }
@@ -484,10 +486,10 @@ const scenarios: Record<string, Scenario> = {
   // revealed program sent in the 300ms after a switch: more than a screenful means
   // the switch itself made it repaint, by a resize or a focus report, which no
   // renderer fix can hide.
-  async switchRealTui(pane, { scale = 1 }) {
+  async switchRealTui(pane, { scale = 1, tuiCommand = 'top' }) {
     await settle(pane)
     const marker = nextMarker()
-    pane.send(`tmux new-window -d -n bench-top "top"; ${emitMarker(marker)}\r`)
+    pane.send(`tmux new-window -d -n bench-top "${tuiCommand}"; ${emitMarker(marker)}\r`)
     await waitForMarker(pane.term, marker)
     await sleep(300)
     pane.send("vim -u NONE -c 'set mouse=a' -c 'help' -c 'only'\r")

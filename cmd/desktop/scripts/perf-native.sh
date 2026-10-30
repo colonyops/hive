@@ -8,6 +8,9 @@ set -euo pipefail
 #
 #   perf-native.sh <work-dir> [--no-build]
 #
+# HIVE_PERF_HTTP_PORT and HIVE_PERF_MCP_PORT let it run beside this worktree's dev
+# app, which holds the ports in launch.env.
+#
 # Unsetting TMUX matters as much as TMUX_TMPDIR: an inherited TMUX names the
 # socket of whichever server this script runs under, and the app honors it.
 cd "$(dirname "$0")/../../.."
@@ -41,8 +44,8 @@ exec env -u TMUX -u TMUX_PANE \
   HIVE_DESKTOP_DEVELOPMENT_PERF_ENABLED=true \
   HIVE_DESKTOP_DEVELOPMENT_PPROF_ENABLED=true \
   HIVE_DESKTOP_HTTP_ENABLED=true \
-  HIVE_DESKTOP_HTTP_PORT="$(port HIVE_DESKTOP_HTTP_PORT)" \
+  HIVE_DESKTOP_HTTP_PORT="${HIVE_PERF_HTTP_PORT:-$(port HIVE_DESKTOP_HTTP_PORT)}" \
   WAILS_MCP=1 \
   WAILS_MCP_HOST=127.0.0.1 \
-  WAILS_MCP_PORT="$(port WAILS_MCP_PORT)" \
+  WAILS_MCP_PORT="${HIVE_PERF_MCP_PORT:-$(port WAILS_MCP_PORT)}" \
   "${HIVE_PERF_BINARY:-cmd/desktop/bin/hive-desktop-perf}"

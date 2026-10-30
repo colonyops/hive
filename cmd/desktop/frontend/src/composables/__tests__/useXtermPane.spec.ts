@@ -196,6 +196,53 @@ describe('useXtermPane', () => {
     expect(pane.socket()).toBeNull()
   })
 
+  it('keeps the outgoing terminal showing across a swap until it is released', () => {
+    const { pane } = setup(boxedHost())
+    const outgoing = pane.build()!
+    const element = document.createElement('div')
+    ;(outgoing as unknown as { element: HTMLElement; blur: () => void }).element = element
+    ;(outgoing as unknown as { blur: () => void }).blur = vi.fn()
+    const disposer = { dispose: vi.fn() }
+    pane.track(disposer)
+    const socket = new FakeSocket()
+    pane.attach(socket as unknown as WebSocket)
+
+    pane.retire()
+
+    expect(socket.closed).toBe(true)
+    expect(pane.term.value).toBeNull()
+    expect(pane.holding()).toBe(true)
+    expect(element.style.position).toBe('absolute')
+    expect(outgoing.dispose).not.toHaveBeenCalled()
+    expect(disposer.dispose).not.toHaveBeenCalled()
+
+    const incoming = pane.build()!
+    expect(incoming).not.toBe(outgoing)
+    pane.releaseRetired()
+
+    expect(pane.holding()).toBe(false)
+    expect(disposer.dispose).toHaveBeenCalled()
+    expect(outgoing.dispose).toHaveBeenCalled()
+    expect(incoming.dispose).not.toHaveBeenCalled()
+  })
+
+  it('lets a teardown clear a terminal that is still held', () => {
+    const { pane } = setup(boxedHost())
+    const outgoing = pane.build()!
+    ;(outgoing as unknown as { element: HTMLElement }).element = document.createElement('div')
+    ;(outgoing as unknown as { blur: () => void }).blur = vi.fn()
+    pane.retire()
+    pane.teardown()
+    expect(outgoing.dispose).toHaveBeenCalled()
+    expect(pane.holding()).toBe(false)
+  })
+
+  it('retires nothing when no terminal has opened', () => {
+    const { pane } = setup(boxedHost())
+    pane.retire()
+    expect(pane.holding()).toBe(false)
+  })
+
   it('applies a new font once its faces load and then asks for a debounced resize', async () => {
     vi.useFakeTimers()
     const { pane, onResize } = setup(boxedHost())
