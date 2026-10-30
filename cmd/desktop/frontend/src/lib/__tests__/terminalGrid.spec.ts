@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Terminal } from '@xterm/xterm'
-import { proposeGrid, renderRevealedTerminal, terminalCellSize } from '../terminalGrid'
+import { deferHiddenSelectionRedraw, proposeGrid, renderRevealedTerminal, terminalCellSize } from '../terminalGrid'
 
 const cell = { width: 10, height: 25 }
 
@@ -98,5 +98,39 @@ describe('renderRevealedTerminal', () => {
     expect(() =>
       renderRevealedTerminal({ rows: 24, element: { offsetParent: {} } } as unknown as Terminal),
     ).not.toThrow()
+  })
+})
+
+describe('deferHiddenSelectionRedraw', () => {
+  function withSelectionService(shown: boolean) {
+    const redraw = vi.fn()
+    const service = {
+      _selectionState: { start: undefined, end: undefined, columnSelectMode: false },
+      _needsSelectionRefresh: false,
+      _needsFullRefresh: false,
+      handleSelectionChanged: redraw,
+    } as Record<string, unknown>
+    const term = terminal(service, shown)
+    deferHiddenSelectionRedraw(term)
+    return { service, redraw, term }
+  }
+
+  it('keeps the selection for the reveal instead of drawing a hidden pane', () => {
+    const { service, redraw } = withSelectionService(false)
+    ;(service.handleSelectionChanged as (s: unknown, e: unknown, c: boolean) => void)([0, 1], [5, 1], true)
+    expect(redraw).not.toHaveBeenCalled()
+    expect(service._selectionState).toEqual({ start: [0, 1], end: [5, 1], columnSelectMode: true })
+    expect(service._needsSelectionRefresh).toBe(true)
+    expect(service._needsFullRefresh).toBe(true)
+  })
+
+  it('draws at once on a pane that is shown', () => {
+    const { service, redraw } = withSelectionService(true)
+    ;(service.handleSelectionChanged as (s: unknown, e: unknown, c: boolean) => void)([0, 1], [5, 1], false)
+    expect(redraw).toHaveBeenCalledWith([0, 1], [5, 1], false)
+  })
+
+  it('does nothing when xterm internals have moved', () => {
+    expect(() => deferHiddenSelectionRedraw(terminal({}))).not.toThrow()
   })
 })

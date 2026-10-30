@@ -40,6 +40,7 @@ import type { MenuEntry } from '@hive/ui/types/menu'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
 
+const props = defineProps<{ active: boolean }>()
 const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions } = useTerminalModeContext()
 const { openBlank: openNewSession } = useNewSession()
 const menus = proxyRefs(useTreeRowMenus({ windowMenuAllowed: ops.rowHasWindowActions }))
@@ -173,21 +174,37 @@ const { rails, update: settleRails } = useSelectionRail(
 
 // Motion stays off until the tree has been through a frame: on the first paint
 // every row is an enter, so the panel would animate in as one block and the
-// rails would force layout through all of it.
+// rails would force layout through all of it. A reveal is a first paint too: a
+// mode hidden with v-show measures every row at 0, so the update that shows it
+// would FLIP each row in from the top of the panel.
+let settleRun = 0
+function settleTree(): void {
+  const run = ++settleRun
+  void nextTick(() =>
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (run !== settleRun) return
+        treeSettled.value = true
+        settleRails()
+      }),
+    ),
+  )
+}
 watch(
   () => view.ready,
   (ready) => {
-    if (!ready) return
-    void nextTick(() =>
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          treeSettled.value = true
-          settleRails()
-        }),
-      ),
-    )
+    if (ready) settleTree()
   },
   { immediate: true },
+)
+// Ahead of the render, which is what has to see motion off.
+watch(
+  () => props.active,
+  (shown) => {
+    settleRun++
+    treeSettled.value = false
+    if (shown && view.ready) settleTree()
+  },
 )
 
 // Expand/collapse animates the measured height; the hooks pin the start and end

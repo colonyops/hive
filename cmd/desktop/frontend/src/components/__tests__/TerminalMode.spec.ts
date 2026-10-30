@@ -1177,6 +1177,15 @@ describe('TerminalMode', () => {
     expect(wrapper.get('[data-testid="terminal-listed-window-row"]').attributes('data-tree-key')).toBe('w:Scratch:@7')
   })
 
+  it('turns tree motion off through a reveal, so rows measured while hidden do not fly in', async () => {
+    const { wrapper } = await mountAvailable()
+    const settling = () => wrapper.find('.tree-settling').exists()
+    await wrapper.setProps({ active: false })
+    expect(settling()).toBe(true)
+    await wrapper.setProps({ active: true })
+    expect(settling()).toBe(true)
+  })
+
   it('re-enters from the caches and resumes without waiting on the probe', async () => {
     const listWindows = fakeListWindowsEach([{ windowId: '@7', name: 'agent', active: true, width: 0, height: 0 }])
     mocks.createTerminalClient.mockReturnValue({ listWindows })

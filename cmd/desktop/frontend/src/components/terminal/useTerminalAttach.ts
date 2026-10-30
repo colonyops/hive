@@ -24,6 +24,8 @@ export function useTerminalAttach(options: {
   pool: TerminalPool
   tree: TerminalTree
   active: () => boolean
+  /** True once a shown mode has painted; see usePaintedActive. */
+  revalidating: () => boolean
   onSwitch: () => void
 }) {
   const { pool, tree } = options
@@ -178,10 +180,23 @@ export function useTerminalAttach(options: {
   )
   onScopeDispose(() => setAttachedTerminalWindows(null))
 
+  // Putting a session back on screen cannot wait, but rechecking what it found
+  // can: a re-entry restores now and revalidates once the mode has painted.
   watch(
     options.active,
     (active) => {
-      if (active) void probe()
+      if (!active) return
+      if (!client.value) void probe()
+      else if (tree.attachable.value.length) restoreLastSession()
+    },
+    { immediate: true },
+  )
+  // Immediate for a mount that finds the client already resolved, which has no
+  // reveal to wait for and otherwise would never recheck.
+  watch(
+    options.revalidating,
+    (revalidating) => {
+      if (revalidating && client.value) void probe()
     },
     { immediate: true },
   )

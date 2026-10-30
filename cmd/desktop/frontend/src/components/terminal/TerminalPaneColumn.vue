@@ -31,7 +31,7 @@ import {
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { useTerminalModeContext } from './terminalModeContext'
 
-const props = defineProps<{ active: boolean }>()
+const props = defineProps<{ revalidating: boolean }>()
 const emit = defineEmits<{ 'open-tasks': []; 'session-repo-key': [repoKey: string] }>()
 
 const { pool, tree, attach, ops, sessions } = useTerminalModeContext()
@@ -103,9 +103,9 @@ function searchLabel(): string {
 const { showStatusBar } = useTerminalStatusBar()
 const { title: editorTitle, refresh: reloadEditor } = useEditorSettings()
 watch(
-  () => props.active,
-  (active) => {
-    if (active) void reloadEditor()
+  () => props.revalidating,
+  (revalidating) => {
+    if (revalidating) void reloadEditor()
   },
   { immediate: true },
 )
@@ -120,7 +120,7 @@ const {
   pullRequest: sessionPullRequest,
   pullRequestError: sessionPullRequestError,
   refresh: refreshSessionStatus,
-} = useSessionStatus(statusBarSessionId)
+} = useSessionStatus(statusBarSessionId, () => props.revalidating)
 const statusBarError = ref('')
 
 async function runStatusBarAction(action: (id: string) => Promise<void>): Promise<void> {

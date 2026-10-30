@@ -17,7 +17,13 @@ import {
 } from '../lib/terminalClient'
 import { resetTerminalFacesForTests } from '../lib/terminalFaces'
 import { scrollbarWidthFor, useTerminalScrollbars } from '../stores/useTerminalScrollbars'
-import { proposeGrid, renderRevealedTerminal, terminalCellSize, type CellSize } from '../lib/terminalGrid'
+import {
+  deferHiddenSelectionRedraw,
+  proposeGrid,
+  renderRevealedTerminal,
+  terminalCellSize,
+  type CellSize,
+} from '../lib/terminalGrid'
 import { activePaneOf, paneGrids, windowPanes } from '../lib/terminalLayout'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
 import { TerminalOutputWriter } from '../lib/terminalOutput'
@@ -583,6 +589,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const endOpen = perf.start('pane:open')
     state.term.open(host)
     endOpen()
+    deferHiddenSelectionRedraw(state.term)
     state.probe.opened()
     const releasePaste = installTerminalImages(host, {
       pasteText: (text) => sendPaste(paneId, text),

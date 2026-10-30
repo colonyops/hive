@@ -21,6 +21,7 @@ import { useTerminalTree } from './terminal/useTerminalTree'
 import { useTreeKeyboardNav } from './terminal/useTreeKeyboardNav'
 import { useWindowRename } from './terminal/useWindowRename'
 import { useNewSession } from '../composables/useNewSession'
+import { usePaintedActive } from '../composables/usePaintedActive'
 import { useSessionActions } from '../composables/useSessionActions'
 import { openLink } from '../composables/useXtermPane'
 import { spaceGroup, type DriveScope } from '../lib/drive'
@@ -48,12 +49,14 @@ const emit = defineEmits<{
   'open-drive-page': [scope: DriveScope]
 }>()
 const active = (): boolean => props.active
+const painted = usePaintedActive(active)
+const revalidating = (): boolean => painted.value
 
 const { checking, available, reason } = useTerminalAvailability()
 const { poolSize } = useTerminalPoolSize()
 
 const pool = useTerminalPool({ size: poolSize, onEvicted: () => tree.sweepListings() })
-const tree = useTerminalTree({ pool, active })
+const tree = useTerminalTree({ pool, active: revalidating })
 const codeViews = useCodeViews()
 const view = useSessionTreeView(tree, {
   filter: () => codeViews.draft.value,
@@ -61,9 +64,9 @@ const view = useSessionTreeView(tree, {
 })
 const viewMenus = useSessionViewMenus(tree)
 const rename = useWindowRename(pool.visible)
-const attach = useTerminalAttach({ pool, tree, active, onSwitch: () => (rename.windowId.value = '') })
+const attach = useTerminalAttach({ pool, tree, active, revalidating, onSwitch: () => (rename.windowId.value = '') })
 const sessions = useSessionActions({ onChanged: () => void tree.reloadSessions() })
-const ops = useTerminalSessionOps({ pool, tree, attach, confirmation: sessions.confirmation, active })
+const ops = useTerminalSessionOps({ pool, tree, attach, confirmation: sessions.confirmation, active: revalidating })
 const nav = useTreeKeyboardNav({
   groups: view.groups,
   expanded: view.expansion.expanded,
@@ -135,9 +138,9 @@ const knownTags = computed(() => {
     </div>
 
     <div v-else class="flex min-h-0 min-w-0 flex-1">
-      <TerminalSidebar v-if="!sidebarCollapsed" />
+      <TerminalSidebar v-if="!sidebarCollapsed" :active="props.active" />
       <TerminalPaneColumn
-        :active="props.active"
+        :revalidating="painted"
         @open-tasks="emit('open-tasks')"
         @session-repo-key="emit('session-repo-key', $event)"
       />

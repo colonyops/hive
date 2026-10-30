@@ -43,6 +43,9 @@ interface RenderService {
   _charSizeService?: { hasValidSize?: boolean; measure?: () => void }
   _pausedResizeTask?: { flush?: () => void }
   _renderRows?: (start: number, end: number) => void
+  _needsSelectionRefresh?: boolean
+  _selectionState?: { start: unknown; end: unknown; columnSelectMode: boolean }
+  handleSelectionChanged?: (start: unknown, end: unknown, columnSelectMode: boolean) => void
 }
 
 /**
@@ -70,4 +73,32 @@ export function renderRevealedTerminal(term: Terminal): void {
   // sync listen to it.
   service._isNextRenderRedrawOnly = false
   service._renderRows(0, term.rows - 1)
+}
+
+/**
+ * Stops a hidden terminal redrawing its rows for a selection.
+ *
+ * Every other render path honors xterm's pause, but this one calls the renderer
+ * directly. A pane holding a selection refreshes it as output trims its full
+ * scrollback, and the DOM renderer a hidden pane sits on measures width 0 inside
+ * display:none. Its cache keeps only widths above 0, so it measures every cell
+ * again: over 13000 forced measurements for one log tab during a single switch.
+ * The state is kept and drawn on reveal. An xterm whose internals moved keeps its
+ * own behavior.
+ */
+export function deferHiddenSelectionRedraw(term: Terminal): void {
+  const service = (term as unknown as { _core?: { _renderService?: RenderService } })._core?._renderService
+  const original = service?.handleSelectionChanged
+  if (!service?._selectionState || !original) return
+  service.handleSelectionChanged = (start, end, columnSelectMode) => {
+    if (term.element?.offsetParent || !service._selectionState) {
+      original.call(service, start, end, columnSelectMode)
+      return
+    }
+    service._selectionState.start = start
+    service._selectionState.end = end
+    service._selectionState.columnSelectMode = columnSelectMode
+    service._needsSelectionRefresh = true
+    service._needsFullRefresh = true
+  }
 }
