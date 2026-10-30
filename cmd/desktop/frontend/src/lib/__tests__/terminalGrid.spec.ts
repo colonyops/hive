@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Terminal } from '@xterm/xterm'
-import { proposeGrid, terminalCellSize } from '../terminalGrid'
+import { proposeGrid, renderRevealedTerminal, terminalCellSize } from '../terminalGrid'
 
 const cell = { width: 10, height: 25 }
 
@@ -42,5 +42,61 @@ describe('terminalCellSize', () => {
   it('is null when the private field it reads is missing', () => {
     expect(terminalCellSize(terminalWithCell(undefined))).toBeNull()
     expect(terminalCellSize({} as unknown as Terminal)).toBeNull()
+  })
+})
+
+function terminal(service: Record<string, unknown>, shown = true): Terminal {
+  return {
+    rows: 24,
+    element: { offsetParent: shown ? {} : null },
+    _core: { _renderService: service },
+  } as unknown as Terminal
+}
+
+describe('renderRevealedTerminal', () => {
+  it('draws a paused pane that took output while hidden, and marks the render as public', () => {
+    const renderRows = vi.fn()
+    const service = { _isPaused: true, _needsFullRefresh: true, _isNextRenderRedrawOnly: true, _renderRows: renderRows }
+    renderRevealedTerminal(terminal(service))
+    expect(renderRows).toHaveBeenCalledWith(0, 23)
+    expect(service._isPaused).toBe(false)
+    expect(service._needsFullRefresh).toBe(false)
+    // Without this xterm's public onRender stays silent, and the image layer with it.
+    expect(service._isNextRenderRedrawOnly).toBe(false)
+  })
+
+  it('applies a resize that was deferred while hidden before drawing', () => {
+    const order: string[] = []
+    renderRevealedTerminal(
+      terminal({
+        _isPaused: true,
+        _needsFullRefresh: true,
+        _pausedResizeTask: { flush: () => order.push('resize') },
+        _renderRows: () => order.push('render'),
+      }),
+    )
+    expect(order).toEqual(['resize', 'render'])
+  })
+
+  it('unpauses without drawing when nothing changed while hidden', () => {
+    const renderRows = vi.fn()
+    const service = { _isPaused: true, _needsFullRefresh: false, _renderRows: renderRows }
+    renderRevealedTerminal(terminal(service))
+    expect(renderRows).not.toHaveBeenCalled()
+    expect(service._isPaused).toBe(false)
+  })
+
+  it('leaves a pane that is still hidden paused, because nothing would unpause it again', () => {
+    const service = { _isPaused: true, _needsFullRefresh: true, _renderRows: vi.fn() }
+    renderRevealedTerminal(terminal(service, false))
+    expect(service._isPaused).toBe(true)
+    expect(service._renderRows).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when xterm internals have moved', () => {
+    expect(() => renderRevealedTerminal(terminal({}))).not.toThrow()
+    expect(() =>
+      renderRevealedTerminal({ rows: 24, element: { offsetParent: {} } } as unknown as Terminal),
+    ).not.toThrow()
   })
 })

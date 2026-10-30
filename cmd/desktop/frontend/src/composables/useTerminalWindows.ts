@@ -17,7 +17,7 @@ import {
 } from '../lib/terminalClient'
 import { resetTerminalFacesForTests } from '../lib/terminalFaces'
 import { scrollbarWidthFor, useTerminalScrollbars } from '../stores/useTerminalScrollbars'
-import { proposeGrid, terminalCellSize, type CellSize } from '../lib/terminalGrid'
+import { proposeGrid, renderRevealedTerminal, terminalCellSize, type CellSize } from '../lib/terminalGrid'
 import { activePaneOf, paneGrids, windowPanes } from '../lib/terminalLayout'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
 import { TerminalOutputWriter } from '../lib/terminalOutput'
@@ -153,6 +153,8 @@ export interface UseTerminalWindows {
   resizePane: (paneId: string, size: { width?: number; height?: number }) => Promise<void>
   focusActive: () => void
   scrollToBottom: () => void
+  /** Draws the shown window now; the caller has just made it visible. */
+  renderShown: () => void
   dispose: () => void
 }
 
@@ -467,6 +469,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     activeWindowId.value = windowId
     for (const tab of tabs.value) tab.active = tab.windowId === windowId
     showRenderers(windowId)
+    void nextTick(renderShown)
     // A search belongs to the buffer it ran against, so switching tabs re-runs
     // it rather than carrying the old window's hit count onto the new one.
     if (search.value.open) runSearch('incremental')
@@ -480,6 +483,13 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const tab = findTab(windowId)
     if (!tab) return
     for (const pane of tab.panes) showRenderer(pane.paneId)
+  }
+
+  // Inside the nextTick that follows the DOM flip, so it lands before the browser
+  // paints it: the first frame of a switch shows what the pane holds now.
+  function renderShown(): void {
+    const tab = findTab(activeWindowId.value)
+    for (const pane of tab?.panes ?? []) renderRevealedTerminal(pane.term)
   }
 
   function showRenderer(paneId: string): void {
@@ -1249,6 +1259,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     resizePane,
     focusActive,
     scrollToBottom,
+    renderShown,
     dispose,
   }
 }

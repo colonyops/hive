@@ -17,7 +17,9 @@ mkdir -p "${work_dir}/data" "${work_dir}/config/workspaces" "${work_dir}/hive"
 work_dir="$(cd "${work_dir}" && pwd)"
 # A unix socket path is capped at 104 bytes on macOS, which a work dir under a
 # long checkout path easily passes.
-tmux_dir="$(mktemp -d -t hive-perf-tmux)"
+# HIVE_PERF_TMUX_DIR reuses a server between builds so an A/B run sees the same
+# sessions.
+tmux_dir="${HIVE_PERF_TMUX_DIR:-$(mktemp -d -t hive-perf-tmux)}"
 printf '%s\n' "${tmux_dir}" >"${work_dir}/tmux-dir"
 
 if [[ "${2:-}" != "--no-build" ]]; then
@@ -43,4 +45,4 @@ exec env -u TMUX -u TMUX_PANE \
   WAILS_MCP=1 \
   WAILS_MCP_HOST=127.0.0.1 \
   WAILS_MCP_PORT="$(port WAILS_MCP_PORT)" \
-  cmd/desktop/bin/hive-desktop-perf
+  "${HIVE_PERF_BINARY:-cmd/desktop/bin/hive-desktop-perf}"

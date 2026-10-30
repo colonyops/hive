@@ -16,6 +16,7 @@ function fakeSession(slug: string) {
     start: vi.fn().mockResolvedValue(undefined),
     select: vi.fn().mockResolvedValue(undefined),
     focusActive: vi.fn(),
+    renderShown: vi.fn(),
     dispose: vi.fn(),
   }
 }

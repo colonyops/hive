@@ -231,14 +231,18 @@ export interface BenchPane {
   nextWindow(): Promise<void>
 }
 
-const benchPanes = new Map<string, BenchPane>()
+const registeredPanes = new Map<string, BenchPane>()
 
 export function registerBenchPane(pane: BenchPane): IDisposable {
   if (!perfEnabled()) return { dispose: () => {} }
-  benchPanes.set(pane.paneId, pane)
-  return { dispose: () => benchPanes.delete(pane.paneId) }
+  registeredPanes.set(pane.paneId, pane)
+  return { dispose: () => registeredPanes.delete(pane.paneId) }
 }
 
 export function visibleBenchPane(): BenchPane | undefined {
-  return [...benchPanes.values()].find((pane) => pane.term.element?.offsetParent)
+  return [...registeredPanes.values()].find((pane) => pane.term.element?.offsetParent)
+}
+
+export function benchPanes(): BenchPane[] {
+  return [...registeredPanes.values()]
 }

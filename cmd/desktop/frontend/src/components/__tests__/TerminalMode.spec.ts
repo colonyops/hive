@@ -229,6 +229,7 @@ function fakeSession() {
     focusPane: vi.fn().mockResolvedValue(undefined),
     resizePane: vi.fn().mockResolvedValue(undefined),
     focusActive: vi.fn(),
+    renderShown: vi.fn(),
     scrollToBottom: vi.fn(),
     dispose: vi.fn(),
     reportOutcome: vi.fn(),

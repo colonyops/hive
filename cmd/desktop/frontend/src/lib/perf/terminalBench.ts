@@ -1,7 +1,7 @@
-import type { Terminal } from '@xterm/xterm'
+import type { IDisposable, Terminal } from '@xterm/xterm'
 import { flushPerf, usePerf } from '../../composables/usePerf'
 import { collectFrames, percentile, round, type FrameSummary } from '../frameCollector'
-import { visibleBenchPane, type BenchPane } from '../terminalPerf'
+import { benchPanes, visibleBenchPane, type BenchPane } from '../terminalPerf'
 
 /**
  * Scripted workloads against whichever real pane is on screen, run inside the
@@ -71,6 +71,22 @@ function nextFrame(): Promise<void> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Read straight after a draw, before the browser composites and may clear the
+// buffer: a canvas of one color holds no text, which on screen is a blank flash.
+function canvasIsBlank(term: Terminal): boolean {
+  const canvas = term.element?.querySelector('canvas')
+  const gl = canvas?.getContext('webgl2')
+  if (!canvas || !gl) return false
+  const width = Math.min(canvas.width, 400)
+  const height = Math.min(canvas.height, 300)
+  const pixels = new Uint8Array(width * height * 4)
+  gl.readPixels(0, canvas.height - height, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+  for (let i = 4; i < pixels.length; i += 4) {
+    if (pixels[i] !== pixels[0] || pixels[i + 1] !== pixels[1] || pixels[i + 2] !== pixels[2]) return false
+  }
+  return true
 }
 
 async function settle(pane: BenchPane): Promise<void> {
@@ -319,29 +335,171 @@ const scenarios: Record<string, Scenario> = {
     return { attachMs: round(performance.now() - startedAt), ...stopFrames() }
   },
 
-  // Tab to tab and back, on a session with a window of history in each.
+  // Sidebar clicks between two real sessions: the first visit attaches and the
+  // rest flip a pooled pane, each with a TUI redrawing behind it. Needs two
+  // started sessions besides the scratch terminal.
+  async switchSession(_pane, { scale = 1 }) {
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-testid="terminal-session-row"][data-slug]')].filter(
+      (row) => row.dataset.slug !== 'Scratch' && row.offsetParent,
+    )
+    if (rows.length < 2) throw new Error(`need two sessions in the sidebar, found ${rows.length}`)
+    const [first, second] = rows
+    const loop = "while :; do printf '\\033[H\\033[2J%s\\n' $(date +%s); seq 1 30; sleep 0.05; done"
+
+    const cold: number[] = []
+    let coldBlank = 0
+    for (const row of [first, second]) {
+      const revealed = await clickAndWaitForReveal(row, visibleBenchPane())
+      cold.push(revealed.ms)
+      if (revealed.blank) coldBlank++
+      await sleep(600)
+      revealed.pane?.send(`${loop}\r`)
+      await sleep(500)
+    }
+
+    const stopFrames = collectFrames()
+    const warm: number[] = []
+    const warmFresh: number[] = []
+    let warmBlank = 0
+    for (let i = 0; i < Math.round(30 * scale); i++) {
+      const row = i % 2 === 0 ? first : second
+      const revealed = await clickAndWaitForReveal(row, visibleBenchPane())
+      warm.push(revealed.ms)
+      if (revealed.freshFrames >= 0) warmFresh.push(revealed.freshFrames)
+      if (revealed.blank) warmBlank++
+      await sleep(150)
+    }
+    const frames = stopFrames()
+    warm.sort((a, b) => a - b)
+    warmFresh.sort((a, b) => a - b)
+    for (const row of [first, second]) {
+      await clickAndWaitForReveal(row, visibleBenchPane())
+      visibleBenchPane()?.send('\x03')
+      await sleep(150)
+    }
+    return {
+      coldMs: round(Math.max(...cold)),
+      coldBlank,
+      warmP50: round(percentile(warm, 50)),
+      warmP95: round(percentile(warm, 95)),
+      warmBlank,
+      warmFreshFrameP50: percentile(warmFresh, 50),
+      warmFreshFrameP95: percentile(warmFresh, 95),
+      ...frames,
+    }
+  },
+
+  // Tab to tab between two windows that are both redrawing, as agent TUIs do, so
+  // the screen a hidden pane last drew is out of date by the time it comes back.
+  // `freshFrameP50` counts the frames shown before the pane's current contents:
+  // 0 means the first frame after the switch was right, and each one above that
+  // is a frame of old screen, which is the flash.
   async switchWindow(pane, { scale = 1 }) {
     await settle(pane)
+    const loop = "while :; do printf '\\033[H\\033[2J%s\\n' $(date +%s); seq 1 30; sleep 0.05; done"
     const marker = nextMarker()
-    pane.send(`tmux new-window -d -n bench-tab 'seq 1 2000; exec sh'; ${emitMarker(marker)}\r`)
+    pane.send(`tmux new-window -d -n bench-tab "${loop}"; ${emitMarker(marker)}\r`)
     await waitForMarker(pane.term, marker)
+    pane.send(`${loop}\r`)
     await sleep(800)
+
     const stopFrames = collectFrames()
     const times: number[] = []
-    for (let i = 0; i < Math.round(20 * scale); i++) {
+    const freshFrames: number[] = []
+    let blankReveals = 0
+    for (let i = 0; i < Math.round(30 * scale); i++) {
+      const outgoing = visibleBenchPane()
       const startedAt = performance.now()
-      await pane.nextWindow()
-      await nextFrame()
+      let frames = 0
+      let counting = true
+      const count = (): void => {
+        frames++
+        if (counting) requestAnimationFrame(count)
+      }
+      requestAnimationFrame(count)
+      const rendered = new Promise<number>((resolve) => {
+        const handles = benchPanes().map((candidate) =>
+          candidate.term.onRender(() => {
+            if (candidate === outgoing) return
+            for (const handle of handles) handle.dispose()
+            if (canvasIsBlank(candidate.term)) blankReveals++
+            resolve(frames)
+          }),
+        )
+      })
+      await outgoing?.nextWindow()
+      const fresh = await Promise.race([rendered, sleep(500).then(() => -1)])
+      counting = false
       await nextFrame()
       times.push(performance.now() - startedAt)
-      await sleep(120)
+      if (fresh >= 0) freshFrames.push(fresh)
+      await sleep(150)
     }
     const frames = stopFrames()
     times.sort((a, b) => a - b)
-    pane.send('tmux kill-window -t bench-tab 2>/dev/null\r')
+    freshFrames.sort((a, b) => a - b)
+    pane.send('\x03')
+    const current = visibleBenchPane() ?? pane
+    current.send('\x03')
+    await sleep(100)
+    current.send('tmux kill-window -t bench-tab 2>/dev/null; clear\r')
     await sleep(400)
-    return { switchP50: round(percentile(times, 50)), switchP95: round(percentile(times, 95)), ...frames }
+    return {
+      switchP50: round(percentile(times, 50)),
+      switchP95: round(percentile(times, 95)),
+      freshFrameP50: percentile(freshFrames, 50),
+      freshFrameP95: percentile(freshFrames, 95),
+      freshSamples: freshFrames.length,
+      blankReveals,
+      ...frames,
+    }
   },
+}
+
+// The first frame the incoming pane is on screen is the one that matters: a
+// click's feel is the time to it, and its contents are the flash or the lack of one.
+async function clickAndWaitForReveal(
+  row: HTMLElement,
+  outgoing: BenchPane | undefined,
+): Promise<{ ms: number; blank: boolean; pane: BenchPane | undefined; freshFrames: number }> {
+  const startedAt = performance.now()
+  let frame = 0
+  let renderedAt = -1
+  const watching = new Map<BenchPane, IDisposable>()
+  const watchPanes = (): void => {
+    for (const candidate of benchPanes()) {
+      if (candidate === outgoing || watching.has(candidate)) continue
+      watching.set(
+        candidate,
+        candidate.term.onRender(() => {
+          if (renderedAt < 0 && candidate.term.element?.offsetParent) renderedAt = frame
+        }),
+      )
+    }
+  }
+  watchPanes()
+  row.click()
+  try {
+    for (;;) {
+      await nextFrame()
+      watchPanes()
+      const shown = visibleBenchPane()
+      if (shown && shown !== outgoing) {
+        const ms = performance.now() - startedAt
+        const blank = canvasIsBlank(shown.term)
+        const revealedAt = frame
+        while (renderedAt < 0 && frame - revealedAt < 30) {
+          await nextFrame()
+          frame++
+        }
+        return { ms, blank, pane: shown, freshFrames: renderedAt < 0 ? -1 : Math.max(0, renderedAt - revealedAt) }
+      }
+      frame++
+      if (performance.now() - startedAt > 5000) return { ms: 5000, blank: true, pane: shown, freshFrames: -1 }
+    }
+  } finally {
+    for (const handle of watching.values()) handle.dispose()
+  }
 }
 
 let lastRun: Promise<BenchResult[]> | null = null

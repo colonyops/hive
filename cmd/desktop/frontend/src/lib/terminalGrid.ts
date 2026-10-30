@@ -35,3 +35,39 @@ export function proposeGrid(box: { width: number; height: number }, cell: CellSi
   if (cols < 1 || rows < 1) return null
   return { cols, rows }
 }
+
+interface RenderService {
+  _isPaused?: boolean
+  _needsFullRefresh?: boolean
+  _isNextRenderRedrawOnly?: boolean
+  _charSizeService?: { hasValidSize?: boolean; measure?: () => void }
+  _pausedResizeTask?: { flush?: () => void }
+  _renderRows?: (start: number, end: number) => void
+}
+
+/**
+ * Draws a terminal that has just become visible, before the browser paints it.
+ *
+ * xterm stops rendering a hidden terminal and resumes from an IntersectionObserver
+ * callback, which runs after the frame that revealed it. It then waits another
+ * animation frame to draw. A pane that took output while hidden therefore shows
+ * its old screen for two frames, which reads as a flash on a TUI that redraws.
+ * This does what that callback does, one frame sooner. The observer still runs
+ * and finds nothing left to do. An xterm whose internals moved falls back to the
+ * flash and nothing worse.
+ */
+export function renderRevealedTerminal(term: Terminal): void {
+  if (!term.element?.offsetParent) return
+  const service = (term as unknown as { _core?: { _renderService?: RenderService } })._core?._renderService
+  if (!service?._isPaused || typeof service._renderRows !== 'function') return
+  service._isPaused = false
+  // A pane opened while hidden measured nothing, so its renderer has no grid yet.
+  if (service._charSizeService && !service._charSizeService.hasValidSize) service._charSizeService.measure?.()
+  if (!service._needsFullRefresh) return
+  service._needsFullRefresh = false
+  service._pausedResizeTask?.flush?.()
+  // The public onRender is gated on this, and the image layer and the textarea
+  // sync listen to it.
+  service._isNextRenderRedrawOnly = false
+  service._renderRows(0, term.rows - 1)
+}
