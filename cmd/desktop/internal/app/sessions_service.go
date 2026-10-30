@@ -496,6 +496,23 @@ func (s *SessionsService) SessionChanges(ctx context.Context, id string, base gi
 	return changes, nil
 }
 
+// SessionFileDiffs reads the diffs of paths in the session's checkout, through
+// the session API as SessionChanges does. The caller asks for a batch because
+// each call first re-reads the change list.
+func (s *SessionsService) SessionFileDiffs(ctx context.Context, id string, base gitstatus.DiffBase, paths []string) ([]gitstatus.FileDiff, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, Errorf(KindInvalid, "session id is required")
+	}
+	diffs, err := s.sessions.SessionFileDiffs(ctx, id, base, paths)
+	if errors.Is(err, session.ErrNotFound) {
+		return nil, Wrap(err, KindNotFound, "reading diffs for session %q", id)
+	}
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "reading diffs for session %q", id)
+	}
+	return diffs, nil
+}
+
 // SessionPullRequest resolves the pull request for a branch SessionGitStatus
 // already reported. The branch is passed rather than read again: resolving it
 // costs a git subprocess the caller has just paid for, and the two halves

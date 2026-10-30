@@ -86,5 +86,20 @@ func TestSessionAPI_ReadsChangesFromTheServer(t *testing.T) {
 	changes, err := serverA.API(t).SessionChanges(t.Context(), created.ID, gitstatus.DiffBaseUncommitted)
 	require.NoError(t, err)
 	require.True(t, changes.Resolved)
-	assert.Contains(t, changes.Files, git.ChangedFile{Path: "only-on-the-server.txt", Status: git.FileStatusUntracked})
+	require.Len(t, changes.Files, 1)
+	assert.Equal(t, "only-on-the-server.txt", changes.Files[0].Path)
+	assert.Equal(t, git.FileStatusUntracked, changes.Files[0].Status)
+}
+
+func TestSessionAPI_ReadsAFileDiffFromTheServer(t *testing.T) {
+	created := serverA.CreateSession(t, "diffs")
+	serverA.Shell(t, "echo changed > "+path.Join(created.Path, "only-on-the-server.txt")).Ok(t)
+
+	diffs, err := serverA.API(t).SessionFileDiffs(t.Context(), created.ID, gitstatus.DiffBaseUncommitted,
+		[]string{"only-on-the-server.txt", "not-in-the-list.txt"})
+	require.NoError(t, err)
+	assert.Equal(t, []gitstatus.FileDiff{
+		{Path: "only-on-the-server.txt", Text: "@@ -0,0 +1,1 @@\n+changed\n"},
+		{Path: "not-in-the-list.txt", Gone: true},
+	}, diffs)
 }

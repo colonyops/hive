@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -122,4 +124,84 @@ func TestReadChangesAppliesTheReadTimeout(t *testing.T) {
 	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", defaultBranch: "main", block: true}, 1)
 	_, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffBaseBranch)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestReadFileDiffsReportsEachFileOnItsOwn(t *testing.T) {
+	t.Parallel()
+
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{
+		branch: "main", defaultBranch: "main",
+		files: []git.ChangedFile{
+			{Path: "ok.go", Status: git.FileStatusModified, Additions: 1},
+			{Path: "image.png", Status: git.FileStatusModified, Binary: true},
+			{Path: "lock.json", Status: git.FileStatusModified, Additions: 1000, Deletions: 501},
+			{Path: "data.bin", Status: git.FileStatusUntracked},
+			{Path: "pipe", Status: git.FileStatusUntracked},
+			{Path: "raced.txt", Status: git.FileStatusUntracked},
+			{Path: "big.txt", Status: git.FileStatusUntracked},
+			{Path: "broken.go", Status: git.FileStatusModified},
+		},
+		diffs: map[string]string{"ok.go": "@@ -1 +1 @@\n+x\n"},
+		diffErrs: map[string]error{
+			"data.bin":  git.ErrBinaryDiff,
+			"pipe":      git.ErrNoTextDiff,
+			"raced.txt": fs.ErrNotExist,
+			"big.txt":   git.ErrDiffTooLarge,
+			"broken.go": errors.New("exit 128"),
+		},
+	}, 1)
+
+	got, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffBaseUncommitted,
+		[]string{"ok.go", "image.png", "lock.json", "data.bin", "pipe", "raced.txt", "big.txt", "broken.go", "../../etc/passwd"})
+	require.NoError(t, err)
+	assert.Equal(t, []gitstatus.FileDiff{
+		{Path: "ok.go", Text: "@@ -1 +1 @@\n+x\n"},
+		{Path: "image.png", Binary: true},
+		{Path: "lock.json", Truncated: true},
+		{Path: "data.bin", Binary: true},
+		{Path: "pipe", Unavailable: true},
+		{Path: "raced.txt", Gone: true},
+		{Path: "big.txt", Truncated: true},
+		{Path: "broken.go", Error: "exit 128"},
+		{Path: "../../etc/passwd", Gone: true},
+	}, got)
+}
+
+func TestReadFileDiffsClipsLongLinesAndHugePatches(t *testing.T) {
+	t.Parallel()
+
+	long := "+" + strings.Repeat("x", 5000)
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{
+		branch: "main", defaultBranch: "main",
+		files: []git.ChangedFile{{Path: "long.go", Status: git.FileStatusModified}, {Path: "spread.go", Status: git.FileStatusModified}, {Path: "latin.txt", Status: git.FileStatusModified}},
+		diffs: map[string]string{
+			"long.go":   long + "\n",
+			"spread.go": strings.Repeat(" context\n", 3001),
+			"latin.txt": "+caf\xe9\n",
+		},
+	}, 1)
+
+	got, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffBaseBranch, []string{"long.go", "spread.go", "latin.txt"})
+	require.NoError(t, err)
+	assert.Len(t, strings.TrimSuffix(got[0].Text, "\n"), 4000)
+	assert.True(t, got[1].Truncated)
+	assert.Empty(t, got[1].Text)
+	assert.Equal(t, "+caf\uFFFD\n", got[2].Text)
+}
+
+func TestReadFileDiffsReportsEveryPathGoneWithNoCheckout(t *testing.T) {
+	t.Parallel()
+
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branchErr: errors.New("must not run")}, 1)
+	got, err := svc.ReadFileDiffs(t.Context(), session.Session{ID: "r", State: session.StateRecycled}, gitstatus.DiffBaseBranch, []string{"a"})
+	require.NoError(t, err)
+	assert.Equal(t, []gitstatus.FileDiff{{Path: "a", Gone: true}}, got)
+}
+
+func TestReadFileDiffsReturnsAFailedList(t *testing.T) {
+	t.Parallel()
+
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", defaultBranch: "main", filesErr: errors.New("bad HEAD")}, 1)
+	_, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffBaseBranch, []string{"a"})
+	require.ErrorContains(t, err, "bad HEAD")
 }

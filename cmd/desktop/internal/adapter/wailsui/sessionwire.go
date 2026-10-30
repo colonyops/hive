@@ -150,7 +150,8 @@ type SessionGitStatus struct {
 	Branch   string `json:"branch"`
 	Dirty    bool   `json:"dirty"`
 	Unpushed bool   `json:"unpushed"`
-	// Additions and Deletions are lines against the default branch, not HEAD.
+	// Additions and Deletions are the working tree against the merge base with
+	// the default branch.
 	Additions int `json:"additions"`
 	Deletions int `json:"deletions"`
 	// Host, Owner and Repo are the remote's coordinates, and are empty for a
@@ -181,7 +182,8 @@ func sessionGitStatusOf(s gitstatus.Status) SessionGitStatus {
 	return status
 }
 
-// ChangedFile is one row of the Git pane.
+// ChangedFile is one file in the review view. Stamp changes when the file on
+// disk does, so a held diff can be read again.
 type ChangedFile struct {
 	Path      string `json:"path"`
 	OldPath   string `json:"oldPath"`
@@ -189,9 +191,10 @@ type ChangedFile struct {
 	Additions int    `json:"additions"`
 	Deletions int    `json:"deletions"`
 	Binary    bool   `json:"binary"`
+	Stamp     string `json:"stamp"`
 }
 
-// SessionChanges is what the Git pane lists. Base is the base the read used,
+// SessionChanges is what the review view lists. Base is the base the read used,
 // which is "uncommitted" whenever BranchAvailable is false.
 type SessionChanges struct {
 	Resolved        bool          `json:"resolved"`
@@ -213,6 +216,7 @@ func sessionChangesOf(c gitstatus.Changes) SessionChanges {
 			Additions: f.Additions,
 			Deletions: f.Deletions,
 			Binary:    f.Binary,
+			Stamp:     f.Stamp,
 		})
 	}
 	return SessionChanges{
@@ -224,4 +228,24 @@ func sessionChangesOf(c gitstatus.Changes) SessionChanges {
 		Files:           files,
 		Truncated:       c.Truncated,
 	}
+}
+
+// SessionFileDiff is one file's diff. At most one state field is set, and with
+// none set Text is the unified diff.
+type SessionFileDiff struct {
+	Path        string `json:"path"`
+	Text        string `json:"text"`
+	Binary      bool   `json:"binary"`
+	Truncated   bool   `json:"truncated"`
+	Unavailable bool   `json:"unavailable"`
+	Gone        bool   `json:"gone"`
+	Error       string `json:"error"`
+}
+
+func sessionFileDiffsOf(diffs []gitstatus.FileDiff) []SessionFileDiff {
+	out := make([]SessionFileDiff, 0, len(diffs))
+	for _, d := range diffs {
+		out = append(out, SessionFileDiff(d))
+	}
+	return out
 }

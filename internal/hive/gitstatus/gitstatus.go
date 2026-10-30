@@ -27,6 +27,7 @@ type Git interface {
 	DefaultBranch(ctx context.Context, dir string) (string, error)
 	MergeBase(ctx context.Context, dir, branch string) (string, error)
 	ChangedFiles(ctx context.Context, dir, ref string) ([]git.ChangedFile, error)
+	FileDiff(ctx context.Context, dir, ref string, file git.ChangedFile) (string, error)
 }
 
 // Status is one checkout's git state.
@@ -40,7 +41,8 @@ type Status struct {
 	Branch   string
 	Dirty    bool
 	Unpushed bool
-	// Additions and Deletions are lines against the default branch, not HEAD.
+	// Additions and Deletions are the working tree against the merge base with
+	// the default branch.
 	Additions int
 	Deletions int
 	// Host, Owner and Repo are the remote's coordinates. They are empty for a

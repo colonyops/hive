@@ -88,6 +88,14 @@ func (l *Local) SessionChanges(ctx context.Context, id string, base gitstatus.Di
 	return l.engine.GitStatus().ReadChanges(ctx, sess, base)
 }
 
+func (l *Local) SessionFileDiffs(ctx context.Context, id string, base gitstatus.DiffBase, paths []string) ([]gitstatus.FileDiff, error) {
+	sess, err := l.engine.Sessions().GetSession(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return l.engine.GitStatus().ReadFileDiffs(ctx, sess, base, paths)
+}
+
 func (l *Local) StatusAvailable() bool {
 	return l.engine.Status().Available()
 }

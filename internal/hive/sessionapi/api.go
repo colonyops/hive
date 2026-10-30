@@ -41,6 +41,7 @@ type API interface {
 	CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Risk, error)
 	SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOptions, error)
 	SessionChanges(ctx context.Context, id string, base gitstatus.DiffBase) (gitstatus.Changes, error)
+	SessionFileDiffs(ctx context.Context, id string, base gitstatus.DiffBase, paths []string) ([]gitstatus.FileDiff, error)
 
 	// StatusAvailable must not block: the TUI calls it inside Update. A false
 	// answer can turn true later (the daemon client answers false until its

@@ -31,6 +31,10 @@ func (m *mockGit) MergeBase(context.Context, string, string) (string, error) { r
 func (m *mockGit) ChangedFiles(context.Context, string, string) ([]git.ChangedFile, error) {
 	return nil, nil
 }
+
+func (m *mockGit) FileDiff(context.Context, string, string, git.ChangedFile) (string, error) {
+	return "", nil
+}
 func (m *mockGit) IsValidRepo(context.Context, string) error                    { return nil }
 func (m *mockGit) CloneBare(context.Context, string, string) error              { return nil }
 func (m *mockGit) WorktreeAdd(context.Context, string, string, string) error    { return nil }

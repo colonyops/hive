@@ -87,13 +87,23 @@ func (s *SessionService) SessionGitStatus(ctx context.Context, id string) (Sessi
 }
 
 // SessionChanges lists what differs in the session's checkout against base,
-// "branch" or "uncommitted". The Git pane polls it while visible.
+// "branch" or "uncommitted". The review view polls it while open.
 func (s *SessionService) SessionChanges(ctx context.Context, id, base string) (SessionChanges, error) {
 	changes, err := s.sessions.SessionChanges(ctx, id, gitstatus.DiffBase(base))
 	if err != nil {
 		return SessionChanges{}, err
 	}
 	return sessionChangesOf(changes), nil
+}
+
+// SessionFileDiffs reads the diffs of paths against base. Only a path in the
+// current change list is read.
+func (s *SessionService) SessionFileDiffs(ctx context.Context, id, base string, paths []string) ([]SessionFileDiff, error) {
+	diffs, err := s.sessions.SessionFileDiffs(ctx, id, gitstatus.DiffBase(base), paths)
+	if err != nil {
+		return nil, err
+	}
+	return sessionFileDiffsOf(diffs), nil
 }
 
 // SessionPullRequest resolves the pull request for a branch SessionGitStatus

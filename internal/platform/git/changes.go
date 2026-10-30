@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/colonyops/hive/pkg/executil"
 )
@@ -22,6 +23,10 @@ type FileStatus string
 // ChangedFile is one path that differs from a diff's base. OldPath is set for
 // a rename. Untracked files carry no line counts, so a list's totals match
 // DiffStats and a poll reads no file contents.
+//
+// Stamp changes when the file on disk does. Line counts alone can't tell a
+// reader that its diff is stale: replacing one line with another leaves them
+// the same, and an untracked file has none. It is empty for a deleted file.
 type ChangedFile struct {
 	Path      string
 	OldPath   string
@@ -29,13 +34,31 @@ type ChangedFile struct {
 	Additions int
 	Deletions int
 	Binary    bool
+	Stamp     string
 }
+
+// FileDiff reports these instead of a diff.
+var (
+	ErrBinaryDiff   = errors.New("binary file")
+	ErrNoTextDiff   = errors.New("not a regular file")
+	ErrDiffTooLarge = errors.New("diff too large")
+)
+
+// maxDiffBytes keeps one generated file from buffering in memory. Only a file
+// with very long lines reaches it, since the line cap stops the rest first.
+const (
+	maxDiffBytes      = 2 << 20
+	binarySniffLength = 8 << 10
+)
 
 // Polled reads run beside an agent in the checkout, so they must not write
 // under .git. The flag core.fsmonitor=false also keeps a repo's hook from
 // running on each poll. Clean filters stay on: git status runs them on the
 // status bar's poll, and without them every LFS file reads as changed.
-var readFlags = []string{"--no-optional-locks", "-c", "core.fsmonitor=false"}
+//
+// Paths are literal because a file can be named [id].vue, which a pathspec would
+// read as a glob.
+var readFlags = []string{"--no-optional-locks", "--literal-pathspecs", "-c", "core.fsmonitor=false"}
 
 // color.ui=always would otherwise break the parsers.
 var diffFlags = []string{"--no-ext-diff", "--no-textconv", "--no-color"}
@@ -45,19 +68,22 @@ const readErrorBytes = 500
 // read returns stdout alone: git writes warnings to stderr, and those must not
 // reach a parser.
 func (e *Executor) read(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	return e.capture(ctx, dir, args[0], e.gitPath, slices.Concat(readFlags, args)...)
-}
-
-func (e *Executor) capture(ctx context.Context, dir, operation, cmd string, args ...string) ([]byte, error) {
 	var stdout bytes.Buffer
-	stderr := &executil.HeadWriter{Max: readErrorBytes}
-	if err := e.exec.RunDirStream(ctx, dir, &stdout, stderr, cmd, args...); err != nil {
-		if text := strings.TrimSpace(stderr.String()); text != "" {
-			return nil, fmt.Errorf("git %s: %s: %w", operation, text, err)
-		}
-		return nil, fmt.Errorf("git %s: %w", operation, err)
+	if err := e.capture(ctx, dir, args[0], &stdout, e.gitPath, slices.Concat(readFlags, args)...); err != nil {
+		return nil, err
 	}
 	return stdout.Bytes(), nil
+}
+
+func (e *Executor) capture(ctx context.Context, dir, operation string, stdout io.Writer, cmd string, args ...string) error {
+	stderr := &executil.HeadWriter{Max: readErrorBytes}
+	if err := e.exec.RunDirStream(ctx, dir, stdout, stderr, cmd, args...); err != nil {
+		if text := strings.TrimSpace(stderr.String()); text != "" {
+			return fmt.Errorf("git %s: %s: %w", operation, text, err)
+		}
+		return fmt.Errorf("git %s: %w", operation, err)
+	}
+	return nil
 }
 
 // withScratchIndex runs read with a private copy of dir's index and passes the
@@ -111,9 +137,9 @@ func copyFile(source, dest string) error {
 
 // readDiff runs git diff against the scratch index. The env program sets the
 // variable because executil.Executor has no per-command environment.
-func (e *Executor) readDiff(ctx context.Context, dir, indexEnv string, args ...string) ([]byte, error) {
+func (e *Executor) readDiff(ctx context.Context, dir, indexEnv string, stdout io.Writer, args ...string) error {
 	argv := slices.Concat([]string{indexEnv, e.gitPath}, readFlags, []string{"diff"}, diffFlags, args)
-	return e.capture(ctx, dir, "diff", "env", argv...)
+	return e.capture(ctx, dir, "diff", stdout, "env", argv...)
 }
 
 // MergeBase returns the commit where HEAD left branch. It prefers
@@ -136,14 +162,12 @@ func (e *Executor) MergeBase(ctx context.Context, dir, branch string) (string, e
 // ChangedFiles lists the working tree against ref, plus untracked files,
 // sorted by path.
 func (e *Executor) ChangedFiles(ctx context.Context, dir, ref string) ([]ChangedFile, error) {
-	var names, stats []byte
+	var names, stats bytes.Buffer
 	err := e.withScratchIndex(ctx, dir, func(indexEnv string) error {
-		var err error
-		if names, err = e.readDiff(ctx, dir, indexEnv, "--name-status", "-z", "--find-renames", ref, "--"); err != nil {
+		if err := e.readDiff(ctx, dir, indexEnv, &names, "--name-status", "-z", "--find-renames", ref, "--"); err != nil {
 			return err
 		}
-		stats, err = e.readDiff(ctx, dir, indexEnv, "--numstat", "-z", "--find-renames", ref, "--")
-		return err
+		return e.readDiff(ctx, dir, indexEnv, &stats, "--numstat", "-z", "--find-renames", ref, "--")
 	})
 	if err != nil {
 		return nil, err
@@ -153,8 +177,8 @@ func (e *Executor) ChangedFiles(ctx context.Context, dir, ref string) ([]Changed
 		return nil, err
 	}
 
-	files := parseNameStatus(names)
-	counts := parseNumstat(stats)
+	files := parseNameStatus(names.Bytes())
+	counts := parseNumstat(stats.Bytes())
 	for i := range files {
 		if count, ok := counts[files[i].Path]; ok {
 			files[i].Additions, files[i].Deletions, files[i].Binary = count.additions, count.deletions, count.binary
@@ -164,7 +188,96 @@ func (e *Executor) ChangedFiles(ctx context.Context, dir, ref string) ([]Changed
 		files = append(files, ChangedFile{Path: path, Status: FileStatusUntracked})
 	}
 	slices.SortFunc(files, func(a, b ChangedFile) int { return strings.Compare(a.Path, b.Path) })
+	for i := range files {
+		files[i].Stamp = fileStamp(dir, files[i].Path)
+	}
 	return files, nil
+}
+
+func fileStamp(dir, path string) string {
+	info, err := os.Lstat(filepath.Join(dir, path))
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d-%d", info.ModTime().UnixNano(), info.Size())
+}
+
+// FileDiff returns the unified diff of one file against ref, or ErrBinaryDiff,
+// ErrNoTextDiff or ErrDiffTooLarge. An untracked file that has vanished returns
+// an error matching fs.ErrNotExist.
+func (e *Executor) FileDiff(ctx context.Context, dir, ref string, file ChangedFile) (string, error) {
+	if file.Status == FileStatusUntracked {
+		return untrackedDiff(dir, file.Path)
+	}
+	paths := []string{file.Path}
+	if file.OldPath != "" {
+		paths = []string{file.OldPath, file.Path}
+	}
+	stdout := &executil.HeadWriter{Max: maxDiffBytes}
+	err := e.withScratchIndex(ctx, dir, func(indexEnv string) error {
+		args := slices.Concat([]string{"--find-renames", ref, "--"}, paths)
+		return e.readDiff(ctx, dir, indexEnv, stdout, args...)
+	})
+	if err != nil {
+		return "", err
+	}
+	if stdout.Truncated() {
+		return "", ErrDiffTooLarge
+	}
+	return stdout.String(), nil
+}
+
+// untrackedDiff writes the diff itself. git diff --no-index hangs on a FIFO and
+// exits 1 for both a success and a vanished file.
+func untrackedDiff(dir, path string) (string, error) {
+	full := filepath.Join(dir, path)
+	info, err := os.Lstat(full)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", ErrNoTextDiff
+	}
+	// O_NONBLOCK because the path can turn into a FIFO after the Lstat, and
+	// opening one would otherwise wait for a writer.
+	f, err := os.OpenFile(full, os.O_RDONLY|syscall.O_NONBLOCK, 0) //nolint:gosec // git listed this path inside the checkout
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	if info, err = f.Stat(); err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", ErrNoTextDiff
+	}
+	content, err := io.ReadAll(io.LimitReader(f, maxDiffBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if bytes.IndexByte(content[:min(len(content), binarySniffLength)], 0) >= 0 {
+		return "", ErrBinaryDiff
+	}
+	if len(content) > maxDiffBytes {
+		return "", ErrDiffTooLarge
+	}
+	return additionsPatch(string(content)), nil
+}
+
+func additionsPatch(content string) string {
+	if content == "" {
+		return ""
+	}
+	lines := strings.Split(strings.TrimSuffix(content, "\n"), "\n")
+	var patch strings.Builder
+	fmt.Fprintf(&patch, "@@ -0,0 +1,%d @@\n", len(lines))
+	for _, line := range lines {
+		patch.WriteString("+" + line + "\n")
+	}
+	if !strings.HasSuffix(content, "\n") {
+		patch.WriteString("\\ No newline at end of file\n")
+	}
+	return patch.String()
 }
 
 func nulFields(out []byte) []string {

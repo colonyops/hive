@@ -127,6 +127,7 @@ export type {
     SessionChanges,
     SessionCondition,
     SessionDetail,
+    SessionFileDiff,
     SessionFilter,
     SessionGitStatus,
     SessionSummary,

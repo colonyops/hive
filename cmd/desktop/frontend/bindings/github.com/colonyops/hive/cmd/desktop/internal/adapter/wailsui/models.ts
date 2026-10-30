@@ -161,7 +161,8 @@ export interface CanvasWire {
 }
 
 /**
- * ChangedFile is one row of the Git pane.
+ * ChangedFile is one file in the review view. Stamp changes when the file on
+ * disk does, so a held diff can be read again.
  */
 export interface ChangedFile {
     "path": string;
@@ -170,6 +171,7 @@ export interface ChangedFile {
     "additions": number;
     "deletions": number;
     "binary": boolean;
+    "stamp": string;
 }
 
 /**
@@ -615,7 +617,7 @@ export interface ServerSessions {
 }
 
 /**
- * SessionChanges is what the Git pane lists. Base is the base the read used,
+ * SessionChanges is what the review view lists. Base is the base the read used,
  * which is "uncommitted" whenever BranchAvailable is false.
  */
 export interface SessionChanges {
@@ -654,6 +656,20 @@ export interface SessionDetail {
     "updatedAt": string;
 }
 
+/**
+ * SessionFileDiff is one file's diff. At most one state field is set, and with
+ * none set Text is the unified diff.
+ */
+export interface SessionFileDiff {
+    "path": string;
+    "text": string;
+    "binary": boolean;
+    "truncated": boolean;
+    "unavailable": boolean;
+    "gone": boolean;
+    "error": string;
+}
+
 export interface SessionFilter {
     "match": string;
     "conditions": SessionCondition[] | null;
@@ -671,7 +687,8 @@ export interface SessionGitStatus {
     "unpushed": boolean;
 
     /**
-     * Additions and Deletions are lines against the default branch, not HEAD.
+     * Additions and Deletions are the working tree against the merge base with
+     * the default branch.
      */
     "additions": number;
     "deletions": number;

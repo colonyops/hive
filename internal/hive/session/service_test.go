@@ -137,6 +137,10 @@ func (*mockGit) MergeBase(context.Context, string, string) (string, error) { ret
 func (*mockGit) ChangedFiles(context.Context, string, string) ([]git.ChangedFile, error) {
 	return nil, nil
 }
+
+func (*mockGit) FileDiff(context.Context, string, string, git.ChangedFile) (string, error) {
+	return "", nil
+}
 func (m *mockGit) IsValidRepo(_ context.Context, _ string) error { return nil }
 
 type testMultiplexer struct{}

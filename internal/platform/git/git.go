@@ -27,7 +27,8 @@ type Git interface {
 	Branch(ctx context.Context, dir string) (string, error)
 	// DefaultBranch returns the default branch name (e.g., "main" or "master") for the repository.
 	DefaultBranch(ctx context.Context, dir string) (string, error)
-	// DiffStats returns the number of lines added and deleted compared to the default branch.
+	// DiffStats returns the lines added and deleted in the working tree against
+	// the merge base with the default branch, or against HEAD without one.
 	DiffStats(ctx context.Context, dir string) (additions, deletions int, err error)
 	// IsValidRepo checks if dir contains a valid git repository.
 	IsValidRepo(ctx context.Context, dir string) error
@@ -47,6 +48,8 @@ type Git interface {
 	MergeBase(ctx context.Context, dir, branch string) (string, error)
 	// ChangedFiles lists the working tree against ref, plus untracked files.
 	ChangedFiles(ctx context.Context, dir, ref string) ([]ChangedFile, error)
+	// FileDiff returns the unified diff of one file against ref.
+	FileDiff(ctx context.Context, dir, ref string, file ChangedFile) (string, error)
 }
 
 // RemoteIdentity returns the key under which remotes that name the same

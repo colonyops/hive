@@ -38,6 +38,7 @@ service SessionService {
   rpc Statuses(StatusesRequest) returns (StatusesResponse);
   // Changes reads the session's checkout on the machine that holds it.
   rpc Changes(ChangesRequest) returns (ChangesResponse);
+  rpc FileDiffs(FileDiffsRequest) returns (FileDiffsResponse);
 }
 
 message HelloRequest {}
@@ -344,6 +345,7 @@ message ChangedFile {
   int32 additions = 4;
   int32 deletions = 5;
   bool binary = 6;
+  string stamp = 7;
 }
 
 message ChangesRequest {
@@ -359,4 +361,24 @@ message ChangesResponse {
   bool branch_available = 5;
   repeated ChangedFile files = 6;
   bool truncated = 7;
+}
+
+message FileDiff {
+  string path = 1;
+  string text = 2;
+  bool binary = 3;
+  bool truncated = 4;
+  bool unavailable = 5;
+  bool gone = 6;
+  string error = 7;
+}
+
+message FileDiffsRequest {
+  string id = 1;
+  string base = 2;
+  repeated string paths = 3;
+}
+
+message FileDiffsResponse {
+  repeated FileDiff diffs = 1;
 }

@@ -180,6 +180,14 @@ func (s *sessionServer) Changes(ctx context.Context, req *connect.Request[daemon
 	return connect.NewResponse(wire.ChangesToProto(changes)), nil
 }
 
+func (s *sessionServer) FileDiffs(ctx context.Context, req *connect.Request[daemonv1.FileDiffsRequest]) (*connect.Response[daemonv1.FileDiffsResponse], error) {
+	diffs, err := s.api.SessionFileDiffs(ctx, req.Msg.GetId(), gitstatus.DiffBase(req.Msg.GetBase()), req.Msg.GetPaths())
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(wire.FileDiffsToProto(diffs)), nil
+}
+
 func (s *sessionServer) Statuses(ctx context.Context, req *connect.Request[daemonv1.StatusesRequest]) (*connect.Response[daemonv1.StatusesResponse], error) {
 	all, err := s.api.ListSessions(ctx)
 	if err != nil {

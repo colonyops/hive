@@ -161,7 +161,7 @@ export function Servers(): $CancellablePromise<app$0.ServerStatus[] | null> {
 
 /**
  * SessionChanges lists what differs in the session's checkout against base,
- * "branch" or "uncommitted". The Git pane polls it while visible.
+ * "branch" or "uncommitted". The review view polls it while open.
  */
 export function SessionChanges(id: string, base: string): $CancellablePromise<$models.SessionChanges> {
     return $Call.ByID(2425529358, id, base);
@@ -181,6 +181,14 @@ export function SessionDetail(id: string): $CancellablePromise<$models.SessionDe
  */
 export function SessionDraftFromActivity(metadata: { [_ in string]?: string } | null): $CancellablePromise<dispatch$0.SessionDraft> {
     return $Call.ByID(2572141453, metadata);
+}
+
+/**
+ * SessionFileDiffs reads the diffs of paths against base. Only a path in the
+ * current change list is read.
+ */
+export function SessionFileDiffs(id: string, base: string, paths: string[] | null): $CancellablePromise<$models.SessionFileDiff[] | null> {
+    return $Call.ByID(3130590133, id, base, paths);
 }
 
 /**

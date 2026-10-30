@@ -64,6 +64,10 @@ func (*mouseTestGit) MergeBase(context.Context, string, string) (string, error) 
 func (*mouseTestGit) ChangedFiles(context.Context, string, string) ([]git.ChangedFile, error) {
 	return nil, nil
 }
+
+func (*mouseTestGit) FileDiff(context.Context, string, string, git.ChangedFile) (string, error) {
+	return "", nil
+}
 func (g *mouseTestGit) IsValidRepo(_ context.Context, _ string) error          { return nil }
 func (g *mouseTestGit) CloneBare(_ context.Context, _, _ string) error         { return nil }
 func (g *mouseTestGit) WorktreeAdd(_ context.Context, _, _, _ string) error    { return nil }

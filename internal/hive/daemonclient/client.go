@@ -538,6 +538,16 @@ func (c *Client) SessionChanges(ctx context.Context, id string, base gitstatus.D
 	return wire.ChangesFromProto(resp.Msg), nil
 }
 
+func (c *Client) SessionFileDiffs(ctx context.Context, id string, base gitstatus.DiffBase, paths []string) ([]gitstatus.FileDiff, error) {
+	resp, err := retryRead(func() (*connect.Response[daemonv1.FileDiffsResponse], error) {
+		return c.sessions.FileDiffs(ctx, connect.NewRequest(&daemonv1.FileDiffsRequest{Id: id, Base: base.String(), Paths: paths}))
+	})
+	if err != nil {
+		return nil, wire.FromConnectError(err)
+	}
+	return wire.FileDiffsFromProto(resp.Msg), nil
+}
+
 // helloRetry spaces background Hellos while status is not yet known
 // available, so a daemon that was down at the first call is seen once it is
 // up.

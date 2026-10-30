@@ -4,6 +4,7 @@ package wire
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -185,12 +186,14 @@ func ChangesToProto(c gitstatus.Changes) *daemonv1.ChangesResponse {
 	files := make([]*daemonv1.ChangedFile, 0, len(c.Files))
 	for _, f := range c.Files {
 		files = append(files, &daemonv1.ChangedFile{
-			Path:      f.Path,
-			OldPath:   f.OldPath,
+			// protobuf strings refuse invalid UTF-8, and a filename can hold any bytes.
+			Path:      strings.ToValidUTF8(f.Path, "\uFFFD"),
+			OldPath:   strings.ToValidUTF8(f.OldPath, "\uFFFD"),
 			Status:    f.Status.String(),
 			Additions: int32(f.Additions), //nolint:gosec // a line count fits in int32
 			Deletions: int32(f.Deletions), //nolint:gosec // a line count fits in int32
 			Binary:    f.Binary,
+			Stamp:     f.Stamp,
 		})
 	}
 	return &daemonv1.ChangesResponse{
@@ -214,6 +217,7 @@ func ChangesFromProto(p *daemonv1.ChangesResponse) gitstatus.Changes {
 			Additions: int(f.GetAdditions()),
 			Deletions: int(f.GetDeletions()),
 			Binary:    f.GetBinary(),
+			Stamp:     f.GetStamp(),
 		})
 	}
 	return gitstatus.Changes{
@@ -225,6 +229,38 @@ func ChangesFromProto(p *daemonv1.ChangesResponse) gitstatus.Changes {
 		Files:           files,
 		Truncated:       p.GetTruncated(),
 	}
+}
+
+func FileDiffsToProto(diffs []gitstatus.FileDiff) *daemonv1.FileDiffsResponse {
+	out := make([]*daemonv1.FileDiff, 0, len(diffs))
+	for _, d := range diffs {
+		out = append(out, &daemonv1.FileDiff{
+			Path:        strings.ToValidUTF8(d.Path, "\uFFFD"),
+			Text:        d.Text,
+			Binary:      d.Binary,
+			Truncated:   d.Truncated,
+			Unavailable: d.Unavailable,
+			Gone:        d.Gone,
+			Error:       strings.ToValidUTF8(d.Error, "\uFFFD"),
+		})
+	}
+	return &daemonv1.FileDiffsResponse{Diffs: out}
+}
+
+func FileDiffsFromProto(p *daemonv1.FileDiffsResponse) []gitstatus.FileDiff {
+	out := make([]gitstatus.FileDiff, 0, len(p.GetDiffs()))
+	for _, d := range p.GetDiffs() {
+		out = append(out, gitstatus.FileDiff{
+			Path:        d.GetPath(),
+			Text:        d.GetText(),
+			Binary:      d.GetBinary(),
+			Truncated:   d.GetTruncated(),
+			Unavailable: d.GetUnavailable(),
+			Gone:        d.GetGone(),
+			Error:       d.GetError(),
+		})
+	}
+	return out
 }
 
 func LaunchOptionsFromProto(p *daemonv1.LaunchOptionsResponse) sessionsvc.LaunchOptions {

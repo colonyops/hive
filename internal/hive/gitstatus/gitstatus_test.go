@@ -42,6 +42,8 @@ type stubGit struct {
 	filesErr         error
 	onRef            func(string)
 	block            bool
+	diffs            map[string]string
+	diffErrs         map[string]error
 }
 
 func (g stubGit) Branch(context.Context, string) (string, error) { return g.branch, g.branchErr }
@@ -75,6 +77,13 @@ func (g stubGit) ChangedFiles(ctx context.Context, _, ref string) ([]git.Changed
 		g.onRef(ref)
 	}
 	return g.files, g.filesErr
+}
+
+func (g stubGit) FileDiff(_ context.Context, _, _ string, file git.ChangedFile) (string, error) {
+	if err, ok := g.diffErrs[file.Path]; ok {
+		return "", err
+	}
+	return g.diffs[file.Path], nil
 }
 
 func activeSession() session.Session {
