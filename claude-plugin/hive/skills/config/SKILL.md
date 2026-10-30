@@ -1,12 +1,12 @@
 ---
 name: config
-description: This skill should be used when the user asks to "configure hive", "setup hive for my workflow", "customize session spawn", "add tmux integration", "create custom keybindings", "add user commands", or needs guidance on hive configuration, rules, spawn commands, terminal integration, or keybindings.
+description: This skill should be used when the user asks to "configure hive", "setup hive for my workflow", "customize session windows", "add tmux integration", "create custom keybindings", "add user commands", or needs guidance on hive configuration, rules, windows, terminal integration, or keybindings.
 compatibility: claude, opencode
 ---
 
 # Config - Configure Hive for Your Workflow
 
-Set up and customize hive to match development workflows with rules, spawn commands, keybindings, and terminal integration.
+Set up and customize hive to match development workflows with rules, windows, keybindings, and terminal integration.
 
 ## Configuration File
 
@@ -65,7 +65,7 @@ rules:
 | `dir`     | string | no       | Working directory override                     |
 | `focus`   | bool   | no       | Select this window after creation              |
 
-`windows` is mutually exclusive with `spawn`/`batch_spawn`. If neither is set, the default layout (agent window + shell) is used.
+If no matching rule sets `windows`, the default layout (agent window + shell) is used. Hive ignores the old `spawn` and `batch_spawn` keys and logs a warning.
 
 ### Pattern Examples
 
@@ -82,8 +82,8 @@ Commands support Go templates with `{{ .Variable }}` syntax.
 
 | Context | Variables |
 |---------|-----------|
-| `windows`, `spawn`, `batch_spawn` | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
-| `batch_spawn`, `windows` (batch) | `.Prompt` |
+| `windows` | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
+| `windows` (batch) | `.Prompt` |
 | `recycle` | `.DefaultBranch` |
 | `usercommands.*.sh` | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`, `.Form.*` |
 

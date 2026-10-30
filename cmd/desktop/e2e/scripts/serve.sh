@@ -64,9 +64,8 @@ prepare_action_runtime() {
   git -C "${source}" push -u origin main >/dev/null
   git --git-dir="${remote}" symbolic-ref HEAD refs/heads/main
 
-  # Both spawn paths are deliberately harmless. Session creation still runs
-  # the real clone/save path, but Docker --network none never starts tmux or
-  # an agent process.
+  # The window command is deliberately harmless. Session creation still runs
+  # the real clone/save path, but no agent process starts.
   cat >"${data_dir}/hive-e2e.yaml" <<EOF
 version: "0.2.7"
 git_path: git
@@ -78,10 +77,9 @@ agents:
     command: /usr/bin/true
 rules:
   - pattern: ".*"
-    spawn:
-      - "/usr/bin/true"
-    batch_spawn:
-      - "/usr/bin/true"
+    windows:
+      - name: smoke
+        command: /usr/bin/true
 EOF
 }
 

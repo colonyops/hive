@@ -257,23 +257,6 @@ func TestSpawnConfigs(t *testing.T) {
 
 	cases := []spawnConfigCase{
 		{
-			name: "spawn commands",
-			config: `version: "0.2.4"
-git_path: git
-agents:
-  default: testbash
-  testbash:
-    command: bash
-rules:
-  - spawn:
-      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
-    batch_spawn:
-      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
-`,
-			wantSession: "spawn-cmd",
-			wantWindows: nil, // spawn manages tmux directly; window name is unpredictable
-		},
-		{
 			name: "declarative windows",
 			config: `version: "0.2.4"
 git_path: git

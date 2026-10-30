@@ -361,7 +361,7 @@ Two validation phases:
 Commands support Go templates with `shq` function for shell quoting:
 
 ```yaml
-spawn:
+commands:
   - my-script {{ .Name | shq }} {{ .Path | shq }}
 ```
 

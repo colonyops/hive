@@ -83,6 +83,10 @@ func StartRuntime(ctx context.Context, cfg *config.Config, opts RuntimeOptions) 
 		logger.Warn().Err(err).Msg("failed to extract bundled scripts")
 	}
 
+	for _, w := range cfg.RemovedSpawnWarnings() {
+		logger.Warn().Str("item", w.Item).Msg(w.Message)
+	}
+
 	database, err := OpenDB(ctx, cfg.DataDir, cfg.Database)
 	if err != nil {
 		return nil, &StartError{Step: StartStepDatabase, Err: err}

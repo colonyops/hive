@@ -38,11 +38,10 @@ func TestValidateDeep_ValidConfig(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Rules = []config.Rule{
 		{
-			Pattern:    "^https://github.com/.*",
-			Commands:   []string{"echo hello"},
-			Spawn:      []string{"echo {{.Path}}", "echo {{.Name}} {{.Slug}}"},
-			BatchSpawn: []string{"echo {{.Path}}", "echo {{.Name}} {{.Prompt}}"},
-			Recycle:    []string{"git reset --hard", "git checkout main"},
+			Pattern:  "^https://github.com/.*",
+			Commands: []string{"echo hello"},
+			Windows:  []config.WindowConfig{{Name: "agent", Command: "echo {{.Name}} {{.Prompt}}"}},
+			Recycle:  []string{"git reset --hard", "git checkout main"},
 		},
 	}
 	// With the new model, keybindings reference commands

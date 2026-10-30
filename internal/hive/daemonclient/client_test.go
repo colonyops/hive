@@ -388,7 +388,6 @@ func TestTimeoutFor(t *testing.T) {
 	assert.Equal(t, 3*time.Second, c.timeoutFor(daemonv1connect.SessionServiceRiskProcedure))
 	assert.Equal(t, 4*time.Second, c.timeoutFor(daemonv1connect.SessionServiceDeleteProcedure))
 	assert.Zero(t, c.timeoutFor(daemonv1connect.SessionServiceRenameProcedure))
-	assert.Equal(t, 2*time.Second, c.timeoutFor(daemonv1connect.SessionServiceSpawnPlanProcedure), "runs after a create, so a stuck daemon must not hang it")
 
 	c.openConns.Add(1)
 	assert.Equal(t, time.Second, c.timeoutFor(get), "has a connection")

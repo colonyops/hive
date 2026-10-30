@@ -32,10 +32,7 @@ import (
 
 const (
 	// tFixtureRepo is a bare repository with one commit on both servers.
-	tFixtureRepo = "/home/hive/repo.git"
-	// tWindowsRepo is a copy of tFixtureRepo whose rule uses the windows
-	// spawn strategy.
-	tWindowsRepo    = "/home/hive/windows.git"
+	tFixtureRepo    = "/home/hive/repo.git"
 	tCommandTimeout = 60 * time.Second
 )
 

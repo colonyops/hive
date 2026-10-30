@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
-	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -117,8 +116,8 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 	switch {
 	case f.background:
 	case app.TargetsServer():
-		showRemoteAttach(ctx, app, *sess, opts.Remote, progress)
-	case createsTmuxSession(app, opts.Remote) && canAttach():
+		showRemoteAttach(app, *sess, progress)
+	case canAttach():
 		if err := app.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(*sess), multiplexer.AttachStreams{}); err != nil {
 			return sess, fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
 		}
@@ -149,19 +148,13 @@ func checkAgent(ctx context.Context, app *app.App, agent string) error {
 }
 
 // showRemoteAttach prints how to reach a new session on a server, which the
-// CLI cannot attach to yet (#745). The server's spawn rules decide whether a
-// tmux session exists.
-func showRemoteAttach(ctx context.Context, app *app.App, sess session.Session, remote string, progress io.Writer) {
+// CLI cannot attach to yet (#745).
+func showRemoteAttach(app *app.App, sess session.Session, progress io.Writer) {
 	if progress == nil {
 		progress = os.Stderr
 	}
-	creates, err := app.SessionAPI().SpawnCreatesTmuxSession(ctx, remote)
-	if err != nil {
-		app.Logger.Debug().Err(err).Str("server", app.DefaultServer()).Msg("ask the server about its spawn rules")
-		return
-	}
 	server, ok := app.Servers.Server(app.DefaultServer())
-	if !creates || !ok {
+	if !ok {
 		return
 	}
 	cfg := server.Config()
@@ -178,13 +171,6 @@ func showRemoteAttach(ctx context.Context, app *app.App, sess session.Session, r
 func isLocalPath(remote string) bool {
 	return strings.HasPrefix(remote, "/") || strings.HasPrefix(remote, ".") ||
 		strings.HasPrefix(remote, "~") || strings.HasPrefix(remote, "file://")
-}
-
-// createsTmuxSession reports whether the spawn strategy for remote creates
-// the tmux session Target names. Legacy spawn commands run whatever the user
-// wrote, which may open a terminal tab instead, so there is nothing to attach.
-func createsTmuxSession(app *app.App, remote string) bool {
-	return hiveconfig.ResolveSpawn(app.Config.Rules, remote, false).IsWindows()
 }
 
 // canAttach reports whether a tmux client can show the new session: inside

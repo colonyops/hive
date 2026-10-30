@@ -166,7 +166,6 @@ var readProcedures = map[string]bool{
 	daemonv1connect.SessionServiceGetProcedure:           true,
 	daemonv1connect.SessionServiceRiskProcedure:          true,
 	daemonv1connect.SessionServiceLaunchOptionsProcedure: true,
-	daemonv1connect.SessionServiceSpawnPlanProcedure:     true,
 	daemonv1connect.SessionServiceStatusesProcedure:      true,
 }
 
@@ -526,16 +525,6 @@ func (c *Client) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOpt
 		return sessionsvc.LaunchOptions{}, wire.FromConnectError(err)
 	}
 	return wire.LaunchOptionsFromProto(resp.Msg), nil
-}
-
-func (c *Client) SpawnCreatesTmuxSession(ctx context.Context, remote string) (bool, error) {
-	resp, err := retryRead(func() (*connect.Response[daemonv1.SpawnPlanResponse], error) {
-		return c.sessions.SpawnPlan(ctx, connect.NewRequest(&daemonv1.SpawnPlanRequest{Remote: remote}))
-	})
-	if err != nil {
-		return false, wire.FromConnectError(err)
-	}
-	return resp.Msg.GetCreatesTmuxSession(), nil
 }
 
 // helloRetry spaces background Hellos while status is not yet known

@@ -36,7 +36,6 @@ RUN git config --global user.name fixture \
     && git clone -q /home/hive/repo.git /tmp/seed \
     && git -C /tmp/seed commit -q --allow-empty -m seed \
     && git -C /tmp/seed push -q origin main \
-    && git clone -q --bare --no-local /home/hive/repo.git /home/hive/windows.git \
     && rm -rf /tmp/seed \
     && git clone -q --no-hardlinks /home/hive/repo.git /home/hive/work
 USER root

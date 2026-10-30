@@ -49,8 +49,7 @@ Use an agent profile for sessions without a per-session agent:
 		Description: `Creates multiple agent sessions from a JSON specification.
 
 Each session in the input array is created sequentially. A terminal is
-spawned for each session using the batch_spawn commands if configured,
-otherwise falls back to spawn commands.
+created in the background for each session from the windows in config.
 
 Processing stops after 3 failures. Sessions not attempted are marked as skipped.
 
@@ -72,7 +71,7 @@ Input JSON schema:
 Fields:
   name       - Required. Session name (used in path).
   session_id - Optional. Session ID (lowercase alphanumeric, auto-generated if empty).
-  prompt     - Optional. Task prompt passed to batch_spawn via {{.Prompt}} template.
+  prompt     - Optional. Task prompt passed to windows via {{.Prompt}} template.
   remote     - Optional. Git remote URL (auto-detected from current dir if empty).
   source     - Optional. Directory to copy files from (per copy rules in config).
   agent      - Optional. Agent profile key from agents config.
@@ -209,7 +208,7 @@ func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) Batch
 		Prompt:        sess.Prompt,
 		Remote:        sess.Remote,
 		Source:        source,
-		UseBatchSpawn: true,
+		Background:    true,
 		CloneStrategy: sess.CloneStrategy,
 		AgentKey:      cmd.agentForSession(sess),
 		Tags:          sess.Tags,

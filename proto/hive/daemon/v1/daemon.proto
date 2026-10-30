@@ -33,9 +33,6 @@ service SessionService {
   rpc Prune(PruneRequest) returns (PruneResponse);
   rpc Risk(RiskRequest) returns (RiskResponse);
   rpc LaunchOptions(LaunchOptionsRequest) returns (LaunchOptionsResponse);
-  // SpawnPlan says what the daemon's spawn rules do for a repository, so a
-  // client decides to attach from the rules of the machine that spawns.
-  rpc SpawnPlan(SpawnPlanRequest) returns (SpawnPlanResponse);
   // Statuses answers from the daemon's status loop, never from a fetch of
   // its own, so every client shares one tracker.
   rpc Statuses(StatusesRequest) returns (StatusesResponse);
@@ -124,12 +121,14 @@ message GetResponse {
 // in the background, so the caller attaches itself. remote must be set and
 // source must be absolute: the daemon has its own working directory.
 message CreateRequest {
+  reserved 6;
+  reserved "use_batch_spawn";
+
   string name = 1;
   string session_id = 2;
   string prompt = 3;
   string remote = 4;
   string source = 5;
-  bool use_batch_spawn = 6;
   string clone_strategy = 7;
   bool skip_spawn = 8;
   string agent_key = 9;
@@ -252,16 +251,6 @@ message RiskResponse {
 }
 
 message LaunchOptionsRequest {}
-
-message SpawnPlanRequest {
-  string remote = 1;
-}
-
-message SpawnPlanResponse {
-  // creates_tmux_session is true when a create makes a tmux session named
-  // after the session, which a client can attach to.
-  bool creates_tmux_session = 1;
-}
 
 message LaunchRepository {
   string name = 1;

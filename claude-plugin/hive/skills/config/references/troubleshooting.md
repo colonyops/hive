@@ -35,7 +35,7 @@
 **Problem:** Variable expands to empty string
 
 **Solutions:**
-- Check variable availability: some only work in specific contexts (e.g., `.Prompt` only in `batch_spawn`)
+- Check variable availability: some only work in specific contexts (e.g., `.Prompt` only in batch sessions)
 - Verify spelling: variable names are case-sensitive
 - Check session metadata: `hive ls` shows available data
 - Use default values: `{{ .Variable | default "fallback" }}`

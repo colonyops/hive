@@ -74,9 +74,6 @@ const (
 	// SessionServiceLaunchOptionsProcedure is the fully-qualified name of the SessionService's
 	// LaunchOptions RPC.
 	SessionServiceLaunchOptionsProcedure = "/hive.daemon.v1.SessionService/LaunchOptions"
-	// SessionServiceSpawnPlanProcedure is the fully-qualified name of the SessionService's SpawnPlan
-	// RPC.
-	SessionServiceSpawnPlanProcedure = "/hive.daemon.v1.SessionService/SpawnPlan"
 	// SessionServiceStatusesProcedure is the fully-qualified name of the SessionService's Statuses RPC.
 	SessionServiceStatusesProcedure = "/hive.daemon.v1.SessionService/Statuses"
 )
@@ -249,9 +246,6 @@ type SessionServiceClient interface {
 	Prune(context.Context, *connect.Request[v1.PruneRequest]) (*connect.Response[v1.PruneResponse], error)
 	Risk(context.Context, *connect.Request[v1.RiskRequest]) (*connect.Response[v1.RiskResponse], error)
 	LaunchOptions(context.Context, *connect.Request[v1.LaunchOptionsRequest]) (*connect.Response[v1.LaunchOptionsResponse], error)
-	// SpawnPlan says what the daemon's spawn rules do for a repository, so a
-	// client decides to attach from the rules of the machine that spawns.
-	SpawnPlan(context.Context, *connect.Request[v1.SpawnPlanRequest]) (*connect.Response[v1.SpawnPlanResponse], error)
 	// Statuses answers from the daemon's status loop, never from a fetch of
 	// its own, so every client shares one tracker.
 	Statuses(context.Context, *connect.Request[v1.StatusesRequest]) (*connect.Response[v1.StatusesResponse], error)
@@ -352,12 +346,6 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("LaunchOptions")),
 			connect.WithClientOptions(opts...),
 		),
-		spawnPlan: connect.NewClient[v1.SpawnPlanRequest, v1.SpawnPlanResponse](
-			httpClient,
-			baseURL+SessionServiceSpawnPlanProcedure,
-			connect.WithSchema(sessionServiceMethods.ByName("SpawnPlan")),
-			connect.WithClientOptions(opts...),
-		),
 		statuses: connect.NewClient[v1.StatusesRequest, v1.StatusesResponse](
 			httpClient,
 			baseURL+SessionServiceStatusesProcedure,
@@ -383,7 +371,6 @@ type sessionServiceClient struct {
 	prune             *connect.Client[v1.PruneRequest, v1.PruneResponse]
 	risk              *connect.Client[v1.RiskRequest, v1.RiskResponse]
 	launchOptions     *connect.Client[v1.LaunchOptionsRequest, v1.LaunchOptionsResponse]
-	spawnPlan         *connect.Client[v1.SpawnPlanRequest, v1.SpawnPlanResponse]
 	statuses          *connect.Client[v1.StatusesRequest, v1.StatusesResponse]
 }
 
@@ -457,11 +444,6 @@ func (c *sessionServiceClient) LaunchOptions(ctx context.Context, req *connect.R
 	return c.launchOptions.CallUnary(ctx, req)
 }
 
-// SpawnPlan calls hive.daemon.v1.SessionService.SpawnPlan.
-func (c *sessionServiceClient) SpawnPlan(ctx context.Context, req *connect.Request[v1.SpawnPlanRequest]) (*connect.Response[v1.SpawnPlanResponse], error) {
-	return c.spawnPlan.CallUnary(ctx, req)
-}
-
 // Statuses calls hive.daemon.v1.SessionService.Statuses.
 func (c *sessionServiceClient) Statuses(ctx context.Context, req *connect.Request[v1.StatusesRequest]) (*connect.Response[v1.StatusesResponse], error) {
 	return c.statuses.CallUnary(ctx, req)
@@ -485,9 +467,6 @@ type SessionServiceHandler interface {
 	Prune(context.Context, *connect.Request[v1.PruneRequest]) (*connect.Response[v1.PruneResponse], error)
 	Risk(context.Context, *connect.Request[v1.RiskRequest]) (*connect.Response[v1.RiskResponse], error)
 	LaunchOptions(context.Context, *connect.Request[v1.LaunchOptionsRequest]) (*connect.Response[v1.LaunchOptionsResponse], error)
-	// SpawnPlan says what the daemon's spawn rules do for a repository, so a
-	// client decides to attach from the rules of the machine that spawns.
-	SpawnPlan(context.Context, *connect.Request[v1.SpawnPlanRequest]) (*connect.Response[v1.SpawnPlanResponse], error)
 	// Statuses answers from the daemon's status loop, never from a fetch of
 	// its own, so every client shares one tracker.
 	Statuses(context.Context, *connect.Request[v1.StatusesRequest]) (*connect.Response[v1.StatusesResponse], error)
@@ -584,12 +563,6 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("LaunchOptions")),
 		connect.WithHandlerOptions(opts...),
 	)
-	sessionServiceSpawnPlanHandler := connect.NewUnaryHandler(
-		SessionServiceSpawnPlanProcedure,
-		svc.SpawnPlan,
-		connect.WithSchema(sessionServiceMethods.ByName("SpawnPlan")),
-		connect.WithHandlerOptions(opts...),
-	)
 	sessionServiceStatusesHandler := connect.NewUnaryHandler(
 		SessionServiceStatusesProcedure,
 		svc.Statuses,
@@ -626,8 +599,6 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceRiskHandler.ServeHTTP(w, r)
 		case SessionServiceLaunchOptionsProcedure:
 			sessionServiceLaunchOptionsHandler.ServeHTTP(w, r)
-		case SessionServiceSpawnPlanProcedure:
-			sessionServiceSpawnPlanHandler.ServeHTTP(w, r)
 		case SessionServiceStatusesProcedure:
 			sessionServiceStatusesHandler.ServeHTTP(w, r)
 		default:
@@ -693,10 +664,6 @@ func (UnimplementedSessionServiceHandler) Risk(context.Context, *connect.Request
 
 func (UnimplementedSessionServiceHandler) LaunchOptions(context.Context, *connect.Request[v1.LaunchOptionsRequest]) (*connect.Response[v1.LaunchOptionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.LaunchOptions is not implemented"))
-}
-
-func (UnimplementedSessionServiceHandler) SpawnPlan(context.Context, *connect.Request[v1.SpawnPlanRequest]) (*connect.Response[v1.SpawnPlanResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.SpawnPlan is not implemented"))
 }
 
 func (UnimplementedSessionServiceHandler) Statuses(context.Context, *connect.Request[v1.StatusesRequest]) (*connect.Response[v1.StatusesResponse], error) {

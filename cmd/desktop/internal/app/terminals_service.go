@@ -135,9 +135,7 @@ func (s *TerminalsService) Attach(ctx context.Context, slug string, cols, rows i
 
 // Start spawns the tmux session slug names, from the hive session's own spawn
 // configuration, and reports whether it had to. A session tmux is already
-// running is left alone: the probe is what keeps a spawn configuration the
-// desktop cannot drive — hive's command-based `spawn:` rather than `windows:` —
-// from failing a start for a session that needs none.
+// running is left alone.
 //
 // ScratchSlug is the one slug this does not ask hive about — see startScratch.
 func (s *TerminalsService) Start(ctx context.Context, slug string) (multiplexer.LaunchResult, error) {

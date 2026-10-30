@@ -9,7 +9,6 @@ import (
 
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
-	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
 )
@@ -22,7 +21,7 @@ type SessionCreator interface {
 	AttachOrSwitch(ctx context.Context, target multiplexer.Target, streams multiplexer.AttachStreams) error
 }
 
-// SpawnData is the template context for spawn commands.
+// SpawnData is the template context for window templates.
 type SpawnData struct {
 	Path       string // Absolute path to session directory
 	Name       string // Session name (display name)
@@ -36,7 +35,6 @@ type SpawnData struct {
 // Spawner handles terminal spawning with template rendering.
 type Spawner struct {
 	log      zerolog.Logger
-	executor executil.Executor
 	renderer *tmpl.Renderer
 	tmux     SessionCreator
 	stdout   io.Writer
@@ -44,39 +42,14 @@ type Spawner struct {
 }
 
 // NewSpawner creates a new Spawner.
-func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer, tmuxClient SessionCreator, stdout, stderr io.Writer) *Spawner {
+func NewSpawner(log zerolog.Logger, renderer *tmpl.Renderer, tmuxClient SessionCreator, stdout, stderr io.Writer) *Spawner {
 	return &Spawner{
 		log:      log,
-		executor: executor,
 		renderer: renderer,
 		tmux:     tmuxClient,
 		stdout:   stdout,
 		stderr:   stderr,
 	}
-}
-
-// Spawn executes spawn commands sequentially with template rendering.
-func (s *Spawner) Spawn(ctx context.Context, commands []string, data SpawnData) error {
-	return s.SpawnWith(ctx, commands, data, s.renderer)
-}
-
-// SpawnWith executes spawn commands using the given renderer instead of the default.
-func (s *Spawner) SpawnWith(ctx context.Context, commands []string, data SpawnData, renderer *tmpl.Renderer) error {
-	for _, cmdTmpl := range commands {
-		s.log.Debug().Str("command", cmdTmpl).Msg("executing spawn command")
-
-		rendered, err := renderer.Render(cmdTmpl, data)
-		if err != nil {
-			return fmt.Errorf("render spawn command %q: %w", cmdTmpl, err)
-		}
-
-		if err := s.executor.RunStream(ctx, s.stdout, s.stderr, "sh", "-c", rendered); err != nil {
-			return fmt.Errorf("execute spawn command %q: %w", rendered, err)
-		}
-	}
-
-	s.log.Debug().Msg("spawn complete")
-	return nil
 }
 
 // SpawnWindows renders window templates and creates a tmux session.

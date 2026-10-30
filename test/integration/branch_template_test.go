@@ -16,15 +16,14 @@ import (
 )
 
 // branchTemplateConfig returns inline YAML config with a catch-all worktree rule
-// and the given branch_template. Uses spawn instead of windows so the test
-// doesn't need a running tmux server.
+// and the given branch_template.
 func branchTemplateConfig(tmpl string) string {
 	return fmt.Sprintf(`data_dir: ""
 rules:
   - clone_strategy: worktree
     branch_template: %q
-    spawn:
-      - "tmux new-session -d -s {{ .Slug | shq }} -c {{ .Path | shq }}"
+    windows:
+      - name: shell
 `, tmpl)
 }
 
@@ -69,8 +68,8 @@ func TestBranchTemplate_DefaultIsHiveSlugID(t *testing.T) {
 	h := NewHarness(t).WithConfig(`data_dir: ""
 rules:
   - clone_strategy: worktree
-    spawn:
-      - "tmux new-session -d -s {{ .Slug | shq }} -c {{ .Path | shq }}"
+    windows:
+      - name: shell
 `)
 	repo := createBareRepo(t, "bt-default-repo")
 	cleanupTmuxSession(t, "bt-default")
@@ -125,8 +124,8 @@ rules:
     branch_template: "dev/{{ .Slug }}-{{ .ID }}"
     commands:
       - "echo NAME={{ .Name | shq }} SLUG={{ .Slug }} OWNER={{ .Owner }} REPO={{ .Repo }} ID={{ .ID }} >> %s"
-    spawn:
-      - "tmux new-session -d -s {{ .Slug | shq }} -c {{ .Path | shq }}"
+    windows:
+      - name: shell
 `, outFile)
 
 	h := NewHarness(t).WithConfig(cfg)

@@ -14,16 +14,14 @@ import (
 )
 
 // worktreeConfig returns inline YAML config that sets a catch-all clone strategy via rules.
-// Includes the same tmux spawn commands as testdata/config.yaml so sessions
+// Includes the same tmux window as testdata/config.yaml so sessions
 // can be created in Docker without a pre-existing tmux session.
 func worktreeConfig(cloneStrategy string) string {
 	return fmt.Sprintf(`data_dir: ""
 rules:
   - clone_strategy: %s
-    spawn:
-      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
-    batch_spawn:
-      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
+    windows:
+      - name: shell
 `, cloneStrategy)
 }
 
@@ -85,10 +83,8 @@ func TestWorktreeRuleOverride(t *testing.T) {
 	cfg := `data_dir: ""
 rules:
   - clone_strategy: worktree
-    spawn:
-      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
-    batch_spawn:
-      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
+    windows:
+      - name: shell
 `
 	h := NewHarness(t).WithConfig(cfg)
 
@@ -105,10 +101,8 @@ func TestWorktreeRuleNoMatchFallsBackToGlobal(t *testing.T) {
 	// Rule only matches GitHub remotes — local bare repo won't match, so defaults to full
 	cfg := `data_dir: ""
 rules:
-  - spawn:
-      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
-    batch_spawn:
-      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
+  - windows:
+      - name: shell
   - pattern: "git@github.com:.*"
     clone_strategy: worktree
 `

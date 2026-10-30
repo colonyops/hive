@@ -171,14 +171,6 @@ func (s *sessionServer) LaunchOptions(ctx context.Context, _ *connect.Request[da
 	return connect.NewResponse(wire.LaunchOptionsToProto(options)), nil
 }
 
-func (s *sessionServer) SpawnPlan(ctx context.Context, req *connect.Request[daemonv1.SpawnPlanRequest]) (*connect.Response[daemonv1.SpawnPlanResponse], error) {
-	creates, err := s.api.SpawnCreatesTmuxSession(ctx, req.Msg.GetRemote())
-	if err != nil {
-		return nil, wire.ToConnectError(err)
-	}
-	return connect.NewResponse(&daemonv1.SpawnPlanResponse{CreatesTmuxSession: creates}), nil
-}
-
 func (s *sessionServer) Statuses(ctx context.Context, req *connect.Request[daemonv1.StatusesRequest]) (*connect.Response[daemonv1.StatusesResponse], error) {
 	all, err := s.api.ListSessions(ctx)
 	if err != nil {

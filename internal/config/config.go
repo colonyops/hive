@@ -237,12 +237,12 @@ type Rule struct {
 	// nil = inherit from previous rule or default (5), 0 = unlimited, >0 = limit
 	MaxRecycled *int `json:"max_recycled,omitempty" yaml:"max_recycled,omitempty"`
 	// Windows defines tmux windows to create when spawning a session.
-	// Mutually exclusive with Spawn/BatchSpawn.
 	Windows []WindowConfig `json:"windows,omitempty" yaml:"windows,omitempty"`
-	// Spawn commands to run when creating a new session (hive new).
-	Spawn []string `json:"spawn,omitempty" yaml:"spawn,omitempty"`
-	// BatchSpawn commands to run when creating a batch session (hive batch).
-	BatchSpawn []string `json:"batch_spawn,omitempty" yaml:"batch_spawn,omitempty"`
+	// RemovedSpawn and RemovedBatchSpawn hold the spawn and batch_spawn keys of
+	// an older config. Hive never runs them; they exist so Warnings can name
+	// the rule, because yaml would otherwise drop the keys without a word.
+	RemovedSpawn      []string `json:"-" yaml:"spawn,omitempty"`
+	RemovedBatchSpawn []string `json:"-" yaml:"batch_spawn,omitempty"`
 	// Recycle commands to run when recycling a session.
 	Recycle []string `json:"recycle,omitempty" yaml:"recycle,omitempty"`
 	// CloneStrategy overrides the clone strategy for matching repos ("full" or "worktree").
@@ -525,14 +525,6 @@ func (c *Config) validateWindowsBasic() error {
 			continue
 		}
 
-		// Windows and spawn/batch_spawn are mutually exclusive
-		if len(rule.Spawn) > 0 {
-			errs = errs.Append(fmt.Sprintf("rules[%d]", i), fmt.Errorf("cannot have both windows and spawn"))
-		}
-		if len(rule.BatchSpawn) > 0 {
-			errs = errs.Append(fmt.Sprintf("rules[%d]", i), fmt.Errorf("cannot have both windows and batch_spawn"))
-		}
-
 		// Each window must have a name and cannot mix command with panes.
 		for j, w := range rule.Windows {
 			field := fmt.Sprintf("rules[%d].windows[%d]", i, j)
@@ -693,22 +685,16 @@ func ValidateCloneStrategy(s string) error {
 	}
 }
 
-// SpawnStrategy holds the resolved spawn method for a session.
-// Exactly one of Windows or Commands is populated.
+// SpawnStrategy holds the tmux windows and agent resolved for a session.
 type SpawnStrategy struct {
-	Windows  []WindowConfig
-	Commands []string
-	Agent    string
+	Windows []WindowConfig
+	Agent   string
 }
 
-// IsWindows returns true if the strategy uses declarative window config.
-func (s SpawnStrategy) IsWindows() bool { return len(s.Windows) > 0 }
-
-// ResolveSpawn determines the spawn strategy for the given remote URL.
-// Rules are evaluated in order (last-match-wins). If the last matching rule
-// has windows, those are used. If it has spawn/batch_spawn commands, those are used.
-// If nothing matches, DefaultWindows() is returned.
-func ResolveSpawn(rules []Rule, remote string, batch bool) SpawnStrategy {
+// ResolveSpawn determines the spawn strategy for the given remote URL. Rules
+// are evaluated in order (last-match-wins). If no matching rule has windows,
+// DefaultWindows() is used.
+func ResolveSpawn(rules []Rule, remote string) SpawnStrategy {
 	var strategy SpawnStrategy
 	for _, rule := range rules {
 		if !rule.Matches(remote) {
@@ -717,19 +703,11 @@ func ResolveSpawn(rules []Rule, remote string, batch bool) SpawnStrategy {
 		if rule.Agent != "" {
 			strategy.Agent = rule.Agent
 		}
-		switch {
-		case len(rule.Windows) > 0:
+		if len(rule.Windows) > 0 {
 			strategy.Windows = rule.Windows
-			strategy.Commands = nil
-		case batch && len(rule.BatchSpawn) > 0:
-			strategy.Windows = nil
-			strategy.Commands = rule.BatchSpawn
-		case !batch && len(rule.Spawn) > 0:
-			strategy.Windows = nil
-			strategy.Commands = rule.Spawn
 		}
 	}
-	if !strategy.IsWindows() && len(strategy.Commands) == 0 {
+	if len(strategy.Windows) == 0 {
 		strategy.Windows = DefaultWindows()
 	}
 	return strategy

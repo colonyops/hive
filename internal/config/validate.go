@@ -13,7 +13,7 @@ import (
 	"github.com/hay-kot/criterio"
 )
 
-// SpawnTemplateData defines available fields for spawn command templates (hive new).
+// SpawnTemplateData defines available fields for rule command templates.
 type SpawnTemplateData struct {
 	Path       string // Absolute path to the session directory
 	Name       string // Session name (directory basename)
@@ -24,8 +24,8 @@ type SpawnTemplateData struct {
 	ID         string // Short random ID shared with the session directory
 }
 
-// BatchSpawnTemplateData defines available fields for batch_spawn command templates (hive batch).
-type BatchSpawnTemplateData struct {
+// WindowTemplateData defines available fields for window and pane templates.
+type WindowTemplateData struct {
 	Path       string // Absolute path to the session directory
 	Name       string // Session name (directory basename)
 	Prompt     string // User-provided prompt (batch only)
@@ -87,8 +87,26 @@ func (c *Config) Warnings() []ValidationWarning {
 		}
 	}
 
+	warnings = append(warnings, c.RemovedSpawnWarnings()...)
 	warnings = append(warnings, c.terminalConfirmWarnings()...)
 
+	return warnings
+}
+
+// RemovedSpawnWarnings names each rule that still sets spawn or batch_spawn.
+// Such a config must keep loading: the rule's other keys still apply.
+func (c *Config) RemovedSpawnWarnings() []ValidationWarning {
+	var warnings []ValidationWarning
+	for i, rule := range c.Rules {
+		if len(rule.RemovedSpawn) == 0 && len(rule.RemovedBatchSpawn) == 0 {
+			continue
+		}
+		warnings = append(warnings, ValidationWarning{
+			Category: "Rules",
+			Item:     fmt.Sprintf("rule %d", i),
+			Message:  "hive ignores spawn and batch_spawn; use windows to set the session's tmux windows",
+		})
+	}
 	return warnings
 }
 
@@ -203,17 +221,6 @@ func (c *Config) validateRules() error {
 			}
 		}
 
-		// Validate spawn templates
-		for j, cmd := range rule.Spawn {
-			if err := validateTemplate(cmd, SpawnTemplateData{}); err != nil {
-				errs = errs.Append(fmt.Sprintf("rules[%d].spawn[%d]", i, j), fmt.Errorf("template error: %w", err))
-			}
-		}
-		for j, cmd := range rule.BatchSpawn {
-			if err := validateTemplate(cmd, BatchSpawnTemplateData{}); err != nil {
-				errs = errs.Append(fmt.Sprintf("rules[%d].batch_spawn[%d]", i, j), fmt.Errorf("template error: %w", err))
-			}
-		}
 		// Validate recycle templates
 		for j, cmd := range rule.Recycle {
 			if err := validateTemplate(cmd, RecycleTemplateData{}); err != nil {
@@ -223,33 +230,33 @@ func (c *Config) validateRules() error {
 		// Validate window templates
 		for j, w := range rule.Windows {
 			prefix := fmt.Sprintf("rules[%d].windows[%d]", i, j)
-			if err := validateTemplate(w.Name, BatchSpawnTemplateData{}); err != nil {
+			if err := validateTemplate(w.Name, WindowTemplateData{}); err != nil {
 				errs = errs.Append(prefix+".name", fmt.Errorf("template error: %w", err))
 			}
 			if w.Command != "" {
-				if err := validateTemplate(w.Command, BatchSpawnTemplateData{}); err != nil {
+				if err := validateTemplate(w.Command, WindowTemplateData{}); err != nil {
 					errs = errs.Append(prefix+".command", fmt.Errorf("template error: %w", err))
 				}
 			}
 			if w.Dir != "" {
-				if err := validateTemplate(w.Dir, BatchSpawnTemplateData{}); err != nil {
+				if err := validateTemplate(w.Dir, WindowTemplateData{}); err != nil {
 					errs = errs.Append(prefix+".dir", fmt.Errorf("template error: %w", err))
 				}
 			}
 			for k, p := range w.Panes {
 				panePrefix := fmt.Sprintf("%s.panes[%d]", prefix, k)
 				if p.Command != "" {
-					if err := validateTemplate(p.Command, BatchSpawnTemplateData{}); err != nil {
+					if err := validateTemplate(p.Command, WindowTemplateData{}); err != nil {
 						errs = errs.Append(panePrefix+".command", fmt.Errorf("template error: %w", err))
 					}
 				}
 				if p.Dir != "" {
-					if err := validateTemplate(p.Dir, BatchSpawnTemplateData{}); err != nil {
+					if err := validateTemplate(p.Dir, WindowTemplateData{}); err != nil {
 						errs = errs.Append(panePrefix+".dir", fmt.Errorf("template error: %w", err))
 					}
 				}
 				if p.Size != "" {
-					if err := validateTemplate(p.Size, BatchSpawnTemplateData{}); err != nil {
+					if err := validateTemplate(p.Size, WindowTemplateData{}); err != nil {
 						errs = errs.Append(panePrefix+".size", fmt.Errorf("template error: %w", err))
 					}
 				}

@@ -102,8 +102,7 @@ original location.
 Images that Pi draws with the Kitty graphics protocol show in Chats, Code
 panes, and pop-up terminals. Hive Desktop sets `PI_IMAGE_PROTOCOL=kitty` on the
 chats, sessions, agent windows, and pop-ups it starts. A session started from
-the hive CLI, or from a rule that uses `spawn:` commands instead of `windows:`,
-does not get it: set `PI_IMAGE_PROTOCOL=kitty` in that session's environment
+the hive CLI does not get it: set `PI_IMAGE_PROTOCOL=kitty` in that session's environment
 yourself.
 
 When you reopen a session or the terminal resyncs, Hive narrows the window by

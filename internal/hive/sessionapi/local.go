@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 
-	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
@@ -78,10 +77,6 @@ func (l *Local) CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Ris
 
 func (l *Local) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOptions, error) {
 	return l.engine.Sessions().SessionLaunchOptions(ctx)
-}
-
-func (l *Local) SpawnCreatesTmuxSession(_ context.Context, remote string) (bool, error) {
-	return config.ResolveSpawn(l.engine.Config().Rules, remote, false).IsWindows(), nil
 }
 
 func (l *Local) StatusAvailable() bool {
