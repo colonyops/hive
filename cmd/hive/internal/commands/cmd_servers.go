@@ -164,7 +164,7 @@ func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 	}
 	server, ok := cmd.app.Servers.Server(name)
 	if !ok {
-		return fmt.Errorf("no server named %q under servers: in config.yaml", name)
+		return fmt.Errorf("unknown server %q: it is not under servers: in config.yaml", name)
 	}
 	ctx, cancel := context.WithTimeout(ctx, serverProbeTimeout)
 	defer cancel()

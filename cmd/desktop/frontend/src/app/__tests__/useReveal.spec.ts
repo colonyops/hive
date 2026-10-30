@@ -155,6 +155,9 @@ describe('useReveal', () => {
     await open({ area: 'code', slug: 'web', canvas: '1' })
     expect(push).toHaveBeenLastCalledWith({ name: 'terminal', params: { slug: 'web' }, query: { doc: '1' } })
 
+    await open({ area: 'code', slug: 'web', server: 'local' })
+    expect(push).toHaveBeenLastCalledWith({ name: 'terminal', params: { slug: 'web' }, query: {} })
+
     await open({ area: 'inbox', profile: 'work', item: 7 })
     expect(push).toHaveBeenLastCalledWith({
       name: 'feed',

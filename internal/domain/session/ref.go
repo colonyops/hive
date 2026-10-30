@@ -12,14 +12,16 @@ const LocalServer = "local"
 
 var serverNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
-// ValidateServerName checks a name under servers:. The name must not hold
-// the Ref separator and must not be LocalServer.
+// ValidateServerName checks a name under servers:. A name is letters,
+// digits, and _ . -, starts with a letter or digit, and is not LocalServer,
+// so a "<server>:<id>" Ref stays one plain argument on a command line and in
+// a hive:// link.
 func ValidateServerName(name string) error {
 	switch {
 	case name == LocalServer:
 		return fmt.Errorf("%q names this machine; choose another name", LocalServer)
 	case !serverNamePattern.MatchString(name):
-		return fmt.Errorf("%q: use letters, digits, and _ . - only", name)
+		return fmt.Errorf("%q: start with a letter or digit, then letters, digits, _ . -", name)
 	}
 	return nil
 }
@@ -29,10 +31,6 @@ func ValidateServerName(name string) error {
 type Ref struct {
 	Server string
 	ID     string
-}
-
-func LocalRef(id string) Ref {
-	return Ref{Server: LocalServer, ID: id}
 }
 
 // ParseRef reads "<server>:<id>", or a bare id for a session on
@@ -51,14 +49,10 @@ func ParseRef(s, defaultServer string) (Ref, error) {
 	return Ref{Server: server, ID: id}, nil
 }
 
-func (r Ref) IsLocal() bool {
-	return r.Server == LocalServer
-}
-
 // String is the form ParseRef reads. A local session prints as its bare id,
 // so local output does not change.
 func (r Ref) String() string {
-	if r.IsLocal() {
+	if r.Server == LocalServer {
 		return r.ID
 	}
 	return r.Server + ":" + r.ID

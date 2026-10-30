@@ -31,12 +31,12 @@ func TestParseRef(t *testing.T) {
 }
 
 func TestRefStringRoundTrips(t *testing.T) {
-	for _, ref := range []Ref{LocalRef("abc123"), {Server: "box", ID: "abc123"}} {
+	for _, ref := range []Ref{{Server: LocalServer, ID: "abc123"}, {Server: "box", ID: "abc123"}} {
 		parsed, err := ParseRef(ref.String(), LocalServer)
 		require.NoError(t, err)
 		assert.Equal(t, ref, parsed)
 	}
-	assert.Equal(t, "abc123", LocalRef("abc123").String())
+	assert.Equal(t, "abc123", Ref{Server: LocalServer, ID: "abc123"}.String())
 }
 
 func TestParseRefPutsABareIDOnTheDefaultServer(t *testing.T) {

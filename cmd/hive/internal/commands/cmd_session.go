@@ -682,7 +682,7 @@ func (cmd *SessionCmd) resolve(arg string) (session.Ref, sessionapi.API, error) 
 	if err != nil {
 		return session.Ref{}, nil, err
 	}
-	api, err := cmd.app.Servers.API(ref.Server)
+	api, err := cmd.app.ServerAPI(ref.Server)
 	if err != nil {
 		return session.Ref{}, nil, err
 	}

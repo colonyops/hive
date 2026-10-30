@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -111,14 +112,34 @@ func (a *App) SessionAPI() sessionapi.API {
 // TargetServer points SessionAPI at the daemon on a server under servers:,
 // so session commands act on that server's sessions instead of local ones.
 func (a *App) TargetServer(name string) error {
-	server, ok := a.Servers.Server(name)
-	if !ok {
-		return fmt.Errorf("no server named %q under servers: in config.yaml", name)
+	if name == session.LocalServer {
+		return fmt.Errorf("--target-server %q names this machine; omit the flag", name)
 	}
-	server.CopyStderrTo(os.Stderr)
-	a.sessions = server.Client()
+	api, err := a.ServerAPI(name)
+	if err != nil {
+		return err
+	}
+	a.sessions = api
 	a.targetServer = name
 	return nil
+}
+
+// ServerAPI is the session API of the named server; session.LocalServer
+// names this machine. A server's ssh errors go to stderr, since a failed ssh
+// otherwise shows only as a closed connection.
+func (a *App) ServerAPI(name string) (sessionapi.API, error) {
+	if name == session.LocalServer {
+		if local := a.Servers.Local(); local != nil {
+			return local, nil
+		}
+		return nil, errors.New("this command has no local session API")
+	}
+	server, ok := a.Servers.Server(name)
+	if !ok {
+		return nil, fmt.Errorf("unknown server %q: it is not under servers: in config.yaml", name)
+	}
+	server.CopyStderrTo(os.Stderr)
+	return server.Client(), nil
 }
 
 // DefaultServer is the server that SessionAPI reaches and that a bare
