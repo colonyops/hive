@@ -2,8 +2,17 @@
 // Every changed file's diff in one scroll. CodeView owns the scroller and keeps
 // only the lines near the viewport in the DOM (ADR the-changes-view-renders-through-pierre-diffs).
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { CodeView, type CodeViewDiffItem, type CodeViewOptions, type PostRenderPhase } from '@pierre/diffs'
+import { useEventListener } from '@vueuse/core'
+import {
+  CodeView,
+  type CodeViewDiffItem,
+  type CodeViewOptions,
+  type LineAnnotation,
+  type PostRenderPhase,
+  type SelectedLineRange,
+} from '@pierre/diffs'
 import { useHiveUiPlatform } from '@hive/ui/platform'
+import DiffCommentCard from './DiffCommentCard.vue'
 import DiffFileHeader from './DiffFileHeader.vue'
 import type { DiffEntry } from '../../composables/useFileDiffs'
 import { diffThemeName, diffWorkerPool } from '../../lib/diffHighlight'
@@ -15,6 +24,10 @@ import {
   parseFileDiff,
   type DiffMode,
 } from '../../lib/diffItems'
+import type { DiffSearchMatch, DiffSide } from '../../lib/diffReview'
+import { clearSearchPaint, paintSearch, SEARCH_HIGHLIGHT_CSS } from '../../lib/diffSearchPaint'
+import { diffTextSelection, type DiffLineSelection } from '../../lib/diffSelection'
+import type { ChangesComment } from '../../stores/useChangesReview'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
@@ -26,12 +39,22 @@ const props = defineProps<{
   viewedPaths: ReadonlySet<string>
   current: string | null
   mode: DiffMode
+  /** The comments to draw under their lines, by file. */
+  comments: ReadonlyMap<string, readonly ChangesComment[]>
+  isOutdated: (comment: ChangesComment) => boolean
+  searchQuery: string
+  activeMatch: DiffSearchMatch | null
 }>()
 const emit = defineEmits<{
   'update:current': [path: string]
   fold: [file: ChangedFile]
   'toggle-viewed': [file: ChangedFile]
   'open-editor': []
+  /** The user selected lines to comment on. `text` is set when they selected code rather than line numbers. */
+  'select-lines': [selection: DiffLineSelection]
+  'update-comment': [comment: ChangesComment, text: string]
+  'remove-comment': [comment: ChangesComment]
+  'pick-comment': [comment: ChangesComment]
 }>()
 
 // The separator's height is the only row the library's own stylesheet sizes
@@ -39,13 +62,19 @@ const emit = defineEmits<{
 const UNSAFE_CSS = `
   :host { --diffs-bg: var(--color-app); }
   [data-separator=metadata] { height: ${DIFF_METRICS.separatorPx}px; }
+  ${SEARCH_HIGHLIGHT_CSS}
 `
+
+// A saved comment's row, found by id across CodeView remounting it.
+interface CommentAnnotation {
+  commentId: string
+}
 
 const root = ref<HTMLElement | null>(null)
 const platform = useHiveUiPlatform()
 const log = platform.log('changes')
 const pool = diffWorkerPool(platform.theme.value, log)
-let viewer: CodeView | null = null
+let viewer: CodeView<CommentAnnotation> | null = null
 let scrollTop = 0
 
 // Header hosts stay per path: CodeView asks again each time a file remounts, and
@@ -78,7 +107,73 @@ interface ItemContext {
   item: { id: string }
 }
 
-function viewerOptions(): CodeViewOptions<undefined, undefined> {
+const commentHosts = new Map<string, HTMLElement>()
+const mountedComments = shallowRef<ReadonlySet<string>>(new Set())
+const commentById = computed(() => new Map([...props.comments.values()].flat().map((comment) => [comment.id, comment])))
+
+function commentHost(id: string): HTMLElement {
+  let host = commentHosts.get(id)
+  if (!host) {
+    host = document.createElement('div')
+    host.className = 'p-2'
+    commentHosts.set(id, host)
+    mountedComments.value = new Set([...mountedComments.value, id])
+  }
+  return host
+}
+
+// The pointer's last position, where the composer opens: CodeView reports a
+// finished selection without one.
+let pointer = { x: 0, y: 0 }
+useEventListener(root, 'pointerup', (event: PointerEvent) => {
+  pointer = { x: event.clientX, y: event.clientY }
+})
+
+function onLineSelectionEnd(range: SelectedLineRange | null, context: ItemContext): void {
+  if (range) {
+    emit('select-lines', {
+      path: context.item.id,
+      range,
+      rect: { top: pointer.y, left: pointer.x, width: 0, height: 0 },
+    })
+  }
+}
+
+function mountedRoots(): { path: string; root: ShadowRoot }[] {
+  return (viewer?.getRenderedItems() ?? []).flatMap((item) =>
+    item.element.shadowRoot ? [{ path: item.id, root: item.element.shadowRoot }] : [],
+  )
+}
+
+// A selection in the code is the browser's own, finished on the release. It waits
+// a tick so that a click clearing the selection reads as nothing selected.
+useEventListener(root, 'mouseup', () => {
+  setTimeout(() => {
+    const selected = diffTextSelection(document.getSelection(), mountedRoots())
+    if (!selected) return
+    emit('select-lines', { path: selected.path, range: selected.range, text: selected.text, rect: selected.rect })
+  })
+})
+
+function selectLines(path: string, range: SelectedLineRange): void {
+  viewer?.setSelectedLines({ id: path, range }, { notify: false })
+}
+
+function clearSelection(): void {
+  viewer?.clearSelectedLines({ notify: false })
+}
+
+let paintQueued = false
+function queuePaint(): void {
+  if (paintQueued) return
+  paintQueued = true
+  requestAnimationFrame(() => {
+    paintQueued = false
+    paintSearch(mountedRoots(), props.searchQuery, props.activeMatch)
+  })
+}
+
+function viewerOptions(): CodeViewOptions<CommentAnnotation, undefined> {
   const { headerPx, rowPx, separatorPx } = DIFF_METRICS
   return {
     diffStyle: props.mode,
@@ -89,9 +184,16 @@ function viewerOptions(): CodeViewOptions<undefined, undefined> {
     layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
     itemMetrics: { lineHeight: rowPx, diffHeaderHeight: headerPx, hunkSeparatorHeight: separatorPx, spacing: 0 },
     unsafeCSS: UNSAFE_CSS,
+    enableLineSelection: true,
+    enableGutterUtility: true,
+    lineHoverHighlight: 'number',
+    onGutterUtilityClick: () => {},
+    onLineSelectionEnd,
     renderCustomHeader: (_fileDiff: unknown, context: ItemContext) => headerHost(context.item.id),
+    renderAnnotation: (annotation: LineAnnotation<CommentAnnotation>) => commentHost(annotation.metadata.commentId),
     onPostRender: (_node: unknown, _instance: unknown, phase: PostRenderPhase, context: ItemContext) => {
       if (phase === 'unmount') setHeaderMounted(context.item.id, false)
+      queuePaint()
     },
   }
 }
@@ -99,29 +201,36 @@ function viewerOptions(): CodeViewOptions<undefined, undefined> {
 interface BuiltItem {
   entry: DiffEntry | undefined
   open: boolean
-  item: CodeViewDiffItem<undefined>
+  comments: readonly ChangesComment[] | undefined
+  item: CodeViewDiffItem<CommentAnnotation>
 }
 const built = new Map<string, BuiltItem>()
 
-function itemFor(file: ChangedFile): CodeViewDiffItem<undefined> {
+function itemFor(file: ChangedFile): CodeViewDiffItem<CommentAnnotation> {
   const entry = props.entries.get(file.path)
   const open = props.openPaths.has(file.path)
+  const comments = props.comments.get(file.path)
   const held = built.get(file.path)
-  if (held && held.entry === entry && held.open === open) return held.item
+  if (held && held.entry === entry && held.open === open && held.comments === comments) return held.item
   const fileDiff =
     held && held.entry === entry
       ? held.item.fileDiff
       : entry && diffHasText(entry.diff)
         ? parseFileDiff(file, entry.diff.text, `${props.scope}:${file.path}:${entry.version}`)
         : emptyFileDiff(file)
-  const item: CodeViewDiffItem<undefined> = {
+  const item: CodeViewDiffItem<CommentAnnotation> = {
     id: file.path,
     type: 'diff',
     fileDiff,
+    annotations: comments?.map((comment) => ({
+      side: comment.endSide,
+      lineNumber: comment.endLine,
+      metadata: { commentId: comment.id },
+    })),
     collapsed: !open || fileDiff.hunks.length === 0,
     version: (held?.item.version ?? 0) + 1,
   }
-  built.set(file.path, { entry, open, item })
+  built.set(file.path, { entry, open, comments, item })
   return item
 }
 
@@ -193,25 +302,33 @@ function stepHunk(delta: 1 | -1): boolean {
   return false
 }
 
-defineExpose({ focus, scrollToFile, stepHunk })
+function scrollToLine(path: string, line: number, side: DiffSide): void {
+  viewer?.scrollTo({ type: 'line', id: path, lineNumber: line, side, align: 'center' })
+}
+
+defineExpose({ focus, scrollToFile, stepHunk, scrollToLine, selectLines, clearSelection })
 
 onMounted(() => {
   if (!root.value) return
-  viewer = new CodeView(viewerOptions(), pool)
-  viewer.setup(root.value)
-  viewer.subscribeToScroll((top) => {
+  const created = new CodeView<CommentAnnotation>(viewerOptions(), pool)
+  viewer = created
+  created.setup(root.value)
+  created.subscribeToScroll((top) => {
     scrollTop = top
+    queuePaint()
     const at = fileAt(top + 8)
     if (!pendingJump && at && at.path !== props.current) emit('update:current', at.path)
   })
   syncItems()
 })
 onBeforeUnmount(() => {
+  clearSearchPaint()
   viewer?.cleanUp()
   viewer = null
 })
 
-watch(() => [props.files, props.entries, props.openPaths] as const, syncItems, { flush: 'post' })
+watch(() => [props.files, props.entries, props.openPaths, props.comments] as const, syncItems, { flush: 'post' })
+watch(() => [props.searchQuery, props.activeMatch] as const, queuePaint)
 watch(
   () => props.mode,
   () => viewer?.setOptions(viewerOptions()),
@@ -243,6 +360,16 @@ watch(platform.theme, (theme) => {
         @fold="emit('fold', fileByPath.get(path)!)"
         @toggle-viewed="emit('toggle-viewed', fileByPath.get(path)!)"
         @open-editor="emit('open-editor')"
+      />
+    </Teleport>
+    <Teleport v-for="id in mountedComments" :key="id" :to="commentHosts.get(id)">
+      <DiffCommentCard
+        v-if="commentById.get(id)"
+        :comment="commentById.get(id)!"
+        :outdated="isOutdated(commentById.get(id)!)"
+        @update="emit('update-comment', commentById.get(id)!, $event)"
+        @remove="emit('remove-comment', commentById.get(id)!)"
+        @pick="emit('pick-comment', commentById.get(id)!)"
       />
     </Teleport>
   </div>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Picks one running agent to receive a document's feedback. Go lists only
-// agents that can take text now and resolves the pick again on send.
+// Picks one running agent to receive feedback. Go lists only agents that can
+// take text now and resolves the pick again on send.
 import { computed, onMounted, ref } from 'vue'
 import IconSend from '~icons/lucide/send'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
@@ -11,19 +11,17 @@ import Spinner from '@hive/ui/components/ui/Spinner.vue'
 import { useToasts } from '../../composables/useToasts'
 import { activityIndicator } from '../../lib/agentActivity'
 import { errorText } from '../../lib/appError'
-import { useDriveReview } from '../../stores/useDriveReview'
-import { AgentTargets } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reviewservice'
 import type { AgentTarget } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const props = defineProps<{
-  space: string
-  path: string
+  load: () => Promise<AgentTarget[]>
+  /** Delivers to the pick. Resolves to why it failed, or null. */
+  deliver: (target: AgentTarget) => Promise<string | null>
   /** Derives `-send-dialog`, `-send-target-<index>`, `-send-warning`, `-send-error`, `-send-empty`, and `-send-submit`. */
   testid: string
 }>()
 const emit = defineEmits<{ close: []; sent: [] }>()
 
-const review = useDriveReview()
 const { showToast } = useToasts()
 
 const targets = ref<AgentTarget[]>([])
@@ -53,7 +51,7 @@ const indexOf = (target: AgentTarget) => rows.value.indexOf(target)
 
 onMounted(async () => {
   try {
-    targets.value = (await AgentTargets()) ?? []
+    targets.value = await props.load()
   } catch (err) {
     loadError.value = errorText(err, 'Could not list the running agents.')
   } finally {
@@ -66,7 +64,7 @@ async function send(): Promise<void> {
   if (!target || sending.value) return
   sending.value = true
   sendError.value = null
-  const error = await review.send(props.space, props.path, { kind: target.kind, id: target.id, pane: target.pane })
+  const error = await props.deliver(target)
   sending.value = false
   if (error) {
     sendError.value = error

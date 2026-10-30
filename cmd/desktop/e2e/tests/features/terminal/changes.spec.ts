@@ -37,12 +37,14 @@ const PATCHES: Record<string, string> = {
 }
 const noState = { binary: false, truncated: false, unavailable: false, gone: false, error: '' }
 
-async function changesFixture(page: Page) {
+async function changesFixture(page: Page, sent: unknown[][] = []) {
   const availability = ['terminalservice', 'agentsservice', 'popupterminalservice'].map((name) => bindingID(name, 'Available'))
   const list = bindingID('sessionservice', 'ListSessions')
   const scratch = bindingID('terminalservice', 'Scratch')
   const changes = bindingID('sessionservice', 'SessionChanges')
   const diffs = bindingID('sessionservice', 'SessionFileDiffs')
+  const targets = bindingID('reviewservice', 'ChangesTargets')
+  const send = bindingID('reviewservice', 'SendChanges')
   await page.route('**/wails/runtime', async (route) => {
     const args = route.request().postDataJSON()?.args
     let answer: unknown
@@ -59,6 +61,11 @@ async function changesFixture(page: Page) {
       answer = (args.args[2] as string[]).map((path) => ({
         path, text: PATCHES[path] ?? '', ...noState, binary: path.endsWith('.png'),
       }))
+    } else if (args?.methodID === targets) {
+      answer = [{ kind: 'session', id: 'review', pane: '%1', label: 'Review · claude', status: 'ready' }]
+    } else if (args?.methodID === send) {
+      sent.push(args.args)
+      answer = null
     } else return route.fallback()
     await route.fulfill({ json: answer })
   })
@@ -123,5 +130,114 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
 
     await page.keyboard.press('Escape')
     await expect(view).toBeHidden()
+  })
+
+  async function openChanges(page: Page) {
+    await page.goto('/#/terminal/review')
+    await expect(page.locator('[data-file-drop-target]:visible').last()).toBeVisible()
+    await page.keyboard.press('Meta+k')
+    await page.getByTestId('command-palette-input').fill('Toggle Changes')
+    await page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' }).click()
+    await expect(page.getByTestId('changes-stream')).toContainText('return err')
+  }
+
+  test('comments on selected lines and sends the review to the agent (mock terminal)', async ({ page, browserName }) => {
+    const sent: unknown[][] = []
+    await changesFixture(page, sent)
+    await openChanges(page)
+    const stream = page.getByTestId('changes-stream')
+
+    const from = stream.locator('[data-column-number="11"][data-line-type="change-addition"]').first()
+    const to = stream.locator('[data-column-number="12"][data-line-type="change-addition"]').first()
+    await from.hover()
+    await page.mouse.down()
+    await to.hover()
+    await page.mouse.up()
+
+    const popover = page.getByTestId('changes-comment-popover')
+    await expect(popover).toContainText('changes.go L11-12')
+    await page.screenshot({ path: screenshotPath(`changes-composer-${browserName}.png`) })
+    await page.getByTestId('changes-comment-text').fill('Wrap this error.')
+    await page.getByTestId('changes-comment-save').click()
+    await expect(popover).toBeHidden()
+
+    const review = page.getByTestId('changes-review')
+    await expect(review).toContainText('Wrap this error.')
+    await expect(stream).toContainText('Wrap this error.')
+    await expect(page.getByTestId('changes-send-count')).toHaveText('1')
+    await expect(page.getByTestId('changes-row-internal/platform/git/changes.go-comments')).toHaveText('1')
+    await page.screenshot({ path: screenshotPath(`changes-review-${browserName}.png`) })
+
+    await page.getByTestId('changes-send').click()
+    await expect(page.getByTestId('changes-send')).toBeHidden()
+    expect(sent).toHaveLength(1)
+    expect(sent[0][0]).toBe('review')
+    expect(sent[0][1]).toBe('%1')
+    expect(sent[0][2]).toMatchObject([
+      { path: 'internal/platform/git/changes.go', startLine: 11, endLine: 12, text: 'Wrap this error.' },
+    ])
+    await expect(stream).not.toContainText('Wrap this error.')
+    await expect(review).toBeHidden()
+  })
+
+  test('comments on code selected with the mouse (mock terminal)', async ({ page }) => {
+    await changesFixture(page)
+    await openChanges(page)
+    const line = page.getByTestId('changes-stream').locator('[data-line="11"][data-line-type="change-addition"]').first()
+    await line.dblclick({ position: { x: 60, y: 10 } })
+    const popover = page.getByTestId('changes-comment-popover')
+    await expect(popover).toContainText('L11')
+    await page.keyboard.press('Escape')
+    await expect(popover).toBeHidden()
+    await expect(page.getByTestId('changes-view')).toBeVisible()
+  })
+
+  test('searches every diff and steps through the matches (mock terminal)', async ({ page, browserName }) => {
+    await changesFixture(page)
+    await openChanges(page)
+
+    await page.keyboard.press('/')
+    const input = page.getByTestId('changes-search-input')
+    await expect(input).toBeFocused()
+    await input.fill('return')
+    await expect(page.getByTestId('changes-search-count')).toHaveText('1 of 2')
+    await page.screenshot({ path: screenshotPath(`changes-search-${browserName}.png`) })
+    await input.press('Enter')
+    await expect(page.getByTestId('changes-search-count')).toHaveText('2 of 2')
+    await input.press('Enter')
+    await expect(page.getByTestId('changes-search-count')).toHaveText('1 of 2')
+    await input.fill('nothing like this')
+    await expect(page.getByTestId('changes-search-count')).toHaveText('No matches')
+
+    await input.press('Escape')
+    await expect(input).toHaveValue('')
+    await input.press('Escape')
+    await expect(page.getByTestId('changes-search')).toBeHidden()
+    await expect(page.getByTestId('changes-view')).toBeVisible()
+  })
+
+  test('the file rail and the review panel keep the width they were given (mock terminal)', async ({ page }) => {
+    await changesFixture(page)
+    await openChanges(page)
+    await page.keyboard.press('r')
+    const review = page.getByTestId('changes-review')
+    await expect(review).toBeVisible()
+
+    const handle = page.getByTestId('resize-handle-changes-review')
+    const before = (await review.boundingBox())!.width
+    const box = (await handle.boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x - 60, box.y + box.height / 2)
+    await page.mouse.up()
+    await expect.poll(async () => (await review.boundingBox())!.width).toBeGreaterThan(before + 40)
+    const resized = (await review.boundingBox())!.width
+
+    await page.reload()
+    await page.keyboard.press('Meta+k')
+    await page.getByTestId('command-palette-input').fill('Toggle Changes')
+    await page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' }).click()
+    await expect(review).toBeVisible()
+    expect((await review.boundingBox())!.width).toBe(resized)
   })
 })

@@ -31,6 +31,13 @@ export function AgentTargets(): $CancellablePromise<app$0.AgentTarget[] | null> 
     return $Call.ByID(4149271922);
 }
 
+/**
+ * ChangesTargets lists the agents of one Code session.
+ */
+export function ChangesTargets(sessionID: string): $CancellablePromise<app$0.AgentTarget[] | null> {
+    return $Call.ByID(2271021566, sessionID);
+}
+
 export function Clear(space: string, path: string): $CancellablePromise<void> {
     return $Call.ByID(3405723224, space, path);
 }
@@ -56,6 +63,14 @@ export function Review(space: string, path: string): $CancellablePromise<$models
  */
 export function Send(space: string, path: string, note: string, to: app$0.AgentTargetRef): $CancellablePromise<void> {
     return $Call.ByID(126228081, space, path, note, to);
+}
+
+/**
+ * SendChanges pastes feedback on a session's changes into its agent's pane and
+ * submits it.
+ */
+export function SendChanges(sessionID: string, pane: string, comments: app$0.DiffCommentInput[] | null): $CancellablePromise<void> {
+    return $Call.ByID(2127863494, sessionID, pane, comments);
 }
 
 export function UpdateComment(space: string, path: string, id: string, text: string): $CancellablePromise<void> {

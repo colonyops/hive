@@ -163,11 +163,28 @@ Every changed file's diff sits in one scroll, with the files listed beside it. *
 | <kbd>v</kbd> | Mark the file viewed, which folds it |
 | <kbd>o</kbd> | Fold or unfold the file |
 | <kbd>s</kbd> | Switch between unified and side by side |
+| <kbd>/</kbd> or <kbd>⌘F</kbd> | Search the diffs |
+| <kbd>r</kbd> | Show or hide the comments panel |
+| <kbd>⌘↵</kbd> | Send your comments to the agent |
 | <kbd>Esc</kbd> | Close |
 
 The view refreshes every 5 seconds while it's open and the window has focus. A viewed file comes back unviewed when it changes again. Viewed marks last until you quit Hive.
 
-Changes is read-only, so it's safe to use while an agent works in the checkout. It can't stage or commit. These limits apply:
+Drag either divider to resize the file list or the comments panel. Hive remembers the widths, and whether the panel is open.
+
+### Search
+
+Press <kbd>/</kbd> or <kbd>⌘F</kbd> to search. <kbd>Enter</kbd> and <kbd>Shift+Enter</kbd> step through the matches, and a match in a folded file unfolds it. Search ignores case and covers the diffs Hive has read so far, up to 200 files around the one on screen. When it hasn't read them all, the bar shows how many it covered. It stops counting at 2,000 matches.
+
+### Comments
+
+To comment, drag across line numbers, click the **+** beside a line, or select code with the mouse. Type in the box that opens and press <kbd>⌘↵</kbd>. A label button saves that label as the comment. Comments appear under their lines and as rows in a panel beside the diff.
+
+The send button in the header, which shows how many comments you've written, pastes them into the session's agent and submits them, then clears them. If the session has one agent, it goes straight there, even mid-turn. With several agents, a dialog asks which one, and it also tells you when none is running. An agent waiting on a prompt can't receive comments, because the Enter would answer the prompt, so Hive shows an error and keeps them. If a send fails, your comments stay.
+
+Comments are kept on this machine, per session, until you send or delete them, and they survive quitting Hive. They point at line numbers, so a comment shows an amber dot when the agent edits the file after you commented. If the line has left the diff, or the comment was made under the other comparison, the comment shows only in the panel. Select its line label to jump to it, which also switches the comparison back.
+
+Changes never writes to the checkout, so it's safe to use while an agent works in it. It can't stage or commit. These limits apply:
 
 - A diff over 20,000 changed lines shows **Open in editor** instead. So does a very large file, and the list stops at 1,000 files.
 - Binary files, symlinks, pipes, and nested repositories show a note instead of a diff.

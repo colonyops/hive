@@ -11,11 +11,23 @@ const mocks = vi.hoisted(() => ({
   setRenderOptions: vi.fn(() => Promise.resolve()),
   setOptions: vi.fn(),
   scrollTo: vi.fn(),
+  setSelectedLines: vi.fn(),
+  lineSelectionEnd: null as ((...args: unknown[]) => unknown) | null,
+  ChangesTargets: vi.fn(),
+  SendChanges: vi.fn(),
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   SessionChanges: mocks.SessionChanges,
   SessionFileDiffs: mocks.SessionFileDiffs,
   OpenSessionInEditor: mocks.OpenSessionInEditor,
+}))
+vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reviewservice', () => ({
+  ChangesTargets: mocks.ChangesTargets,
+  SendChanges: mocks.SendChanges,
+}))
+vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
+  ReviewLabels: vi.fn().mockResolvedValue([]),
+  SetReviewLabels: vi.fn(),
 }))
 vi.mock('../../../stores/useWindowFocus', () => ({ useWindowFocus: () => ({ focused: ref(true) }) }))
 vi.mock('../../../lib/diffHighlight', () => ({
@@ -29,7 +41,13 @@ vi.mock('@pierre/diffs', async (importOriginal) => {
     root: HTMLElement | null = null
     constructor(public options: Record<string, (...args: unknown[]) => HTMLElement>) {
       mocks.setOptions.mockClear()
+      mocks.lineSelectionEnd = options.onLineSelectionEnd
     }
+    getRenderedItems(): unknown[] {
+      return []
+    }
+    setSelectedLines = mocks.setSelectedLines
+    clearSelectedLines(): void {}
     setup(root: HTMLElement): void {
       this.root = root
     }
@@ -89,6 +107,20 @@ async function mountView() {
   return wrapper
 }
 const testid = (id: string) => `[data-testid="${id}"]`
+async function selectLines(path: string, line: number) {
+  mocks.lineSelectionEnd!({ start: line, side: 'additions', end: line, endSide: 'additions' }, { item: { id: path } })
+  await flushPromises()
+}
+async function comment(text: string) {
+  await selectLines('a.go', 1)
+  const field = document.querySelector<HTMLTextAreaElement>(testid('changes-comment-text'))!
+  field.value = text
+  field.dispatchEvent(new Event('input'))
+  await flushPromises()
+  document.querySelector<HTMLButtonElement>(testid('changes-comment-save'))!.click()
+  await flushPromises()
+}
+const agent = (pane: string, status: string) => ({ kind: 'session', id: 's1', pane, label: `app · ${pane}`, status })
 const press = async (key: string, init: KeyboardEventInit = {}) => {
   window.dispatchEvent(new KeyboardEvent('keydown', { key, ...init }))
   await flushPromises()
@@ -267,6 +299,130 @@ describe('ChangesView', () => {
     const wrapper = await mountView()
     await press('v', { metaKey: true })
     expect(wrapper.get(testid('changes-progress')).text()).toBe('0/2 viewed')
+    wrapper.unmount()
+  })
+
+  it('opens a composer on selected lines and files the comment under the panel', async () => {
+    const wrapper = await mountView()
+    expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
+    expect(wrapper.find(testid('changes-send')).exists()).toBe(false)
+
+    await selectLines('a.go', 1)
+    expect(document.querySelector(testid('changes-comment-popover'))!.textContent).toContain('a.go L1')
+    expect(mocks.setSelectedLines).toHaveBeenCalled()
+
+    const field = document.querySelector<HTMLTextAreaElement>(testid('changes-comment-text'))!
+    field.value = 'rename this'
+    field.dispatchEvent(new Event('input'))
+    await flushPromises()
+    document.querySelector<HTMLButtonElement>(testid('changes-comment-save'))!.click()
+    await flushPromises()
+
+    expect(document.querySelector(testid('changes-comment-popover'))).toBeNull()
+    expect(wrapper.get(testid('changes-review')).text()).toContain('rename this')
+    expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
+    expect(wrapper.get(testid('changes-row-a.go-comments')).text()).toBe('1')
+    wrapper.unmount()
+  })
+
+  it('remembers a closed panel and leaves it closed for later comments', async () => {
+    let wrapper = await mountView()
+    await comment('first')
+    await press('r')
+    expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
+    await comment('second')
+    expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
+    wrapper.unmount()
+
+    wrapper = await mountView()
+    expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
+    expect(wrapper.get(testid('changes-send-count')).text()).toBe('2')
+    wrapper.unmount()
+  })
+
+  it.each(['ready', 'active'])('sends straight to a lone %s agent and clears the review', async (status) => {
+    mocks.ChangesTargets.mockResolvedValue([agent('%1', status)])
+    mocks.SendChanges.mockResolvedValue(undefined)
+    const wrapper = await mountView()
+    await comment('rename this')
+    await wrapper.get(testid('changes-send')).trigger('click')
+    await flushPromises()
+    expect(mocks.SendChanges).toHaveBeenCalledWith('s1', '%1', [expect.objectContaining({ text: 'rename this' })])
+    expect(wrapper.find(testid('changes-send')).exists()).toBe(false)
+    expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it.each([
+    ['several', [agent('%1', 'ready'), agent('%2', 'ready')]],
+    ['none', []],
+  ])('asks before sending with %s', async (_name, targets) => {
+    mocks.ChangesTargets.mockResolvedValue(targets)
+    const wrapper = await mountView()
+    await comment('rename this')
+    await wrapper.get(testid('changes-send')).trigger('click')
+    await flushPromises()
+    expect(mocks.SendChanges).not.toHaveBeenCalled()
+    expect(document.querySelector(testid('changes-send-dialog'))).not.toBeNull()
+    wrapper.unmount()
+  })
+
+  it('saves with ⌘↵ in the composer without sending, and sends with it outside a field', async () => {
+    mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
+    mocks.SendChanges.mockResolvedValue(undefined)
+    const wrapper = await mountView()
+    await selectLines('a.go', 1)
+    const field = document.querySelector<HTMLTextAreaElement>(testid('changes-comment-text'))!
+    field.value = 'rename this'
+    field.dispatchEvent(new Event('input'))
+    await flushPromises()
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+    expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
+    expect(mocks.ChangesTargets).not.toHaveBeenCalled()
+
+    await press('Enter', { metaKey: true })
+    expect(mocks.SendChanges).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('keeps the comments when a direct send fails, as Go refusing an agent on a prompt does', async () => {
+    mocks.ChangesTargets.mockResolvedValue([agent('%1', 'approval')])
+    mocks.SendChanges.mockRejectedValue(new Error('waiting on a prompt'))
+    const wrapper = await mountView()
+    await comment('rename this')
+    await wrapper.get(testid('changes-send')).trigger('click')
+    await flushPromises()
+    expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
+    wrapper.unmount()
+  })
+
+  it('searches with / and steps through matches, unfolding the file a match is in', async () => {
+    const wrapper = await mountView()
+    await press('j')
+    await press('v')
+    expect(wrapper.get('[data-fake="fake-b.go"]').text()).not.toContain('new b.go')
+
+    await press('/')
+    const input = wrapper.get(testid('changes-search-input'))
+    await input.setValue('new')
+    await new Promise((resolve) => setTimeout(resolve, 170))
+    await flushPromises()
+    expect(wrapper.get(testid('changes-search-count')).text()).toBe('1 of 2')
+    expect(mocks.scrollTo).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'line', id: 'a.go', lineNumber: 1 }),
+    )
+
+    await input.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(wrapper.get(testid('changes-search-count')).text()).toBe('2 of 2')
+    expect(mocks.scrollTo).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'line', id: 'b.go', lineNumber: 1 }),
+    )
+    expect(wrapper.get('[data-fake="fake-b.go"]').text()).toContain('new b.go')
+
+    await input.trigger('keydown', { key: 'Enter', shiftKey: true })
+    expect(wrapper.get(testid('changes-search-count')).text()).toBe('1 of 2')
     wrapper.unmount()
   })
 

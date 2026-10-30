@@ -161,6 +161,29 @@ export interface DiagnosticsSnapshot {
 }
 
 /**
+ * DiffCommentInput is a comment on rows of a session's diff. Unlike a Drive
+ * comment it stays in the frontend until it is sent: the lines it points at move
+ * whenever the agent edits the file, so nothing here keeps it in hive.db.
+ */
+export interface DiffCommentInput {
+    "path": string;
+
+    /**
+     * additions | deletions
+     */
+    "startSide": string;
+    "startLine": number;
+
+    /**
+     * additions | deletions
+     */
+    "endSide": string;
+    "endLine": number;
+    "quote": string;
+    "text": string;
+}
+
+/**
  * HiveSetup is the external Hive configuration as the first-run and settings
  * screens see it: what the file declares, what this machine could run, and
  * whether the environment is overriding the choice.

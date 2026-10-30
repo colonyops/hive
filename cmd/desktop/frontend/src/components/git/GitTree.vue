@@ -4,6 +4,7 @@ import IconChevronRight from '~icons/lucide/chevron-right'
 import IconClipboardCopy from '~icons/lucide/clipboard-copy'
 import IconEllipsis from '~icons/lucide/ellipsis'
 import IconExternalLink from '~icons/lucide/external-link'
+import IconMessageSquare from '~icons/lucide/message-square'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { useClipboard } from '@hive/ui/composables/useClipboard'
@@ -20,6 +21,8 @@ const props = defineProps<{
   selected: string | null
   /** Files marked viewed, which dim in the list. */
   viewed?: ReadonlySet<string>
+  /** How many review comments each file holds. */
+  commentCounts?: ReadonlyMap<string, number>
 }>()
 const emit = defineEmits<{ pick: [path: string]; 'open-editor': [] }>()
 
@@ -203,6 +206,15 @@ function onMenuSelect(id: string): void {
           >{{ gitFileDir(row.file.path) }}</span
         >
         <span class="min-w-0 flex-1" />
+        <span
+          v-if="commentCounts?.get(row.file.path)"
+          class="flex shrink-0 items-center gap-0.5 font-mono text-caption text-accent"
+          :title="`${commentCounts.get(row.file.path)} review comments`"
+          :data-testid="`changes-row-${row.file.path}-comments`"
+        >
+          <IconMessageSquare class="size-3" aria-hidden="true" />
+          {{ commentCounts.get(row.file.path) }}
+        </span>
         <span v-if="!row.file.binary" class="git-row-reveal shrink-0 font-mono text-caption">
           <span v-if="row.file.additions" class="text-severity-success">+{{ row.file.additions }}</span>
           <span v-if="row.file.deletions" class="ml-1 text-severity-error">-{{ row.file.deletions }}</span>

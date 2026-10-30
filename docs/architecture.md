@@ -2476,6 +2476,13 @@ bracketed paste from a named buffer, then Enter. A pane with no detected agent
 is never a target, because a shell would run the feedback, and an agent on a
 prompt is refused, because the Enter would answer it.
 
+**Comments on a session's diffs stay in the frontend until they are sent**
+(ADR comments-on-a-session-s-diffs-stay-in-browser-storage-until-they-are-sent).
+`stores/useChangesReview` holds them per session in browser storage, and the
+review travels whole to `ReviewService.SendChanges`, which formats it with
+`review.DiffFeedback` and delivers it the way a document's Send does, to an agent
+pane of that one session.
+
 **HTML has two tiers.** A canvas **html block** is the one place
 agent-authored markup reaches the app's DOM
 (ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).
