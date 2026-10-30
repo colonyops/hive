@@ -55,8 +55,9 @@ const running = shallowRef(false)
 
 let frames: Sample[] = []
 let lags: Sample[] = []
-// The fastest interval the display has produced, which is its refresh period —
-// nothing can render faster than the panel refreshes.
+// The median of recent frames, capped at 60Hz. The fastest interval would be no
+// estimate: WebKit clamps its clock to whole milliseconds and sometimes runs two
+// callbacks a beat apart, and one such sample would count every frame as dropped.
 let periodMs = FALLBACK_PERIOD_MS
 let lastFrameAt = 0
 let expectedProbeAt = 0
@@ -119,8 +120,6 @@ function onFrame(now: number): void {
   if (lastFrameAt > 0) {
     const ms = now - lastFrameAt
     frames.push({ at: now, ms })
-    // Sub-millisecond intervals are the clock's clamping, not a 2000Hz display.
-    if (ms >= 1 && ms < periodMs) periodMs = ms
     if (ms >= periodMs * DROPPED_AT) perf.record('frame:long', ms)
   }
   lastFrameAt = now
@@ -140,6 +139,15 @@ function onProbe(): void {
 
   frames = prune(frames, now)
   lags = prune(lags, now)
+  if (frames.length > 0) {
+    periodMs = Math.min(
+      percentile(
+        frames.map((sample) => sample.ms),
+        50,
+      ),
+      FALLBACK_PERIOD_MS,
+    )
+  }
   stats.value = summarize(frames, lags, now, periodMs)
 }
 

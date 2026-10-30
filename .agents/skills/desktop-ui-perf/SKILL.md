@@ -21,6 +21,10 @@ Pick the right tool first:
   `/debug/pprof/` on the loopback server. These numbers are not comparable;
   a span includes time pprof never sees.
 
+- **The terminal as a whole** (typing, walls of text, scrolling, tab and session
+  switching) already has probes and scenarios, so do not instrument it first.
+  See "Benchmark the terminal" below.
+
 ## 1. Confirm recording is on
 
 The gate is `development.perf.enabled`, off in a shipped build and set for
@@ -155,6 +159,40 @@ compare p95 for the same operation name.
 **Instrumentation can stay.** It is inert in a shipped build, so a span left on
 a path that turned out to be interesting does not need stripping before merge.
 Remove what was pure noise; keep what would help the next investigation.
+
+## Benchmark the terminal
+
+Every pane records `terminal input:echo`, `output:burst`, `scroll:gesture`, and
+`attach`. Read them without writing a jq line:
+
+```bash
+mise run desktop:perf:report -- --scope terminal "$PERF"
+mise run desktop:perf:report -- --baseline before.jsonl "$PERF"
+```
+
+To compare builds, run the scenarios against the real stack:
+
+```bash
+mise run desktop:perf:native -- /some/work/dir   # the real WKWebView, isolated tmux and data
+mise run desktop:perf:bench                      # Chromium in Docker, real tmux; test-results/perf/
+```
+
+In the native app, drive it with `js_eval` (the `desktop-ui-audit` skill), and poll,
+because one call cannot wait out a long run:
+
+```js
+window.__hiveTerminalBench.start(['wall', 'typing', 'switchWindow'], { scale: 1 })
+return window.__hiveTerminalBench.poll() // null until done
+```
+
+Keep the window visible with `window_control {action: "set_always_on_top"}`: a
+covered WKWebView fires no frames, and a run flags that as `hiddenDuringRun`. Pass
+the Docker socket through `DOCKER_HOST` if the default context is not running.
+
+What the numbers mean: `freshFrameP50` above 0 and `blankReveals` above 0 are the
+flash on a switch. `maxBacklogBytes` that keeps growing means the parser is behind.
+`mbPerSec` tops out near tmux's own 45 MB/s, so past that look at CPU per stage, not
+throughput. Docker frame times are software GL; compare them only with each other.
 
 ## Guardrails
 

@@ -477,7 +477,10 @@ cmd/desktop/internal/
                                   #   Recorder ports; persistence lives in data/stores
     perf/                         # UI performance spans -> a size-capped JSONL
                                   #   file; development-gated, no aggregation
-                                  #   and no dependencies (ADR ui-performance-spans-are-recorded-to-jsonl)
+                                  #   and no dependencies (ADR ui-performance-spans-are-recorded-to-jsonl).
+                                  #   The terminal's probes and scenarios sit in
+                                  #   the frontend and cmd/tools/perfreport reads
+                                  #   the file (ADR terminal-performance-is-measured-by-scenarios-that-run-inside-the-page)
     telemetry/                    # the app's own metrics, logs and traces over
                                   #   OTLP, profiles over Pyroscope, and the local
                                   #   /metrics scrape; the only package that

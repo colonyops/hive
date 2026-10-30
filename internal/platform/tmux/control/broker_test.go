@@ -635,10 +635,7 @@ func TestBrokerQuietPaneCutsAnotherPanesHoldShort(t *testing.T) {
 
 		echoed := time.Now()
 		b.publish(Output{At: echoed, WindowID: "@2", PaneID: "%2", Data: []byte("a")})
-		for {
-			if requireOutput(t, <-events).PaneID == "%2" {
-				break
-			}
+		for requireOutput(t, <-events).PaneID != "%2" {
 		}
 		require.Zero(t, time.Since(echoed), "a key typed into a quiet pane must not wait for a neighbor's burst")
 	})

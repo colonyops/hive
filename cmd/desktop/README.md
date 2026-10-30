@@ -661,6 +661,19 @@ ui-performance-spans-are-recorded-to-jsonl). The **desktop-ui-perf** agent skill
 the full loop: the naming rules and the jq recipes for percentiles, outliers,
 and grouping by attribute.
 
+While recording is on, the frontend also profiles itself with nothing
+instrumented: `lib/perfMonitor.ts` records frames and lag per 10s window, long
+tasks, route changes and control-plane requests, and `lib/terminalPerf.ts` records
+each pane's `input:echo`, `output:burst` and `scroll:gesture`.
+`mise run desktop:perf:report -- [--baseline old.jsonl] [--scope terminal] <perf.jsonl>`
+summarizes the file. `window.__hiveTerminalBench` runs scripted workloads against
+the pane on screen (ADR terminal-performance-is-measured-by-scenarios-that-run-inside-the-page):
+
+- `mise run desktop:perf:native -- <work-dir>` runs the real WKWebView with the
+  production frontend, on its own tmux server and data roots.
+- `mise run desktop:perf:bench` runs them in Chromium against real tmux in Docker.
+- `mise run desktop:perf:gobench` and `desktop:perf:jsbench` cover the hot paths.
+
 ## Diagnostics
 
 Window ▸ Diagnostics (macOS), or Open Diagnostics in the command palette,

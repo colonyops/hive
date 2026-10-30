@@ -45,6 +45,6 @@ latency stamps the oldest byte in the frame.
   (`TestBrokerCoalescesQueuedOutputWithoutLosingBytes`,
   `TestBrokerNeverCoalescesAcrossWindows`).
 - Byte accounting is unchanged, so the overflow bound trips at the same volume.
-- Measured under a flood through tmux, the hold took delivery from about 320
-  frames per MB to about 16, which is where the WebSocket and webview cost goes
-  (`BenchmarkBrokerFlood`).
+- `BenchmarkBrokerFlood` reports frames per MB, which went from about 320 to about
+  30 with the hold (ADR
+  a-terminal-output-burst-waits-briefly-for-a-frame-instead-of-crossing-the-webview-per-notification).

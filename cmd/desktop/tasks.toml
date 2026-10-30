@@ -60,6 +60,29 @@ dir = "{{config_root}}/cmd/desktop"
 env = { _.file = ["../../launch.onboarding.env"], VITE_HIVE_DEV_BRANCH = "{{ exec(command='git branch --show-current') }}", HIVE_DESKTOP_DEVELOPMENT_MOCKS_MODE = "" }
 run = "unset HIVE_DEFAULT_AGENT; go run ./devtools run -- wails3 dev -config ./build/config.yml"
 
+["desktop:perf:report"]
+description = "Summarize a perf.jsonl: mise run desktop:perf:report -- [--baseline old.jsonl] [--scope terminal] <perf.jsonl>"
+run = "go run ./cmd/tools/perfreport"
+
+["desktop:perf:native"]
+description = "Run the native app with the production frontend on an isolated tmux server and data roots: mise run desktop:perf:native -- <work-dir>"
+run = "./cmd/desktop/scripts/perf-native.sh"
+
+["desktop:perf:bench"]
+description = "Run the terminal benchmarks in Chromium against real tmux in the pinned Docker environment; results land in cmd/desktop/e2e/test-results/perf/"
+depends = ["desktop:frontend:install"]
+env = { HIVE_E2E_GO_TAGS = "server,serverterminal" }
+run = "./cmd/desktop/e2e/scripts/run-docker.sh --config playwright.perf.config.ts"
+
+["desktop:perf:gobench"]
+description = "Run the Go benchmarks for the terminal stream's hot paths"
+run = "go test ./internal/platform/tmux/control/ -run '^$' -bench . -benchtime 2s"
+
+["desktop:perf:jsbench"]
+description = "Run the frontend benchmarks for the terminal's output filters"
+dir = "{{config_root}}/cmd/desktop/frontend"
+run = "npx vitest bench --run"
+
 ["desktop:dev:reset"]
 description = "Safely delete this worktree's marked desktop instance and launch.env"
 run = "go run ./cmd/desktop/devtools reset"
