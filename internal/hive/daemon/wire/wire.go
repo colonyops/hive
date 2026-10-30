@@ -12,8 +12,10 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/status"
+	"github.com/colonyops/hive/internal/platform/git"
 )
 
 func SessionToProto(s session.Session) *daemonv1.Session {
@@ -176,6 +178,52 @@ func LaunchOptionsToProto(o sessionsvc.LaunchOptions) *daemonv1.LaunchOptionsRes
 		DefaultRepository: o.DefaultRepository,
 		Agents:            o.Agents,
 		DefaultAgent:      o.DefaultAgent,
+	}
+}
+
+func ChangesToProto(c gitstatus.Changes) *daemonv1.ChangesResponse {
+	files := make([]*daemonv1.ChangedFile, 0, len(c.Files))
+	for _, f := range c.Files {
+		files = append(files, &daemonv1.ChangedFile{
+			Path:      f.Path,
+			OldPath:   f.OldPath,
+			Status:    f.Status.String(),
+			Additions: int32(f.Additions), //nolint:gosec // a line count fits in int32
+			Deletions: int32(f.Deletions), //nolint:gosec // a line count fits in int32
+			Binary:    f.Binary,
+		})
+	}
+	return &daemonv1.ChangesResponse{
+		Resolved:        c.Resolved,
+		Branch:          c.Branch,
+		DefaultBranch:   c.DefaultBranch,
+		Base:            c.Base.String(),
+		BranchAvailable: c.BranchAvailable,
+		Files:           files,
+		Truncated:       c.Truncated,
+	}
+}
+
+func ChangesFromProto(p *daemonv1.ChangesResponse) gitstatus.Changes {
+	var files []git.ChangedFile
+	for _, f := range p.GetFiles() {
+		files = append(files, git.ChangedFile{
+			Path:      f.GetPath(),
+			OldPath:   f.GetOldPath(),
+			Status:    git.FileStatus(f.GetStatus()),
+			Additions: int(f.GetAdditions()),
+			Deletions: int(f.GetDeletions()),
+			Binary:    f.GetBinary(),
+		})
+	}
+	return gitstatus.Changes{
+		Resolved:        p.GetResolved(),
+		Branch:          p.GetBranch(),
+		DefaultBranch:   p.GetDefaultBranch(),
+		Base:            gitstatus.DiffBase(p.GetBase()),
+		BranchAvailable: p.GetBranchAvailable(),
+		Files:           files,
+		Truncated:       p.GetTruncated(),
 	}
 }
 

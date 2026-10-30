@@ -180,3 +180,48 @@ func sessionGitStatusOf(s gitstatus.Status) SessionGitStatus {
 	}
 	return status
 }
+
+// ChangedFile is one row of the Git pane.
+type ChangedFile struct {
+	Path      string `json:"path"`
+	OldPath   string `json:"oldPath"`
+	Status    string `json:"status"`
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+	Binary    bool   `json:"binary"`
+}
+
+// SessionChanges is what the Git pane lists. Base is the base the read used,
+// which is "uncommitted" whenever BranchAvailable is false.
+type SessionChanges struct {
+	Resolved        bool          `json:"resolved"`
+	Branch          string        `json:"branch"`
+	DefaultBranch   string        `json:"defaultBranch"`
+	Base            string        `json:"base"`
+	BranchAvailable bool          `json:"branchAvailable"`
+	Files           []ChangedFile `json:"files"`
+	Truncated       bool          `json:"truncated"`
+}
+
+func sessionChangesOf(c gitstatus.Changes) SessionChanges {
+	files := make([]ChangedFile, 0, len(c.Files))
+	for _, f := range c.Files {
+		files = append(files, ChangedFile{
+			Path:      f.Path,
+			OldPath:   f.OldPath,
+			Status:    f.Status.String(),
+			Additions: f.Additions,
+			Deletions: f.Deletions,
+			Binary:    f.Binary,
+		})
+	}
+	return SessionChanges{
+		Resolved:        c.Resolved,
+		Branch:          c.Branch,
+		DefaultBranch:   c.DefaultBranch,
+		Base:            c.Base.String(),
+		BranchAvailable: c.BranchAvailable,
+		Files:           files,
+		Truncated:       c.Truncated,
+	}
+}

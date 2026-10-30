@@ -99,6 +99,26 @@ describe('useTerminalDrive', () => {
     expect(api.pane.value).toBeNull()
   })
 
+  it('restores ?git when a route write drops it, with the file only on the same session', async () => {
+    const { router } = await mountAt('/terminal/fix-login?git=cmd%2Fa.go')
+
+    await router.replace({ query: { window: '@2' } })
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ window: '@2', git: 'cmd/a.go' })
+
+    await router.push('/terminal/add-search')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ git: '1' })
+  })
+
+  it('does not bring Drive back when the switch to Git drops ?doc', async () => {
+    const { api, router } = await mountAt('/terminal/fix-login?doc=plans%2Fx.md')
+
+    api.syncGitQuery(true)
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ git: '1' })
+  })
+
   it('leaves a closed pane closed across a session switch', async () => {
     const { router } = await mountAt('/terminal/fix-login')
 

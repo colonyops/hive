@@ -36,6 +36,8 @@ service SessionService {
   // Statuses answers from the daemon's status loop, never from a fetch of
   // its own, so every client shares one tracker.
   rpc Statuses(StatusesRequest) returns (StatusesResponse);
+  // Changes reads the session's checkout on the machine that holds it.
+  rpc Changes(ChangesRequest) returns (ChangesResponse);
 }
 
 message HelloRequest {}
@@ -334,3 +336,27 @@ message CreateSessionErrorDetail {
 // InvalidTagDetail marks an INVALID_ARGUMENT error as a rejected tag, so the
 // client can tell it from a create with no remote.
 message InvalidTagDetail {}
+
+message ChangedFile {
+  string path = 1;
+  string old_path = 2;
+  string status = 3;
+  int32 additions = 4;
+  int32 deletions = 5;
+  bool binary = 6;
+}
+
+message ChangesRequest {
+  string id = 1;
+  string base = 2;
+}
+
+message ChangesResponse {
+  bool resolved = 1;
+  string branch = 2;
+  string default_branch = 3;
+  string base = 4;
+  bool branch_available = 5;
+  repeated ChangedFile files = 6;
+  bool truncated = 7;
+}

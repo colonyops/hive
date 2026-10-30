@@ -24,6 +24,9 @@ type Git interface {
 	IsClean(ctx context.Context, dir string) (bool, error)
 	HasUnpushedCommits(ctx context.Context, dir string) (bool, error)
 	DiffStats(ctx context.Context, dir string) (additions, deletions int, err error)
+	DefaultBranch(ctx context.Context, dir string) (string, error)
+	MergeBase(ctx context.Context, dir, branch string) (string, error)
+	ChangedFiles(ctx context.Context, dir, ref string) ([]git.ChangedFile, error)
 }
 
 // Status is one checkout's git state.

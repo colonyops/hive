@@ -160,6 +160,14 @@ export function Servers(): $CancellablePromise<app$0.ServerStatus[] | null> {
 }
 
 /**
+ * SessionChanges lists what differs in the session's checkout against base,
+ * "branch" or "uncommitted". The Git pane polls it while visible.
+ */
+export function SessionChanges(id: string, base: string): $CancellablePromise<$models.SessionChanges> {
+    return $Call.ByID(2425529358, id, base);
+}
+
+/**
  * SessionDetail reads one session in full, for the detail view.
  */
 export function SessionDetail(id: string): $CancellablePromise<$models.SessionDetail> {

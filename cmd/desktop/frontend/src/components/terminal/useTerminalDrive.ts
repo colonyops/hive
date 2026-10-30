@@ -18,25 +18,30 @@ export interface TerminalDriveTarget {
  */
 export function useTerminalDrive(target: Ref<TerminalDriveTarget | null>, active: () => boolean) {
   const route = useRoute()
-  const { docRequested, docPath, syncDocQuery } = useDriveRoute()
+  const { docRequested, docPath, gitRequested, gitPath, syncDocQuery, syncGitQuery, closeSidePane } = useDriveRoute()
 
   const open = computed(() => route.name === 'terminal' && docRequested.value)
   const pane = computed(() => (open.value ? target.value : null))
+  const paneOpen = computed(() => route.name === 'terminal' && (docRequested.value || gitRequested.value))
 
   // A route write outside useTerminalAttach can still rebuild the query. A
-  // close changes nothing but ?doc, so any other write that drops it gets it
-  // back, with the pinned path only while the session is the same one.
+  // close or a tab switch changes nothing but these two queries, so any other
+  // write that drops the open one gets it back, with the pinned path only while
+  // the session is the same one.
   watch(
     () => ({
       slug: route.name === 'terminal' && typeof route.params.slug === 'string' ? route.params.slug : '',
       window: route.query.window,
       doc: route.name === 'terminal' ? route.query.doc : undefined,
+      git: route.name === 'terminal' ? route.query.git : undefined,
     }),
     (now, before) => {
-      if (!now.slug || !before.slug || before.doc === undefined || now.doc !== undefined) return
+      if (!now.slug || !before.slug || now.doc !== undefined || now.git !== undefined) return
       const sameSession = now.slug === before.slug
       if (sameSession && now.window === before.window) return
-      syncDocQuery(true, sameSession && typeof before.doc === 'string' ? before.doc : '1')
+      if (before.doc !== undefined) syncDocQuery(true, sameSession && typeof before.doc === 'string' ? before.doc : '1')
+      else if (before.git !== undefined)
+        syncGitQuery(true, sameSession && typeof before.git === 'string' ? before.git : '1')
     },
   )
 
@@ -50,5 +55,5 @@ export function useTerminalDrive(target: Ref<TerminalDriveTarget | null>, active
     syncDocQuery(payload.open, payload.path || undefined)
   })
 
-  return { pane, docPath, syncDocQuery }
+  return { pane, paneOpen, docPath, gitPath, gitRequested, syncDocQuery, syncGitQuery, closeSidePane }
 }

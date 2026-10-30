@@ -7,6 +7,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/status"
 )
@@ -77,6 +78,14 @@ func (l *Local) CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Ris
 
 func (l *Local) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOptions, error) {
 	return l.engine.Sessions().SessionLaunchOptions(ctx)
+}
+
+func (l *Local) SessionChanges(ctx context.Context, id string, base gitstatus.DiffBase) (gitstatus.Changes, error) {
+	sess, err := l.engine.Sessions().GetSession(ctx, id)
+	if err != nil {
+		return gitstatus.Changes{}, err
+	}
+	return l.engine.GitStatus().ReadChanges(ctx, sess, base)
 }
 
 func (l *Local) StatusAvailable() bool {

@@ -76,6 +76,8 @@ const (
 	SessionServiceLaunchOptionsProcedure = "/hive.daemon.v1.SessionService/LaunchOptions"
 	// SessionServiceStatusesProcedure is the fully-qualified name of the SessionService's Statuses RPC.
 	SessionServiceStatusesProcedure = "/hive.daemon.v1.SessionService/Statuses"
+	// SessionServiceChangesProcedure is the fully-qualified name of the SessionService's Changes RPC.
+	SessionServiceChangesProcedure = "/hive.daemon.v1.SessionService/Changes"
 )
 
 // DaemonServiceClient is a client for the hive.daemon.v1.DaemonService service.
@@ -249,6 +251,8 @@ type SessionServiceClient interface {
 	// Statuses answers from the daemon's status loop, never from a fetch of
 	// its own, so every client shares one tracker.
 	Statuses(context.Context, *connect.Request[v1.StatusesRequest]) (*connect.Response[v1.StatusesResponse], error)
+	// Changes reads the session's checkout on the machine that holds it.
+	Changes(context.Context, *connect.Request[v1.ChangesRequest]) (*connect.Response[v1.ChangesResponse], error)
 }
 
 // NewSessionServiceClient constructs a client for the hive.daemon.v1.SessionService service. By
@@ -352,6 +356,12 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("Statuses")),
 			connect.WithClientOptions(opts...),
 		),
+		changes: connect.NewClient[v1.ChangesRequest, v1.ChangesResponse](
+			httpClient,
+			baseURL+SessionServiceChangesProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("Changes")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -372,6 +382,7 @@ type sessionServiceClient struct {
 	risk              *connect.Client[v1.RiskRequest, v1.RiskResponse]
 	launchOptions     *connect.Client[v1.LaunchOptionsRequest, v1.LaunchOptionsResponse]
 	statuses          *connect.Client[v1.StatusesRequest, v1.StatusesResponse]
+	changes           *connect.Client[v1.ChangesRequest, v1.ChangesResponse]
 }
 
 // List calls hive.daemon.v1.SessionService.List.
@@ -449,6 +460,11 @@ func (c *sessionServiceClient) Statuses(ctx context.Context, req *connect.Reques
 	return c.statuses.CallUnary(ctx, req)
 }
 
+// Changes calls hive.daemon.v1.SessionService.Changes.
+func (c *sessionServiceClient) Changes(ctx context.Context, req *connect.Request[v1.ChangesRequest]) (*connect.Response[v1.ChangesResponse], error) {
+	return c.changes.CallUnary(ctx, req)
+}
+
 // SessionServiceHandler is an implementation of the hive.daemon.v1.SessionService service.
 type SessionServiceHandler interface {
 	List(context.Context, *connect.Request[v1.ListRequest]) (*connect.Response[v1.ListResponse], error)
@@ -470,6 +486,8 @@ type SessionServiceHandler interface {
 	// Statuses answers from the daemon's status loop, never from a fetch of
 	// its own, so every client shares one tracker.
 	Statuses(context.Context, *connect.Request[v1.StatusesRequest]) (*connect.Response[v1.StatusesResponse], error)
+	// Changes reads the session's checkout on the machine that holds it.
+	Changes(context.Context, *connect.Request[v1.ChangesRequest]) (*connect.Response[v1.ChangesResponse], error)
 }
 
 // NewSessionServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -569,6 +587,12 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("Statuses")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceChangesHandler := connect.NewUnaryHandler(
+		SessionServiceChangesProcedure,
+		svc.Changes,
+		connect.WithSchema(sessionServiceMethods.ByName("Changes")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/hive.daemon.v1.SessionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SessionServiceListProcedure:
@@ -601,6 +625,8 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceLaunchOptionsHandler.ServeHTTP(w, r)
 		case SessionServiceStatusesProcedure:
 			sessionServiceStatusesHandler.ServeHTTP(w, r)
+		case SessionServiceChangesProcedure:
+			sessionServiceChangesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -668,4 +694,8 @@ func (UnimplementedSessionServiceHandler) LaunchOptions(context.Context, *connec
 
 func (UnimplementedSessionServiceHandler) Statuses(context.Context, *connect.Request[v1.StatusesRequest]) (*connect.Response[v1.StatusesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.Statuses is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) Changes(context.Context, *connect.Request[v1.ChangesRequest]) (*connect.Response[v1.ChangesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.Changes is not implemented"))
 }

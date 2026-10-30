@@ -10,6 +10,7 @@ import (
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/status"
 )
@@ -39,6 +40,7 @@ type API interface {
 	Prune(ctx context.Context, all bool) (int, error)
 	CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Risk, error)
 	SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOptions, error)
+	SessionChanges(ctx context.Context, id string, base gitstatus.DiffBase) (gitstatus.Changes, error)
 
 	// StatusAvailable must not block: the TUI calls it inside Update. A false
 	// answer can turn true later (the daemon client answers false until its

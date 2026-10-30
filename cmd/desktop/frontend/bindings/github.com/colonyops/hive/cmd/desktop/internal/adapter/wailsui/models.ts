@@ -161,6 +161,18 @@ export interface CanvasWire {
 }
 
 /**
+ * ChangedFile is one row of the Git pane.
+ */
+export interface ChangedFile {
+    "path": string;
+    "oldPath": string;
+    "status": string;
+    "additions": number;
+    "deletions": number;
+    "binary": boolean;
+}
+
+/**
  * AtUnixMs is Date.now(); zero leaves only the backend's own timestamp.
  */
 export interface ClientLogEntry {
@@ -600,6 +612,20 @@ export interface ServerSessions {
     "state": string;
     "error": string;
     "sessions": SessionSummary[] | null;
+}
+
+/**
+ * SessionChanges is what the Git pane lists. Base is the base the read used,
+ * which is "uncommitted" whenever BranchAvailable is false.
+ */
+export interface SessionChanges {
+    "resolved": boolean;
+    "branch": string;
+    "defaultBranch": string;
+    "base": string;
+    "branchAvailable": boolean;
+    "files": ChangedFile[] | null;
+    "truncated": boolean;
 }
 
 export interface SessionCondition {

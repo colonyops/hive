@@ -26,6 +26,8 @@ const props = defineProps<{
   path: string | null
   /** Offers the way to connect an agent while the space is empty, where Hive does not wire the agent itself. */
   agentSetup?: boolean
+  /** Inside SessionSidePane, which owns the aside, the width and the close button. */
+  embedded?: boolean
 }>()
 const emit = defineEmits<{
   close: []
@@ -104,12 +106,15 @@ const {
 </script>
 
 <template>
-  <aside
-    class="relative flex shrink-0 flex-col border-l border-border bg-pane"
-    :style="{ width: paneWidth + 'px' }"
+  <component
+    :is="embedded ? 'div' : 'aside'"
+    :class="
+      embedded ? 'flex min-h-0 flex-1 flex-col' : 'relative flex shrink-0 flex-col border-l border-border bg-pane'
+    "
+    :style="embedded ? undefined : { width: paneWidth + 'px' }"
     data-testid="drive-pane"
   >
-    <PanelResizeHandle edge="left" name="drive-pane" :start="startPaneResize" :step="stepPane" />
+    <PanelResizeHandle v-if="!embedded" edge="left" name="drive-pane" :start="startPaneResize" :step="stepPane" />
 
     <div class="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1">
       <button
@@ -142,7 +147,13 @@ const {
         data-testid="drive-pane-expand"
         @click="emit('open-page', shown)"
       />
-      <IconButton label="Close drive" :icon="IconX" data-testid="drive-pane-close" @click="emit('close')" />
+      <IconButton
+        v-if="!embedded"
+        label="Close drive"
+        :icon="IconX"
+        data-testid="drive-pane-close"
+        @click="emit('close')"
+      />
     </div>
 
     <DriveBrowser
@@ -186,5 +197,5 @@ const {
         </div>
       </div>
     </div>
-  </aside>
+  </component>
 </template>

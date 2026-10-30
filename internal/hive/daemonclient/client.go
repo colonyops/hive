@@ -20,6 +20,7 @@ import (
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
 	"github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1/daemonv1connect"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/hive/status"
@@ -525,6 +526,16 @@ func (c *Client) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOpt
 		return sessionsvc.LaunchOptions{}, wire.FromConnectError(err)
 	}
 	return wire.LaunchOptionsFromProto(resp.Msg), nil
+}
+
+func (c *Client) SessionChanges(ctx context.Context, id string, base gitstatus.DiffBase) (gitstatus.Changes, error) {
+	resp, err := retryRead(func() (*connect.Response[daemonv1.ChangesResponse], error) {
+		return c.sessions.Changes(ctx, connect.NewRequest(&daemonv1.ChangesRequest{Id: id, Base: base.String()}))
+	})
+	if err != nil {
+		return gitstatus.Changes{}, wire.FromConnectError(err)
+	}
+	return wire.ChangesFromProto(resp.Msg), nil
 }
 
 // helloRetry spaces background Hellos while status is not yet known

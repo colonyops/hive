@@ -7,9 +7,9 @@ import ActionInputsDialog from './ActionInputsDialog.vue'
 import ModeSkeleton from './ModeSkeleton.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
 import SessionEditDialog from './SessionEditDialog.vue'
-import DrivePane from './drive/DrivePane.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
 import TerminalPaneColumn from './terminal/TerminalPaneColumn.vue'
+import SessionSidePane from './terminal/SessionSidePane.vue'
 import TerminalSidebar from './terminal/TerminalSidebar.vue'
 import { provideTerminalMode } from './terminal/terminalModeContext'
 import { useSessionTreeView } from './terminal/useSessionTreeView'
@@ -30,6 +30,7 @@ import { spaceGroup, type DriveScope } from '../lib/drive'
 import { TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 import { useCodeViews } from '../stores/useCodeViews'
 import { useTerminalAvailability } from '../stores/useTerminalAvailability'
+import type { RightPaneTab } from '../stores/useRightPaneTab'
 import { useTerminalPoolSize } from '../stores/useTerminalPoolSize'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import '@xterm/xterm/css/xterm.css'
@@ -43,8 +44,10 @@ const props = withDefaults(
     active?: boolean
     /** The space the attached session reads; null for a session with none. */
     drive?: TerminalDriveTarget | null
+    /** The session whose checkout the Git pane reads; null for a pinned chat. */
+    git?: string | null
   }>(),
-  { active: true, drive: null },
+  { active: true, drive: null, git: null },
 )
 const emit = defineEmits<{
   'open-tasks': []
@@ -111,7 +114,15 @@ const context = { pool, tree, view, viewMenus, nav, attach, ops, rename, session
 provideTerminalMode(context)
 useTerminalCommands(context, active)
 
-const { pane: drivePane, docPath, syncDocQuery } = useTerminalDrive(toRef(props, 'drive'), active)
+const { paneOpen, docPath, gitPath, gitRequested, syncDocQuery, syncGitQuery, closeSidePane } = useTerminalDrive(
+  toRef(props, 'drive'),
+  active,
+)
+
+function pickTab(tab: RightPaneTab): void {
+  if (tab === 'git') syncGitQuery(true)
+  else syncDocQuery(true)
+}
 
 // Hive does not configure a Code session's agent, so the empty pane leads to
 // the page that says how.
@@ -171,17 +182,21 @@ const knownTags = computed(() => {
       />
       <!-- A sibling of the pane column, as in Chats: opening it must not
            re-key a terminal host, and the size vote absorbs the width change. -->
-      <DrivePane
-        v-if="drivePane"
-        :session="drivePane.session"
-        :space="drivePane.space"
-        :path="docPath"
-        :agent-setup="spaceGroup(drivePane.space) === 'Repositories'"
+      <SessionSidePane
+        v-if="paneOpen && (drive || git)"
+        :drive="drive"
+        :git-session="git"
+        :requested="gitRequested ? 'git' : 'drive'"
+        :doc-path="docPath"
+        :git-path="gitPath"
+        :active="props.active"
+        @tab="pickTab"
+        @close="closeSidePane"
+        @pick-doc="(path) => syncDocQuery(true, path)"
+        @pick-git="(path) => syncGitQuery(true, path)"
         @setup="openMcpSettings"
-        @close="syncDocQuery(false)"
         @open-url="openLink"
-        @pick="(path) => syncDocQuery(true, path)"
-        @open-page="(path) => emit('open-drive-page', { ...drivePane!, path })"
+        @open-drive-page="emit('open-drive-page', $event)"
       />
     </div>
 

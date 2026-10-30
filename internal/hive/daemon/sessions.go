@@ -13,6 +13,7 @@ import (
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
 	"github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1/daemonv1connect"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/hive/status"
@@ -169,6 +170,14 @@ func (s *sessionServer) LaunchOptions(ctx context.Context, _ *connect.Request[da
 		return nil, wire.ToConnectError(err)
 	}
 	return connect.NewResponse(wire.LaunchOptionsToProto(options)), nil
+}
+
+func (s *sessionServer) Changes(ctx context.Context, req *connect.Request[daemonv1.ChangesRequest]) (*connect.Response[daemonv1.ChangesResponse], error) {
+	changes, err := s.api.SessionChanges(ctx, req.Msg.GetId(), gitstatus.DiffBase(req.Msg.GetBase()))
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(wire.ChangesToProto(changes)), nil
 }
 
 func (s *sessionServer) Statuses(ctx context.Context, req *connect.Request[daemonv1.StatusesRequest]) (*connect.Response[daemonv1.StatusesResponse], error) {

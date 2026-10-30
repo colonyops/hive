@@ -171,6 +171,7 @@ useWailsEvent('flows:updated', () => {
           :active="terminalActive"
           :sidebar-collapsed="terminalSidebarCollapsed"
           :drive="appMode.codeDrive.value"
+          :git="appMode.codeGit.value"
           @open-drive-page="appMode.openDrive"
           @open-tasks="overlays.toggleTasks"
           @session-repo-key="terminalSessionRepoKey = $event"

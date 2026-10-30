@@ -133,7 +133,11 @@ func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
 	return "main", nil
 }
 func (m *mockGit) DiffStats(_ context.Context, _ string) (int, int, error) { return 0, 0, nil }
-func (m *mockGit) IsValidRepo(_ context.Context, _ string) error           { return nil }
+func (*mockGit) MergeBase(context.Context, string, string) (string, error) { return "", nil }
+func (*mockGit) ChangedFiles(context.Context, string, string) ([]git.ChangedFile, error) {
+	return nil, nil
+}
+func (m *mockGit) IsValidRepo(_ context.Context, _ string) error { return nil }
 
 type testMultiplexer struct{}
 

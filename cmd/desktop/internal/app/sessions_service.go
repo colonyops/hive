@@ -479,6 +479,23 @@ func (s *SessionsService) SessionGitStatus(ctx context.Context, id string) (gits
 	return s.hive.GitStatus().ReadSession(ctx, sess), nil
 }
 
+// SessionChanges lists what differs in the session's checkout. It goes through
+// the session API rather than the in-process engine, so it reads the checkout
+// on the machine that holds it.
+func (s *SessionsService) SessionChanges(ctx context.Context, id string, base gitstatus.DiffBase) (gitstatus.Changes, error) {
+	if strings.TrimSpace(id) == "" {
+		return gitstatus.Changes{}, Errorf(KindInvalid, "session id is required")
+	}
+	changes, err := s.sessions.SessionChanges(ctx, id, base)
+	if errors.Is(err, session.ErrNotFound) {
+		return gitstatus.Changes{}, Wrap(err, KindNotFound, "reading changes for session %q", id)
+	}
+	if err != nil {
+		return gitstatus.Changes{}, Wrap(err, KindInternal, "reading changes for session %q", id)
+	}
+	return changes, nil
+}
+
 // SessionPullRequest resolves the pull request for a branch SessionGitStatus
 // already reported. The branch is passed rather than read again: resolving it
 // costs a git subprocess the caller has just paid for, and the two halves

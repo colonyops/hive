@@ -43,6 +43,10 @@ type Git interface {
 	// It first checks the upstream tracking branch; if none is set, it falls back to comparing
 	// against origin/<default branch>. Returns false (no risk) on any git error.
 	HasUnpushedCommits(ctx context.Context, dir string) (bool, error)
+	// MergeBase returns the commit where HEAD left branch.
+	MergeBase(ctx context.Context, dir, branch string) (string, error)
+	// ChangedFiles lists the working tree against ref, plus untracked files.
+	ChangedFiles(ctx context.Context, dir, ref string) ([]ChangedFile, error)
 }
 
 // RemoteIdentity returns the key under which remotes that name the same

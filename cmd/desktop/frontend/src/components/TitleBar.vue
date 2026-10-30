@@ -59,8 +59,8 @@ import SegmentedControl, { type SegmentedControlOption } from '@hive/ui/componen
 // shown as a pulsing amber dot. sidebarCollapsed drives the panel-toggle glyph;
 // canToggleSidebar disables the toggle in views with no left panel (settings,
 // flows, onboarding). previewCollapsed/canTogglePreview are the same pair for
-// the right-hand pane — the detail preview in Inbox, the drive in Chats and
-// Code, the comments on the Drive page. previewUnseen is that pane's attention dot: an agent wrote to a
+// the right-hand pane — the detail preview in Inbox, the drive in Chats, the
+// side pane in Code, the comments on the Drive page. previewUnseen is that pane's attention dot: an agent wrote to a
 // document that is not on screen. updateAvailable renders a click-to-install chip in
 // the right cluster, independent of profileName so it can show during
 // onboarding too.
@@ -114,7 +114,8 @@ const modeOptions: SegmentedControlOption<'hub' | 'terminal' | 'agents'>[] = [
 const modeIcons = { hub: IconInbox, terminal: IconCode, agents: IconMessagesSquare }
 const rightPane = computed(() => {
   if (props.mode === 'drive') return 'comments'
-  return props.mode === 'terminal' || props.mode === 'agents' ? 'drive' : 'preview'
+  if (props.mode === 'terminal') return 'panel'
+  return props.mode === 'agents' ? 'drive' : 'preview'
 })
 const jobsRoot = ref<HTMLElement | null>(null)
 const jobsOpen = ref(false)

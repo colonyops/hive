@@ -18,6 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
@@ -57,6 +58,15 @@ func TestClientDrivesTheSessionAPIThroughTheDaemon(t *testing.T) {
 	risk, err := client.CheckSessionRisk(ctx, created.ID)
 	require.NoError(t, err)
 	assert.Equal(t, sessionsvc.Risk{}, risk)
+
+	changes, err := client.SessionChanges(ctx, created.ID, gitstatus.DiffBaseUncommitted)
+	require.NoError(t, err)
+	assert.True(t, changes.Resolved)
+	assert.Equal(t, gitstatus.DiffBaseUncommitted, changes.Base)
+	assert.Empty(t, changes.Files)
+
+	_, err = client.SessionChanges(ctx, "no-such-session", gitstatus.DiffBaseBranch)
+	require.ErrorIs(t, err, session.ErrNotFound)
 
 	options, err := client.SessionLaunchOptions(ctx)
 	require.NoError(t, err)

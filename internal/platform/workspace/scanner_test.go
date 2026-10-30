@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/colonyops/hive/internal/platform/git"
 )
 
 type mockGit struct {
@@ -23,8 +25,12 @@ func (m *mockGit) ResetHard(context.Context, string) error        { return nil }
 func (m *mockGit) IsClean(context.Context, string) (bool, error)  { return true, nil }
 func (m *mockGit) Branch(context.Context, string) (string, error) { return "main", nil }
 
-func (m *mockGit) DefaultBranch(context.Context, string) (string, error)        { return "main", nil }
-func (m *mockGit) DiffStats(context.Context, string) (int, int, error)          { return 0, 0, nil }
+func (m *mockGit) DefaultBranch(context.Context, string) (string, error)     { return "main", nil }
+func (m *mockGit) DiffStats(context.Context, string) (int, int, error)       { return 0, 0, nil }
+func (m *mockGit) MergeBase(context.Context, string, string) (string, error) { return "", nil }
+func (m *mockGit) ChangedFiles(context.Context, string, string) ([]git.ChangedFile, error) {
+	return nil, nil
+}
 func (m *mockGit) IsValidRepo(context.Context, string) error                    { return nil }
 func (m *mockGit) CloneBare(context.Context, string, string) error              { return nil }
 func (m *mockGit) WorktreeAdd(context.Context, string, string, string) error    { return nil }

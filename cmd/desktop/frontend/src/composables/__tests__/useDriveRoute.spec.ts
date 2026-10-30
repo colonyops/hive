@@ -137,4 +137,47 @@ describe('useDriveRoute', () => {
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({ window: '@2' })
   })
+
+  it('opens Git on the terminal route, and opening either query drops the other', async () => {
+    const { api, router } = await mountAt('/terminal/fix-login?window=%402&doc=plans%2Fx.md')
+
+    api.syncGitQuery(true)
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ window: '@2', git: '1' })
+    expect(api.gitRequested.value).toBe(true)
+    expect(api.docRequested.value).toBe(false)
+    expect(api.gitPath.value).toBeNull()
+
+    api.syncGitQuery(true, 'cmd/a.go')
+    await flushPromises()
+    expect(api.gitPath.value).toBe('cmd/a.go')
+
+    api.syncDocQuery(true)
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ window: '@2', doc: '1' })
+    expect(api.gitRequested.value).toBe(false)
+  })
+
+  it('keeps the file on a bare reopen of Git', async () => {
+    const { api, router } = await mountAt('/terminal/fix-login?git=cmd%2Fa.go')
+    api.syncGitQuery(true)
+    await flushPromises()
+    expect(router.currentRoute.value.query.git).toBe('cmd/a.go')
+  })
+
+  it('closes whichever pane is open', async () => {
+    const { api, router } = await mountAt('/terminal/fix-login?window=%402&git=1')
+    api.closeSidePane()
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ window: '@2' })
+  })
+
+  it('has no Git pane in Chats', async () => {
+    const { api, router } = await mountAt('/workspaces/web-app?chat=7')
+    expect(api.gitRequested.value).toBe(false)
+
+    api.syncGitQuery(true)
+    await flushPromises()
+    expect(router.currentRoute.value.query.git).toBeUndefined()
+  })
 })

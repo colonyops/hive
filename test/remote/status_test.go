@@ -13,7 +13,9 @@ import (
 
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	"github.com/colonyops/hive/internal/hive/status"
+	"github.com/colonyops/hive/internal/platform/git"
 )
 
 func TestSessionAPI_ReportsTmuxPresenceFromTheServer(t *testing.T) {
@@ -75,4 +77,14 @@ func TestSessionAPI_ReportsTheAgentStatusFromTheServer(t *testing.T) {
 		serverA.Shell(t, fmt.Sprintf("mkdir -p /tmp/fake-claude && echo %s > %s", shellQuote(step.snapshot), shellQuote(stateFile))).Ok(t)
 		waitFor(step.want)
 	}
+}
+
+func TestSessionAPI_ReadsChangesFromTheServer(t *testing.T) {
+	created := serverA.CreateSession(t, "changes")
+	serverA.Shell(t, "echo changed > "+path.Join(created.Path, "only-on-the-server.txt")).Ok(t)
+
+	changes, err := serverA.API(t).SessionChanges(t.Context(), created.ID, gitstatus.DiffBaseUncommitted)
+	require.NoError(t, err)
+	require.True(t, changes.Resolved)
+	assert.Contains(t, changes.Files, git.ChangedFile{Path: "only-on-the-server.txt", Status: git.FileStatusUntracked})
 }

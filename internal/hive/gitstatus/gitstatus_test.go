@@ -33,6 +33,15 @@ type stubGit struct {
 	deletions   int
 	diffErr     error
 	unpushedHit *atomic.Int32
+
+	defaultBranch    string
+	defaultBranchErr error
+	mergeBase        string
+	mergeBaseErr     error
+	files            []git.ChangedFile
+	filesErr         error
+	onRef            func(string)
+	block            bool
 }
 
 func (g stubGit) Branch(context.Context, string) (string, error) { return g.branch, g.branchErr }
@@ -47,6 +56,25 @@ func (g stubGit) HasUnpushedCommits(context.Context, string) (bool, error) {
 
 func (g stubGit) DiffStats(context.Context, string) (int, int, error) {
 	return g.additions, g.deletions, g.diffErr
+}
+
+func (g stubGit) DefaultBranch(context.Context, string) (string, error) {
+	return g.defaultBranch, g.defaultBranchErr
+}
+
+func (g stubGit) MergeBase(context.Context, string, string) (string, error) {
+	return g.mergeBase, g.mergeBaseErr
+}
+
+func (g stubGit) ChangedFiles(ctx context.Context, _, ref string) ([]git.ChangedFile, error) {
+	if g.block {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	if g.onRef != nil {
+		g.onRef(ref)
+	}
+	return g.files, g.filesErr
 }
 
 func activeSession() session.Session {
