@@ -9,6 +9,7 @@ import { useDriveReview } from '../stores/useDriveReview'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 import { createLogger } from '../lib/log'
+import { AGENTS_SIDEBAR, TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 
 const log = createLogger('app-mode')
 
@@ -55,7 +56,9 @@ export function useAppMode(
 
   // Mounted on first entry and then only hidden (ADR
   // terminal-mode-is-hidden-not-unmounted): both hold live PTYs and xterm
-  // screens bound to their elements, so unmounting paid a full re-attach.
+  // screens bound to their elements, so unmounting paid a full re-attach. The
+  // Code view can mount hidden ahead of that (ADR
+  // code-and-chats-preload-after-the-hub-is-up).
   const mountedOnce = (active: Ref<boolean>) => {
     const mounted = ref(false)
     watch(
@@ -68,6 +71,9 @@ export function useAppMode(
     return mounted
   }
   const terminalMounted = mountedOnce(terminalActive)
+  function prepareTerminal(): void {
+    terminalMounted.value = true
+  }
   const agentsMounted = mountedOnce(agentsActive)
 
   // Each mode's toggle lands where that mode was last. Only the agents path
@@ -118,8 +124,8 @@ export function useAppMode(
   )
 
   const feedSidebarCollapsed = useStorage('hive.panel.sidebar.collapsed', false)
-  const terminalSidebarCollapsed = useStorage('hive.panel.terminal.sidebar.collapsed', false)
-  const agentsSidebarCollapsed = useStorage('hive.panel.agents.sidebar.collapsed', false)
+  const terminalSidebarCollapsed = useStorage(TERMINAL_SIDEBAR.collapsedKey, false)
+  const agentsSidebarCollapsed = useStorage(AGENTS_SIDEBAR.collapsedKey, false)
   const driveSidebarCollapsed = useStorage('hive.panel.drive.sidebar.collapsed', false)
   const previewCollapsed = useStorage('hive.panel.detailpane.collapsed', false)
   // Follows the hub's template fallthrough: the feed renders whenever no other
@@ -267,6 +273,7 @@ export function useAppMode(
     toggleDrive,
     closeSettings,
     terminalMounted,
+    prepareTerminal,
     agentsMounted,
     onScreenSessionSlug,
     feedSidebarCollapsed,

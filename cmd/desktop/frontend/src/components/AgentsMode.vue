@@ -14,12 +14,13 @@ import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDocumentVisibility } from '@vueuse/core'
-import type { Terminal } from '@xterm/xterm'
+import type { IDisposable, Terminal } from '@xterm/xterm'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import AgentsSidebar from './AgentsSidebar.vue'
 import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
 import DrivePane from './drive/DrivePane.vue'
+import ModeSkeleton from './ModeSkeleton.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
@@ -28,11 +29,14 @@ import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { useNewSession } from '../composables/useNewSession'
+import { usePaintedActive } from '../composables/usePaintedActive'
+import { usePerf } from '../composables/usePerf'
 import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXtermPane'
 import { driveEventAuthor, workspaceSpaceKey, type DriveScope } from '../lib/drive'
 import { decodeFrame, encodeInputFrames, encodePasteFrames } from '../lib/agentWorkspacesClient'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { isEditableTarget } from '../lib/isEditableTarget'
+import { AGENTS_SIDEBAR } from '../lib/modeSidebars'
 import { installTerminalImages } from '../lib/terminalImages'
 import { installKittyGraphics } from '../lib/kitty/kittyGraphics'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
@@ -73,6 +77,7 @@ const {
   renameSession,
   deleteSession,
   resetOpenWorkspace,
+  workspacesLoaded,
 } = useAgentWorkspaces()
 const { recents, reload: reloadRecents } = useAgentSessionsAll()
 
@@ -106,6 +111,7 @@ const missingSkillsNotice = computed(() => {
 // ReferenceError even though the function that closes over it is hoisted.
 const paneHost = ref<HTMLElement | null>(null)
 const pane = useXtermPane(paneHost, voteSize)
+const perf = usePerf('terminal')
 const { term } = pane
 const openSessionId = ref<string | null>(null)
 const paneStatus = ref<'idle' | 'opening' | 'live'>('idle')
@@ -121,6 +127,7 @@ let paneWindowId = ''
 let panePaneId = ''
 
 const paneLaidOut = computed(() => paneStatus.value === 'opening' || term.value !== null)
+const paneHolding = ref(false)
 const paneWorkspaceName = computed(
   () => workspaces.value.find((ws) => ws.dir === paneWorkspaceDir.value)?.name || paneWorkspaceDir.value,
 )
@@ -129,6 +136,11 @@ const paneWorkspaceName = computed(
 const route = useRoute()
 const router = useRouter()
 const { routeChatId, docVisible, docPath, syncDocQuery } = useDriveRoute()
+// A route naming a chat is a resume on its way. The pane says so from the first
+// frame, or re-entry would pass through the zero state and shift when the status
+// bar arrives. A resume that cannot happen clears ?chat, which ends this.
+const paneResuming = computed(() => paneStatus.value === 'idle' && routeChatId.value !== null && !paneError.value)
+const painted = usePaintedActive(() => props.active, { preloaded: workspacesLoaded.value })
 const selectedWorkspace = computed(() =>
   route.name === 'agents' && typeof route.params.workspace === 'string' ? route.params.workspace : '',
 )
@@ -142,10 +154,9 @@ function selectWorkspace(dir: string): Promise<unknown> {
 }
 
 watch(
-  () => props.active,
-  (active) => {
-    if (!active) return
-    void loadWorkspaces()
+  painted,
+  (shown) => {
+    if (shown) void loadWorkspaces()
   },
   { immediate: true },
 )
@@ -212,9 +223,9 @@ function stopActivityPolling(): void {
 const visibility = useDocumentVisibility()
 
 watch(
-  [() => props.active, visibility],
-  ([active, state]) => {
-    if (!active) {
+  [painted, visibility],
+  ([shown, state]) => {
+    if (!shown) {
       stopActivityPolling()
       return
     }
@@ -300,13 +311,21 @@ watch([paneStatus, openSessionId], ([status, id]) => {
 })
 
 // A route naming a chat other than the open one is a request to switch. A
-// reload with a stale ?chat is the same shape. Only an in-flight launch is left
-// alone, so two attaches never race for the pane.
+// reload with a stale ?chat is the same shape, and so is a return to a chat that
+// ended while another mode was showing, which off the route could not clear ?chat.
+// Only an in-flight launch is left alone, so two attaches never race for the pane.
+function paneHoldsChat(id: string): boolean {
+  return openSessionId.value === id && paneStatus.value !== 'idle'
+}
+
 watch(
   [routeChatId, () => props.active],
   ([id, active]) => {
     if (id === null || !active) return
-    if (openSessionId.value === id || paneStatus.value === 'opening') return
+    if (paneHoldsChat(id) || paneStatus.value === 'opening') return
+    if (paneStatus.value === 'idle') {
+      paneWorkspaceDir.value = recents.value.find((row) => row.id === id)?.workspace ?? selectedWorkspace.value
+    }
     void resumeChatFromRoute(id)
   },
   { immediate: true },
@@ -329,7 +348,7 @@ async function resumeChatFromRoute(id: string): Promise<void> {
   await ready()
   if (!available.value) return
   await reloadRecents()
-  if (routeChatId.value !== id || openSessionId.value === id || paneStatus.value === 'opening') return
+  if (routeChatId.value !== id || paneHoldsChat(id) || paneStatus.value === 'opening') return
   const session = recents.value.find((row) => row.id === id || row.legacyId === id)
   if (!session?.terminalId) {
     // The route named a chat that cannot be attached, so the query goes back
@@ -523,7 +542,8 @@ async function launchIntoPane(
   action: (size: { cols?: number; rows?: number }) => Promise<AgentSession>,
 ): Promise<string | null> {
   if (!client.value || paneStatus.value === 'opening') return null
-  teardownPane()
+  const endOpen = perf.start('chat:open')
+  retirePane()
   openSessionId.value = null
   paneWorkspaceDir.value = workspace
   paneActionError.value = ''
@@ -567,6 +587,7 @@ async function launchIntoPane(
     lastVote = size
     attachStream(created, result.terminalId, result.windowId, result.paneId)
     paneStatus.value = 'live'
+    endOpen()
     // A launch that lands while the user is typing elsewhere must not steal
     // that focus -- the sidebar's inline rename can be one keystroke into a
     // field opened by the same double click that started this launch.
@@ -589,10 +610,16 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
 
   paneWindowId = windowId
   panePaneId = paneId
+  let firstDraw: IDisposable | undefined
   pane.track(silenceDeviceReports(created))
   const graphics = installKittyGraphics(created)
   pane.track(graphics)
-  pane.track(created.onData((data) => send(data)))
+  // A retired terminal is still listening, and send targets the current pane.
+  pane.track(
+    created.onData((data) => {
+      if (term.value === created) send(data)
+    }),
+  )
   pane.track({
     dispose: installTerminalImages(paneHost.value, {
       pasteText: sendPaste,
@@ -644,8 +671,17 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
       return
     }
     if (frame.windowId !== paneWindowId) return
-    if (frame.type === 'output') created.write(graphics.filter.rewrite(frame.data))
-    else if (frame.kind === 'exited' || frame.kind === 'error') exited()
+    if (frame.type === 'output') {
+      created.write(graphics.filter.rewrite(frame.data))
+      if (pane.holding() && !firstDraw) {
+        // Its own draw is what clears the outgoing one: both land in one frame.
+        firstDraw = created.onRender(() => {
+          firstDraw?.dispose()
+          releaseRetiredPane()
+        })
+        pane.track(firstDraw)
+      }
+    } else if (frame.kind === 'exited' || frame.kind === 'error') exited()
   }
   opened.onerror = () => fail('The session connection dropped.')
   opened.onclose = () => {
@@ -694,8 +730,33 @@ function fail(why: string): void {
   void reloadRecents()
 }
 
+// The outgoing chat stays on screen until the incoming one has drawn. The cap is
+// for a chat with an empty screen, which sends no first paint at all.
+const RETIRED_HOLD_MS = 300
+let retiredHoldTimer: ReturnType<typeof setTimeout> | undefined
+
+function retirePane(): void {
+  pane.retire()
+  paneHolding.value = pane.holding()
+  clearTimeout(retiredHoldTimer)
+  retiredHoldTimer = setTimeout(releaseRetiredPane, RETIRED_HOLD_MS)
+  resetPaneState()
+}
+
+function releaseRetiredPane(): void {
+  clearTimeout(retiredHoldTimer)
+  pane.releaseRetired()
+  paneHolding.value = false
+}
+
 function teardownPane(): void {
   pane.teardown()
+  clearTimeout(retiredHoldTimer)
+  paneHolding.value = false
+  resetPaneState()
+}
+
+function resetPaneState(): void {
   paneWindowId = ''
   lastVote = null
   paneError.value = ''
@@ -718,6 +779,7 @@ onMounted(() => {
   })
 })
 onBeforeUnmount(() => {
+  clearTimeout(retiredHoldTimer)
   setAgentsTreeHandles(null)
   teardownPane()
   stopActivityPolling()
@@ -726,7 +788,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-app" data-testid="agents-mode">
-    <div v-if="checking" class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">Checking…</div>
+    <ModeSkeleton v-if="checking" :sidebar="AGENTS_SIDEBAR" />
 
     <div
       v-else-if="!available"
@@ -752,7 +814,7 @@ onBeforeUnmount(() => {
       <AgentsSidebar
         v-if="!sidebarCollapsed"
         ref="sidebarEl"
-        :active="props.active"
+        :painted-active="painted"
         :selected-workspace="selectedWorkspace"
         :open-session-id="openSessionId"
         :starting-session="startingSession"
@@ -799,7 +861,7 @@ onBeforeUnmount(() => {
         </div>
 
         <PaneStatusBar
-          v-if="paneStatus !== 'idle'"
+          v-if="paneStatus !== 'idle' || paneResuming"
           testid="agents-pane-statusbar"
           :label="paneWorkspaceName"
           :path="paneWorkspaceDir"
@@ -823,7 +885,7 @@ onBeforeUnmount(() => {
             data-testid="agents-session-pane"
             @mousedown="term?.focus()"
           >
-            <div ref="paneHost" class="size-full" />
+            <div ref="paneHost" class="relative size-full" />
           </div>
 
           <!-- The Code view's pill, placed and worded identically: new output
@@ -845,7 +907,7 @@ onBeforeUnmount(() => {
                most of a start is spent waiting on tmux after the grid is
                built, and a bare dark pane there reads as nothing happening. -->
           <div
-            v-if="paneStatus === 'opening'"
+            v-if="(paneStatus === 'opening' && !paneHolding) || paneResuming"
             class="absolute inset-0 z-10 flex items-center justify-center bg-app"
             data-testid="agents-pane-opening"
           >

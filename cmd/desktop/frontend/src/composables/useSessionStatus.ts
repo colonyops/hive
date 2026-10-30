@@ -16,7 +16,10 @@ const POLL_INTERVAL_MS = 15_000
  * The attached session's checkout, for the session status bar. Scoped to one
  * session: a full read costs several git subprocesses.
  */
-export function useSessionStatus(sessionId: Ref<string>): {
+export function useSessionStatus(
+  sessionId: Ref<string>,
+  paintedActive: () => boolean = () => true,
+): {
   git: Ref<SessionGitStatus | null>
   pullRequest: Ref<SessionPullRequest | null>
   /** Why the lookup failed, which is never the same as the branch having none. */
@@ -106,11 +109,18 @@ export function useSessionStatus(sessionId: Ref<string>): {
       // Cached, so restoring it does not replay the arrival animation.
       pullRequest.value = remembered ? { ...remembered, cached: true } : null
       pullRequestError.value = ''
-      void refresh()
+      // Moves even with no refresh to follow: an answer already in flight is for
+      // the session being left.
+      sequence++
+      if (paintedActive()) void refresh()
       schedule()
     },
     { immediate: true },
   )
+
+  watch(paintedActive, (shown) => {
+    if (shown) void refresh()
+  })
 
   // A blurred window's checkout keeps changing — an agent is committing in it —
   // so refocus is both the stalest moment and the one worth spending a request

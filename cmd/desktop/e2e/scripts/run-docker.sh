@@ -26,7 +26,7 @@ E2E_HARNESS_MARKER="$(openssl rand -hex 32)"
 # cgo, and cross-compiles for whatever architecture the Docker server runs.
 (cd cmd/desktop/frontend && npm run build)
 CGO_ENABLED=0 GOOS=linux GOARCH="$(docker version --format '{{.Server.Arch}}')" \
-  go build -tags server -o cmd/desktop/e2e/.build/hive-desktop-server ./cmd/desktop
+  go build -tags "${HIVE_E2E_GO_TAGS:-server}" -o cmd/desktop/e2e/.build/hive-desktop-server ./cmd/desktop
 
 docker build --file cmd/desktop/e2e/Dockerfile --tag "${IMAGE_TAG}" .
 
@@ -49,6 +49,7 @@ mkdir -p cmd/desktop/e2e/test-results cmd/desktop/e2e/screenshots
 docker run --rm --init --network none --ipc=host \
   --env HIVE_DESKTOP_E2E_HARNESS="${E2E_HARNESS_MARKER}" \
   --env PW_FAIL_ON_FLAKY \
+  --env HIVE_PERF_SCALE \
   --volume "$(pwd)/cmd/desktop/e2e/test-results:/workspace/cmd/desktop/e2e/test-results" \
   --volume "$(pwd)/cmd/desktop/e2e/screenshots:/workspace/cmd/desktop/e2e/screenshots" \
   "${IMAGE_TAG}" "$@"

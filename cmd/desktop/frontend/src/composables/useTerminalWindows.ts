@@ -17,13 +17,20 @@ import {
 } from '../lib/terminalClient'
 import { resetTerminalFacesForTests } from '../lib/terminalFaces'
 import { scrollbarWidthFor, useTerminalScrollbars } from '../stores/useTerminalScrollbars'
-import { proposeGrid, terminalCellSize, type CellSize } from '../lib/terminalGrid'
+import {
+  deferHiddenSelectionRedraw,
+  proposeGrid,
+  renderRevealedTerminal,
+  terminalCellSize,
+  type CellSize,
+} from '../lib/terminalGrid'
 import { activePaneOf, paneGrids, windowPanes } from '../lib/terminalLayout'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
-import { TerminalOutputWriter } from '../lib/terminalOutput'
+import { PacedWriter, TerminalOutputWriter } from '../lib/terminalOutput'
 import { installTerminalImages } from '../lib/terminalImages'
 import { installKittyGraphics, type KittyGraphics } from '../lib/kitty/kittyGraphics'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
+import { probePane, registerBenchPane, type PaneProbe } from '../lib/terminalPerf'
 import { appClaimsPaneKey, claimsShiftEnter } from '../lib/terminalKeys'
 import { silenceDeviceReports } from '../lib/terminalReports'
 import { scrolledOffTail } from '../lib/terminalTail'
@@ -33,10 +40,12 @@ import { resizeTerminalPreservingViewport } from '../lib/terminalViewport'
 import { useTerminalFont } from '../stores/useTerminalFont'
 import { useTerminalOutcomes, type TerminalEndReason } from '../stores/useTerminalOutcomes'
 export type { TerminalEndReason } from '../stores/useTerminalOutcomes'
+import { usePerf } from './usePerf'
 import { createTerminal, loadTerminalFont, watchTerminalAppearance } from './useXtermPane'
 import { createLogger } from '../lib/log'
 
 const log = createLogger('terminal-windows')
+const perf = usePerf('terminal')
 
 /**
  * 'ended' is terminal: this view has no stream any more — whether or not the
@@ -150,6 +159,7 @@ export interface UseTerminalWindows {
   resizePane: (paneId: string, size: { width?: number; height?: number }) => Promise<void>
   focusActive: () => void
   scrollToBottom: () => void
+  renderShown: () => void
   dispose: () => void
 }
 
@@ -175,7 +185,9 @@ interface PaneRuntime {
   term: Terminal
   finder: SearchAddon
   output: TerminalOutputWriter
+  writes: PacedWriter
   graphics: KittyGraphics
+  probe: PaneProbe
   disposers: IDisposable[]
   // An atlas renderer is live on this terminal. False after a failed claim or a
   // context loss, which is what makes the next activation retry instead of
@@ -258,6 +270,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   // tmux obeys the attach vote and would resize the session to it.
   let vote: TerminalSize | null = rememberedVote(cellMetrics())
   let resizeTimer: ReturnType<typeof setTimeout> | undefined
+  let lastResizeAt = Number.NEGATIVE_INFINITY
   let constraintTimer: ReturnType<typeof setTimeout> | undefined
   let constraintDismissed = false
   // terminalGrid.ts reads xterm's private _core, which no test against a fake
@@ -326,19 +339,28 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   }
 
   function createPane(windowId: string, paneId: string, grid: TerminalSize | undefined): TerminalPane {
+    const endCreate = perf.start('pane:create')
     // registerDecoration is still proposed API, and every find highlights
     // through it -- without this the first findNext throws and search is dead.
     const term = createTerminal({ allowProposedApi: true })
     const finder = markRaw(new SearchAddon())
     term.loadAddon(finder)
     const graphics = markRaw(installKittyGraphics(term))
+    const probe = probePane(paneId, term, () => !!panes.get(paneId)?.rendered)
+    const writes = markRaw(new PacedWriter(term, probe.parsed))
     const output = markRaw(
-      new TerminalOutputWriter((data) => {
-        if (painted.value) term.write(data)
-        else
-          term.write(data, () => {
-            painted.value = true
-          })
+      new TerminalOutputWriter((data, atomic) => {
+        const endPaint = painted.value ? null : perf.start('paint:parse', { bytes: data.length })
+        writes.write(
+          data,
+          atomic,
+          endPaint
+            ? () => {
+                endPaint()
+                painted.value = true
+              }
+            : undefined,
+        )
       }, graphics.filter),
     )
     // Before any output reaches it: xterm re-wraps its buffer on resize, so a
@@ -359,13 +381,44 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       term,
       finder,
       output,
+      writes,
       graphics,
+      probe,
       disposers: [
         finder,
         { dispose: () => output.dispose() },
+        { dispose: () => writes.discard() },
         graphics,
+        probe,
+        registerBenchPane({
+          paneId,
+          term,
+          send: (data) => sendInput(paneId, data),
+          backlog: () => probe.backlog(),
+          received: () => probe.totalReceived(),
+          webgl: () => !!panes.get(paneId)?.rendered,
+          reattach: async () => {
+            painted.value = false
+            await reconnect()
+            if (painted.value) return
+            await new Promise<void>((resolve) => {
+              const stop = watch(painted, () => {
+                stop()
+                resolve()
+              })
+            })
+          },
+          nextWindow: async () => {
+            const index = tabs.value.findIndex((tab) => tab.windowId === activeWindowId.value)
+            const next = tabs.value[(index + 1) % tabs.value.length]
+            if (next) await select(next.windowId)
+          },
+        }),
         silenceDeviceReports(term),
-        term.onData((data: string) => sendInput(paneId, data)),
+        term.onData((data: string) => {
+          probe.input(data)
+          sendInput(paneId, data)
+        }),
         term.onScroll(() => refreshScrolledUp(paneId)),
         // Entering the alternate screen has no scrollback and fires no scroll
         // event on the way in.
@@ -378,6 +431,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
         }),
       ],
     })
+    endCreate()
     return { uid: nextUID++, paneId, term, scrolledUp: false }
   }
 
@@ -429,6 +483,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     activeWindowId.value = windowId
     for (const tab of tabs.value) tab.active = tab.windowId === windowId
     showRenderers(windowId)
+    void nextTick(renderShown)
     // A search belongs to the buffer it ran against, so switching tabs re-runs
     // it rather than carrying the old window's hit count onto the new one.
     if (search.value.open) runSearch('incremental')
@@ -442,6 +497,13 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const tab = findTab(windowId)
     if (!tab) return
     for (const pane of tab.panes) showRenderer(pane.paneId)
+  }
+
+  // Inside the nextTick that follows the DOM flip, so it lands before the browser
+  // paints it: the first frame of a switch shows what the pane holds now.
+  function renderShown(): void {
+    const tab = findTab(activeWindowId.value)
+    for (const pane of tab?.panes ?? []) renderRevealedTerminal(pane.term)
   }
 
   function showRenderer(paneId: string): void {
@@ -515,7 +577,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const state = windows.get(windowId)
     if (!state || state.host) return
     state.host = host
-    const observer = new ResizeObserver(() => scheduleVote())
+    const observer = new ResizeObserver(() => voteOnResize())
     observer.observe(host)
     state.observer = observer
     scheduleVote()
@@ -526,7 +588,11 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const state = panes.get(paneId)
     if (!found || !state || state.host) return
     state.host = host
+    const endOpen = perf.start('pane:open')
     state.term.open(host)
+    endOpen()
+    deferHiddenSelectionRedraw(state.term)
+    state.probe.opened()
     const releasePaste = installTerminalImages(host, {
       pasteText: (text) => sendPaste(paneId, text),
       capture: () => {
@@ -572,6 +638,16 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   function scheduleVote(): void {
     clearTimeout(resizeTimer)
     resizeTimer = setTimeout(voteSize, RESIZE_DEBOUNCE_MS)
+  }
+
+  // A resize that follows none votes at once, because until tmux answers the pane
+  // shows its old grid in the new box. The debounce still closes it, so a window
+  // being dragged sends its first size and then its last.
+  function voteOnResize(): void {
+    const now = performance.now()
+    if (now - lastResizeAt >= RESIZE_DEBOUNCE_MS) voteSize()
+    lastResizeAt = now
+    scheduleVote()
   }
 
   // All panes share font metrics. Prefer an active-window atlas renderer because
@@ -676,7 +752,8 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
 
     switch (frame.type) {
       case 'output': {
-        panes.get(frame.paneId)?.output.write(frame.data)
+        const state = panes.get(frame.paneId)
+        if (state) state.probe.received(state.output.write(frame.data))
         break
       }
       case 'window':
@@ -700,10 +777,12 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     if (disposed) return
     outputDropped.value = true
     for (const [paneId, state] of panes) {
-      state.output.reset()
-      state.term.reset()
-      state.graphics.clear()
-      refreshScrolledUp(paneId)
+      const held = state.output.reset()
+      const queued = state.writes.clear(() => {
+        state.graphics.clear()
+        refreshScrolledUp(paneId)
+      })
+      state.probe.discarded(held + queued)
     }
   }
 
@@ -909,6 +988,8 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     for (const tab of [...tabs.value]) disposeTab(tab.windowId)
   }
 
+  let stopAttachSpan: () => void = () => {}
+
   async function start(): Promise<void> {
     const epoch = ++connectionEpoch
     status.value = 'connecting'
@@ -916,6 +997,16 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     error.value = null
     actionError.value = null
     outputDropped.value = false
+    stopAttachSpan()
+    // Only a first attach: a reconnect keeps `painted`, so it has no moment to end on.
+    if (!painted.value) {
+      const endAttach = perf.start('attach')
+      stopAttachSpan = watch(painted, (done) => {
+        if (!done) return
+        stopAttachSpan()
+        endAttach()
+      })
+    }
     try {
       // Concurrent, not sequential: the faces have to be resident before
       // term.open() measures a cell, which attachPane does well after this
@@ -1150,6 +1241,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   function dispose(): void {
     if (disposed) return
     disposed = true
+    stopAttachSpan()
     clearTimeout(resizeTimer)
     clearTimeout(constraintTimer)
     closeSocket()
@@ -1202,6 +1294,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     resizePane,
     focusActive,
     scrollToBottom,
+    renderShown,
     dispose,
   }
 }
@@ -1239,6 +1332,7 @@ function message(error: unknown, fallback: string): string {
 // A failed claim leaves state.rendered false, which is what makes showRenderer
 // try again the next time the pane is shown (ADR terminal-renderer-claimed-on-activation).
 function loadRenderer(state: PaneRuntime): void {
+  const endClaim = perf.start('renderer:claim')
   claimAtlasRenderer(
     state.term,
     (addon) => state.disposers.push(addon),
@@ -1246,6 +1340,7 @@ function loadRenderer(state: PaneRuntime): void {
       state.rendered = rendered
     },
   )
+  endClaim()
 }
 
 // Re-exported so the pane's own tests keep reaching it through the composable

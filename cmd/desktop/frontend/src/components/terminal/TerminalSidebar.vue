@@ -31,6 +31,7 @@ import { dropClass, dropEdge, useDragReorder } from '../../composables/useDragRe
 import { formatCombo, useKeybindings } from '../../composables/useKeybindings'
 import { useNewSession } from '../../composables/useNewSession'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
+import { TERMINAL_SIDEBAR } from '../../lib/modeSidebars'
 import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
 import { moveId, type OrderDropTarget } from '../../lib/listOrder'
 import { terminalTreeFocused } from '../../lib/terminalTree'
@@ -40,6 +41,7 @@ import type { MenuEntry } from '@hive/ui/types/menu'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
 
+const props = defineProps<{ active: boolean }>()
 const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions } = useTerminalModeContext()
 const { openBlank: openNewSession } = useNewSession()
 const menus = proxyRefs(useTreeRowMenus({ windowMenuAllowed: ops.rowHasWindowActions }))
@@ -145,17 +147,7 @@ const focusHint = computed(() => {
   return { keys: formatCombo(combo), label: inTree ? 'terminal' : 'tree' }
 })
 
-const {
-  size: sidebarWidth,
-  startResize,
-  step,
-} = useResizablePanel({
-  storageKey: 'hive.panel.terminal.sidebar',
-  defaultSize: 250,
-  min: 180,
-  max: 400,
-  edge: 'right',
-})
+const { size: sidebarWidth, startResize, step } = useResizablePanel(TERMINAL_SIDEBAR.panel)
 
 // The selection markers are two elements that travel: one tracks the attached
 // session, one the active window. Measured off the rows, because row heights
@@ -173,21 +165,37 @@ const { rails, update: settleRails } = useSelectionRail(
 
 // Motion stays off until the tree has been through a frame: on the first paint
 // every row is an enter, so the panel would animate in as one block and the
-// rails would force layout through all of it.
+// rails would force layout through all of it. A reveal is a first paint too: a
+// mode hidden with v-show measures every row at 0, so the update that shows it
+// would FLIP each row in from the top of the panel.
+let settleRun = 0
+function settleTree(): void {
+  const run = ++settleRun
+  void nextTick(() =>
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (run !== settleRun) return
+        treeSettled.value = true
+        settleRails()
+      }),
+    ),
+  )
+}
 watch(
   () => view.ready,
   (ready) => {
-    if (!ready) return
-    void nextTick(() =>
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          treeSettled.value = true
-          settleRails()
-        }),
-      ),
-    )
+    if (ready && props.active) settleTree()
   },
   { immediate: true },
+)
+// Ahead of the render, which is what has to see motion off.
+watch(
+  () => props.active,
+  (shown) => {
+    settleRun++
+    treeSettled.value = false
+    if (shown && view.ready) settleTree()
+  },
 )
 
 // Expand/collapse animates the measured height; the hooks pin the start and end
@@ -261,7 +269,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
       new-label="New session"
       menu-label="Session list actions"
       :menu-entries="sidebarMenuEntries"
-      :loading="tree.sessionsLoading"
+      :loading="tree.sessionsLoading || (!view.ready && !tree.sessionsError)"
       testid="terminal-sessions"
       new-testid="terminal-new-session"
       @escape="nav.focusTree"
@@ -282,16 +290,13 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
         class="px-3 py-2"
         :message="tree.sessionsError"
       />
-      <p
-        v-else-if="!view.ready"
-        class="px-3 py-2 font-mono text-xs text-text-4"
-        data-testid="terminal-sessions-loading"
-      >
-        Loading…
-      </p>
       <!-- The rails' positioning context, and the box whose resize tells them a row moved. -->
       <div ref="treeContent" class="relative" :class="{ 'tree-settling': !treeSettled }">
-        <div v-for="group in view.groups" :key="group.key" class="border-t border-border first:border-t-0">
+        <div
+          v-for="group in view.ready ? view.groups : []"
+          :key="group.key"
+          class="border-t border-border first:border-t-0"
+        >
           <!-- Chats take a repository's header: it heads several rows, so its name cannot be one of them. -->
           <div
             v-if="group.kind !== 'scratch'"

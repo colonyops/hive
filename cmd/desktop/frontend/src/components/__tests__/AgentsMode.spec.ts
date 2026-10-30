@@ -1,6 +1,6 @@
 import { createMemoryHistory, type Router } from 'vue-router'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentsMode from '../AgentsMode.vue'
 import AgentsSidebar from '../AgentsSidebar.vue'
 import { resetNewSessionForTests, useNewSession } from '../../composables/useNewSession'
@@ -28,6 +28,9 @@ const xterm = vi.hoisted(() => {
     resize = vi.fn()
     focus = vi.fn()
     scrollToBottom = vi.fn()
+    blur = vi.fn()
+    element?: HTMLElement
+    renderHandler: (() => void) | null = null
     parser = {
       registerCsiHandler: vi.fn(() => ({ dispose: vi.fn() })),
       registerDcsHandler: vi.fn(() => ({ dispose: vi.fn() })),
@@ -53,6 +56,11 @@ const xterm = vi.hoisted(() => {
     constructor(options: Record<string, unknown> = {}) {
       this.options = { ...options }
       FakeTerminal.instances.push(this)
+    }
+
+    onRender(handler: () => void) {
+      this.renderHandler = handler
+      return { dispose: vi.fn() }
     }
 
     onData(handler: (data: string) => void) {
@@ -591,10 +599,34 @@ describe('AgentsMode', () => {
     const client = fakeClient()
     client.allSessions.mockResolvedValue([{ ...chatRow, terminalId: '' }])
     mocks.createAgentWorkspacesClient.mockReturnValue(client)
-    const { router } = await mountAgentsMode('/workspaces/web-app?chat=7')
+    const { wrapper, router } = await mountAgentsMode('/workspaces/web-app?chat=7')
 
     expect(client.resumeSession).not.toHaveBeenCalled()
     expect(router.currentRoute.value.query.chat).toBeUndefined()
+    expect(wrapper.find('[data-testid="agents-pane-empty"]').exists()).toBe(true)
+  })
+
+  it('spins the reload button instead of showing placeholder text until the workspaces load', async () => {
+    const client = fakeClient()
+    client.workspaces.mockReturnValue(new Promise(() => {}))
+    mocks.createAgentWorkspacesClient.mockReturnValue(client)
+    const { wrapper } = await mountAgentsMode()
+    const sidebar = wrapper.get('[data-testid="agents-workspace-sidebar"]')
+
+    expect(sidebar.get('[data-testid="agents-sidebar-reload"]').attributes('disabled')).toBeDefined()
+    expect(sidebar.text()).not.toContain('Loading')
+    expect(sidebar.find('[data-testid="agents-sidebar-workspaces-empty"]').exists()).toBe(false)
+  })
+
+  it('holds the opening pane and its status bar while a routed chat resolves', async () => {
+    const client = fakeClient()
+    client.allSessions.mockReturnValue(new Promise(() => {}))
+    mocks.createAgentWorkspacesClient.mockReturnValue(client)
+    const { wrapper } = await mountAgentsMode('/workspaces/web-app?chat=7')
+
+    expect(wrapper.find('[data-testid="agents-pane-empty"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="agents-pane-opening"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="agents-pane-statusbar-workspace"]').text()).toBe('Web App')
   })
 
   // A route naming another chat is a request to switch, whatever the pane is
@@ -611,6 +643,129 @@ describe('AgentsMode', () => {
 
     expect(client.resumeSession).toHaveBeenCalledWith({ id: '9' })
     expect(router.currentRoute.value.query.chat).toBe('9')
+  })
+
+  it('clears a routed chat that ended while another mode was showing', async () => {
+    const client = fakeClient()
+    client.allSessions.mockResolvedValue([{ ...chatRow, terminalId: '' }])
+    const { wrapper, router } = await mountWithOpenChat(client)
+    const chatPath = router.currentRoute.value.fullPath
+    expect(router.currentRoute.value.query.chat).toBe('7')
+
+    await router.push({ name: 'feed' })
+    await wrapper.setProps({ active: false })
+    openedSocket(client).onmessage?.({ data: lifecycleFrame({ kind: 'exited', windowId: 'w1', message: '' }) })
+    await flushPromises()
+
+    await router.push(chatPath)
+    await wrapper.setProps({ active: true })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="agents-pane-opening"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="agents-pane-empty"]').exists()).toBe(true)
+    expect(router.currentRoute.value.query.chat).toBeUndefined()
+  })
+
+  it('waits for a re-entry to paint before it reloads what the sidebar shows', async () => {
+    const client = fakeClient()
+    mocks.createAgentWorkspacesClient.mockReturnValue(client)
+    const { wrapper } = await mountAgentsMode('/workspaces')
+    await wrapper.setProps({ active: false })
+    await flushPromises()
+    client.allSessions.mockClear()
+    client.activity.mockClear()
+    client.workspaces.mockClear()
+
+    await wrapper.setProps({ active: true })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(client.allSessions).not.toHaveBeenCalled()
+    expect(client.activity).not.toHaveBeenCalled()
+    expect(client.workspaces).not.toHaveBeenCalled()
+
+    await vi.waitFor(() => expect(client.allSessions).toHaveBeenCalled())
+    expect(client.activity).toHaveBeenCalled()
+    expect(client.workspaces).toHaveBeenCalled()
+  })
+
+  describe('swapping one chat for another', () => {
+    const other = { ...chatRow, id: '9', name: 'Second', terminalId: 'agentws-9' }
+
+    async function openSecondChat(client = fakeClient()) {
+      client.allSessions.mockResolvedValue([other])
+      client.resumeSession.mockResolvedValue({
+        ...other,
+        windowId: 'w9',
+        paneId: '%9',
+        cols: 80,
+        rows: 24,
+        resumeAttempted: true,
+      })
+      const { wrapper, router } = await mountWithOpenChat(client)
+      const outgoing = xterm.FakeTerminal.instances.at(-1)!
+      outgoing.element = document.createElement('div')
+      return {
+        wrapper,
+        client,
+        outgoing,
+        swap: async () => {
+          await router.push({ name: 'agents', params: { workspace: 'web-app' }, query: { chat: '9' } })
+          await flushPromises()
+        },
+      }
+    }
+
+    afterEach(() => vi.useRealTimers())
+
+    it('holds the outgoing chat until the incoming one has drawn', async () => {
+      const { wrapper, client, outgoing, swap } = await openSecondChat()
+      await swap()
+      // The held terminal pins itself with inset: 0, which has to resolve against
+      // this box and not the padded one around it, or the chat shifts.
+      expect(wrapper.get('[data-testid="agents-session-pane"] > div').classes()).toContain('relative')
+      expect(outgoing.dispose).not.toHaveBeenCalled()
+
+      openedSocket(client).onmessage?.({ data: outputFrame('w9', '%9', 'hello') })
+      expect(outgoing.dispose).not.toHaveBeenCalled()
+      xterm.FakeTerminal.instances.at(-1)!.renderHandler?.()
+
+      expect(outgoing.dispose).toHaveBeenCalled()
+    })
+
+    it('stops holding at the cap when the incoming chat draws nothing', async () => {
+      const { outgoing, swap } = await openSecondChat()
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      await swap()
+      await vi.advanceTimersByTimeAsync(299)
+      expect(outgoing.dispose).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(outgoing.dispose).toHaveBeenCalled()
+    })
+
+    it('shows no opening indicator over a held chat, and shows it once the hold ends', async () => {
+      const client = fakeClient()
+      const { wrapper, swap } = await openSecondChat(client)
+      client.resumeSession.mockReturnValue(new Promise(() => {}))
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      await swap()
+      expect(wrapper.find('[data-testid="agents-pane-opening"]').exists()).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(300)
+      expect(wrapper.find('[data-testid="agents-pane-opening"]').exists()).toBe(true)
+    })
+
+    it('sends nothing from the held chat to the incoming one', async () => {
+      const { client, outgoing, swap } = await openSecondChat()
+      await swap()
+      const socket = openedSocket(client)
+
+      outgoing.dataHandler?.('\x1b[<0;1;1M')
+      expect(socket.sent).toHaveLength(0)
+
+      xterm.FakeTerminal.instances.at(-1)!.dataHandler?.('a')
+      expect(socket.sent).toHaveLength(1)
+    })
   })
 
   // A route naming a chat that cannot be attached leaves the live one alone:

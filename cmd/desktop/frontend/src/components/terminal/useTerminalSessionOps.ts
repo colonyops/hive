@@ -15,6 +15,8 @@ import type { TerminalTree } from './useTerminalTree'
 
 export type TerminalSessionOps = ReturnType<typeof useTerminalSessionOps>
 
+const AGENT_PROFILES_FRESH_MS = 60_000
+
 /**
  * What a tree row, a keybinding, or the palette does to a session other than
  * attach it: kill it, add or close its windows and panes, and run the configured
@@ -26,7 +28,7 @@ export function useTerminalSessionOps(options: {
   tree: TerminalTree
   attach: TerminalAttach
   confirmation: ReturnType<typeof useConfirmation>
-  active: () => boolean
+  paintedActive: () => boolean
 }) {
   const { pool, tree, attach, confirmation } = options
   const router = useRouter()
@@ -62,10 +64,16 @@ export function useTerminalSessionOps(options: {
     return agentProfilesRequest
   }
 
+  // SessionLaunchOptions runs a git call per repository in every workspace
+  // directory, which took 700ms on a real setup, and all this reads off it is a
+  // list that rarely changes.
+  let agentProfilesLoadedAt = Number.NEGATIVE_INFINITY
   watch(
-    options.active,
-    (active) => {
-      if (active) void loadAgentProfiles()
+    options.paintedActive,
+    (shown) => {
+      if (!shown || Date.now() - agentProfilesLoadedAt < AGENT_PROFILES_FRESH_MS) return
+      agentProfilesLoadedAt = Date.now()
+      void loadAgentProfiles()
     },
     { immediate: true },
   )

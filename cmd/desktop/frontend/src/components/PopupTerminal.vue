@@ -9,6 +9,7 @@ import IconX from '~icons/lucide/x'
 import IconPower from '~icons/lucide/power'
 import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { loadTerminalFont, useXtermPane } from '../composables/useXtermPane'
+import { renderRevealedTerminal } from '../lib/terminalGrid'
 import { decodeFrame, encodeInputFrames, type PopupTerminalState } from '../lib/popupTerminalClient'
 import { installTerminalImages } from '../lib/terminalImages'
 import { installKittyGraphics } from '../lib/kitty/kittyGraphics'
@@ -211,6 +212,7 @@ async function reveal(): Promise<void> {
   // A renderer claim that failed earlier gets another chance every time the
   // pane comes back on screen (ADR terminal-renderer-claimed-on-activation).
   pane.claimRenderer()
+  if (term.value) renderRevealedTerminal(term.value)
   term.value?.focus()
 }
 

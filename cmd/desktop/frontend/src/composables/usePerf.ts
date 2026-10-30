@@ -151,6 +151,19 @@ export function usePerf(scope: string): PerfScope {
   return { record, start, track }
 }
 
+/**
+ * A probe on a hot path asks at creation and installs nothing when it is off,
+ * so a shipped build pays no per-frame cost at all.
+ */
+export function resolvePerfEnabled(): Promise<boolean> {
+  return gate()
+}
+
+/** False until the backend has answered. */
+export function perfEnabled(): boolean {
+  return enabled === true
+}
+
 /** Send anything buffered immediately. */
 export function flushPerf(): Promise<void> {
   return flush()

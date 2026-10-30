@@ -14,6 +14,7 @@ import { initializeKeybindings } from './composables/useKeybindings'
 import { initializeTheme } from './composables/useTheme'
 import { hiveUiPlatform } from './lib/hiveUiPlatform'
 import { captureVueErrors, installErrorCapture } from './lib/log'
+import { startPerfMonitor } from './lib/perfMonitor'
 import { router } from './router'
 
 installErrorCapture()
@@ -24,10 +25,12 @@ if (new URLSearchParams(window.location.search).has('diagnostics')) {
   installHiveUi(app, hiveUiPlatform)
   captureVueErrors(app)
   app.mount('#app')
+  void startPerfMonitor()
 } else {
   initializeKeybindings()
   const app = createApp(App as Component).use(router)
   installHiveUi(app, hiveUiPlatform)
   captureVueErrors(app)
   app.mount('#app')
+  void startPerfMonitor(router)
 }

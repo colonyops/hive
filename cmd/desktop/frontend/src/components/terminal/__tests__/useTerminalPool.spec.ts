@@ -16,6 +16,7 @@ function fakeSession(slug: string) {
     start: vi.fn().mockResolvedValue(undefined),
     select: vi.fn().mockResolvedValue(undefined),
     focusActive: vi.fn(),
+    renderShown: vi.fn(),
     dispose: vi.fn(),
   }
 }
@@ -67,6 +68,8 @@ describe('useTerminalPool', () => {
     await nextTick()
     expect(pool.visible.value).toBe(sessions.get('b'))
     expect(pool.visibleSlug.value).toBe('b')
+    await nextTick()
+    expect(sessions.get('b')!.renderShown).toHaveBeenCalled()
   })
 
   it('reveals an unpainted session once the hold cap runs out', async () => {

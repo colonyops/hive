@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, toRef } from 'vue'
+import { computed, onMounted, ref, toRef, watch } from 'vue'
+import { useTimeoutFn, whenever } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
 import ActionInputsDialog from './ActionInputsDialog.vue'
+import ModeSkeleton from './ModeSkeleton.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
 import SessionEditDialog from './SessionEditDialog.vue'
 import DrivePane from './drive/DrivePane.vue'
@@ -21,9 +23,11 @@ import { useTerminalTree } from './terminal/useTerminalTree'
 import { useTreeKeyboardNav } from './terminal/useTreeKeyboardNav'
 import { useWindowRename } from './terminal/useWindowRename'
 import { useNewSession } from '../composables/useNewSession'
+import { usePaintedActive } from '../composables/usePaintedActive'
 import { useSessionActions } from '../composables/useSessionActions'
 import { openLink } from '../composables/useXtermPane'
 import { spaceGroup, type DriveScope } from '../lib/drive'
+import { TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 import { useCodeViews } from '../stores/useCodeViews'
 import { useTerminalAvailability } from '../stores/useTerminalAvailability'
 import { useTerminalPoolSize } from '../stores/useTerminalPoolSize'
@@ -47,23 +51,49 @@ const emit = defineEmits<{
   'session-repo-key': [repoKey: string]
   'open-drive-page': [scope: DriveScope]
 }>()
+const PREPARE_LIMIT_MS = 3000
 const active = (): boolean => props.active
+const { checking, available, reason, client } = useTerminalAvailability()
+const painted = usePaintedActive(active, { preloaded: client.value !== null })
+const paintedActive = (): boolean => painted.value
 
-const { checking, available, reason } = useTerminalAvailability()
 const { poolSize } = useTerminalPoolSize()
 
 const pool = useTerminalPool({ size: poolSize, onEvicted: () => tree.sweepListings() })
-const tree = useTerminalTree({ pool, active })
+// Mounted hidden by the preload: the tree reads statuses and windows once, so the
+// first entry reveals a finished tree as every later entry does. Only the tree:
+// the attach's probe restores a session by route, which must wait for an entry.
+// eslint-disable-next-line vue/no-setup-props-reactivity-loss -- how this mount began, read once
+const preparing = ref(!props.active)
+const tree = useTerminalTree({ pool, active: () => paintedActive() || preparing.value })
 const codeViews = useCodeViews()
 const view = useSessionTreeView(tree, {
   filter: () => codeViews.draft.value,
   filterReady: () => codeViews.hydrated.value,
 })
+const stopPreparing = (): void => {
+  preparing.value = false
+}
+whenever(view.ready, stopPreparing, { immediate: true })
+// A tree that cannot get ready, with tmux missing, must not keep polling off-screen.
+useTimeoutFn(stopPreparing, PREPARE_LIMIT_MS)
+onMounted(() => {
+  if (preparing.value) tree.sweepListings()
+})
+// A pool reveal draws its pane; coming back to the same session has to as well,
+// or output taken while hidden waits two frames for the observer.
+watch(
+  () => props.active,
+  (shown) => {
+    if (shown) pool.visible.value?.renderShown()
+  },
+  { flush: 'post' },
+)
 const viewMenus = useSessionViewMenus(tree)
 const rename = useWindowRename(pool.visible)
-const attach = useTerminalAttach({ pool, tree, active, onSwitch: () => (rename.windowId.value = '') })
+const attach = useTerminalAttach({ pool, tree, active, paintedActive, onSwitch: () => (rename.windowId.value = '') })
 const sessions = useSessionActions({ onChanged: () => void tree.reloadSessions() })
-const ops = useTerminalSessionOps({ pool, tree, attach, confirmation: sessions.confirmation, active })
+const ops = useTerminalSessionOps({ pool, tree, attach, confirmation: sessions.confirmation, paintedActive })
 const nav = useTreeKeyboardNav({
   groups: view.groups,
   expanded: view.expansion.expanded,
@@ -110,9 +140,7 @@ const knownTags = computed(() => {
 
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-app" data-testid="terminal-mode">
-    <div v-if="checking" class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">
-      Checking tmux…
-    </div>
+    <ModeSkeleton v-if="checking" :sidebar="TERMINAL_SIDEBAR" />
 
     <div
       v-else-if="!available"
@@ -135,9 +163,9 @@ const knownTags = computed(() => {
     </div>
 
     <div v-else class="flex min-h-0 min-w-0 flex-1">
-      <TerminalSidebar v-if="!sidebarCollapsed" />
+      <TerminalSidebar v-if="!sidebarCollapsed" :active="props.active" />
       <TerminalPaneColumn
-        :active="props.active"
+        :painted-active="painted"
         @open-tasks="emit('open-tasks')"
         @session-repo-key="emit('session-repo-key', $event)"
       />

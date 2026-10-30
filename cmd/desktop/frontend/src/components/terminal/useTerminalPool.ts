@@ -68,7 +68,9 @@ export function useTerminalPool(options: { size: Ref<number>; onEvicted: () => v
     displayed.value = incoming
     displayedSlug.value = activeSlug.value
     void nextTick(() => {
-      if (displayed.value === incoming && paneMayAutoFocus.value) incoming.focusActive()
+      if (displayed.value !== incoming) return
+      incoming.renderShown()
+      if (paneMayAutoFocus.value) incoming.focusActive()
     })
   }
 

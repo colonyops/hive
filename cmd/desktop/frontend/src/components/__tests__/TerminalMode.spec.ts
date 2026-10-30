@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { createMemoryHistory } from 'vue-router'
 import TerminalMode from '../TerminalMode.vue'
+import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
 import { useTerminalSessions } from '../../stores/useTerminalSessions'
 import { resetSessionStatusesForTests, useSessionStatuses } from '../../composables/useSessionStatuses'
 import { useTerminalShowWindows } from '../../stores/useTerminalShowWindows'
@@ -229,6 +230,7 @@ function fakeSession() {
     focusPane: vi.fn().mockResolvedValue(undefined),
     resizePane: vi.fn().mockResolvedValue(undefined),
     focusActive: vi.fn(),
+    renderShown: vi.fn(),
     scrollToBottom: vi.fn(),
     dispose: vi.fn(),
     reportOutcome: vi.fn(),
@@ -1176,6 +1178,150 @@ describe('TerminalMode', () => {
     expect(wrapper.get('[data-testid="terminal-listed-window-row"]').attributes('data-tree-key')).toBe('w:Scratch:@7')
   })
 
+  it('turns tree motion off through a reveal, so rows measured while hidden do not fly in', async () => {
+    const { wrapper } = await mountAvailable()
+    const settling = () => wrapper.find('.tree-settling').exists()
+    await vi.waitFor(() => expect(settling()).toBe(false))
+    await wrapper.setProps({ active: false })
+    expect(settling()).toBe(true)
+    await wrapper.setProps({ active: true })
+    expect(settling()).toBe(true)
+    await vi.waitFor(() => expect(settling()).toBe(false))
+  })
+
+  it('draws the visible session again on a re-entry to the same one', async () => {
+    const session = fakeSession()
+    mocks.useTerminalWindows.mockReturnValue(session)
+    const { wrapper } = await mountAt('/terminal/hive-bump-deps')
+    await wrapper.setProps({ active: false })
+    session.renderShown.mockClear()
+    await wrapper.setProps({ active: true })
+    expect(session.renderShown).toHaveBeenCalled()
+  })
+
+  it('revalidates a re-entry only once the reveal has painted', async () => {
+    const { wrapper } = await mountAvailable()
+    await wrapper.setProps({ active: false })
+    await flushPromises()
+    mocks.ListSessions.mockClear()
+    mocks.Available.mockClear()
+
+    await wrapper.setProps({ active: true })
+    await flushPromises()
+    expect(mocks.ListSessions).not.toHaveBeenCalled()
+    expect(mocks.Available).not.toHaveBeenCalled()
+
+    await vi.waitFor(() => expect(mocks.ListSessions).toHaveBeenCalled())
+    expect(mocks.Available).toHaveBeenCalled()
+  })
+
+  it('stops preparing a hidden tree that cannot get ready', async () => {
+    mocks.SessionStatuses.mockResolvedValue({ items: [], pollIntervalMs: 5 })
+    mocks.ListSessions.mockReturnValue(new Promise(() => {}))
+    await useTerminalAvailability().probe()
+    const router = createAppRouter(createMemoryHistory())
+    await router.push({ name: 'feed' })
+    await router.isReady()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const wrapper = mount(TerminalMode, {
+        props: { active: false },
+        global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
+      })
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(2999)
+      const polling = mocks.SessionStatuses.mock.calls.length
+      expect(polling).toBeGreaterThan(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      const stopped = mocks.SessionStatuses.mock.calls.length
+      await vi.advanceTimersByTimeAsync(100)
+      expect(mocks.SessionStatuses.mock.calls.length).toBe(stopped)
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('spins the toolbar instead of showing placeholder text until the tree is ready', async () => {
+    let finish: (rows: unknown[]) => void = () => {}
+    mocks.ListSessions.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    const { wrapper } = await mountAvailable()
+    const sidebar = wrapper.get('[data-testid="terminal-session-sidebar"]')
+
+    expect(sidebar.find('[data-testid="terminal-sessions-reloading"]').exists()).toBe(true)
+    expect(sidebar.text()).not.toContain('Loading')
+
+    finish([])
+    await flushPromises()
+    expect(sidebar.find('[data-testid="terminal-sessions-reloading"]').exists()).toBe(false)
+  })
+
+  it('paints the tree once, after the first statuses decide which groups open', async () => {
+    let finish: (snapshot: unknown) => void = () => {}
+    mocks.SessionStatuses.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    const { wrapper } = await mountAvailable()
+    expect(wrapper.findAll('[data-testid="terminal-repo-group"]')).toHaveLength(0)
+
+    finish({ items: [], pollIntervalMs: 0 })
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="terminal-repo-group"]').length).toBeGreaterThan(0)
+  })
+
+  it('builds the tree when mounted hidden, without attaching, navigating, or polling on', async () => {
+    mocks.SessionStatuses.mockResolvedValue({ items: [], pollIntervalMs: 5 })
+    localStorage.setItem('hive.terminal.restore', JSON.stringify({ slug: 'hive-bump-deps', window: '' }))
+    await useTerminalAvailability().probe()
+    await useTerminalSessions().reload()
+    const router = createAppRouter(createMemoryHistory())
+    await router.push({ name: 'feed' })
+    await router.isReady()
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const wrapper = mount(TerminalMode, {
+        props: { active: false },
+        global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
+      })
+      await flushPromises()
+
+      expect(wrapper.findAll('[data-testid="terminal-repo-group"]').length).toBeGreaterThan(0)
+      expect(router.currentRoute.value.name).toBe('feed')
+      expect(mocks.useTerminalWindows).not.toHaveBeenCalled()
+
+      const polls = mocks.SessionStatuses.mock.calls.length
+      await vi.advanceTimersByTimeAsync(40)
+      expect(mocks.SessionStatuses.mock.calls.length).toBe(polls)
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('restores the last session in the tick of a first entry, ahead of revalidation', async () => {
+    localStorage.setItem('hive.terminal.restore', JSON.stringify({ slug: 'hive-bump-deps', window: '' }))
+    await useTerminalAvailability().probe()
+    await useTerminalSessions().reload()
+    const router = createAppRouter(createMemoryHistory())
+    await router.push({ name: 'feed' })
+    await router.isReady()
+    mocks.useTerminalWindows.mockReturnValue(fakeSession())
+    const wrapper = mount(TerminalMode, {
+      props: { active: false },
+      global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
+    })
+    await flushPromises()
+    mocks.ListSessions.mockClear()
+
+    await router.push('/terminal')
+    await wrapper.setProps({ active: true })
+    await flushPromises()
+
+    expect(router.currentRoute.value.params.slug).toBe('hive-bump-deps')
+    expect(mocks.ListSessions).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('re-enters from the caches and resumes without waiting on the probe', async () => {
     const listWindows = fakeListWindowsEach([{ windowId: '@7', name: 'agent', active: true, width: 0, height: 0 }])
     mocks.createTerminalClient.mockReturnValue({ listWindows })
@@ -1194,8 +1340,8 @@ describe('TerminalMode', () => {
 
     expect(second.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
     expect(sessionRows(second)).toHaveLength(2)
-    // The toolbar spinner is the staleness indicator while revalidation runs.
-    expect(second.find('[data-testid="terminal-sessions-reloading"]').exists()).toBe(true)
+    // Revalidation waits for the first paint of a mount that has data to show.
+    await vi.waitFor(() => expect(second.find('[data-testid="terminal-sessions-reloading"]').exists()).toBe(true))
     expect(router.currentRoute.value.params.slug).toBe('hive-bump-deps')
     expect(mocks.useTerminalWindows).toHaveBeenCalledWith('hive-bump-deps', expect.anything())
     second.unmount()
@@ -4223,7 +4369,9 @@ describe('TerminalMode', () => {
       mocks.SessionPullRequest.mockResolvedValue({ ...found, cached: true })
 
       const cachedMount = await mountWithStatusBar()
-      expect(cachedMount.wrapper.findComponent({ name: 'SessionStatusChips' }).vm.animateArrival).toBe(false)
+      await vi.waitFor(() =>
+        expect(cachedMount.wrapper.findComponent({ name: 'SessionStatusChips' }).vm.animateArrival).toBe(false),
+      )
       cachedMount.wrapper.unmount()
     })
 

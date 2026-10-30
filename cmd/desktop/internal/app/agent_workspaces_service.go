@@ -1785,11 +1785,24 @@ func (s *AgentWorkspacesService) resolveSkills(ctx context.Context, ws agentws.W
 // view, nothing here launches or attaches, so WindowID, ResumeAttempted and
 // Notice stay zero-valued.
 func (s *AgentWorkspacesService) sessionViews(ctx context.Context, records []stores.AgentSession) []SessionView {
+	// One listing for the whole set, not a tmux subprocess per record: this is read
+	// every time the Code view or Chats is entered, so its cost grew with chat
+	// history and landed on the switch itself.
+	alive := map[string]bool{}
+	if len(records) > 0 {
+		names, err := s.terminals.SessionNames(ctx, agentSessionPrefix)
+		if err != nil {
+			s.logger.Debug().Err(err).Msg("listing agent tmux sessions")
+		}
+		for _, name := range names {
+			alive[name] = true
+		}
+	}
 	views := make([]SessionView, 0, len(records))
 	for _, rec := range records {
 		name := sessionName(rec)
 		live := ""
-		if alive, err := s.terminals.HasSession(ctx, name); err == nil && alive {
+		if alive[name] {
 			live = name
 		}
 		views = append(views, SessionView{

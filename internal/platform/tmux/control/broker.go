@@ -76,6 +76,24 @@ type broker struct {
 	// subscriber in place — see advance.
 	epoch  uint64
 	closed bool
+	// delivering is true while a pump holds its own copy of buf[0], which is the
+	// only time the head cannot take a merge.
+	delivering bool
+	// mergeBuf is the buffer behind the last merge. It doubles as the merge grows,
+	// so a flood reaches a full frame in a few allocations and a short run in a
+	// backlog with no reader does not pin a whole frame's worth of memory.
+	mergeBuf []byte
+	// lastDelivery is when a subscriber last took an output event, which is what
+	// tells a burst from a keystroke's echo.
+	lastDelivery time.Time
+	// lastOutput is when each pane last published. A pane that has been quiet is
+	// not part of a burst even while another one floods the same stream.
+	lastOutput map[string]time.Time
+	// flushPending says the backlog holds something that must not wait, so the
+	// next delivery skips its hold. flushHold wakes a hold already running: a
+	// goroutine waiting on a timer is out of sync.Cond's reach.
+	flushPending bool
+	flushHold    chan struct{}
 
 	overflow bool
 	// dropped is what overflow has cost so far: the tripping event plus
@@ -105,6 +123,8 @@ func newBroker(bounds backlogBounds, onOverflow func()) *broker {
 		resyncCooldown: resyncCooldown,
 		onOverflow:     onOverflow,
 		done:           make(chan struct{}),
+		lastOutput:     map[string]time.Time{},
+		flushHold:      make(chan struct{}, 1),
 	}
 	b.cond = sync.NewCond(&b.mu)
 	return b
@@ -141,15 +161,35 @@ func (b *broker) publish(ev Event) {
 			return
 		}
 	}
-	if b.coalesceLocked(ev, size) {
-		b.mu.Unlock()
-		b.cond.Broadcast()
-		return
+	flush := b.endsHoldLocked(ev)
+	if !b.coalesceLocked(ev, size) {
+		b.buf = append(b.buf, ev)
+		b.bytes += size
 	}
-	b.buf = append(b.buf, ev)
-	b.bytes += size
+	flush = flush || b.bytes >= maxCoalescedBytes
+	b.flushPending = b.flushPending || flush
 	b.mu.Unlock()
 	b.cond.Broadcast()
+	if flush {
+		select {
+		case b.flushHold <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// endsHoldLocked reports whether ev should not wait out a hold another pane's
+// burst started: the echo of a key typed into a quiet pane, next to a background
+// agent's flood.
+func (b *broker) endsHoldLocked(ev Event) bool {
+	out, isOutput := ev.(Output)
+	if !isOutput {
+		return true
+	}
+	now := time.Now()
+	last, seen := b.lastOutput[out.PaneID]
+	b.lastOutput[out.PaneID] = now
+	return !seen || now.Sub(last) >= burstGap
 }
 
 // maxCoalescedBytes bounds one merged frame. tmux caps a %output notification
@@ -160,18 +200,16 @@ func (b *broker) publish(ev Event) {
 const maxCoalescedBytes = 64 << 10
 
 // coalesceLocked folds ev into the last queued event when both are output for
-// the same pane, reporting whether it did. It merges only into an event behind
-// the head, because the head is the one pump may already be handing to the
-// subscriber — it holds its own copy and charges the backlog for the size it
-// read, so growing it there would both lose the appended bytes and corrupt the
-// byte accounting.
+// the same pane, reporting whether it did. It never merges into a head a pump has
+// taken: the pump holds its own copy and charges the backlog for the size it read,
+// so growing it there would both lose the appended bytes and corrupt the byte
+// accounting.
 //
-// Nothing here adds latency: a merge is only possible when a second event is
-// already waiting, which means the subscriber is behind. A consumer keeping up
-// sees a backlog of at most one and every event whole.
+// Nothing here adds latency of its own; see burstHold for the one place the
+// pump waits so that there is something to merge.
 func (b *broker) coalesceLocked(ev Event, size int) bool {
 	out, isOutput := ev.(Output)
-	if !isOutput || len(b.buf) < 2 {
+	if !isOutput || len(b.buf) == 0 || (b.delivering && len(b.buf) < 2) {
 		return false
 	}
 	last := len(b.buf) - 1
@@ -182,12 +220,21 @@ func (b *broker) coalesceLocked(ev Event, size int) bool {
 	if len(tail.Data)+size > maxCoalescedBytes {
 		return false
 	}
-	// A fresh buffer rather than append onto tail.Data: that slice can alias
-	// one the paint gate or the decoder still owns, and appending into its
-	// spare capacity would write through to the other holder.
-	merged := make([]byte, 0, len(tail.Data)+size)
-	merged = append(merged, tail.Data...)
+	// Never append onto a slice this broker did not allocate: tail.Data can alias
+	// one the paint gate or the decoder still owns, and writing into its spare
+	// capacity would write through to the other holder. Its own merge buffer is
+	// safe, because a queued event has no other holder until a pump takes it, and
+	// the delivering check above keeps a merge off the one a pump has taken.
+	merged := tail.Data
+	owned := len(b.mergeBuf) > 0 && len(tail.Data) > 0 && &b.mergeBuf[0] == &tail.Data[0]
+	want := len(tail.Data) + size
+	if !owned || cap(merged) < want {
+		// Capacity stays within twice the contents, which is what keeps the byte
+		// bound honest: it counts len, and a backlog can hold thousands of these.
+		merged = append(make([]byte, 0, min(2*want, maxCoalescedBytes)), tail.Data...)
+	}
 	merged = append(merged, out.Data...)
+	b.mergeBuf = merged
 	// tail.At is kept, not out.At: it stamps the oldest byte in the frame, so
 	// the latency the adapter reports stays the worst case rather than being
 	// reset by every merge.
@@ -195,6 +242,33 @@ func (b *broker) coalesceLocked(ev Event, size int) bool {
 	b.buf[last] = tail
 	b.bytes += size
 	return true
+}
+
+const (
+	// burstGap is how soon after the last delivery more output counts as the same
+	// burst. A person cannot type this fast, and a shell's echo arrives in one
+	// write.
+	burstGap = 2 * time.Millisecond
+	// burstHold is how long the pump waits inside a burst for the backlog to fill
+	// a frame. A consumer on loopback takes a frame in tens of microseconds, so
+	// without a wait the backlog never forms and a flood reaches the webview as
+	// about 15000 frames a second of 1.4KB each, which costs a syscall, a process
+	// hop and a main-thread task per frame.
+	burstHold = 3 * time.Millisecond
+)
+
+// holdForBurstLocked reports how long pump should wait before delivering the
+// head, or zero to deliver now. It waits only for output that follows a
+// delivery within burstGap and while nothing queued has asked to go now, which
+// a full frame does, so the hold never caps throughput.
+func (b *broker) holdForBurstLocked(now time.Time) time.Duration {
+	if _, isOutput := b.buf[0].(Output); !isOutput || b.closed || b.flushPending {
+		return 0
+	}
+	if b.lastDelivery.IsZero() || now.Sub(b.lastDelivery) >= burstGap {
+		return 0
+	}
+	return burstHold
 }
 
 // droppable reports whether losing ev is recoverable. Overflow is answered by a
@@ -225,6 +299,8 @@ func (b *broker) subscribe() (<-chan Event, func()) {
 	}
 	sub := &subscription{gen: gen, ch: make(chan Event, subscriberQueue), stop: make(chan struct{})}
 	b.sub = sub
+	// A replaced pump never advances, so its claim on the head dies with it.
+	b.delivering = false
 	b.mu.Unlock()
 	b.cond.Broadcast()
 
@@ -238,6 +314,7 @@ func (b *broker) unsubscribe(gen uint64) {
 		close(b.sub.stop)
 		b.sub = nil
 		b.gen++
+		b.delivering = false
 	}
 	b.mu.Unlock()
 	b.cond.Broadcast()
@@ -260,6 +337,7 @@ func (b *broker) reset() {
 		b.sub = nil
 		b.gen++
 	}
+	b.delivering = false
 	b.clearLocked()
 	b.mu.Unlock()
 	b.cond.Broadcast()
@@ -299,6 +377,7 @@ func (b *broker) resync(now time.Time) (int, bool) {
 func (b *broker) clearLocked() int {
 	dropped := b.bytes
 	b.buf = nil
+	b.mergeBuf = nil
 	b.bytes = 0
 	b.epoch++
 	return dropped
@@ -322,6 +401,7 @@ func (b *broker) close() {
 // the subscriber never took stays accounted and replays to its replacement.
 func (b *broker) pump(sub *subscription) {
 	defer close(sub.ch)
+	held := false
 	for {
 		b.mu.Lock()
 		for len(b.buf) == 0 && b.gen == sub.gen && !b.closed {
@@ -331,9 +411,29 @@ func (b *broker) pump(sub *subscription) {
 			b.mu.Unlock()
 			return
 		}
+		if !held {
+			if hold := b.holdForBurstLocked(time.Now()); hold > 0 {
+				// A wake from before this hold has already been honored by the
+				// delivery it preceded.
+				select {
+				case <-b.flushHold:
+				default:
+				}
+				b.mu.Unlock()
+				if !b.waitBurst(sub, hold) {
+					return
+				}
+				held = true
+				continue
+			}
+		}
+		held = false
 		ev := b.buf[0]
 		epoch := b.epoch
 		closing := b.closed
+		b.delivering = true
+		// Until the backlog drains: what asked to go now may be behind this head.
+		b.flushPending = b.flushPending && len(b.buf) > 1
 		b.mu.Unlock()
 
 		switch {
@@ -379,6 +479,10 @@ func (b *broker) advance(gen, epoch uint64, ev Event) bool {
 	if b.gen != gen {
 		return false
 	}
+	b.delivering = false
+	if _, isOutput := ev.(Output); isOutput {
+		b.lastDelivery = time.Now()
+	}
 	if b.epoch != epoch {
 		return true
 	}
@@ -389,6 +493,23 @@ func (b *broker) advance(gen, epoch uint64, ev Event) bool {
 	b.buf = b.buf[1:]
 	b.bytes -= eventBytes(ev)
 	return true
+}
+
+// waitBurst reports whether the pump should carry on. A closing broker cuts the
+// wait short rather than ending it: the next pass delivers under closing rules.
+func (b *broker) waitBurst(sub *subscription, hold time.Duration) bool {
+	timer := time.NewTimer(hold)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-b.flushHold:
+		return true
+	case <-sub.stop:
+		return false
+	case <-b.done:
+		return true
+	}
 }
 
 func (b *broker) sendFinal(sub *subscription, ev Event) bool {

@@ -45,6 +45,7 @@ import TreeRail from '@hive/ui/components/ui/TreeRail.vue'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
+import { AGENTS_SIDEBAR } from '../lib/modeSidebars'
 import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
 import { useTreeExpansion } from '../composables/useTreeExpansion'
 import { activityIndicator, type StatusIndicator } from '../lib/agentActivity'
@@ -56,7 +57,7 @@ import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 
 const props = withDefaults(
   defineProps<{
-    active?: boolean
+    paintedActive?: boolean
     /**
      * The workspace the route currently has focused, '' when none. It scopes what
      * AgentsMode regenerates and reports above the pane, and unfolds its row here;
@@ -71,7 +72,7 @@ const props = withDefaults(
     sessionActivity?: Record<string, string>
   }>(),
   {
-    active: false,
+    paintedActive: false,
     selectedWorkspace: '',
     openSessionId: null,
     startingSession: false,
@@ -106,9 +107,9 @@ const { isPinned, togglePin } = useTerminalPinnedChats()
 // so this and AgentsMode's own workspaces reload can race harmlessly on
 // activation — last response wins, and both fetch the same idempotent read.
 watch(
-  () => props.active,
-  (active) => {
-    if (!active) return
+  () => props.paintedActive,
+  (shown) => {
+    if (!shown) return
     void reloadWorkspaces()
     void reloadRecents()
   },
@@ -406,7 +407,12 @@ function onListMenuSelect(id: string): void {
   else if (id === 'expand-all') setAllExpanded(true)
 }
 
-const listLoading = computed(() => workspacesLoading.value || recentsLoading.value)
+const listLoading = computed(
+  () =>
+    workspacesLoading.value ||
+    recentsLoading.value ||
+    (!workspacesLoaded.value && !workspacesError.value && !rootProblem.value),
+)
 
 function reloadAll(): void {
   void reloadWorkspaces()
@@ -501,13 +507,7 @@ const {
   size: sidebarWidth,
   startResize: startSidebarResize,
   step: stepSidebar,
-} = useResizablePanel({
-  storageKey: 'hive.panel.agents.sidebar',
-  defaultSize: 260,
-  min: 180,
-  max: 400,
-  edge: 'right',
-})
+} = useResizablePanel(AGENTS_SIDEBAR.panel)
 
 // ── The selection rail (the Code view's traveling mark) ──────────────────
 const treeContent = ref<HTMLElement | null>(null)
@@ -571,21 +571,14 @@ defineExpose({
           it resolves.
         </p>
       </div>
-      <p
-        v-else-if="!workspacesLoaded"
-        class="px-3 py-2 font-mono text-xs text-text-4"
-        data-testid="agents-sidebar-workspaces-loading"
-      >
-        Loading…
-      </p>
       <EmptyState
-        v-else-if="!filteredTree.length"
+        v-else-if="workspacesLoaded && !filteredTree.length"
         variant="inline"
         class="px-3 py-2"
         :message="emptyNote"
         data-testid="agents-sidebar-workspaces-empty"
       />
-      <template v-else>
+      <template v-else-if="workspacesLoaded">
         <!-- The chat read can fail on its own, which leaves every workspace row
              correct and every count wrong; say so rather than draw an empty
              tree. -->

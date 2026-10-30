@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { effectScope, nextTick, ref } from 'vue'
 import { useSessionStatus } from '../useSessionStatus'
 
@@ -45,6 +46,23 @@ describe('useSessionStatus', () => {
     vi.clearAllMocks()
     mocks.SessionGitStatus.mockImplementation(async (id: string) => gitStatus(id === '1' ? 'feat/one' : 'feat/two'))
     mocks.SessionPullRequest.mockResolvedValue({ status: 'none' })
+  })
+
+  it('drops an answer in flight when the session changes before the next refresh may run', async () => {
+    let finish: (status: ReturnType<typeof gitStatus>) => void = () => {}
+    mocks.SessionGitStatus.mockImplementation(() => new Promise((resolve) => (finish = resolve)))
+    const sessionId = ref('1')
+    const scope = effectScope()
+    const status = scope.run(() => useSessionStatus(sessionId as never, () => sessionId.value === '1'))!
+    await vi.waitFor(() => expect(mocks.SessionGitStatus).toHaveBeenCalled())
+
+    sessionId.value = '2'
+    await nextTick()
+    finish(gitStatus('feat/one'))
+    await flushPromises()
+
+    expect(status.git.value).toBeNull()
+    scope.stop()
   })
 
   // A git read takes long enough that blanking on every switch is visible.
