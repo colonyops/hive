@@ -9,22 +9,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-)
 
-func TestValidateRejectsUnsafeHosts(t *testing.T) {
-	bad := []Host{
-		{Name: "-oProxyCommand=x"},
-		{Name: "a b"},
-		{Name: ""},
-		{Name: "box", Binary: "hive;rm -rf ~"},
-		{Name: "box", Binary: "$(id)"},
-		{Name: "box", ConfigFile: "a\nb"},
-	}
-	for _, h := range bad {
-		require.Error(t, h.Validate(), "%+v", h)
-	}
-	assert.NoError(t, Host{Name: "ada@build-1.lan", Binary: "~/go/bin/hive"}.Validate())
-}
+	"github.com/colonyops/hive/internal/domain/server"
+)
 
 func TestArgs(t *testing.T) {
 	want := []string{
@@ -37,11 +24,11 @@ func TestArgs(t *testing.T) {
 		"-o", "ServerAliveCountMax=3",
 		"fixture", "--", `"$HOME"/'go/bin/hive'`, "daemon", "dial-stdio",
 	}
-	assert.Equal(t, want, Args(Host{Name: "fixture", ConfigFile: "/state/ssh_config", Binary: "~/go/bin/hive"}))
+	assert.Equal(t, want, Args(server.Host{Name: "fixture", ConfigFile: "/state/ssh_config", Binary: "~/go/bin/hive"}))
 
-	args := Args(Host{Name: "box"})
+	args := Args(server.Host{Name: "box"})
 	assert.Equal(t, []string{"box", "--", "hive", "daemon", "dial-stdio"}, args[len(args)-5:])
-	args = Args(Host{Name: "box", Binary: "/usr/local/bin/hive"})
+	args = Args(server.Host{Name: "box", Binary: "/usr/local/bin/hive"})
 	assert.Equal(t, "'/usr/local/bin/hive'", args[len(args)-3])
 }
 
@@ -58,7 +45,7 @@ func fakeSSH(t *testing.T, body string) (pidFile string) {
 
 func TestDialStdioRoundTripsAndKillsSSHOnClose(t *testing.T) {
 	pidFile := fakeSSH(t, "exec cat")
-	c, err := DialStdio(t.Context(), Host{Name: "fixture"}, nil)
+	c, err := DialStdio(t.Context(), server.Host{Name: "fixture"}, nil)
 	require.NoError(t, err)
 
 	_, err = c.Write([]byte("ping"))
@@ -84,7 +71,7 @@ func TestDialStdioRoundTripsAndKillsSSHOnClose(t *testing.T) {
 
 func TestDialStdioReportsEOFWhenSSHExits(t *testing.T) {
 	fakeSSH(t, "exit 255")
-	c, err := DialStdio(t.Context(), Host{Name: "fixture"}, nil)
+	c, err := DialStdio(t.Context(), server.Host{Name: "fixture"}, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = c.Close() })
 

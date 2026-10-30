@@ -48,6 +48,7 @@ type Config struct {
 	Database            DatabaseConfig     `json:"database"              yaml:"database"`
 	Todos               TodosConfig        `json:"todos"                 yaml:"todos"`
 	Experimental        ExperimentalConfig `json:"experimental"          yaml:"experimental"`
+	Servers             []ServerConfig     `json:"servers"               yaml:"servers"`
 	Workspaces          []string           `json:"workspaces"            yaml:"workspaces"` // parent directories containing git repository folders for new session dialog
 	RepoDirsCompat      []string           `json:"-"                     yaml:"repo_dirs"`  // deprecated: use workspaces instead (kept for backwards compatibility)
 	DataDir             string             `json:"-"                     yaml:"-"`          // set by caller, not from config file
@@ -452,6 +453,7 @@ func (c *Config) Validate() error {
 		c.validateCloneStrategies(),
 		c.validateCloneProtocols(),
 		c.validateTerminalConfirm(),
+		c.validateServers(),
 	)
 }
 

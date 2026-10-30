@@ -1,21 +1,17 @@
 package commands
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"strings"
 	"sync"
 	"text/tabwriter"
 	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
-	"github.com/colonyops/hive/cmd/hive/internal/config"
-	"github.com/colonyops/hive/internal/hive/daemonclient"
+	hiveserver "github.com/colonyops/hive/internal/domain/server"
+	"github.com/colonyops/hive/internal/hive/servers"
 	"github.com/colonyops/hive/pkg/iojson"
 )
 
@@ -61,6 +57,7 @@ runs "hive daemon dial-stdio", which needs no daemon flag on either side.`,
 type serverSummary struct {
 	Name        string `json:"name"`
 	SSH         string `json:"ssh"`
+	State       string `json:"state"`
 	Reachable   bool   `json:"reachable"`
 	Version     string `json:"version,omitempty"`
 	Sessions    int    `json:"sessions"`
@@ -69,14 +66,14 @@ type serverSummary struct {
 }
 
 func (cmd *ServersCmd) ls(ctx context.Context, c *cli.Command) error {
-	servers := cmd.app.Config.Servers
-	results := make([]serverSummary, len(servers))
+	all := cmd.app.Servers.Servers()
+	results := make([]serverSummary, len(all))
 	var wg sync.WaitGroup
-	for i, server := range servers {
+	for i, server := range all {
 		wg.Go(func() {
 			ctx, cancel := context.WithTimeout(ctx, serverProbeTimeout)
 			defer cancel()
-			results[i] = summarize(ctx, cmd.app.Logger, server)
+			results[i] = summarize(ctx, server)
 		})
 	}
 	wg.Wait()
@@ -95,34 +92,34 @@ func (cmd *ServersCmd) ls(ctx context.Context, c *cli.Command) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "NAME\tSSH\tREACHABLE\tVERSION\tSESSIONS\tRTT\tERROR")
+	_, _ = fmt.Fprintln(tw, "NAME\tSSH\tSTATE\tVERSION\tSESSIONS\tRTT\tERROR")
 	for _, r := range results {
 		if !r.Reachable {
-			_, _ = fmt.Fprintf(tw, "%s\t%s\tno\t-\t-\t-\t%s\n", r.Name, r.SSH, r.Error)
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t-\t-\t-\t%s\n", r.Name, r.SSH, r.State, r.Error)
 			continue
 		}
-		_, _ = fmt.Fprintf(tw, "%s\t%s\tyes\t%s\t%d\t%dms\t\n", r.Name, r.SSH, r.Version, r.Sessions, r.RoundTripMS)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%dms\t\n", r.Name, r.SSH, r.State, r.Version, r.Sessions, r.RoundTripMS)
 	}
 	return tw.Flush()
 }
 
-func summarize(ctx context.Context, logger zerolog.Logger, server config.ServerConfig) serverSummary {
-	out := serverSummary{Name: server.Name, SSH: server.SSH}
-	client, stderr := remoteClient(logger, server)
-	defer client.HTTPClient().CloseIdleConnections()
-
-	began := time.Now()
-	info, err := client.Hello(ctx)
-	out.RoundTripMS = time.Since(began).Milliseconds()
-	if err != nil {
-		out.Error = remoteError(err, stderr).Error()
+func summarize(ctx context.Context, server *servers.Server) serverSummary {
+	status := server.Check(ctx)
+	out := serverSummary{
+		Name:        status.Name,
+		SSH:         status.SSH,
+		State:       string(status.State),
+		Reachable:   status.State == hiveserver.StateConnected,
+		Version:     status.Version,
+		RoundTripMS: status.RoundTrip.Milliseconds(),
+		Error:       status.Error,
+	}
+	if !out.Reachable {
 		return out
 	}
-	out.Reachable = true
-	out.Version = info.Version
-	sessions, err := client.ListSessions(ctx)
+	sessions, err := server.Client().ListSessions(ctx)
 	if err != nil {
-		out.Error = remoteError(err, stderr).Error()
+		out.Error = server.Explain(err).Error()
 		return out
 	}
 	out.Sessions = len(sessions)
@@ -165,23 +162,22 @@ func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 	if name == "" {
 		return fmt.Errorf("usage: hive servers probe <name>")
 	}
-	server, ok := cmd.app.Config.Server(name)
+	server, ok := cmd.app.Servers.Server(name)
 	if !ok {
 		return fmt.Errorf("no server named %q under servers: in config.yaml", name)
 	}
 	ctx, cancel := context.WithTimeout(ctx, serverProbeTimeout)
 	defer cancel()
-	client, stderr := remoteClient(cmd.app.Logger, server)
-	defer client.HTTPClient().CloseIdleConnections()
+	client := server.Client()
 
-	out := probeResult{Name: server.Name, SSH: server.SSH, Sessions: []probeSession{}}
+	out := probeResult{Name: name, SSH: server.Config().SSH, Sessions: []probeSession{}}
 	failed := func(step *probeStep, err error) error {
-		err = remoteError(err, stderr)
+		err = server.Explain(err)
 		step.Error = err.Error()
 		if cmd.json {
 			_ = iojson.WriteLine(c.Root().Writer, out)
 		}
-		return fmt.Errorf("probe %s: %w", server.Name, err)
+		return fmt.Errorf("probe %s: %w", name, err)
 	}
 
 	began := time.Now()
@@ -222,43 +218,4 @@ func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 		_, _ = fmt.Fprintf(w, "  %s  %s  %s\n", sess.ID, sess.State, sess.Name)
 	}
 	return nil
-}
-
-func remoteClient(logger zerolog.Logger, server config.ServerConfig) (*daemonclient.Client, *tailBuffer) {
-	stderr := &tailBuffer{}
-	return app.RemoteClient(logger, server, stderr), stderr
-}
-
-// remoteError adds ssh's last stderr line, since a failed ssh only shows up
-// as a closed connection.
-func remoteError(err error, stderr *tailBuffer) error {
-	if line := stderr.lastLine(); line != "" {
-		return fmt.Errorf("%w; %s", err, line)
-	}
-	return err
-}
-
-// tailBuffer keeps the last 4 KiB written to it.
-type tailBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-var _ io.Writer = (*tailBuffer)(nil)
-
-func (b *tailBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.buf.Write(p)
-	if over := b.buf.Len() - 4096; over > 0 {
-		b.buf.Next(over)
-	}
-	return len(p), nil
-}
-
-func (b *tailBuffer) lastLine() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	lines := strings.Split(strings.TrimSpace(b.buf.String()), "\n")
-	return strings.TrimSpace(lines[len(lines)-1])
 }

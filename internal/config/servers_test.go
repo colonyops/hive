@@ -21,8 +21,9 @@ func TestLoadServers(t *testing.T) {
 
 	cfg, err := Load(path, t.TempDir())
 	require.NoError(t, err)
-	server, ok := cfg.Server("fixture")
-	require.True(t, ok)
+	require.Len(t, cfg.Servers, 1)
+	server := cfg.Servers[0]
+	assert.Equal(t, "fixture", server.Name)
 	assert.Equal(t, "/state/ssh_config", server.Host().ConfigFile)
 	assert.Equal(t, "/usr/local/bin/hive", server.Host().Binary)
 }

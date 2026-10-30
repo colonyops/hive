@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/colonyops/hive/cmd/hive/internal/sources"
@@ -160,33 +159,4 @@ var validationRenderer = tmpl.NewValidation()
 func validateTemplate(tmplStr string, data any) error {
 	_, err := validationRenderer.Render(tmplStr, data)
 	return err
-}
-
-func (c *Config) validateServers() error {
-	var errs criterio.FieldErrorsBuilder
-	seen := map[string]bool{}
-	for i, server := range c.Servers {
-		field := fmt.Sprintf("servers[%d]", i)
-		switch {
-		case server.Name == "":
-			errs = errs.Append(field+".name", errors.New("required"))
-		case seen[server.Name]:
-			errs = errs.Append(field+".name", fmt.Errorf("duplicate server name %q", server.Name))
-		}
-		seen[server.Name] = true
-		if err := server.Host().Validate(); err != nil {
-			errs = errs.Append(field+".ssh", err)
-		}
-	}
-	return errs.ToError()
-}
-
-// Server finds a configured server by name.
-func (c *Config) Server(name string) (ServerConfig, bool) {
-	for _, server := range c.Servers {
-		if server.Name == name {
-			return server, true
-		}
-	}
-	return ServerConfig{}, false
 }

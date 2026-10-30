@@ -50,6 +50,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	hiveevents "github.com/colonyops/hive/internal/hive/events"
+	"github.com/colonyops/hive/internal/hive/servers"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/platform/execenv"
@@ -213,7 +214,9 @@ type App struct {
 	hive     *hive.Engine
 	sessions sessionapi.API
 	// hiveDaemon is set when experimental.daemon routes sessions to it.
-	hiveDaemon  *daemonclient.Client
+	hiveDaemon *daemonclient.Client
+	// A config reload swaps in a new fleet, so load it on each use.
+	hiveServers atomic.Pointer[servers.Fleet]
 	hiveRuntime *hive.Runtime
 	launcher    *dispatch.RepositoryLauncher
 
@@ -791,6 +794,9 @@ func (a *App) Close() error {
 	if a.hiveWatcher != nil {
 		a.hiveWatcher.Stop()
 	}
+	if fleet := a.hiveServers.Load(); fleet != nil {
+		fleet.Close()
+	}
 	var err error
 	if a.hiveRuntime != nil {
 		if closeErr := a.hiveRuntime.Close(); closeErr != nil {
@@ -1297,6 +1303,7 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	} else {
 		a.sessions = sessionapi.NewLocal(a.hive)
 	}
+	a.hiveServers.Store(servers.New(a.logger, a.sessions, hiveCfg.Servers))
 	logDroppedHiveEvents(a.logger, hiveRuntime.Bus())
 	forwardDriveChanges(ctx, hiveRuntime.Bus(), a.Events)
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
@@ -1455,6 +1462,9 @@ func (a *App) ReloadHiveRuntime(ctx context.Context) error {
 		}
 	}
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
+	if old := a.hiveServers.Swap(servers.New(a.logger, a.sessions, hiveCfg.Servers)); old != nil {
+		old.Close()
+	}
 	return nil
 }
 

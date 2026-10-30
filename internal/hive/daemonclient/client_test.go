@@ -224,3 +224,46 @@ func TestStatusAvailableRetriesAHelloThatFailed(t *testing.T) {
 	require.Eventually(t, client.StatusAvailable, 5*time.Second, 10*time.Millisecond)
 	assert.Equal(t, int32(1), server.calls.Load())
 }
+
+// slowServer blocks List until the caller gives up, and answers Delete and
+// Recycle only after slow.
+type slowServer struct {
+	daemonv1connect.UnimplementedSessionServiceHandler
+	slow time.Duration
+}
+
+func (slowServer) List(ctx context.Context, _ *connect.Request[daemonv1.ListRequest]) (*connect.Response[daemonv1.ListResponse], error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (s slowServer) Delete(ctx context.Context, _ *connect.Request[daemonv1.DeleteRequest]) (*connect.Response[daemonv1.DeleteResponse], error) {
+	select {
+	case <-time.After(s.slow):
+		return connect.NewResponse(&daemonv1.DeleteResponse{}), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (s slowServer) Recycle(ctx context.Context, _ *connect.Request[daemonv1.RecycleRequest], stream *connect.ServerStream[daemonv1.RecycleResponse]) error {
+	select {
+	case <-time.After(s.slow):
+		return stream.Send(&daemonv1.RecycleResponse{ProgressLine: "done"})
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func TestClientReadTimeoutBoundsOnlyReads(t *testing.T) {
+	const timeout = 50 * time.Millisecond
+	path := socketPath(t)
+	serve(t, path, slowServer{slow: 4 * timeout}, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop(), ReadTimeout: timeout})
+
+	_, err := client.ListSessions(t.Context())
+	assert.Equal(t, connect.CodeDeadlineExceeded, connect.CodeOf(err))
+
+	require.NoError(t, client.DeleteSession(t.Context(), "s1"), "a delete outlives the read timeout")
+	require.NoError(t, client.RecycleSession(t.Context(), "s1", nil), "a stream outlives the read timeout")
+}
