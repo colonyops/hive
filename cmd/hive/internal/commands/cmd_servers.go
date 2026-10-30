@@ -11,6 +11,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	hiveserver "github.com/colonyops/hive/internal/domain/server"
+	"github.com/colonyops/hive/internal/hive/daemon/wire"
 	"github.com/colonyops/hive/internal/hive/servers"
 	"github.com/colonyops/hive/pkg/iojson"
 )
@@ -136,19 +137,29 @@ type probeResult struct {
 	SSH   string `json:"ssh"`
 	Hello struct {
 		probeStep
-		Version string `json:"version,omitempty"`
-		PID     int    `json:"pid,omitempty"`
-		DataDir string `json:"data_dir,omitempty"`
+		Version  string `json:"version,omitempty"`
+		Protocol int    `json:"protocol"`
+		PID      int    `json:"pid,omitempty"`
+		DataDir  string `json:"data_dir,omitempty"`
 	} `json:"hello"`
 	Health struct {
 		probeStep
-		DBOK     bool           `json:"db_ok"`
-		TmuxOK   bool           `json:"tmux_ok"`
-		ByState  map[string]int `json:"sessions_by_state,omitempty"`
-		UptimeMS int64          `json:"uptime_ms"`
+		DBOK       bool           `json:"db_ok"`
+		TmuxOK     bool           `json:"tmux_ok"`
+		ByState    map[string]int `json:"sessions_by_state,omitempty"`
+		UptimeMS   int64          `json:"uptime_ms"`
+		Supervised bool           `json:"supervised"`
+		Agents     []probeAgent   `json:"agents"`
 	} `json:"health"`
 	List     probeStep      `json:"list"`
 	Sessions []probeSession `json:"sessions"`
+}
+
+type probeAgent struct {
+	Profile string `json:"profile"`
+	Command string `json:"command"`
+	// Path is empty when the command is not on the daemon's PATH.
+	Path string `json:"path"`
 }
 
 type probeSession struct {
@@ -185,7 +196,10 @@ func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 	if err != nil {
 		return failed(&out.Hello.probeStep, err)
 	}
-	out.Hello.Version, out.Hello.PID, out.Hello.DataDir = info.Version, info.PID, info.DataDir
+	out.Hello.Version, out.Hello.Protocol, out.Hello.PID, out.Hello.DataDir = info.Version, info.ProtocolVersion, info.PID, info.DataDir
+	if err := wire.CheckProtocol(info.ProtocolVersion, info.Version, cmd.app.Build.Version); err != nil {
+		return failed(&out.Hello.probeStep, err)
+	}
 
 	began = time.Now()
 	health, err := client.Health(ctx)
@@ -195,6 +209,11 @@ func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 	}
 	out.Health.DBOK, out.Health.TmuxOK = health.DBOK, health.TmuxOK
 	out.Health.ByState, out.Health.UptimeMS = health.SessionsByState, health.Uptime.Milliseconds()
+	out.Health.Supervised = health.Supervised
+	out.Health.Agents = []probeAgent{}
+	for _, agent := range health.Agents {
+		out.Health.Agents = append(out.Health.Agents, probeAgent(agent))
+	}
 
 	began = time.Now()
 	sessions, err := client.ListSessions(ctx)
@@ -212,6 +231,15 @@ func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 	}
 	_, _ = fmt.Fprintf(w, "hello   %4dms  version %s, pid %d, data dir %s\n", out.Hello.MS, out.Hello.Version, out.Hello.PID, out.Hello.DataDir)
 	_, _ = fmt.Fprintf(w, "health  %4dms  database %s, tmux %s, up %s\n", out.Health.MS, okText(health.DBOK, health.DBError), okText(health.TmuxOK, ""), health.Uptime.Round(time.Second))
+	// A daemon on protocol 0 does not report this.
+	if !health.Supervised && info.ProtocolVersion > 0 {
+		_, _ = fmt.Fprintln(w, "daemon         not started by `hive daemon install`; it does not start again after the server restarts")
+	}
+	for _, agent := range out.Health.Agents {
+		if agent.Path == "" {
+			_, _ = fmt.Fprintf(w, "agent          %s: %s is not on the daemon's PATH\n", agent.Profile, agent.Command)
+		}
+	}
 	_, _ = fmt.Fprintf(w, "list    %4dms  %d sessions\n", out.List.MS, len(out.Sessions))
 	for _, sess := range out.Sessions {
 		_, _ = fmt.Fprintf(w, "  %s  %s  %s\n", sess.ID, sess.State, sess.Name)

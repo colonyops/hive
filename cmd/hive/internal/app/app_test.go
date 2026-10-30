@@ -14,7 +14,7 @@ import (
 )
 
 func newAppWithServers(local sessionapi.API) *App {
-	fleet := servers.New(zerolog.Nop(), local, []hiveconfig.ServerConfig{{Name: "box", SSH: "box"}})
+	fleet := servers.New(zerolog.Nop(), local, []hiveconfig.ServerConfig{{Name: "box", SSH: "box"}}, "")
 	return &App{Servers: fleet, sessions: local}
 }
 

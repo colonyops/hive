@@ -46,6 +46,9 @@ message HelloResponse {
   string data_dir = 3;
   google.protobuf.Timestamp started_at = 4;
   bool status_available = 5;
+  // protocol_version is the daemon's wire protocol. A client refuses a daemon
+  // outside the range it supports. Daemons before the field send 0.
+  int32 protocol_version = 6;
 }
 
 message HealthRequest {}
@@ -57,6 +60,18 @@ message HealthResponse {
   StatusLoopHealth status_loop = 4;
   map<string, int32> sessions_by_state = 5;
   google.protobuf.Duration uptime = 6;
+  // supervised is true for a daemon that `hive daemon install` started.
+  bool supervised = 7;
+  // agents are the configured agent profiles and where the daemon finds
+  // each command on its PATH.
+  repeated AgentCheck agents = 8;
+}
+
+message AgentCheck {
+  string profile = 1;
+  string command = 2;
+  // path is empty when the command is not on the daemon's PATH.
+  string path = 3;
 }
 
 message StatusLoopHealth {

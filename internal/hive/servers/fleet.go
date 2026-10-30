@@ -16,6 +16,7 @@ import (
 
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/server"
+	"github.com/colonyops/hive/internal/hive/daemon/wire"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/platform/sshdial"
@@ -44,12 +45,13 @@ type Fleet struct {
 }
 
 // New builds a fleet over local and the configured servers. It does not
-// dial: a server connects on its first call or Check.
-func New(logger zerolog.Logger, local sessionapi.API, configs []config.ServerConfig) *Fleet {
+// dial: a server connects on its first call or Check. clientVersion is this
+// build's version, which an incompatible server's error names.
+func New(logger zerolog.Logger, local sessionapi.API, configs []config.ServerConfig, clientVersion string) *Fleet {
 	logger = logutils.Component(logger, "servers")
 	f := &Fleet{local: local}
 	for _, cfg := range configs {
-		f.servers = append(f.servers, newServer(logger, cfg))
+		f.servers = append(f.servers, newServer(logger, cfg, clientVersion))
 	}
 	return f
 }
@@ -109,19 +111,21 @@ type Status struct {
 // Server is one configured server. Its client keeps one ssh connection and
 // dials a new one on the next call after the connection drops.
 type Server struct {
-	config config.ServerConfig
-	client *daemonclient.Client
-	stderr *tailBuffer
+	config        config.ServerConfig
+	clientVersion string
+	client        *daemonclient.Client
+	stderr        *tailBuffer
 
 	mu     sync.Mutex
 	status Status
 }
 
-func newServer(logger zerolog.Logger, cfg config.ServerConfig) *Server {
+func newServer(logger zerolog.Logger, cfg config.ServerConfig, clientVersion string) *Server {
 	s := &Server{
-		config: cfg,
-		stderr: &tailBuffer{},
-		status: Status{Name: cfg.Name, SSH: cfg.SSH, State: server.StateConnecting},
+		config:        cfg,
+		clientVersion: clientVersion,
+		stderr:        &tailBuffer{},
+		status:        Status{Name: cfg.Name, SSH: cfg.SSH, State: server.StateConnecting},
 	}
 	host := cfg.Host()
 	s.client = daemonclient.New(daemonclient.Options{
@@ -139,6 +143,8 @@ func newServer(logger zerolog.Logger, cfg config.ServerConfig) *Server {
 		ConnectTimeout: ConnectTimeout,
 		RiskTimeout:    RiskTimeout,
 		DeleteTimeout:  DeleteTimeout,
+		CheckProtocol:  true,
+		ClientVersion:  clientVersion,
 	})
 	return s
 }
@@ -160,7 +166,9 @@ func (s *Server) Status() Status {
 	return s.status
 }
 
-// Check asks the server's daemon for its version and records the state.
+// Check asks the server's daemon for its version and records the state:
+// offline when it does not answer, incompatible when its protocol is outside
+// the range this client supports.
 func (s *Server) Check(ctx context.Context) Status {
 	began := time.Now()
 	info, err := s.client.Hello(ctx)
@@ -172,7 +180,13 @@ func (s *Server) Check(ctx context.Context) Status {
 		RoundTrip: time.Since(began),
 		CheckedAt: time.Now(),
 	}
-	if err != nil {
+	if err == nil {
+		err = wire.CheckProtocol(info.ProtocolVersion, info.Version, s.clientVersion)
+		if err != nil {
+			status.State = server.StateIncompatible
+			status.Error = err.Error()
+		}
+	} else {
 		status.State = server.StateOffline
 		status.Version = ""
 		status.Error = err.Error()

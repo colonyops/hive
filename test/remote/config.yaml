@@ -6,6 +6,9 @@ agents:
   default: testbash
   testbash:
     command: bash
+  # An agent whose command is not installed, for hive servers probe.
+  missing:
+    command: no-such-agent
 rules:
   - spawn:
       # claude is the fake agent from the fixture image (fake-claude).

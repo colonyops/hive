@@ -23,7 +23,7 @@ func failingSSH(t *testing.T, line string) {
 }
 
 func TestFleetFindsServersInConfigOrder(t *testing.T) {
-	fleet := New(zerolog.Nop(), nil, []config.ServerConfig{{Name: "b", SSH: "b"}, {Name: "a", SSH: "a"}})
+	fleet := New(zerolog.Nop(), nil, []config.ServerConfig{{Name: "b", SSH: "b"}, {Name: "a", SSH: "a"}}, "")
 
 	require.Len(t, fleet.Servers(), 2)
 	assert.Equal(t, "b", fleet.Servers()[0].Config().Name)
@@ -36,7 +36,7 @@ func TestFleetFindsServersInConfigOrder(t *testing.T) {
 
 func TestCheckReportsAnOfflineServerWithTheSSHError(t *testing.T) {
 	failingSSH(t, "ssh: connect to host box port 22: Connection refused")
-	fleet := New(zerolog.Nop(), nil, []config.ServerConfig{{Name: "box", SSH: "box"}})
+	fleet := New(zerolog.Nop(), nil, []config.ServerConfig{{Name: "box", SSH: "box"}}, "")
 
 	statuses := fleet.CheckAll(t.Context())
 
@@ -49,7 +49,7 @@ func TestCheckReportsAnOfflineServerWithTheSSHError(t *testing.T) {
 
 func TestCheckDropsTheSSHErrorOfAnEarlierDial(t *testing.T) {
 	failingSSH(t, "first failure")
-	fleet := New(zerolog.Nop(), nil, []config.ServerConfig{{Name: "box", SSH: "box"}})
+	fleet := New(zerolog.Nop(), nil, []config.ServerConfig{{Name: "box", SSH: "box"}}, "")
 	box, _ := fleet.Server("box")
 	require.Contains(t, box.Check(t.Context()).Error, "first failure")
 

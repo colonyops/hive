@@ -360,6 +360,13 @@ func TestExplain(t *testing.T) {
 		assert.EqualError(t, c.explain(wireErr, read, 10*time.Second), "box did not answer in 10s")
 	})
 
+	t.Run("an explained error stays as it is", func(t *testing.T) {
+		c := New(Options{Logger: zerolog.Nop(), Name: "box"})
+		explained := c.explain(timedOut, read, 10*time.Second)
+
+		assert.Same(t, explained, c.explain(explained, change, 20*time.Second))
+	})
+
 	t.Run("a local daemon has no server name", func(t *testing.T) {
 		c := New(Options{Logger: zerolog.Nop()})
 

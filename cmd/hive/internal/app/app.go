@@ -98,7 +98,6 @@ func NewApp(
 	} else {
 		a.sessions = sessionapi.NewLocal(engine)
 	}
-	a.Servers = servers.New(logger, a.sessions, cfg.Servers)
 	return a
 }
 

@@ -21,7 +21,7 @@ func newFleet(t *testing.T) *servers.Fleet {
 	for _, s := range []Server{serverA, serverB} {
 		configs = append(configs, config.ServerConfig{Name: s.Name, SSH: s.Name, SSHConfig: sshConfig})
 	}
-	fleet := servers.New(zerolog.Nop(), nil, configs)
+	fleet := servers.New(zerolog.Nop(), nil, configs, "")
 	t.Cleanup(fleet.Close)
 	return fleet
 }
