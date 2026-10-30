@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { createMemoryHistory } from 'vue-router'
 import TerminalMode from '../TerminalMode.vue'
+import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
 import { useTerminalSessions } from '../../stores/useTerminalSessions'
 import { resetSessionStatusesForTests, useSessionStatuses } from '../../composables/useSessionStatuses'
 import { useTerminalShowWindows } from '../../stores/useTerminalShowWindows'
@@ -1198,6 +1199,42 @@ describe('TerminalMode', () => {
     finish([])
     await flushPromises()
     expect(sidebar.find('[data-testid="terminal-sessions-reloading"]').exists()).toBe(false)
+  })
+
+  it('paints the tree once, after the first statuses decide which groups open', async () => {
+    let finish: (snapshot: unknown) => void = () => {}
+    mocks.SessionStatuses.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    const { wrapper } = await mountAvailable()
+    expect(wrapper.findAll('[data-testid="terminal-repo-group"]')).toHaveLength(0)
+
+    finish({ items: [], pollIntervalMs: 0 })
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="terminal-repo-group"]').length).toBeGreaterThan(0)
+  })
+
+  it('builds the tree when mounted hidden, without attaching, navigating, or polling on', async () => {
+    mocks.SessionStatuses.mockResolvedValue({ items: [], pollIntervalMs: 5 })
+    localStorage.setItem('hive.terminal.restore', JSON.stringify({ slug: 'hive-bump-deps', window: '' }))
+    await useTerminalAvailability().probe()
+    await useTerminalSessions().reload()
+    const router = createAppRouter(createMemoryHistory())
+    await router.push({ name: 'feed' })
+    await router.isReady()
+
+    const wrapper = mount(TerminalMode, {
+      props: { active: false },
+      global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-testid="terminal-repo-group"]').length).toBeGreaterThan(0)
+    expect(router.currentRoute.value.name).toBe('feed')
+    expect(mocks.useTerminalWindows).not.toHaveBeenCalled()
+
+    const polls = mocks.SessionStatuses.mock.calls.length
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    expect(mocks.SessionStatuses.mock.calls.length).toBe(polls)
+    wrapper.unmount()
   })
 
   it('re-enters from the caches and resumes without waiting on the probe', async () => {

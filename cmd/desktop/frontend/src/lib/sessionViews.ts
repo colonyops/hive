@@ -45,11 +45,6 @@ export function isBuiltInView(id: string): boolean {
   return BUILT_IN_VIEWS.some((view) => view.id === id)
 }
 
-/** Whether the filter reads run status, so the tree has to wait for the first poll before painting. */
-export function filterReadsStatus(filter: SessionFilter): boolean {
-  return filter.conditions.some((condition) => condition.field === 'status')
-}
-
 const dayMilliseconds = 24 * 60 * 60 * 1000
 
 function matchesCondition(row: TerminalSessionRow, condition: SessionCondition, ctx: SessionFilterContext): boolean {

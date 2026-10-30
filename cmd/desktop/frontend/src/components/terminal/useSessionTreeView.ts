@@ -1,6 +1,6 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useTreeExpansion } from '../../composables/useTreeExpansion'
-import { filterReadsStatus, matchesSessionFilter, type SessionFilter } from '../../lib/sessionViews'
+import { matchesSessionFilter, type SessionFilter } from '../../lib/sessionViews'
 import type { TerminalSessionGroup } from '../../stores/useTerminalSessions'
 import type { TerminalTree } from './useTerminalTree'
 
@@ -112,8 +112,8 @@ export function useSessionTreeView(
     if (ready.value || !tree.sessionsLoaded.value || !tree.showAllWindowsReady.value) return
     // The view decides which rows exist at all.
     if (options.filterReady && !options.filterReady()) return
-    const filter = options.filter?.()
-    if (filter && filterReadsStatus(filter) && !tree.statusesLoaded.value) return
+    // A repo with something running defaults open, so statuses decide which rows exist.
+    if (tree.activeSessions.value.length && !tree.statusesLoaded.value) return
     const sweeping =
       tree.attachable.value.length > 0 && (tree.showAllWindows.value || tree.alwaysSwept.value.length > 0)
     if (sweeping && !tree.listingsSettled.value) return

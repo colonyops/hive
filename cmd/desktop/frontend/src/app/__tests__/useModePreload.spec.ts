@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   reloadRecents: vi.fn(),
   useTerminalShowWindows: vi.fn(),
   useCodeViews: vi.fn(),
+  prepareCode: vi.fn(),
 }))
 
 vi.mock('../../components/TerminalMode.vue', () => ({ default: {} }))
@@ -39,7 +40,7 @@ describe('useModePreload', () => {
 
   function setup(initial: boolean) {
     const ready = ref(initial)
-    effectScope().run(() => useModePreload(() => ready.value))
+    effectScope().run(() => useModePreload(() => ready.value, mocks.prepareCode))
     return ready
   }
 
@@ -56,6 +57,7 @@ describe('useModePreload', () => {
     expect(mocks.reloadSessions).toHaveBeenCalledTimes(1)
     expect(mocks.reloadWorkspaces).toHaveBeenCalledTimes(1)
     expect(mocks.reloadRecents).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(mocks.prepareCode).toHaveBeenCalledTimes(1))
 
     ready.value = false
     await nextTick()

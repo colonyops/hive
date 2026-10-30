@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, toRef } from 'vue'
+import { computed, onMounted, ref, toRef } from 'vue'
+import { useTimeoutFn, whenever } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
 import ActionInputsDialog from './ActionInputsDialog.vue'
@@ -50,6 +51,7 @@ const emit = defineEmits<{
   'session-repo-key': [repoKey: string]
   'open-drive-page': [scope: DriveScope]
 }>()
+const PREPARE_LIMIT_MS = 3000
 const active = (): boolean => props.active
 const { checking, available, reason, client } = useTerminalAvailability()
 const painted = usePaintedActive(active, { preloaded: client.value !== null })
@@ -58,11 +60,25 @@ const revalidating = (): boolean => painted.value
 const { poolSize } = useTerminalPoolSize()
 
 const pool = useTerminalPool({ size: poolSize, onEvicted: () => tree.sweepListings() })
-const tree = useTerminalTree({ pool, active: revalidating })
+// Mounted hidden by the preload: the tree reads statuses and windows once, so the
+// first entry reveals a finished tree as every later entry does. Only the tree:
+// the attach's probe restores a session by route, which must wait for an entry.
+// eslint-disable-next-line vue/no-setup-props-reactivity-loss -- how this mount began, read once
+const preparing = ref(!props.active)
+const tree = useTerminalTree({ pool, active: () => revalidating() || preparing.value })
 const codeViews = useCodeViews()
 const view = useSessionTreeView(tree, {
   filter: () => codeViews.draft.value,
   filterReady: () => codeViews.hydrated.value,
+})
+const stopPreparing = (): void => {
+  preparing.value = false
+}
+whenever(view.ready, stopPreparing, { immediate: true })
+// A tree that cannot get ready, with tmux missing, must not keep polling off-screen.
+useTimeoutFn(stopPreparing, PREPARE_LIMIT_MS)
+onMounted(() => {
+  if (preparing.value) tree.sweepListings()
 })
 const viewMenus = useSessionViewMenus(tree)
 const rename = useWindowRename(pool.visible)

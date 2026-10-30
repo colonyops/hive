@@ -56,7 +56,9 @@ export function useAppMode(
 
   // Mounted on first entry and then only hidden (ADR
   // terminal-mode-is-hidden-not-unmounted): both hold live PTYs and xterm
-  // screens bound to their elements, so unmounting paid a full re-attach.
+  // screens bound to their elements, so unmounting paid a full re-attach. The
+  // Code view can mount hidden ahead of that (ADR
+  // code-and-chats-preload-after-the-hub-is-up).
   const mountedOnce = (active: Ref<boolean>) => {
     const mounted = ref(false)
     watch(
@@ -69,6 +71,9 @@ export function useAppMode(
     return mounted
   }
   const terminalMounted = mountedOnce(terminalActive)
+  function prepareTerminal(): void {
+    terminalMounted.value = true
+  }
   const agentsMounted = mountedOnce(agentsActive)
 
   // Each mode's toggle lands where that mode was last. Only the agents path
@@ -268,6 +273,7 @@ export function useAppMode(
     toggleDrive,
     closeSettings,
     terminalMounted,
+    prepareTerminal,
     agentsMounted,
     onScreenSessionSlug,
     feedSidebarCollapsed,

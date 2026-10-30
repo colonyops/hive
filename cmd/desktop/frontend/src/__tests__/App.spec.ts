@@ -1923,7 +1923,7 @@ describe('App', () => {
       wrapper.unmount()
     })
 
-    // TerminalMode never mounts on the feed route (it is mount-on-first-visit),
+    // TerminalMode has not mounted this soon on the feed route (the preload waits),
     // so ListSessions and the Agents probe only fire here through this watch —
     // proof the reload is the palette's own doing, not a side effect of some
     // other component being on screen.

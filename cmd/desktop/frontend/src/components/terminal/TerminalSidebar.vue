@@ -184,7 +184,7 @@ function settleTree(): void {
 watch(
   () => view.ready,
   (ready) => {
-    if (ready) settleTree()
+    if (ready && props.active) settleTree()
   },
   { immediate: true },
 )
@@ -292,7 +292,11 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
       />
       <!-- The rails' positioning context, and the box whose resize tells them a row moved. -->
       <div ref="treeContent" class="relative" :class="{ 'tree-settling': !treeSettled }">
-        <div v-for="group in view.groups" :key="group.key" class="border-t border-border first:border-t-0">
+        <div
+          v-for="group in view.ready ? view.groups : []"
+          :key="group.key"
+          class="border-t border-border first:border-t-0"
+        >
           <!-- Chats take a repository's header: it heads several rows, so its name cannot be one of them. -->
           <div
             v-if="group.kind !== 'scratch'"

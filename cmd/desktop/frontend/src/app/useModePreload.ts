@@ -15,11 +15,14 @@ const PRELOAD_DELAY_MS = 500
 export const loadTerminalMode = () => import('../components/TerminalMode.vue')
 export const loadAgentsMode = () => import('../components/AgentsMode.vue')
 
-function preload(): void {
-  for (const load of [loadTerminalMode, loadAgentsMode]) {
-    // A failed fetch here only loses the head start: the mount loads it again and reports it.
-    load().catch((error: unknown) => log.warn('mode chunk preload failed', error))
-  }
+// A failed fetch here only loses the head start: the mount loads it again and reports it.
+function reportFailure(error: unknown): void {
+  log.warn('mode chunk preload failed', error)
+}
+
+function preload(prepareCode: () => void): void {
+  loadTerminalMode().then(prepareCode).catch(reportFailure)
+  loadAgentsMode().catch(reportFailure)
   void useTerminalAvailability().probe()
   void useTerminalSessions().reload()
   useTerminalShowWindows()
@@ -30,10 +33,11 @@ function preload(): void {
 
 /**
  * Readies Code and Chats shortly after the shell is up, so the first entry to
- * either paints its real tree. This only reads: it attaches no tmux client and
- * resumes no chat, which stay tied to entering the mode.
+ * either paints its real tree. `prepareCode` mounts the Code view hidden once its
+ * chunk is in. This only reads: it attaches no tmux client and resumes no chat,
+ * which stay tied to entering the mode.
  */
-export function useModePreload(shellReady: () => boolean): void {
-  const { start } = useTimeoutFn(preload, PRELOAD_DELAY_MS, { immediate: false })
+export function useModePreload(shellReady: () => boolean, prepareCode: () => void): void {
+  const { start } = useTimeoutFn(() => preload(prepareCode), PRELOAD_DELAY_MS, { immediate: false })
   whenever(shellReady, () => start(), { immediate: true, once: true })
 }
