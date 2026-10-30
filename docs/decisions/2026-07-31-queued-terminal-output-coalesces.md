@@ -18,20 +18,24 @@ are output for the same pane** (`coalesceLocked` in
 `internal/platform/tmux/control/broker.go`), under the lock that already guards
 the backlog.
 
-A merge is only possible when a second event is already waiting, which means
-the subscriber is behind. A consumer keeping up sees every event whole, with no
-added latency. The batching window is exactly how far behind the consumer is.
+A merge is only possible when a second event is already waiting. A subscriber
+on loopback almost never falls behind on its own, so inside a burst the pump
+waits up to 3 ms (`burstHold`) for a frame to form. Output that follows a
+delivery by 2 ms or more (`burstGap`) goes at once, so a keystroke's echo is never
+held, and a queued full frame goes at once, so the hold never caps throughput.
 
 Three bounds:
 
-- **Never into the head.** `pump` hands its own copy of `buf[0]` to the
-  subscriber and charges the backlog for the size it read, so growing it would
-  lose bytes and corrupt the accounting. Merging requires `len(buf) >= 2`.
+- **Never into a head a pump holds.** `pump` hands its own copy of `buf[0]` to
+  the subscriber and charges the backlog for the size it read, so growing it
+  then would lose bytes and corrupt the accounting. The `delivering` flag covers
+  that window; a head nobody has taken yet merges like any other event.
 - **Never across panes.** A frame carries one window and pane id.
 - **64 KiB per merged frame** (`maxCoalescedBytes`).
 
-The merge copies into a fresh buffer, because the tail's slice can alias one
-the paint gate or decoder still owns. The tail's timestamp is kept, so reported
+The first merge copies into a buffer of its own, because the tail's slice can
+alias one the paint gate or decoder still owns; later merges append to that
+buffer. The tail's timestamp is kept, so reported
 latency stamps the oldest byte in the frame.
 
 ## Consequences
@@ -41,3 +45,6 @@ latency stamps the oldest byte in the frame.
   (`TestBrokerCoalescesQueuedOutputWithoutLosingBytes`,
   `TestBrokerNeverCoalescesAcrossWindows`).
 - Byte accounting is unchanged, so the overflow bound trips at the same volume.
+- Measured under a flood through tmux, the hold took delivery from about 320
+  frames per MB to about 16, which is where the WebSocket and webview cost goes
+  (`BenchmarkBrokerFlood`).

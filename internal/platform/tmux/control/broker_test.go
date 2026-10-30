@@ -1,6 +1,7 @@
 package tmuxcc
 
 import (
+	"bytes"
 	"runtime"
 	"strconv"
 	"strings"
@@ -89,8 +90,12 @@ func TestBrokerReplaysBacklogOnSubscribe(t *testing.T) {
 	ch, unsubscribe := b.subscribe()
 	defer unsubscribe()
 
-	require.Equal(t, outputEvent("@1", "first").Data, requireOutput(t, receive(t, ch)).Data)
-	require.Equal(t, outputEvent("@1", "second").Data, requireOutput(t, receive(t, ch)).Data)
+	// A byte stream, not a sequence of frames: the backlog may arrive merged.
+	var got []byte
+	for len(got) < len("firstsecond") {
+		got = append(got, requireOutput(t, receive(t, ch)).Data...)
+	}
+	require.Equal(t, "firstsecond", string(got))
 }
 
 func TestBrokerSubscribeReplacesPrevious(t *testing.T) {
@@ -574,4 +579,117 @@ func TestBrokerNeverCoalescesAcrossWindows(t *testing.T) {
 		perWindow[out.WindowID] += string(out.Data)
 	}
 	require.Equal(t, map[string]string{"@1": "ac", "@2": "bd"}, perWindow)
+}
+
+func TestBrokerDeliversAKeystrokeEchoWithoutHolding(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		b := newBroker(backlogBounds{}, nil)
+		defer b.close()
+		events, unsubscribe := b.subscribe()
+		defer unsubscribe()
+
+		for range 5 {
+			// Well past burstGap, as keys are.
+			time.Sleep(2 * burstGap)
+			sent := time.Now()
+			b.publish(Output{At: sent, WindowID: "@1", PaneID: "%1", Data: []byte("a")})
+			<-events
+			require.Zero(t, time.Since(sent), "an isolated echo must not wait out a burst hold")
+		}
+	})
+}
+
+func TestBrokerHoldsOutputInsideABurstForAtMostTheHold(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		b := newBroker(backlogBounds{}, nil)
+		defer b.close()
+		events, unsubscribe := b.subscribe()
+		defer unsubscribe()
+
+		b.publish(Output{At: time.Now(), WindowID: "@1", PaneID: "%1", Data: []byte("a")})
+		<-events
+		synctest.Wait()
+		sent := time.Now()
+		b.publish(Output{At: sent, WindowID: "@1", PaneID: "%1", Data: []byte("b")})
+		<-events
+		require.Equal(t, burstHold, time.Since(sent))
+	})
+}
+
+func TestBrokerQuietPaneCutsAnotherPanesHoldShort(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		b := newBroker(backlogBounds{}, nil)
+		defer b.close()
+		events, unsubscribe := b.subscribe()
+		defer unsubscribe()
+
+		flood := func() { b.publish(Output{At: time.Now(), WindowID: "@1", PaneID: "%1", Data: []byte("f")}) }
+		flood()
+		<-events
+		synctest.Wait()
+		flood()
+		synctest.Wait()
+
+		echoed := time.Now()
+		b.publish(Output{At: echoed, WindowID: "@2", PaneID: "%2", Data: []byte("a")})
+		for {
+			if requireOutput(t, <-events).PaneID == "%2" {
+				break
+			}
+		}
+		require.Zero(t, time.Since(echoed), "a key typed into a quiet pane must not wait for a neighbor's burst")
+	})
+}
+
+func TestBrokerDoesNotHoldAFullFrame(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		b := newBroker(backlogBounds{}, nil)
+		defer b.close()
+		events, unsubscribe := b.subscribe()
+		defer unsubscribe()
+
+		b.publish(Output{At: time.Now(), WindowID: "@1", PaneID: "%1", Data: []byte("a")})
+		<-events
+		synctest.Wait()
+		sent := time.Now()
+		b.publish(Output{At: sent, WindowID: "@1", PaneID: "%1", Data: make([]byte, maxCoalescedBytes)})
+		<-events
+		require.Zero(t, time.Since(sent), "the hold must not cap throughput")
+	})
+}
+
+func TestBrokerMergesAFloodIntoFewFramesWithoutLosingBytes(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		b := newBroker(backlogBounds{bytes: 64 << 20}, nil)
+		defer b.close()
+		events, unsubscribe := b.subscribe()
+		defer unsubscribe()
+
+		const chunks, size = 2000, 1400
+		go func() {
+			for i := range chunks {
+				b.publish(Output{At: time.Now(), WindowID: "@1", PaneID: "%1", Data: bytes.Repeat([]byte{byte(i)}, size)})
+				time.Sleep(50 * time.Microsecond)
+			}
+		}()
+
+		var got []byte
+		frames := 0
+		for len(got) < chunks*size {
+			out, ok := (<-events).(Output)
+			require.True(t, ok)
+			require.LessOrEqual(t, len(out.Data), maxCoalescedBytes)
+			got = append(got, out.Data...)
+			frames++
+		}
+		for i := range chunks {
+			require.Equal(t, byte(i), got[i*size], "chunk %d is out of order", i)
+		}
+		require.Less(t, frames, chunks/4, "a flood should reach the subscriber as far fewer frames than it was published in")
+	})
 }
