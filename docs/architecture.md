@@ -1550,13 +1550,16 @@ attach keeps the outgoing screen until the incoming one has painted, so a
 switch never blanks the pane (ADR terminal-attach-pool). Detach fires on eviction, explicit
 close, the session leaving the listing, and view unmount — not on switch.
 
-**Terminal mode is mounted on first entry and hidden, never unmounted, on the
-way back to the hub** (ADR terminal-mode-is-hidden-not-unmounted) — the same rule the pop-up panel follows, and
+**Terminal mode is mounted once and hidden, never unmounted, on the way back to
+the hub** (ADR terminal-mode-is-hidden-not-unmounted) — the same rule the pop-up panel follows, and
 for the same reason: an unmount is what makes the pool pay for itself again.
 The mode takes an `active` prop, and that, not mount, is what starts the
 status poll and the window-listing sweep and what revalidates the session tree.
 Anything the mode must not do off-screen belongs on that prop; anything it must
-keep across a trip to the hub can now simply live in the component.
+keep across a trip to the hub can now simply live in the component. The preload
+mounts it hidden shortly after startup, and the tree alone reads statuses and
+windows once, so a first entry is a reveal too (ADR
+code-and-chats-preload-after-the-hub-is-up). The attach still waits for `active`.
 
 **Terminal style is a setting, not pane chrome.** Text size, family, weights,
 line height and tracking are all `appearance.terminal_*` settings written from
