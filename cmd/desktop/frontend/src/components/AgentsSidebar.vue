@@ -407,7 +407,12 @@ function onListMenuSelect(id: string): void {
   else if (id === 'expand-all') setAllExpanded(true)
 }
 
-const listLoading = computed(() => workspacesLoading.value || recentsLoading.value)
+const listLoading = computed(
+  () =>
+    workspacesLoading.value ||
+    recentsLoading.value ||
+    (!workspacesLoaded.value && !workspacesError.value && !rootProblem.value),
+)
 
 function reloadAll(): void {
   void reloadWorkspaces()
@@ -566,21 +571,14 @@ defineExpose({
           it resolves.
         </p>
       </div>
-      <p
-        v-else-if="!workspacesLoaded"
-        class="px-3 py-2 font-mono text-xs text-text-4"
-        data-testid="agents-sidebar-workspaces-loading"
-      >
-        Loading…
-      </p>
       <EmptyState
-        v-else-if="!filteredTree.length"
+        v-else-if="workspacesLoaded && !filteredTree.length"
         variant="inline"
         class="px-3 py-2"
         :message="emptyNote"
         data-testid="agents-sidebar-workspaces-empty"
       />
-      <template v-else>
+      <template v-else-if="workspacesLoaded">
         <!-- The chat read can fail on its own, which leaves every workspace row
              correct and every count wrong; say so rather than draw an empty
              tree. -->

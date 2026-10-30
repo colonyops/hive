@@ -598,6 +598,18 @@ describe('AgentsMode', () => {
     expect(wrapper.find('[data-testid="agents-pane-empty"]').exists()).toBe(true)
   })
 
+  it('spins the reload button instead of showing placeholder text until the workspaces load', async () => {
+    const client = fakeClient()
+    client.workspaces.mockReturnValue(new Promise(() => {}))
+    mocks.createAgentWorkspacesClient.mockReturnValue(client)
+    const { wrapper } = await mountAgentsMode()
+    const sidebar = wrapper.get('[data-testid="agents-workspace-sidebar"]')
+
+    expect(sidebar.get('[data-testid="agents-sidebar-reload"]').attributes('disabled')).toBeDefined()
+    expect(sidebar.text()).not.toContain('Loading')
+    expect(sidebar.find('[data-testid="agents-sidebar-workspaces-empty"]').exists()).toBe(false)
+  })
+
   it('holds the opening pane and its status bar while a routed chat resolves', async () => {
     const client = fakeClient()
     client.allSessions.mockReturnValue(new Promise(() => {}))

@@ -269,7 +269,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
       new-label="New session"
       menu-label="Session list actions"
       :menu-entries="sidebarMenuEntries"
-      :loading="tree.sessionsLoading"
+      :loading="tree.sessionsLoading || (!view.ready && !tree.sessionsError)"
       testid="terminal-sessions"
       new-testid="terminal-new-session"
       @escape="nav.focusTree"
@@ -290,13 +290,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
         class="px-3 py-2"
         :message="tree.sessionsError"
       />
-      <p
-        v-else-if="!view.ready"
-        class="px-3 py-2 font-mono text-xs text-text-4"
-        data-testid="terminal-sessions-loading"
-      >
-        Loading…
-      </p>
       <!-- The rails' positioning context, and the box whose resize tells them a row moved. -->
       <div ref="treeContent" class="relative" :class="{ 'tree-settling': !treeSettled }">
         <div v-for="group in view.groups" :key="group.key" class="border-t border-border first:border-t-0">

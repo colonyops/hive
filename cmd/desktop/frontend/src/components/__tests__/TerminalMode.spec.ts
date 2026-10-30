@@ -1186,6 +1186,20 @@ describe('TerminalMode', () => {
     expect(settling()).toBe(true)
   })
 
+  it('spins the toolbar instead of showing placeholder text until the tree is ready', async () => {
+    let finish: (rows: unknown[]) => void = () => {}
+    mocks.ListSessions.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    const { wrapper } = await mountAvailable()
+    const sidebar = wrapper.get('[data-testid="terminal-session-sidebar"]')
+
+    expect(sidebar.find('[data-testid="terminal-sessions-reloading"]').exists()).toBe(true)
+    expect(sidebar.text()).not.toContain('Loading')
+
+    finish([])
+    await flushPromises()
+    expect(sidebar.find('[data-testid="terminal-sessions-reloading"]').exists()).toBe(false)
+  })
+
   it('re-enters from the caches and resumes without waiting on the probe', async () => {
     const listWindows = fakeListWindowsEach([{ windowId: '@7', name: 'agent', active: true, width: 0, height: 0 }])
     mocks.createTerminalClient.mockReturnValue({ listWindows })
