@@ -270,18 +270,28 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		}
 	}
 
+	sessID := opts.SessionID
+	if sessID == "" {
+		sessID = generateID()
+	}
+
 	if recyclable != nil {
-		sess = *recyclable
-		sess.Name = opts.Name
-		sess.Slug = slug
-		sess.Tags = tags
-		sess.MarkActive(time.Now())
+		// Only the checkout carries over. The id names an inbox, hc tasks, and
+		// refs, which all belong to the session that ran here before.
+		now := time.Now()
+		sess = session.Session{
+			ID:            sessID,
+			Name:          opts.Name,
+			Slug:          slug,
+			Path:          recyclable.Path,
+			Remote:        remote,
+			CloneStrategy: cloneStrategy,
+			Tags:          tags,
+			CreatedAt:     now,
+		}
+		sess.MarkActive(now)
 	} else {
 		// Create new session (either no recyclable found or it was corrupted)
-		sessID := opts.SessionID
-		if sessID == "" {
-			sessID = generateID()
-		}
 		dirID = generateID()
 		repoName := git.ExtractRepoName(remote)
 
@@ -351,7 +361,12 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 
 	// Save session
 	writeProgressf(progress, "Saving session...")
-	if err := s.sessions.Save(ctx, sess); err != nil {
+	if recyclable != nil {
+		err = s.sessions.ReplaceRecycled(ctx, recyclable.ID, sess)
+	} else {
+		err = s.sessions.Save(ctx, sess)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("save session: %w", err)
 	}
 
@@ -508,8 +523,8 @@ func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) er
 	}
 
 	s.killSessionTarget(ctx, sess)
-	// The recycled clone keeps its record when a new session reuses it, so a
-	// persisted tmux name from a past rename must not outlive its tmux session.
+	// Deleting a recycled session kills its target, so a persisted tmux name
+	// from a past rename must not outlive its tmux session.
 	sess.ClearMeta(session.MetaTmuxSession)
 
 	sess.MarkRecycled(time.Now())
@@ -723,6 +738,10 @@ func (s *Service) DeleteSession(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}
+
+	// A caller that gives up or disconnects must not stop the delete midway: a
+	// removed clone with its row left behind is a session no one can open.
+	ctx = context.WithoutCancel(ctx)
 
 	s.log.Info().Str("session_id", id).Str("path", sess.Path).Msg("deleting session")
 

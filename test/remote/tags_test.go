@@ -67,8 +67,7 @@ func TestClientCLI_RejectsAnInvalidTagBeforeWriting(t *testing.T) {
 	tooLong := strings.Repeat("x", session.MaxTagLength+1)
 	failed := NewClient(t).HiveOn(serverA, "session", "update", created.ID, "--clear-tags", "--add-tag", tooLong).Fails(t)
 
-	// hive prints its errors to stdout.
-	assert.Contains(t, failed.Stdout+failed.Stderr, session.ErrInvalidTag.Error())
+	assert.Contains(t, failed.Stderr, session.ErrInvalidTag.Error())
 	assert.Equal(t, []string{"keep"}, serverA.Show(t, created.ID).Tags)
 }
 

@@ -25,4 +25,9 @@ type Store interface {
 	Update(ctx context.Context, id string, edit func(*Session) error) (Session, error)
 	// Delete removes a session by ID. Returns ErrNotFound if not found.
 	Delete(ctx context.Context, id string) error
+	// ReplaceRecycled removes the recycled session recycledID and saves next
+	// as one write, so two rows never share one clone. Returns ErrNotFound and
+	// saves nothing if recycledID is gone or no longer recycled, as when
+	// another create took the clone first.
+	ReplaceRecycled(ctx context.Context, recycledID string, next Session) error
 }

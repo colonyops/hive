@@ -7,6 +7,7 @@ import (
 	"github.com/hay-kot/criterio"
 
 	"github.com/colonyops/hive/internal/domain/server"
+	"github.com/colonyops/hive/internal/domain/session"
 )
 
 // ServerConfig names a remote hive server whose daemon a client reaches over
@@ -33,6 +34,10 @@ func (c *Config) validateServers() error {
 			errs = errs.Append(field+".name", errors.New("required"))
 		case seen[server.Name]:
 			errs = errs.Append(field+".name", fmt.Errorf("duplicate server name %q", server.Name))
+		default:
+			if err := session.ValidateServerName(server.Name); err != nil {
+				errs = errs.Append(field+".name", err)
+			}
 		}
 		seen[server.Name] = true
 		if err := server.Host().Validate(); err != nil {

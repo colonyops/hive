@@ -187,6 +187,18 @@ func (q *Queries) DeleteOldestMessagesInTopic(ctx context.Context, arg DeleteOld
 	return err
 }
 
+const deleteRecycledSession = `-- name: DeleteRecycledSession :execrows
+DELETE FROM sessions WHERE id = ? AND state = 'recycled'
+`
+
+func (q *Queries) DeleteRecycledSession(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteRecycledSession, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteReviewComment = `-- name: DeleteReviewComment :exec
 DELETE FROM review_comments
 WHERE id = ?

@@ -61,7 +61,6 @@ func TestDriveRemotePushPullShare(t *testing.T) {
 	t.Run("push of an unpushable path fails the command", func(t *testing.T) {
 		out, err := pusher.RunStdoutInDir(workDir, "drive", "push", "--json", "notes.txt")
 		require.Error(t, err)
-		// hive prints a failing command's error to stdout after the JSON.
 		var line map[string]any
 		require.NoError(t, json.NewDecoder(strings.NewReader(out)).Decode(&line))
 		assert.Equal(t, "failed", line["action"])

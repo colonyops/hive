@@ -158,6 +158,7 @@ func TestSessionShow(t *testing.T) {
 
 	entry, err := h.RunJSON("session", "show", id, "--json")
 	require.NoError(t, err)
+	assert.Equal(t, "local", entry["server"])
 	assert.Equal(t, "show-me", entry["name"])
 	assert.Equal(t, "active", entry["state"])
 	assert.ElementsMatch(t, []any{"a", "b"}, entry["tags"])
@@ -258,6 +259,7 @@ func TestSessionDeleteRiskGateUnpushed(t *testing.T) {
 
 	entry, err := h.RunJSON("session", "delete", id, "--force", "--json")
 	require.NoError(t, err)
+	assert.Equal(t, "local", entry["server"])
 	assert.Equal(t, true, entry["deleted"])
 }
 
@@ -290,6 +292,7 @@ func TestSessionDeleteRiskGate(t *testing.T) {
 
 	entry, err := h.RunJSON("session", "delete", id, "--force", "--json")
 	require.NoError(t, err)
+	assert.Equal(t, "local", entry["server"])
 	assert.Equal(t, true, entry["deleted"])
 
 	lines, err := h.RunJSONLines("ls", "--json")
@@ -336,6 +339,7 @@ func TestSessionRecycleRiskGateWorktree(t *testing.T) {
 
 	entry, err := h.RunJSON("session", "recycle", id, "--force", "--json")
 	require.NoError(t, err)
+	assert.Equal(t, "local", entry["server"])
 	assert.Equal(t, true, entry["deleted"], "worktree sessions are deleted on recycle")
 }
 

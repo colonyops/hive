@@ -332,6 +332,14 @@ Rerun `cli:remote:up` after changing code the servers run. The harness
 Delete what a test creates (`CreateSession` and `DeleteOnCleanup` do), so the
 next test starts from the same server state.
 
+#### Smoke Tests
+
+`mise run cli:smoke:up` starts a client and two servers in Docker that an
+agent can drive by hand and break on purpose: stuck daemon, slow network,
+frozen server. Use it to explore instead of running hive or probe scripts on
+the host. The `cli-smoke` skill has the commands. A bug you find there gets a
+test in `test/remote/`.
+
 #### Bubble Tea (TUI)
 
 Standard Model/Update/View pattern. Key messages:

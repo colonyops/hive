@@ -93,6 +93,10 @@ func errText(err error) string {
 // errors.As finds a rebuilt LaunchError or CreateSessionError;
 // connect.CodeOf still reads the code.
 func FromConnectError(err error) error {
+	var unreachable *UnreachableError
+	if errors.As(err, &unreachable) {
+		return err
+	}
 	var connectErr *connect.Error
 	if !errors.As(err, &connectErr) {
 		return err
@@ -180,3 +184,21 @@ func (e *remoteError) Unwrap() []error {
 	}
 	return []error{e.sentinel, e.conn}
 }
+
+// UnreachableError is a call that the daemon did not answer, as opposed to an
+// error the daemon returned.
+type UnreachableError struct {
+	// Server is the server the call was for. Empty means this machine's daemon.
+	Server  string
+	message string
+	err     error
+}
+
+// NewUnreachableError wraps err, the transport's failure, so that it prints as
+// message.
+func NewUnreachableError(server, message string, err error) *UnreachableError {
+	return &UnreachableError{Server: server, message: message, err: err}
+}
+
+func (e *UnreachableError) Error() string { return e.message }
+func (e *UnreachableError) Unwrap() error { return e.err }

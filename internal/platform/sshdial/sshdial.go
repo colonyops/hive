@@ -3,6 +3,7 @@
 package sshdial
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -88,7 +89,9 @@ func DialStdio(ctx context.Context, h server.Host, stderr io.Writer) (net.Conn, 
 	}()
 	go func() {
 		defer c.copies.Done()
-		_, _ = io.Copy(bridge, out)
+		if daemon, err := skipShellOutput(out, stderr); err == nil {
+			_, _ = io.Copy(bridge, daemon)
+		}
 		_ = bridge.Close()
 	}()
 	if err := ctx.Err(); err != nil {
@@ -96,6 +99,51 @@ func DialStdio(ctx context.Context, h server.Host, stderr io.Writer) (net.Conn, 
 		return nil, err
 	}
 	return c, nil
+}
+
+// maxShellOutput limits what skipShellOutput discards, so a stream that never
+// holds the daemon's first frame fails instead of filling memory.
+const maxShellOutput = 64 << 10
+
+// skipShellOutput returns r from the daemon's first byte. A shell startup file
+// on the server can print text to stdout before hive runs, and HTTP/2 reads
+// that text as a frame. An HTTP/2 server must send a SETTINGS frame first
+// (RFC 9113, section 3.4), so the daemon starts at the first SETTINGS header.
+func skipShellOutput(r io.Reader, stderr io.Writer) (io.Reader, error) {
+	var seen []byte
+	chunk := make([]byte, 4096)
+	for {
+		n, err := r.Read(chunk)
+		seen = append(seen, chunk[:n]...)
+		if i := settingsFrameIndex(seen); i >= 0 {
+			return io.MultiReader(bytes.NewReader(seen[i:]), r), nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if len(seen) > maxShellOutput {
+			if stderr != nil {
+				first, _, _ := bytes.Cut(seen, []byte("\n"))
+				_, _ = fmt.Fprintf(stderr, "ssh printed %d bytes with no answer from the daemon; first line: %.200s\n", len(seen), first)
+			}
+			return nil, fmt.Errorf("no answer from the daemon in %d bytes of output", len(seen))
+		}
+	}
+}
+
+// settingsFrameIndex finds an HTTP/2 SETTINGS frame header: a 24-bit length that
+// is a multiple of 6, type 0x4, no flags, and stream 0. The NUL bytes keep it
+// from matching text.
+func settingsFrameIndex(b []byte) int {
+	const headerLen = 9
+	for i := 0; i+headerLen <= len(b); i++ {
+		h := b[i : i+headerLen]
+		length := int(h[0])<<16 | int(h[1])<<8 | int(h[2])
+		if h[0] == 0 && length%6 == 0 && bytes.Equal(h[3:], []byte{0x4, 0, 0, 0, 0, 0}) {
+			return i
+		}
+	}
+	return -1
 }
 
 type conn struct {

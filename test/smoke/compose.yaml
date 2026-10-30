@@ -1,0 +1,55 @@
+# A throwaway hive stack: a client and two servers on a private network with
+# no route out. Nothing from the host is mounted except the keys run.sh
+# generates and the client's config.
+x-image: &image
+  build:
+    context: ../..
+    dockerfile: test/remote/Dockerfile
+  image: hive-smoke:${HIVE_SMOKE_PROJECT:?}
+  init: true
+  stop_grace_period: 2s
+  working_dir: /home/hive/work
+  networks: [smoke]
+
+x-server: &server
+  <<: *image
+  # For the network fault, which needs tc.
+  cap_add: [NET_ADMIN]
+  healthcheck:
+    # A running sshd process is not yet one that accepts connections.
+    test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/22"]
+    interval: 1s
+    timeout: 2s
+    retries: 30
+
+services:
+  client:
+    <<: *image
+    entrypoint: ["bash", "/run/smoke/client-entrypoint.sh"]
+    environment:
+      # Lets `hive x assess drive` and `scenario` run here.
+      HIVE_ASSESS_ISOLATED: "1"
+      HIVE_LOG_FILE: /tmp/hive.log
+      HIVE_LOG_LEVEL: debug
+      LANG: C.UTF-8
+    volumes:
+      - ${HIVE_SMOKE_STATE:?}:/run/smoke/state:ro
+      - ./client-entrypoint.sh:/run/smoke/client-entrypoint.sh:ro
+      - ./client-config.yaml:/home/hive/.config/hive/config.yaml:ro
+    depends_on:
+      server-a: { condition: service_healthy }
+      server-b: { condition: service_healthy }
+  server-a:
+    <<: *server
+    volumes:
+      - ${HIVE_SMOKE_STATE:?}/id_ed25519.pub:/run/client.pub:ro
+      - ${HIVE_SMOKE_STATE:?}/server-a_host_ed25519_key:/run/host_key:ro
+  server-b:
+    <<: *server
+    volumes:
+      - ${HIVE_SMOKE_STATE:?}/id_ed25519.pub:/run/client.pub:ro
+      - ${HIVE_SMOKE_STATE:?}/server-b_host_ed25519_key:/run/host_key:ro
+
+networks:
+  smoke:
+    internal: true

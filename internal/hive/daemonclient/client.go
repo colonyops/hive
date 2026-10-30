@@ -51,10 +51,27 @@ type Options struct {
 	// as for a remote daemon or `hive daemon status --no-start`.
 	AutoStart func(ctx context.Context) error
 	// ReadTimeout bounds each read-only call, so a slow remote daemon cannot
-	// block a caller. Zero sets no bound. Calls that change sessions are never
-	// bounded: the deadline reaches the daemon, and a delete cut off after it
-	// removed the clone would leave the session's row behind.
+	// block a caller. A call that changes sessions first asks the daemon for
+	// Hello under this bound, so a stuck daemon fails it before any change.
+	// Zero sets no bound and sends no Hello.
 	ReadTimeout time.Duration
+	// ConnectTimeout replaces ReadTimeout for a read while the client has no
+	// connection, since setting one up can take many round trips on a slow link.
+	ConnectTimeout time.Duration
+	// RiskTimeout replaces ReadTimeout for a risk check, which runs git and takes
+	// as long as the repository needs.
+	RiskTimeout time.Duration
+	// DeleteTimeout bounds a delete. The service finishes a delete it has
+	// started, so a cut-off delete cannot leave a half-deleted session. Other
+	// calls that change sessions have no bound: a clone can take any time, and
+	// a rename cut off midway leaves tmux and the store apart.
+	DeleteTimeout time.Duration
+	// Name is the server this client reaches, for its errors. Empty means the
+	// daemon on this machine.
+	Name string
+	// FailureDetail adds the transport's reason to an error, such as the last
+	// line ssh printed.
+	FailureDetail func() string
 }
 
 // baseURL is never resolved: every connection goes through the Dialer.
@@ -71,6 +88,16 @@ type Client struct {
 	sessions   daemonv1connect.SessionServiceClient
 	control    daemonv1connect.DaemonServiceClient
 
+	name          string
+	failureDetail func() string
+
+	checkBeforeChange bool
+	readTimeout       time.Duration
+	connectTimeout    time.Duration
+	riskTimeout       time.Duration
+	deleteTimeout     time.Duration
+	openConns         atomic.Int32
+
 	statusAvailable atomic.Bool
 	helloMu         sync.Mutex
 	helloInFlight   bool
@@ -85,6 +112,15 @@ func New(opts Options) *Client {
 		logger: logutils.Component(opts.Logger, "daemon-client"),
 		dialer: opts.Dialer,
 		now:    time.Now,
+
+		name:          opts.Name,
+		failureDetail: opts.FailureDetail,
+
+		checkBeforeChange: opts.ReadTimeout > 0,
+		readTimeout:       opts.ReadTimeout,
+		connectTimeout:    opts.ConnectTimeout,
+		riskTimeout:       opts.RiskTimeout,
+		deleteTimeout:     opts.DeleteTimeout,
 	}
 	if opts.AutoStart != nil {
 		c.starter = &starter{start: opts.AutoStart, now: time.Now}
@@ -94,13 +130,15 @@ func New(opts Options) *Client {
 	c.httpClient = &http.Client{Transport: &http.Transport{
 		Protocols: &protocols,
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return c.dial(ctx)
+			conn, err := c.dial(ctx)
+			if err != nil {
+				return nil, err
+			}
+			c.openConns.Add(1)
+			return &countedConn{Conn: conn, closed: func() { c.openConns.Add(-1) }}, nil
 		},
 	}}
-	var clientOpts []connect.ClientOption
-	if opts.ReadTimeout > 0 {
-		clientOpts = append(clientOpts, connect.WithInterceptors(readTimeout(opts.ReadTimeout)))
-	}
+	clientOpts := []connect.ClientOption{connect.WithInterceptors(c.explainFailures(), c.callTimeouts())}
 	c.sessions = daemonv1connect.NewSessionServiceClient(c.httpClient, baseURL, clientOpts...)
 	c.control = daemonv1connect.NewDaemonServiceClient(c.httpClient, baseURL, clientOpts...)
 	return c
@@ -116,10 +154,11 @@ var readProcedures = map[string]bool{
 	daemonv1connect.SessionServiceStatusesProcedure:      true,
 }
 
-func readTimeout(timeout time.Duration) connect.UnaryInterceptorFunc {
+func (c *Client) callTimeouts() connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-			if !readProcedures[req.Spec().Procedure] {
+			timeout := c.timeoutFor(req.Spec().Procedure)
+			if timeout == 0 {
 				return next(ctx, req)
 			}
 			ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -127,6 +166,32 @@ func readTimeout(timeout time.Duration) connect.UnaryInterceptorFunc {
 			return next(ctx, req)
 		}
 	}
+}
+
+func (c *Client) timeoutFor(procedure string) time.Duration {
+	switch {
+	case procedure == daemonv1connect.SessionServiceDeleteProcedure:
+		return c.deleteTimeout
+	case !readProcedures[procedure]:
+		return 0
+	case procedure == daemonv1connect.SessionServiceRiskProcedure && c.riskTimeout > 0:
+		return c.riskTimeout
+	case c.connectTimeout > 0 && c.openConns.Load() == 0:
+		return c.connectTimeout
+	}
+	return c.readTimeout
+}
+
+// checkAnswering fails a change before it starts when the daemon is stuck. An
+// ssh connection to a stuck daemon stays healthy, so nothing else notices.
+func (c *Client) checkAnswering(ctx context.Context) error {
+	if !c.checkBeforeChange {
+		return nil
+	}
+	if _, err := c.Hello(ctx); err != nil {
+		return fmt.Errorf("%w; nothing changed", err)
+	}
+	return nil
 }
 
 // HTTPClient reaches the daemon's plain HTTP endpoints, such as /healthz.
@@ -262,9 +327,13 @@ func (c *Client) GetSession(ctx context.Context, id string) (session.Session, er
 }
 
 func (c *Client) CreateSession(ctx context.Context, opts sessionsvc.CreateOptions) (*session.Session, error) {
+	if err := c.checkAnswering(ctx); err != nil {
+		return nil, err
+	}
+	began := c.now()
 	stream, err := c.sessions.Create(ctx, connect.NewRequest(wire.CreateOptionsToProto(opts)))
 	if err != nil {
-		return nil, wire.FromConnectError(err)
+		return nil, c.streamFailure(err, daemonv1connect.SessionServiceCreateProcedure, began)
 	}
 	defer func() { _ = stream.Close() }()
 
@@ -281,7 +350,7 @@ func (c *Client) CreateSession(ctx context.Context, opts sessionsvc.CreateOption
 		}
 	}
 	if err := stream.Err(); err != nil {
-		return nil, wire.FromConnectError(err)
+		return nil, c.streamFailure(err, daemonv1connect.SessionServiceCreateProcedure, began)
 	}
 	if created == nil {
 		return nil, fmt.Errorf("create session: the daemon ended the stream without a session")
@@ -290,6 +359,9 @@ func (c *Client) CreateSession(ctx context.Context, opts sessionsvc.CreateOption
 }
 
 func (c *Client) CreateFromRequest(ctx context.Context, req sessionsvc.LaunchRequest) (session.Session, error) {
+	if err := c.checkAnswering(ctx); err != nil {
+		return session.Session{}, err
+	}
 	resp, err := c.sessions.CreateFromRequest(ctx, connect.NewRequest(wire.LaunchRequestToProto(req)))
 	if err != nil {
 		return session.Session{}, wire.FromConnectError(err)
@@ -298,6 +370,9 @@ func (c *Client) CreateFromRequest(ctx context.Context, req sessionsvc.LaunchReq
 }
 
 func (c *Client) CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec) (*session.Session, error) {
+	if err := c.checkAnswering(ctx); err != nil {
+		return nil, err
+	}
 	resp, err := c.sessions.CreateWithWindows(ctx, connect.NewRequest(&daemonv1.CreateWithWindowsRequest{
 		Name:    req.Name,
 		Remote:  req.Remote,
@@ -312,16 +387,25 @@ func (c *Client) CreateSessionWithWindows(ctx context.Context, req sessionsvc.Ne
 }
 
 func (c *Client) RenameSession(ctx context.Context, id, name string) error {
+	if err := c.checkAnswering(ctx); err != nil {
+		return err
+	}
 	_, err := c.sessions.Rename(ctx, connect.NewRequest(&daemonv1.RenameRequest{Id: id, Name: name}))
 	return wire.FromConnectError(err)
 }
 
 func (c *Client) SetSessionGroup(ctx context.Context, id, group string) error {
+	if err := c.checkAnswering(ctx); err != nil {
+		return err
+	}
 	_, err := c.sessions.SetGroup(ctx, connect.NewRequest(&daemonv1.SetGroupRequest{Id: id, Group: group}))
 	return wire.FromConnectError(err)
 }
 
 func (c *Client) SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error) {
+	if err := c.checkAnswering(ctx); err != nil {
+		return session.Session{}, err
+	}
 	resp, err := c.sessions.SetTags(ctx, connect.NewRequest(&daemonv1.SetTagsRequest{Id: id, Tags: tags}))
 	if err != nil {
 		return session.Session{}, wire.FromConnectError(err)
@@ -330,6 +414,9 @@ func (c *Client) SetSessionTags(ctx context.Context, id string, tags []string) (
 }
 
 func (c *Client) EditSessionTags(ctx context.Context, id string, add, remove []string) (session.Session, error) {
+	if err := c.checkAnswering(ctx); err != nil {
+		return session.Session{}, err
+	}
 	resp, err := c.sessions.EditTags(ctx, connect.NewRequest(&daemonv1.EditTagsRequest{Id: id, Add: add, Remove: remove}))
 	if err != nil {
 		return session.Session{}, wire.FromConnectError(err)
@@ -338,14 +425,21 @@ func (c *Client) EditSessionTags(ctx context.Context, id string, add, remove []s
 }
 
 func (c *Client) DeleteSession(ctx context.Context, id string) error {
+	if err := c.checkAnswering(ctx); err != nil {
+		return err
+	}
 	_, err := c.sessions.Delete(ctx, connect.NewRequest(&daemonv1.DeleteRequest{Id: id}))
 	return wire.FromConnectError(err)
 }
 
 func (c *Client) RecycleSession(ctx context.Context, id string, w io.Writer) error {
+	if err := c.checkAnswering(ctx); err != nil {
+		return err
+	}
+	began := c.now()
 	stream, err := c.sessions.Recycle(ctx, connect.NewRequest(&daemonv1.RecycleRequest{Id: id}))
 	if err != nil {
-		return wire.FromConnectError(err)
+		return c.streamFailure(err, daemonv1connect.SessionServiceRecycleProcedure, began)
 	}
 	defer func() { _ = stream.Close() }()
 	for stream.Receive() {
@@ -353,10 +447,13 @@ func (c *Client) RecycleSession(ctx context.Context, id string, w io.Writer) err
 			_, _ = fmt.Fprintln(w, stream.Msg().GetProgressLine())
 		}
 	}
-	return wire.FromConnectError(stream.Err())
+	return c.streamFailure(stream.Err(), daemonv1connect.SessionServiceRecycleProcedure, began)
 }
 
 func (c *Client) Prune(ctx context.Context, all bool) (int, error) {
+	if err := c.checkAnswering(ctx); err != nil {
+		return 0, err
+	}
 	resp, err := c.sessions.Prune(ctx, connect.NewRequest(&daemonv1.PruneRequest{All: all}))
 	if err != nil {
 		return 0, wire.FromConnectError(err)
@@ -365,9 +462,15 @@ func (c *Client) Prune(ctx context.Context, all bool) (int, error) {
 }
 
 func (c *Client) CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Risk, error) {
+	if err := c.checkAnswering(ctx); err != nil {
+		return sessionsvc.Risk{}, err
+	}
 	resp, err := retryRead(func() (*connect.Response[daemonv1.RiskResponse], error) {
 		return c.sessions.Risk(ctx, connect.NewRequest(&daemonv1.RiskRequest{Id: id}))
 	})
+	if connect.CodeOf(err) == connect.CodeDeadlineExceeded {
+		return sessionsvc.Risk{}, fmt.Errorf("%w: %w", sessionapi.ErrRiskCheckTimedOut, err)
+	}
 	if err != nil {
 		return sessionsvc.Risk{}, wire.FromConnectError(err)
 	}

@@ -81,6 +81,38 @@ run = "test/remote/run.sh run"
 description = "Remove the ssh fixture"
 run = "test/remote/run.sh down"
 
+# A client and two servers in Docker for agents to drive by hand. The
+# cli-smoke skill says how.
+["cli:smoke:up"]
+description = "Start a throwaway client and two servers in Docker, or replace them with this branch's binary"
+depends = ["cli:build:container"]
+run = "test/smoke/run.sh up"
+
+["cli:smoke:exec"]
+description = "Run a command in the smoke stack as the hive user: mise run cli:smoke:exec -- client hive session list"
+run = "test/smoke/run.sh exec"
+
+["cli:smoke:root"]
+description = "Run a command in the smoke stack as root: mise run cli:smoke:root -- server-a ps aux"
+run = "test/smoke/run.sh root"
+
+["cli:smoke:tui"]
+description = "Drive the TUI on the smoke stack client: start, keys, show, stop"
+run = "test/smoke/run.sh tui"
+
+["cli:smoke:fault"]
+description = "Break a smoke stack server: mise run cli:smoke:fault -- stuck-daemon server-a"
+run = "test/smoke/run.sh fault"
+
+["cli:smoke:down"]
+description = "Remove the smoke stack and everything in it"
+run = "test/smoke/run.sh down"
+
+["cli:smoke:test"]
+description = "Check the smoke stack tooling against a fresh stack, then remove it"
+depends = ["cli:build:container"]
+run = "test/smoke/run.sh test"
+
 # ── Gates ────────────────────────────────────────────────────────────────────
 
 ["cli:check:goreleaser"]

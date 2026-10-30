@@ -119,7 +119,7 @@ func summarize(ctx context.Context, server *servers.Server) serverSummary {
 	}
 	sessions, err := server.Client().ListSessions(ctx)
 	if err != nil {
-		out.Error = server.Explain(err).Error()
+		out.Error = err.Error()
 		return out
 	}
 	out.Sessions = len(sessions)
@@ -164,7 +164,7 @@ func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 	}
 	server, ok := cmd.app.Servers.Server(name)
 	if !ok {
-		return fmt.Errorf("no server named %q under servers: in config.yaml", name)
+		return fmt.Errorf("unknown server %q: it is not under servers: in config.yaml", name)
 	}
 	ctx, cancel := context.WithTimeout(ctx, serverProbeTimeout)
 	defer cancel()
@@ -172,7 +172,6 @@ func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 
 	out := probeResult{Name: name, SSH: server.Config().SSH, Sessions: []probeSession{}}
 	failed := func(step *probeStep, err error) error {
-		err = server.Explain(err)
 		step.Error = err.Error()
 		if cmd.json {
 			_ = iojson.WriteLine(c.Root().Writer, out)

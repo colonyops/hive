@@ -30,7 +30,7 @@ repository's drive space, `<context root>/<owner>/<repo>/`, the directory a
 checkout links as `.hive`
 (ADR hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it).
 The owner is the repository and not the session, because hive gives a
-recycled session's id and path to the next one. Every session of a repository
+recycled session's clone to the next one. Every session of a repository
 reads and writes the same canvases. Prune never removes a canvas.
 
 **The owner key is `owner/repo`**, in the same field that carries a

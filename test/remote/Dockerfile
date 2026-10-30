@@ -1,5 +1,5 @@
-# An ssh host with hive, tmux, and git for the remote tests. The build
-# context is the repository root; run.sh builds the binary first.
+# An ssh host with hive, tmux, and git for the remote tests and test/sandbox.
+# The build context is the repository root; run.sh builds the binary first.
 FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tmux \
     git \
     procps \
+    iproute2 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     # sshd refuses a locked account when UsePAM is off; PasswordAuthentication
@@ -22,6 +23,8 @@ COPY internal/domain/terminal/assess/testdata/claude/ /usr/local/share/fake-clau
 COPY --chmod=755 test/remote/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chown=hive:hive test/remote/config.yaml /home/hive/.config/hive/config.yaml
 
+# --no-hardlinks: a later clone of repo.git fails with "hardlink different from
+# source" when objects in an image layer already have a second link.
 USER hive
 RUN git config --global user.name fixture \
     && git config --global user.email fixture@example.invalid \
@@ -30,7 +33,8 @@ RUN git config --global user.name fixture \
     && git clone -q /home/hive/repo.git /tmp/seed \
     && git -C /tmp/seed commit -q --allow-empty -m seed \
     && git -C /tmp/seed push -q origin main \
-    && rm -rf /tmp/seed
+    && rm -rf /tmp/seed \
+    && git clone -q --no-hardlinks /home/hive/repo.git /home/hive/work
 USER root
 
 EXPOSE 22

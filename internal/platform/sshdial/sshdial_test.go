@@ -1,9 +1,11 @@
 package sshdial
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,17 +45,75 @@ func fakeSSH(t *testing.T, body string) (pidFile string) {
 	return pidFile
 }
 
+// emptySettings is the HTTP/2 frame header of an empty SETTINGS frame.
+var emptySettings = []byte{0, 0, 0, 0x4, 0, 0, 0, 0, 0}
+
+func TestDialStdioDropsWhatTheShellPrintsBeforeTheDaemon(t *testing.T) {
+	fakeSSH(t, "echo 'Welcome to box'\nexec cat")
+	c, err := DialStdio(t.Context(), server.Host{Name: "fixture"}, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = c.Close() })
+
+	_, err = c.Write(emptySettings)
+	require.NoError(t, err)
+	buf := make([]byte, len(emptySettings))
+	_, err = io.ReadFull(c, buf)
+	require.NoError(t, err)
+	assert.Equal(t, emptySettings, buf)
+}
+
+func TestSkipShellOutput(t *testing.T) {
+	settings := []byte{0, 0, 18, 0x4, 0, 0, 0, 0, 0, 1, 2, 3}
+	tests := []struct {
+		name  string
+		input []byte
+		want  []byte
+	}{
+		{name: "no shell output", input: settings, want: settings},
+		{name: "text first", input: append([]byte("Welcome\nyou have mail\n"), settings...), want: settings},
+		{name: "no line end before the frame", input: append([]byte("no newline"), settings...), want: settings},
+		{name: "a settings ack is not the first frame", input: append([]byte{0, 0, 0, 0x4, 1, 0, 0, 0, 0}, settings...), want: settings},
+		{name: "a length that is not a multiple of 6", input: append([]byte{0, 0, 7, 0x4, 0, 0, 0, 0, 0}, settings...), want: settings},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, err := skipShellOutput(bytes.NewReader(tt.input), nil)
+			require.NoError(t, err)
+			got, err := io.ReadAll(r)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestSkipShellOutputStopsOnEndlessText(t *testing.T) {
+	var stderr bytes.Buffer
+	endless := strings.NewReader("first line\n" + strings.Repeat("x", 2*maxShellOutput))
+
+	_, err := skipShellOutput(endless, &stderr)
+
+	require.Error(t, err)
+	assert.Contains(t, stderr.String(), "first line: first line")
+}
+
+func TestSkipShellOutputReportsAClosedStream(t *testing.T) {
+	_, err := skipShellOutput(strings.NewReader("hive: command not found\n"), nil)
+
+	assert.ErrorIs(t, err, io.EOF)
+}
+
 func TestDialStdioRoundTripsAndKillsSSHOnClose(t *testing.T) {
 	pidFile := fakeSSH(t, "exec cat")
 	c, err := DialStdio(t.Context(), server.Host{Name: "fixture"}, nil)
 	require.NoError(t, err)
 
-	_, err = c.Write([]byte("ping"))
+	sent := append(append([]byte{}, emptySettings...), "ping"...)
+	_, err = c.Write(sent)
 	require.NoError(t, err)
-	buf := make([]byte, 4)
+	buf := make([]byte, len(sent))
 	_, err = io.ReadFull(c, buf)
 	require.NoError(t, err)
-	assert.Equal(t, "ping", string(buf))
+	assert.Equal(t, sent, buf)
 
 	sshProc := c.(*conn).cmd
 	require.NoError(t, c.Close())

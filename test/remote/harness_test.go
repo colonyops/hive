@@ -173,6 +173,13 @@ func (s Server) Shell(t *testing.T, command string) Result {
 	return r
 }
 
+// Root runs a shell command on the server as root, for changes the hive user
+// cannot make.
+func (s Server) Root(t *testing.T, command string) Result {
+	t.Helper()
+	return compose(t, "exec", "-T", "-u", "root", s.Name, "bash", "-c", command)
+}
+
 // API is the session API on the server over `ssh -- hive daemon dial-stdio`,
 // the same path a remote client takes.
 func (s Server) API(t *testing.T) *daemonclient.Client {
@@ -198,6 +205,18 @@ func (s Server) CreateSession(t *testing.T, name string) Session {
 	return sess
 }
 
+// CreateSessionWithID creates a session with a chosen id, so a test can put
+// the same id on both servers. `hive session create` cannot choose an id.
+func (s Server) CreateSessionWithID(t *testing.T, name, id string) Session {
+	t.Helper()
+	input := fmt.Sprintf(`{"sessions":[{"name":%q,"session_id":%q,"remote":%q}]}`, name, id, tFixtureRepo)
+	s.Shell(t, "echo "+shellQuote(input)+" | hive batch").Ok(t)
+	s.DeleteOnCleanup(t, id)
+	sess := s.Show(t, id)
+	require.Equal(t, name, sess.Name)
+	return sess
+}
+
 // DeleteOnCleanup deletes a session when the test ends, so the next test
 // starts from the same server state. A session the test already deleted is
 // fine.
@@ -205,8 +224,7 @@ func (s Server) DeleteOnCleanup(t *testing.T, id string) {
 	t.Helper()
 	t.Cleanup(func() {
 		r := s.Hive(t, "session", "delete", "--force", id)
-		// hive prints its errors to stdout.
-		if r.Err != nil && !strings.Contains(r.Stdout+r.Stderr, session.ErrNotFound.Error()) {
+		if r.Err != nil && !strings.Contains(r.Stderr, session.ErrNotFound.Error()) {
 			t.Logf("delete session %s on %s: %v\n%s%s", id, s.Name, r.Err, r.Stdout, r.Stderr)
 		}
 	})

@@ -25,6 +25,9 @@ ON CONFLICT(id) DO UPDATE SET
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id = ?;
 
+-- name: DeleteRecycledSession :execrows
+DELETE FROM sessions WHERE id = ? AND state = 'recycled';
+
 -- name: PublishMessage :exec
 INSERT INTO messages (
     id, topic, payload, sender, session_id, created_at

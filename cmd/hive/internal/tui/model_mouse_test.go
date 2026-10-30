@@ -40,6 +40,9 @@ func (s *mouseTestStore) Save(_ context.Context, _ session.Session) error { retu
 func (s *mouseTestStore) Update(_ context.Context, _ string, _ func(*session.Session) error) (session.Session, error) {
 	return session.Session{}, session.ErrNotFound
 }
+
+func (s *mouseTestStore) ReplaceRecycled(context.Context, string, session.Session) error { return nil }
+
 func (s *mouseTestStore) Delete(_ context.Context, _ string) error { return nil }
 
 type mouseTestGit struct{}

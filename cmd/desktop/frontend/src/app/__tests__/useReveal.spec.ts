@@ -155,6 +155,9 @@ describe('useReveal', () => {
     await open({ area: 'code', slug: 'web', canvas: '1' })
     expect(push).toHaveBeenLastCalledWith({ name: 'terminal', params: { slug: 'web' }, query: { doc: '1' } })
 
+    await open({ area: 'code', slug: 'web', server: 'local' })
+    expect(push).toHaveBeenLastCalledWith({ name: 'terminal', params: { slug: 'web' }, query: {} })
+
     await open({ area: 'inbox', profile: 'work', item: 7 })
     expect(push).toHaveBeenLastCalledWith({
       name: 'feed',
@@ -187,6 +190,14 @@ describe('useReveal', () => {
 
     await open({ area: 'drive', space: 'shared' })
     expect(openDrive).toHaveBeenLastCalledWith({ space: 'shared', path: null, session: null })
+  })
+
+  it('does not open a local session for a code link on another server', async () => {
+    mocks.TakeLink.mockResolvedValueOnce({ area: 'code', slug: 'web', server: 'box-1' })
+    setup()
+    await flushPromises()
+    expect(push).not.toHaveBeenCalled()
+    expect(showToast).toHaveBeenCalledWith('Hive cannot open sessions on server box-1 yet', { severity: 'error' })
   })
 
   it('says so when a link cannot be read', async () => {
