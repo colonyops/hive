@@ -1,4 +1,4 @@
-//go:build server
+//go:build server && !serverterminal
 
 package tmuxcc
 

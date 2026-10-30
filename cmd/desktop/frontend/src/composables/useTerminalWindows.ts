@@ -24,6 +24,7 @@ import { TerminalOutputWriter } from '../lib/terminalOutput'
 import { installTerminalImages } from '../lib/terminalImages'
 import { installKittyGraphics, type KittyGraphics } from '../lib/kitty/kittyGraphics'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
+import { probePane, registerBenchPane, type PaneProbe } from '../lib/terminalPerf'
 import { appClaimsPaneKey, claimsShiftEnter } from '../lib/terminalKeys'
 import { silenceDeviceReports } from '../lib/terminalReports'
 import { scrolledOffTail } from '../lib/terminalTail'
@@ -33,10 +34,12 @@ import { resizeTerminalPreservingViewport } from '../lib/terminalViewport'
 import { useTerminalFont } from '../stores/useTerminalFont'
 import { useTerminalOutcomes, type TerminalEndReason } from '../stores/useTerminalOutcomes'
 export type { TerminalEndReason } from '../stores/useTerminalOutcomes'
+import { usePerf } from './usePerf'
 import { createTerminal, loadTerminalFont, watchTerminalAppearance } from './useXtermPane'
 import { createLogger } from '../lib/log'
 
 const log = createLogger('terminal-windows')
+const perf = usePerf('terminal')
 
 /**
  * 'ended' is terminal: this view has no stream any more — whether or not the
@@ -176,6 +179,7 @@ interface PaneRuntime {
   finder: SearchAddon
   output: TerminalOutputWriter
   graphics: KittyGraphics
+  probe: PaneProbe
   disposers: IDisposable[]
   // An atlas renderer is live on this terminal. False after a failed claim or a
   // context loss, which is what makes the next activation retry instead of
@@ -332,13 +336,19 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const finder = markRaw(new SearchAddon())
     term.loadAddon(finder)
     const graphics = markRaw(installKittyGraphics(term))
+    const probe = probePane(paneId, term, () => !!panes.get(paneId)?.rendered)
     const output = markRaw(
       new TerminalOutputWriter((data) => {
-        if (painted.value) term.write(data)
-        else
-          term.write(data, () => {
-            painted.value = true
-          })
+        const reportParsed = probe.parsed
+        if (painted.value) {
+          if (reportParsed) term.write(data, () => reportParsed(data.length))
+          else term.write(data)
+          return
+        }
+        term.write(data, () => {
+          painted.value = true
+          reportParsed?.(data.length)
+        })
       }, graphics.filter),
     )
     // Before any output reaches it: xterm re-wraps its buffer on resize, so a
@@ -360,12 +370,40 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       finder,
       output,
       graphics,
+      probe,
       disposers: [
         finder,
         { dispose: () => output.dispose() },
         graphics,
+        probe,
+        registerBenchPane({
+          paneId,
+          term,
+          send: (data) => sendInput(paneId, data),
+          backlog: () => probe.backlog(),
+          webgl: () => !!panes.get(paneId)?.rendered,
+          reattach: async () => {
+            painted.value = false
+            await reconnect()
+            if (painted.value) return
+            await new Promise<void>((resolve) => {
+              const stop = watch(painted, () => {
+                stop()
+                resolve()
+              })
+            })
+          },
+          nextWindow: async () => {
+            const index = tabs.value.findIndex((tab) => tab.windowId === activeWindowId.value)
+            const next = tabs.value[(index + 1) % tabs.value.length]
+            if (next) await select(next.windowId)
+          },
+        }),
         silenceDeviceReports(term),
-        term.onData((data: string) => sendInput(paneId, data)),
+        term.onData((data: string) => {
+          probe.input(data)
+          sendInput(paneId, data)
+        }),
         term.onScroll(() => refreshScrolledUp(paneId)),
         // Entering the alternate screen has no scrollback and fires no scroll
         // event on the way in.
@@ -527,6 +565,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     if (!found || !state || state.host) return
     state.host = host
     state.term.open(host)
+    state.probe.opened()
     const releasePaste = installTerminalImages(host, {
       pasteText: (text) => sendPaste(paneId, text),
       capture: () => {
@@ -676,7 +715,9 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
 
     switch (frame.type) {
       case 'output': {
-        panes.get(frame.paneId)?.output.write(frame.data)
+        const state = panes.get(frame.paneId)
+        state?.probe.received(frame.data.length)
+        state?.output.write(frame.data)
         break
       }
       case 'window':
@@ -916,6 +957,12 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     error.value = null
     actionError.value = null
     outputDropped.value = false
+    const endAttach = perf.start('attach')
+    const stopAttachSpan = watch(painted, (done) => {
+      if (!done) return
+      stopAttachSpan()
+      endAttach()
+    })
     try {
       // Concurrent, not sequential: the faces have to be resident before
       // term.open() measures a cell, which attachPane does well after this
