@@ -4,6 +4,7 @@ import IconLayoutGrid from '~icons/lucide/layout-grid'
 import ActionInputsDialog from '../components/ActionInputsDialog.vue'
 import ActionRunsView from '../components/ActionRunsView.vue'
 import ActivityView from '../components/ActivityView.vue'
+import ChangesView from '../components/git/ChangesView.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import ErrorDialog from '../components/ErrorDialog.vue'
 import ReportProblemDialog from '../components/ReportProblemDialog.vue'
@@ -36,6 +37,8 @@ const props = defineProps<{
   profileActions: ReturnType<typeof useProfileActions>
   feedCommands: ReturnType<typeof useFeedCommands>
   openActivityItem: (link: ActivityItemLink) => Promise<void>
+  /** The session on screen in Code whose checkout Changes reads. */
+  changesSession: string | null
 }>()
 
 // The composables' result objects keep their identity for App's lifetime.
@@ -55,7 +58,7 @@ const {
   createProfileError,
 } = feed
 const { pendingNavigation, unsavedChangesBusy } = nav
-const { tasksOpen, activityOpen, actionRunsOpen, actionRunsRunId } = overlays
+const { tasksOpen, activityOpen, actionRunsOpen, actionRunsRunId, changesOpen } = overlays
 const { newProfileOpen } = profileActions
 const flowsSession = useFlowsSession()
 const { open: reportDialogOpen } = useReportDialog()
@@ -158,6 +161,14 @@ onMounted(() => {
   />
   <HubOverlay v-if="tasksOpen" label="Tasks" testid="tasks-overlay" @close="tasksOpen = false">
     <TasksView @close="tasksOpen = false" />
+  </HubOverlay>
+  <HubOverlay
+    v-if="changesOpen && changesSession"
+    label="Changes"
+    testid="changes-overlay"
+    @close="changesOpen = false"
+  >
+    <ChangesView :session-id="changesSession" @close="changesOpen = false" />
   </HubOverlay>
   <HubOverlay v-if="actionRunsOpen" label="Action runs" testid="action-runs-overlay" @close="actionRunsOpen = false">
     <ActionRunsView

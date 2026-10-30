@@ -7,6 +7,7 @@ import IconChevronUp from '~icons/lucide/chevron-up'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconCopy from '~icons/lucide/copy'
 import IconInfo from '~icons/lucide/info'
+import IconFileDiff from '~icons/lucide/file-diff'
 import IconListTodo from '~icons/lucide/list-todo'
 import IconPlay from '~icons/lucide/play'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
@@ -32,7 +33,7 @@ import {
 import { useTerminalModeContext } from './terminalModeContext'
 
 const props = defineProps<{ paintedActive: boolean }>()
-const emit = defineEmits<{ 'open-tasks': []; 'session-repo-key': [repoKey: string] }>()
+const emit = defineEmits<{ 'open-tasks': []; 'open-changes': []; 'session-repo-key': [repoKey: string] }>()
 
 const { pool, tree, attach, ops, sessions } = useTerminalModeContext()
 const visible = computed(() => pool.visible)
@@ -169,6 +170,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
         :pull-request="sessionPullRequest"
         :pull-request-error="sessionPullRequestError"
         @refresh-pull-request="refreshSessionStatus({ refreshPullRequest: true })"
+        @open-changes="emit('open-changes')"
       />
       <SessionTagsStatus :tags="statusBarRow.tags" @edit="sessions.requestEdit(statusBarRow, 'tags')" />
       <template #actions>
@@ -179,6 +181,12 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           :icon="launcherIconComponent(action.icon)"
           :data-testid="`terminal-statusbar-action-${action.id}`"
           @click="ops.actions.invoke(action, { slug: statusBarRow.slug, windowId: '' })"
+        />
+        <IconButton
+          label="Changes"
+          :icon="IconFileDiff"
+          data-testid="terminal-statusbar-changes"
+          @click="emit('open-changes')"
         />
         <IconButton
           label="Tasks"

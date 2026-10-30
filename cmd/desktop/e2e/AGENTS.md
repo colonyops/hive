@@ -21,11 +21,13 @@ mise run desktop:e2e -- --list
 mise run desktop:e2e -- --grep @critical
 mise run desktop:e2e -- --project features-chromium
 mise run desktop:e2e -- --grep @palette --grep-invert @settings
-mise run desktop:e2e -- --project features-chromium tests/features/drive/drive.spec.ts
+mise run desktop:e2e -- --project=features-chromium tests/features/drive/drive.spec.ts
 ```
 
 The first argument must be a flag. The image entrypoint runs a first argument
-that is not a flag as a command, so put a file path after a flag.
+that is not a flag as a command, so put a file path after a flag. Join a file
+path's `--project` with `=`: `--project` takes several values, so with a space
+it reads the path as a project name.
 
 `--list` skips the servers, so it answers "what runs where" in seconds after
 the image builds. The image build also runs `tsc --noEmit` over this

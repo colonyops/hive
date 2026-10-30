@@ -2,13 +2,14 @@ import { ref, type Ref } from 'vue'
 import { useTasks } from '../stores/useTasks'
 
 /**
- * Tasks, Activity and Action runs open over whatever is on screen rather than
+ * Tasks, Changes, Activity and Action runs open over whatever is on screen rather than
  * navigating away from it (hay-kot/hive-desktop#441), so they are overlays,
  * not routes. A title-bar icon or a command toggles each one.
  */
 export function useHubOverlays(terminalActive: Ref<boolean>) {
   const tasksOpen = ref(false)
   const activityOpen = ref(false)
+  const changesOpen = ref(false)
   const actionRunsOpen = ref(false)
   const actionRunsRunId = ref<number | null>(null)
   const { setRepoKey } = useTasks()
@@ -23,6 +24,10 @@ export function useHubOverlays(terminalActive: Ref<boolean>) {
       setRepoKey(terminalSessionRepoKey.value)
     }
     tasksOpen.value = !tasksOpen.value
+  }
+
+  function toggleChanges(): void {
+    changesOpen.value = !changesOpen.value
   }
 
   function toggleActivity(): void {
@@ -51,5 +56,7 @@ export function useHubOverlays(terminalActive: Ref<boolean>) {
     terminalSessionRepoKey,
     toggleTasks,
     toggleActivity,
+    changesOpen,
+    toggleChanges,
   }
 }

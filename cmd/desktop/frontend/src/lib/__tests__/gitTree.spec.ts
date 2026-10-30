@@ -3,7 +3,7 @@ import { gitFileDir, gitFileName, gitRows, type GitRow } from '../gitTree'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 function file(path: string): ChangedFile {
-  return { path, oldPath: '', status: 'modified', additions: 0, deletions: 0, binary: false }
+  return { path, oldPath: '', status: 'modified', additions: 0, deletions: 0, binary: false, stamp: '' }
 }
 
 const describeRow = (row: GitRow) =>

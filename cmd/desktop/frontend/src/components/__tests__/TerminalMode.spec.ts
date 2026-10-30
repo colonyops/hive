@@ -42,7 +42,6 @@ const mocks = vi.hoisted(() => ({
   SessionGitStatus: vi.fn(),
   SessionPullRequest: vi.fn(),
   OpenSessionInEditor: vi.fn(),
-  SessionChanges: vi.fn(),
   RevealSession: vi.fn(),
   SessionRisk: vi.fn(),
   EditSession: vi.fn(),
@@ -123,7 +122,6 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   SessionGitStatus: mocks.SessionGitStatus,
   SessionPullRequest: mocks.SessionPullRequest,
   OpenSessionInEditor: mocks.OpenSessionInEditor,
-  SessionChanges: mocks.SessionChanges,
   RevealSession: mocks.RevealSession,
   SessionRisk: mocks.SessionRisk,
   EditSession: mocks.EditSession,
@@ -4677,14 +4675,14 @@ describe('TerminalMode', () => {
   describe('drive pane', () => {
     const drive = { space: 'hay-kot/hive', session: '1' }
 
-    async function mountWithDrive(path: string, extraProps: Record<string, unknown> = {}) {
+    async function mountWithDrive(path: string) {
       const session = fakeSession()
       mocks.useTerminalWindows.mockReturnValue(session)
       const router = createAppRouter(createMemoryHistory())
       await router.push(path)
       await router.isReady()
       const wrapper = mount(TerminalMode, {
-        props: { drive, ...extraProps },
+        props: { drive },
         global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
       })
       await flushPromises()
@@ -4704,7 +4702,7 @@ describe('TerminalMode', () => {
 
       expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(true)
 
-      await wrapper.get('[data-testid="session-side-pane-close"]').trigger('click')
+      await wrapper.get('[data-testid="drive-pane-close"]').trigger('click')
       await flushPromises()
       expect(router.currentRoute.value.query.doc).toBeUndefined()
       expect(router.currentRoute.value.params.slug).toBe('hive-fix-parser')
@@ -4740,27 +4738,6 @@ describe('TerminalMode', () => {
 
       expect(router.currentRoute.value.name).toBe('application-settings')
       expect(router.currentRoute.value.params.section).toBe('mcp')
-
-      wrapper.unmount()
-    })
-
-    it('switches to Git in the same slot without re-keying the terminal', async () => {
-      const { wrapper, router } = await mountWithDrive('/terminal/hive-fix-parser?doc=1', { git: '1' })
-      const tab = wrapper.findComponent({ name: 'TerminalTab' })
-      expect(tab.exists()).toBe(true)
-      const tabElement = tab.element
-      const pane = wrapper.get('[data-testid="session-side-pane"]').element
-
-      await wrapper.get('[data-testid="session-side-pane-tab-git"]').trigger('click')
-      await flushPromises()
-
-      expect(router.currentRoute.value.query.git).toBe('1')
-      expect(router.currentRoute.value.query.doc).toBeUndefined()
-      expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
-      expect(wrapper.find('[data-testid="git-pane"]').exists()).toBe(true)
-      expect(mocks.SessionChanges).toHaveBeenCalledWith('1', 'branch')
-      expect(wrapper.get('[data-testid="session-side-pane"]').element).toBe(pane)
-      expect(wrapper.findComponent({ name: 'TerminalTab' }).element).toBe(tabElement)
 
       wrapper.unmount()
     })

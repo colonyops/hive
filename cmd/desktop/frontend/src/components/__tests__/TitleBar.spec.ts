@@ -124,15 +124,12 @@ describe('TitleBar', () => {
     expect(collapsed.find('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe('Show preview')
   })
 
-  it('names the right pane the drive in Chats and the panel in Code', () => {
-    for (const [mode, label] of [
-      ['agents', 'Show drive'],
-      ['terminal', 'Show panel'],
-    ] as const) {
+  it('names the right pane the drive in Chats and Code', () => {
+    for (const mode of ['agents', 'terminal'] as const) {
       const wrapper = mount(TitleBar, {
         props: { profileName: 'Triage', mode, canTogglePreview: true, previewCollapsed: true },
       })
-      expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe(label)
+      expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe('Show drive')
     }
   })
 

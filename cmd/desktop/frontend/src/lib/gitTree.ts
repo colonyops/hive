@@ -41,6 +41,18 @@ function buildTree(files: ChangedFile[]): Folder {
   return root
 }
 
+const STATUS: Record<string, { letter: string; label: string; color: string }> = {
+  modified: { letter: 'M', label: 'Modified', color: 'text-severity-warning' },
+  added: { letter: 'A', label: 'Added', color: 'text-severity-success' },
+  deleted: { letter: 'D', label: 'Deleted', color: 'text-severity-error' },
+  renamed: { letter: 'R', label: 'Renamed', color: 'text-severity-info' },
+  untracked: { letter: 'U', label: 'Untracked', color: 'text-severity-success' },
+}
+
+export function gitStatus(status: string): { letter: string; label: string; color: string } {
+  return STATUS[status] ?? { letter: '?', label: status, color: 'text-text-3' }
+}
+
 const byPath = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 /**

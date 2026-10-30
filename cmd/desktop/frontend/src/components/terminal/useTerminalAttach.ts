@@ -45,8 +45,6 @@ export function useTerminalAttach(options: {
     if (window) query.window = window
     const doc = route.name === 'terminal' ? route.query.doc : undefined
     if (doc !== undefined) query.doc = slug === routeSlug.value && typeof doc === 'string' ? doc : '1'
-    const git = route.name === 'terminal' ? route.query.git : undefined
-    if (git !== undefined) query.git = slug === routeSlug.value && typeof git === 'string' ? git : '1'
     return query
   }
 

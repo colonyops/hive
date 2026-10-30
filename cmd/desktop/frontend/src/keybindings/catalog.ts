@@ -2,6 +2,7 @@ import { computed, ref, type Component, type ComputedRef } from 'vue'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
+import IconFileDiff from '~icons/lucide/file-diff'
 import IconArrowUp from '~icons/lucide/arrow-up'
 import IconFolderTree from '~icons/lucide/folder-tree'
 import IconMessageSquare from '~icons/lucide/message-square'
@@ -84,6 +85,7 @@ export type CommandContext =
   | 'terminal-session'
   | 'terminal-pane'
   | 'any-terminal'
+  | 'session-changes'
   | 'agents'
   | 'sidebar'
   | 'panel'
@@ -314,6 +316,16 @@ export const commandCatalog: BindableCommand[] = [
     icon: IconPanelRight,
     defaultCombos: ['mod+alt+b'],
     context: 'panel',
+    piercesPane: 'non-mac',
+  },
+  {
+    id: 'changes.toggle',
+    title: 'Toggle Changes',
+    group: 'View',
+    keywords: ['git', 'diff', 'changes', 'review', 'files', 'branch', 'uncommitted'],
+    icon: IconFileDiff,
+    defaultCombos: ['mod+alt+g'],
+    context: 'session-changes',
     piercesPane: 'non-mac',
   },
   {

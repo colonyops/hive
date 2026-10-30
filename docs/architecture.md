@@ -1432,6 +1432,18 @@ place that turns a `Location` into a route or an overlay. A new area adds an
 
 ### Terminal sessions
 
+**Changes is read-only and reads through `sessionapi`.** The Changes view is a
+hub overlay over the session in Code, not a route or a side pane: it needs more
+width than the right slot has, and it takes key focus away from the terminal.
+Both reads (`SessionChanges`, `SessionFileDiffs`) go through `sessionapi` to
+`gitstatus`, so they read the checkout on the machine that holds it. Every `git
+diff` runs on a scratch copy of the index (`internal/platform/git/changes.go`),
+because it otherwise rewrites the index and holds `index.lock` when it meets a
+touched file, even under `--no-optional-locks`, and that lock can fail an agent's
+own git command. `DiffStats` follows the same rule. A new read in that file must
+too. The frontend reads diffs in batches for the files near the viewport and drops
+the rows of files far from it, so a large change list costs one screen of work.
+
 **Image input is local file references.** Wails routes native drops to a specific
 terminal host; that host captures clipboard images from webview paste events. `TerminalImagesService`
 validates original paths or saves clipboard bytes through `terminalimg` under

@@ -6,7 +6,6 @@ import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/dri
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveActivity } from '../stores/useDriveActivity'
 import { useDriveReview } from '../stores/useDriveReview'
-import { useRightPaneTab } from '../stores/useRightPaneTab'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 import { createLogger } from '../lib/log'
@@ -33,9 +32,7 @@ export function useAppMode(
   shellLoaded: Ref<boolean>,
 ) {
   const { route, router } = nav
-  const { routeChatId, docRequested, docPath, docUnseen, gitRequested, syncDocQuery, syncGitQuery, closeSidePane } =
-    useDriveRoute()
-  const { lastTab } = useRightPaneTab()
+  const { routeChatId, docRequested, docPath, docUnseen, syncDocQuery } = useDriveRoute()
   const activity = useDriveActivity()
   const review = useDriveReview()
   const { recents } = useAgentSessionsAll()
@@ -179,27 +176,24 @@ export function useAppMode(
     return row?.canvasOwner ? { space: row.canvasOwner, session: row.id } : null
   })
 
-  // The session on screen in Code whose checkout the Git pane reads. A pinned
-  // chat has no session checkout, and neither does the scratch terminal.
-  const codeGit = computed<string | null>(() => {
+  // The session on screen in Code whose checkout Changes reads. A pinned chat has
+  // no session checkout, and neither does the scratch terminal.
+  const codeChangesSession = computed<string | null>(() => {
     const slug = onScreenSessionSlug.value
     if (!terminalActive.value || !slug || recents.value.some((row) => row.slug === slug)) return null
     return codeSessions.value.find((session) => session.slug === slug)?.id ?? null
   })
 
   // One control per frame edge: the right toggle names the detail preview in
-  // Inbox, the drive pane in Chats, and the side pane in Code
-  // (hay-kot/hive-desktop#432).
+  // Inbox and the drive pane in Chats and Code (hay-kot/hive-desktop#432).
   const agentsDriveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
-  const rightPaneAvailable = computed(
-    () => agentsDriveAvailable.value || codeDrive.value !== null || codeGit.value !== null,
-  )
+  const driveAvailable = computed(() => agentsDriveAvailable.value || codeDrive.value !== null)
   const previewToggleCollapsed = computed(() => {
     if (driveActive.value) return review.pageCommentsCollapsed.value
-    return rightPaneAvailable.value ? !docRequested.value && !gitRequested.value : previewCollapsed.value
+    return driveAvailable.value ? !docRequested.value : previewCollapsed.value
   })
   const canTogglePreview = computed(
-    () => feedViewActive.value || rightPaneAvailable.value || (driveActive.value && review.pageReviewed.value),
+    () => feedViewActive.value || driveAvailable.value || (driveActive.value && review.pageReviewed.value),
   )
   const previewUnseen = computed(() =>
     agentsDriveAvailable.value ? docUnseen.value : activity.isUnseen(codeDrive.value?.session ?? null),
@@ -207,15 +201,8 @@ export function useAppMode(
 
   function togglePreview(): void {
     if (driveActive.value) review.togglePageComments()
-    else if (agentsDriveAvailable.value) syncDocQuery(!docRequested.value)
-    else if (rightPaneAvailable.value) toggleCodePane()
+    else if (driveAvailable.value) syncDocQuery(!docRequested.value)
     else previewCollapsed.value = !previewCollapsed.value
-  }
-
-  function toggleCodePane(): void {
-    if (docRequested.value || gitRequested.value) closeSidePane()
-    else if (codeGit.value !== null && (lastTab.value === 'git' || codeDrive.value === null)) syncGitQuery(true)
-    else syncDocQuery(true)
   }
 
   // What the drive pane beside the open chat or Code session shows, or would
@@ -311,7 +298,7 @@ export function useAppMode(
     previewUnseen,
     togglePreview,
     codeDrive,
-    codeGit,
+    codeChangesSession,
     viewDriveScope,
     toggleMaximise,
   }

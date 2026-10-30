@@ -45,7 +45,7 @@ A setup command that exits successfully does not stop healthy panes. If every co
 
 **Stop session** stops the tmux session and its processes while keeping the checkout and Hive session record. **Recycle** and **Delete** also change or remove the checkout.
 
-For repository sessions, the optional status bar shows the branch, changes against the default branch, uncommitted work, and unpushed commits. Connected GitHub, Gitea, and Forgejo repositories also show pull request, review, and check state. Use the status bar to open the checkout in your editor or file manager. Actions that target `statusbar` add buttons of their own; see [Where actions run](../inbox/actions.md#where-actions-run).
+For repository sessions, the optional status bar shows the branch, changes against the default branch including uncommitted work, whether there is uncommitted work, and unpushed commits. Select the line counts to [review the changes](#changes). Connected GitHub, Gitea, and Forgejo repositories also show pull request, review, and check state. Use the status bar to open the checkout in your editor or file manager. Actions that target `statusbar` add buttons of their own; see [Where actions run](../inbox/actions.md#where-actions-run).
 
 ### Tags
 
@@ -149,6 +149,31 @@ Search by title or ID, pick a repository (type in the picker to find one), and i
 Each list row has its own actions. Click the status icon to pick a status, or hover the row for **Mark done** (**Reopen** on a closed task) and a menu with every status, **Copy ID**, and **Delete**. Right-clicking a row opens the same menu.
 
 Use <kbd>J</kbd> and <kbd>K</kbd> (or the arrow keys) to move the selection. On the board, <kbd>H</kbd> and <kbd>L</kbd> move between columns. In the list, they fold and unfold epics. <kbd>D</kbd> marks the selected task done, or reopens it if it is closed. <kbd>Y</kbd> copies the selected task's ID.
+
+## Changes
+
+**Changes** shows what an agent changed in the session on screen, without leaving Hive. Open it with <kbd>⌘⌥G</kbd> (Windows/Linux: <kbd>Ctrl+Alt+G</kbd>), the file button in the status bar, or the line counts beside the branch. It opens over the session and closes with <kbd>Esc</kbd>.
+
+Every changed file's diff sits in one scroll, with the files listed beside it. **Branch** compares the working tree with the point where the branch left the default branch, so it shows everything the agent did, committed or not. **Uncommitted** compares it with `HEAD`. Only Uncommitted appears on the default branch, or when Hive can't find a merge base, as in a shallow clone. Both include untracked files.
+
+| Key | Action |
+| --- | --- |
+| <kbd>j</kbd> / <kbd>k</kbd> | Next or previous file |
+| <kbd>n</kbd> / <kbd>N</kbd> | Next or previous hunk |
+| <kbd>v</kbd> | Mark the file viewed, which folds it |
+| <kbd>o</kbd> | Fold or unfold the file |
+| <kbd>s</kbd> | Switch between unified and side by side |
+| <kbd>Esc</kbd> | Close |
+
+The view refreshes every 5 seconds while it's open and the window has focus. A viewed file comes back unviewed when it changes again. Viewed marks last until you quit Hive.
+
+Changes is read-only, so it's safe to use while an agent works in the checkout. It can't stage or commit. These limits apply:
+
+- A diff over 1,500 changed lines shows **Open in editor** instead. So does a very large file, and the list stops at 1,000 files.
+- Binary files, symlinks, pipes, and nested repositories show a note instead of a diff.
+- An unstaged `mv` shows as a delete plus an untracked file.
+- Untracked files have no line counts, so the totals match the status bar.
+- A repository with no commits shows git's error.
 
 ## Drive
 

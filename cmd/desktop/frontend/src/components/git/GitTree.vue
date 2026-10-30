@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconClipboardCopy from '~icons/lucide/clipboard-copy'
 import IconEllipsis from '~icons/lucide/ellipsis'
@@ -11,13 +11,15 @@ import { useListKeyboardNav } from '@hive/ui/composables/useListKeyboardNav'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import { documentIcon, folderIcon } from '../drive/driveIcon'
 import { useTreeExpansion } from '../../composables/useTreeExpansion'
-import { gitFileDir, gitFileName, gitRows, type GitLayout, type GitRow } from '../../lib/gitTree'
+import { gitFileDir, gitFileName, gitRows, gitStatus, type GitLayout, type GitRow } from '../../lib/gitTree'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
   files: ChangedFile[]
   layout: GitLayout
   selected: string | null
+  /** Files marked viewed, which dim in the list. */
+  viewed?: ReadonlySet<string>
 }>()
 const emit = defineEmits<{ pick: [path: string]; 'open-editor': [] }>()
 
@@ -53,6 +55,14 @@ const nav = useListKeyboardNav({
   },
 })
 
+// The selection follows the stream as it scrolls, so its row stays in view.
+watch(
+  () => props.selected,
+  (path) => {
+    if (path) rowElements.get(`file:${path}`)?.scrollIntoView?.({ block: 'nearest' })
+  },
+)
+
 function activate(row: GitRow): void {
   if (row.kind === 'dir') expansion.toggle(row.key)
   else emit('pick', row.file.path)
@@ -81,14 +91,6 @@ function onKeydown(event: KeyboardEvent): void {
   event.preventDefault()
 }
 
-const STATUS: Record<string, { letter: string; label: string; color: string }> = {
-  modified: { letter: 'M', label: 'Modified', color: 'text-severity-warning' },
-  added: { letter: 'A', label: 'Added', color: 'text-severity-success' },
-  deleted: { letter: 'D', label: 'Deleted', color: 'text-severity-error' },
-  renamed: { letter: 'R', label: 'Renamed', color: 'text-severity-info' },
-  untracked: { letter: 'U', label: 'Untracked', color: 'text-severity-success' },
-}
-
 function rowTitle(file: ChangedFile): string {
   return file.oldPath ? `${file.oldPath} -> ${file.path}` : file.path
 }
@@ -97,13 +99,13 @@ const menu = ref<{ file: ChangedFile; anchor: HTMLElement; toggle: HTMLElement }
 const clipboard = useClipboard()
 
 const menuEntries: MenuEntry[] = [
-  { kind: 'action', id: 'copy-path', label: 'Copy path', icon: IconClipboardCopy, testid: 'git-pane-copy-path' },
+  { kind: 'action', id: 'copy-path', label: 'Copy path', icon: IconClipboardCopy, testid: 'changes-copy-path' },
   {
     kind: 'action',
     id: 'open-editor',
     label: 'Open in editor',
     icon: IconExternalLink,
-    testid: 'git-pane-open-editor',
+    testid: 'changes-open-editor',
   },
 ]
 
@@ -128,7 +130,7 @@ function onMenuSelect(id: string): void {
     aria-label="Changed files"
     tabindex="0"
     class="min-h-full pb-6 outline-none"
-    data-testid="git-pane-tree"
+    data-testid="changes-tree"
     @keydown="onKeydown"
   >
     <template v-for="(row, index) in rows" :key="rowKey(row)">
@@ -142,7 +144,7 @@ function onMenuSelect(id: string): void {
         :title="row.key"
         :aria-level="row.depth + 1"
         :aria-expanded="expansion.expanded(row.key)"
-        :data-testid="`git-pane-dir-${row.key}`"
+        :data-testid="`changes-dir-${row.key}`"
         @click="
           () => {
             active = index
@@ -176,7 +178,7 @@ function onMenuSelect(id: string): void {
         :title="rowTitle(row.file)"
         :aria-level="row.depth + 1"
         :aria-selected="row.file.path === selected"
-        :data-testid="`git-pane-row-${row.file.path}`"
+        :data-testid="`changes-row-${row.file.path}`"
         @click="
           () => {
             active = index
@@ -191,7 +193,9 @@ function onMenuSelect(id: string): void {
           :class="documentIcon(gitFileName(row.file.path), '').color"
           aria-hidden="true"
         />
-        <span class="min-w-0 truncate">{{ gitFileName(row.file.path) }}</span>
+        <span class="min-w-0 truncate" :class="viewed?.has(row.file.path) ? 'text-text-4 line-through' : ''">{{
+          gitFileName(row.file.path)
+        }}</span>
         <span
           v-if="layout === 'flat' && gitFileDir(row.file.path)"
           class="min-w-0 truncate text-caption text-text-4"
@@ -208,14 +212,14 @@ function onMenuSelect(id: string): void {
           size="sm"
           :label="`Actions for ${gitFileName(row.file.path)}`"
           :icon="IconEllipsis"
-          :data-testid="`git-pane-row-${row.file.path}-menu`"
+          :data-testid="`changes-row-${row.file.path}-menu`"
           @click.stop="openMenu(row.file, $event)"
         />
         <span
           class="w-3 shrink-0 text-center font-mono text-caption font-semibold"
-          :class="STATUS[row.file.status]?.color"
-          :title="STATUS[row.file.status]?.label"
-          >{{ STATUS[row.file.status]?.letter }}</span
+          :class="gitStatus(row.file.status).color"
+          :title="gitStatus(row.file.status).label"
+          >{{ gitStatus(row.file.status).letter }}</span
         >
       </div>
     </template>
@@ -224,7 +228,7 @@ function onMenuSelect(id: string): void {
       :entries="menuEntries"
       :anchor="menu.anchor"
       :ignore="[menu.toggle]"
-      testid="git-pane-row-menu"
+      testid="changes-row-menu"
       @select="onMenuSelect"
       @close="menu = null"
     />

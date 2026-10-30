@@ -22,6 +22,7 @@ const activeContexts = new Set<CommandContext>()
 const paletteOpen = ref(false)
 const activityOpen = ref(false)
 const tasksOpen = ref(false)
+const changesOpen = ref(false)
 const actionRunsOpen = ref(false)
 
 beforeEach(async () => {
@@ -41,6 +42,7 @@ beforeEach(async () => {
   paletteOpen.value = false
   activityOpen.value = false
   tasksOpen.value = false
+  changesOpen.value = false
   actionRunsOpen.value = false
   scope = effectScope()
   scope.run(() =>
@@ -50,6 +52,7 @@ beforeEach(async () => {
       paletteOpen,
       activityOpen,
       tasksOpen,
+      changesOpen,
       actionRunsOpen,
     }),
   )
@@ -111,6 +114,7 @@ describe('useGlobalKeymap overlay gate', () => {
     ['the palette', () => (paletteOpen.value = true)],
     ['Activity', () => (activityOpen.value = true)],
     ['Tasks', () => (tasksOpen.value = true)],
+    ['Changes', () => (changesOpen.value = true)],
     ['Action runs', () => (actionRunsOpen.value = true)],
     ['a modal', () => void openModal()],
   ])('suppresses everything but the palette toggle while %s is open', (_name, open) => {
