@@ -112,8 +112,9 @@ export const useCodeViews = defineStore('codeViews', () => {
     },
     { immediate: true, flush: 'sync' },
   )
-  // Only once hydrated: before then every stored id looks dangling. A view
-  // deleted elsewhere (another window, a synced settings.yaml) falls back to All.
+  // Only once hydrated: before then every stored id looks dangling. Falls back
+  // to All when the active view is removed, or when the stored id names a view
+  // that is gone by launch.
   watch(
     [views, setting.hydrated],
     () => {

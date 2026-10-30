@@ -112,6 +112,7 @@ func TestCodeViewsValidation(t *testing.T) {
 	cfg := DefaultSettings()
 	for name, views := range map[string][]SessionView{
 		"needs an id":     {{Name: "A"}},
+		"is reserved":     {{ID: "running", Name: "Mine"}},
 		"is used twice":   {{ID: "a", Name: "A"}, {ID: "a", Name: "B"}},
 		"needs a name":    {{ID: "a", Name: " "}},
 		"match all | any": {{ID: "a", Name: "A", Filter: SessionFilter{Match: "none"}}},

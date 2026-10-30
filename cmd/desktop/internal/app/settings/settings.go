@@ -241,11 +241,19 @@ type SessionCondition struct {
 	Days   int      `yaml:"days,omitempty"`
 }
 
+// builtInCodeViewIDs are the ids the frontend gives its built-in views
+// (ALL_SESSIONS_VIEW_ID and RUNNING_VIEW_ID in lib/sessionViews.ts). A saved
+// view with one of them would sit behind the built-in, unreachable.
+var builtInCodeViewIDs = []string{"all", "running"}
+
 func (v ViewsSettings) Validate() error {
 	seen := make(map[string]bool, len(v.Code))
 	for _, view := range v.Code {
 		if view.ID == "" {
 			return fmt.Errorf("views.code: every view needs an id")
+		}
+		if slices.Contains(builtInCodeViewIDs, view.ID) {
+			return fmt.Errorf("views.code: view id %q is reserved for a built-in view", view.ID)
 		}
 		if seen[view.ID] {
 			return fmt.Errorf("views.code: view id %q is used twice", view.ID)

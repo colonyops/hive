@@ -23,7 +23,13 @@ const docs = { ...row('2', 'docs'), tags: ['Auto'] }
 const api = row('3', 'api', 'github.com/acme/api')
 const scratch = row('s', 'scratch', '')
 
-function setup(running: string[] = [], settled = true, filter?: SessionFilter, statusesInitiallyLoaded = true) {
+function setup(
+  running: string[] = [],
+  settled = true,
+  filter?: SessionFilter,
+  statusesInitiallyLoaded = true,
+  filterReady?: () => boolean,
+) {
   const groups = ref<TerminalSessionGroup[]>([
     { key: 'scratch', name: 'Scratch', kind: 'scratch', sessions: [scratch] },
     { key: 'github.com/acme/api', name: 'acme/api', kind: 'repo', sessions: [api] },
@@ -47,7 +53,7 @@ function setup(running: string[] = [], settled = true, filter?: SessionFilter, s
     showAllWindowsReady: ref(true),
     listingsSettled,
   }
-  const view = effectScope().run(() => useSessionTreeView(tree, { filter: filter && (() => filter) }))!
+  const view = effectScope().run(() => useSessionTreeView(tree, { filter: filter && (() => filter), filterReady }))!
   return { view, statusesLoaded, listingsSettled }
 }
 
@@ -99,6 +105,22 @@ describe('useSessionTreeView', () => {
     expect(view.noMatchesNote.value).toBe('No sessions match this view.')
     view.query.value = 'zzz'
     expect(view.noMatchesNote.value).toBe('No sessions match “zzz”.')
+  })
+
+  it('holds the first paint until the stored view has loaded', async () => {
+    const hydrated = ref(false)
+    const { view } = setup(
+      [],
+      true,
+      { match: 'all', conditions: [{ field: 'tag', op: 'any', values: ['auto'] }] },
+      true,
+      () => hydrated.value,
+    )
+    await nextTick()
+    expect(view.ready.value).toBe(false)
+    hydrated.value = true
+    await nextTick()
+    expect(view.ready.value).toBe(true)
   })
 
   it('holds the first paint for a view that reads status until statuses land', async () => {
