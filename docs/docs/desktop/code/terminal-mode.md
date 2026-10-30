@@ -169,7 +169,7 @@ The view refreshes every 5 seconds while it's open and the window has focus. A v
 
 Changes is read-only, so it's safe to use while an agent works in the checkout. It can't stage or commit. These limits apply:
 
-- A diff over 1,500 changed lines shows **Open in editor** instead. So does a very large file, and the list stops at 1,000 files.
+- A diff over 20,000 changed lines shows **Open in editor** instead. So does a very large file, and the list stops at 1,000 files.
 - Binary files, symlinks, pipes, and nested repositories show a note instead of a diff.
 - An unstaged `mv` shows as a delete plus an untracked file.
 - Untracked files have no line counts, so the totals match the status bar.

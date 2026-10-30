@@ -107,14 +107,19 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await page.keyboard.press('v')
     await expect(page.getByTestId('changes-progress')).toHaveText('1/4 viewed')
 
+    await page.keyboard.press('n')
+    await expect(stream).toContainText('var new = 2')
+    await page.keyboard.press('j')
+    await expect(page.getByTestId('changes-file-web/ui/App.vue-header')).toBeVisible()
+
     await page.keyboard.press('s')
-    await expect(page.getByTestId('changes-diff-pair').first()).toBeVisible()
+    await expect(stream.locator('[data-diff-type="split"]').first()).toBeVisible()
     await page.screenshot({ path: screenshotPath(`changes-split-${browserName}.png`) })
     await page.keyboard.press('s')
 
     await page.getByTestId('changes-base-uncommitted').click()
     await expect(page.getByTestId('changes-total')).toHaveText('+3-1')
-    await expect(page.getByTestId('changes-file-web/ui/App.vue')).toHaveCount(0)
+    await expect(page.getByTestId('changes-file-web/ui/App.vue-header')).toHaveCount(0)
 
     await page.keyboard.press('Escape')
     await expect(view).toBeHidden()

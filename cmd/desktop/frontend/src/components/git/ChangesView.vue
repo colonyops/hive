@@ -2,8 +2,8 @@
 // Every changed file's diff in one scroll, with a file rail beside it. It is
 // read-only: every read goes through the session API, and nothing here writes
 // to the checkout.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue'
-import { useEventListener, useResizeObserver, useStorage } from '@vueuse/core'
+import { computed, nextTick, onMounted, ref, toRef, watch } from 'vue'
+import { useEventListener, useStorage } from '@vueuse/core'
 import IconColumns2 from '~icons/lucide/columns-2'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconList from '~icons/lucide/list'
@@ -18,12 +18,13 @@ import SegmentedControl, { type SegmentedControlOption } from '@hive/ui/componen
 import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
-import DiffFile from './DiffFile.vue'
+import DiffStream from './DiffStream.vue'
 import GitTree from './GitTree.vue'
 import { fileVersion, useFileDiffs } from '../../composables/useFileDiffs'
 import { useSessionChanges, type DiffBase } from '../../composables/useSessionChanges'
 import { useToasts } from '../../composables/useToasts'
 import { errorText } from '../../lib/appError'
+import { readOrder, type DiffMode } from '../../lib/diffItems'
 import { gitRows, type GitLayout } from '../../lib/gitTree'
 import { isEditableTarget } from '../../lib/isEditableTarget'
 import { useChangesViewed } from '../../stores/useChangesViewed'
@@ -39,7 +40,11 @@ const openModalCount = useOpenModalCount()
 const sessionId = toRef(props, 'sessionId')
 const base = useStorage<DiffBase>('hive.git.base', 'branch')
 const layout = useStorage<GitLayout>('hive.git.layout', 'tree')
-const mode = useStorage<'unified' | 'split'>('hive.git.diffMode', 'unified')
+const mode = useStorage<DiffMode>('hive.git.diffMode', 'unified')
+
+// Held diffs set the scrollbar's length and take memory, so the read stops this
+// many files from the one on screen. Scrolling on reads further.
+const READ_WINDOW = 200
 
 const { changes, error } = useSessionChanges(sessionId, base, () => true)
 // The tree lists folders first, so the stream follows the rail's order rather
@@ -84,70 +89,27 @@ function toggleViewed(file: ChangedFile): void {
   foldOverrides.value.delete(file.path)
 }
 
-const scroller = ref<HTMLElement | null>(null)
+const stream = ref<{
+  focus: () => void
+  scrollToFile: (path: string) => void
+  stepHunk: (delta: 1 | -1) => boolean
+} | null>(null)
+const scope = computed(() => `${props.sessionId}:${base.value}`)
 const current = ref<string | null>(null)
-const near = ref(new Set<string>())
+const openPaths = computed(() => new Set(files.value.filter(isOpen).map((file) => file.path)))
 const wanted = computed(() => {
-  const open = files.value.filter((file) => isOpen(file) && near.value.has(file.path))
-  return open.map((file) => file.path)
+  const center = files.value.findIndex((file) => file.path === current.value)
+  const open = readOrder(files.value, center).filter((file) => openPaths.value.has(file.path))
+  return open.slice(0, READ_WINDOW).map((file) => file.path)
 })
 const { entries } = useFileDiffs(sessionId, base, files, wanted)
 
-// Sections are observed by the path they carry, so the rendered list can change
-// under the observer.
-const NEAR_MARGIN_PX = 1500
-let nearObserver: IntersectionObserver | null = null
-const sectionElements = ref<HTMLElement[]>([])
-const heights = new WeakMap<Element, number>()
-
-// WebKit has no scroll anchoring, so a file growing above the viewport as its
-// diff loads would push the one being read out of view.
-useResizeObserver(sectionElements, (records) => {
-  const box = scroller.value
-  if (!box) return
-  const top = box.getBoundingClientRect().top
-  for (const record of records) {
-    const { height, bottom } = record.target.getBoundingClientRect()
-    const before = heights.get(record.target)
-    heights.set(record.target, height)
-    if (before !== undefined && bottom - (height - before) <= top) box.scrollTop += height - before
-  }
-})
-
-function sections(): HTMLElement[] {
-  return [...(scroller.value?.querySelectorAll<HTMLElement>('section[data-file]') ?? [])]
-}
-
-function observeSections(): void {
-  sectionElements.value = sections()
-  for (const section of sectionElements.value) nearObserver?.observe(section)
-}
-
+// Arrow keys and Page Down scroll what has focus. HubOverlay focuses the panel
+// one tick after it mounts, which is after this child, so this waits one more.
 onMounted(() => {
-  if (typeof IntersectionObserver !== 'undefined') {
-    nearObserver = new IntersectionObserver(
-      (records) => {
-        const next = new Set(near.value)
-        for (const record of records) {
-          const path = (record.target as HTMLElement).dataset.file
-          if (!path) continue
-          if (record.isIntersecting) next.add(path)
-          else next.delete(path)
-        }
-        near.value = next
-      },
-      { root: scroller.value, rootMargin: `${NEAR_MARGIN_PX}px 0px` },
-    )
-  }
-  observeSections()
-  // Arrow keys and Page Down scroll what has focus. HubOverlay focuses the panel
-  // one tick after it mounts, which is after this child, so this waits one more.
   void nextTick()
     .then(() => nextTick())
-    .then(() => scroller.value?.focus({ preventScroll: true }))
-})
-onBeforeUnmount(() => {
-  nearObserver?.disconnect()
+    .then(() => stream.value?.focus())
 })
 watch(
   () => files.value.map((file) => file.path).join('\n'),
@@ -155,33 +117,16 @@ watch(
     if (!current.value || !files.value.some((file) => file.path === current.value)) {
       current.value = files.value[0]?.path ?? null
     }
-    void nextTick(observeSections)
   },
 )
 
 watch([sessionId, base], () => {
-  near.value = new Set()
   foldOverrides.value = new Map()
-  if (scroller.value) scroller.value.scrollTop = 0
 })
 
 function jumpTo(path: string): void {
   current.value = path
-  const box = scroller.value
-  const section = sections().find((node) => node.dataset.file === path)
-  if (box && section) box.scrollTop += section.getBoundingClientRect().top - box.getBoundingClientRect().top
-}
-
-function onScroll(): void {
-  const box = scroller.value
-  if (!box) return
-  const line = box.getBoundingClientRect().top + 8
-  let at: string | undefined
-  for (const section of sections()) {
-    if (section.getBoundingClientRect().top > line) break
-    at = section.dataset.file
-  }
-  if (at) current.value = at
+  stream.value?.scrollToFile(path)
 }
 
 function stepFile(delta: number): void {
@@ -190,16 +135,8 @@ function stepFile(delta: number): void {
   if (next) jumpTo(next.path)
 }
 
-function stepHunk(delta: number): void {
-  const box = scroller.value
-  if (!box) return
-  // Below the sticky file header, which covers the top of the scroller.
-  const line = box.getBoundingClientRect().top + 34
-  const offset = (hunk: Element) => hunk.getBoundingClientRect().top - line
-  const hunks = [...box.querySelectorAll('[data-hunk]')]
-  const next = delta > 0 ? hunks.find((hunk) => offset(hunk) > 2) : hunks.reverse().find((hunk) => offset(hunk) < -2)
-  if (next) box.scrollTop += offset(next)
-  else stepFile(delta)
+function stepHunk(delta: 1 | -1): void {
+  if (!stream.value?.stepHunk(delta)) stepFile(delta)
 }
 
 // On the window, because a click on a file header moves focus to the panel,
@@ -324,30 +261,24 @@ const KEY_HINTS = [
           </p>
         </div>
       </aside>
-      <div
-        ref="scroller"
-        class="hive-scroll relative min-w-0 flex-1 overflow-y-auto bg-app outline-none"
-        tabindex="0"
-        aria-label="Diffs"
-        data-testid="changes-stream"
-        @scroll.passive="onScroll"
-      >
-        <EmptyState v-if="changes && !files.length" :message="emptyMessage" data-testid="changes-empty" />
-        <DiffFile
-          v-for="file in files"
-          :key="file.path"
-          :file="file"
-          :entry="entries.get(file.path)"
-          :open="isOpen(file)"
-          :viewed="viewedPaths.has(file.path)"
-          :current="current === file.path"
-          :near="near.has(file.path)"
-          :mode="mode"
-          @fold="toggleFold(file)"
-          @toggle-viewed="toggleViewed(file)"
-          @open-editor="openInEditor"
-        />
+      <div v-if="changes && !files.length" class="min-w-0 flex-1 bg-app">
+        <EmptyState :message="emptyMessage" data-testid="changes-empty" />
       </div>
+      <DiffStream
+        v-else
+        ref="stream"
+        :key="scope"
+        v-model:current="current"
+        :scope="scope"
+        :files="files"
+        :entries="entries"
+        :open-paths="openPaths"
+        :viewed-paths="viewedPaths"
+        :mode="mode"
+        @fold="toggleFold"
+        @toggle-viewed="toggleViewed"
+        @open-editor="openInEditor"
+      />
     </div>
 
     <div

@@ -13,8 +13,10 @@ import (
 
 const (
 	maxChangedFiles = 1000
-	maxDiffLines    = 1500
-	maxLineBytes    = 4000
+	// Rendering is virtualized, so lines cost little: this keeps a diff readable
+	// and git's maxDiffBytes keeps it bounded.
+	maxDiffLines = 20000
+	maxLineBytes = 4000
 	// A diff read covers a batch of files, so it gets longer than a list read.
 	diffReadTimeout = 15 * time.Second
 )

@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { defineAsyncComponent, onMounted } from 'vue'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import ActionInputsDialog from '../components/ActionInputsDialog.vue'
 import ActionRunsView from '../components/ActionRunsView.vue'
 import ActivityView from '../components/ActivityView.vue'
-import ChangesView from '../components/git/ChangesView.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import ErrorDialog from '../components/ErrorDialog.vue'
 import ReportProblemDialog from '../components/ReportProblemDialog.vue'
@@ -58,6 +57,10 @@ const {
   createProfileError,
 } = feed
 const { pendingNavigation, unsavedChangesBusy } = nav
+// Its diff library and highlighter load only when a review opens.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
+const ChangesView = defineAsyncComponent(() => import('../components/git/ChangesView.vue'))
+
 const { tasksOpen, activityOpen, actionRunsOpen, actionRunsRunId, changesOpen } = overlays
 const { newProfileOpen } = profileActions
 const flowsSession = useFlowsSession()

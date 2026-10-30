@@ -134,7 +134,7 @@ func TestReadFileDiffsReportsEachFileOnItsOwn(t *testing.T) {
 		files: []git.ChangedFile{
 			{Path: "ok.go", Status: git.FileStatusModified, Additions: 1},
 			{Path: "image.png", Status: git.FileStatusModified, Binary: true},
-			{Path: "lock.json", Status: git.FileStatusModified, Additions: 1000, Deletions: 501},
+			{Path: "lock.json", Status: git.FileStatusModified, Additions: 15000, Deletions: 5001},
 			{Path: "data.bin", Status: git.FileStatusUntracked},
 			{Path: "pipe", Status: git.FileStatusUntracked},
 			{Path: "raced.txt", Status: git.FileStatusUntracked},
@@ -176,7 +176,7 @@ func TestReadFileDiffsClipsLongLinesAndHugePatches(t *testing.T) {
 		files: []git.ChangedFile{{Path: "long.go", Status: git.FileStatusModified}, {Path: "spread.go", Status: git.FileStatusModified}, {Path: "latin.txt", Status: git.FileStatusModified}},
 		diffs: map[string]string{
 			"long.go":   long + "\n",
-			"spread.go": strings.Repeat(" context\n", 3001),
+			"spread.go": strings.Repeat(" context\n", 40001),
 			"latin.txt": "+caf\xe9\n",
 		},
 	}, 1)
