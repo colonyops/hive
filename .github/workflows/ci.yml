@@ -78,6 +78,7 @@ jobs:
               - 'go.sum'
               - '.dockerignore'
               - 'test/remote/**'
+              - 'test/smoke/**'
               - 'mise.toml'
               - 'mise.lock'
               - '.github/workflows/ci.yml'
@@ -238,6 +239,9 @@ jobs:
 
       - name: Run remote server tests
         run: mise run cli:remote:test
+
+      - name: Check the smoke stack
+        run: mise run cli:smoke:test
 
   # The static checks (format, lint, vue-tsc, build) and the vitest suite are independent; one job made
   # the shorter wait on the longer.
