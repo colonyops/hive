@@ -125,6 +125,8 @@ function watchRoutes(router: Router): void {
   router.afterEach(() => {
     const close = end
     end = null
+    // A covered window fires no frames, so a span closed by one measures the OS.
+    if (document.hidden) return
     void nextTick(() => requestAnimationFrame(() => close?.()))
   })
 }

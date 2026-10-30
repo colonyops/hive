@@ -156,6 +156,7 @@ export function probePane(paneId: string, term: Terminal, renderer: () => boolea
     if (!echo || !echo.parsedAt) return
     const done = echo
     echo = null
+    if (now - done.at > ECHO_GIVE_UP_MS) return
     perf.record('input:echo', now - done.at, {
       pane: paneId,
       wireMs: round(done.arrivedAt - done.at),
@@ -170,6 +171,8 @@ export function probePane(paneId: string, term: Terminal, renderer: () => boolea
     input(data) {
       if (isMouseReport(data)) return
       const now = performance.now()
+      // A key whose program printed nothing never echoes, and the next output
+      // would otherwise read as its very slow echo.
       if (echo && now - echo.at > ECHO_GIVE_UP_MS) echo = null
       echo ??= { at: now, arrivedAt: 0, parsedAt: 0, target: 0, busy: received > parsed }
     },

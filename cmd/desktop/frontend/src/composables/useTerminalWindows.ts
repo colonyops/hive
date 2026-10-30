@@ -26,7 +26,7 @@ import {
 } from '../lib/terminalGrid'
 import { activePaneOf, paneGrids, windowPanes } from '../lib/terminalLayout'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
-import { TerminalOutputWriter } from '../lib/terminalOutput'
+import { splitForWrite, TerminalOutputWriter } from '../lib/terminalOutput'
 import { installTerminalImages } from '../lib/terminalImages'
 import { installKittyGraphics, type KittyGraphics } from '../lib/kitty/kittyGraphics'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
@@ -350,16 +350,20 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const output = markRaw(
       new TerminalOutputWriter((data) => {
         const reportParsed = probe.parsed
-        if (painted.value) {
-          if (reportParsed) term.write(data, () => reportParsed(data.length))
-          else term.write(data)
-          return
-        }
-        const endPaint = perf.start('paint:parse', { bytes: data.length })
-        term.write(data, () => {
-          endPaint()
-          painted.value = true
-          reportParsed?.(data.length)
+        const pieces = splitForWrite(data)
+        const endPaint = painted.value ? null : perf.start('paint:parse', { bytes: data.length })
+        pieces.forEach((piece, index) => {
+          const paints = endPaint && index === pieces.length - 1
+          if (!paints && !reportParsed) {
+            term.write(piece)
+            return
+          }
+          term.write(piece, () => {
+            reportParsed?.(piece.length)
+            if (!paints) return
+            endPaint()
+            painted.value = true
+          })
         })
       }, graphics.filter),
     )

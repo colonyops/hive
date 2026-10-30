@@ -9,6 +9,23 @@ const SYNCHRONIZED_OUTPUT_TIMEOUT_MS = 1000
 // holding megabytes and a second of latency.
 const MAX_SYNCHRONIZED_FRAME_BYTES = 1 << 20
 
+// xterm yields to the browser only between writes, so one write of a pane's whole
+// scrollback snapshot held the main thread for up to 220ms on a real session.
+const MAX_WRITE_BYTES = 32 << 10
+
+/**
+ * Cuts output into pieces xterm can yield between. A cut can land inside an escape
+ * sequence or a UTF-8 character: xterm's parser keeps its state across writes.
+ */
+export function splitForWrite(data: Uint8Array): Uint8Array[] {
+  if (data.length <= MAX_WRITE_BYTES) return [data]
+  const pieces: Uint8Array[] = []
+  for (let offset = 0; offset < data.length; offset += MAX_WRITE_BYTES) {
+    pieces.push(data.subarray(offset, offset + MAX_WRITE_BYTES))
+  }
+  return pieces
+}
+
 /** A stateful rewrite of the pane's bytes that runs ahead of the writer's own filters. */
 export interface StreamFilter {
   rewrite(data: Uint8Array): Uint8Array
