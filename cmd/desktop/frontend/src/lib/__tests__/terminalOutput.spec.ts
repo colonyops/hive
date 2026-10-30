@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/xterm'
-import { ScreenTitleFilter, TerminalOutputWriter } from '../terminalOutput'
+import { PacedWriter, ScreenTitleFilter, TerminalOutputWriter } from '../terminalOutput'
 import { KittyFilter } from '../kitty/kittyFilter'
 
 const encoder = new TextEncoder()
@@ -208,5 +208,61 @@ describe('ScreenTitleFilter', () => {
     await Promise.all(writes)
 
     expect(screen(term)[0]).toBe('done')
+  })
+})
+
+describe('TerminalOutputWriter accounting', () => {
+  const sync = (body: string): Uint8Array => encoder.encode(`\x1b[?2026h${body}\x1b[?2026l`)
+
+  it('reports the bytes its filters let through', () => {
+    const writer = new TerminalOutputWriter(() => {})
+    expect(writer.write(encoder.encode('a\x1bkname\x1b\\b'))).toBe(2)
+    writer.dispose()
+  })
+
+  it('reports what a reset threw away, and sends none of it', () => {
+    const sink = vi.fn()
+    const writer = new TerminalOutputWriter(sink)
+    writer.write(encoder.encode('\x1b[?2026hheld'))
+    expect(writer.reset()).toBe(12)
+    expect(writer.reset()).toBe(0)
+    expect(sink).not.toHaveBeenCalled()
+  })
+
+  it('marks only a frame that reached its end marker as atomic', () => {
+    const sink = vi.fn<(data: Uint8Array, atomic: boolean) => void>()
+    const writer = new TerminalOutputWriter(sink)
+    writer.write(encoder.encode('plain'))
+    writer.write(sync('frame'))
+    expect(sink.mock.calls.map(([, atomic]) => atomic)).toEqual([false, true])
+
+    sink.mockClear()
+    writer.write(encoder.encode('\x1b[?2026h'))
+    writer.write(new Uint8Array(1 << 20))
+    expect(sink.mock.calls.map(([, atomic]) => atomic)).toEqual([false])
+    writer.dispose()
+  })
+})
+
+describe('PacedWriter against a real emulator', () => {
+  // A cut inside this sequence leaves the parser mid-escape, and xterm's own queue
+  // survives term.reset(), so a repaint could lose its first bytes or sit below
+  // output it replaced.
+  const frameCutMidEscape = (): Uint8Array =>
+    encoder.encode(`${'stale\r\n'.repeat(4680)}\x1b[38;5;120m${'stale\r\n'.repeat(4680)}`)
+
+  it('lets a repaint land clean on a screen cleared mid-frame', async () => {
+    const term = new Terminal({ cols: 24, rows: 4, scrollback: 100 })
+    const writer = new PacedWriter(term, null)
+    writer.write(frameCutMidEscape(), false)
+
+    const cleared = vi.fn()
+    writer.clear(cleared)
+    await write(term, 'fresh')
+
+    expect(cleared).toHaveBeenCalledOnce()
+
+    expect(screen(term)).toEqual(['fresh', '', '', ''])
+    expect(term.buffer.active.length).toBe(4)
   })
 })

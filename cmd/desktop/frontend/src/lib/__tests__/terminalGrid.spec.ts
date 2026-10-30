@@ -64,6 +64,19 @@ describe('renderRevealedTerminal', () => {
     expect(service._isNextRenderRedrawOnly).toBe(false)
   })
 
+  it('measures a cell for a pane that opened hidden and has none yet', () => {
+    const measure = vi.fn()
+    renderRevealedTerminal(
+      terminal({
+        _isPaused: true,
+        _needsFullRefresh: false,
+        _charSizeService: { hasValidSize: false, measure },
+        _renderRows: vi.fn(),
+      }),
+    )
+    expect(measure).toHaveBeenCalledOnce()
+  })
+
   it('applies a resize that was deferred while hidden before drawing', () => {
     const order: string[] = []
     renderRevealedTerminal(

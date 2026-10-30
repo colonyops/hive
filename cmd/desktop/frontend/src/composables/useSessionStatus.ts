@@ -18,7 +18,7 @@ const POLL_INTERVAL_MS = 15_000
  */
 export function useSessionStatus(
   sessionId: Ref<string>,
-  revalidating: () => boolean = () => true,
+  paintedActive: () => boolean = () => true,
 ): {
   git: Ref<SessionGitStatus | null>
   pullRequest: Ref<SessionPullRequest | null>
@@ -109,14 +109,17 @@ export function useSessionStatus(
       // Cached, so restoring it does not replay the arrival animation.
       pullRequest.value = remembered ? { ...remembered, cached: true } : null
       pullRequestError.value = ''
-      if (revalidating()) void refresh()
+      // Moves even with no refresh to follow: an answer already in flight is for
+      // the session being left.
+      sequence++
+      if (paintedActive()) void refresh()
       schedule()
     },
     { immediate: true },
   )
 
-  watch(revalidating, (ready) => {
-    if (ready) void refresh()
+  watch(paintedActive, (shown) => {
+    if (shown) void refresh()
   })
 
   // A blurred window's checkout keeps changing — an agent is committing in it —

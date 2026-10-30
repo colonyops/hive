@@ -26,7 +26,7 @@ import {
 } from '../lib/terminalGrid'
 import { activePaneOf, paneGrids, windowPanes } from '../lib/terminalLayout'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
-import { splitForWrite, TerminalOutputWriter } from '../lib/terminalOutput'
+import { PacedWriter, TerminalOutputWriter } from '../lib/terminalOutput'
 import { installTerminalImages } from '../lib/terminalImages'
 import { installKittyGraphics, type KittyGraphics } from '../lib/kitty/kittyGraphics'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
@@ -185,6 +185,7 @@ interface PaneRuntime {
   term: Terminal
   finder: SearchAddon
   output: TerminalOutputWriter
+  writes: PacedWriter
   graphics: KittyGraphics
   probe: PaneProbe
   disposers: IDisposable[]
@@ -346,24 +347,20 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     term.loadAddon(finder)
     const graphics = markRaw(installKittyGraphics(term))
     const probe = probePane(paneId, term, () => !!panes.get(paneId)?.rendered)
+    const writes = markRaw(new PacedWriter(term, probe.parsed))
     const output = markRaw(
-      new TerminalOutputWriter((data) => {
-        const reportParsed = probe.parsed
-        const pieces = splitForWrite(data)
+      new TerminalOutputWriter((data, atomic) => {
         const endPaint = painted.value ? null : perf.start('paint:parse', { bytes: data.length })
-        pieces.forEach((piece, index) => {
-          const paints = endPaint && index === pieces.length - 1
-          if (!paints && !reportParsed) {
-            term.write(piece)
-            return
-          }
-          term.write(piece, () => {
-            reportParsed?.(piece.length)
-            if (!paints) return
-            endPaint()
-            painted.value = true
-          })
-        })
+        writes.write(
+          data,
+          atomic,
+          endPaint
+            ? () => {
+                endPaint()
+                painted.value = true
+              }
+            : undefined,
+        )
       }, graphics.filter),
     )
     // Before any output reaches it: xterm re-wraps its buffer on resize, so a
@@ -384,11 +381,13 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       term,
       finder,
       output,
+      writes,
       graphics,
       probe,
       disposers: [
         finder,
         { dispose: () => output.dispose() },
+        { dispose: () => writes.discard() },
         graphics,
         probe,
         registerBenchPane({
@@ -754,8 +753,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     switch (frame.type) {
       case 'output': {
         const state = panes.get(frame.paneId)
-        state?.probe.received(frame.data.length)
-        state?.output.write(frame.data)
+        if (state) state.probe.received(state.output.write(frame.data))
         break
       }
       case 'window':
@@ -779,10 +777,12 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     if (disposed) return
     outputDropped.value = true
     for (const [paneId, state] of panes) {
-      state.output.reset()
-      state.term.reset()
-      state.graphics.clear()
-      refreshScrolledUp(paneId)
+      const held = state.output.reset()
+      const queued = state.writes.clear(() => {
+        state.graphics.clear()
+        refreshScrolledUp(paneId)
+      })
+      state.probe.discarded(held + queued)
     }
   }
 
@@ -988,6 +988,8 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     for (const tab of [...tabs.value]) disposeTab(tab.windowId)
   }
 
+  let stopAttachSpan: () => void = () => {}
+
   async function start(): Promise<void> {
     const epoch = ++connectionEpoch
     status.value = 'connecting'
@@ -995,12 +997,16 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     error.value = null
     actionError.value = null
     outputDropped.value = false
-    const endAttach = perf.start('attach')
-    const stopAttachSpan = watch(painted, (done) => {
-      if (!done) return
-      stopAttachSpan()
-      endAttach()
-    })
+    stopAttachSpan()
+    // Only a first attach: a reconnect keeps `painted`, so it has no moment to end on.
+    if (!painted.value) {
+      const endAttach = perf.start('attach')
+      stopAttachSpan = watch(painted, (done) => {
+        if (!done) return
+        stopAttachSpan()
+        endAttach()
+      })
+    }
     try {
       // Concurrent, not sequential: the faces have to be resident before
       // term.open() measures a cell, which attachPane does well after this
@@ -1235,6 +1241,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   function dispose(): void {
     if (disposed) return
     disposed = true
+    stopAttachSpan()
     clearTimeout(resizeTimer)
     clearTimeout(constraintTimer)
     closeSocket()

@@ -101,6 +101,32 @@ describe('probePane', () => {
       probe.dispose()
     })
 
+    it('closes a burst whose bytes a repaint replaced', async () => {
+      const { term } = fakeTerminal()
+      const probe = probePane('%1', term, () => true)
+      probe.received(64 << 10)
+      probe.parsed?.(1 << 10)
+      probe.discarded(63 << 10)
+      expect(probe.backlog()).toBe(0)
+      vi.advanceTimersByTime(1000)
+      expect((await recorded()).filter((sample) => sample.name === 'output:burst')).toHaveLength(1)
+      probe.dispose()
+    })
+
+    it('times a wheel gesture from its first event to the last', async () => {
+      const { term } = fakeTerminal()
+      const probe = probePane('%1', term, () => true)
+      probe.opened()
+      const wheel = vi.mocked(term.element!.addEventListener).mock.calls[0][1] as () => void
+      wheel()
+      vi.advanceTimersByTime(40)
+      wheel()
+      vi.advanceTimersByTime(150)
+      const gesture = (await recorded()).find((sample) => sample.name === 'scroll:gesture')
+      expect(gesture?.attrs).toMatchObject({ events: 2 })
+      probe.dispose()
+    })
+
     it('keeps a burst open while the emulator still owes bytes', async () => {
       const { term } = fakeTerminal()
       const probe = probePane('%1', term, () => true)

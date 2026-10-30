@@ -21,11 +21,13 @@ const ECHO_GIVE_UP_MS = 2000
  */
 export interface PaneProbe extends IDisposable {
   input(data: string): void
-  /** Output off the socket, before anything filters it. */
+  /** Output the pane's filters let through, which is what the emulator will parse. */
   received(bytes: number): void
+  /** Received bytes the emulator will now never parse, because a repaint replaced them. */
+  discarded(bytes: number): void
   /** Null when the probe is off. */
   readonly parsed: ((bytes: number) => void) | null
-  /** The bytes off the socket that the emulator has not parsed yet. */
+  /** The received bytes that the emulator has not parsed yet. */
   backlog(): number
   totalReceived(): number
   /** Call after term.open(): the wheel listener needs the element. */
@@ -35,6 +37,7 @@ export interface PaneProbe extends IDisposable {
 const OFF: PaneProbe = {
   input: () => {},
   received: () => {},
+  discarded: () => {},
   parsed: null,
   backlog: () => 0,
   totalReceived: () => 0,
@@ -87,6 +90,11 @@ export function probePane(paneId: string, term: Terminal, renderer: () => boolea
   let wheelTarget: HTMLElement | null = null
 
   const visible = (): boolean => !!term.element?.offsetParent
+
+  function advanceParsed(bytes: number, now: number): void {
+    parsed += bytes
+    if (echo && echo.arrivedAt && !echo.parsedAt && parsed >= echo.target) echo.parsedAt = now
+  }
 
   function closeBurst(): void {
     if (!burst) return
@@ -199,11 +207,13 @@ export function probePane(paneId: string, term: Terminal, renderer: () => boolea
       burst.socketFrames++
       burst.maxBacklog = Math.max(burst.maxBacklog, received - parsed)
     },
+    discarded(bytes) {
+      advanceParsed(bytes, performance.now())
+    },
     parsed(bytes) {
-      parsed += bytes
       const now = performance.now()
+      advanceParsed(bytes, now)
       if (burst) burst.lastAt = now
-      if (echo && echo.arrivedAt && !echo.parsedAt && parsed >= echo.target) echo.parsedAt = now
     },
     backlog: () => received - parsed,
     totalReceived: () => received,

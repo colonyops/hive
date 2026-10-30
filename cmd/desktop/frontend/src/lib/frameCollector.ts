@@ -37,6 +37,9 @@ function onFrame(now: number): void {
 export function collectFrames(): () => FrameSummary {
   if (typeof requestAnimationFrame !== 'function') return () => summarizeFrames([])
   const samples: number[] = []
+  // A hidden page holds the last frame's callback back, so the loop can still be
+  // pending from before the hide, and its next interval would span all of it.
+  if (collectors.size === 0) lastFrameAt = 0
   collectors.add(samples)
   if (!handle) handle = requestAnimationFrame(onFrame)
   return () => {

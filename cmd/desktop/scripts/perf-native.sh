@@ -27,7 +27,9 @@ printf '%s\n' "${tmux_dir}" >"${work_dir}/tmux-dir"
 
 if [[ "${2:-}" != "--no-build" ]]; then
   (cd cmd/desktop/frontend && npm run build)
-  go build -tags mcp -o cmd/desktop/bin/hive-desktop-perf ./cmd/desktop 2>/dev/null
+  # The macOS linker warns about every object it links. A compile error still shows.
+  go build -tags mcp -o cmd/desktop/bin/hive-desktop-perf ./cmd/desktop \
+    2> >(grep -v -e '^ld: warning' -e '^# github.com/colonyops/hive/cmd/desktop$' >&2)
 fi
 
 test -f launch.env || mise run desktop:dev:prepare

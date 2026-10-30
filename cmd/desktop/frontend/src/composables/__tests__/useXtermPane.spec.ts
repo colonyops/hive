@@ -213,6 +213,7 @@ describe('useXtermPane', () => {
     expect(pane.term.value).toBeNull()
     expect(pane.holding()).toBe(true)
     expect(element.style.position).toBe('absolute')
+    expect(element.style.pointerEvents).toBe('none')
     expect(outgoing.dispose).not.toHaveBeenCalled()
     expect(disposer.dispose).not.toHaveBeenCalled()
 

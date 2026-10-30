@@ -25,7 +25,7 @@ export function useTerminalAttach(options: {
   tree: TerminalTree
   active: () => boolean
   /** True once a shown mode has painted; see usePaintedActive. */
-  revalidating: () => boolean
+  paintedActive: () => boolean
   onSwitch: () => void
 }) {
   const { pool, tree } = options
@@ -194,9 +194,9 @@ export function useTerminalAttach(options: {
   // Immediate for a mount that finds the client already resolved, which has no
   // reveal to wait for and otherwise would never recheck.
   watch(
-    options.revalidating,
-    (revalidating) => {
-      if (revalidating && client.value) void probe()
+    options.paintedActive,
+    (shown) => {
+      if (shown && client.value) void probe()
     },
     { immediate: true },
   )

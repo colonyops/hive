@@ -1,6 +1,7 @@
 import { useTerminalScrollbars } from '../../stores/useTerminalScrollbars'
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { nextTick } from 'vue'
 import type { ISearchOptions } from '@xterm/addon-search'
 import { resetTerminalFacesForTests, useTerminalWindows } from '../useTerminalWindows'
 import {
@@ -561,6 +562,46 @@ describe('useTerminalWindows', () => {
     // Later output does not pay for the callback.
     socket.onmessage?.({ data: outputFrame('@1', '%1', 'more') })
     expect(write.mock.calls[1][1]).toBeUndefined()
+  })
+
+  it('waits for the last piece of a split snapshot before flagging the first paint', async () => {
+    const { session, socket } = await attached()
+    socket.onmessage?.({ data: outputFrame('@1', '%1', 'x'.repeat((32 << 10) + 1)) })
+    const write = session.tabs.value[0].panes[0].term.write as ReturnType<typeof vi.fn>
+
+    expect(write).toHaveBeenCalledTimes(1)
+    write.mock.calls[0][1]()
+    expect(session.painted.value).toBe(false)
+    expect(write).toHaveBeenCalledTimes(2)
+    write.mock.calls[1][1]()
+    expect(session.painted.value).toBe(true)
+  })
+
+  it('drops the pieces of a snapshot xterm has not taken when the stream degrades', async () => {
+    const { session, socket } = await attached()
+    socket.onmessage?.({ data: outputFrame('@1', '%1', 'x'.repeat((32 << 10) * 3)) })
+    const write = session.tabs.value[0].panes[0].term.write as ReturnType<typeof vi.fn>
+
+    socket.onmessage?.({ data: jsonFrame(0x02, { kind: 'degraded', windowId: '', message: 'overflow' }) })
+    write.mock.calls[0][1]()
+
+    expect(write.mock.calls.map((call) => (call[0] as Uint8Array).length)).toEqual([32 << 10, 1])
+  })
+
+  it('draws the window it switches to before the browser paints it', async () => {
+    const { session } = await attached()
+    const renderRows = vi.fn()
+    const term = session.tabs.value[1].panes[0].term as unknown as {
+      element: unknown
+      _core: { _renderService: unknown }
+    }
+    term.element = { offsetParent: {} }
+    term._core._renderService = { _isPaused: true, _needsFullRefresh: true, _renderRows: renderRows }
+
+    await session.select('@2')
+    await nextTick()
+
+    expect(renderRows).toHaveBeenCalled()
   })
 
   it('maps window events onto the tab list', async () => {
@@ -1316,6 +1357,9 @@ describe('useTerminalWindows', () => {
     socket.onmessage?.({ data: outputFrame('@1', '%1', 'before the flood') })
 
     socket.onmessage?.({ data: jsonFrame(0x02, { kind: 'degraded', windowId: '', message: 'overflow' }) })
+    for (const term of xterm.FakeTerminal.instances) expect(term.reset).not.toHaveBeenCalled()
+    // The reset waits in xterm's own queue, behind whatever that already holds.
+    for (const term of xterm.FakeTerminal.instances) (term.write.mock.lastCall as [unknown, () => void])[1]()
 
     expect(session.status.value).toBe('live')
     expect(session.endReason.value).toBeNull()

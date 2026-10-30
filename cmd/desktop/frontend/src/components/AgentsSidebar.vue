@@ -57,7 +57,7 @@ import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 
 const props = withDefaults(
   defineProps<{
-    active?: boolean
+    paintedActive?: boolean
     /**
      * The workspace the route currently has focused, '' when none. It scopes what
      * AgentsMode regenerates and reports above the pane, and unfolds its row here;
@@ -72,7 +72,7 @@ const props = withDefaults(
     sessionActivity?: Record<string, string>
   }>(),
   {
-    active: false,
+    paintedActive: false,
     selectedWorkspace: '',
     openSessionId: null,
     startingSession: false,
@@ -107,9 +107,9 @@ const { isPinned, togglePin } = useTerminalPinnedChats()
 // so this and AgentsMode's own workspaces reload can race harmlessly on
 // activation — last response wins, and both fetch the same idempotent read.
 watch(
-  () => props.active,
-  (active) => {
-    if (!active) return
+  () => props.paintedActive,
+  (shown) => {
+    if (!shown) return
     void reloadWorkspaces()
     void reloadRecents()
   },

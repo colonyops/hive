@@ -1,3 +1,5 @@
+import type { Terminal } from '@xterm/xterm'
+
 const BEGIN_SYNCHRONIZED_OUTPUT = Uint8Array.from([0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x32, 0x36, 0x68])
 const END_SYNCHRONIZED_OUTPUT = Uint8Array.from([0x1b, 0x5b, 0x3f, 0x32, 0x30, 0x32, 0x36, 0x6c])
 const SYNCHRONIZED_OUTPUT_TIMEOUT_MS = 1000
@@ -26,6 +28,79 @@ export function splitForWrite(data: Uint8Array): Uint8Array[] {
   return pieces
 }
 
+interface QueuedPiece {
+  data: Uint8Array
+  whenParsed?: () => void
+}
+
+/**
+ * Hands xterm a split frame one piece at a time, each from the last one's parsed
+ * callback, so what a repaint supersedes stays here where `clear` can drop it.
+ */
+export class PacedWriter {
+  private queue: QueuedPiece[] = []
+  private writing = false
+
+  constructor(
+    private readonly term: Pick<Terminal, 'write' | 'reset'>,
+    private readonly reportParsed: ((bytes: number) => void) | null,
+  ) {}
+
+  /** `atomic` keeps the frame in one write, so nothing can draw between its parts. */
+  write(data: Uint8Array, atomic: boolean, whenParsed?: () => void): void {
+    const pieces = atomic ? [data] : splitForWrite(data)
+    if (pieces.length === 1 && !this.writing) {
+      if (!whenParsed && !this.reportParsed) {
+        this.term.write(data)
+        return
+      }
+      this.term.write(data, () => {
+        this.reportParsed?.(data.length)
+        whenParsed?.()
+      })
+      return
+    }
+    pieces.forEach((piece, index) => {
+      this.queue.push({ data: piece, whenParsed: index === pieces.length - 1 ? whenParsed : undefined })
+    })
+    if (!this.writing) this.next()
+  }
+
+  /** Drops what xterm has not been handed and reports how many bytes that was. */
+  discard(): number {
+    const bytes = this.queue.reduce((total, piece) => total + piece.data.length, 0)
+    this.queue = []
+    return bytes
+  }
+
+  /**
+   * Readies the emulator for a repaint and reports the bytes dropped. `term.reset()`
+   * leaves xterm's own queue alone, so calling it directly would land what is queued
+   * on the cleared screen, and a piece cut inside an escape would eat the repaint's
+   * first bytes. The reset therefore goes through that queue, behind a CAN that ends
+   * any such sequence.
+   */
+  clear(whenCleared: () => void): number {
+    const bytes = this.discard()
+    this.term.write('\x18', () => {
+      this.term.reset()
+      whenCleared()
+    })
+    return bytes
+  }
+
+  private next(): void {
+    const piece = this.queue.shift()
+    this.writing = piece !== undefined
+    if (!piece) return
+    this.term.write(piece.data, () => {
+      this.reportParsed?.(piece.data.length)
+      piece.whenParsed?.()
+      this.next()
+    })
+  }
+}
+
 /** A stateful rewrite of the pane's bytes that runs ahead of the writer's own filters. */
 export interface StreamFilter {
   rewrite(data: Uint8Array): Uint8Array
@@ -47,12 +122,15 @@ export class TerminalOutputWriter {
   private readonly titles = new ScreenTitleFilter()
 
   constructor(
-    private readonly sink: (data: Uint8Array) => void,
+    private readonly sink: (data: Uint8Array, atomic: boolean) => void,
     private readonly filter?: StreamFilter,
   ) {}
 
-  write(data: Uint8Array): void {
-    this.forward(this.titles.strip(this.filter ? this.filter.rewrite(data) : data))
+  /** Reports the bytes the filters let through, which is what will reach the sink. */
+  write(data: Uint8Array): number {
+    const kept = this.titles.strip(this.filter ? this.filter.rewrite(data) : data)
+    this.forward(kept)
+    return kept.length
   }
 
   private forward(data: Uint8Array): void {
@@ -72,7 +150,7 @@ export class TerminalOutputWriter {
     if (begin === -1) {
       const retained = matchingSuffixLength(combined, BEGIN_SYNCHRONIZED_OUTPUT)
       const writable = combined.length - retained
-      if (writable) this.sink(retained ? combined.subarray(0, writable) : combined)
+      if (writable) this.sink(retained ? combined.subarray(0, writable) : combined, false)
       if (retained) {
         this.prefix = combined.slice(writable)
         this.armTimeout()
@@ -80,7 +158,7 @@ export class TerminalOutputWriter {
       return
     }
 
-    if (begin) this.sink(combined.subarray(0, begin))
+    if (begin) this.sink(combined.subarray(0, begin), false)
     this.synchronizing = true
     this.appendFrame(combined.subarray(begin, begin + BEGIN_SYNCHRONIZED_OUTPUT.length))
     this.armTimeout()
@@ -90,9 +168,11 @@ export class TerminalOutputWriter {
   /**
    * Drops whatever is held mid-frame. A resync repaint supersedes the stream
    * these bytes came from, so releasing them afterwards — on the END marker or
-   * the timeout — would paint pre-repaint output over the snapshot.
+   * the timeout — would paint pre-repaint output over the snapshot. Reports how
+   * many bytes that was.
    */
-  reset(): void {
+  reset(): number {
+    const held = this.prefix.length + this.frameBytes
     this.filter?.reset()
     this.titles.reset()
     clearTimeout(this.timer)
@@ -102,6 +182,7 @@ export class TerminalOutputWriter {
     this.frameBytes = 0
     this.endMatched = 0
     this.synchronizing = false
+    return held
   }
 
   dispose(): void {
@@ -116,14 +197,14 @@ export class TerminalOutputWriter {
       if (this.endMatched !== END_SYNCHRONIZED_OUTPUT.length) continue
 
       this.appendFrame(data.subarray(0, i + 1))
-      this.flushFrame()
+      this.flushFrame(true)
       this.forward(data.subarray(i + 1))
       return
     }
     this.appendFrame(data)
     // No END in sight and the frame has grown past what is worth holding —
     // release it rather than keep buffering toward the timeout.
-    if (this.frameBytes >= MAX_SYNCHRONIZED_FRAME_BYTES) this.flushFrame()
+    if (this.frameBytes >= MAX_SYNCHRONIZED_FRAME_BYTES) this.flushFrame(false)
   }
 
   private appendFrame(data: Uint8Array): void {
@@ -132,7 +213,7 @@ export class TerminalOutputWriter {
     this.frameBytes += data.length
   }
 
-  private flushFrame(): void {
+  private flushFrame(complete: boolean): void {
     clearTimeout(this.timer)
     this.timer = undefined
     const frame = concatenate(this.frame, this.frameBytes)
@@ -140,7 +221,7 @@ export class TerminalOutputWriter {
     this.frameBytes = 0
     this.endMatched = 0
     this.synchronizing = false
-    if (frame.length) this.sink(frame)
+    if (frame.length) this.sink(frame, complete)
   }
 
   private armTimeout(): void {
@@ -153,12 +234,12 @@ export class TerminalOutputWriter {
         this.frameBytes = 0
         this.endMatched = 0
         this.synchronizing = false
-        if (frame.length) this.sink(frame)
+        if (frame.length) this.sink(frame, false)
         return
       }
       const prefix = this.prefix
       this.prefix = new Uint8Array()
-      if (prefix.length) this.sink(prefix)
+      if (prefix.length) this.sink(prefix, false)
     }, SYNCHRONIZED_OUTPUT_TIMEOUT_MS)
   }
 }

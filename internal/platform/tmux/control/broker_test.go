@@ -690,3 +690,128 @@ func TestBrokerMergesAFloodIntoFewFramesWithoutLosingBytes(t *testing.T) {
 		require.Less(t, frames, chunks/4, "a flood should reach the subscriber as far fewer frames than it was published in")
 	})
 }
+
+func TestBrokerDoesNotMergeIntoAHeadAPumpHolds(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		b := newBroker(backlogBounds{}, nil)
+		defer b.close()
+		events, unsubscribe := b.subscribe()
+		defer unsubscribe()
+
+		b.publish(outputEvent("@1", "a"))
+		synctest.Wait()
+		b.publish(outputEvent("@1", "b"))
+
+		var got []byte
+		for len(got) < 2 {
+			got = append(got, requireOutput(t, <-events).Data...)
+		}
+		require.Equal(t, "ab", string(got))
+		require.Zero(t, b.depth())
+	})
+}
+
+func TestBrokerMergeDoesNotWriteIntoACallersSlice(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		b := newBroker(backlogBounds{}, nil)
+		defer b.close()
+		events, unsubscribe := b.subscribe()
+		defer unsubscribe()
+
+		b.publish(outputEvent("@1", "head"))
+		synctest.Wait()
+		backing := []byte("xyzzy")
+		b.publish(Output{At: time.Now(), WindowID: "@1", PaneID: "%1", Data: backing[:1]})
+		b.publish(outputEvent("@1", "Q"))
+
+		require.Equal(t, "xyzzy", string(backing))
+		require.Equal(t, "head", string(requireOutput(t, <-events).Data))
+		require.Equal(t, "xQ", string(requireOutput(t, <-events).Data))
+	})
+}
+
+func TestBrokerDeliversHeldOutputWhenClosedDuringAHold(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		b := newBroker(backlogBounds{}, nil)
+		events, unsubscribe := b.subscribe()
+		defer unsubscribe()
+
+		b.publish(outputEvent("@1", "a"))
+		<-events
+		b.publish(outputEvent("@1", "b"))
+		synctest.Wait()
+
+		received := make(chan Event, 1)
+		go func() { received <- <-events }()
+		synctest.Wait()
+		b.close()
+
+		require.Equal(t, "b", string(requireOutput(t, <-received).Data))
+	})
+}
+
+func TestBrokerLifecycleEventEndsAHoldAndEverythingQueuedWithIt(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		b := newBroker(backlogBounds{}, nil)
+		defer b.close()
+		events, unsubscribe := b.subscribe()
+		defer unsubscribe()
+
+		b.publish(outputEvent("@1", "a"))
+		<-events
+		b.publish(outputEvent("@1", "b"))
+		synctest.Wait()
+		sent := time.Now()
+		b.publish(LifecycleChanged{Kind: LifecycleDegraded})
+		b.publish(outputEvent("@1", "c"))
+
+		require.Equal(t, "b", string(requireOutput(t, <-events).Data))
+		require.IsType(t, LifecycleChanged{}, <-events)
+		require.Equal(t, "c", string(requireOutput(t, <-events).Data))
+		require.Zero(t, time.Since(sent), "a lifecycle event must not wait out the hold, nor must what queued behind it")
+	})
+}
+
+func TestBrokerMergedFramesHoldNoMoreThanTwiceTheirBytes(t *testing.T) {
+	t.Parallel()
+	b := newBroker(backlogBounds{}, nil)
+	defer b.close()
+
+	const runs, size = 200, 500
+	for range runs {
+		for _, pane := range []string{"%1", "%2"} {
+			for range 2 {
+				b.publish(Output{At: time.Now(), WindowID: "@1", PaneID: pane, Data: make([]byte, size)})
+			}
+		}
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	require.Len(t, b.buf, 2*runs)
+	capacity := 0
+	for _, ev := range b.buf {
+		capacity += cap(requireOutput(t, ev).Data)
+	}
+	require.LessOrEqual(t, capacity, 2*b.bytes, "the byte bound counts len, so capacity has to stay close to it")
+}
+
+func TestBrokerGrowsAMergeToAFullFrame(t *testing.T) {
+	t.Parallel()
+	b := newBroker(backlogBounds{}, nil)
+	defer b.close()
+
+	for range maxCoalescedBytes / 1000 {
+		b.publish(Output{At: time.Now(), WindowID: "@1", PaneID: "%1", Data: make([]byte, 1000)})
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	require.Len(t, b.buf, 1)
+	require.LessOrEqual(t, cap(requireOutput(t, b.buf[0]).Data), maxCoalescedBytes)
+	require.Equal(t, maxCoalescedBytes/1000*1000, b.bytes)
+}

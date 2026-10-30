@@ -25,6 +25,7 @@ function preload(prepareCode: () => void): void {
   loadAgentsMode().catch(reportFailure)
   void useTerminalAvailability().probe()
   void useTerminalSessions().reload()
+  // Creating a store reads its setting, and the Code tree waits on both of these.
   useTerminalShowWindows()
   useCodeViews()
   void useAgentWorkspaces().reloadWorkspaces()

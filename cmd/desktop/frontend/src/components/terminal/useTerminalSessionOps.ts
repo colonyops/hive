@@ -28,7 +28,7 @@ export function useTerminalSessionOps(options: {
   tree: TerminalTree
   attach: TerminalAttach
   confirmation: ReturnType<typeof useConfirmation>
-  active: () => boolean
+  paintedActive: () => boolean
 }) {
   const { pool, tree, attach, confirmation } = options
   const router = useRouter()
@@ -66,12 +66,12 @@ export function useTerminalSessionOps(options: {
 
   // SessionLaunchOptions runs a git call per repository in every workspace
   // directory, which took 700ms on a real setup, and all this reads off it is a
-  // list that rarely changes. Opening the menu is what needs it current.
+  // list that rarely changes.
   let agentProfilesLoadedAt = Number.NEGATIVE_INFINITY
   watch(
-    options.active,
-    (active) => {
-      if (!active || Date.now() - agentProfilesLoadedAt < AGENT_PROFILES_FRESH_MS) return
+    options.paintedActive,
+    (shown) => {
+      if (!shown || Date.now() - agentProfilesLoadedAt < AGENT_PROFILES_FRESH_MS) return
       agentProfilesLoadedAt = Date.now()
       void loadAgentProfiles()
     },

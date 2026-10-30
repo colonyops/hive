@@ -105,34 +105,6 @@ function canvasIsBlank(term: Terminal): boolean {
   return true
 }
 
-let capturedReveal: string | null = null
-
-// The page cannot screenshot itself, and the OS may refuse to.
-function captureCanvas(term: Terminal): string | null {
-  return atlasRenderer(term)?._canvas?.toDataURL('image/png') ?? null
-}
-
-// The buffer is only defined right after a draw, so this asks for one and reads it
-// in the same callback.
-function captureCanvasAtNextDraw(term: Terminal): string | null {
-  let captured: string | null = null
-  const handle = term.onRender(() => {
-    captured = captureCanvas(term)
-    handle.dispose()
-  })
-  const service = (
-    term as unknown as {
-      _core?: { _renderService?: { _renderRows?: (s: number, e: number) => void; _isNextRenderRedrawOnly?: boolean } }
-    }
-  )._core?._renderService
-  if (service?._renderRows) {
-    service._isNextRenderRedrawOnly = false
-    service._renderRows(0, term.rows - 1)
-  }
-  handle.dispose()
-  return captured
-}
-
 function blankAfterDraw(term: Terminal): boolean {
   let blank = false
   const handle = term.onRender(() => {
@@ -486,7 +458,6 @@ const scenarios: Record<string, Scenario> = {
     const times: number[] = []
     let blank = 0
     let resized = 0
-    capturedReveal = null
     for (let i = 0; i < Math.round(20 * scale); i++) {
       const outgoing = visibleBenchPane()
       const sizes = new Map(benchPanes().map((candidate) => [candidate, candidate.term.cols * candidate.term.rows]))
@@ -499,7 +470,6 @@ const scenarios: Record<string, Scenario> = {
       if (!shown) continue
       await sleep(300)
       if (blankAfterDraw(shown.term)) blank++
-      capturedReveal = captureCanvasAtNextDraw(shown.term) ?? capturedReveal
       redraw.push(shown.received() - (before.get(shown) ?? 0))
       if (sizes.get(shown) !== shown.term.cols * shown.term.rows) resized++
     }
@@ -678,7 +648,6 @@ async function clickAndWaitForReveal(
   }
 }
 
-let lastRun: Promise<BenchResult[]> | null = null
 let lastResults: BenchResult[] | null = null
 
 async function run(names: string[], options: BenchOptions): Promise<BenchResult[]> {
@@ -729,20 +698,15 @@ export interface TerminalBench {
   start(names?: string[], options?: BenchOptions): void
   /** Null while a run is in flight; a native js_eval call cannot wait out a long one. */
   poll(): BenchResult[] | null
-  /** What the first reveal of the last `switchRealTui` drew, as a data URL. */
-  lastReveal(): string | null
 }
 
 export const terminalBench: TerminalBench = {
   scenarios: Object.keys(scenarios),
   start(names = Object.keys(scenarios), options = {}) {
     lastResults = null
-    lastRun = run(names, options).then((results) => {
+    void run(names, options).then((results) => {
       lastResults = results
-      return results
     })
-    void lastRun
   },
   poll: () => lastResults,
-  lastReveal: () => capturedReveal,
 }

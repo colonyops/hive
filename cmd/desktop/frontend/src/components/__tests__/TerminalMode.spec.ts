@@ -1181,10 +1181,66 @@ describe('TerminalMode', () => {
   it('turns tree motion off through a reveal, so rows measured while hidden do not fly in', async () => {
     const { wrapper } = await mountAvailable()
     const settling = () => wrapper.find('.tree-settling').exists()
+    await vi.waitFor(() => expect(settling()).toBe(false))
     await wrapper.setProps({ active: false })
     expect(settling()).toBe(true)
     await wrapper.setProps({ active: true })
     expect(settling()).toBe(true)
+    await vi.waitFor(() => expect(settling()).toBe(false))
+  })
+
+  it('draws the visible session again on a re-entry to the same one', async () => {
+    const session = fakeSession()
+    mocks.useTerminalWindows.mockReturnValue(session)
+    const { wrapper } = await mountAt('/terminal/hive-bump-deps')
+    await wrapper.setProps({ active: false })
+    session.renderShown.mockClear()
+    await wrapper.setProps({ active: true })
+    expect(session.renderShown).toHaveBeenCalled()
+  })
+
+  it('revalidates a re-entry only once the reveal has painted', async () => {
+    const { wrapper } = await mountAvailable()
+    await wrapper.setProps({ active: false })
+    await flushPromises()
+    mocks.ListSessions.mockClear()
+    mocks.Available.mockClear()
+
+    await wrapper.setProps({ active: true })
+    await flushPromises()
+    expect(mocks.ListSessions).not.toHaveBeenCalled()
+    expect(mocks.Available).not.toHaveBeenCalled()
+
+    await vi.waitFor(() => expect(mocks.ListSessions).toHaveBeenCalled())
+    expect(mocks.Available).toHaveBeenCalled()
+  })
+
+  it('stops preparing a hidden tree that cannot get ready', async () => {
+    mocks.SessionStatuses.mockResolvedValue({ items: [], pollIntervalMs: 5 })
+    mocks.ListSessions.mockReturnValue(new Promise(() => {}))
+    await useTerminalAvailability().probe()
+    const router = createAppRouter(createMemoryHistory())
+    await router.push({ name: 'feed' })
+    await router.isReady()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const wrapper = mount(TerminalMode, {
+        props: { active: false },
+        global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
+      })
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(2999)
+      const polling = mocks.SessionStatuses.mock.calls.length
+      expect(polling).toBeGreaterThan(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      const stopped = mocks.SessionStatuses.mock.calls.length
+      await vi.advanceTimersByTimeAsync(100)
+      expect(mocks.SessionStatuses.mock.calls.length).toBe(stopped)
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('spins the toolbar instead of showing placeholder text until the tree is ready', async () => {
@@ -1221,19 +1277,48 @@ describe('TerminalMode', () => {
     await router.push({ name: 'feed' })
     await router.isReady()
 
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const wrapper = mount(TerminalMode, {
+        props: { active: false },
+        global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
+      })
+      await flushPromises()
+
+      expect(wrapper.findAll('[data-testid="terminal-repo-group"]').length).toBeGreaterThan(0)
+      expect(router.currentRoute.value.name).toBe('feed')
+      expect(mocks.useTerminalWindows).not.toHaveBeenCalled()
+
+      const polls = mocks.SessionStatuses.mock.calls.length
+      await vi.advanceTimersByTimeAsync(40)
+      expect(mocks.SessionStatuses.mock.calls.length).toBe(polls)
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('restores the last session in the tick of a first entry, ahead of revalidation', async () => {
+    localStorage.setItem('hive.terminal.restore', JSON.stringify({ slug: 'hive-bump-deps', window: '' }))
+    await useTerminalAvailability().probe()
+    await useTerminalSessions().reload()
+    const router = createAppRouter(createMemoryHistory())
+    await router.push({ name: 'feed' })
+    await router.isReady()
+    mocks.useTerminalWindows.mockReturnValue(fakeSession())
     const wrapper = mount(TerminalMode, {
       props: { active: false },
       global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
     })
     await flushPromises()
+    mocks.ListSessions.mockClear()
 
-    expect(wrapper.findAll('[data-testid="terminal-repo-group"]').length).toBeGreaterThan(0)
-    expect(router.currentRoute.value.name).toBe('feed')
-    expect(mocks.useTerminalWindows).not.toHaveBeenCalled()
+    await router.push('/terminal')
+    await wrapper.setProps({ active: true })
+    await flushPromises()
 
-    const polls = mocks.SessionStatuses.mock.calls.length
-    await new Promise((resolve) => setTimeout(resolve, 40))
-    expect(mocks.SessionStatuses.mock.calls.length).toBe(polls)
+    expect(router.currentRoute.value.params.slug).toBe('hive-bump-deps')
+    expect(mocks.ListSessions).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 

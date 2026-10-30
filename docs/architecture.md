@@ -1539,10 +1539,14 @@ vote is a fresh attach's alone — a live client keeps the one it already cast.
 in.** tmux caps a `%output` at 2KB, so a busy pane produces ~14.5k events a
 second and every fixed per-frame cost downstream is multiplied by that. The
 broker folds an incoming output into the last queued event for the same pane
-(ADR queued-terminal-output-coalesces). It costs no latency because a merge is only possible when a second
-event is already waiting — a consumer keeping up sees every event whole — and
-it never merges into the head, which `pump` may already be delivering. Byte
-accounting is unchanged, so the overflow bound trips at the same volume.
+(ADR queued-terminal-output-coalesces). Inside a burst the pump waits up to 3 ms
+for the backlog to fill a frame, because a consumer keeping up would otherwise
+never let one form (ADR
+a-terminal-output-burst-waits-briefly-for-a-frame-instead-of-crossing-the-webview-per-notification).
+A key's echo in a quiet pane and a lifecycle event end that wait, and a merge
+never goes into a head `pump` has taken. Byte accounting is unchanged, so the
+overflow bound trips at the same volume, and a merged frame's capacity stays
+within twice its bytes so that bound also holds for memory.
 
 The frontend holds a small LRU pool of live attaches rather than one:
 switching sessions hides the outgoing panes instead of detaching, and a cold
@@ -1553,10 +1557,12 @@ close, the session leaving the listing, and view unmount — not on switch.
 **Terminal mode is mounted once and hidden, never unmounted, on the way back to
 the hub** (ADR terminal-mode-is-hidden-not-unmounted) — the same rule the pop-up panel follows, and
 for the same reason: an unmount is what makes the pool pay for itself again.
-The mode takes an `active` prop, and that, not mount, is what starts the
-status poll and the window-listing sweep and what revalidates the session tree.
-Anything the mode must not do off-screen belongs on that prop; anything it must
-keep across a trip to the hub can now simply live in the component. The preload
+The mode takes an `active` prop, and that, not mount, is what attaches and restores
+a session. Background revalidation (the status poll, the window-listing sweep, the
+session tree) follows `usePaintedActive`, which turns true once the reveal has
+painted (ADR revalidation-on-entering-a-mode-waits-until-the-mode-has-painted).
+Anything the mode must not do off-screen belongs on one of those two; anything it
+must keep across a trip to the hub can now simply live in the component. The preload
 mounts it hidden shortly after startup, and the tree alone reads statuses and
 windows once, so a first entry is a reveal too (ADR
 code-and-chats-preload-after-the-hub-is-up). The attach still waits for `active`.

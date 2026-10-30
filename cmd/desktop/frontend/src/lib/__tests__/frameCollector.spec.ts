@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { percentile, summarizeFrames } from '../frameCollector'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { collectFrames, percentile, resetFrameCollectorForTests, summarizeFrames } from '../frameCollector'
 
 describe('summarizeFrames', () => {
   it('reports nothing for no samples', () => {
@@ -34,5 +34,40 @@ describe('percentile', () => {
     expect(percentile([1, 2, 3, 4], 50)).toBe(2)
     expect(percentile([1, 2, 3, 4], 95)).toBe(4)
     expect(percentile([], 50)).toBe(0)
+  })
+})
+
+describe('collectFrames', () => {
+  let pending: FrameRequestCallback | null = null
+  const fire = (now: number): void => {
+    const callback = pending
+    pending = null
+    callback?.(now)
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      pending = callback
+      return 1
+    })
+    vi.stubGlobal('cancelAnimationFrame', () => {
+      pending = null
+    })
+  })
+  afterEach(() => {
+    resetFrameCollectorForTests()
+    vi.unstubAllGlobals()
+  })
+
+  it('does not read a hidden period as one long frame', () => {
+    const beforeHide = collectFrames()
+    fire(1000)
+    fire(1016)
+    beforeHide()
+
+    const afterShow = collectFrames()
+    fire(300_000)
+    fire(300_016)
+    expect(afterShow()).toMatchObject({ frames: 1, frameWorst: 16 })
   })
 })

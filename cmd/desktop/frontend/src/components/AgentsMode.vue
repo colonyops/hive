@@ -29,6 +29,7 @@ import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { useNewSession } from '../composables/useNewSession'
+import { usePaintedActive } from '../composables/usePaintedActive'
 import { usePerf } from '../composables/usePerf'
 import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXtermPane'
 import { driveEventAuthor, workspaceSpaceKey, type DriveScope } from '../lib/drive'
@@ -76,6 +77,7 @@ const {
   renameSession,
   deleteSession,
   resetOpenWorkspace,
+  workspacesLoaded,
 } = useAgentWorkspaces()
 const { recents, reload: reloadRecents } = useAgentSessionsAll()
 
@@ -138,6 +140,7 @@ const { routeChatId, docVisible, docPath, syncDocQuery } = useDriveRoute()
 // frame, or re-entry would pass through the zero state and shift when the status
 // bar arrives. A resume that cannot happen clears ?chat, which ends this.
 const paneResuming = computed(() => paneStatus.value === 'idle' && routeChatId.value !== null && !paneError.value)
+const painted = usePaintedActive(() => props.active, { preloaded: workspacesLoaded.value })
 const selectedWorkspace = computed(() =>
   route.name === 'agents' && typeof route.params.workspace === 'string' ? route.params.workspace : '',
 )
@@ -151,10 +154,9 @@ function selectWorkspace(dir: string): Promise<unknown> {
 }
 
 watch(
-  () => props.active,
-  (active) => {
-    if (!active) return
-    void loadWorkspaces()
+  painted,
+  (shown) => {
+    if (shown) void loadWorkspaces()
   },
   { immediate: true },
 )
@@ -221,9 +223,9 @@ function stopActivityPolling(): void {
 const visibility = useDocumentVisibility()
 
 watch(
-  [() => props.active, visibility],
-  ([active, state]) => {
-    if (!active) {
+  [painted, visibility],
+  ([shown, state]) => {
+    if (!shown) {
       stopActivityPolling()
       return
     }
@@ -309,13 +311,18 @@ watch([paneStatus, openSessionId], ([status, id]) => {
 })
 
 // A route naming a chat other than the open one is a request to switch. A
-// reload with a stale ?chat is the same shape. Only an in-flight launch is left
-// alone, so two attaches never race for the pane.
+// reload with a stale ?chat is the same shape, and so is a return to a chat that
+// ended while another mode was showing, which off the route could not clear ?chat.
+// Only an in-flight launch is left alone, so two attaches never race for the pane.
+function paneHoldsChat(id: string): boolean {
+  return openSessionId.value === id && paneStatus.value !== 'idle'
+}
+
 watch(
   [routeChatId, () => props.active],
   ([id, active]) => {
     if (id === null || !active) return
-    if (openSessionId.value === id || paneStatus.value === 'opening') return
+    if (paneHoldsChat(id) || paneStatus.value === 'opening') return
     if (paneStatus.value === 'idle') {
       paneWorkspaceDir.value = recents.value.find((row) => row.id === id)?.workspace ?? selectedWorkspace.value
     }
@@ -341,7 +348,7 @@ async function resumeChatFromRoute(id: string): Promise<void> {
   await ready()
   if (!available.value) return
   await reloadRecents()
-  if (routeChatId.value !== id || openSessionId.value === id || paneStatus.value === 'opening') return
+  if (routeChatId.value !== id || paneHoldsChat(id) || paneStatus.value === 'opening') return
   const session = recents.value.find((row) => row.id === id || row.legacyId === id)
   if (!session?.terminalId) {
     // The route named a chat that cannot be attached, so the query goes back
@@ -607,7 +614,12 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
   pane.track(silenceDeviceReports(created))
   const graphics = installKittyGraphics(created)
   pane.track(graphics)
-  pane.track(created.onData((data) => send(data)))
+  // A retired terminal is still listening, and send targets the current pane.
+  pane.track(
+    created.onData((data) => {
+      if (term.value === created) send(data)
+    }),
+  )
   pane.track({
     dispose: installTerminalImages(paneHost.value, {
       pasteText: sendPaste,
@@ -802,7 +814,7 @@ onBeforeUnmount(() => {
       <AgentsSidebar
         v-if="!sidebarCollapsed"
         ref="sidebarEl"
-        :active="props.active"
+        :painted-active="painted"
         :selected-workspace="selectedWorkspace"
         :open-session-id="openSessionId"
         :starting-session="startingSession"
@@ -873,7 +885,7 @@ onBeforeUnmount(() => {
             data-testid="agents-session-pane"
             @mousedown="term?.focus()"
           >
-            <div ref="paneHost" class="size-full" />
+            <div ref="paneHost" class="relative size-full" />
           </div>
 
           <!-- The Code view's pill, placed and worded identically: new output

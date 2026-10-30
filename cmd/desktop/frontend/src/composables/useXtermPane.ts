@@ -225,6 +225,7 @@ export function useXtermPane(host: Ref<HTMLElement | null>, onResize: () => void
     outgoing.element.style.position = 'absolute'
     outgoing.element.style.inset = '0'
     outgoing.element.style.zIndex = '1'
+    outgoing.element.style.pointerEvents = 'none'
     retired = { term: outgoing, disposers: disposers.splice(0) }
     term.value = null
     fit = null

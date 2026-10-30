@@ -33,8 +33,8 @@ is WKWebView, which Playwright cannot drive.
 
 ## Consequences
 
-- OS input and OS screen capture stay out of reach of these runs. Keys go through
-  xterm's real handlers as DOM events, and pixels come from reading the WebGL
+- OS input and OS screen capture stay out of reach of these runs. Keys enter through
+  `term.input`, after xterm's key handling, a wheel is a real DOM event, and pixels come from reading the WebGL
   canvas right after a draw, which is the only moment its buffer is defined. A real
   trackpad's feel still takes a person.
 - Native numbers need a visible window, because a covered WKWebView fires no

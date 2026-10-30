@@ -49,6 +49,7 @@ mkdir -p cmd/desktop/e2e/test-results cmd/desktop/e2e/screenshots
 docker run --rm --init --network none --ipc=host \
   --env HIVE_DESKTOP_E2E_HARNESS="${E2E_HARNESS_MARKER}" \
   --env PW_FAIL_ON_FLAKY \
+  --env HIVE_PERF_SCALE \
   --volume "$(pwd)/cmd/desktop/e2e/test-results:/workspace/cmd/desktop/e2e/test-results" \
   --volume "$(pwd)/cmd/desktop/e2e/screenshots:/workspace/cmd/desktop/e2e/screenshots" \
   "${IMAGE_TAG}" "$@"

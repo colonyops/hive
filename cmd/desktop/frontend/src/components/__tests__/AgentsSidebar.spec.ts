@@ -121,7 +121,7 @@ const BOTH_OPEN = { 'demo-a': true, 'demo-b': true }
 // screen; the fold specs pass {} and take the defaults instead.
 async function mountSidebar(props: Record<string, unknown> = {}, folds: Record<string, boolean> = BOTH_OPEN) {
   localStorage.setItem(FOLD_KEY, JSON.stringify(folds))
-  const wrapper = mount(AgentsSidebar, { props: { active: true, ...props } })
+  const wrapper = mount(AgentsSidebar, { props: { paintedActive: true, ...props } })
   await flushPromises()
   return wrapper
 }

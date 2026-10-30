@@ -79,8 +79,9 @@ type broker struct {
 	// delivering is true while a pump holds its own copy of buf[0], which is the
 	// only time the head cannot take a merge.
 	delivering bool
-	// mergeBuf is the buffer behind the last merge, sized for a whole frame so a
-	// flood costs one allocation per frame rather than one per notification.
+	// mergeBuf is the buffer behind the last merge. It doubles as the merge grows,
+	// so a flood reaches a full frame in a few allocations and a short run in a
+	// backlog with no reader does not pin a whole frame's worth of memory.
 	mergeBuf []byte
 	// lastDelivery is when a subscriber last took an output event, which is what
 	// tells a burst from a keystroke's echo.
@@ -199,11 +200,10 @@ func (b *broker) endsHoldLocked(ev Event) bool {
 const maxCoalescedBytes = 64 << 10
 
 // coalesceLocked folds ev into the last queued event when both are output for
-// the same pane, reporting whether it did. It merges only into an event behind
-// the head, because the head is the one pump may already be handing to the
-// subscriber — it holds its own copy and charges the backlog for the size it
-// read, so growing it there would both lose the appended bytes and corrupt the
-// byte accounting.
+// the same pane, reporting whether it did. It never merges into a head a pump has
+// taken: the pump holds its own copy and charges the backlog for the size it read,
+// so growing it there would both lose the appended bytes and corrupt the byte
+// accounting.
 //
 // Nothing here adds latency of its own; see burstHold for the one place the
 // pump waits so that there is something to merge.
@@ -226,8 +226,12 @@ func (b *broker) coalesceLocked(ev Event, size int) bool {
 	// safe, because a queued event has no other holder until a pump takes it, and
 	// the delivering check above keeps a merge off the one a pump has taken.
 	merged := tail.Data
-	if len(b.mergeBuf) == 0 || len(tail.Data) == 0 || &b.mergeBuf[0] != &tail.Data[0] {
-		merged = append(make([]byte, 0, maxCoalescedBytes), tail.Data...)
+	owned := len(b.mergeBuf) > 0 && len(tail.Data) > 0 && &b.mergeBuf[0] == &tail.Data[0]
+	want := len(tail.Data) + size
+	if !owned || cap(merged) < want {
+		// Capacity stays within twice the contents, which is what keeps the byte
+		// bound honest: it counts len, and a backlog can hold thousands of these.
+		merged = append(make([]byte, 0, min(2*want, maxCoalescedBytes)), tail.Data...)
 	}
 	merged = append(merged, out.Data...)
 	b.mergeBuf = merged
