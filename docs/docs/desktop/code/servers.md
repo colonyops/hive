@@ -22,7 +22,7 @@ On a server's session you can:
 - rename it, edit its tags, recycle it, and delete it
 - see its branch, changes, and pull request in the status bar
 
-Open in editor, Show in Finder, agent windows, and session actions run on your machine, so Code does not offer them for a server's session. Code refuses an image pasted into its terminal, and a pop-up terminal in its directory, for the same reason. A create on a server does not take an agent workspace, and its prompt can be at most 32 KiB.
+Open in editor, Show in Finder, agent windows, and configured actions run on your machine, so Code does not offer them for a server's session. Code refuses an image pasted into its terminal, and a pop-up terminal in its directory, for the same reason. A create on a server does not take an agent workspace, and the dialog refuses a prompt above 32 KiB.
 
 ## Server states
 
