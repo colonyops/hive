@@ -157,7 +157,6 @@ func (u *UI) Mount(ctx context.Context, core *app.App, opts MountOptions) {
 	})
 	u.attachUpdater(opts)
 	u.buildMenu()
-	unlockDisplayRefreshRate()
 	u.buildWindow()
 	u.buildTray(core)
 }
