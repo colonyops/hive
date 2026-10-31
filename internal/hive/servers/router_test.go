@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -127,6 +128,99 @@ func TestRouter_SendsACallToTheServerItsIDNames(t *testing.T) {
 	require.NoError(t, router.DeleteSession(t.Context(), "box:"+twinThere.ID))
 	_, err = box.GetSession(t.Context(), twinThere.ID)
 	require.ErrorIs(t, err, session.ErrNotFound)
+}
+
+// switchableDialer reaches socket until it goes down, and then fails like a
+// stopped server and cuts the connections it made.
+type switchableDialer struct {
+	socket string
+	mu     sync.Mutex
+	down   bool
+	hang   chan struct{}
+	conns  []net.Conn
+}
+
+func (d *switchableDialer) dial(ctx context.Context, _ config.ServerConfig, stderr io.Writer) (net.Conn, error) {
+	d.mu.Lock()
+	down, hang := d.down, d.hang
+	d.mu.Unlock()
+	if hang != nil {
+		select {
+		case <-hang:
+			return nil, errors.New("exit status 255")
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if down {
+		_, _ = io.WriteString(stderr, "ssh: connect to host box port 22: Connection refused\n")
+		return nil, errors.New("exit status 255")
+	}
+	var nd net.Dialer
+	conn, err := nd.DialContext(ctx, "unix", d.socket)
+	if err == nil {
+		d.mu.Lock()
+		d.conns = append(d.conns, conn)
+		d.mu.Unlock()
+	}
+	return conn, err
+}
+
+func (d *switchableDialer) set(down, hang bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.down = down
+	if d.hang != nil {
+		close(d.hang)
+		d.hang = nil
+	}
+	if hang {
+		d.hang = make(chan struct{})
+	}
+	if down || hang {
+		for _, conn := range d.conns {
+			_ = conn.Close()
+		}
+		d.conns = nil
+	}
+}
+
+func TestRouter_KeepsTheRowsOfAServerThatStopsAnsweringAndDoesNotWaitForIt(t *testing.T) {
+	boxSocket := runDaemon(t)
+	dialer := &switchableDialer{socket: boxSocket}
+	fleet := servers.New(zerolog.Nop(), newClient(runDaemon(t)),
+		[]config.ServerConfig{{Name: "box", SSH: "box"}}, "test", servers.WithDialer(dialer.dial))
+	t.Cleanup(fleet.Close)
+	box, ok := fleet.Server("box")
+	require.True(t, ok)
+	there := create(t, box.Client(), "there")
+	router := servers.NewRouter(fleet)
+	_, err := router.ListSessions(t.Context())
+	require.NoError(t, err)
+
+	dialer.set(true, false)
+	sessions, err := router.ListSessions(t.Context())
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "box:"+there.ID, sessions[0].ID)
+	assert.Equal(t, server.StateOffline, router.States()[0].State)
+
+	dialer.set(false, true)
+	start := time.Now()
+	sessions, err = router.ListSessions(t.Context())
+	require.NoError(t, err)
+	assert.Len(t, sessions, 1)
+	assert.Less(t, time.Since(start), 2*time.Second, "the list waited for an offline server")
+
+	statuses, err := router.GitStatuses(t.Context(), []string{"box:" + there.ID})
+	require.NoError(t, err)
+	assert.Empty(t, statuses, "an offline server is not asked")
+
+	dialer.set(false, false)
+	assert.Eventually(t, func() bool {
+		_, err := router.ListSessions(t.Context())
+		return err == nil && router.States()[0].State == server.StateConnected
+	}, 10*time.Second, 100*time.Millisecond)
 }
 
 func newClient(socket string) sessionapi.API {
