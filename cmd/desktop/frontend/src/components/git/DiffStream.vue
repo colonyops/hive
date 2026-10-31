@@ -56,6 +56,7 @@ const emit = defineEmits<{
   'update-comment': [comment: ChangesComment, text: string]
   'remove-comment': [comment: ChangesComment]
   'pick-comment': [comment: ChangesComment]
+  synced: []
 }>()
 
 // The separator's height is the only row the library's own stylesheet sizes
@@ -268,6 +269,13 @@ function syncItems(): void {
     pendingJump = null
     viewer?.scrollTo({ type: 'item', id: path, align: 'start' })
   }
+  emit('synced')
+}
+
+/** The stream shows this file open with the diff read last, so a line in it can be scrolled to. */
+function holds(path: string): boolean {
+  const held = built.get(path)
+  return !!held && held.open && held.entry === props.entries.get(path)
 }
 
 function fileAt(top: number): ChangedFile | undefined {
@@ -333,7 +341,7 @@ function scrollToLine(path: string, line: number, side: DiffSide): void {
   viewer?.scrollTo({ type: 'line', id: path, lineNumber: line, side, align: 'center' })
 }
 
-defineExpose({ focus, scrollToFile, stepHunk, scrollToLine, selectLines, clearSelection })
+defineExpose({ focus, scrollToFile, holds, stepHunk, scrollToLine, selectLines, clearSelection })
 
 onMounted(() => {
   if (!root.value) return

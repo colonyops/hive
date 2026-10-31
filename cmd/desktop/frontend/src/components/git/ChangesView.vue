@@ -2,7 +2,7 @@
 // Every changed file's diff in one scroll, with a file rail beside it and the
 // review comments that go to the session's agent. Nothing here writes to the
 // checkout: every read goes through the session API.
-import { computed, nextTick, onMounted, ref, toRef, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, shallowRef, toRef, watch } from 'vue'
 import { useEventListener, useStorage } from '@vueuse/core'
 import IconChevronsDownUp from '~icons/lucide/chevrons-down-up'
 import IconChevronsUpDown from '~icons/lucide/chevrons-up-down'
@@ -153,6 +153,7 @@ function toggleViewed(file: ChangedFile): void {
 const stream = ref<{
   focus: () => void
   scrollToFile: (path: string) => void
+  holds: (path: string) => boolean
   stepHunk: (delta: 1 | -1) => boolean
   scrollToLine: (path: string, line: number, side: DiffSpan['startSide']) => void
   selectLines: (path: string, range: DiffLineSelection['range']) => void
@@ -160,6 +161,9 @@ const stream = ref<{
 } | null>(null)
 const scope = computed(() => `${props.sessionId}:${targetKey(target.value)}`)
 const current = ref<string | null>(null)
+// A picked comment can sit in another comparison or a folded file, whose diff is
+// not read yet. CodeView drops a scroll to a line it cannot place, so this waits.
+const pendingReveal = shallowRef<ChangesComment | null>(null)
 const openPaths = computed(() => new Set(files.value.filter(isOpen).map((file) => file.path)))
 const wanted = computed(() => {
   const center = files.value.findIndex((file) => file.path === current.value)
@@ -194,9 +198,11 @@ watch([sessionId, () => targetKey(target.value)], () => {
 })
 watch(sessionId, () => {
   commit.value = ''
+  pendingReveal.value = null
 })
 
 function jumpTo(path: string): void {
+  pendingReveal.value = null
   current.value = path
   stream.value?.scrollToFile(path)
 }
@@ -342,20 +348,50 @@ function saveDraft(text: string): void {
   endDraft()
 }
 
-async function pickComment(comment: ChangesComment): Promise<void> {
+function pickComment(comment: ChangesComment): void {
   if (!inShownComparison(comment)) {
     base.value = comment.base
     if (comment.base === 'branch') against.value = comment.against ?? ''
     commit.value = comment.commit ?? ''
   }
-  await revealLine(comment.path, comment.endLine, comment.endSide)
-  stream.value?.selectLines(comment.path, {
+  pendingReveal.value = comment
+}
+
+function settleReveal(): void {
+  const comment = pendingReveal.value
+  if (!comment || pending.value) return
+  if (!changes.value) {
+    if (error.value) pendingReveal.value = null
+    return
+  }
+  const file = files.value.find((candidate) => candidate.path === comment.path)
+  // The panel keeps a comment whose file has left this comparison, or whose
+  // comparison no longer resolves, and there is nowhere to take the user.
+  if (!file || !inShownComparison(comment)) {
+    pendingReveal.value = null
+    return
+  }
+  current.value = file.path
+  if (!isOpen(file)) {
+    foldOverrides.value.set(file.path, true)
+    return
+  }
+  const entry = entries.value.get(file.path)
+  if (!entry || !stream.value?.holds(file.path)) return
+  pendingReveal.value = null
+  if (!hasDiffLine(entryRows(entry), comment.endLine, comment.endSide)) {
+    stream.value.scrollToFile(file.path)
+    return
+  }
+  stream.value.scrollToLine(file.path, comment.endLine, comment.endSide)
+  stream.value.selectLines(file.path, {
     start: comment.startLine,
     side: comment.startSide,
     end: comment.endLine,
     endSide: comment.endSide,
   })
 }
+watch([pendingReveal, pending, files, entries, openPaths], settleReveal, { flush: 'post' })
 
 const SEND_KEY = formatCombo('mod+enter')
 const picking = ref(false)
@@ -649,6 +685,7 @@ const KEY_HINTS = [
           :is-outdated="isOutdated"
           :search-query="search.debounced.value"
           :active-match="search.active.value"
+          @synced="settleReveal"
           @fold="toggleFold"
           @toggle-viewed="toggleViewed"
           @open-editor="openInEditor"

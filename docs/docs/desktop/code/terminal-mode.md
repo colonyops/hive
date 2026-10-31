@@ -196,7 +196,7 @@ The panel keeps the last three reviews you sent from each session under **Sent**
 
 Deleting a session deletes its comments and sent reviews, so the confirmation warns about any unsent comments, and a message afterward offers to copy them. Recycling warns too, but a recycled session keeps its comments unless the recycle deletes it.
 
-Comments are kept on this machine, per session, until you send or delete them, and they survive quitting Hive. They point at line numbers, so a comment shows an amber dot when the agent edits the file after you commented. If the line has left the diff, or the comment was made under another comparison, the comment shows only in the panel. A comment made on a commit, or on the staged version, tells the agent which version its line numbers belong to. Select its line label to jump to it, which also switches the comparison back.
+Comments are kept on this machine, per session, until you send or delete them, and they survive quitting Hive. They point at line numbers, so a comment shows an amber dot when the agent edits the file after you commented. If the line has left the diff, or the comment was made under another comparison, the comment shows only in the panel. A comment made on a commit, or on the staged version, tells the agent which version its line numbers belong to. Select its line label to jump to it, which also switches the comparison back and unfolds the file. If the line has left the diff, this goes to the file instead.
 
 Changes never writes to the checkout, so it's safe to use while an agent works in it. It can't stage or commit. These limits apply:
 

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import ChangesView from '../ChangesView.vue'
 import { useChangesReview } from '../../../stores/useChangesReview'
+import { useChangesViewed } from '../../../stores/useChangesViewed'
+import { fileVersion } from '../../../composables/useFileDiffs'
 import { resetStores } from '../../../stores/defineStore'
 import { resetToastsForTests, useToasts } from '../../../composables/useToasts'
 
@@ -297,6 +299,171 @@ describe('ChangesView', () => {
 
     expect(mocks.scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'b.go' }))
     wrapper.unmount()
+  })
+
+  describe('stepping through hunks', () => {
+    const TWO_HUNKS = '@@ -1,2 +1,2 @@\n-a\n+b\n c\n@@ -50,2 +50,2 @@\n-d\n+e\n f\n'
+    const atPosition = (position: number) => ({ type: 'position', position })
+
+    async function mountTwoFiles() {
+      mocks.SessionFileDiffs.mockImplementation((_id: string, _target: unknown, paths: string[]) =>
+        Promise.resolve(paths.map((path) => ({ path, text: TWO_HUNKS, ...noState }))),
+      )
+      mocks.tops.set('a.go', 0)
+      mocks.tops.set('b.go', 1000)
+      const wrapper = await mountView()
+      mocks.scrollTo.mockClear()
+      return wrapper
+    }
+
+    it('moves forward within a file and on to the next, and back again', async () => {
+      const wrapper = await mountTwoFiles()
+      await press('n')
+      expect(mocks.scrollTo).toHaveBeenLastCalledWith(atPosition(60))
+
+      mocks.scroll!(60)
+      await press('n')
+      expect(mocks.scrollTo).toHaveBeenLastCalledWith(atPosition(1000))
+
+      mocks.scroll!(1000)
+      await press('N')
+      expect(mocks.scrollTo).toHaveBeenLastCalledWith(atPosition(60))
+      wrapper.unmount()
+    })
+
+    it('measures hunks by side-by-side rows in that mode', async () => {
+      const wrapper = await mountTwoFiles()
+      await press('s')
+      await press('n')
+      expect(mocks.scrollTo).toHaveBeenLastCalledWith(atPosition(40))
+      wrapper.unmount()
+    })
+
+    it('skips a folded file, and moves by file when no hunk is left', async () => {
+      const wrapper = await mountTwoFiles()
+      await press('j')
+      await press('o')
+      mocks.scroll!(0)
+      await press('k')
+      mocks.scroll!(60)
+      mocks.scrollTo.mockClear()
+
+      await press('n')
+      expect(mocks.scrollTo).toHaveBeenCalledExactlyOnceWith({ type: 'item', id: 'b.go', align: 'start' })
+      wrapper.unmount()
+    })
+  })
+
+  describe('picking a comment', () => {
+    const atLine = (id: string, lineNumber: number) => ({
+      type: 'line',
+      id,
+      lineNumber,
+      side: 'additions',
+      align: 'center',
+    })
+    const span = {
+      startSide: 'additions',
+      startLine: 1,
+      endSide: 'additions',
+      endLine: 1,
+      quote: '+new',
+      text: 'note',
+    } as const
+    const pickFrom = async (wrapper: VueWrapper, id: string) => {
+      await press('r')
+      await wrapper.get(testid(`changes-comment-${id}-pick`)).trigger('click')
+      await flushPromises()
+    }
+
+    it('switches comparison and scrolls once that diff is read', async () => {
+      mocks.SessionChanges.mockImplementation((_id: string, target: { base: string }) =>
+        Promise.resolve(changes([file('a.go'), file('b.go')], { base: target.base })),
+      )
+      const { id } = useChangesReview().add('s1', { ...span, path: 'b.go', base: 'staged', staged: true, version: 'v' })
+      const wrapper = await mountView()
+      let answer!: (diffs: unknown[]) => void
+      mocks.SessionFileDiffs.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
+      mocks.scrollTo.mockClear()
+
+      await pickFrom(wrapper, id)
+      expect(mocks.SessionFileDiffs).toHaveBeenLastCalledWith(
+        's1',
+        expect.objectContaining({ base: 'staged' }),
+        expect.anything(),
+      )
+      expect(mocks.scrollTo).not.toHaveBeenCalledWith(atLine('b.go', 1))
+
+      answer(['a.go', 'b.go'].map((path) => ({ path, text: `@@ -1 +1 @@\n-old\n+new ${path}\n`, ...noState })))
+      await flushPromises()
+      expect(mocks.scrollTo).toHaveBeenCalledWith(atLine('b.go', 1))
+      expect(mocks.setSelectedLines).toHaveBeenLastCalledWith(
+        { id: 'b.go', range: { start: 1, side: 'additions', end: 1, endSide: 'additions' } },
+        { notify: false },
+      )
+      wrapper.unmount()
+    })
+
+    it('unfolds a viewed file and scrolls once its diff is read', async () => {
+      useChangesViewed().setViewed('s1', 'a.go', fileVersion(file('a.go')), true)
+      const { id } = useChangesReview().add('s1', { ...span, path: 'a.go', base: 'branch', version: 'v' })
+      const wrapper = await mountView()
+      expect(mocks.SessionFileDiffs).not.toHaveBeenCalledWith('s1', expect.anything(), expect.arrayContaining(['a.go']))
+      mocks.scrollTo.mockClear()
+
+      await pickFrom(wrapper, id)
+      expect(mocks.SessionFileDiffs).toHaveBeenLastCalledWith('s1', expect.anything(), ['a.go'])
+      expect(mocks.scrollTo).toHaveBeenCalledWith(atLine('a.go', 1))
+      wrapper.unmount()
+    })
+
+    it('goes to the file when the line has left the diff', async () => {
+      const { id } = useChangesReview().add('s1', { ...span, endLine: 99, path: 'b.go', base: 'branch', version: 'v' })
+      const wrapper = await mountView()
+      mocks.scrollTo.mockClear()
+
+      await pickFrom(wrapper, id)
+      expect(mocks.scrollTo).toHaveBeenCalledExactlyOnceWith({ type: 'item', id: 'b.go', align: 'start' })
+      wrapper.unmount()
+    })
+
+    it('stays put when the file has left the comparison', async () => {
+      const { id } = useChangesReview().add('s1', { ...span, path: 'gone.go', base: 'branch', version: 'v' })
+      const wrapper = await mountView()
+      mocks.scrollTo.mockClear()
+
+      await pickFrom(wrapper, id)
+      expect(mocks.scrollTo).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('stays put when the comparison falls back to another one', async () => {
+      mocks.SessionChanges.mockResolvedValue(changes([file('b.go')], { base: 'uncommitted' }))
+      const { id } = useChangesReview().add('s1', { ...span, path: 'b.go', base: 'branch', version: 'v' })
+      const wrapper = await mountView()
+      mocks.scrollTo.mockClear()
+
+      await pickFrom(wrapper, id)
+      expect(mocks.scrollTo).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('gives way to a jump the user makes while the diff is read', async () => {
+      const { id } = useChangesReview().add('s1', { ...span, path: 'b.go', base: 'staged', staged: true, version: 'v' })
+      mocks.SessionChanges.mockImplementation((_id: string, target: { base: string }) =>
+        Promise.resolve(changes([file('a.go'), file('b.go')], { base: target.base })),
+      )
+      const wrapper = await mountView()
+      let answer!: (diffs: unknown[]) => void
+      mocks.SessionFileDiffs.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
+      await pickFrom(wrapper, id)
+      await press('k')
+
+      answer(['a.go', 'b.go'].map((path) => ({ path, text: '@@ -1 +1 @@\n-old\n+new\n', ...noState })))
+      await flushPromises()
+      expect(mocks.scrollTo).not.toHaveBeenCalledWith(atLine('b.go', 1))
+      wrapper.unmount()
+    })
   })
 
   it('keeps a draft to the comparison it was started in', async () => {
