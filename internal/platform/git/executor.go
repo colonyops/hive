@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -138,27 +139,23 @@ func (e *Executor) DefaultBranch(ctx context.Context, dir string) (string, error
 }
 
 func (e *Executor) DiffStats(ctx context.Context, dir string) (additions, deletions int, err error) {
-	// Get the default branch to compare against
-	defaultBranch, err := e.DefaultBranch(ctx, dir)
+	// With no default branch or merge base there is still uncommitted work to
+	// count, as in a shallow clone.
+	ref := "HEAD"
+	if branch, err := e.DefaultBranch(ctx, dir); err == nil {
+		if base, err := e.MergeBase(ctx, dir, branch); err == nil {
+			ref = base
+		}
+	}
+
+	var out bytes.Buffer
+	err = e.withScratchIndex(ctx, dir, func(indexEnv string) error {
+		return e.readDiff(ctx, dir, indexEnv, &out, "--shortstat", ref, "--")
+	})
 	if err != nil {
-		// Fallback to comparing against HEAD if we can't determine default branch
-		defaultBranch = "HEAD"
+		return 0, 0, err
 	}
-
-	var out []byte
-	if defaultBranch == "HEAD" {
-		// Compare working directory against HEAD
-		out, err = e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "diff", "--shortstat", "HEAD")
-	} else {
-		// Compare current branch against default branch (e.g., main...HEAD)
-		out, err = e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "diff", "--shortstat", defaultBranch+"...HEAD")
-	}
-
-	if err != nil {
-		return 0, 0, e.commandError("git diff", dir, out, err)
-	}
-
-	return parseDiffStats(string(out))
+	return parseDiffStats(out.String())
 }
 
 // parseDiffStats parses git diff --shortstat output.

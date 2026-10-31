@@ -1,6 +1,6 @@
 # The webview renders at the display refresh rate through a WebKit private preference
 
-- **Status:** accepted
+- **Status:** superseded by [the-webview-stays-at-webkit-s-near-60fps-default](2026-10-30-the-webview-stays-at-webkit-s-near-60fps-default.md)
 - **Date:** 2026-10-30
 
 ## Context

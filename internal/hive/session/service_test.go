@@ -133,7 +133,27 @@ func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
 	return "main", nil
 }
 func (m *mockGit) DiffStats(_ context.Context, _ string) (int, int, error) { return 0, 0, nil }
-func (m *mockGit) IsValidRepo(_ context.Context, _ string) error           { return nil }
+func (*mockGit) MergeBase(context.Context, string, string) (string, error) { return "", nil }
+func (*mockGit) ChangedFiles(context.Context, string, git.DiffRange) ([]git.ChangedFile, error) {
+	return nil, nil
+}
+
+func (*mockGit) MergeBaseRef(context.Context, string, string) (string, error)  { return "", nil }
+func (*mockGit) ResolveCommit(context.Context, string, string) (string, error) { return "", nil }
+func (*mockGit) CommitRange(context.Context, string, string) (git.DiffRange, error) {
+	return git.DiffRange{}, nil
+}
+
+func (*mockGit) Commits(context.Context, string, string, int) ([]git.CommitInfo, error) {
+	return nil, nil
+}
+
+func (*mockGit) Branches(context.Context, string, int) ([]string, error) { return nil, nil }
+
+func (*mockGit) FileDiffs(context.Context, string, git.DiffRange, []git.ChangedFile) []git.FileDiffResult {
+	return nil
+}
+func (m *mockGit) IsValidRepo(_ context.Context, _ string) error { return nil }
 
 type testMultiplexer struct{}
 

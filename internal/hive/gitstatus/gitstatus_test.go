@@ -33,6 +33,25 @@ type stubGit struct {
 	deletions   int
 	diffErr     error
 	unpushedHit *atomic.Int32
+
+	defaultBranch    string
+	defaultBranchErr error
+	mergeBase        string
+	mergeBaseErr     error
+	files            []git.ChangedFile
+	filesErr         error
+	onDiff           func(git.DiffRange)
+	mergeBaseRef     string
+	mergeBaseRefErr  error
+	commitErr        error
+	commits          []git.CommitInfo
+	commitsErr       error
+	onSince          func(string)
+	branches         []string
+	block            bool
+	diffs            map[string]string
+	diffErrs         map[string]error
+	diffBatch        *atomic.Int32
 }
 
 func (g stubGit) Branch(context.Context, string) (string, error) { return g.branch, g.branchErr }
@@ -47,6 +66,60 @@ func (g stubGit) HasUnpushedCommits(context.Context, string) (bool, error) {
 
 func (g stubGit) DiffStats(context.Context, string) (int, int, error) {
 	return g.additions, g.deletions, g.diffErr
+}
+
+func (g stubGit) DefaultBranch(context.Context, string) (string, error) {
+	return g.defaultBranch, g.defaultBranchErr
+}
+
+func (g stubGit) MergeBase(context.Context, string, string) (string, error) {
+	return g.mergeBase, g.mergeBaseErr
+}
+
+func (g stubGit) MergeBaseRef(context.Context, string, string) (string, error) {
+	return g.mergeBaseRef, g.mergeBaseRefErr
+}
+
+func (g stubGit) ResolveCommit(_ context.Context, _, rev string) (string, error) {
+	if g.commitErr != nil && rev != "HEAD" {
+		return "", g.commitErr
+	}
+	return "full-" + rev, nil
+}
+
+func (g stubGit) CommitRange(_ context.Context, _, commit string) (git.DiffRange, error) {
+	return git.WorkingTree("commit:" + commit), nil
+}
+
+func (g stubGit) Commits(_ context.Context, _, since string, _ int) ([]git.CommitInfo, error) {
+	if g.onSince != nil {
+		g.onSince(since)
+	}
+	return g.commits, g.commitsErr
+}
+
+func (g stubGit) Branches(context.Context, string, int) ([]string, error) { return g.branches, nil }
+
+func (g stubGit) ChangedFiles(ctx context.Context, _ string, diff git.DiffRange) ([]git.ChangedFile, error) {
+	if g.block {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	if g.onDiff != nil {
+		g.onDiff(diff)
+	}
+	return g.files, g.filesErr
+}
+
+func (g stubGit) FileDiffs(_ context.Context, _ string, _ git.DiffRange, files []git.ChangedFile) []git.FileDiffResult {
+	if g.diffBatch != nil {
+		g.diffBatch.Add(1)
+	}
+	results := make([]git.FileDiffResult, len(files))
+	for i, file := range files {
+		results[i] = git.FileDiffResult{Text: g.diffs[file.Path], Err: g.diffErrs[file.Path]}
+	}
+	return results
 }
 
 func activeSession() session.Session {

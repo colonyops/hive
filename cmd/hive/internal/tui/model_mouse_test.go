@@ -60,11 +60,33 @@ func (g *mouseTestGit) Branch(_ context.Context, _ string) (string, error) { ret
 func (g *mouseTestGit) DefaultBranch(_ context.Context, _ string) (string, error) { return "main", nil }
 
 func (g *mouseTestGit) DiffStats(_ context.Context, _ string) (int, int, error) { return 0, 0, nil }
-func (g *mouseTestGit) IsValidRepo(_ context.Context, _ string) error           { return nil }
-func (g *mouseTestGit) CloneBare(_ context.Context, _, _ string) error          { return nil }
-func (g *mouseTestGit) WorktreeAdd(_ context.Context, _, _, _ string) error     { return nil }
-func (g *mouseTestGit) WorktreeRemove(_ context.Context, _, _, _ string) error  { return nil }
-func (g *mouseTestGit) Fetch(_ context.Context, _ string) error                 { return nil }
+func (*mouseTestGit) MergeBase(context.Context, string, string) (string, error) { return "", nil }
+func (*mouseTestGit) ChangedFiles(context.Context, string, git.DiffRange) ([]git.ChangedFile, error) {
+	return nil, nil
+}
+
+func (*mouseTestGit) MergeBaseRef(context.Context, string, string) (string, error) { return "", nil }
+
+func (*mouseTestGit) ResolveCommit(context.Context, string, string) (string, error) { return "", nil }
+
+func (*mouseTestGit) CommitRange(context.Context, string, string) (git.DiffRange, error) {
+	return git.DiffRange{}, nil
+}
+
+func (*mouseTestGit) Commits(context.Context, string, string, int) ([]git.CommitInfo, error) {
+	return nil, nil
+}
+
+func (*mouseTestGit) Branches(context.Context, string, int) ([]string, error) { return nil, nil }
+
+func (*mouseTestGit) FileDiffs(context.Context, string, git.DiffRange, []git.ChangedFile) []git.FileDiffResult {
+	return nil
+}
+func (g *mouseTestGit) IsValidRepo(_ context.Context, _ string) error          { return nil }
+func (g *mouseTestGit) CloneBare(_ context.Context, _, _ string) error         { return nil }
+func (g *mouseTestGit) WorktreeAdd(_ context.Context, _, _, _ string) error    { return nil }
+func (g *mouseTestGit) WorktreeRemove(_ context.Context, _, _, _ string) error { return nil }
+func (g *mouseTestGit) Fetch(_ context.Context, _ string) error                { return nil }
 func (g *mouseTestGit) HasUnpushedCommits(_ context.Context, _ string) (bool, error) {
 	return false, nil
 }

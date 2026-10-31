@@ -4,6 +4,7 @@ package wire
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -12,8 +13,10 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/status"
+	"github.com/colonyops/hive/internal/platform/git"
 )
 
 func SessionToProto(s session.Session) *daemonv1.Session {
@@ -177,6 +180,117 @@ func LaunchOptionsToProto(o sessionsvc.LaunchOptions) *daemonv1.LaunchOptionsRes
 		Agents:            o.Agents,
 		DefaultAgent:      o.DefaultAgent,
 	}
+}
+
+// validUTF8 is for anything git reports, because protobuf strings refuse invalid
+// UTF-8 and git holds file names, branch names, and commit text as raw bytes.
+func validUTF8(s string) string {
+	return strings.ToValidUTF8(s, "\uFFFD")
+}
+
+func DiffTargetToProto(t gitstatus.DiffTarget) *daemonv1.DiffTarget {
+	return &daemonv1.DiffTarget{Base: t.Base.String(), Against: t.Against, Commit: t.Commit}
+}
+
+func DiffTargetFromProto(p *daemonv1.DiffTarget) gitstatus.DiffTarget {
+	return gitstatus.DiffTarget{Base: gitstatus.DiffBase(p.GetBase()), Against: p.GetAgainst(), Commit: p.GetCommit()}
+}
+
+// RefsToProto makes a list of refs safe to send.
+func RefsToProto(refs []string) []string {
+	safe := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		safe = append(safe, validUTF8(ref))
+	}
+	return safe
+}
+
+func ChangesToProto(c gitstatus.Changes) *daemonv1.ChangesResponse {
+	commits := make([]*daemonv1.CommitInfo, 0, len(c.Commits))
+	for _, commit := range c.Commits {
+		commits = append(commits, &daemonv1.CommitInfo{Id: commit.ID, Subject: validUTF8(commit.Subject), Author: validUTF8(commit.Author), Unix: commit.Unix})
+	}
+	files := make([]*daemonv1.ChangedFile, 0, len(c.Files))
+	for _, f := range c.Files {
+		files = append(files, &daemonv1.ChangedFile{
+			Path:      validUTF8(f.Path),
+			OldPath:   validUTF8(f.OldPath),
+			Status:    f.Status.String(),
+			Additions: int32(f.Additions), //nolint:gosec // a line count fits in int32
+			Deletions: int32(f.Deletions), //nolint:gosec // a line count fits in int32
+			Binary:    f.Binary,
+			Stamp:     f.Stamp,
+		})
+	}
+	return &daemonv1.ChangesResponse{
+		Resolved:        c.Resolved,
+		Branch:          validUTF8(c.Branch),
+		DefaultBranch:   validUTF8(c.DefaultBranch),
+		Base:            c.Base.String(),
+		BranchAvailable: c.BranchAvailable,
+		Against:         validUTF8(c.Against),
+		Commit:          c.Commit,
+		Commits:         commits,
+		Files:           files,
+		Truncated:       c.Truncated,
+	}
+}
+
+func ChangesFromProto(p *daemonv1.ChangesResponse) gitstatus.Changes {
+	var commits []git.CommitInfo
+	for _, c := range p.GetCommits() {
+		commits = append(commits, git.CommitInfo{ID: c.GetId(), Subject: c.GetSubject(), Author: c.GetAuthor(), Unix: c.GetUnix()})
+	}
+	var files []git.ChangedFile
+	for _, f := range p.GetFiles() {
+		files = append(files, git.ChangedFile{
+			Path:      f.GetPath(),
+			OldPath:   f.GetOldPath(),
+			Status:    git.FileStatus(f.GetStatus()),
+			Additions: int(f.GetAdditions()),
+			Deletions: int(f.GetDeletions()),
+			Binary:    f.GetBinary(),
+			Stamp:     f.GetStamp(),
+		})
+	}
+	return gitstatus.Changes{
+		Resolved:        p.GetResolved(),
+		Branch:          p.GetBranch(),
+		DefaultBranch:   p.GetDefaultBranch(),
+		Base:            gitstatus.DiffBase(p.GetBase()),
+		BranchAvailable: p.GetBranchAvailable(),
+		Against:         p.GetAgainst(),
+		Commit:          p.GetCommit(),
+		Commits:         commits,
+		Files:           files,
+		Truncated:       p.GetTruncated(),
+	}
+}
+
+func FileDiffsToProto(diffs []gitstatus.FileDiff) *daemonv1.FileDiffsResponse {
+	out := make([]*daemonv1.FileDiff, 0, len(diffs))
+	for _, d := range diffs {
+		out = append(out, &daemonv1.FileDiff{
+			Path:  validUTF8(d.Path),
+			State: d.State.String(),
+			Text:  d.Text,
+			Error: validUTF8(d.Error),
+		})
+	}
+	return &daemonv1.FileDiffsResponse{Diffs: out}
+}
+
+func FileDiffsFromProto(p *daemonv1.FileDiffsResponse) []gitstatus.FileDiff {
+	out := make([]gitstatus.FileDiff, 0, len(p.GetDiffs()))
+	for _, d := range p.GetDiffs() {
+		out = append(out, gitstatus.FileDiff{
+			Path:  d.GetPath(),
+			State: gitstatus.FileDiffState(d.GetState()),
+			Text:  d.GetText(),
+			Error: d.GetError(),
+		})
+	}
+	return out
 }
 
 func LaunchOptionsFromProto(p *daemonv1.LaunchOptionsResponse) sessionsvc.LaunchOptions {

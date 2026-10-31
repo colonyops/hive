@@ -8,9 +8,12 @@ import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import Kbd from '@hive/ui/components/ui/Kbd.vue'
 import TextArea from '@hive/ui/components/ui/TextArea.vue'
 import { useClipboard } from '@hive/ui/composables/useClipboard'
+import { formatCombo } from '../../composables/useKeybindings'
 import { useToasts } from '../../composables/useToasts'
 import { errorText } from '../../lib/appError'
 import { useDriveReview } from '../../stores/useDriveReview'
+import { AgentTargets } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reviewservice'
+import type { AgentTarget } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const props = defineProps<{
   space: string
@@ -18,6 +21,8 @@ const props = defineProps<{
   /** Derives `-review-footer`, `-review-note`, `-review-ready`, `-review-copy`, `-review-send`, and the dialog's ids. */
   testid: string
 }>()
+
+const SEND_KEY = formatCombo('mod+enter')
 
 const store = useDriveReview()
 const { showToast } = useToasts()
@@ -39,6 +44,14 @@ async function copyAll(): Promise<void> {
     return
   }
   if (copyStatus.value === 'error') showToast('Could not copy to the clipboard', { severity: 'error' })
+}
+
+async function loadTargets(): Promise<AgentTarget[]> {
+  return (await AgentTargets()) ?? []
+}
+
+function deliver(target: AgentTarget): Promise<string | null> {
+  return store.send(props.space, props.path, { kind: target.kind, id: target.id, pane: target.pane })
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -80,9 +93,15 @@ function onKeydown(event: KeyboardEvent): void {
       >
         <template #icon><IconSend class="size-3.5" /></template>
         Send to Agent
-        <Kbd class="text-accent/70">⌘↵</Kbd>
+        <Kbd class="text-accent/70">{{ SEND_KEY }}</Kbd>
       </BaseButton>
     </div>
-    <SendToAgentDialog v-if="sending" :space="space" :path="path" :testid="testid" @close="sending = false" />
+    <SendToAgentDialog
+      v-if="sending"
+      :load="loadTargets"
+      :deliver="deliver"
+      :testid="testid"
+      @close="sending = false"
+    />
   </div>
 </template>

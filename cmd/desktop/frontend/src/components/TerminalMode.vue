@@ -48,6 +48,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{
   'open-tasks': []
+  'open-changes': []
   'session-repo-key': [repoKey: string]
   'open-drive-page': [scope: DriveScope]
 }>()
@@ -167,6 +168,7 @@ const knownTags = computed(() => {
       <TerminalPaneColumn
         :painted-active="painted"
         @open-tasks="emit('open-tasks')"
+        @open-changes="emit('open-changes')"
         @session-repo-key="emit('session-repo-key', $event)"
       />
       <!-- A sibling of the pane column, as in Chats: opening it must not

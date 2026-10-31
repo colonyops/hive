@@ -45,4 +45,43 @@ describe('startDrag', () => {
 
     expect(onMove).not.toHaveBeenCalled()
   })
+
+  it('reports a cancelled drag through onCancel, not onEnd', () => {
+    const onEnd = vi.fn()
+    const onCancel = vi.fn()
+    startDrag(pointerEvent('pointerdown', 0), { onMove: vi.fn(), onEnd, onCancel })
+
+    window.dispatchEvent(pointerEvent('pointercancel', 0))
+
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(onEnd).not.toHaveBeenCalled()
+  })
+
+  it('blocks text selection only for the length of the drag', () => {
+    const selectStart = () => {
+      const event = new Event('selectstart', { bubbles: true, cancelable: true })
+      document.body.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+
+    expect(selectStart()).toBe(false)
+    startDrag(pointerEvent('pointerdown', 0), { onMove: vi.fn() })
+    expect(selectStart()).toBe(true)
+
+    window.dispatchEvent(pointerEvent('pointerup', 0))
+    expect(selectStart()).toBe(false)
+  })
+
+  it('ends the drag when the browser cancels the pointer', () => {
+    const onMove = vi.fn()
+    startDrag(pointerEvent('pointerdown', 0), { onMove })
+
+    window.dispatchEvent(pointerEvent('pointercancel', 0))
+    window.dispatchEvent(pointerEvent('pointermove', 10))
+
+    expect(onMove).not.toHaveBeenCalled()
+    const event = new Event('selectstart', { bubbles: true, cancelable: true })
+    document.body.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+  })
 })

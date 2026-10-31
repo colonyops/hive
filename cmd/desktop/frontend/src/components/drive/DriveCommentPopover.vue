@@ -11,6 +11,7 @@ import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { startDrag } from '@hive/ui/composables/useDragGesture'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
+import { formatCombo } from '../../composables/useKeybindings'
 import type { SourceRange } from '../../lib/driveReviewSelection'
 import { isEditableTarget } from '../../lib/isEditableTarget'
 import { labelText, type ReviewLabel } from '../../lib/reviewLabels'
@@ -22,12 +23,16 @@ const props = defineProps<{
   /** The selection's box in the viewport. */
   rect: SelectionRect
   range: SourceRange
+  /** What the header calls the lines, when `L12–14` alone would not say where. */
+  label?: string
   busy: boolean
   error: string | null
   /** Derives `-comment-popover`, `-comment-grip`, `-comment-text`, `-comment-save`, and `-comment-cancel`. */
   testid: string
 }>()
 const emit = defineEmits<{ save: [text: string]; cancel: [] }>()
+
+const SAVE_KEY = formatCombo('mod+enter')
 
 const text = defineModel<string>('text', { default: '' })
 const popover = ref<HTMLElement | null>(null)
@@ -74,10 +79,12 @@ function startMove(event: PointerEvent): void {
   })
 }
 
-const lines = computed(() =>
-  props.range.startLine === props.range.endLine
-    ? `L${props.range.startLine}`
-    : `L${props.range.startLine}–${props.range.endLine}`,
+const lines = computed(
+  () =>
+    props.label ??
+    (props.range.startLine === props.range.endLine
+      ? `L${props.range.startLine}`
+      : `L${props.range.startLine}–${props.range.endLine}`),
 )
 
 useEscapeToClose(() => emit('cancel'))
@@ -170,7 +177,9 @@ defineExpose({ contains: (node: Node | null) => !!node && !!popover.value?.conta
       </div>
       <InlineError v-if="error" variant="line" :message="error" :testid="`${testid}-comment-error`" />
       <div class="flex items-center gap-2">
-        <span class="ml-auto font-mono text-micro text-text-4">⌘↵</span>
+        <span class="ml-auto font-mono text-micro text-text-4" :data-testid="`${testid}-comment-key`">{{
+          SAVE_KEY
+        }}</span>
         <BaseButton variant="ghost" size="xs" :data-testid="`${testid}-comment-cancel`" @click="emit('cancel')">
           Cancel
         </BaseButton>

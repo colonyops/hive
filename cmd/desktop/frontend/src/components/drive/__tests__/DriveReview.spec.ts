@@ -143,6 +143,13 @@ describe('DriveReviewCards', () => {
 })
 
 describe('DriveReviewFooter', () => {
+  it('names the key of the platform on the send button', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'X11; Linux x86_64' })
+    const wrapper = await mountPart(DriveReviewFooter)
+    expect(wrapper.get('[data-testid="r-review-send"]').text()).toContain('Ctrl+↵')
+    vi.unstubAllGlobals()
+  })
+
   it('counts what is ready, copies it all, and opens the send dialog on ⌘↵ in the note', async () => {
     const wrapper = await mountPart(DriveReviewFooter)
     expect(wrapper.get('[data-testid="r-review-ready"]').text()).toBe('2 comments ready')
@@ -157,5 +164,42 @@ describe('DriveReviewFooter', () => {
     await note.trigger('keydown', { key: 'Enter', metaKey: true })
     await flushPromises()
     expect(document.querySelector('[data-testid="r-send-dialog"]')).not.toBeNull()
+    wrapper.unmount()
+  })
+
+  async function pickAgentAndSubmit(wrapper: Awaited<ReturnType<typeof mountPart>>, note: string) {
+    reviews.AgentTargets.mockResolvedValue([{ kind: 'session', id: 's1', pane: '%1', label: 'app', status: 'ready' }])
+    await wrapper.get('[data-testid="r-review-note"]').setValue(note)
+    await wrapper.get('[data-testid="r-review-send"]').trigger('click')
+    await flushPromises()
+    document.querySelector<HTMLButtonElement>('[data-testid="r-send-target-0"]')!.click()
+    await flushPromises()
+    document.querySelector<HTMLButtonElement>('[data-testid="r-send-submit"]')!.click()
+    await flushPromises()
+  }
+
+  it('sends the document, the note, and the picked agent, then clears the note', async () => {
+    reviews.Send.mockResolvedValue(undefined)
+    const wrapper = await mountPart(DriveReviewFooter)
+    await pickAgentAndSubmit(wrapper, 'Ship it')
+
+    expect(reviews.Send).toHaveBeenCalledExactlyOnceWith('workspaces/ws', 'plans/p.md', 'Ship it', {
+      kind: 'session',
+      id: 's1',
+      pane: '%1',
+    })
+    expect(document.querySelector('[data-testid="r-send-dialog"]')).toBeNull()
+    expect(wrapper.get<HTMLTextAreaElement>('[data-testid="r-review-note"]').element.value).toBe('')
+    wrapper.unmount()
+  })
+
+  it('shows a rejected send in the dialog and keeps the note', async () => {
+    reviews.Send.mockRejectedValue(new Error('pane gone'))
+    const wrapper = await mountPart(DriveReviewFooter)
+    await pickAgentAndSubmit(wrapper, 'Keep me')
+
+    expect(document.querySelector('[data-testid="r-send-error"]')!.textContent).toContain('pane gone')
+    expect(wrapper.get<HTMLTextAreaElement>('[data-testid="r-review-note"]').element.value).toBe('Keep me')
+    wrapper.unmount()
   })
 })

@@ -82,6 +82,32 @@ func (s *ReviewService) Send(ctx context.Context, space, path, note string, to a
 	return s.fail(ctx, "send", s.review.Send(ctx, space, path, note, to))
 }
 
+// ChangesTargets lists the agents of one Code session.
+func (s *ReviewService) ChangesTargets(ctx context.Context, sessionID string) ([]app.AgentTarget, error) {
+	targets, err := s.review.ChangesTargets(ctx, sessionID)
+	if err != nil {
+		return nil, s.fail(ctx, "changes-targets", err)
+	}
+	return targets, nil
+}
+
+// ChangesFeedback builds the text SendChanges delivers, for the clipboard.
+func (s *ReviewService) ChangesFeedback(ctx context.Context, comments []app.DiffCommentInput) (string, error) {
+	text, err := s.review.ChangesFeedback(ctx, comments)
+	if err != nil {
+		return "", s.fail(ctx, "changes-feedback", err)
+	}
+	return text, nil
+}
+
+// SendChanges pastes feedback on a session's changes into its agent's pane and
+// submits it.
+func (s *ReviewService) SendChanges(ctx context.Context, sessionID, pane string, comments []app.DiffCommentInput) (err error) {
+	ctx, span := startReviewCommand(ctx, "send-changes", "", sessionID)
+	defer observe.End(span, &err)
+	return s.fail(ctx, "send-changes", s.review.SendChanges(ctx, sessionID, pane, comments))
+}
+
 func startReviewCommand(ctx context.Context, command, space, path string) (context.Context, trace.Span) {
 	return startCommand(ctx, "review "+command, space, path)
 }

@@ -479,6 +479,55 @@ func (s *SessionsService) SessionGitStatus(ctx context.Context, id string) (gits
 	return s.hive.GitStatus().ReadSession(ctx, sess), nil
 }
 
+// SessionChanges lists what differs in the session's checkout. It goes through
+// the session API rather than the in-process engine, so it reads the checkout
+// on the machine that holds it.
+func (s *SessionsService) SessionChanges(ctx context.Context, id string, target gitstatus.DiffTarget) (gitstatus.Changes, error) {
+	if strings.TrimSpace(id) == "" {
+		return gitstatus.Changes{}, Errorf(KindInvalid, "session id is required")
+	}
+	changes, err := s.sessions.SessionChanges(ctx, id, target)
+	if errors.Is(err, session.ErrNotFound) {
+		return gitstatus.Changes{}, Wrap(err, KindNotFound, "reading changes for session %q", id)
+	}
+	if err != nil {
+		return gitstatus.Changes{}, Wrap(err, KindInternal, "reading changes for session %q", id)
+	}
+	return changes, nil
+}
+
+// SessionFileDiffs reads the diffs of paths in the session's checkout, through
+// the session API as SessionChanges does. The caller asks for a batch because one
+// git diff answers it.
+func (s *SessionsService) SessionFileDiffs(ctx context.Context, id string, target gitstatus.DiffTarget, paths []string) ([]gitstatus.FileDiff, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, Errorf(KindInvalid, "session id is required")
+	}
+	diffs, err := s.sessions.SessionFileDiffs(ctx, id, target, paths)
+	if errors.Is(err, session.ErrNotFound) {
+		return nil, Wrap(err, KindNotFound, "reading diffs for session %q", id)
+	}
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "reading diffs for session %q", id)
+	}
+	return diffs, nil
+}
+
+// SessionBranches lists the full refs the session's checkout can compare against.
+func (s *SessionsService) SessionBranches(ctx context.Context, id string) ([]string, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, Errorf(KindInvalid, "session id is required")
+	}
+	refs, err := s.sessions.SessionBranches(ctx, id)
+	if errors.Is(err, session.ErrNotFound) {
+		return nil, Wrap(err, KindNotFound, "reading branches for session %q", id)
+	}
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "reading branches for session %q", id)
+	}
+	return refs, nil
+}
+
 // SessionPullRequest resolves the pull request for a branch SessionGitStatus
 // already reported. The branch is passed rather than read again: resolving it
 // costs a git subprocess the caller has just paid for, and the two halves

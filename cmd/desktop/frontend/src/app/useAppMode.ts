@@ -176,6 +176,14 @@ export function useAppMode(
     return row?.canvasOwner ? { space: row.canvasOwner, session: row.id } : null
   })
 
+  // The session on screen in Code whose checkout Changes reads. A pinned chat has
+  // no session checkout, and neither does the scratch terminal.
+  const codeChangesSession = computed<string | null>(() => {
+    const slug = onScreenSessionSlug.value
+    if (!terminalActive.value || !slug || recents.value.some((row) => row.slug === slug)) return null
+    return codeSessions.value.find((session) => session.slug === slug)?.id ?? null
+  })
+
   // One control per frame edge: the right toggle names the detail preview in
   // Inbox and the drive pane in Chats and Code (hay-kot/hive-desktop#432).
   const agentsDriveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
@@ -290,6 +298,7 @@ export function useAppMode(
     previewUnseen,
     togglePreview,
     codeDrive,
+    codeChangesSession,
     viewDriveScope,
     toggleMaximise,
   }

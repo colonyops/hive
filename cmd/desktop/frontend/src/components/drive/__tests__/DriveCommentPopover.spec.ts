@@ -37,6 +37,13 @@ describe('DriveCommentPopover', () => {
     expect(document.activeElement).toBe(field)
   })
 
+  it('names the key of the platform in its save hint', () => {
+    vi.stubGlobal('navigator', { userAgent: 'X11; Linux x86_64' })
+    mountPopover()
+    expect(document.querySelector('[data-testid="r-comment-key"]')?.textContent).toBe('Ctrl+↵')
+    vi.unstubAllGlobals()
+  })
+
   it('applies a label from its key', async () => {
     const wrapper = mountPopover()
     await flushPromises()

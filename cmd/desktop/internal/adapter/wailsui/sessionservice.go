@@ -85,6 +85,31 @@ func (s *SessionService) SessionGitStatus(ctx context.Context, id string) (Sessi
 	return sessionGitStatusOf(status), nil
 }
 
+// SessionChanges lists what differs in the session's checkout for a target. The
+// review view polls it while open.
+func (s *SessionService) SessionChanges(ctx context.Context, id string, target DiffTarget) (SessionChanges, error) {
+	changes, err := s.sessions.SessionChanges(ctx, id, target.gitstatus())
+	if err != nil {
+		return SessionChanges{}, err
+	}
+	return sessionChangesOf(changes), nil
+}
+
+// SessionFileDiffs reads the diffs of paths for a target. Only a path in the
+// current change list is read.
+func (s *SessionService) SessionFileDiffs(ctx context.Context, id string, target DiffTarget, paths []string) ([]SessionFileDiff, error) {
+	diffs, err := s.sessions.SessionFileDiffs(ctx, id, target.gitstatus(), paths)
+	if err != nil {
+		return nil, err
+	}
+	return sessionFileDiffsOf(diffs), nil
+}
+
+// SessionBranches lists the full refs the session's checkout can compare against.
+func (s *SessionService) SessionBranches(ctx context.Context, id string) ([]string, error) {
+	return s.sessions.SessionBranches(ctx, id)
+}
+
 // SessionPullRequest resolves the pull request for a branch SessionGitStatus
 // reported, answering from a short-lived cache unless refresh is set. Its
 // Status field says why there is nothing to show, so a caller never has to

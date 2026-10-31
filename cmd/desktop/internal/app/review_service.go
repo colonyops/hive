@@ -13,7 +13,6 @@ import (
 
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/domain/review"
-	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
@@ -233,15 +232,8 @@ func (s *ReviewService) Send(ctx context.Context, space, path, note string, to A
 	if text == "" {
 		return Errorf(KindInvalid, "there is no feedback to send")
 	}
-	target, err := s.resolveTarget(ctx, to)
-	if err != nil {
+	if err := s.deliver(ctx, to, text); err != nil {
 		return err
-	}
-	if target.Status == string(terminal.StatusApproval) {
-		return Errorf(KindConflict, "%s is waiting on a prompt", target.Label)
-	}
-	if err := s.input.SendText(ctx, target.deliverTo, []byte(text), s.submitDelay); err != nil {
-		return Wrap(err, KindInternal, "sending the feedback to %s", target.Label)
 	}
 	if doc.review.SessionID == "" {
 		return nil

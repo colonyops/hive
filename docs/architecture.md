@@ -1432,6 +1432,22 @@ place that turns a `Location` into a route or an overlay. A new area adds an
 
 ### Terminal sessions
 
+**Changes is read-only and reads through `sessionapi`.** The Changes view is a
+hub overlay over the session in Code, not a route or a side pane: it needs more
+width than the right slot has, and it takes key focus away from the terminal.
+Its reads (`SessionChanges`, `SessionFileDiffs`, `SessionBranches`) go through
+`sessionapi` to `gitstatus`, so they read the checkout on the machine that holds
+it. A `gitstatus.DiffTarget` says what the first two compare: the working tree
+against a merge base or `HEAD`, the index, or one commit. Every `git
+diff` runs on a scratch copy of the index (`internal/platform/git/changes.go`),
+because it otherwise rewrites the index and holds `index.lock` when it meets a
+touched file, even under `--no-optional-locks`, and that lock can fail an agent's
+own git command. `DiffStats` follows the same rule. A new read in that file must
+too. The frontend reads diffs one batch at a time, outward from the file on screen,
+and stops at the 200 open files nearest it. `@pierre/diffs` renders them: only the lines near the
+viewport exist in the DOM, and highlighting runs in a worker pool (ADR
+the-changes-view-renders-through-pierre-diffs).
+
 **Image input is local file references.** Wails routes native drops to a specific
 terminal host; that host captures clipboard images from webview paste events. `TerminalImagesService`
 validates original paths or saves clipboard bytes through `terminalimg` under
@@ -2086,8 +2102,9 @@ Three rules govern it, and each is a consequence of that:
   — in two ways, which is the distinction to get right before adding to it.
 
   A command **pierces** when the catalog marks it `piercesPane`: it is claimed
-  on the binding alone, whatever modifiers it carries. The pop-up toggle and
-  `tasks.toggle`, because the combo that opens an overlay has to close it, and
+  on the binding alone, whatever modifiers it carries. The pop-up toggle,
+  `tasks.toggle`, and `changes.toggle`, because the combo that opens an overlay
+  has to close it, and
   `drive.toggle`, because the chat that wrote a document is a focused pane and
   the chord that opens the page from there has to work from inside it;
   `terminal.focus-sidebar` and `agents.focus-sidebar`, because reaching the list
@@ -2461,6 +2478,13 @@ pane of a running chat, and delivers through `tmuxcc.Manager.SendText`: a
 bracketed paste from a named buffer, then Enter. A pane with no detected agent
 is never a target, because a shell would run the feedback, and an agent on a
 prompt is refused, because the Enter would answer it.
+
+**Comments on a session's diffs stay in the frontend until they are sent**
+(ADR comments-on-a-session-s-diffs-stay-in-browser-storage-until-they-are-sent).
+`stores/useChangesReview` holds them per session in browser storage, and the
+review travels whole to `ReviewService.SendChanges`, which formats it with
+`review.DiffFeedback` and delivers it the way a document's Send does, to an agent
+pane of that one session.
 
 **HTML has two tiers.** A canvas **html block** is the one place
 agent-authored markup reaches the app's DOM

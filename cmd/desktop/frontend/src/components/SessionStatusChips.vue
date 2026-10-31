@@ -24,7 +24,7 @@ const props = defineProps<{
   pullRequestError: string
 }>()
 
-const emit = defineEmits<{ 'refresh-pull-request': [] }>()
+const emit = defineEmits<{ 'refresh-pull-request': []; 'open-changes': [] }>()
 
 const showBranch = computed(() => !!props.git?.resolved && !!props.git.branch)
 const showDiff = computed(() => !!props.git?.resolved && !!(props.git.additions || props.git.deletions))
@@ -107,11 +107,17 @@ async function copyLink(): Promise<void> {
         <span class="truncate font-mono">{{ git.branch }}</span>
       </span>
 
-      <AppTooltip v-if="showDiff" text="Lines changed against the default branch">
-        <span class="flex h-6 shrink-0 items-center gap-1 px-1.5 font-mono" data-testid="session-status-diff">
+      <AppTooltip v-if="showDiff" text="Lines changed against the default branch. Click to see the changes.">
+        <button
+          type="button"
+          class="flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded px-1.5 font-mono hover:bg-chip"
+          aria-label="Show changes"
+          data-testid="session-status-diff"
+          @click="emit('open-changes')"
+        >
           <span class="text-severity-success">+{{ git.additions }}</span>
           <span class="text-severity-error">−{{ git.deletions }}</span>
-        </span>
+        </button>
       </AppTooltip>
 
       <!-- Icon-only, so the tooltip is the whole explanation — AppTooltip

@@ -150,7 +150,8 @@ type SessionGitStatus struct {
 	Branch   string `json:"branch"`
 	Dirty    bool   `json:"dirty"`
 	Unpushed bool   `json:"unpushed"`
-	// Additions and Deletions are lines against the default branch, not HEAD.
+	// Additions and Deletions are the working tree against the merge base with
+	// the default branch.
 	Additions int `json:"additions"`
 	Deletions int `json:"deletions"`
 	// Host, Owner and Repo are the remote's coordinates, and are empty for a
@@ -179,4 +180,97 @@ func sessionGitStatusOf(s gitstatus.Status) SessionGitStatus {
 		status.Error = err.Error()
 	}
 	return status
+}
+
+// ChangedFile is one file in the review view. Stamp changes when the file's diff
+// can, so a held diff can be read again.
+type ChangedFile struct {
+	Path      string `json:"path"`
+	OldPath   string `json:"oldPath"`
+	Status    string `json:"status"`
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+	Binary    bool   `json:"binary"`
+	Stamp     string `json:"stamp"`
+}
+
+// DiffTarget says what a read compares. See gitstatus.DiffTarget.
+type DiffTarget struct {
+	Base    string `json:"base"`
+	Against string `json:"against"`
+	Commit  string `json:"commit"`
+}
+
+func (t DiffTarget) gitstatus() gitstatus.DiffTarget {
+	return gitstatus.DiffTarget{Base: gitstatus.DiffBase(t.Base), Against: t.Against, Commit: t.Commit}
+}
+
+type SessionCommit struct {
+	ID      string `json:"id"`
+	Subject string `json:"subject"`
+	Author  string `json:"author"`
+	Unix    int64  `json:"unix"`
+}
+
+// SessionChanges is what the review view lists. Base is the base the read used:
+// a branch read with no merge base falls back to "uncommitted".
+type SessionChanges struct {
+	Resolved        bool            `json:"resolved"`
+	Branch          string          `json:"branch"`
+	DefaultBranch   string          `json:"defaultBranch"`
+	Base            string          `json:"base"`
+	BranchAvailable bool            `json:"branchAvailable"`
+	Against         string          `json:"against"`
+	Commit          string          `json:"commit"`
+	Commits         []SessionCommit `json:"commits"`
+	Files           []ChangedFile   `json:"files"`
+	Truncated       bool            `json:"truncated"`
+}
+
+func sessionChangesOf(c gitstatus.Changes) SessionChanges {
+	files := make([]ChangedFile, 0, len(c.Files))
+	for _, f := range c.Files {
+		files = append(files, ChangedFile{
+			Path:      f.Path,
+			OldPath:   f.OldPath,
+			Status:    f.Status.String(),
+			Additions: f.Additions,
+			Deletions: f.Deletions,
+			Binary:    f.Binary,
+			Stamp:     f.Stamp,
+		})
+	}
+	commits := make([]SessionCommit, 0, len(c.Commits))
+	for _, commit := range c.Commits {
+		commits = append(commits, SessionCommit{ID: commit.ID, Subject: commit.Subject, Author: commit.Author, Unix: commit.Unix})
+	}
+	return SessionChanges{
+		Resolved:        c.Resolved,
+		Branch:          c.Branch,
+		DefaultBranch:   c.DefaultBranch,
+		Base:            c.Base.String(),
+		BranchAvailable: c.BranchAvailable,
+		Against:         c.Against,
+		Commit:          c.Commit,
+		Commits:         commits,
+		Files:           files,
+		Truncated:       c.Truncated,
+	}
+}
+
+// SessionFileDiff is one file's diff. State is a gitstatus.FileDiffState, which
+// says whether Text or Error applies.
+type SessionFileDiff struct {
+	Path  string `json:"path"`
+	State string `json:"state"`
+	Text  string `json:"text"`
+	Error string `json:"error"`
+}
+
+func sessionFileDiffsOf(diffs []gitstatus.FileDiff) []SessionFileDiff {
+	out := make([]SessionFileDiff, 0, len(diffs))
+	for _, d := range diffs {
+		out = append(out, SessionFileDiff{Path: d.Path, State: d.State.String(), Text: d.Text, Error: d.Error})
+	}
+	return out
 }

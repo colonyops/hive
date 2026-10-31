@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/colonyops/hive/internal/platform/git"
 )
 
 type mockGit struct {
@@ -23,8 +25,28 @@ func (m *mockGit) ResetHard(context.Context, string) error        { return nil }
 func (m *mockGit) IsClean(context.Context, string) (bool, error)  { return true, nil }
 func (m *mockGit) Branch(context.Context, string) (string, error) { return "main", nil }
 
-func (m *mockGit) DefaultBranch(context.Context, string) (string, error)        { return "main", nil }
-func (m *mockGit) DiffStats(context.Context, string) (int, int, error)          { return 0, 0, nil }
+func (m *mockGit) DefaultBranch(context.Context, string) (string, error)     { return "main", nil }
+func (m *mockGit) DiffStats(context.Context, string) (int, int, error)       { return 0, 0, nil }
+func (m *mockGit) MergeBase(context.Context, string, string) (string, error) { return "", nil }
+func (m *mockGit) ChangedFiles(context.Context, string, git.DiffRange) ([]git.ChangedFile, error) {
+	return nil, nil
+}
+
+func (m *mockGit) FileDiffs(context.Context, string, git.DiffRange, []git.ChangedFile) []git.FileDiffResult {
+	return nil
+}
+func (m *mockGit) MergeBaseRef(context.Context, string, string) (string, error)  { return "", nil }
+func (m *mockGit) ResolveCommit(context.Context, string, string) (string, error) { return "", nil }
+func (m *mockGit) CommitRange(context.Context, string, string) (git.DiffRange, error) {
+	return git.DiffRange{}, nil
+}
+
+func (m *mockGit) Commits(context.Context, string, string, int) ([]git.CommitInfo, error) {
+	return nil, nil
+}
+
+func (m *mockGit) Branches(context.Context, string, int) ([]string, error) { return nil, nil }
+
 func (m *mockGit) IsValidRepo(context.Context, string) error                    { return nil }
 func (m *mockGit) CloneBare(context.Context, string, string) error              { return nil }
 func (m *mockGit) WorktreeAdd(context.Context, string, string, string) error    { return nil }

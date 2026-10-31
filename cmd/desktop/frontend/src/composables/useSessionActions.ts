@@ -1,4 +1,6 @@
 import { ref, type DeepReadonly } from 'vue'
+import { useChangesReview } from '../stores/useChangesReview'
+import { useCopyReview } from './useCopyReview'
 import {
   DeleteSession,
   PruneSessions,
@@ -63,6 +65,12 @@ export function riskDetails(risk: SessionRiskView): ConfirmationDetail[] {
   ]
 }
 
+function unsentDetails(count: number): ConfirmationDetail[] {
+  if (!count) return []
+  const text = count === 1 ? '1 review comment has not been sent.' : `${count} review comments have not been sent.`
+  return [{ tone: 'danger', text }]
+}
+
 /**
  * The session row's operations: read, edit, recycle, delete, and the list-wide
  * prune. Destructive ones are gated on a risk pre-flight and run as background
@@ -71,6 +79,8 @@ export function riskDetails(risk: SessionRiskView): ConfirmationDetail[] {
  */
 export function useSessionActions(options: SessionActionOptions = {}) {
   const { showToast } = useToasts()
+  const changesReview = useChangesReview()
+  const copyReview = useCopyReview()
   const confirmation = useConfirmation()
 
   const detail = ref<SessionDetailView | null>(null)
@@ -134,15 +144,34 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     confirmation.request({
       title: operation === 'delete' ? 'Delete this session?' : 'Recycle this session?',
       description: riskDescription(session.name, operation, risk),
-      details: riskDetails(risk),
+      details: [...riskDetails(risk), ...unsentDetails(changesReview.comments(session.id).length)],
       confirmLabel: operation === 'delete' ? 'Delete' : 'Recycle',
       onConfirm: async () => {
         await (operation === 'delete' ? DeleteSession(session.id) : RecycleSession(session.id))
+        if (operation === 'delete' || risk.recycleDeletes) offerUnsentComments(session)
         showToast(operation === 'delete' ? `Deleting ${session.name}…` : `Recycling ${session.name}…`, {
           severity: 'info',
         })
       },
     })
+  }
+
+  // Nothing can open the review of a session that is gone, so its comments leave
+  // storage here, and a toast that waits is the last way to keep them.
+  function offerUnsentComments(session: SessionRow): void {
+    const unsent = [...changesReview.comments(session.id)]
+    changesReview.forget(session.id)
+    if (!unsent.length) return
+    showToast(
+      unsent.length === 1
+        ? `1 unsent comment from ${session.name}`
+        : `${unsent.length} unsent comments from ${session.name}`,
+      {
+        severity: 'warning',
+        duration: 0,
+        actions: [{ label: 'Copy comments', onClick: () => void copyReview(unsent) }],
+      },
+    )
   }
 
   function requestDelete(session: SessionRow): Promise<void> {

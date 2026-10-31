@@ -24,6 +24,15 @@ type Git interface {
 	IsClean(ctx context.Context, dir string) (bool, error)
 	HasUnpushedCommits(ctx context.Context, dir string) (bool, error)
 	DiffStats(ctx context.Context, dir string) (additions, deletions int, err error)
+	DefaultBranch(ctx context.Context, dir string) (string, error)
+	MergeBase(ctx context.Context, dir, branch string) (string, error)
+	MergeBaseRef(ctx context.Context, dir, ref string) (string, error)
+	ResolveCommit(ctx context.Context, dir, rev string) (string, error)
+	CommitRange(ctx context.Context, dir, commit string) (git.DiffRange, error)
+	Commits(ctx context.Context, dir, since string, limit int) ([]git.CommitInfo, error)
+	Branches(ctx context.Context, dir string, limit int) ([]string, error)
+	ChangedFiles(ctx context.Context, dir string, diff git.DiffRange) ([]git.ChangedFile, error)
+	FileDiffs(ctx context.Context, dir string, diff git.DiffRange, files []git.ChangedFile) []git.FileDiffResult
 }
 
 // Status is one checkout's git state.
@@ -37,7 +46,8 @@ type Status struct {
 	Branch   string
 	Dirty    bool
 	Unpushed bool
-	// Additions and Deletions are lines against the default branch, not HEAD.
+	// Additions and Deletions are the working tree against the merge base with
+	// the default branch.
 	Additions int
 	Deletions int
 	// Host, Owner and Repo are the remote's coordinates. They are empty for a
@@ -72,12 +82,15 @@ type Service struct {
 	git     Git
 	workers int
 	logger  zerolog.Logger
+
+	listsMu sync.Mutex
+	lists   map[string]changeList
 }
 
 // NewService returns a Service that runs at most workers reads at once in a
 // batch. A workers value below one means one.
 func NewService(logger zerolog.Logger, g Git, workers int) *Service {
-	return &Service{git: g, workers: max(workers, 1), logger: logutils.Component(logger, "gitstatus")}
+	return &Service{git: g, workers: max(workers, 1), logger: logutils.Component(logger, "gitstatus"), lists: make(map[string]changeList)}
 }
 
 // Read reads one checkout. A failed branch read stands for the whole status,
