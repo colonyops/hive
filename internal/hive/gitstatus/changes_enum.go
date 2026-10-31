@@ -15,6 +15,12 @@ const (
 	DiffBaseBranch DiffBase = "branch"
 	// DiffBaseUncommitted is a DiffBase of type uncommitted.
 	DiffBaseUncommitted DiffBase = "uncommitted"
+	// DiffBaseStaged is a DiffBase of type staged.
+	DiffBaseStaged DiffBase = "staged"
+	// DiffBaseUnstaged is a DiffBase of type unstaged.
+	DiffBaseUnstaged DiffBase = "unstaged"
+	// DiffBaseCommit is a DiffBase of type commit.
+	DiffBaseCommit DiffBase = "commit"
 )
 
 var ErrInvalidDiffBase = fmt.Errorf("not a valid DiffBase, try [%s]", strings.Join(_DiffBaseNames, ", "))
@@ -22,6 +28,9 @@ var ErrInvalidDiffBase = fmt.Errorf("not a valid DiffBase, try [%s]", strings.Jo
 var _DiffBaseNames = []string{
 	string(DiffBaseBranch),
 	string(DiffBaseUncommitted),
+	string(DiffBaseStaged),
+	string(DiffBaseUnstaged),
+	string(DiffBaseCommit),
 }
 
 // DiffBaseNames returns a list of possible string values of DiffBase.
@@ -46,6 +55,9 @@ func (x DiffBase) IsValid() bool {
 var _DiffBaseValue = map[string]DiffBase{
 	"branch":      DiffBaseBranch,
 	"uncommitted": DiffBaseUncommitted,
+	"staged":      DiffBaseStaged,
+	"unstaged":    DiffBaseUnstaged,
+	"commit":      DiffBaseCommit,
 }
 
 // ParseDiffBase attempts to convert a string to a DiffBase.

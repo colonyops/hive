@@ -4,13 +4,18 @@
 // checkout: every read goes through the session API.
 import { computed, nextTick, onMounted, ref, toRef, watch } from 'vue'
 import { useEventListener, useStorage } from '@vueuse/core'
+import IconChevronsDownUp from '~icons/lucide/chevrons-down-up'
+import IconChevronsUpDown from '~icons/lucide/chevrons-up-down'
 import IconColumns2 from '~icons/lucide/columns-2'
+import IconEye from '~icons/lucide/eye'
+import IconEyeOff from '~icons/lucide/eye-off'
 import IconMessageSquare from '~icons/lucide/message-square'
 import IconSearch from '~icons/lucide/search'
 import IconSend from '~icons/lucide/send'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconList from '~icons/lucide/list'
 import IconListTree from '~icons/lucide/list-tree'
+import IconPanelLeft from '~icons/lucide/panel-left'
 import IconRows2 from '~icons/lucide/rows-2'
 import IconX from '~icons/lucide/x'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
@@ -18,12 +23,12 @@ import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import Kbd from '@hive/ui/components/ui/Kbd.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
-import SegmentedControl, { type SegmentedControlOption } from '@hive/ui/components/ui/SegmentedControl.vue'
 import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import ChangesReviewPanel from './ChangesReviewPanel.vue'
+import ChangesTargetPicker from './ChangesTargetPicker.vue'
 import DiffSearchBar from './DiffSearchBar.vue'
 import DiffStream from './DiffStream.vue'
 import GitTree from './GitTree.vue'
@@ -32,10 +37,11 @@ import SendToAgentDialog from '../drive/SendToAgentDialog.vue'
 import { entryRows, useDiffSearch } from '../../composables/useDiffSearch'
 import { useCopyReview } from '../../composables/useCopyReview'
 import { fileVersion, useFileDiffs } from '../../composables/useFileDiffs'
-import { useSessionChanges, type DiffBase } from '../../composables/useSessionChanges'
+import { targetKey, useSessionBranches, useSessionChanges, type DiffBase } from '../../composables/useSessionChanges'
 import { useToasts } from '../../composables/useToasts'
 import { errorText } from '../../lib/appError'
 import { readOrder, type DiffMode } from '../../lib/diffItems'
+import { branchName } from '../../lib/diffTarget'
 import { diffSpan, hasDiffLine, spanLabel, type DiffSearchMatch, type DiffSpan } from '../../lib/diffReview'
 import type { DiffLineSelection } from '../../lib/diffSelection'
 import { gitFileName, gitRows, type GitLayout } from '../../lib/gitTree'
@@ -59,6 +65,17 @@ const {
   step: stepRail,
 } = useResizablePanel({ storageKey: 'hive.panel.changes.files', defaultSize: 280, min: 180, max: 520, edge: 'right' })
 const base = useStorage<DiffBase>('hive.git.base', 'branch')
+// A commit stays picked only while the view is open: the next opening shows the latest.
+const commit = ref('')
+// Per session, because a branch one repository has means nothing in another.
+const againstBySession = useStorage<Record<string, string>>('hive.git.against', {})
+const against = computed({
+  get: () => againstBySession.value[props.sessionId] ?? '',
+  set: (next: string) => {
+    againstBySession.value = { ...againstBySession.value, [props.sessionId]: next }
+  },
+})
+const target = computed(() => ({ base: base.value, against: against.value, commit: commit.value }))
 const layout = useStorage<GitLayout>('hive.git.layout', 'tree')
 const mode = useStorage<DiffMode>('hive.git.diffMode', 'unified')
 
@@ -66,29 +83,50 @@ const mode = useStorage<DiffMode>('hive.git.diffMode', 'unified')
 // many files from the one on screen. Scrolling on reads further.
 const READ_WINDOW = 200
 
-const { changes, error } = useSessionChanges(sessionId, base, () => true)
+const { changes, error, pending } = useSessionChanges(sessionId, target, () => true)
+const branches = useSessionBranches(sessionId)
 // The tree lists folders first, so the stream follows the rail's order rather
-// than git's: j and k then walk the rail row by row.
+// than git's: j and k then walk the rail row by row. While a new target's answer
+// is on its way, the last target's files would be read against the new one.
 const files = computed<ChangedFile[]>(() =>
-  gitRows(changes.value?.files ?? [], layout.value, () => true).flatMap((row) =>
-    row.kind === 'file' ? [row.file] : [],
-  ),
+  pending.value
+    ? []
+    : gitRows(changes.value?.files ?? [], layout.value, () => true).flatMap((row) =>
+        row.kind === 'file' ? [row.file] : [],
+      ),
 )
 
 const shownBase = computed<DiffBase>(() => (changes.value?.base as DiffBase | undefined) || base.value)
-const baseOptions = computed<SegmentedControlOption<DiffBase>[]>(() => [
-  ...(changes.value?.branchAvailable
-    ? [{ value: 'branch' as const, label: 'Branch', title: `Against ${changes.value.defaultBranch}` }]
-    : []),
-  { value: 'uncommitted', label: 'Uncommitted', title: 'Against HEAD' },
-])
 const additions = computed(() => files.value.reduce((sum, file) => sum + file.additions, 0))
 const deletions = computed(() => files.value.reduce((sum, file) => sum + file.deletions, 0))
+const EMPTY_MESSAGES: Record<Exclude<DiffBase, 'branch'>, string> = {
+  uncommitted: 'No uncommitted changes',
+  staged: 'Nothing is staged',
+  unstaged: 'No unstaged changes',
+  commit: 'This commit changes no files',
+}
 const emptyMessage = computed(() =>
   shownBase.value === 'branch'
-    ? `No changes against ${changes.value?.defaultBranch ?? 'the default branch'}`
-    : 'No uncommitted changes',
+    ? `No changes against ${changes.value?.against ? branchName(changes.value.against) : (changes.value?.defaultBranch ?? 'the default branch')}`
+    : EMPTY_MESSAGES[shownBase.value],
 )
+
+function pickTarget(nextBase: DiffBase, nextCommit: string): void {
+  base.value = nextBase
+  commit.value = nextCommit
+}
+
+// Stepping back from any other comparison starts at the latest commit.
+function stepCommit(delta: 1 | -1): void {
+  if (shownBase.value !== 'commit') {
+    if (delta > 0) pickTarget('commit', '')
+    return
+  }
+  const commits = changes.value?.commits ?? []
+  const index = commits.findIndex((candidate) => candidate.id === changes.value?.commit)
+  const next = index >= 0 ? commits[index + delta] : undefined
+  if (next) commit.value = next.id
+}
 
 const toasts = useToasts()
 const viewedStore = useChangesViewed()
@@ -118,7 +156,7 @@ const stream = ref<{
   selectLines: (path: string, range: DiffLineSelection['range']) => void
   clearSelection: () => void
 } | null>(null)
-const scope = computed(() => `${props.sessionId}:${base.value}`)
+const scope = computed(() => `${props.sessionId}:${targetKey(target.value)}`)
 const current = ref<string | null>(null)
 const openPaths = computed(() => new Set(files.value.filter(isOpen).map((file) => file.path)))
 const wanted = computed(() => {
@@ -126,7 +164,7 @@ const wanted = computed(() => {
   const open = readOrder(files.value, center).filter((file) => openPaths.value.has(file.path))
   return open.slice(0, READ_WINDOW).map((file) => file.path)
 })
-const { entries } = useFileDiffs(sessionId, base, files, wanted)
+const { entries } = useFileDiffs(sessionId, target, files, wanted)
 
 // Arrow keys and Page Down scroll what has focus. HubOverlay focuses the panel
 // one tick after it mounts, which is after this child, so this waits one more.
@@ -144,8 +182,11 @@ watch(
   },
 )
 
-watch([sessionId, base], () => {
+watch([sessionId, () => targetKey(target.value)], () => {
   foldOverrides.value = new Map()
+})
+watch(sessionId, () => {
+  commit.value = ''
 })
 
 function jumpTo(path: string): void {
@@ -193,7 +234,12 @@ function closeSearch(): void {
 const review = useChangesReview()
 const copyReview = useCopyReview()
 const comments = computed(() => review.comments(props.sessionId))
-const reviewOpen = useStorage('hive.panel.changes.review.open', false)
+// Comments already sit under their lines, so the panel waits to be asked for.
+const reviewOpen = ref(false)
+const filesOpen = useStorage('hive.panel.changes.files.open', true)
+const hideViewed = useStorage('hive.git.hideViewed', false)
+const railFiles = computed(() => (hideViewed.value ? files.value.filter((file) => !isViewed(file)) : files.value))
+const tree = ref<{ anyFolderOpen: boolean; setAllFolders: (open: boolean) => void } | null>(null)
 const canSend = computed(() => comments.value.length > 0)
 const sendLabel = computed(() =>
   comments.value.length === 1 ? 'Send 1 comment to the agent' : `Send ${comments.value.length} comments to the agent`,
@@ -204,7 +250,7 @@ const sendLabel = computed(() =>
 const shownComments = computed(() => {
   const byPath = new Map<string, ChangesComment[]>()
   for (const comment of comments.value) {
-    if (comment.base !== shownBase.value) continue
+    if (!inShownComparison(comment)) continue
     if (!hasDiffLine(entryRows(entries.value.get(comment.path)), comment.endLine, comment.endSide)) continue
     byPath.set(comment.path, [...(byPath.get(comment.path) ?? []), comment])
   }
@@ -215,6 +261,12 @@ const commentCounts = computed(() => {
   for (const { path } of comments.value) counts.set(path, (counts.get(path) ?? 0) + 1)
   return counts
 })
+
+function inShownComparison(comment: ChangesComment): boolean {
+  if (comment.base !== shownBase.value) return false
+  if (comment.base === 'branch') return (comment.against ?? '') === (changes.value?.against ?? '')
+  return comment.base !== 'commit' || comment.commit === changes.value?.commit
+}
 
 function isOutdated(comment: ChangesComment): boolean {
   const file = files.value.find((candidate) => candidate.path === comment.path)
@@ -265,12 +317,13 @@ function saveDraft(text: string): void {
   const held = draft.value
   const file = files.value.find((candidate) => candidate.path === held?.path)
   if (!held || !file) return
-  // Only the first comment opens the panel, so one the user closed stays closed while they carry on.
-  if (!comments.value.length) reviewOpen.value = true
   review.add(props.sessionId, {
     ...held.span,
     path: held.path,
     base: shownBase.value,
+    against: shownBase.value === 'branch' ? changes.value?.against : undefined,
+    commit: shownBase.value === 'commit' ? changes.value?.commit : undefined,
+    staged: shownBase.value === 'staged' || undefined,
     version: fileVersion(file),
     text: text.trim(),
   })
@@ -278,7 +331,11 @@ function saveDraft(text: string): void {
 }
 
 async function pickComment(comment: ChangesComment): Promise<void> {
-  if (comment.base !== shownBase.value) base.value = comment.base
+  if (!inShownComparison(comment)) {
+    base.value = comment.base
+    if (comment.base === 'branch') against.value = comment.against ?? ''
+    commit.value = comment.commit ?? ''
+  }
   await revealLine(comment.path, comment.endLine, comment.endSide)
   stream.value?.selectLines(comment.path, {
     start: comment.startLine,
@@ -373,6 +430,15 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
     case 'r':
       reviewOpen.value = !reviewOpen.value
       break
+    case 'b':
+      filesOpen.value = !filesOpen.value
+      break
+    case '[':
+      stepCommit(1)
+      break
+    case ']':
+      stepCommit(-1)
+      break
     default:
       return
   }
@@ -392,6 +458,8 @@ const KEY_HINTS = [
   ['o', 'fold'],
   ['s', 'side by side'],
   ['/', 'search'],
+  ['[ ]', 'commit'],
+  ['b', 'files'],
   ['r', 'comments'],
   ['⌘↵', 'send'],
   ['esc', 'close'],
@@ -402,20 +470,29 @@ const KEY_HINTS = [
   <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="changes-view">
     <ViewHeader>
       <template #title>
+        <IconButton
+          :label="filesOpen ? 'Hide files' : 'Show files'"
+          :tooltip="`${filesOpen ? 'Hide' : 'Show'} files (b)`"
+          :icon="IconPanelLeft"
+          size="lg"
+          :aria-pressed="filesOpen"
+          data-testid="changes-files-toggle"
+          @click="filesOpen = !filesOpen"
+        />
         <span class="text-body font-semibold text-text">Changes</span>
         <span class="flex min-w-0 items-center gap-1 font-mono text-caption text-text-2">
           <IconGitBranch class="size-3 shrink-0 text-text-4" aria-hidden="true" />
           <span class="truncate" data-testid="changes-branch">{{ changes?.branch }}</span>
         </span>
         <div class="min-w-0 flex-1" />
-        <SegmentedControl
-          :model-value="shownBase"
-          :options="baseOptions"
-          variant="compact"
-          size="sm"
-          aria-label="Compare against"
-          testid="changes-base"
-          @update:model-value="base = $event"
+        <ChangesTargetPicker
+          :changes="changes"
+          :branches="branches"
+          :base="shownBase"
+          :commit="commit"
+          @pick-target="pickTarget"
+          @pick-against="against = $event"
+          @step-commit="stepCommit"
         />
         <span class="shrink-0 font-mono text-caption" data-testid="changes-total">
           <span class="text-severity-success">+{{ additions }}</span>
@@ -470,7 +547,12 @@ const KEY_HINTS = [
     <InlineError v-if="error" class="mx-3 mt-2 shrink-0" :message="error" testid="changes-error" />
 
     <div class="flex min-h-0 flex-1">
-      <aside class="relative flex shrink-0 flex-col border-r border-border" :style="{ width: `${railWidth}px` }">
+      <aside
+        v-if="filesOpen"
+        class="relative flex shrink-0 flex-col border-r border-border"
+        :style="{ width: `${railWidth}px` }"
+        data-testid="changes-files"
+      >
         <PanelResizeHandle edge="right" name="changes-files" :start="startRailResize" :step="stepRail" />
         <!-- As tall as a diff's file header (DIFF_METRICS.headerPx), which sits beside it. -->
         <div class="flex h-8 shrink-0 items-center gap-2 border-b border-border px-2.5">
@@ -484,6 +566,22 @@ const KEY_HINTS = [
             >{{ viewedPaths.size }}/{{ files.length }} viewed</span
           >
           <IconButton
+            v-if="layout === 'tree'"
+            size="sm"
+            :label="tree?.anyFolderOpen ? 'Collapse all folders' : 'Expand all folders'"
+            :icon="tree?.anyFolderOpen ? IconChevronsDownUp : IconChevronsUpDown"
+            data-testid="changes-folders-toggle"
+            @click="tree?.setAllFolders(!tree.anyFolderOpen)"
+          />
+          <IconButton
+            size="sm"
+            :label="hideViewed ? 'Show viewed files' : 'Hide viewed files'"
+            :icon="hideViewed ? IconEyeOff : IconEye"
+            :aria-pressed="hideViewed"
+            data-testid="changes-hide-viewed"
+            @click="hideViewed = !hideViewed"
+          />
+          <IconButton
             size="sm"
             :label="layout === 'tree' ? 'Show as list' : 'Show as tree'"
             :icon="layout === 'tree' ? IconList : IconListTree"
@@ -493,7 +591,8 @@ const KEY_HINTS = [
         </div>
         <div class="hive-scroll min-h-0 flex-1 overflow-y-auto">
           <GitTree
-            :files="files"
+            ref="tree"
+            :files="railFiles"
             :layout="layout"
             :selected="current"
             :viewed="viewedPaths"
@@ -518,7 +617,7 @@ const KEY_HINTS = [
           @step="search.step"
           @close="closeSearch"
         />
-        <div v-if="changes && !files.length" class="min-h-0 min-w-0 flex-1 bg-app">
+        <div v-if="changes && !pending && !files.length" class="min-h-0 min-w-0 flex-1 bg-app">
           <EmptyState :message="emptyMessage" data-testid="changes-empty" />
         </div>
         <DiffStream

@@ -19,6 +19,8 @@ const (
 // it. The agent has the file; the quote only has to identify the lines.
 const maxQuotedDiffLines = 30
 
+const shortCommitLength = 8
+
 // DiffComment is feedback on a run of rows in one file's diff. The run starts
 // and ends on a side each, because a unified diff can select from a removed
 // line into an added one.
@@ -30,6 +32,10 @@ type DiffComment struct {
 	EndLine   int
 	Quote     string
 	Text      string
+	// Commit is the commit the comment's diff showed, and Staged says it showed
+	// the index. With neither, the lines are the working tree's.
+	Commit string
+	Staged bool
 }
 
 // DiffFeedback formats comments on a session's changes as the text its agent
@@ -62,7 +68,7 @@ func DiffFeedback(comments []DiffComment) string {
 	if slices.ContainsFunc(comments, func(c DiffComment) bool {
 		return c.StartSide == DiffSideDeletions || c.EndSide == DiffSideDeletions
 	}) {
-		b.WriteString("\nRemoved lines are numbered as in the version the diff started from. Other lines are numbered as in the working tree.\n")
+		b.WriteString("\nRemoved lines are numbered as in the version the diff started from. Other lines are numbered as in the working tree, unless a comment names another version.\n")
 	}
 
 	sorted := slices.Clone(comments)
@@ -78,6 +84,17 @@ func DiffFeedback(comments []DiffComment) string {
 }
 
 func diffLineLabel(c DiffComment) string {
+	switch {
+	case c.Commit != "":
+		return fmt.Sprintf("%s at commit %s", diffLineRange(c), c.Commit[:min(len(c.Commit), shortCommitLength)])
+	case c.Staged:
+		return diffLineRange(c) + " of the staged version"
+	default:
+		return diffLineRange(c)
+	}
+}
+
+func diffLineRange(c DiffComment) string {
 	removed := func(side DiffSide) string {
 		if side == DiffSideDeletions {
 			return "removed "

@@ -528,9 +528,9 @@ func (c *Client) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOpt
 	return wire.LaunchOptionsFromProto(resp.Msg), nil
 }
 
-func (c *Client) SessionChanges(ctx context.Context, id string, base gitstatus.DiffBase) (gitstatus.Changes, error) {
+func (c *Client) SessionChanges(ctx context.Context, id string, target gitstatus.DiffTarget) (gitstatus.Changes, error) {
 	resp, err := retryRead(func() (*connect.Response[daemonv1.ChangesResponse], error) {
-		return c.sessions.Changes(ctx, connect.NewRequest(&daemonv1.ChangesRequest{Id: id, Base: base.String()}))
+		return c.sessions.Changes(ctx, connect.NewRequest(&daemonv1.ChangesRequest{Id: id, Base: target.Base.String(), Against: target.Against, Commit: target.Commit}))
 	})
 	if err != nil {
 		return gitstatus.Changes{}, wire.FromConnectError(err)
@@ -538,14 +538,26 @@ func (c *Client) SessionChanges(ctx context.Context, id string, base gitstatus.D
 	return wire.ChangesFromProto(resp.Msg), nil
 }
 
-func (c *Client) SessionFileDiffs(ctx context.Context, id string, base gitstatus.DiffBase, paths []string) ([]gitstatus.FileDiff, error) {
+func (c *Client) SessionFileDiffs(ctx context.Context, id string, target gitstatus.DiffTarget, paths []string) ([]gitstatus.FileDiff, error) {
 	resp, err := retryRead(func() (*connect.Response[daemonv1.FileDiffsResponse], error) {
-		return c.sessions.FileDiffs(ctx, connect.NewRequest(&daemonv1.FileDiffsRequest{Id: id, Base: base.String(), Paths: paths}))
+		return c.sessions.FileDiffs(ctx, connect.NewRequest(&daemonv1.FileDiffsRequest{
+			Id: id, Base: target.Base.String(), Against: target.Against, Commit: target.Commit, Paths: paths,
+		}))
 	})
 	if err != nil {
 		return nil, wire.FromConnectError(err)
 	}
 	return wire.FileDiffsFromProto(resp.Msg), nil
+}
+
+func (c *Client) SessionBranches(ctx context.Context, id string) ([]string, error) {
+	resp, err := retryRead(func() (*connect.Response[daemonv1.BranchesResponse], error) {
+		return c.sessions.Branches(ctx, connect.NewRequest(&daemonv1.BranchesRequest{Id: id}))
+	})
+	if err != nil {
+		return nil, wire.FromConnectError(err)
+	}
+	return resp.Msg.GetRefs(), nil
 }
 
 // helloRetry spaces background Hellos while status is not yet known

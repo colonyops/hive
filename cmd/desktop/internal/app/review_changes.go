@@ -19,6 +19,8 @@ type DiffCommentInput struct {
 	EndLine   int    `json:"endLine"`
 	Quote     string `json:"quote"`
 	Text      string `json:"text"`
+	Commit    string `json:"commit,omitempty"`
+	Staged    bool   `json:"staged,omitempty"`
 }
 
 // ChangesTargets lists the agents of one Code session.
@@ -93,6 +95,8 @@ func diffComments(comments []DiffCommentInput) ([]review.DiffComment, error) {
 			EndLine:   c.EndLine,
 			Quote:     c.Quote,
 			Text:      text,
+			Commit:    c.Commit,
+			Staged:    c.Staged,
 		})
 	}
 	return converted, nil

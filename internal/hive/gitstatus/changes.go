@@ -19,21 +19,40 @@ const (
 	maxLineBytes = 4000
 	// A diff read covers a batch of files, so it gets longer than a list read.
 	diffReadTimeout = 15 * time.Second
+	maxCommits      = 200
+	maxBranches     = 1000
 )
 
-// ENUM(branch, uncommitted)
+// ENUM(branch, uncommitted, staged, unstaged, commit)
 type DiffBase string
 
-// Changes is what differs in a session's checkout against a base. Base is the
-// base the read used, which is uncommitted whenever BranchAvailable is false:
-// on the default branch, or when the default branch or merge base can't be
-// resolved, as in a shallow clone.
+// DiffTarget says what a read compares. Against is the full ref a branch read
+// compares with, and empty means the default branch. Commit is the commit a
+// commit read shows, and empty means HEAD.
+type DiffTarget struct {
+	Base    DiffBase
+	Against string
+	Commit  string
+}
+
+// Changes is what differs in a session's checkout against a target. Base is the
+// base the read used, which is uncommitted when a branch read has nothing to
+// compare with: on the default branch, or when the default branch or merge base
+// can't be resolved, as in a shallow clone.
+//
+// Against is the chosen ref a branch read used. It is empty for the default
+// branch, including when a chosen ref no longer resolves. Commit is the full id
+// a commit read showed. Commits lists what the branch added, newest first, or
+// HEAD's recent history when it has no merge base.
 type Changes struct {
 	Resolved        bool
 	Branch          string
 	DefaultBranch   string
 	Base            DiffBase
 	BranchAvailable bool
+	Against         string
+	Commit          string
+	Commits         []git.CommitInfo
 	Files           []git.ChangedFile
 	Truncated       bool
 }
@@ -41,19 +60,19 @@ type Changes struct {
 // ReadChanges answers the zero Changes for a session with no checkout, as
 // ReadSession does: there is nothing to read, which is not a failure. Files
 // stops at maxChangedFiles.
-func (s *Service) ReadChanges(ctx context.Context, sess session.Session, base DiffBase) (Changes, error) {
+func (s *Service) ReadChanges(ctx context.Context, sess session.Session, target DiffTarget) (Changes, error) {
 	if sess.State != session.StateActive || sess.Path == "" {
 		return Changes{}, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
 
-	changes, ref, err := s.resolveBase(ctx, sess.Path, base)
+	changes, diff, err := s.resolveTarget(ctx, sess.Path, target)
 	if err != nil {
 		return Changes{}, err
 	}
 
-	files, err := s.git.ChangedFiles(ctx, sess.Path, ref)
+	files, err := s.git.ChangedFiles(ctx, sess.Path, diff)
 	if err != nil {
 		return Changes{}, err
 	}
@@ -65,12 +84,23 @@ func (s *Service) ReadChanges(ctx context.Context, sess session.Session, base Di
 	return changes, nil
 }
 
-func (s *Service) resolveBase(ctx context.Context, dir string, base DiffBase) (Changes, string, error) {
+// ReadBranches lists the full refs a session's checkout can compare against. A
+// session with no checkout has none.
+func (s *Service) ReadBranches(ctx context.Context, sess session.Session) ([]string, error) {
+	if sess.State != session.StateActive || sess.Path == "" {
+		return nil, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, readTimeout)
+	defer cancel()
+	return s.git.Branches(ctx, sess.Path, maxBranches)
+}
+
+func (s *Service) resolveTarget(ctx context.Context, dir string, target DiffTarget) (Changes, git.DiffRange, error) {
 	branch, err := s.git.Branch(ctx, dir)
 	if err != nil {
-		return Changes{}, "", err
+		return Changes{}, git.DiffRange{}, err
 	}
-	defaultBranch, mergeBase := s.branchBase(ctx, dir, branch)
+	defaultBranch, against, mergeBase := s.branchBase(ctx, dir, branch, target.Against)
 
 	changes := Changes{
 		Resolved:        true,
@@ -78,32 +108,88 @@ func (s *Service) resolveBase(ctx context.Context, dir string, base DiffBase) (C
 		DefaultBranch:   defaultBranch,
 		Base:            DiffBaseUncommitted,
 		BranchAvailable: mergeBase != "",
+		Against:         against,
+		Commits:         s.commits(ctx, dir, mergeBase),
 	}
-	ref := "HEAD"
-	if changes.BranchAvailable && base != DiffBaseUncommitted {
-		changes.Base = DiffBaseBranch
-		ref = mergeBase
+	diff := git.WorkingTree("HEAD")
+	switch target.Base {
+	case DiffBaseStaged:
+		changes.Base = DiffBaseStaged
+		diff = git.Staged()
+	case DiffBaseUnstaged:
+		changes.Base = DiffBaseUnstaged
+		diff = git.Unstaged()
+	case DiffBaseCommit:
+		commit, commitDiff, err := s.commitDiff(ctx, dir, target.Commit)
+		if err != nil {
+			return Changes{}, git.DiffRange{}, err
+		}
+		changes.Base, changes.Commit = DiffBaseCommit, commit
+		diff = commitDiff
+	case DiffBaseUncommitted:
+	default:
+		if changes.BranchAvailable {
+			changes.Base = DiffBaseBranch
+			diff = git.WorkingTree(mergeBase)
+		}
 	}
-	return changes, ref, nil
+	return changes, diff, nil
+}
+
+// commitDiff falls back to HEAD for a commit that no longer resolves, which a
+// rewritten branch can leave behind.
+func (s *Service) commitDiff(ctx context.Context, dir, commit string) (string, git.DiffRange, error) {
+	if commit != "" {
+		if resolved, err := s.git.ResolveCommit(ctx, dir, commit); err == nil {
+			diff, err := s.git.Commit(ctx, dir, resolved)
+			return resolved, diff, err
+		}
+		s.logger.Debug().Str("path", dir).Str("commit", commit).Msg("git commit lookup failed")
+	}
+	resolved, err := s.git.ResolveCommit(ctx, dir, "HEAD")
+	if err != nil {
+		return "", git.DiffRange{}, err
+	}
+	diff, err := s.git.Commit(ctx, dir, resolved)
+	return resolved, diff, err
+}
+
+// commits is only a picker's contents, so a failure leaves it empty rather than
+// failing the read of the changes.
+func (s *Service) commits(ctx context.Context, dir, mergeBase string) []git.CommitInfo {
+	commits, err := s.git.Commits(ctx, dir, mergeBase, maxCommits)
+	if err != nil {
+		s.logger.Debug().Err(err).Str("path", dir).Msg("git log failed")
+		return nil
+	}
+	return commits
 }
 
 // branchBase returns an empty merge base when the branch has nothing to compare
 // against, which callers show as the uncommitted view rather than as a failure.
-func (s *Service) branchBase(ctx context.Context, dir, branch string) (defaultBranch, mergeBase string) {
+// A chosen ref that no longer resolves gives way to the default branch.
+func (s *Service) branchBase(ctx context.Context, dir, branch, chosen string) (defaultBranch, against, mergeBase string) {
 	defaultBranch, err := s.git.DefaultBranch(ctx, dir)
 	if err != nil {
 		s.logger.Debug().Err(err).Str("path", dir).Msg("git default branch lookup failed")
-		return "", ""
 	}
-	if defaultBranch == branch {
-		return defaultBranch, ""
+	// The prefix also keeps a ref from reaching git as an option.
+	if strings.HasPrefix(chosen, "refs/heads/") || strings.HasPrefix(chosen, "refs/remotes/") {
+		mergeBase, err := s.git.MergeBaseRef(ctx, dir, chosen)
+		if err == nil {
+			return defaultBranch, chosen, mergeBase
+		}
+		s.logger.Debug().Err(err).Str("path", dir).Str("ref", chosen).Msg("git merge base lookup failed")
+	}
+	if defaultBranch == "" || defaultBranch == branch {
+		return defaultBranch, "", ""
 	}
 	mergeBase, err = s.git.MergeBase(ctx, dir, defaultBranch)
 	if err != nil {
 		s.logger.Debug().Err(err).Str("path", dir).Msg("git merge base lookup failed")
-		return defaultBranch, ""
+		return defaultBranch, "", ""
 	}
-	return defaultBranch, mergeBase
+	return defaultBranch, "", mergeBase
 }
 
 // FileDiff is one file's diff. At most one state field is set, and with none
@@ -126,7 +212,7 @@ type FileDiff struct {
 
 // ReadFileDiffs returns one FileDiff per path, in order. It reads only paths in
 // the current change list. A session with no checkout reports every path Gone.
-func (s *Service) ReadFileDiffs(ctx context.Context, sess session.Session, base DiffBase, paths []string) ([]FileDiff, error) {
+func (s *Service) ReadFileDiffs(ctx context.Context, sess session.Session, target DiffTarget, paths []string) ([]FileDiff, error) {
 	diffs := make([]FileDiff, len(paths))
 	for i, path := range paths {
 		diffs[i] = FileDiff{Path: path, Gone: true}
@@ -137,11 +223,11 @@ func (s *Service) ReadFileDiffs(ctx context.Context, sess session.Session, base 
 	ctx, cancel := context.WithTimeout(ctx, diffReadTimeout)
 	defer cancel()
 
-	_, ref, err := s.resolveBase(ctx, sess.Path, base)
+	_, diffRange, err := s.resolveTarget(ctx, sess.Path, target)
 	if err != nil {
 		return nil, err
 	}
-	files, err := s.git.ChangedFiles(ctx, sess.Path, ref)
+	files, err := s.git.ChangedFiles(ctx, sess.Path, diffRange)
 	if err != nil {
 		return nil, err
 	}
@@ -151,13 +237,13 @@ func (s *Service) ReadFileDiffs(ctx context.Context, sess session.Session, base 
 	}
 	for i, path := range paths {
 		if file, ok := listed[path]; ok {
-			diffs[i] = s.readFileDiff(ctx, sess.Path, ref, file)
+			diffs[i] = s.readFileDiff(ctx, sess.Path, diffRange, file)
 		}
 	}
 	return diffs, nil
 }
 
-func (s *Service) readFileDiff(ctx context.Context, dir, ref string, file git.ChangedFile) FileDiff {
+func (s *Service) readFileDiff(ctx context.Context, dir string, diffRange git.DiffRange, file git.ChangedFile) FileDiff {
 	diff := FileDiff{Path: file.Path}
 	if file.Binary {
 		diff.Binary = true
@@ -168,7 +254,7 @@ func (s *Service) readFileDiff(ctx context.Context, dir, ref string, file git.Ch
 		diff.Truncated = true
 		return diff
 	}
-	text, err := s.git.FileDiff(ctx, dir, ref, file)
+	text, err := s.git.FileDiff(ctx, dir, diffRange, file)
 	switch {
 	case err == nil:
 		diff.Text, diff.Truncated = clipDiff(text)

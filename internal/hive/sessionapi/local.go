@@ -80,20 +80,28 @@ func (l *Local) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOpti
 	return l.engine.Sessions().SessionLaunchOptions(ctx)
 }
 
-func (l *Local) SessionChanges(ctx context.Context, id string, base gitstatus.DiffBase) (gitstatus.Changes, error) {
+func (l *Local) SessionChanges(ctx context.Context, id string, target gitstatus.DiffTarget) (gitstatus.Changes, error) {
 	sess, err := l.engine.Sessions().GetSession(ctx, id)
 	if err != nil {
 		return gitstatus.Changes{}, err
 	}
-	return l.engine.GitStatus().ReadChanges(ctx, sess, base)
+	return l.engine.GitStatus().ReadChanges(ctx, sess, target)
 }
 
-func (l *Local) SessionFileDiffs(ctx context.Context, id string, base gitstatus.DiffBase, paths []string) ([]gitstatus.FileDiff, error) {
+func (l *Local) SessionFileDiffs(ctx context.Context, id string, target gitstatus.DiffTarget, paths []string) ([]gitstatus.FileDiff, error) {
 	sess, err := l.engine.Sessions().GetSession(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return l.engine.GitStatus().ReadFileDiffs(ctx, sess, base, paths)
+	return l.engine.GitStatus().ReadFileDiffs(ctx, sess, target, paths)
+}
+
+func (l *Local) SessionBranches(ctx context.Context, id string) ([]string, error) {
+	sess, err := l.engine.Sessions().GetSession(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return l.engine.GitStatus().ReadBranches(ctx, sess)
 }
 
 func (l *Local) StatusAvailable() bool {

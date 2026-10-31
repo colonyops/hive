@@ -65,6 +65,46 @@ var diffFlags = []string{"--no-ext-diff", "--no-textconv", "--no-color"}
 
 const readErrorBytes = 500
 
+// DiffRange is the two sides of a diff. Build one with WorkingTree, Staged,
+// Unstaged or Commit.
+type DiffRange struct {
+	args      []string
+	untracked bool
+	staged    bool
+	commit    string
+}
+
+// WorkingTree compares the working tree with ref. It lists untracked files.
+func WorkingTree(ref string) DiffRange {
+	return DiffRange{args: []string{ref}, untracked: true}
+}
+
+// Staged compares the index with HEAD.
+func Staged() DiffRange {
+	return DiffRange{args: []string{"--cached", "HEAD"}, staged: true}
+}
+
+// Unstaged compares the working tree with the index. It lists untracked files.
+func Unstaged() DiffRange {
+	return DiffRange{untracked: true}
+}
+
+// Commit compares a commit with its first parent, or with the empty tree for a
+// root commit. It takes the id ResolveCommit returned.
+func (e *Executor) Commit(ctx context.Context, dir, commit string) (DiffRange, error) {
+	from := commit + "^"
+	if _, err := e.read(ctx, dir, "rev-parse", "--verify", "--quiet", "--end-of-options", from+"^{commit}"); err != nil {
+		// hash-object writes nothing without -w, and it names the empty tree in the
+		// repository's own hash.
+		out, err := e.read(ctx, dir, "hash-object", "-t", "tree", os.DevNull)
+		if err != nil {
+			return DiffRange{}, err
+		}
+		from = strings.TrimSpace(string(out))
+	}
+	return DiffRange{args: []string{from, commit}, commit: commit}, nil
+}
+
 // read returns stdout alone: git writes warnings to stderr, and those must not
 // reach a parser.
 func (e *Executor) read(ctx context.Context, dir string, args ...string) ([]byte, error) {
@@ -152,27 +192,88 @@ func (e *Executor) MergeBase(ctx context.Context, dir, branch string) (string, e
 	if _, err := e.read(ctx, dir, "rev-parse", "--verify", "--quiet", remote+"^{commit}"); err == nil {
 		ref = remote
 	}
-	out, err := e.read(ctx, dir, "merge-base", ref, "HEAD")
+	return e.MergeBaseRef(ctx, dir, ref)
+}
+
+// MergeBaseRef returns the commit where HEAD left a full ref, exactly as named.
+func (e *Executor) MergeBaseRef(ctx context.Context, dir, ref string) (string, error) {
+	out, err := e.read(ctx, dir, "merge-base", "--end-of-options", ref, "HEAD")
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
 }
 
-// ChangedFiles lists the working tree against ref, plus untracked files,
-// sorted by path.
-func (e *Executor) ChangedFiles(ctx context.Context, dir, ref string) ([]ChangedFile, error) {
-	var names, stats bytes.Buffer
-	err := e.withScratchIndex(ctx, dir, func(indexEnv string) error {
-		if err := e.readDiff(ctx, dir, indexEnv, &names, "--name-status", "-z", "--find-renames", ref, "--"); err != nil {
-			return err
-		}
-		return e.readDiff(ctx, dir, indexEnv, &stats, "--numstat", "-z", "--find-renames", ref, "--")
-	})
+// ResolveCommit returns the full id of rev, or fails when it names no commit.
+func (e *Executor) ResolveCommit(ctx context.Context, dir, rev string) (string, error) {
+	out, err := e.read(ctx, dir, "rev-parse", "--verify", "--quiet", "--end-of-options", rev+"^{commit}")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// CommitInfo is one commit Commits lists.
+type CommitInfo struct {
+	ID      string
+	Subject string
+	Author  string
+	Unix    int64
+}
+
+// Commits lists the commits reachable from HEAD and not from since, newest
+// first. An empty since lists HEAD's history.
+func (e *Executor) Commits(ctx context.Context, dir, since string, limit int) ([]CommitInfo, error) {
+	revisions := "HEAD"
+	if since != "" {
+		revisions = since + "..HEAD"
+	}
+	// log.showSignature would otherwise write gpg's output between the records.
+	out, err := e.read(ctx, dir, "log", "--no-show-signature", "--no-color", "-z", "--format=%H%x00%s%x00%an%x00%ct",
+		fmt.Sprintf("--max-count=%d", limit), "--end-of-options", revisions, "--")
 	if err != nil {
 		return nil, err
 	}
-	untracked, err := e.read(ctx, dir, "ls-files", "--others", "--exclude-standard", "-z")
+	fields := nulFields(out)
+	commits := make([]CommitInfo, 0, len(fields)/4)
+	for i := 0; i+3 < len(fields); i += 4 {
+		// git wrote these digits, so a failed parse can only read as zero.
+		unix, _ := strconv.ParseInt(fields[i+3], 10, 64)
+		commits = append(commits, CommitInfo{ID: fields[i], Subject: fields[i+1], Author: fields[i+2], Unix: unix})
+	}
+	return commits, nil
+}
+
+// Branches lists the full refs of local and remote branches, most recently
+// committed first. A symbolic ref such as origin/HEAD only repeats a branch.
+func (e *Executor) Branches(ctx context.Context, dir string, limit int) ([]string, error) {
+	out, err := e.read(ctx, dir, "for-each-ref", "--sort=-committerdate", fmt.Sprintf("--count=%d", limit),
+		"--format=%(refname)%00%(symref)", "refs/heads", "refs/remotes")
+	if err != nil {
+		return nil, err
+	}
+	var refs []string
+	for line := range strings.Lines(string(out)) {
+		ref, symref, _ := strings.Cut(strings.TrimSuffix(line, "\n"), "\x00")
+		if symref == "" {
+			refs = append(refs, ref)
+		}
+	}
+	return refs, nil
+}
+
+// ChangedFiles lists what differs across diff, sorted by path, plus untracked
+// files when diff includes the working tree.
+func (e *Executor) ChangedFiles(ctx context.Context, dir string, diff DiffRange) ([]ChangedFile, error) {
+	var names, stats bytes.Buffer
+	err := e.withScratchIndex(ctx, dir, func(indexEnv string) error {
+		nameArgs := slices.Concat([]string{"--name-status", "-z", "--find-renames"}, diff.args, []string{"--"})
+		if err := e.readDiff(ctx, dir, indexEnv, &names, nameArgs...); err != nil {
+			return err
+		}
+		statArgs := slices.Concat([]string{"--numstat", "-z", "--find-renames"}, diff.args, []string{"--"})
+		return e.readDiff(ctx, dir, indexEnv, &stats, statArgs...)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -184,14 +285,48 @@ func (e *Executor) ChangedFiles(ctx context.Context, dir, ref string) ([]Changed
 			files[i].Additions, files[i].Deletions, files[i].Binary = count.additions, count.deletions, count.binary
 		}
 	}
-	for _, path := range nulFields(untracked) {
-		files = append(files, ChangedFile{Path: path, Status: FileStatusUntracked})
+	if diff.untracked {
+		untracked, err := e.read(ctx, dir, "ls-files", "--others", "--exclude-standard", "-z")
+		if err != nil {
+			return nil, err
+		}
+		for _, path := range nulFields(untracked) {
+			files = append(files, ChangedFile{Path: path, Status: FileStatusUntracked})
+		}
 	}
 	slices.SortFunc(files, func(a, b ChangedFile) int { return strings.Compare(a.Path, b.Path) })
+	stamp, err := e.stamper(ctx, dir, diff)
+	if err != nil {
+		return nil, err
+	}
 	for i := range files {
-		files[i].Stamp = fileStamp(dir, files[i].Path)
+		files[i].Stamp = stamp(files[i].Path)
 	}
 	return files, nil
+}
+
+// stamper picks what moves when a file's diff does. A commit's diff never moves,
+// and a staged diff follows the index rather than the file on disk.
+func (e *Executor) stamper(ctx context.Context, dir string, diff DiffRange) (func(path string) string, error) {
+	switch {
+	case diff.commit != "":
+		return func(string) string { return diff.commit }, nil
+	case diff.staged:
+		out, err := e.read(ctx, dir, "ls-files", "--stage", "-z")
+		if err != nil {
+			return nil, err
+		}
+		blobs := make(map[string]string)
+		for _, entry := range nulFields(out) {
+			meta, path, ok := strings.Cut(entry, "\t")
+			if ok {
+				blobs[path] = meta
+			}
+		}
+		return func(path string) string { return blobs[path] }, nil
+	default:
+		return func(path string) string { return fileStamp(dir, path) }, nil
+	}
 }
 
 func fileStamp(dir, path string) string {
@@ -202,10 +337,10 @@ func fileStamp(dir, path string) string {
 	return fmt.Sprintf("%d-%d", info.ModTime().UnixNano(), info.Size())
 }
 
-// FileDiff returns the unified diff of one file against ref, or ErrBinaryDiff,
+// FileDiff returns the unified diff of one file across diff, or ErrBinaryDiff,
 // ErrNoTextDiff or ErrDiffTooLarge. An untracked file that has vanished returns
 // an error matching fs.ErrNotExist.
-func (e *Executor) FileDiff(ctx context.Context, dir, ref string, file ChangedFile) (string, error) {
+func (e *Executor) FileDiff(ctx context.Context, dir string, diff DiffRange, file ChangedFile) (string, error) {
 	if file.Status == FileStatusUntracked {
 		return untrackedDiff(dir, file.Path)
 	}
@@ -215,7 +350,7 @@ func (e *Executor) FileDiff(ctx context.Context, dir, ref string, file ChangedFi
 	}
 	stdout := &executil.HeadWriter{Max: maxDiffBytes}
 	err := e.withScratchIndex(ctx, dir, func(indexEnv string) error {
-		args := slices.Concat([]string{"--find-renames", ref, "--"}, paths)
+		args := slices.Concat([]string{"--find-renames"}, diff.args, []string{"--"}, paths)
 		return e.readDiff(ctx, dir, indexEnv, stdout, args...)
 	})
 	if err != nil {

@@ -1435,8 +1435,10 @@ place that turns a `Location` into a route or an overlay. A new area adds an
 **Changes is read-only and reads through `sessionapi`.** The Changes view is a
 hub overlay over the session in Code, not a route or a side pane: it needs more
 width than the right slot has, and it takes key focus away from the terminal.
-Both reads (`SessionChanges`, `SessionFileDiffs`) go through `sessionapi` to
-`gitstatus`, so they read the checkout on the machine that holds it. Every `git
+Its reads (`SessionChanges`, `SessionFileDiffs`, `SessionBranches`) go through
+`sessionapi` to `gitstatus`, so they read the checkout on the machine that holds
+it. A `gitstatus.DiffTarget` says what the first two compare: the working tree
+against a merge base or `HEAD`, the index, or one commit. Every `git
 diff` runs on a scratch copy of the index (`internal/platform/git/changes.go`),
 because it otherwise rewrites the index and holds `index.lock` when it meets a
 touched file, even under `--no-optional-locks`, and that lock can fail an agent's

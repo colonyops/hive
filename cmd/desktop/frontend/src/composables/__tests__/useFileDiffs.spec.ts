@@ -1,6 +1,6 @@
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { fileVersion, useFileDiffs } from '../useFileDiffs'
 import type { DiffBase } from '../useSessionChanges'
 
@@ -21,14 +21,15 @@ function setup(paths = ['a', 'b']) {
   const base = ref<DiffBase>('branch')
   const files = ref(paths.map((path) => file(path)))
   const wanted = ref<string[]>(paths)
-  const api = useFileDiffs(sessionId, base, files, wanted)
+  const target = computed(() => ({ base: base.value, against: '', commit: '' }))
+  const api = useFileDiffs(sessionId, target, files, wanted)
   return { ...api, sessionId, base, files, wanted }
 }
 
 describe('useFileDiffs', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.SessionFileDiffs.mockImplementation((_id: string, _base: string, paths: string[]) =>
+    mocks.SessionFileDiffs.mockImplementation((_id: string, _target: unknown, paths: string[]) =>
       Promise.resolve(paths.map((path) => diff(path))),
     )
   })
@@ -37,14 +38,14 @@ describe('useFileDiffs', () => {
     const { entries } = setup()
     await flushPromises()
     expect(mocks.SessionFileDiffs).toHaveBeenCalledTimes(1)
-    expect(mocks.SessionFileDiffs).toHaveBeenCalledWith('1', 'branch', ['a', 'b'])
+    expect(mocks.SessionFileDiffs).toHaveBeenCalledWith('1', { base: 'branch', against: '', commit: '' }, ['a', 'b'])
     expect(entries.value.get('a')?.diff.text).toBe('@@ a')
   })
 
   it('reads a long list in batches, one request at a time', async () => {
     let running = 0
     let peak = 0
-    mocks.SessionFileDiffs.mockImplementation(async (_id: string, _base: string, paths: string[]) => {
+    mocks.SessionFileDiffs.mockImplementation(async (_id: string, _target: unknown, paths: string[]) => {
       peak = Math.max(peak, ++running)
       await Promise.resolve()
       running--
@@ -97,7 +98,9 @@ describe('useFileDiffs', () => {
     finish([diff('a', 'stale')])
     await flushPromises()
 
-    expect(mocks.SessionFileDiffs).toHaveBeenLastCalledWith('1', 'uncommitted', ['a'])
+    expect(mocks.SessionFileDiffs).toHaveBeenLastCalledWith('1', { base: 'uncommitted', against: '', commit: '' }, [
+      'a',
+    ])
     expect(entries.value.get('a')?.diff.text).toBe('@@ a')
   })
 

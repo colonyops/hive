@@ -3,9 +3,10 @@ import { computed } from 'vue'
 import IconCheck from '~icons/lucide/check'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import { documentIcon } from '../drive/driveIcon'
 import type { DiffEntry } from '../../composables/useFileDiffs'
 import { diffHasText } from '../../lib/diffItems'
-import { gitStatus } from '../../lib/gitTree'
+import { gitFileName, gitStatus } from '../../lib/gitTree'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
@@ -18,6 +19,7 @@ const props = defineProps<{
 const emit = defineEmits<{ fold: []; 'toggle-viewed': []; 'open-editor': [] }>()
 
 const status = computed(() => gitStatus(props.file.status))
+const fileIcon = computed(() => documentIcon(gitFileName(props.file.path), ''))
 const diff = computed(() => props.entry?.diff)
 const note = computed(() => {
   const d = diff.value
@@ -47,6 +49,7 @@ const note = computed(() => {
       :class="open ? 'rotate-90' : ''"
       aria-hidden="true"
     />
+    <component :is="fileIcon.icon" class="size-3.5 shrink-0" :class="fileIcon.color" aria-hidden="true" />
     <span
       class="w-3 shrink-0 text-center font-mono text-body font-semibold"
       :class="status.color"

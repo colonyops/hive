@@ -46,10 +46,20 @@ type Git interface {
 	HasUnpushedCommits(ctx context.Context, dir string) (bool, error)
 	// MergeBase returns the commit where HEAD left branch.
 	MergeBase(ctx context.Context, dir, branch string) (string, error)
+	// MergeBaseRef returns the commit where HEAD left a full ref.
+	MergeBaseRef(ctx context.Context, dir, ref string) (string, error)
+	// ResolveCommit returns the full id of rev.
+	ResolveCommit(ctx context.Context, dir, rev string) (string, error)
+	// Commit returns the range that shows one commit.
+	Commit(ctx context.Context, dir, commit string) (DiffRange, error)
+	// Commits lists the commits on HEAD after since, newest first.
+	Commits(ctx context.Context, dir, since string, limit int) ([]CommitInfo, error)
+	// Branches lists the full refs of local and remote branches.
+	Branches(ctx context.Context, dir string, limit int) ([]string, error)
 	// ChangedFiles lists the working tree against ref, plus untracked files.
-	ChangedFiles(ctx context.Context, dir, ref string) ([]ChangedFile, error)
+	ChangedFiles(ctx context.Context, dir string, diff DiffRange) ([]ChangedFile, error)
 	// FileDiff returns the unified diff of one file against ref.
-	FileDiff(ctx context.Context, dir, ref string, file ChangedFile) (string, error)
+	FileDiff(ctx context.Context, dir string, diff DiffRange, file ChangedFile) (string, error)
 }
 
 // RemoteIdentity returns the key under which remotes that name the same

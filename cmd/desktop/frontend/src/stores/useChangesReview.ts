@@ -16,6 +16,12 @@ export interface ChangesComment extends DiffSpan {
   path: string
   /** The comparison the comment was made in: removed lines are only numbered within it. */
   base: DiffBase
+  /** The ref a branch comparison used. Missing on a comment from before there was a choice. */
+  against?: string
+  /** The commit a commit comparison showed. */
+  commit?: string
+  /** Its lines are numbered as in the index, which the agent reads from this flag. */
+  staged?: boolean
   /** The file's version when the comment was made, to tell when the lines have moved under it. */
   version: string
   text: string

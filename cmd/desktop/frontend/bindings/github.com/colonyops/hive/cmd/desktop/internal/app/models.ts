@@ -181,6 +181,8 @@ export interface DiffCommentInput {
     "endLine": number;
     "quote": string;
     "text": string;
+    "commit"?: string;
+    "staged"?: boolean;
 }
 
 /**

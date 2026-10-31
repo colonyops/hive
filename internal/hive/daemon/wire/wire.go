@@ -183,6 +183,10 @@ func LaunchOptionsToProto(o sessionsvc.LaunchOptions) *daemonv1.LaunchOptionsRes
 }
 
 func ChangesToProto(c gitstatus.Changes) *daemonv1.ChangesResponse {
+	commits := make([]*daemonv1.CommitInfo, 0, len(c.Commits))
+	for _, commit := range c.Commits {
+		commits = append(commits, &daemonv1.CommitInfo{Id: commit.ID, Subject: commit.Subject, Author: commit.Author, Unix: commit.Unix})
+	}
 	files := make([]*daemonv1.ChangedFile, 0, len(c.Files))
 	for _, f := range c.Files {
 		files = append(files, &daemonv1.ChangedFile{
@@ -202,12 +206,19 @@ func ChangesToProto(c gitstatus.Changes) *daemonv1.ChangesResponse {
 		DefaultBranch:   c.DefaultBranch,
 		Base:            c.Base.String(),
 		BranchAvailable: c.BranchAvailable,
+		Against:         c.Against,
+		Commit:          c.Commit,
+		Commits:         commits,
 		Files:           files,
 		Truncated:       c.Truncated,
 	}
 }
 
 func ChangesFromProto(p *daemonv1.ChangesResponse) gitstatus.Changes {
+	var commits []git.CommitInfo
+	for _, c := range p.GetCommits() {
+		commits = append(commits, git.CommitInfo{ID: c.GetId(), Subject: c.GetSubject(), Author: c.GetAuthor(), Unix: c.GetUnix()})
+	}
 	var files []git.ChangedFile
 	for _, f := range p.GetFiles() {
 		files = append(files, git.ChangedFile{
@@ -226,6 +237,9 @@ func ChangesFromProto(p *daemonv1.ChangesResponse) gitstatus.Changes {
 		DefaultBranch:   p.GetDefaultBranch(),
 		Base:            gitstatus.DiffBase(p.GetBase()),
 		BranchAvailable: p.GetBranchAvailable(),
+		Against:         p.GetAgainst(),
+		Commit:          p.GetCommit(),
+		Commits:         commits,
 		Files:           files,
 		Truncated:       p.GetTruncated(),
 	}

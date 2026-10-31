@@ -1,6 +1,6 @@
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { effectScope, ref } from 'vue'
+import { computed, effectScope, ref } from 'vue'
 import { useSessionChanges, type DiffBase } from '../useSessionChanges'
 
 const mocks = vi.hoisted(() => ({ SessionChanges: vi.fn() }))
@@ -26,8 +26,9 @@ function answer(branch: string) {
 function setup(visible = ref(true)) {
   const sessionId = ref('1')
   const base = ref<DiffBase>('branch')
+  const target = computed(() => ({ base: base.value, against: '', commit: '' }))
   const scope = effectScope()
-  const api = scope.run(() => useSessionChanges(sessionId, base, () => visible.value))!
+  const api = scope.run(() => useSessionChanges(sessionId, target, () => visible.value))!
   return { api, sessionId, base, visible, scope }
 }
 
@@ -108,7 +109,7 @@ describe('useSessionChanges', () => {
 
     base.value = 'uncommitted'
     await flushPromises()
-    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('1', 'uncommitted')
+    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('1', { base: 'uncommitted', against: '', commit: '' })
     expect(api.changes.value?.branch).toBe('branch-1')
     scope.stop()
   })

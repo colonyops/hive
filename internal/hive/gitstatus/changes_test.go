@@ -24,7 +24,11 @@ func TestReadChangesPicksTheRefForTheBase(t *testing.T) {
 		name         string
 		git          stubGit
 		base         gitstatus.DiffBase
-		wantRef      string
+		against      string
+		commit       string
+		wantDiff     git.DiffRange
+		wantAgainst  string
+		wantCommit   string
 		wantBase     gitstatus.DiffBase
 		wantBranchOK bool
 	}{
@@ -32,7 +36,7 @@ func TestReadChangesPicksTheRefForTheBase(t *testing.T) {
 			name:         "branch reads against the merge base",
 			git:          stubGit{branch: "feat/x", defaultBranch: "main", mergeBase: "abc"},
 			base:         gitstatus.DiffBaseBranch,
-			wantRef:      "abc",
+			wantDiff:     git.WorkingTree("abc"),
 			wantBase:     gitstatus.DiffBaseBranch,
 			wantBranchOK: true,
 		},
@@ -40,7 +44,7 @@ func TestReadChangesPicksTheRefForTheBase(t *testing.T) {
 			name:         "uncommitted reads against HEAD and still offers branch",
 			git:          stubGit{branch: "feat/x", defaultBranch: "main", mergeBase: "abc"},
 			base:         gitstatus.DiffBaseUncommitted,
-			wantRef:      "HEAD",
+			wantDiff:     git.WorkingTree("HEAD"),
 			wantBase:     gitstatus.DiffBaseUncommitted,
 			wantBranchOK: true,
 		},
@@ -48,37 +52,165 @@ func TestReadChangesPicksTheRefForTheBase(t *testing.T) {
 			name:     "the default branch has only uncommitted",
 			git:      stubGit{branch: "main", defaultBranch: "main", mergeBase: "abc"},
 			base:     gitstatus.DiffBaseBranch,
-			wantRef:  "HEAD",
+			wantDiff: git.WorkingTree("HEAD"),
 			wantBase: gitstatus.DiffBaseUncommitted,
 		},
 		{
 			name:     "an unknown default branch falls back",
 			git:      stubGit{branch: "feat/x", defaultBranchErr: errors.New("no origin/HEAD")},
 			base:     gitstatus.DiffBaseBranch,
-			wantRef:  "HEAD",
+			wantDiff: git.WorkingTree("HEAD"),
 			wantBase: gitstatus.DiffBaseUncommitted,
+		},
+		{
+			name:         "staged reads the index",
+			git:          stubGit{branch: "feat/x", defaultBranch: "main", mergeBase: "abc"},
+			base:         gitstatus.DiffBaseStaged,
+			wantDiff:     git.Staged(),
+			wantBase:     gitstatus.DiffBaseStaged,
+			wantBranchOK: true,
+		},
+		{
+			name:         "unstaged reads the working tree against the index",
+			git:          stubGit{branch: "feat/x", defaultBranch: "main", mergeBase: "abc"},
+			base:         gitstatus.DiffBaseUnstaged,
+			wantDiff:     git.Unstaged(),
+			wantBase:     gitstatus.DiffBaseUnstaged,
+			wantBranchOK: true,
+		},
+		{
+			name:         "a commit read with no commit shows HEAD",
+			git:          stubGit{branch: "feat/x", defaultBranch: "main", mergeBase: "abc"},
+			base:         gitstatus.DiffBaseCommit,
+			wantDiff:     git.WorkingTree("commit:full-HEAD"),
+			wantBase:     gitstatus.DiffBaseCommit,
+			wantCommit:   "full-HEAD",
+			wantBranchOK: true,
+		},
+		{
+			name:         "a commit read shows the commit it names",
+			git:          stubGit{branch: "feat/x", defaultBranch: "main", mergeBase: "abc"},
+			base:         gitstatus.DiffBaseCommit,
+			commit:       "c1",
+			wantDiff:     git.WorkingTree("commit:full-c1"),
+			wantBase:     gitstatus.DiffBaseCommit,
+			wantCommit:   "full-c1",
+			wantBranchOK: true,
+		},
+		{
+			name:         "a commit that no longer resolves gives way to HEAD",
+			git:          stubGit{branch: "feat/x", defaultBranch: "main", mergeBase: "abc", commitErr: errors.New("gone")},
+			base:         gitstatus.DiffBaseCommit,
+			commit:       "c1",
+			wantDiff:     git.WorkingTree("commit:full-HEAD"),
+			wantBase:     gitstatus.DiffBaseCommit,
+			wantCommit:   "full-HEAD",
+			wantBranchOK: true,
+		},
+		{
+			name:         "a chosen ref sets the merge base",
+			git:          stubGit{branch: "feat/x", defaultBranch: "main", mergeBase: "abc", mergeBaseRef: "def"},
+			base:         gitstatus.DiffBaseBranch,
+			against:      "refs/heads/release",
+			wantDiff:     git.WorkingTree("def"),
+			wantBase:     gitstatus.DiffBaseBranch,
+			wantAgainst:  "refs/heads/release",
+			wantBranchOK: true,
+		},
+		{
+			name:         "a chosen ref on the default branch can still compare",
+			git:          stubGit{branch: "main", defaultBranch: "main", mergeBaseRef: "def"},
+			base:         gitstatus.DiffBaseBranch,
+			against:      "refs/remotes/origin/release",
+			wantDiff:     git.WorkingTree("def"),
+			wantBase:     gitstatus.DiffBaseBranch,
+			wantAgainst:  "refs/remotes/origin/release",
+			wantBranchOK: true,
+		},
+		{
+			name:         "a chosen ref that no longer resolves gives way to the default branch",
+			git:          stubGit{branch: "feat/x", defaultBranch: "main", mergeBase: "abc", mergeBaseRefErr: errors.New("gone")},
+			base:         gitstatus.DiffBaseBranch,
+			against:      "refs/heads/release",
+			wantDiff:     git.WorkingTree("abc"),
+			wantBase:     gitstatus.DiffBaseBranch,
+			wantBranchOK: true,
+		},
+		{
+			name:         "a chosen value that is not a branch ref is ignored",
+			git:          stubGit{branch: "feat/x", defaultBranch: "main", mergeBase: "abc", mergeBaseRef: "def"},
+			base:         gitstatus.DiffBaseBranch,
+			against:      "--output=/tmp/x",
+			wantDiff:     git.WorkingTree("abc"),
+			wantBase:     gitstatus.DiffBaseBranch,
+			wantBranchOK: true,
 		},
 		{
 			name:     "a failed merge base falls back",
 			git:      stubGit{branch: "feat/x", defaultBranch: "main", mergeBaseErr: errors.New("shallow")},
 			base:     gitstatus.DiffBaseBranch,
-			wantRef:  "HEAD",
+			wantDiff: git.WorkingTree("HEAD"),
 			wantBase: gitstatus.DiffBaseUncommitted,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			var ref string
-			tt.git.onRef = func(r string) { ref = r }
+			var diff git.DiffRange
+			tt.git.onDiff = func(d git.DiffRange) { diff = d }
 
-			got, err := gitstatus.NewService(zerolog.Nop(), tt.git, 1).ReadChanges(t.Context(), activeSession(), tt.base)
+			got, err := gitstatus.NewService(zerolog.Nop(), tt.git, 1).ReadChanges(t.Context(), activeSession(), gitstatus.DiffTarget{Base: tt.base, Against: tt.against, Commit: tt.commit})
 			require.NoError(t, err)
 			assert.True(t, got.Resolved)
-			assert.Equal(t, tt.wantRef, ref)
+			assert.Equal(t, tt.wantDiff, diff)
 			assert.Equal(t, tt.wantBase, got.Base)
+			assert.Equal(t, tt.wantAgainst, got.Against)
+			assert.Equal(t, tt.wantCommit, got.Commit)
 			assert.Equal(t, tt.wantBranchOK, got.BranchAvailable)
 		})
 	}
+}
+
+func TestReadChangesListsTheCommitsTheBranchAdded(t *testing.T) {
+	t.Parallel()
+
+	var since string
+	commits := []git.CommitInfo{{ID: "c2", Subject: "second"}, {ID: "c1", Subject: "first"}}
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{
+		branch: "feat/x", defaultBranch: "main", mergeBase: "abc", commits: commits,
+		onSince: func(s string) { since = s },
+	}, 1)
+
+	got, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted})
+	require.NoError(t, err)
+	assert.Equal(t, "abc", since)
+	assert.Equal(t, commits, got.Commits)
+}
+
+func TestReadChangesSurvivesAFailedCommitList(t *testing.T) {
+	t.Parallel()
+
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{
+		branch: "feat/x", defaultBranch: "main", mergeBase: "abc", commitsErr: errors.New("no log"),
+	}, 1)
+
+	got, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch})
+	require.NoError(t, err)
+	assert.True(t, got.Resolved)
+	assert.Empty(t, got.Commits)
+}
+
+func TestReadBranchesIsEmptyWithNoCheckout(t *testing.T) {
+	t.Parallel()
+
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branches: []string{"refs/heads/main"}}, 1)
+
+	got, err := svc.ReadBranches(t.Context(), session.Session{ID: "r", State: session.StateRecycled})
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	got, err = svc.ReadBranches(t.Context(), activeSession())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"refs/heads/main"}, got)
 }
 
 func TestReadChangesIsEmptyWithNoCheckout(t *testing.T) {
@@ -89,7 +221,7 @@ func TestReadChangesIsEmptyWithNoCheckout(t *testing.T) {
 		{ID: "recycled", Path: "/tmp/x", State: session.StateRecycled},
 		{ID: "no path", State: session.StateActive},
 	} {
-		got, err := svc.ReadChanges(t.Context(), sess, gitstatus.DiffBaseBranch)
+		got, err := svc.ReadChanges(t.Context(), sess, gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch})
 		require.NoError(t, err)
 		assert.Equal(t, gitstatus.Changes{}, got)
 	}
@@ -99,7 +231,7 @@ func TestReadChangesReturnsAFailedRead(t *testing.T) {
 	t.Parallel()
 
 	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", defaultBranch: "main", filesErr: errors.New("bad HEAD")}, 1)
-	_, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffBaseBranch)
+	_, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch})
 	require.ErrorContains(t, err, "bad HEAD")
 }
 
@@ -112,7 +244,7 @@ func TestReadChangesStopsAtTheFileCap(t *testing.T) {
 	}
 	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", defaultBranch: "main", files: files}, 1)
 
-	got, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffBaseBranch)
+	got, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch})
 	require.NoError(t, err)
 	assert.Len(t, got.Files, 1000)
 	assert.True(t, got.Truncated)
@@ -122,7 +254,7 @@ func TestReadChangesAppliesTheReadTimeout(t *testing.T) {
 	t.Parallel()
 
 	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", defaultBranch: "main", block: true}, 1)
-	_, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffBaseBranch)
+	_, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch})
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
@@ -151,7 +283,7 @@ func TestReadFileDiffsReportsEachFileOnItsOwn(t *testing.T) {
 		},
 	}, 1)
 
-	got, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffBaseUncommitted,
+	got, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted},
 		[]string{"ok.go", "image.png", "lock.json", "data.bin", "pipe", "raced.txt", "big.txt", "broken.go", "../../etc/passwd"})
 	require.NoError(t, err)
 	assert.Equal(t, []gitstatus.FileDiff{
@@ -181,7 +313,7 @@ func TestReadFileDiffsClipsLongLinesAndHugePatches(t *testing.T) {
 		},
 	}, 1)
 
-	got, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffBaseBranch, []string{"long.go", "spread.go", "latin.txt"})
+	got, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch}, []string{"long.go", "spread.go", "latin.txt"})
 	require.NoError(t, err)
 	assert.Len(t, strings.TrimSuffix(got[0].Text, "\n"), 4000)
 	assert.True(t, got[1].Truncated)
@@ -193,7 +325,7 @@ func TestReadFileDiffsReportsEveryPathGoneWithNoCheckout(t *testing.T) {
 	t.Parallel()
 
 	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branchErr: errors.New("must not run")}, 1)
-	got, err := svc.ReadFileDiffs(t.Context(), session.Session{ID: "r", State: session.StateRecycled}, gitstatus.DiffBaseBranch, []string{"a"})
+	got, err := svc.ReadFileDiffs(t.Context(), session.Session{ID: "r", State: session.StateRecycled}, gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch}, []string{"a"})
 	require.NoError(t, err)
 	assert.Equal(t, []gitstatus.FileDiff{{Path: "a", Gone: true}}, got)
 }
@@ -202,6 +334,6 @@ func TestReadFileDiffsReturnsAFailedList(t *testing.T) {
 	t.Parallel()
 
 	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", defaultBranch: "main", filesErr: errors.New("bad HEAD")}, 1)
-	_, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffBaseBranch, []string{"a"})
+	_, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch}, []string{"a"})
 	require.ErrorContains(t, err, "bad HEAD")
 }

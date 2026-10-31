@@ -39,6 +39,7 @@ service SessionService {
   // Changes reads the session's checkout on the machine that holds it.
   rpc Changes(ChangesRequest) returns (ChangesResponse);
   rpc FileDiffs(FileDiffsRequest) returns (FileDiffsResponse);
+  rpc Branches(BranchesRequest) returns (BranchesResponse);
 }
 
 message HelloRequest {}
@@ -351,6 +352,15 @@ message ChangedFile {
 message ChangesRequest {
   string id = 1;
   string base = 2;
+  string against = 3;
+  string commit = 4;
+}
+
+message CommitInfo {
+  string id = 1;
+  string subject = 2;
+  string author = 3;
+  int64 unix = 4;
 }
 
 message ChangesResponse {
@@ -361,6 +371,9 @@ message ChangesResponse {
   bool branch_available = 5;
   repeated ChangedFile files = 6;
   bool truncated = 7;
+  string against = 8;
+  string commit = 9;
+  repeated CommitInfo commits = 10;
 }
 
 message FileDiff {
@@ -377,8 +390,18 @@ message FileDiffsRequest {
   string id = 1;
   string base = 2;
   repeated string paths = 3;
+  string against = 4;
+  string commit = 5;
 }
 
 message FileDiffsResponse {
   repeated FileDiff diffs = 1;
+}
+
+message BranchesRequest {
+  string id = 1;
+}
+
+message BranchesResponse {
+  repeated string refs = 1;
 }

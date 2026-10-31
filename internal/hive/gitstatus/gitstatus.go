@@ -26,8 +26,13 @@ type Git interface {
 	DiffStats(ctx context.Context, dir string) (additions, deletions int, err error)
 	DefaultBranch(ctx context.Context, dir string) (string, error)
 	MergeBase(ctx context.Context, dir, branch string) (string, error)
-	ChangedFiles(ctx context.Context, dir, ref string) ([]git.ChangedFile, error)
-	FileDiff(ctx context.Context, dir, ref string, file git.ChangedFile) (string, error)
+	MergeBaseRef(ctx context.Context, dir, ref string) (string, error)
+	ResolveCommit(ctx context.Context, dir, rev string) (string, error)
+	Commit(ctx context.Context, dir, commit string) (git.DiffRange, error)
+	Commits(ctx context.Context, dir, since string, limit int) ([]git.CommitInfo, error)
+	Branches(ctx context.Context, dir string, limit int) ([]string, error)
+	ChangedFiles(ctx context.Context, dir string, diff git.DiffRange) ([]git.ChangedFile, error)
+	FileDiff(ctx context.Context, dir string, diff git.DiffRange, file git.ChangedFile) (string, error)
 }
 
 // Status is one checkout's git state.

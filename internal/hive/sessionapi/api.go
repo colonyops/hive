@@ -40,8 +40,9 @@ type API interface {
 	Prune(ctx context.Context, all bool) (int, error)
 	CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Risk, error)
 	SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOptions, error)
-	SessionChanges(ctx context.Context, id string, base gitstatus.DiffBase) (gitstatus.Changes, error)
-	SessionFileDiffs(ctx context.Context, id string, base gitstatus.DiffBase, paths []string) ([]gitstatus.FileDiff, error)
+	SessionChanges(ctx context.Context, id string, target gitstatus.DiffTarget) (gitstatus.Changes, error)
+	SessionFileDiffs(ctx context.Context, id string, target gitstatus.DiffTarget, paths []string) ([]gitstatus.FileDiff, error)
+	SessionBranches(ctx context.Context, id string) ([]string, error)
 
 	// StatusAvailable must not block: the TUI calls it inside Update. A false
 	// answer can turn true later (the daemon client answers false until its

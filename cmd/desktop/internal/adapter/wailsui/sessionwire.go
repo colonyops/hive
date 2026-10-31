@@ -196,14 +196,35 @@ type ChangedFile struct {
 
 // SessionChanges is what the review view lists. Base is the base the read used,
 // which is "uncommitted" whenever BranchAvailable is false.
+// DiffTarget says what a read compares. See gitstatus.DiffTarget.
+type DiffTarget struct {
+	Base    string `json:"base"`
+	Against string `json:"against"`
+	Commit  string `json:"commit"`
+}
+
+func (t DiffTarget) gitstatus() gitstatus.DiffTarget {
+	return gitstatus.DiffTarget{Base: gitstatus.DiffBase(t.Base), Against: t.Against, Commit: t.Commit}
+}
+
+type SessionCommit struct {
+	ID      string `json:"id"`
+	Subject string `json:"subject"`
+	Author  string `json:"author"`
+	Unix    int64  `json:"unix"`
+}
+
 type SessionChanges struct {
-	Resolved        bool          `json:"resolved"`
-	Branch          string        `json:"branch"`
-	DefaultBranch   string        `json:"defaultBranch"`
-	Base            string        `json:"base"`
-	BranchAvailable bool          `json:"branchAvailable"`
-	Files           []ChangedFile `json:"files"`
-	Truncated       bool          `json:"truncated"`
+	Resolved        bool            `json:"resolved"`
+	Branch          string          `json:"branch"`
+	DefaultBranch   string          `json:"defaultBranch"`
+	Base            string          `json:"base"`
+	BranchAvailable bool            `json:"branchAvailable"`
+	Against         string          `json:"against"`
+	Commit          string          `json:"commit"`
+	Commits         []SessionCommit `json:"commits"`
+	Files           []ChangedFile   `json:"files"`
+	Truncated       bool            `json:"truncated"`
 }
 
 func sessionChangesOf(c gitstatus.Changes) SessionChanges {
@@ -219,12 +240,19 @@ func sessionChangesOf(c gitstatus.Changes) SessionChanges {
 			Stamp:     f.Stamp,
 		})
 	}
+	commits := make([]SessionCommit, 0, len(c.Commits))
+	for _, commit := range c.Commits {
+		commits = append(commits, SessionCommit{ID: commit.ID, Subject: commit.Subject, Author: commit.Author, Unix: commit.Unix})
+	}
 	return SessionChanges{
 		Resolved:        c.Resolved,
 		Branch:          c.Branch,
 		DefaultBranch:   c.DefaultBranch,
 		Base:            c.Base.String(),
 		BranchAvailable: c.BranchAvailable,
+		Against:         c.Against,
+		Commit:          c.Commit,
+		Commits:         commits,
 		Files:           files,
 		Truncated:       c.Truncated,
 	}

@@ -154,7 +154,15 @@ Use <kbd>J</kbd> and <kbd>K</kbd> (or the arrow keys) to move the selection. On 
 
 **Changes** shows what an agent changed in the session on screen, without leaving Hive. Open it with <kbd>⌘⌥G</kbd> (Windows/Linux: <kbd>Ctrl+Alt+G</kbd>), the file button in the status bar, or the line counts beside the branch. It opens over the session and closes with <kbd>Esc</kbd>.
 
-Every changed file's diff sits in one scroll, with the files listed beside it. **Branch** compares the working tree with the point where the branch left the default branch, so it shows everything the agent did, committed or not. **Uncommitted** compares it with `HEAD`. Only Uncommitted appears on the default branch, or when Hive can't find a merge base, as in a shallow clone. Both include untracked files.
+Every changed file's diff sits in one scroll, with the files listed beside it. The picker in the header chooses what to review:
+
+- **Branch changes** compares the working tree with the point where the branch left another branch, so it shows everything the agent did, committed or not. **against** beside it picks that other branch, local or remote, and Hive remembers your pick for the session. Without a pick it uses the default branch. Branch changes isn't offered on the default branch, or when Hive can't find a merge base, as in a shallow clone.
+- **Uncommitted** compares the working tree with `HEAD`.
+- **Staged** compares the index with `HEAD`.
+- **Unstaged** compares the working tree with the index.
+- **Last commit**, or any commit listed under **Commits**, shows that one commit against its parent. Use the arrows beside the picker, or <kbd>[</kbd> and <kbd>]</kbd>, to step to an older or newer commit.
+
+Branch changes, Uncommitted, and Unstaged include untracked files.
 
 | Key | Action |
 | --- | --- |
@@ -164,13 +172,15 @@ Every changed file's diff sits in one scroll, with the files listed beside it. *
 | <kbd>o</kbd> | Fold or unfold the file |
 | <kbd>s</kbd> | Switch between unified and side by side |
 | <kbd>/</kbd> or <kbd>⌘F</kbd> | Search the diffs |
+| <kbd>[</kbd> <kbd>]</kbd> | Step to an older or newer commit |
+| <kbd>b</kbd> | Show or hide the file list |
 | <kbd>r</kbd> | Show or hide the comments panel |
 | <kbd>⌘↵</kbd> | Send your comments to the agent |
 | <kbd>Esc</kbd> | Close |
 
 The view refreshes every 5 seconds while it's open and the window has focus. A viewed file comes back unviewed when it changes again. Viewed marks last until you quit Hive.
 
-Drag either divider to resize the file list or the comments panel. Hive remembers the widths, and whether the panel is open.
+Drag either divider to resize the file list or the comments panel. Hive remembers the widths, and whether the file list is open. The comments panel starts closed each time. Buttons above the file list collapse or expand every folder and hide the files you've marked viewed.
 
 ### Search
 
@@ -178,7 +188,7 @@ Press <kbd>/</kbd> or <kbd>⌘F</kbd> to search. <kbd>Enter</kbd> and <kbd>Shift
 
 ### Comments
 
-To comment, drag across line numbers, click the **+** beside a line, or select code with the mouse. Type in the box that opens and press <kbd>⌘↵</kbd>. A label button saves that label as the comment. Comments appear under their lines and as rows in a panel beside the diff.
+To comment, drag across line numbers, click the **+** beside a line, or select code with the mouse. Type in the box that opens and press <kbd>⌘↵</kbd>. A label button saves that label as the comment. Comments appear under their lines and as rows in the comments panel, which the comment button in the header or <kbd>r</kbd> opens.
 
 The send button in the header, which shows how many comments you've written, pastes them into the session's agent and submits them, then clears them. If the session has one agent, it goes straight there, even mid-turn. With several agents, a dialog asks which one. An agent waiting on a prompt can't receive comments, because the Enter would answer the prompt. If a send fails, or no agent is running, your comments stay and an error offers **Copy comments**, which copies them as the text the agent would have received.
 
@@ -186,7 +196,7 @@ The panel keeps the last three reviews you sent from each session under **Sent**
 
 Deleting a session deletes its comments and sent reviews, so the confirmation warns about any unsent comments, and a message afterward offers to copy them. Recycling warns too, but a recycled session keeps its comments unless the recycle deletes it.
 
-Comments are kept on this machine, per session, until you send or delete them, and they survive quitting Hive. They point at line numbers, so a comment shows an amber dot when the agent edits the file after you commented. If the line has left the diff, or the comment was made under the other comparison, the comment shows only in the panel. Select its line label to jump to it, which also switches the comparison back.
+Comments are kept on this machine, per session, until you send or delete them, and they survive quitting Hive. They point at line numbers, so a comment shows an amber dot when the agent edits the file after you commented. If the line has left the diff, or the comment was made under another comparison, the comment shows only in the panel. A comment made on a commit, or on the staged version, tells the agent which version its line numbers belong to. Select its line label to jump to it, which also switches the comparison back.
 
 Changes never writes to the checkout, so it's safe to use while an agent works in it. It can't stage or commit. These limits apply:
 

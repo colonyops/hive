@@ -160,11 +160,18 @@ export function Servers(): $CancellablePromise<app$0.ServerStatus[] | null> {
 }
 
 /**
- * SessionChanges lists what differs in the session's checkout against base,
- * "branch" or "uncommitted". The review view polls it while open.
+ * SessionBranches lists the full refs the session's checkout can compare against.
  */
-export function SessionChanges(id: string, base: string): $CancellablePromise<$models.SessionChanges> {
-    return $Call.ByID(2425529358, id, base);
+export function SessionBranches(id: string): $CancellablePromise<string[] | null> {
+    return $Call.ByID(2667325725, id);
+}
+
+/**
+ * SessionChanges lists what differs in the session's checkout for a target. The
+ * review view polls it while open.
+ */
+export function SessionChanges(id: string, target: $models.DiffTarget): $CancellablePromise<$models.SessionChanges> {
+    return $Call.ByID(2425529358, id, target);
 }
 
 /**
@@ -184,11 +191,11 @@ export function SessionDraftFromActivity(metadata: { [_ in string]?: string } | 
 }
 
 /**
- * SessionFileDiffs reads the diffs of paths against base. Only a path in the
+ * SessionFileDiffs reads the diffs of paths for a target. Only a path in the
  * current change list is read.
  */
-export function SessionFileDiffs(id: string, base: string, paths: string[] | null): $CancellablePromise<$models.SessionFileDiff[] | null> {
-    return $Call.ByID(3130590133, id, base, paths);
+export function SessionFileDiffs(id: string, target: $models.DiffTarget, paths: string[] | null): $CancellablePromise<$models.SessionFileDiff[] | null> {
+    return $Call.ByID(3130590133, id, target, paths);
 }
 
 /**

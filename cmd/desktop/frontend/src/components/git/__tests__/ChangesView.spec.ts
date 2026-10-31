@@ -1,12 +1,15 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import ChangesView from '../ChangesView.vue'
+import { useChangesReview } from '../../../stores/useChangesReview'
 import { resetStores } from '../../../stores/defineStore'
 import { resetToastsForTests, useToasts } from '../../../composables/useToasts'
 
 const mocks = vi.hoisted(() => ({
   SessionChanges: vi.fn(),
+  SessionBranches: vi.fn(),
+  scroll: null as ((top: number) => void) | null,
   SessionFileDiffs: vi.fn(),
   OpenSessionInEditor: vi.fn(),
   setRenderOptions: vi.fn(() => Promise.resolve()),
@@ -21,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   SessionChanges: mocks.SessionChanges,
+  SessionBranches: mocks.SessionBranches,
   SessionFileDiffs: mocks.SessionFileDiffs,
   OpenSessionInEditor: mocks.OpenSessionInEditor,
 }))
@@ -60,7 +64,9 @@ vi.mock('@pierre/diffs', async (importOriginal) => {
       this.root = root
     }
     cleanUp(): void {}
-    subscribeToScroll(): void {}
+    subscribeToScroll(listener: (top: number) => void): void {
+      mocks.scroll = listener
+    }
     getTopForItem(): number {
       return 0
     }
@@ -101,6 +107,9 @@ function changes(files: unknown[], extra: Record<string, unknown> = {}) {
     defaultBranch: 'main',
     base: 'branch',
     branchAvailable: true,
+    against: '',
+    commit: '',
+    commits: [],
     truncated: false,
     files,
     ...extra,
@@ -115,6 +124,17 @@ async function mountView() {
   return wrapper
 }
 const testid = (id: string) => `[data-testid="${id}"]`
+async function pick(wrapper: VueWrapper, select: string, value: string) {
+  await wrapper.get(testid(select)).trigger('click')
+  await flushPromises()
+  document.querySelector<HTMLElement>(testid(`${select}-option-${value}`))!.click()
+  await flushPromises()
+}
+const COMMITS = [
+  { id: 'c3', subject: 'third', author: 'a', unix: 3 },
+  { id: 'c2', subject: 'second', author: 'a', unix: 2 },
+  { id: 'c1', subject: 'first', author: 'a', unix: 1 },
+]
 async function selectLines(path: string, line: number) {
   mocks.lineSelectionEnd!({ start: line, side: 'additions', end: line, endSide: 'additions' }, { item: { id: path } })
   await flushPromises()
@@ -142,7 +162,8 @@ describe('ChangesView', () => {
     vi.clearAllMocks()
     mocks.OpenSessionInEditor.mockResolvedValue(undefined)
     mocks.SessionChanges.mockResolvedValue(changes([file('a.go'), file('b.go')]))
-    mocks.SessionFileDiffs.mockImplementation((_id: string, _base: string, paths: string[]) =>
+    mocks.SessionBranches.mockResolvedValue(['refs/heads/main', 'refs/heads/release', 'refs/remotes/origin/release'])
+    mocks.SessionFileDiffs.mockImplementation((_id: string, _target: unknown, paths: string[]) =>
       Promise.resolve(paths.map((path) => ({ path, text: `@@ -1 +1 @@\n-old ${path}\n+new ${path}\n`, ...noState }))),
     )
   })
@@ -164,7 +185,10 @@ describe('ChangesView', () => {
     expect(wrapper.get(testid('changes-total')).text()).toBe('+2-2')
     expect(wrapper.get('[data-fake="fake-a.go"]').text()).toContain('new a.go')
     expect(wrapper.get('[data-fake="fake-b.go"]').text()).toContain('old b.go')
-    expect(mocks.SessionFileDiffs).toHaveBeenCalledWith('s1', 'branch', ['a.go', 'b.go'])
+    expect(mocks.SessionFileDiffs).toHaveBeenCalledWith('s1', { base: 'branch', against: '', commit: '' }, [
+      'a.go',
+      'b.go',
+    ])
     wrapper.unmount()
   })
 
@@ -280,27 +304,189 @@ describe('ChangesView', () => {
   it('hides Branch and says why the list is empty when only uncommitted work applies', async () => {
     mocks.SessionChanges.mockResolvedValue(changes([], { base: 'uncommitted', branchAvailable: false }))
     const wrapper = await mountView()
-    expect(wrapper.find(testid('changes-base-branch')).exists()).toBe(false)
-    expect(wrapper.get(testid('changes-base-uncommitted')).attributes('aria-pressed')).toBe('true')
+    await wrapper.get(testid('changes-target')).trigger('click')
+    await flushPromises()
+    expect(document.querySelector(testid('changes-target-option-branch'))).toBeNull()
+    expect(document.querySelector(testid('changes-target-option-uncommitted'))).not.toBeNull()
     expect(wrapper.get(testid('changes-empty')).text()).toBe('No uncommitted changes')
     wrapper.unmount()
   })
 
-  it('reads the other base when it is picked', async () => {
+  it.each(['uncommitted', 'staged', 'unstaged'])('reads %s when it is picked', async (base) => {
     const wrapper = await mountView()
-    await wrapper.get(testid('changes-base-uncommitted')).trigger('click')
+    await pick(wrapper, 'changes-target', base)
+    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('s1', { base, against: '', commit: '' })
+    wrapper.unmount()
+  })
+
+  it('compares against the branch picked, for this session only', async () => {
+    let wrapper = await mountView()
+    await pick(wrapper, 'changes-against', 'refs/remotes/origin/release')
+    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('s1', {
+      base: 'branch',
+      against: 'refs/remotes/origin/release',
+      commit: '',
+    })
+    wrapper.unmount()
+
+    wrapper = mount(ChangesView, { props: { sessionId: 's2' }, attachTo: document.body })
     await flushPromises()
-    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('s1', 'uncommitted')
+    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('s2', { base: 'branch', against: '', commit: '' })
+    wrapper.unmount()
+  })
+
+  it('offers only the default branch when the branches cannot be listed', async () => {
+    mocks.SessionBranches.mockRejectedValue(new Error('daemon gone'))
+    const wrapper = await mountView()
+    await wrapper.get(testid('changes-against')).trigger('click')
+    await flushPromises()
+    expect(document.querySelector(testid('changes-against-option-'))!.textContent).toContain('main (default)')
+    expect(document.querySelector(testid('changes-against-option-refs/heads/release'))).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('steps through the commits from the keyboard and stops at each end', async () => {
+    mocks.SessionChanges.mockImplementation((_id: string, target: { base: string; commit: string }) =>
+      Promise.resolve(
+        changes([file('a.go')], {
+          base: target.base,
+          commits: COMMITS,
+          commit: target.base === 'commit' ? target.commit || 'c3' : '',
+        }),
+      ),
+    )
+    const wrapper = await mountView()
+
+    await press('[')
+    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('s1', { base: 'commit', against: '', commit: '' })
+    expect(wrapper.get(testid('changes-commit-position')).text()).toBe('3/3')
+    expect(wrapper.get(testid('changes-commit-newer')).attributes('disabled')).toBeDefined()
+
+    await press('[')
+    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('s1', { base: 'commit', against: '', commit: 'c2' })
+    await press('[')
+    expect(wrapper.get(testid('changes-commit-position')).text()).toBe('1/3')
+    expect(wrapper.get(testid('changes-commit-older')).attributes('disabled')).toBeDefined()
+
+    mocks.SessionChanges.mockClear()
+    await press('[')
+    expect(mocks.SessionChanges).not.toHaveBeenCalled()
+
+    await press(']')
+    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('s1', { base: 'commit', against: '', commit: 'c2' })
+    wrapper.unmount()
+  })
+
+  it('reads nothing against a new target until its file list lands', async () => {
+    const wrapper = await mountView()
+    mocks.SessionFileDiffs.mockClear()
+    let answer: (value: unknown) => void = () => {}
+    mocks.SessionChanges.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
+    await pick(wrapper, 'changes-target', 'staged')
+    expect(mocks.SessionFileDiffs).not.toHaveBeenCalled()
+    expect(wrapper.find(testid('changes-empty')).exists()).toBe(false)
+
+    answer(changes([file('staged.go')], { base: 'staged' }))
+    await flushPromises()
+    expect(mocks.SessionFileDiffs).toHaveBeenLastCalledWith('s1', expect.objectContaining({ base: 'staged' }), [
+      'staged.go',
+    ])
     wrapper.unmount()
   })
 
   it('keeps the last good list beside a failed read', async () => {
     const wrapper = await mountView()
     mocks.SessionChanges.mockRejectedValue(new Error('fatal: bad HEAD'))
-    await wrapper.get(testid('changes-base-uncommitted')).trigger('click')
-    await flushPromises()
+    await pick(wrapper, 'changes-target', 'uncommitted')
     expect(wrapper.get(testid('changes-error')).text()).toContain('fatal: bad HEAD')
     expect(wrapper.find(testid('changes-file-a.go-header')).exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('hides and shows the file list, and remembers it', async () => {
+    let wrapper = await mountView()
+    await wrapper.get(testid('changes-files-toggle')).trigger('click')
+    expect(wrapper.find(testid('changes-files')).exists()).toBe(false)
+    expect(wrapper.find(testid('changes-file-a.go-header')).exists()).toBe(true)
+    wrapper.unmount()
+
+    wrapper = await mountView()
+    expect(wrapper.find(testid('changes-files')).exists()).toBe(false)
+    await press('b')
+    expect(wrapper.find(testid('changes-files')).exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('collapses and expands every folder at once', async () => {
+    mocks.SessionChanges.mockResolvedValue(changes([file('x/a.go'), file('x/y/b.go'), file('z/c.go')]))
+    const wrapper = await mountView()
+    const toggle = () => wrapper.get(testid('changes-folders-toggle'))
+    expect(toggle().attributes('aria-label')).toBe('Collapse all folders')
+
+    await toggle().trigger('click')
+    expect(wrapper.find(testid('changes-row-x/a.go')).exists()).toBe(false)
+    expect(wrapper.find(testid('changes-row-z/c.go')).exists()).toBe(false)
+    expect(toggle().attributes('aria-label')).toBe('Expand all folders')
+
+    await toggle().trigger('click')
+    expect(wrapper.find(testid('changes-row-x/y/b.go')).exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  // A scroll turns the code's scrollers off, or WebKit shows code through the sticky header.
+  it('turns the code scrollers off only while the stream scrolls', async () => {
+    const wrapper = await mountView()
+    const overflow = () =>
+      wrapper.get<HTMLElement>(testid('changes-stream')).element.style.getPropertyValue('--diffs-overflow-override')
+    vi.useFakeTimers()
+    try {
+      mocks.scroll!(100)
+      expect(overflow()).toBe('hidden')
+      vi.advanceTimersByTime(100)
+      mocks.scroll!(200)
+      vi.advanceTimersByTime(100)
+      expect(overflow()).toBe('hidden')
+      vi.advanceTimersByTime(100)
+      expect(overflow()).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
+    wrapper.unmount()
+  })
+
+  it('hides viewed files from the list but not from the diffs', async () => {
+    const wrapper = await mountView()
+    await press('v')
+    expect(wrapper.find(testid('changes-row-a.go')).exists()).toBe(true)
+    await wrapper.get(testid('changes-hide-viewed')).trigger('click')
+    expect(wrapper.find(testid('changes-row-a.go')).exists()).toBe(false)
+    expect(wrapper.find(testid('changes-file-a.go-header')).exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('names the commit a comment was made on, and returns to it when picked', async () => {
+    mocks.SessionChanges.mockImplementation((_id: string, target: { base: string; commit: string }) =>
+      Promise.resolve(
+        changes([file('a.go')], {
+          base: target.base,
+          commits: COMMITS,
+          commit: target.base === 'commit' ? target.commit || 'c3' : '',
+        }),
+      ),
+    )
+    const wrapper = await mountView()
+    await press('[')
+    await comment('at this commit')
+    const [saved] = useChangesReview().comments('s1')
+    expect(saved).toMatchObject({ base: 'commit', commit: 'c3' })
+    expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
+
+    await press('[')
+    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('s1', { base: 'commit', against: '', commit: 'c2' })
+    await press('r')
+    await wrapper.get(testid('changes-review')).get('button').trigger('click')
+    await flushPromises()
+    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('s1', { base: 'commit', against: '', commit: 'c3' })
     wrapper.unmount()
   })
 
@@ -328,24 +514,24 @@ describe('ChangesView', () => {
     await flushPromises()
 
     expect(document.querySelector(testid('changes-comment-popover'))).toBeNull()
+    expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
+    await press('r')
     expect(wrapper.get(testid('changes-review')).text()).toContain('rename this')
     expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
     expect(wrapper.get(testid('changes-row-a.go-comments')).text()).toBe('1')
     wrapper.unmount()
   })
 
-  it('remembers a closed panel and leaves it closed for later comments', async () => {
+  it('starts with the panel closed every time, even one left open', async () => {
     let wrapper = await mountView()
     await comment('first')
     await press('r')
-    expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
-    await comment('second')
-    expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
+    expect(wrapper.find(testid('changes-review')).exists()).toBe(true)
     wrapper.unmount()
 
     wrapper = await mountView()
     expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
-    expect(wrapper.get(testid('changes-send-count')).text()).toBe('2')
+    expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
     wrapper.unmount()
   })
 

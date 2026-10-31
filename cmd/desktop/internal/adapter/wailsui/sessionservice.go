@@ -6,7 +6,6 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
-	"github.com/colonyops/hive/internal/hive/gitstatus"
 )
 
 // SessionService is the frontend API for the New Session form and for managing
@@ -86,24 +85,29 @@ func (s *SessionService) SessionGitStatus(ctx context.Context, id string) (Sessi
 	return sessionGitStatusOf(status), nil
 }
 
-// SessionChanges lists what differs in the session's checkout against base,
-// "branch" or "uncommitted". The review view polls it while open.
-func (s *SessionService) SessionChanges(ctx context.Context, id, base string) (SessionChanges, error) {
-	changes, err := s.sessions.SessionChanges(ctx, id, gitstatus.DiffBase(base))
+// SessionChanges lists what differs in the session's checkout for a target. The
+// review view polls it while open.
+func (s *SessionService) SessionChanges(ctx context.Context, id string, target DiffTarget) (SessionChanges, error) {
+	changes, err := s.sessions.SessionChanges(ctx, id, target.gitstatus())
 	if err != nil {
 		return SessionChanges{}, err
 	}
 	return sessionChangesOf(changes), nil
 }
 
-// SessionFileDiffs reads the diffs of paths against base. Only a path in the
+// SessionFileDiffs reads the diffs of paths for a target. Only a path in the
 // current change list is read.
-func (s *SessionService) SessionFileDiffs(ctx context.Context, id, base string, paths []string) ([]SessionFileDiff, error) {
-	diffs, err := s.sessions.SessionFileDiffs(ctx, id, gitstatus.DiffBase(base), paths)
+func (s *SessionService) SessionFileDiffs(ctx context.Context, id string, target DiffTarget, paths []string) ([]SessionFileDiff, error) {
+	diffs, err := s.sessions.SessionFileDiffs(ctx, id, target.gitstatus(), paths)
 	if err != nil {
 		return nil, err
 	}
 	return sessionFileDiffsOf(diffs), nil
+}
+
+// SessionBranches lists the full refs the session's checkout can compare against.
+func (s *SessionService) SessionBranches(ctx context.Context, id string) ([]string, error) {
+	return s.sessions.SessionBranches(ctx, id)
 }
 
 // SessionPullRequest resolves the pull request for a branch SessionGitStatus

@@ -2,10 +2,11 @@ import { shallowRef, watch, type Ref } from 'vue'
 import { SessionFileDiffs as ReadFileDiffs } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type {
   ChangedFile,
+  DiffTarget,
   SessionFileDiff,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { errorText } from '../lib/appError'
-import type { DiffBase } from './useSessionChanges'
+import { targetKey } from './useSessionChanges'
 
 const BATCH_SIZE = 8
 
@@ -28,13 +29,13 @@ export function fileVersion(file: ChangedFile): string {
  */
 export function useFileDiffs(
   sessionId: Ref<string>,
-  base: Ref<DiffBase>,
+  target: Ref<DiffTarget>,
   files: Ref<ChangedFile[]>,
   wanted: Ref<string[]>,
 ): { entries: Ref<ReadonlyMap<string, DiffEntry>> } {
   const entries = shallowRef<ReadonlyMap<string, DiffEntry>>(new Map())
   let reading = false
-  // A read that started before a session or base change must not land after it.
+  // A read that started before a session or target change must not land after it.
   let generation = 0
 
   function versions(): Map<string, string> {
@@ -56,7 +57,7 @@ export function useFileDiffs(
     let diffs: SessionFileDiff[]
     let failed: boolean
     try {
-      diffs = (await ReadFileDiffs(sessionId.value, base.value, batch)) ?? []
+      diffs = (await ReadFileDiffs(sessionId.value, target.value, batch)) ?? []
       failed = !diffs.length
     } catch (err) {
       failed = true
@@ -80,7 +81,7 @@ export function useFileDiffs(
     if (!failed && !diffs.some((diff) => diff.error)) void pump()
   }
 
-  watch([sessionId, base], () => {
+  watch([sessionId, () => targetKey(target.value)], () => {
     generation++
     entries.value = new Map()
     void pump()

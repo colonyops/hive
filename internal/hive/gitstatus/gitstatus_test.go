@@ -40,7 +40,14 @@ type stubGit struct {
 	mergeBaseErr     error
 	files            []git.ChangedFile
 	filesErr         error
-	onRef            func(string)
+	onDiff           func(git.DiffRange)
+	mergeBaseRef     string
+	mergeBaseRefErr  error
+	commitErr        error
+	commits          []git.CommitInfo
+	commitsErr       error
+	onSince          func(string)
+	branches         []string
 	block            bool
 	diffs            map[string]string
 	diffErrs         map[string]error
@@ -68,18 +75,42 @@ func (g stubGit) MergeBase(context.Context, string, string) (string, error) {
 	return g.mergeBase, g.mergeBaseErr
 }
 
-func (g stubGit) ChangedFiles(ctx context.Context, _, ref string) ([]git.ChangedFile, error) {
+func (g stubGit) MergeBaseRef(context.Context, string, string) (string, error) {
+	return g.mergeBaseRef, g.mergeBaseRefErr
+}
+
+func (g stubGit) ResolveCommit(_ context.Context, _, rev string) (string, error) {
+	if g.commitErr != nil && rev != "HEAD" {
+		return "", g.commitErr
+	}
+	return "full-" + rev, nil
+}
+
+func (g stubGit) Commit(_ context.Context, _, commit string) (git.DiffRange, error) {
+	return git.WorkingTree("commit:" + commit), nil
+}
+
+func (g stubGit) Commits(_ context.Context, _, since string, _ int) ([]git.CommitInfo, error) {
+	if g.onSince != nil {
+		g.onSince(since)
+	}
+	return g.commits, g.commitsErr
+}
+
+func (g stubGit) Branches(context.Context, string, int) ([]string, error) { return g.branches, nil }
+
+func (g stubGit) ChangedFiles(ctx context.Context, _ string, diff git.DiffRange) ([]git.ChangedFile, error) {
 	if g.block {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
-	if g.onRef != nil {
-		g.onRef(ref)
+	if g.onDiff != nil {
+		g.onDiff(diff)
 	}
 	return g.files, g.filesErr
 }
 
-func (g stubGit) FileDiff(_ context.Context, _, _ string, file git.ChangedFile) (string, error) {
+func (g stubGit) FileDiff(_ context.Context, _ string, _ git.DiffRange, file git.ChangedFile) (string, error) {
 	if err, ok := g.diffErrs[file.Path]; ok {
 		return "", err
 	}

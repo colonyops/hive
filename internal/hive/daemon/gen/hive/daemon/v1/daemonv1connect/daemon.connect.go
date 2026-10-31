@@ -81,6 +81,8 @@ const (
 	// SessionServiceFileDiffsProcedure is the fully-qualified name of the SessionService's FileDiffs
 	// RPC.
 	SessionServiceFileDiffsProcedure = "/hive.daemon.v1.SessionService/FileDiffs"
+	// SessionServiceBranchesProcedure is the fully-qualified name of the SessionService's Branches RPC.
+	SessionServiceBranchesProcedure = "/hive.daemon.v1.SessionService/Branches"
 )
 
 // DaemonServiceClient is a client for the hive.daemon.v1.DaemonService service.
@@ -257,6 +259,7 @@ type SessionServiceClient interface {
 	// Changes reads the session's checkout on the machine that holds it.
 	Changes(context.Context, *connect.Request[v1.ChangesRequest]) (*connect.Response[v1.ChangesResponse], error)
 	FileDiffs(context.Context, *connect.Request[v1.FileDiffsRequest]) (*connect.Response[v1.FileDiffsResponse], error)
+	Branches(context.Context, *connect.Request[v1.BranchesRequest]) (*connect.Response[v1.BranchesResponse], error)
 }
 
 // NewSessionServiceClient constructs a client for the hive.daemon.v1.SessionService service. By
@@ -372,6 +375,12 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("FileDiffs")),
 			connect.WithClientOptions(opts...),
 		),
+		branches: connect.NewClient[v1.BranchesRequest, v1.BranchesResponse](
+			httpClient,
+			baseURL+SessionServiceBranchesProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("Branches")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -394,6 +403,7 @@ type sessionServiceClient struct {
 	statuses          *connect.Client[v1.StatusesRequest, v1.StatusesResponse]
 	changes           *connect.Client[v1.ChangesRequest, v1.ChangesResponse]
 	fileDiffs         *connect.Client[v1.FileDiffsRequest, v1.FileDiffsResponse]
+	branches          *connect.Client[v1.BranchesRequest, v1.BranchesResponse]
 }
 
 // List calls hive.daemon.v1.SessionService.List.
@@ -481,6 +491,11 @@ func (c *sessionServiceClient) FileDiffs(ctx context.Context, req *connect.Reque
 	return c.fileDiffs.CallUnary(ctx, req)
 }
 
+// Branches calls hive.daemon.v1.SessionService.Branches.
+func (c *sessionServiceClient) Branches(ctx context.Context, req *connect.Request[v1.BranchesRequest]) (*connect.Response[v1.BranchesResponse], error) {
+	return c.branches.CallUnary(ctx, req)
+}
+
 // SessionServiceHandler is an implementation of the hive.daemon.v1.SessionService service.
 type SessionServiceHandler interface {
 	List(context.Context, *connect.Request[v1.ListRequest]) (*connect.Response[v1.ListResponse], error)
@@ -505,6 +520,7 @@ type SessionServiceHandler interface {
 	// Changes reads the session's checkout on the machine that holds it.
 	Changes(context.Context, *connect.Request[v1.ChangesRequest]) (*connect.Response[v1.ChangesResponse], error)
 	FileDiffs(context.Context, *connect.Request[v1.FileDiffsRequest]) (*connect.Response[v1.FileDiffsResponse], error)
+	Branches(context.Context, *connect.Request[v1.BranchesRequest]) (*connect.Response[v1.BranchesResponse], error)
 }
 
 // NewSessionServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -616,6 +632,12 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("FileDiffs")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceBranchesHandler := connect.NewUnaryHandler(
+		SessionServiceBranchesProcedure,
+		svc.Branches,
+		connect.WithSchema(sessionServiceMethods.ByName("Branches")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/hive.daemon.v1.SessionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SessionServiceListProcedure:
@@ -652,6 +674,8 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceChangesHandler.ServeHTTP(w, r)
 		case SessionServiceFileDiffsProcedure:
 			sessionServiceFileDiffsHandler.ServeHTTP(w, r)
+		case SessionServiceBranchesProcedure:
+			sessionServiceBranchesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -727,4 +751,8 @@ func (UnimplementedSessionServiceHandler) Changes(context.Context, *connect.Requ
 
 func (UnimplementedSessionServiceHandler) FileDiffs(context.Context, *connect.Request[v1.FileDiffsRequest]) (*connect.Response[v1.FileDiffsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.FileDiffs is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) Branches(context.Context, *connect.Request[v1.BranchesRequest]) (*connect.Response[v1.BranchesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.Branches is not implemented"))
 }

@@ -69,3 +69,17 @@ func TestDiffFeedbackCutsLongQuotes(t *testing.T) {
 	assert.NotContains(t, got, fmt.Sprintf("+line %d\n", maxQuotedDiffLines))
 	assert.Contains(t, got, "... (5 more lines)")
 }
+
+func TestDiffFeedbackNamesTheVersionACommentWasMadeOn(t *testing.T) {
+	line := DiffComment{Path: "a.go", StartSide: DiffSideAdditions, StartLine: 3, EndSide: DiffSideAdditions, EndLine: 3, Text: "x"}
+
+	inCommit := line
+	inCommit.Commit = "0123456789abcdef"
+	assert.Contains(t, DiffFeedback([]DiffComment{inCommit}), "## 1. a.go (line 3 at commit 01234567)")
+
+	staged := line
+	staged.Staged = true
+	assert.Contains(t, DiffFeedback([]DiffComment{staged}), "## 1. a.go (line 3 of the staged version)")
+
+	assert.Contains(t, DiffFeedback([]DiffComment{line}), "## 1. a.go (line 3)")
+}

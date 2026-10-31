@@ -26,12 +26,17 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ pick: [path: string]; 'open-editor': [] }>()
 
+const folders = computed(() =>
+  gitRows(props.files, props.layout, () => true).flatMap((row) => (row.kind === 'dir' ? [row.key] : [])),
+)
 const expansion = useTreeExpansion<string>('hive.git.tree.expanded', {
   key: (dir) => dir,
   defaultOpen: () => true,
   filtering: () => false,
-  nodes: () => [],
+  nodes: () => folders.value,
 })
+const anyFolderOpen = computed(() => folders.value.some((dir) => expansion.expanded(dir)))
+defineExpose({ anyFolderOpen, setAllFolders: expansion.setAll })
 
 const rows = computed(() => gitRows(props.files, props.layout, expansion.expanded))
 
@@ -168,9 +173,9 @@ function onMenuSelect(id: string): void {
           aria-hidden="true"
         />
         <component
-          :is="folderIcon(row.label, expansion.expanded(row.key)).icon"
+          :is="folderIcon(gitFileName(row.label), expansion.expanded(row.key)).icon"
           class="size-3.5 shrink-0"
-          :class="folderIcon(row.label, expansion.expanded(row.key)).color"
+          :class="folderIcon(gitFileName(row.label), expansion.expanded(row.key)).color"
           aria-hidden="true"
         />
         <span class="min-w-0 flex-1 truncate">{{ row.label }}</span>

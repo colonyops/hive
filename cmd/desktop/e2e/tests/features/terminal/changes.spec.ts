@@ -35,6 +35,10 @@ const PATCHES: Record<string, string> = {
   'internal/platform/git/changes_test.go': '@@ -0,0 +1,2 @@\n+package git_test\n+\n',
   'web/ui/App.vue': '@@ -0,0 +1,2 @@\n+<template>\n+</template>\n',
 }
+const COMMITS = [
+  { id: 'c2c2c2c2c2', subject: 'Second commit', author: 'Hive', unix: 1760000200 },
+  { id: 'c1c1c1c1c1', subject: 'First commit', author: 'Hive', unix: 1760000100 },
+]
 const noState = { binary: false, truncated: false, unavailable: false, gone: false, error: '' }
 
 async function changesFixture(page: Page, sent: unknown[][] = []) {
@@ -43,6 +47,7 @@ async function changesFixture(page: Page, sent: unknown[][] = []) {
   const scratch = bindingID('terminalservice', 'Scratch')
   const changes = bindingID('sessionservice', 'SessionChanges')
   const diffs = bindingID('sessionservice', 'SessionFileDiffs')
+  const branches = bindingID('sessionservice', 'SessionBranches')
   const targets = bindingID('reviewservice', 'ChangesTargets')
   const send = bindingID('reviewservice', 'SendChanges')
   await page.route('**/wails/runtime', async (route) => {
@@ -52,11 +57,14 @@ async function changesFixture(page: Page, sent: unknown[][] = []) {
     else if (args?.methodID === list) answer = [{ id: 'review', name: 'Review', slug: 'review', repo: '', state: 'active' }]
     else if (args?.methodID === scratch) answer = { slug: '', name: '' }
     else if (args?.methodID === changes) {
-      const base = args.args[1]
+      const { base, against, commit } = args.args[1]
       answer = {
         resolved: true, branch: 'feat/review', defaultBranch: 'main', base, branchAvailable: true, truncated: false,
+        against, commit: base === 'commit' ? commit || COMMITS[0].id : '', commits: COMMITS,
         files: base === 'branch' ? FILES : FILES.slice(0, 1),
       }
+    } else if (args?.methodID === branches) {
+      answer = ['refs/heads/main', 'refs/heads/release', 'refs/remotes/origin/release']
     } else if (args?.methodID === diffs) {
       answer = (args.args[2] as string[]).map((path) => ({
         path, text: PATCHES[path] ?? '', ...noState, binary: path.endsWith('.png'),
@@ -124,9 +132,36 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await page.screenshot({ path: screenshotPath(`changes-split-${browserName}.png`) })
     await page.keyboard.press('s')
 
-    await page.getByTestId('changes-base-uncommitted').click()
+    await page.getByTestId('changes-against').click()
+    await page.getByTestId('changes-against-option-refs/heads/release').click()
+    await expect(page.getByTestId('changes-against')).toContainText('release')
+    await page.screenshot({ path: screenshotPath(`changes-against-${browserName}.png`) })
+
+    await page.getByTestId('changes-target').click()
+    await expect(page.getByTestId('changes-target-option-c1c1c1c1c1')).toContainText('First commit')
+    await page.screenshot({ path: screenshotPath(`changes-target-${browserName}.png`) })
+    await page.getByTestId('changes-target-option-uncommitted').click()
     await expect(page.getByTestId('changes-total')).toHaveText('+3-1')
     await expect(page.getByTestId('changes-file-web/ui/App.vue-header')).toHaveCount(0)
+
+    await page.keyboard.press('[')
+    await expect(page.getByTestId('changes-commit-position')).toHaveText('2/2')
+    await page.keyboard.press('[')
+    await expect(page.getByTestId('changes-commit-position')).toHaveText('1/2')
+    await expect(page.getByTestId('changes-target')).toContainText('First commit')
+    await page.screenshot({ path: screenshotPath(`changes-commit-${browserName}.png`) })
+    await page.getByTestId('changes-target').click()
+    await page.getByTestId('changes-target-option-branch').click()
+
+    await page.getByTestId('changes-folders-toggle').click()
+    await expect(page.getByTestId('changes-row-web/ui/App.vue')).toHaveCount(0)
+    await page.getByTestId('changes-folders-toggle').click()
+    await expect(page.getByTestId('changes-row-web/ui/App.vue')).toBeVisible()
+    await page.keyboard.press('b')
+    await expect(page.getByTestId('changes-files')).toBeHidden()
+    await page.screenshot({ path: screenshotPath(`changes-no-rail-${browserName}.png`) })
+    await page.keyboard.press('b')
+    await expect(page.getByTestId('changes-files')).toBeVisible()
 
     await page.keyboard.press('Escape')
     await expect(view).toBeHidden()
@@ -162,6 +197,8 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await expect(popover).toBeHidden()
 
     const review = page.getByTestId('changes-review')
+    await expect(review).toBeHidden()
+    await page.getByTestId('changes-review-toggle').click()
     await expect(review).toContainText('Wrap this error.')
     await expect(stream).toContainText('Wrap this error.')
     await expect(page.getByTestId('changes-send-count')).toHaveText('1')
@@ -244,6 +281,8 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await page.keyboard.press('Meta+k')
     await page.getByTestId('command-palette-input').fill('Toggle Changes')
     await page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' }).click()
+    await expect(review).toBeHidden()
+    await page.keyboard.press('r')
     await expect(review).toBeVisible()
     expect((await review.boundingBox())!.width).toBe(resized)
   })

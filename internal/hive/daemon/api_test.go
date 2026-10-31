@@ -59,16 +59,16 @@ func TestClientDrivesTheSessionAPIThroughTheDaemon(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, sessionsvc.Risk{}, risk)
 
-	changes, err := client.SessionChanges(ctx, created.ID, gitstatus.DiffBaseUncommitted)
+	changes, err := client.SessionChanges(ctx, created.ID, gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted})
 	require.NoError(t, err)
 	assert.True(t, changes.Resolved)
 	assert.Equal(t, gitstatus.DiffBaseUncommitted, changes.Base)
 	assert.Empty(t, changes.Files)
 
-	_, err = client.SessionChanges(ctx, "no-such-session", gitstatus.DiffBaseBranch)
+	_, err = client.SessionChanges(ctx, "no-such-session", gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch})
 	require.ErrorIs(t, err, session.ErrNotFound)
 
-	diffs, err := client.SessionFileDiffs(ctx, created.ID, gitstatus.DiffBaseUncommitted, []string{"not-changed.txt"})
+	diffs, err := client.SessionFileDiffs(ctx, created.ID, gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, []string{"not-changed.txt"})
 	require.NoError(t, err)
 	assert.Equal(t, []gitstatus.FileDiff{{Path: "not-changed.txt", Gone: true}}, diffs)
 

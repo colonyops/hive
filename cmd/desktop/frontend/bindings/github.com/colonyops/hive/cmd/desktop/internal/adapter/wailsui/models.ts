@@ -208,6 +208,17 @@ export interface DevToolsInfo {
 }
 
 /**
+ * SessionChanges is what the review view lists. Base is the base the read used,
+ * which is "uncommitted" whenever BranchAvailable is false.
+ * DiffTarget says what a read compares. See gitstatus.DiffTarget.
+ */
+export interface DiffTarget {
+    "base": string;
+    "against": string;
+    "commit": string;
+}
+
+/**
  * DocumentReviewWire is app.DocumentReview with its comments converted.
  */
 export interface DocumentReviewWire {
@@ -616,18 +627,24 @@ export interface ServerSessions {
     "sessions": SessionSummary[] | null;
 }
 
-/**
- * SessionChanges is what the review view lists. Base is the base the read used,
- * which is "uncommitted" whenever BranchAvailable is false.
- */
 export interface SessionChanges {
     "resolved": boolean;
     "branch": string;
     "defaultBranch": string;
     "base": string;
     "branchAvailable": boolean;
+    "against": string;
+    "commit": string;
+    "commits": SessionCommit[] | null;
     "files": ChangedFile[] | null;
     "truncated": boolean;
+}
+
+export interface SessionCommit {
+    "id": string;
+    "subject": string;
+    "author": string;
+    "unix": number;
 }
 
 export interface SessionCondition {
