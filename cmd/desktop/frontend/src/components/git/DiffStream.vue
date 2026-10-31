@@ -33,7 +33,7 @@ import type { ChangesComment } from '../../stores/useChangesReview'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
-  /** Which read this stream shows: a session and a base. Held diffs are cached under it. */
+  /** Which read this stream shows: a session and a target. Held diffs are cached under it. */
   scope: string
   files: ChangedFile[]
   entries: ReadonlyMap<string, DiffEntry>
@@ -41,7 +41,6 @@ const props = defineProps<{
   viewedPaths: ReadonlySet<string>
   current: string | null
   mode: DiffMode
-  /** The comments to draw under their lines, by file. */
   comments: ReadonlyMap<string, readonly ChangesComment[]>
   isOutdated: (comment: ChangesComment) => boolean
   searchQuery: string
@@ -263,6 +262,7 @@ function syncItems(): void {
   )
   viewer?.setItems(shown.value.map(itemFor))
   updatePinned()
+  if (pendingJump && !fileByPath.value.has(pendingJump)) pendingJump = null
   if (pendingJump && built.has(pendingJump)) {
     const path = pendingJump
     pendingJump = null
@@ -299,8 +299,10 @@ function focus(): void {
 }
 
 function scrollToFile(path: string): void {
-  if (built.has(path)) viewer?.scrollTo({ type: 'item', id: path, align: 'start' })
-  else pendingJump = path
+  if (built.has(path)) {
+    pendingJump = null
+    viewer?.scrollTo({ type: 'item', id: path, align: 'start' })
+  } else pendingJump = path
 }
 
 /** Moves to the next or previous hunk across the whole list. False when there is none. */
@@ -360,11 +362,17 @@ watch(
   () => viewer?.setOptions(viewerOptions()),
   { flush: 'post' },
 )
-watch(platform.theme, (theme) => {
-  pool.setRenderOptions({ theme: diffThemeName(theme) }).catch((err: unknown) => {
-    log.warn('could not switch the diff theme', { err })
-  })
-})
+// Immediate because the pool outlives this view, and the theme can change while no
+// stream is open to hear of it. The pool does nothing for the theme it already has.
+watch(
+  platform.theme,
+  (theme) => {
+    pool.setRenderOptions({ theme: diffThemeName(theme) }).catch((err: unknown) => {
+      log.warn('could not switch the diff theme', { err })
+    })
+  },
+  { immediate: true },
+)
 </script>
 
 <template>

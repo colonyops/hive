@@ -66,6 +66,23 @@ describe('useChangesReview', () => {
     expect(store.comments('s1')).toEqual([])
   })
 
+  it('keeps what was added or edited during the send, and records only what went', async () => {
+    let finish!: () => void
+    mocks.SendChanges.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)))
+    const store = useChangesReview()
+    const edited = store.add('s1', { ...span, path: 'a.go', text: 'before' })
+    store.add('s1', { ...span, path: 'b.go', text: 'delivered' })
+
+    const sending = store.send('s1', '%1')
+    store.update('s1', edited.id, 'after')
+    store.add('s1', { ...span, path: 'c.go', text: 'late' })
+    finish()
+    expect(await sending).toBeNull()
+
+    expect(store.comments('s1').map((comment) => comment.text)).toEqual(['after', 'late'])
+    expect(store.sentReviews('s1')[0].comments.map((comment) => comment.text)).toEqual(['before', 'delivered'])
+  })
+
   it('keeps the last three sent reviews, newest first', async () => {
     mocks.SendChanges.mockResolvedValue(undefined)
     const store = useChangesReview()

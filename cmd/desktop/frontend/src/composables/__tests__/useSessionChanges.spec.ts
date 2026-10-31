@@ -52,6 +52,38 @@ describe('useSessionChanges', () => {
     scope.stop()
   })
 
+  it('stops polling when disposed during a read', async () => {
+    const { scope } = setup()
+    await flushPromises()
+    let finish!: (value: unknown) => void
+    mocks.SessionChanges.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)))
+    await vi.advanceTimersByTimeAsync(5_000)
+    mocks.SessionChanges.mockClear()
+
+    scope.stop()
+    finish(answer('late'))
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    expect(mocks.SessionChanges).not.toHaveBeenCalled()
+  })
+
+  it("drops the last target's list when the first read of a new one fails, but not when a poll does", async () => {
+    const { api, base, scope } = setup()
+    await flushPromises()
+
+    mocks.SessionChanges.mockRejectedValueOnce(new Error('poll failed'))
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(api.changes.value?.branch).toBe('branch-1')
+
+    mocks.SessionChanges.mockRejectedValueOnce(new Error('bad target'))
+    base.value = 'staged'
+    await flushPromises()
+    expect(api.changes.value).toBeNull()
+    expect(api.error.value).toBeTruthy()
+    expect(api.pending.value).toBe(false)
+    scope.stop()
+  })
+
   it('stops reading while hidden or blurred, and reads again on return', async () => {
     const { visible, scope } = setup()
     await flushPromises()

@@ -1,6 +1,8 @@
 export interface DragGestureOptions {
   onMove: (event: PointerEvent) => void
   onEnd?: (event: PointerEvent) => void
+  /** The system took the pointer away, so the drag ends where it is and commits nothing. */
+  onCancel?: () => void
   pointerCapture?: boolean
 }
 
@@ -23,7 +25,7 @@ export function startDrag(event: PointerEvent, options: DragGestureOptions): () 
     stopped = true
     window.removeEventListener('pointermove', options.onMove)
     window.removeEventListener('pointerup', onUp)
-    window.removeEventListener('pointercancel', stop)
+    window.removeEventListener('pointercancel', onCancel)
     window.removeEventListener('selectstart', preventSelection, true)
     target?.releasePointerCapture?.(pointerId)
   }
@@ -33,9 +35,14 @@ export function startDrag(event: PointerEvent, options: DragGestureOptions): () 
     options.onEnd?.(upEvent)
   }
 
+  function onCancel(): void {
+    stop()
+    options.onCancel?.()
+  }
+
   window.addEventListener('pointermove', options.onMove)
   window.addEventListener('pointerup', onUp)
-  window.addEventListener('pointercancel', stop)
+  window.addEventListener('pointercancel', onCancel)
   window.addEventListener('selectstart', preventSelection, true)
 
   return stop

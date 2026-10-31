@@ -21,7 +21,7 @@ export function targetKey(target: DiffTarget): string {
 }
 
 /**
- * The changed files in one session's checkout, for the Git pane. It reads only
+ * The changed files in one session's checkout, for the Changes view. It reads only
  * while visible() holds and the window has focus, because a read costs several
  * git subprocesses. A failed read keeps the last good list beside its error.
  */
@@ -41,10 +41,11 @@ export function useSessionChanges(
   const pending = ref(false)
   const { focused } = useWindowFocus()
 
-  // An answer for the session or base you just left must not paint over the
+  // An answer for the session or target you just left must not paint over the
   // one you switched to.
   let sequence = 0
   let timer: ReturnType<typeof setTimeout> | undefined
+  let disposed = false
 
   async function refresh(): Promise<void> {
     const id = sessionId.value
@@ -63,6 +64,9 @@ export function useSessionChanges(
     } catch (err) {
       if (current !== sequence) return
       error.value = errorText(err, 'Could not read the changes.')
+      // The first read for a target has no list of its own, and the last target's
+      // would be read and commented on as if it were this one's.
+      if (pending.value) changes.value = null
     }
     pending.value = false
   }
@@ -76,7 +80,8 @@ export function useSessionChanges(
 
   async function poll(): Promise<void> {
     if (visible() && focused.value) await refresh()
-    schedule()
+    // Disposal during that read found no timer to clear, so only this stops the loop.
+    if (!disposed) schedule()
   }
 
   watch(
@@ -100,6 +105,7 @@ export function useSessionChanges(
   )
 
   onScopeDispose(() => {
+    disposed = true
     sequence++
     clearTimeout(timer)
   })

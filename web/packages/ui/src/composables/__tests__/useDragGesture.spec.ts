@@ -46,6 +46,17 @@ describe('startDrag', () => {
     expect(onMove).not.toHaveBeenCalled()
   })
 
+  it('reports a cancelled drag through onCancel, not onEnd', () => {
+    const onEnd = vi.fn()
+    const onCancel = vi.fn()
+    startDrag(pointerEvent('pointerdown', 0), { onMove: vi.fn(), onEnd, onCancel })
+
+    window.dispatchEvent(pointerEvent('pointercancel', 0))
+
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(onEnd).not.toHaveBeenCalled()
+  })
+
   it('blocks text selection only for the length of the drag', () => {
     const selectStart = () => {
       const event = new Event('selectstart', { bubbles: true, cancelable: true })

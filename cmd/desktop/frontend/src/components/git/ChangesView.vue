@@ -80,8 +80,8 @@ const target = computed(() => ({ base: base.value, against: against.value, commi
 const layout = useStorage<GitLayout>('hive.git.layout', 'tree')
 const mode = useStorage<DiffMode>('hive.git.diffMode', 'unified')
 
-// Held diffs set the scrollbar's length and take memory, so the read stops this
-// many files from the one on screen. Scrolling on reads further.
+// Held diffs set the scrollbar's length and take memory, so the read takes this
+// many open files nearest the one on screen. Scrolling on reads further.
 const READ_WINDOW = 200
 
 const { changes, error, pending } = useSessionChanges(sessionId, target, () => true)
@@ -274,12 +274,18 @@ function inShownComparison(comment: ChangesComment): boolean {
   return comment.base !== 'commit' || comment.commit === changes.value?.commit
 }
 
+// Stamps belong to a comparison, so only the comment's own can say it moved.
 function isOutdated(comment: ChangesComment): boolean {
+  if (pending.value || !inShownComparison(comment)) return false
   const file = files.value.find((candidate) => candidate.path === comment.path)
   return !file || fileVersion(file) !== comment.version
 }
 
+// The comparison and version are the diff's when the selection was made: the view
+// can move to another session or comparison, or the file can change, during typing.
 interface CommentDraft {
+  sessionId: string
+  comparison: Pick<ChangesComment, 'base' | 'against' | 'commit' | 'staged' | 'version'>
   path: string
   span: DiffSpan
   rect: DiffLineSelection['rect']
@@ -289,9 +295,18 @@ const draft = ref<CommentDraft | null>(null)
 
 function startComment(selection: DiffLineSelection): void {
   const span = diffSpan(entryRows(entries.value.get(selection.path)), selection.range)
-  if (!span) return
+  const file = files.value.find((candidate) => candidate.path === selection.path)
+  if (!span || !file) return
   stream.value?.selectLines(selection.path, selection.range)
   draft.value = {
+    sessionId: props.sessionId,
+    comparison: {
+      base: shownBase.value,
+      against: shownBase.value === 'branch' ? changes.value?.against : undefined,
+      commit: shownBase.value === 'commit' ? changes.value?.commit : undefined,
+      staged: shownBase.value === 'staged' || undefined,
+      version: fileVersion(file),
+    },
     path: selection.path,
     span: selection.text ? { ...span, quote: selection.text } : span,
     rect: selection.rect,
@@ -321,18 +336,8 @@ function endDraft(): void {
 
 function saveDraft(text: string): void {
   const held = draft.value
-  const file = files.value.find((candidate) => candidate.path === held?.path)
-  if (!held || !file) return
-  review.add(props.sessionId, {
-    ...held.span,
-    path: held.path,
-    base: shownBase.value,
-    against: shownBase.value === 'branch' ? changes.value?.against : undefined,
-    commit: shownBase.value === 'commit' ? changes.value?.commit : undefined,
-    staged: shownBase.value === 'staged' || undefined,
-    version: fileVersion(file),
-    text: text.trim(),
-  })
+  if (!held) return
+  review.add(held.sessionId, { ...held.span, ...held.comparison, path: held.path, text: text.trim() })
   endDraft()
 }
 

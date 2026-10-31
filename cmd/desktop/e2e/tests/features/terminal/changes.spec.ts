@@ -293,6 +293,7 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     const resized = (await review.boundingBox())!.width
 
     await page.reload()
+    await page.locator('[data-file-drop-target]:visible').first().waitFor()
     await page.keyboard.press('Meta+k')
     await page.getByTestId('command-palette-input').fill('Toggle Changes')
     await page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' }).click()

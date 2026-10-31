@@ -269,12 +269,70 @@ describe('ChangesView', () => {
   })
 
   it('does not read a file while it is folded', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const wrapper = await mountView()
+      mocks.SessionFileDiffs.mockClear()
+      await press('o')
+      mocks.SessionChanges.mockResolvedValue(changes([file('a.go', { stamp: '2' }), file('b.go', { stamp: '2' })]))
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(mocks.SessionFileDiffs).toHaveBeenCalledExactlyOnceWith('s1', expect.anything(), ['b.go'])
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not jump back to a file that loads after a newer jump', async () => {
+    let answer!: (diffs: unknown[]) => void
+    mocks.SessionFileDiffs.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
     const wrapper = await mountView()
-    mocks.SessionFileDiffs.mockClear()
     await press('o')
-    mocks.SessionChanges.mockResolvedValue(changes([file('a.go', { stamp: '2' }), file('b.go')]))
+    await press('j')
+    await press('k')
+    mocks.scrollTo.mockClear()
+
+    answer([{ path: 'b.go', text: '@@ -1 +1 @@\n-old\n+new\n', ...noState }])
     await flushPromises()
-    expect(mocks.SessionFileDiffs).not.toHaveBeenCalled()
+
+    expect(mocks.scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'b.go' }))
+    wrapper.unmount()
+  })
+
+  it('keeps a draft to the comparison it was started in', async () => {
+    mocks.SessionChanges.mockImplementation((_id: string, target: { base: string }) =>
+      Promise.resolve(changes([file('a.go')], { base: target.base })),
+    )
+    const wrapper = await mountView()
+    await selectLines('a.go', 1)
+    const field = document.querySelector<HTMLTextAreaElement>(testid('changes-comment-text'))!
+    field.value = 'on the branch diff'
+    field.dispatchEvent(new Event('input'))
+
+    await press('[')
+    mocks.SessionChanges.mockResolvedValue(changes([], { base: 'commit' }))
+    await flushPromises()
+    document.querySelector<HTMLButtonElement>(testid('changes-comment-save'))!.click()
+    await flushPromises()
+
+    expect(useChangesReview().comments('s1')).toMatchObject([
+      { path: 'a.go', base: 'branch', text: 'on the branch diff' },
+    ])
+    wrapper.unmount()
+  })
+
+  it('marks a comment outdated only in the comparison it belongs to', async () => {
+    mocks.SessionChanges.mockImplementation((_id: string, target: { base: string }) =>
+      Promise.resolve(changes([file('a.go', { stamp: target.base })], { base: target.base })),
+    )
+    const wrapper = await mountView()
+    await comment('note')
+    await press('r')
+    expect(wrapper.find('[data-testid$="-outdated"]').exists()).toBe(false)
+
+    await press('[')
+    await flushPromises()
+    expect(wrapper.find('[data-testid$="-outdated"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -468,12 +526,33 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
-  it('keeps the last good list beside a failed read', async () => {
+  it('applies the current theme on opening, since the pool outlives a closed view', async () => {
     const wrapper = await mountView()
-    mocks.SessionChanges.mockRejectedValue(new Error('fatal: bad HEAD'))
+    expect(mocks.setRenderOptions).toHaveBeenCalledWith({ theme: expect.stringMatching(/^code-/) })
+    wrapper.unmount()
+  })
+
+  it('keeps the last good list beside a failed poll', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const wrapper = await mountView()
+      mocks.SessionChanges.mockRejectedValue(new Error('fatal: bad HEAD'))
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(wrapper.get(testid('changes-error')).text()).toContain('fatal: bad HEAD')
+      expect(wrapper.find(testid('changes-file-a.go-header')).exists()).toBe(true)
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("does not read the last target's files against a target that failed to load", async () => {
+    const wrapper = await mountView()
+    mocks.SessionFileDiffs.mockClear()
+    mocks.SessionChanges.mockRejectedValue(new Error('fatal: bad ref'))
     await pick(wrapper, 'changes-target', 'uncommitted')
-    expect(wrapper.get(testid('changes-error')).text()).toContain('fatal: bad HEAD')
-    expect(wrapper.find(testid('changes-file-a.go-header')).exists()).toBe(true)
+    expect(wrapper.get(testid('changes-error')).text()).toContain('fatal: bad ref')
+    expect(mocks.SessionFileDiffs).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 

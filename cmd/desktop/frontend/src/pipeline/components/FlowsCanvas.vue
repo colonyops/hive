@@ -371,6 +371,10 @@ function onOutputPortPointerDown(e: PointerEvent, node: FlowNode, portIndex: num
       wireDraft.value = null
       hoverTargetId.value = null
     },
+    onCancel: () => {
+      wireDraft.value = null
+      hoverTargetId.value = null
+    },
   })
 }
 
@@ -457,6 +461,7 @@ function onSurfacePointerDown(e: PointerEvent) {
       if (!moved) selectedNodeId.value = null
       cleanup()
     },
+    onCancel: () => cleanup(),
   })
 
   function cleanup() {

@@ -16,7 +16,7 @@ export interface ChangesComment extends DiffSpan {
   path: string
   /** The comparison the comment was made in: removed lines are only numbered within it. */
   base: DiffBase
-  /** The ref a branch comparison used. Missing on a comment from before there was a choice. */
+  /** The ref a branch comparison used. */
   against?: string
   /** The commit a commit comparison showed. */
   commit?: string
@@ -39,9 +39,8 @@ const MAX_SENT_REVIEWS = 3
 
 /**
  * Comments on a session's diffs, waiting to go to its agent. In browser storage
- * rather than hive.db: they anchor to lines an agent is about to move, are gone
- * the moment they are sent, and belong to this machine's sitting. A relaunch
- * still must not lose what the user wrote.
+ * rather than hive.db: they anchor to lines an agent is about to move, and belong
+ * to this machine's sitting. A relaunch still must not lose what the user wrote.
  */
 export const useChangesReview = defineStore('changesReview', () => {
   const sessions = useStorage<Record<string, ChangesComment[]>>('hive.changes.comments', {})
@@ -85,21 +84,29 @@ export const useChangesReview = defineStore('changesReview', () => {
     return (await ChangesTargets(sessionId)) ?? []
   }
 
-  /** Delivers the review and clears it. A failed delivery keeps every comment. Returns why it failed, or null. */
+  /**
+   * Delivers the review and clears what it delivered. A failed delivery keeps every
+   * comment, and a comment added or edited during the delivery stays to send next.
+   * Returns why it failed, or null.
+   */
   async function send(sessionId: string, pane: string): Promise<string | null> {
+    const delivered = [...comments(sessionId)]
     try {
-      await SendChanges(sessionId, pane, [...comments(sessionId)])
+      await SendChanges(sessionId, pane, delivered)
     } catch (err) {
       return errorText(err, 'Could not send the feedback.')
     }
-    const held = [...comments(sessionId)]
-    write(sessionId, [])
+    const deliveredText = new Map(delivered.map((comment) => [comment.id, comment.text]))
+    write(
+      sessionId,
+      comments(sessionId).filter((comment) => deliveredText.get(comment.id) !== comment.text),
+    )
     sent.value = {
       ...sent.value,
-      [sessionId]: [{ id: crypto.randomUUID(), sentAt: Date.now(), comments: held }, ...sentReviews(sessionId)].slice(
-        0,
-        MAX_SENT_REVIEWS,
-      ),
+      [sessionId]: [
+        { id: crypto.randomUUID(), sentAt: Date.now(), comments: delivered },
+        ...sentReviews(sessionId),
+      ].slice(0, MAX_SENT_REVIEWS),
     }
     return null
   }
