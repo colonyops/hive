@@ -48,8 +48,8 @@ async function mountView(applet: object = table) {
   return wrapper
 }
 
-function press(key: string): void {
-  window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+function press(key: string, target: EventTarget = document.body): void {
+  target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
 }
 
 describe('AppletView', () => {
@@ -93,7 +93,12 @@ describe('AppletView', () => {
     press('Enter')
     await flushPromises()
     const popup = usePopupTerminal()
-    expect(popup.request.value).toMatchObject({ applet: 'docker', appletAction: 'logs', sessionSlug: 'sess' })
+    expect(popup.request.value).toMatchObject({
+      applet: 'docker',
+      appletAction: 'logs',
+      appletRow: rows[0],
+      sessionSlug: 'sess',
+    })
     expect(popup.visible.value).toBe(true)
     expect(runMock).not.toHaveBeenCalled()
     wrapper.unmount()
@@ -105,6 +110,18 @@ describe('AppletView', () => {
     press('r')
     await flushPromises()
     expect(runMock).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('ignores a key aimed at a surface stacked over it', async () => {
+    const wrapper = await mountView()
+    const other = document.createElement('div')
+    other.tabIndex = -1
+    document.body.append(other)
+    press('r', other)
+    await flushPromises()
+    expect(runMock).not.toHaveBeenCalled()
+    other.remove()
     wrapper.unmount()
   })
 

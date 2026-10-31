@@ -5,6 +5,7 @@ import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import {
+  BridgeToken,
   Context,
   Exec,
   KillSpawns,
@@ -33,6 +34,12 @@ const emit = defineEmits<{ close: [] }>()
 const popupTerminal = usePopupTerminal()
 const { showToast } = useToasts()
 const frame = ref<HTMLIFrameElement | null>(null)
+
+// The frame can navigate to another page and keep its window, so the window does not
+// prove who is asking. Only the applet's own pages were served this.
+// AppletHost keys this component by applet id, so the id cannot change under it.
+// eslint-disable-next-line vue/no-setup-props-reactivity-loss
+const token = BridgeToken(props.applet.id)
 
 const src = computed(
   () =>
@@ -71,22 +78,34 @@ const methods: Record<string, (args: BridgeArgs) => unknown> = {
 
 useEventListener(window, 'message', (event: MessageEvent) => {
   const source = frame.value?.contentWindow
-  const message = event.data as { hiveApplet?: number; id?: number; method?: string; args?: BridgeArgs } | null
+  const message = event.data as {
+    hiveApplet?: number
+    token?: string
+    id?: number
+    method?: string
+    args?: BridgeArgs
+  } | null
   if (!source || event.source !== source || message?.hiveApplet !== 1) return
   const reply = (body: { result?: unknown; error?: string }) => {
     source.postMessage({ hiveApplet: 1, id: message.id, ...body }, '*')
   }
-  const method = methods[message.method ?? '']
-  if (!method) {
-    reply({ error: `hive has no method "${message.method}"` })
-    return
-  }
-  Promise.resolve()
-    .then(() => method(message.args ?? {}))
-    .then(
-      (result) => reply({ result }),
-      (cause: unknown) => reply({ error: cause instanceof Error ? cause.message : String(cause) }),
-    )
+  void token.then(
+    (expected) => {
+      if (message.token !== expected) return
+      const method = methods[message.method ?? '']
+      if (!method) {
+        reply({ error: `hive has no method "${message.method}"` })
+        return
+      }
+      Promise.resolve()
+        .then(() => method(message.args ?? {}))
+        .then(
+          (result) => reply({ result }),
+          (cause: unknown) => reply({ error: cause instanceof Error ? cause.message : String(cause) }),
+        )
+    },
+    () => {},
+  )
 })
 
 // A page's Escape arrives through the bridge. This one is for focus outside the frame.

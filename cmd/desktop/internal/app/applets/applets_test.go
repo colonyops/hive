@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -142,6 +143,51 @@ func TestStoreKeepsLastGoodAndReportsTheError(t *testing.T) {
 	assert.Equal(t, "Thing", entries[0].Applet.Title)
 	_, ok = store.Get("thing")
 	assert.True(t, ok, "the last good declaration keeps running")
+}
+
+func TestABrokenFileKeepsTheRevisionSoARunningPageStaysUp(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root)
+	write(t, root, "thing", minimal)
+	require.NoError(t, store.Reload())
+	before := store.List()[0].Revision
+	require.NotZero(t, before)
+
+	write(t, root, "thing", "version: [")
+	require.NoError(t, store.Reload())
+	assert.Equal(t, before, store.List()[0].Revision)
+}
+
+func TestRevisionFollowsPagesButNotData(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root)
+	write(t, root, "thing", minimal)
+	write(t, root, "other", minimal)
+	require.NoError(t, store.Reload())
+	revisions := func() map[string]int64 {
+		out := map[string]int64{}
+		for _, entry := range store.List() {
+			out[entry.Applet.ID] = entry.Revision
+		}
+		return out
+	}
+	before := revisions()
+
+	stamp := func(name string, offset time.Duration) {
+		t.Helper()
+		path := filepath.Join(root, "thing", name)
+		require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))
+		at := time.UnixMilli(before["thing"]).Add(offset)
+		require.NoError(t, os.Chtimes(path, at, at))
+	}
+	stamp("scores.log", time.Hour)
+	require.NoError(t, store.Reload())
+	assert.Equal(t, before["thing"], revisions()["thing"], "a data file does not restart the page")
+
+	stamp("game.js", time.Hour)
+	require.NoError(t, store.Reload())
+	assert.Greater(t, revisions()["thing"], before["thing"])
+	assert.Equal(t, before["other"], revisions()["other"], "another applet is left alone")
 }
 
 func TestStoreListsAFileThatNeverLoaded(t *testing.T) {

@@ -88,7 +88,9 @@ Commands run through `sh -c` in the on-screen session's checkout when there is o
 otherwise in the applet's directory, with `$HIVE_APPLET_DIR` set.
 
 `localStorage` works and persists per applet. Cookies and IndexedDB do not, because
-the frame has an opaque origin. Read and write files for anything larger.
+the frame has an opaque origin. Read and write files for anything larger. A page can
+navigate to another HTML file of its own, but cannot `fetch` one. If the frame
+navigates to any other site, that page gets no `window.hive`.
 
 Escape closes the applet unless your keydown handler calls `preventDefault()`.
 Audio needs a user gesture first, as on any page.

@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -72,6 +73,9 @@ type AppletAsset struct {
 	Name        string
 	ContentType string
 	Body        []byte
+	// HoldsToken marks a response carrying the bridge token, which must never be
+	// readable cross-origin.
+	HoldsToken bool
 }
 
 func (s *AppletsService) page(id string) (applets.Applet, error) {
@@ -81,6 +85,9 @@ func (s *AppletsService) page(id string) (applets.Applet, error) {
 	}
 	if applet.View != applets.ViewHTML {
 		return applets.Applet{}, Errorf(KindInvalid, "applet %q is not an html applet", id)
+	}
+	if !s.pages {
+		return applets.Applet{}, Errorf(KindUnavailable, appletPagesUnavailable)
 	}
 	return applet, nil
 }
@@ -98,6 +105,23 @@ func (s *AppletsService) Context(ctx context.Context, id, sessionSlug string) (A
 	return AppletContext{ID: applet.ID, Title: applet.Title, Dir: applet.Dir, Cwd: cwd, SessionSlug: sessionSlug}, nil
 }
 
+// BridgeToken is the secret a page proves itself with on the bridge. The frame can
+// navigate away from the applet and keep its window, so the window alone does not say
+// who is asking. Only pages served by Asset hold the token.
+func (s *AppletsService) BridgeToken(id string) (string, error) {
+	if _, err := s.page(id); err != nil {
+		return "", err
+	}
+	s.tokensMu.Lock()
+	defer s.tokensMu.Unlock()
+	if token, ok := s.tokens[id]; ok {
+		return token, nil
+	}
+	token := rand.Text()
+	s.tokens[id] = token
+	return token, nil
+}
+
 // Asset reads one file of an applet. An HTML file comes back with the bridge in its
 // head, so window.hive exists before any of the page's own scripts run.
 func (s *AppletsService) Asset(id, name string) (AppletAsset, error) {
@@ -108,7 +132,7 @@ func (s *AppletsService) Asset(id, name string) (AppletAsset, error) {
 	if name == "" {
 		name = applet.Entry
 	}
-	if !filepath.IsLocal(name) {
+	if !filepath.IsLocal(name) || hasHiddenSegment(name) {
 		return AppletAsset{}, Errorf(KindNotFound, "no file %q in applet %q", name, id)
 	}
 	body, err := os.ReadFile(filepath.Join(applet.Dir, filepath.FromSlash(name)))
@@ -120,18 +144,31 @@ func (s *AppletsService) Asset(id, name string) (AppletAsset, error) {
 		contentType = http.DetectContentType(body)
 	}
 	if strings.HasPrefix(contentType, "text/html") {
-		body = injectBridge(body, readAppletStorage(applet.Dir))
+		token, err := s.BridgeToken(id)
+		if err != nil {
+			return AppletAsset{}, err
+		}
+		body = injectBridge(body, token, readAppletStorage(applet.Dir))
+		return AppletAsset{Name: name, ContentType: contentType, Body: body, HoldsToken: true}, nil
 	}
 	return AppletAsset{Name: name, ContentType: contentType, Body: body}, nil
 }
 
+// hasHiddenSegment refuses dotfiles, which is where a page's saved localStorage lives:
+// the page already receives it inline, and nothing has a reason to fetch it.
+func hasHiddenSegment(name string) bool {
+	return slices.ContainsFunc(strings.Split(filepath.ToSlash(name), "/"), func(segment string) bool {
+		return strings.HasPrefix(segment, ".")
+	})
+}
+
 var htmlHead = regexp.MustCompile(`(?i)<head[^>]*>`)
 
-func injectBridge(page []byte, storage []byte) []byte {
+func injectBridge(page []byte, token string, storage []byte) []byte {
 	// The JSON sits inside a script element, so a stored "</script>" must not end it.
 	var safe bytes.Buffer
 	json.HTMLEscape(&safe, storage)
-	script := []byte("<script>window.__hiveStorage=" + safe.String() + ";" + applets.BridgeScript() + "</script>")
+	script := []byte(`<script>window.__hiveToken="` + token + `";window.__hiveStorage=` + safe.String() + ";" + applets.BridgeScript() + "</script>")
 	if at := htmlHead.FindIndex(page); at != nil {
 		return append(append(append([]byte{}, page[:at[1]]...), script...), page[at[1]:]...)
 	}
@@ -199,21 +236,22 @@ func (s *AppletsService) SaveStorage(id, encoded string) error {
 	return s.WriteFile(id, appletStorageFile, encoded)
 }
 
-// command builds the process. The returned context outlives ctx, because a spawned
-// process outlives the call that started it; its cancel is what ends the process.
-func (s *AppletsService) command(ctx context.Context, id string, req AppletExec) (*exec.Cmd, context.Context, context.CancelFunc, error) {
+// command builds the process. Its context is detached because RunShellProcess owns
+// stopping it, with a SIGTERM and a grace period. A cancellable context here would
+// also fire the standard library's immediate SIGKILL, so traps would never run.
+func (s *AppletsService) command(ctx context.Context, id string, req AppletExec) (*exec.Cmd, error) {
 	applet, err := s.page(id)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	dir, err := s.dir(ctx, applet, req.SessionSlug)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	if req.Cwd != "" {
 		cwd, err := pathutil.ExpandHomeE(req.Cwd)
 		if err != nil {
-			return nil, nil, nil, Wrap(err, KindInternal, "expanding %q", req.Cwd)
+			return nil, Wrap(err, KindInternal, "expanding %q", req.Cwd)
 		}
 		if filepath.IsAbs(cwd) {
 			dir = cwd
@@ -221,14 +259,13 @@ func (s *AppletsService) command(ctx context.Context, id string, req AppletExec)
 			dir = filepath.Join(dir, cwd)
 		}
 	}
-	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	proc := exec.CommandContext(runCtx, "sh", "-c", req.Command)
+	proc := exec.CommandContext(context.WithoutCancel(ctx), "sh", "-c", req.Command)
 	proc.Dir = dir
 	proc.Env = append(s.environ(ctx), appletEnv(applet)...)
 	for _, key := range slices.Sorted(maps.Keys(req.Env)) {
 		proc.Env = append(proc.Env, key+"="+req.Env[key])
 	}
-	return proc, runCtx, cancel, nil
+	return proc, nil
 }
 
 func exitResult(err error) (int, error) {
@@ -243,11 +280,10 @@ func exitResult(err error) (int, error) {
 
 // Exec answers hive.exec.
 func (s *AppletsService) Exec(ctx context.Context, id string, req AppletExec) (AppletExecResult, error) {
-	proc, _, cancel, err := s.command(ctx, id, req)
+	proc, err := s.command(ctx, id, req)
 	if err != nil {
 		return AppletExecResult{}, err
 	}
-	defer cancel()
 	timeout := appletActionTimeout
 	if req.TimeoutMillis > 0 {
 		timeout = time.Duration(req.TimeoutMillis) * time.Millisecond
@@ -322,10 +358,11 @@ func (w spawnStream) Write(data []byte) (int, error) {
 // Spawn answers hive.spawn: a process that outlives the call, read with SpawnRead
 // until Done. It ends when the applet closes, or when the app does.
 func (s *AppletsService) Spawn(ctx context.Context, id string, req AppletExec) (string, error) {
-	proc, runCtx, cancel, err := s.command(ctx, id, req)
+	proc, err := s.command(ctx, id, req)
 	if err != nil {
 		return "", err
 	}
+	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	spawn := &appletSpawn{applet: id, cancel: cancel, wake: make(chan struct{}, 1)}
 	proc.Stdout = spawnStream{spawn, &spawn.stdout}
 	proc.Stderr = spawnStream{spawn, &spawn.stderr}
@@ -348,7 +385,8 @@ func (s *AppletsService) Spawn(ctx context.Context, id string, req AppletExec) (
 	go func() {
 		code, err := exitResult(dispatch.RunShellProcess(runCtx, proc))
 		spawn.mu.Lock()
-		if err != nil {
+		// Being stopped is what the page asked for, so it is not output to report.
+		if err != nil && !errors.Is(err, context.Canceled) {
 			spawn.stderr.WriteString(err.Error())
 		}
 		spawn.code, spawn.done = code, true

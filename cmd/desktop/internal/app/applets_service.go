@@ -6,10 +6,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/pathutil"
 )
@@ -22,6 +24,8 @@ const (
 	// cutting a JSON document in half.
 	maxAppletStdout = 32 << 20
 	maxAppletStderr = 4 << 10
+
+	appletPagesUnavailable = "html applets do not run in the headless server build"
 )
 
 // AppletAction is an action as much as a surface needs to offer it. What it runs
@@ -76,13 +80,25 @@ type AppletsService struct {
 	catalog *applets.Store
 	environ func(context.Context) []string
 	spawns  spawnTable
+	// pages reports whether this process may serve html applets and answer their
+	// bridge, which the headless server build may not.
+	pages bool
+
+	tokensMu sync.Mutex
+	tokens   map[string]string
 	// sessionDir answers where a session-scoped applet runs, the same answer a
 	// launcher gets, including the refusal for a session on a server.
 	sessionDir func(context.Context, string) (string, error)
 }
 
 func newAppletsService(catalog *applets.Store, environ func(context.Context) []string, sessionDir func(context.Context, string) (string, error)) *AppletsService {
-	return &AppletsService{catalog: catalog, environ: environ, sessionDir: sessionDir}
+	return &AppletsService{
+		catalog:    catalog,
+		environ:    environ,
+		sessionDir: sessionDir,
+		pages:      buildServesAppletPages || settings.E2EHarnessMarkerValid(),
+		tokens:     map[string]string{},
+	}
 }
 
 // List returns the catalog, broken files included.
@@ -90,7 +106,12 @@ func (s *AppletsService) List(context.Context) []Applet {
 	entries := s.catalog.List()
 	out := make([]Applet, 0, len(entries))
 	for _, entry := range entries {
-		out = append(out, appletOf(entry))
+		applet := appletOf(entry)
+		if applet.View == applets.ViewHTML && !s.pages {
+			applet.Runnable = false
+			applet.Error = appletPagesUnavailable
+		}
+		out = append(out, applet)
 	}
 	return out
 }

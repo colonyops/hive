@@ -1,0 +1,13 @@
+version: 1
+title: E2E picker
+view: picker
+cwd: "~"
+data:
+  command: printf 'lint\ntest\nbuild\n'
+  format: lines
+columns:
+  - key: line
+actions:
+  - id: pick
+    label: Pick
+    run: printf 'picked %s' "$HIVE_ROW_LINE"
