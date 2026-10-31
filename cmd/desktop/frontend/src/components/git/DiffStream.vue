@@ -2,7 +2,7 @@
 // Every changed file's diff in one scroll. CodeView owns the scroller and keeps
 // only the lines near the viewport in the DOM (ADR the-changes-view-renders-through-pierre-diffs).
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { useEventListener, useTimeoutFn } from '@vueuse/core'
+import { useEventListener } from '@vueuse/core'
 import {
   CodeView,
   type CodeViewDiffItem,
@@ -59,18 +59,17 @@ const emit = defineEmits<{
 
 // The separator's height is the only row the library's own stylesheet sizes
 // past what its variables reach. No background of its own: the app's shows through.
+//
+// WebKit scrolls composited layers off the main thread, and the code's horizontal
+// scrollers are such layers. A header sharing a layer with what lies beneath it
+// lets them paint over it mid-scroll, though its z-index says otherwise, so it
+// gets a layer of its own.
 const UNSAFE_CSS = `
   :host { --diffs-bg: var(--color-app); }
+  [data-diffs-header][data-sticky] { will-change: transform; }
   [data-separator=metadata] { height: ${DIFF_METRICS.separatorPx}px; }
   ${SEARCH_HIGHLIGHT_CSS}
 `
-
-// WebKit composites each code block's horizontal scroller above the sticky file
-// header during a fast scroll, so code shows through it. CodeView turns those
-// scrollers off while scrolling, but only on iOS, and WKWebView on macOS needs it
-// too. The custom property reaches the shadow roots by inheritance.
-const SCROLLING_OVERFLOW = '--diffs-overflow-override'
-const SCROLL_SETTLE_MS = 150
 
 // A saved comment's row, found by id across CodeView remounting it.
 interface CommentAnnotation {
@@ -179,10 +178,6 @@ function queuePaint(): void {
     paintSearch(mountedRoots(), props.searchQuery, props.activeMatch)
   })
 }
-
-const scrollSettle = useTimeoutFn(() => root.value?.style.removeProperty(SCROLLING_OVERFLOW), SCROLL_SETTLE_MS, {
-  immediate: false,
-})
 
 function viewerOptions(): CodeViewOptions<CommentAnnotation, undefined> {
   const { headerPx, rowPx, separatorPx } = DIFF_METRICS
@@ -326,8 +321,6 @@ onMounted(() => {
   created.setup(root.value)
   created.subscribeToScroll((top) => {
     scrollTop = top
-    root.value?.style.setProperty(SCROLLING_OVERFLOW, 'hidden')
-    scrollSettle.start()
     queuePaint()
     const at = fileAt(top + 8)
     if (!pendingJump && at && at.path !== props.current) emit('update:current', at.path)

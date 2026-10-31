@@ -9,7 +9,6 @@ import { resetToastsForTests, useToasts } from '../../../composables/useToasts'
 const mocks = vi.hoisted(() => ({
   SessionChanges: vi.fn(),
   SessionBranches: vi.fn(),
-  scroll: null as ((top: number) => void) | null,
   SessionFileDiffs: vi.fn(),
   OpenSessionInEditor: vi.fn(),
   setRenderOptions: vi.fn(() => Promise.resolve()),
@@ -64,9 +63,7 @@ vi.mock('@pierre/diffs', async (importOriginal) => {
       this.root = root
     }
     cleanUp(): void {}
-    subscribeToScroll(listener: (top: number) => void): void {
-      mocks.scroll = listener
-    }
+    subscribeToScroll(): void {}
     getTopForItem(): number {
       return 0
     }
@@ -430,27 +427,6 @@ describe('ChangesView', () => {
 
     await toggle().trigger('click')
     expect(wrapper.find(testid('changes-row-x/y/b.go')).exists()).toBe(true)
-    wrapper.unmount()
-  })
-
-  // A scroll turns the code's scrollers off, or WebKit shows code through the sticky header.
-  it('turns the code scrollers off only while the stream scrolls', async () => {
-    const wrapper = await mountView()
-    const overflow = () =>
-      wrapper.get<HTMLElement>(testid('changes-stream')).element.style.getPropertyValue('--diffs-overflow-override')
-    vi.useFakeTimers()
-    try {
-      mocks.scroll!(100)
-      expect(overflow()).toBe('hidden')
-      vi.advanceTimersByTime(100)
-      mocks.scroll!(200)
-      vi.advanceTimersByTime(100)
-      expect(overflow()).toBe('hidden')
-      vi.advanceTimersByTime(100)
-      expect(overflow()).toBe('')
-    } finally {
-      vi.useRealTimers()
-    }
     wrapper.unmount()
   })
 
