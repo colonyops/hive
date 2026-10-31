@@ -14,6 +14,7 @@ declare module "@wailsio/runtime" {
         interface CustomEvents {
             "actions:updated": string;
             "activity:appended": number;
+            "appearance:updated": string;
             "connection:updated": string;
             "drive:toggle": wailsui$0.DriveToggle;
             "drive:updated": wailsui$0.DriveWrite;
@@ -25,6 +26,7 @@ declare module "@wailsio/runtime" {
             "menubar:open": wailsui$0.MenuBarNavigation;
             "notification:activated": wailsui$0.NotificationActivation;
             "notification:toast": wailsui$0.NotificationToast;
+            "review:updated": wailsui$0.ReviewUpdate;
             "schedules:updated": string;
             "sessions:create-failed": string;
             "sessions:updated": string;

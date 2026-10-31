@@ -14,7 +14,7 @@ import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import { useDriveDocument } from '../../composables/useDriveDocument'
-import { popOutDrive } from '../../composables/usePopOut'
+import { usePopOut } from '../../composables/usePopOut'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import { useDriveActivity } from '../../stores/useDriveActivity'
 import { entryLabel, movedPath, newestDocument, type DriveAuthor } from '../../lib/drive'
@@ -37,6 +37,7 @@ const emit = defineEmits<{
   setup: []
 }>()
 
+const popOutDrive = usePopOut()
 const { document, tree, treeError, paths, shown, loading, error, show } = useDriveDocument({
   vanished: (path) => documentDeleted(path),
 })

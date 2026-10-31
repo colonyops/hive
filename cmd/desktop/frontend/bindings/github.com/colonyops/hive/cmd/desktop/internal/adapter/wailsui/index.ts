@@ -125,6 +125,7 @@ export type {
     ReportPreview,
     ReportResult,
     ReviewLabel,
+    ReviewUpdate,
     RuntimeStats,
     SessionCondition,
     SessionDetail,

@@ -133,7 +133,7 @@ type NotificationToast struct {
 // never surfacing a notification the user may have switched off.
 //
 // What this gate adds is the one thing the core cannot know: where a
-// notification surfaces. It holds the window's focus state because the
+// notification surfaces. It holds the app's focus state because the
 // automatic delivery mode means "a banner only when I'm looking elsewhere",
 // and only this side of the app knows both halves.
 type NotificationGate struct {
@@ -143,7 +143,7 @@ type NotificationGate struct {
 }
 
 // NewNotificationGate builds the gate over the core's settings service and
-// the window's focus state.
+// whether any Hive window has focus.
 func NewNotificationGate(settingsService *app.SettingsService, focus *FocusState, logger zerolog.Logger) NotificationGate {
 	return NotificationGate{settings: settingsService, focus: focus, logger: logger}
 }
@@ -167,7 +167,7 @@ func (g NotificationGate) NotificationPolicy() dispatch.NotificationPolicy {
 
 // inApp maps the delivery preference onto this moment: "app" always stays
 // inside Hive, "system" always leaves it, and "auto" — the default — keeps a
-// notification in-app only while the user is already looking at the window.
+// notification in-app only while the user is already looking at a Hive window.
 // An unknown focus state (no window yet) counts as unfocused, so a
 // notification raised during startup still reaches the user.
 func (g NotificationGate) inApp(delivery string) bool {

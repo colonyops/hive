@@ -428,7 +428,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.openWebhook(runCtx, cfg)
 
 	a.Sources = newSourcesService(a.producer, a.fetchers, a.rssFetchers)
-	a.Settings = newSettingsService(SettingsDeps{Store: cfg.SettingsStore, Producer: a.producer, Fetchers: a.fetchers, LookPath: a.execEnv.LookPath})
+	a.Settings = newSettingsService(SettingsDeps{Store: cfg.SettingsStore, Producer: a.producer, Fetchers: a.fetchers, LookPath: a.execEnv.LookPath, Events: a.Events})
 	a.TerminalImages = &TerminalImagesService{store: terminalimg.NewStore(filepath.Join(cfg.Paths.StateDir, "assets", "terminal-images"))}
 	profileImages := profileimg.NewStore(filepath.Join(cfg.Paths.StateDir, "assets", "profiles"))
 	sourceMarks := sourcemark.NewStore(filepath.Join(cfg.Paths.StateDir, "assets", "webhookmarks"))
@@ -532,6 +532,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Code:    engineCodeAgents{engine: a.hive},
 		Chats:   a.AgentWorkspaces,
 		Input:   a.terminals,
+		Events:  a.Events,
 		Logger:  cfg.Logger,
 	})
 

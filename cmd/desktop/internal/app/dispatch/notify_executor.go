@@ -67,7 +67,7 @@ type NotificationPolicy struct {
 	Sound bool
 	// InApp routes this delivery inside Hive instead of to an OS banner. The
 	// gate resolves it from the user's delivery preference and, for the
-	// automatic mode, the window's current focus — so this package needs no
+	// automatic mode, whether any Hive window has focus — so this package needs no
 	// vocabulary for either.
 	InApp bool
 }

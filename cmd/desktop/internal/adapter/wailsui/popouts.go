@@ -49,8 +49,9 @@ type popOutWindow struct {
 	raise func()
 }
 
-// PopOutService opens surfaces in their own windows, one window per surface and
-// scope: asking for a scope that is already open raises its window.
+// PopOutService opens surfaces in their own windows: asking for a scope that is
+// already open raises a window showing it. A window that moves can land on a
+// scope another window shows, and then the older of the two is the one raised.
 type PopOutService struct {
 	native bool
 	create func(name string, kind popOutKind, url string, closed func(id uint)) popOutWindow
@@ -123,16 +124,18 @@ func (s *PopOutService) Retarget(ctx context.Context, req PopOutRequest) error {
 func (s *PopOutService) find(scope string) (popOutWindow, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var oldest popOutWindow
+	found := false
 	for _, open := range s.windows {
-		if open.scope == scope {
-			return open.window, true
+		if open.scope == scope && (!found || open.window.id < oldest.id) {
+			oldest, found = open.window, true
 		}
 	}
-	return popOutWindow{}, false
+	return oldest, found
 }
 
-// A closed window must leave here: Wails does not clear its native pointer, so
-// calling a closed window can touch released memory.
+// A closed window must leave here, or asking for its scope would raise nothing
+// instead of opening a new window.
 func (s *PopOutService) closed(id uint) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

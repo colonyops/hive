@@ -14,6 +14,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/ingest"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
@@ -342,4 +343,15 @@ func TestSettingsServiceTerminalScrollbarsPersistAndRespectEnvironment(t *testin
 	stored, err := settings.LoadPersistedSettings()
 	require.NoError(t, err)
 	require.False(t, stored.Appearance.TerminalShowScrollbars)
+}
+
+func TestSettingsServiceAppearanceChangesReachOtherWindows(t *testing.T) {
+	t.Setenv(settings.EnvConfigDir, filepath.Join(t.TempDir(), "config"))
+	bus := newTestBus(t)
+	updates := subscribeEvents[events.AppearanceUpdated](t, bus)
+	service := newSettingsService(SettingsDeps{Store: settings.NewStore(settings.SettingsPath()), Events: bus})
+
+	require.NoError(t, service.SetTheme(t.Context(), "midnight"))
+
+	requireEvents(t, updates, 1)
 }

@@ -107,6 +107,11 @@ export function setTheme(nextTheme: Theme): void {
   persistTheme(nextTheme)
 }
 
+/** Re-reads settings.yaml, for a theme another window saved. */
+export function reloadTheme(): void {
+  void hydrateFromSettings()
+}
+
 // Called once in main.ts before mount so the first paint uses the cached theme,
 // and to heal a garbage cached value back to the default. The durable theme is
 // reconciled asynchronously right after: it cannot be read synchronously, and

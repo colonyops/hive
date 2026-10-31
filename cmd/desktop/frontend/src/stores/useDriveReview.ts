@@ -183,6 +183,14 @@ export const useDriveReview = defineStore('driveReview', () => {
     }
   })
 
+  // Another window's comments: each window holds its own copy of a review.
+  useWailsEvent('review:updated', (event) => {
+    const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as
+      { space?: unknown; path?: unknown } | undefined
+    if (typeof payload?.space !== 'string' || typeof payload.path !== 'string') return
+    void reviews.get(keyOf(payload.space, payload.path))?.reload()
+  })
+
   return {
     enabled: computed(() => enabled.value),
     toggleEnabled,

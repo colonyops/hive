@@ -3,43 +3,73 @@ package wailsui
 import (
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFocusStateReadsTheWindowsAfterTheDelay(t *testing.T) {
-	var windowFocused atomic.Bool
-	var notified atomic.Int32
-	state := NewFocusState(time.Millisecond, windowFocused.Load, func(bool) { notified.Add(1) })
+const testSettleDelay = 100 * time.Millisecond
 
-	assert.False(t, state.Get(), "no window has reported focus yet")
-
-	windowFocused.Store(true)
-	state.Changed()
-	assert.Eventually(t, state.Get, time.Second, time.Millisecond)
-	assert.EqualValues(t, 1, notified.Load())
-
-	windowFocused.Store(false)
-	state.Changed()
-	assert.Eventually(t, func() bool { return !state.Get() }, time.Second, time.Millisecond)
-	assert.EqualValues(t, 2, notified.Load())
+func settleFocus() {
+	time.Sleep(testSettleDelay)
+	synctest.Wait()
 }
 
-func TestFocusStateStaysFocusedWhileMovingBetweenWindows(t *testing.T) {
-	var notified atomic.Int32
-	state := NewFocusState(time.Millisecond, func() bool { return true }, func(bool) { notified.Add(1) })
+func TestFocusStateReadsTheWindowsAfterTheDelay(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var windowFocused atomic.Bool
+		var notified atomic.Int32
+		state := NewFocusState(testSettleDelay, windowFocused.Load, func(bool) { notified.Add(1) })
 
-	state.Changed()
-	assert.Eventually(t, state.Get, time.Second, time.Millisecond)
+		assert.False(t, state.Get(), "no window has reported focus yet")
 
-	// The resign and the become-key of a move between windows.
-	state.Changed()
-	state.Changed()
-	time.Sleep(20 * time.Millisecond)
+		windowFocused.Store(true)
+		state.Changed()
+		time.Sleep(testSettleDelay / 2)
+		synctest.Wait()
+		assert.False(t, state.Get(), "the windows are not read before the delay")
 
-	assert.True(t, state.Get())
-	assert.EqualValues(t, 1, notified.Load(), "the move is not a transition")
+		settleFocus()
+		assert.True(t, state.Get())
+		assert.EqualValues(t, 1, notified.Load())
+
+		windowFocused.Store(false)
+		state.Changed()
+		settleFocus()
+		assert.False(t, state.Get())
+		assert.EqualValues(t, 2, notified.Load())
+	})
+}
+
+func TestFocusStateStaysFocusedThroughTheGapOfAMoveBetweenWindows(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var windowFocused atomic.Bool
+		var queries, notified atomic.Int32
+		query := func() bool {
+			queries.Add(1)
+			return windowFocused.Load()
+		}
+		state := NewFocusState(testSettleDelay, query, func(bool) { notified.Add(1) })
+
+		windowFocused.Store(true)
+		state.Changed()
+		settleFocus()
+		queries.Store(0)
+		notified.Store(0)
+
+		// The resign event, while no window has focus, then the become-key.
+		windowFocused.Store(false)
+		state.Changed()
+		time.Sleep(testSettleDelay / 2)
+		windowFocused.Store(true)
+		state.Changed()
+		settleFocus()
+
+		assert.True(t, state.Get())
+		assert.EqualValues(t, 1, queries.Load(), "the two events collapse into one read")
+		assert.Zero(t, notified.Load(), "the move is not a transition")
+	})
 }
 
 func TestWindowServiceFocused(t *testing.T) {

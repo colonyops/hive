@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/ingest"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	ghsource "github.com/colonyops/hive/cmd/desktop/internal/app/sources/github"
@@ -24,18 +25,20 @@ type SettingsService struct {
 	// lookPath resolves an editor command against the subprocess PATH
 	// (execenv.Resolver.LookPath); nil falls back to this process's own PATH.
 	lookPath func(context.Context, string) (string, error)
+	events   *events.Bus
 }
 
-// Producer and Fetchers may be nil when no live source subsystem is available.
+// Producer, Fetchers, and Events may be nil when no live source subsystem is available.
 type SettingsDeps struct {
 	Store    *settings.Store
 	Producer *ingest.Producer
 	Fetchers *ghsource.Fetchers
 	LookPath func(context.Context, string) (string, error)
+	Events   *events.Bus
 }
 
 func newSettingsService(d SettingsDeps) *SettingsService {
-	return &SettingsService{store: d.Store, producer: d.Producer, fetchers: d.Fetchers, lookPath: d.LookPath}
+	return &SettingsService{store: d.Store, producer: d.Producer, fetchers: d.Fetchers, lookPath: d.LookPath, events: d.Events}
 }
 
 // NewSettingsService builds the settings-only service an adapter can use
@@ -179,28 +182,32 @@ func (s *SettingsService) Appearance(context.Context) (AppearanceSettings, error
 	}, nil
 }
 
-func (s *SettingsService) SetTheme(_ context.Context, theme string) error {
+// saveAppearance is for a setting every window shows, which each window reads
+// only when it starts or when the event arrives.
+func (s *SettingsService) saveAppearance(ctx context.Context, mutate func(*settings.Settings)) error {
 	_, err := s.store.Update(func(current *settings.Settings) error {
-		current.Appearance.Theme = theme
+		mutate(current)
 		return nil
 	})
-	return Wrap(err, KindInternal, "saving settings")
+	if err != nil {
+		return Wrap(err, KindInternal, "saving settings")
+	}
+	if s.events != nil {
+		s.events.Publish(ctx, events.AppearanceUpdated{})
+	}
+	return nil
 }
 
-func (s *SettingsService) SetFontFamily(_ context.Context, family string) error {
-	_, err := s.store.Update(func(current *settings.Settings) error {
-		current.Appearance.FontFamily = family
-		return nil
-	})
-	return Wrap(err, KindInternal, "saving settings")
+func (s *SettingsService) SetTheme(ctx context.Context, theme string) error {
+	return s.saveAppearance(ctx, func(current *settings.Settings) { current.Appearance.Theme = theme })
 }
 
-func (s *SettingsService) SetMonoFontFamily(_ context.Context, family string) error {
-	_, err := s.store.Update(func(current *settings.Settings) error {
-		current.Appearance.MonoFontFamily = family
-		return nil
-	})
-	return Wrap(err, KindInternal, "saving settings")
+func (s *SettingsService) SetFontFamily(ctx context.Context, family string) error {
+	return s.saveAppearance(ctx, func(current *settings.Settings) { current.Appearance.FontFamily = family })
+}
+
+func (s *SettingsService) SetMonoFontFamily(ctx context.Context, family string) error {
+	return s.saveAppearance(ctx, func(current *settings.Settings) { current.Appearance.MonoFontFamily = family })
 }
 
 func (s *SettingsService) SetTerminalFontSize(_ context.Context, px int) error {
@@ -288,28 +295,16 @@ func (s *SettingsService) SetTerminalSessionAge(_ context.Context, enabled bool,
 	return Wrap(err, KindInternal, "saving settings")
 }
 
-func (s *SettingsService) SetCanvasFontSize(_ context.Context, size string) error {
-	_, err := s.store.Update(func(current *settings.Settings) error {
-		current.Appearance.CanvasFontSize = size
-		return nil
-	})
-	return Wrap(err, KindInternal, "saving settings")
+func (s *SettingsService) SetCanvasFontSize(ctx context.Context, size string) error {
+	return s.saveAppearance(ctx, func(current *settings.Settings) { current.Appearance.CanvasFontSize = size })
 }
 
-func (s *SettingsService) SetCanvasLineSpacing(_ context.Context, spacing string) error {
-	_, err := s.store.Update(func(current *settings.Settings) error {
-		current.Appearance.CanvasLineSpacing = spacing
-		return nil
-	})
-	return Wrap(err, KindInternal, "saving settings")
+func (s *SettingsService) SetCanvasLineSpacing(ctx context.Context, spacing string) error {
+	return s.saveAppearance(ctx, func(current *settings.Settings) { current.Appearance.CanvasLineSpacing = spacing })
 }
 
-func (s *SettingsService) SetCanvasPageWidth(_ context.Context, width string) error {
-	_, err := s.store.Update(func(current *settings.Settings) error {
-		current.Appearance.CanvasPageWidth = width
-		return nil
-	})
-	return Wrap(err, KindInternal, "saving settings")
+func (s *SettingsService) SetCanvasPageWidth(ctx context.Context, width string) error {
+	return s.saveAppearance(ctx, func(current *settings.Settings) { current.Appearance.CanvasPageWidth = width })
 }
 
 // NotificationSettings is the resolved notification configuration.

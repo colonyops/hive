@@ -36,6 +36,20 @@ async function settle(): Promise<void> {
 }
 
 describe('useTheme', () => {
+  it('applies a theme another window saved', async () => {
+    mocks.AppearanceSettings.mockResolvedValue({ theme: 'dark' })
+    const { initializeTheme, reloadTheme } = await import('../useTheme')
+    initializeTheme()
+    await settle()
+
+    mocks.AppearanceSettings.mockResolvedValue({ theme: 'nord' })
+    reloadTheme()
+    await settle()
+
+    expect(document.documentElement.dataset.theme).toBe('nord')
+    expect(mocks.SetTheme).not.toHaveBeenCalled()
+  })
+
   it('applies the cached theme synchronously, before the settings read resolves', async () => {
     localStorage.setItem('hive.theme', 'midnight')
     let resolveRead: (value: { theme: string }) => void = () => {}

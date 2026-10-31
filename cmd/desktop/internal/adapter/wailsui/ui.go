@@ -123,7 +123,7 @@ func New(mock string, settingsStore *settings.Store, appIcon []byte, logger zero
 func (u *UI) Notifier() dispatch.SystemNotifier { return NewFlowNotifier(u.notifications) }
 
 // Gate is the driven port that answers whether a notification may be
-// delivered, and where. It holds the window's focus state, because the
+// delivered, and where. It holds the app's focus state, because the
 // automatic delivery mode means "a banner only when I am looking elsewhere"
 // and only this side of the app knows both halves.
 //

@@ -6,8 +6,9 @@ import { createLogger } from '../lib/log'
 
 const log = createLogger('window-focus')
 
-// Native focus events are the source of truth once subscribed; the initial
-// RPC only seeds the state before the first event arrives.
+// window:focus and window:blur are the source of truth once subscribed: settled
+// transitions of whether any Hive window has focus. The initial RPC only seeds
+// the state before the first event arrives.
 export const useWindowFocus = defineStore('windowFocus', () => {
   const focused = ref(true)
   let stateVersion = 0

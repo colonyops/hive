@@ -1,10 +1,12 @@
 package wailsui
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 )
@@ -68,6 +70,73 @@ func TestPopOutService_OpenCreatesAgainAfterTheWindowClosed(t *testing.T) {
 
 	assert.Len(t, fake.urls, 2)
 	assert.Empty(t, fake.raised, "a closed window must not be called")
+}
+
+type callerWindow struct {
+	application.Window
+	id uint
+}
+
+func (w callerWindow) ID() uint { return w.id }
+
+func calledFrom(t *testing.T, id uint) context.Context {
+	t.Helper()
+	return context.WithValue(t.Context(), application.WindowKey, application.Window(callerWindow{id: id}))
+}
+
+func TestPopOutService_RetargetMovesTheWindowsIdentity(t *testing.T) {
+	fake := &popOutFake{}
+	service := NewPopOutService(true, fake.create)
+
+	_, err := service.Open(driveRequest("a.md"))
+	require.NoError(t, err)
+	require.NoError(t, service.Retarget(calledFrom(t, 1), driveRequest("b.md")))
+
+	_, err = service.Open(driveRequest("b.md"))
+	require.NoError(t, err)
+	assert.Equal(t, []uint{1}, fake.raised, "the window that moved shows b.md")
+
+	_, err = service.Open(driveRequest("a.md"))
+	require.NoError(t, err)
+	assert.Len(t, fake.urls, 2, "nothing shows a.md any more")
+}
+
+func TestPopOutService_RetargetIgnoresACallerThatIsNotAPopOut(t *testing.T) {
+	fake := &popOutFake{}
+	service := NewPopOutService(true, fake.create)
+
+	_, err := service.Open(driveRequest("a.md"))
+	require.NoError(t, err)
+	require.NoError(t, service.Retarget(calledFrom(t, 99), driveRequest("b.md")))
+	require.NoError(t, service.Retarget(t.Context(), driveRequest("b.md")))
+
+	_, err = service.Open(driveRequest("a.md"))
+	require.NoError(t, err)
+	assert.Equal(t, []uint{1}, fake.raised, "window 1 still shows a.md")
+}
+
+func TestPopOutService_RetargetRejectsWhatNoKindDeclares(t *testing.T) {
+	service := NewPopOutService(true, (&popOutFake{}).create)
+
+	err := service.Retarget(calledFrom(t, 1), PopOutRequest{Kind: "nope"})
+	assert.Equal(t, app.KindInvalid, app.KindOf(err))
+}
+
+func TestPopOutService_TwoWindowsOnOneScopeRaiseTheOlder(t *testing.T) {
+	fake := &popOutFake{}
+	service := NewPopOutService(true, fake.create)
+
+	_, err := service.Open(driveRequest("a.md"))
+	require.NoError(t, err)
+	_, err = service.Open(driveRequest("b.md"))
+	require.NoError(t, err)
+	require.NoError(t, service.Retarget(calledFrom(t, 2), driveRequest("a.md")))
+
+	for range 8 {
+		_, err = service.Open(driveRequest("a.md"))
+		require.NoError(t, err)
+	}
+	assert.Equal(t, []uint{1, 1, 1, 1, 1, 1, 1, 1}, fake.raised)
 }
 
 func TestPopOutService_WithoutNativeWindowsReturnsOnlyTheURL(t *testing.T) {

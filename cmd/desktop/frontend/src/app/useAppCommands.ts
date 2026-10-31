@@ -3,7 +3,7 @@ import { nextTick, onMounted, ref, type Ref } from 'vue'
 import { useCommandPalette } from '../composables/useCommands'
 import { useLaunchers } from '../composables/useLaunchers'
 import { useNewSession } from '../composables/useNewSession'
-import { popOutDrive } from '../composables/usePopOut'
+import { usePopOut } from '../composables/usePopOut'
 import { useReportDialog } from '../composables/useReportDialog'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import {
@@ -71,6 +71,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   // user's home (ADR ephemeral-popup-terminals).
   const popupTerminal = usePopupTerminal()
   const review = useDriveReview()
+  const popOutDrive = usePopOut()
   const popupTerminalMounted = ref(false)
 
   function togglePopupTerminal(): void {

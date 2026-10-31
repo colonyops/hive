@@ -11,6 +11,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => mocks)
 
+const wailsEvents = vi.hoisted(() => ({ handlers: new Map<string, () => void>() }))
+vi.mock('../../composables/useWailsEvent', () => ({
+  useWailsEvent: (name: string, handler: () => void) => wailsEvents.handlers.set(name, handler),
+}))
+
 describe('useCanvasSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -31,6 +36,23 @@ describe('useCanvasSettings', () => {
     expect(typography.fontSizePx.value).toBe(18)
     expect(typography.lineSpacing.value).toBe('relaxed')
     expect(typography.lineHeight.value).toBe(1.85)
+  })
+
+  it('re-reads every setting when another window saves one', async () => {
+    const typography = useCanvasSettings()
+    await flushPromises()
+
+    mocks.AppearanceSettings.mockResolvedValue({
+      canvasFontSize: 'large',
+      canvasLineSpacing: 'compact',
+      canvasPageWidth: 'full',
+    })
+    wailsEvents.handlers.get('appearance:updated')?.()
+    await flushPromises()
+
+    expect(typography.fontSize.value).toBe('large')
+    expect(typography.lineSpacing.value).toBe('compact')
+    expect(typography.pageWidth.value).toBe('full')
   })
 
   it('persists selections while applying them immediately', async () => {

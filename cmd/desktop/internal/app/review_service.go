@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/terminal"
@@ -53,6 +54,7 @@ type ReviewDeps struct {
 	Code    codeAgents
 	Chats   chatAgents
 	Input   agentInput
+	Events  *events.Bus
 	Logger  zerolog.Logger
 }
 
@@ -72,6 +74,7 @@ type ReviewService struct {
 	chats       chatAgents
 	input       agentInput
 	submitDelay time.Duration
+	events      *events.Bus
 	log         zerolog.Logger
 }
 
@@ -83,6 +86,7 @@ func newReviewService(d ReviewDeps) *ReviewService {
 		chats:       d.Chats,
 		input:       d.Input,
 		submitDelay: sendSubmitDelay,
+		events:      d.Events,
 		log:         logutils.Component(d.Logger, "review"),
 	}
 }
@@ -143,6 +147,7 @@ func (s *ReviewService) AddComment(ctx context.Context, space, path string, in C
 	if err := s.reviews.SaveComment(ctx, comment); err != nil {
 		return review.Comment{}, Wrap(err, KindInternal, "saving the comment on %s", path)
 	}
+	s.changed(ctx, space, path)
 	return comment, nil
 }
 
@@ -180,14 +185,22 @@ func (s *ReviewService) UpdateComment(ctx context.Context, space, path, id, text
 		return err
 	}
 	comment.CommentText = text
-	return Wrap(s.reviews.UpdateComment(ctx, comment), KindInternal, "updating the comment on %s", path)
+	if err := s.reviews.UpdateComment(ctx, comment); err != nil {
+		return Wrap(err, KindInternal, "updating the comment on %s", path)
+	}
+	s.changed(ctx, space, path)
+	return nil
 }
 
 func (s *ReviewService) DeleteComment(ctx context.Context, space, path, id string) error {
 	if _, err := s.comment(ctx, space, path, id); err != nil {
 		return err
 	}
-	return Wrap(s.reviews.DeleteComment(ctx, id), KindInternal, "deleting the comment on %s", path)
+	if err := s.reviews.DeleteComment(ctx, id); err != nil {
+		return Wrap(err, KindInternal, "deleting the comment on %s", path)
+	}
+	s.changed(ctx, space, path)
+	return nil
 }
 
 // Feedback formats the open review with the document's absolute path, so any
@@ -216,7 +229,11 @@ func (s *ReviewService) Clear(ctx context.Context, space, path string) error {
 	if doc.review.SessionID == "" {
 		return nil
 	}
-	return Wrap(s.reviews.DeleteSession(ctx, doc.review.SessionID), KindInternal, "clearing the review of %s", path)
+	if err := s.reviews.DeleteSession(ctx, doc.review.SessionID); err != nil {
+		return Wrap(err, KindInternal, "clearing the review of %s", path)
+	}
+	s.changed(ctx, space, path)
+	return nil
 }
 
 // Send delivers the open review's feedback to one agent and clears the
@@ -246,7 +263,15 @@ func (s *ReviewService) Send(ctx context.Context, space, path, note string, to A
 	if doc.review.SessionID == "" {
 		return nil
 	}
-	return Wrap(s.reviews.DeleteSession(ctx, doc.review.SessionID), KindInternal, "the feedback was sent, but clearing the review of %s failed", path)
+	if err := s.reviews.DeleteSession(ctx, doc.review.SessionID); err != nil {
+		return Wrap(err, KindInternal, "the feedback was sent, but clearing the review of %s failed", path)
+	}
+	s.changed(ctx, space, path)
+	return nil
+}
+
+func (s *ReviewService) changed(ctx context.Context, space, path string) {
+	s.events.Publish(ctx, events.ReviewChanged{Space: space, Path: path})
 }
 
 func (s *ReviewService) comment(ctx context.Context, space, path, id string) (review.Comment, error) {

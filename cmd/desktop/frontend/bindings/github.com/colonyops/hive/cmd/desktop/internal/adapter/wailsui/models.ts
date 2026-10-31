@@ -600,6 +600,15 @@ export interface ReviewLabel {
     "icon": string;
 }
 
+/**
+ * ReviewUpdate is the review:updated payload: the document whose comments
+ * changed.
+ */
+export interface ReviewUpdate {
+    "space": string;
+    "path": string;
+}
+
 export interface RuntimeStats {
     "sampledAtUnixMs": number;
     "uptimeMs": number;

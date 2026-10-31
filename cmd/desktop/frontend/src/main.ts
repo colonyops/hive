@@ -6,11 +6,12 @@ import '@fontsource-variable/inter/wght-italic.css'
 import './styles/main.css'
 
 import { installHiveUi } from '@hive/ui/platform'
-import { createApp, type App, type Component } from 'vue'
+import { createApp, effectScope, type App, type Component } from 'vue'
 import type { Router } from 'vue-router'
-import { initializeAppFont } from './composables/useAppFont'
+import { initializeAppFont, reloadAppFont } from './composables/useAppFont'
 import { initializeKeybindings } from './composables/useKeybindings'
-import { initializeTheme } from './composables/useTheme'
+import { initializeTheme, reloadTheme } from './composables/useTheme'
+import { useWailsEvent } from './composables/useWailsEvent'
 import { hiveUiPlatform } from './lib/hiveUiPlatform'
 import { captureVueErrors, installErrorCapture } from './lib/log'
 import { startPerfMonitor } from './lib/perfMonitor'
@@ -18,6 +19,13 @@ import { startPerfMonitor } from './lib/perfMonitor'
 installErrorCapture()
 initializeTheme()
 initializeAppFont()
+// Detached: the subscription lasts as long as the window, not a component.
+effectScope(true).run(() => {
+  useWailsEvent('appearance:updated', () => {
+    reloadTheme()
+    reloadAppFont()
+  })
+})
 
 // One window, one root, loaded on demand: a document in a pop-out must not pay
 // for the feed, the flows canvas, and the shell around them.

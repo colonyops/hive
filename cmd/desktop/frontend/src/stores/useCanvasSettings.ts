@@ -5,6 +5,7 @@ import {
   SetCanvasLineSpacing as PersistCanvasLineSpacing,
   SetCanvasPageWidth as PersistCanvasPageWidth,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
+import { useWailsEvent } from '../composables/useWailsEvent'
 import { defineStore } from './defineStore'
 import { usePersistedSetting } from './usePersistedSetting'
 
@@ -103,6 +104,13 @@ export const useCanvasSettings = defineStore('canvasSettings', () => {
     },
     write: (next) => PersistCanvasPageWidth(next),
     label: 'the canvas page width',
+  })
+
+  useWailsEvent('appearance:updated', () => {
+    appearance = null
+    void fontSize.reload()
+    void lineSpacing.reload()
+    void pageWidth.reload()
   })
 
   return {

@@ -25,7 +25,7 @@ import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 import { useDriveDocument } from '../../composables/useDriveDocument'
-import { popOutDrive } from '../../composables/usePopOut'
+import { usePopOut } from '../../composables/usePopOut'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import { relativeAge } from '../../lib/age'
@@ -49,6 +49,7 @@ const emit = defineEmits<{
   title: [title: string]
 }>()
 
+const popOutDrive = usePopOut()
 const { spaces, spacesLoaded, error: spacesError } = useDrive()
 const { document, tree, treeError, paths, shown, loading, error, show } = useDriveDocument({
   vanished: (path) => documentDeleted(path),
@@ -283,7 +284,7 @@ useEscapeToClose(() => emit('close'), { enabled: () => !props.windowed })
                 :icon="IconExternalLink"
                 size="lg"
                 data-testid="drive-page-pop-out"
-                @click="popOutDrive({ ...scope, space })"
+                @click="popOutDrive(scope)"
               />
               <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
             </template>

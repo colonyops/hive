@@ -64,6 +64,11 @@ func registerEvents() struct{} {
 	// the payload is the whole message; coalescing keeps only the latest ask,
 	// which is the final intent anyway.
 	application.RegisterEvent[DriveToggle](driveToggleEvent)
+	// review:updated names the document whose comments changed, so every event
+	// has to arrive: the subscription buffers. A window re-reads that review.
+	application.RegisterEvent[ReviewUpdate](reviewUpdatedEvent)
+	// appearance:updated is a wake-up: every window re-reads its appearance.
+	application.RegisterEvent[string]("appearance:updated")
 	// schedules:updated carries the workspace whose scheduled chats changed:
 	// its manifest was written, or one of its schedules ran. The Chats area
 	// re-reads its workspace and chat lists on receipt.
@@ -143,6 +148,12 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		events.Subscribe(ctx, bus, "wailsui.drive", events.Buffer(64), func(_ context.Context, e events.DriveChanged) {
 			emitDriveUpdated(DriveWrite{Space: e.Space, Paths: e.Paths, Session: e.Session, HiveSession: e.HiveSession})
 		}),
+		events.Subscribe(ctx, bus, "wailsui.review", events.Buffer(64), func(_ context.Context, e events.ReviewChanged) {
+			emitEvent(reviewUpdatedEvent, ReviewUpdate{Space: e.Space, Path: e.Path})
+		}),
+		events.Subscribe(ctx, bus, "wailsui.appearance", events.Coalesce(), func(context.Context, events.AppearanceUpdated) {
+			emitEvent("appearance:updated", "changed")
+		}),
 		events.Subscribe(ctx, bus, "wailsui.drive-toggle", events.Coalesce(), func(_ context.Context, e events.DriveToggleRequested) {
 			emitDriveToggle(DriveToggle{
 				Session: e.Session, HiveSession: e.HiveSession,
@@ -209,9 +220,17 @@ func emitActivityAppended(id int64) {
 }
 
 const (
-	driveUpdatedEvent = "drive:updated"
-	driveToggleEvent  = "drive:toggle"
+	driveUpdatedEvent  = "drive:updated"
+	driveToggleEvent   = "drive:toggle"
+	reviewUpdatedEvent = "review:updated"
 )
+
+// ReviewUpdate is the review:updated payload: the document whose comments
+// changed.
+type ReviewUpdate struct {
+	Space string `json:"space"`
+	Path  string `json:"path"`
+}
 
 // DriveWrite is the drive:updated payload: the space and the document paths
 // that changed, and who wrote them when an agent did through the desktop, a

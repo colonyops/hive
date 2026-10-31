@@ -89,6 +89,11 @@ export function setAppMonoFontFamily(family: string): void {
   persist(() => PersistMonoFontFamily(family))
 }
 
+/** Re-reads settings.yaml, for a font another window saved. */
+export function reloadAppFont(): void {
+  void hydrate()
+}
+
 // Called once in main.ts before mount so the first paint uses the cached
 // choice. The durable one is reconciled asynchronously right after: it cannot
 // be read synchronously, and blocking the first paint on it would cause the

@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
@@ -29,6 +30,7 @@ type reviewFixture struct {
 	code  *fakeCodeAgents
 	chats *fakeChatAgents
 	input *fakeAgentInput
+	bus   *events.Bus
 }
 
 func newReviewFixture(t *testing.T) reviewFixture {
@@ -38,6 +40,7 @@ func newReviewFixture(t *testing.T) reviewFixture {
 		code:  &fakeCodeAgents{panes: map[string][]statussvc.AgentPane{}},
 		chats: &fakeChatAgents{},
 		input: &fakeAgentInput{},
+		bus:   newTestBus(t),
 	}
 	f.drive.writeDoc(t, "workspaces/ws", "plans/p.md", reviewDoc)
 	f.drive.writeDoc(t, "workspaces/ws", "page.html", "<p>x</p>")
@@ -47,6 +50,7 @@ func newReviewFixture(t *testing.T) reviewFixture {
 		Code:    f.code,
 		Chats:   f.chats,
 		Input:   f.input,
+		Events:  f.bus,
 		Logger:  zerolog.Nop(),
 	})
 	f.svc.submitDelay = 0
@@ -93,6 +97,31 @@ func TestReviewAddListUpdateDelete(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got.Comments, 1)
 	assert.Equal(t, "changed", got.Comments[0].CommentText)
+}
+
+func TestReviewPublishesEachChangeToTheComments(t *testing.T) {
+	f := newReviewFixture(t)
+	ctx := t.Context()
+	changes := subscribeEvents[events.ReviewChanged](t, f.bus)
+	space, path := "workspaces/ws", "plans/p.md"
+
+	comment := f.add(t, 6, 6, "first")
+	require.NoError(t, f.svc.UpdateComment(ctx, space, path, comment.ID, "edited"))
+	require.NoError(t, f.svc.DeleteComment(ctx, space, path, comment.ID))
+	f.add(t, 6, 6, "second")
+	require.NoError(t, f.svc.Clear(ctx, space, path))
+
+	want := events.ReviewChanged{Space: space, Path: path}
+	assert.Equal(t, []events.ReviewChanged{want, want, want, want, want}, requireEvents(t, changes, 5))
+}
+
+func TestReviewClearWithNothingOpenPublishesNothing(t *testing.T) {
+	f := newReviewFixture(t)
+	changes := subscribeEvents[events.ReviewChanged](t, f.bus)
+
+	require.NoError(t, f.svc.Clear(t.Context(), "workspaces/ws", "plans/p.md"))
+
+	requireEvents(t, changes, 0)
 }
 
 func TestReviewKeyAndHash(t *testing.T) {

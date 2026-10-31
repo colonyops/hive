@@ -54,6 +54,22 @@ test.describe('drive', { tag: [tag.drive] }, () => {
     await expect(page.getByTestId("feed-item").first()).toBeVisible();
   });
 
+  test("a document pops out into a window of its own", async ({ page }) => {
+    await page.goto(
+      `/#/drive?space=e2e%2Frepo&doc=${encodeURIComponent(planPath)}`,
+    );
+    await expect(page.getByTestId("drive-page-title")).toHaveText(planTitle);
+
+    const [popup] = await Promise.all([
+      page.waitForEvent("popup"),
+      page.getByTestId("drive-page-pop-out").click(),
+    ]);
+
+    await expect(popup.getByTestId("popout-drive")).toBeVisible();
+    await expect(popup.getByTestId("drive-page-title")).toHaveText(planTitle);
+    await expect(popup.getByTestId("drive-page-close")).toHaveCount(0);
+  });
+
   test("a comment on a Drive document survives a reload, then clears", async ({
     page,
   }) => {

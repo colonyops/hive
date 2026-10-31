@@ -1,6 +1,6 @@
 import { expect, tag, test } from '../../fixtures/test.js'
 
-test.describe('pop-out windows', { tag: [tag.drive] }, () => {
+test.describe('pop-out windows', { tag: [tag.drive, tag.critical] }, () => {
   test('A Drive pop-out boots on its own root without the shell', async ({ page }) => {
     await page.goto('/?popout=drive')
     await expect(page.getByTestId('popout-drive')).toBeVisible()

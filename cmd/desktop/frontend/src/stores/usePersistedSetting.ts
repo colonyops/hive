@@ -21,10 +21,12 @@ export interface PersistedSetting<T> {
   set: (next: T) => void
   /** Resolves once the stored value has been read; for an action relative to it. */
   whenHydrated: () => Promise<void>
+  /** Reads the stored value again, for a change another window saved. */
+  reload: () => Promise<void>
 }
 
 /**
- * The settings pattern: hydrate once from settings.yaml, apply a write
+ * The settings pattern: hydrate from settings.yaml, apply a write
  * immediately, persist writes in order, and warn when either side fails.
  * settings.yaml stays the only store; a failed persist keeps the chosen value
  * on screen so the control never snaps back under the user's hand.
@@ -36,7 +38,7 @@ export function usePersistedSetting<T>(options: PersistedSettingOptions<T>): Per
   let persistChain: Promise<void> = Promise.resolve()
 
   // A write made while the read is in flight must win over the read's result.
-  const hydration = (async () => {
+  async function read(): Promise<void> {
     const startedAt = version
     try {
       const stored = await options.read()
@@ -46,7 +48,8 @@ export function usePersistedSetting<T>(options: PersistedSettingOptions<T>): Per
     } finally {
       hydrated.value = true
     }
-  })()
+  }
+  const hydration = read()
 
   function set(next: T): void {
     version++
@@ -63,5 +66,6 @@ export function usePersistedSetting<T>(options: PersistedSettingOptions<T>): Per
     hydrated: readonly(hydrated),
     set,
     whenHydrated: () => hydration,
+    reload: read,
   }
 }

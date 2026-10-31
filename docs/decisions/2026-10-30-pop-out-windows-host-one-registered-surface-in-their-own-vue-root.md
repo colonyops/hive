@@ -25,7 +25,8 @@ the main window's shell. Nothing passes between windows except through Go.
 only open a declared surface.
 
 **A window is identified by its scope.** Asking for a scope that is open raises
-its window. A surface that moves reports its new scope with `Retarget`.
+a window showing it. A surface that moves reports its new scope with `Retarget`,
+which can leave two windows on one scope; the older one is raised.
 
 **Closing destroys a pop-out.** Unlike Diagnostics, it holds no hidden webview.
 
@@ -46,6 +47,9 @@ never leave the Wails window map. `Open` returns the URL, and the page opens it.
   stay out, because a tmux control client has one subscriber per session.
 - `localStorage` keys are shared between windows, so a key that must differ per
   window belongs in the surface's params.
+- Each window caches what it reads, so a change that other windows show needs a
+  wake-up from Go: `review:updated` for comments, `appearance:updated` for the
+  theme, fonts, and reader settings.
 - A pop-out has no keymap or palette yet. ⌘W reaches it through the app menu.
 - On Linux under GTK4, a closed window leaves its web process running until the
   app quits (wailsapp/wails#6505).

@@ -68,6 +68,16 @@ type DriveChanged struct {
 	HiveSession string
 }
 
+// ReviewChanged reports that the comments on one Drive document changed. Each
+// window caches a review, so a change made in one has to reach the others.
+type ReviewChanged struct {
+	Space string
+	Path  string
+}
+
+// AppearanceUpdated reports that a theme, font, or reader setting was saved.
+type AppearanceUpdated struct{}
+
 // DriveToggleRequested reports an agent asked to open or close the drive
 // pane beside its chat. Unlike the wake-up events the payload is the whole
 // message: pane visibility is UI intent, not stored state to re-read. Path
@@ -122,6 +132,8 @@ func (MenuBarUpdated) eventName() string         { return "menu-bar.updated" }
 func (AgentWorkspacesUpdated) eventName() string { return "agent-workspaces.updated" }
 func (DriveChanged) eventName() string           { return "drive.changed" }
 func (DriveToggleRequested) eventName() string   { return "drive.toggle-requested" }
+func (ReviewChanged) eventName() string          { return "review.changed" }
+func (AppearanceUpdated) eventName() string      { return "appearance.updated" }
 func (SchedulesUpdated) eventName() string       { return "schedules.updated" }
 func (ConnectionUpdated) eventName() string      { return "connection.updated" }
 func (NotificationRaised) eventName() string     { return "notification.raised" }

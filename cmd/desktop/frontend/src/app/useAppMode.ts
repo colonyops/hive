@@ -236,7 +236,6 @@ export function useAppMode(
     void router.push(lastOutsideDrivePath || { name: 'feed' })
   }
 
-  // What a pop-out shows from here: the Drive page's scope, or the pane's.
   const popOutScope = computed(() => (driveActive.value ? driveScope.value : viewDriveScope.value))
 
   // Opening follows the chat or session on screen; from anywhere else it

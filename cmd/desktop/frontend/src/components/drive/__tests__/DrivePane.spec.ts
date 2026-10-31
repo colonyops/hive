@@ -47,6 +47,12 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
   ReviewLabels: vi.fn().mockResolvedValue(null),
 }))
 
+const popOuts = vi.hoisted(() => ({ Open: vi.fn().mockResolvedValue({ url: '', opened: true }) }))
+vi.mock(
+  '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/popoutservice',
+  () => popOuts,
+)
+
 const plan = doc('plans/plan.md', { title: 'The Plan', modified: '2026-10-03T00:00:00Z' })
 const perf = doc('reports/perf.canvas.json', { title: 'Perf', modified: '2026-10-05T00:00:00Z' })
 let tree: EntryWire
@@ -103,6 +109,25 @@ describe('DrivePane', () => {
     })
     await flushPromises()
     expect(drive.Document).toHaveBeenLastCalledWith('workspaces/web-app', 'plans/plan.md')
+  })
+
+  it("pops out the session's write it is showing, not the newest in the space", async () => {
+    const wrapper = await mountPane()
+    wailsEvents.fire('drive:updated', {
+      space: 'workspaces/web-app',
+      paths: [plan.path],
+      session: '7',
+      hiveSession: '',
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="drive-pane-pop-out"]').trigger('click')
+    await flushPromises()
+
+    expect(popOuts.Open).toHaveBeenCalledWith({
+      kind: 'drive',
+      params: { space: 'workspaces/web-app', doc: plan.path, session: '7' },
+    })
   })
 
   it("counts the session's writes as seen only while the pane shows that session", async () => {
