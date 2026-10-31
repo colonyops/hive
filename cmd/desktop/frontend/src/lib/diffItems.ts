@@ -18,7 +18,7 @@ export const DIFF_METRICS = {
 } as const
 
 export function diffHasText(diff: SessionFileDiff | undefined): boolean {
-  return !!diff?.text && !diff.binary && !diff.truncated && !diff.unavailable && !diff.gone && !diff.error
+  return diff?.state === 'text' && !!diff.text
 }
 
 function changeType(file: ChangedFile): FileDiffMetadata['type'] {

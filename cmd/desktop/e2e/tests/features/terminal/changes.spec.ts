@@ -39,7 +39,6 @@ const COMMITS = [
   { id: 'c2c2c2c2c2', subject: 'Second commit', author: 'Hive', unix: 1760000200 },
   { id: 'c1c1c1c1c1', subject: 'First commit', author: 'Hive', unix: 1760000100 },
 ]
-const noState = { binary: false, truncated: false, unavailable: false, gone: false, error: '' }
 
 async function changesFixture(page: Page, sent: unknown[][] = []) {
   const availability = ['terminalservice', 'agentsservice', 'popupterminalservice'].map((name) => bindingID(name, 'Available'))
@@ -67,7 +66,7 @@ async function changesFixture(page: Page, sent: unknown[][] = []) {
       answer = ['refs/heads/main', 'refs/heads/release', 'refs/remotes/origin/release']
     } else if (args?.methodID === diffs) {
       answer = (args.args[2] as string[]).map((path) => ({
-        path, text: PATCHES[path] ?? '', ...noState, binary: path.endsWith('.png'),
+        path, state: path.endsWith('.png') ? 'binary' : 'text', text: PATCHES[path] ?? '', error: '',
       }))
     } else if (args?.methodID === targets) {
       answer = [{ kind: 'session', id: 'review', pane: '%1', label: 'Review · claude', status: 'ready' }]

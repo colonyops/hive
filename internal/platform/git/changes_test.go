@@ -74,6 +74,7 @@ func TestChangedFilesReportsEachStatus(t *testing.T) {
 	writeFile(t, dir, "keep.txt", "one\nchanged\nthree\nfour\n")
 	require.NoError(t, os.Remove(filepath.Join(dir, "gone.txt")))
 	runGit(t, dir, "mv", "moved.txt", "renamed.txt")
+	writeFile(t, dir, "renamed.txt", "a\nb\nc\nd\ne\nedited\n")
 	writeFile(t, dir, "image.bin", "\x00\x02")
 	writeFile(t, dir, "staged.txt", "new\n")
 	runGit(t, dir, "add", "staged.txt")
@@ -84,7 +85,7 @@ func TestChangedFilesReportsEachStatus(t *testing.T) {
 		{Path: "gone.txt", Status: git.FileStatusDeleted, Deletions: 1},
 		{Path: "image.bin", Status: git.FileStatusModified, Binary: true},
 		{Path: "keep.txt", Status: git.FileStatusModified, Additions: 2, Deletions: 1},
-		{Path: "renamed.txt", OldPath: "moved.txt", Status: git.FileStatusRenamed},
+		{Path: "renamed.txt", OldPath: "moved.txt", Status: git.FileStatusRenamed, Additions: 1, Deletions: 1},
 		{Path: "staged.txt", Status: git.FileStatusAdded, Additions: 1},
 		{Path: "with space/and\nnewline.txt", Status: git.FileStatusUntracked},
 	}, files)
@@ -286,6 +287,7 @@ func TestFileDiffIgnoresColorAndPrefixConfig(t *testing.T) {
 
 	text := diffOf(t, g, dir, git.ChangedFile{Path: "keep.txt", Status: git.FileStatusModified})
 	assert.NotContains(t, text, "\x1b[")
+	assert.Contains(t, text, "diff --git a/keep.txt b/keep.txt")
 	assert.Contains(t, text, "@@ -1,3 +1,3 @@")
 }
 
@@ -472,7 +474,7 @@ func TestCommitShowsOneCommitAndIgnoresTheWorkingTree(t *testing.T) {
 
 	head, err := g.ResolveCommit(t.Context(), dir, "HEAD")
 	require.NoError(t, err)
-	diff, err := g.Commit(t.Context(), dir, head)
+	diff, err := g.CommitRange(t.Context(), dir, head)
 	require.NoError(t, err)
 	files, err := g.ChangedFiles(t.Context(), dir, diff)
 	require.NoError(t, err)
@@ -491,7 +493,7 @@ func TestCommitShowsARootCommitAsAdditions(t *testing.T) {
 
 	root, err := g.ResolveCommit(t.Context(), dir, "HEAD")
 	require.NoError(t, err)
-	diff, err := g.Commit(t.Context(), dir, root)
+	diff, err := g.CommitRange(t.Context(), dir, root)
 	require.NoError(t, err)
 	files, err := g.ChangedFiles(t.Context(), dir, diff)
 	require.NoError(t, err)
@@ -597,6 +599,53 @@ func TestFileDiffsMatchesFileDiffForEachFile(t *testing.T) {
 		assert.Equal(t, diffOf(t, g, dir, file), results[i].Text, file.Path)
 		assert.NotEmpty(t, results[i].Text, file.Path)
 		assert.NotContains(t, results[i].Text, "\x1b[", file.Path)
+	}
+}
+
+func TestFileDiffsKeepsBothHalvesOfATypeChange(t *testing.T) {
+	t.Parallel()
+	dir, g := newRepo(t)
+	require.NoError(t, os.Remove(filepath.Join(dir, "keep.txt")))
+	require.NoError(t, os.Symlink("moved.txt", filepath.Join(dir, "keep.txt")))
+	files := []git.ChangedFile{{Path: "keep.txt", Status: git.FileStatusModified}}
+
+	got := g.FileDiffs(t.Context(), dir, git.WorkingTree("HEAD"), files)[0]
+	require.NoError(t, got.Err)
+	assert.Equal(t, diffOf(t, g, dir, files[0]), got.Text)
+	assert.Contains(t, got.Text, "deleted file mode")
+	assert.Contains(t, got.Text, "new file mode 120000")
+}
+
+func TestFileDiffsKeepsAConflictOutOfTheFileBeforeIt(t *testing.T) {
+	t.Parallel()
+	cases := map[string]git.DiffRange{"unstaged": git.Unstaged(), "staged": git.Staged()}
+	for name, diff := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			dir, g := newRepo(t)
+			runGit(t, dir, "checkout", "-q", "-b", "other")
+			writeFile(t, dir, "moved.txt", "other side\n")
+			runGit(t, dir, "commit", "-qam", "other")
+			runGit(t, dir, "checkout", "-q", "main")
+			writeFile(t, dir, "moved.txt", "this side\n")
+			runGit(t, dir, "commit", "-qam", "this")
+			cmd := exec.Command("git", "merge", "other")
+			cmd.Dir = dir
+			require.Error(t, cmd.Run(), "the merge must conflict")
+			writeFile(t, dir, "keep.txt", "one\nchanged\nthree\n")
+			if name == "staged" {
+				runGit(t, dir, "add", "keep.txt")
+			}
+			files := []git.ChangedFile{
+				{Path: "keep.txt", Status: git.FileStatusModified},
+				{Path: "moved.txt", Status: git.FileStatusModified},
+			}
+
+			results := g.FileDiffs(t.Context(), dir, diff, files)
+			require.NoError(t, results[0].Err)
+			assert.Contains(t, results[0].Text, "+changed")
+			assert.NotContains(t, results[0].Text, "moved.txt")
+		})
 	}
 }
 

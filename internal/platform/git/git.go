@@ -50,13 +50,13 @@ type Git interface {
 	MergeBaseRef(ctx context.Context, dir, ref string) (string, error)
 	// ResolveCommit returns the full id of rev.
 	ResolveCommit(ctx context.Context, dir, rev string) (string, error)
-	// Commit returns the range that shows one commit.
-	Commit(ctx context.Context, dir, commit string) (DiffRange, error)
+	// CommitRange returns the range that shows one commit.
+	CommitRange(ctx context.Context, dir, commit string) (DiffRange, error)
 	// Commits lists the commits on HEAD after since, newest first.
 	Commits(ctx context.Context, dir, since string, limit int) ([]CommitInfo, error)
 	// Branches lists the full refs of local and remote branches.
 	Branches(ctx context.Context, dir string, limit int) ([]string, error)
-	// ChangedFiles lists the working tree against ref, plus untracked files.
+	// ChangedFiles lists what differs across diff, plus untracked files when diff includes the working tree.
 	ChangedFiles(ctx context.Context, dir string, diff DiffRange) ([]ChangedFile, error)
 	// FileDiffs returns the unified diff of each file, in order.
 	FileDiffs(ctx context.Context, dir string, diff DiffRange, files []ChangedFile) []FileDiffResult

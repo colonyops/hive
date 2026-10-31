@@ -94,3 +94,92 @@ func (x *DiffBase) UnmarshalText(text []byte) error {
 func (x *DiffBase) AppendText(b []byte) ([]byte, error) {
 	return append(b, x.String()...), nil
 }
+
+const (
+	// FileDiffStateText is a FileDiffState of type text.
+	FileDiffStateText FileDiffState = "text"
+	// FileDiffStateBinary is a FileDiffState of type binary.
+	FileDiffStateBinary FileDiffState = "binary"
+	// FileDiffStateTruncated is a FileDiffState of type truncated.
+	FileDiffStateTruncated FileDiffState = "truncated"
+	// FileDiffStateUnavailable is a FileDiffState of type unavailable.
+	FileDiffStateUnavailable FileDiffState = "unavailable"
+	// FileDiffStateGone is a FileDiffState of type gone.
+	FileDiffStateGone FileDiffState = "gone"
+	// FileDiffStateError is a FileDiffState of type error.
+	FileDiffStateError FileDiffState = "error"
+)
+
+var ErrInvalidFileDiffState = fmt.Errorf("not a valid FileDiffState, try [%s]", strings.Join(_FileDiffStateNames, ", "))
+
+var _FileDiffStateNames = []string{
+	string(FileDiffStateText),
+	string(FileDiffStateBinary),
+	string(FileDiffStateTruncated),
+	string(FileDiffStateUnavailable),
+	string(FileDiffStateGone),
+	string(FileDiffStateError),
+}
+
+// FileDiffStateNames returns a list of possible string values of FileDiffState.
+func FileDiffStateNames() []string {
+	tmp := make([]string, len(_FileDiffStateNames))
+	copy(tmp, _FileDiffStateNames)
+	return tmp
+}
+
+// String implements the Stringer interface.
+func (x FileDiffState) String() string {
+	return string(x)
+}
+
+// IsValid provides a quick way to determine if the typed value is
+// part of the allowed enumerated values
+func (x FileDiffState) IsValid() bool {
+	_, err := ParseFileDiffState(string(x))
+	return err == nil
+}
+
+var _FileDiffStateValue = map[string]FileDiffState{
+	"text":        FileDiffStateText,
+	"binary":      FileDiffStateBinary,
+	"truncated":   FileDiffStateTruncated,
+	"unavailable": FileDiffStateUnavailable,
+	"gone":        FileDiffStateGone,
+	"error":       FileDiffStateError,
+}
+
+// ParseFileDiffState attempts to convert a string to a FileDiffState.
+func ParseFileDiffState(name string) (FileDiffState, error) {
+	if x, ok := _FileDiffStateValue[name]; ok {
+		return x, nil
+	}
+	// Case insensitive parse, do a separate lookup to prevent unnecessary cost of lowercasing a string if we don't need to.
+	if x, ok := _FileDiffStateValue[strings.ToLower(name)]; ok {
+		return x, nil
+	}
+	return FileDiffState(""), fmt.Errorf("%s is %w", name, ErrInvalidFileDiffState)
+}
+
+// MarshalText implements the text marshaller method.
+func (x FileDiffState) MarshalText() ([]byte, error) {
+	return []byte(string(x)), nil
+}
+
+// UnmarshalText implements the text unmarshaller method.
+func (x *FileDiffState) UnmarshalText(text []byte) error {
+	tmp, err := ParseFileDiffState(string(text))
+	if err != nil {
+		return err
+	}
+	*x = tmp
+	return nil
+}
+
+// AppendText appends the textual representation of itself to the end of b
+// (allocating a larger slice if necessary) and returns the updated slice.
+//
+// Implementations must not retain b, nor mutate any bytes within b[:len(b)].
+func (x *FileDiffState) AppendText(b []byte) ([]byte, error) {
+	return append(b, x.String()...), nil
+}

@@ -168,7 +168,14 @@ var readProcedures = map[string]bool{
 	daemonv1connect.SessionServiceRiskProcedure:          true,
 	daemonv1connect.SessionServiceLaunchOptionsProcedure: true,
 	daemonv1connect.SessionServiceStatusesProcedure:      true,
+	daemonv1connect.SessionServiceChangesProcedure:       true,
+	daemonv1connect.SessionServiceFileDiffsProcedure:     true,
+	daemonv1connect.SessionServiceBranchesProcedure:      true,
 }
+
+// fileDiffsTimeout outlasts the daemon's own 15s limit on a batch of diffs, so
+// the daemon's answer arrives before the client gives up.
+const fileDiffsTimeout = 20 * time.Second
 
 func (c *Client) callTimeouts() connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
@@ -194,6 +201,8 @@ func (c *Client) timeoutFor(procedure string) time.Duration {
 		return c.riskTimeout
 	case c.connectTimeout > 0 && c.openConns.Load() == 0:
 		return c.connectTimeout
+	case procedure == daemonv1connect.SessionServiceFileDiffsProcedure && c.readTimeout > 0:
+		return max(c.readTimeout, fileDiffsTimeout)
 	}
 	return c.readTimeout
 }
@@ -530,7 +539,7 @@ func (c *Client) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOpt
 
 func (c *Client) SessionChanges(ctx context.Context, id string, target gitstatus.DiffTarget) (gitstatus.Changes, error) {
 	resp, err := retryRead(func() (*connect.Response[daemonv1.ChangesResponse], error) {
-		return c.sessions.Changes(ctx, connect.NewRequest(&daemonv1.ChangesRequest{Id: id, Base: target.Base.String(), Against: target.Against, Commit: target.Commit}))
+		return c.sessions.Changes(ctx, connect.NewRequest(&daemonv1.ChangesRequest{Id: id, Target: wire.DiffTargetToProto(target)}))
 	})
 	if err != nil {
 		return gitstatus.Changes{}, wire.FromConnectError(err)
@@ -540,9 +549,7 @@ func (c *Client) SessionChanges(ctx context.Context, id string, target gitstatus
 
 func (c *Client) SessionFileDiffs(ctx context.Context, id string, target gitstatus.DiffTarget, paths []string) ([]gitstatus.FileDiff, error) {
 	resp, err := retryRead(func() (*connect.Response[daemonv1.FileDiffsResponse], error) {
-		return c.sessions.FileDiffs(ctx, connect.NewRequest(&daemonv1.FileDiffsRequest{
-			Id: id, Base: target.Base.String(), Against: target.Against, Commit: target.Commit, Paths: paths,
-		}))
+		return c.sessions.FileDiffs(ctx, connect.NewRequest(&daemonv1.FileDiffsRequest{Id: id, Target: wire.DiffTargetToProto(target), Paths: paths}))
 	})
 	if err != nil {
 		return nil, wire.FromConnectError(err)

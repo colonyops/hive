@@ -28,7 +28,7 @@ type Git interface {
 	MergeBase(ctx context.Context, dir, branch string) (string, error)
 	MergeBaseRef(ctx context.Context, dir, ref string) (string, error)
 	ResolveCommit(ctx context.Context, dir, rev string) (string, error)
-	Commit(ctx context.Context, dir, commit string) (git.DiffRange, error)
+	CommitRange(ctx context.Context, dir, commit string) (git.DiffRange, error)
 	Commits(ctx context.Context, dir, since string, limit int) ([]git.CommitInfo, error)
 	Branches(ctx context.Context, dir string, limit int) ([]string, error)
 	ChangedFiles(ctx context.Context, dir string, diff git.DiffRange) ([]git.ChangedFile, error)

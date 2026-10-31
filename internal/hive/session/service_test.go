@@ -140,7 +140,7 @@ func (*mockGit) ChangedFiles(context.Context, string, git.DiffRange) ([]git.Chan
 
 func (*mockGit) MergeBaseRef(context.Context, string, string) (string, error)  { return "", nil }
 func (*mockGit) ResolveCommit(context.Context, string, string) (string, error) { return "", nil }
-func (*mockGit) Commit(context.Context, string, string) (git.DiffRange, error) {
+func (*mockGit) CommitRange(context.Context, string, string) (git.DiffRange, error) {
 	return git.DiffRange{}, nil
 }
 

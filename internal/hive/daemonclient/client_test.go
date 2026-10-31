@@ -391,6 +391,9 @@ func TestTimeoutFor(t *testing.T) {
 
 	c.openConns.Add(1)
 	assert.Equal(t, time.Second, c.timeoutFor(get), "has a connection")
+	assert.Equal(t, time.Second, c.timeoutFor(daemonv1connect.SessionServiceChangesProcedure))
+	assert.Equal(t, time.Second, c.timeoutFor(daemonv1connect.SessionServiceBranchesProcedure))
+	assert.Equal(t, fileDiffsTimeout, c.timeoutFor(daemonv1connect.SessionServiceFileDiffsProcedure))
 }
 
 func TestClientWithoutReadTimeoutSendsNoHelloBeforeAChange(t *testing.T) {

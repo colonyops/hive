@@ -116,7 +116,7 @@ function changes(files: unknown[], extra: Record<string, unknown> = {}) {
     ...extra,
   }
 }
-const noState = { binary: false, truncated: false, unavailable: false, gone: false, error: '' }
+const noState = { state: 'text', error: '' }
 
 async function mountView() {
   const wrapper = mount(ChangesView, { props: { sessionId: 's1' }, attachTo: document.body })
@@ -283,11 +283,11 @@ describe('ChangesView', () => {
       changes(['bin', 'big', 'pipe', 'gone', 'bad', 'renamed'].map((path) => file(path))),
     )
     mocks.SessionFileDiffs.mockResolvedValue([
-      { path: 'bin', text: '', ...noState, binary: true },
-      { path: 'big', text: '', ...noState, truncated: true },
-      { path: 'pipe', text: '', ...noState, unavailable: true },
-      { path: 'gone', text: '', ...noState, gone: true },
-      { path: 'bad', text: '', ...noState, error: 'exit 128' },
+      { path: 'bin', text: '', state: 'binary', error: '' },
+      { path: 'big', text: '', state: 'truncated', error: '' },
+      { path: 'pipe', text: '', state: 'unavailable', error: '' },
+      { path: 'gone', text: '', state: 'gone', error: '' },
+      { path: 'bad', text: '', state: 'error', error: 'exit 128' },
       { path: 'renamed', text: '', ...noState },
     ])
     const wrapper = await mountView()

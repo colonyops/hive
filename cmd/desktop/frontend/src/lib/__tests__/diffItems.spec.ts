@@ -42,13 +42,13 @@ describe('parseFileDiff', () => {
 })
 
 describe('diffHasText', () => {
-  const diff = { path: 'a', text: '@@', binary: false, truncated: false, unavailable: false, gone: false, error: '' }
+  const diff = { path: 'a', state: 'text', text: '@@', error: '' }
   it('is true only for a diff with text and no other state', () => {
     expect(diffHasText(diff)).toBe(true)
     expect(diffHasText(undefined)).toBe(false)
     expect(diffHasText({ ...diff, text: '' })).toBe(false)
-    expect(diffHasText({ ...diff, binary: true })).toBe(false)
-    expect(diffHasText({ ...diff, error: 'x' })).toBe(false)
+    expect(diffHasText({ ...diff, state: 'binary' })).toBe(false)
+    expect(diffHasText({ ...diff, state: 'error' })).toBe(false)
   })
 })
 

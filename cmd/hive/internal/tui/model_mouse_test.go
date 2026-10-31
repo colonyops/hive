@@ -69,7 +69,7 @@ func (*mouseTestGit) MergeBaseRef(context.Context, string, string) (string, erro
 
 func (*mouseTestGit) ResolveCommit(context.Context, string, string) (string, error) { return "", nil }
 
-func (*mouseTestGit) Commit(context.Context, string, string) (git.DiffRange, error) {
+func (*mouseTestGit) CommitRange(context.Context, string, string) (git.DiffRange, error) {
 	return git.DiffRange{}, nil
 }
 

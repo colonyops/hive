@@ -13,7 +13,6 @@ import (
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
 	"github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1/daemonv1connect"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
-	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/hive/status"
@@ -173,11 +172,7 @@ func (s *sessionServer) LaunchOptions(ctx context.Context, _ *connect.Request[da
 }
 
 func (s *sessionServer) Changes(ctx context.Context, req *connect.Request[daemonv1.ChangesRequest]) (*connect.Response[daemonv1.ChangesResponse], error) {
-	changes, err := s.api.SessionChanges(ctx, req.Msg.GetId(), gitstatus.DiffTarget{
-		Base:    gitstatus.DiffBase(req.Msg.GetBase()),
-		Against: req.Msg.GetAgainst(),
-		Commit:  req.Msg.GetCommit(),
-	})
+	changes, err := s.api.SessionChanges(ctx, req.Msg.GetId(), wire.DiffTargetFromProto(req.Msg.GetTarget()))
 	if err != nil {
 		return nil, wire.ToConnectError(err)
 	}
@@ -185,11 +180,7 @@ func (s *sessionServer) Changes(ctx context.Context, req *connect.Request[daemon
 }
 
 func (s *sessionServer) FileDiffs(ctx context.Context, req *connect.Request[daemonv1.FileDiffsRequest]) (*connect.Response[daemonv1.FileDiffsResponse], error) {
-	diffs, err := s.api.SessionFileDiffs(ctx, req.Msg.GetId(), gitstatus.DiffTarget{
-		Base:    gitstatus.DiffBase(req.Msg.GetBase()),
-		Against: req.Msg.GetAgainst(),
-		Commit:  req.Msg.GetCommit(),
-	}, req.Msg.GetPaths())
+	diffs, err := s.api.SessionFileDiffs(ctx, req.Msg.GetId(), wire.DiffTargetFromProto(req.Msg.GetTarget()), req.Msg.GetPaths())
 	if err != nil {
 		return nil, wire.ToConnectError(err)
 	}
@@ -201,7 +192,7 @@ func (s *sessionServer) Branches(ctx context.Context, req *connect.Request[daemo
 	if err != nil {
 		return nil, wire.ToConnectError(err)
 	}
-	return connect.NewResponse(&daemonv1.BranchesResponse{Refs: refs}), nil
+	return connect.NewResponse(&daemonv1.BranchesResponse{Refs: wire.RefsToProto(refs)}), nil
 }
 
 func (s *sessionServer) Statuses(ctx context.Context, req *connect.Request[daemonv1.StatusesRequest]) (*connect.Response[daemonv1.StatusesResponse], error) {

@@ -9,11 +9,10 @@ vi.mock('@vueuse/core', async (importOriginal) => ({
   refDebounced: <T>(source: T) => source,
 }))
 
-const entry = (text: string) =>
-  ({
-    version: '1',
-    diff: { path: '', text, binary: false, truncated: false, unavailable: false, gone: false, error: '' },
-  }) as DiffEntry
+const entry = (text: string) => ({
+  version: '1',
+  diff: { path: '', state: 'text', text, error: '' },
+})
 const hit = entry('@@ -1 +1 @@\n-old\n+needle\n')
 const file = (path: string) => ({ path }) as ChangedFile
 

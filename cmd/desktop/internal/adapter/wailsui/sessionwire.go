@@ -182,8 +182,8 @@ func sessionGitStatusOf(s gitstatus.Status) SessionGitStatus {
 	return status
 }
 
-// ChangedFile is one file in the review view. Stamp changes when the file on
-// disk does, so a held diff can be read again.
+// ChangedFile is one file in the review view. Stamp changes when the file's diff
+// can, so a held diff can be read again.
 type ChangedFile struct {
 	Path      string `json:"path"`
 	OldPath   string `json:"oldPath"`
@@ -194,8 +194,6 @@ type ChangedFile struct {
 	Stamp     string `json:"stamp"`
 }
 
-// SessionChanges is what the review view lists. Base is the base the read used,
-// which is "uncommitted" whenever BranchAvailable is false.
 // DiffTarget says what a read compares. See gitstatus.DiffTarget.
 type DiffTarget struct {
 	Base    string `json:"base"`
@@ -214,6 +212,8 @@ type SessionCommit struct {
 	Unix    int64  `json:"unix"`
 }
 
+// SessionChanges is what the review view lists. Base is the base the read used:
+// a branch read with no merge base falls back to "uncommitted".
 type SessionChanges struct {
 	Resolved        bool            `json:"resolved"`
 	Branch          string          `json:"branch"`
@@ -258,22 +258,19 @@ func sessionChangesOf(c gitstatus.Changes) SessionChanges {
 	}
 }
 
-// SessionFileDiff is one file's diff. At most one state field is set, and with
-// none set Text is the unified diff.
+// SessionFileDiff is one file's diff. State is a gitstatus.FileDiffState, which
+// says whether Text or Error applies.
 type SessionFileDiff struct {
-	Path        string `json:"path"`
-	Text        string `json:"text"`
-	Binary      bool   `json:"binary"`
-	Truncated   bool   `json:"truncated"`
-	Unavailable bool   `json:"unavailable"`
-	Gone        bool   `json:"gone"`
-	Error       string `json:"error"`
+	Path  string `json:"path"`
+	State string `json:"state"`
+	Text  string `json:"text"`
+	Error string `json:"error"`
 }
 
 func sessionFileDiffsOf(diffs []gitstatus.FileDiff) []SessionFileDiff {
 	out := make([]SessionFileDiff, 0, len(diffs))
 	for _, d := range diffs {
-		out = append(out, SessionFileDiff(d))
+		out = append(out, SessionFileDiff{Path: d.Path, State: d.State.String(), Text: d.Text, Error: d.Error})
 	}
 	return out
 }

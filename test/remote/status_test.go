@@ -99,9 +99,40 @@ func TestSessionAPI_ReadsAFileDiffFromTheServer(t *testing.T) {
 		[]string{"only-on-the-server.txt", "not-in-the-list.txt"})
 	require.NoError(t, err)
 	assert.Equal(t, []gitstatus.FileDiff{
-		{Path: "only-on-the-server.txt", Text: "@@ -0,0 +1,1 @@\n+changed\n"},
-		{Path: "not-in-the-list.txt", Gone: true},
+		{Path: "only-on-the-server.txt", State: gitstatus.FileDiffStateText, Text: "@@ -0,0 +1,1 @@\n+changed\n"},
+		{Path: "not-in-the-list.txt", State: gitstatus.FileDiffStateGone},
 	}, diffs)
+}
+
+func TestSessionAPI_ReadsAChosenBranchAndCommitFromTheServer(t *testing.T) {
+	created := serverA.CreateSession(t, "targets")
+	const commit = "git -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm"
+	serverA.Shell(t, "cd "+created.Path+" && git branch chosen && "+
+		"echo older > older.txt && git add . && "+commit+" older && "+
+		"echo newer > newer.txt && git add . && "+commit+" newer").Ok(t)
+	api := serverA.API(t)
+
+	const against = "refs/heads/chosen"
+	branch := gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch, Against: against}
+	changes, err := api.SessionChanges(t.Context(), created.ID, branch)
+	require.NoError(t, err)
+	assert.Equal(t, against, changes.Against)
+	assert.ElementsMatch(t, []string{"older.txt", "newer.txt"}, []string{changes.Files[0].Path, changes.Files[1].Path})
+	diffs, err := api.SessionFileDiffs(t.Context(), created.ID, branch, []string{"older.txt"})
+	require.NoError(t, err)
+	assert.Contains(t, diffs[0].Text, "+older")
+
+	require.Len(t, changes.Commits, 2)
+	older := gitstatus.DiffTarget{Base: gitstatus.DiffBaseCommit, Commit: changes.Commits[1].ID}
+	changes, err = api.SessionChanges(t.Context(), created.ID, older)
+	require.NoError(t, err)
+	assert.Equal(t, older.Commit, changes.Commit)
+	require.Len(t, changes.Files, 1)
+	assert.Equal(t, "older.txt", changes.Files[0].Path)
+	diffs, err = api.SessionFileDiffs(t.Context(), created.ID, older, []string{"older.txt", "newer.txt"})
+	require.NoError(t, err)
+	assert.Equal(t, gitstatus.FileDiffStateText, diffs[0].State)
+	assert.Equal(t, gitstatus.FileDiffStateGone, diffs[1].State)
 }
 
 func TestSessionAPI_ReadsACommitAndTheBranchesFromTheServer(t *testing.T) {

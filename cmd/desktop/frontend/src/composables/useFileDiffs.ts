@@ -49,7 +49,7 @@ export function useFileDiffs(
 
   function stale(version: string | undefined, path: string): boolean {
     const held = entries.value.get(path)
-    return version !== undefined && (held?.version !== version || !!held.diff.error)
+    return version !== undefined && (held?.version !== version || held.diff.state === 'error')
   }
 
   async function pump(): Promise<void> {
@@ -67,15 +67,7 @@ export function useFileDiffs(
     } catch (err) {
       failed = true
       const error = errorText(err, 'Could not read this diff.')
-      diffs = batch.map((path) => ({
-        path,
-        text: '',
-        binary: false,
-        truncated: false,
-        unavailable: false,
-        gone: false,
-        error,
-      }))
+      diffs = batch.map((path) => ({ path, state: 'error', text: '', error }))
     }
     reading = false
     if (started !== generation) return void pump()
@@ -84,7 +76,7 @@ export function useFileDiffs(
     entries.value = next
     answered.value = true
     // A failed request waits for the next poll, or it would retry in a tight loop.
-    if (!failed && !diffs.some((diff) => diff.error)) void pump()
+    if (!failed && !diffs.some((diff) => diff.state === 'error')) void pump()
   }
 
   watch([sessionId, () => targetKey(target.value)], () => {

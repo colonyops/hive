@@ -185,7 +185,7 @@ func (s *Service) resolveTarget(ctx context.Context, dir string, target DiffTarg
 func (s *Service) commitDiff(ctx context.Context, dir, commit string) (string, git.DiffRange, error) {
 	if commit != "" {
 		if resolved, err := s.git.ResolveCommit(ctx, dir, commit); err == nil {
-			diff, err := s.git.Commit(ctx, dir, resolved)
+			diff, err := s.git.CommitRange(ctx, dir, resolved)
 			return resolved, diff, err
 		}
 		s.logger.Debug().Str("path", dir).Str("commit", commit).Msg("git commit lookup failed")
@@ -194,7 +194,7 @@ func (s *Service) commitDiff(ctx context.Context, dir, commit string) (string, g
 	if err != nil {
 		return "", git.DiffRange{}, err
 	}
-	diff, err := s.git.Commit(ctx, dir, resolved)
+	diff, err := s.git.CommitRange(ctx, dir, resolved)
 	return resolved, diff, err
 }
 
@@ -236,21 +236,21 @@ func (s *Service) branchBase(ctx context.Context, dir, branch, chosen string) (d
 	return defaultBranch, "", mergeBase
 }
 
-// FileDiff is one file's diff. At most one state field is set, and with none
-// set Text is the unified diff, which is empty for a rename with no edits.
+// FileDiffState says what a FileDiff holds. Truncated is a diff past the caps.
+// Unavailable is a path with no text to show: a FIFO, a symlink, or a nested
+// repository. Gone is a path no longer in the change list, which is routine: an
+// agent can revert a file between the list and the read.
+//
+// ENUM(text, binary, truncated, unavailable, gone, error)
+type FileDiffState string
+
+// FileDiff is one file's diff. Text is the unified diff in FileDiffStateText,
+// and is empty for a rename with no edits. Error is why this one file failed in
+// FileDiffStateError, so it can't blank the rest of a batch.
 type FileDiff struct {
-	Path string
-	Text string
-	// Binary means a binary file, and Truncated a diff past the caps.
-	Binary    bool
-	Truncated bool
-	// Unavailable means a path with no text to show: a FIFO, a symlink, or a
-	// nested repository.
-	Unavailable bool
-	// Gone means the path is no longer in the change list, which is routine: an
-	// agent can revert a file between the list and this read.
-	Gone bool
-	// Error is why this one file failed, so it can't blank the rest of a batch.
+	Path  string
+	State FileDiffState
+	Text  string
 	Error string
 }
 
@@ -259,7 +259,7 @@ type FileDiff struct {
 func (s *Service) ReadFileDiffs(ctx context.Context, sess session.Session, target DiffTarget, paths []string) ([]FileDiff, error) {
 	diffs := make([]FileDiff, len(paths))
 	for i, path := range paths {
-		diffs[i] = FileDiff{Path: path, Gone: true}
+		diffs[i] = FileDiff{Path: path, State: FileDiffStateGone}
 	}
 	if sess.State != session.StateActive || sess.Path == "" {
 		return diffs, nil
@@ -283,10 +283,10 @@ func (s *Service) ReadFileDiffs(ctx context.Context, sess session.Session, targe
 		switch {
 		case !ok:
 		case file.Binary:
-			diffs[i] = FileDiff{Path: path, Binary: true}
+			diffs[i] = FileDiff{Path: path, State: FileDiffStateBinary}
 		// Decided from the counts so a generated file never buffers its patch.
 		case file.Additions+file.Deletions > maxDiffLines:
-			diffs[i] = FileDiff{Path: path, Truncated: true}
+			diffs[i] = FileDiff{Path: path, State: FileDiffStateTruncated}
 		default:
 			toRead = append(toRead, file)
 			readAt = append(readAt, i)
@@ -302,30 +302,31 @@ func (s *Service) ReadFileDiffs(ctx context.Context, sess session.Session, targe
 }
 
 func (s *Service) fileDiffOf(dir string, file git.ChangedFile, result git.FileDiffResult) FileDiff {
-	diff := FileDiff{Path: file.Path}
 	text, err := result.Text, result.Err
 	switch {
 	case err == nil:
 		// The list can be seconds old. A tracked file with no diff has gone back to
 		// matching its base. An empty untracked file and a pure rename are still changes.
 		if text == "" && file.Status != git.FileStatusUntracked && file.Status != git.FileStatusRenamed {
-			diff.Gone = true
-			return diff
+			return FileDiff{Path: file.Path, State: FileDiffStateGone}
 		}
-		diff.Text, diff.Truncated = clipDiff(text)
+		clipped, truncated := clipDiff(text)
+		if truncated {
+			return FileDiff{Path: file.Path, State: FileDiffStateTruncated}
+		}
+		return FileDiff{Path: file.Path, State: FileDiffStateText, Text: clipped}
 	case errors.Is(err, git.ErrBinaryDiff):
-		diff.Binary = true
+		return FileDiff{Path: file.Path, State: FileDiffStateBinary}
 	case errors.Is(err, git.ErrDiffTooLarge):
-		diff.Truncated = true
+		return FileDiff{Path: file.Path, State: FileDiffStateTruncated}
 	case errors.Is(err, git.ErrNoTextDiff):
-		diff.Unavailable = true
+		return FileDiff{Path: file.Path, State: FileDiffStateUnavailable}
 	case errors.Is(err, fs.ErrNotExist):
-		diff.Gone = true
+		return FileDiff{Path: file.Path, State: FileDiffStateGone}
 	default:
 		s.logger.Debug().Err(err).Str("path", dir).Str("file", file.Path).Msg("git file diff failed")
-		diff.Error = err.Error()
+		return FileDiff{Path: file.Path, State: FileDiffStateError, Error: err.Error()}
 	}
-	return diff
 }
 
 // clipDiff caps the lines and their length. The line cap counts context too, so

@@ -161,8 +161,8 @@ export interface CanvasWire {
 }
 
 /**
- * ChangedFile is one file in the review view. Stamp changes when the file on
- * disk does, so a held diff can be read again.
+ * ChangedFile is one file in the review view. Stamp changes when the file's diff
+ * can, so a held diff can be read again.
  */
 export interface ChangedFile {
     "path": string;
@@ -208,8 +208,6 @@ export interface DevToolsInfo {
 }
 
 /**
- * SessionChanges is what the review view lists. Base is the base the read used,
- * which is "uncommitted" whenever BranchAvailable is false.
  * DiffTarget says what a read compares. See gitstatus.DiffTarget.
  */
 export interface DiffTarget {
@@ -627,6 +625,10 @@ export interface ServerSessions {
     "sessions": SessionSummary[] | null;
 }
 
+/**
+ * SessionChanges is what the review view lists. Base is the base the read used:
+ * a branch read with no merge base falls back to "uncommitted".
+ */
 export interface SessionChanges {
     "resolved": boolean;
     "branch": string;
@@ -674,16 +676,13 @@ export interface SessionDetail {
 }
 
 /**
- * SessionFileDiff is one file's diff. At most one state field is set, and with
- * none set Text is the unified diff.
+ * SessionFileDiff is one file's diff. State is a gitstatus.FileDiffState, which
+ * says whether Text or Error applies.
  */
 export interface SessionFileDiff {
     "path": string;
+    "state": string;
     "text": string;
-    "binary": boolean;
-    "truncated": boolean;
-    "unavailable": boolean;
-    "gone": boolean;
     "error": string;
 }
 

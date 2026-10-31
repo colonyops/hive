@@ -13,7 +13,7 @@ function file(path: string, stamp = '1') {
   return { path, oldPath: '', status: 'modified', additions: 1, deletions: 0, binary: false, stamp }
 }
 function diff(path: string, text = `@@ ${path}`) {
-  return { path, text, binary: false, truncated: false, unavailable: false, gone: false, error: '' }
+  return { path, state: 'text', text, error: '' }
 }
 
 function setup(paths = ['a', 'b']) {

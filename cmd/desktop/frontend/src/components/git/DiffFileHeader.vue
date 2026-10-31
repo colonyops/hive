@@ -22,16 +22,18 @@ const emit = defineEmits<{ fold: []; 'toggle-viewed': []; 'open-editor': [] }>()
 const prefix = computed(() => props.testPrefix ?? `changes-file-${props.file.path}`)
 const status = computed(() => gitStatus(props.file.status))
 const fileIcon = computed(() => documentIcon(gitFileName(props.file.path), ''))
+const STATE_NOTES: Record<string, string> = {
+  binary: 'Binary file',
+  truncated: 'Diff too large to show',
+  unavailable: 'A symlink, pipe or nested repository',
+  gone: 'No longer changed',
+}
 const diff = computed(() => props.entry?.diff)
 const note = computed(() => {
   const d = diff.value
   if (!props.open || !d || diffHasText(d)) return null
-  if (d.error) return d.error
-  if (d.binary) return 'Binary file'
-  if (d.truncated) return 'Diff too large to show'
-  if (d.unavailable) return 'A symlink, pipe or nested repository'
-  if (d.gone) return 'No longer changed'
-  return 'No content changes'
+  if (d.state === 'error') return d.error
+  return STATE_NOTES[d.state] ?? 'No content changes'
 })
 </script>
 
@@ -66,12 +68,17 @@ const note = computed(() => {
     <span
       v-if="note"
       class="max-w-[50%] shrink truncate text-caption"
-      :class="diff?.error ? 'text-severity-error' : 'text-text-3'"
+      :class="diff?.state === 'error' ? 'text-severity-error' : 'text-text-3'"
       :title="note"
       :data-testid="`${prefix}-note`"
       >{{ note }}</span
     >
-    <BaseButton v-if="open && diff?.truncated" variant="secondary" size="xs" @click.stop="emit('open-editor')">
+    <BaseButton
+      v-if="open && diff?.state === 'truncated'"
+      variant="secondary"
+      size="xs"
+      @click.stop="emit('open-editor')"
+    >
       Open in editor
     </BaseButton>
     <span v-if="!file.binary" class="shrink-0 font-mono text-body">

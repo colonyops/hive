@@ -52,7 +52,7 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 		{"SessionRisk", app.SessionRisk{}, sorted("uncommittedChanges", "unpushedCommits", "recycleDeletes")},
 		{"SessionGitStatus", SessionGitStatus{}, sorted("path", "branch", "dirty", "unpushed", "additions", "deletions", "host", "owner", "repo", "resolved", "error")},
 		{"ChangedFile", ChangedFile{}, sorted("path", "oldPath", "status", "additions", "deletions", "binary", "stamp")},
-		{"SessionFileDiff", SessionFileDiff{}, sorted("path", "text", "binary", "truncated", "unavailable", "gone", "error")},
+		{"SessionFileDiff", SessionFileDiff{}, sorted("path", "state", "text", "error")},
 		{"SessionChanges", SessionChanges{}, sorted("resolved", "branch", "defaultBranch", "base", "branchAvailable", "against", "commit", "commits", "files", "truncated")},
 		{"SessionCommit", SessionCommit{}, sorted("id", "subject", "author", "unix")},
 		{"DiffTarget", DiffTarget{}, sorted("base", "against", "commit")},

@@ -70,7 +70,7 @@ func TestClientDrivesTheSessionAPIThroughTheDaemon(t *testing.T) {
 
 	diffs, err := client.SessionFileDiffs(ctx, created.ID, gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, []string{"not-changed.txt"})
 	require.NoError(t, err)
-	assert.Equal(t, []gitstatus.FileDiff{{Path: "not-changed.txt", Gone: true}}, diffs)
+	assert.Equal(t, []gitstatus.FileDiff{{Path: "not-changed.txt", State: gitstatus.FileDiffStateGone}}, diffs)
 
 	options, err := client.SessionLaunchOptions(ctx)
 	require.NoError(t, err)

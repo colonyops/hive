@@ -290,15 +290,15 @@ func TestReadFileDiffsReportsEachFileOnItsOwn(t *testing.T) {
 		[]string{"ok.go", "image.png", "lock.json", "data.bin", "pipe", "raced.txt", "big.txt", "broken.go", "../../etc/passwd"})
 	require.NoError(t, err)
 	assert.Equal(t, []gitstatus.FileDiff{
-		{Path: "ok.go", Text: "@@ -1 +1 @@\n+x\n"},
-		{Path: "image.png", Binary: true},
-		{Path: "lock.json", Truncated: true},
-		{Path: "data.bin", Binary: true},
-		{Path: "pipe", Unavailable: true},
-		{Path: "raced.txt", Gone: true},
-		{Path: "big.txt", Truncated: true},
-		{Path: "broken.go", Error: "exit 128"},
-		{Path: "../../etc/passwd", Gone: true},
+		{Path: "ok.go", State: gitstatus.FileDiffStateText, Text: "@@ -1 +1 @@\n+x\n"},
+		{Path: "image.png", State: gitstatus.FileDiffStateBinary},
+		{Path: "lock.json", State: gitstatus.FileDiffStateTruncated},
+		{Path: "data.bin", State: gitstatus.FileDiffStateBinary},
+		{Path: "pipe", State: gitstatus.FileDiffStateUnavailable},
+		{Path: "raced.txt", State: gitstatus.FileDiffStateGone},
+		{Path: "big.txt", State: gitstatus.FileDiffStateTruncated},
+		{Path: "broken.go", State: gitstatus.FileDiffStateError, Error: "exit 128"},
+		{Path: "../../etc/passwd", State: gitstatus.FileDiffStateGone},
 	}, got)
 }
 
@@ -319,7 +319,7 @@ func TestReadFileDiffsClipsLongLinesAndHugePatches(t *testing.T) {
 	got, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch}, []string{"long.go", "spread.go", "latin.txt"})
 	require.NoError(t, err)
 	assert.Len(t, strings.TrimSuffix(got[0].Text, "\n"), 4000)
-	assert.True(t, got[1].Truncated)
+	assert.Equal(t, gitstatus.FileDiffStateTruncated, got[1].State)
 	assert.Empty(t, got[1].Text)
 	assert.Equal(t, "+caf\uFFFD\n", got[2].Text)
 }
@@ -330,7 +330,7 @@ func TestReadFileDiffsReportsEveryPathGoneWithNoCheckout(t *testing.T) {
 	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branchErr: errors.New("must not run")}, 1)
 	got, err := svc.ReadFileDiffs(t.Context(), session.Session{ID: "r", State: session.StateRecycled}, gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch}, []string{"a"})
 	require.NoError(t, err)
-	assert.Equal(t, []gitstatus.FileDiff{{Path: "a", Gone: true}}, got)
+	assert.Equal(t, []gitstatus.FileDiff{{Path: "a", State: gitstatus.FileDiffStateGone}}, got)
 }
 
 func TestReadFileDiffsReturnsAFailedList(t *testing.T) {
@@ -357,7 +357,7 @@ func TestReadFileDiffsReadsABatchInOneCall(t *testing.T) {
 
 	got, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, []string{"b.go", "image.png", "a.go"})
 	require.NoError(t, err)
-	assert.Equal(t, []gitstatus.FileDiff{{Path: "b.go", Text: "+b\n"}, {Path: "image.png", Binary: true}, {Path: "a.go", Text: "+a\n"}}, got)
+	assert.Equal(t, []gitstatus.FileDiff{{Path: "b.go", State: gitstatus.FileDiffStateText, Text: "+b\n"}, {Path: "image.png", State: gitstatus.FileDiffStateBinary}, {Path: "a.go", State: gitstatus.FileDiffStateText, Text: "+a\n"}}, got)
 	assert.Equal(t, int32(1), batches.Load())
 }
 
@@ -375,7 +375,7 @@ func TestReadFileDiffsReportsAFileThatStoppedDifferingAsGone(t *testing.T) {
 
 	got, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, []string{"reverted.go", "empty.txt", "moved.go"})
 	require.NoError(t, err)
-	assert.Equal(t, []gitstatus.FileDiff{{Path: "reverted.go", Gone: true}, {Path: "empty.txt"}, {Path: "moved.go"}}, got)
+	assert.Equal(t, []gitstatus.FileDiff{{Path: "reverted.go", State: gitstatus.FileDiffStateGone}, {Path: "empty.txt", State: gitstatus.FileDiffStateText}, {Path: "moved.go", State: gitstatus.FileDiffStateText}}, got)
 }
 
 func TestReadFileDiffsReusesARecentListForTheSameTarget(t *testing.T) {

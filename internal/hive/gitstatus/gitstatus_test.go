@@ -87,7 +87,7 @@ func (g stubGit) ResolveCommit(_ context.Context, _, rev string) (string, error)
 	return "full-" + rev, nil
 }
 
-func (g stubGit) Commit(_ context.Context, _, commit string) (git.DiffRange, error) {
+func (g stubGit) CommitRange(_ context.Context, _, commit string) (git.DiffRange, error) {
 	return git.WorkingTree("commit:" + commit), nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -26,9 +27,9 @@ type FileStatus string
 // a rename. Untracked files carry no line counts, so a list's totals match
 // DiffStats and a poll reads no file contents.
 //
-// Stamp changes when the file on disk does. Line counts alone can't tell a
-// reader that its diff is stale: replacing one line with another leaves them
-// the same, and an untracked file has none. It is empty for a deleted file.
+// Stamp changes when the file's diff across this range can. Line counts alone
+// can't tell a reader that its diff is stale: replacing one line with another
+// leaves them the same, and an untracked file has none.
 type ChangedFile struct {
 	Path      string
 	OldPath   string
@@ -46,8 +47,7 @@ var (
 	ErrDiffTooLarge = errors.New("diff too large")
 )
 
-// maxDiffBytes keeps one generated file from buffering in memory. Only a file
-// with very long lines reaches it, since the line cap stops the rest first.
+// maxDiffBytes keeps one generated file from buffering in memory.
 const (
 	maxDiffBytes      = 2 << 20
 	binarySniffLength = 8 << 10
@@ -95,9 +95,9 @@ func Unstaged() DiffRange {
 	return DiffRange{untracked: true}
 }
 
-// Commit compares a commit with its first parent, or with the empty tree for a
+// CommitRange compares a commit with its first parent, or with the empty tree for a
 // root commit. It takes the id ResolveCommit returned.
-func (e *Executor) Commit(ctx context.Context, dir, commit string) (DiffRange, error) {
+func (e *Executor) CommitRange(ctx context.Context, dir, commit string) (DiffRange, error) {
 	from := commit + "^"
 	if _, err := e.read(ctx, dir, "rev-parse", "--verify", "--quiet", "--end-of-options", from+"^{commit}"); err != nil {
 		// hash-object writes nothing without -w, and it names the empty tree in the
@@ -440,19 +440,25 @@ func fileHeader(file ChangedFile) string {
 	return "diff --git a/" + from + " b/" + file.Path
 }
 
-// splitPatch keys each file's section by its header line. A line of a hunk always
-// starts with a marker, so only a real header can start with "diff --git".
+// patchSectionStart matches what can start a file's section. A line of a hunk
+// always starts with a marker, so only a real header can match. During a merge,
+// an unmerged path gets a combined diff or the "Unmerged path" line.
+var patchSectionStart = regexp.MustCompile(`(?m)^(?:diff --git |diff --cc |diff --combined |\* Unmerged path )`)
+
+// splitPatch keys each file's section by its header line. A file that changes
+// between a regular file and a symlink has two sections under one header, a
+// deletion and a creation, so sections under one header join.
 func splitPatch(patch string) map[string]string {
-	const boundary = "\ndiff --git "
 	sections := make(map[string]string)
-	for patch != "" {
-		section := patch
-		if end := strings.Index(patch, boundary); end >= 0 {
-			section = patch[:end+1]
+	starts := patchSectionStart.FindAllStringIndex(patch, -1)
+	for i, start := range starts {
+		end := len(patch)
+		if i+1 < len(starts) {
+			end = starts[i+1][0]
 		}
-		patch = patch[len(section):]
+		section := patch[start[0]:end]
 		header, _, _ := strings.Cut(section, "\n")
-		sections[header] = section
+		sections[header] += section
 	}
 	return sections
 }

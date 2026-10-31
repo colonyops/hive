@@ -349,11 +349,15 @@ message ChangedFile {
   string stamp = 7;
 }
 
+message DiffTarget {
+  string base = 1;
+  string against = 2;
+  string commit = 3;
+}
+
 message ChangesRequest {
   string id = 1;
-  string base = 2;
-  string against = 3;
-  string commit = 4;
+  DiffTarget target = 2;
 }
 
 message CommitInfo {
@@ -378,20 +382,15 @@ message ChangesResponse {
 
 message FileDiff {
   string path = 1;
-  string text = 2;
-  bool binary = 3;
-  bool truncated = 4;
-  bool unavailable = 5;
-  bool gone = 6;
-  string error = 7;
+  string state = 2;
+  string text = 3;
+  string error = 4;
 }
 
 message FileDiffsRequest {
   string id = 1;
-  string base = 2;
+  DiffTarget target = 2;
   repeated string paths = 3;
-  string against = 4;
-  string commit = 5;
 }
 
 message FileDiffsResponse {
