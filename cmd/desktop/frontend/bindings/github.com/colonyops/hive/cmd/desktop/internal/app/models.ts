@@ -3,9 +3,6 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as applets$0 from "./applets/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
 import * as diagnostics$0 from "./diagnostics/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -108,44 +105,20 @@ export interface AgentTargetRef {
 
 /**
  * Applet is one catalog entry. Error names what is wrong with its file. An applet
- * that once loaded still runs its last good declaration; Runnable is false when
- * none ever did.
+ * that once loaded still runs its last good file; Runnable is false when none ever did.
  */
 export interface Applet {
     "id": string;
     "title": string;
     "icon": string;
-    "view": string;
     "path": string;
-    "requiresSession": boolean;
-    "refreshMillis": number;
+    "builtin": boolean;
     "entry": string;
     "width": number;
     "height": number;
     "revision": number;
     "runnable": boolean;
     "error": string;
-    "columns": AppletColumn[] | null;
-    "actions": AppletAction[] | null;
-}
-
-/**
- * AppletAction is an action as much as a surface needs to offer it. What it runs
- * is deliberately absent: a caller invokes it by id, so what runs is the file's
- * answer and not the client's.
- */
-export interface AppletAction {
-    "id": string;
-    "label": string;
-    "mode": string;
-    "key": string;
-    "confirm": string;
-}
-
-export interface AppletColumn {
-    "key": string;
-    "label": string;
-    "tones": { [_ in string]?: string } | null;
 }
 
 /**
@@ -194,11 +167,13 @@ export interface AppletOutput {
 }
 
 /**
- * AppletRows is one run of an applet's data command.
+ * AppletProcess is a process an applet has running, for Settings to show.
  */
-export interface AppletRows {
-    "rows": applets$0.Row[] | null;
-    "truncated": boolean;
+export interface AppletProcess {
+    "handle": string;
+    "applet": string;
+    "command": string;
+    "startedMillis": number;
 }
 
 /**

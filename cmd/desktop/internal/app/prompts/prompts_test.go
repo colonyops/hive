@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/mcpcatalog"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
@@ -307,4 +308,66 @@ func fencedBlock(t *testing.T, text, lang string) string {
 	body, _, found := strings.Cut(after, "```")
 	require.Truef(t, found, "unterminated ```%s block", lang)
 	return body
+}
+
+func TestAppletBriefShapesThePrompt(t *testing.T) {
+	render := func(brief AppletBrief) (string, error) {
+		prompt, err := newTestService(t).Render("applets", Input{AppletBrief: &brief})
+		return prompt.Text, err
+	}
+	base := AppletBrief{Style: "hive"}
+
+	for _, style := range appletStyles {
+		brief := base
+		brief.Style = style
+		brief.Reference = "the Linear app"
+		if style == "named" {
+			brief.Reference = appletNamedStyles[0]
+		}
+		text, err := render(brief)
+		require.NoError(t, err, style)
+		assert.Contains(t, text, "## Style:", style)
+		assert.Contains(t, text, "## Start by asking", style)
+		assert.NotContains(t, text, "<no value>", style)
+		assert.NotContains(t, text, "<describe it here>", style)
+	}
+	for _, named := range appletNamedStyles {
+		brief := base
+		brief.Style, brief.Reference = "named", named
+		text, err := render(brief)
+		require.NoError(t, err, named)
+		assert.Regexp(t, `## Style: `+named+`\n\S`, strings.ReplaceAll(text, "\n\n", "\n"), "every named style has words")
+	}
+	for _, field := range []func(*AppletBrief){
+		func(b *AppletBrief) { b.Style = "nope" },
+		func(b *AppletBrief) { b.Style, b.Reference = "named", "nope" },
+		func(b *AppletBrief) { b.Style, b.Reference = "reference", " " },
+	} {
+		brief := base
+		field(&brief)
+		_, err := render(brief)
+		require.Error(t, err)
+	}
+
+	text, err := render(base)
+	require.NoError(t, err)
+	assert.Contains(t, text, "--hv-sidebar")
+}
+
+func TestAppletsPromptWithoutABriefLeavesTheTaskOpen(t *testing.T) {
+	prompt, err := newTestService(t).Render("applets", Input{})
+	require.NoError(t, err)
+	assert.Contains(t, prompt.Text, "<describe it here>")
+	assert.NotContains(t, prompt.Text, "## Style:")
+}
+
+func TestAppletsPromptSchemaParses(t *testing.T) {
+	prompt, err := newTestService(t).Render("applets", Input{})
+	require.NoError(t, err)
+	_, rest, found := strings.Cut(prompt.Text, "```yaml\n")
+	require.True(t, found)
+	body, _, found := strings.Cut(rest, "```")
+	require.True(t, found)
+	_, err = applets.Parse("containers", []byte(body))
+	require.NoError(t, err)
 }

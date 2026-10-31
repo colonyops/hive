@@ -534,7 +534,6 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.Terminals = newTerminalsService(TerminalsDeps{Manager: a.terminals, Servers: a.serverTerminals, Starter: a.Sessions, Home: os.UserHomeDir, Logger: cfg.Logger})
 	a.PopupTerminals = newPopupTerminalsService(PopupTerminalsDeps{Manager: a.popupTerminals, Terminals: a.Terminals, Directory: a.Sessions, Catalog: a.actionStore})
 	a.Applets = newAppletsService(a.appletStore, a.execEnv.Environ, a.PopupTerminals.terminalDir)
-	a.PopupTerminals.applets = a.Applets
 	a.Diagnostics = &DiagnosticsService{paths: cfg.Paths, jobs: a.Jobs, build: cfg.Build, environ: a.execEnv.Environ, hive: a.HiveConfig, commands: a.profileCommands, webhooks: a.Webhooks, reveal: a.System.revealPath}
 	a.Tasks = newTasksService(a.hive)
 	a.Review = newReviewService(ReviewDeps{

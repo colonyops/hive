@@ -1,66 +1,47 @@
 ---
 icon: lucide/layout-panel-top
-description: Ask an agent for a table, a fuzzy picker, or a whole web page that opens over Hive Desktop and can do anything on your machine.
+description: Ask an agent for a web page that opens over Hive Desktop and can do anything on your machine, with the Applet Builder to get you started.
 ---
 
 # Applets
 
-An applet is a UI that opens over the app. It can be a table for watching and managing things, a fuzzy picker for choosing one thing and acting on it, or a web page of its own that does whatever you want.
+An applet is a web page that opens over the app. It can be a Docker viewer, a Git graph, a dashboard, a game, or whatever else you want, and it can run any command on your machine.
 
 ## Make one
 
-An agent writes the applet for you.
+Open **Applet Builder** from the command palette at <kbd>⌘K</kbd>. Pick a style (Hive, a website, a design style, or something it should feel like), then copy the prompt.
 
-- **In a chat**, ask for what you want. Workspaces with the `hive` skill package carry the `hive-applets` skill.
-- **Anywhere else**, run **Copy Applet Authoring Prompt** from the command palette at <kbd>⌘K</kbd>, paste it to an agent, and describe what you want.
+Paste the prompt to an agent. The agent asks what the applet should do, then writes it.
 
-Try "a Docker viewer where I can see my containers, read their logs, and restart them", "a picker that runs a mise task", or "Pong, where my busiest process is the opponent".
+In a chat, you can also just ask. Workspaces with the `hive` skill package carry the `hive-applets` skill.
 
 The applet appears as soon as its file is valid. If you dislike it, ask for changes or delete its directory.
 
 ## Open one
 
-Applets are in the command palette under **Applets**. Bind one to a key in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>`. An applet that runs in the current session appears only while a session is on screen.
+- Press <kbd>⌘K</kbd> and type its name. An applet whose name matches comes first, under **Applets**.
+- Press <kbd>⌘K</kbd> and type <kbd>+</kbd>, or press <kbd>⇥</kbd> to reach the **Applets** tab, to see only applets.
+- Bind one to a key in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>`.
 
-| View | Keys |
-| --- | --- |
-| Table | <kbd>j</kbd> <kbd>k</kbd> move, <kbd>/</kbd> filters, <kbd>↵</kbd> runs the first action, each action's own key runs it, <kbd>esc</kbd> closes |
-| Picker | Type to filter, <kbd>↑</kbd> <kbd>↓</kbd> move, <kbd>↵</kbd> runs the first action and closes |
-| Page | Whatever the page does. <kbd>esc</kbd> closes unless the page keeps it |
+<kbd>esc</kbd> closes an applet, unless the page uses the key itself first.
 
-## The file
+## See what is registered
 
-An applet is one directory under `~/.config/hive/desktop/applets/`, named for its id, holding an `applet.yaml` and any scripts it calls.
+**Settings ▸ Applets** lists every applet Hive found and whether its file loaded, with the error if not. It also shows what applets have running, so you can stop a process, and where the applets folder is.
 
-```yaml
-version: 1
-title: Mise tasks
-icon: play
-view: picker
-data:
-  command: mise tasks --json
-columns:
-  - key: name
-    label: Task
-  - key: description
-actions:
-  - id: run
-    label: Run
-    mode: terminal
-    run: mise run "$HIVE_ROW_NAME"
-```
+## The files
 
-An action reads the selected row from `$HIVE_ROW_<KEY>`, or all of it as JSON from `$HIVE_ROW`. The `hive-applets` skill has the full schema.
-
-## Your own page
-
-Set `view: html` and put an `index.html` beside the file. Scripts, modules, images, audio, and network requests all work, and editing a file reloads the page.
+An applet is one directory under `~/.config/hive/desktop/applets/`, named for its id, holding an `applet.yaml` and its page.
 
 ```yaml
 version: 1
-title: Pong
-view: html
+title: Containers
+icon: container
+width: 1200
+height: 760
 ```
+
+Put an `index.html` beside it. Scripts, modules, images, audio, and network requests all work, and editing a file reloads the page.
 
 The page gets `window.hive`:
 
@@ -71,12 +52,15 @@ The page gets `window.hive`:
 | `hive.readFile(path)`, `hive.writeFile(path, text)` | Reads and writes files anywhere |
 | `hive.terminal(command)` | Opens the pop-up terminal |
 | `hive.toast(message, options)` | Shows a toast |
+| `hive.copy(text)` | Puts text on the clipboard |
 | `hive.context()` | Returns the applet's directory, working directory, and session |
 | `hive.close()` | Closes the applet |
 
-`localStorage` works and is kept per applet. Cookies and IndexedDB do not work.
+The page also receives Hive's theme as CSS variables such as `--hv-app`, `--hv-text` and `--hv-accent`, which change when you change theme. `localStorage` works and is kept per applet. Cookies and IndexedDB do not work.
 
 !!! warning "An applet can do anything you can"
     Applets have no permissions and no allowlist. A page can run any command and change any file, and so can any remote script it loads. Nothing runs when a file loads, only when you open an applet. Read an applet from someone else before you open it.
 
-If a file is invalid, the palette marks the applet **(invalid)** and opening it shows the error. An applet that loaded before keeps running its last valid version and shows the error above its rows.
+If a file is invalid, the palette marks the applet **(invalid)** and opening it shows the error. An applet that loaded before keeps running its last valid version.
+
+To replace the Applet Builder with your own, create a directory named `applet-builder`.

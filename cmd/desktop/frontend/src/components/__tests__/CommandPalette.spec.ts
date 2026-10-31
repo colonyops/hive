@@ -334,6 +334,53 @@ describe('CommandPalette', () => {
     ])
   })
 
+  it('puts an applet whose title has the query first, under its own header', async () => {
+    const extra = mount({
+      template: '<div />',
+      setup() {
+        useCommands([
+          { id: 'doc-docker', title: 'Docker', group: 'Docs', scope: 'goto', order: -2, run: vi.fn() },
+          { id: 'applet.docker', title: 'Docker', group: 'Applets', scope: 'applets', run: vi.fn() },
+        ])
+        return {}
+      },
+    })
+    await openPalette()
+
+    await wrapper!.find('[data-testid="command-palette-input"]').setValue('dock')
+
+    expect(wrapper!.findAll('.palette-group-header').map((node) => node.text())).toEqual(['Applets', 'Results'])
+    expect(wrapper!.findAll('[data-testid="command-palette-command-scope"]').map((node) => node.text())).toEqual([
+      'Docs ›',
+    ])
+    extra.unmount()
+  })
+
+  it('leaves the headers off when no applet title has the query', async () => {
+    const extra = mount({
+      template: '<div />',
+      setup() {
+        useCommands([
+          {
+            id: 'applet.docker',
+            title: 'Docker',
+            group: 'Applets',
+            scope: 'applets',
+            keywords: ['open'],
+            run: vi.fn(),
+          },
+        ])
+        return {}
+      },
+    })
+    await openPalette()
+
+    await wrapper!.find('[data-testid="command-palette-input"]').setValue('open')
+
+    expect(wrapper!.findAll('.palette-group-header')).toHaveLength(0)
+    extra.unmount()
+  })
+
   function tabs() {
     return wrapper!.findAll('[data-testid="command-palette-tab"]')
   }
@@ -341,7 +388,7 @@ describe('CommandPalette', () => {
   it('renders a tab per visible scope with All active by default', async () => {
     await openPalette()
 
-    expect(tabs().map((tab) => tab.attributes('data-scope'))).toEqual(['all', 'goto', 'actions', 'shell'])
+    expect(tabs().map((tab) => tab.attributes('data-scope'))).toEqual(['all', 'goto', 'actions', 'applets', 'shell'])
     expect(
       tabs()
         .filter((tab) => tab.classes().includes('palette-tab-active'))

@@ -27,7 +27,6 @@ import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconRotateCcw from '~icons/lucide/rotate-ccw'
 import IconSearch from '~icons/lucide/search'
 import IconSettings from '~icons/lucide/settings'
-import IconSparkles from '~icons/lucide/sparkles'
 import IconSquareCheckBig from '~icons/lucide/square-check-big'
 import IconSquareTerminal from '~icons/lucide/square-terminal'
 import IconSquarePlus from '~icons/lucide/square-plus'
@@ -702,15 +701,6 @@ export const commandCatalog: BindableCommand[] = [
     // through terminalEscapeCombo.
     piercesPane: true,
     scope: 'goto',
-  },
-  {
-    id: 'applets.copy-prompt',
-    title: 'Copy Applet Authoring Prompt',
-    group: 'Applets',
-    keywords: ['applet', 'agent', 'prompt', 'generate', 'ui', 'picker'],
-    icon: IconSparkles,
-    defaultCombos: [],
-    context: 'global',
   },
   {
     id: 'action-runs.toggle',

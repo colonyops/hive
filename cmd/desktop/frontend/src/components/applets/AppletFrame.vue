@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { useEventListener } from '@vueuse/core'
+import { useEventListener, useMutationObserver } from '@vueuse/core'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import {
   BridgeToken,
@@ -17,13 +18,16 @@ import {
   SpawnWrite,
   WriteFile,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
+import { Render } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/promptsservice'
 import type { Applet } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { useToasts } from '../../composables/useToasts'
 import { usePopupTerminal } from '../../stores/usePopupTerminal'
 
 // Hosts an applet's own page. The frame has an opaque origin, so a page can do what
 // it likes to itself without reaching Hive's DOM or storage, and what it asks of the
-// machine arrives here as messages (ADR applets-are-declared-in-yaml-and-rendered-natively).
+// machine arrives here as messages (ADR applets-are-web-pages-with-full-access-to-the-machine).
+
+type AppletBrief = NonNullable<Parameters<typeof Render>[1]['appletBrief']>
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the page is free-form; the services validate
 type BridgeArgs = Record<string, any>
@@ -33,6 +37,7 @@ const emit = defineEmits<{ close: [] }>()
 
 const popupTerminal = usePopupTerminal()
 const { showToast } = useToasts()
+const clipboard = useClipboard()
 const frame = ref<HTMLIFrameElement | null>(null)
 
 // The frame can navigate to another page and keep its window, so the window does not
@@ -46,6 +51,53 @@ const src = computed(
     `/__applet/${encodeURIComponent(props.applet.id)}/${props.applet.entry.split('/').map(encodeURIComponent).join('/')}?r=${props.applet.revision}`,
 )
 
+// Custom properties do not cross into a frame, and browsers do not reliably enumerate
+// them, so the tokens a page can use are named here.
+const THEME_PROPERTIES = [
+  'color-scheme',
+  ...[
+    'app',
+    'raised',
+    'sidebar',
+    'pane',
+    'list',
+    'chip',
+    'hover',
+    'border',
+    'card',
+    'strong',
+    'row',
+    'row-hover',
+    'text',
+    'text-2',
+    'text-3',
+    'text-4',
+    'accent',
+    'accent-contrast',
+    'accent-tint',
+    'selection',
+    'backdrop',
+    'code-key',
+    'code-string',
+    'code-comment',
+    ...['info', 'success', 'warning', 'error', 'running'].flatMap((severity) => [
+      `severity-${severity}`,
+      `severity-${severity}-tint`,
+    ]),
+  ].map((token) => `--hv-${token}`),
+]
+
+function readTheme(): Record<string, string> {
+  const computed = getComputedStyle(document.documentElement)
+  return Object.fromEntries(THEME_PROPERTIES.map((name) => [name, computed.getPropertyValue(name).trim()]))
+}
+
+useMutationObserver(
+  document.documentElement,
+  () => frame.value?.contentWindow?.postMessage({ hiveApplet: 1, theme: readTheme() }, '*'),
+  { attributeFilter: ['data-theme'] },
+)
+
 const execRequest = (args: BridgeArgs) => ({
   command: String(args.command ?? ''),
   sessionSlug: props.sessionSlug,
@@ -57,6 +109,7 @@ const execRequest = (args: BridgeArgs) => ({
 
 const methods: Record<string, (args: BridgeArgs) => unknown> = {
   context: () => Context(props.applet.id, props.sessionSlug),
+  theme: readTheme,
   exec: (args) => Exec(props.applet.id, execRequest(args)),
   spawn: (args) => Spawn(props.applet.id, execRequest(args)),
   spawnRead: (args) => SpawnRead(String(args.handle)),
@@ -72,6 +125,17 @@ const methods: Record<string, (args: BridgeArgs) => unknown> = {
   toast(args) {
     const severity = args.severity as 'info' | 'success' | 'warning' | 'error' | undefined
     showToast(String(args.message ?? ''), { severity, body: args.body as string | undefined })
+  },
+  async copy(args) {
+    if (!(await clipboard.copy(String(args.text ?? '')))) throw new Error('The clipboard refused the text.')
+  },
+  async authoringPrompt(args) {
+    const prompt = await Render('applets', {
+      webhookPath: '',
+      webhookSample: '',
+      appletBrief: args.brief as AppletBrief,
+    })
+    return prompt.text
   },
   close: () => emit('close'),
 }

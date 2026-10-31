@@ -83,23 +83,27 @@ function titleSegments(title: string, query: string): TitleSegment[] {
 // entries only) — not its position in `results` — since Recent reorders rows
 // relative to their group. navList below derives from this without reading
 // selection, so assigning index here can't cycle back through selectedIndex.
+function isAppletHit(cmd: Command, q: string): boolean {
+  return cmd.scope === 'applets' && cmd.title.toLowerCase().includes(q.toLowerCase())
+}
+
 const displayList = computed<DisplayEntry[]>(() => {
   const q = query.value.trim()
   const entries: DisplayEntry[] = []
   let navIndex = 0
-  // Ranked results interleave groups, so section headers would mislabel the
-  // rows under them; while filtering, each row carries its group as an inline
-  // prefix instead.
+  // Ranked results interleave groups, so section headers would mislabel the rows
+  // under them; while filtering, each row carries its group as an inline prefix.
+  // Applets are the exception. Their names collide with documents, which outnumber
+  // them, so one whose title has the query comes first under a header of its own.
   if (q) {
-    results.value.forEach((cmd) => {
-      entries.push({
-        kind: 'cmd',
-        cmd,
-        index: navIndex++,
-        segments: titleSegments(cmd.title, q),
-        groupPrefix: cmd.group ?? '',
-      })
-    })
+    const pushRow = (cmd: Command, groupPrefix: string) =>
+      entries.push({ kind: 'cmd', cmd, index: navIndex++, segments: titleSegments(cmd.title, q), groupPrefix })
+    const applets = scope.value === 'all' ? results.value.filter((cmd) => isAppletHit(cmd, q)) : []
+    const rest = results.value.filter((cmd) => !applets.includes(cmd))
+    if (applets.length) entries.push({ kind: 'header', group: 'Applets' })
+    applets.forEach((cmd) => pushRow(cmd, ''))
+    if (applets.length && rest.length) entries.push({ kind: 'header', group: 'Results' })
+    rest.forEach((cmd) => pushRow(cmd, cmd.group ?? ''))
     return entries
   }
 

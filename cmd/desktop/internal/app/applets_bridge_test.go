@@ -12,10 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
-	"github.com/colonyops/hive/internal/domain/session"
 )
 
-const pageApplet = "version: 1\ntitle: Page\nview: html\n"
+const pageApplet = "version: 1\ntitle: Page\n"
 
 const (
 	reasonableWait = 5 * time.Second
@@ -25,7 +24,7 @@ const (
 func pageHarness(t *testing.T) (*AppletsService, string) {
 	t.Helper()
 	service := appletHarness(t, "page", pageApplet)
-	dir := filepath.Dir(service.List(t.Context())[0].Path)
+	dir := filepath.Dir(appletOnDisk(t, service, "page").Path)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte(`<!doctype html><html><HEAD lang="en"><title>x</title></HEAD></html>`), 0o600))
 	return service, dir
 }
@@ -111,12 +110,6 @@ func TestFilesResolveAgainstTheAppletAndAnywhereElse(t *testing.T) {
 	assert.Equal(t, "free", got)
 }
 
-func TestBridgeRefusesADeclarativeApplet(t *testing.T) {
-	service := appletHarness(t, "thing", "version: 1\ntitle: T\nview: table\ncwd: \"~\"\ndata: {command: \"true\"}\ncolumns: [{key: a}]\n")
-	_, err := service.Exec(t.Context(), "thing", AppletExec{Command: "true"})
-	assert.Equal(t, KindInvalid, KindOf(err))
-}
-
 func TestServerBuildServesNoPages(t *testing.T) {
 	service, _ := pageHarness(t)
 	service.pages = false
@@ -137,7 +130,7 @@ func TestServerBuildServesNoPages(t *testing.T) {
 	assert.Equal(t, KindUnavailable, KindOf(err))
 
 	list := service.List(ctx)
-	require.Len(t, list, 1)
+	require.Len(t, list, 1, "a built-in is not listed where it cannot open")
 	assert.False(t, list[0].Runnable)
 	assert.Equal(t, appletPagesUnavailable, list[0].Error)
 }
@@ -213,39 +206,60 @@ func TestASpawnOutlivesTheCallThatStartedIt(t *testing.T) {
 	assert.Equal(t, "got still here\n", stdout.String())
 }
 
-func TestPopupOpensAnAppletActionFromTheCatalog(t *testing.T) {
-	out := filepath.Join(t.TempDir(), "row")
-	cwd := t.TempDir()
-	service := appletHarness(t, "thing", `
-version: 1
-title: Thing
-view: table
-cwd: `+cwd+`
-data: {command: "true"}
-columns: [{key: name}]
-actions:
-  - id: loud
-    label: Loud
-    mode: terminal
-    run: printf '%s' "$HIVE_ROW_NAME" > `+out+`
-`)
-	popup := newPopupHarness(t, checkoutHarness(t, t.TempDir(), session.StateActive))
-	popup.applets = service
+func TestDrainHoldsBackAHalfWrittenCharacter(t *testing.T) {
+	spawn := &appletSpawn{}
+	check := "\u2713"
+	spawn.stdout.WriteString("ok " + check[:2])
+	out, ready := spawn.drain()
+	assert.True(t, ready)
+	assert.Equal(t, "ok ", out.Stdout)
 
-	term, err := popup.Open(t.Context(), OpenPopupTerminal{
-		Applet:       "thing",
-		AppletAction: "loud",
-		AppletRow:    applets.Row{"name": "a b; c"},
-		Command:      "echo from-the-client",
-		Dir:          t.TempDir(),
-		Cols:         80,
-		Rows:         24,
-	})
+	spawn.stdout.WriteString(check[2:])
+	out, _ = spawn.drain()
+	assert.Equal(t, check, out.Stdout)
+
+	spawn.stdout.WriteString(check[:1])
+	spawn.done = true
+	out, _ = spawn.drain()
+	assert.Equal(t, check[:1], out.Stdout, "a process that ended will not finish the character")
+}
+
+func TestBuiltinServesFromTheBinaryAndKeepsStorageOnDisk(t *testing.T) {
+	store := applets.NewStore(t.TempDir())
+	require.NoError(t, store.Reload())
+	service := newAppletsService(store, func(context.Context) []string { return os.Environ() }, func(context.Context, string) (string, error) { return "", nil })
+	service.pages = true
+
+	asset, err := service.Asset(applets.BuilderID, "")
 	require.NoError(t, err)
-	assert.Contains(t, term.Command, "HIVE_ROW_NAME", "the catalog's command, not the client's")
-	assert.Equal(t, cwd, term.Dir)
-	require.Eventually(t, func() bool {
-		written, err := os.ReadFile(out)
-		return err == nil && string(written) == "a b; c"
-	}, reasonableWait, pollEvery, "the row reached the terminal's environment")
+	assert.Contains(t, string(asset.Body), "window.__hiveToken", "a built-in page gets the bridge like any other")
+
+	require.NoError(t, service.SaveStorage(applets.BuilderID, `{"k":"v"}`))
+	asset, err = service.Asset(applets.BuilderID, "")
+	require.NoError(t, err)
+	assert.Contains(t, string(asset.Body), `"k":"v"`)
+	assert.True(t, store.List()[0].Applet.Builtin, "saved storage does not turn the built-in into a broken disk applet")
+}
+
+func TestServerBuildHidesBuiltins(t *testing.T) {
+	store := applets.NewStore(t.TempDir())
+	require.NoError(t, store.Reload())
+	service := newAppletsService(store, func(context.Context) []string { return os.Environ() }, func(context.Context, string) (string, error) { return "", nil })
+	service.pages = false
+	assert.Empty(t, service.List(t.Context()))
+}
+
+func TestProcessesListsWhatIsRunning(t *testing.T) {
+	service, _ := pageHarness(t)
+	handle, err := service.Spawn(t.Context(), "page", AppletExec{Command: "sleep 30"})
+	require.NoError(t, err)
+
+	running := service.Processes()
+	require.Len(t, running, 1)
+	assert.Equal(t, handle, running[0].Handle)
+	assert.Equal(t, "page", running[0].Applet)
+	assert.Equal(t, "sleep 30", running[0].Command)
+
+	service.KillSpawns("page")
+	assert.Empty(t, service.Processes())
 }

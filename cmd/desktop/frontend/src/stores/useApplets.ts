@@ -8,17 +8,16 @@ import { defineStore } from './defineStore'
 import { useResource } from './useResource'
 
 // The applets on disk and the one on screen. Each is a bindable command, so this
-// is what turns a file an agent wrote into a palette row and a chord. Only identity
-// crosses the bridge: what an applet runs stays in the core (ADR
-// applets-are-declared-in-yaml-and-rendered-natively).
+// is what turns a file an agent wrote into a palette row and a chord (ADR
+// applets-are-web-pages-with-full-access-to-the-machine).
 export const useApplets = defineStore('applets', () => {
   const catalog = useResource(async () => (await List()) ?? [], {
     initial: [] as Applet[],
     errorFallback: 'Could not load the applets.',
   })
   const openID = ref<string | null>(null)
-  // Captured on open: a session-scoped applet stays on the session it opened
-  // over, and the user cannot switch sessions behind the overlay.
+  // Captured on open: an applet stays on the session it opened over, and the user
+  // cannot switch sessions behind the overlay.
   const sessionSlug = ref('')
 
   const open = computed(() => catalog.data.value.find((applet) => applet.id === openID.value) ?? null)
@@ -31,12 +30,13 @@ export const useApplets = defineStore('applets', () => {
           id: appletCommandID(applet.id),
           title: applet.runnable ? applet.title : `${applet.title} (invalid)`,
           group: 'Applets',
-          keywords: ['applet', applet.id, applet.view],
+          keywords: ['applet', applet.id],
           icon: launcherIconComponent(applet.icon),
           // Unbound until the user says otherwise: a file an agent wrote must not
           // claim a chord the app never offered it.
           defaultCombos: [],
-          context: applet.requiresSession ? 'terminal-session' : 'global',
+          context: 'global',
+          scope: 'applets',
         })),
       )
     },

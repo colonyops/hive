@@ -95,7 +95,7 @@ describe('usePopupTerminal', () => {
 
   it('starts a launched command every time it is asked for', () => {
     const popup = usePopupTerminal()
-    const request = { applet: 'mise', appletAction: 'run' }
+    const request = { command: 'mise run ci' }
     const before = popup.launchSeq.value
     popup.launch(request)
     popup.launch(request)
@@ -105,7 +105,7 @@ describe('usePopupTerminal', () => {
 
   it('hides and restores a launched command on the plain toggle rather than replacing it', () => {
     const popup = usePopupTerminal()
-    popup.launch({ applet: 'mise', appletAction: 'run' })
+    popup.launch({ command: 'mise run ci' })
     const seq = popup.launchSeq.value
 
     popup.toggle({ sessionSlug: 'sess' })
@@ -113,12 +113,12 @@ describe('usePopupTerminal', () => {
     popup.toggle({ sessionSlug: 'sess' })
     expect(popup.visible.value).toBe(true)
     expect(popup.launchSeq.value).toBe(seq)
-    expect(popup.request.value).toMatchObject({ applet: 'mise' })
+    expect(popup.request.value).toMatchObject({ command: 'mise run ci' })
   })
 
   it('opens a shell on the plain toggle once the launched command has ended', () => {
     const popup = usePopupTerminal()
-    popup.launch({ applet: 'mise', appletAction: 'run' })
+    popup.launch({ command: 'mise run ci' })
     popup.launchEnded()
     popup.hide()
 
@@ -129,7 +129,7 @@ describe('usePopupTerminal', () => {
 
   it('lets a launcher replace a launched command', () => {
     const popup = usePopupTerminal()
-    popup.launch({ applet: 'mise', appletAction: 'run' })
+    popup.launch({ command: 'mise run ci' })
     popup.toggle({ launcher: 'lazygit' })
     expect(popup.request.value).toEqual({ launcher: 'lazygit' })
     expect(popup.visible.value).toBe(true)

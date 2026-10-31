@@ -1,0 +1,6 @@
+version: 1
+title: Applet Builder
+icon: hammer
+cwd: "~"
+width: 640
+height: 400

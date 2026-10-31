@@ -18,6 +18,7 @@ import AgentsSettingsView from './AgentsSettingsView.vue'
 import DriveSettingsView from './DriveSettingsView.vue'
 import GeneralSettingsView from './GeneralSettingsView.vue'
 import HiveSettingsView from './HiveSettingsView.vue'
+import AppletsSettingsView from './AppletsSettingsView.vue'
 import ServerSettingsView from './ServerSettingsView.vue'
 import LauncherSettingsView from './LauncherSettingsView.vue'
 import McpSettingsView from './McpSettingsView.vue'
@@ -65,7 +66,10 @@ const emit = defineEmits<{ close: []; 'select-category': [category: ApplicationS
 // against applicationSettingsSections so a new pane cannot be routable but
 // absent from the nav.
 const navGroups: Array<{ title: string; ids: readonly ApplicationSettingsSection[] }> = [
-  { title: 'Preferences', ids: ['general', 'appearance', 'drive', 'notifications', 'menubar', 'keybindings'] },
+  {
+    title: 'Preferences',
+    ids: ['general', 'appearance', 'drive', 'notifications', 'menubar', 'keybindings', 'applets'],
+  },
   { title: 'Inbox', ids: ['integrations', 'actions'] },
   { title: 'Code', ids: ['terminal', 'launchers', 'hive', 'servers', 'mcp'] },
   { title: 'Chats', ids: ['agents'] },
@@ -213,6 +217,7 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
     <DriveSettingsView v-else-if="props.activeCategory === 'drive'" />
 
     <KeybindingSettingsView v-else-if="props.activeCategory === 'keybindings'" />
+    <AppletsSettingsView v-else-if="props.activeCategory === 'applets'" />
 
     <TerminalSettingsView v-else-if="props.activeCategory === 'terminal'" />
     <HiveSettingsView v-else-if="props.activeCategory === 'hive'" />

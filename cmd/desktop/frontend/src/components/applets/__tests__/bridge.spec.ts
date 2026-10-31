@@ -26,6 +26,12 @@ vi.mock(
   () => service,
 )
 
+const render = vi.hoisted(() => vi.fn())
+
+vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/promptsservice', () => ({
+  Render: render,
+}))
+
 const applet = { id: 'pong', title: 'Pong', entry: 'index.html', revision: 1 }
 
 interface Hive {
@@ -35,6 +41,7 @@ interface Hive {
   writeFile(path: string, content: string): Promise<void>
   context(): Promise<unknown>
   toast(message: string): Promise<void>
+  authoringPrompt(brief: object): Promise<string>
   close(): Promise<void>
 }
 
@@ -103,6 +110,16 @@ describe('bridge.js', () => {
 
     expect(service.Exec).toHaveBeenCalledWith('pong', expect.objectContaining({ command: 'echo hi', timeoutMillis: 5 }))
     expect(service.WriteFile).toHaveBeenCalledWith('pong', 'a.txt', 'body')
+    wrapper.unmount()
+  })
+
+  it('asks Hive for the authoring prompt with the answers it was given', async () => {
+    render.mockResolvedValue({ text: 'the prompt' })
+    const { wrapper, page } = loadPage()
+    const brief = { style: 'hive', reference: '' }
+
+    await expect(page.hive.authoringPrompt(brief)).resolves.toBe('the prompt')
+    expect(render).toHaveBeenCalledWith('applets', { webhookPath: '', webhookSample: '', appletBrief: brief })
     wrapper.unmount()
   })
 

@@ -453,7 +453,8 @@ export function useCommandPalette(): {
           keysScopes.value.flatMap((r) => r.source()),
         )
       case 'goto':
-      case 'actions': {
+      case 'actions':
+      case 'applets': {
         const wanted = _scope.value
         return filterAndScore(
           query,

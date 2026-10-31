@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -19,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
@@ -26,9 +28,9 @@ import (
 	"github.com/colonyops/hive/pkg/pathutil"
 )
 
-// This file is what window.hive reaches. An html applet is a page the user asked
+// This file is what window.hive reaches. An applet is a page the user asked
 // for on their own machine, so these calls are deliberately unrestricted: any
-// command, any path (ADR applets-are-declared-in-yaml-and-rendered-natively).
+// command, any path (ADR applets-are-web-pages-with-full-access-to-the-machine).
 
 const (
 	appletStorageFile = ".localstorage.json"
@@ -83,9 +85,6 @@ func (s *AppletsService) page(id string) (applets.Applet, error) {
 	if err != nil {
 		return applets.Applet{}, err
 	}
-	if applet.View != applets.ViewHTML {
-		return applets.Applet{}, Errorf(KindInvalid, "applet %q is not an html applet", id)
-	}
 	if !s.pages {
 		return applets.Applet{}, Errorf(KindUnavailable, appletPagesUnavailable)
 	}
@@ -135,7 +134,12 @@ func (s *AppletsService) Asset(id, name string) (AppletAsset, error) {
 	if !filepath.IsLocal(name) || hasHiddenSegment(name) {
 		return AppletAsset{}, Errorf(KindNotFound, "no file %q in applet %q", name, id)
 	}
-	body, err := os.ReadFile(filepath.Join(applet.Dir, filepath.FromSlash(name)))
+	var body []byte
+	if applet.Builtin {
+		body, err = applets.ReadBuiltin(id, name)
+	} else {
+		body, err = os.ReadFile(filepath.Join(applet.Dir, filepath.FromSlash(name)))
+	}
 	if err != nil {
 		return AppletAsset{}, Wrap(err, KindNotFound, "reading %q of applet %q", name, id)
 	}
@@ -318,9 +322,11 @@ type spawnTable struct {
 }
 
 type appletSpawn struct {
-	applet string
-	cancel context.CancelFunc
-	stdin  io.WriteCloser
+	applet  string
+	command string
+	started time.Time
+	cancel  context.CancelFunc
+	stdin   io.WriteCloser
 
 	mu     sync.Mutex
 	stdout strings.Builder
@@ -363,7 +369,7 @@ func (s *AppletsService) Spawn(ctx context.Context, id string, req AppletExec) (
 		return "", err
 	}
 	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	spawn := &appletSpawn{applet: id, cancel: cancel, wake: make(chan struct{}, 1)}
+	spawn := &appletSpawn{applet: id, command: req.Command, started: time.Now(), cancel: cancel, wake: make(chan struct{}, 1)}
 	proc.Stdout = spawnStream{spawn, &spawn.stdout}
 	proc.Stderr = spawnStream{spawn, &spawn.stderr}
 	stdin, err := proc.StdinPipe()
@@ -438,10 +444,30 @@ func (s *AppletsService) SpawnRead(ctx context.Context, handle string) (AppletOu
 func (p *appletSpawn) drain() (AppletOutput, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	out := AppletOutput{Stdout: p.stdout.String(), Stderr: p.stderr.String(), Done: p.done, Code: p.code}
-	p.stdout.Reset()
-	p.stderr.Reset()
+	out := AppletOutput{Stdout: takeWholeRunes(&p.stdout, p.done), Stderr: takeWholeRunes(&p.stderr, p.done), Done: p.done, Code: p.code}
 	return out, out.Done || out.Stdout != "" || out.Stderr != ""
+}
+
+// takeWholeRunes empties the buffer but for a character the process has only half
+// written, because output crosses to the page as a JSON string, where the two halves
+// would each become a replacement character.
+func takeWholeRunes(buffer *strings.Builder, final bool) string {
+	text := buffer.String()
+	buffer.Reset()
+	if final {
+		return text
+	}
+	whole := len(text)
+	for start := len(text) - 1; start >= 0 && start >= len(text)-utf8.UTFMax; start-- {
+		if utf8.RuneStart(text[start]) {
+			if !utf8.FullRuneInString(text[start:]) {
+				whole = start
+			}
+			break
+		}
+	}
+	buffer.WriteString(text[whole:])
+	return text[:whole]
 }
 
 // SpawnWrite sends text to the process's stdin.
@@ -464,6 +490,33 @@ func (s *AppletsService) SpawnKill(handle string) error {
 	}
 	spawn.cancel()
 	return nil
+}
+
+// AppletProcess is a process an applet has running, for Settings to show.
+type AppletProcess struct {
+	Handle        string `json:"handle"`
+	Applet        string `json:"applet"`
+	Command       string `json:"command"`
+	StartedMillis int64  `json:"startedMillis"`
+}
+
+// Processes lists what applets have running, oldest first.
+func (s *AppletsService) Processes() []AppletProcess {
+	s.spawns.mu.Lock()
+	defer s.spawns.mu.Unlock()
+	out := make([]AppletProcess, 0, len(s.spawns.live))
+	for handle, spawn := range s.spawns.live {
+		spawn.mu.Lock()
+		done := spawn.done
+		spawn.mu.Unlock()
+		if !done {
+			out = append(out, AppletProcess{Handle: handle, Applet: spawn.applet, Command: spawn.command, StartedMillis: spawn.started.UnixMilli()})
+		}
+	}
+	slices.SortFunc(out, func(a, b AppletProcess) int {
+		return cmp.Or(cmp.Compare(a.StartedMillis, b.StartedMillis), cmp.Compare(a.Handle, b.Handle))
+	})
+	return out
 }
 
 // KillSpawns stops every process an applet started, and is what closing it means.

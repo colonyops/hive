@@ -443,7 +443,7 @@ cmd/desktop/internal/
                                   #   declared — consumer-defined, no notify/ package
     actions/                      # actions.yml catalog, editable model
       docs/                       # per-action-type markdown
-    applets/                      # applet.yaml schema, row parsing, catalog
+    applets/                      # applet.yaml, catalog, built-ins, the window.hive script
     dirwatch/                     # the debounced directory watcher behind actions,
                                   #   flows, and agentws hot-reload
     configmigrate/                # versioned migrations for settings.yaml, flows, actions.yml
@@ -1409,15 +1409,12 @@ agent hive would run rather than the one a launcher environment resolved
 
 ### Applets
 
-An applet is a UI in `<ConfigDir>/applets/<id>/`, usually written by an agent
-([ADR applets-are-declared-in-yaml-and-rendered-natively](decisions/2026-10-31-applets-are-declared-in-yaml-and-rendered-natively.md)).
-`table` and `picker` are declared in `applet.yaml` and drawn by `AppletView`. `html` is
-the applet's own page in `AppletFrame`.
+An applet is a web page in `<ConfigDir>/applets/<id>/`, usually written by an agent, and
+opened in `AppletFrame`
+([ADR applets-are-web-pages-with-full-access-to-the-machine](decisions/2026-10-31-applets-are-web-pages-with-full-access-to-the-machine.md)).
 
 - **The file is the registration.** `applets.Store` hot-reloads per directory. A
-  broken file keeps its last good declaration and reports the error on its entry.
-- **A declared applet's commands stay in the core.** The frontend invokes by id, as
-  for a launcher. A row reaches a command through the environment, never a template.
+  broken file keeps its last good version and reports the error on its entry.
 - **A page is deliberately unrestricted.** `window.hive` (`applets/bridge.js`) reaches
   `AppletsService` through `postMessage` and `AppletFrame`, and runs what it is asked.
   The opaque-origin frame protects the app from a page's mistakes. Do not add
@@ -1426,10 +1423,15 @@ the applet's own page in `AppletFrame`.
   only pages served by `Asset` hold, because a navigated frame keeps its window.
 - **A page's files are served by `appletAssets` on the Wails asset handler**, so in the
   native build nothing outside the webview can reach them. The server build's asset
-  handler is a TCP listener, so it refuses html applets outside the e2e harness
+  handler is a TCP listener, so it refuses applets outside the e2e harness
   (`buildServesAppletPages`).
 - **A spawned process belongs to its applet.** Closing it, editing it, or closing the
-  app ends the process.
+  app ends the process. Settings › Applets lists what is running.
+- **A built-in lives in the binary** (`applets/builtin/`). The Applet Builder is one. Its
+  page sends answers, and the prompt's words stay in `prompts/templates/applets.tmpl`.
+- **Applets are a palette scope.** They have their own tab, and while filtering All, one
+  whose title has the query comes first under its own header, because their names
+  collide with documents, which outnumber them.
 
 ### App modes
 
@@ -2206,6 +2208,7 @@ a window, a settings section) is titled with the object's own name and grouped u
 its real container — rendering draws the nesting (the group header, or a
 `Container ›` prefix once a query narrows past it) rather than the title
 encoding a path or a verb (ADR palette-rows-name-objects-and-rendering-draws-the-path).
+Applets are the exception to the prefix: see "Applets".
 
 ### Agent workspaces
 

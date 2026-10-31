@@ -11,10 +11,10 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 )
 
-// appletAssetPrefix is where an html applet's files are served. It is on the app's
+// appletAssetPrefix is where an applet's files are served. It is on the app's
 // own asset handler, not the loopback server, so in the native build nothing outside
 // the webview can read them. The server build refuses them: its asset handler is the
-// network listener (ADR applets-are-declared-in-yaml-and-rendered-natively).
+// network listener (ADR applets-are-web-pages-with-full-access-to-the-machine).
 const appletAssetPrefix = "/__applet/"
 
 type appletAssetSource interface {
