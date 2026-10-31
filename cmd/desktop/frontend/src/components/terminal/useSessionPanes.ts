@@ -2,14 +2,18 @@ import { useTimeoutFn } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
 import {
   focusedWindow,
-  placeWindow,
+  moveTab,
+  openView,
   reconcileWindows,
   revealWindow,
+  windowOrder,
   windowsOnScreen,
   type SessionLayout,
+  type SessionViewKind,
 } from '../../lib/sessionLayout'
 import { paneMayAutoFocus } from '../../lib/terminalTree'
 import { useSessionTabs } from '../../stores/useSessionTabs'
+import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { TerminalPool } from './useTerminalPool'
 import type { TerminalSessionOps } from './useTerminalSessionOps'
 import type { TerminalTree } from './useTerminalTree'
@@ -44,30 +48,30 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
   const windowIds = computed(() => pool.visible.value?.tabs.value.map((tab) => tab.windowId) ?? [])
   const activeWindow = computed(() => pool.visible.value?.activeWindowId.value ?? '')
 
-  const windowForSecondPane = ref(false)
+  // A pane a "+" named for the window it is making.
+  const newWindowPane = ref<number | null>(null)
   const { start: expirePending, stop: keepPending } = useTimeoutFn(
-    () => (windowForSecondPane.value = false),
+    () => (newWindowPane.value = null),
     PENDING_WINDOW_MS,
     { immediate: false },
   )
 
   watch(
-    [key, windowIds, activeWindow],
-    ([sessionKey, ids, active], before) => {
-      // No windows means an attach in flight or an ended session, and neither
-      // says the session's tabs are wrong.
-      if (!ids.length) return
-      apply((current) => reconcileWindows(current, ids, active))
+    [key, windowIds, activeWindow, () => pool.visible.value?.status.value],
+    ([sessionKey, ids, active, status], before) => {
+      // No windows while attaching says nothing. After an end, the windows are
+      // gone and their tabs go with them.
+      if (!ids.length && status !== 'ended') return
+      const target = newWindowPane.value ?? undefined
+      apply((current) => reconcileWindows(current, ids, { active, target }))
       if (!before || before[0] !== sessionKey) return
       const known = before[1] ?? []
-      const created = ids.find((id) => !known.includes(id))
-      if (created && windowForSecondPane.value) {
-        windowForSecondPane.value = false
+      if (ids.some((id) => !known.includes(id))) {
+        newWindowPane.value = null
         keepPending()
-        apply((current) => placeWindow(current, created, 1))
       }
       // A first active window is an attach landing, which must not pull the
-      // restored tabs back to the terminal.
+      // restored tabs away from what they show.
       if (before[2] && active && active !== before[2]) apply((current) => revealWindow(current, active))
     },
     { immediate: true },
@@ -97,27 +101,59 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
   // has to be asked.
   watch([() => pool.visible.value, onScreen], renderOnScreen, { flush: 'post' })
 
-  async function newWindow(pane: number): Promise<void> {
-    const target = row.value
-    if (!target) return
-    if (pane > 0) {
-      windowForSecondPane.value = true
-      expirePending()
-    }
+  function expectWindowIn(pane: number | undefined): void {
+    newWindowPane.value = pane ?? null
+    if (pane !== undefined) expirePending()
     paneMayAutoFocus.value = true
+  }
+
+  async function newWindow(target: TerminalSessionRow, pane?: number): Promise<void> {
+    expectWindowIn(pane)
     await ops.newWindowIn(target)
   }
 
-  async function newAgentWindow(pane: number, agent: string): Promise<void> {
-    const target = row.value
-    if (!target) return
-    if (pane > 0) {
-      windowForSecondPane.value = true
-      expirePending()
-    }
-    paneMayAutoFocus.value = true
+  async function newAgentWindow(target: TerminalSessionRow, agent: string, pane?: number): Promise<void> {
+    expectWindowIn(pane)
     await ops.newAgentWindowIn(target, agent)
   }
 
-  return { row, key, layout, onScreen, apply, renderOnScreen, newWindow, newAgentWindow }
+  function openViewIn(target: TerminalSessionRow, kind: SessionViewKind, pane?: number): void {
+    sessionTabs.apply(target.id, (current) => openView(current, kind, pane))
+    if (target.slug !== pool.visibleSlug.value) ops.selectRow(target.slug)
+  }
+
+  // Which views make sense for a session. A pinned chat and the scratch terminal
+  // have no session checkout, and a server's session has none on this machine.
+  function viewsFor(target: TerminalSessionRow): SessionViewKind[] {
+    const views: SessionViewKind[] = []
+    if (target.canvasOwner || tree.isChat(target)) views.push('docs')
+    if (tree.isHiveSession(target) && !tree.isServerSession(target)) views.push('diff', 'tasks')
+    return views
+  }
+
+  // tmux's order drives the window chords, so a tab that moves takes its window along.
+  function syncWindowOrder(windowId: string): void {
+    const position = windowOrder(layout.value).indexOf(windowId)
+    if (position >= 0) void pool.visible.value?.moveWindow(windowId, position)
+  }
+
+  function moveTabTo(tabId: string, pane: number, gap: number): void {
+    apply((current) => moveTab(current, tabId, pane, gap))
+    if (tabId.startsWith('window:')) syncWindowOrder(tabId.slice('window:'.length))
+  }
+
+  return {
+    row,
+    key,
+    layout,
+    onScreen,
+    apply,
+    renderOnScreen,
+    newWindow,
+    newAgentWindow,
+    openViewIn,
+    viewsFor,
+    moveTabTo,
+    syncWindowOrder,
+  }
 }

@@ -1,17 +1,12 @@
 export type SessionViewKind = 'docs' | 'diff' | 'tasks'
 
-export const TERMINAL_TAB_ID = 'terminal'
-
 /** `auto` is side by side until the session gets too narrow, then stacked. A pick holds at any width. */
 export type SplitAxis = 'auto' | 'row' | 'column'
 
 export const MIN_SPLIT_RATIO = 0.2
 export const MAX_SPLIT_RATIO = 0.8
 
-export type SessionTab =
-  | { id: string; kind: 'terminal' }
-  | { id: string; kind: 'window'; windowId: string }
-  | { id: string; kind: SessionViewKind }
+export type SessionTab = { id: string; kind: 'window'; windowId: string } | { id: string; kind: SessionViewKind }
 
 export interface SessionPane {
   tabs: SessionTab[]
@@ -21,14 +16,13 @@ export interface SessionPane {
 }
 
 /**
- * What a session shows in Code. The first pane always holds the Terminal tab,
- * which shows `terminalWindow`. Ids derive from the content, so opening a view
- * twice finds the tab it already has.
+ * What a session shows in Code. Every tmux window has exactly one tab, and the
+ * tree lists these tabs in this order, so the two always mirror each other. Ids
+ * derive from the content, so opening a view twice finds the tab it already has.
  */
 export interface SessionLayout {
   panes: SessionPane[]
   focusedPane: number
-  terminalWindow: string
   docPath: string | null
   splitAxis: SplitAxis
   /** The first pane's share of the session. */
@@ -37,9 +31,8 @@ export interface SessionLayout {
 
 export function newSessionLayout(): SessionLayout {
   return {
-    panes: [{ tabs: [{ id: TERMINAL_TAB_ID, kind: 'terminal' }], activeTab: TERMINAL_TAB_ID, picking: false }],
+    panes: [{ tabs: [], activeTab: null, picking: false }],
     focusedPane: 0,
-    terminalWindow: '',
     docPath: null,
     splitAxis: 'auto',
     splitRatio: 0.5,
@@ -51,10 +44,8 @@ export function isSessionLayout(value: unknown): value is SessionLayout {
   const layout = value as Partial<SessionLayout> | null | undefined
   const panes = layout?.panes
   if (!Array.isArray(panes) || panes.length < 1 || panes.length > 2) return false
-  if (panes[0]?.tabs?.[0]?.kind !== 'terminal') return false
   return (
     panes.every((pane) => Array.isArray(pane?.tabs)) &&
-    typeof layout?.terminalWindow === 'string' &&
     typeof layout?.splitAxis === 'string' &&
     typeof layout?.splitRatio === 'number'
   )
@@ -68,7 +59,7 @@ function paneWithTab(layout: SessionLayout, tabId: string): number {
   return layout.panes.findIndex((pane) => pane.tabs.some((tab) => tab.id === tabId))
 }
 
-function windowTabId(windowId: string): string {
+export function windowTabId(windowId: string): string {
   return `window:${windowId}`
 }
 
@@ -99,16 +90,16 @@ export function openView(layout: SessionLayout, kind: SessionViewKind, target = 
 export function placeView(layout: SessionLayout, kind: SessionViewKind, target: number): SessionLayout {
   const from = paneWithTab(layout, kind)
   if (from === target) return selectTab(layout, target, kind)
-  const cleared = from < 0 ? layout : removeTab(layout, from, kind)
-  return appendTab(cleared, target, { id: kind, kind })
+  if (from >= 0) return moveTab(layout, kind, target, layout.panes[target].tabs.length)
+  return appendTab(layout, target, { id: kind, kind })
 }
 
-/** A window shows in one place: one already on screen is focused rather than opened again. */
+/** A window has one tab, so placing one moves that tab here. */
 export function placeWindow(layout: SessionLayout, windowId: string, target: number): SessionLayout {
-  if (windowId === layout.terminalWindow) return selectTab(layout, 0, TERMINAL_TAB_ID)
   const id = windowTabId(windowId)
-  const existing = paneWithTab(layout, id)
-  if (existing >= 0) return selectTab(layout, existing, id)
+  const from = paneWithTab(layout, id)
+  if (from === target) return selectTab(layout, target, id)
+  if (from >= 0) return moveTab(layout, id, target, layout.panes[target].tabs.length)
   return appendTab(layout, target, { id, kind: 'window', windowId })
 }
 
@@ -120,19 +111,21 @@ function removeTab(layout: SessionLayout, index: number, tabId: string): Session
   return withPane(layout, index, { tabs, activeTab })
 }
 
-function dropEmptySecondPane(layout: SessionLayout): SessionLayout {
-  const second = layout.panes[1]
-  if (!second || second.tabs.length || second.picking) return layout
-  return { ...layout, panes: [layout.panes[0]], focusedPane: 0 }
+/** A pane with nothing in it closes, whichever side it is on. The last pane stays. */
+function dropEmptyPane(layout: SessionLayout): SessionLayout {
+  if (layout.panes.length < 2) return layout
+  const kept = layout.panes.filter((pane) => pane.tabs.length || pane.picking)
+  if (kept.length === layout.panes.length) return layout
+  return { ...layout, panes: kept.length ? kept : [layout.panes[0]], focusedPane: 0 }
 }
 
-/** The Terminal tab has no close: closing it would end the session. Closing a window's tab only hides it. */
+/** Removes a tab from the layout. A window's tab goes when its tmux window goes: see reconcileWindows. */
 export function closeTab(layout: SessionLayout, index: number, tabId: string): SessionLayout {
-  if (tabId === TERMINAL_TAB_ID || !layout.panes[index]?.tabs.some((tab) => tab.id === tabId)) return layout
-  return dropEmptySecondPane(removeTab(layout, index, tabId))
+  if (!layout.panes[index]?.tabs.some((tab) => tab.id === tabId)) return layout
+  return dropEmptyPane(removeTab(layout, index, tabId))
 }
 
-/** Views survive the merge into the first pane; a window's tab goes, and the window keeps running. */
+/** Everything in the second pane survives the merge: a window keeps its tab. */
 export function toggleSplit(layout: SessionLayout): SessionLayout {
   const [first, second] = layout.panes
   if (!second) {
@@ -142,8 +135,11 @@ export function toggleSplit(layout: SessionLayout): SessionLayout {
       focusedPane: 1,
     }
   }
-  const views = second.tabs.filter((tab) => tab.kind !== 'window')
-  return { ...layout, panes: [{ ...first, tabs: [...first.tabs, ...views] }], focusedPane: 0 }
+  return {
+    ...layout,
+    panes: [{ ...first, tabs: [...first.tabs, ...second.tabs], activeTab: first.activeTab ?? second.activeTab }],
+    focusedPane: 0,
+  }
 }
 
 /** One button per direction: it splits that way, turns an existing split, or closes a split already that way. */
@@ -158,69 +154,89 @@ export function resizeSplit(layout: SessionLayout, ratio: number): SessionLayout
   return splitRatio === layout.splitRatio ? layout : { ...layout, splitRatio }
 }
 
-/**
- * `gap` counts tabs in the target pane as they stand before the move. The
- * Terminal tab stays first and stays put, so nothing lands ahead of it.
- */
+/** `gap` counts tabs in the target pane as they stand before the move. */
 export function moveTab(layout: SessionLayout, tabId: string, target: number, gap: number): SessionLayout {
   const from = paneWithTab(layout, tabId)
   const destination = layout.panes[target]
-  if (tabId === TERMINAL_TAB_ID || from < 0 || !destination) return layout
+  if (from < 0 || !destination) return layout
   const tab = layout.panes[from].tabs.find((candidate) => candidate.id === tabId)!
   const position = from === target ? destination.tabs.indexOf(tab) : -1
   const adjusted = position >= 0 && position < gap ? gap - 1 : gap
   const cleared = removeTab(layout, from, tabId)
   const remaining = cleared.panes[target].tabs
-  const at = Math.min(remaining.length, Math.max(target === 0 ? 1 : 0, adjusted))
+  const at = Math.min(remaining.length, Math.max(0, adjusted))
   const placed = withPane(cleared, target, { tabs: [...remaining.slice(0, at), tab, ...remaining.slice(at)] })
-  return dropEmptySecondPane(selectTab(placed, target, tabId))
+  return dropEmptyPane(selectTab(placed, target, tabId))
 }
 
-/** The tree or a chord asked for a window: focus it where it shows, or show it in the Terminal tab. */
-export function revealWindow(layout: SessionLayout, windowId: string): SessionLayout {
-  const id = windowTabId(windowId)
-  const existing = paneWithTab(layout, id)
-  if (existing >= 0) return selectTab(layout, existing, id)
-  return selectTab({ ...layout, terminalWindow: windowId }, 0, TERMINAL_TAB_ID)
+/** The tree names a neighbour rather than a pane and a gap. */
+export function moveTabBeside(
+  layout: SessionLayout,
+  tabId: string,
+  besideId: string,
+  edge: 'before' | 'after',
+): SessionLayout {
+  const pane = paneWithTab(layout, besideId)
+  if (pane < 0) return layout
+  const at = layout.panes[pane].tabs.findIndex((tab) => tab.id === besideId)
+  return moveTab(layout, tabId, pane, edge === 'after' ? at + 1 : at)
 }
 
 /**
- * Brings a layout in line with the windows tmux has. The same layout comes back
- * when nothing changed, so a poll cannot cost a storage write. With no free
- * window left, the Terminal tab takes one back from the second pane.
+ * The tree or a chord asked for a window: focus its tab, wherever it lives. A
+ * session still attaching has no tab for it yet. Making one here would put that
+ * window ahead of the others, so the active window brings it forward once it lands.
  */
-export function reconcileWindows(layout: SessionLayout, windowIds: readonly string[], preferred = ''): SessionLayout {
+export function revealWindow(layout: SessionLayout, windowId: string): SessionLayout {
+  const id = windowTabId(windowId)
+  const existing = paneWithTab(layout, id)
+  return existing >= 0 ? selectTab(layout, existing, id) : layout
+}
+
+/**
+ * Gives every window tmux has a tab, and takes the tab away from one it no
+ * longer has. The same layout comes back when nothing changed, so a poll cannot
+ * cost a storage write. A pane with nothing active takes `active` when it holds
+ * that window, and its first tab otherwise.
+ */
+export function reconcileWindows(
+  layout: SessionLayout,
+  windowIds: readonly string[],
+  options: { active?: string; target?: number } = {},
+): SessionLayout {
   let next = layout
   for (const [index, pane] of layout.panes.entries()) {
     for (const tab of pane.tabs) {
       if (tab.kind === 'window' && !windowIds.includes(tab.windowId)) next = removeTab(next, index, tab.id)
     }
   }
-  if (!windowIds.includes(next.terminalWindow)) {
-    const placed = next.panes.flatMap((pane) => pane.tabs.flatMap((tab) => (tab.kind === 'window' ? tab.windowId : [])))
-    const candidates = preferred ? [preferred, ...windowIds] : [...windowIds]
-    const terminalWindow = candidates.find((id) => !placed.includes(id)) ?? windowIds[0] ?? ''
-    next = { ...next, terminalWindow }
-    const holder = paneWithTab(next, windowTabId(terminalWindow))
-    if (holder >= 0) next = removeTab(next, holder, windowTabId(terminalWindow))
+  const target = next.panes[options.target ?? next.focusedPane] ? (options.target ?? next.focusedPane) : 0
+  const missing = windowIds.filter((id) => paneWithTab(next, windowTabId(id)) < 0)
+  if (missing.length) {
+    const added = missing.map((windowId) => ({ id: windowTabId(windowId), kind: 'window' as const, windowId }))
+    next = withPane(next, target, { tabs: [...next.panes[target].tabs, ...added], picking: false })
   }
-  return next === layout ? layout : dropEmptySecondPane(next)
+  for (const [index, pane] of next.panes.entries()) {
+    if (pane.activeTab || !pane.tabs.length) continue
+    const wanted = options.active ? windowTabId(options.active) : ''
+    next = withPane(next, index, {
+      activeTab: pane.tabs.some((tab) => tab.id === wanted) ? wanted : pane.tabs[0].id,
+    })
+  }
+  return next === layout ? layout : dropEmptyPane(next)
 }
 
 function shownTab(pane: SessionPane): SessionTab | undefined {
   return pane.picking ? undefined : pane.tabs.find((tab) => tab.id === pane.activeTab)
 }
 
-function windowOf(layout: SessionLayout, tab: SessionTab | undefined): string {
-  if (tab?.kind === 'terminal') return layout.terminalWindow
-  return tab?.kind === 'window' ? tab.windowId : ''
+/** Every tab in the order the tree lists it, with where each one lives. */
+export function orderedTabs(layout: SessionLayout): { pane: number; tab: SessionTab }[] {
+  return layout.panes.flatMap((pane, index) => pane.tabs.map((tab) => ({ pane: index, tab })))
 }
 
-/** The Docs, Diff and Tasks tabs a session has open, with where each one lives. */
-export function openViews(layout: SessionLayout): { pane: number; tab: SessionTab }[] {
-  return layout.panes.flatMap((pane, index) =>
-    pane.tabs.filter((tab) => tab.kind !== 'terminal' && tab.kind !== 'window').map((tab) => ({ pane: index, tab })),
-  )
+export function windowOrder(layout: SessionLayout): string[] {
+  return orderedTabs(layout).flatMap(({ tab }) => (tab.kind === 'window' ? [tab.windowId] : []))
 }
 
 /** The tab the focused pane shows, when nothing is asking there. */
@@ -232,23 +248,31 @@ export function focusedTab(layout: SessionLayout): string {
 /** The window the keyboard belongs to, or '' with a view in the focused pane. */
 export function focusedWindow(layout: SessionLayout): string {
   const pane = layout.panes[layout.focusedPane]
-  return pane ? windowOf(layout, shownTab(pane)) : ''
+  const tab = pane && shownTab(pane)
+  return tab?.kind === 'window' ? tab.windowId : ''
 }
 
 /** Which pane shows each window on screen. */
 export function windowsOnScreen(layout: SessionLayout): Map<string, number> {
   const shown = new Map<string, number>()
   layout.panes.forEach((pane, index) => {
-    const windowId = windowOf(layout, shownTab(pane))
-    if (windowId) shown.set(windowId, index)
+    const tab = shownTab(pane)
+    if (tab?.kind === 'window') shown.set(tab.windowId, index)
   })
   return shown
 }
 
-/** Windows with no tab of their own and not in the Terminal tab: what a new pane can offer. */
-export function freeWindows(layout: SessionLayout, windowIds: readonly string[]): string[] {
-  return windowIds.filter(
-    (id) =>
-      id !== layout.terminalWindow && !layout.panes.some((pane) => pane.tabs.some((tab) => tab.id === windowTabId(id))),
-  )
+/** Windows behind another tab: what a new pane can bring forward. */
+export function offscreenWindows(layout: SessionLayout, windowIds: readonly string[]): string[] {
+  const shown = windowsOnScreen(layout)
+  return windowIds.filter((id) => !shown.has(id))
+}
+
+/** The pane a session's terminal states show in: one holding a window, or nothing at all. */
+export function terminalPane(layout: SessionLayout): number {
+  return layout.panes.findIndex((pane) => {
+    if (pane.picking) return false
+    const tab = shownTab(pane)
+    return !tab || tab.kind === 'window'
+  })
 }

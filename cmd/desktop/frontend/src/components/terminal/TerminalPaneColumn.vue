@@ -9,12 +9,8 @@ import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconCopy from '~icons/lucide/copy'
 import IconCode from '~icons/lucide/code'
 import IconColumns2 from '~icons/lucide/columns-2'
-import IconFileDiff from '~icons/lucide/file-diff'
-import IconFileText from '~icons/lucide/file-text'
 import IconFolderOpen from '~icons/lucide/folder-open'
 import IconInfo from '~icons/lucide/info'
-import IconListTodo from '~icons/lucide/list-todo'
-import IconPlus from '~icons/lucide/plus'
 import IconRows2 from '~icons/lucide/rows-2'
 import IconServer from '~icons/lucide/server'
 import IconPlay from '~icons/lucide/play'
@@ -24,7 +20,6 @@ import IconTerminal from '~icons/lucide/terminal'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
-import type { MenuEntry } from '@hive/ui/types/menu'
 import ChangesLoading from '../git/ChangesLoading.vue'
 import DrivePane from '../drive/DrivePane.vue'
 import TasksView from '../tasks/TasksView.vue'
@@ -44,15 +39,15 @@ import {
   chooseSplit,
   closeTab,
   focusPane,
-  freeWindows,
+  offscreenWindows,
   openView,
   placeView,
   placeWindow,
   selectTab,
+  terminalPane,
   resizeSplit,
   toggleSplit,
   type SessionTab,
-  type SessionViewKind,
 } from '../../lib/sessionLayout'
 import { activePaneOf } from '../../lib/terminalLayout'
 import { useDriveActivity } from '../../stores/useDriveActivity'
@@ -214,11 +209,6 @@ const { tabDrop, startTabDrag, startResize, stepResize } = useSessionPaneDrag(
   panesHost,
   () => layout.value.splitRatio,
 )
-const compactTabs = computed(() => {
-  const width = panesWidth.value
-  return width > 0 && (width < 620 || (split.value && !stacked.value && width < 800))
-})
-
 const TAB_ROW_PX = 30
 
 // Terminals stay in one parent, because a Terminal binds to one element for its
@@ -251,10 +241,7 @@ const dividerStyle = computed(() => {
 
 const activeWindowRegion = computed(() => paneRegion(panes.onScreen.get(activeWindowId.value) ?? 0))
 const activeWindowOnScreen = computed(() => panes.onScreen.has(activeWindowId.value))
-const terminalTabShown = computed(() => {
-  const first = layout.value.panes[0]
-  return !first.picking && first.activeTab === 'terminal'
-})
+const statusPane = computed(() => terminalPane(layout.value))
 
 function windowName(windowId: string): string {
   const tab = tabs.value.find((candidate) => candidate.windowId === windowId)
@@ -263,8 +250,6 @@ function windowName(windowId: string): string {
 
 function tabLabel(tab: SessionTab): string {
   switch (tab.kind) {
-    case 'terminal':
-      return 'Terminal'
     case 'window':
       return windowName(tab.windowId)
     case 'docs':
@@ -284,13 +269,25 @@ function needsApproval(windowId: string): boolean {
 }
 
 function tabAttention(tab: SessionTab): boolean {
-  if (tab.kind === 'terminal') return tabs.value.some((candidate) => needsApproval(candidate.windowId))
   if (tab.kind === 'window') return needsApproval(tab.windowId)
   return tab.kind === 'docs' && !!shownDrive.value && driveActivity.isUnseen(shownDrive.value.session)
 }
 
 function viewTabs(tabList: readonly SessionTab[]): SessionTab[] {
-  return tabList.filter((tab) => tab.kind === 'docs' || tab.kind === 'diff' || tab.kind === 'tasks')
+  return tabList.filter((tab) => tab.kind !== 'window')
+}
+
+// A running window has a tab and a tree row, so closing its tab closes the window,
+// through the same confirmation as the tree.
+function closePaneTab(index: number, tabId: string): void {
+  const tab = layout.value.panes[index]?.tabs.find((candidate) => candidate.id === tabId)
+  if (tab?.kind === 'window') void ops.requestCloseWindow(pool.visibleSlug, tab.windowId, windowName(tab.windowId))
+  else panes.apply((current) => closeTab(current, index, tabId))
+}
+
+function placeWindowHere(windowId: string, index: number): void {
+  panes.apply((current) => placeWindow(current, windowId, index))
+  panes.syncWindowOrder(windowId)
 }
 
 // The mode hides on a trip to the hub, and props.drive empties with it. A tab
@@ -304,59 +301,16 @@ watch(
   },
 )
 
-// A pinned chat and the scratch terminal have no session checkout, and a server's
-// session has no checkout on this machine.
-const localHiveRow = computed(() => {
+const changesSession = computed(() => {
   const row = panes.row
-  return row && tree.isHiveSession(row) && !tree.isServerSession(row) ? row : null
+  return row && tree.isHiveSession(row) && !tree.isServerSession(row) ? row.id : ''
 })
-const changesSession = computed(() => localHiveRow.value?.id ?? '')
-
-const availableViews = computed<SessionViewKind[]>(() => {
-  const views: SessionViewKind[] = []
-  if (shownDrive.value) views.push('docs')
-  if (localHiveRow.value) views.push('diff', 'tasks')
-  return views
-})
-
-const canAddTerminal = computed(() => {
-  const row = panes.row
-  return !!row && !tree.isChat(row)
-})
-const agents = computed(() => (localHiveRow.value && !ops.agentWindowBusy ? ops.agentProfiles : []))
-
-const VIEW_MENU = {
-  docs: { label: 'Docs', icon: IconFileText },
-  diff: { label: 'Diff', icon: IconFileDiff },
-  tasks: { label: 'Tasks', icon: IconListTodo },
-}
-
-const addEntries = computed<MenuEntry[]>(() => {
-  const entries: MenuEntry[] = []
-  if (canAddTerminal.value) {
-    entries.push({ kind: 'action', id: 'terminal', label: 'New terminal', icon: IconPlus })
-    for (const agent of agents.value) {
-      entries.push({ kind: 'action', id: `agent:${agent}`, label: `New ${agent} agent`, icon: IconPlus })
-    }
-  }
-  if (entries.length && availableViews.value.length) entries.push({ kind: 'separator' })
-  for (const view of availableViews.value) {
-    entries.push({ kind: 'action', id: `view:${view}`, label: VIEW_MENU[view].label, icon: VIEW_MENU[view].icon })
-  }
-  return entries
-})
-
-function addToPane(index: number, entryId: string): void {
-  if (entryId === 'terminal') void panes.newWindow(index)
-  else if (entryId.startsWith('agent:')) void panes.newAgentWindow(index, entryId.slice('agent:'.length))
-  else if (entryId.startsWith('view:')) {
-    const view = entryId.slice('view:'.length) as SessionViewKind
-    panes.apply((current) => openView(current, view, index))
-  }
-}
+const availableViews = computed(() => (panes.row ? panes.viewsFor(panes.row) : []))
+const canAddTerminal = computed(() => !!panes.row && !tree.isChat(panes.row))
+const agents = computed(() => (changesSession.value && !ops.agentWindowBusy ? ops.agentProfiles : []))
 
 const pickerWindows = computed(() =>
-  freeWindows(
+  offscreenWindows(
     layout.value,
     tabs.value.map((tab) => tab.windowId),
   ).map((windowId) => ({ windowId, name: windowName(windowId) })),
@@ -491,17 +445,15 @@ function pickDoc(path: string | null): void {
           :pane="pane"
           :index="index"
           :focused="layout.focusedPane === index || !split"
-          :compact="compactTabs"
           :label="tabLabel"
           :attention="tabAttention"
-          :menu-entries="addEntries"
+          :row="panes.row"
           :drop-gap="tabDrop?.pane === index ? tabDrop.gap : null"
           :resizable="split && stacked && index === 1"
           @tab-drag="startTabDrag"
           @resize-start="(event) => startResize(event, true)"
           @select="(tabId) => panes.apply((current) => selectTab(current, index, tabId))"
-          @close="(tabId) => panes.apply((current) => closeTab(current, index, tabId))"
-          @add="(entryId) => addToPane(index, entryId)"
+          @close="(tabId) => closePaneTab(index, tabId)"
         >
           <template v-if="index === layout.panes.length - 1" #actions>
             <div class="ml-auto flex shrink-0 items-center gap-px pl-2">
@@ -560,9 +512,9 @@ function pickDoc(path: string | null): void {
             :agents="agents"
             :views="availableViews"
             :can-add-terminal="canAddTerminal"
-            @window="(windowId) => panes.apply((current) => placeWindow(current, windowId, index))"
-            @terminal="panes.newWindow(index)"
-            @agent="(agent) => panes.newAgentWindow(index, agent)"
+            @window="(windowId) => placeWindowHere(windowId, index)"
+            @terminal="panes.newWindow(panes.row!, index)"
+            @agent="(agent) => panes.newAgentWindow(panes.row!, agent, index)"
             @view="(view) => panes.apply((current) => placeView(current, view, index))"
             @cancel="panes.apply(toggleSplit)"
           />
@@ -594,12 +546,6 @@ function pickDoc(path: string | null): void {
               :session-id="changesSession"
             />
             <TasksView v-else-if="tab.kind === 'tasks'" embedded :keys-active="viewHasKeys(index, tab.id)" />
-          </div>
-          <div
-            v-if="!pane.picking && !pane.activeTab"
-            class="flex flex-1 items-center justify-center text-small text-text-3"
-          >
-            No tab here. Use + to open one.
           </div>
         </div>
       </section>
@@ -705,7 +651,11 @@ function pickDoc(path: string | null): void {
           </button>
         </Transition>
       </div>
-      <div v-if="visible && terminalTabShown" class="pointer-events-none absolute flex flex-col" :style="paneRegion(0)">
+      <div
+        v-if="visible && statusPane >= 0"
+        class="pointer-events-none absolute flex flex-col"
+        :style="paneRegion(statusPane)"
+      >
         <div
           v-if="!tabs.length && status !== 'ended'"
           class="flex flex-1 items-center justify-center font-mono text-xs text-text-4"

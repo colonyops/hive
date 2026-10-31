@@ -51,6 +51,6 @@ describe('useSessionTabs', () => {
   it('starts over from a stored layout that breaks the rules', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ a: { panes: [] } }))
 
-    expect(useSessionTabs().layoutOf('a').panes[0].tabs[0].kind).toBe('terminal')
+    expect(useSessionTabs().layoutOf('a').panes).toHaveLength(1)
   })
 })

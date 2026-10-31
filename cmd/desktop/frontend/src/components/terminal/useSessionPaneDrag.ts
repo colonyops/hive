@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { startDrag } from '@hive/ui/composables/useDragGesture'
-import { moveTab, resizeSplit } from '../../lib/sessionLayout'
+import { resizeSplit } from '../../lib/sessionLayout'
 import type { SessionPanes } from './useSessionPanes'
 
 export interface TabDrop {
@@ -31,7 +31,7 @@ function dropAt(x: number, y: number): TabDrop | null {
  * swallow its events. Capture keeps them coming across both.
  */
 export function useSessionPaneDrag(
-  panes: Pick<SessionPanes, 'apply'>,
+  panes: Pick<SessionPanes, 'apply' | 'moveTabTo'>,
   host: Ref<HTMLElement | null>,
   currentRatio: () => number,
 ) {
@@ -53,7 +53,7 @@ export function useSessionPaneDrag(
       onEnd: () => {
         const drop = tabDrop.value
         tabDrop.value = null
-        if (drop) panes.apply((current) => moveTab(current, tabId, drop.pane, drop.gap))
+        if (drop) panes.moveTabTo(tabId, drop.pane, drop.gap)
       },
       onCancel: () => (tabDrop.value = null),
     })

@@ -243,6 +243,7 @@ export function useTerminalSessionOps(options: {
     requestCloseWindow,
     requestClosePane,
     newWindowIn,
+    selectRow: attach.selectSession,
     newAgentWindowIn,
     rowHasWindowActions,
     runSessionAction,

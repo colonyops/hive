@@ -5,7 +5,9 @@ import { useTerminalWindowListings } from '../../composables/useTerminalWindowLi
 import { useWailsEvent } from '../../composables/useWailsEvent'
 import { activityIndicator, type StatusIndicator } from '../../lib/agentActivity'
 import type { WindowState } from '../../lib/terminalClient'
+import { windowOrder } from '../../lib/sessionLayout'
 import { useAgentSessionsAll } from '../../stores/useAgentSessionsAll'
+import { useSessionTabs } from '../../stores/useSessionTabs'
 import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
 import { useTerminalPinnedChats } from '../../stores/useTerminalPinnedChats'
 import {
@@ -44,6 +46,7 @@ const SERVER_POLL_MS = 30_000
  */
 export function useTerminalTree(options: { pool: TerminalPool; active: () => boolean }) {
   const { pool, activeSlug } = options.pool
+  const sessionTabs = useSessionTabs()
   const { client } = useTerminalAvailability()
   const {
     sessions: sessionRows,
@@ -244,6 +247,15 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
   // not collapse its subtree. A chat is one conversation, so its row is a leaf.
   function buildWindowRows(row: TerminalSessionRow): TreeWindowRow[] {
     if (isChat(row)) return []
+    const order = windowOrder(sessionTabs.layoutOf(row.id))
+    const rank = (windowId: string): number => {
+      const at = order.indexOf(windowId)
+      return at < 0 ? order.length : at
+    }
+    return unorderedWindowRows(row).sort((a, b) => rank(a.windowId) - rank(b.windowId))
+  }
+
+  function unorderedWindowRows(row: TerminalSessionRow): TreeWindowRow[] {
     const live = pool.get(row.slug)
     if (live?.tabs.value.length && (row.slug === activeSlug.value || showAllWindows.value || isScratch(row))) {
       return live.tabs.value.map((tab) => ({

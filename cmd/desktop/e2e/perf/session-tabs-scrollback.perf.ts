@@ -45,7 +45,6 @@ test('a terminal keeps its scrollback across a drag and a direction change', asy
   await page.getByTestId('session-split-column').click()
   await page.screenshot({ path: `${screenshots}/session-tabs-real-tmux-stacked.png` })
 
-  await page.getByTestId('session-tab-terminal').click()
   await page.locator('[data-testid="terminal-pane-host"]:visible').first().click()
   await findsOnce(page, 'mark-707')
   await findsOnce(page, 'mark-1407')
