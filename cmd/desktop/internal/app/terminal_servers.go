@@ -17,7 +17,10 @@ import (
 	"github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
-const terminalStopBudget = 3 * time.Second
+// serverTerminalStopBudget bounds stopping a server's manager. Closing its clients
+// waits on their ssh processes, and a frozen server must not hold up a reload or
+// the app's shutdown.
+const serverTerminalStopBudget = 3 * time.Second
 
 // serverTerminals holds one tmux control manager per server, each running the
 // server's tmux over ssh. A manager is built on the first terminal call for its
@@ -119,7 +122,7 @@ func (t *serverTerminals) Prune(ctx context.Context) {
 func (t *serverTerminals) stopLocked(ctx context.Context, name string, current serverManager) {
 	delete(t.managers, name)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), terminalStopBudget)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), serverTerminalStopBudget)
 		defer cancel()
 		_ = current.manager.Stop(ctx)
 	}()

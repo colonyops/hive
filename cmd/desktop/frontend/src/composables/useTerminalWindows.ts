@@ -925,7 +925,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   function dropped(): void {
     if (disposed || status.value === 'ended') return
     end('disconnected', 'Terminal connection lost. The tmux session may still be running.')
-    if (server) scheduleReconnect()
+    if (server) scheduleServerReconnect()
     else void reconcileEnd(connectionEpoch)
   }
 
@@ -933,7 +933,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   // tmux session on the server lives on. Its window listing cannot tell
   // "terminated" from "unreachable", so the view attaches again instead, and
   // the attach answers not_found when the session really is gone.
-  function scheduleReconnect(): void {
+  function scheduleServerReconnect(): void {
     if (disposed || reconnectTimer || endReason.value === 'stopped' || autoReconnects >= MAX_AUTO_RECONNECTS) return
     const delay = RECONNECT_DELAYS_MS[Math.min(autoReconnects, RECONNECT_DELAYS_MS.length - 1)]
     autoReconnects++
@@ -959,7 +959,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
 
   async function exited(detail: string): Promise<void> {
     end('exited', detail)
-    if (server) scheduleReconnect()
+    if (server) scheduleServerReconnect()
     else await reconcileEnd(connectionEpoch)
   }
 
@@ -1077,7 +1077,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
         return
       }
       end('attach-failed', message(e, 'Could not attach to this session.'))
-      if (server) scheduleReconnect()
+      if (server) scheduleServerReconnect()
     }
   }
 

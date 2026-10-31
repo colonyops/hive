@@ -762,7 +762,7 @@ func (a *App) Close() error {
 		cancel()
 	}
 	if a.serverTerminals != nil {
-		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(a.ctx), terminalStopBudget)
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(a.ctx), serverTerminalStopBudget)
 		a.serverTerminals.Stop(stopCtx)
 		cancel()
 	}
