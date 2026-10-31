@@ -357,13 +357,13 @@ describe('useCommands', () => {
   it('hides the Shell tab until an escape claims it as available', () => {
     const palette = useCommandPalette()
 
-    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive'])
+    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive', 'applets'])
 
     scope.run(() => useShellEscape(() => []))
-    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive', 'shell'])
+    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive', 'applets', 'shell'])
 
     scope.stop()
-    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive'])
+    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive', 'applets'])
   })
 
   it('cycles forward and backward through only the visible scopes, wrapping at both ends', () => {
@@ -378,10 +378,12 @@ describe('useCommands', () => {
     palette.cycleScope(1)
     expect(palette.scope.value).toBe('drive')
     palette.cycleScope(1)
+    expect(palette.scope.value).toBe('applets')
+    palette.cycleScope(1)
     expect(palette.scope.value).toBe('all')
 
     palette.cycleScope(-1)
-    expect(palette.scope.value).toBe('drive')
+    expect(palette.scope.value).toBe('applets')
   })
 
   it('pops to All only on an empty query, and never when already on All', () => {

@@ -4,10 +4,9 @@ import (
 	"context"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 )
 
-// AppletsService exposes the applet catalog and runs what applets declare.
+// AppletsService exposes the applet catalog and the bridge behind window.hive.
 type AppletsService struct {
 	applets *app.AppletsService
 }
@@ -20,12 +19,12 @@ func (s *AppletsService) List(ctx context.Context) []app.Applet {
 	return s.applets.List(ctx)
 }
 
-func (s *AppletsService) Rows(ctx context.Context, id, sessionSlug string) (app.AppletRows, error) {
-	return s.applets.Rows(ctx, id, sessionSlug)
+func (s *AppletsService) Dir() string {
+	return s.applets.Dir()
 }
 
-func (s *AppletsService) Run(ctx context.Context, id, actionID, sessionSlug string, row applets.Row) (string, error) {
-	return s.applets.Run(ctx, id, actionID, sessionSlug, row)
+func (s *AppletsService) Processes() []app.AppletProcess {
+	return s.applets.Processes()
 }
 
 func (s *AppletsService) Context(ctx context.Context, id, sessionSlug string) (app.AppletContext, error) {

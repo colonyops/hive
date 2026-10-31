@@ -23,7 +23,7 @@ type Entry struct {
 	Revision int64
 }
 
-// Usable reports that there is a loaded declaration to run.
+// Usable reports that a file has loaded, so there is a page to open.
 func (e Entry) Usable() bool { return e.Applet.Version != 0 }
 
 // Store is the catalog. It reads the disk only in Reload, so opening the palette
@@ -56,7 +56,8 @@ func IsWatchedFile(path string) bool {
 }
 
 // Reload rereads every applet. A directory with no applet.yaml is not an applet
-// yet, which is the normal state of one an agent is halfway through writing.
+// yet, which is the normal state of one an agent is halfway through writing. A
+// built-in fills in wherever the disk has no applet of its name.
 func (s *Store) Reload() error {
 	dirs, err := os.ReadDir(s.root)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -89,6 +90,11 @@ func (s *Store) Reload() error {
 		next[id] = Entry{Applet: s.entries[id].Applet, Err: err, Revision: s.entries[id].Revision}
 		if !next[id].Usable() {
 			next[id] = Entry{Applet: Applet{ID: id, Dir: path, Title: id}, Err: err}
+		}
+	}
+	for id, entry := range loadBuiltins(s.root) {
+		if _, onDisk := next[id]; !onDisk {
+			next[id] = entry
 		}
 	}
 	s.entries = next
@@ -126,7 +132,7 @@ func (s *Store) List() []Entry {
 	return out
 }
 
-// Get returns the applet with that id, if it has a declaration to run.
+// Get returns the applet with that id, if a file for it has loaded.
 func (s *Store) Get(id string) (Applet, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

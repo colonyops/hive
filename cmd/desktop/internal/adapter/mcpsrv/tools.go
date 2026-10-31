@@ -126,7 +126,7 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 		Name:  "list_applets",
 		Title: "List the applets",
 		Description: "List the applets with the directory they are written under and, for each, the error in its applet.yaml if it does not load. " +
-			"An applet that fails to load keeps its last good declaration, so this is how to confirm a write actually took.",
+			"An applet that fails to load keeps its last good file, so this is how to confirm a write actually took.",
 	}, ctrl.ListApplets)
 
 	addTool(srv, &mcp.Tool{

@@ -1,0 +1,168 @@
+:root {
+  --app: var(--hv-app, #101318);
+  --pane: var(--hv-pane, #151922);
+  --border: var(--hv-border, #232936);
+  --strong: var(--hv-strong, #414d5e);
+  --text: var(--hv-text, #e9edf4);
+  --text-3: var(--hv-text-3, #7a8698);
+  --accent: var(--hv-accent, #f5b23f);
+  --accent-tint: var(--hv-accent-tint, #2b2418);
+  --contrast: var(--hv-accent-contrast, #101318);
+  --error: var(--hv-severity-error, #e5645c);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--app);
+  color: var(--text);
+  font: 13.5px/1.45 'Inter Variable', Inter, -apple-system, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  color: inherit;
+  font: inherit;
+}
+
+button {
+  cursor: default;
+}
+
+/* The right padding leaves room for the close button Hive draws over the page. */
+header {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 52px 0 20px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+h1 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 20px;
+}
+
+section + section {
+  margin-top: 22px;
+}
+
+h2 {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.choice {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--pane);
+  text-align: left;
+}
+
+.choice:hover {
+  border-color: var(--strong);
+}
+
+.choice[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.choice strong {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.choice span {
+  display: block;
+  margin-top: 1px;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+#reference {
+  width: 100%;
+  height: 30px;
+  margin-top: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: 0;
+  background: var(--pane);
+  font-size: 12.5px;
+}
+
+#reference:focus {
+  border-color: var(--accent);
+}
+
+#reference::placeholder {
+  color: var(--text-3);
+}
+
+footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  flex: none;
+}
+
+#status {
+  flex: 1;
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+#status.error {
+  color: var(--error);
+}
+
+#copy {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--contrast);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#copy:disabled {
+  opacity: 0.4;
+}

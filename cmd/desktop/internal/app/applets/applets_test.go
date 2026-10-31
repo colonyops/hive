@@ -3,6 +3,7 @@ package applets
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -13,58 +14,39 @@ import (
 const minimal = `
 version: 1
 title: Thing
-view: table
-data: {command: "true"}
-columns: [{key: name}]
 `
 
-func TestExamplesParse(t *testing.T) {
-	require.NotEmpty(t, Examples())
-	for _, example := range Examples() {
-		_, err := Parse(example.ID, []byte(example.YAML))
-		assert.NoErrorf(t, err, "example %s", example.ID)
-	}
+func TestBuiltinsParse(t *testing.T) {
+	entries := loadBuiltins(t.TempDir())
+	require.Contains(t, entries, BuilderID)
+	body, err := ReadBuiltin(BuilderID, entries[BuilderID].Applet.Entry)
+	require.NoError(t, err)
+	assert.NotEmpty(t, body)
 }
 
 func TestParseDefaults(t *testing.T) {
-	applet, err := Parse("thing", []byte(minimal+"actions: [{id: go, label: Go, run: x}]\n"))
+	applet, err := Parse("thing", []byte(minimal))
 	require.NoError(t, err)
 	assert.Equal(t, "thing", applet.ID)
-	assert.Equal(t, "json", applet.Data.Format)
-	assert.Equal(t, ModeBackground, applet.Actions[0].Mode)
+	assert.Equal(t, DefaultEntry, applet.Entry)
 }
 
 func TestParseRefuses(t *testing.T) {
-	for name, tc := range map[string]struct{ id, yaml, want string }{
-		"unknown key":    {"thing", minimal + "colour: red\n", "colour"},
-		"empty":          {"thing", "", "empty"},
-		"bad dir":        {"Bad Name", minimal, "slug"},
-		"bad view":       {"thing", "version: 1\ntitle: T\nview: grid\ndata: {command: x}\ncolumns: [{key: a}]\n", "view"},
-		"fast refresh":   {"thing", "version: 1\ntitle: T\nview: table\ndata: {command: x, refresh: 10ms}\ncolumns: [{key: a}]\n", "refresh"},
-		"no columns":     {"thing", "version: 1\ntitle: T\nview: table\ndata: {command: x}\n", "column"},
-		"picker no acts": {"thing", "version: 1\ntitle: T\nview: picker\ndata: {command: x}\ncolumns: [{key: a}]\n", "picker"},
-		"bad tone":       {"thing", "version: 1\ntitle: T\nview: table\ndata: {command: x}\ncolumns: [{key: a, tones: {x: red}}]\n", "tone"},
-		"reserved key":   {"thing", minimal + "actions: [{id: a, label: A, run: x, key: j}]\n", "key"},
-		"dup key":        {"thing", minimal + "actions: [{id: a, label: A, run: x, key: r},{id: b, label: B, run: x, key: r}]\n", "twice"},
-		"dup id":         {"thing", minimal + "actions: [{id: a, label: A, run: x},{id: a, label: B, run: x}]\n", "twice"},
-		"bad mode":       {"thing", minimal + "actions: [{id: a, label: A, run: x, mode: popup}]\n", "mode"},
+	for name, body := range map[string]string{
+		"wrong version": "version: 2\ntitle: T\n",
+		"no title":      "version: 1\n",
+		"unknown key":   "version: 1\ntitle: T\nview: table\n",
+		"unknown icon":  "version: 1\ntitle: T\nicon: nope\n",
+		"entry outside": "version: 1\ntitle: T\nentry: ../outside.html\n",
+		"negative size": "version: 1\ntitle: T\nwidth: -1\n",
+		"empty file":    "",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := Parse(tc.id, []byte(tc.yaml))
+			_, err := Parse("thing", []byte(body))
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), tc.want)
 		})
 	}
-}
-
-func TestParseHTML(t *testing.T) {
-	applet, err := Parse("page", []byte("version: 1\ntitle: Page\nview: html\n"))
-	require.NoError(t, err)
-	assert.Equal(t, DefaultEntry, applet.Entry)
-
-	_, err = Parse("page", []byte("version: 1\ntitle: Page\nview: html\nentry: ../outside.html\n"))
-	require.Error(t, err)
-	_, err = Parse("page", []byte("version: 1\ntitle: Page\nview: html\ncolumns: [{key: a}]\n"))
+	_, err := Parse("Bad Name", []byte(minimal))
 	require.Error(t, err)
 }
 
@@ -74,50 +56,6 @@ func TestWatchedFilesReloadPagesButNotTheirData(t *testing.T) {
 	assert.False(t, IsWatchedFile("/x/matches.log"))
 	assert.False(t, IsWatchedFile("/x/.localstorage.json"))
 	assert.False(t, IsWatchedFile("/x/run.sh"))
-}
-
-func TestParseRows(t *testing.T) {
-	for name, tc := range map[string]struct {
-		format, stdout string
-		want           []Row
-	}{
-		"array":    {FormatJSON, `[{"a":"x","n":1.50,"b":true,"z":null,"o":{"k":1}}]`, []Row{{"a": "x", "n": "1.50", "b": "true", "z": "", "o": `{"k":1}`}}},
-		"jsonl":    {FormatJSON, "{\"a\":\"1\"}\n{\"a\":\"2\"}\n", []Row{{"a": "1"}, {"a": "2"}}},
-		"empty":    {FormatJSON, "  \n", []Row{}},
-		"lines":    {FormatLines, "one\n\n two\n", []Row{{LineKey: "one"}, {LineKey: " two"}}},
-		"no lines": {FormatLines, "", []Row{}},
-	} {
-		t.Run(name, func(t *testing.T) {
-			rows, truncated, err := ParseRows(tc.format, []byte(tc.stdout))
-			require.NoError(t, err)
-			assert.False(t, truncated)
-			assert.Equal(t, tc.want, rows)
-		})
-	}
-
-	_, _, err := ParseRows(FormatJSON, []byte("not json"))
-	require.Error(t, err)
-	_, _, err = ParseRows(FormatJSON, []byte(`[1,2]`))
-	require.Error(t, err)
-}
-
-func TestParseRowsTruncates(t *testing.T) {
-	lines := make([]byte, 0, (MaxRows+1)*2)
-	for range MaxRows + 1 {
-		lines = append(lines, 'x', '\n')
-	}
-	rows, truncated, err := ParseRows(FormatLines, lines)
-	require.NoError(t, err)
-	assert.True(t, truncated)
-	assert.Len(t, rows, MaxRows)
-}
-
-func TestRowEnv(t *testing.T) {
-	env, err := RowEnv(Row{"Names": "a; rm -rf /", "com.docker-id": "x"})
-	require.NoError(t, err)
-	assert.Contains(t, env, "HIVE_ROW_NAMES=a; rm -rf /")
-	assert.Contains(t, env, "HIVE_ROW_COM_DOCKER_ID=x")
-	assert.Contains(t, env, `HIVE_ROW={"Names":"a; rm -rf /","com.docker-id":"x"}`)
 }
 
 func write(t *testing.T, root, id, body string) {
@@ -137,12 +75,12 @@ func TestStoreKeepsLastGoodAndReportsTheError(t *testing.T) {
 
 	write(t, root, "thing", "version: [")
 	require.NoError(t, store.Reload())
-	entries := store.List()
+	entries := onDisk(store)
 	require.Len(t, entries, 1)
 	require.Error(t, entries[0].Err)
 	assert.Equal(t, "Thing", entries[0].Applet.Title)
 	_, ok = store.Get("thing")
-	assert.True(t, ok, "the last good declaration keeps running")
+	assert.True(t, ok, "the last good file keeps running")
 }
 
 func TestABrokenFileKeepsTheRevisionSoARunningPageStaysUp(t *testing.T) {
@@ -150,12 +88,12 @@ func TestABrokenFileKeepsTheRevisionSoARunningPageStaysUp(t *testing.T) {
 	store := NewStore(root)
 	write(t, root, "thing", minimal)
 	require.NoError(t, store.Reload())
-	before := store.List()[0].Revision
+	before := onDisk(store)[0].Revision
 	require.NotZero(t, before)
 
 	write(t, root, "thing", "version: [")
 	require.NoError(t, store.Reload())
-	assert.Equal(t, before, store.List()[0].Revision)
+	assert.Equal(t, before, onDisk(store)[0].Revision)
 }
 
 func TestRevisionFollowsPagesButNotData(t *testing.T) {
@@ -197,7 +135,7 @@ func TestStoreListsAFileThatNeverLoaded(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "unfinished"), 0o755))
 	require.NoError(t, store.Reload())
 
-	entries := store.List()
+	entries := onDisk(store)
 	require.Len(t, entries, 1, "a directory with no applet.yaml is not listed")
 	assert.Equal(t, "broken", entries[0].Applet.ID)
 	require.Error(t, entries[0].Err)
@@ -205,8 +143,36 @@ func TestStoreListsAFileThatNeverLoaded(t *testing.T) {
 	assert.False(t, ok, "nothing to run")
 }
 
-func TestStoreMissingRootIsEmpty(t *testing.T) {
+func TestStoreMissingRootHasOnlyBuiltins(t *testing.T) {
 	store := NewStore(filepath.Join(t.TempDir(), "absent"))
 	require.NoError(t, store.Reload())
-	assert.Empty(t, store.List())
+	assert.Empty(t, onDisk(store))
+	_, ok := store.Get(BuilderID)
+	assert.True(t, ok)
+}
+
+func TestADirectoryReplacesTheBuiltinOfItsName(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root)
+	write(t, root, BuilderID, minimal)
+	require.NoError(t, store.Reload())
+	applet, ok := store.Get(BuilderID)
+	require.True(t, ok)
+	assert.False(t, applet.Builtin)
+	assert.Equal(t, "Thing", applet.Title)
+}
+
+func TestSavedStorageDoesNotHideABuiltin(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, BuilderID), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, BuilderID, ".localstorage.json"), []byte("{}"), 0o600))
+	require.NoError(t, store.Reload())
+	applet, ok := store.Get(BuilderID)
+	require.True(t, ok)
+	assert.True(t, applet.Builtin)
+}
+
+func onDisk(store *Store) []Entry {
+	return slices.DeleteFunc(store.List(), func(entry Entry) bool { return entry.Applet.Builtin })
 }

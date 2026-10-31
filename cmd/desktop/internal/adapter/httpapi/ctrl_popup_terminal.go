@@ -7,7 +7,6 @@ import (
 	"github.com/hay-kot/httpkit/server"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/ptyterm"
 )
 
@@ -33,12 +32,7 @@ type popupOpenRequest struct {
 	// and a launcher that has no configured cwd is refused — it runs in a
 	// session or not at all (ADR quick-terminal-launchers-are-session-scoped).
 	SessionSlug string `json:"sessionSlug"`
-	// Applet, AppletAction and AppletRow open a terminal action of an applet
-	// against a row. Like Launcher, the command stays the catalog's answer.
-	Applet       string      `json:"applet"`
-	AppletAction string      `json:"appletAction"`
-	AppletRow    applets.Row `json:"appletRow"`
-	Dir          string      `json:"dir"`
+	Dir         string `json:"dir"`
 	// Command is a shell command line — it is run through a login shell, so what
 	// a user would type in their own terminal is what runs. Empty opens an
 	// interactive shell.
@@ -114,15 +108,12 @@ func (ctrl *Controller) PopupTerminalOpen(w http.ResponseWriter, r *http.Request
 		return err
 	}
 	term, err := ctrl.core.PopupTerminals.Open(r.Context(), app.OpenPopupTerminal{
-		Launcher:     body.Launcher,
-		SessionSlug:  body.SessionSlug,
-		Applet:       body.Applet,
-		AppletAction: body.AppletAction,
-		AppletRow:    body.AppletRow,
-		Dir:          body.Dir,
-		Command:      body.Command,
-		Cols:         body.Cols,
-		Rows:         body.Rows,
+		Launcher:    body.Launcher,
+		SessionSlug: body.SessionSlug,
+		Dir:         body.Dir,
+		Command:     body.Command,
+		Cols:        body.Cols,
+		Rows:        body.Rows,
 	})
 	if err != nil {
 		return err

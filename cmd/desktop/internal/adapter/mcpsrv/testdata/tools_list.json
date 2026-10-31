@@ -790,7 +790,7 @@
     "title": "List the action catalog"
   },
   {
-    "description": "List the applets with the directory they are written under and, for each, the error in its applet.yaml if it does not load. An applet that fails to load keeps its last good declaration, so this is how to confirm a write actually took.",
+    "description": "List the applets with the directory they are written under and, for each, the error in its applet.yaml if it does not load. An applet that fails to load keeps its last good file, so this is how to confirm a write actually took.",
     "inputSchema": {
       "additionalProperties": false,
       "type": "object"

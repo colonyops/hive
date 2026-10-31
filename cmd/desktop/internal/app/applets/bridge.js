@@ -4,8 +4,17 @@
   let nextID = 0
   const pending = new Map()
 
+  const applyTheme = (theme) => {
+    for (const [name, value] of Object.entries(theme)) document.documentElement.style.setProperty(name, value)
+  }
+
   addEventListener('message', (event) => {
-    if (event.source !== parent || event.data?.hiveApplet !== 1 || !pending.has(event.data.id)) return
+    if (event.source !== parent || event.data?.hiveApplet !== 1) return
+    if (event.data.theme) {
+      applyTheme(event.data.theme)
+      return
+    }
+    if (!pending.has(event.data.id)) return
     const { resolve, reject } = pending.get(event.data.id)
     pending.delete(event.data.id)
     if ('error' in event.data) reject(new Error(event.data.error))
@@ -48,8 +57,12 @@
     writeFile: (path, content) => call('writeFile', { path, content }),
     terminal: (command, options = {}) => call('terminal', { command, ...options }),
     toast: (message, options = {}) => call('toast', { message, ...options }),
+    copy: (text) => call('copy', { text }),
+    authoringPrompt: (brief) => call('authoringPrompt', { brief }),
     close: () => call('close'),
   }
+
+  call('theme').then(applyTheme, () => {})
 
   // The frame has an opaque origin, where the real localStorage throws. Generated
   // pages reach for it constantly, so this one works the same and persists per applet.
