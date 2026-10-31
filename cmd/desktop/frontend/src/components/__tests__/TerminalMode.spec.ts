@@ -3207,6 +3207,42 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
+    // A configured action runs on this machine, and a server's checkout is not here.
+    it('grows no window menu on a server session', async () => {
+      offer([], [interrupt])
+      mocks.ListServerSessions.mockResolvedValue([
+        {
+          server: 'box',
+          ssh: 'box',
+          state: 'connected',
+          error: '',
+          sessions: [
+            {
+              server: 'box',
+              id: 'box:9',
+              name: 'remote work',
+              slug: 'box:remote-work',
+              repo: '/home/hive/repo.git',
+              repoIdentity: '/home/hive/repo.git',
+              state: 'active',
+              canvasOwner: '',
+              tags: [],
+              createdAt: '',
+            },
+          ],
+        },
+      ])
+      const { wrapper } = await mountAvailable()
+      const group = wrapper.get('[data-testid="terminal-repo-group"][data-repo="/home/hive/repo.git"]')
+      if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
+      await wrapper.get('[data-slug="box:remote-work"]').trigger('click')
+      await flushPromises()
+
+      const remote = wrapper.get('[data-testid="terminal-window-row"][data-window-id="@2"]')
+      expect(remote.find('[data-testid="terminal-window-menu-toggle"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
     it('collects declared inputs before running', async () => {
       offer([
         {
