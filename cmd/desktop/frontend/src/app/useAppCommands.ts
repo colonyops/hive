@@ -1,12 +1,16 @@
 import { Open as openDiagnostics } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/diagnosticsservice'
-import { nextTick, onMounted, ref, type Ref } from 'vue'
+import { nextTick, onMounted, ref, watch, type Ref } from 'vue'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useCommandPalette } from '../composables/useCommands'
 import { useLaunchers } from '../composables/useLaunchers'
+import { renderPrompt } from '../composables/usePrompts'
+import { useToasts } from '../composables/useToasts'
 import { useNewSession } from '../composables/useNewSession'
 import { useReportDialog } from '../composables/useReportDialog'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import {
   commandById,
+  appletID,
   launcherActionID,
   launcherCommandID,
   terminalWindowPosition,
@@ -28,6 +32,7 @@ import {
   stepTerminalWindow,
   zoomTerminalPane,
 } from '../lib/terminalTree'
+import { useApplets } from '../stores/useApplets'
 import { useDriveReview } from '../stores/useDriveReview'
 import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { useTerminalFont } from '../stores/useTerminalFont'
@@ -88,6 +93,25 @@ export function useAppCommands(deps: AppCommandDeps) {
     popupTerminal.toggle({ launcher: actionID, sessionSlug: onScreenSessionSlug.value || undefined })
   }
 
+  // An applet's terminal action asks the store directly, so the panel has to come
+  // up on that as well as on the toggles above.
+  watch(popupTerminal.visible, (visible) => {
+    if (visible) popupTerminalMounted.value = true
+  })
+
+  const applets = useApplets()
+  const { showToast } = useToasts()
+  const clipboard = useClipboard()
+
+  async function copyAppletPrompt(): Promise<void> {
+    const prompt = await renderPrompt('applets')
+    if (!prompt || !(await clipboard.copy(prompt))) {
+      showToast('Could not copy the applet prompt', { severity: 'error' })
+      return
+    }
+    showToast('Applet prompt copied. Paste it to an agent and say what you want.', { severity: 'success' })
+  }
+
   // Launchers are palette and keymap commands before any pop-up has opened.
   const launchers = useLaunchers()
   onMounted(() => {
@@ -129,6 +153,7 @@ export function useAppCommands(deps: AppCommandDeps) {
     },
     'report.bundle': report.openBundleDialog,
     'tasks.toggle': overlays.toggleTasks,
+    'applets.copy-prompt': copyAppletPrompt,
     'canvas.toggle': appMode.toggleDrive,
     'action-runs.toggle': () => overlays.toggleActionRuns(),
     'terminal.popup.toggle': togglePopupTerminal,
@@ -185,6 +210,12 @@ export function useAppCommands(deps: AppCommandDeps) {
     const launcher = launcherActionID(id)
     if (launcher !== null) {
       toggleLauncher(launcher)
+      return
+    }
+    const applet = appletID(id)
+    if (applet !== null) {
+      const command = commandById.value.get(id)
+      if (command && contextActive(command.context)) applets.toggle(applet, onScreenSessionSlug.value)
       return
     }
     const window = terminalWindowPosition(id)

@@ -2,7 +2,14 @@ import { computed, onScopeDispose, watch, type Ref } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { comboFromEvent, SEQUENCE_TIMEOUT_MS, terminalEscapeCombo, useKeybindings } from '../composables/useKeybindings'
 import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
-import { commandById, commandPiercesPane, launcherActionID, type CommandContext } from '../keybindings/catalog'
+import {
+  appletID,
+  commandById,
+  commandPiercesPane,
+  launcherActionID,
+  type CommandContext,
+} from '../keybindings/catalog'
+import { useApplets } from '../stores/useApplets'
 import { isEditableTarget, isTerminalTarget } from '../lib/isEditableTarget'
 
 export interface GlobalKeymapDeps {
@@ -39,13 +46,19 @@ export function useGlobalKeymap({
     'tasks.toggle': tasksOpen,
     'action-runs.toggle': actionRunsOpen,
   }
+  const applets = useApplets()
   const otherOverlayOpen = computed(() => paletteOpen.value || activityOpen.value || openModalCount.value > 0)
   const anyOverlayOpen = computed(
-    () => otherOverlayOpen.value || Object.values(toggledOverlays).some((open) => open.value),
+    () =>
+      otherOverlayOpen.value ||
+      applets.open.value !== null ||
+      Object.values(toggledOverlays).some((open) => open.value),
   )
 
   function closesOwnOverlay(id: string): boolean {
-    if (otherOverlayOpen.value || !toggledOverlays[id]?.value) return false
+    if (otherOverlayOpen.value) return false
+    if (appletID(id) !== null) return appletID(id) === applets.open.value?.id
+    if (applets.open.value !== null || !toggledOverlays[id]?.value) return false
     return Object.entries(toggledOverlays).every(([toggle, open]) => toggle === id || !open.value)
   }
 
@@ -160,7 +173,7 @@ export function useGlobalKeymap({
     // so its chord falls through with no terminal attached (ADR
     // quick-terminal-launchers-are-session-scoped).
     const pierced = kb.resolve(comboFromEvent(e) ?? '', applies)
-    if (pierced && (commandPiercesPane(pierced) || launcherActionID(pierced) !== null)) {
+    if (pierced && (commandPiercesPane(pierced) || launcherActionID(pierced) !== null || appletID(pierced) !== null)) {
       if (contextActive(commandById.value.get(pierced)?.context ?? 'global')) {
         resetSequence()
         e.preventDefault()

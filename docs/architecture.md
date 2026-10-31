@@ -443,6 +443,7 @@ cmd/desktop/internal/
                                   #   declared — consumer-defined, no notify/ package
     actions/                      # actions.yml catalog, editable model
       docs/                       # per-action-type markdown
+    applets/                      # applet.yaml schema, row parsing, catalog
     dirwatch/                     # the debounced directory watcher behind actions,
                                   #   flows, and agentws hot-reload
     configmigrate/                # versioned migrations for settings.yaml, flows, actions.yml
@@ -1405,6 +1406,26 @@ has no `HIVE_DEFAULT_AGENT` either, and hive folds that variable into
 and the login shell's answers otherwise, so the New Session form preselects the
 agent hive would run rather than the one a launcher environment resolved
 (`SessionsService.SessionLaunchOptions`).
+
+### Applets
+
+An applet is a UI in `<ConfigDir>/applets/<id>/`, usually written by an agent
+([ADR applets-are-declared-in-yaml-and-rendered-natively](decisions/2026-10-31-applets-are-declared-in-yaml-and-rendered-natively.md)).
+`table` and `picker` are declared in `applet.yaml` and drawn by `AppletView`. `html` is
+the applet's own page in `AppletFrame`.
+
+- **The file is the registration.** `applets.Store` hot-reloads per directory. A
+  broken file keeps its last good declaration and reports the error on its entry.
+- **A declared applet's commands stay in the core.** The frontend invokes by id, as
+  for a launcher. A row reaches a command through the environment, never a template.
+- **A page is deliberately unrestricted.** `window.hive` (`applets/bridge.js`) reaches
+  `AppletsService` through `postMessage` and `AppletFrame`, and runs what it is asked.
+  The opaque-origin frame protects the app from a page's mistakes and is not a
+  security boundary. Do not add permission checks here without revisiting the ADR.
+- **A page's files are served by `appletAssets` on the Wails asset handler**, so
+  nothing outside the webview can reach them.
+- **A spawned process belongs to its applet.** Closing it, editing it, or closing the
+  app ends the process.
 
 ### App modes
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/ptyterm"
 	"github.com/colonyops/hive/pkg/pathutil"
 )
@@ -42,10 +43,16 @@ type OpenPopupTerminal struct {
 	// Code view attaches answers here, which is what lets a launcher open on
 	// the scratch terminal or a pinned chat as readily as on a checkout.
 	SessionSlug string
-	Dir         string
-	Command     string
-	Cols        int
-	Rows        int
+	// Applet, AppletAction and AppletRow name a terminal action of an applet and
+	// the row it runs against. Like Launcher, they carry identity: the command and
+	// the directory are the catalog's answer.
+	Applet       string
+	AppletAction string
+	AppletRow    applets.Row
+	Dir          string
+	Command      string
+	Cols         int
+	Rows         int
 }
 
 // PopupLauncher is one configured launcher, as much of it as a menu needs.
@@ -69,6 +76,7 @@ type PopupTerminalsService struct {
 	terminals terminalWorkingDirectory
 	directory terminalDirectory
 	catalog   *actions.ActionStore
+	applets   *AppletsService
 }
 
 type PopupTerminalsDeps struct {
@@ -99,17 +107,27 @@ func (s *PopupTerminalsService) Launchers(context.Context) ([]PopupLauncher, err
 
 // Open launches a terminal and returns it.
 func (s *PopupTerminalsService) Open(ctx context.Context, req OpenPopupTerminal) (ptyterm.Terminal, error) {
-	req, err := s.applyLauncher(req)
-	if err != nil {
-		return ptyterm.Terminal{}, err
+	var (
+		dir string
+		env []string
+		err error
+	)
+	if req.Applet != "" {
+		var launch appletLaunch
+		launch, err = s.applets.terminalLaunch(ctx, req.Applet, req.AppletAction, req.SessionSlug, req.AppletRow)
+		req.Command, dir, env = launch.Command, launch.Dir, launch.Env
+	} else {
+		if req, err = s.applyLauncher(req); err == nil {
+			dir, err = s.resolveDir(ctx, req)
+		}
 	}
-	dir, err := s.resolveDir(ctx, req)
 	if err != nil {
 		return ptyterm.Terminal{}, err
 	}
 	term, err := s.manager.Open(ctx, ptyterm.Spec{
 		Dir:     dir,
 		Command: req.Command,
+		Env:     env,
 		Cols:    req.Cols,
 		Rows:    req.Rows,
 	})

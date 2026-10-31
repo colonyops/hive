@@ -178,6 +178,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		application.NewService(NewJobService(core.Jobs)),
 		application.NewService(NewActionRunService(core.ActionRuns)),
 		application.NewService(NewTasksService(core.Tasks)),
+		application.NewService(NewAppletsService(core.Applets)),
 		application.NewService(NewDriveService(core.Drive, u.logger)),
 		application.NewService(NewReviewService(core.Review, u.logger)),
 		application.NewService(NewSystemService(core.System, opts.Build.Version, opts.Build.Commit, opts.Build.Date)),
@@ -227,7 +228,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		Logger: slog.New(zerolog.NewSlogHandler(wailsLogger(u.logger))),
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(opts.Assets),
-			Middleware: e2e.SmokeMiddleware(core.PipelineDB(), core.Stores, core.HiveConn(), reset, core.PublishLogAppended),
+			Middleware: appletAssets(core.Applets, e2e.SmokeMiddleware(core.PipelineDB(), core.Stores, core.HiveConn(), reset, core.PublishLogAppended)),
 		},
 		SingleInstance: u.singleInstance(core.RuntimePaths().DataDir),
 		Mac: application.MacOptions{

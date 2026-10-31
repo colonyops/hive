@@ -14,6 +14,7 @@ declare module "@wailsio/runtime" {
         interface CustomEvents {
             "actions:updated": string;
             "activity:appended": number;
+            "applets:updated": string;
             "connection:updated": string;
             "drive:toggle": wailsui$0.DriveToggle;
             "drive:updated": wailsui$0.DriveWrite;

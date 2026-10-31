@@ -49,6 +49,8 @@ type Paths struct {
 	ConfigDir   string
 	FlowsDir    string
 	ActionsPath string
+	// AppletsDir holds one directory per applet.
+	AppletsDir string
 	// AgentWorkspacesDir is the agent-workspace root: agent_workspaces.dir,
 	// resolved and `~`-expanded, or <ConfigDir>/workspaces when unset.
 	AgentWorkspacesDir   string
@@ -140,6 +142,7 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 		ConfigDir:            configDir,
 		FlowsDir:             flowsDir,
 		ActionsPath:          actionsPath,
+		AppletsDir:           filepath.Join(configDir, "applets"),
 		AgentWorkspacesDir:   agentWorkspacesDir,
 		SettingsPath:         filepath.Join(configDir, settingsFileName),
 		CredentialsIndexPath: filepath.Join(stateDir, "credentials.json"),

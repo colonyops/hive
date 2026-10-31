@@ -6,7 +6,9 @@ import (
 	"time"
 )
 
-func runShellProcess(ctx context.Context, command *exec.Cmd) error {
+// RunShellProcess runs command in its own process group and stops the whole
+// group when ctx ends, so a shell's children do not outlive a timeout.
+func RunShellProcess(ctx context.Context, command *exec.Cmd) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

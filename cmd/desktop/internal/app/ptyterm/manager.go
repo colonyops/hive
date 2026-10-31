@@ -109,8 +109,10 @@ type Spec struct {
 	ID      string
 	Dir     string
 	Command string
-	Cols    int
-	Rows    int
+	// Env is added to the environment the terminal would otherwise get.
+	Env  []string
+	Cols int
+	Rows int
 }
 
 // ManagerOptions configures the terminal set.
@@ -211,7 +213,7 @@ func (m *Manager) Open(ctx context.Context, spec Spec) (Terminal, error) {
 		Dir:     spec.Dir,
 		Command: spec.Command,
 		Argv:    argv,
-		Env:     terminalEnv(m.environ(ctx)),
+		Env:     append(terminalEnv(m.environ(ctx)), spec.Env...),
 		Cols:    cols,
 		Rows:    rows,
 	}, m.forget)

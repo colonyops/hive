@@ -1,0 +1,104 @@
+Build a Hive Desktop applet.
+{{template "app" .}}
+An applet is a UI that opens over the app, from the command palette or a key the
+user binds. It is either declared in YAML and drawn by Hive, or a whole web page
+you write. It runs on the user's own machine with their full access, and that is
+intended: do what the request needs.
+
+Write the applet to {{.Env.AppletsDir}}/<id>/applet.yaml. The directory name is
+the applet's id: a slug of lowercase letters, digits and hyphens. Put any script
+it needs in the same directory and call it through `$HIVE_APPLET_DIR`. The app
+watches these files, so the applet appears as soon as the file is valid. Nothing
+runs until the user opens it.
+
+Pick the view from what the user asked for:
+
+- `table` is a large overlay for watching and managing things. Rows can refresh
+  on a timer. Keys run actions against the selected row.
+- `picker` is a compact fuzzy finder, like telescope in Neovim. The user types to
+  filter and Enter runs the first action, then the picker closes.
+- `html` is your own page, for anything those two cannot be: charts, games, editors,
+  dashboards, or a look of its own. Prefer it whenever the request goes beyond a list.
+
+## Schema
+
+Unknown keys are errors.
+
+- `version`: must be `1`.
+- `title`: the name in the palette and the overlay header.
+- `view`: `table`, `picker`, or `html`.
+- `icon`: optional glyph: `terminal`, `git-branch`, `git-compare`, `folder`, `file-text`, `search`, `database`, `gauge`, `activity`, `flask-conical`, `hammer`, `container`, `cloud`, `bug`, `zap`, `package`, `globe`, `external-link`, `git-pull-request`, or `play`.
+- `cwd`: where commands run. Omit it when the applet is about the code in front of the user: commands then run in the on-screen session's checkout, and the applet is only offered while a session is on screen. Set `"~"` or an absolute path when the applet works anywhere. A relative path is relative to the applet's directory.
+- `data`: where the rows come from.
+  - `command`: run through `sh -c` for up to 30 seconds. Failure shows its stderr in the applet.
+  - `format`: `json` (default) reads one JSON array of objects, or one JSON object per line. `lines` makes each line a row with the single field `line`.
+  - `refresh`: optional duration such as `5s`, at least `1s`, to re-run while the applet is open.
+- `columns`: at least one, in display order. The filter matches their text.
+  - `key`: the field in each row. Nested objects are not traversed, so flatten them in the command.
+  - `label`: optional header, defaulting to `key`.
+  - `tones`: optional map from a value to a badge tone: `neutral`, `success`, `accent`, `muted`, or `danger`.
+- `actions`: what the user can run against the selected row. A `picker` needs at least one.
+  - `id`: a slug, unique in the file.
+  - `label`: the button text.
+  - `run`: the shell command.
+  - `mode`: `background` (default) runs through `sh -c` for up to 5 minutes, shows the result, then refreshes the rows. `terminal` opens the command in the pop-up terminal, for anything long-running or interactive.
+  - `key`: optional single lowercase letter or digit that runs it in a `table`. Not `j`, `k` or `g`, which navigate.
+  - `confirm`: optional question to ask first. Use it on anything destructive.
+
+## Reading the selected row
+
+An action receives the row in its environment. Never build it into the command
+any other way.
+
+- `HIVE_ROW_<KEY>` is one field, upper-cased, with every character other than
+  letters and digits replaced by `_`. Field `Names` is `$HIVE_ROW_NAMES`.
+- `HIVE_ROW` is the whole row as JSON, with every value as a string.
+- `HIVE_APPLET_DIR` is the applet's directory, also set for the data command.
+
+Always double-quote these: `docker restart "$HIVE_ROW_ID"`.
+
+## Check your work
+
+1. Run the data command yourself and confirm its output parses and has the keys your columns name. For an html applet, run the commands the page uses.
+2. If the `list_applets` tool of the app's MCP server is available, call it and fix any `error` it reports. Without it, the palette row for a broken applet opens and shows the same error.
+3. Tell the user the applet's name, and that they open it from the command palette and can bind it to a key as `applet.<id>`.
+
+## HTML applets
+
+An `html` applet takes `version`, `title`, `view`, and optionally `icon`, `cwd`,
+`entry` (the page, default `index.html`), and `width` and `height` in pixels (default
+fills the window). It takes no `data`, `columns` or `actions`.
+
+The page is a normal web page, served from the applet's directory: relative
+scripts, ES modules, stylesheets, images, audio and network requests all work. There
+is no build step, so either write plain files or commit the built output. Editing a
+page, script or stylesheet reloads it on screen and stops the processes it started.
+
+`window.hive` exists before your scripts run. Every call returns a promise.
+
+- `hive.exec(command, {cwd, env, stdin, timeout})` runs a shell command and resolves to `{stdout, stderr, code}`. A non-zero `code` does not reject. `timeout` is in milliseconds and defaults to 5 minutes.
+- `hive.spawn(command, {cwd, env, onStdout, onStderr, onExit})` starts a long-running process and resolves to `{write(text), kill()}`. Output arrives as text in arbitrary chunks. Closing the applet stops it.
+- `hive.readFile(path)` and `hive.writeFile(path, text)` handle text files. A relative path is relative to the applet's directory, and `~` and absolute paths work.
+- `hive.terminal(command, {cwd})` opens the command in the pop-up terminal.
+- `hive.toast(message, {severity, body})` shows a Hive toast. `severity` is `info`, `success`, `warning`, or `error`.
+- `hive.context()` resolves to `{id, title, dir, cwd, sessionSlug}`.
+- `hive.close()` closes the applet.
+
+Commands run through `sh -c` in the on-screen session's checkout when there is one,
+otherwise in the applet's directory, with `$HIVE_APPLET_DIR` set.
+
+`localStorage` works and persists per applet. Cookies and IndexedDB do not, because
+the frame has an opaque origin. Read and write files for anything larger.
+
+Escape closes the applet unless your keydown handler calls `preventDefault()`.
+Audio needs a user gesture first, as on any page.
+
+## Worked examples
+{{range .Examples}}
+`{{.ID}}/applet.yaml`:
+
+```yaml
+{{.YAML}}
+```
+{{end}}
+{{template "task" .}}

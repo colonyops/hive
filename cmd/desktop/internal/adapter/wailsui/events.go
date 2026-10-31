@@ -37,6 +37,7 @@ func registerEvents() struct{} {
 	application.RegisterEvent[string]("inbox:updated")
 	application.RegisterEvent[string]("flows:updated")
 	application.RegisterEvent[string]("actions:updated")
+	application.RegisterEvent[string]("applets:updated")
 	application.RegisterEvent[string]("jobs:updated")
 	// sessions:create-failed names the session a create job failed to produce.
 	// A wake-up like the rest: the frontend re-reads the failed draft to
@@ -136,6 +137,9 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		events.Subscribe(ctx, bus, "wailsui.actions", events.Coalesce(), func(context.Context, events.ActionsUpdated) {
 			emitActionsUpdated()
 			trayStale()
+		}),
+		events.Subscribe(ctx, bus, "wailsui.applets", events.Coalesce(), func(context.Context, events.AppletsUpdated) {
+			emitAppletsUpdated()
 		}),
 		events.Subscribe(ctx, bus, "wailsui.menu-bar", events.Coalesce(), func(context.Context, events.MenuBarUpdated) {
 			trayStale()
@@ -372,6 +376,12 @@ func emitFlowsUpdated() {
 func emitActionsUpdated() {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("actions:updated", "changed")
+	}
+}
+
+func emitAppletsUpdated() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("applets:updated", "changed")
 	}
 }
 

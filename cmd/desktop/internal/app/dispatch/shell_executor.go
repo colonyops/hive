@@ -108,7 +108,7 @@ func runShell(ctx context.Context, env ExecEnvironment, spanName string, cmd she
 	proc.Stdout, proc.Stderr = io.MultiWriter(stdout, runLog.Stdout()), io.MultiWriter(stderr, runLog.Stderr())
 	runLog.Systemf("%s", shellCommandLine(cmd))
 	started := time.Now()
-	err = runShellProcess(runCtx, proc)
+	err = RunShellProcess(runCtx, proc)
 	runLog.Systemf("%s", shellExitLine(err, time.Since(started), cmd.Timeout))
 	return ExecutionLog{Stdout: boundExecutionStream(stdout.String()), Stderr: boundExecutionStream(stderr.String())}, err
 }

@@ -50,6 +50,9 @@ type FlowsUpdated struct{ Reason string }
 // ActionsUpdated reports that the actions catalog was reloaded or mutated.
 type ActionsUpdated struct{ Count int }
 
+// AppletsUpdated reports that the applet catalog was reloaded.
+type AppletsUpdated struct{ Count int }
+
 type MenuBarUpdated struct{}
 
 // AgentWorkspacesUpdated reports that the workspace set was reloaded.
@@ -118,6 +121,7 @@ func (SessionsUpdated) eventName() string        { return "sessions.updated" }
 func (TasksUpdated) eventName() string           { return "tasks.updated" }
 func (FlowsUpdated) eventName() string           { return "flows.updated" }
 func (ActionsUpdated) eventName() string         { return "actions.updated" }
+func (AppletsUpdated) eventName() string         { return "applets.updated" }
 func (MenuBarUpdated) eventName() string         { return "menu-bar.updated" }
 func (AgentWorkspacesUpdated) eventName() string { return "agent-workspaces.updated" }
 func (DriveChanged) eventName() string           { return "drive.changed" }

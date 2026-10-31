@@ -27,6 +27,7 @@ import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconRotateCcw from '~icons/lucide/rotate-ccw'
 import IconSearch from '~icons/lucide/search'
 import IconSettings from '~icons/lucide/settings'
+import IconSparkles from '~icons/lucide/sparkles'
 import IconSquareCheckBig from '~icons/lucide/square-check-big'
 import IconSquareTerminal from '~icons/lucide/square-terminal'
 import IconSquarePlus from '~icons/lucide/square-plus'
@@ -703,6 +704,15 @@ export const commandCatalog: BindableCommand[] = [
     scope: 'goto',
   },
   {
+    id: 'applets.copy-prompt',
+    title: 'Copy Applet Authoring Prompt',
+    group: 'Applets',
+    keywords: ['applet', 'agent', 'prompt', 'generate', 'ui', 'picker'],
+    icon: IconSparkles,
+    defaultCombos: [],
+    context: 'global',
+  },
+  {
     id: 'action-runs.toggle',
     title: 'Toggle Action runs',
     group: 'View',
@@ -770,23 +780,48 @@ export function launcherActionID(commandID: string): string | null {
   return commandID.startsWith(LAUNCHER_PREFIX) ? commandID.slice(LAUNCHER_PREFIX.length) : null
 }
 
-const launcherCommands = ref<BindableCommand[]>([])
+const configuredCommands = ref<{ launchers: BindableCommand[]; applets: BindableCommand[] }>({
+  launchers: [],
+  applets: [],
+})
+
+// The namespace an applet's bindable command id lives in: `applet.docker` in
+// settings.yaml's keybindings.
+const APPLET_PREFIX = 'applet.'
+
+export function appletCommandID(id: string): string {
+  return APPLET_PREFIX + id
+}
+
+/** The applet behind a command, or null for any other command. */
+export function appletID(commandID: string): string | null {
+  return commandID.startsWith(APPLET_PREFIX) ? commandID.slice(APPLET_PREFIX.length) : null
+}
+
+/** Replaces the applet commands, which change whenever an applet's file does. */
+export function setAppletCommands(next: BindableCommand[]): void {
+  configuredCommands.value = { ...configuredCommands.value, applets: next }
+}
 
 /**
  * Replaces the launcher commands, which change whenever actions.yml does.
  * Called by useLaunchers; everything else reads `commands`.
  */
 export function setLauncherCommands(next: BindableCommand[]): void {
-  launcherCommands.value = next
+  configuredCommands.value = { ...configuredCommands.value, launchers: next }
 }
 
 /**
  * Every bindable command: the static catalog above followed by the configured
- * launchers. Launchers come last so a combo they share with a built-in resolves
+ * launchers and applets. They come last so a combo they share with a built-in resolves
  * to the built-in — a config file must not be able to take `mod+k` away from
  * the palette.
  */
-export const commands: ComputedRef<BindableCommand[]> = computed(() => [...commandCatalog, ...launcherCommands.value])
+export const commands: ComputedRef<BindableCommand[]> = computed(() => [
+  ...commandCatalog,
+  ...configuredCommands.value.launchers,
+  ...configuredCommands.value.applets,
+])
 
 /**
  * Every bindable command by id, built from `commands` (not `commandCatalog`)

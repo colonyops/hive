@@ -220,6 +220,7 @@ func (s *PromptsService) service(ctx context.Context) (*prompts.Service, error) 
 	env := prompts.Env{
 		FlowsDir:           s.paths.FlowsDir,
 		ActionsPath:        s.paths.ActionsPath,
+		AppletsDir:         s.paths.AppletsDir,
 		SettingsPath:       s.paths.SettingsPath,
 		AgentWorkspacesDir: s.paths.AgentWorkspacesDir,
 	}
