@@ -235,6 +235,7 @@ function fakeSession() {
     resizePane: vi.fn().mockResolvedValue(undefined),
     focusActive: vi.fn(),
     renderShown: vi.fn(),
+    revealWindow: vi.fn(),
     scrollToBottom: vi.fn(),
     dispose: vi.fn(),
     reportOutcome: vi.fn(),
@@ -4589,14 +4590,26 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
-    // The button only signals the click; App.vue reads the repo to scope to
-    // off the session-repo-key it has already been keeping current.
-    it('emits open-tasks, carrying no payload of its own, when the tasks button is clicked', async () => {
+    it('opens the Diff tab from the diff counts rather than an overlay', async () => {
+      mocks.SessionGitStatus.mockResolvedValue({
+        path: '/tmp/fix-parser',
+        branch: 'feat/parser',
+        dirty: false,
+        unpushed: false,
+        additions: 42,
+        deletions: 7,
+        host: 'github.com',
+        owner: 'hay-kot',
+        repo: 'hive',
+        resolved: true,
+        error: '',
+      })
       const { wrapper } = await mountWithStatusBar()
 
-      await wrapper.get('[data-testid="terminal-statusbar-tasks"]').trigger('click')
+      await wrapper.get('[data-testid="session-status-diff"]').trigger('click')
+      await flushPromises()
 
-      expect(wrapper.emitted('open-tasks')).toEqual([[]])
+      expect(wrapper.get('[data-testid="session-tab-diff"]').attributes('data-shown')).toBe('true')
 
       wrapper.unmount()
     })
@@ -4689,7 +4702,7 @@ describe('TerminalMode', () => {
       return { wrapper, router, session }
     }
 
-    it('stays closed until the route asks for it', async () => {
+    it('has no Docs tab until the route asks for one', async () => {
       const { wrapper } = await mountWithDrive('/terminal/hive-fix-parser')
 
       expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
@@ -4697,32 +4710,27 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
-    it('opens beside the session and closes back to the terminal alone', async () => {
+    it('turns ?doc into a Docs tab and consumes the query, so it cannot follow the route', async () => {
       const { wrapper, router } = await mountWithDrive('/terminal/hive-fix-parser?doc=1')
 
       expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(true)
-
-      await wrapper.get('[data-testid="drive-pane-close"]').trigger('click')
-      await flushPromises()
       expect(router.currentRoute.value.query.doc).toBeUndefined()
+
+      await wrapper.get('[data-testid="session-tab-close-docs"]').trigger('click')
+      await flushPromises()
       expect(router.currentRoute.value.params.slug).toBe('hive-fix-parser')
       expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
 
       wrapper.unmount()
     })
 
-    it('keeps the pane mounted while the active terminal window changes', async () => {
-      const { wrapper, router, session } = await mountWithDrive(
-        '/terminal/hive-fix-parser?doc=canvases%2Fmermaid.canvas.json',
-      )
+    it('keeps the tab mounted while the active terminal window changes', async () => {
+      const { wrapper, session } = await mountWithDrive('/terminal/hive-fix-parser?doc=canvases%2Fmermaid.canvas.json')
       const pane = wrapper.get('[data-testid="drive-pane"]').element
-      const visited: Array<Record<string, unknown>> = []
-      router.afterEach((to) => visited.push({ ...to.query }))
 
       session.activeWindowId.value = '@2'
       await flushPromises()
 
-      expect(visited).toEqual([{ window: '@2', doc: 'canvases/mermaid.canvas.json' }])
       expect(wrapper.get('[data-testid="drive-pane"]').element).toBe(pane)
 
       wrapper.unmount()

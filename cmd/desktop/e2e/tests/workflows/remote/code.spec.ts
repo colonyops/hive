@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { type Page } from '@playwright/test'
+import { screenshotPath } from '../../../fixtures/paths.js'
 import { serverURL } from '../../../fixtures/servers.js'
 import { expect, resetServerState, tag, test } from '../../../fixtures/test.js'
 import { bindingID } from '../../../fixtures/wails.js'
@@ -120,6 +121,34 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
 
     await expect(page).toHaveURL(new RegExp(`/terminal/${SLUG}$`))
     await expect.poll(() => attached).toContain(SLUG)
+  })
+
+  test('gives a server session tabs and a split, without the views that need a checkout', async ({ page, browserName }) => {
+    await stubTerminals(page)
+    await page.goto(`/#/terminal/${SLUG}`)
+    await findSession(page)
+    await expect(sessionRow(page)).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('session-tab-terminal')).toBeVisible()
+    await expect(page.getByTestId('session-status-host')).toHaveText('server-a')
+
+    await page.getByTestId('session-tab-add-0').click()
+    const menu = page.getByTestId('session-tab-menu-0')
+    await expect(menu.getByText('New terminal')).toBeVisible()
+    await expect(menu.getByText('Diff')).toHaveCount(0)
+    await expect(menu.getByText('Tasks')).toHaveCount(0)
+    await page.keyboard.press('Escape')
+
+    await page.getByTestId('session-split-row').click()
+    await expect(page.getByTestId('session-pane-picker')).toBeVisible()
+    const before = (await page.getByTestId('session-pane-0').boundingBox())!
+    const divider = (await page.getByTestId('session-split-divider').boundingBox())!
+    await page.mouse.move(divider.x + 3, divider.y + 100)
+    await page.mouse.down()
+    await page.mouse.move(divider.x + 103, divider.y + 100, { steps: 8 })
+    await page.mouse.up()
+    expect((await page.getByTestId('session-pane-0').boundingBox())!.width).toBeCloseTo(before.width + 100, -1)
+    await page.screenshot({ path: screenshotPath(`session-tabs-server-${browserName}.png`) })
+    await page.getByTestId('session-pane-picker-cancel').click()
   })
 
   test('does not offer Changes for a server session', async ({ page }) => {

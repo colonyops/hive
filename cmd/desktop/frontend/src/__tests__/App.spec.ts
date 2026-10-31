@@ -3420,7 +3420,7 @@ describe('App', () => {
   // A hive session's documents belong to its repository's space, so the
   // title bar's right toggle and the full-page view both work from Code with
   // no chat.
-  it('opens the drive beside a Code session from the title bar, and the full page on its repository', async () => {
+  it('leaves Docs to the session tabs in Code, and opens the full page on its repository', async () => {
     mocks.AgentsAvailable.mockResolvedValue({ available: true, reason: '' })
     mocks.agentsClient = {
       workspaces: vi.fn().mockResolvedValue({
@@ -3450,20 +3450,9 @@ describe('App', () => {
     ])
     const { wrapper, router } = await mountAppWithRouter()
 
-    // The scratch terminal has no checkout, so it has no space to toggle.
-    await router.push('/terminal/Scratch')
-    await flushPromises()
-    expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('disabled')).toBeDefined()
-
     await router.push('/terminal/hive-fix-parser')
     await flushPromises()
-    await vi.waitFor(() =>
-      expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('disabled')).toBeUndefined(),
-    )
-    await wrapper.get('[data-testid="titlebar-toggle-preview"]').trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBe('1')
-    expect(router.currentRoute.value.params.slug).toBe('hive-fix-parser')
+    expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('disabled')).toBeDefined()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', metaKey: true, shiftKey: true }))
     await flushPromises()
@@ -3578,14 +3567,15 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('scopes tasks to the repo carried by the terminal status bar’s own open-tasks click', async () => {
+  it('scopes tasks to the repo the terminal reports when the command opens them', async () => {
     const { wrapper } = await mountAppWithRouter()
     await wrapper.get('[data-testid="titlebar-mode-terminal"]').trigger('click')
     await vi.waitFor(() => expect(terminalOnScreen(wrapper)).toBe(true))
     const terminal = wrapper.findComponent(TerminalMode)
     await terminal.vm.$emit('session-repo-key', 'acme/site')
 
-    await terminal.vm.$emit('open-tasks')
+    useKeybindings().addBinding('tasks.toggle', 'alt+t')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', altKey: true, bubbles: true, cancelable: true }))
     await flushPromises()
 
     expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
@@ -3602,7 +3592,8 @@ describe('App', () => {
     const terminal = wrapper.findComponent(TerminalMode)
     await terminal.vm.$emit('session-repo-key', '')
 
-    await terminal.vm.$emit('open-tasks')
+    useKeybindings().addBinding('tasks.toggle', 'alt+t')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', altKey: true, bubbles: true, cancelable: true }))
     await flushPromises()
 
     expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()

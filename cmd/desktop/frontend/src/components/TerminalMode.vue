@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, toRef, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useTimeoutFn, whenever } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
@@ -7,16 +7,16 @@ import ActionInputsDialog from './ActionInputsDialog.vue'
 import ModeSkeleton from './ModeSkeleton.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
 import SessionEditDialog from './SessionEditDialog.vue'
-import DrivePane from './drive/DrivePane.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
 import TerminalPaneColumn from './terminal/TerminalPaneColumn.vue'
 import TerminalSidebar from './terminal/TerminalSidebar.vue'
 import { provideTerminalMode } from './terminal/terminalModeContext'
+import { useSessionPanes } from './terminal/useSessionPanes'
 import { useSessionTreeView } from './terminal/useSessionTreeView'
 import { useSessionViewMenus } from './terminal/useSessionViewMenus'
 import { useTerminalAttach } from './terminal/useTerminalAttach'
 import { useTerminalCommands } from './terminal/useTerminalCommands'
-import { useTerminalDrive, type TerminalDriveTarget } from './terminal/useTerminalDrive'
+import type { TerminalDriveTarget } from './terminal/useTerminalDrive'
 import { useTerminalPool } from './terminal/useTerminalPool'
 import { useTerminalSessionOps } from './terminal/useTerminalSessionOps'
 import { useTerminalTree } from './terminal/useTerminalTree'
@@ -25,10 +25,11 @@ import { useWindowRename } from './terminal/useWindowRename'
 import { useNewSession } from '../composables/useNewSession'
 import { usePaintedActive } from '../composables/usePaintedActive'
 import { useSessionActions } from '../composables/useSessionActions'
-import { openLink } from '../composables/useXtermPane'
-import { spaceGroup, type DriveScope } from '../lib/drive'
+import type { DriveScope } from '../lib/drive'
+import { revealWindow } from '../lib/sessionLayout'
 import { TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 import { useCodeViews } from '../stores/useCodeViews'
+import { useSessionTabs } from '../stores/useSessionTabs'
 import { useTerminalAvailability } from '../stores/useTerminalAvailability'
 import { useTerminalPoolSize } from '../stores/useTerminalPoolSize'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
@@ -47,8 +48,6 @@ const props = withDefaults(
   { active: true, drive: null },
 )
 const emit = defineEmits<{
-  'open-tasks': []
-  'open-changes': []
   'session-repo-key': [repoKey: string]
   'open-drive-page': [scope: DriveScope]
 }>()
@@ -86,15 +85,24 @@ onMounted(() => {
 watch(
   () => props.active,
   (shown) => {
-    if (shown) pool.visible.value?.renderShown()
+    if (shown) panes.renderOnScreen()
   },
   { flush: 'post' },
 )
 const viewMenus = useSessionViewMenus(tree)
 const rename = useWindowRename(pool.visible)
-const attach = useTerminalAttach({ pool, tree, active, paintedActive, onSwitch: () => (rename.windowId.value = '') })
+const sessionTabs = useSessionTabs()
+const attach = useTerminalAttach({
+  pool,
+  tree,
+  active,
+  paintedActive,
+  onSwitch: () => (rename.windowId.value = ''),
+  onWindowChosen: (row, windowId) => sessionTabs.apply(row.id, (layout) => revealWindow(layout, windowId)),
+})
 const sessions = useSessionActions({ onChanged: () => void tree.reloadSessions() })
 const ops = useTerminalSessionOps({ pool, tree, attach, confirmation: sessions.confirmation, paintedActive })
+const panes = useSessionPanes({ pool, tree, ops })
 const nav = useTreeKeyboardNav({
   groups: view.groups,
   expanded: view.expansion.expanded,
@@ -108,11 +116,9 @@ const nav = useTreeKeyboardNav({
   startSession: attach.startSession,
   goToWindow: attach.goToWindow,
 })
-const context = { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions }
+const context = { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panes }
 provideTerminalMode(context)
 useTerminalCommands(context, active)
-
-const { pane: drivePane, docPath, syncDocQuery } = useTerminalDrive(toRef(props, 'drive'), active)
 
 // Hive does not configure a Code session's agent, so the empty pane leads to
 // the page that says how.
@@ -167,23 +173,11 @@ const knownTags = computed(() => {
       <TerminalSidebar v-if="!sidebarCollapsed" :active="props.active" />
       <TerminalPaneColumn
         :painted-active="painted"
-        @open-tasks="emit('open-tasks')"
-        @open-changes="emit('open-changes')"
+        :active="props.active"
+        :drive="props.drive"
         @session-repo-key="emit('session-repo-key', $event)"
-      />
-      <!-- A sibling of the pane column, as in Chats: opening it must not
-           re-key a terminal host, and the size vote absorbs the width change. -->
-      <DrivePane
-        v-if="drivePane"
-        :session="drivePane.session"
-        :space="drivePane.space"
-        :path="docPath"
-        :agent-setup="spaceGroup(drivePane.space) === 'Repositories'"
+        @open-drive-page="emit('open-drive-page', $event)"
         @setup="openMcpSettings"
-        @close="syncDocQuery(false)"
-        @open-url="openLink"
-        @pick="(path) => syncDocQuery(true, path)"
-        @open-page="(path) => emit('open-drive-page', { ...drivePane!, path })"
       />
     </div>
 

@@ -161,6 +161,8 @@ export interface UseTerminalWindows {
   focusActive: () => void
   scrollToBottom: () => void
   renderShown: () => void
+  /** Put a window that is on screen but not active in front of the user: its renderer and its current screen. */
+  revealWindow: (windowId: string) => void
   dispose: () => void
 }
 
@@ -515,6 +517,11 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     for (const pane of tab?.panes ?? []) renderRevealedTerminal(pane.term)
   }
 
+  function revealWindow(windowId: string): void {
+    showRenderers(windowId)
+    for (const pane of findTab(windowId)?.panes ?? []) renderRevealedTerminal(pane.term)
+  }
+
   function showRenderer(paneId: string): void {
     const state = panes.get(paneId)
     if (!state?.host || state.rendered) return
@@ -697,18 +704,28 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   // Vote the whole window box against shared cell metrics; tmux remains
   // authoritative for the actual grid. Only a single visible pane gets a gutter.
   function voteSize(): void {
-    const tab = findTab(activeWindowId.value)
-    const host = tab ? windows.get(tab.windowId)?.host : undefined
-    if (!tab || !host) return
     // A pane inside a display:none subtree — every pooled session behind the
     // shown one — has no rendered box. Voting from one would squeeze every
     // window of the session to a few cells and force the TUI inside to reflow,
     // then reflow back on reveal — the repaint the pool exists to avoid.
-    if (!host.clientWidth || !host.clientHeight) return
+    //
+    // tmux gives this client one grid per session, so two windows on screen in
+    // panes of different sizes share it. The smallest box wins: both fit, and
+    // moving the keyboard between them does not reflow either.
+    const shown = tabs.value.filter((candidate) => {
+      const box = windows.get(candidate.windowId)?.host
+      return !!box?.clientWidth && !!box.clientHeight
+    })
+    const tab = shown.find((candidate) => candidate.windowId === activeWindowId.value) ?? shown[0]
+    if (!tab) return
+    const boxes = shown.map((candidate) => windows.get(candidate.windowId)!.host!)
     const measured = measureCell()
     if (!measured) return
     const proposed = proposeGrid(
-      { width: host.clientWidth - scrollbarWidthFor(tab, showScrollbars.value), height: host.clientHeight },
+      {
+        width: Math.min(...boxes.map((box) => box.clientWidth)) - scrollbarWidthFor(tab, showScrollbars.value),
+        height: Math.min(...boxes.map((box) => box.clientHeight)),
+      },
       measured,
     )
     if (!proposed) return
@@ -1338,6 +1355,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     focusActive,
     scrollToBottom,
     renderShown,
+    revealWindow,
     dispose,
   }
 }

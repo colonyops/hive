@@ -173,8 +173,6 @@ useWailsEvent('flows:updated', () => {
           :sidebar-collapsed="terminalSidebarCollapsed"
           :drive="appMode.codeDrive.value"
           @open-drive-page="appMode.openDrive"
-          @open-tasks="overlays.toggleTasks"
-          @open-changes="overlays.toggleChanges"
           @session-repo-key="terminalSessionRepoKey = $event"
         />
         <AgentsMode

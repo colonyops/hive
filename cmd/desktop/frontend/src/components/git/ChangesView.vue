@@ -54,10 +54,19 @@ import { OpenSessionInEditor } from '../../../bindings/github.com/colonyops/hive
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import type { AgentTarget } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
-const props = defineProps<{ sessionId: string }>()
+const props = withDefaults(
+  defineProps<{
+    sessionId: string
+    /** Lives in a session tab, which owns closing: Escape and the close button are the overlay's. */
+    embedded?: boolean
+    /** A tab is mounted while another shows, and its bare keys must not fire from there. */
+    keysActive?: boolean
+  }>(),
+  { embedded: false, keysActive: true },
+)
 const emit = defineEmits<{ close: [] }>()
 
-useEscapeToClose(() => emit('close'))
+useEscapeToClose(() => emit('close'), { enabled: () => !props.embedded })
 const openModalCount = useOpenModalCount()
 
 const sessionId = toRef(props, 'sessionId')
@@ -436,7 +445,7 @@ async function sendReview(): Promise<void> {
 // On the window, because a click on a file header moves focus to the panel,
 // which is outside this view's root.
 useEventListener(window, 'keydown', (event: KeyboardEvent) => {
-  if (openModalCount.value > 0) return
+  if (openModalCount.value > 0 || !props.keysActive) return
   if ((event.metaKey || event.ctrlKey) && !event.altKey) {
     if (event.key === 'f') {
       event.preventDefault()
@@ -513,11 +522,12 @@ const KEY_HINTS = [
   [SEND_KEY, 'send'],
   ['esc', 'close'],
 ]
+const keyHints = computed(() => (props.embedded ? KEY_HINTS.filter(([key]) => key !== 'esc') : KEY_HINTS))
 </script>
 
 <template>
   <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="changes-view">
-    <ViewHeader>
+    <ViewHeader :class="embedded ? 'overflow-x-auto' : ''">
       <template #title>
         <IconButton
           :label="filesOpen ? 'Hide files' : 'Show files'"
@@ -587,8 +597,10 @@ const KEY_HINTS = [
             >{{ comments.length }}</span
           >
         </span>
-        <span class="mx-1 h-4 w-px bg-strong" aria-hidden="true" />
-        <IconButton label="Close" :icon="IconX" size="lg" data-testid="changes-close" @click="emit('close')" />
+        <template v-if="!embedded">
+          <span class="mx-1 h-4 w-px bg-strong" aria-hidden="true" />
+          <IconButton label="Close" :icon="IconX" size="lg" data-testid="changes-close" @click="emit('close')" />
+        </template>
       </template>
     </ViewHeader>
 
@@ -721,7 +733,7 @@ const KEY_HINTS = [
     <div
       class="flex shrink-0 flex-wrap items-center gap-x-3.5 gap-y-0.5 border-t border-border px-3 py-1 text-caption text-text-3"
     >
-      <span v-for="[key, label] in KEY_HINTS" :key="key" class="flex items-center gap-1">
+      <span v-for="[key, label] in keyHints" :key="key" class="flex items-center gap-1">
         <Kbd>{{ key }}</Kbd>
         {{ label }}
       </span>

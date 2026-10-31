@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, proxyRefs, ref, toRef, watch } from 'vue'
+import { computed, nextTick, proxyRefs, ref, toRef, watch, type Component } from 'vue'
 import { useNow } from '@vueuse/core'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconCircleAlert from '~icons/lucide/circle-alert'
@@ -13,6 +13,9 @@ import IconPlus from '~icons/lucide/plus'
 import IconRotateCw from '~icons/lucide/rotate-cw'
 import IconServer from '~icons/lucide/server'
 import IconTrash from '~icons/lucide/trash-2'
+import IconFileDiff from '~icons/lucide/file-diff'
+import IconFileText from '~icons/lucide/file-text'
+import IconListTodo from '~icons/lucide/list-todo'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
@@ -38,16 +41,47 @@ import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import { TERMINAL_SIDEBAR } from '../../lib/modeSidebars'
 import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
 import { moveId, type OrderDropTarget } from '../../lib/listOrder'
+import { closeTab, focusedTab, focusedWindow, openViews, selectTab, type SessionTab } from '../../lib/sessionLayout'
 import { terminalTreeFocused } from '../../lib/terminalTree'
+import { useSessionTabs } from '../../stores/useSessionTabs'
 import { sessionAgeDays, useTerminalSessionAge } from '../../stores/useTerminalSessionAge'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
+import type { TreeWindowRow } from './useTerminalTree'
 
 const props = defineProps<{ active: boolean }>()
-const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions } = useTerminalModeContext()
+const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panes } = useTerminalModeContext()
 const { openBlank: openNewSession } = useNewSession()
+const sessionTabs = useSessionTabs()
+const VIEW_ROWS: Partial<Record<SessionTab['kind'], { label: string; icon: Component }>> = {
+  docs: { label: 'Docs', icon: IconFileText },
+  diff: { label: 'Diff', icon: IconFileDiff },
+  tasks: { label: 'Tasks', icon: IconListTodo },
+}
+
+function viewRowsFor(row: TerminalSessionRow) {
+  return openViews(sessionTabs.layoutOf(row.id))
+}
+
+function viewRowActive(row: TerminalSessionRow, tabId: string): boolean {
+  return row.slug === pool.visibleSlug && focusedTab(sessionTabs.layoutOf(row.id)) === tabId
+}
+
+// tmux's active window is not what the keyboard is in while a view has the focus.
+function windowRowActive(row: TerminalSessionRow, win: TreeWindowRow): boolean {
+  return win.active && !(row.slug === pool.visibleSlug && !focusedWindow(sessionTabs.layoutOf(row.id)))
+}
+
+function openViewRow(row: TerminalSessionRow, pane: number, tabId: string): void {
+  sessionTabs.apply(row.id, (layout) => selectTab(layout, pane, tabId))
+  attach.selectSession(row.slug)
+}
+
+function closeViewRow(row: TerminalSessionRow, pane: number, tabId: string): void {
+  sessionTabs.apply(row.id, (layout) => closeTab(layout, pane, tabId))
+}
 const menus = proxyRefs(useTreeRowMenus({ windowMenuAllowed: ops.rowHasWindowActions }))
 const sidebarEl = toRef(nav, 'root')
 const filterInput = toRef(nav, 'filterInput')
@@ -591,7 +625,11 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     </div>
                   </div>
                   <Transition name="tree-expand" v-bind="expandHooks">
-                    <div v-if="tree.windowRowsFor(row).length && view.expansion.expanded(group)">
+                    <div
+                      v-if="
+                        (tree.windowRowsFor(row).length || viewRowsFor(row).length) && view.expansion.expanded(group)
+                      "
+                    >
                       <TransitionGroup name="tree" tag="div" class="relative flex flex-col pb-1">
                         <!-- The slot carries the drag and its marker: the row's ::before and
                              ::after draw the tree connector. -->
@@ -614,8 +652,10 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                             class="window-row"
                             :class="{
                               'window-row-flush': group.kind === 'scratch',
-                              'window-row-last': index === tree.windowRowsFor(row).length - 1,
-                              'window-row-active': win.active,
+                              'window-row-last':
+                                index === tree.windowRowsFor(row).length - 1 && !viewRowsFor(row).length,
+                              'window-row-active': windowRowActive(row, win),
+                              'window-row-on-screen': row.slug === pool.visibleSlug && panes.onScreen.has(win.windowId),
                               'has-swap': win.live,
                               'menu-open': menus.openWindow === windowMenuKey(row, win.windowId),
                             }"
@@ -695,6 +735,40 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                                 testid="terminal-window-menu"
                                 @select="runWindowAction(row, win.windowId, $event)"
                                 @close="menus.openWindow = ''"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <div v-for="(item, index) in viewRowsFor(row)" :key="`view:${item.tab.id}`">
+                          <div
+                            class="window-row has-swap"
+                            :class="{
+                              'window-row-flush': group.kind === 'scratch',
+                              'window-row-last': index === viewRowsFor(row).length - 1,
+                              'window-row-active': viewRowActive(row, item.tab.id),
+                            }"
+                            role="button"
+                            tabindex="-1"
+                            data-testid="terminal-view-row"
+                            :data-view-kind="item.tab.kind"
+                            @click="openViewRow(row, item.pane, item.tab.id)"
+                          >
+                            <component
+                              :is="VIEW_ROWS[item.tab.kind]?.icon"
+                              class="mr-1.5 size-3 shrink-0 text-text-4"
+                              aria-hidden="true"
+                            />
+                            <span class="min-w-0 flex-1 truncate text-small">{{
+                              VIEW_ROWS[item.tab.kind]?.label
+                            }}</span>
+                            <div class="window-trailing" @click.stop>
+                              <IconButton
+                                :label="`Close ${VIEW_ROWS[item.tab.kind]?.label}`"
+                                :icon="IconX"
+                                size="sm"
+                                class="row-action row-swap"
+                                data-testid="terminal-close-view"
+                                @click="closeViewRow(row, item.pane, item.tab.id)"
                               />
                             </div>
                           </div>
@@ -827,6 +901,10 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
 .window-row-active {
   font-weight: 500;
   color: var(--color-accent);
+}
+
+.window-row-on-screen:not(.window-row-active) {
+  color: var(--color-text);
 }
 
 /* One cell, two occupants: the count is what the row says at rest, the add

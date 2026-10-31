@@ -1,4 +1,4 @@
-import { computed, watch, type Ref } from 'vue'
+import { watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDriveRoute } from '../../composables/useDriveRoute'
 import { useWailsEvent } from '../../composables/useWailsEvent'
@@ -11,44 +11,37 @@ export interface TerminalDriveTarget {
 }
 
 /**
- * The drive pane beside the session attached in Code. It rides ?doc on the
- * terminal route the way the Chats pane rides it on the agents route, so the
- * title bar's right toggle, a reload, and an agent's open_document reach it
- * the same way in both areas.
+ * The ways into a session's Docs tab from outside it. ?doc is how a reveal
+ * links to a document, and an agent's open_document arrives as drive:toggle.
+ * The tab owns the document after that, so the query is consumed: left in
+ * place, it would follow the route into the next session.
  */
-export function useTerminalDrive(target: Ref<TerminalDriveTarget | null>, active: () => boolean) {
+export function useTerminalDrive(
+  target: Ref<TerminalDriveTarget | null>,
+  active: () => boolean,
+  docs: { ready: () => boolean; open: (path: string | null) => void; close: () => void },
+) {
   const route = useRoute()
   const { docRequested, docPath, syncDocQuery } = useDriveRoute()
 
-  const open = computed(() => route.name === 'terminal' && docRequested.value)
-  const pane = computed(() => (open.value ? target.value : null))
-
-  // A route write outside useTerminalAttach can still rebuild the query. A
-  // close changes nothing but ?doc, so any other write that drops it gets it
-  // back, with the pinned path only while the session is the same one.
   watch(
-    () => ({
-      slug: route.name === 'terminal' && typeof route.params.slug === 'string' ? route.params.slug : '',
-      window: route.query.window,
-      doc: route.name === 'terminal' ? route.query.doc : undefined,
-    }),
-    (now, before) => {
-      if (!now.slug || !before.slug || before.doc === undefined || now.doc !== undefined) return
-      const sameSession = now.slug === before.slug
-      if (sameSession && now.window === before.window) return
-      syncDocQuery(true, sameSession && typeof before.doc === 'string' ? before.doc : '1')
+    () => route.name === 'terminal' && docRequested.value && !!target.value && docs.ready(),
+    (requested) => {
+      if (!requested) return
+      docs.open(docPath.value)
+      syncDocQuery(false)
     },
+    { immediate: true },
   )
 
-  // An agent can ask to open or close the pane. Honored only for the session
-  // in view, for the Chats pane's reason: it must never drag the user away.
+  // Honored only for the session in view, for the Chats pane's reason: an agent
+  // must never drag the user away.
   useWailsEvent('drive:toggle', (event) => {
     const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as
       { path?: string; open: boolean } | undefined
     if (!payload || !active() || route.name !== 'terminal') return
     if (driveEventAuthor(payload) !== (target.value?.session ?? null)) return
-    syncDocQuery(payload.open, payload.path || undefined)
+    if (payload.open) docs.open(payload.path || null)
+    else docs.close()
   })
-
-  return { pane, docPath, syncDocQuery }
 }

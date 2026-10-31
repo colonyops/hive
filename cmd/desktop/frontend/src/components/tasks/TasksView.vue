@@ -49,6 +49,15 @@ import TaskRow from './TaskRow.vue'
 import { useTaskDelete } from './useTaskDelete'
 import { useTaskStatusChange } from './useTaskStatusChange'
 
+const props = withDefaults(
+  defineProps<{
+    /** Lives in a session tab, which owns closing: Escape and the close button are the overlay's. */
+    embedded?: boolean
+    /** A tab is mounted while another shows, and its bare keys must not fire from there. */
+    keysActive?: boolean
+  }>(),
+  { embedded: false, keysActive: true },
+)
 const emit = defineEmits<{ close: [] }>()
 
 const {
@@ -258,7 +267,7 @@ function keyIsOurs(event: KeyboardEvent): boolean {
   // popover owns its own arrow keys — AppSelect's own handler already calls
   // preventDefault() for the ones it takes, so deferring to that flag (rather
   // than special-casing the component) covers any listbox the same way.
-  return openModalCount.value === 0 && !isEditableTarget(event.target) && !event.defaultPrevented
+  return props.keysActive && openModalCount.value === 0 && !isEditableTarget(event.target) && !event.defaultPrevented
 }
 
 onKeyStroke(['ArrowDown', 'ArrowUp', 'j', 'k'], (event) => {
@@ -356,7 +365,7 @@ async function requestPrune(): Promise<void> {
   })
 }
 
-useEscapeToClose(() => emit('close'))
+useEscapeToClose(() => emit('close'), { enabled: () => !props.embedded })
 
 onMounted(() => {
   startLiveUpdates()
@@ -405,8 +414,10 @@ onUnmounted(() => {
           data-testid="tasks-prune"
           @click="requestPrune"
         />
-        <span class="mx-1 h-4 w-px bg-strong" aria-hidden="true" />
-        <IconButton label="Close" :icon="IconX" size="lg" data-testid="tasks-close" @click="emit('close')" />
+        <template v-if="!embedded">
+          <span class="mx-1 h-4 w-px bg-strong" aria-hidden="true" />
+          <IconButton label="Close" :icon="IconX" size="lg" data-testid="tasks-close" @click="emit('close')" />
+        </template>
       </template>
     </ViewHeader>
 

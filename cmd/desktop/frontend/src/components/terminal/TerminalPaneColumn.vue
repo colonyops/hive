@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, ref, toRef, watch } from 'vue'
+import { useElementSize } from '@vueuse/core'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronUp from '~icons/lucide/chevron-up'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconCopy from '~icons/lucide/copy'
-import IconInfo from '~icons/lucide/info'
+import IconCode from '~icons/lucide/code'
+import IconColumns2 from '~icons/lucide/columns-2'
 import IconFileDiff from '~icons/lucide/file-diff'
+import IconFileText from '~icons/lucide/file-text'
+import IconFolderOpen from '~icons/lucide/folder-open'
+import IconInfo from '~icons/lucide/info'
 import IconListTodo from '~icons/lucide/list-todo'
+import IconPlus from '~icons/lucide/plus'
+import IconRows2 from '~icons/lucide/rows-2'
+import IconServer from '~icons/lucide/server'
 import IconPlay from '~icons/lucide/play'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconSearch from '~icons/lucide/search'
@@ -16,26 +24,65 @@ import IconTerminal from '~icons/lucide/terminal'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
-import PaneStatusBar from '../PaneStatusBar.vue'
+import type { MenuEntry } from '@hive/ui/types/menu'
+import ChangesLoading from '../git/ChangesLoading.vue'
+import DrivePane from '../drive/DrivePane.vue'
+import TasksView from '../tasks/TasksView.vue'
+import SessionPanePicker from './SessionPanePicker.vue'
+import SessionTabRow from './SessionTabRow.vue'
 import SessionTagsStatus from '../SessionTagsStatus.vue'
 import SessionStatusChips from '../SessionStatusChips.vue'
 import TerminalTab from '../TerminalTab.vue'
 import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useEditorSettings } from '../../composables/useEditorSettings'
 import { useSessionStatus } from '../../composables/useSessionStatus'
-import { activePaneOf } from '../../lib/terminalLayout'
+import { openLink } from '../../composables/useXtermPane'
+import { activityIndicator } from '../../lib/agentActivity'
+import { spaceGroup, type DriveScope } from '../../lib/drive'
 import { launcherIconComponent } from '../../lib/launcherIcons'
+import {
+  chooseSplit,
+  closeTab,
+  focusPane,
+  freeWindows,
+  openView,
+  placeView,
+  placeWindow,
+  selectTab,
+  resizeSplit,
+  toggleSplit,
+  type SessionTab,
+  type SessionViewKind,
+} from '../../lib/sessionLayout'
+import { activePaneOf } from '../../lib/terminalLayout'
+import { useDriveActivity } from '../../stores/useDriveActivity'
+import { useTasks } from '../../stores/useTasks'
 import { useTerminalStatusBar } from '../../stores/useTerminalStatusBar'
 import {
   OpenSessionInEditor,
   RevealSession,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { useTerminalModeContext } from './terminalModeContext'
+import { useSessionPaneDrag } from './useSessionPaneDrag'
+import { useTerminalDrive, type TerminalDriveTarget } from './useTerminalDrive'
 
-const props = defineProps<{ paintedActive: boolean }>()
-const emit = defineEmits<{ 'open-tasks': []; 'open-changes': []; 'session-repo-key': [repoKey: string] }>()
+// Its diff library and highlighter load only when a Diff tab opens.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
+const ChangesView = defineAsyncComponent({
+  loader: () => import('../git/ChangesView.vue'),
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
+  loadingComponent: ChangesLoading,
+  delay: 0,
+})
 
-const { pool, tree, attach, ops, sessions } = useTerminalModeContext()
+const props = defineProps<{ paintedActive: boolean; active: boolean; drive: TerminalDriveTarget | null }>()
+const emit = defineEmits<{
+  'session-repo-key': [repoKey: string]
+  'open-drive-page': [scope: DriveScope]
+  setup: []
+}>()
+
+const { pool, tree, attach, ops, sessions, panes } = useTerminalModeContext()
 const visible = computed(() => pool.visible)
 
 const tabs = computed(() => visible.value?.tabs.value ?? [])
@@ -111,9 +158,18 @@ watch(
   { immediate: true },
 )
 
-const statusBarRow = computed(() => {
-  if (!showStatusBar.value || !pool.visibleSlug) return null
-  return tree.activeSessions.find((row) => row.slug === pool.visibleSlug) ?? null
+// A stopped session still has a checkout to open, so the actions do not ask
+// whether it is running, or whether the status bar is on.
+const actionRow = computed(() => tree.activeSessions.find((row) => row.slug === pool.visibleSlug) ?? null)
+const statusBarRow = computed(() => (showStatusBar.value ? actionRow.value : null))
+const footerRow = computed(() => {
+  if (!showStatusBar.value) return null
+  return statusBarRow.value ?? (panes.row?.server ? panes.row : null)
+})
+const agentStatus = computed(() => {
+  const row = footerRow.value
+  const status = row ? tree.windowStatus(row, activeWindowId.value) : undefined
+  return status ? activityIndicator(status.status, status.tool) : null
 })
 const statusBarSessionId = computed(() => statusBarRow.value?.id ?? '')
 const {
@@ -125,7 +181,7 @@ const {
 const statusBarError = ref('')
 
 async function runStatusBarAction(action: (id: string) => Promise<void>): Promise<void> {
-  const id = statusBarSessionId.value
+  const id = actionRow.value?.id
   if (!id) return
   statusBarError.value = ''
   try {
@@ -143,6 +199,206 @@ const sessionRepoKey = computed(() => {
   return git?.resolved && git.owner && git.repo ? `${git.owner}/${git.repo}` : ''
 })
 watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true })
+
+const layout = computed(() => panes.layout)
+const split = computed(() => layout.value.panes.length > 1)
+const panesHost = ref<HTMLElement | null>(null)
+const { width: panesWidth } = useElementSize(panesHost)
+const stacked = computed(() => {
+  const axis = layout.value.splitAxis
+  if (axis !== 'auto') return axis === 'column'
+  return panesWidth.value > 0 && panesWidth.value < 620
+})
+const { tabDrop, startTabDrag, startResize, stepResize } = useSessionPaneDrag(
+  panes,
+  panesHost,
+  () => layout.value.splitRatio,
+)
+const compactTabs = computed(() => {
+  const width = panesWidth.value
+  return width > 0 && (width < 620 || (split.value && !stacked.value && width < 800))
+})
+
+const TAB_ROW_PX = 30
+
+// Terminals stay in one parent, because a Terminal binds to one element for its
+// lifetime, so a pane places them by position.
+function paneRegion(index: number): Record<string, string> {
+  if (!split.value) return { inset: `${TAB_ROW_PX}px 0 0 0` }
+  const first = `${layout.value.splitRatio * 100}%`
+  if (stacked.value) {
+    return index === 0
+      ? { left: '0', right: '0', top: `${TAB_ROW_PX}px`, height: `calc(${first} - ${TAB_ROW_PX}px)` }
+      : { left: '0', right: '0', top: `calc(${first} + ${TAB_ROW_PX + 1}px)`, bottom: '0' }
+  }
+  return index === 0
+    ? { top: `${TAB_ROW_PX}px`, bottom: '0', left: '0', width: first }
+    : { top: `${TAB_ROW_PX}px`, bottom: '0', left: `calc(${first} + 1px)`, right: '0' }
+}
+
+function paneFlex(index: number): Record<string, string> | undefined {
+  if (!split.value) return undefined
+  const share = index === 0 ? layout.value.splitRatio : 1 - layout.value.splitRatio
+  return { flex: `${share} 1 0` }
+}
+
+const dividerStyle = computed(() => {
+  const at = `calc(${layout.value.splitRatio * 100}% - 3px)`
+  return stacked.value
+    ? { top: at, left: '0', right: '0', height: '6px' }
+    : { left: at, top: '0', bottom: '0', width: '6px' }
+})
+
+const activeWindowRegion = computed(() => paneRegion(panes.onScreen.get(activeWindowId.value) ?? 0))
+const activeWindowOnScreen = computed(() => panes.onScreen.has(activeWindowId.value))
+const terminalTabShown = computed(() => {
+  const first = layout.value.panes[0]
+  return !first.picking && first.activeTab === 'terminal'
+})
+
+function windowName(windowId: string): string {
+  const tab = tabs.value.find((candidate) => candidate.windowId === windowId)
+  return tab?.name || windowId
+}
+
+function tabLabel(tab: SessionTab): string {
+  switch (tab.kind) {
+    case 'terminal':
+      return 'Terminal'
+    case 'window':
+      return windowName(tab.windowId)
+    case 'docs':
+      return 'Docs'
+    case 'diff':
+      return 'Diff'
+    case 'tasks':
+      return 'Tasks'
+  }
+}
+
+const driveActivity = useDriveActivity()
+
+function needsApproval(windowId: string): boolean {
+  const row = panes.row
+  return !!row && tree.windowStatus(row, windowId)?.status === 'approval'
+}
+
+function tabAttention(tab: SessionTab): boolean {
+  if (tab.kind === 'terminal') return tabs.value.some((candidate) => needsApproval(candidate.windowId))
+  if (tab.kind === 'window') return needsApproval(tab.windowId)
+  return tab.kind === 'docs' && !!shownDrive.value && driveActivity.isUnseen(shownDrive.value.session)
+}
+
+function viewTabs(tabList: readonly SessionTab[]): SessionTab[] {
+  return tabList.filter((tab) => tab.kind === 'docs' || tab.kind === 'diff' || tab.kind === 'tasks')
+}
+
+// The mode hides on a trip to the hub, and props.drive empties with it. A tab
+// that follows would unmount and lose its place for nothing.
+// eslint-disable-next-line vue/no-setup-props-reactivity-loss -- the first value; the watcher below follows it
+const shownDrive = ref(props.drive)
+watch(
+  () => props.drive,
+  (drive) => {
+    if (props.active) shownDrive.value = drive
+  },
+)
+
+// A pinned chat and the scratch terminal have no session checkout, and a server's
+// session has no checkout on this machine.
+const localHiveRow = computed(() => {
+  const row = panes.row
+  return row && tree.isHiveSession(row) && !tree.isServerSession(row) ? row : null
+})
+const changesSession = computed(() => localHiveRow.value?.id ?? '')
+
+const availableViews = computed<SessionViewKind[]>(() => {
+  const views: SessionViewKind[] = []
+  if (shownDrive.value) views.push('docs')
+  if (localHiveRow.value) views.push('diff', 'tasks')
+  return views
+})
+
+const canAddTerminal = computed(() => {
+  const row = panes.row
+  return !!row && !tree.isChat(row)
+})
+const agents = computed(() => (localHiveRow.value && !ops.agentWindowBusy ? ops.agentProfiles : []))
+
+const VIEW_MENU = {
+  docs: { label: 'Docs', icon: IconFileText },
+  diff: { label: 'Diff', icon: IconFileDiff },
+  tasks: { label: 'Tasks', icon: IconListTodo },
+}
+
+const addEntries = computed<MenuEntry[]>(() => {
+  const entries: MenuEntry[] = []
+  if (canAddTerminal.value) {
+    entries.push({ kind: 'action', id: 'terminal', label: 'New terminal', icon: IconPlus })
+    for (const agent of agents.value) {
+      entries.push({ kind: 'action', id: `agent:${agent}`, label: `New ${agent} agent`, icon: IconPlus })
+    }
+  }
+  if (entries.length && availableViews.value.length) entries.push({ kind: 'separator' })
+  for (const view of availableViews.value) {
+    entries.push({ kind: 'action', id: `view:${view}`, label: VIEW_MENU[view].label, icon: VIEW_MENU[view].icon })
+  }
+  return entries
+})
+
+function addToPane(index: number, entryId: string): void {
+  if (entryId === 'terminal') void panes.newWindow(index)
+  else if (entryId.startsWith('agent:')) void panes.newAgentWindow(index, entryId.slice('agent:'.length))
+  else if (entryId.startsWith('view:')) {
+    const view = entryId.slice('view:'.length) as SessionViewKind
+    panes.apply((current) => openView(current, view, index))
+  }
+}
+
+const pickerWindows = computed(() =>
+  freeWindows(
+    layout.value,
+    tabs.value.map((tab) => tab.windowId),
+  ).map((windowId) => ({ windowId, name: windowName(windowId) })),
+)
+
+function openDiff(): void {
+  panes.apply((current) => openView(current, 'diff'))
+}
+
+function viewHasKeys(index: number, tabId: string): boolean {
+  const pane = layout.value.panes[index]
+  return props.active && layout.value.focusedPane === index && !pane.picking && pane.activeTab === tabId
+}
+
+const { setRepoKey } = useTasks()
+const tasksTabOpen = computed(() => layout.value.panes.some((pane) => pane.tabs.some((tab) => tab.kind === 'tasks')))
+watch(
+  [tasksTabOpen, sessionRepoKey],
+  ([open, repoKey]) => {
+    if (open && repoKey) setRepoKey(repoKey)
+  },
+  { immediate: true },
+)
+
+useTerminalDrive(toRef(props, 'drive'), () => props.active, {
+  // Tabs are keyed by the row's id, so a request has to wait for the row.
+  ready: () => !!panes.row && pool.activeSlug === pool.visibleSlug,
+  open: (path) =>
+    panes.apply((current) => {
+      const opened = openView(current, 'docs')
+      return path ? { ...opened, docPath: path } : opened
+    }),
+  close: () => panes.apply((current) => closeTab(current, Math.max(0, paneWithDocs(current)), 'docs')),
+})
+
+function paneWithDocs(current: typeof layout.value): number {
+  return current.panes.findIndex((pane) => pane.tabs.some((tab) => tab.kind === 'docs'))
+}
+
+function pickDoc(path: string | null): void {
+  panes.apply((current) => ({ ...current, docPath: path }))
+}
 </script>
 
 <template>
@@ -155,47 +411,6 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
       <IconTerminal class="size-6 text-text-4" />
       <p class="text-xs text-text-3">Select a session to attach.</p>
     </div>
-
-    <!-- Outside the started/not-started split: a stopped session still has a checkout to open. -->
-    <PaneStatusBar
-      v-if="statusBarRow"
-      testid="terminal-pane-statusbar"
-      :error="statusBarError"
-      :editor-title="editorTitle"
-      @open-editor="runStatusBarAction(OpenSessionInEditor)"
-      @reveal="runStatusBarAction(RevealSession)"
-    >
-      <SessionStatusChips
-        :git="sessionGit"
-        :pull-request="sessionPullRequest"
-        :pull-request-error="sessionPullRequestError"
-        @refresh-pull-request="refreshSessionStatus({ refreshPullRequest: true })"
-        @open-changes="emit('open-changes')"
-      />
-      <SessionTagsStatus :tags="statusBarRow.tags" @edit="sessions.requestEdit(statusBarRow, 'tags')" />
-      <template #actions>
-        <IconButton
-          v-for="action in ops.actions.statusBarActions.value"
-          :key="action.id"
-          :label="action.label"
-          :icon="launcherIconComponent(action.icon)"
-          :data-testid="`terminal-statusbar-action-${action.id}`"
-          @click="ops.actions.invoke(action, { slug: statusBarRow.slug, windowId: '' })"
-        />
-        <IconButton
-          label="Changes"
-          :icon="IconFileDiff"
-          data-testid="terminal-statusbar-changes"
-          @click="emit('open-changes')"
-        />
-        <IconButton
-          label="Tasks"
-          :icon="IconListTodo"
-          data-testid="terminal-statusbar-tasks"
-          @click="emit('open-tasks')"
-        />
-      </template>
-    </PaneStatusBar>
 
     <p
       v-if="actionError"
@@ -255,29 +470,185 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
 
     <!-- Hidden rather than unmounted without a session: a pooled session's terminals keep
          their elements, or each would lose its screen. -->
-    <div class="relative min-h-0 min-w-0 flex-1 flex-col" :class="visible ? 'flex' : 'hidden'">
-      <template v-for="pane in pool.paneSessions" :key="pane.slug">
-        <TerminalTab
-          v-for="tab in pane.tabs"
-          :key="tab.uid"
-          :tab="tab"
-          :session="pane.entry"
-          :active="pane.entry === visible && tab.windowId === pane.activeWindowId"
-        />
-      </template>
-      <template v-if="visible">
-        <div
-          v-if="!tabs.length && status !== 'ended'"
-          class="flex flex-1 items-center justify-center font-mono text-xs text-text-4"
+    <div
+      ref="panesHost"
+      class="relative min-h-0 min-w-0 flex-1"
+      :class="[visible ? 'flex' : 'hidden', stacked ? 'flex-col' : '']"
+      data-testid="session-panes"
+    >
+      <section
+        v-for="(pane, index) in layout.panes"
+        :key="index"
+        class="flex min-h-0 min-w-0 flex-1 basis-0 flex-col"
+        :style="paneFlex(index)"
+        :data-session-pane="index"
+        :class="index > 0 ? (stacked ? 'border-t border-strong' : 'border-l border-strong') : ''"
+        :aria-label="`Pane ${index + 1}`"
+        :data-testid="`session-pane-${index}`"
+        @pointerdown.capture="panes.apply((current) => focusPane(current, index))"
+      >
+        <SessionTabRow
+          :pane="pane"
+          :index="index"
+          :focused="layout.focusedPane === index || !split"
+          :compact="compactTabs"
+          :label="tabLabel"
+          :attention="tabAttention"
+          :menu-entries="addEntries"
+          :drop-gap="tabDrop?.pane === index ? tabDrop.gap : null"
+          :resizable="split && stacked && index === 1"
+          @tab-drag="startTabDrag"
+          @resize-start="(event) => startResize(event, true)"
+          @select="(tabId) => panes.apply((current) => selectTab(current, index, tabId))"
+          @close="(tabId) => panes.apply((current) => closeTab(current, index, tabId))"
+          @add="(entryId) => addToPane(index, entryId)"
         >
-          Attaching…
-        </div>
+          <template v-if="index === layout.panes.length - 1" #actions>
+            <div class="ml-auto flex shrink-0 items-center gap-px pl-2">
+              <span
+                v-if="statusBarError"
+                class="max-w-40 truncate px-1.5 text-caption text-severity-error"
+                data-testid="terminal-pane-statusbar-error"
+                >{{ statusBarError }}</span
+              >
+              <template v-if="actionRow">
+                <IconButton
+                  v-if="editorTitle"
+                  :label="`Open in ${editorTitle}`"
+                  :icon="IconCode"
+                  data-testid="terminal-pane-statusbar-open-editor"
+                  @click="runStatusBarAction(OpenSessionInEditor)"
+                />
+                <IconButton
+                  label="Show in Finder"
+                  :icon="IconFolderOpen"
+                  data-testid="terminal-pane-statusbar-reveal"
+                  @click="runStatusBarAction(RevealSession)"
+                />
+                <IconButton
+                  v-for="action in ops.actions.statusBarActions.value"
+                  :key="action.id"
+                  :label="action.label"
+                  :icon="launcherIconComponent(action.icon)"
+                  :data-testid="`terminal-statusbar-action-${action.id}`"
+                  @click="ops.actions.invoke(action, { slug: actionRow!.slug, windowId: '' })"
+                />
+                <span class="mx-1 h-3.5 w-px bg-strong" aria-hidden="true" />
+              </template>
+              <IconButton
+                :label="split && !stacked ? 'Close the split' : 'Split side by side'"
+                :icon="IconColumns2"
+                :active="split && !stacked"
+                data-testid="session-split-row"
+                @click="panes.apply((current) => chooseSplit(current, 'row', stacked))"
+              />
+              <IconButton
+                :label="split && stacked ? 'Close the split' : 'Split top and bottom'"
+                :icon="IconRows2"
+                :active="split && stacked"
+                data-testid="session-split-column"
+                @click="panes.apply((current) => chooseSplit(current, 'column', stacked))"
+              />
+            </div>
+          </template>
+        </SessionTabRow>
 
+        <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <SessionPanePicker
+            v-if="pane.picking"
+            :windows="pickerWindows"
+            :agents="agents"
+            :views="availableViews"
+            :can-add-terminal="canAddTerminal"
+            @window="(windowId) => panes.apply((current) => placeWindow(current, windowId, index))"
+            @terminal="panes.newWindow(index)"
+            @agent="(agent) => panes.newAgentWindow(index, agent)"
+            @view="(view) => panes.apply((current) => placeView(current, view, index))"
+            @cancel="panes.apply(toggleSplit)"
+          />
+          <!-- Mounted while open, so a tab switch keeps a diff's scroll and picks;
+               a session switch re-keys them, so only the visible session pays. -->
+          <div
+            v-for="tab in viewTabs(pane.tabs)"
+            v-show="!pane.picking && pane.activeTab === tab.id"
+            :key="`${panes.key}:${tab.id}`"
+            class="absolute inset-0 flex min-h-0 min-w-0 flex-col bg-app"
+            :data-testid="`session-view-${tab.kind}`"
+          >
+            <DrivePane
+              v-if="tab.kind === 'docs' && shownDrive"
+              embedded
+              :session="shownDrive.session"
+              :space="shownDrive.space"
+              :path="layout.docPath"
+              :agent-setup="spaceGroup(shownDrive.space) === 'Repositories'"
+              @setup="emit('setup')"
+              @open-url="openLink"
+              @pick="pickDoc"
+              @open-page="(path) => emit('open-drive-page', { ...shownDrive!, path })"
+            />
+            <ChangesView
+              v-else-if="tab.kind === 'diff' && changesSession"
+              embedded
+              :keys-active="viewHasKeys(index, tab.id)"
+              :session-id="changesSession"
+            />
+            <TasksView v-else-if="tab.kind === 'tasks'" embedded :keys-active="viewHasKeys(index, tab.id)" />
+          </div>
+          <div
+            v-if="!pane.picking && !pane.activeTab"
+            class="flex flex-1 items-center justify-center text-small text-text-3"
+          >
+            No tab here. Use + to open one.
+          </div>
+        </div>
+      </section>
+
+      <template v-for="session in pool.paneSessions" :key="session.slug">
+        <div
+          v-for="tab in session.tabs"
+          v-show="session.entry === visible && panes.onScreen.has(tab.windowId)"
+          :key="tab.uid"
+          class="absolute flex min-h-0 min-w-0 flex-col"
+          :style="paneRegion(session.entry === visible ? (panes.onScreen.get(tab.windowId) ?? 0) : 0)"
+          :data-session-pane="panes.onScreen.get(tab.windowId) ?? 0"
+          @pointerdown.capture="panes.apply((current) => focusPane(current, panes.onScreen.get(tab.windowId) ?? 0))"
+        >
+          <TerminalTab
+            :tab="tab"
+            :session="session.entry"
+            :active="session.entry === visible && panes.onScreen.has(tab.windowId)"
+          />
+        </div>
+      </template>
+      <div
+        v-if="split"
+        class="absolute z-20 touch-none"
+        :class="stacked ? 'cursor-row-resize' : 'cursor-col-resize'"
+        :style="dividerStyle"
+        role="separator"
+        tabindex="0"
+        :aria-orientation="stacked ? 'horizontal' : 'vertical'"
+        :aria-valuenow="Math.round(layout.splitRatio * 100)"
+        aria-label="Resize the panes"
+        data-testid="session-split-divider"
+        @pointerdown="startResize($event, stacked)"
+        @dblclick="panes.apply((current) => resizeSplit(current, 0.5))"
+        @keydown.left.prevent="stepResize(-1)"
+        @keydown.up.prevent="stepResize(-1)"
+        @keydown.right.prevent="stepResize(1)"
+        @keydown.down.prevent="stepResize(1)"
+      />
+      <div
+        v-if="visible && activeWindowOnScreen"
+        class="pointer-events-none absolute flex flex-col"
+        :style="activeWindowRegion"
+      >
         <!-- Floated rather than in the column: shrinking the pane's box would change the
              window size this client votes to tmux, for every attached client. -->
         <div
           v-if="search.open && status !== 'ended'"
-          class="absolute right-5 top-3 z-10 flex items-center gap-1 rounded-md border border-strong bg-raised/95 py-1 pl-2 pr-1 shadow-lg"
+          class="pointer-events-auto absolute right-5 top-3 z-10 flex items-center gap-1 rounded-md border border-strong bg-raised/95 py-1 pl-2 pr-1 shadow-lg"
           data-testid="terminal-search"
         >
           <IconSearch class="size-3 shrink-0 text-text-4" />
@@ -326,18 +697,26 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           <button
             v-if="activeScrolledUp && status !== 'ended'"
             type="button"
-            class="absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-caption text-text-2 shadow-lg hover:text-text"
+            class="pointer-events-auto absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-caption text-text-2 shadow-lg hover:text-text"
             data-testid="terminal-scroll-to-bottom"
             @click="visible?.scrollToBottom()"
           >
             <IconArrowDown class="size-3" />Scroll to bottom
           </button>
         </Transition>
+      </div>
+      <div v-if="visible && terminalTabShown" class="pointer-events-none absolute flex flex-col" :style="paneRegion(0)">
+        <div
+          v-if="!tabs.length && status !== 'ended'"
+          class="flex flex-1 items-center justify-center font-mono text-xs text-text-4"
+        >
+          Attaching…
+        </div>
 
         <!-- Starting runs the session's agent command, so it is offered, never done on selection. -->
         <div
           v-if="notStarted"
-          class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-app/95 px-10 text-center"
+          class="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-3 bg-app/95 px-10 text-center"
           data-testid="terminal-session-not-started"
         >
           <template v-if="attach.startError">
@@ -440,7 +819,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
 
         <div
           v-else-if="status === 'ended'"
-          class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-app/95 px-10 text-center"
+          class="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-3 bg-app/95 px-10 text-center"
           data-testid="terminal-session-ended"
         >
           <div class="text-body font-semibold" data-testid="terminal-session-ended-title">{{ endedTitle }}</div>
@@ -479,7 +858,45 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
             </BaseButton>
           </div>
         </div>
-      </template>
+      </div>
     </div>
+
+    <footer
+      v-if="footerRow"
+      class="flex h-6 shrink-0 items-center gap-1 overflow-hidden border-t border-border bg-raised px-1.5"
+      aria-label="Session status"
+      data-testid="terminal-pane-statusbar"
+    >
+      <div class="flex min-w-0 flex-1 items-center overflow-hidden">
+        <SessionStatusChips
+          v-if="statusBarRow"
+          :git="sessionGit"
+          :pull-request="sessionPullRequest"
+          :pull-request-error="sessionPullRequestError"
+          @refresh-pull-request="refreshSessionStatus({ refreshPullRequest: true })"
+          @open-changes="openDiff"
+        />
+        <SessionTagsStatus
+          v-if="statusBarRow"
+          :tags="statusBarRow.tags"
+          @edit="sessions.requestEdit(statusBarRow!, 'tags')"
+        />
+      </div>
+      <div class="flex shrink-0 items-center gap-1 pl-2 text-caption text-text-3">
+        <span v-if="agentStatus" class="flex items-center gap-1" data-testid="session-status-agent">
+          <component
+            :is="agentStatus.icon"
+            class="size-3"
+            :class="[agentStatus.color, agentStatus.animated ? 'animate-spin' : '']"
+            aria-hidden="true"
+          />{{ agentStatus.label }}
+        </span>
+        <span v-if="agentStatus" class="mx-1 h-3 w-px bg-border" aria-hidden="true" />
+        <span class="flex items-center gap-1" data-testid="session-status-host">
+          <IconServer v-if="footerRow.server" class="size-3 text-text-4" aria-hidden="true" />
+          {{ footerRow.server || 'Local' }}
+        </span>
+      </div>
+    </footer>
   </div>
 </template>

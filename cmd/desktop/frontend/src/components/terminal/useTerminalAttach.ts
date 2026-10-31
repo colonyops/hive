@@ -27,6 +27,8 @@ export function useTerminalAttach(options: {
   /** True once a shown mode has painted; see usePaintedActive. */
   paintedActive: () => boolean
   onSwitch: () => void
+  /** A row in the tree named this window, which holds even when it is already the active one. */
+  onWindowChosen: (row: TerminalSessionRow, windowId: string) => void
 }) {
   const { pool, tree } = options
   const { activeSlug, current } = pool
@@ -220,6 +222,7 @@ export function useTerminalAttach(options: {
   }
 
   async function goToWindow(row: TerminalSessionRow, win: TreeWindowRow): Promise<void> {
+    options.onWindowChosen(row, win.windowId)
     if (win.live && row.slug === activeSlug.value) await current.value?.select(win.windowId)
     else {
       void router.push({

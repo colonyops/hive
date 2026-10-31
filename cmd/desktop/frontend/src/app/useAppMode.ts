@@ -4,7 +4,6 @@ import { Window } from '@wailsio/runtime'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
-import { useDriveActivity } from '../stores/useDriveActivity'
 import { useDriveReview } from '../stores/useDriveReview'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
@@ -33,7 +32,6 @@ export function useAppMode(
 ) {
   const { route, router } = nav
   const { routeChatId, docRequested, docPath, docUnseen, syncDocQuery } = useDriveRoute()
-  const activity = useDriveActivity()
   const review = useDriveReview()
   const { recents } = useAgentSessionsAll()
   const { sessions: codeSessions } = useTerminalSessions()
@@ -185,9 +183,9 @@ export function useAppMode(
   })
 
   // One control per frame edge: the right toggle names the detail preview in
-  // Inbox and the drive pane in Chats and Code (hay-kot/hive-desktop#432).
-  const agentsDriveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
-  const driveAvailable = computed(() => agentsDriveAvailable.value || codeDrive.value !== null)
+  // Inbox and the drive pane in Chats (hay-kot/hive-desktop#432). Code has no
+  // right pane: Docs is a session tab there.
+  const driveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
   const previewToggleCollapsed = computed(() => {
     if (driveActive.value) return review.pageCommentsCollapsed.value
     return driveAvailable.value ? !docRequested.value : previewCollapsed.value
@@ -195,11 +193,10 @@ export function useAppMode(
   const canTogglePreview = computed(
     () => feedViewActive.value || driveAvailable.value || (driveActive.value && review.pageReviewed.value),
   )
-  const previewUnseen = computed(() =>
-    agentsDriveAvailable.value ? docUnseen.value : activity.isUnseen(codeDrive.value?.session ?? null),
-  )
+  const previewUnseen = computed(() => driveAvailable.value && docUnseen.value)
 
   function togglePreview(): void {
+    if (terminalActive.value) return
     if (driveActive.value) review.togglePageComments()
     else if (driveAvailable.value) syncDocQuery(!docRequested.value)
     else previewCollapsed.value = !previewCollapsed.value

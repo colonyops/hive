@@ -1,5 +1,6 @@
 import { inject, provide, proxyRefs, type InjectionKey, type ShallowUnwrapRef } from 'vue'
 import type { useSessionActions } from '../../composables/useSessionActions'
+import type { SessionPanes } from './useSessionPanes'
 import type { SessionTreeView } from './useSessionTreeView'
 import type { TerminalAttach } from './useTerminalAttach'
 import type { TerminalPool } from './useTerminalPool'
@@ -24,6 +25,7 @@ export interface TerminalModeContext {
   ops: TerminalSessionOps
   rename: WindowRename
   sessions: ReturnType<typeof useSessionActions>
+  panes: SessionPanes
 }
 
 /** The context as the children see it: each part's refs unwrapped one level, as in a template. */
