@@ -99,6 +99,21 @@ async function changesFixture(page: Page, sent: unknown[][] = []) {
 }
 
 test.describe('session changes', { tag: [tag.terminal] }, () => {
+  test('lists Toggle Changes in the keys help and the Keyboard settings (mock terminal)', async ({ page }) => {
+    await changesFixture(page)
+    await page.goto('/#/terminal/review')
+    await expect(page.locator('[data-file-drop-target]:visible').last()).toBeVisible()
+
+    await page.keyboard.press('Meta+k')
+    await page.getByTestId('command-palette-input').pressSequentially('?toggle changes')
+    const row = page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' })
+    await expect(row).toBeVisible()
+    await expect(page.getByText('Code session · active context')).toBeVisible()
+
+    await row.click()
+    await expect(page.getByTestId('settings-keybindings')).toContainText('Toggle Changes')
+  })
+
   test('reviews every diff in one scroll from the keyboard (mock terminal)', async ({ page, browserName }) => {
     await changesFixture(page)
     await page.goto('/#/terminal/review')

@@ -37,6 +37,7 @@ import DriveCommentPopover from '../drive/DriveCommentPopover.vue'
 import SendToAgentDialog from '../drive/SendToAgentDialog.vue'
 import { entryRows, useDiffSearch } from '../../composables/useDiffSearch'
 import { useCopyReview } from '../../composables/useCopyReview'
+import { formatCombo } from '../../composables/useKeybindings'
 import { fileVersion, useFileDiffs } from '../../composables/useFileDiffs'
 import { targetKey, useSessionBranches, useSessionChanges, type DiffBase } from '../../composables/useSessionChanges'
 import { useToasts } from '../../composables/useToasts'
@@ -356,6 +357,7 @@ async function pickComment(comment: ChangesComment): Promise<void> {
   })
 }
 
+const SEND_KEY = formatCombo('mod+enter')
 const picking = ref(false)
 const sending = ref(false)
 const loadTargets = () => review.targets(props.sessionId)
@@ -399,12 +401,12 @@ async function sendReview(): Promise<void> {
 // which is outside this view's root.
 useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   if (openModalCount.value > 0) return
-  if (event.metaKey && !event.ctrlKey && !event.altKey) {
+  if ((event.metaKey || event.ctrlKey) && !event.altKey) {
     if (event.key === 'f') {
       event.preventDefault()
       openSearch()
     } else if (event.key === 'Enter' && !isEditableTarget(event.target)) {
-      // A text field's ⌘↵ saves what is being typed. Its handler has already cleared
+      // A text field's own send key saves what is being typed. Its handler has already cleared
       // the draft by the time the key reaches here, so only the target can tell.
       event.preventDefault()
       void sendReview()
@@ -472,7 +474,7 @@ const KEY_HINTS = [
   ['[ ]', 'commit'],
   ['b', 'files'],
   ['r', 'comments'],
-  ['⌘↵', 'send'],
+  [SEND_KEY, 'send'],
   ['esc', 'close'],
 ]
 </script>
@@ -535,7 +537,7 @@ const KEY_HINTS = [
         <span v-if="canSend" class="relative flex shrink-0">
           <IconButton
             :label="sendLabel"
-            :tooltip="`${sendLabel} (⌘↵)`"
+            :tooltip="`${sendLabel} (${SEND_KEY})`"
             :icon="IconSend"
             size="lg"
             active

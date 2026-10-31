@@ -2102,8 +2102,9 @@ Three rules govern it, and each is a consequence of that:
   — in two ways, which is the distinction to get right before adding to it.
 
   A command **pierces** when the catalog marks it `piercesPane`: it is claimed
-  on the binding alone, whatever modifiers it carries. The pop-up toggle and
-  `tasks.toggle`, because the combo that opens an overlay has to close it, and
+  on the binding alone, whatever modifiers it carries. The pop-up toggle,
+  `tasks.toggle`, and `changes.toggle`, because the combo that opens an overlay
+  has to close it, and
   `drive.toggle`, because the chat that wrote a document is a focused pane and
   the chord that opens the page from there has to work from inside it;
   `terminal.focus-sidebar` and `agents.focus-sidebar`, because reaching the list

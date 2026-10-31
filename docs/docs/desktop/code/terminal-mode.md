@@ -152,7 +152,7 @@ Use <kbd>J</kbd> and <kbd>K</kbd> (or the arrow keys) to move the selection. On 
 
 ## Changes
 
-**Changes** shows what an agent changed in the session on screen, without leaving Hive. Open it with <kbd>⌘⌥G</kbd> (Windows/Linux: <kbd>Ctrl+Alt+G</kbd>), the file button in the status bar, or the line counts beside the branch. It opens over the session and closes with <kbd>Esc</kbd>.
+**Changes** shows what an agent changed in the session on screen, without leaving Hive. It needs a repository session on screen, so scratch terminals and pinned chats don't offer it. Open it with <kbd>⌘⌥G</kbd> (Windows/Linux: <kbd>Ctrl+Alt+G</kbd>), **Toggle Changes** in the command palette, the file button in the status bar, or the line counts beside the branch. It opens over the session and closes with <kbd>Esc</kbd>. To [rebind](../configuration/keybindings.md#rebinding) the shortcut, use the command id `changes.toggle`.
 
 Every changed file's diff sits in one scroll, with the files listed beside it. The picker in the header chooses what to review:
 
@@ -171,11 +171,11 @@ Branch changes, Uncommitted, and Unstaged include untracked files.
 | <kbd>v</kbd> | Mark the file viewed, which folds it |
 | <kbd>o</kbd> | Fold or unfold the file |
 | <kbd>s</kbd> | Switch between unified and side by side |
-| <kbd>/</kbd> or <kbd>⌘F</kbd> | Search the diffs |
+| <kbd>/</kbd> or <kbd>⌘F</kbd> (Windows/Linux: <kbd>Ctrl+F</kbd>) | Search the diffs |
 | <kbd>[</kbd> <kbd>]</kbd> | Step to an older or newer commit |
 | <kbd>b</kbd> | Show or hide the file list |
 | <kbd>r</kbd> | Show or hide the comments panel |
-| <kbd>⌘↵</kbd> | Send your comments to the agent |
+| <kbd>⌘↵</kbd> (Windows/Linux: <kbd>Ctrl+Enter</kbd>) | Send your comments to the agent |
 | <kbd>Esc</kbd> | Close |
 
 The view refreshes every 5 seconds while it's open and the window has focus. A viewed file comes back unviewed when it changes again. Viewed marks last until you quit Hive.
@@ -184,11 +184,11 @@ Drag either divider to resize the file list or the comments panel. Hive remember
 
 ### Search
 
-Press <kbd>/</kbd> or <kbd>⌘F</kbd> to search. <kbd>Enter</kbd> and <kbd>Shift+Enter</kbd> step through the matches, and a match in a folded file unfolds it. Search ignores case and covers the diffs Hive has read so far, up to 200 files around the one on screen. When it hasn't read them all, the bar shows how many it covered. It stops counting at 2,000 matches.
+Press <kbd>/</kbd> or <kbd>⌘F</kbd> (Windows/Linux: <kbd>Ctrl+F</kbd>) to search. <kbd>Enter</kbd> and <kbd>Shift+Enter</kbd> step through the matches, and a match in a folded file unfolds it. Search ignores case and covers the diffs Hive has read so far, up to 200 files around the one on screen. When it hasn't read them all, the bar shows how many it covered. It stops counting at 2,000 matches.
 
 ### Comments
 
-To comment, drag across line numbers, click the **+** beside a line, or select code with the mouse. Type in the box that opens and press <kbd>⌘↵</kbd>. A label button saves that label as the comment. Comments appear under their lines and as rows in the comments panel, which the comment button in the header or <kbd>r</kbd> opens.
+To comment, drag across line numbers, click the **+** beside a line, or select code with the mouse. Type in the box that opens and press <kbd>⌘↵</kbd> (Windows/Linux: <kbd>Ctrl+Enter</kbd>). A label button saves that label as the comment. Comments appear under their lines and as rows in the comments panel, which the comment button in the header or <kbd>r</kbd> opens.
 
 The send button in the header, which shows how many comments you've written, pastes them into the session's agent and submits them, then clears them. If the session has one agent, it goes straight there, even mid-turn. With several agents, a dialog asks which one. An agent waiting on a prompt can't receive comments, because the Enter would answer the prompt. If a send fails, or no agent is running, your comments stay and an error offers **Copy comments**, which copies them as the text the agent would have received.
 

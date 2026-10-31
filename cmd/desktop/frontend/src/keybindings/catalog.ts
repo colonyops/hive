@@ -76,6 +76,10 @@ import type { CommandScope } from '../palette/scopes'
 // Any slug the Code view attaches counts, including the scratch terminal and a
 // pinned chat — what the launcher needs is a pane, not a hive record.
 //
+// `session-changes` is narrower too: the slug on screen must be a hive session,
+// because Changes reads its checkout, which a scratch terminal and a pinned chat
+// do not have.
+//
 // `terminal-pane` is narrower than `terminal-session`: one of the attached Code
 // session's panes has focus, not the session tree beside it.
 export type CommandContext =

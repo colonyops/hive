@@ -655,6 +655,20 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
+  it('takes Ctrl for search and send where there is no Command key', async () => {
+    mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
+    mocks.SendChanges.mockResolvedValue(undefined)
+    const wrapper = await mountView()
+    await press('f', { ctrlKey: true })
+    expect(wrapper.find(testid('changes-search')).exists()).toBe(true)
+
+    await comment('note')
+    await press('Enter', { ctrlKey: true })
+    await flushPromises()
+    expect(mocks.SendChanges).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+
   it('opens a composer on selected lines and files the comment under the panel', async () => {
     const wrapper = await mountView()
     expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
