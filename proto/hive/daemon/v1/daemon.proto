@@ -36,6 +36,9 @@ service SessionService {
   // Statuses answers from the daemon's status loop, never from a fetch of
   // its own, so every client shares one tracker.
   rpc Statuses(StatusesRequest) returns (StatusesResponse);
+  // GitStatuses reads the checkouts of sessions on the daemon's machine. A
+  // read is shared by every client that asks within a few seconds.
+  rpc GitStatuses(GitStatusesRequest) returns (GitStatusesResponse);
 }
 
 message HelloRequest {}
@@ -279,6 +282,32 @@ message StatusesResponse {
   // statuses is keyed like status.Service.FetchBatch: session id, or
   // status.RootStatusKey for a root.
   map<string, TerminalStatus> statuses = 1;
+}
+
+message GitStatusesRequest {
+  repeated string session_ids = 1;
+}
+
+message GitStatusesResponse {
+  // statuses is keyed by session id. A session that does not exist is absent.
+  map<string, GitStatus> statuses = 1;
+}
+
+// GitStatus carries every gitstatus.Status field. error and unpushed_error
+// are the failed reads' text.
+message GitStatus {
+  string path = 1;
+  string branch = 2;
+  bool dirty = 3;
+  bool unpushed = 4;
+  int32 additions = 5;
+  int32 deletions = 6;
+  string host = 7;
+  string owner = 8;
+  string repo = 9;
+  bool resolved = 10;
+  string error = 11;
+  string unpushed_error = 12;
 }
 
 message PaneStatus {

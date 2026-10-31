@@ -11,9 +11,11 @@ import IconListTodo from '~icons/lucide/list-todo'
 import IconPlay from '~icons/lucide/play'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconSearch from '~icons/lucide/search'
+import IconServer from '~icons/lucide/server'
 import IconTerminal from '~icons/lucide/terminal'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import PaneStatusBar from '../PaneStatusBar.vue'
 import SessionTagsStatus from '../SessionTagsStatus.vue'
@@ -112,9 +114,24 @@ watch(
 
 const statusBarRow = computed(() => {
   if (!showStatusBar.value || !pool.visibleSlug) return null
-  return tree.activeSessions.find((row) => row.slug === pool.visibleSlug) ?? null
+  const slug = pool.visibleSlug
+  const onServer = tree.servers.flatMap((list) => list.sessions).filter((row) => row.state === 'active')
+  return tree.activeSessions.find((row) => row.slug === slug) ?? onServer.find((row) => row.slug === slug) ?? null
 })
-const statusBarSessionId = computed(() => statusBarRow.value?.id ?? '')
+// A server session's checkout is on the server: the editor, Finder, and
+// configured actions all run on this machine.
+const statusBarLocal = computed(() => !!statusBarRow.value && !tree.isServerSession(statusBarRow.value))
+// An offline server's row keeps its bar and the badge that names the server,
+// and asks that server nothing.
+const statusBarSessionId = computed(() => (statusBarRow.value?.offline ? '' : (statusBarRow.value?.id ?? '')))
+// The server a session runs on is named here, above the terminal, so nobody
+// types into a server's agent thinking it is this machine's.
+const statusBarHost = computed(() => {
+  const server = statusBarRow.value?.server
+  if (!server) return null
+  const ssh = tree.servers.find((list) => list.server.name === server)?.server.ssh ?? ''
+  return { name: server, ssh, hue: tree.hue(server) }
+})
 const {
   git: sessionGit,
   pullRequest: sessionPullRequest,
@@ -136,8 +153,10 @@ async function runStatusBarAction(action: (id: string) => Promise<void>): Promis
 
 // owner/repo is exactly the hc repoKey format. Reported continuously, so App.vue
 // can scope Tasks to the attached session's repo from any entry point and not
-// only from this bar's own button.
+// only from this bar's own button. Tasks are this machine's, so a session on a
+// server has no repo to scope them to.
 const sessionRepoKey = computed(() => {
+  if (!statusBarLocal.value) return ''
   const git = sessionGit.value
   return git?.resolved && git.owner && git.repo ? `${git.owner}/${git.repo}` : ''
 })
@@ -160,10 +179,19 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
       v-if="statusBarRow"
       testid="terminal-pane-statusbar"
       :error="statusBarError"
-      :editor-title="editorTitle"
+      :editor-title="statusBarLocal ? editorTitle : ''"
+      :revealable="statusBarLocal"
       @open-editor="runStatusBarAction(OpenSessionInEditor)"
       @reveal="runStatusBarAction(RevealSession)"
     >
+      <BaseBadge
+        v-if="statusBarHost"
+        class="mx-1 h-[18px] shrink-0 px-1.5 font-mono text-micro font-medium"
+        :class="statusBarHost.hue.badge"
+        :title="statusBarHost.ssh ? `${statusBarHost.name} · ${statusBarHost.ssh}` : statusBarHost.name"
+        data-testid="terminal-pane-host"
+        ><IconServer class="size-3" aria-hidden="true" />{{ statusBarHost.name }}</BaseBadge
+      >
       <SessionStatusChips
         :git="sessionGit"
         :pull-request="sessionPullRequest"
@@ -173,7 +201,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
       <SessionTagsStatus :tags="statusBarRow.tags" @edit="sessions.requestEdit(statusBarRow, 'tags')" />
       <template #actions>
         <IconButton
-          v-for="action in ops.actions.statusBarActions.value"
+          v-for="action in statusBarLocal ? ops.actions.statusBarActions.value : []"
           :key="action.id"
           :label="action.label"
           :icon="launcherIconComponent(action.icon)"
@@ -181,6 +209,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           @click="ops.actions.invoke(action, { slug: statusBarRow.slug, windowId: '' })"
         />
         <IconButton
+          v-if="statusBarLocal"
           label="Tasks"
           :icon="IconListTodo"
           data-testid="terminal-statusbar-tasks"

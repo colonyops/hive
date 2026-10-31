@@ -4589,6 +4589,87 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
+    it('reports a server session’s git status without the buttons that act on this machine', async () => {
+      mocks.TerminalActionViews.mockImplementation((target: string) =>
+        Promise.resolve(
+          target === 'statusbar'
+            ? [
+                {
+                  id: 'open-ci',
+                  label: 'Open CI',
+                  type: 'shell',
+                  icon: 'globe',
+                  showInDetail: false,
+                  requiresSessionInput: false,
+                },
+              ]
+            : [],
+        ),
+      )
+      mocks.ListServerSessions.mockResolvedValue([
+        {
+          server: 'box',
+          ssh: 'box',
+          state: 'connected',
+          error: '',
+          sessions: [
+            {
+              server: 'box',
+              id: 'box:9',
+              name: 'remote work',
+              slug: 'box:remote-work',
+              repo: '/home/hive/repo.git',
+              repoIdentity: '/home/hive/repo.git',
+              state: 'active',
+              canvasOwner: '',
+              tags: [],
+              createdAt: '',
+            },
+          ],
+        },
+      ])
+      mocks.SessionGitStatus.mockResolvedValue({
+        path: '/home/hive/.local/share/hive/repos/repo-abc',
+        branch: 'remote-branch',
+        dirty: true,
+        unpushed: false,
+        additions: 0,
+        deletions: 0,
+        host: '',
+        owner: 'acme',
+        repo: 'site',
+        resolved: true,
+        error: '',
+      })
+      useTerminalStatusBar().setShowStatusBar(true)
+      const { wrapper } = await mountAvailable()
+      const group = wrapper.get('[data-testid="terminal-repo-group"][data-repo="/home/hive/repo.git"]')
+      if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
+      await wrapper.get('[data-slug="box:remote-work"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="terminal-pane-host"]').text()).toBe('box')
+      expect(mocks.SessionGitStatus).toHaveBeenCalledWith('box:9')
+      expect(wrapper.get('[data-testid="session-status-branch"]').text()).toBe('remote-branch')
+      expect(wrapper.find('[data-testid="session-status-dirty"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="terminal-pane-statusbar-open-editor"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="terminal-pane-statusbar-reveal"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="terminal-statusbar-action-open-ci"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="terminal-statusbar-tasks"]').exists()).toBe(false)
+
+      const calls = mocks.SessionGitStatus.mock.calls.length
+      mocks.ListServerSessions.mockResolvedValue([
+        { server: 'box', ssh: 'box', state: 'offline', error: 'refused', sessions: [] },
+      ])
+      await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
+      await wrapper.get('[data-testid="terminal-sessions-refresh"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[data-testid="terminal-pane-host"]').text()).toBe('box')
+      expect(mocks.SessionGitStatus.mock.calls.length).toBe(calls)
+
+      wrapper.unmount()
+    })
+
     // The button only signals the click; App.vue reads the repo to scope to
     // off the session-repo-key it has already been keeping current.
     it('emits open-tasks, carrying no payload of its own, when the tasks button is clicked', async () => {

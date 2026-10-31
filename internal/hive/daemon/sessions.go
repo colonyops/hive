@@ -27,7 +27,8 @@ type sessionServer struct {
 	// concurrent creates would interleave their progress.
 	writeMu sync.Mutex
 
-	statuses func(sessions []*session.Session, roots []status.RootRepoTarget) map[string]status.TerminalStatus
+	statuses    func(sessions []*session.Session, roots []status.RootRepoTarget) map[string]status.TerminalStatus
+	gitStatuses *gitStatusCache
 }
 
 var _ daemonv1connect.SessionServiceHandler = (*sessionServer)(nil)
@@ -188,6 +189,14 @@ func (s *sessionServer) Statuses(ctx context.Context, req *connect.Request[daemo
 	}
 	statuses := s.statuses(sessions, wire.RootsFromProto(req.Msg.GetRoots()))
 	return connect.NewResponse(&daemonv1.StatusesResponse{Statuses: wire.StatusesToProto(statuses)}), nil
+}
+
+func (s *sessionServer) GitStatuses(ctx context.Context, req *connect.Request[daemonv1.GitStatusesRequest]) (*connect.Response[daemonv1.GitStatusesResponse], error) {
+	statuses, err := s.gitStatuses.get(ctx, req.Msg.GetSessionIds())
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(&daemonv1.GitStatusesResponse{Statuses: wire.GitStatusesToProto(statuses)}), nil
 }
 
 // lineWriter sends each complete line written to it. The session service

@@ -109,12 +109,21 @@ export function groupTerminalSessions(
   return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
+// `badge` overrides BaseBadge's own tone colors.
 const SERVER_HUES = [
-  { mark: 'bg-node-blue-tint text-node-blue', fill: 'bg-node-blue' },
-  { mark: 'bg-node-purple-tint text-node-purple', fill: 'bg-node-purple' },
-  { mark: 'bg-node-teal-tint text-node-teal', fill: 'bg-node-teal' },
-  { mark: 'bg-node-orange-tint text-node-orange', fill: 'bg-node-orange' },
-  { mark: 'bg-node-green-tint text-node-green', fill: 'bg-node-green' },
+  { mark: 'bg-node-blue-tint text-node-blue', fill: 'bg-node-blue', badge: '!bg-node-blue-tint !text-node-blue' },
+  {
+    mark: 'bg-node-purple-tint text-node-purple',
+    fill: 'bg-node-purple',
+    badge: '!bg-node-purple-tint !text-node-purple',
+  },
+  { mark: 'bg-node-teal-tint text-node-teal', fill: 'bg-node-teal', badge: '!bg-node-teal-tint !text-node-teal' },
+  {
+    mark: 'bg-node-orange-tint text-node-orange',
+    fill: 'bg-node-orange',
+    badge: '!bg-node-orange-tint !text-node-orange',
+  },
+  { mark: 'bg-node-green-tint text-node-green', fill: 'bg-node-green', badge: '!bg-node-green-tint !text-node-green' },
 ] as const
 
 export type ServerHue = (typeof SERVER_HUES)[number]

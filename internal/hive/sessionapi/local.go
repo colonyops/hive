@@ -7,6 +7,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/status"
 )
@@ -77,6 +78,24 @@ func (l *Local) CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Ris
 
 func (l *Local) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOptions, error) {
 	return l.engine.Sessions().SessionLaunchOptions(ctx)
+}
+
+func (l *Local) GitStatuses(ctx context.Context, ids []string) (map[string]gitstatus.Status, error) {
+	all, err := l.engine.Sessions().ListSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	wanted := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		wanted[id] = true
+	}
+	sessions := make([]session.Session, 0, len(ids))
+	for _, sess := range all {
+		if wanted[sess.ID] {
+			sessions = append(sessions, sess)
+		}
+	}
+	return l.engine.GitStatus().ReadSessions(ctx, sessions), nil
 }
 
 func (l *Local) StatusAvailable() bool {
