@@ -28,6 +28,7 @@ Unknown keys are errors.
 - `entry`: the page, default `index.html`.
 - `width` and `height`: the panel in pixels. The default fills the window.
 - `titlebar`: offers a page for the title bar, with `entry` (default: the applet's own `entry`) and `width` in pixels (default 28, one icon button). See "In the title bar".
+- `commands`: palette rows the user can bind to a key, each with `id` (a slug), `title`, and optional `icon` and `keywords`. See "In the command palette".
 
 ## The page
 
@@ -51,7 +52,9 @@ close button over the top right corner of the page, so leave about 52px clear th
 - `hive.open()` opens the applet's panel from any of them.
 - `hive.broadcast(data)` sends to the applet's other open frames, which listen with `hive.on('message', fn)`.
 - `hive.on('session', fn)` reports the slug of the session on screen when it changes. `hive.on` returns a function that stops listening.
-- `hive.commands()` resolves to Hive's commands as `{id, title, group}`, and `hive.command(id)` runs one, so a page can do what the command palette can.
+- `hive.commands()` resolves to Hive's commands as `{id, title, group, keys}`, and `hive.command(id)` runs one and rejects an id that does not exist, so a page can do what the command palette can.
+- `hive.openPalette(query)` opens the command palette on a query. A first character of `+`, `@` or `>` picks its tab.
+- `hive.setCommands(rows)` and `hive.on('command', fn)` add to the palette. See "In the command palette".
 - `hive.navigate(path)` goes to a route of the app: `/hub`, `/terminal/<session-slug>`, `/settings/<section>`.
 
 Commands run through `sh -c` in the directory `cwd` describes, with `$HIVE_APPLET_DIR`
@@ -69,8 +72,12 @@ the user changes theme. They are empty for a moment while the page loads, so giv
 `var()` a fallback: `--hv-app`, `--hv-sidebar`, `--hv-pane`, `--hv-raised`, `--hv-list`, `--hv-chip`, `--hv-hover`, `--hv-row`, `--hv-row-hover`, `--hv-card`, `--hv-border`, `--hv-strong`, `--hv-text`, `--hv-text-2`, `--hv-text-3`, `--hv-text-4`, `--hv-accent`, `--hv-accent-contrast`, `--hv-accent-tint`, `--hv-selection`, `--hv-backdrop`, `--hv-code-key`, `--hv-code-string`, `--hv-code-comment`, and `--hv-severity-info`, `-success`, `-warning`, `-error` and `-running`, each with a `-tint`.
 
 Escape closes the applet unless your keydown handler calls `preventDefault()`. Use
-that to let Escape back out of a dialog or a filter first. Keys typed in the page do
-not reach Hive's own shortcuts. Audio needs a user gesture first, as on any page.
+that to let Escape back out of a dialog or a filter first. Command, Control and Option
+chords reach Hive's shortcuts unless your handler calls `preventDefault()`, and while a
+panel is open that only runs the palette, the key that closes the panel, and this applet's
+commands. So call `preventDefault()` on any chord the page uses for itself, such as Command-K
+for its own search. Other keys stay in the page. Audio needs a user gesture first, as on any
+page.
 
 ## In the title bar
 
@@ -85,16 +92,23 @@ keeps running until they turn it off, so keep what it polls cheap.
 - `hive.dropdown({entry, width, height})` opens a panel under the bar and a second call closes it, so call it from a click. It closes when the user clicks elsewhere or presses Escape. `hive.resize({width, height})` from its page resizes it. It loads fresh on each open, so anything that must keep going, such as audio or a long-running process, belongs in the title bar page. Keep the two in step with `hive.broadcast`.
 - `localStorage` is shared between an applet's frames, and the `storage` event fires as it does in a browser.
 - Closing a panel or dropdown stops only what that frame spawned.
-- Command and control chords typed in a title bar page or dropdown reach Hive's shortcuts unless your handler calls `preventDefault()`.
 
 If the applet is only for the title bar, the palette still opens its `entry` as a panel, so
 make that page useful too: settings or a larger view.
+
+## In the command palette
+
+Use `commands:` in `applet.yaml` for what a user would want to do from anywhere, or bind to a key. The row is always there, and the user binds it as `applet.<id>.<command>`. Do not suggest a chord or write one to `settings.yaml` unless they ask. The palette can show the title without the applet's name, so write "Next radio station" and not "Next".
+
+`hive.on('command', (id) => ...)` receives it. It goes to the title bar page if that is on. Otherwise the panel opens and its page receives it, so the applet's `entry` must handle every command too, or be the same page as the title bar's. From the title bar page, a command can call `hive.dropdown()` to open the dropdown.
+
+Use `hive.setCommands(rows)` for rows only a running page knows about, such as stations, containers or recent files. Each call replaces the rows that page set before, and they go when the page closes or reloads. They cannot be bound. A row needs `id` and `title`, and can have `group` (default: the applet's title), `scope` (`actions`, the default, or `goto` for a row that names a thing), `kind` (the small word at the right of such a row), `hint`, `keywords` and `icon`. Selecting one calls the same `hive.on('command')` with its id.
 
 ## Check your work
 
 1. Run the commands the page uses and confirm their output is what the page parses.
 2. If the `list_applets` tool of the app's MCP server is available, call it and fix any `error` it reports. Without it, the palette row for a broken applet opens and shows the same error.
-3. Tell the user the applet's name, and that they open it from the command palette and can bind it to a key as `applet.<id>`. For a title bar page, also tell them to turn it on in Settings > Applets.
+3. Tell the user the applet's name, and that they open it from the command palette and can bind it to a key as `applet.<id>`, and name any `commands` it has. For a title bar page, also tell them to turn it on in Settings > Applets.
 {{with .Brief}}
 {{if eq .Style "hive"}}{{template "applet-style-hive"}}{{end -}}
 {{if eq .Style "website"}}

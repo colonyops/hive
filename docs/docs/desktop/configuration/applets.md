@@ -21,9 +21,18 @@ The applet appears as soon as its file is valid. If you dislike it, ask for chan
 
 - Press <kbd>⌘K</kbd> and type its name. An applet whose name matches comes first, under **Applets**.
 - Press <kbd>⌘K</kbd> and type <kbd>+</kbd>, or press <kbd>⇥</kbd> to reach the **Applets** tab, to see only applets.
-- Bind one to a key in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>`.
+- Bind one to a key in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>`. The same key closes it again.
 
 <kbd>esc</kbd> closes an applet, unless the page uses the key itself first.
+
+## Palette and keys
+
+An applet can add its own rows to the command palette at <kbd>⌘K</kbd>:
+
+- Commands its `applet.yaml` lists are always there. You can bind each one in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>.<command>`. They have no shortcut until you give them one.
+- Rows a page adds while it runs, such as a list of stations, last as long as that page and cannot be bound.
+
+Shortcuts keep working with focus inside a page, as long as they use <kbd>⌘</kbd>, <kbd>Ctrl</kbd> or <kbd>⌥</kbd>. While a panel is open, only <kbd>⌘K</kbd>, that applet's own key, and that applet's commands run. A page can keep a shortcut for itself. See [Keyboard shortcuts](keybindings.md#applets).
 
 ## Put one in the title bar
 
@@ -69,7 +78,10 @@ The page gets `window.hive`:
 | `hive.context()` | Returns the applet's directory, working directory, and session |
 | `hive.close()` | Closes the applet. In a title bar page, closes its dropdown |
 | `hive.open()` | Opens the applet's panel |
-| `hive.commands()`, `hive.command(id)` | Lists Hive's commands, and runs one |
+| `hive.commands()`, `hive.command(id)` | Lists Hive's commands with `{id, title, group, keys}`, and runs one. An unknown id rejects |
+| `hive.setCommands(rows)` | Replaces the palette rows this page added |
+| `hive.on('command', fn)` | Reports the id of the applet's command or row that was run |
+| `hive.openPalette(query)` | Opens the command palette on a query. `+`, `@` or `>` first picks a tab |
 | `hive.navigate(path)` | Goes to a route of the app |
 | `hive.broadcast(data)`, `hive.on('message', fn)` | Talks to the applet's other open frames |
 | `hive.on('session', fn)` | Reports the session on screen when it changes |
@@ -100,6 +112,82 @@ The slot is 28px tall, and a page with a transparent background sits directly on
 | `hive.dropdown({entry, width, height})` | Opens a panel under the bar, or closes it if it is open |
 
 A dropdown loads again each time it opens, so put anything that has to keep going, such as audio, in the title bar page and talk to it with `hive.broadcast`. `localStorage` is shared between an applet's frames. Closing a panel or dropdown stops only the processes it started.
+
+A small title bar page looks like this:
+
+```html
+<!doctype html>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; }
+  button { width: 100%; height: 28px; border: 0; border-radius: 8px; background: none; color: var(--hv-text-2, #aaa); }
+  button:hover { background: var(--hv-chip, #333); }
+</style>
+<button id="count">0</button>
+<script>
+  const button = document.querySelector('#count')
+  const refresh = async () => {
+    const { stdout } = await hive.exec('docker ps -q | wc -l')
+    button.textContent = stdout.trim()
+  }
+  button.onclick = () => hive.open()
+  refresh()
+  setInterval(refresh, 10000)
+</script>
+```
+
+### Palette commands
+
+List commands in `applet.yaml` to give the palette rows that a user can bind to a key. `id` is a slug and becomes part of the binding, `applet.<applet id>.<id>`, so keep it once people use it. `icon` and `keywords` are optional. The palette shows `title` without the applet's name in some views, so make it make sense alone.
+
+```yaml
+commands:
+  - id: next
+    title: Next radio station
+    icon: play
+    keywords: [skip]
+```
+
+Listen for them in the page:
+
+```js
+hive.on('command', (id) => {
+  if (id === 'next') playNext()
+})
+```
+
+A command goes to the title bar page if it is on. Otherwise the panel opens and the page there gets it, even if it starts listening after it loads. To have a command open a dropdown, call `hive.dropdown()` from the listener in the title bar page.
+
+For rows that change, such as things only a running page knows about, call `hive.setCommands`. Each call replaces the rows that page added before, and they disappear when the page closes or reloads. They arrive through the same `hive.on('command')`. Only `id` and `title` are required.
+
+```js
+hive.setCommands(stations.map((station) => ({
+  id: station.id,
+  title: station.name,
+  group: 'Stations',
+  scope: 'goto',
+  kind: 'station',
+  hint: station.genre,
+  keywords: [station.genre],
+  icon: 'play',
+})))
+```
+
+`group` defaults to the applet's name, and `scope` to `actions`. `kind` is the small word at the row's right edge, for a row that names a thing rather than an action.
+
+### Keys in a page
+
+Command, Control and Option shortcuts go to the page first, then to Hive unless the page calls `preventDefault()`. Keep a shortcut for the page like this:
+
+```js
+addEventListener('keydown', (event) => {
+  if (event.metaKey && event.key === 'k') {
+    event.preventDefault()
+    openMySearch()
+  }
+})
+```
+
+Keys with no modifier stay in the page, apart from <kbd>esc</kbd>, so typing never runs a Hive shortcut. The exception is the rest of a sequence such as <kbd>⌘G</kbd> then <kbd>i</kbd>, which goes to Hive once the first step has started it.
 
 If a file is invalid, the palette marks the applet **(invalid)** and opening it shows the error. An applet that loaded before keeps running its last valid version.
 

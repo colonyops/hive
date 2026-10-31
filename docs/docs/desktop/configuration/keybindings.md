@@ -50,6 +50,20 @@ The map only needs entries you want to change. An empty list removes a binding.
 
 Use lower-case key names and join modifiers with `+`, such as `mod+shift+t`. `mod` means Command on macOS and Control on other platforms. Separate keys with a space for a sequence such as `g i`.
 
+## Applets
+
+Applets have no shortcuts until you add them. They appear in **Settings ▸ Keyboard**, or you can name them in `settings.yaml`:
+
+```yaml
+keybindings:
+  applet.docker: [mod+shift+d]
+  applet.radio.next: [alt+n]
+```
+
+`applet.<id>` opens and closes the applet's panel. `applet.<id>.<command>` runs a [command the applet lists](applets.md#palette-commands). Both also work from a focused terminal, whatever keys they use, so the terminal stops receiving that key. Avoid one your shell needs. With focus inside an applet page, a shortcut needs <kbd>⌘</kbd>, <kbd>Ctrl</kbd> or <kbd>⌥</kbd>, because the page keeps other keys.
+
+While an applet's panel is open, only <kbd>⌘K</kbd>, the key that closes it, and that applet's commands run. A page can keep a shortcut for itself, so one it uses may not reach Hive.
+
 ## Terminal shortcuts
 
 A focused terminal sends most keys to the running program. A shortcut works from a terminal when it starts with Command on macOS, or with Control on Linux, where you press it with Control+Shift from inside the terminal. Shortcuts without one of those, such as <kbd>g</kbd> then <kbd>i</kbd>, only work outside a terminal, so typing `git` always reaches the shell.

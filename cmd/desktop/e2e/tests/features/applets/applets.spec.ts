@@ -28,8 +28,9 @@ test.describe('applets', { tag: [tag.applets] }, () => {
     const titles = page.getByTestId('command-palette-command-title')
     await expect(titles.filter({ hasText: 'Applet Builder' })).toHaveCount(1)
     await expect(titles.filter({ hasText: 'E2E page' })).toHaveCount(1)
-    await expect(titles.filter({ hasText: 'E2E bar' })).toHaveCount(1)
-    await expect(titles).toHaveCount(3)
+    await expect(titles.filter({ hasText: /^E2E bar$/ })).toHaveCount(1)
+    await expect(titles.filter({ hasText: 'E2E bar ping' })).toHaveCount(1)
+    await expect(titles).toHaveCount(4)
   })
 
   test('the builder fits on one screen and copies a prompt that asks what to build', async ({ page }) => {
@@ -148,6 +149,85 @@ test.describe('applets', { tag: [tag.applets] }, () => {
     await page.goto('/#/settings/applets')
     await toggle.click()
     await expect(slot).toHaveCount(0)
+  })
+
+  test('a page adds to the palette, and a declared command reaches the page that is running', async ({ page }) => {
+    await page.goto('/#/settings/applets')
+    const toggle = page.getByTestId('settings-applet-e2e-bar-titlebar')
+    await toggle.click()
+    const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]')
+    await expect(bar.locator('#surface')).toHaveText('titlebar')
+
+    await openApplet(page, 'E2E bar ping')
+    await expect(bar.locator('#command-run')).toHaveText('ping')
+    await expect(page.getByTestId('applet-page-overlay')).toHaveCount(0)
+
+    await openApplet(page, 'E2E bar live row')
+    await expect(bar.locator('#command-run')).toHaveText('live')
+
+    await page.goto('/#/settings/applets')
+    await toggle.click()
+    await expect(page.getByTestId('titlebar-applet-e2e-bar')).toHaveCount(0)
+
+    await page.keyboard.press('Meta+k')
+    await page.getByTestId('command-palette-input').fill('E2E bar live row')
+    await expect(page.getByTestId('command-palette-command-title').filter({ hasText: 'live row' })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+
+    await openApplet(page, 'E2E bar ping')
+    await expect(page.frameLocator('[data-testid="applet-frame"]').locator('#command')).toHaveText('ping')
+    await page.getByTestId('applet-page-close').click()
+  })
+
+  test('a bound chord works from inside the page, and only there for what a panel allows', async ({ page }) => {
+    const bind = async (title: string, chord: string) => {
+      await page.goto('/#/settings/keybindings')
+      await page.getByTestId('keybinding-filter').fill(title)
+      const row = page.getByTestId('keybinding-row').filter({ hasText: title }).first()
+      await row.getByTestId('keybinding-add').click()
+      await page.keyboard.press(chord)
+      await row.getByTestId('keybinding-capture').click()
+      await expect(row.getByTestId('keybinding-combo')).toHaveCount(1)
+      return row
+    }
+    const unbind = async (title: string) => {
+      await page.goto('/#/settings/keybindings')
+      await page.getByTestId('keybinding-filter').fill(title)
+      await page.getByTestId('keybinding-row').filter({ hasText: title }).first().getByTestId('keybinding-remove').click()
+    }
+
+    await bind('E2E page', 'Meta+Shift+y')
+    await bind('E2E bar ping', 'Meta+Shift+u')
+    await page.goto('/#/settings/applets')
+    const toggle = page.getByTestId('settings-applet-e2e-bar-titlebar')
+    await toggle.click()
+    const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]')
+    await expect(bar.locator('#surface')).toHaveText('titlebar')
+
+    // Focus is in the title bar page, so these only arrive if it hands them on.
+    await bar.locator('#chord').focus()
+    await page.keyboard.press('Meta+Shift+u')
+    await expect(bar.locator('#command-run')).toHaveText('ping')
+    await bar.locator('#chord').focus()
+    await page.keyboard.press('Meta+Shift+y')
+    const overlay = page.getByTestId('applet-page-overlay')
+    await expect(overlay).toBeVisible()
+
+    // The panel has taken focus.
+    const panel = page.frameLocator('[data-testid="applet-frame"]')
+    await panel.locator('body').click()
+    await page.keyboard.press('Meta+k')
+    await expect(page.getByTestId('command-palette-input')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('command-palette-input')).toHaveCount(0)
+    await panel.locator('body').click()
+    await page.keyboard.press('Meta+Shift+y')
+    await expect(overlay).toHaveCount(0)
+
+    await page.goto('/#/settings/applets')
+    await toggle.click()
+    await unbind('E2E page')
+    await unbind('E2E bar ping')
   })
 
   test('the asset route hides saved storage and gives a page no CORS', async ({ page }) => {

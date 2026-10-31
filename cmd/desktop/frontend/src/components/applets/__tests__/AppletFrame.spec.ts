@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useCommandPalette } from '../../../composables/useCommands'
 import { useApplets } from '../../../stores/useApplets'
 import { resetStores } from '../../../stores/defineStore'
 import { usePopupTerminal } from '../../../stores/usePopupTerminal'
@@ -213,10 +214,130 @@ describe('AppletFrame', () => {
       wrapper.unmount()
     })
 
+    it('refuses a command that does not exist', async () => {
+      const { wrapper, send, replies } = titlebar()
+      const run = vi.fn()
+      useApplets().setCommandRunner(run)
+      await send('command', { id: 'settings.nope' })
+      expect(run).not.toHaveBeenCalled()
+      expect(replies).toEqual([{ hiveApplet: 1, id: 1, error: 'hive has no command "settings.nope"' }])
+      wrapper.unmount()
+    })
+
+    it('lists commands with the keys they are bound to', async () => {
+      const { wrapper, send, replies } = titlebar()
+      await send('commands')
+      const { result } = replies[0] as { result: { id: string; keys: string[] }[] }
+      expect(result.find((command) => command.id === 'palette.toggle')?.keys).toContain('mod+k')
+      wrapper.unmount()
+    })
+
+    it('opens the palette on a query, and a sigil enters its scope', async () => {
+      const { wrapper, send } = titlebar()
+      const palette = useCommandPalette()
+      await send('openPalette', { query: '+doc' })
+      expect(palette.open.value).toBe(true)
+      expect(palette.scope.value).toBe('applets')
+      expect(palette.query.value).toBe('doc')
+      palette.toggle()
+      wrapper.unmount()
+    })
+
+    it('does not run the rest of a sequence that has timed out', async () => {
+      const { wrapper, send, replies } = titlebar()
+      const seen: KeyboardEvent[] = []
+      const listener = (event: KeyboardEvent) => seen.push(event)
+      window.addEventListener('keydown', listener)
+      await send('key', { key: 'j', continuing: true })
+      window.removeEventListener('keydown', listener)
+      expect(seen).toEqual([])
+      expect(replies).toEqual([{ hiveApplet: 1, id: 1, result: false }])
+      wrapper.unmount()
+    })
+
     it('tells the page when the session on screen changes', async () => {
       const { wrapper, replies } = titlebar()
       await wrapper.setProps({ sessionSlug: 'other' })
       expect(replies).toEqual([{ hiveApplet: 1, event: 'session', data: 'other' }])
+      wrapper.unmount()
+    })
+  })
+
+  describe('palette rows from a page', () => {
+    it('lasts as long as the frame, and running one reaches that frame', async () => {
+      const { wrapper, send, replies } = setup()
+      await send('ready')
+      await send('setCommands', { rows: [{ id: 'jazz', title: 'Jazz', hint: 'station', scope: 'goto' }] })
+      const applets = useApplets()
+      const [row] = applets.pageRows.value
+      expect(row).toMatchObject({
+        id: 'applet:pong:jazz',
+        title: 'Jazz',
+        group: 'pong',
+        hint: 'station',
+        scope: 'goto',
+      })
+
+      replies.length = 0
+      void row.run()
+      expect(replies).toEqual([{ hiveApplet: 1, event: 'command', data: 'jazz' }])
+
+      wrapper.unmount()
+      expect(applets.pageRows.value).toEqual([])
+    })
+
+    it('replaces the rows it set before', async () => {
+      const { wrapper, send } = setup()
+      await send('setCommands', { rows: [{ id: 'a', title: 'A' }] })
+      await send('setCommands', { rows: [{ id: 'b', title: 'B' }] })
+      expect(useApplets().pageRows.value.map((row) => row.id)).toEqual(['applet:pong:b'])
+      await send('setCommands', { rows: [] })
+      expect(useApplets().pageRows.value).toEqual([])
+      wrapper.unmount()
+    })
+
+    it.each([
+      ['not a list', 'nope', 'setCommands takes a list of rows.'],
+      ['no title', [{ id: 'a' }], 'A palette row needs an id and a title.'],
+      [
+        'bad scope',
+        [{ id: 'a', title: 'A', scope: 'nowhere' }],
+        'A palette row\'s scope is goto or actions, not "nowhere".',
+      ],
+    ])('refuses %s', async (_name, rows, error) => {
+      const { wrapper, send, replies } = setup()
+      await send('setCommands', { rows })
+      expect(replies).toEqual([{ hiveApplet: 1, id: 1, error }])
+      expect(useApplets().pageRows.value).toEqual([])
+      wrapper.unmount()
+    })
+  })
+
+  describe('commands the applet declares', () => {
+    it('reaches the title bar page when both are open', async () => {
+      const panel = setup()
+      const bar = setup({ surface: 'titlebar' })
+      await panel.send('ready')
+      await bar.send('ready')
+      panel.replies.length = 0
+      bar.replies.length = 0
+      expect(useApplets().deliverCommand('pong', 'next')).toBe(true)
+      expect(bar.replies).toEqual([{ hiveApplet: 1, event: 'command', data: 'next' }])
+      expect(panel.replies).toEqual([])
+      panel.wrapper.unmount()
+      bar.wrapper.unmount()
+    })
+
+    it('reports that no page can take it', () => {
+      expect(useApplets().deliverCommand('pong', 'next')).toBe(false)
+    })
+
+    it('waits for the panel it opens to load', async () => {
+      useApplets().openForCommand('pong', 'next', 'sess')
+      const { wrapper, send, replies } = setup()
+      expect(replies).toEqual([])
+      await send('ready')
+      expect(replies).toContainEqual({ hiveApplet: 1, event: 'command', data: 'next' })
       wrapper.unmount()
     })
   })

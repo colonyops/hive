@@ -5,6 +5,8 @@ import {
   TitlebarApplets,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
 import type { Applet } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import type { AppletSurface } from '../components/applets/useAppletBridge'
+import type { Command } from '../composables/useCommands'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { appletCommandID, setAppletCommands } from '../keybindings/catalog'
 import { launcherIconComponent } from '../lib/launcherIcons'
@@ -18,6 +20,25 @@ export interface AppletDropdown {
   width: number
   height: number
   anchor: HTMLElement
+}
+
+// One open frame of an applet, as the rest of the applet and the palette reach it.
+export interface AppletFrameHandle {
+  surface: AppletSurface
+  window: () => Window | null | undefined
+  deliverCommand: (id: string) => void
+}
+
+// A row a running page asked for through hive.setCommands.
+export interface AppletPageRow {
+  id: string
+  title: string
+  group?: string
+  keywords?: string[]
+  icon?: string
+  hint?: string
+  kind?: string
+  scope?: 'goto' | 'actions'
 }
 
 // The applets on disk and the one on screen. Each is a bindable command, so this
@@ -88,38 +109,107 @@ export const useApplets = defineStore('applets', () => {
 
   // An applet's open frames, so one can reach the others. Windows are not state a view
   // renders, so this stays out of the reactive graph.
-  const frames = new Map<string, Set<() => Window | null | undefined>>()
+  const frames = new Map<string, Set<AppletFrameHandle>>()
+  // Commands waiting for the panel that opened to run them.
+  const commandsForPanel = new Map<string, string[]>()
 
-  function connectFrame(id: string, target: () => Window | null | undefined): () => void {
+  function connectFrame(id: string, handle: AppletFrameHandle): () => void {
     const connected = frames.get(id) ?? new Set()
     frames.set(id, connected)
-    connected.add(target)
-    return () => connected.delete(target)
+    connected.add(handle)
+    if (handle.surface === 'page') {
+      commandsForPanel.get(id)?.forEach((command) => handle.deliverCommand(command))
+      commandsForPanel.delete(id)
+    }
+    return () => {
+      connected.delete(handle)
+      setFrameRows(handle, id, [])
+    }
   }
 
   function otherFrames(id: string, self: Window): Window[] {
-    return [...(frames.get(id) ?? [])].flatMap((target) => {
-      const frame = target()
+    return [...(frames.get(id) ?? [])].flatMap((handle) => {
+      const frame = handle.window()
       return frame && frame !== self ? [frame] : []
     })
   }
 
+  // The title bar page first, because it is the one that keeps running: a panel over it
+  // may come and go, and two frames acting on one command would run it twice.
+  function deliverCommand(id: string, command: string): boolean {
+    const connected = [...(frames.get(id) ?? [])]
+    const target =
+      connected.find((handle) => handle.surface === 'titlebar') ?? connected.find((handle) => handle.surface === 'page')
+    target?.deliverCommand(command)
+    return target !== undefined
+  }
+
+  function openForCommand(id: string, command: string, session: string): void {
+    commandsForPanel.set(id, [...(commandsForPanel.get(id) ?? []), command])
+    sessionSlug.value = session
+    openID.value = id
+  }
+
+  const frameRows = shallowRef(new Map<AppletFrameHandle, { applet: string; rows: AppletPageRow[] }>())
+
+  function setFrameRows(handle: AppletFrameHandle, applet: string, rows: AppletPageRow[]): void {
+    const next = new Map(frameRows.value)
+    if (rows.length > 0) next.set(handle, { applet, rows })
+    else next.delete(handle)
+    frameRows.value = next
+  }
+
+  // Data rather than commands, so nothing binds to them: they exist while the page does.
+  const pageRows = computed<Command[]>(() => {
+    const byID = new Map<string, Command>()
+    for (const [handle, { applet, rows }] of frameRows.value) {
+      const title = catalog.data.value.find((candidate) => candidate.id === applet)?.title ?? applet
+      for (const row of rows) {
+        const id = `applet:${applet}:${row.id}`
+        byID.set(id, {
+          id,
+          title: row.title,
+          group: row.group ?? title,
+          keywords: ['applet', applet, title, ...(row.keywords ?? [])],
+          icon: row.icon ? launcherIconComponent(row.icon) : undefined,
+          hint: row.hint,
+          kind: row.kind,
+          scope: row.scope,
+          run: () => handle.deliverCommand(row.id),
+        })
+      }
+    }
+    return [...byID.values()]
+  })
+
   watch(
     catalog.data,
     (applets) => {
+      // Unbound until the user says otherwise: a file an agent wrote must not claim a
+      // chord the app never offered it.
       setAppletCommands(
-        applets.map((applet) => ({
-          id: appletCommandID(applet.id),
-          title: applet.runnable ? applet.title : `${applet.title} (invalid)`,
-          group: 'Applets',
-          keywords: ['applet', applet.id],
-          icon: launcherIconComponent(applet.icon),
-          // Unbound until the user says otherwise: a file an agent wrote must not
-          // claim a chord the app never offered it.
-          defaultCombos: [],
-          context: 'global',
-          scope: 'applets',
-        })),
+        applets.flatMap((applet) => [
+          {
+            id: appletCommandID(applet.id),
+            title: applet.runnable ? applet.title : `${applet.title} (invalid)`,
+            group: 'Applets',
+            keywords: ['applet', applet.id],
+            icon: launcherIconComponent(applet.icon),
+            defaultCombos: [],
+            context: 'global' as const,
+            scope: 'applets' as const,
+          },
+          ...(applet.runnable ? (applet.commands ?? []) : []).map((command) => ({
+            id: appletCommandID(applet.id, command.id),
+            title: command.title,
+            group: applet.title,
+            keywords: ['applet', applet.id, applet.title, ...(command.keywords ?? [])],
+            icon: launcherIconComponent(command.icon || applet.icon),
+            defaultCombos: [],
+            context: 'global' as const,
+            scope: 'applets' as const,
+          })),
+        ]),
       )
     },
     { immediate: true },
@@ -163,5 +253,9 @@ export const useApplets = defineStore('applets', () => {
     runCommand,
     connectFrame,
     otherFrames,
+    deliverCommand,
+    openForCommand,
+    setFrameRows,
+    pageRows,
   }
 })

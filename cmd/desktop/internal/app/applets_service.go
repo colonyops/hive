@@ -35,6 +35,15 @@ type Applet struct {
 	Error    string `json:"error"`
 	// Titlebar is nil for an applet that offers no title bar page.
 	Titlebar *AppletTitlebar `json:"titlebar"`
+	Commands []AppletCommand `json:"commands"`
+}
+
+// AppletCommand is a palette row an applet declares, bindable as applet.<id>.<command>.
+type AppletCommand struct {
+	ID       string   `json:"id"`
+	Title    string   `json:"title"`
+	Icon     string   `json:"icon"`
+	Keywords []string `json:"keywords"`
 }
 
 // AppletTitlebar is the page an applet offers for the title bar.
@@ -106,6 +115,10 @@ func appletOf(entry applets.Entry) Applet {
 		Entry:    a.Entry,
 		Width:    a.Width,
 		Height:   a.Height,
+		Commands: make([]AppletCommand, 0, len(a.Commands)),
+	}
+	for _, command := range a.Commands {
+		out.Commands = append(out.Commands, AppletCommand{ID: command.ID, Title: command.Title, Icon: command.Icon, Keywords: command.Keywords})
 	}
 	if a.Titlebar != nil {
 		out.Titlebar = &AppletTitlebar{Entry: a.Titlebar.Entry, Width: a.Titlebar.Width}

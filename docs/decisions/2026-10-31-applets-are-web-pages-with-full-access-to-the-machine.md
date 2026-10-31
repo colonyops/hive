@@ -66,6 +66,16 @@ reach each other through `hive.broadcast`, and share `localStorage` by passing e
 along, because an opaque origin has no `BroadcastChannel` or `storage` event of its own and
 each frame's save writes the whole store.
 
+**An applet adds to the palette in two ways, and only one can be bound.** A row in
+`commands:` is a command: it exists from the file, and a user can write its id in
+`settings.yaml`. A row from `hive.setCommands` is data a running page knows about, such as a
+list of stations, and its life is the page's. This is the split the rest of the palette has
+between commands and object rows. A declared command carries no default chord, for the same
+reason as `applet.<id>`. It goes to one frame, the title bar page if it is running, because
+that frame is the one that keeps running and two frames acting on it would run it twice.
+With no page to take it, the panel opens, and the bridge holds the command until the page
+listens.
+
 ## Consequences
 
 - An applet has the user's full access, and so does any remote script its page loads.
@@ -73,10 +83,14 @@ each frame's save writes the whole store.
 - A page cannot `fetch` another HTML file of its own, because that response has no CORS
   header. It can navigate to one.
 - Cookies and IndexedDB do not work in an opaque origin.
-- Keys in a frame do not reach the app's keymap, so the injected script forwards
-  Escape, and a page keeps it by calling `preventDefault`. A title bar page or dropdown
-  also forwards command and control chords, because it sits beside the app and one click
-  into it would otherwise leave every shortcut dead. A panel keeps its keys, as a modal does.
+- Keys in a frame do not reach the app's keymap, so the injected script forwards Escape
+  and any command, control or option chord, and a page keeps one by calling `preventDefault`.
+  One click into a page would otherwise leave every shortcut dead, and the chord that opened
+  a panel could not close it. A panel stays modal: the keymap already refuses all but the
+  palette and that applet's own commands while one is open. A page that uses a chord and
+  does not call `preventDefault` gets both.
+- Bare keys stay in the page, so typing never runs a shortcut, except the rest of a chord
+  sequence the app reports waiting.
 - A dropdown loads again each time it opens. A page that must keep running, such as a music
   player, lives in the title bar frame and talks to its dropdown.
 - A page falls back to its own directory on a server session: commands run on this

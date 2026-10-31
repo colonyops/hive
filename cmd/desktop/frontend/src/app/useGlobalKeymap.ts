@@ -57,6 +57,7 @@ export function useGlobalKeymap({
 
   function closesOwnOverlay(id: string): boolean {
     if (otherOverlayOpen.value) return false
+    // Its own commands as well as the chord that closes it: a panel still has a use for them.
     if (appletID(id) !== null) return appletID(id) === applets.open.value?.id
     if (applets.open.value !== null || !toggledOverlays[id]?.value) return false
     return Object.entries(toggledOverlays).every(([toggle, open]) => toggle === id || !open.value)

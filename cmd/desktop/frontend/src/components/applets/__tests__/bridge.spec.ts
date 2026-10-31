@@ -1,7 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import bridgeSource from '../../../../../internal/app/applets/bridge.js?raw'
+import { useKeybindings } from '../../../composables/useKeybindings'
 import { resetStores } from '../../../stores/defineStore'
+import { useApplets } from '../../../stores/useApplets'
 import AppletFrame from '../AppletFrame.vue'
 
 // Runs the real bridge.js against the real AppletFrame, so a method name that drifts
@@ -43,6 +45,8 @@ interface Hive {
   toast(message: string): Promise<void>
   authoringPrompt(brief: object): Promise<string>
   close(): Promise<void>
+  on(event: string, listener: (data: unknown) => void): () => void
+  setCommands(rows: object[]): Promise<void>
 }
 
 interface PageWindow {
@@ -192,5 +196,109 @@ describe('bridge.js', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('keys', () => {
+    function keysSeenByTheApp() {
+      const seen: string[] = []
+      const listener = (event: KeyboardEvent) => seen.push(event.key)
+      window.addEventListener('keydown', listener)
+      return { seen, stop: () => window.removeEventListener('keydown', listener) }
+    }
+
+    async function press(keydown: Listener | undefined, event: object) {
+      keydown?.(event)
+      await vi.advanceTimersByTimeAsync(5)
+      await flushPromises()
+    }
+
+    it('hands the app a chord from a panel, unless the page kept it', async () => {
+      vi.useFakeTimers()
+      const app = keysSeenByTheApp()
+      try {
+        const { wrapper, listeners } = loadPage()
+        const keydown = listeners.keydown?.[0]
+        await press(keydown, { key: 'k', metaKey: true, defaultPrevented: true })
+        expect(app.seen).toEqual([])
+        await press(keydown, { key: 'k', metaKey: true, defaultPrevented: false })
+        expect(app.seen).toEqual(['k'])
+        wrapper.unmount()
+      } finally {
+        app.stop()
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps a bare key and a modifier alone', async () => {
+      vi.useFakeTimers()
+      const app = keysSeenByTheApp()
+      try {
+        const { wrapper, listeners } = loadPage()
+        const keydown = listeners.keydown?.[0]
+        await press(keydown, { key: 'j', defaultPrevented: false })
+        await press(keydown, { key: 'Meta', metaKey: true, defaultPrevented: false })
+        expect(app.seen).toEqual([])
+        wrapper.unmount()
+      } finally {
+        app.stop()
+        vi.useRealTimers()
+      }
+    })
+
+    it('hands on the next key while a sequence waits', async () => {
+      vi.useFakeTimers()
+      const app = keysSeenByTheApp()
+      const { pendingSequence } = useKeybindings()
+      const { wrapper, listeners } = loadPage()
+      const keydown = listeners.keydown?.[0]
+      // The app is what decides that a chord started a sequence.
+      const start = () => {
+        pendingSequence.value = { steps: ['mod+g'] } as never
+      }
+      window.addEventListener('keydown', start, { once: true })
+      try {
+        await press(keydown, { key: 'g', metaKey: true, defaultPrevented: false })
+        await press(keydown, { key: 'i', defaultPrevented: false })
+        expect(app.seen).toEqual(['g', 'i'])
+        // Timed out: the app drops the key that was on its way, and the page stops asking.
+        pendingSequence.value = null
+        await press(keydown, { key: 'j', defaultPrevented: false })
+        await press(keydown, { key: 'k', defaultPrevented: false })
+        expect(app.seen).toEqual(['g', 'i'])
+        wrapper.unmount()
+      } finally {
+        pendingSequence.value = null
+        app.stop()
+        vi.useRealTimers()
+      }
+    })
+  })
+
+  describe('commands', () => {
+    it('holds a command until the page listens', async () => {
+      const { wrapper, page } = loadPage()
+      await flushPromises()
+      useApplets().deliverCommand('pong', 'next')
+      await flushPromises()
+      const heard: unknown[] = []
+      page.hive.on('command', (id) => heard.push(id))
+      expect(heard).toEqual(['next'])
+
+      useApplets().deliverCommand('pong', 'again')
+      await flushPromises()
+      expect(heard).toEqual(['next', 'again'])
+      wrapper.unmount()
+    })
+
+    it('puts a row in the palette and runs it in the page', async () => {
+      const { wrapper, page } = loadPage()
+      await page.hive.setCommands([{ id: 'jazz', title: 'Jazz' }])
+      const heard: unknown[] = []
+      page.hive.on('command', (id) => heard.push(id))
+      void useApplets().pageRows.value[0].run()
+      await flushPromises()
+      expect(heard).toEqual(['jazz'])
+      wrapper.unmount()
+    })
   })
 })

@@ -38,6 +38,10 @@ func TestParseRefuses(t *testing.T) {
 		"unknown key":   "version: 1\ntitle: T\nview: table\n",
 		"unknown icon":  "version: 1\ntitle: T\nicon: nope\n",
 		"entry outside": "version: 1\ntitle: T\nentry: ../outside.html\n",
+		"command id":    "version: 1\ntitle: T\ncommands:\n  - {id: not.a.slug, title: C}\n",
+		"command twice": "version: 1\ntitle: T\ncommands:\n  - {id: c, title: C}\n  - {id: c, title: D}\n",
+		"command title": "version: 1\ntitle: T\ncommands:\n  - {id: c}\n",
+		"command icon":  "version: 1\ntitle: T\ncommands:\n  - {id: c, title: C, icon: nope}\n",
 		"negative size": "version: 1\ntitle: T\nwidth: -1\n",
 		"empty file":    "",
 	} {
@@ -201,4 +205,10 @@ func TestParseTitlebar(t *testing.T) {
 		_, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  width: -1\n"))
 		assert.ErrorContains(t, err, "titlebar.width")
 	})
+}
+
+func TestParseCommands(t *testing.T) {
+	applet, err := Parse("radio", []byte(minimal+"commands:\n  - id: next\n    title: Next station\n    icon: play\n    keywords: [skip]\n"))
+	require.NoError(t, err)
+	assert.Equal(t, []Command{{ID: "next", Title: "Next station", Icon: "play", Keywords: []string{"skip"}}}, applet.Commands)
 }

@@ -3,3 +3,6 @@ title: E2E bar
 titlebar:
   entry: bar.html
   width: 60
+commands:
+  - id: ping
+    title: E2E bar ping

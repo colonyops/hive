@@ -51,6 +51,19 @@ type Applet struct {
 	// Titlebar offers a page for the title bar. It shows once the user turns it on, so a
 	// file on disk neither starts running nor claims room in the bar by itself.
 	Titlebar *Titlebar `yaml:"titlebar,omitempty"`
+	// Commands are the applet's palette rows that a user can bind to a key, as
+	// applet.<id>.<command>. They carry no default chord, for the reason applet.<id> has none.
+	Commands []Command `yaml:"commands,omitempty"`
+}
+
+// Command is one thing an applet offers the palette. Running it reaches the page through
+// hive.on('command').
+type Command struct {
+	// ID is permanent once a user has bound it: it is what settings.yaml names.
+	ID       string   `yaml:"id"`
+	Title    string   `yaml:"title"`
+	Icon     string   `yaml:"icon,omitempty"`
+	Keywords []string `yaml:"keywords,omitempty"`
 }
 
 // Titlebar is the page an applet can show in the title bar.
@@ -109,6 +122,24 @@ func (a Applet) Validate() error {
 		return fmt.Errorf("titlebar.entry must be a path inside the applet's directory, got %q", a.Titlebar.Entry)
 	case a.Titlebar != nil && a.Titlebar.Width < 0:
 		return errors.New("titlebar.width must not be negative")
+	}
+	return a.validateCommands()
+}
+
+func (a Applet) validateCommands() error {
+	seen := make(map[string]bool, len(a.Commands))
+	for i, command := range a.Commands {
+		switch {
+		case !slug.Valid(command.ID):
+			return fmt.Errorf("commands[%d].id %q is not a valid slug", i, command.ID)
+		case seen[command.ID]:
+			return fmt.Errorf("commands[%d].id %q is used twice", i, command.ID)
+		case strings.TrimSpace(command.Title) == "":
+			return fmt.Errorf("commands[%d].title is required", i)
+		case !icons.ValidLauncher(command.Icon):
+			return fmt.Errorf("commands[%d].icon: unknown icon %q", i, command.Icon)
+		}
+		seen[command.ID] = true
 	}
 	return nil
 }

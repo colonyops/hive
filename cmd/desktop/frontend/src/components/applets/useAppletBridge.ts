@@ -16,10 +16,12 @@ import {
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
 import { Render } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/promptsservice'
 import type { Applet } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import { useCommandPalette } from '../../composables/useCommands'
+import { useKeybindings } from '../../composables/useKeybindings'
 import { useToasts } from '../../composables/useToasts'
-import { appletCommandID, commands } from '../../keybindings/catalog'
+import { appletCommandID, commandById, commands } from '../../keybindings/catalog'
 import { router } from '../../router'
-import { useApplets } from '../../stores/useApplets'
+import { useApplets, type AppletFrameHandle, type AppletPageRow } from '../../stores/useApplets'
 import { usePopupTerminal } from '../../stores/usePopupTerminal'
 
 export type AppletSurface = 'page' | 'titlebar' | 'dropdown'
@@ -73,6 +75,18 @@ function readTheme(): Record<string, string> {
   return Object.fromEntries(THEME_PROPERTIES.map((name) => [name, computed.getPropertyValue(name).trim()]))
 }
 
+// A row goes in the palette, so a wrong one should say so to the page that sent it rather
+// than draw a blank row.
+function parsePageRows(rows: unknown): AppletPageRow[] {
+  if (!Array.isArray(rows)) throw new Error('setCommands takes a list of rows.')
+  return rows.map((row: Partial<AppletPageRow>) => {
+    if (!row?.id || !row.title) throw new Error('A palette row needs an id and a title.')
+    if (row.scope !== undefined && row.scope !== 'goto' && row.scope !== 'actions')
+      throw new Error(`A palette row's scope is goto or actions, not "${String(row.scope)}".`)
+    return { ...row, id: String(row.id), title: String(row.title) }
+  })
+}
+
 export interface AppletBridgeOptions {
   // A frame's host keys it by applet id, so the id cannot change under it.
   applet: () => Applet
@@ -101,7 +115,26 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     { attributeFilter: ['data-theme'] },
   )
 
-  const disconnect = applets.connectFrame(id, () => frame.value?.contentWindow)
+  const keybindings = useKeybindings()
+  const palette = useCommandPalette()
+
+  // A page cannot hear anything until its bridge has loaded, and says when it has.
+  let pageReady = false
+  const queuedCommands: string[] = []
+
+  function postCommand(command: string): void {
+    frame.value?.contentWindow?.postMessage({ hiveApplet: 1, event: 'command', data: command }, '*')
+  }
+
+  const handle: AppletFrameHandle = {
+    surface: options.surface(),
+    window: () => frame.value?.contentWindow,
+    deliverCommand(command) {
+      if (pageReady) postCommand(command)
+      else queuedCommands.push(command)
+    },
+  }
+  const disconnect = applets.connectFrame(id, handle)
 
   watch(options.sessionSlug, (slug) => {
     frame.value?.contentWindow?.postMessage({ hiveApplet: 1, event: 'session', data: slug }, '*')
@@ -188,11 +221,35 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
       if (options.surface() === 'page') throw new Error('A panel takes its size from applet.yaml.')
       options.resize({ width: args.width as number | undefined, height: args.height as number | undefined })
     },
-    command: (args) => applets.runCommand(String(args.id)),
-    commands: () => commands.value.map(({ id: commandID, title, group }) => ({ id: commandID, title, group })),
+    ready() {
+      pageReady = true
+      queuedCommands.splice(0).forEach(postCommand)
+    },
+    command(args) {
+      const commandID = String(args.id)
+      if (!commandById.value.has(commandID)) throw new Error(`hive has no command "${commandID}"`)
+      applets.runCommand(commandID)
+    },
+    commands: () =>
+      commands.value.map(({ id: commandID, title, group }) => ({
+        id: commandID,
+        title,
+        group,
+        keys: keybindings.combosFor(commandID),
+      })),
+    setCommands(args) {
+      applets.setFrameRows(handle, id, parsePageRows(args.rows))
+    },
+    openPalette(args) {
+      palette.openWithScope('all')
+      palette.setQuery(String(args.query ?? ''))
+    },
     navigate: (args) => router.push(String(args.path)).then(() => undefined),
-    key(args) {
-      window.dispatchEvent(new KeyboardEvent('keydown', { ...args, bubbles: true, cancelable: true }))
+    key({ continuing, ...init }) {
+      // The sequence timed out while the page waited for its next key.
+      if (continuing && keybindings.pendingSequence.value === null) return false
+      window.dispatchEvent(new KeyboardEvent('keydown', { ...init, bubbles: true, cancelable: true }))
+      return keybindings.pendingSequence.value !== null
     },
   }
 
@@ -228,7 +285,14 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     )
   })
 
-  watch(() => options.applet().revision, endProcesses)
+  watch(
+    () => options.applet().revision,
+    () => {
+      endProcesses()
+      pageReady = false
+      applets.setFrameRows(handle, id, [])
+    },
+  )
   onBeforeUnmount(() => {
     closed = true
     disconnect()

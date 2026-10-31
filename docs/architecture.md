@@ -1437,6 +1437,15 @@ opened in `AppletFrame`
 - **Applets are a palette scope.** They have their own tab, and while filtering All, one
   whose title has the query comes first under its own header, because their names
   collide with documents, which outnumber them.
+- **An applet adds to the palette as a command or as data.** `commands:` in `applet.yaml`
+  becomes a catalog entry through `setAppletCommands`, bindable as
+  `applet.<id>.<command>` with no default chord. `hive.setCommands` adds rows through
+  `useApplets.pageRows`, which last as long as the frame. Both reach the page as
+  `hive.on('command')`. `appletID` reads both id forms, so a keymap rule about an applet
+  covers its commands too.
+- **A frame hands chords to the keymap.** `bridge.js` forwards what a page did not
+  `preventDefault` as a synthetic keydown on `window`, so the keymap has one path. It does
+  not special-case frames: the overlay gate in `useGlobalKeymap` is what keeps a panel modal.
 
 ### App modes
 

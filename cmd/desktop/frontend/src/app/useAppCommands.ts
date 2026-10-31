@@ -1,12 +1,13 @@
 import { Open as openDiagnostics } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/diagnosticsservice'
 import { nextTick, onMounted, ref, watch, type Ref } from 'vue'
-import { useCommandPalette } from '../composables/useCommands'
+import { useCommandPalette, useCommands } from '../composables/useCommands'
 import { useLaunchers } from '../composables/useLaunchers'
 import { useNewSession } from '../composables/useNewSession'
 import { useReportDialog } from '../composables/useReportDialog'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import {
   commandById,
+  appletDeclaredCommand,
   appletID,
   launcherActionID,
   launcherCommandID,
@@ -200,14 +201,18 @@ export function useAppCommands(deps: AppCommandDeps) {
     const applet = appletID(id)
     if (applet !== null) {
       const command = commandById.value.get(id)
-      if (command && contextActive(command.context)) {
-        // The palette can open an applet over a hub view, whose own keys would keep
-        // acting on rows under it.
-        overlays.tasksOpen.value = false
-        overlays.activityOpen.value = false
-        overlays.actionRunsOpen.value = false
-        applets.toggle(applet, onScreenSessionSlug.value)
-      }
+      if (!command || !contextActive(command.context)) return
+      const declared = appletDeclaredCommand(id)
+      // A page that is already running takes it where the user is. Otherwise it needs
+      // a page to run in, so the panel opens to take it.
+      if (declared !== null && applets.deliverCommand(applet, declared)) return
+      // The palette can open an applet over a hub view, whose own keys would keep
+      // acting on rows under it.
+      overlays.tasksOpen.value = false
+      overlays.activityOpen.value = false
+      overlays.actionRunsOpen.value = false
+      if (declared !== null) applets.openForCommand(applet, declared, onScreenSessionSlug.value)
+      else applets.toggle(applet, onScreenSessionSlug.value)
       return
     }
     const window = terminalWindowPosition(id)
@@ -250,6 +255,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   }
 
   useAppPaletteRows(deps, runCommand, contextActive)
+  useCommands(applets.pageRows)
   applets.setCommandRunner(runCommand)
   watch(onScreenSessionSlug, applets.setLiveSession, { immediate: true })
 

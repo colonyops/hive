@@ -4,7 +4,9 @@
   let nextID = 0
   const pending = new Map()
   const surface = new URLSearchParams(location.search).get('surface') ?? 'page'
-  const listeners = { message: new Set(), session: new Set() }
+  const listeners = { message: new Set(), session: new Set(), command: new Set() }
+  // A command can be why this page opened, and arrive before its scripts have listened.
+  const heldCommands = []
 
   const applyTheme = (theme) => {
     for (const [name, value] of Object.entries(theme)) document.documentElement.style.setProperty(name, value)
@@ -21,6 +23,10 @@
       return
     }
     if (event.data.event) {
+      if (event.data.event === 'command' && listeners.command.size === 0) {
+        heldCommands.push(event.data.data)
+        return
+      }
       for (const listener of listeners[event.data.event] ?? []) listener(event.data.data)
       return
     }
@@ -56,6 +62,7 @@
     on(event, listener) {
       if (!listeners[event]) throw new Error(`hive has no event "${event}"`)
       listeners[event].add(listener)
+      if (event === 'command') heldCommands.splice(0).forEach((id) => listener(id))
       return () => listeners[event].delete(listener)
     },
     broadcast: (data) => call('broadcast', { data }),
@@ -64,6 +71,8 @@
     resize: (size) => call('resize', size),
     command: (id) => call('command', { id }),
     commands: () => call('commands'),
+    setCommands: (rows) => call('setCommands', { rows }),
+    openPalette: (query = '') => call('openPalette', { query }),
     navigate: (path) => call('navigate', { path }),
     context: () => call('context'),
     exec: (command, options = {}) => call('exec', { command, ...options }),
@@ -86,6 +95,7 @@
   }
 
   call('theme').then(applyTheme, () => {})
+  void call('ready')
 
   // The frame has an opaque origin, where the real localStorage throws. Generated
   // pages reach for it constantly, so this one works the same and persists per applet.
@@ -129,23 +139,33 @@
   }
   Object.defineProperty(window, 'localStorage', { value: storage, configurable: true })
 
-  // Keys in a frame never reach the app, so Escape closes the applet from here. A page
-  // that wants Escape for itself calls preventDefault, which is only settled once its
-  // own listeners have run.
+  // Keys in a frame never reach the app, so this hands on what a chord would be: without
+  // it one click into a page would leave every shortcut dead until the user clicked
+  // elsewhere. Escape closes the applet from here. A page that wants either for itself
+  // calls preventDefault, which is only settled once its own listeners have run.
   //
-  // A panel is modal, so its keys stay its own. A title bar page sits beside the app,
-  // and one click into it would otherwise leave every shortcut dead until the user
-  // clicked elsewhere, so it hands on what a chord would be.
+  // The rest of a chord sequence is a bare key, so it crosses only while the app says one
+  // is waiting.
+  let sequencePending = false
   addEventListener('keydown', (event) => {
-    const chord = surface !== 'page' && (event.metaKey || event.ctrlKey)
-    if (event.key !== 'Escape' && !chord) return
+    if (['Meta', 'Control', 'Alt', 'Shift'].includes(event.key)) return
+    const chord = event.metaKey || event.ctrlKey || event.altKey
+    const continuing = sequencePending
+    if (event.key !== 'Escape' && !chord && !continuing) return
+    sequencePending = false
     setTimeout(() => {
       if (event.defaultPrevented) return
-      if (event.key === 'Escape') void call('close')
-      else {
-        const { key, code, metaKey, ctrlKey, altKey, shiftKey } = event
-        void call('key', { key, code, metaKey, ctrlKey, altKey, shiftKey })
+      if (event.key === 'Escape' && !continuing) {
+        void call('close')
+        return
       }
+      const { key, code, metaKey, ctrlKey, altKey, shiftKey } = event
+      call('key', { key, code, metaKey, ctrlKey, altKey, shiftKey, continuing }).then(
+        (pending) => {
+          sequencePending = pending
+        },
+        () => {},
+      )
     })
   })
 })()
