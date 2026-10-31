@@ -33,7 +33,13 @@ static void disableNear60FPSPreference(WKPreferences *preferences) {
 }
 
 static id webViewInitAtDisplayRefresh(id self, SEL cmd, NSRect frame, WKWebViewConfiguration *configuration) {
-	disableNear60FPSPreference(configuration.preferences);
+	// An exception here would escape window creation and end the app at launch.
+	// The frame rate is not worth that when a macOS update changes this SPI.
+	@try {
+		disableNear60FPSPreference(configuration.preferences);
+	} @catch (NSException *exception) {
+		NSLog(@"[Hive] Could not change the webview frame rate: %@", exception.reason);
+	}
 	return originalWebViewInit(self, cmd, frame, configuration);
 }
 
