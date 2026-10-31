@@ -9,7 +9,7 @@ The `windows` field defines tmux windows declaratively. Hive handles session cre
 ```yaml
 windows:
   - name: "{{ agentWindow }}"
-    command: '{{ agentCommand }} {{ agentFlags }}'
+    command: '{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}'
     focus: true
   - name: shell
 ```
@@ -54,7 +54,7 @@ windows:
 ```yaml
 windows:
   - name: "{{ agentWindow }}"
-    command: '{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt }}{{ end }}'
+    command: '{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}'
     focus: true
   - name: shell
 ```

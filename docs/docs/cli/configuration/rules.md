@@ -13,7 +13,7 @@ rules:
     max_recycled: 5
     windows:
       - name: "{{ agentWindow }}"
-        command: '{{ agentCommand }} {{ agentFlags }}'
+        command: '{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}'
         focus: true
       - name: shell
     commands:
@@ -24,7 +24,7 @@ rules:
     agent: aider
     windows:
       - name: "{{ agentWindow }}"
-        command: "{{ agentCommand }} {{ agentFlags }}"
+        command: "{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
         focus: true
       - name: tests
         command: "npm run test:watch"
@@ -103,7 +103,7 @@ rules:
     agent: aider
     windows:
       - name: "{{ agentWindow }}"
-        command: "{{ agentCommand }} {{ agentFlags }}"
+        command: "{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
         focus: true
       - name: shell
 ```
@@ -136,10 +136,13 @@ The `windows` field defines tmux windows declaratively. Each window has:
 ```yaml
 windows:
   - name: "{{ agentWindow }}"
-    command: '{{ agentCommand }} {{ agentFlags }}'
+    command: '{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}'
     focus: true
   - name: shell
 ```
+
+!!! warning "Keep the `.Prompt` suffix in agent commands"
+    `.Prompt` carries the opening prompt when a session starts with one, for example from `hive batch`. A custom agent window without `{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}` starts the agent with no prompt. Keep the suffix when you copy a command, and always pass `.Prompt` through `shq`.
 
 ### Window Examples
 
@@ -148,7 +151,7 @@ windows:
 ```yaml
 windows:
   - name: "{{ agentWindow }}"
-    command: "{{ agentCommand }} {{ agentFlags }}"
+    command: "{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
     focus: true
   - name: shell
 ```
@@ -158,7 +161,7 @@ windows:
 ```yaml
 windows:
   - name: "{{ agentWindow }}"
-    command: "{{ agentCommand }} {{ agentFlags }}"
+    command: "{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
     focus: true
   - name: tests
     command: "npm run test:watch"
@@ -170,7 +173,7 @@ windows:
 ```yaml
 windows:
   - name: "{{ agentWindow }}"
-    command: "{{ agentCommand }} {{ agentFlags }}"
+    command: "{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
     focus: true
   - name: aider
     command: "aider --model sonnet"
@@ -184,7 +187,7 @@ windows:
   - name: "{{ agentWindow }}"
     focus: true
     panes:
-      - command: "{{ agentCommand }} {{ agentFlags }}"
+      - command: "{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
       - command: "npm test -- --watch"
         split: horizontal
         size: 30%
@@ -208,7 +211,7 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 
 | Context                | Variables                                                           |
 | ---------------------- | ------------------------------------------------------------------- |
-| `rules[].windows` / `panes` | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`, `.Prompt` (batch) |
+| `rules[].windows` / `panes` | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`, `.Prompt` (empty unless the session starts with a prompt) |
 | `rules[].commands`     | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`, `.ID` |
 | `rules[].recycle`      | `.DefaultBranch`                                                    |
 | `rules[].branch_template` | `.Name`, `.Slug`, `.Owner`, `.Repo`, `.ID`                     |
