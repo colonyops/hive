@@ -73,9 +73,8 @@ mise run remote:down      # remove them
 Each server is a Docker container from the `test/remote` image: hive with the
 daemon enabled, tmux, git, and a stand-in `claude`, behind sshd on
 `127.0.0.1:2221` and up. `remote:up` prints a `servers:` block to paste into
-the `config.yaml` that Hive Desktop and the CLI read, and the two repositories
-each server can create sessions from (`/home/hive/repo.git` and
-`/home/hive/windows.git`). Then `hive servers ls` lists them, and the Code view
+the `config.yaml` that Hive Desktop and the CLI read, and the repository each
+server can create sessions from (`/home/hive/repo.git`). Then `hive servers ls` lists them, and the Code view
 in Hive Desktop shows a group for each.
 
 The servers run the Linux binary from `cli:build:container`, which `remote:up`

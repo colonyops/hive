@@ -57,7 +57,9 @@ up() {
     echo "error: the server count must be 1 to 99, not ${count}" >&2
     exit 2
   fi
-  down
+  if [[ $# -gt 1 ]]; then
+    usage
+  fi
   mkdir -p "${state}"
   chmod 700 "${state}"
   [[ -f "${state}/id_ed25519" ]] || ssh-keygen -q -t ed25519 -N '' -C hive-sandbox -f "${state}/id_ed25519"
@@ -73,6 +75,8 @@ up() {
     token_mount=(--volume "${state}/claude-token:/run/claude-token:ro")
   fi
 
+  # After the checks and builds, so a failed one leaves the running servers.
+  down
   : >"${state}/known_hosts"
   : >"${state}/ssh_config"
   for i in $(seq 1 "${count}"); do
@@ -125,10 +129,9 @@ EOF
   fi
   cat <<EOF
 
-Each server has two repositories to create sessions from:
-  /home/hive/repo.git     the spawn rule runs claude in a tmux session
-  /home/hive/windows.git  the windows rule opens an "agent" window
-claude on the servers is a stand-in that draws a fixed screen.
+Each server has one repository to create sessions from: /home/hive/repo.git.
+The windows rule opens an "agent" window that runs claude, a stand-in that
+draws a fixed screen.
 
 Try one:  ssh -F ${state}/ssh_config sandbox-1
 Or add "Include ${state}/ssh_config" to ~/.ssh/config and drop ssh_config: above.
@@ -153,14 +156,16 @@ status() {
   done
 }
 
+usage() {
+  echo "usage: sandbox.sh up [--claude] [N]|status|down" >&2
+  exit 2
+}
+
 cmd="${1:-up}"
 shift || true
 case "${cmd}" in
   up) up "$@" ;;
   status) status ;;
   down) down ;;
-  *)
-    echo "usage: sandbox.sh up [N]|status|down" >&2
-    exit 2
-    ;;
+  *) usage ;;
 esac
