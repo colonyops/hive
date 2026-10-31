@@ -269,6 +269,10 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 		return Action{}, false
 	}
 
+	if err := checkServerSession(cmd, sess); err != nil {
+		return Action{Key: key, Help: kb.Help, Type: action.TypeShell, Err: err}, true
+	}
+
 	// Build action from command, with keybinding overrides
 	a := Action{
 		Key:           key,
@@ -464,6 +468,9 @@ func (h *KeybindingResolver) KeyBindings() []key.Binding {
 // doc, when non-nil, populates the .Doc.* template namespace with the focused
 // review-view document; otherwise .Doc fields render as empty strings.
 func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserCommand, sess session.Session, args []string, doc *DocTemplateData) Action {
+	if err := checkServerSession(cmd, sess); err != nil {
+		return Action{Key: ":" + name, Help: cmd.Help, Type: action.TypeShell, Err: err}
+	}
 	a := Action{
 		Key:           ":" + name,
 		Help:          cmd.Help,
@@ -597,4 +604,20 @@ func (h *KeybindingResolver) ResolveFormCommand(key string, sess session.Session
 	}
 
 	return kb.Cmd, cmd, true
+}
+
+// checkServerSession refuses a command that runs on this machine for a
+// session on a server, whose checkout and tmux are on the server.
+func checkServerSession(cmd config.UserCommand, sess session.Session) error {
+	ref, err := session.ParseRef(sess.ID, session.LocalServer)
+	if err != nil || ref.Server == session.LocalServer {
+		return nil
+	}
+	switch {
+	case cmd.Sh != "" || len(cmd.Windows) > 0,
+		cmd.Action == action.TypeShell, cmd.Action == action.TypeTmuxStart,
+		cmd.Action == action.TypeSpawnWindows, cmd.Action == action.TypeKillWindow:
+		return fmt.Errorf("session %s is on server %s; this command runs on this machine", sess.Name, ref.Server)
+	}
+	return nil
 }

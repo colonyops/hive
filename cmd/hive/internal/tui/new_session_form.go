@@ -82,9 +82,12 @@ type NewSessionForm struct {
 	// Without agent selector: 0=repo, 1=name
 	// With agent selector:    0=agent, 1=repo, 2=name  (initial focus: 1)
 	focusedField int
-	submitted    bool
-	cancelled    bool
-	nameError    string
+	// server is the server under servers: the session is created on, or
+	// empty for this machine. It is chosen before the form opens.
+	server    string
+	submitted bool
+	cancelled bool
+	nameError string
 }
 
 // NewSessionFormResult contains the form submission result.
@@ -92,6 +95,7 @@ type NewSessionFormResult struct {
 	Repo        workspace.DiscoveredRepo
 	SessionName string
 	AgentKey    string // empty when agent selector is disabled
+	Server      string // empty for this machine
 }
 
 // NewNewSessionForm creates a new session form with the given repos.
@@ -318,12 +322,18 @@ func (f *NewSessionForm) Result() NewSessionFormResult {
 		Repo:        f.repos[idx],
 		SessionName: f.nameInput.Value(),
 		AgentKey:    agentKey,
+		Server:      f.server,
 	}
 }
 
 // View renders the form.
 func (f *NewSessionForm) View() string {
 	var sections []string
+
+	if f.server != "" {
+		sections = append(sections, styles.FormFieldStyle.Render(
+			styles.TextMutedStyle.Render("Server ")+f.server))
+	}
 
 	// Agent picker — title line then options line
 	if f.hasAgentSelector {
