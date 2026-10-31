@@ -509,4 +509,56 @@ describe('useNewSession — retry from an activity row', () => {
     expect(useToasts().toasts.value.at(-1)?.message).toBe('this activity event carries no session to retry')
     expect(useToasts().toasts.value.at(-1)?.severity).toBe('error')
   })
+
+  describe('a draft that failed on a server', () => {
+    const boxOptions = { ...options, workspaces: [], defaultRepository: '/home/hive/repo.git', agents: ['testbash'] }
+    const onBox = () => pending({ server: 'box', repository: 'https://example.com/typed.git' })
+
+    it('reopens on that server with its options', async () => {
+      mocks.FailedSessionDraft.mockResolvedValue(onBox())
+      mocks.ServerLaunchOptions.mockResolvedValue(boxOptions)
+      const s = useNewSession()
+      await s.openFailure()
+      expect(s.server.value).toBe('box')
+      expect(s.options.value).toEqual(boxOptions)
+      expect(s.initial.value.repository).toBe('https://example.com/typed.git')
+      expect(s.error.value).toBeNull()
+    })
+
+    it.each([
+      ['Retry on the toast', (s: ReturnType<typeof useNewSession>) => s.openFailure()],
+      ['New Session', (s: ReturnType<typeof useNewSession>) => s.openBlank()],
+    ])('still opens from %s when the server is unreachable', async (_, openForm) => {
+      mocks.FailedSessionDraft.mockResolvedValue(onBox())
+      mocks.ServerLaunchOptions.mockRejectedValue(new Error('ssh: connection refused'))
+      const s = useNewSession()
+      await openForm(s)
+      expect(s.open.value).toBe(true)
+      expect(s.server.value).toBe('box')
+      expect(s.initial.value.name).toBe('fix-crash')
+      expect(s.failure.value).toEqual(failure)
+      expect(s.error.value).toBe('ssh: connection refused')
+    })
+
+    it('retries from the Activity row on that server', async () => {
+      mocks.SessionDraftFromActivity.mockResolvedValue(onBox())
+      mocks.ServerLaunchOptions.mockResolvedValue(boxOptions)
+      mocks.CreateSession.mockResolvedValue(7)
+      const s = useNewSession()
+      await s.openFromActivity({ retry: 'session-create' })
+      expect(s.server.value).toBe('box')
+      await s.submit({ repository: 'https://example.com/typed.git', name: 'fix-crash' })
+      expect(mocks.CreateSession).toHaveBeenCalledWith(expect.objectContaining({ server: 'box' }))
+    })
+
+    it('reopens from the inbox item it was drafted from on that server', async () => {
+      mocks.NewSessionDraft.mockResolvedValue({ repository: 'acme/site', name: 'n', prompt: 'p' })
+      mocks.FailedSessionDraft.mockResolvedValue({ ...onBox(), itemIds: [item.id] })
+      mocks.ServerLaunchOptions.mockResolvedValue(boxOptions)
+      const s = useNewSession()
+      await s.openFromItem(item)
+      expect(s.server.value).toBe('box')
+      expect(s.failure.value).toEqual(failure)
+    })
+  })
 })

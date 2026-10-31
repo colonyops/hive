@@ -116,11 +116,21 @@ const inputValues = seedRef<ActionInputValues>(() => initialActionInputs(inputs.
 const validationError = ref('')
 
 // Another server's options name other repositories and agents, so a choice
-// the new options do not hold falls back to their default.
+// picked from the old options falls back to the new default when they do not
+// hold it. A refresh of the same server's options is not a new choice, and a
+// typed URL or restored draft was never picked from a list, so both stay.
+const optionsServer = seedRef(() => props.server)
 watch(
   () => props.options,
-  (options) => {
-    if (!(options.repositories ?? []).some((repo) => repo.repository === repository.value))
+  (options, previous) => {
+    if (props.server === optionsServer.value) return
+    optionsServer.value = props.server
+    const current = repository.value
+    const picked =
+      !current ||
+      current === previous.defaultRepository ||
+      (previous.repositories ?? []).some((repo) => repo.repository === current)
+    if (picked && !(options.repositories ?? []).some((repo) => repo.repository === current))
       repository.value = options.defaultRepository || ''
     if (agent.value && !(options.agents ?? []).includes(agent.value)) agent.value = options.defaultAgent || ''
   },

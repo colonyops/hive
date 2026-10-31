@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   ListServerSessions: vi.fn(),
   On: vi.fn().mockReturnValue(() => {}),
   SessionStatuses: vi.fn(),
+  ServerSessionStatuses: vi.fn(),
   SessionLaunchOptions: vi.fn(),
   SessionDetail: vi.fn(),
   SessionGitStatus: vi.fn(),
@@ -115,6 +116,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   ListSessions: mocks.ListSessions,
   ListServerSessions: mocks.ListServerSessions,
   SessionStatuses: mocks.SessionStatuses,
+  ServerSessionStatuses: mocks.ServerSessionStatuses,
   SessionLaunchOptions: mocks.SessionLaunchOptions,
   SessionDetail: mocks.SessionDetail,
   SessionGitStatus: mocks.SessionGitStatus,
@@ -325,6 +327,7 @@ describe('TerminalMode', () => {
     mocks.Available.mockResolvedValue({ available: true, reason: '' })
     mocks.Scratch.mockResolvedValue({ slug: 'Scratch', name: 'Terminals' })
     mocks.ListServerSessions.mockResolvedValue([])
+    mocks.ServerSessionStatuses.mockResolvedValue([])
     mocks.SessionLaunchOptions.mockResolvedValue({ agents: ['claude', 'codex'], defaultAgent: 'claude' })
     mocks.getTerminalEndpoint.mockResolvedValue({
       httpBaseURL: 'http://127.0.0.1:1',
@@ -724,6 +727,84 @@ describe('TerminalMode', () => {
     await row.trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.params.slug).toBeFalsy()
+  })
+
+  describe('a session on a server', () => {
+    const connected = {
+      server: 'box',
+      ssh: 'ada@box',
+      state: 'connected',
+      error: '',
+      sessions: [
+        {
+          server: 'box',
+          id: 'box:9',
+          name: 'remote work',
+          slug: 'box:remote-work',
+          repo: '/home/hive/repo.git',
+          repoIdentity: '/home/hive/repo.git',
+          state: 'active',
+          canvasOwner: '',
+          tags: [],
+          createdAt: '',
+        },
+      ],
+    }
+    const offline = { ...connected, state: 'offline', error: 'refused', sessions: [] }
+
+    async function refresh(wrapper: Awaited<ReturnType<typeof mountAvailable>>['wrapper']) {
+      await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
+      await wrapper.get('[data-testid="terminal-sessions-refresh"]').trigger('click')
+      await flushPromises()
+    }
+
+    it('stays attached through a failed list, and closes once the server answers without it', async () => {
+      mocks.ListServerSessions.mockResolvedValue([connected])
+      const { wrapper, router } = await mountAvailable()
+      await router.push({ name: 'terminal', params: { slug: 'box:remote-work' } })
+      await flushPromises()
+
+      mocks.ListServerSessions.mockResolvedValue([offline])
+      await refresh(wrapper)
+      expect(router.currentRoute.value.params.slug).toBe('box:remote-work')
+      expect(storedRestore()?.slug).toBe('box:remote-work')
+
+      mocks.ListServerSessions.mockResolvedValue([{ ...connected, sessions: [] }])
+      await refresh(wrapper)
+      expect(router.currentRoute.value.params.slug).toBeFalsy()
+    })
+
+    it('keeps a remembered session until its server answers, then restores it', async () => {
+      localStorage.setItem('hive.terminal.restore', JSON.stringify({ slug: 'box:remote-work', window: '' }))
+      mocks.ListServerSessions.mockResolvedValue([offline])
+      const { wrapper, router } = await mountAvailable()
+      expect(router.currentRoute.value.params.slug).toBeFalsy()
+      expect(storedRestore()?.slug).toBe('box:remote-work')
+
+      mocks.ListServerSessions.mockResolvedValue([connected])
+      await refresh(wrapper)
+      expect(router.currentRoute.value.params.slug).toBe('box:remote-work')
+    })
+
+    it('forgets a remembered session the server answers without', async () => {
+      localStorage.setItem('hive.terminal.restore', JSON.stringify({ slug: 'box:remote-work', window: '' }))
+      mocks.ListServerSessions.mockResolvedValue([{ ...connected, sessions: [] }])
+      await mountAvailable()
+      await flushPromises()
+      expect(storedRestore()?.slug).toBe('')
+    })
+
+    it('names the state of an incompatible server in its banner', async () => {
+      mocks.ListServerSessions.mockResolvedValue([{ ...offline, state: 'incompatible' }])
+      const { wrapper } = await mountAvailable()
+      expect(wrapper.get('[data-testid="terminal-server-offline-box"]').text()).toContain('box incompatible')
+    })
+
+    it('reports a server list that fails outright', async () => {
+      mocks.ListServerSessions.mockRejectedValue(new Error('no fleet'))
+      const { wrapper } = await mountAvailable()
+      expect(wrapper.get('[data-testid="terminal-servers-error"]').text()).toContain('no fleet')
+    })
   })
 
   it('starts a new session in the repository whose header was clicked', async () => {

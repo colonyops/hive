@@ -55,6 +55,8 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     sessionRepository,
     sessionServer,
     servers,
+    serversError,
+    serversLoaded,
     reloadServers,
   } = useTerminalSessions()
   const { rows: chatRows, slugs: chatSlugs, unpinSlug } = useTerminalPinnedChats()
@@ -88,8 +90,20 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     return serverHue(serverNames.value, server)
   }
 
-  function serverConnected(server: string): boolean {
-    return servers.value.some((list) => list.server.name === server && list.server.state === 'connected')
+  // An offline row is out of `attachable` but not gone: only a server that
+  // answers without the session says it is gone.
+  function isOfflineSlug(slug: string): boolean {
+    return servers.value.some((list) => list.sessions.some((row) => row.offline && row.slug === slug))
+  }
+
+  // Whether a slug on a server can be judged yet. A server that has not
+  // answered says nothing about its sessions, so a remembered one has to wait.
+  function serverPending(slug: string): boolean {
+    if (!slug.includes(':')) return false
+    if (!serversLoaded.value || serversError.value) return true
+    const name = slug.slice(0, slug.indexOf(':'))
+    const list = servers.value.find((candidate) => candidate.server.name === name)
+    return !!list && list.server.state !== 'connected'
   }
 
   // The scratch terminal and the pinned chats are part of this set rather than
@@ -109,9 +123,9 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
 
   // The tree has no other way to learn whether tmux is holding one of these, so
   // the sweep asks about them whatever "always show windows" says.
-  // A server's sessions are swept too: the status poll reads a server's
-  // windows only after its session list lands, so the sweep is what knows
-  // first whether a server's terminal runs.
+  // A server's sessions are swept too: the status poll reports nothing for a
+  // server that fails it, so it cannot tell a stopped terminal from an
+  // unanswered poll, and the sweep is the only source of a server row's liveness.
   const alwaysSwept = computed(() => [
     ...chatRows.value,
     ...(scratchRow.value ? [scratchRow.value] : []),
@@ -288,13 +302,13 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     isChat,
     isHiveSession,
     isServerSession,
-    serverSessions,
     servers,
-    serverNames,
+    serversError,
     offlineServers,
+    isOfflineSlug,
+    serverPending,
     reloadServers,
     hue,
-    serverConnected,
     sessionServer,
     rowRunning,
     rowIdle,

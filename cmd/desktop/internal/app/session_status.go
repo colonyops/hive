@@ -70,22 +70,19 @@ func (s *SessionsService) SessionStatuses(ctx context.Context) (SessionStatusSna
 		return SessionStatusSnapshot{}, Wrap(err, KindInternal, "listing tmux windows for status")
 	}
 	snapshot.Items = projectSessionStatuses(active, terminalStatuses, windowSets, s.windows != nil)
-	snapshot.Items = append(snapshot.Items, s.serverSessionStatuses(ctx)...)
 	return snapshot, nil
 }
 
-// serverSessionStatuses asks each server about its own active sessions, at
+// ServerSessionStatuses asks each server about its own active sessions, at
 // the same time, and gives each item the "<server>:<id>" id of its row. A
 // server that fails the poll reports nothing, the same as a missing terminal.
-func (s *SessionsService) serverSessionStatuses(ctx context.Context) []SessionStatus {
-	lists := s.listedServers()
-	if len(lists) == 0 {
-		return nil
-	}
+// It is separate from SessionStatuses, so a slow server never delays local
+// status and a machine without local status still reads its servers.
+func (s *SessionsService) ServerSessionStatuses(ctx context.Context) []SessionStatus {
+	items := []SessionStatus{}
 	var mu sync.Mutex
-	var items []SessionStatus
 	var wg sync.WaitGroup
-	for _, list := range lists {
+	for _, list := range s.listedServers() {
 		wg.Go(func() {
 			found := s.serverStatuses(ctx, list)
 			mu.Lock()
@@ -98,7 +95,7 @@ func (s *SessionsService) serverSessionStatuses(ctx context.Context) []SessionSt
 }
 
 func (s *SessionsService) serverStatuses(ctx context.Context, list ServerSessionList) []SessionStatus {
-	ctx, cancel := context.WithTimeout(ctx, serverListTimeout)
+	ctx, cancel := context.WithTimeout(ctx, serverReadTimeout)
 	defer cancel()
 	api, err := s.serverAPI(list.Server)
 	if err != nil || !api.StatusAvailable() {

@@ -143,16 +143,18 @@ export function RevealSession(id: string): $CancellablePromise<void> {
     return $Call.ByID(945395014, id);
 }
 
-/**
- * ServerLaunchOptions returns the New Session form's choices for a server.
- */
 export function ServerLaunchOptions(server: string): $CancellablePromise<dispatch$0.SessionLaunchOptions> {
     return $Call.ByID(1957319003, server);
 }
 
 /**
- * Servers checks every server under servers: and returns its state.
+ * ServerSessionStatuses returns the same state for the sessions on servers. It
+ * is a call of its own so local status never waits on ssh.
  */
+export function ServerSessionStatuses(): $CancellablePromise<app$0.SessionStatus[] | null> {
+    return $Call.ByID(965152434);
+}
+
 export function Servers(): $CancellablePromise<app$0.ServerStatus[] | null> {
     return $Call.ByID(794598629);
 }

@@ -74,6 +74,7 @@ const (
 	RetryMetadataKey       = "retry"
 	RetryKindSessionCreate = "session-create"
 
+	metaServer      = "server"
 	metaRepository  = "repository"
 	metaWorkspace   = "workspace"
 	metaName        = "name"
@@ -92,6 +93,7 @@ const (
 func SessionDraftMetadata(draft SessionDraft) map[string]string {
 	meta := map[string]string{
 		RetryMetadataKey: RetryKindSessionCreate,
+		metaServer:       draft.Server,
 		metaRepository:   draft.Repository,
 		metaWorkspace:    draft.Workspace,
 		metaName:         draft.Name,
@@ -125,6 +127,7 @@ func SessionDraftFromMetadata(meta map[string]string) (SessionDraft, bool) {
 		return SessionDraft{}, false
 	}
 	draft := SessionDraft{
+		Server:     meta[metaServer],
 		Repository: meta[metaRepository],
 		Workspace:  meta[metaWorkspace],
 		Name:       meta[metaName],

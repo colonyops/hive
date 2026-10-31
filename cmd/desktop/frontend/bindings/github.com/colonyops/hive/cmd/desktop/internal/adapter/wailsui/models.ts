@@ -594,9 +594,6 @@ export interface RuntimeStats {
     "go": procstats$0.GoRuntime;
 }
 
-/**
- * ServerSessions is one server's rows for the Code view.
- */
 export interface ServerSessions {
     "server": string;
     "ssh": string;

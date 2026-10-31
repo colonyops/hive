@@ -1,7 +1,6 @@
 package wailsui
 
 import (
-	"strings"
 	"time"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
@@ -47,13 +46,12 @@ func sessionSummaryOf(canonical func(drive.Space) drive.Space, s session.Session
 // here: the drive is on this machine.
 func serverSummaryOf(server string, s session.Session) SessionSummary {
 	return SessionSummary{
-		Server: server, ID: server + ":" + s.ID, Name: s.Name, Slug: server + ":" + s.Slug,
+		Server: server, ID: session.Ref{Server: server, ID: s.ID}.String(), Name: s.Name, Slug: session.Ref{Server: server, ID: s.Slug}.String(),
 		Repo: s.Remote, RepoIdentity: git.RemoteIdentity(s.Remote), State: string(s.State),
 		Tags: tagsOf(s), CreatedAt: s.ActivatedAt(),
 	}
 }
 
-// ServerSessions is one server's rows for the Code view.
 type ServerSessions struct {
 	Server   string           `json:"server"`
 	SSH      string           `json:"ssh"`
@@ -109,12 +107,12 @@ type SessionDetail struct {
 // sessionDetailOf is s as read through id, which keeps the "<server>:" prefix
 // of a session on a server.
 func sessionDetailOf(id string, s session.Session) SessionDetail {
-	server := serverOf(id)
+	ref := refOf(id)
 	return SessionDetail{
-		Server:         server,
-		ID:             qualified(server, s.ID),
+		Server:         serverOf(id),
+		ID:             session.Ref{Server: ref.Server, ID: s.ID}.String(),
 		Name:           s.Name,
-		Slug:           qualified(server, s.Slug),
+		Slug:           session.Ref{Server: ref.Server, ID: s.Slug}.String(),
 		Repo:           s.Remote,
 		State:          string(s.State),
 		Path:           s.Path,
@@ -126,20 +124,22 @@ func sessionDetailOf(id string, s session.Session) SessionDetail {
 	}
 }
 
-// serverOf is the server an id from the Code view names, "" for a local id.
-func serverOf(id string) string {
-	server, _, found := strings.Cut(id, ":")
-	if !found {
-		return ""
+// refOf reads an id the service has already accepted, so a malformed one is
+// only ever a bare local id.
+func refOf(id string) session.Ref {
+	ref, err := session.ParseRef(id, session.LocalServer)
+	if err != nil {
+		return session.Ref{Server: session.LocalServer, ID: id}
 	}
-	return server
+	return ref
 }
 
-func qualified(server, value string) string {
-	if server == "" {
-		return value
+// serverOf is the server an id from the Code view names, "" for this machine.
+func serverOf(id string) string {
+	if ref := refOf(id); ref.Server != session.LocalServer {
+		return ref.Server
 	}
-	return server + ":" + value
+	return ""
 }
 
 // SessionGitStatus is one session's checkout as the session status bar reads

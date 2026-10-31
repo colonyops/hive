@@ -347,3 +347,43 @@ describe('SessionLaunchDialog: launched from an action', () => {
     expect(wrapper.emitted('close')).toBeUndefined()
   })
 })
+
+describe('SessionLaunchDialog: new options', () => {
+  const typed = 'https://example.com/typed.git'
+  const boxOptions = {
+    ...options,
+    repositories: [{ name: 'repo', repository: '/home/hive/repo.git' }],
+    defaultRepository: '/home/hive/repo.git',
+    agents: ['testbash'],
+    defaultAgent: 'testbash',
+  }
+
+  async function submitted(wrapper: ReturnType<typeof mountDialog>) {
+    await nextTick()
+    await wrapper.get('[data-testid="new-session-name"]').setValue('fix-crash')
+    await wrapper.get('[data-testid="new-session-submit"]').trigger('click')
+    return wrapper.emitted('submit')?.[0]?.[0] as { repository: string; agent?: string }
+  }
+
+  it('keeps a typed repository when the same options refresh', async () => {
+    const wrapper = mountDialog({ initial: { ...blank, repository: typed }, withPrompt: true })
+    await wrapper.setProps({ options: { ...options } })
+    expect((await submitted(wrapper)).repository).toBe(typed)
+  })
+
+  it('moves a repository and agent picked from the old options to the new server’s defaults', async () => {
+    const wrapper = mountDialog({ initial: { ...blank, repository: options.defaultRepository }, withPrompt: true })
+    await wrapper.setProps({ server: 'box' })
+    await wrapper.setProps({ options: boxOptions })
+    const input = await submitted(wrapper)
+    expect(input.repository).toBe('/home/hive/repo.git')
+    expect(input.agent).toBe('testbash')
+  })
+
+  it('keeps a typed repository when the server changes', async () => {
+    const wrapper = mountDialog({ initial: { ...blank, repository: typed }, withPrompt: true })
+    await wrapper.setProps({ server: 'box' })
+    await wrapper.setProps({ options: boxOptions })
+    expect((await submitted(wrapper)).repository).toBe(typed)
+  })
+})

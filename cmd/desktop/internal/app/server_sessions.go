@@ -19,9 +19,9 @@ import (
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 )
 
-// serverListTimeout bounds one server's session list, so the Code view shows
-// an offline server as offline soon after it opens.
-const serverListTimeout = 5 * time.Second
+// serverReadTimeout bounds one server's answer to a session list or a status
+// poll, so the Code view shows an offline server as offline soon after it opens.
+const serverReadTimeout = 5 * time.Second
 
 // ServerSessionList is the sessions of one server under servers:, with the
 // state this read found. A server that did not answer has no sessions and an
@@ -34,7 +34,6 @@ type ServerSessionList struct {
 	Sessions []session.Session `json:"sessions"`
 }
 
-// ServerStatus is a server under servers: as the last check found it.
 type ServerStatus struct {
 	Name        string       `json:"name"`
 	SSH         string       `json:"ssh"`
@@ -85,16 +84,13 @@ func (s *SessionsService) listedServers() []ServerSessionList {
 }
 
 func listServerSessions(ctx context.Context, srv *servers.Server) ServerSessionList {
-	ctx, cancel := context.WithTimeout(ctx, serverListTimeout)
+	ctx, cancel := context.WithTimeout(ctx, serverReadTimeout)
 	defer cancel()
 	cfg := srv.Config()
 	list := ServerSessionList{Server: cfg.Name, SSH: cfg.SSH, State: server.StateConnected, Sessions: []session.Session{}}
 	sessions, err := srv.Client().ListSessions(ctx)
 	if err != nil {
-		list.State = server.StateOffline
-		if _, ok := errors.AsType[*wire.IncompatibleError](err); ok {
-			list.State = server.StateIncompatible
-		}
+		list.State = serverStateOf(err)
 		list.Error = err.Error()
 		return list
 	}
@@ -102,7 +98,13 @@ func listServerSessions(ctx context.Context, srv *servers.Server) ServerSessionL
 	return list
 }
 
-// Servers checks every server under servers: and reports what it found.
+func serverStateOf(err error) server.State {
+	if _, ok := errors.AsType[*wire.IncompatibleError](err); ok {
+		return server.StateIncompatible
+	}
+	return server.StateOffline
+}
+
 func (s *SessionsService) Servers(ctx context.Context) []ServerStatus {
 	fleet := s.fleet()
 	if fleet == nil {
@@ -129,6 +131,25 @@ type sessionTarget struct {
 }
 
 func (t sessionTarget) local() bool { return t.server == session.LocalServer }
+
+// wrap classifies a failure of this target. A server that fails for any reason
+// but a missing session is unreachable or refusing, not missing, whatever kind
+// the same failure has on this machine.
+func (t sessionTarget) wrap(err error, kind Kind, format string, args ...any) error {
+	if t.local() || errors.Is(err, session.ErrNotFound) {
+		return Wrap(err, kind, format, args...)
+	}
+	return serverError(err, KindUnavailable, format, args...)
+}
+
+// slugServer is the server a terminal slug names, if it names one.
+func slugServer(slug string) (string, bool) {
+	ref, err := session.ParseRef(slug, session.LocalServer)
+	if err != nil || ref.Server == session.LocalServer {
+		return "", false
+	}
+	return ref.Server, true
+}
 
 // target resolves an id from the Code view. "<server>:<id>" is a session on
 // that server and a bare id is local, the form ParseRef reads.

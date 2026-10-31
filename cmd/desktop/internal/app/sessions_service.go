@@ -448,7 +448,7 @@ func (s *SessionsService) SessionDetail(ctx context.Context, id string) (session
 	}
 	detail, err := target.api.GetSession(ctx, target.id)
 	if err != nil {
-		return session.Session{}, Wrap(err, KindNotFound, "reading session %q", id)
+		return session.Session{}, target.wrap(err, KindNotFound, "reading session %q", id)
 	}
 	return detail, nil
 }
@@ -551,11 +551,11 @@ func (s *SessionsService) SessionRisk(ctx context.Context, id string) (SessionRi
 	}
 	sess, err := target.api.GetSession(ctx, target.id)
 	if err != nil {
-		return SessionRisk{}, Wrap(err, KindNotFound, "checking session %q", id)
+		return SessionRisk{}, target.wrap(err, KindNotFound, "checking session %q", id)
 	}
 	risk, err := target.api.CheckSessionRisk(ctx, target.id)
 	if err != nil {
-		return SessionRisk{}, Wrap(err, KindNotFound, "checking session %q", id)
+		return SessionRisk{}, target.wrap(err, KindNotFound, "checking session %q", id)
 	}
 	return SessionRisk{
 		UncommittedChanges: risk.UncommittedChanges,
@@ -792,7 +792,7 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 	}
 	current, err := target.api.GetSession(ctx, target.id)
 	if err != nil {
-		return session.Session{}, Wrap(err, KindNotFound, "reading session %q", id)
+		return session.Session{}, target.wrap(err, KindNotFound, "reading session %q", id)
 	}
 	slug := session.Slugify(name)
 	if err := assertSlugFree(ctx, target, slug); err != nil {
@@ -812,15 +812,15 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 			rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionRenameRollbackTimeout)
 			defer cancel()
 			if _, rollbackErr := target.tmux.RenameSessionIfPresent(rollbackCtx, slug, tmuxSession); rollbackErr != nil {
-				return session.Session{}, Wrap(err, KindInternal, "renaming session %q (its terminal session is now named %q)", current.Name, slug)
+				return session.Session{}, target.wrap(err, KindInternal, "renaming session %q (its terminal session is now named %q)", current.Name, slug)
 			}
 		}
-		return session.Session{}, Wrap(err, KindInternal, "renaming session %q", current.Name)
+		return session.Session{}, target.wrap(err, KindInternal, "renaming session %q", current.Name)
 	}
 
 	renamed, err := target.api.GetSession(ctx, target.id)
 	if err != nil {
-		return session.Session{}, Wrap(err, KindInternal, "re-reading renamed session %q", id)
+		return session.Session{}, target.wrap(err, KindInternal, "re-reading renamed session %q", id)
 	}
 	return renamed, nil
 }
@@ -837,6 +837,9 @@ func (s *SessionsService) EditSession(ctx context.Context, id, name string, tags
 	if err != nil {
 		if errors.Is(err, session.ErrNotFound) {
 			return session.Session{}, Wrap(err, KindNotFound, "session %q not found", id)
+		}
+		if KindOf(err) == KindUnavailable {
+			return session.Session{}, err
 		}
 		return session.Session{}, Wrap(err, KindInternal, "reading session %q", id)
 	}
@@ -884,7 +887,7 @@ func (s *SessionsService) saveTags(ctx context.Context, id string, save func(ses
 	case errors.Is(err, session.ErrNotFound):
 		return session.Session{}, Wrap(err, KindNotFound, "session %q not found", id)
 	case err != nil:
-		return session.Session{}, Wrap(err, KindInternal, "updating tags on session %q", id)
+		return session.Session{}, target.wrap(err, KindInternal, "updating tags on session %q", id)
 	}
 	return saved, nil
 }
@@ -904,7 +907,7 @@ func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) (mu
 		return multiplexer.LaunchResult{}, Errorf(KindInvalid, "session slug is required")
 	}
 
-	if server, _, remote := strings.Cut(slug, ":"); remote {
+	if server, remote := slugServer(slug); remote {
 		return multiplexer.LaunchResult{}, Errorf(KindUnavailable, "session %q is on server %q; start its terminal on that server", slug, server)
 	}
 	detail, err := s.detailBySlug(ctx, slug)
@@ -944,7 +947,7 @@ func (s *SessionsService) SessionDirectory(ctx context.Context, slug string) (st
 	if slug == "" {
 		return "", Errorf(KindInvalid, "session slug is required")
 	}
-	if _, _, remote := strings.Cut(slug, ":"); remote {
+	if _, remote := slugServer(slug); remote {
 		return "", errLocalOnly(slug, "a terminal on this machine")
 	}
 	detail, err := s.detailBySlug(ctx, slug)
@@ -1028,7 +1031,7 @@ func (s *SessionsService) destructiveJob(ctx context.Context, id, label, actionI
 	}
 	detail, err := target.api.GetSession(ctx, target.id)
 	if err != nil {
-		return 0, Wrap(err, KindNotFound, "reading session %q", id)
+		return 0, target.wrap(err, KindNotFound, "reading session %q", id)
 	}
 	return s.jobs.Track(ctx, label, actionID, detail.Name, func(bg context.Context) error {
 		return op(bg, target)

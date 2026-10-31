@@ -103,6 +103,9 @@ jobs:
               - '.github/workflows/ci.yml'
             desktop-e2e:
               - 'cmd/desktop/**'
+              - 'cmd/hive/**'
+              - 'test/remote/**'
+              - 'mise.toml'
               - 'internal/**'
               - 'pkg/**'
               - 'web/**'
@@ -329,7 +332,7 @@ jobs:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.desktop-e2e == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       MISE_TASK_RUN_AUTO_INSTALL: "false"
     steps:
@@ -342,7 +345,7 @@ jobs:
         with:
           cache-name: e2e
           desktop-deps: "false"
-          mise-install-args: go
+          mise-install-args: go goreleaser go:github.com/abice/go-enum github:sqlc-dev/sqlc github:hay-kot/gobusgen github:bufbuild/buf
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
@@ -355,6 +358,9 @@ jobs:
 
       - name: Run desktop e2e tests
         run: mise run desktop:e2e
+
+      - name: Run desktop e2e tests against a server
+        run: mise run desktop:e2e:remote
 
       - name: Upload traces
         if: failure()

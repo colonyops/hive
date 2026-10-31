@@ -170,6 +170,11 @@ func TestServerSessionsQualifyIDAndSlugWithTheServer(t *testing.T) {
 }
 
 func TestSessionDetailOfKeepsTheServerOfTheID(t *testing.T) {
+	local := sessionDetailOf("local:s1", session.Session{ID: "s1", Slug: "review"})
+	assert.Empty(t, local.Server, "local: names this machine, not a server")
+	assert.Equal(t, "s1", local.ID)
+	assert.Equal(t, "review", local.Slug)
+
 	got := sessionDetailOf("box:s1", session.Session{ID: "s1", Slug: "review"})
 	assert.Equal(t, "box", got.Server)
 	assert.Equal(t, "box:s1", got.ID)

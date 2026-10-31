@@ -26,19 +26,23 @@ func runTestDaemon(t *testing.T, mux *fakeMux) *daemonclient.Client {
 }
 
 // runTestDaemonSocket is runTestDaemon's daemon, answered by its socket path.
-func runTestDaemonSocket(t *testing.T, mux *fakeMux) string {
+func runTestDaemonSocket(t *testing.T, mux *fakeMux, configure ...func(*daemon.Options)) string {
 	t.Helper()
 	dataDir := t.TempDir()
 	ctx, cancel := context.WithCancel(t.Context())
 	ready := make(chan string, 1)
 	done := make(chan error, 1)
+	opts := daemon.Options{
+		Config:  hivetest.LoadConfig(t, dataDir),
+		Ports:   hive.Ports{Executor: &executiltest.Exec{}, Mux: mux, DataDir: dataDir, Logger: zerolog.Nop()},
+		Version: "test",
+		OnReady: func(path string) { ready <- path },
+	}
+	for _, apply := range configure {
+		apply(&opts)
+	}
 	go func() {
-		done <- daemon.Run(ctx, daemon.Options{
-			Config:  hivetest.LoadConfig(t, dataDir),
-			Ports:   hive.Ports{Executor: &executiltest.Exec{}, Mux: mux, DataDir: dataDir, Logger: zerolog.Nop()},
-			Version: "test",
-			OnReady: func(path string) { ready <- path },
-		})
+		done <- daemon.Run(ctx, opts)
 	}()
 	t.Cleanup(func() {
 		cancel()

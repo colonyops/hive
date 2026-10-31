@@ -77,6 +77,9 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
     }
   })
 
+  // A clone on a CI runner can take most of a minute.
+  test.setTimeout(120_000)
+
   test('reports an offline server without holding up the tree', async ({ page }) => {
     await stubTerminals(page)
     await page.goto('/#/terminal')

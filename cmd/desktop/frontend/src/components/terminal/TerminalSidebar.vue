@@ -40,7 +40,7 @@ import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
 import { moveId, type OrderDropTarget } from '../../lib/listOrder'
 import { terminalTreeFocused } from '../../lib/terminalTree'
 import { sessionAgeDays, useTerminalSessionAge } from '../../stores/useTerminalSessionAge'
-import type { TerminalSessionGroup, TerminalSessionRow } from '../../stores/useTerminalSessions'
+import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
@@ -132,17 +132,13 @@ function onChatMenuSelect(row: TerminalSessionRow, id: string): void {
   else if (id === 'open-in-agents') ops.openChatInAgents(row)
 }
 
-function groupTestid(group: TerminalSessionGroup): string {
-  return group.kind === 'chats' ? 'terminal-chats-group' : 'terminal-repo-group'
-}
-
 function serverOffline(name: string): boolean {
   return tree.offlineServers.some((server) => server.name === name)
 }
 
 function hostTitle(row: TerminalSessionRow): string {
   const server = tree.servers.find((list) => list.server.name === row.server)?.server
-  if (row.offline) return `${row.server} is offline`
+  if (row.offline) return `${row.server} is ${server?.state ?? 'offline'}`
   return server?.ssh ? `${row.server} · ${server.ssh}` : row.server
 }
 
@@ -307,6 +303,9 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
     </SidebarToolbar>
     <SessionViewBar />
     <SessionViewDialogs />
+    <InlineError v-if="tree.serversError" class="mx-3 mt-2 shrink-0" testid="terminal-servers-error">{{
+      tree.serversError
+    }}</InlineError>
     <InlineError
       v-for="server in tree.offlineServers"
       :key="server.name"
@@ -315,7 +314,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
     >
       <IconCircleAlert class="size-3.5 shrink-0" aria-hidden="true" />
       <span class="min-w-0 flex-1 truncate text-text-2" :title="server.error">
-        <span class="font-medium text-text">{{ server.name }}</span> offline · {{ server.sessions }}
+        <span class="font-medium text-text">{{ server.name }}</span> {{ server.state }} · {{ server.sessions }}
         {{ server.sessions === 1 ? 'session' : 'sessions' }}
       </span>
       <BaseButton
@@ -348,7 +347,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
             class="repo-group"
             role="button"
             tabindex="0"
-            :data-testid="groupTestid(group)"
+            :data-testid="group.kind === 'chats' ? 'terminal-chats-group' : 'terminal-repo-group'"
             :data-repo="group.key"
             :aria-expanded="view.expansion.expanded(group)"
             @click="view.expansion.toggle(group)"

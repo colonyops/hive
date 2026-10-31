@@ -384,8 +384,6 @@ export function useAppPaletteRows(
         }
       }
 
-      // A new session on a server is its own row, so the server is chosen
-      // before the form opens rather than inside it.
       for (const { server } of terminalServers.value) {
         if (server.state !== 'connected') continue
         cmds.push({

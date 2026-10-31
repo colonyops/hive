@@ -45,12 +45,10 @@ func (s *SessionService) ListServerSessions(ctx context.Context) []ServerSession
 	return serverSessionsOf(s.sessions.ListServerSessions(ctx))
 }
 
-// Servers checks every server under servers: and returns its state.
 func (s *SessionService) Servers(ctx context.Context) []app.ServerStatus {
 	return s.sessions.Servers(ctx)
 }
 
-// ServerLaunchOptions returns the New Session form's choices for a server.
 func (s *SessionService) ServerLaunchOptions(ctx context.Context, server string) (dispatch.SessionLaunchOptions, error) {
 	return s.sessions.ServerLaunchOptions(ctx, server)
 }
@@ -59,6 +57,12 @@ func (s *SessionService) ServerLaunchOptions(ctx context.Context, server string)
 // active session.
 func (s *SessionService) SessionStatuses(ctx context.Context) (app.SessionStatusSnapshot, error) {
 	return s.sessions.SessionStatuses(ctx)
+}
+
+// ServerSessionStatuses returns the same state for the sessions on servers. It
+// is a call of its own so local status never waits on ssh.
+func (s *SessionService) ServerSessionStatuses(ctx context.Context) []app.SessionStatus {
+	return s.sessions.ServerSessionStatuses(ctx)
 }
 
 // SessionDetail reads one session in full, for the detail view.

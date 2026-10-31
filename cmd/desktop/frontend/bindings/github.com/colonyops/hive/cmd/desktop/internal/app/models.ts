@@ -312,9 +312,6 @@ export interface ScratchTerminal {
     "name": string;
 }
 
-/**
- * ServerStatus is a server under servers: as the last check found it.
- */
 export interface ServerStatus {
     "name": string;
     "ssh": string;

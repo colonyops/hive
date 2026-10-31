@@ -170,6 +170,29 @@ export function useNewSession() {
     }
   }
 
+  // A draft goes back to the server it failed on, and that server being down
+  // may be why it failed. Its options are then out of reach, so the form opens
+  // on this machine's with the error in it: what was typed stays reachable,
+  // and the user can retry or choose another server.
+  async function showRestored(
+    draft: SessionDraft,
+    localOpts: SessionLaunchOptionsView,
+    items: number[],
+  ): Promise<void> {
+    const onServer = draft.server ?? ''
+    let opts = localOpts
+    let unreachable: string | null = null
+    if (onServer) {
+      try {
+        opts = await ServerLaunchOptions(onServer)
+      } catch (e) {
+        unreachable = message(e, `Could not read the options of server ${onServer}.`)
+      }
+    }
+    show(restored(draft, opts), opts, items, draft.failure ?? null, undefined, onServer)
+    error.value = unreachable
+  }
+
   // `preferred` is the repository of whatever session is on screen. Starting a
   // second session on the repo you are already in is the common case, and the
   // backend default — the first configured workspace — is almost never it.
@@ -187,8 +210,7 @@ export function useNewSession() {
     try {
       const [localOpts, pending] = await Promise.all([resolveOptions(), pendingDraft()])
       if (pending?.failure) {
-        const opts = pending.server ? await ServerLaunchOptions(pending.server) : localOpts
-        show(restored(pending, opts), opts, draftItemIDs(pending), pending.failure, undefined, pending.server ?? '')
+        await showRestored(pending, localOpts, draftItemIDs(pending))
         return
       }
       const opts = onServer ? await ServerLaunchOptions(onServer) : localOpts
@@ -224,7 +246,7 @@ export function useNewSession() {
       const pendingItemIDs = pending ? draftItemIDs(pending) : []
       const sameItems = pendingItemIDs.length === ids.length && pendingItemIDs.every((id, index) => id === ids[index])
       if (pending?.failure && sameItems) {
-        show(restored(pending, opts), opts, ids, pending.failure)
+        await showRestored(pending, opts, ids)
         return
       }
       const draftOptions = items.length > 1 && !draft.repository ? { ...opts, defaultRepository: '' } : opts
@@ -249,8 +271,7 @@ export function useNewSession() {
     try {
       const [localOpts, pending] = await Promise.all([resolveOptions(), pendingDraft()])
       if (!pending?.failure) return
-      const opts = pending.server ? await ServerLaunchOptions(pending.server) : localOpts
-      show(restored(pending, opts), opts, draftItemIDs(pending), pending.failure, undefined, pending.server ?? '')
+      await showRestored(pending, localOpts, draftItemIDs(pending))
     } catch (e) {
       showToast(message(e, 'Could not reopen the session form.'), { severity: 'error' })
     } finally {
@@ -266,7 +287,7 @@ export function useNewSession() {
     loading.value = true
     try {
       const [opts, draft] = await Promise.all([resolveOptions(), SessionDraftFromActivity(metadata)])
-      show(restored(draft, opts), opts, draftItemIDs(draft), draft.failure ?? null)
+      await showRestored(draft, opts, draftItemIDs(draft))
     } catch (e) {
       showToast(message(e, 'Could not reopen the session form.'), { severity: 'error' })
     } finally {
