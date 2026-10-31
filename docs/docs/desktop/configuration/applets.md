@@ -47,6 +47,35 @@ applets:
   titlebar: [music, build-status]
 ```
 
+## Share one
+
+Export and import are in **Settings ▸ Applets**.
+
+!!! warning "Only import applets from people you trust"
+    An applet has full access to your machine, as you. Hive does not review or limit it. Once you open it, it can run any command or program, keep processes running, read, change and delete any of your files, reach the network and send what it reads anywhere, use your clipboard, ask for your camera and microphone, and run Hive's commands. Importing one is the same as running a program someone sent you.
+
+**To export**, press **Export** on the applet, check the list of files, and save. You get one `.hiveapplet` file.
+
+| In the file | Left out |
+| --- | --- |
+| The applet's own files, in their folders | Saved `localStorage` |
+| | Hidden files and folders such as `.env` and `.git` |
+| | `.log` files |
+| | Links, so nothing outside the applet's folder can get in |
+
+The file holds no settings, shortcuts or other data from your machine. Hive cannot tell every file a page wrote from one you wrote, so read the list, and anyone you send the file to can read all of it. Built-in applets have no **Export**.
+
+**To import**, press **Import** and choose the file. Hive shows the warning, the applet's name, its files, and what would run. Nothing is on disk until you tick **I trust who this came from** and press **Import applet**. Cancel is the default and leaves nothing behind.
+
+An import never replaces an applet. If the id is taken, Hive offers a new one. To update an applet, delete its folder first, which also deletes its saved data. An imported applet starts with nothing:
+
+- Nothing runs until you open it.
+- A title bar page stays off until you turn it on, even if that id was in your title bar before.
+- It has no shortcuts, even if that id had some before.
+- Files are not marked executable, so a page has to run a script with `sh script.sh`.
+
+Hive refuses a file that is over 32 MB, unpacks past 64 MB, or has more than 500 files. It also refuses one with paths outside the applet, links, hidden files, or an invalid `applet.yaml`, and installs none of it.
+
 ## See what is registered
 
 **Settings ▸ Applets** lists every applet Hive found and whether its file loaded, with the error if not. It also shows what applets have running, so you can stop a process, and where the applets folder is.
@@ -90,7 +119,7 @@ The page gets `window.hive`:
 The page also receives Hive's theme as CSS variables such as `--hv-app`, `--hv-text` and `--hv-accent`, which change when you change theme. `localStorage` works and is kept per applet. Cookies and IndexedDB do not work.
 
 !!! warning "An applet can do anything you can"
-    Applets have no permissions and no allowlist. A page can run any command and change any file, and so can any remote script it loads. Nothing runs when a file loads, only when you open an applet. Read an applet from someone else before you open it.
+    Applets have no permissions and no allowlist. A page can run any command and change any file, and so can any remote script it loads. Nothing runs when a file loads, only when you open an applet. Only [import applets](#share-one) from people you trust.
 
 ### Title bar pages
 

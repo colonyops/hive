@@ -4,8 +4,13 @@ import { resetStores } from '../../stores/defineStore'
 import AppletsSettingsView from '../AppletsSettingsView.vue'
 
 const service = vi.hoisted(() => ({
+  CancelImport: vi.fn(),
+  ConfirmImport: vi.fn(),
   Dir: vi.fn(),
+  Export: vi.fn(),
+  ExportPreview: vi.fn(),
   List: vi.fn(),
+  PrepareImport: vi.fn(),
   Processes: vi.fn(),
   SpawnKill: vi.fn(),
 }))
@@ -33,6 +38,7 @@ describe('AppletsSettingsView', () => {
   beforeEach(() => {
     resetStores()
     vi.useFakeTimers()
+    service.PrepareImport.mockReset()
     service.Dir.mockResolvedValue('/applets')
     service.SpawnKill.mockResolvedValue(undefined)
     service.Processes.mockResolvedValue([])
@@ -91,5 +97,68 @@ describe('AppletsSettingsView', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="settings-applet-process-p2"]').exists()).toBe(true)
     wrapper.unmount()
+  })
+
+  describe('sharing', () => {
+    async function mountView() {
+      const wrapper = mount(AppletsSettingsView, { attachTo: document.body })
+      await flushPromises()
+      return wrapper
+    }
+
+    it('offers export only for an applet there is something to share of', async () => {
+      const wrapper = await mountView()
+      expect(wrapper.find('[data-testid="settings-applet-docker-export"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="settings-applet-applet-builder-export"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="settings-applet-broken-export"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('shows what an export includes and leaves out', async () => {
+      service.ExportPreview.mockResolvedValue({
+        id: 'docker',
+        title: 'Docker',
+        fileName: 'docker.hiveapplet',
+        files: [{ path: 'index.html', bytes: 10 }],
+        leftOut: ['.localstorage.json'],
+      })
+      const wrapper = await mountView()
+      await wrapper.get('[data-testid="settings-applet-docker-export"]').trigger('click')
+      await flushPromises()
+      expect(document.querySelector('[data-testid="applet-export-files"]')?.textContent).toContain('index.html')
+      expect(document.querySelector('[data-testid="applet-export-left-out"]')?.textContent).toContain(
+        '.localstorage.json',
+      )
+      wrapper.unmount()
+    })
+
+    it('shows why a file was refused, and opens no dialog', async () => {
+      service.PrepareImport.mockRejectedValue(new Error('this file has a path outside the applet'))
+      const wrapper = await mountView()
+      vi.useRealTimers()
+      const input = wrapper.get('[data-testid="settings-applets-import-input"]').element as HTMLInputElement
+      Object.defineProperty(input, 'files', { value: [new File(['x'], 'bad.hiveapplet')], configurable: true })
+      input.dispatchEvent(new Event('change'))
+      await vi.waitFor(() =>
+        expect(wrapper.find('[data-testid="settings-applets-share-error"]').text()).toContain('outside the applet'),
+      )
+      expect(document.querySelector('[data-testid="applet-import"]')).toBeNull()
+      wrapper.unmount()
+    })
+
+    it('refuses a file over the limit without reading it', async () => {
+      const wrapper = await mountView()
+      vi.useRealTimers()
+      const input = wrapper.get('[data-testid="settings-applets-import-input"]').element as HTMLInputElement
+      const big = new File(['x'], 'big.hiveapplet')
+      Object.defineProperty(big, 'size', { value: (32 << 20) + 1 })
+      Object.defineProperty(input, 'files', { value: [big], configurable: true })
+      input.dispatchEvent(new Event('change'))
+      await vi.waitFor(() =>
+        expect(wrapper.find('[data-testid="settings-applets-share-error"]').text()).toContain('32 MB'),
+      )
+      expect(service.PrepareImport).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
   })
 })

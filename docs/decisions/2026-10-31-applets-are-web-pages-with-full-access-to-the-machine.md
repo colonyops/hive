@@ -76,10 +76,25 @@ that frame is the one that keeps running and two frames acting on it would run i
 With no page to take it, the panel opens, and the bridge holds the command until the page
 listens.
 
+**Sharing is where the first rule stops holding.** This ADR's case for no restrictions is
+that an applet is written by or for the person who runs it. An import breaks that, so it
+gets the one warning in this design, and it still adds no permission, since an applet that
+someone trusts has the access any applet has. A `.hiveapplet` is a zip holding
+`hive-applet.json`, with a format number and the id, and the files under `files/`. The file
+is hostile until the user confirms: it is checked whole in memory and installed by renaming
+a finished directory in, so nothing lands early or partly. Import never replaces an applet,
+because a replace is how someone else's update overwrites what a user trusted, and it clears
+any title bar place or chord the id still has in `settings.yaml`, so a file cannot inherit
+what the user gave another applet of that name.
+
 ## Consequences
 
 - An applet has the user's full access, and so does any remote script its page loads.
-  Opening an applet from someone else is running their code.
+  Opening an applet from someone else is running their code. The warning says so, and no
+  check of the file can make it safe: the checks protect the disk from the import, not the
+  user from the applet.
+- An export cannot tell every data file a page wrote from one its author wrote, so it leaves
+  out hidden files and logs and shows the user the list.
 - A page cannot `fetch` another HTML file of its own, because that response has no CORS
   header. It can navigate to one.
 - Cookies and IndexedDB do not work in an opaque origin.

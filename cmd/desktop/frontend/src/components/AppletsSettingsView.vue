@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Which applets Hive found, whether each loaded, and what they have running. The files
-// under the applets directory are the registration, so this page reads them and does
-// not edit them.
+// under the applets directory are the registration, so this page only reads them, apart
+// from importing a new one.
 import { useIntervalFn } from '@vueuse/core'
 import { computed, onMounted, ref, type DeepReadonly } from 'vue'
 import SettingsPage from './settings/SettingsPage.vue'
@@ -13,17 +13,27 @@ import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import CopyButton from '@hive/ui/components/ui/CopyButton.vue'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
+import AppletExportDialog from './applets/AppletExportDialog.vue'
+import AppletImportDialog from './applets/AppletImportDialog.vue'
 import {
   Dir,
+  ExportPreview,
+  PrepareImport,
   Processes,
   SpawnKill,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
-import type { Applet, AppletProcess } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import type {
+  Applet,
+  AppletExportPreview,
+  AppletImportPreview,
+  AppletProcess,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { useSystemSettings } from '../composables/useSystemSettings'
 import { useApplets } from '../stores/useApplets'
 
 const PROCESS_POLL_MS = 2000
 const BUILDER_ID = 'applet-builder'
+const MAX_ARCHIVE_BYTES = 32 << 20
 
 const applets = useApplets()
 const { revealPath } = useSystemSettings()
@@ -63,6 +73,45 @@ async function stop(process: AppletProcess): Promise<void> {
   await pollProcesses()
 }
 
+const importInput = ref<HTMLInputElement | null>(null)
+const importPreview = ref<AppletImportPreview | null>(null)
+const exportPreview = ref<AppletExportPreview | null>(null)
+const shareError = ref('')
+
+function readBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '')
+    reader.onerror = () => reject(new Error('Could not read that file.'))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function onImportFile(): Promise<void> {
+  const input = importInput.value
+  const file = input?.files?.[0]
+  if (!input || !file) return
+  shareError.value = ''
+  try {
+    if (file.size > MAX_ARCHIVE_BYTES) throw new Error('This file is larger than the 32 MB limit.')
+    importPreview.value = await PrepareImport(await readBase64(file))
+  } catch (e) {
+    shareError.value = e instanceof Error ? e.message : 'Could not read that file.'
+  } finally {
+    // So choosing the same file again still fires a change.
+    input.value = ''
+  }
+}
+
+async function startExport(id: string): Promise<void> {
+  shareError.value = ''
+  try {
+    exportPreview.value = await ExportPreview(id)
+  } catch (e) {
+    shareError.value = e instanceof Error ? e.message : 'Could not export that applet.'
+  }
+}
+
 function status(applet: DeepReadonly<Applet>): { tone: 'success' | 'danger' | 'accent'; label: string } {
   if (!applet.runnable) return { tone: 'danger', label: 'Invalid' }
   if (applet.error) return { tone: 'accent', label: 'Running last good file' }
@@ -98,6 +147,17 @@ onMounted(() => {
       boxed
     >
       <template #actions>
+        <input
+          ref="importInput"
+          type="file"
+          accept=".hiveapplet"
+          class="hidden"
+          data-testid="settings-applets-import-input"
+          @change="onImportFile"
+        />
+        <BaseButton variant="secondary" size="sm" data-testid="settings-applets-import" @click="importInput?.click()"
+          >Import</BaseButton
+        >
         <BaseButton
           variant="secondary"
           size="sm"
@@ -106,6 +166,13 @@ onMounted(() => {
           >Build an applet</BaseButton
         >
       </template>
+      <InlineError
+        v-if="shareError"
+        variant="line"
+        class="px-4 py-3.5"
+        :message="shareError"
+        testid="settings-applets-share-error"
+      />
       <SettingsRow
         v-for="applet in applets.applets.value"
         :key="applet.id"
@@ -137,6 +204,14 @@ onMounted(() => {
             :data-testid="`settings-applet-${applet.id}-open`"
             @click="applets.toggle(applet.id, '')"
             >Open</BaseButton
+          >
+          <BaseButton
+            v-if="!applet.builtin && applet.runnable"
+            variant="secondary"
+            size="xs"
+            :data-testid="`settings-applet-${applet.id}-export`"
+            @click="startExport(applet.id)"
+            >Export</BaseButton
           >
         </div>
       </SettingsRow>
@@ -187,5 +262,7 @@ onMounted(() => {
         </div>
       </SettingsRow>
     </SettingsSection>
+    <AppletImportDialog v-if="importPreview" :preview="importPreview" @close="importPreview = null" />
+    <AppletExportDialog v-if="exportPreview" :preview="exportPreview" @close="exportPreview = null" />
   </SettingsPage>
 </template>
