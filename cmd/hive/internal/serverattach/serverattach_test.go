@@ -1,17 +1,19 @@
 package serverattach
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/domain/server"
 )
 
 func TestCommandAttachesWithTheConnectionsSSHOptionsAndATerminal(t *testing.T) {
-	argv := Command(server.Host{Name: "box", ConfigFile: "/cfg/ssh config"}, "it's mine")
+	argv := Command(server.Host{Name: "box", ConfigFile: "/cfg/ssh config"}, Target("it's mine", ""))
 
 	assert.Equal(t, []string{
 		"ssh", "-F", "/cfg/ssh config", "-t",
@@ -22,10 +24,24 @@ func TestCommandAttachesWithTheConnectionsSSHOptionsAndATerminal(t *testing.T) {
 }
 
 func TestCommandUsesTheTmuxPathOfTheServer(t *testing.T) {
-	argv := Command(server.Host{Name: "box", Tmux: "~/bin/tmux"}, "s")
+	argv := Command(server.Host{Name: "box", Tmux: "~/bin/tmux"}, Target("s", ""))
 
 	assert.Contains(t, argv, `"$HOME"/'bin/tmux'`)
 	assert.NotContains(t, argv, "tmux")
+}
+
+func TestTargetNamesTheWindowOrPane(t *testing.T) {
+	assert.Equal(t, "=s", Target("s", ""))
+	assert.Equal(t, "=s:tests", Target("s", "tests"))
+	assert.Equal(t, "%7", Target("s", "%7"))
+}
+
+func TestPrepareReportsTheLastLineOfSSH(t *testing.T) {
+	cmd, report := Prepare(t.Context(), server.Host{Name: "box"}, Target("s", ""))
+	_, _ = fmt.Fprint(cmd.Stderr, "ssh: connect to host box port 22: Connection refused\n")
+
+	require.NoError(t, report(nil))
+	assert.EqualError(t, report(errors.New("exit status 255")), "ssh box: exit status 255: ssh: connect to host box port 22: Connection refused")
 }
 
 func TestWindowScriptCarriesTheSSHAgentOfThisProcess(t *testing.T) {

@@ -541,6 +541,9 @@ func (h *KeybindingResolver) RenderWithFormData(
 	formData map[string]any,
 	doc *DocTemplateData,
 ) Action {
+	if err := checkServerSession(cmd, sess); err != nil {
+		return Action{Key: ":" + name, Help: cmd.Help, Type: action.TypeShell, Err: err}
+	}
 	a := Action{
 		Key:           ":" + name,
 		Help:          cmd.Help,

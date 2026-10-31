@@ -6,6 +6,7 @@ package serverattach
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -19,35 +20,64 @@ import (
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
-// Command is the argv that attaches a terminal to tmuxSession on h.
-func Command(h server.Host, tmuxSession string) []string {
+// ErrSessionCompleted is a session whose commands all finished, so it left no
+// terminal to attach to.
+var ErrSessionCompleted = errors.New("the session's commands finished, so it has no terminal to attach to")
+
+// Target is the tmux target of window in tmuxSession. An empty window is the
+// session's current window. A pane id stands alone because tmux does not
+// resolve it after a session name, and it is unique on its server.
+func Target(tmuxSession, window string) string {
+	switch {
+	case window == "":
+		return "=" + tmuxSession
+	case strings.HasPrefix(window, "%"):
+		return window
+	default:
+		return "=" + tmuxSession + ":" + window
+	}
+}
+
+// Command is the argv that attaches a terminal to target on h.
+func Command(h server.Host, target string) []string {
 	tmux := "tmux"
 	if h.Tmux != "" {
 		tmux = sshdial.RemotePath(h.Tmux)
 	}
 	args := append([]string{"ssh"}, sshdial.TerminalOptions(h)...)
-	return append(args, h.Name, "--", tmux, "attach-session", "-t", sshdial.Quote("="+tmuxSession))
+	return append(args, h.Name, "--", tmux, "attach-session", "-t", sshdial.Quote(target))
 }
 
 // Run attaches this process's terminal and returns when the user detaches.
 // A failed connection reports ssh's last stderr line, which names the cause. An
 // error from tmux on the server reaches the user over the terminal instead.
-func Run(ctx context.Context, h server.Host, tmuxSession string) error {
-	argv := Command(h, tmuxSession)
-	var last lastLine
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // argv is built from the config's ssh target
+func Run(ctx context.Context, h server.Host, target string) error {
+	cmd, report := Prepare(ctx, h, target)
 	cmd.Stdin, cmd.Stdout = os.Stdin, os.Stdout
-	cmd.Stderr = io.MultiWriter(os.Stderr, &last)
-	if err := cmd.Run(); err != nil {
+	return report(cmd.Run())
+}
+
+// Prepare builds the attach for a caller that runs it, which sets its stdin
+// and stdout. report turns the command's result into the error to show, with
+// ssh's last stderr line, because the terminal may not keep that line on
+// screen after ssh ends.
+func Prepare(ctx context.Context, h server.Host, target string) (cmd *exec.Cmd, report func(error) error) {
+	argv := Command(h, target)
+	last := &lastLine{}
+	cmd = exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // argv is built from the config's ssh target
+	cmd.Stderr = io.MultiWriter(os.Stderr, last)
+	return cmd, func(err error) error {
+		if err == nil {
+			return nil
+		}
 		return explain(h, err, last.String())
 	}
-	return nil
 }
 
 // OpenWindow opens the attach in a new window of the tmux this process runs
 // in, so the caller keeps its own window. The window stays open after a
 // failed ssh, so the user can read why.
-func OpenWindow(ctx context.Context, h server.Host, tmuxSession, windowName string) error {
+func OpenWindow(ctx context.Context, h server.Host, target, windowName string) error {
 	args := []string{"new-window", "-n", windowName}
 	// The window starts in the tmux server's directory, where a relative
 	// ssh_config path would not resolve.
@@ -56,7 +86,7 @@ func OpenWindow(ctx context.Context, h server.Host, tmuxSession, windowName stri
 	}
 	// sh, because tmux otherwise runs the script with the user's default-shell,
 	// which may not be POSIX.
-	args = append(args, "--", "sh", "-c", windowScript(h, tmuxSession, os.Getenv("SSH_AUTH_SOCK")))
+	args = append(args, "--", "sh", "-c", windowScript(h, target, os.Getenv("SSH_AUTH_SOCK")))
 	var stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, "tmux", args...) //nolint:gosec // windowScript quotes every argument
 	cmd.Stderr = &stderr
@@ -69,12 +99,12 @@ func OpenWindow(ctx context.Context, h server.Host, tmuxSession, windowName stri
 // windowScript carries authSock because the window gets the tmux server's
 // environment, which can name a different ssh agent than the one that just
 // reached the server, and BatchMode cannot ask for a password instead.
-func windowScript(h server.Host, tmuxSession, authSock string) string {
+func windowScript(h server.Host, target, authSock string) string {
 	var script strings.Builder
 	if authSock != "" {
 		script.WriteString("SSH_AUTH_SOCK=" + tmpl.ShellQuote(authSock) + " ")
 	}
-	for _, arg := range Command(h, tmuxSession) {
+	for _, arg := range Command(h, target) {
 		script.WriteString(tmpl.ShellQuote(arg) + " ")
 	}
 	script.WriteString(`|| { printf '\nssh exited with status %s. Press enter to close.' "$?"; read -r _; }`)

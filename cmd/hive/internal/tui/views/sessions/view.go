@@ -311,10 +311,9 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 	v.allSessions = msg.sessions
 	cmds := []tea.Cmd{v.applyFilter()}
 	if len(v.pluginStatuses) > 0 {
-		sessions := make([]*session.Session, len(v.allSessions))
-		for i := range v.allSessions {
-			sessions[i] = &v.allSessions[i]
-		}
+		// Plugins read the session's path on this machine, and a server's
+		// session has its path on the server.
+		sessions := localSessions(v.allSessions)
 		v.pluginManager.UpdateSessions(sessions)
 		v.logger.Debug().Int("sessionCount", len(sessions)).Msg("updated plugin manager sessions")
 	}
@@ -1114,6 +1113,9 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 		}
 	} else if previewContent == "" {
 		previewContent = "No session selected"
+		if ti := v.SelectedTreeItem(); ti != nil && ti.IsHeader && ti.ServerError != "" {
+			previewContent = lipgloss.NewStyle().Width(max(previewWidth-4, 1)).Render(ti.Server + " is " + string(ti.ServerState) + "\n\n" + ti.ServerError)
+		}
 	}
 
 	listView := v.list.View()
@@ -1827,6 +1829,13 @@ func MaybeOverrideWindowDelete(action act.Action, treeItem *TreeItem) act.Action
 		return action
 	}
 
+	// The kill runs on this machine's tmux, where a session with the same name
+	// can exist.
+	if name := ServerOf(treeItem.ParentSession); name != session.LocalServer {
+		action.Err = fmt.Errorf("window %s of session %s is on server %s; killing a window runs on this machine", treeItem.WindowName, treeItem.ParentSession.Name, name)
+		return action
+	}
+
 	target := sessionsvc.Target(treeItem.ParentSession)
 	target.Window = treeItem.WindowIndex
 	if err := target.ValidateWindow(); err != nil {
@@ -1948,6 +1957,16 @@ func ensureExactHeight(content string, n int) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func localSessions(all []session.Session) []*session.Session {
+	local := make([]*session.Session, 0, len(all))
+	for i := range all {
+		if ServerOf(all[i]) == session.LocalServer {
+			local = append(local, &all[i])
+		}
+	}
+	return local
 }
 
 // selectedServer names the server of the selected row: a server's group

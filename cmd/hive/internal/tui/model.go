@@ -644,6 +644,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleSetGroupComplete(msg)
 	case serverAttachReadyMsg:
 		return m, m.attachServer(msg)
+	case serverAttachExitMsg:
+		return m.quit()
+	case serverActionDoneMsg:
+		model, cmd = m.handleServerActionDone(msg)
 	case serverLaunchOptionsMsg:
 		model, cmd = m.openServerNewSessionForm(msg)
 	case actionCompleteMsg:
@@ -831,6 +835,7 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.modals.NewSession = nil
 		if result.Server != "" {
 			m.state = stateNormal
+			m.publishNotificationf(notify.LevelInfo, "Creating session %s on %s", result.SessionName, result.Server)
 			return m, m.createOnServer(result.SessionName, result.Repo, result.AgentKey, result.Server)
 		}
 		return m, m.startCreate(result.SessionName, result.Repo, result.AgentKey)
@@ -981,6 +986,7 @@ func (m Model) handleFormDialogKey(msg tea.KeyPressMsg, keyStr string) (tea.Mode
 type sessionRiskCheckedMsg struct {
 	action Action
 	risk   sessionsvc.Risk
+	err    error
 }
 
 // riskCheckLoaderDelay is how long to wait before showing the "Checking for
@@ -1006,7 +1012,7 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 	if action.Type == act.TypeTmuxOpen && m.serverAttach != nil {
 		if ref, err := session.ParseRef(action.SessionID, session.LocalServer); err == nil && ref.Server != session.LocalServer {
 			m.state = stateNormal
-			return m, m.startServerAttach(ref)
+			return m, m.startServerAttach(ref, action)
 		}
 	}
 
@@ -1019,8 +1025,8 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 		sessionID := action.SessionID
 		return m, tea.Batch(
 			func() tea.Msg {
-				risk, _ := m.sessions.CheckSessionRisk(context.Background(), action.SessionID)
-				return sessionRiskCheckedMsg{action: action, risk: risk}
+				risk, err := m.sessions.CheckSessionRisk(context.Background(), action.SessionID)
+				return sessionRiskCheckedMsg{action: action, risk: risk, err: err}
 			},
 			func() tea.Msg {
 				time.Sleep(riskCheckLoaderDelay)

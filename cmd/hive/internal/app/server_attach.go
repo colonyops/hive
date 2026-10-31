@@ -12,10 +12,6 @@ import (
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 )
 
-// ErrSessionCompleted is a session whose commands all finished, so it left no
-// terminal to attach to.
-var ErrSessionCompleted = errors.New("the session's commands finished, so it has no terminal to attach to")
-
 // StartServerSession makes sure the tmux session of sess on the named server
 // runs, by the server's rules, and returns the ssh target to attach with.
 func (a *App) StartServerSession(ctx context.Context, serverName string, sess session.Session) (server.Host, error) {
@@ -28,7 +24,7 @@ func (a *App) StartServerSession(ctx context.Context, serverName string, sess se
 		return server.Host{}, fmt.Errorf("start session %s on server %s: %w", sess.Name, serverName, err)
 	}
 	if result.Completed {
-		return server.Host{}, fmt.Errorf("session %s on server %s: %w", sess.Name, serverName, ErrSessionCompleted)
+		return server.Host{}, fmt.Errorf("session %s on server %s: %w", sess.Name, serverName, serverattach.ErrSessionCompleted)
 	}
 	return srv.Config().Host(), nil
 }
@@ -38,16 +34,16 @@ func (a *App) StartServerSession(ctx context.Context, serverName string, sess se
 // terminal outside it.
 func (a *App) AttachServerSession(ctx context.Context, serverName string, sess session.Session) error {
 	host, err := a.StartServerSession(ctx, serverName, sess)
-	if errors.Is(err, ErrSessionCompleted) {
+	if errors.Is(err, serverattach.ErrSessionCompleted) {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	tmuxSession := sessionsvc.Target(sess).Session
+	target := serverattach.Target(sessionsvc.Target(sess).Session, "")
 	if os.Getenv("TMUX") != "" {
-		return serverattach.OpenWindow(ctx, host, tmuxSession, serverName+"/"+sess.Name)
+		return serverattach.OpenWindow(ctx, host, target, serverName+"/"+sess.Name)
 	}
-	return serverattach.Run(ctx, host, tmuxSession)
+	return serverattach.Run(ctx, host, target)
 }

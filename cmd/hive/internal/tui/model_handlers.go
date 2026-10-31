@@ -1711,10 +1711,14 @@ func (m Model) handleShowRiskLoading(msg showRiskLoadingMsg) (tea.Model, tea.Cmd
 func (m Model) handleSessionRiskChecked(msg sessionRiskCheckedMsg) (tea.Model, tea.Cmd) {
 	action := msg.action
 
-	if msg.risk.HasRisk() {
+	if msg.err != nil || msg.risk.HasRisk() {
 		var lines []string
-		lines = append(lines, "This session has work that will be permanently lost:")
-		lines = append(lines, "")
+		if msg.err != nil {
+			lines = append(lines, "Could not check this session for work that will be lost:", "", "  "+msg.err.Error())
+		} else {
+			lines = append(lines, "This session has work that will be permanently lost:")
+			lines = append(lines, "")
+		}
 		if msg.risk.UncommittedChanges {
 			lines = append(lines, "  • Uncommitted changes")
 		}

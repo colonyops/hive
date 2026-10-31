@@ -368,3 +368,10 @@ func TestGroupSessionsByRepo_GivesEachServerOneGroupAfterTheLocalOnes(t *testing
 	assert.Equal(t, "down", headers[2].Server)
 	assert.Empty(t, headers[1].RootPath)
 }
+
+func TestLocalSessions_LeavesOutServerSessions(t *testing.T) {
+	local := localSessions([]session.Session{{ID: "abc"}, {ID: "box:abc"}})
+
+	require.Len(t, local, 1)
+	assert.Equal(t, "abc", local[0].ID)
+}
