@@ -23,6 +23,26 @@ func (s *AppletsService) Dir() string {
 	return s.applets.Dir()
 }
 
+func (s *AppletsService) ExportPreview(id string) (app.AppletExportPreview, error) {
+	return s.applets.ExportPreview(id)
+}
+
+func (s *AppletsService) Export(id, dest string) error {
+	return s.applets.Export(id, dest)
+}
+
+func (s *AppletsService) PrepareImport(encoded string) (app.AppletImportPreview, error) {
+	return s.applets.PrepareImport(encoded)
+}
+
+func (s *AppletsService) ConfirmImport(token, id string) error {
+	return s.applets.ConfirmImport(token, id)
+}
+
+func (s *AppletsService) CancelImport(token string) {
+	s.applets.CancelImport(token)
+}
+
 func (s *AppletsService) Processes() []app.AppletProcess {
 	return s.applets.Processes()
 }

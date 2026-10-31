@@ -172,6 +172,48 @@ export interface AppletExecResult {
 }
 
 /**
+ * AppletExportPreview is what an export would contain, for the user to read first.
+ */
+export interface AppletExportPreview {
+    "id": string;
+    "title": string;
+    "fileName": string;
+    "files": AppletFile[] | null;
+    "leftOut": string[] | null;
+}
+
+/**
+ * AppletFile is one file of an applet being shared.
+ */
+export interface AppletFile {
+    "path": string;
+    "bytes": number;
+}
+
+/**
+ * AppletImportPreview is a checked file waiting for the user. Nothing is on disk yet.
+ */
+export interface AppletImportPreview {
+    /**
+     * Token names the checked file, so what the user confirms is what they read.
+     */
+    "token": string;
+
+    /**
+     * ID is what the file asks for, and SuggestedID the nearest id that is free.
+     */
+    "id": string;
+    "suggestedId": string;
+    "title": string;
+    "entry": string;
+    "cwd": string;
+    "titlebar": AppletTitlebar | null;
+    "commands": AppletCommand[] | null;
+    "files": AppletFile[] | null;
+    "totalBytes": number;
+}
+
+/**
  * AppletOutput is what a spawned process has done since the last read. Done is set
  * once, on the read that drains the end of its output.
  */

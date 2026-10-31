@@ -68,6 +68,14 @@ type AppletsService struct {
 	// sessionDir answers where the session on screen is, the same answer a launcher
 	// gets, including the refusal for a session on a server.
 	sessionDir func(context.Context, string) (string, error)
+
+	importMu      sync.Mutex
+	pendingImport *pendingAppletImport
+}
+
+type pendingAppletImport struct {
+	token   string
+	archive applets.Archive
 }
 
 func newAppletsService(catalog *applets.Store, environ func(context.Context) []string, sessionDir func(context.Context, string) (string, error)) *AppletsService {

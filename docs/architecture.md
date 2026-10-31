@@ -1432,6 +1432,10 @@ opened in `AppletFrame`
   (`AppletTitlebarSlot`), and the dropdown under it (`AppletDropdown`). A new extension
   point is another host, not another bridge. The user turns the title bar on per applet
   (`applets.titlebar` in `settings.yaml`), because that page runs without being opened.
+- **Sharing goes through `applets/archive.go`.** `Unpack` treats a `.hiveapplet` as hostile
+  and writes nothing. `AppletsService` holds the checked file in memory under a token until
+  the user confirms in `AppletImportDialog`, and `Install` renames a finished directory into
+  place. It never replaces an applet.
 - **A built-in lives in the binary** (`applets/builtin/`). The Applet Builder is one. Its
   page sends answers, and the prompt's words stay in `prompts/templates/applets.tmpl`.
 - **Applets are a palette scope.** They have their own tab, and while filtering All, one

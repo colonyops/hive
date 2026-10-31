@@ -104,6 +104,10 @@ Use `commands:` in `applet.yaml` for what a user would want to do from anywhere,
 
 Use `hive.setCommands(rows)` for rows only a running page knows about, such as stations, containers or recent files. Each call replaces the rows that page set before, and they go when the page closes or reloads. They cannot be bound. A row needs `id` and `title`, and can have `group` (default: the applet's title), `scope` (`actions`, the default, or `goto` for a row that names a thing), `kind` (the small word at the right of such a row), `hint`, `keywords` and `icon`. Selecting one calls the same `hive.on('command')` with its id.
 
+## Sharing
+
+The user shares an applet from Settings > Applets, as one `.hiveapplet` file. An export leaves out hidden files, `.log` files and links, along with `localStorage`, and takes everything else in the directory. So keep what a page saves for this machine in `localStorage`, a hidden file or a `.log` file, never in a plain file, and never put a token or a personal path in a file that would ship. Prefer `~` or the session's checkout to a path from this machine in `cwd`. Import does not keep the executable bit, so run a script with `sh script.sh`. Refer the user to Import in Settings when they want an applet someone sent them, and do not unpack one into the applets directory yourself: Import shows them what they are about to trust.
+
 ## Check your work
 
 1. Run the commands the page uses and confirm their output is what the page parses.

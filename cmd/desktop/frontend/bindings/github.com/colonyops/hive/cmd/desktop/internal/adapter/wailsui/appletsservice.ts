@@ -18,6 +18,14 @@ export function BridgeToken(id: string): $CancellablePromise<string> {
     return $Call.ByID(2552326400, id);
 }
 
+export function CancelImport(token: string): $CancellablePromise<void> {
+    return $Call.ByID(116663997, token);
+}
+
+export function ConfirmImport(token: string, id: string): $CancellablePromise<void> {
+    return $Call.ByID(4014336295, token, id);
+}
+
 export function Context(id: string, sessionSlug: string): $CancellablePromise<app$0.AppletContext> {
     return $Call.ByID(1499792253, id, sessionSlug);
 }
@@ -30,12 +38,24 @@ export function Exec(id: string, req: app$0.AppletExec): $CancellablePromise<app
     return $Call.ByID(2190116655, id, req);
 }
 
+export function Export(id: string, dest: string): $CancellablePromise<void> {
+    return $Call.ByID(746956496, id, dest);
+}
+
+export function ExportPreview(id: string): $CancellablePromise<app$0.AppletExportPreview> {
+    return $Call.ByID(3263323028, id);
+}
+
 export function KillSpawns(handles: string[] | null): $CancellablePromise<void> {
     return $Call.ByID(3115435170, handles);
 }
 
 export function List(): $CancellablePromise<app$0.Applet[] | null> {
     return $Call.ByID(64825518);
+}
+
+export function PrepareImport(encoded: string): $CancellablePromise<app$0.AppletImportPreview> {
+    return $Call.ByID(705952256, encoded);
 }
 
 export function Processes(): $CancellablePromise<app$0.AppletProcess[] | null> {
