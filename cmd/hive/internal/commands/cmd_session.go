@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/cmd/hive/internal/serverattach"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -819,7 +820,7 @@ func (cmd *SessionCmd) runAttach(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("start session %s: %w", sess.Name, err)
 	}
 	if result.Completed {
-		fmt.Fprintf(os.Stderr, "session %s: %v\n", sess.Name, app.ErrSessionCompleted)
+		fmt.Fprintf(os.Stderr, "session %s: %v\n", sess.Name, serverattach.ErrSessionCompleted)
 		return nil
 	}
 	streams := multiplexer.AttachStreams{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}

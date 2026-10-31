@@ -411,7 +411,7 @@ func (d TreeDelegate) renderHeader(item TreeItem, isSelected bool, _ list.Model,
 		}
 		result += " " + d.Styles.SessionID.Render("server · "+state)
 		if item.ServerError != "" {
-			result += " " + d.Styles.StatusRecycled.Render(item.ServerError)
+			result += " " + d.Styles.StatusRecycled.Render(strings.Join(strings.Fields(item.ServerError), " "))
 		}
 		return result
 	}

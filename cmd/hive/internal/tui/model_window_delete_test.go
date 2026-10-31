@@ -20,6 +20,19 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 		ShellCmd:  "echo hello",
 	}
 
+	t.Run("window of a server session is refused", func(t *testing.T) {
+		ti := &sessions.TreeItem{
+			IsWindowItem:  true,
+			WindowIndex:   "1",
+			WindowName:    "tests",
+			ParentSession: session.Session{ID: "box:abc", Name: "twin"},
+		}
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti)
+		assert.Equal(t, action.TypeDelete, got.Type)
+		assert.Nil(t, got.WindowTarget)
+		assert.ErrorContains(t, got.Err, "on server box")
+	})
+
 	t.Run("nil treeItem returns action unchanged", func(t *testing.T) {
 		got := sessions.MaybeOverrideWindowDelete(deleteAction, nil)
 		assert.Equal(t, action.TypeDelete, got.Type)
