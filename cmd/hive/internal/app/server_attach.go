@@ -10,7 +10,6 @@ import (
 	"github.com/colonyops/hive/internal/domain/server"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
-	"github.com/colonyops/hive/internal/hive/sessionapi"
 )
 
 // ErrSessionCompleted is a session whose commands all finished, so it left no
@@ -51,9 +50,4 @@ func (a *App) AttachServerSession(ctx context.Context, serverName string, sess s
 		return serverattach.OpenWindow(ctx, host, tmuxSession, serverName+"/"+sess.Name)
 	}
 	return serverattach.Run(ctx, host, tmuxSession)
-}
-
-// ServerAPI is the session API of the named server under servers:.
-func (a *App) ServerAPI(name string) (sessionapi.API, error) {
-	return a.Servers.API(name)
 }

@@ -610,7 +610,7 @@ func (h *KeybindingResolver) ResolveFormCommand(key string, sess session.Session
 // session on a server, whose checkout and tmux are on the server.
 func checkServerSession(cmd config.UserCommand, sess session.Session) error {
 	ref, err := session.ParseRef(sess.ID, session.LocalServer)
-	if err != nil || ref.IsLocal() {
+	if err != nil || ref.Server == session.LocalServer {
 		return nil
 	}
 	switch {

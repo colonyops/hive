@@ -69,12 +69,12 @@ func newRouter(t *testing.T) (*servers.Router, sessionapi.API, sessionapi.API) {
 		return d.DialContext(ctx, "unix", boxSocket)
 	}
 	local := newClient(localSocket)
-	registry := servers.New(zerolog.Nop(), local,
+	fleet := servers.New(zerolog.Nop(), local,
 		[]config.ServerConfig{{Name: "box", SSH: "box"}, {Name: "down", SSH: "down"}}, "test", servers.WithDialer(dial))
-	t.Cleanup(registry.Close)
-	box, err := registry.API("box")
-	require.NoError(t, err)
-	return servers.NewRouter(registry), local, box
+	t.Cleanup(fleet.Close)
+	box, ok := fleet.Server("box")
+	require.True(t, ok)
+	return servers.NewRouter(fleet), local, box.Client()
 }
 
 func create(t *testing.T, api sessionapi.API, name string) *session.Session {

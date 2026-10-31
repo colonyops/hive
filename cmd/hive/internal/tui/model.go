@@ -1004,7 +1004,7 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 	}
 
 	if action.Type == act.TypeTmuxOpen && m.serverAttach != nil {
-		if ref, err := session.ParseRef(action.SessionID, session.LocalServer); err == nil && !ref.IsLocal() {
+		if ref, err := session.ParseRef(action.SessionID, session.LocalServer); err == nil && ref.Server != session.LocalServer {
 			m.state = stateNormal
 			return m, m.startServerAttach(ref)
 		}
