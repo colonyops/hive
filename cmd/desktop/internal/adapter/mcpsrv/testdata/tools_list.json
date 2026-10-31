@@ -790,6 +790,15 @@
     "title": "List the action catalog"
   },
   {
+    "description": "List the applets with the directory they are written under and, for each, the error in its applet.yaml if it does not load. An applet that fails to load keeps its last good declaration, so this is how to confirm a write actually took.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "list_applets",
+    "title": "List the applets"
+  },
+  {
     "description": "List the feeds a profile's graph declares, with their total, unread and archived counts. A declared feed nothing has landed in yet still lists, at zero — so an empty feed and a feed id that does not exist are different answers.",
     "inputSchema": {
       "additionalProperties": false,

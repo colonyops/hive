@@ -16,7 +16,14 @@ interface PopupTerminalAvailability {
 }
 
 function sameLaunch(a: PopupTerminalRequest, b: PopupTerminalRequest): boolean {
-  return a.launcher === b.launcher && a.sessionSlug === b.sessionSlug && a.dir === b.dir && a.command === b.command
+  return (
+    a.launcher === b.launcher &&
+    a.applet === b.applet &&
+    a.appletAction === b.appletAction &&
+    a.sessionSlug === b.sessionSlug &&
+    a.dir === b.dir &&
+    a.command === b.command
+  )
 }
 
 // The pop-up terminal's panel state, shared by whatever asks for one — the
@@ -62,6 +69,15 @@ export const usePopupTerminal = defineStore('popupTerminal', () => {
     void ready()
   }
 
+  // An applet action is a thing to do, not a place to return to: invoking it twice
+  // runs it twice, where show would bring back the terminal from the first run.
+  function launch(next: PopupTerminalRequest): void {
+    request.value = next
+    launchSeq.value++
+    visible.value = true
+    void ready()
+  }
+
   function hide(): void {
     visible.value = false
   }
@@ -86,6 +102,7 @@ export const usePopupTerminal = defineStore('popupTerminal', () => {
     client: computed(() => probe.data.value.client),
     toggle,
     show,
+    launch,
     hide,
     ready,
   }

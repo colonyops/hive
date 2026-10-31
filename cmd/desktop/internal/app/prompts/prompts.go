@@ -37,6 +37,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/mcpcatalog"
 )
@@ -54,6 +55,8 @@ type Env struct {
 	FlowsDir string
 	// ActionsPath is the actions.yml location.
 	ActionsPath string
+	// AppletsDir holds one directory per applet.
+	AppletsDir string
 	// SettingsPath is the settings.yaml location.
 	SettingsPath string
 	// WebhookBaseURL is the local listener's base URL, already including the
@@ -127,6 +130,14 @@ var definitions = []definition{
 		target:      func(env Env) string { return env.ActionsPath },
 		listed:      true,
 		data:        actionsData,
+	},
+	{
+		id:          "applets",
+		title:       "Applets",
+		description: "Build a small native UI that opens over Hive: a table or fuzzy picker fed by a shell command, with actions that run against the selected row.",
+		target:      func(env Env) string { return env.AppletsDir + "/<id>/" + applets.FileName },
+		listed:      true,
+		data:        appletsData,
 	},
 	{
 		id:          "webhook-sources",
@@ -347,6 +358,10 @@ func actionsData(Env, Input) (map[string]any, error) {
 		"LauncherDoc": strings.TrimSpace(actions.LauncherDoc()),
 		"Example":     strings.TrimSpace(actions.ExampleYAML()),
 	}, nil
+}
+
+func appletsData(Env, Input) (map[string]any, error) {
+	return map[string]any{"Examples": applets.Examples()}, nil
 }
 
 // agentWorkspacesData assembles the agent-workspaces prompt from the shipped

@@ -39,6 +39,7 @@ nav = [
     { "Configuration" = [
       "desktop/configuration/settings.md",
       "desktop/configuration/keybindings.md",
+      "desktop/configuration/applets.md",
       "desktop/configuration/links.md",
     ]},
     { "Resources" = [

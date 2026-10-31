@@ -19,6 +19,7 @@ func testEnv() Env {
 	return Env{
 		FlowsDir:           "/home/u/.config/hive/desktop/flows",
 		ActionsPath:        "/home/u/.config/hive/desktop/actions.yml",
+		AppletsDir:         "/home/u/.config/hive/desktop/applets",
 		SettingsPath:       "/home/u/.config/hive/desktop/settings.yaml",
 		WebhookBaseURL:     "http://127.0.0.1:24917/hooks",
 		WebhookEnabled:     true,
@@ -168,6 +169,7 @@ func TestPromptsCarryInstallPaths(t *testing.T) {
 	for id, want := range map[string]string{
 		"flows":            env.FlowsDir,
 		"actions":          env.ActionsPath,
+		"applets":          env.AppletsDir,
 		"settings":         env.SettingsPath,
 		"webhook-sources":  env.WebhookBaseURL,
 		"mcp":              env.MCPEndpoint,

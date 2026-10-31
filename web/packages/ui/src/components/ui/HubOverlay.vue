@@ -4,12 +4,12 @@
 // register with useOpenModalCount, because App.vue and TasksView read a
 // non-zero count as "a dialog is stacked above the overlay" and would never
 // let it close.
-import { ref } from 'vue'
+import { ref, type StyleValue } from 'vue'
 import { useAutofocus } from '../../composables/useAutofocus'
 import { useFocusTrap } from '../../composables/useFocusTrap'
 import { useReturnFocus } from '../../composables/useReturnFocus'
 
-defineProps<{ label: string; testid: string }>()
+defineProps<{ label: string; testid: string; panelStyle?: StyleValue }>()
 const emit = defineEmits<{ close: [] }>()
 
 const panel = ref<HTMLElement | null>(null)
@@ -30,6 +30,7 @@ useAutofocus(panel)
     >
       <div
         ref="panel"
+        :style="panelStyle"
         class="flex h-[88vh] w-[min(1600px,96vw)] flex-col overflow-hidden rounded-xl border border-strong bg-pane text-text shadow-2xl outline-none"
         role="dialog"
         :aria-label="label"

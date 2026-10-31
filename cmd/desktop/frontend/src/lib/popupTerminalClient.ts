@@ -41,6 +41,10 @@ export interface PopupTerminalState {
  */
 export interface PopupTerminalRequest {
   launcher?: string
+  /** An applet's terminal action and the row it runs against, by identity like `launcher`. */
+  applet?: string
+  appletAction?: string
+  appletRow?: Record<string, string>
   sessionSlug?: string
   dir?: string
   command?: string
