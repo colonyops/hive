@@ -10,6 +10,7 @@ function row(id: string, name: string, repo = 'github.com/acme/site'): TerminalS
     name,
     slug: `${name}-${id}`,
     repo,
+    server: '',
     repoIdentity: repo,
     state: 'active',
     canvasOwner: '',

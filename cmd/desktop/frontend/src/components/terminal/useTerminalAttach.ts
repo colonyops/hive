@@ -80,7 +80,7 @@ export function useTerminalAttach(options: {
   function restoreLastSession(): void {
     if (routeSlug.value || !restore.value.slug) return
     if (!tree.attachable.value.some((row) => row.slug === restore.value.slug)) {
-      restore.value = { slug: '', window: '' }
+      if (!tree.serverPending(restore.value.slug)) restore.value = { slug: '', window: '' }
       return
     }
     void router.replace({
@@ -89,6 +89,12 @@ export function useTerminalAttach(options: {
       query: restore.value.window ? { window: restore.value.window } : {},
     })
   }
+
+  // A server's list lands apart from the local one, so a remembered session on
+  // a server can only be restored once its list has.
+  watch(tree.servers, () => {
+    if (options.active() && tree.sessionServer(restore.value.slug)) restoreLastSession()
+  })
 
   function openSession(slug: string): void {
     if (!client.value) return
@@ -136,9 +142,10 @@ export function useTerminalAttach(options: {
   watch([tree.attachable, activeSlug], ([rows, slug]) => {
     if (tree.sessionsError.value) return
     for (const pooledSlug of [...pool.pool.keys()]) {
-      if (pooledSlug !== slug && !rows.some((row) => row.slug === pooledSlug)) pool.drop(pooledSlug)
+      if (pooledSlug === slug || tree.isOfflineSlug(pooledSlug)) continue
+      if (!rows.some((row) => row.slug === pooledSlug)) pool.drop(pooledSlug)
     }
-    if (!slug) return
+    if (!slug || tree.isOfflineSlug(slug)) return
     const attached = rows.find((row) => row.slug === slug)
     if (attached) {
       attachedId.value = attached.id

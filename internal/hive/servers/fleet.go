@@ -7,6 +7,7 @@ package servers
 import (
 	"bytes"
 	"context"
+	"io"
 	"net"
 	"strings"
 	"sync"
@@ -44,14 +45,39 @@ type Fleet struct {
 	servers []*Server
 }
 
+// Dialer opens the connection to a server's daemon. The default runs
+// `ssh <host> -- hive daemon dial-stdio`.
+type Dialer func(ctx context.Context, cfg config.ServerConfig, stderr io.Writer) (net.Conn, error)
+
+// Option changes how New builds a fleet.
+type Option func(*options)
+
+type options struct {
+	dial Dialer
+}
+
+// WithDialer reaches every server through dial instead of ssh, for a test
+// that serves a daemon on this machine.
+func WithDialer(dial Dialer) Option {
+	return func(o *options) { o.dial = dial }
+}
+
+func sshDialer(ctx context.Context, cfg config.ServerConfig, stderr io.Writer) (net.Conn, error) {
+	return sshdial.DialStdio(ctx, cfg.Host(), stderr)
+}
+
 // New builds a fleet over local and the configured servers. It does not
 // dial: a server connects on its first call or Check. clientVersion is this
 // build's version, which an incompatible server's error names.
-func New(logger zerolog.Logger, local sessionapi.API, configs []config.ServerConfig, clientVersion string) *Fleet {
+func New(logger zerolog.Logger, local sessionapi.API, configs []config.ServerConfig, clientVersion string, opts ...Option) *Fleet {
+	o := options{dial: sshDialer}
+	for _, opt := range opts {
+		opt(&o)
+	}
 	logger = logutils.Component(logger, "servers")
 	f := &Fleet{local: local}
 	for _, cfg := range configs {
-		f.servers = append(f.servers, newServer(logger, cfg, clientVersion))
+		f.servers = append(f.servers, newServer(logger, cfg, clientVersion, o.dial))
 	}
 	return f
 }
@@ -120,14 +146,13 @@ type Server struct {
 	status Status
 }
 
-func newServer(logger zerolog.Logger, cfg config.ServerConfig, clientVersion string) *Server {
+func newServer(logger zerolog.Logger, cfg config.ServerConfig, clientVersion string, dial Dialer) *Server {
 	s := &Server{
 		config:        cfg,
 		clientVersion: clientVersion,
 		stderr:        &tailBuffer{},
 		status:        Status{Name: cfg.Name, SSH: cfg.SSH, State: server.StateConnecting},
 	}
-	host := cfg.Host()
 	s.client = daemonclient.New(daemonclient.Options{
 		Logger: logger.With().Str("server", cfg.Name).Logger(),
 		// No AutoStart: dial-stdio on the server starts its daemon.
@@ -135,7 +160,7 @@ func newServer(logger zerolog.Logger, cfg config.ServerConfig, clientVersion str
 			// An error from this connection must not show a line from the last
 			// one.
 			s.stderr.reset()
-			return sshdial.DialStdio(ctx, host, s.stderr)
+			return dial(ctx, cfg, s.stderr)
 		},
 		Name:           cfg.Name,
 		FailureDetail:  s.stderr.lastLine,

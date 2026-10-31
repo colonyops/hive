@@ -149,6 +149,11 @@ description = "Run desktop e2e tests in the pinned Docker/Playwright environment
 depends = ["desktop:frontend:install"]
 run = "./cmd/desktop/e2e/scripts/run-docker.sh"
 
+["desktop:e2e:remote"]
+description = "Run the desktop e2e tests that use the test/remote ssh fixture as a server"
+depends = ["desktop:frontend:install", "cli:build:container"]
+run = "./cmd/desktop/e2e/scripts/run-remote.sh"
+
 ["desktop:frontend:build"]
 description = "Typecheck and build the desktop frontend"
 dir = "{{config_root}}/cmd/desktop/frontend"

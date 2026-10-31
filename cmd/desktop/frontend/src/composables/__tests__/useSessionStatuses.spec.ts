@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetSessionStatusesForTests, useSessionStatuses } from '../useSessionStatuses'
 
-const mocks = vi.hoisted(() => ({ SessionStatuses: vi.fn() }))
+const mocks = vi.hoisted(() => ({ SessionStatuses: vi.fn(), ServerSessionStatuses: vi.fn() }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   SessionStatuses: mocks.SessionStatuses,
+  ServerSessionStatuses: mocks.ServerSessionStatuses,
 }))
 
 function setHidden(hidden: boolean): void {
@@ -16,6 +17,7 @@ describe('useSessionStatuses', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetSessionStatusesForTests()
+    mocks.ServerSessionStatuses.mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -100,11 +102,14 @@ describe('useSessionStatuses', () => {
       }),
       { cancel: vi.fn() },
     )
+    const { statuses, reload, startPolling, stopPolling } = useSessionStatuses()
+    mocks.SessionStatuses.mockResolvedValueOnce({
+      items: [{ sessionId: 's1', running: true, windows: [{ windowId: '@1', status: 'ready', tool: 'pi' }] }],
+      pollIntervalMs: 25,
+    })
+    await reload()
+    mocks.SessionStatuses.mockClear()
     mocks.SessionStatuses.mockReturnValue(pending)
-    const { statuses, startPolling, stopPolling } = useSessionStatuses()
-    statuses.value = {
-      s1: { sessionId: 's1', running: true, windows: [{ windowId: '@1', status: 'ready', tool: 'pi' }] },
-    }
 
     startPolling()
     expect(mocks.SessionStatuses).toHaveBeenCalledTimes(1)
@@ -175,5 +180,23 @@ describe('useSessionStatuses', () => {
     await vi.advanceTimersByTimeAsync(100)
 
     expect(mocks.SessionStatuses).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not hold local status back for a server that has not answered', async () => {
+    mocks.SessionStatuses.mockResolvedValue({
+      items: [{ sessionId: 's1', running: true, windows: [] }],
+      pollIntervalMs: 60_000,
+    })
+    let answer: (items: unknown[]) => void = () => {}
+    mocks.ServerSessionStatuses.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const { statuses, startPolling } = useSessionStatuses()
+
+    startPolling()
+    await vi.waitFor(() => expect(statuses.value.s1?.running).toBe(true))
+    expect(statuses.value['box:s2']).toBeUndefined()
+
+    answer([{ sessionId: 'box:s2', running: true, windows: [] }])
+    await vi.waitFor(() => expect(statuses.value['box:s2']?.running).toBe(true))
+    expect(statuses.value.s1?.running).toBe(true)
   })
 })

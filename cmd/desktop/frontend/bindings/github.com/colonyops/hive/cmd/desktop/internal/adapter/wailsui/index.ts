@@ -122,6 +122,7 @@ export type {
     ReportResult,
     ReviewLabel,
     RuntimeStats,
+    ServerSessions,
     SessionCondition,
     SessionDetail,
     SessionFilter,

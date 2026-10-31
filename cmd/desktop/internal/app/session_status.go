@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
@@ -70,6 +71,61 @@ func (s *SessionsService) SessionStatuses(ctx context.Context) (SessionStatusSna
 	}
 	snapshot.Items = projectSessionStatuses(active, terminalStatuses, windowSets, s.windows != nil)
 	return snapshot, nil
+}
+
+// ServerSessionStatuses asks each server about its own active sessions, at
+// the same time, and gives each item the "<server>:<id>" id of its row. A
+// server that fails the poll reports nothing, the same as a missing terminal.
+// It is separate from SessionStatuses, so a slow server never delays local
+// status and a machine without local status still reads its servers.
+func (s *SessionsService) ServerSessionStatuses(ctx context.Context) []SessionStatus {
+	items := []SessionStatus{}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, list := range s.listedServers() {
+		wg.Go(func() {
+			found := s.serverStatuses(ctx, list)
+			mu.Lock()
+			items = append(items, found...)
+			mu.Unlock()
+		})
+	}
+	wg.Wait()
+	return items
+}
+
+func (s *SessionsService) serverStatuses(ctx context.Context, list ServerSessionList) []SessionStatus {
+	ctx, cancel := context.WithTimeout(ctx, serverReadTimeout)
+	defer cancel()
+	api, err := s.serverAPI(list.Server)
+	if err != nil || !api.StatusAvailable() {
+		return nil
+	}
+	active := make([]*session.Session, 0, len(list.Sessions))
+	for i := range list.Sessions {
+		if list.Sessions[i].State == session.StateActive {
+			active = append(active, &list.Sessions[i])
+		}
+	}
+	statuses := api.FetchBatch(ctx, active, nil)
+	var windowSets map[string][]tmuxcc.IndexedWindow
+	haveWindows := false
+	if s.serverTmux != nil {
+		tmux, err := s.serverTmux(ctx, list.Server)
+		if err == nil {
+			windowSets, err = s.listWindows(ctx, tmux, active)
+		}
+		if err != nil {
+			s.logger.Debug().Err(err).Str("server", list.Server).Msg("listing server tmux windows for status")
+			return nil
+		}
+		haveWindows = true
+	}
+	items := projectSessionStatuses(active, statuses, windowSets, haveWindows)
+	for i := range items {
+		items[i].SessionID = session.Ref{Server: list.Server, ID: items[i].SessionID}.String()
+	}
+	return items
 }
 
 // projectSessionStatuses maps hive's per-session status onto stable window
@@ -161,11 +217,15 @@ func (s *SessionsService) sessionWindows(ctx context.Context, sessions []*sessio
 	if s.windows == nil {
 		return nil, nil
 	}
+	return s.listWindows(ctx, s.windows, sessions)
+}
+
+func (s *SessionsService) listWindows(ctx context.Context, source sessionWindowSource, sessions []*session.Session) (map[string][]tmuxcc.IndexedWindow, error) {
 	targets := make([]string, 0, len(sessions))
 	for _, sess := range sessions {
 		targets = append(targets, sessionsvc.Target(*sess).Session)
 	}
-	return s.windows.ListIndexedWindows(ctx, targets)
+	return source.ListIndexedWindows(ctx, targets)
 }
 
 // stableWindowID prefers the index, checked against the name, because tmux

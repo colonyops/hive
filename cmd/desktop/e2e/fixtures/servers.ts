@@ -1,5 +1,5 @@
 // Ports must match scripts/serve.sh.
-export type ServerName = 'feed' | 'onboarding' | 'pipeline' | 'action-smoke' | 'action-seed'
+export type ServerName = 'feed' | 'onboarding' | 'pipeline' | 'action-smoke' | 'action-seed' | 'remote'
 
 type BrowserName = 'chromium' | 'webkit'
 
@@ -9,6 +9,8 @@ const ports: Record<ServerName, Partial<Record<BrowserName, number>>> = {
   pipeline: { chromium: 8935 },
   'action-smoke': { chromium: 8936 },
   'action-seed': { chromium: 8937 },
+  // Started only in the remote lane (scripts/run-remote.sh).
+  remote: { chromium: 8938 },
 }
 
 /** Throws when the harness starts no such server for that browser. */

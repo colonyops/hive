@@ -22,17 +22,27 @@ import (
 // client.
 func runTestDaemon(t *testing.T, mux *fakeMux) *daemonclient.Client {
 	t.Helper()
+	return daemonclient.New(daemonclient.Options{Dialer: daemonclient.UnixDialer(runTestDaemonSocket(t, mux)), Logger: zerolog.Nop()})
+}
+
+// runTestDaemonSocket is runTestDaemon's daemon, answered by its socket path.
+func runTestDaemonSocket(t *testing.T, mux *fakeMux, configure ...func(*daemon.Options)) string {
+	t.Helper()
 	dataDir := t.TempDir()
 	ctx, cancel := context.WithCancel(t.Context())
 	ready := make(chan string, 1)
 	done := make(chan error, 1)
+	opts := daemon.Options{
+		Config:  hivetest.LoadConfig(t, dataDir),
+		Ports:   hive.Ports{Executor: &executiltest.Exec{}, Mux: mux, DataDir: dataDir, Logger: zerolog.Nop()},
+		Version: "test",
+		OnReady: func(path string) { ready <- path },
+	}
+	for _, apply := range configure {
+		apply(&opts)
+	}
 	go func() {
-		done <- daemon.Run(ctx, daemon.Options{
-			Config:  hivetest.LoadConfig(t, dataDir),
-			Ports:   hive.Ports{Executor: &executiltest.Exec{}, Mux: mux, DataDir: dataDir, Logger: zerolog.Nop()},
-			Version: "test",
-			OnReady: func(path string) { ready <- path },
-		})
+		done <- daemon.Run(ctx, opts)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -44,13 +54,13 @@ func runTestDaemon(t *testing.T, mux *fakeMux) *daemonclient.Client {
 	})
 	select {
 	case socket := <-ready:
-		return daemonclient.New(daemonclient.Options{Dialer: daemonclient.UnixDialer(socket), Logger: zerolog.Nop()})
+		return socket
 	case err := <-done:
 		t.Fatalf("daemon exited before it listened: %v", err)
 	case <-time.After(5 * time.Second):
 		t.Fatal("daemon did not start listening")
 	}
-	return nil
+	return ""
 }
 
 func TestSessionsServiceRunsOverTheDaemon(t *testing.T) {

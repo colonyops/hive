@@ -3,6 +3,7 @@ import {
   CreateSession,
   DismissFailedSession,
   FailedSessionDraft,
+  ServerLaunchOptions,
   SessionDraftFromActivity,
   SessionLaunchOptions,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
@@ -13,6 +14,8 @@ import type {
   SessionLaunchOptions as SessionLaunchOptionsView,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
+import { useNewSessionServer } from '../stores/useNewSessionServer'
+import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { InboxItem } from '../types/feed'
 import { useToasts } from './useToasts'
 
@@ -77,7 +80,7 @@ function resolveOptions(): Promise<SessionLaunchOptionsView> {
   if (!cachedOptions) return fetchOptions()
   void fetchOptions()
     .then((opts) => {
-      if (open.value) options.value = opts
+      if (open.value && !useNewSessionServer().server.value) options.value = opts
     })
     .catch(() => {})
   return Promise.resolve(cachedOptions)
@@ -123,9 +126,17 @@ function draftItemIDs(draft: SessionDraft): number[] {
 
 export function useNewSession() {
   const { showToast } = useToasts()
+  const location = useNewSessionServer()
 
   function prefetch(): void {
     if (!cachedOptions) void fetchOptions().catch(() => {})
+  }
+
+  // The servers on offer are the connected ones from the Code view's last list.
+  function connectedServers(): string[] {
+    return useTerminalSessions()
+      .servers.value.filter((list) => list.server.state === 'connected')
+      .map((list) => list.server.name)
   }
 
   function show(
@@ -134,8 +145,10 @@ export function useNewSession() {
     items: number[],
     detail: SessionCreateFailure | null,
     target: SessionTarget = draft.workspace ? 'workspace' : 'repository',
+    onServer = '',
   ): void {
     chatLauncher = null
+    location.offer(connectedServers(), onServer)
     options.value = opts
     initial.value = draft
     initialTarget.value = target
@@ -157,21 +170,50 @@ export function useNewSession() {
     }
   }
 
+  // A draft goes back to the server it failed on, and that server being down
+  // may be why it failed. Its options are then out of reach, so the form opens
+  // on this machine's with the error in it: what was typed stays reachable,
+  // and the user can retry or choose another server.
+  async function showRestored(
+    draft: SessionDraft,
+    localOpts: SessionLaunchOptionsView,
+    items: number[],
+  ): Promise<void> {
+    const onServer = draft.server ?? ''
+    let opts = localOpts
+    let unreachable: string | null = null
+    if (onServer) {
+      try {
+        opts = await ServerLaunchOptions(onServer)
+      } catch (e) {
+        unreachable = message(e, `Could not read the options of server ${onServer}.`)
+      }
+    }
+    show(restored(draft, opts), opts, items, draft.failure ?? null, undefined, onServer)
+    error.value = unreachable
+  }
+
   // `preferred` is the repository of whatever session is on screen. Starting a
   // second session on the repo you are already in is the common case, and the
   // backend default — the first configured workspace — is almost never it.
   //
   // A failed attempt outranks both: it is the only copy of what was typed.
-  async function openBlank(preferred = '', target: SessionTarget = 'repository', chat?: ChatOpener): Promise<void> {
+  async function openBlank(
+    preferred = '',
+    target: SessionTarget = 'repository',
+    chat?: ChatOpener,
+    onServer = '',
+  ): Promise<void> {
     if (open.value || loading.value) return
     error.value = null
     loading.value = true
     try {
-      const [opts, pending] = await Promise.all([resolveOptions(), pendingDraft()])
+      const [localOpts, pending] = await Promise.all([resolveOptions(), pendingDraft()])
       if (pending?.failure) {
-        show(restored(pending, opts), opts, draftItemIDs(pending), pending.failure)
+        await showRestored(pending, localOpts, draftItemIDs(pending))
         return
       }
+      const opts = onServer ? await ServerLaunchOptions(onServer) : localOpts
       show(
         {
           repository: preferred || opts.defaultRepository || '',
@@ -184,6 +226,7 @@ export function useNewSession() {
         [],
         null,
         target,
+        onServer,
       )
       chatLauncher = chat?.launch ?? null
     } catch (e) {
@@ -203,7 +246,7 @@ export function useNewSession() {
       const pendingItemIDs = pending ? draftItemIDs(pending) : []
       const sameItems = pendingItemIDs.length === ids.length && pendingItemIDs.every((id, index) => id === ids[index])
       if (pending?.failure && sameItems) {
-        show(restored(pending, opts), opts, ids, pending.failure)
+        await showRestored(pending, opts, ids)
         return
       }
       const draftOptions = items.length > 1 && !draft.repository ? { ...opts, defaultRepository: '' } : opts
@@ -226,9 +269,9 @@ export function useNewSession() {
     error.value = null
     loading.value = true
     try {
-      const [opts, pending] = await Promise.all([resolveOptions(), pendingDraft()])
+      const [localOpts, pending] = await Promise.all([resolveOptions(), pendingDraft()])
       if (!pending?.failure) return
-      show(restored(pending, opts), opts, draftItemIDs(pending), pending.failure)
+      await showRestored(pending, localOpts, draftItemIDs(pending))
     } catch (e) {
       showToast(message(e, 'Could not reopen the session form.'), { severity: 'error' })
     } finally {
@@ -244,7 +287,7 @@ export function useNewSession() {
     loading.value = true
     try {
       const [opts, draft] = await Promise.all([resolveOptions(), SessionDraftFromActivity(metadata)])
-      show(restored(draft, opts), opts, draftItemIDs(draft), draft.failure ?? null)
+      await showRestored(draft, opts, draftItemIDs(draft))
     } catch (e) {
       showToast(message(e, 'Could not reopen the session form.'), { severity: 'error' })
     } finally {
@@ -291,6 +334,24 @@ export function useNewSession() {
     })
   }
 
+  // A server has its own repositories and agents, so changing the server
+  // swaps the form's options. The dialog keeps what was typed.
+  async function selectServer(name: string): Promise<void> {
+    if (name === location.server.value || loading.value) return
+    const previous = location.server.value
+    location.choose(name)
+    loading.value = true
+    error.value = null
+    try {
+      options.value = name ? await ServerLaunchOptions(name) : await resolveOptions()
+    } catch (e) {
+      location.choose(previous)
+      error.value = message(e, `Could not read the options of server ${name}.`)
+    } finally {
+      loading.value = false
+    }
+  }
+
   function cancel(): void {
     if (busy.value) return
     open.value = false
@@ -323,6 +384,7 @@ export function useNewSession() {
       // arrives later through sessions:create-failed, which is what hands the
       // form back; only validation errors reject here.
       await CreateSession({
+        server: location.server.value,
         repository: input.repository ?? '',
         workspace: input.workspace ?? '',
         name: input.name,
@@ -331,7 +393,14 @@ export function useNewSession() {
         itemIds: [...itemIDs.value],
       })
       if (input.workspace && input.pinToCode) useTerminalPinnedChats().pinWhenListed(input.workspace, input.name)
-      showToast(`Creating session ${input.name}…`, { severity: 'info' })
+      showToast(
+        location.server.value
+          ? `Creating session ${input.name} on ${location.server.value}…`
+          : `Creating session ${input.name}…`,
+        {
+          severity: 'info',
+        },
+      )
       open.value = false
       options.value = null
       failure.value = null
@@ -348,6 +417,9 @@ export function useNewSession() {
     options,
     initial,
     initialTarget,
+    server: location.server,
+    servers: location.servers,
+    selectServer,
     busy,
     loading,
     error,

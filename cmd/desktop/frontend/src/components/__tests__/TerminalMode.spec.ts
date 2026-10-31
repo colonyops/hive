@@ -33,8 +33,10 @@ const mocks = vi.hoisted(() => ({
   Available: vi.fn(),
   Scratch: vi.fn(),
   ListSessions: vi.fn(),
+  ListServerSessions: vi.fn(),
   On: vi.fn().mockReturnValue(() => {}),
   SessionStatuses: vi.fn(),
+  ServerSessionStatuses: vi.fn(),
   SessionLaunchOptions: vi.fn(),
   SessionDetail: vi.fn(),
   SessionGitStatus: vi.fn(),
@@ -112,7 +114,9 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   ListSessions: mocks.ListSessions,
+  ListServerSessions: mocks.ListServerSessions,
   SessionStatuses: mocks.SessionStatuses,
+  ServerSessionStatuses: mocks.ServerSessionStatuses,
   SessionLaunchOptions: mocks.SessionLaunchOptions,
   SessionDetail: mocks.SessionDetail,
   SessionGitStatus: mocks.SessionGitStatus,
@@ -322,6 +326,8 @@ describe('TerminalMode', () => {
     mocks.allSessions.mockResolvedValue([])
     mocks.Available.mockResolvedValue({ available: true, reason: '' })
     mocks.Scratch.mockResolvedValue({ slug: 'Scratch', name: 'Terminals' })
+    mocks.ListServerSessions.mockResolvedValue([])
+    mocks.ServerSessionStatuses.mockResolvedValue([])
     mocks.SessionLaunchOptions.mockResolvedValue({ agents: ['claude', 'codex'], defaultAgent: 'claude' })
     mocks.getTerminalEndpoint.mockResolvedValue({
       httpBaseURL: 'http://127.0.0.1:1',
@@ -627,8 +633,8 @@ describe('TerminalMode', () => {
     const { wrapper } = await mountAvailable()
     await wrapper.get('[data-testid="terminal-new-session"]').trigger('click')
     expect(mocks.openBlank).toHaveBeenCalledOnce()
-    // Nothing is attached yet, so there is no repository to inherit.
-    expect(mocks.openBlank).toHaveBeenCalledWith('')
+    // Nothing is attached yet, so there is no repository or server to inherit.
+    expect(mocks.openBlank).toHaveBeenCalledWith('', 'repository', undefined, '')
   })
 
   it('starts a new session in the attached session’s repository', async () => {
@@ -637,7 +643,168 @@ describe('TerminalMode', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="terminal-new-session"]').trigger('click')
-    expect(mocks.openBlank).toHaveBeenCalledWith('hay-kot/hive')
+    expect(mocks.openBlank).toHaveBeenCalledWith('hay-kot/hive', 'repository', undefined, '')
+  })
+
+  it('lists a server session in its repository, marked with its server, and an offline server as a banner', async () => {
+    mocks.ListServerSessions.mockResolvedValue([
+      {
+        server: 'box',
+        ssh: 'ada@box',
+        state: 'connected',
+        error: '',
+        sessions: [
+          {
+            server: 'box',
+            id: 'box:9',
+            name: 'remote work',
+            slug: 'box:remote-work',
+            repo: '/home/hive/repo.git',
+            repoIdentity: '/home/hive/repo.git',
+            state: 'active',
+            canvasOwner: '',
+            tags: [],
+            createdAt: '',
+          },
+        ],
+      },
+      { server: 'down', ssh: 'down', state: 'offline', error: 'ssh: connect refused', sessions: [] },
+    ])
+    const { wrapper } = await mountAvailable()
+
+    const group = wrapper.get('[data-testid="terminal-repo-group"][data-repo="/home/hive/repo.git"]')
+    expect(group.findAll('[data-testid="terminal-repo-hosts"] > span').map((dot) => dot.attributes('title'))).toEqual([
+      'box',
+    ])
+    if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
+    const host = wrapper.get('[data-slug="box:remote-work"] [data-testid="terminal-session-host"]')
+    expect(host.attributes('data-server')).toBe('box')
+    expect(host.attributes('title')).toBe('box · ada@box')
+
+    const banner = wrapper.get('[data-testid="terminal-server-offline-down"]')
+    expect(banner.text()).toContain('down offline · 0 sessions')
+    expect(wrapper.find('[data-testid="terminal-server-offline-box"]').exists()).toBe(false)
+    const calls = mocks.ListServerSessions.mock.calls.length
+    await wrapper.get('[data-testid="terminal-server-retry-down"]').trigger('click')
+    expect(mocks.ListServerSessions.mock.calls.length).toBe(calls + 1)
+  })
+
+  it('keeps an offline server’s last sessions in place, inert, until it answers again', async () => {
+    const connected = {
+      server: 'box',
+      ssh: 'ada@box',
+      state: 'connected',
+      error: '',
+      sessions: [
+        {
+          server: 'box',
+          id: 'box:9',
+          name: 'remote work',
+          slug: 'box:remote-work',
+          repo: '/home/hive/repo.git',
+          repoIdentity: '/home/hive/repo.git',
+          state: 'active',
+          canvasOwner: '',
+          tags: [],
+          createdAt: '',
+        },
+      ],
+    }
+    mocks.ListServerSessions.mockResolvedValue([connected])
+    const { wrapper, router } = await mountAvailable()
+    mocks.ListServerSessions.mockResolvedValue([{ ...connected, state: 'offline', error: 'refused', sessions: [] }])
+    await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="terminal-sessions-refresh"]').trigger('click')
+    await flushPromises()
+
+    const group = wrapper.get('[data-testid="terminal-repo-group"][data-repo="/home/hive/repo.git"]')
+    if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
+    const row = wrapper.get('[data-slug="box:remote-work"]')
+    expect(row.attributes('aria-disabled')).toBe('true')
+    expect(row.find('[data-testid="terminal-session-trailing"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="terminal-server-offline-box"]').text()).toContain('box offline · 1 session')
+
+    await row.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.params.slug).toBeFalsy()
+  })
+
+  describe('a session on a server', () => {
+    const connected = {
+      server: 'box',
+      ssh: 'ada@box',
+      state: 'connected',
+      error: '',
+      sessions: [
+        {
+          server: 'box',
+          id: 'box:9',
+          name: 'remote work',
+          slug: 'box:remote-work',
+          repo: '/home/hive/repo.git',
+          repoIdentity: '/home/hive/repo.git',
+          state: 'active',
+          canvasOwner: '',
+          tags: [],
+          createdAt: '',
+        },
+      ],
+    }
+    const offline = { ...connected, state: 'offline', error: 'refused', sessions: [] }
+
+    async function refresh(wrapper: Awaited<ReturnType<typeof mountAvailable>>['wrapper']) {
+      await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
+      await wrapper.get('[data-testid="terminal-sessions-refresh"]').trigger('click')
+      await flushPromises()
+    }
+
+    it('stays attached through a failed list, and closes once the server answers without it', async () => {
+      mocks.ListServerSessions.mockResolvedValue([connected])
+      const { wrapper, router } = await mountAvailable()
+      await router.push({ name: 'terminal', params: { slug: 'box:remote-work' } })
+      await flushPromises()
+
+      mocks.ListServerSessions.mockResolvedValue([offline])
+      await refresh(wrapper)
+      expect(router.currentRoute.value.params.slug).toBe('box:remote-work')
+      expect(storedRestore()?.slug).toBe('box:remote-work')
+
+      mocks.ListServerSessions.mockResolvedValue([{ ...connected, sessions: [] }])
+      await refresh(wrapper)
+      expect(router.currentRoute.value.params.slug).toBeFalsy()
+    })
+
+    it('keeps a remembered session until its server answers, then restores it', async () => {
+      localStorage.setItem('hive.terminal.restore', JSON.stringify({ slug: 'box:remote-work', window: '' }))
+      mocks.ListServerSessions.mockResolvedValue([offline])
+      const { wrapper, router } = await mountAvailable()
+      expect(router.currentRoute.value.params.slug).toBeFalsy()
+      expect(storedRestore()?.slug).toBe('box:remote-work')
+
+      mocks.ListServerSessions.mockResolvedValue([connected])
+      await refresh(wrapper)
+      expect(router.currentRoute.value.params.slug).toBe('box:remote-work')
+    })
+
+    it('forgets a remembered session the server answers without', async () => {
+      localStorage.setItem('hive.terminal.restore', JSON.stringify({ slug: 'box:remote-work', window: '' }))
+      mocks.ListServerSessions.mockResolvedValue([{ ...connected, sessions: [] }])
+      await mountAvailable()
+      await flushPromises()
+      expect(storedRestore()?.slug).toBe('')
+    })
+
+    it('names the state of an incompatible server in its banner', async () => {
+      mocks.ListServerSessions.mockResolvedValue([{ ...offline, state: 'incompatible' }])
+      const { wrapper } = await mountAvailable()
+      expect(wrapper.get('[data-testid="terminal-server-offline-box"]').text()).toContain('box incompatible')
+    })
+
+    it('reports a server list that fails outright', async () => {
+      mocks.ListServerSessions.mockRejectedValue(new Error('no fleet'))
+      const { wrapper } = await mountAvailable()
+      expect(wrapper.get('[data-testid="terminal-servers-error"]').text()).toContain('no fleet')
+    })
   })
 
   it('starts a new session in the repository whose header was clicked', async () => {

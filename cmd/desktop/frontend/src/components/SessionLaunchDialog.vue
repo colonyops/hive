@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconCode from '~icons/lucide/code'
 import IconMessagesSquare from '~icons/lucide/messages-square'
@@ -59,6 +59,10 @@ const props = withDefaults(
     testid?: string
     /** Prefix for the field ids, where it differs from `testid`. */
     fieldTestid?: string
+    /** Servers under servers: a session can be created on. Empty hides the choice. */
+    servers?: readonly string[]
+    /** The chosen server, '' for this machine. The parent swaps `options` to match. */
+    server?: string
   }>(),
   {
     initial: () => ({}),
@@ -68,9 +72,16 @@ const props = withDefaults(
     failure: null,
     testid: 'new-session',
     fieldTestid: undefined,
+    servers: () => [],
+    server: '',
   },
 )
-const emit = defineEmits<{ close: []; submit: [input: SessionLaunchInput]; dismissFailure: [] }>()
+const emit = defineEmits<{
+  close: []
+  submit: [input: SessionLaunchInput]
+  dismissFailure: []
+  'update:server': [server: string]
+}>()
 
 // The footer sits outside the form, so the submit button claims it by id,
 // which is also what makes Enter in a single-line field submit.
@@ -83,6 +94,10 @@ const targetOptions: SegmentedControlOption<Target>[] = [
 ]
 const targetIcons = { repository: IconCode, workspace: IconMessagesSquare }
 const inputs = computed(() => props.action?.inputs ?? [])
+const serverOptions = computed<AppSelectOption[]>(() => [
+  { value: '', label: 'This machine' },
+  ...props.servers.map((name) => ({ value: name, label: name })),
+])
 
 const target = seedRef<Target>(() => props.initialTarget ?? (props.initial.workspace ? 'workspace' : 'repository'))
 const repository = seedRef(() => props.initial.repository || props.options.defaultRepository || '')
@@ -99,6 +114,35 @@ const agent = seedRef(() => props.initial.agent ?? '')
 const pinToCode = ref(false)
 const inputValues = seedRef<ActionInputValues>(() => initialActionInputs(inputs.value))
 const validationError = ref('')
+
+// Another server's options name other repositories and agents, so a choice
+// picked from the old options falls back to the new default when they do not
+// hold it. A refresh of the same server's options is not a new choice, and a
+// typed URL or restored draft was never picked from a list, so both stay.
+const optionsServer = seedRef(() => props.server)
+watch(
+  () => props.options,
+  (options, previous) => {
+    if (props.server === optionsServer.value) return
+    optionsServer.value = props.server
+    const current = repository.value
+    const picked =
+      !current ||
+      current === previous.defaultRepository ||
+      (previous.repositories ?? []).some((repo) => repo.repository === current)
+    if (picked && !(options.repositories ?? []).some((repo) => repo.repository === current))
+      repository.value = options.defaultRepository || ''
+    if (agent.value && !(options.agents ?? []).includes(agent.value)) agent.value = options.defaultAgent || ''
+  },
+)
+// A chat runs in an agent workspace on this machine.
+watch(
+  () => props.server,
+  (server) => {
+    if (server) target.value = 'repository'
+  },
+  { immediate: true },
+)
 const nameInput = ref<{ focus: () => void } | null>(null)
 
 const needsPrompt = computed(() => !!props.action || prompt.value.trim() !== '')
@@ -175,6 +219,7 @@ useSubmitShortcut(submit)
   >
     <template #header-actions>
       <SegmentedControl
+        v-if="!server"
         v-model="target"
         variant="compact"
         size="sm"
@@ -223,11 +268,22 @@ useSubmitShortcut(submit)
       </div>
     </section>
     <form :id="formId" class="flex flex-col gap-3 px-5 py-4" @submit.prevent="submit">
+      <FormField v-if="servers.length && target === 'repository'" v-slot="{ id }" label="Server">
+        <AppSelect
+          :id="id"
+          :model-value="server"
+          :options="serverOptions"
+          aria-label="Server"
+          :testid="`${fieldId}-server`"
+          @update:model-value="emit('update:server', $event)"
+        />
+      </FormField>
       <FormField v-if="target === 'repository'" v-slot="{ id }" label="Repository">
         <RepositorySelect
           :id="id"
           :model-value="repository"
           :repositories="options.repositories"
+          :server="server"
           :testid="`${fieldId}-repository`"
           @update:model-value="repository = $event"
         />

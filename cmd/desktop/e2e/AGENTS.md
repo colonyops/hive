@@ -44,6 +44,17 @@ container.
 `mise run ci` ends with this suite, and GitHub CI runs it in the
 `desktop-e2e` job.
 
+### The remote lane
+
+`mise run desktop:e2e:remote` runs `tests/workflows/remote/` against the ssh
+fixture from `test/remote` as a real server. `scripts/run-remote.sh` starts a
+fixture of its own (`.data/remote-e2e`, ports 19232 and 19233), so it can run
+beside `mise run cli:remote:test`. The container then joins the fixture's
+Docker network instead of `--network none`, and `serve.sh` starts the `remote`
+server with `server-a` and an unreachable `gone` under `servers:`. Without the
+lane, the `workflows-remote-chromium` project and the `remote` server do not
+exist. `mise run ci` and the `desktop-e2e` job run both lanes.
+
 ## Three Kinds of Test
 
 Each kind is a directory, and each directory is one Playwright project per
@@ -77,6 +88,7 @@ files.
 | `pipeline`     | `pipeline`     | chromium         | The source-to-commit flow and its `/_e2e/source-to-commit` probe.  |
 | `action-smoke` | `action-smoke` | chromium         | The actions journey, with a local bare Git remote.                 |
 | `action-seed`  | `action-smoke` | chromium         | Starts with no `actions.yml`, to observe first-run seeding.        |
+| `remote`       | `feed`         | chromium         | The remote lane only: `server-a` from `test/remote` over ssh, and an offline server. |
 
 A spec picks its server with `test.use`; `baseURL` follows from it:
 

@@ -62,6 +62,7 @@ func TestRenderSessionDraftItemsCombinesOnePromptInOrder(t *testing.T) {
 
 func TestSessionDraftMetadataRoundTrip(t *testing.T) {
 	draft := SessionDraft{
+		Server:     "box",
 		Repository: "https://github.com/acme/site.git",
 		Name:       "fix-crash",
 		Prompt:     "Fix the crash",
@@ -80,6 +81,7 @@ func TestSessionDraftMetadataRoundTrip(t *testing.T) {
 
 	got, ok := SessionDraftFromMetadata(meta)
 	require.True(t, ok)
+	assert.Equal(t, draft.Server, got.Server, "a retry goes back to the server that failed")
 	assert.Equal(t, draft.Repository, got.Repository)
 	assert.Equal(t, draft.Name, got.Name)
 	assert.Equal(t, draft.Prompt, got.Prompt)

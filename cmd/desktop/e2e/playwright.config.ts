@@ -40,8 +40,13 @@ export default defineConfig({
     { name: 'smoke-webkit', testDir: './tests/smoke', use: webkit },
     { name: 'features-chromium', testDir: './tests/features', use: chromium },
     { name: 'features-webkit', testDir: './tests/features', use: webkit },
-    { name: 'workflows-chromium', testDir: './tests/workflows', use: chromium },
+    { name: 'workflows-chromium', testDir: './tests/workflows', testIgnore: '**/remote/**', use: chromium },
     // Only onboarding has a webkit server (scripts/serve.sh).
     { name: 'workflows-onboarding-webkit', testDir: './tests/workflows/onboarding', use: webkit },
+    // Only the remote lane starts the server these run against, and only it
+    // can reach the ssh fixture (scripts/run-remote.sh).
+    ...(process.env.HIVE_DESKTOP_E2E_REMOTE
+      ? [{ name: 'workflows-remote-chromium', testDir: './tests/workflows/remote', use: chromium }]
+      : []),
   ],
 })

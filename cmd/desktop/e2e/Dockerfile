@@ -3,12 +3,13 @@
 FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
 ENV CI=1
 
-# The server-build action runtime uses git and tmux; bash, curl, and coreutils
+# The server-build action runtime uses git and tmux, and the remote lane's
+# server terminals run over ssh; bash, curl, and coreutils
 # are used by the isolated e2e harness. The Playwright base image already has
 # the browser system dependencies and all of these but tmux. Naming the others
 # here upgrades them, and the image's Azure mirror has served those downloads
 # at 45 kB/s.
-RUN apt-get update && apt-get install -y --no-install-recommends tmux \
+RUN apt-get update && apt-get install -y --no-install-recommends tmux openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace

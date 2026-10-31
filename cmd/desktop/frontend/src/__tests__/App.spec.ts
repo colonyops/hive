@@ -180,6 +180,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   DismissFailedSession: mocks.DismissFailedSession,
   ListSessions: vi.fn().mockResolvedValue([]),
   SessionStatuses: vi.fn().mockResolvedValue({ items: [], pollIntervalMs: 60_000 }),
+  ServerSessionStatuses: vi.fn().mockResolvedValue([]),
   TerminalActionViews: vi.fn().mockResolvedValue([]),
 }))
 
@@ -1646,6 +1647,7 @@ describe('App', () => {
           name: 'fix the parser',
           slug: 'hive-fix-parser',
           repo: 'hay-kot/hive',
+          server: '',
           repoIdentity: 'hay-kot/hive',
           state: 'active',
           canvasOwner: 'hay-kot/hive',
@@ -3438,6 +3440,7 @@ describe('App', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'git@github.com:hay-kot/hive.git',
+        server: '',
         repoIdentity: 'git@github.com:hay-kot/hive.git',
         state: 'active',
         canvasOwner: 'hay-kot/hive',

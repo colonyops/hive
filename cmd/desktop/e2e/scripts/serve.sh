@@ -83,8 +83,47 @@ rules:
 EOF
 }
 
+# The remote lane's server lists two servers: server-a from the ssh fixture,
+# reached by name on the fixture's Docker network, and one that refuses every
+# connection. run-docker.sh mounts the fixture's keys at /remote.
+prepare_remote_runtime() {
+  local data_dir="$1"
+  local ssh_dir="${data_dir}/ssh"
+  mkdir -p "${ssh_dir}"
+  chmod 700 "${ssh_dir}"
+  # ssh refuses a key that others can read, which a read-only mount can be.
+  install -m 600 /remote/id_ed25519 "${ssh_dir}/id_ed25519"
+  awk '{print "server-a", $1, $2}' /remote/server-a_host_ed25519_key.pub >"${ssh_dir}/known_hosts"
+  cat >"${ssh_dir}/config" <<EOF
+Host server-a
+  HostName server-a
+  User hive
+  IdentityFile ${ssh_dir}/id_ed25519
+  UserKnownHostsFile ${ssh_dir}/known_hosts
+  IdentitiesOnly yes
+
+Host gone
+  HostName 127.0.0.1
+  Port 9
+  User hive
+  IdentityFile ${ssh_dir}/id_ed25519
+  UserKnownHostsFile ${ssh_dir}/known_hosts
+EOF
+  cat >"${data_dir}/hive-e2e.yaml" <<EOF
+version: "0.2.7"
+git_path: git
+servers:
+  - name: server-a
+    ssh: server-a
+    ssh_config: ${ssh_dir}/config
+  - name: gone
+    ssh: gone
+    ssh_config: ${ssh_dir}/config
+EOF
+}
+
 prepare_server_files() {
-  local data_dir="$1" mode="$2"
+  local data_dir="$1" mode="$2" name="$3"
   local fixture_dir="${data_dir}/fixtures"
   mkdir -p "${fixture_dir}"
   cp -R "${FIXTURES}/flows" "${fixture_dir}/flows"
@@ -93,6 +132,9 @@ prepare_server_files() {
   esac
   if [[ "${mode}" == "action-smoke" || "${mode}" == "action-seed" ]]; then
     prepare_action_runtime "${data_dir}"
+  fi
+  if [[ "${name}" == "remote" ]]; then
+    prepare_remote_runtime "${data_dir}"
   fi
   if [[ "${mode}" == "action-smoke" ]]; then
     # Run-scoped IDs, session names, and topic keep foreign rows out of the
@@ -120,7 +162,7 @@ start_server() {
   local data_dir="${E2E_DATA_ROOT}/${name}"
   local config_home="${data_dir}/config"
   mkdir -p "${data_dir}" "${config_home}"
-  prepare_server_files "${data_dir}" "${mode}"
+  prepare_server_files "${data_dir}" "${mode}" "${name}"
   if [[ ! -f "${data_dir}/hive-e2e.yaml" ]]; then
     cat >"${data_dir}/hive-e2e.yaml" <<EOF
 version: "0.2.7"
@@ -181,7 +223,7 @@ wait_ready() {
 
 # Ports must match fixtures/servers.ts. The chromium feed server starts last
 # because playwright.config.ts polls it as the readiness sentinel.
-for port in 8931 8932 8933 8934 8935 8936 8937; do check_port_free "${port}"; done
+for port in 8931 8932 8933 8934 8935 8936 8937 8938; do check_port_free "${port}"; done
 start_server onboarding 8932 onboarding-chromium
 start_server onboarding 8933 onboarding-webkit
 start_server feed 8934 feed-webkit
@@ -190,6 +232,10 @@ start_server action-smoke 8936 action-smoke
 # This server starts with the private actions.yml absent. It proves exact
 # first-run seeding without ever copying an action fixture.
 start_server action-seed 8937 action-seed
+# Only the remote lane can reach the ssh fixture.
+if [[ -n "${HIVE_DESKTOP_E2E_REMOTE:-}" ]]; then
+  start_server feed 8938 remote
+fi
 for i in "${!pids[@]}"; do wait_ready "${pids[$i]}" "${pid_names[$i]}" "${pid_ports[$i]}"; done
 start_server feed 8931 feed-chromium
 last_index=$((${#pids[@]} - 1))

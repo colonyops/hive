@@ -2,6 +2,7 @@
 import { computed, nextTick, proxyRefs, ref, toRef, watch } from 'vue'
 import { useNow } from '@vueuse/core'
 import IconChevronDown from '~icons/lucide/chevron-down'
+import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconChevronsDownUp from '~icons/lucide/chevrons-down-up'
 import IconChevronsUpDown from '~icons/lucide/chevrons-up-down'
@@ -10,11 +11,14 @@ import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPinOff from '~icons/lucide/pin-off'
 import IconPlus from '~icons/lucide/plus'
 import IconRotateCw from '~icons/lucide/rotate-cw'
+import IconServer from '~icons/lucide/server'
 import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import BaseIconBadge from '@hive/ui/components/ui/BaseIconBadge.vue'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import Kbd from '@hive/ui/components/ui/Kbd.vue'
@@ -126,6 +130,16 @@ function onChatMenuSelect(row: TerminalSessionRow, id: string): void {
   menus.openRow = ''
   if (id === 'unpin') tree.unpinSlug(row.slug)
   else if (id === 'open-in-agents') ops.openChatInAgents(row)
+}
+
+function serverOffline(name: string): boolean {
+  return tree.offlineServers.some((server) => server.name === name)
+}
+
+function hostTitle(row: TerminalSessionRow): string {
+  const server = tree.servers.find((list) => list.server.name === row.server)?.server
+  if (row.offline) return `${row.server} is ${server?.state ?? 'offline'}`
+  return server?.ssh ? `${row.server} · ${server.ssh}` : row.server
 }
 
 function terminalState(row: TerminalSessionRow): 'running' | 'stopped' | undefined {
@@ -275,13 +289,43 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
       @escape="nav.focusTree"
       @keydown.down.prevent="nav.focusTree"
       @keydown.enter.prevent="nav.focusTree"
-      @new="openNewSession(tree.sessionRepository(pool.activeSlug))"
+      @new="
+        openNewSession(
+          tree.sessionRepository(pool.activeSlug),
+          'repository',
+          undefined,
+          tree.sessionServer(pool.activeSlug),
+        )
+      "
       @select="onSidebarMenuSelect"
     >
       <SessionFilterButton />
     </SidebarToolbar>
     <SessionViewBar />
     <SessionViewDialogs />
+    <InlineError v-if="tree.serversError" class="mx-3 mt-2 shrink-0" testid="terminal-servers-error">{{
+      tree.serversError
+    }}</InlineError>
+    <InlineError
+      v-for="server in tree.offlineServers"
+      :key="server.name"
+      class="mx-3 mt-2 flex shrink-0 items-center gap-2"
+      :testid="`terminal-server-offline-${server.name}`"
+    >
+      <IconCircleAlert class="size-3.5 shrink-0" aria-hidden="true" />
+      <span class="min-w-0 flex-1 truncate text-text-2" :title="server.error">
+        <span class="font-medium text-text">{{ server.name }}</span> {{ server.state }} · {{ server.sessions }}
+        {{ server.sessions === 1 ? 'session' : 'sessions' }}
+      </span>
+      <BaseButton
+        variant="ghost"
+        size="xs"
+        class="shrink-0"
+        :data-testid="`terminal-server-retry-${server.name}`"
+        @click="tree.reloadServers"
+        >Retry</BaseButton
+      >
+    </InlineError>
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-4">
       <InlineError
         v-if="tree.sessionsError"
@@ -311,6 +355,19 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
             @keydown.space.self.prevent="view.expansion.toggle(group)"
           >
             <span class="min-w-0 truncate text-body text-text">{{ group.name }}</span>
+            <span
+              v-if="group.servers?.length"
+              class="flex shrink-0 items-center gap-[3px]"
+              data-testid="terminal-repo-hosts"
+            >
+              <span
+                v-for="name in group.servers"
+                :key="name"
+                class="size-1.5 rounded-full"
+                :class="serverOffline(name) ? 'border border-severity-error bg-transparent' : tree.hue(name).fill"
+                :title="serverOffline(name) ? `${name} is offline` : name"
+              />
+            </span>
             <div class="group-trailing" @click.stop>
               <span
                 class="group-count font-mono text-caption"
@@ -407,25 +464,42 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     class="session-row"
                     :class="{
                       'session-row-attached': row.slug === pool.activeSlug,
+                      'session-row-offline': row.offline,
                       'menu-open': menus.openRow === row.id || menus.openNewWindow === row.id,
                     }"
                     role="button"
-                    :tabindex="nav.tabStopKey === `s:${row.id}` ? 0 : -1"
+                    :tabindex="row.offline ? undefined : nav.tabStopKey === `s:${row.id}` ? 0 : -1"
+                    :aria-disabled="row.offline || undefined"
                     :data-testid="group.kind === 'chats' ? 'terminal-chat-row' : 'terminal-session-row'"
                     :data-slug="row.slug"
                     :data-tree-key="`s:${row.id}`"
                     :data-attached="row.slug === pool.activeSlug"
-                    @click="nav.clickSession(row)"
-                    @keydown.enter.self.prevent="nav.enterSession(row)"
-                    @keydown.space.self.prevent="nav.enterSession(row)"
-                    @contextmenu.prevent="menus.toggleRow(row, $event)"
+                    :data-offline="row.offline || undefined"
+                    @click="!row.offline && nav.clickSession(row)"
+                    @keydown.enter.self.prevent="!row.offline && nav.enterSession(row)"
+                    @keydown.space.self.prevent="!row.offline && nav.enterSession(row)"
+                    @contextmenu.prevent="!row.offline && menus.toggleRow(row, $event)"
                   >
                     <span
-                      class="min-w-0 flex-1 truncate text-body"
+                      class="min-w-0 truncate text-body"
                       :class="{ 'text-text-3': tree.rowIdle(row) }"
                       :title="row.repo ? `${row.slug}\n${row.repo}` : row.slug"
                       >{{ row.name }}</span
                     >
+                    <BaseIconBadge
+                      v-if="row.server"
+                      :size="18"
+                      rounded="rounded-[5px]"
+                      :class="row.offline ? 'bg-severity-error-tint text-severity-error' : tree.hue(row.server).mark"
+                      :title="hostTitle(row)"
+                      :aria-label="row.offline ? `On ${row.server}, offline` : `On ${row.server}`"
+                      role="img"
+                      data-testid="terminal-session-host"
+                      :data-server="row.server"
+                    >
+                      <component :is="row.offline ? IconCircleAlert : IconServer" class="size-3" aria-hidden="true" />
+                    </BaseIconBadge>
+                    <span class="flex-1" />
                     <SessionTagsIndicator v-if="group.kind === 'repo'" :tags="row.tags" />
                     <BaseBadge
                       v-if="sessionAgeBadges[row.id]"
@@ -439,7 +513,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     </BaseBadge>
                     <!-- AppMenu anchors to the positioned row so its panel spans it; the grid
                          overlap keeps this slot from becoming a positioning ancestor. -->
-                    <div class="row-trailing" data-testid="terminal-session-trailing" @click.stop>
+                    <div v-if="!row.offline" class="row-trailing" data-testid="terminal-session-trailing" @click.stop>
                       <IconButton
                         v-if="group.kind !== 'chats'"
                         label="New window"
@@ -457,10 +531,10 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                         :running="tree.rowRunning(row)"
                         :flip="menus.newWindowFlip"
                         :ignore="[menus.newWindowToggle]"
-                        :agents="ops.agentProfiles"
+                        :agents="row.server ? [] : ops.agentProfiles"
                         :default-agent="ops.defaultAgentProfile"
-                        :loading="ops.agentProfilesLoading"
-                        :failed="ops.agentProfilesFailed"
+                        :loading="!row.server && ops.agentProfilesLoading"
+                        :failed="!row.server && ops.agentProfilesFailed"
                         @close="menus.openNewWindow = ''"
                         @terminal="ops.newWindowIn(row)"
                         @agent="ops.newAgentWindowIn(row, $event)"
@@ -501,7 +575,8 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                         v-else-if="menus.openRow === row.id"
                         :session="row"
                         :terminal="terminalState(row)"
-                        :extra="ops.sessionActionEntries"
+                        :remote="!!row.server"
+                        :extra="row.server ? [] : ops.sessionActionEntries"
                         :flip="menus.rowFlip"
                         :ignore="[menus.rowToggle(row.id)]"
                         @extra="ops.runSessionAction(row, $event)"
@@ -738,6 +813,16 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
   outline: none;
 }
 /* No fill: the rail and the accent find the attached row, and the surface keeps its hover feedback. */
+.session-row-offline {
+  cursor: default;
+  color: var(--color-text-4);
+}
+.session-row-offline > span:first-child {
+  text-decoration: line-through;
+}
+.session-row-offline:hover {
+  background: transparent;
+}
 .session-row-attached,
 .window-row-active {
   font-weight: 500;

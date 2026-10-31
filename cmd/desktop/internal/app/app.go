@@ -514,6 +514,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.Sessions = newSessionsService(SessionsDeps{
 		Hive: a.hive, Sessions: a.sessions, Launcher: a.launcher, WorkspaceLauncher: a.AgentWorkspaces,
 		Windows: a.terminals, Tmux: a.terminals,
+		Servers: a.hiveServers.Load, ServerTmux: a.serverTerminals.SessionTmux,
 		AgentWindows: a.terminals, AgentCommands: a.profileCommands,
 		Jobs: a.Jobs, Items: a.Stores.InboxItems, Links: a.Stores.ItemSessions, Catalog: a.actionStore, Dispatcher: a.dispatcher,
 		Recorder: a.Activity, Events: a.Events, Logger: cfg.Logger,

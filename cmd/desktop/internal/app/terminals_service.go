@@ -137,10 +137,13 @@ func (s *TerminalsService) Attach(ctx context.Context, target string, cols, rows
 	exists, err := manager.HasSession(ctx, slug)
 	if err != nil {
 		observe.RecordError(span, err)
-		if server, _, remote := splitTarget(target); remote && errors.Is(err, tmuxcc.ErrUnavailable) {
-			// The caller sees only the message, and tmux's usual answer for this
-			// on a local machine does not apply to a server.
-			return nil, Wrap(err, KindUnavailable, "server %q has no usable tmux (%v); check ssh to it, or set tmux for it under servers: in config.yaml", server, err)
+		if server, _, remote := splitTarget(target); remote {
+			if errors.Is(err, tmuxcc.ErrUnavailable) {
+				// The caller sees only the message, and tmux's usual answer for this
+				// on a local machine does not apply to a server.
+				return nil, Wrap(err, KindUnavailable, "server %q has no usable tmux (%v); check ssh to it, or set tmux for it under servers: in config.yaml", server, err)
+			}
+			return nil, serverError(err, KindUnavailable, "attaching to session %q on server %q", slug, server)
 		}
 		return nil, terminalError(err, "attaching to session %q", target)
 	}

@@ -125,7 +125,7 @@ export function useSessionTreeView(
   // one has found what it went looking for.
   const note = computed<'' | 'empty' | 'no-matches'>(() => {
     if (tree.sessionsError.value || !ready.value) return ''
-    if (!tree.activeSessions.value.length) return 'empty'
+    if (!tree.sessionGroups.value.some((group) => group.kind === 'repo')) return 'empty'
     const found = query.value.trim() ? groups.value.length > 0 : groups.value.some((group) => group.kind === 'repo')
     return found ? '' : 'no-matches'
   })

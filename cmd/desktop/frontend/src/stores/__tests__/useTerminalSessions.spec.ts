@@ -1,15 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   groupTerminalSessions,
+  serverHue,
   terminalSessionGroups,
   useTerminalSessions,
   type TerminalSessionRow,
 } from '../useTerminalSessions'
 
-const mocks = vi.hoisted(() => ({ ListSessions: vi.fn(), Scratch: vi.fn() }))
+const mocks = vi.hoisted(() => ({ ListSessions: vi.fn(), ListServerSessions: vi.fn(), Scratch: vi.fn() }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   ListSessions: mocks.ListSessions,
+  ListServerSessions: mocks.ListServerSessions,
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/terminalservice', () => ({
   Scratch: mocks.Scratch,
@@ -18,6 +20,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 describe('useTerminalSessions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.ListServerSessions.mockResolvedValue([])
     mocks.Scratch.mockResolvedValue({ slug: 'Scratch', name: 'Terminals' })
   })
 
@@ -28,6 +31,7 @@ describe('useTerminalSessions', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'hay-kot/hive',
+        server: '',
         repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
@@ -39,6 +43,7 @@ describe('useTerminalSessions', () => {
         name: 'old work',
         slug: 'old-work',
         repo: 'hay-kot/hive',
+        server: '',
         repoIdentity: 'hay-kot/hive',
         state: 'recycled',
         canvasOwner: '',
@@ -72,6 +77,7 @@ describe('useTerminalSessions', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'hay-kot/hive',
+        server: '',
         repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
@@ -104,6 +110,7 @@ describe('useTerminalSessions', () => {
       name: 'Terminals',
       slug: 'Scratch',
       repo: '',
+      server: '',
       repoIdentity: '',
       state: 'active',
       canvasOwner: '',
@@ -120,6 +127,7 @@ describe('useTerminalSessions', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'hay-kot/hive',
+        server: '',
         repoIdentity: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
@@ -135,6 +143,35 @@ describe('useTerminalSessions', () => {
     expect(error.value).toBeNull()
     expect(sessions.value.map((row) => row.slug)).toEqual(['hive-fix-parser'])
   })
+
+  it('keeps the sessions an offline server last listed, marked offline', async () => {
+    const session = {
+      server: 'box',
+      id: 'box:9',
+      name: 'remote work',
+      slug: 'box:remote-work',
+      repo: '/home/hive/repo.git',
+      repoIdentity: '/home/hive/repo.git',
+      state: 'active',
+      canvasOwner: '',
+      tags: [],
+      createdAt: '',
+    }
+    const connected = { server: 'box', ssh: 'ada@box', state: 'connected', error: '', sessions: [session] }
+    const { servers, reloadServers } = useTerminalSessions()
+
+    mocks.ListServerSessions.mockResolvedValue([connected])
+    await reloadServers()
+    mocks.ListServerSessions.mockResolvedValue([{ ...connected, state: 'offline', error: 'refused', sessions: [] }])
+    await reloadServers()
+
+    expect(servers.value[0].server.state).toBe('offline')
+    expect(servers.value[0].sessions).toEqual([{ ...session, offline: true }])
+
+    mocks.ListServerSessions.mockResolvedValue([connected])
+    await reloadServers()
+    expect(servers.value[0].sessions).toEqual([session])
+  })
 })
 
 describe('sessionRepository', () => {
@@ -149,6 +186,7 @@ describe('sessionRepository', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'https://github.com/hay-kot/hive.git',
+        server: '',
         repoIdentity: 'https://github.com/hay-kot/hive.git',
         state: 'active',
         canvasOwner: '',
@@ -168,6 +206,7 @@ describe('sessionRepository', () => {
         name: 'scratch',
         slug: 'scratch',
         repo: '',
+        server: '',
         repoIdentity: '',
         state: 'active',
         canvasOwner: '',
@@ -187,6 +226,7 @@ describe('sessionRepository', () => {
 describe('groupTerminalSessions', () => {
   function row(name: string, repo: string, repoIdentity = repo): TerminalSessionRow {
     return {
+      server: '',
       id: name,
       name,
       slug: `slug-${name}`,
@@ -234,6 +274,7 @@ describe('groupTerminalSessions', () => {
 describe('terminalSessionGroups', () => {
   function row(name: string, repo: string, repoIdentity = repo): TerminalSessionRow {
     return {
+      server: '',
       id: name,
       name,
       slug: `slug-${name}`,
@@ -280,5 +321,52 @@ describe('terminalSessionGroups', () => {
     const groups = terminalSessionGroups([row('zeta', 'git@github.com:colonyops/hive.git')], null, [])
 
     expect(groups.map((group) => group.kind)).toEqual(['repo'])
+  })
+
+  it('merges each server session into its repository, after this machine and in server order', () => {
+    const remote = (
+      server: string,
+      name: string,
+      remote = 'git@github.com:colonyops/hive.git',
+      state = 'active',
+    ): TerminalSessionRow => ({
+      ...row(name, remote),
+      server,
+      id: `${server}:${name}`,
+      slug: `${server}:${name}`,
+      state,
+    })
+    const box = { name: 'box', ssh: 'ada@box', state: 'connected', error: '' }
+    const down = { name: 'down', ssh: 'down', state: 'offline', error: 'ssh: connect refused' }
+    const groups = terminalSessionGroups(
+      [row('zeta', 'git@github.com:colonyops/hive.git')],
+      null,
+      [],
+      [
+        { server: down, sessions: [remote('down', 'alpha')] },
+        {
+          server: box,
+          sessions: [
+            remote('box', 'beta'),
+            remote('box', 'alpha'),
+            remote('box', 'old', undefined, 'recycled'),
+            remote('box', 'site', 'git@github.com:acme/site.git'),
+          ],
+        },
+      ],
+    )
+
+    expect(groups.map((group) => [group.kind, group.key, group.servers])).toEqual([
+      ['repo', 'git@github.com:acme/site.git', ['box']],
+      ['repo', 'git@github.com:colonyops/hive.git', ['down', 'box']],
+    ])
+    expect(groups[1].sessions.map((s) => s.id)).toEqual(['zeta', 'down:alpha', 'box:alpha', 'box:beta'])
+  })
+
+  it('colors a server by its place in the config, the same while it is offline', () => {
+    const servers = ['a', 'b', 'c', 'd', 'e', 'f']
+    expect(serverHue(servers, 'b')).toEqual(serverHue(['a', 'b'], 'b'))
+    expect(serverHue(servers, 'a')).not.toEqual(serverHue(servers, 'b'))
+    expect(serverHue(servers, 'f')).toEqual(serverHue(servers, 'a'))
   })
 })

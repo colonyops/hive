@@ -192,12 +192,11 @@ describe('useReveal', () => {
     expect(openDrive).toHaveBeenLastCalledWith({ space: 'shared', path: null, session: null })
   })
 
-  it('does not open a local session for a code link on another server', async () => {
+  it("opens a code link on another server as that server's session, never the local one", async () => {
     mocks.TakeLink.mockResolvedValueOnce({ area: 'code', slug: 'web', server: 'box-1' })
     setup()
     await flushPromises()
-    expect(push).not.toHaveBeenCalled()
-    expect(showToast).toHaveBeenCalledWith('Hive cannot open sessions on server box-1 yet', { severity: 'error' })
+    expect(push).toHaveBeenCalledWith({ name: 'terminal', params: { slug: 'box-1:web' }, query: {} })
   })
 
   it('says so when a link cannot be read', async () => {

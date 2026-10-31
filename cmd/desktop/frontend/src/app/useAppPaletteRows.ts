@@ -7,6 +7,7 @@ import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPalette from '~icons/lucide/palette'
 import IconRss from '~icons/lucide/rss'
 import IconSearch from '~icons/lucide/search'
+import IconServer from '~icons/lucide/server'
 import IconSquarePlus from '~icons/lucide/square-plus'
 import IconTerminal from '~icons/lucide/terminal'
 import IconWorkflow from '~icons/lucide/workflow'
@@ -29,6 +30,7 @@ import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { documentsOf, entryLabel } from '../lib/drive'
 import { useDrive } from '../stores/useDrive'
 import { useAttachedTerminalWindows } from '../composables/useAttachedTerminalWindows'
+import { useNewSession } from '../composables/useNewSession'
 import { applicationSettingsSections } from '../router'
 import { applicationSettingsSectionMeta } from '../components/settings/sectionMeta'
 import { actionTypeMeta } from '../lib/actionPresentation'
@@ -87,13 +89,20 @@ export function useAppPaletteRows(
   const {
     sessions: terminalSessionRows,
     scratch: terminalScratchRow,
+    servers: terminalServers,
     reload: reloadTerminalSessions,
   } = useTerminalSessions()
   const { rows: pinnedChatRows } = useTerminalPinnedChats()
   const { attached: attachedTerminal } = useAttachedTerminalWindows()
+  const newSession = useNewSession()
   const activeTerminalSessions = computed(() => terminalSessionRows.value.filter((row) => row.state === 'active'))
   const terminalGroups = computed(() =>
-    terminalSessionGroups(activeTerminalSessions.value, terminalScratchRow.value, pinnedChatRows.value),
+    terminalSessionGroups(
+      activeTerminalSessions.value,
+      terminalScratchRow.value,
+      pinnedChatRows.value,
+      terminalServers.value,
+    ),
   )
 
   // Chat rows read the same recents listing the Code view's pinned-chats
@@ -352,18 +361,40 @@ export function useAppPaletteRows(
       // itself.
       for (const group of terminalGroups.value) {
         for (const row of group.sessions) {
-          if (row.slug === onScreenSessionSlug.value) continue
+          if (row.slug === onScreenSessionSlug.value || row.offline) continue
           cmds.push({
             id: `terminal:attach:${row.slug}`,
             title: row.name,
             group: group.name,
             scope: 'goto',
             kind: 'session',
-            keywords: [row.slug, group.name, ...(row.tags ?? []), 'session', 'attach', 'switch', 'open'],
+            keywords: [
+              row.slug,
+              group.name,
+              ...(row.server ? [row.server] : []),
+              ...(row.tags ?? []),
+              'session',
+              'attach',
+              'switch',
+              'open',
+            ],
             icon: IconTerminal,
             run: () => void router.push({ name: 'terminal', params: { slug: row.slug } }),
           })
         }
+      }
+
+      for (const { server } of terminalServers.value) {
+        if (server.state !== 'connected') continue
+        cmds.push({
+          id: `session:new:server:${server.name}`,
+          title: `New session on ${server.name}`,
+          group: 'Sessions',
+          scope: 'actions',
+          keywords: ['session', 'new', 'create', 'server', 'remote', 'ssh', server.name],
+          icon: IconServer,
+          run: () => void newSession.openBlank('', 'repository', undefined, server.name),
+        })
       }
 
       // Window rows for whichever session is attached (the module projection

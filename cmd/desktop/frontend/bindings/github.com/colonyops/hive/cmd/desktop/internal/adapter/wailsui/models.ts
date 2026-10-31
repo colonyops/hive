@@ -594,6 +594,14 @@ export interface RuntimeStats {
     "go": procstats$0.GoRuntime;
 }
 
+export interface ServerSessions {
+    "server": string;
+    "ssh": string;
+    "state": string;
+    "error": string;
+    "sessions": SessionSummary[] | null;
+}
+
 export interface SessionCondition {
     "field": string;
     "op": string;
@@ -606,6 +614,7 @@ export interface SessionCondition {
  * SessionDetail is one session read in full, for a detail view.
  */
 export interface SessionDetail {
+    "server": string;
     "id": string;
     "name": string;
     "slug": string;
@@ -655,8 +664,13 @@ export interface SessionGitStatus {
 /**
  * SessionSummary is the session row shown in Code. CreatedAt starts with the
  * current logical session even when Hive reuses an older clone.
+ * 
+ * A session on a server has Server set, and its ID and Slug carry the
+ * "<server>:" prefix, so every id-keyed call and every terminal call reaches
+ * that server. The local rows leave Server empty.
  */
 export interface SessionSummary {
+    "server": string;
     "id": string;
     "name": string;
     "slug": string;

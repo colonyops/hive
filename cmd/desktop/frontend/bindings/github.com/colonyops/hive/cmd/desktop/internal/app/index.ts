@@ -27,6 +27,7 @@ export type {
     MenuBarPin,
     PopupLauncher,
     ScratchTerminal,
+    ServerStatus,
     SessionPullRequest,
     SessionPullRequestKey,
     SessionRisk,

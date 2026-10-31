@@ -100,6 +100,16 @@ func (t *serverTerminals) Manager(ctx context.Context, name string) (*tmuxcc.Man
 	return manager, nil
 }
 
+// SessionTmux is Manager as the session service uses it: to keep a server's
+// tmux session in step with a rename, and to read its windows for status.
+func (t *serverTerminals) SessionTmux(ctx context.Context, name string) (serverSessionTmux, error) {
+	manager, err := t.Manager(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return manager, nil
+}
+
 // Prune stops the managers of servers the fleet no longer has, or has
 // with a different ssh target.
 func (t *serverTerminals) Prune(ctx context.Context) {

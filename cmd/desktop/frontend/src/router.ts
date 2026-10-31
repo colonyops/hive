@@ -21,6 +21,7 @@ export const applicationSettingsSections = [
   'terminal',
   'launchers',
   'hive',
+  'servers',
   'mcp',
   'agents',
   'system',

@@ -146,4 +146,16 @@ describe('RepositorySelect', () => {
     await openList(wrapper as unknown as ReturnType<typeof mountSelect>)
     expect(wrapper.get('[data-testid="repo-empty"]').text()).toContain('No repositories configured')
   })
+
+  it('points at the server config when a server lists no repositories', async () => {
+    const wrapper = mount(RepositorySelect, {
+      attachTo: document.body,
+      props: { modelValue: '', repositories: null, testid: 'repo', server: 'box' },
+      global: { stubs: { Teleport: true } },
+    })
+    await openList(wrapper)
+    const empty = wrapper.get('[data-testid="repo-empty"]').text()
+    expect(empty).toContain('config.yaml on box')
+    expect(empty).not.toContain('Settings')
+  })
 })

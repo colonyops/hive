@@ -31,18 +31,21 @@ function actionsOf(entries: MenuEntry[]): MenuActionEntry[] {
 export function attachedSessionCommands(context: TerminalModeContext, attached: TerminalSessionRow): Command[] {
   const { tree, ops, attach, sessions } = context
   const hive = tree.isHiveSession(attached)
+  // A server's session has no local agents, actions, or start.
+  const local = !tree.isServerSession(attached)
   const scratch = tree.isScratch(attached)
   const chat = tree.isChat(attached)
   const live = attached.state === 'active'
   const running = tree.rowRunning(attached)
   const terminal = (hive && live) || scratch
-  const agents = hive && live && running && !ops.agentWindowBusy.value ? ops.agentProfiles.value : []
+  const agents = hive && local && live && running && !ops.agentWindowBusy.value ? ops.agentProfiles.value : []
   // A window action acts on the window on screen; the row menu carries the other
   // windows' copies. The hint names the window, because an action's label says
   // what it does, not what it does it to.
-  const activeWindow = hive ? tree.windowRowsFor(attached).find((win) => win.active) : undefined
+  const activeWindow = hive && local ? tree.windowRowsFor(attached).find((win) => win.active) : undefined
   const rows: (Command | false)[] = [
     terminal &&
+      local &&
       !running && {
         id: 'terminal:session:start',
         title: scratch ? 'Start terminal' : 'Start session',
@@ -94,7 +97,7 @@ export function attachedSessionCommands(context: TerminalModeContext, attached: 
       icon: IconTrash,
       run: () => void sessions.requestDelete(attached),
     },
-    ...(hive ? actionsOf(ops.sessionActionEntries.value) : []).map((entry) => ({
+    ...(hive && local ? actionsOf(ops.sessionActionEntries.value) : []).map((entry) => ({
       id: `terminal:session:${entry.id}`,
       title: entry.label,
       keywords: ['session', 'action'],

@@ -3,6 +3,7 @@ import type { InboxItem } from '../../types/feed'
 
 const mocks = vi.hoisted(() => ({
   SessionLaunchOptions: vi.fn(),
+  ServerLaunchOptions: vi.fn(),
   CreateSession: vi.fn(),
   NewSessionDraft: vi.fn(),
   FailedSessionDraft: vi.fn(),
@@ -10,12 +11,17 @@ const mocks = vi.hoisted(() => ({
   SessionDraftFromActivity: vi.fn(),
   pin: vi.fn(),
   pinWhenListed: vi.fn(),
+  servers: { value: [] as { server: { name: string; state: string } }[] },
+}))
+vi.mock('../../stores/useTerminalSessions', () => ({
+  useTerminalSessions: () => ({ servers: mocks.servers }),
 }))
 vi.mock('../../stores/useTerminalPinnedChats', () => ({
   useTerminalPinnedChats: () => ({ pin: mocks.pin, pinWhenListed: mocks.pinWhenListed }),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   SessionLaunchOptions: mocks.SessionLaunchOptions,
+  ServerLaunchOptions: mocks.ServerLaunchOptions,
   CreateSession: mocks.CreateSession,
   FailedSessionDraft: mocks.FailedSessionDraft,
   DismissFailedSession: mocks.DismissFailedSession,
@@ -25,6 +31,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   NewSessionDraft: mocks.NewSessionDraft,
 }))
 
+import { resetStores } from '../../stores/defineStore'
 import { resetNewSessionForTests, useNewSession } from '../useNewSession'
 import { resetToastsForTests, useToasts } from '../useToasts'
 
@@ -65,12 +72,68 @@ beforeEach(() => {
   vi.clearAllMocks()
   resetToastsForTests()
   resetNewSessionForTests()
+  resetStores()
+  mocks.servers.value = []
   mocks.SessionLaunchOptions.mockResolvedValue(options)
   mocks.FailedSessionDraft.mockResolvedValue({ repository: '', name: '', prompt: '' })
   mocks.DismissFailedSession.mockResolvedValue(undefined)
 })
 
 describe('useNewSession', () => {
+  it('offers the connected servers and creates on the one chosen, with its own options', async () => {
+    mocks.servers.value = [
+      { server: { name: 'box', state: 'connected' } },
+      { server: { name: 'down', state: 'offline' } },
+    ]
+    const boxOptions = { ...options, workspaces: [], defaultRepository: '/home/hive/repo.git', agents: ['testbash'] }
+    mocks.ServerLaunchOptions.mockResolvedValue(boxOptions)
+    mocks.CreateSession.mockResolvedValue(1)
+    const s = useNewSession()
+
+    await s.openBlank()
+    expect(s.servers.value).toEqual(['box'])
+    expect(s.server.value).toBe('')
+
+    await s.selectServer('box')
+    expect(mocks.ServerLaunchOptions).toHaveBeenCalledWith('box')
+    expect(s.options.value).toEqual(boxOptions)
+
+    await s.submit({ repository: '/home/hive/repo.git', name: 'remote-one' })
+    expect(mocks.CreateSession).toHaveBeenCalledWith(expect.objectContaining({ server: 'box', name: 'remote-one' }))
+    expect(useToasts().toasts.value.at(-1)?.message).toBe('Creating session remote-one on box…')
+  })
+
+  it('opens on a server when asked, and keeps this machine when the server cannot answer', async () => {
+    mocks.ServerLaunchOptions.mockResolvedValueOnce(options)
+    const s = useNewSession()
+    await s.openBlank('', 'repository', undefined, 'box')
+    expect(s.server.value).toBe('box')
+    expect(s.servers.value).toEqual(['box'])
+    s.cancel()
+
+    mocks.ServerLaunchOptions.mockRejectedValueOnce(new Error('ssh: connect refused'))
+    await s.openBlank()
+    await s.selectServer('box')
+    expect(s.server.value).toBe('')
+    expect(s.error.value).toBe('ssh: connect refused')
+  })
+
+  it('keeps the server options when the refresh of the local options lands', async () => {
+    const boxOptions = { ...options, workspaces: [], defaultRepository: '/home/hive/repo.git', agents: ['testbash'] }
+    mocks.ServerLaunchOptions.mockResolvedValue(boxOptions)
+    const s = useNewSession()
+    await s.openBlank()
+    s.cancel()
+
+    let refresh: (opts: typeof options) => void = () => {}
+    mocks.SessionLaunchOptions.mockReturnValueOnce(new Promise((resolve) => (refresh = resolve)))
+    await s.openBlank('', 'repository', undefined, 'box')
+    refresh({ ...options, agents: ['claude', 'pi'] })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(s.options.value).toEqual(boxOptions)
+  })
+
   it('opens blank with the default repository', async () => {
     const s = useNewSession()
     await s.openBlank()
@@ -240,6 +303,7 @@ describe('useNewSession', () => {
     await s.openBlank()
     await s.submit({ repository: 'acme/site', name: 'fix-crash', prompt: 'go', agent: 'claude' })
     expect(mocks.CreateSession).toHaveBeenCalledWith({
+      server: '',
       repository: 'acme/site',
       workspace: '',
       name: 'fix-crash',
@@ -258,6 +322,7 @@ describe('useNewSession', () => {
     await s.openFromItem(item)
     await s.submit({ workspace: 'alerts', name: 'incident', prompt: 'Alert context' })
     expect(mocks.CreateSession).toHaveBeenCalledWith({
+      server: '',
       repository: '',
       workspace: 'alerts',
       name: 'incident',
@@ -443,5 +508,57 @@ describe('useNewSession — retry from an activity row', () => {
     expect(s.open.value).toBe(false)
     expect(useToasts().toasts.value.at(-1)?.message).toBe('this activity event carries no session to retry')
     expect(useToasts().toasts.value.at(-1)?.severity).toBe('error')
+  })
+
+  describe('a draft that failed on a server', () => {
+    const boxOptions = { ...options, workspaces: [], defaultRepository: '/home/hive/repo.git', agents: ['testbash'] }
+    const onBox = () => pending({ server: 'box', repository: 'https://example.com/typed.git' })
+
+    it('reopens on that server with its options', async () => {
+      mocks.FailedSessionDraft.mockResolvedValue(onBox())
+      mocks.ServerLaunchOptions.mockResolvedValue(boxOptions)
+      const s = useNewSession()
+      await s.openFailure()
+      expect(s.server.value).toBe('box')
+      expect(s.options.value).toEqual(boxOptions)
+      expect(s.initial.value.repository).toBe('https://example.com/typed.git')
+      expect(s.error.value).toBeNull()
+    })
+
+    it.each([
+      ['Retry on the toast', (s: ReturnType<typeof useNewSession>) => s.openFailure()],
+      ['New Session', (s: ReturnType<typeof useNewSession>) => s.openBlank()],
+    ])('still opens from %s when the server is unreachable', async (_, openForm) => {
+      mocks.FailedSessionDraft.mockResolvedValue(onBox())
+      mocks.ServerLaunchOptions.mockRejectedValue(new Error('ssh: connection refused'))
+      const s = useNewSession()
+      await openForm(s)
+      expect(s.open.value).toBe(true)
+      expect(s.server.value).toBe('box')
+      expect(s.initial.value.name).toBe('fix-crash')
+      expect(s.failure.value).toEqual(failure)
+      expect(s.error.value).toBe('ssh: connection refused')
+    })
+
+    it('retries from the Activity row on that server', async () => {
+      mocks.SessionDraftFromActivity.mockResolvedValue(onBox())
+      mocks.ServerLaunchOptions.mockResolvedValue(boxOptions)
+      mocks.CreateSession.mockResolvedValue(7)
+      const s = useNewSession()
+      await s.openFromActivity({ retry: 'session-create' })
+      expect(s.server.value).toBe('box')
+      await s.submit({ repository: 'https://example.com/typed.git', name: 'fix-crash' })
+      expect(mocks.CreateSession).toHaveBeenCalledWith(expect.objectContaining({ server: 'box' }))
+    })
+
+    it('reopens from the inbox item it was drafted from on that server', async () => {
+      mocks.NewSessionDraft.mockResolvedValue({ repository: 'acme/site', name: 'n', prompt: 'p' })
+      mocks.FailedSessionDraft.mockResolvedValue({ ...onBox(), itemIds: [item.id] })
+      mocks.ServerLaunchOptions.mockResolvedValue(boxOptions)
+      const s = useNewSession()
+      await s.openFromItem(item)
+      expect(s.server.value).toBe('box')
+      expect(s.failure.value).toEqual(failure)
+    })
   })
 })

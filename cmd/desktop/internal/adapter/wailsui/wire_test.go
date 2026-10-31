@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/domain/hc"
+	"github.com/colonyops/hive/internal/domain/server"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 )
@@ -46,8 +47,8 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 		v    any
 		want []string
 	}{
-		{"SessionSummary", SessionSummary{}, sorted("id", "name", "slug", "repo", "repoIdentity", "state", "canvasOwner", "tags", "createdAt")},
-		{"SessionDetail", SessionDetail{}, sorted("id", "name", "slug", "repo", "state", "path", "cloneStrategy", "worktreeBranch", "tags", "createdAt", "updatedAt")},
+		{"SessionSummary", SessionSummary{}, sorted("server", "id", "name", "slug", "repo", "repoIdentity", "state", "canvasOwner", "tags", "createdAt")},
+		{"SessionDetail", SessionDetail{}, sorted("server", "id", "name", "slug", "repo", "state", "path", "cloneStrategy", "worktreeBranch", "tags", "createdAt", "updatedAt")},
 		{"SessionRisk", app.SessionRisk{}, sorted("uncommittedChanges", "unpushedCommits", "recycleDeletes")},
 		{"SessionGitStatus", SessionGitStatus{}, sorted("path", "branch", "dirty", "unpushed", "additions", "deletions", "host", "owner", "repo", "resolved", "error")},
 		{"SessionWindowStatus", app.SessionWindowStatus{}, sorted("windowId", "status", "tool")},
@@ -60,9 +61,11 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 		{"SessionLaunchRepository", dispatch.SessionLaunchRepository{}, sorted("name", "repository")},
 		{"SessionLaunchWorkspace", dispatch.SessionLaunchWorkspace{}, sorted("dir", "name", "supportsPrompt")},
 		{"SessionLaunchOptions", dispatch.SessionLaunchOptions{}, sorted("repositories", "defaultRepository", "workspaces", "agents", "defaultAgent", "promptFileThresholdBytes")},
-		{"CreateSessionRequest", dispatch.CreateSessionRequest{Repository: "r", Workspace: "w", Agent: "a", ItemIDs: []int64{1}}, sorted("repository", "workspace", "name", "prompt", "agent", "itemIds")},
-		{"SessionDraft", dispatch.SessionDraft{Repository: "r", Workspace: "w", Agent: "a", ItemIDs: []int64{1}, Failure: &dispatch.SessionCreateFailure{}}, sorted("repository", "workspace", "name", "prompt", "agent", "itemIds", "failure")},
+		{"CreateSessionRequest", dispatch.CreateSessionRequest{Server: "s", Repository: "r", Workspace: "w", Agent: "a", ItemIDs: []int64{1}}, sorted("server", "repository", "workspace", "name", "prompt", "agent", "itemIds")},
+		{"SessionDraft", dispatch.SessionDraft{Server: "s", Repository: "r", Workspace: "w", Agent: "a", ItemIDs: []int64{1}, Failure: &dispatch.SessionCreateFailure{}}, sorted("server", "repository", "workspace", "name", "prompt", "agent", "itemIds", "failure")},
 		{"SessionCreateFailure", dispatch.SessionCreateFailure{}, sorted("reason", "step", "output", "cloneStrategy", "destination", "leftoverCheckout", "at")},
+		{"ServerSessions", ServerSessions{}, sorted("server", "ssh", "state", "error", "sessions")},
+		{"ServerStatus", app.ServerStatus{Version: "v", Error: "e"}, sorted("name", "ssh", "state", "version", "error", "roundTripMs")},
 		{"TerminalTarget", dispatch.TerminalTarget{WindowID: "@1"}, sorted("slug", "windowId")},
 		{"TaskItem", TaskItem{}, sorted(taskKeys...)},
 		{"TaskDetail", TaskDetail{}, sorted(append(slices.Clone(taskKeys), "desc", "blockers", "comments")...)},
@@ -96,7 +99,7 @@ func TestSessionSummaryOfMapsEachField(t *testing.T) {
 
 func TestSessionWireTagsAreNeverNull(t *testing.T) {
 	assert.Equal(t, []string{}, sessionSummaryOf(sameSpace, session.Session{}).Tags)
-	assert.Equal(t, []string{}, sessionDetailOf(session.Session{}).Tags)
+	assert.Equal(t, []string{}, sessionDetailOf("", session.Session{}).Tags)
 }
 
 func TestSessionSummaryOfHasNoCanvasOwnerForARemoteWithNoRepository(t *testing.T) {
@@ -121,7 +124,7 @@ func TestSessionDetailOfReadsTheWorktreeBranch(t *testing.T) {
 	s := session.Session{ID: "s1", Name: "review 81", Slug: "review-81", Remote: "acme/site", State: session.StateActive, CloneStrategy: session.CloneStrategyWorktree}
 	s.SetMeta(session.MetaWorktreeBranch, "hive/review-81")
 
-	got := sessionDetailOf(s)
+	got := sessionDetailOf(s.ID, s)
 	assert.Equal(t, "hive/review-81", got.WorktreeBranch)
 	assert.Equal(t, "acme/site", got.Repo)
 	assert.Equal(t, "active", got.State)
@@ -148,3 +151,32 @@ func TestTaskDetailOfFlattensTheItem(t *testing.T) {
 }
 
 func sameSpace(space drive.Space) drive.Space { return space }
+
+func TestServerSessionsQualifyIDAndSlugWithTheServer(t *testing.T) {
+	lists := serverSessionsOf([]app.ServerSessionList{{
+		Server: "box", SSH: "ada@box", State: server.StateConnected,
+		Sessions: []session.Session{{ID: "s1", Name: "review", Slug: "review", Remote: "git@github.com:acme/site.git", State: session.StateActive}},
+	}, {Server: "down", State: server.StateOffline, Error: "ssh: connect refused"}})
+
+	require.Len(t, lists, 2)
+	row := lists[0].Sessions[0]
+	assert.Equal(t, "box", row.Server)
+	assert.Equal(t, "box:s1", row.ID)
+	assert.Equal(t, "box:review", row.Slug)
+	assert.Equal(t, "review", row.Name)
+	assert.Empty(t, row.CanvasOwner, "a server's repository owns no canvas on this machine")
+	assert.Equal(t, "offline", lists[1].State)
+	assert.Equal(t, []SessionSummary{}, lists[1].Sessions)
+}
+
+func TestSessionDetailOfKeepsTheServerOfTheID(t *testing.T) {
+	local := sessionDetailOf("local:s1", session.Session{ID: "s1", Slug: "review"})
+	assert.Empty(t, local.Server, "local: names this machine, not a server")
+	assert.Equal(t, "s1", local.ID)
+	assert.Equal(t, "review", local.Slug)
+
+	got := sessionDetailOf("box:s1", session.Session{ID: "s1", Slug: "review"})
+	assert.Equal(t, "box", got.Server)
+	assert.Equal(t, "box:s1", got.ID)
+	assert.Equal(t, "box:review", got.Slug)
+}

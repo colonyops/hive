@@ -62,6 +62,7 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
       const session = byID.get(id)
       if (session?.slug)
         out.push({
+          server: '',
           id: session.slug,
           name: session.name,
           slug: session.slug,

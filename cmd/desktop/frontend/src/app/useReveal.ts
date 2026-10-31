@@ -124,15 +124,13 @@ export function useReveal(
   async function revealLocation(loc: Location): Promise<void> {
     switch (loc.area) {
       case 'code': {
-        // The same slug can name a different session on each server.
-        if (loc.server && loc.server !== 'local') {
-          showToast(`Hive cannot open sessions on server ${loc.server} yet`, { severity: 'error' })
-          return
-        }
+        // The same slug can name a different session on each server, so a
+        // server's session is addressed as "<server>:<slug>".
+        const slug = loc.server && loc.server !== 'local' ? `${loc.server}:${loc.slug}` : loc.slug
         const query: Record<string, string> = {}
         if (loc.window) query.window = loc.window
         if (loc.canvas) query.doc = docQuery(loc.canvas)
-        await nav.router.push({ name: 'terminal', params: { slug: loc.slug }, query })
+        await nav.router.push({ name: 'terminal', params: { slug }, query })
         return
       }
       case 'chats': {

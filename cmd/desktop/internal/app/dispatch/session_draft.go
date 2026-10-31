@@ -17,6 +17,9 @@ import (
 // inbox items the form was drafted from; the core resolves their identities
 // and never takes item refs from a client.
 type CreateSessionRequest struct {
+	// Server names a server under servers: to create the session on. Empty
+	// means this machine.
+	Server     string  `json:"server,omitempty"`
 	Repository string  `json:"repository,omitempty"`
 	Workspace  string  `json:"workspace,omitempty"`
 	Name       string  `json:"name"`
@@ -30,6 +33,7 @@ type CreateSessionRequest struct {
 // ItemIDs are only meaningful for the second, which has to restore both
 // because the form they came from is gone.
 type SessionDraft struct {
+	Server     string  `json:"server,omitempty"`
 	Repository string  `json:"repository,omitempty"`
 	Workspace  string  `json:"workspace,omitempty"`
 	Name       string  `json:"name"`
@@ -70,6 +74,7 @@ const (
 	RetryMetadataKey       = "retry"
 	RetryKindSessionCreate = "session-create"
 
+	metaServer      = "server"
 	metaRepository  = "repository"
 	metaWorkspace   = "workspace"
 	metaName        = "name"
@@ -88,6 +93,7 @@ const (
 func SessionDraftMetadata(draft SessionDraft) map[string]string {
 	meta := map[string]string{
 		RetryMetadataKey: RetryKindSessionCreate,
+		metaServer:       draft.Server,
 		metaRepository:   draft.Repository,
 		metaWorkspace:    draft.Workspace,
 		metaName:         draft.Name,
@@ -121,6 +127,7 @@ func SessionDraftFromMetadata(meta map[string]string) (SessionDraft, bool) {
 		return SessionDraft{}, false
 	}
 	draft := SessionDraft{
+		Server:     meta[metaServer],
 		Repository: meta[metaRepository],
 		Workspace:  meta[metaWorkspace],
 		Name:       meta[metaName],
