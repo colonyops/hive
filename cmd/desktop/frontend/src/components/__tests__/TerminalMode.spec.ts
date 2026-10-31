@@ -4669,8 +4669,8 @@ describe('TerminalMode', () => {
         branch: 'remote-branch',
         dirty: true,
         unpushed: false,
-        additions: 0,
-        deletions: 0,
+        additions: 3,
+        deletions: 1,
         host: '',
         owner: 'acme',
         repo: 'site',
@@ -4692,6 +4692,10 @@ describe('TerminalMode', () => {
       expect(wrapper.find('[data-testid="terminal-pane-statusbar-reveal"]').exists()).toBe(false)
       expect(wrapper.find('[data-testid="terminal-statusbar-action-open-ci"]').exists()).toBe(false)
       expect(wrapper.find('[data-testid="terminal-statusbar-tasks"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="terminal-statusbar-changes"]').exists()).toBe(false)
+      const diff = wrapper.get('[data-testid="session-status-diff"]')
+      expect(diff.text()).toBe('+3−1')
+      expect(diff.element.tagName).toBe('SPAN')
 
       const calls = mocks.SessionGitStatus.mock.calls.length
       mocks.ListServerSessions.mockResolvedValue([

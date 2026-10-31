@@ -148,6 +148,7 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
     await expect(page.getByTestId('session-status-branch')).toHaveText('main', { timeout: 30_000 })
     await expect(page.getByTestId('terminal-pane-statusbar-reveal')).toHaveCount(0)
     await expect(page.getByTestId('terminal-pane-statusbar-open-editor')).toHaveCount(0)
+    await expect(page.getByTestId('terminal-statusbar-changes')).toHaveCount(0)
     await expect(page.getByTestId('terminal-pane-host')).toHaveText('server-a')
   })
 

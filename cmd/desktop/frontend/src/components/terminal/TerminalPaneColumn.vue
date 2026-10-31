@@ -197,6 +197,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
         :git="sessionGit"
         :pull-request="sessionPullRequest"
         :pull-request-error="sessionPullRequestError"
+        :can-open-changes="statusBarLocal"
         @refresh-pull-request="refreshSessionStatus({ refreshPullRequest: true })"
         @open-changes="emit('open-changes')"
       />
