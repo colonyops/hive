@@ -18,9 +18,15 @@ import (
 	"github.com/colonyops/hive/internal/hive/status"
 )
 
-// ServerListTimeout bounds one server's part of a list, so an offline server
-// costs a few seconds instead of ssh's own timeout.
-const ServerListTimeout = 5 * time.Second
+const (
+	// ServerListTimeout bounds one server's part of a list, so a server that
+	// stops answering costs a few seconds instead of ssh's own timeout.
+	ServerListTimeout = 5 * time.Second
+	// serverProbeTimeout bounds a list of an offline server. No caller waits for
+	// it, so it can outlast ssh's connect timeout and report ssh's reason, and a
+	// slow link can still come back.
+	serverProbeTimeout = 30 * time.Second
+)
 
 // Router is one session API over this machine and every server. It lists
 // the sessions of all of them, gives a server's session the id
@@ -30,8 +36,10 @@ const ServerListTimeout = 5 * time.Second
 type Router struct {
 	fleet *Fleet
 
-	mu     sync.Mutex
-	listed map[string]ListState
+	mu      sync.Mutex
+	listed  map[string]ListState
+	last    map[string][]session.Session
+	probing map[string]bool
 }
 
 // ListState is what the last list found on one server.
@@ -44,7 +52,7 @@ type ListState struct {
 var _ sessionapi.API = (*Router)(nil)
 
 func NewRouter(fleet *Fleet) *Router {
-	return &Router{fleet: fleet, listed: map[string]ListState{}}
+	return &Router{fleet: fleet, listed: map[string]ListState{}, last: map[string][]session.Session{}, probing: map[string]bool{}}
 }
 
 // States returns what the last ListSessions found on each server, in config
@@ -65,42 +73,73 @@ func (r *Router) States() []ListState {
 }
 
 // ListSessions fails only when the local list fails. A server that does not
-// answer adds no sessions; States reports why.
+// answer keeps the sessions of its last good list, so a short outage does not
+// move the user's selection to another row; States reports why. The list does
+// not wait for a server that is already offline: it asks that server in the
+// background, and the next list has the answer.
 func (r *Router) ListSessions(ctx context.Context) ([]session.Session, error) {
 	remotes := r.fleet.Servers()
-	lists := make([][]session.Session, len(remotes))
 	var wg sync.WaitGroup
-	for i, srv := range remotes {
-		wg.Go(func() {
-			name := srv.Config().Name
-			listCtx, cancel := context.WithTimeout(ctx, ServerListTimeout)
-			defer cancel()
-			sessions, err := srv.Client().ListSessions(listCtx)
-			st := ListState{Name: name, State: server.StateConnected}
-			if err != nil {
-				st.State = server.StateOffline
-				if _, ok := errors.AsType[*wire.IncompatibleError](err); ok {
-					st.State = server.StateIncompatible
-				}
-				st.Err = err
-			}
-			r.mu.Lock()
-			r.listed[name] = st
-			r.mu.Unlock()
-			for _, sess := range sessions {
-				lists[i] = append(lists[i], qualify(name, sess))
-			}
-		})
+	for _, srv := range remotes {
+		if r.offline(srv.Config().Name) {
+			r.probe(srv)
+			continue
+		}
+		wg.Go(func() { r.listServer(ctx, srv, ServerListTimeout) })
 	}
 	local, err := r.fleet.Local().ListSessions(ctx)
 	wg.Wait()
 	if err != nil {
 		return nil, err
 	}
-	for _, list := range lists {
-		local = append(local, list...)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, srv := range remotes {
+		local = append(local, r.last[srv.Config().Name]...)
 	}
 	return local, nil
+}
+
+func (r *Router) listServer(ctx context.Context, srv *Server, timeout time.Duration) {
+	name := srv.Config().Name
+	listCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	sessions, err := srv.Client().ListSessions(listCtx)
+	st := ListState{Name: name, State: server.StateConnected}
+	if err != nil {
+		st.State = server.StateOffline
+		if _, ok := errors.AsType[*wire.IncompatibleError](err); ok {
+			st.State = server.StateIncompatible
+		}
+		st.Err = err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.listed[name] = st
+	if err != nil {
+		return
+	}
+	list := make([]session.Session, 0, len(sessions))
+	for _, sess := range sessions {
+		list = append(list, qualify(name, sess))
+	}
+	r.last[name] = list
+}
+
+func (r *Router) probe(srv *Server) {
+	name := srv.Config().Name
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.probing[name] {
+		return
+	}
+	r.probing[name] = true
+	go func() {
+		r.listServer(context.Background(), srv, serverProbeTimeout)
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		delete(r.probing, name)
+	}()
 }
 
 func (r *Router) GetSession(ctx context.Context, id string) (session.Session, error) {
@@ -210,6 +249,9 @@ func (r *Router) GitStatuses(ctx context.Context, ids []string) (map[string]gits
 	var localErr error
 	var wg sync.WaitGroup
 	for name, bare := range byServer {
+		if r.offline(name) {
+			continue
+		}
 		wg.Go(func() {
 			api, err := r.api(name)
 			if err != nil {
@@ -252,6 +294,15 @@ func (r *Router) connected(name string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.listed[name].State == server.StateConnected
+}
+
+// offline reports whether the last list failed. A server not listed yet is
+// not offline.
+func (r *Router) offline(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	st, ok := r.listed[name]
+	return ok && st.State != server.StateConnected
 }
 
 // FetchBatch asks each server about its own sessions, at the same time. Roots

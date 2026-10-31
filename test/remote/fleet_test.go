@@ -82,6 +82,7 @@ func TestRouter_ManagesSessionsOnBothServersAndSurvivesOneDown(t *testing.T) {
 		ids[s.ID] = true
 	}
 	assert.True(t, ids[serverA.Name+":"+onA.ID])
+	assert.True(t, ids[serverB.Name+":"+onB.ID], "an offline server keeps the rows of its last list")
 	states := router.States()
 	assert.Equal(t, server.StateConnected, states[0].State)
 	assert.Equal(t, server.StateOffline, states[1].State)
