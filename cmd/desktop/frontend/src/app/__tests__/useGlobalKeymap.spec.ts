@@ -379,3 +379,25 @@ describe('useGlobalKeymap over a focused terminal', () => {
     expect(runCommand).not.toHaveBeenCalled()
   })
 })
+
+describe('useGlobalKeymap Changes chord over a pane', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'userAgent')
+  })
+
+  it('opens Changes from a focused pane on macOS, where Option rules out the escape form', () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      configurable: true,
+    })
+    activeContexts.add('session-changes')
+    const pane = document.body.appendChild(document.createElement('div'))
+    pane.setAttribute('data-terminal-input-scope', '')
+    const textarea = pane.appendChild(document.createElement('textarea'))
+
+    const event = press('©', { code: 'KeyG', metaKey: true, altKey: true }, textarea)
+
+    expect(runCommand).toHaveBeenCalledWith('changes.toggle')
+    expect(event.defaultPrevented).toBe(true)
+  })
+})

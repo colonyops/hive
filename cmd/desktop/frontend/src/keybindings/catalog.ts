@@ -326,7 +326,9 @@ export const commandCatalog: BindableCommand[] = [
     icon: IconFileDiff,
     defaultCombos: ['mod+alt+g'],
     context: 'session-changes',
-    piercesPane: 'non-mac',
+    // Pierces on macOS too: its pane is where Changes is wanted, and
+    // terminalEscapeCombo refuses any chord that holds Option.
+    piercesPane: true,
   },
   {
     id: 'drive.toggle-comments',
