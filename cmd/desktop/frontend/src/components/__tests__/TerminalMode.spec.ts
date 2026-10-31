@@ -2468,7 +2468,7 @@ describe('TerminalMode', () => {
     mocks.EditSession.mockResolvedValue({})
     const { wrapper } = await mountAvailable()
     const row = wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"]')
-    expect(row.get('[data-testid="session-tags"]').attributes('aria-label')).toBe('Tags: auto')
+    expect(row.get('span[title]').attributes('title')).toContain('auto')
 
     await openRowMenu(wrapper, 'hive-fix-parser')
     await wrapper.get('[data-testid="session-menu-edit"]').trigger('click')

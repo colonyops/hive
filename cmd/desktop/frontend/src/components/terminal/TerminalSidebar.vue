@@ -26,7 +26,6 @@ import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import TreeRail from '@hive/ui/components/ui/TreeRail.vue'
 import SessionAddMenu from './SessionAddMenu.vue'
 import SessionTabIcon from './SessionTabIcon.vue'
-import SessionTagsIndicator from '../SessionTagsIndicator.vue'
 import SessionRowMenu from '../SessionRowMenu.vue'
 import SidebarToolbar from '../sidebar/SidebarToolbar.vue'
 import SessionFilterButton from './SessionFilterButton.vue'
@@ -552,7 +551,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                     <span
                       class="min-w-0 truncate text-body"
                       :class="{ 'text-text-3': tree.rowIdle(row) }"
-                      :title="row.repo ? `${row.slug}\n${row.repo}` : row.slug"
+                      :title="[row.slug, row.repo, row.tags?.join(', ')].filter(Boolean).join('\n')"
                       >{{ row.name }}</span
                     >
                     <BaseIconBadge
@@ -569,7 +568,6 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                       <component :is="row.offline ? IconCircleAlert : IconServer" class="size-3" aria-hidden="true" />
                     </BaseIconBadge>
                     <span class="flex-1" />
-                    <SessionTagsIndicator v-if="group.kind === 'repo'" :tags="row.tags" />
                     <BaseBadge
                       v-if="sessionAgeBadges[row.id]"
                       tone="accent"
@@ -887,12 +885,12 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
 }
 .session-row {
   height: 30px;
-  padding-left: 20px;
+  padding-left: 16px;
   color: var(--color-text);
 }
 .window-row {
   height: 28px;
-  padding-left: 40px;
+  padding-left: 34px;
   color: var(--color-text-2);
 }
 :is(.repo-group, .group-row, .session-row, .window-row):is(:hover, .menu-open) {
@@ -960,7 +958,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
 .window-row::before {
   content: '';
   position: absolute;
-  left: 26px;
+  left: 21px;
   top: 0;
   bottom: 0;
   border-left: 1px solid var(--color-strong);
@@ -968,9 +966,9 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
 .window-row::after {
   content: '';
   position: absolute;
-  left: 26px;
+  left: 21px;
   top: 50%;
-  width: 9px;
+  width: 8px;
   border-top: 1px solid var(--color-strong);
 }
 .window-row-last::before {
@@ -980,7 +978,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
    they take that row's box and drop the connector. */
 .window-row-flush {
   height: 30px;
-  padding-left: 20px;
+  padding-left: 16px;
 }
 .window-row-flush::before,
 .window-row-flush::after {

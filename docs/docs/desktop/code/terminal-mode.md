@@ -49,7 +49,7 @@ For repository sessions, the optional status bar shows the branch, changes again
 
 ### Tags
 
-Tags are short words you put on a session, such as `auto` or `backend`. A session row with tags shows a tag icon; hover it to read them. The status bar above the terminal lists the attached session's tags. **Edit session…** in the session menu or the command palette changes a session's name and tags in one dialog; clicking the tags in the status bar opens it on the tags. Press <kbd>Enter</kbd> or type a comma to add a tag, and <kbd>Backspace</kbd> to remove the last one. Tags already used on other sessions are suggested.
+Tags are short words you put on a session, such as `auto` or `backend`. Hover a session's name to read its tags. The status bar above the terminal lists the attached session's tags. **Edit session…** in the session menu or the command palette changes a session's name and tags in one dialog; clicking the tags in the status bar opens it on the tags. Press <kbd>Enter</kbd> or type a comma to add a tag, and <kbd>Backspace</kbd> to remove the last one. Tags already used on other sessions are suggested.
 
 Tags ignore case, so `Auto` and `auto` are the same tag, and a tag cannot contain a comma. The sidebar filter matches tags as well as names. The hive CLI reads and writes the same tags; see [Sessions](../../cli/getting-started/sessions.md).
 
