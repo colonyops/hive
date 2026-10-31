@@ -91,6 +91,15 @@ func (s *ReviewService) ChangesTargets(ctx context.Context, sessionID string) ([
 	return targets, nil
 }
 
+// ChangesFeedback builds the text SendChanges delivers, for the clipboard.
+func (s *ReviewService) ChangesFeedback(ctx context.Context, comments []app.DiffCommentInput) (string, error) {
+	text, err := s.review.ChangesFeedback(comments)
+	if err != nil {
+		return "", s.fail(ctx, "changes-feedback", err)
+	}
+	return text, nil
+}
+
 // SendChanges pastes feedback on a session's changes into its agent's pane and
 // submits it.
 func (s *ReviewService) SendChanges(ctx context.Context, sessionID, pane string, comments []app.DiffCommentInput) (err error) {

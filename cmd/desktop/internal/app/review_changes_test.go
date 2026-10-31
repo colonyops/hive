@@ -97,6 +97,13 @@ func TestSendChangesReportsAFailedPaste(t *testing.T) {
 	assert.Equal(t, KindInternal, KindOf(err))
 }
 
+func TestChangesFeedbackFormatsWithoutTheSession(t *testing.T) {
+	text, err := newReviewService(ReviewDeps{}).ChangesFeedback([]DiffCommentInput{diffComment("rename")})
+	require.NoError(t, err)
+	assert.Contains(t, text, "a.go (line 4)")
+	assert.Contains(t, text, "> rename")
+}
+
 func TestChangesTargetsTellApartAgentsThatReadTheSame(t *testing.T) {
 	code := &fakeCodeAgents{
 		sessions: []session.Session{{ID: "s1", Name: "one", State: session.StateActive}},

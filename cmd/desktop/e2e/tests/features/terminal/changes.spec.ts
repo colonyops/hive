@@ -178,6 +178,13 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     ])
     await expect(stream).not.toContainText('Wrap this error.')
     await expect(review).toBeHidden()
+
+    await page.getByTestId('changes-review-toggle').click()
+    await expect(page.getByTestId('changes-sent-0')).toContainText('1 comment')
+    await page.screenshot({ path: screenshotPath(`changes-sent-${browserName}.png`) })
+    await page.getByTestId('changes-sent-0-restore').click()
+    await expect(stream).toContainText('Wrap this error.')
+    await expect(page.getByTestId('changes-send-count')).toHaveText('1')
   })
 
   test('comments on code selected with the mouse (mock terminal)', async ({ page }) => {

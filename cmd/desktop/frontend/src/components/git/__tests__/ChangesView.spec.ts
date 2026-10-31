@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import ChangesView from '../ChangesView.vue'
 import { resetStores } from '../../../stores/defineStore'
+import { resetToastsForTests, useToasts } from '../../../composables/useToasts'
 
 const mocks = vi.hoisted(() => ({
   SessionChanges: vi.fn(),
@@ -14,7 +15,9 @@ const mocks = vi.hoisted(() => ({
   setSelectedLines: vi.fn(),
   lineSelectionEnd: null as ((...args: unknown[]) => unknown) | null,
   ChangesTargets: vi.fn(),
+  ChangesFeedback: vi.fn(),
   SendChanges: vi.fn(),
+  writeText: vi.fn(),
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   SessionChanges: mocks.SessionChanges,
@@ -23,12 +26,17 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reviewservice', () => ({
   ChangesTargets: mocks.ChangesTargets,
+  ChangesFeedback: mocks.ChangesFeedback,
   SendChanges: mocks.SendChanges,
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   ReviewLabels: vi.fn().mockResolvedValue([]),
   SetReviewLabels: vi.fn(),
 }))
+vi.mock('../../../lib/hiveUiPlatform', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../../lib/hiveUiPlatform')>()
+  return { ...original, hiveUiPlatform: { ...original.hiveUiPlatform, clipboard: { writeText: mocks.writeText } } }
+})
 vi.mock('../../../stores/useWindowFocus', () => ({ useWindowFocus: () => ({ focused: ref(true) }) }))
 vi.mock('../../../lib/diffHighlight', () => ({
   diffWorkerPool: () => ({ setRenderOptions: mocks.setRenderOptions }),
@@ -130,6 +138,7 @@ describe('ChangesView', () => {
   beforeEach(() => {
     localStorage.clear()
     resetStores()
+    resetToastsForTests()
     vi.clearAllMocks()
     mocks.OpenSessionInEditor.mockResolvedValue(undefined)
     mocks.SessionChanges.mockResolvedValue(changes([file('a.go'), file('b.go')]))
@@ -353,19 +362,19 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
-  it.each([
-    ['several', [agent('%1', 'ready'), agent('%2', 'ready')]],
-    ['none', []],
-  ])('asks before sending with %s', async (_name, targets) => {
-    mocks.ChangesTargets.mockResolvedValue(targets)
-    const wrapper = await mountView()
-    await comment('rename this')
-    await wrapper.get(testid('changes-send')).trigger('click')
-    await flushPromises()
-    expect(mocks.SendChanges).not.toHaveBeenCalled()
-    expect(document.querySelector(testid('changes-send-dialog'))).not.toBeNull()
-    wrapper.unmount()
-  })
+  it.each([['several', [agent('%1', 'ready'), agent('%2', 'ready')]]])(
+    'asks before sending with %s',
+    async (_name, targets) => {
+      mocks.ChangesTargets.mockResolvedValue(targets)
+      const wrapper = await mountView()
+      await comment('rename this')
+      await wrapper.get(testid('changes-send')).trigger('click')
+      await flushPromises()
+      expect(mocks.SendChanges).not.toHaveBeenCalled()
+      expect(document.querySelector(testid('changes-send-dialog'))).not.toBeNull()
+      wrapper.unmount()
+    },
+  )
 
   it('saves with ⌘↵ in the composer without sending, and sends with it outside a field', async () => {
     mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
@@ -386,14 +395,56 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
-  it('keeps the comments when a direct send fails, as Go refusing an agent on a prompt does', async () => {
-    mocks.ChangesTargets.mockResolvedValue([agent('%1', 'approval')])
-    mocks.SendChanges.mockRejectedValue(new Error('waiting on a prompt'))
+  async function failedSend(setup: () => void) {
+    setup()
+    mocks.ChangesFeedback.mockResolvedValue('# feedback')
+    mocks.writeText.mockResolvedValue(undefined)
     const wrapper = await mountView()
     await comment('rename this')
     await wrapper.get(testid('changes-send')).trigger('click')
     await flushPromises()
+    return wrapper
+  }
+
+  it.each([
+    [
+      'Go refuses an agent on a prompt',
+      () => {
+        mocks.ChangesTargets.mockResolvedValue([agent('%1', 'approval')])
+        mocks.SendChanges.mockRejectedValue(new Error('waiting on a prompt'))
+      },
+      'waiting on a prompt',
+    ],
+    ['no agent is running', () => mocks.ChangesTargets.mockResolvedValue([]), 'No agent is running'],
+    ['the agents cannot be listed', () => mocks.ChangesTargets.mockRejectedValue(new Error('tmux down')), 'tmux down'],
+  ])('keeps the comments and offers them as text when %s', async (_name, setup, message) => {
+    const wrapper = await failedSend(setup)
     expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
+    const [toast] = useToasts().toasts.value
+    expect(toast.message).toContain(message)
+    expect(toast.duration).toBe(0)
+
+    toast.actions[0].onClick()
+    await flushPromises()
+    expect(mocks.ChangesFeedback).toHaveBeenCalledWith([expect.objectContaining({ text: 'rename this' })])
+    expect(mocks.writeText).toHaveBeenCalledWith('# feedback')
+    wrapper.unmount()
+  })
+
+  it('lists sent reviews in the panel and restores one', async () => {
+    mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
+    mocks.SendChanges.mockResolvedValue(undefined)
+    const wrapper = await mountView()
+    await comment('rename this')
+    await wrapper.get(testid('changes-send')).trigger('click')
+    await flushPromises()
+    await press('r')
+    expect(wrapper.get(testid('changes-sent-0')).text()).toContain('1 comment')
+
+    await wrapper.get(testid('changes-sent-0-restore')).trigger('click')
+    await flushPromises()
+    expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
+    expect(wrapper.find(testid('changes-sent')).exists()).toBe(false)
     wrapper.unmount()
   })
 

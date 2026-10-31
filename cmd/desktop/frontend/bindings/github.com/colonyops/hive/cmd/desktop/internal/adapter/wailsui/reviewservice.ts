@@ -32,6 +32,13 @@ export function AgentTargets(): $CancellablePromise<app$0.AgentTarget[] | null> 
 }
 
 /**
+ * ChangesFeedback builds the text SendChanges delivers, for the clipboard.
+ */
+export function ChangesFeedback(comments: app$0.DiffCommentInput[] | null): $CancellablePromise<string> {
+    return $Call.ByID(3796010311, comments);
+}
+
+/**
  * ChangesTargets lists the agents of one Code session.
  */
 export function ChangesTargets(sessionID: string): $CancellablePromise<app$0.AgentTarget[] | null> {

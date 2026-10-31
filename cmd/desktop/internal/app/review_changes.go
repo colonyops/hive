@@ -34,14 +34,24 @@ func (s *ReviewService) ChangesTargets(ctx context.Context, sessionID string) ([
 	return targets, nil
 }
 
+// ChangesFeedback formats comments on a session's changes, for the clipboard
+// when they cannot be delivered. It reads nothing of the session, so it still
+// works for one that has been deleted.
+func (s *ReviewService) ChangesFeedback(comments []DiffCommentInput) (string, error) {
+	converted, err := diffComments(comments)
+	if err != nil {
+		return "", err
+	}
+	return review.DiffFeedback(converted), nil
+}
+
 // SendChanges pastes the feedback into one of the session's agent panes and
 // submits it. The frontend clears its comments only when this succeeds.
 func (s *ReviewService) SendChanges(ctx context.Context, sessionID, pane string, comments []DiffCommentInput) error {
-	converted, err := diffComments(comments)
+	text, err := s.ChangesFeedback(comments)
 	if err != nil {
 		return err
 	}
-	text := review.DiffFeedback(converted)
 	if text == "" {
 		return Errorf(KindInvalid, "there is no feedback to send")
 	}

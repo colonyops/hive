@@ -180,7 +180,11 @@ Press <kbd>/</kbd> or <kbd>⌘F</kbd> to search. <kbd>Enter</kbd> and <kbd>Shift
 
 To comment, drag across line numbers, click the **+** beside a line, or select code with the mouse. Type in the box that opens and press <kbd>⌘↵</kbd>. A label button saves that label as the comment. Comments appear under their lines and as rows in a panel beside the diff.
 
-The send button in the header, which shows how many comments you've written, pastes them into the session's agent and submits them, then clears them. If the session has one agent, it goes straight there, even mid-turn. With several agents, a dialog asks which one, and it also tells you when none is running. An agent waiting on a prompt can't receive comments, because the Enter would answer the prompt, so Hive shows an error and keeps them. If a send fails, your comments stay.
+The send button in the header, which shows how many comments you've written, pastes them into the session's agent and submits them, then clears them. If the session has one agent, it goes straight there, even mid-turn. With several agents, a dialog asks which one. An agent waiting on a prompt can't receive comments, because the Enter would answer the prompt. If a send fails, or no agent is running, your comments stay and an error offers **Copy comments**, which copies them as the text the agent would have received.
+
+The panel keeps the last three reviews you sent from each session under **Sent**, in case the agent never acted on one. Copy one, or restore it to edit and send again.
+
+Deleting a session deletes its comments and sent reviews, so the confirmation warns about any unsent comments, and a message afterward offers to copy them. Recycling warns too, but a recycled session keeps its comments unless the recycle deletes it.
 
 Comments are kept on this machine, per session, until you send or delete them, and they survive quitting Hive. They point at line numbers, so a comment shows an amber dot when the agent edits the file after you commented. If the line has left the diff, or the comment was made under the other comparison, the comment shows only in the panel. Select its line label to jump to it, which also switches the comparison back.
 

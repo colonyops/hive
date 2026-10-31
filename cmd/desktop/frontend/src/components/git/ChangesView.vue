@@ -30,6 +30,7 @@ import GitTree from './GitTree.vue'
 import DriveCommentPopover from '../drive/DriveCommentPopover.vue'
 import SendToAgentDialog from '../drive/SendToAgentDialog.vue'
 import { entryRows, useDiffSearch } from '../../composables/useDiffSearch'
+import { useCopyReview } from '../../composables/useCopyReview'
 import { fileVersion, useFileDiffs } from '../../composables/useFileDiffs'
 import { useSessionChanges, type DiffBase } from '../../composables/useSessionChanges'
 import { useToasts } from '../../composables/useToasts'
@@ -190,6 +191,7 @@ function closeSearch(): void {
 }
 
 const review = useChangesReview()
+const copyReview = useCopyReview()
 const comments = computed(() => review.comments(props.sessionId))
 const reviewOpen = useStorage('hive.panel.changes.review.open', false)
 const canSend = computed(() => comments.value.length > 0)
@@ -289,30 +291,37 @@ async function pickComment(comment: ChangesComment): Promise<void> {
 const picking = ref(false)
 const sending = ref(false)
 const loadTargets = () => review.targets(props.sessionId)
+// The comments stay after a failure. A toast that waits offers them as text too,
+// for when the agent cannot take them any time soon.
+function offerCopy(message: string): void {
+  toasts.showToast(message, {
+    severity: 'error',
+    duration: 0,
+    actions: [{ label: 'Copy comments', onClick: () => void copyReview([...comments.value]) }],
+  })
+}
+
 async function deliver(target: AgentTarget): Promise<string | null> {
   const failure = await review.send(props.sessionId, target.pane)
-  if (!failure) reviewOpen.value = false
+  if (failure) offerCopy(failure)
   return failure
 }
 
 // The view belongs to one session, so its only agent needs no picking. Go refuses
-// one on a prompt, which arrives here as the failure. Only several agents, or none
-// to explain, need the dialog.
+// one on a prompt, which arrives here as the failure. Only several agents need the dialog.
 async function sendReview(): Promise<void> {
   if (!canSend.value || sending.value) return
   sending.value = true
   try {
     const targets = await loadTargets()
-    if (targets.length === 1) {
-      const failure = await deliver(targets[0])
-      if (failure) toasts.showToast(failure, { severity: 'error' })
-      else toasts.showToast(`Sent to ${targets[0].label}`)
-    } else {
-      picking.value = true
+    if (targets.length > 1) picking.value = true
+    else if (!targets.length) offerCopy('No agent is running in this session.')
+    else if (!(await deliver(targets[0]))) {
+      reviewOpen.value = false
+      toasts.showToast(`Sent to ${targets[0].label}`)
     }
-  } catch {
-    // The dialog reads the targets again and says why it could not.
-    picking.value = true
+  } catch (err) {
+    offerCopy(errorText(err, 'Could not list the agents in this session.'))
   } finally {
     sending.value = false
   }

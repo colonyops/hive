@@ -29,7 +29,10 @@ needs a migration in the store both programs share.
 ## Consequences
 
 - Reviews are per machine and per browser profile, and clearing site data loses them.
-- A comment on a deleted session stays in storage until something clears it. It is a
-  few hundred bytes and nothing shows it.
+- Deleting a session from Hive Desktop drops its comments, after a warning and an
+  offer to copy them. A session deleted any other way, or by a prune, leaves them in
+  storage, where nothing shows them.
+- The last three sent reviews per session stay in storage too, because tmux accepting
+  a paste does not mean the agent read it.
 - Moving these to `hive.db` later needs only the store to change, plus a migration
   that adds the path and sides to `review_comments`.

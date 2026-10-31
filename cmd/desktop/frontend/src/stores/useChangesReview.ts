@@ -1,7 +1,9 @@
 import { useStorage } from '@vueuse/core'
 import { errorText } from '../lib/appError'
+import { hiveUiPlatform } from '../lib/hiveUiPlatform'
 import type { DiffSpan } from '../lib/diffReview'
 import {
+  ChangesFeedback,
   ChangesTargets,
   SendChanges,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reviewservice'
@@ -19,6 +21,16 @@ export interface ChangesComment extends DiffSpan {
   text: string
 }
 
+/** A review that went to the agent, kept in case the agent never acted on it. */
+export interface SentReview {
+  id: string
+  sentAt: number
+  comments: ChangesComment[]
+}
+
+/** tmux accepting a paste says nothing of the agent reading it, so a few sends stay recoverable. */
+const MAX_SENT_REVIEWS = 3
+
 /**
  * Comments on a session's diffs, waiting to go to its agent. In browser storage
  * rather than hive.db: they anchor to lines an agent is about to move, are gone
@@ -27,6 +39,7 @@ export interface ChangesComment extends DiffSpan {
  */
 export const useChangesReview = defineStore('changesReview', () => {
   const sessions = useStorage<Record<string, ChangesComment[]>>('hive.changes.comments', {})
+  const sent = useStorage<Record<string, SentReview[]>>('hive.changes.sent', {})
 
   function comments(sessionId: string): readonly ChangesComment[] {
     return sessions.value[sessionId] ?? []
@@ -73,9 +86,52 @@ export const useChangesReview = defineStore('changesReview', () => {
     } catch (err) {
       return errorText(err, 'Could not send the feedback.')
     }
+    const held = [...comments(sessionId)]
     write(sessionId, [])
+    sent.value = {
+      ...sent.value,
+      [sessionId]: [{ id: crypto.randomUUID(), sentAt: Date.now(), comments: held }, ...sentReviews(sessionId)].slice(
+        0,
+        MAX_SENT_REVIEWS,
+      ),
+    }
     return null
   }
 
-  return { comments, add, update, remove, targets, send }
+  function sentReviews(sessionId: string): readonly SentReview[] {
+    return sent.value[sessionId] ?? []
+  }
+
+  /** Makes a sent review's comments unsent again, after any the user has written since. */
+  function restore(sessionId: string, reviewId: string): void {
+    const review = sentReviews(sessionId).find((candidate) => candidate.id === reviewId)
+    if (!review) return
+    write(
+      sessionId,
+      [...comments(sessionId), ...review.comments].sort(
+        (a, b) => a.path.localeCompare(b.path) || a.startLine - b.startLine,
+      ),
+    )
+    sent.value = { ...sent.value, [sessionId]: sentReviews(sessionId).filter((other) => other.id !== reviewId) }
+  }
+
+  /** Puts the feedback text on the clipboard. Returns why it could not, or null. */
+  async function copy(held: readonly ChangesComment[]): Promise<string | null> {
+    try {
+      await hiveUiPlatform.clipboard.writeText((await ChangesFeedback([...held])) ?? '')
+      return null
+    } catch (err) {
+      return errorText(err, 'Could not copy the comments.')
+    }
+  }
+
+  /** Drops everything held for a session that no longer exists. */
+  function forget(sessionId: string): void {
+    write(sessionId, [])
+    const rest = { ...sent.value }
+    delete rest[sessionId]
+    sent.value = rest
+  }
+
+  return { comments, add, update, remove, targets, send, sentReviews, restore, copy, forget }
 })
