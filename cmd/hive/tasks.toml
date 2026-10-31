@@ -113,6 +113,21 @@ description = "Check the smoke stack tooling against a fresh stack, then remove 
 depends = ["cli:build:container"]
 run = "test/smoke/run.sh test"
 
+# A sandbox of hive servers for trying remote sessions by hand from Hive
+# Desktop or the CLI. It serves both programs, so the names have no cli: prefix.
+["remote:up"]
+description = "Start N hive servers in Docker behind ssh (default 3) and print the servers: config for them"
+depends = ["cli:build:container"]
+run = "test/remote/sandbox.sh up"
+
+["remote:status"]
+description = "List the sandbox servers and check each one over ssh"
+run = "test/remote/sandbox.sh status"
+
+["remote:down"]
+description = "Remove the sandbox servers"
+run = "test/remote/sandbox.sh down"
+
 # ── Gates ────────────────────────────────────────────────────────────────────
 
 ["cli:check:goreleaser"]

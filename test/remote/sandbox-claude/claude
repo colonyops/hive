@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# sshd gives each login a fresh environment, so the token comes from a file
+# rather than from the container's environment.
+if [[ -z ${CLAUDE_CODE_OAUTH_TOKEN:-} && -r $HOME/.config/claude-token ]]; then
+  CLAUDE_CODE_OAUTH_TOKEN=$(<"$HOME/.config/claude-token")
+  export CLAUDE_CODE_OAUTH_TOKEN
+fi
+# The image pins the version, and an update attempt fails on the read-only
+# prefix and redraws its error, which the status detector reads as activity.
+export DISABLE_AUTOUPDATER=1
+exec /opt/claude/bin/claude "$@"
