@@ -554,6 +554,11 @@ func (m *Manager) ListAllWindows(ctx context.Context, slugs []string) (map[strin
 	// bad listing does not fail a sweep, but it is logged.
 	lines, err := m.oneShot(ctx, "list-windows", "-a", "-F", sessionWindowsFormat)
 	if err != nil && !tmuxAnsweredNo(err) {
+		// A caller asking about one session is deciding whether it ended, and a
+		// failed listing is no evidence that it did.
+		if len(wanted) == 1 {
+			return nil, err
+		}
 		m.log.Debug().Err(err).Msg("listing windows failed")
 	}
 	if err == nil {

@@ -160,8 +160,12 @@ const commentCount = computed(() =>
 watch(commentCount, (count, before) => {
   if (count > before) review.showPageComments()
 })
-watch(reviewed, (next) => review.setPageReviewed(!!next), { immediate: true })
-onBeforeUnmount(() => review.setPageReviewed(false))
+// The flag gates the review chord on the Drive page, which a copy in a hidden Code
+// tab must not change.
+if (!props.embedded) {
+  watch(reviewed, (next) => review.setPageReviewed(!!next), { immediate: true })
+  onBeforeUnmount(() => review.setPageReviewed(false))
+}
 watch(shown, () => {
   if (reader.value) reader.value.scrollTop = 0
 })

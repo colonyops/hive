@@ -1081,6 +1081,49 @@ describe('useTerminalWindows', () => {
     session.dispose()
   })
 
+  // A view beside it can hold the focus while tmux's current window is another one,
+  // and tmux would give the session's vote to that one.
+  it('asks for a grid for a lone window on screen that is not current', async () => {
+    vi.useFakeTimers()
+    const client = fakeClient()
+    const session = open(client)
+    await session.start()
+    await flushPromises()
+
+    session.attachTab('@2', paneHostOf(60, 20))
+    session.attachPane('%2', paneHostOf(60, 20))
+    FakeResizeObserver.instances[0].trigger()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(client.resize).toHaveBeenCalledWith('hive-abc', 60, 20, '@2')
+    session.dispose()
+  })
+
+  it('asks again after a window size failed', async () => {
+    vi.useFakeTimers()
+    const client = fakeClient()
+    client.resize.mockImplementation((_slug: string, _cols: number, _rows: number, windowId?: string) =>
+      windowId ? Promise.reject(new Error('no')) : Promise.resolve(),
+    )
+    const session = open(client)
+    await session.start()
+    await flushPromises()
+
+    session.attachTab('@1', paneHostOf(120, 40))
+    session.attachPane('%1', paneHostOf(120, 40))
+    session.attachTab('@2', paneHostOf(60, 20))
+    FakeResizeObserver.instances[0].trigger()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(client.resize).toHaveBeenCalledWith('hive-abc', 60, 20, '@2')
+    expect(session.actionError.value).toBe('no')
+
+    client.resize.mockClear()
+    FakeResizeObserver.instances[0].trigger()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(client.resize).toHaveBeenCalledWith('hive-abc', 60, 20, '@2')
+    session.dispose()
+  })
+
   it('needs no grid of its own for the only window on screen', async () => {
     vi.useFakeTimers()
     const client = fakeClient()

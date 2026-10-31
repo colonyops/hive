@@ -67,7 +67,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     reloadServers,
   } = useTerminalSessions()
   const { rows: chatRows, slugs: chatSlugs, unpinSlug } = useTerminalPinnedChats()
-  const { recents, reload: reloadRecents } = useAgentSessionsAll()
+  const { recents, recentsLoaded, reload: reloadRecents } = useAgentSessionsAll()
   const {
     statuses: sessionStatuses,
     loaded: statusesLoaded,
@@ -309,6 +309,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     prunableCount,
     recents,
     reloadRecents,
+    recentsLoaded,
     chatSlugs,
     unpinSlug,
     sessionsLoading,

@@ -660,6 +660,25 @@ func TestManagerListAllWindowsAsksTmuxOnceForEverySlug(t *testing.T) {
 	require.Equal(t, []string{"/opt/homebrew/bin/tmux"}, cmds.binaries)
 }
 
+// A caller asking about one session is deciding whether it ended, so a failed
+// listing must not read as no windows. A sweep over several carries on.
+func TestManagerListAllWindowsReportsAFailureForOneSession(t *testing.T) {
+	t.Parallel()
+
+	cmds := &fakeTmuxCommands{failure: errors.New("lost server")}
+	m := newTestManager(t, nil, ManagerOptions{
+		Binary:  func() (string, error) { return "/opt/homebrew/bin/tmux", nil },
+		runTmux: cmds.run,
+	})
+
+	_, err := m.ListAllWindows(t.Context(), []string{"hive-demo"})
+	require.Error(t, err)
+
+	windows, err := m.ListAllWindows(t.Context(), []string{"hive-demo", "hive-other"})
+	require.NoError(t, err)
+	require.Empty(t, windows)
+}
+
 func TestManagerListIndexedWindowsMapsIndicesToStableIDs(t *testing.T) {
 	t.Parallel()
 
@@ -756,7 +775,7 @@ func TestManagerListAllWindowsTreatsADeadServerAsNoWindows(t *testing.T) {
 
 	// No tmux server running at all is what this answers, and it is a normal
 	// state for a sidebar full of sessions nobody has started yet.
-	cmds := &fakeTmuxCommands{failure: errors.New("no server running")}
+	cmds := &fakeTmuxCommands{failure: absentSessionError{}}
 	m := newTestManager(t, nil, ManagerOptions{runTmux: cmds.run})
 
 	windows, err := m.ListAllWindows(t.Context(), []string{"hive-demo"})

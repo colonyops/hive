@@ -93,6 +93,13 @@ type attachResult struct {
 	Windows []terminalWindowResult `json:"windows"`
 }
 
+func (h *terminalHarness) detach(t *testing.T, slug string) {
+	t.Helper()
+	resp := h.post(t, "/api/terminal/detach", testToken, map[string]any{"slug": slug})
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+}
+
 type sessionWindowsResult struct {
 	Sessions map[string][]terminalWindowResult `json:"sessions"`
 }
@@ -376,6 +383,71 @@ func TestTmuxKillEndsTheSession(t *testing.T) {
 	require.NoError(t, json.NewDecoder(again.Body).Decode(&body))
 	_ = again.Body.Close()
 	assert.False(t, body.Killed)
+}
+
+// Under aggressive-resize, tmux sizes only the current window. A window beside it
+// in a split has to get its own size anyway, and the option goes back afterwards.
+func TestTmuxSizesAWindowThatIsNotCurrentAndRestoresTheOption(t *testing.T) {
+	tmux := startTmux(t, "hive-aggressive")
+	tmux.tmux("set-option", "-g", "aggressive-resize", "on")
+	tmux.newWindow("second")
+	h := newTerminalHarness(t)
+	windows := h.attach(t, tmux.slug).Windows
+	require.Len(t, windows, 2)
+	behind := windows[0].WindowID
+	if windows[0].Active {
+		behind = windows[1].WindowID
+	}
+
+	resp := h.post(t, "/api/terminal/resize", testToken, map[string]any{"slug": tmux.slug, "cols": 50, "rows": 20, "windowId": behind})
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	assert.Eventually(t, func() bool {
+		return strings.TrimSpace(tmux.tmux("display-message", "-p", "-t", behind, "#{window_width}x#{window_height}")) == "50x20"
+	}, 5*time.Second, 25*time.Millisecond, "a window that is not current takes its own size")
+	assert.Equal(t, "off", strings.TrimSpace(tmux.tmux("show-options", "-w", "-v", "-q", "-t", behind, "aggressive-resize")))
+
+	h.detach(t, tmux.slug)
+
+	assert.Empty(t, strings.TrimSpace(tmux.tmux("show-options", "-w", "-v", "-q", "-t", behind, "aggressive-resize")), "the window inherits again")
+	assert.Empty(t, strings.TrimSpace(tmux.tmux("show-options", "-w", "-v", "-q", "-t", behind, "@hive-aggressive-resize")))
+	assert.Equal(t, "on", strings.TrimSpace(tmux.tmux("show-options", "-g", "-w", "-v", "aggressive-resize")))
+}
+
+// A client that ended without Close left the option off. The next client that
+// closes cleanly restores it, though it never sized the window itself.
+func TestTmuxRestoresWhatAnEarlierClientLeftBehind(t *testing.T) {
+	tmux := startTmux(t, "hive-left-behind")
+	tmux.tmux("set-option", "-g", "aggressive-resize", "on")
+	id := strings.TrimSpace(tmux.tmux("display-message", "-p", "-t", tmux.slug, "#{window_id}"))
+	tmux.tmux("set-option", "-w", "-t", id, "@hive-aggressive-resize", "inherit")
+	tmux.tmux("set-option", "-w", "-t", id, "aggressive-resize", "off")
+
+	h := newTerminalHarness(t)
+	h.attach(t, tmux.slug)
+	h.detach(t, tmux.slug)
+
+	assert.Empty(t, strings.TrimSpace(tmux.tmux("show-options", "-w", "-v", "-q", "-t", id, "aggressive-resize")))
+	assert.Empty(t, strings.TrimSpace(tmux.tmux("show-options", "-w", "-v", "-q", "-t", id, "@hive-aggressive-resize")))
+}
+
+// A surface that re-attaches to a live client knows no per-window sizes, so one
+// from before the drop must not keep a window away from the session's size.
+func TestTmuxReattachClearsAWindowsOwnSize(t *testing.T) {
+	tmux := startTmux(t, "hive-reattach-size")
+	h := newTerminalHarness(t)
+	id := h.attach(t, tmux.slug).Windows[0].WindowID
+
+	resp := h.post(t, "/api/terminal/resize", testToken, map[string]any{"slug": tmux.slug, "cols": 50, "rows": 20, "windowId": id})
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	size := func() string {
+		return strings.TrimSpace(tmux.tmux("display-message", "-p", "-t", id, "#{window_width}x#{window_height}"))
+	}
+	require.Eventually(t, func() bool { return size() == "50x20" }, 5*time.Second, 25*time.Millisecond)
+
+	h.attach(t, tmux.slug)
+	assert.Eventually(t, func() bool { return size() == "120x40" }, 5*time.Second, 25*time.Millisecond)
 }
 
 // A slug tmux is already running needs no start, and must not be respawned over.

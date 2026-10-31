@@ -1,3 +1,5 @@
+import { openView, panesOf } from '../../lib/sessionLayout'
+import { useSessionTabs } from '../../stores/useSessionTabs'
 import { flushPromises, mount, type DOMWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
@@ -2917,6 +2919,26 @@ describe('TerminalMode', () => {
         expect(wrapper.find(`[data-testid="session-menu-${entry}"]`).exists()).toBe(false)
       }
       expect(wrapper.find('[data-testid="terminal-action-open-in-zed"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('keeps the tabs when the kill fails', async () => {
+      localStorage.clear()
+      useSessionTabs().apply(SCRATCH_SLUG, (layout) => openView(layout, 'docs'))
+      mocks.createTerminalClient.mockReturnValue({
+        kill: vi.fn().mockRejectedValue(new Error('tmux said no')),
+        listWindows: fakeListWindows({ [SCRATCH_SLUG]: [oneTab] }),
+      })
+      const { wrapper } = await mountAvailable()
+
+      await heading(wrapper).get('[data-testid="terminal-session-menu-toggle"]').trigger('click')
+      await wrapper.get('[data-testid="session-menu-kill"]').trigger('click')
+      await flushPromises()
+      document.querySelector<HTMLButtonElement>('[data-testid="session-confirmation-confirm"]')?.click()
+      await flushPromises()
+
+      const tabs = panesOf(useSessionTabs().layoutOf(SCRATCH_SLUG)).flatMap((pane) => pane.tabs.map((tab) => tab.id))
+      expect(tabs).toContain('docs')
       wrapper.unmount()
     })
 

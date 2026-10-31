@@ -12,7 +12,7 @@ import IconTrash from '~icons/lucide/trash-2'
 import { useCommands, useShellEscape, type Command } from '../../composables/useCommands'
 import type { TerminalWindowTab } from '../../composables/useTerminalWindows'
 import { activePaneOf } from '../../lib/terminalLayout'
-import { closeTab, focusedTab, focusedWindow, revealWindow } from '../../lib/sessionLayout'
+import { closeTab, focusedTab, focusedWindow, inTabOrder, revealWindow } from '../../lib/sessionLayout'
 import { paneMayAutoFocus, setTerminalTreeHandles } from '../../lib/terminalTree'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { MenuActionEntry, MenuEntry } from '@hive/ui/types/menu'
@@ -183,8 +183,12 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
 
   // Wrapping, where the tree's walk clamps: a session's windows are a ring in
   // every terminal emulator.
+  function windowsInTabOrder(): TerminalWindowTab[] {
+    return inTabOrder(current.value?.tabs.value ?? [], panes.layout.value)
+  }
+
   function relativeWindow(delta: number): TerminalWindowTab | undefined {
-    const tabs = current.value?.tabs.value ?? []
+    const tabs = windowsInTabOrder()
     const at = tabs.findIndex((tab) => tab.windowId === current.value?.activeWindowId.value)
     if (at < 0) return undefined
     return tabs[(at + delta + tabs.length) % tabs.length]
@@ -200,7 +204,7 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
       focusFilter: nav.focusFilter,
       focusPane: (): void => current.value?.focusActive(),
       // Counted along the strip rather than clamped: ⌘3 means the third window.
-      selectWindow: (position: number): void => goToWindow(current.value?.tabs.value[position - 1]),
+      selectWindow: (position: number): void => goToWindow(windowsInTabOrder()[position - 1]),
       stepWindow: (delta: number): void => goToWindow(relativeWindow(delta)),
       newWindow: (): void => {
         const row = tree.attachedRow.value

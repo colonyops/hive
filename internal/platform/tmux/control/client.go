@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -173,9 +172,7 @@ type Client struct {
 	// Attach answers, which is precisely what deferring the paint means.
 	lifeCtx context.Context //nolint:containedctx // see above; teardown cancels it before joining the pass
 
-	// sizedWindows holds the windows ResizeWindow has prepared.
-	sizedWindowsMu sync.Mutex
-	sizedWindows   map[string]sizedWindow
+	sizing windowSizing
 
 	readerDone chan struct{}
 	workerDone chan struct{}
@@ -335,8 +332,6 @@ func (c *Client) Paste(ctx context.Context, pane string, p []byte) error {
 	return err
 }
 
-var windowIDPattern = regexp.MustCompile(`^@[0-9]+$`)
-
 // Resize renegotiates the client size. Every client attached to a window
 // renders the same grid and tmux's window-size option picks whose size that is
 // — by default the most recently used client's — so this is a vote, and
@@ -356,80 +351,12 @@ func (c *Client) ResizeWindow(ctx context.Context, windowID string, cols, rows i
 	if err := validateSize(cols, rows); err != nil {
 		return err
 	}
-	if !windowIDPattern.MatchString(windowID) {
-		return fmt.Errorf("invalid window id %q", windowID)
+	if err := c.requireWindow(windowID); err != nil {
+		return err
 	}
 	c.sizeWhileNotCurrent(ctx, windowID)
 	_, err := c.gw.Send(ctx, fmt.Sprintf("refresh-client -C %s:%dx%d", windowID, cols, rows))
 	return err
-}
-
-// sizedWindow is what ResizeWindow did to a window's aggressive-resize.
-type sizedWindow struct {
-	turnedOff bool
-	own       string
-}
-
-// sizeWhileNotCurrent makes tmux honour a window's own size when it is not the
-// session's current window. With aggressive-resize on, tmux sizes only the
-// current window, so a window beside it in a split would overflow its pane until
-// something activated it. Selecting the window instead would move the session's
-// focus for every client. The option has to change before the size is sent: tmux
-// does not apply a size it ignored earlier.
-//
-// A failure here is logged and not returned, because the size is still worth
-// sending: the option is commonly off, and then nothing was needed.
-func (c *Client) sizeWhileNotCurrent(ctx context.Context, id string) {
-	// Held across the round trips so a concurrent resize cannot read "off" back
-	// as the window's own value and restore that.
-	c.sizedWindowsMu.Lock()
-	defer c.sizedWindowsMu.Unlock()
-	if _, prepared := c.sizedWindows[id]; prepared {
-		return
-	}
-	own, err := c.windowOption(ctx, id, "-q", aggressiveResize)
-	if err != nil {
-		c.log.Debug().Err(err).Str("window", id).Msg("reading a window's aggressive-resize failed")
-		return
-	}
-	effective, err := c.windowOption(ctx, id, "-A", aggressiveResize)
-	if err != nil {
-		c.log.Debug().Err(err).Str("window", id).Msg("reading a window's aggressive-resize failed")
-		return
-	}
-	window := sizedWindow{own: own}
-	if effective == "on" {
-		if _, err := c.gw.Send(ctx, "set-option -w -t "+id+" "+aggressiveResize+" off"); err != nil {
-			c.log.Debug().Err(err).Str("window", id).Msg("turning off a window's aggressive-resize failed")
-			return
-		}
-		window.turnedOff = true
-	}
-	if c.sizedWindows == nil {
-		c.sizedWindows = map[string]sizedWindow{}
-	}
-	c.sizedWindows[id] = window
-}
-
-// restoreAggressiveResize hands the windows back as this client found them. A
-// window closed since has nothing to restore, so its error is expected.
-func (c *Client) restoreAggressiveResize(ctx context.Context) {
-	c.sizedWindowsMu.Lock()
-	defer c.sizedWindowsMu.Unlock()
-	restore, cancel := context.WithTimeout(context.WithoutCancel(ctx), imageRestoreTimeout)
-	defer cancel()
-	for id, window := range c.sizedWindows {
-		if !window.turnedOff {
-			continue
-		}
-		cmd := "set-option -w -t " + id + " -u " + aggressiveResize
-		if window.own != "" {
-			cmd = "set-option -w -t " + id + " " + aggressiveResize + " " + window.own
-		}
-		if _, err := c.gw.Send(restore, cmd); err != nil {
-			c.log.Debug().Err(err).Str("window", id).Msg("restoring a window's aggressive-resize failed")
-		}
-	}
 }
 
 // Renegotiate re-votes the client size and refreshes the window set from
@@ -446,6 +373,7 @@ func (c *Client) Renegotiate(ctx context.Context, cols, rows int) (err error) {
 		trace.WithAttributes(attribute.Bool(attrUnsized, false)))
 	defer observe.End(span, &err)
 
+	c.clearWindowSizes(ctx)
 	if err := c.Resize(ctx, cols, rows); err != nil {
 		return err
 	}

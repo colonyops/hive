@@ -7,6 +7,7 @@ import {
   closeTab,
   focusedTab,
   focusedWindow,
+  inTabOrder,
   isSessionLayout,
   moveTab,
   moveTabBeside,
@@ -277,6 +278,28 @@ describe('moveTab', () => {
     expect(ids(layout)).toEqual(['window:@1', 'window:@2'])
   })
 
+  it('keeps a picker on screen when a window nobody asked for arrives', () => {
+    const asking = splitPane(attached('@1', '@2'), 'p0', 'row')
+    const layout = reconcileWindows(asking, ['@1', '@2', '@3'], { active: '@1' })
+    const pane = panesOf(layout).find((candidate) => candidate.id === asking.focusedPane)!
+    expect(pane.picking).toBe(true)
+    expect(pane.tabs.map((tab) => tab.id)).toContain('window:@3')
+  })
+
+  it('lets a window the pane asked for answer its picker', () => {
+    const asking = splitPane(attached('@1', '@2'), 'p0', 'row')
+    const layout = reconcileWindows(asking, ['@1', '@2', '@3'], { active: '@1', target: asking.focusedPane })
+    expect(panesOf(layout).find((candidate) => candidate.id === asking.focusedPane)!.picking).toBe(false)
+  })
+
+  it('orders windows as the tabs show them, not as tmux does', () => {
+    const split = splitPane(attached('@1', '@2'), 'p0', 'row')
+    const layout = closePane(placeWindow(split, '@2', paneId(split, 1)), 'p0')
+    expect(windowOrder(layout)).toEqual(['@2', '@1'])
+    const tmuxOrder = [{ windowId: '@1' }, { windowId: '@2' }, { windowId: '@9' }]
+    expect(inTabOrder(tmuxOrder, layout).map((window) => window.windowId)).toEqual(['@2', '@1', '@9'])
+  })
+
   it('fills a pane that was asking', () => {
     const split = splitPane(openView(attached(), 'diff'), 'p0', 'row')
     const layout = moveTab(split, 'diff', paneId(split, 1), 0)
@@ -303,10 +326,10 @@ describe('addViewQuietly', () => {
     expect(addViewQuietly(layout, 'docs')).toBe(layout)
   })
 
-  it('joins the last pane, and fills one that was asking', () => {
+  it('joins the last pane, behind its picker', () => {
     const layout = addViewQuietly(splitPane(attached('@1'), 'p0', 'row'), 'docs')
     expect(ids(layout, 1)).toEqual(['docs'])
-    expect(panesOf(layout)[1].picking).toBe(false)
+    expect(panesOf(layout)[1].picking).toBe(true)
   })
 })
 

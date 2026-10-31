@@ -20,8 +20,6 @@ const imageRedrawPause = 150 * time.Millisecond
 
 const imageRestoreTimeout = 2 * time.Second
 
-const aggressiveResize = "aggressive-resize"
-
 var kittyCommandStart = []byte("\x1b_G")
 
 // imageDetector reports the first Kitty graphics command in each pane's

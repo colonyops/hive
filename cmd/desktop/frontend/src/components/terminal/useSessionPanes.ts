@@ -163,7 +163,7 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
     return views
   }
 
-  // tmux's order drives the window chords, so a tab that moves takes its window along.
+  // tmux's numbering should agree with the tabs, so a tab that moves takes its window along.
   function syncWindowOrder(windowId: string): void {
     const session = pool.visible.value
     const position = windowOrder(layout.value).indexOf(windowId)
@@ -180,11 +180,11 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
 
   // A session deleted or recycled while not on screen says nothing to the watcher
   // above. A server that has not answered says nothing about its sessions, so
-  // layouts wait until every server has.
+  // layouts wait until every server has, and a pinned chat's row needs the recents.
   watch(
-    [tree.attachable, tree.sessionsLoaded, tree.serversLoaded],
-    ([rows, loaded, serversLoaded]) => {
-      if (!loaded || !serversLoaded || tree.sessionsError.value || tree.serversError.value) return
+    [tree.attachable, tree.sessionsLoaded, tree.serversLoaded, tree.recentsLoaded],
+    ([rows, loaded, serversLoaded, recentsLoaded]) => {
+      if (!loaded || !serversLoaded || !recentsLoaded || tree.sessionsError.value || tree.serversError.value) return
       if (tree.offlineServers.value.length) return
       const known = new Set(rows.flatMap((candidate) => [candidate.id, candidate.slug]))
       sessionTabs.retain((sessionKey) => known.has(sessionKey))

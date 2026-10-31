@@ -153,8 +153,21 @@ export function addViewQuietly(layout: SessionLayout, kind: SessionViewKind): Se
   return withPane(layout, pane.id, {
     tabs: [...pane.tabs, { id: kind, kind }],
     activeTab: pane.activeTab ?? kind,
-    picking: false,
   })
+}
+
+/**
+ * Windows in the order the tabs and the tree show them. tmux's own can differ, as
+ * when a closed pane's tabs join the end of its neighbour's, and one move cannot
+ * always repair it. A window with no tab yet goes last.
+ */
+export function inTabOrder<T extends { windowId: string }>(windows: readonly T[], layout: SessionLayout): T[] {
+  const order = windowOrder(layout)
+  const position = (window: T): number => {
+    const at = order.indexOf(window.windowId)
+    return at < 0 ? order.length : at
+  }
+  return [...windows].sort((a, b) => position(a) - position(b))
 }
 
 /** The picker names a place, so a view open in another pane moves here. */
@@ -337,7 +350,10 @@ export function reconcileWindows(
     const wanted = options.target ?? next.focusedPane
     const target = paneById(next, wanted) ?? firstPane(next.root)
     const added = missing.map((windowId) => ({ id: windowTabId(windowId), kind: 'window' as const, windowId }))
-    next = withPane(next, target.id, { tabs: [...target.tabs, ...added], picking: false })
+    // Only a window this pane asked for answers its picker. One that an agent or
+    // another client opened joins behind it, and the question stays on screen.
+    const picking = target.picking && target.id !== options.target
+    next = withPane(next, target.id, { tabs: [...target.tabs, ...added], picking })
   }
   for (const pane of panesOf(next)) {
     if (pane.activeTab || !pane.tabs.length) continue

@@ -94,10 +94,10 @@ export function useTerminalSessionOps(options: {
   }
 
   async function killSession(slug: string): Promise<void> {
-    const killed = tree.attachable.value.find((row) => row.slug === slug)
-    if (killed) useSessionTabs().forget(killed.id)
     if (!client.value) return
+    const killed = tree.attachable.value.find((row) => row.slug === slug)
     await client.value.kill(slug)
+    if (killed) useSessionTabs().forget(killed.id)
     useTerminalOutcomes().report(slug, { reason: 'stopped', detail: 'The terminal was stopped.' })
     // Re-attaching the killed session lands it on the start panel; a pooled one
     // that is not on screen is simply let go.

@@ -30,7 +30,7 @@ function fakeSession(windowIds: string[], active = windowIds[0] ?? '') {
 
 type FakeSession = ReturnType<typeof fakeSession>
 
-function mountPanes(session: FakeSession) {
+function mountPanes(session: FakeSession, recentsLoaded = ref(true)) {
   const visible = shallowRef<FakeSession | null>(session)
   const row = { id: KEY, slug: 'hive-one' }
   const rows: Ref<(typeof row)[]> = ref([row])
@@ -39,6 +39,7 @@ function mountPanes(session: FakeSession) {
     attachable: computed(() => rows.value),
     sessionsLoaded: ref(true),
     serversLoaded: ref(true),
+    recentsLoaded,
     sessionsError: ref(null),
     serversError: ref(''),
     offlineServers: ref([]),
@@ -197,6 +198,20 @@ describe('useSessionPanes', () => {
       expect(session.revealWindow).toHaveBeenCalledWith('@1')
       expect(session.revealWindow).toHaveBeenCalledWith('@2')
     })
+  })
+
+  // A pinned chat's row comes from the recents listing, so until that answers a
+  // chat's layout looks like one for a session that no longer exists.
+  it('keeps every layout until the recents have answered', async () => {
+    useSessionTabs().apply('agentws-7', (layout) => openView(layout, 'docs'))
+    const recentsLoaded = ref(false)
+    mountPanes(fakeSession(['@1']), recentsLoaded)
+    await flushPromises()
+    expect(panesOf(useSessionTabs().layoutOf('agentws-7'))[0].tabs.map((tab) => tab.id)).toEqual(['docs'])
+
+    recentsLoaded.value = true
+    await flushPromises()
+    expect(panesOf(useSessionTabs().layoutOf('agentws-7'))[0].tabs).toEqual([])
   })
 
   describe('what ends a session', () => {

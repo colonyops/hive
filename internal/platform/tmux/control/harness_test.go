@@ -43,6 +43,9 @@ type fakeTmux struct {
 	histories map[string][]string
 	cursors   map[string]string
 	options   map[string][]string
+	marks     map[string]string
+	clients   []string
+	silent    string
 	failures  map[string]string
 	splitPane string
 	onCommand func(cmd string)
@@ -66,6 +69,7 @@ func newFakeTmux(t *testing.T, slug string) *fakeTmux {
 		histories: map[string][]string{},
 		cursors:   map[string]string{},
 		options:   map[string][]string{},
+		marks:     map[string]string{},
 		failures:  map[string]string{},
 	}
 	t.Cleanup(f.closeStreams)
@@ -135,6 +139,10 @@ func (f *fakeTmux) serve() {
 
 func (f *fakeTmux) respond(cmd string) {
 	f.mu.Lock()
+	if f.silent != "" && strings.HasPrefix(cmd, f.silent) {
+		f.mu.Unlock()
+		return
+	}
 	for prefix, msg := range f.failures {
 		if strings.HasPrefix(cmd, prefix) {
 			f.mu.Unlock()
@@ -145,6 +153,37 @@ func (f *fakeTmux) respond(cmd string) {
 	f.mu.Unlock()
 
 	switch {
+	case strings.HasPrefix(cmd, "set-option") && strings.Contains(cmd, aggressiveResizeMark):
+		f.mu.Lock()
+		if strings.Contains(cmd, " -u ") {
+			delete(f.marks, argAfter(cmd, "-t"))
+		} else {
+			f.marks[argAfter(cmd, "-t")] = argAfter(cmd, aggressiveResizeMark)
+		}
+		f.mu.Unlock()
+		f.reply(nil, false)
+	case strings.HasPrefix(cmd, "show-options") && strings.Contains(cmd, aggressiveResizeMark):
+		f.mu.Lock()
+		mark, ok := f.marks[argAfter(cmd, "-t")]
+		f.mu.Unlock()
+		if ok {
+			f.reply([]string{mark}, false)
+		} else {
+			f.reply(nil, false)
+		}
+	case strings.HasPrefix(cmd, "list-windows") && strings.Contains(cmd, aggressiveResizeMark):
+		f.mu.Lock()
+		rows := make([]string, 0, len(f.marks))
+		for id, mark := range f.marks {
+			rows = append(rows, id+" "+mark)
+		}
+		f.mu.Unlock()
+		f.reply(rows, false)
+	case strings.HasPrefix(cmd, "list-clients"):
+		f.mu.Lock()
+		clients := append([]string(nil), f.clients...)
+		f.mu.Unlock()
+		f.reply(clients, false)
 	case cmd == "detach":
 		f.reply(nil, false)
 		f.emit("%exit")
@@ -261,6 +300,27 @@ func (f *fakeTmux) setOption(target string, values ...string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.options[target] = values
+}
+
+// setMark sets a window's aggressive-resize mark, as an earlier client left it.
+func (f *fakeTmux) setMark(window, mark string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.marks[window] = mark
+}
+
+// setClients sets what list-clients answers.
+func (f *fakeTmux) setClients(rows ...string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.clients = rows
+}
+
+// setSilent makes the server stop answering commands with this prefix.
+func (f *fakeTmux) setSilent(prefix string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.silent = prefix
 }
 
 func (f *fakeTmux) setOnCommand(hook func(cmd string)) {
