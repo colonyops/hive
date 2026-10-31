@@ -14,6 +14,8 @@ import {
 import { useHiveUiPlatform } from '@hive/ui/platform'
 import DiffCommentCard from './DiffCommentCard.vue'
 import DiffFileHeader from './DiffFileHeader.vue'
+import { usePerf } from '../../composables/usePerf'
+import { useScrollGestureSpan } from '../../composables/useScrollGestureSpan'
 import type { DiffEntry } from '../../composables/useFileDiffs'
 import { diffThemeName, diffWorkerPool } from '../../lib/diffHighlight'
 import {
@@ -71,6 +73,8 @@ interface CommentAnnotation {
 }
 
 const root = ref<HTMLElement | null>(null)
+const perf = usePerf('changes')
+useScrollGestureSpan(root, (durationMs, attrs) => perf.record('scroll:gesture', durationMs, { ...attrs }))
 const platform = useHiveUiPlatform()
 const log = platform.log('changes')
 const pool = diffWorkerPool(platform.theme.value, log)
