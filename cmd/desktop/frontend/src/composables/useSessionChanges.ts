@@ -22,19 +22,17 @@ export function targetKey(target: DiffTarget): string {
 
 /**
  * The changed files in one session's checkout, for the Changes view. It reads only
- * while visible() holds and the window has focus, because a read costs several
- * git subprocesses. A failed read keeps the last good list beside its error.
+ * while the window has focus, because a read costs several git subprocesses. A
+ * failed read keeps the last good list beside its error.
  */
 export function useSessionChanges(
   sessionId: Ref<string>,
   target: Ref<DiffTarget>,
-  visible: () => boolean,
 ): {
   changes: Ref<SessionChanges | null>
   error: Ref<string | null>
   /** The target moved and its answer has not landed, so changes still describes the last one. */
   pending: Ref<boolean>
-  refresh: () => Promise<void>
 } {
   const changes = ref<SessionChanges | null>(null)
   const error = ref<string | null>(null)
@@ -79,7 +77,7 @@ export function useSessionChanges(
   }
 
   async function poll(): Promise<void> {
-    if (visible() && focused.value) await refresh()
+    if (focused.value) await refresh()
     // Disposal during that read found no timer to clear, so only this stops the loop.
     if (!disposed) schedule()
   }
@@ -97,12 +95,9 @@ export function useSessionChanges(
     { immediate: true },
   )
 
-  watch(
-    () => visible() && focused.value,
-    (reading) => {
-      if (reading) void refresh()
-    },
-  )
+  watch(focused, (reading) => {
+    if (reading) void refresh()
+  })
 
   onScopeDispose(() => {
     disposed = true
@@ -110,7 +105,7 @@ export function useSessionChanges(
     clearTimeout(timer)
   })
 
-  return { changes, error, pending, refresh }
+  return { changes, error, pending }
 }
 
 /**

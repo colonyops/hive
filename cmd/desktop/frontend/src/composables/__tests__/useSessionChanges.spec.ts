@@ -23,13 +23,13 @@ function answer(branch: string) {
   }
 }
 
-function setup(visible = ref(true)) {
+function setup() {
   const sessionId = ref('1')
   const base = ref<DiffBase>('branch')
   const target = computed(() => ({ base: base.value, against: '', commit: '' }))
   const scope = effectScope()
-  const api = scope.run(() => useSessionChanges(sessionId, target, () => visible.value))!
-  return { api, sessionId, base, visible, scope }
+  const api = scope.run(() => useSessionChanges(sessionId, target))!
+  return { api, sessionId, base, scope }
 }
 
 describe('useSessionChanges', () => {
@@ -41,7 +41,7 @@ describe('useSessionChanges', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  it('reads at once and every five seconds while visible', async () => {
+  it('reads at once and every five seconds', async () => {
     const { api, scope } = setup()
     await flushPromises()
     expect(api.changes.value?.branch).toBe('branch-1')
@@ -84,20 +84,11 @@ describe('useSessionChanges', () => {
     scope.stop()
   })
 
-  it('stops reading while hidden or blurred, and reads again on return', async () => {
-    const { visible, scope } = setup()
+  it('stops reading while blurred, and reads again on return', async () => {
+    const { scope } = setup()
     await flushPromises()
     mocks.SessionChanges.mockClear()
 
-    visible.value = false
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(mocks.SessionChanges).not.toHaveBeenCalled()
-
-    visible.value = true
-    await flushPromises()
-    expect(mocks.SessionChanges).toHaveBeenCalledTimes(1)
-
-    mocks.SessionChanges.mockClear()
     focused.value = false
     await vi.advanceTimersByTimeAsync(10_000)
     expect(mocks.SessionChanges).not.toHaveBeenCalled()

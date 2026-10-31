@@ -40,7 +40,6 @@ defineExpose({ anyFolderOpen, setAllFolders: expansion.setAll })
 
 const rows = computed(() => gitRows(props.files, props.layout, expansion.expanded))
 
-// A collapsed folder hides its files' counts, so it shows their total.
 function folderComments(dir: string): number {
   let total = 0
   for (const [path, count] of props.commentCounts ?? []) if (path.startsWith(`${dir}/`)) total += count
@@ -70,7 +69,6 @@ const nav = useListKeyboardNav({
   },
 })
 
-// The selection follows the stream as it scrolls, so its row stays in view.
 watch(
   () => props.selected,
   (path) => {

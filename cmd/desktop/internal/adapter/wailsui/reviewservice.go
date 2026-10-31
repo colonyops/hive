@@ -93,7 +93,7 @@ func (s *ReviewService) ChangesTargets(ctx context.Context, sessionID string) ([
 
 // ChangesFeedback builds the text SendChanges delivers, for the clipboard.
 func (s *ReviewService) ChangesFeedback(ctx context.Context, comments []app.DiffCommentInput) (string, error) {
-	text, err := s.review.ChangesFeedback(comments)
+	text, err := s.review.ChangesFeedback(ctx, comments)
 	if err != nil {
 		return "", s.fail(ctx, "changes-feedback", err)
 	}

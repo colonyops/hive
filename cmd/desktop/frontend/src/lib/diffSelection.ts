@@ -12,7 +12,6 @@ function sideOf(line: HTMLElement): 'additions' | 'deletions' {
   return line.closest('[data-deletions]') ? 'deletions' : 'additions'
 }
 
-/** Lines the user picked to comment on. */
 export interface DiffLineSelection {
   path: string
   range: SelectedLineRange

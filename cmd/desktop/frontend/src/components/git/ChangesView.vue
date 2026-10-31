@@ -85,7 +85,7 @@ const mode = useStorage<DiffMode>('hive.git.diffMode', 'unified')
 // many open files nearest the one on screen. Scrolling on reads further.
 const READ_WINDOW = 200
 
-const { changes, error, pending } = useSessionChanges(sessionId, target, () => true)
+const { changes, error, pending } = useSessionChanges(sessionId, target)
 const branches = useSessionBranches(sessionId)
 // The tree lists folders first, so the stream follows the rail's order rather
 // than git's: j and k then walk the rail row by row. While a new target's answer

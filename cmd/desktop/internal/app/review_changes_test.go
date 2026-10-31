@@ -98,7 +98,7 @@ func TestSendChangesReportsAFailedPaste(t *testing.T) {
 }
 
 func TestChangesFeedbackFormatsWithoutTheSession(t *testing.T) {
-	text, err := newReviewService(ReviewDeps{}).ChangesFeedback([]DiffCommentInput{diffComment("rename")})
+	text, err := newReviewService(ReviewDeps{}).ChangesFeedback(t.Context(), []DiffCommentInput{diffComment("rename")})
 	require.NoError(t, err)
 	assert.Contains(t, text, "a.go (line 4)")
 	assert.Contains(t, text, "> rename")

@@ -20,7 +20,7 @@ needs a migration in the store both programs share.
 
 2. **Each comment carries its own quote.** The rows it covered are copied when it is
    made, so the feedback still says what the user meant after the lines move. The
-   card says **File changed** when the file's version differs.
+   card shows a warning dot when the file's version differs.
 
 3. **Go owns the feedback text.** The review goes to `ReviewService.SendChanges`
    whole, and `review.DiffFeedback` formats it, as `review.Feedback` does for a
