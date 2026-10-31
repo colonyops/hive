@@ -196,15 +196,6 @@ Run 'hive new' to create a new session from the current repository.`,
 				Value:       hiveconfig.DefaultDataDir(),
 				Destination: &flags.DataDir,
 			},
-			// Hidden until every session command works against a server;
-			// the remote tests use it to run the client CLI as a user would.
-			&cli.StringFlag{
-				Name:        "target-server",
-				Usage:       "run session commands against the named server under servers:",
-				Sources:     cli.EnvVars("HIVE_TARGET_SERVER"),
-				Hidden:      true,
-				Destination: &flags.TargetServer,
-			},
 		},
 		Before: func(ctx context.Context, c *cli.Command) (context.Context, error) {
 			// Skip heavy initialization during shell completion. The
@@ -333,12 +324,6 @@ Run 'hive new' to create a new session from the current repository.`,
 			hiveApp.Build = hiveBuildInfo()
 			hiveApp.Servers = servers.New(logger, hiveApp.SessionAPI(), cfg.Servers, version)
 			hiveApp.Sources = app.BuildSourceRegistry(logger, cfg, exec, kvStore)
-			if flags.TargetServer != "" {
-				if err := hiveApp.TargetServer(flags.TargetServer); err != nil {
-					return ctx, err
-				}
-			}
-
 			return ctx, nil
 		},
 		After: func(ctx context.Context, c *cli.Command) error {
