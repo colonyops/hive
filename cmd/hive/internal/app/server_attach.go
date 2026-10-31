@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -11,6 +12,10 @@ import (
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 )
 
+// ErrSessionCompleted is a session whose commands all finished, so it left no
+// terminal to attach to.
+var ErrSessionCompleted = errors.New("the session's commands finished, so it has no terminal to attach to")
+
 // StartServerSession makes sure the tmux session of sess on the named server
 // runs, by the server's rules, and returns the ssh target to attach with.
 func (a *App) StartServerSession(ctx context.Context, serverName string, sess session.Session) (server.Host, error) {
@@ -18,8 +23,12 @@ func (a *App) StartServerSession(ctx context.Context, serverName string, sess se
 	if !ok {
 		return server.Host{}, fmt.Errorf("no server named %q under servers: in config.yaml", serverName)
 	}
-	if _, err := srv.Client().StartTmuxSession(ctx, sess.ID); err != nil {
+	result, err := srv.Client().StartTmuxSession(ctx, sess.ID)
+	if err != nil {
 		return server.Host{}, fmt.Errorf("start session %s on server %s: %w", sess.Name, serverName, err)
+	}
+	if result.Completed {
+		return server.Host{}, fmt.Errorf("session %s on server %s: %w", sess.Name, serverName, ErrSessionCompleted)
 	}
 	return srv.Config().Host(), nil
 }
@@ -29,6 +38,10 @@ func (a *App) StartServerSession(ctx context.Context, serverName string, sess se
 // terminal outside it.
 func (a *App) AttachServerSession(ctx context.Context, serverName string, sess session.Session) error {
 	host, err := a.StartServerSession(ctx, serverName, sess)
+	if errors.Is(err, ErrSessionCompleted) {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		return nil
+	}
 	if err != nil {
 		return err
 	}

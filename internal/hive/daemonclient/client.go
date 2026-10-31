@@ -597,6 +597,9 @@ func (c *Client) GitStatuses(ctx context.Context, ids []string) (map[string]gits
 // StartTmuxSession is not retried: a second start after a lost answer could
 // spawn the agent twice.
 func (c *Client) StartTmuxSession(ctx context.Context, id string) (multiplexer.LaunchResult, error) {
+	if err := c.checkAnswering(ctx); err != nil {
+		return multiplexer.LaunchResult{}, err
+	}
 	resp, err := c.sessions.StartTmux(ctx, connect.NewRequest(&daemonv1.StartTmuxRequest{Id: id}))
 	if err != nil {
 		if connect.CodeOf(err) == connect.CodeUnimplemented {

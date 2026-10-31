@@ -174,6 +174,13 @@ func TestServerSessionsQualifyIDAndSlugWithTheServer(t *testing.T) {
 	assert.Equal(t, []SessionSummary{}, lists[1].Sessions)
 }
 
+func TestServerSummaryAttachesToTheTmuxNameOfASessionRenamedWhileStopped(t *testing.T) {
+	s := session.Session{ID: "s1", Name: "new name", Slug: "new-name"}
+	s.SetMeta(session.MetaTmuxSession, "old-name")
+
+	assert.Equal(t, "box:old-name", serverSummaryOf("box", s).Slug)
+}
+
 func TestSessionDetailOfKeepsTheServerOfTheID(t *testing.T) {
 	local := sessionDetailOf("local:s1", session.Session{ID: "s1", Slug: "review"})
 	assert.Empty(t, local.Server, "local: names this machine, not a server")
