@@ -281,6 +281,8 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await page.keyboard.press('Meta+k')
     await page.getByTestId('command-palette-input').fill('Toggle Changes')
     await page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' }).click()
+    await expect(page.getByTestId('changes-stream')).toContainText('return err')
+    await expect(page.getByTestId('command-palette-input')).toBeHidden()
     await expect(review).toBeHidden()
     await page.keyboard.press('r')
     await expect(review).toBeVisible()
