@@ -5,7 +5,7 @@
 // prune, row actions, and keyboard navigation; TaskDetail owns everything about
 // the selection through the same useTasks() singleton.
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { onKeyStroke } from '@vueuse/core'
+import { onKeyStroke, useElementSize } from '@vueuse/core'
 import IconEraser from '~icons/lucide/eraser'
 import IconKanban from '~icons/lucide/square-kanban'
 import IconList from '~icons/lucide/list'
@@ -210,6 +210,20 @@ watch(
   { flush: 'sync' },
 )
 
+// The inline detail pane has a fixed width and does not give way, so a session
+// tab narrower than it plus a usable list reads the detail in the drawer instead.
+const LIST_MIN_WIDTH_PX = 320
+const root = ref<HTMLElement | null>(null)
+const { width: rootWidth } = useElementSize(root)
+const narrow = computed(
+  () => rootWidth.value > 0 && rootWidth.value < TASK_DETAIL_PANEL.defaultSize + LIST_MIN_WIDTH_PX,
+)
+
+function selectRow(id: string): void {
+  if (narrow.value) openPeek(id)
+  else select(id)
+}
+
 function openPeek(id: string): void {
   select(id)
   peekOpen.value = true
@@ -376,8 +390,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="tasks-view">
-    <ViewHeader>
+  <div ref="root" class="flex h-full min-h-0 flex-1 flex-col" data-testid="tasks-view">
+    <ViewHeader :class="embedded ? 'overflow-x-auto' : ''">
       <template #title>
         <span class="text-body font-semibold text-text">Tasks</span>
         <span class="font-mono text-caption text-text-4" data-testid="tasks-count"
@@ -421,15 +435,18 @@ onUnmounted(() => {
       </template>
     </ViewHeader>
 
-    <div class="flex shrink-0 items-center gap-2 border-b border-row bg-pane px-4 py-2">
+    <div
+      class="flex shrink-0 flex-wrap items-center gap-2 border-b border-row bg-pane px-4 py-2"
+      data-testid="tasks-filters"
+    >
       <SearchField
         v-model="search"
         placeholder="Search by title or ID…"
         aria-label="Search tasks"
         testid="tasks-search"
-        class="h-[31px] w-[260px]"
+        class="h-[31px] w-[260px] max-w-full"
       />
-      <div class="w-[220px]">
+      <div class="w-[220px] max-w-full">
         <AppSelect
           :model-value="repoKey"
           :options="repoOptions"
@@ -444,6 +461,7 @@ onUnmounted(() => {
       <div class="flex-1" />
       <SegmentedControl
         v-if="view === 'list'"
+        class="max-w-full overflow-x-auto"
         :model-value="filter"
         variant="compact"
         :options="filterOptions"
@@ -481,7 +499,7 @@ onUnmounted(() => {
     </div>
 
     <div class="flex min-h-0 flex-1">
-      <div ref="bodyEl" class="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+      <div ref="bodyEl" class="flex min-h-0 min-w-0 flex-1 flex-col bg-app" data-testid="tasks-list-column">
         <div v-if="!loaded" class="flex h-full items-center justify-center font-mono text-xs text-text-4">
           Loading tasks…
         </div>
@@ -490,7 +508,8 @@ onUnmounted(() => {
              may hold plenty. -->
         <div
           v-else-if="!items.length && repoKey"
-          class="flex h-full flex-col items-center justify-center gap-3 px-10 text-center"
+          class="flex h-full flex-col items-center justify-center gap-3 text-center"
+          :class="narrow ? 'px-4' : 'px-10'"
           data-testid="tasks-empty"
         >
           <div class="text-body text-text-3">No tasks in {{ repoKey }}.</div>
@@ -545,7 +564,7 @@ onUnmounted(() => {
             :counts="row.node.children.length ? row.node.counts : undefined"
             :selected="row.node.item.id === selectedId"
             :session-name="sessionNameById.get(row.node.item.sessionId)"
-            @select="select"
+            @select="selectRow"
             @toggle="toggleCollapsed"
             @status="statusChange.request"
             @copy="copyId"
@@ -554,11 +573,11 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <TaskDetailPane v-if="view === 'list'" />
+      <TaskDetailPane v-if="view === 'list' && !narrow" />
     </div>
 
     <DrawerSheet
-      v-if="view === 'board' && peekOpen"
+      v-if="(view === 'board' || narrow) && peekOpen"
       bare
       title="Task details"
       testid="task-detail-pane"

@@ -248,6 +248,48 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await expect(page.getByTestId('session-pane-1')).toHaveCount(0)
   })
 
+  test('keeps every view usable at half width and at the clamp', async ({ page, browserName }) => {
+    test.setTimeout(60_000)
+    await fixture(page)
+    await page.getByTestId('session-split-row').click()
+    await page.getByTestId('session-pane-picker-view-tasks').click()
+    await addTab(page, 1, 'Docs')
+    await addTab(page, 1, 'Diff')
+
+    const show = (kind: string) => page.getByTestId(`session-tab-${kind}`).click()
+    const shots = async (width: string) => {
+      for (const kind of ['tasks', 'docs', 'diff']) {
+        await show(kind)
+        await page.screenshot({ path: screenshotPath(`session-tabs-width-${kind}-${width}-${browserName}.png`) })
+      }
+    }
+    const tasksFit = async () => {
+      await show('tasks')
+      const pane = await paneBox(page, 1)
+      const list = (await page.getByTestId('tasks-list-column').boundingBox())!
+      expect(list.width).toBeGreaterThan(pane.width * 0.9)
+      await expect(page.getByTestId('tasks-empty')).toContainText('No tasks in')
+      const text = (await page.getByTestId('tasks-empty').locator('div').first().boundingBox())!
+      expect(text.x + text.width).toBeLessThanOrEqual(pane.x + pane.width)
+      const button = (await page.getByTestId('tasks-empty-show-all').boundingBox())!
+      expect(button.x).toBeGreaterThanOrEqual(pane.x)
+      expect(button.x + button.width).toBeLessThanOrEqual(pane.x + pane.width)
+      const filters = (await page.getByTestId('tasks-filters').boundingBox())!
+      const filter = (await page.getByTestId('tasks-filter').boundingBox())!
+      expect(filter.x + filter.width).toBeLessThanOrEqual(filters.x + filters.width)
+    }
+
+    await tasksFit()
+    expect((await page.getByTestId('tasks-list-column').boundingBox())!.width).toBeGreaterThan(320)
+    await shots('half')
+
+    const divider = await center(page.getByTestId('session-split-divider'))
+    await dragTo(page, divider, { x: 5000, y: divider.y })
+    expect((await paneBox(page, 1)).width).toBeLessThan(260)
+    await tasksFit()
+    await shots('clamp')
+  })
+
   test('drags the boundary to resize both ways, keeps it, and clamps it', async ({ page, browserName }) => {
     await fixture(page)
     await page.getByTestId('session-split-row').click()
