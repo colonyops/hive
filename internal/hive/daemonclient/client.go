@@ -169,6 +169,7 @@ var readProcedures = map[string]bool{
 	daemonv1connect.SessionServiceRiskProcedure:          true,
 	daemonv1connect.SessionServiceLaunchOptionsProcedure: true,
 	daemonv1connect.SessionServiceStatusesProcedure:      true,
+	daemonv1connect.SessionServiceGitStatusesProcedure:   true,
 }
 
 func (c *Client) callTimeouts() connect.UnaryInterceptorFunc {

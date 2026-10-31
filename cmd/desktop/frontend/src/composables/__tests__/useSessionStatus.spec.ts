@@ -66,6 +66,18 @@ describe('useSessionStatus', () => {
   })
 
   // A git read takes long enough that blanking on every switch is visible.
+  it('keeps the last answer and shows the error when a read fails', async () => {
+    await withStatus(ref('1'), async (status) => {
+      await vi.waitFor(() => expect(status.git.value?.branch).toBe('feat/one'))
+
+      mocks.SessionGitStatus.mockRejectedValue(new Error('box did not answer in 10s'))
+      await status.refresh()
+
+      expect(status.git.value?.branch).toBe('feat/one')
+      expect(status.git.value?.error).toBe('box did not answer in 10s')
+    })
+  })
+
   it('seeds a revisited session from its last answer instead of blanking', async () => {
     const sessionId = ref('1')
     await withStatus(sessionId, async (status) => {

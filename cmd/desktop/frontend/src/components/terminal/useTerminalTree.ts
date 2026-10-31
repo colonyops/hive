@@ -302,7 +302,6 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     isChat,
     isHiveSession,
     isServerSession,
-    serverSessions,
     servers,
     serversError,
     offlineServers,

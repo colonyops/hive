@@ -277,6 +277,15 @@ func TestClientReadTimeoutBoundsOnlyReads(t *testing.T) {
 	require.NoError(t, client.RecycleSession(t.Context(), "s1", nil), "a stream outlives the read timeout")
 }
 
+func TestClientGitStatusesNamesADaemonThatPredatesThem(t *testing.T) {
+	path := socketPath(t)
+	serve(t, path, slowServer{}, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop()})
+
+	_, err := client.GitStatuses(t.Context(), []string{"s1"})
+	require.ErrorIs(t, err, ErrGitStatusUnsupported)
+}
+
 func TestClientDeleteTimeoutBoundsADelete(t *testing.T) {
 	const timeout = 50 * time.Millisecond
 	path := socketPath(t)
@@ -390,6 +399,7 @@ func TestTimeoutFor(t *testing.T) {
 	assert.Zero(t, c.timeoutFor(daemonv1connect.SessionServiceRenameProcedure))
 
 	c.openConns.Add(1)
+	assert.Equal(t, time.Second, c.timeoutFor(daemonv1connect.SessionServiceGitStatusesProcedure), "a git status is a read")
 	assert.Equal(t, time.Second, c.timeoutFor(get), "has a connection")
 }
 

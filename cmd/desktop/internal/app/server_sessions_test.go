@@ -271,3 +271,14 @@ func TestServerStateOf(t *testing.T) {
 	assert.Equal(t, server.StateIncompatible, serverStateOf(incompatible))
 	assert.Equal(t, server.StateOffline, serverStateOf(errors.New("exit status 255")))
 }
+
+func TestServerSessions_GitStatusFailures(t *testing.T) {
+	f := newServerFixture(t)
+
+	_, err := f.svc.SessionGitStatus(t.Context(), "down:s1")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	require.ErrorContains(t, err, "Connection refused")
+
+	_, err = f.svc.SessionGitStatus(t.Context(), "box:missing")
+	assert.Equal(t, KindNotFound, KindOf(err))
+}
