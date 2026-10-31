@@ -3,6 +3,7 @@ package servers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -27,7 +28,7 @@ const ServerListTimeout = 5 * time.Second
 // server that id names. Creates, prune, and launch options act on this
 // machine; a caller that creates on a server uses that server's API.
 type Router struct {
-	registry *Registry
+	fleet *Fleet
 
 	mu     sync.Mutex
 	listed map[string]ListState
@@ -42,8 +43,8 @@ type ListState struct {
 
 var _ sessionapi.API = (*Router)(nil)
 
-func NewRouter(registry *Registry) *Router {
-	return &Router{registry: registry, listed: map[string]ListState{}}
+func NewRouter(fleet *Fleet) *Router {
+	return &Router{fleet: fleet, listed: map[string]ListState{}}
 }
 
 // States returns what the last ListSessions found on each server, in config
@@ -51,8 +52,8 @@ func NewRouter(registry *Registry) *Router {
 func (r *Router) States() []ListState {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make([]ListState, 0, len(r.registry.Servers()))
-	for _, srv := range r.registry.Servers() {
+	out := make([]ListState, 0, len(r.fleet.Servers()))
+	for _, srv := range r.fleet.Servers() {
 		name := srv.Config().Name
 		st, ok := r.listed[name]
 		if !ok {
@@ -66,7 +67,7 @@ func (r *Router) States() []ListState {
 // ListSessions fails only when the local list fails. A server that does not
 // answer adds no sessions; States reports why.
 func (r *Router) ListSessions(ctx context.Context) ([]session.Session, error) {
-	remotes := r.registry.Servers()
+	remotes := r.fleet.Servers()
 	lists := make([][]session.Session, len(remotes))
 	var wg sync.WaitGroup
 	for i, srv := range remotes {
@@ -81,7 +82,7 @@ func (r *Router) ListSessions(ctx context.Context) ([]session.Session, error) {
 				if _, ok := errors.AsType[*wire.IncompatibleError](err); ok {
 					st.State = server.StateIncompatible
 				}
-				st.Err = srv.Explain(err)
+				st.Err = err
 			}
 			r.mu.Lock()
 			r.listed[name] = st
@@ -91,7 +92,7 @@ func (r *Router) ListSessions(ctx context.Context) ([]session.Session, error) {
 			}
 		})
 	}
-	local, err := r.registry.Local().ListSessions(ctx)
+	local, err := r.fleet.Local().ListSessions(ctx)
 	wg.Wait()
 	if err != nil {
 		return nil, err
@@ -112,15 +113,15 @@ func (r *Router) GetSession(ctx context.Context, id string) (session.Session, er
 }
 
 func (r *Router) CreateSession(ctx context.Context, opts sessionsvc.CreateOptions) (*session.Session, error) {
-	return r.registry.Local().CreateSession(ctx, opts)
+	return r.fleet.Local().CreateSession(ctx, opts)
 }
 
 func (r *Router) CreateFromRequest(ctx context.Context, req sessionsvc.LaunchRequest) (session.Session, error) {
-	return r.registry.Local().CreateFromRequest(ctx, req)
+	return r.fleet.Local().CreateFromRequest(ctx, req)
 }
 
 func (r *Router) CreateSessionWithWindows(ctx context.Context, req sessionsvc.NewSessionRequest, windows []multiplexer.WindowSpec) (*session.Session, error) {
-	return r.registry.Local().CreateSessionWithWindows(ctx, req, windows)
+	return r.fleet.Local().CreateSessionWithWindows(ctx, req, windows)
 }
 
 func (r *Router) RenameSession(ctx context.Context, id, name string) error {
@@ -174,7 +175,7 @@ func (r *Router) RecycleSession(ctx context.Context, id string, w io.Writer) err
 }
 
 func (r *Router) Prune(ctx context.Context, all bool) (int, error) {
-	return r.registry.Local().Prune(ctx, all)
+	return r.fleet.Local().Prune(ctx, all)
 }
 
 func (r *Router) CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Risk, error) {
@@ -186,11 +187,7 @@ func (r *Router) CheckSessionRisk(ctx context.Context, id string) (sessionsvc.Ri
 }
 
 func (r *Router) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOptions, error) {
-	return r.registry.Local().SessionLaunchOptions(ctx)
-}
-
-func (r *Router) SpawnCreatesTmuxSession(ctx context.Context, remote string) (bool, error) {
-	return r.registry.Local().SpawnCreatesTmuxSession(ctx, remote)
+	return r.fleet.Local().SessionLaunchOptions(ctx)
 }
 
 func (r *Router) StartTmuxSession(ctx context.Context, id string) (multiplexer.LaunchResult, error) {
@@ -214,7 +211,7 @@ func (r *Router) GitStatuses(ctx context.Context, ids []string) (map[string]gits
 	var wg sync.WaitGroup
 	for name, bare := range byServer {
 		wg.Go(func() {
-			api, err := r.registry.API(name)
+			api, err := r.api(name)
 			if err != nil {
 				return
 			}
@@ -239,8 +236,8 @@ func (r *Router) GitStatuses(ctx context.Context, ids []string) (map[string]gits
 // StatusAvailable is true when this machine or any server can report
 // terminal status.
 func (r *Router) StatusAvailable() bool {
-	available := r.registry.Local().StatusAvailable()
-	for _, srv := range r.registry.Servers() {
+	available := r.fleet.Local().StatusAvailable()
+	for _, srv := range r.fleet.Servers() {
 		if r.connected(srv.Config().Name) && srv.Client().StatusAvailable() {
 			available = true
 		}
@@ -287,12 +284,12 @@ func (r *Router) FetchBatch(ctx context.Context, sessions []*session.Session, ro
 			out[key] = st
 		}
 	}
-	wg.Go(func() { fetch(session.LocalServer, r.registry.Local(), byServer[session.LocalServer], roots) })
+	wg.Go(func() { fetch(session.LocalServer, r.fleet.Local(), byServer[session.LocalServer], roots) })
 	for name, list := range byServer {
 		if name == session.LocalServer {
 			continue
 		}
-		srv, ok := r.registry.Server(name)
+		srv, ok := r.fleet.Server(name)
 		if !ok || !r.connected(name) {
 			continue
 		}
@@ -302,12 +299,23 @@ func (r *Router) FetchBatch(ctx context.Context, sessions []*session.Session, ro
 	return out
 }
 
+func (r *Router) api(name string) (sessionapi.API, error) {
+	if name == session.LocalServer {
+		return r.fleet.Local(), nil
+	}
+	srv, ok := r.fleet.Server(name)
+	if !ok {
+		return nil, fmt.Errorf("unknown server %q: it is not under servers: in config.yaml", name)
+	}
+	return srv.Client(), nil
+}
+
 func (r *Router) route(id string) (session.Ref, sessionapi.API, error) {
 	ref, err := session.ParseRef(id, session.LocalServer)
 	if err != nil {
 		return session.Ref{}, nil, err
 	}
-	api, err := r.registry.API(ref.Server)
+	api, err := r.api(ref.Server)
 	return ref, api, err
 }
 
