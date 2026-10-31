@@ -96,7 +96,8 @@ describe('attachedSessionCommands', () => {
       'terminal:session:recycle',
       'terminal:session:delete',
     ])
-    expect(ids(remote, false)).not.toContain('terminal:session:start')
+    // The server starts its own terminal, so a stopped one offers Start.
+    expect(ids(remote, false)).toContain('terminal:session:start')
   })
 
   it('gives the scratch terminal its terminal operations only', () => {

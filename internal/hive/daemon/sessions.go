@@ -199,6 +199,14 @@ func (s *sessionServer) GitStatuses(ctx context.Context, req *connect.Request[da
 	return connect.NewResponse(&daemonv1.GitStatusesResponse{Statuses: wire.GitStatusesToProto(statuses)}), nil
 }
 
+func (s *sessionServer) StartTmux(ctx context.Context, req *connect.Request[daemonv1.StartTmuxRequest]) (*connect.Response[daemonv1.StartTmuxResponse], error) {
+	result, err := s.api.StartTmuxSession(ctx, req.Msg.GetId())
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(&daemonv1.StartTmuxResponse{Created: result.Created, Completed: result.Completed}), nil
+}
+
 // lineWriter sends each complete line written to it. The session service
 // writes progress with or without a trailing newline, so Flush sends the
 // rest.

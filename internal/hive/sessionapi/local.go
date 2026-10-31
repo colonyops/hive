@@ -2,6 +2,7 @@ package sessionapi
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
@@ -96,6 +97,17 @@ func (l *Local) GitStatuses(ctx context.Context, ids []string) (map[string]gitst
 		}
 	}
 	return l.engine.GitStatus().ReadSessions(ctx, sessions), nil
+}
+
+func (l *Local) StartTmuxSession(ctx context.Context, id string) (multiplexer.LaunchResult, error) {
+	sess, err := l.engine.Sessions().GetSession(ctx, id)
+	if err != nil {
+		return multiplexer.LaunchResult{}, err
+	}
+	if sess.State != session.StateActive {
+		return multiplexer.LaunchResult{}, fmt.Errorf("session %q is %s, so there is no checkout to open a terminal in: %w", sess.Name, sess.State, session.ErrNotActive)
+	}
+	return l.engine.Sessions().OpenTmuxSession(ctx, sess.Name, sess.Path, sess.Remote, "", true)
 }
 
 func (l *Local) StatusAvailable() bool {

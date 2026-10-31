@@ -39,6 +39,10 @@ service SessionService {
   // GitStatuses reads the checkouts of sessions on the daemon's machine. A
   // read is shared by every client that asks within a few seconds.
   rpc GitStatuses(GitStatusesRequest) returns (GitStatusesResponse);
+  // StartTmux opens the tmux session of a session on the daemon's machine
+  // in the background, by that machine's rules. It creates the session
+  // and starts the agent when no tmux session runs.
+  rpc StartTmux(StartTmuxRequest) returns (StartTmuxResponse);
 }
 
 message HelloRequest {}
@@ -282,6 +286,15 @@ message StatusesResponse {
   // statuses is keyed like status.Service.FetchBatch: session id, or
   // status.RootStatusKey for a root.
   map<string, TerminalStatus> statuses = 1;
+}
+
+message StartTmuxRequest {
+  string id = 1;
+}
+
+message StartTmuxResponse {
+  bool created = 1;
+  bool completed = 2;
 }
 
 message GitStatusesRequest {
