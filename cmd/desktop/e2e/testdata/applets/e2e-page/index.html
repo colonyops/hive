@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <title>E2E page</title>
+  </head>
+  <body>
+    <pre id="result">pending</pre>
+    <button id="navigate">Leave</button>
+    <script type="module">
+      import { fromModule } from './helper.mjs'
+
+      const result = {
+        fromModule,
+        visits: Number(localStorage.getItem('visits') ?? 0),
+        bypassed: (await hive.exec('test -e bypassed')).code === 0,
+      }
+      localStorage.setItem('visits', String(result.visits + 1))
+      result.exec = await hive.exec('echo out; echo err >&2; exit 3')
+      result.context = (await hive.context()).id
+      await hive.writeFile('note.txt', 'written')
+      result.file = await hive.readFile('note.txt')
+      result.spawn = await new Promise(async (resolve) => {
+        let out = ''
+        const process = await hive.spawn('read line; echo "got $line"; exit 5', {
+          onStdout: (text) => (out += text),
+          onExit: (code) => resolve({ out, code }),
+        })
+        await process.write('hello\n')
+      })
+      await hive.toast('page toast', { severity: 'success' })
+      document.getElementById('result').textContent = JSON.stringify(result)
+
+      // A page the frame navigates to keeps the frame's window but holds no token, so
+      // the bridge must not answer it.
+      document.getElementById('navigate').addEventListener('click', () => {
+        location.href =
+          'data:text/html,' +
+          encodeURIComponent(`<pre id="left">waiting</pre><script>
+            addEventListener('message', () => { document.getElementById('left').textContent = 'answered' })
+            parent.postMessage({ hiveApplet: 1, id: 1, method: 'exec', args: { command: 'touch bypassed' } }, '*')
+            setTimeout(() => { if (document.getElementById('left').textContent === 'waiting') document.getElementById('left').textContent = 'ignored' }, 1000)
+          <\/script>`)
+      })
+    </script>
+  </body>
+</html>

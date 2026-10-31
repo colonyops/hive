@@ -17,6 +17,10 @@ import * as app$0 from "../../app/models.js";
 // @ts-ignore: Unused imports
 import * as applets$0 from "../../app/applets/models.js";
 
+export function BridgeToken(id: string): $CancellablePromise<string> {
+    return $Call.ByID(2552326400, id);
+}
+
 export function Context(id: string, sessionSlug: string): $CancellablePromise<app$0.AppletContext> {
     return $Call.ByID(1499792253, id, sessionSlug);
 }

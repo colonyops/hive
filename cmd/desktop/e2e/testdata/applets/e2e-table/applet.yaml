@@ -1,0 +1,26 @@
+version: 1
+title: E2E table
+view: table
+cwd: "~"
+data:
+  command: printf '{"name":"alpha","state":"up"}\n{"name":"beta; touch injected","state":"down"}\n'
+columns:
+  - key: name
+  - key: state
+    tones:
+      up: success
+      down: muted
+actions:
+  - id: say
+    label: Say
+    key: n
+    run: printf 'said %s' "$HIVE_ROW_NAME"
+  - id: boom
+    label: Boom
+    key: b
+    run: echo kaboom >&2; exit 4
+  - id: careful
+    label: Careful
+    key: c
+    confirm: Really do it?
+    run: echo careful

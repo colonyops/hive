@@ -229,7 +229,7 @@ func likePrefix(prefix string) string {
 }
 
 func actionSmokeHarnessEnabled(mock string) bool {
-	return mock == "action-smoke" && desktopSmokeRunID() != "" && e2eHarnessMarkerValid()
+	return mock == "action-smoke" && desktopSmokeRunID() != "" && settings.E2EHarnessMarkerValid()
 }
 
 func desktopSmokeRunID() string {

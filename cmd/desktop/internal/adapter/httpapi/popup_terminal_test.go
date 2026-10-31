@@ -62,6 +62,16 @@ func TestPopupTerminalControlPlaneAnswersPreflight(t *testing.T) {
 // An id whose terminal is gone answers closed=false rather than 404: an exited
 // terminal is dropped, so a caller closing one it already saw exit is not an
 // error.
+func TestPopupTerminalOpenPassesAppletIdentityToTheCore(t *testing.T) {
+	h := newTerminalHarness(t)
+
+	resp := h.post(t, PopupTerminalPathPrefix+"open", testToken, map[string]any{
+		"applet": "absent", "appletAction": "run", "appletRow": map[string]string{"name": "x"}, "cols": 80, "rows": 24,
+	})
+	defer func() { _ = resp.Body.Close() }()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "an applet the catalog does not hold, not a bare shell")
+}
+
 func TestPopupTerminalCloseIsIdempotent(t *testing.T) {
 	h := newTerminalHarness(t)
 

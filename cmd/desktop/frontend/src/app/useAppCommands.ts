@@ -215,7 +215,14 @@ export function useAppCommands(deps: AppCommandDeps) {
     const applet = appletID(id)
     if (applet !== null) {
       const command = commandById.value.get(id)
-      if (command && contextActive(command.context)) applets.toggle(applet, onScreenSessionSlug.value)
+      if (command && contextActive(command.context)) {
+        // The palette can open an applet over a hub view, whose own keys would keep
+        // acting on rows under it.
+        overlays.tasksOpen.value = false
+        overlays.activityOpen.value = false
+        overlays.actionRunsOpen.value = false
+        applets.toggle(applet, onScreenSessionSlug.value)
+      }
       return
     }
     const window = terminalWindowPosition(id)

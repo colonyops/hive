@@ -5,6 +5,7 @@ import { usePopupTerminal } from '../../../stores/usePopupTerminal'
 import AppletFrame from '../AppletFrame.vue'
 
 const service = vi.hoisted(() => ({
+  BridgeToken: vi.fn(),
   Context: vi.fn(),
   Exec: vi.fn(),
   KillSpawns: vi.fn(),
@@ -35,9 +36,12 @@ function setup() {
   vi.spyOn(source, 'postMessage').mockImplementation((message: unknown) => {
     replies.push(message)
   })
-  const send = async (method: string, args: object = {}, from: unknown = source) => {
+  const send = async (method: string, args: object = {}, from: unknown = source, token: unknown = 'secret') => {
     window.dispatchEvent(
-      new MessageEvent('message', { data: { hiveApplet: 1, id: 1, method, args }, source: from as Window }),
+      new MessageEvent('message', {
+        data: { hiveApplet: 1, token, id: 1, method, args },
+        source: from as Window,
+      }),
     )
     await flushPromises()
   }
@@ -48,6 +52,7 @@ describe('AppletFrame', () => {
   beforeEach(() => {
     resetStores()
     for (const mock of Object.values(service)) mock.mockReset()
+    service.BridgeToken.mockResolvedValue('secret')
   })
 
   it('loads the page sandboxed, without the same origin as the app', () => {
@@ -73,6 +78,15 @@ describe('AppletFrame', () => {
   it('ignores a message from any other window', async () => {
     const { wrapper, replies, send } = setup()
     await send('exec', { command: 'rm -rf /' }, window)
+    expect(service.Exec).not.toHaveBeenCalled()
+    expect(replies).toEqual([])
+    wrapper.unmount()
+  })
+
+  it('ignores its own frame without the token, as after navigating away', async () => {
+    const { wrapper, frame, replies, send } = setup()
+    await send('exec', { command: 'rm -rf /' }, frame.contentWindow, null)
+    await send('exec', { command: 'rm -rf /' }, frame.contentWindow, 'guess')
     expect(service.Exec).not.toHaveBeenCalled()
     expect(replies).toEqual([])
     wrapper.unmount()

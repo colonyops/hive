@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -88,7 +86,7 @@ func NewStateResetHarness(db *queries.DB, st *stores.Stores, core *sql.DB, logge
 
 // NewStateResetHarnessForInstance uses the composition-root runtime snapshot.
 func NewStateResetHarnessForInstance(db *queries.DB, st *stores.Stores, core *sql.DB, mock string, paths settings.Paths, logger zerolog.Logger) *StateReset {
-	if mock == "" || !e2eHarnessMarkerValid() {
+	if mock == "" || !settings.E2EHarnessMarkerValid() {
 		return nil
 	}
 	r := &StateReset{db: db, stores: st, core: core, logger: logger, mock: mock, flowsDir: paths.FlowsDir}
@@ -320,16 +318,4 @@ func stateResetMiddleware(reset *StateReset) application.Middleware {
 			w.WriteHeader(http.StatusNoContent)
 		})
 	}
-}
-
-// e2eHarnessMarkerValid reports whether HIVE_DESKTOP_E2E_HARNESS carries the
-// 256-bit hex marker cmd/desktop/e2e/scripts/run-docker.sh mints. It keeps mock
-// mode alone from enabling test-only routes.
-func e2eHarnessMarkerValid() bool {
-	marker := strings.TrimSpace(os.Getenv(settings.EnvE2EHarness))
-	if len(marker) != 64 {
-		return false
-	}
-	_, err := hex.DecodeString(marker)
-	return err == nil
 }

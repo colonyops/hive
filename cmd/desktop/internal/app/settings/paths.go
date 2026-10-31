@@ -4,8 +4,10 @@
 package settings
 
 import (
+	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -206,3 +208,15 @@ var onboardingFlowsDir = sync.OnceValue(func() string {
 	}
 	return dir
 })
+
+// E2EHarnessMarkerValid reports whether HIVE_DESKTOP_E2E_HARNESS carries the 256-bit
+// hex marker cmd/desktop/e2e/scripts/run-docker.sh mints. It keeps mock mode alone
+// from enabling what only the e2e harness may use.
+func E2EHarnessMarkerValid() bool {
+	marker := strings.TrimSpace(os.Getenv(EnvE2EHarness))
+	if len(marker) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(marker)
+	return err == nil
+}

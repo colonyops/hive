@@ -83,7 +83,7 @@ files.
 
 | `server`       | Mock mode      | Browsers         | For                                                                |
 | -------------- | -------------- | ---------------- | ------------------------------------------------------------------ |
-| `feed`         | `feed`         | chromium, webkit | The default. Six seeded feed items, the fixture flow, a Drive space. |
+| `feed`         | `feed`         | chromium, webkit | The default. Six seeded feed items, the fixture flow, a Drive space, the applets in `testdata/applets`. |
 | `onboarding`   | `onboarding`   | chromium, webkit | First run: nothing connected, a fake device flow that grants once. |
 | `pipeline`     | `pipeline`     | chromium         | The source-to-commit flow and its `/_e2e/source-to-commit` probe.  |
 | `action-smoke` | `action-smoke` | chromium         | The actions journey, with a local bare Git remote.                 |

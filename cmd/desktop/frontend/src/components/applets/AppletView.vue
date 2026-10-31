@@ -58,6 +58,7 @@ const selected = ref(0)
 const runningAction = ref<string | null>(null)
 const filter = ref<{ focus: () => void } | null>(null)
 const list = ref<HTMLElement | null>(null)
+const root = ref<HTMLElement | null>(null)
 
 const matched = computed(() => filterAppletRows(rows.value, props.applet.columns ?? [], query.value))
 const visible = computed(() => matched.value.slice(0, MAX_RENDERED_ROWS))
@@ -146,11 +147,19 @@ function toneDot(column: AppletColumn, value: string | undefined): string | null
   return tone ? (TONE_DOTS[tone] ?? null) : null
 }
 
+// An action key must never reach a row hidden under another surface. Focus on the body
+// means nothing else claimed the key.
+function aimedElsewhere(target: EventTarget | null): boolean {
+  if (!(target instanceof Node) || target === document.body) return false
+  const scope = root.value?.closest('[role="dialog"]') ?? root.value
+  return !scope?.contains(target)
+}
+
 // On the window because the overlay holds focus on its own panel, and a stacked
 // surface (the palette, a confirm, the pop-up terminal) takes these keys first.
 useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   const inFilter = event.target instanceof HTMLElement && event.target.dataset.testid === 'applet-filter'
-  if (popupTerminal.visible.value || confirmation.options.value) return
+  if (popupTerminal.visible.value || confirmation.options.value || aimedElsewhere(event.target)) return
   if (isEditableTarget(event.target) && !inFilter) return
   if (event.metaKey || event.ctrlKey || event.altKey) return
   // Enter on a focused button is that button's own click.
@@ -205,7 +214,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 flex-col" :class="isPicker ? 'h-[60vh]' : ''" data-testid="applet-view">
+  <div ref="root" class="flex min-h-0 flex-1 flex-col" :class="isPicker ? 'h-[60vh]' : ''" data-testid="applet-view">
     <header v-if="!isPicker" class="flex h-12 shrink-0 items-center gap-2.5 border-b border-row pr-3 pl-4">
       <component :is="icon" class="size-4 shrink-0 text-text-3" />
       <h2 class="truncate text-small font-semibold text-text" data-testid="applet-title">{{ applet.title }}</h2>

@@ -1420,10 +1420,14 @@ the applet's own page in `AppletFrame`.
   for a launcher. A row reaches a command through the environment, never a template.
 - **A page is deliberately unrestricted.** `window.hive` (`applets/bridge.js`) reaches
   `AppletsService` through `postMessage` and `AppletFrame`, and runs what it is asked.
-  The opaque-origin frame protects the app from a page's mistakes and is not a
-  security boundary. Do not add permission checks here without revisiting the ADR.
-- **A page's files are served by `appletAssets` on the Wails asset handler**, so
-  nothing outside the webview can reach them.
+  The opaque-origin frame protects the app from a page's mistakes. Do not add
+  permission checks here without revisiting the ADR.
+- **The bridge answers only the applet's own pages.** `AppletFrame` checks a token that
+  only pages served by `Asset` hold, because a navigated frame keeps its window.
+- **A page's files are served by `appletAssets` on the Wails asset handler**, so in the
+  native build nothing outside the webview can reach them. The server build's asset
+  handler is a TCP listener, so it refuses html applets outside the e2e harness
+  (`buildServesAppletPages`).
 - **A spawned process belongs to its applet.** Closing it, editing it, or closing the
   app ends the process.
 

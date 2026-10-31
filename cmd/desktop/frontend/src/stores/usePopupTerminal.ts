@@ -41,6 +41,7 @@ export const usePopupTerminal = defineStore('popupTerminal', () => {
   // time (ADR ephemeral-popup-terminals), so asking for lazygit while a shell is up replaces it rather
   // than opening beside it — and the panel watches this to know which it is.
   const launchSeq = ref(0)
+  const launched = ref(false)
 
   // The availability answer and the transport are resolved once per run: neither
   // can change while the app is running — there is no program to install — so a
@@ -61,6 +62,7 @@ export const usePopupTerminal = defineStore('popupTerminal', () => {
   }
 
   function show(next: PopupTerminalRequest = {}): void {
+    launched.value = false
     if (!sameLaunch(next, request.value)) {
       request.value = next
       launchSeq.value++
@@ -72,6 +74,7 @@ export const usePopupTerminal = defineStore('popupTerminal', () => {
   // An applet action is a thing to do, not a place to return to: invoking it twice
   // runs it twice, where show would bring back the terminal from the first run.
   function launch(next: PopupTerminalRequest): void {
+    launched.value = true
     request.value = next
     launchSeq.value++
     visible.value = true
@@ -82,12 +85,24 @@ export const usePopupTerminal = defineStore('popupTerminal', () => {
     visible.value = false
   }
 
+  // Once a launched command has ended there is nothing to return to, and reopening the
+  // request would run it again.
+  function launchEnded(): void {
+    launched.value = false
+  }
+
   // The combo that opens a launcher has to close it, so invoking what is already
   // on screen dismisses it. Invoking anything else — another launcher, or a plain
   // shell for a different session — is a request for a terminal the panel is not
   // showing, and answering that by returning to the old one would ignore what was
   // asked for.
   function toggle(next: PopupTerminalRequest = {}): void {
+    // A launched command has no chord of its own, so the plain toggle is how it is
+    // hidden and brought back. Replacing it here would kill what it is running.
+    if (launched.value && !next.launcher && !next.command && !next.dir) {
+      visible.value = !visible.value
+      return
+    }
     if (visible.value && sameLaunch(next, request.value)) hide()
     else show(next)
   }
@@ -103,6 +118,7 @@ export const usePopupTerminal = defineStore('popupTerminal', () => {
     toggle,
     show,
     launch,
+    launchEnded,
     hide,
     ready,
   }

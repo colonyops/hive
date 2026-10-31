@@ -130,6 +130,10 @@ prepare_server_files() {
   case "${mode}" in
     pipeline) rm -rf "${fixture_dir}/flows"; mkdir -p "${fixture_dir}/flows"; cp -R "${FIXTURES}/flows/source-to-commit/." "${fixture_dir}/flows/" ;;
   esac
+  if [[ "${mode}" == "feed" ]]; then
+    mkdir -p "${data_dir}/config/hive/desktop"
+    cp -R "${FIXTURES}/applets" "${data_dir}/config/hive/desktop/applets"
+  fi
   if [[ "${mode}" == "action-smoke" || "${mode}" == "action-seed" ]]; then
     prepare_action_runtime "${data_dir}"
   fi

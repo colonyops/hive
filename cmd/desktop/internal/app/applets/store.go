@@ -86,7 +86,7 @@ func (s *Store) Reload() error {
 				continue
 			}
 		}
-		next[id] = Entry{Applet: s.entries[id].Applet, Err: err}
+		next[id] = Entry{Applet: s.entries[id].Applet, Err: err, Revision: s.entries[id].Revision}
 		if !next[id].Usable() {
 			next[id] = Entry{Applet: Applet{ID: id, Dir: path, Title: id}, Err: err}
 		}

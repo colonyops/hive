@@ -1,4 +1,6 @@
 (() => {
+  const token = window.__hiveToken
+  delete window.__hiveToken
   let nextID = 0
   const pending = new Map()
 
@@ -14,7 +16,7 @@
     return new Promise((resolve, reject) => {
       const id = ++nextID
       pending.set(id, { resolve, reject })
-      parent.postMessage({ hiveApplet: 1, id, method, args }, '*')
+      parent.postMessage({ hiveApplet: 1, token, id, method, args }, '*')
     })
   }
 

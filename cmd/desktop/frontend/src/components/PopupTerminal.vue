@@ -20,7 +20,8 @@ import '@xterm/xterm/css/xterm.css'
 // panel is a view of the terminal, not the terminal's lifetime — so the only
 // things that end it are the process exiting, End, and quitting Hive.
 
-const { visible, checking, available, reason, client, request, launchSeq, hide, ready } = usePopupTerminal()
+const { visible, checking, available, reason, client, request, launchSeq, hide, launchEnded, ready } =
+  usePopupTerminal()
 
 const MIN_WIDTH = 380
 const MIN_HEIGHT = 220
@@ -167,6 +168,7 @@ function exited(): void {
   teardown()
   status.value = 'idle'
   terminal.value = null
+  launchEnded()
   hide()
 }
 

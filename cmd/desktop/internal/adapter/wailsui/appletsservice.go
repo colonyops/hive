@@ -32,6 +32,10 @@ func (s *AppletsService) Context(ctx context.Context, id, sessionSlug string) (a
 	return s.applets.Context(ctx, id, sessionSlug)
 }
 
+func (s *AppletsService) BridgeToken(id string) (string, error) {
+	return s.applets.BridgeToken(id)
+}
+
 func (s *AppletsService) Exec(ctx context.Context, id string, req app.AppletExec) (app.AppletExecResult, error) {
 	return s.applets.Exec(ctx, id, req)
 }
