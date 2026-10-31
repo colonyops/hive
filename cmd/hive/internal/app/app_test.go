@@ -49,9 +49,10 @@ func TestTargetServerKeepsLocalRefsOnThisMachine(t *testing.T) {
 	assert.Same(t, local, api)
 }
 
-func TestTargetServerRejectsLocal(t *testing.T) {
-	a := newAppWithServers(&struct{ sessionapi.API }{})
+func TestTargetServerLocalKeepsTheLocalSessions(t *testing.T) {
+	local := &struct{ sessionapi.API }{}
+	a := newAppWithServers(local)
 
-	require.Error(t, a.TargetServer(session.LocalServer))
+	require.NoError(t, a.TargetServer(session.LocalServer))
 	assert.Equal(t, session.LocalServer, a.DefaultServer())
 }

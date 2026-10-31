@@ -496,9 +496,6 @@ func (cmd *SessionCmd) listEachServer(ctx context.Context) []serverSessions {
 			ctx, cancel := context.WithTimeout(ctx, serverListTimeout)
 			defer cancel()
 			sessions, err := srv.Client().ListSessions(ctx)
-			if err != nil {
-				err = srv.Explain(err)
-			}
 			out[i+1] = serverSessions{server: srv.Config().Name, sessions: sessions, err: err}
 		})
 	}
