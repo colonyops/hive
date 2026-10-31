@@ -22,7 +22,9 @@ func serverFlag(dest *string) cli.Flag {
 // targetServer is the Before hook of a command with serverFlag.
 func targetServer(a *app.App, name *string) cli.BeforeFunc {
 	return func(ctx context.Context, _ *cli.Command) (context.Context, error) {
-		if *name == "" {
+		// The root Before stops early during shell completion, so Servers is
+		// still nil here, and urfave runs this hook before it completes.
+		if *name == "" || a.Servers == nil {
 			return ctx, nil
 		}
 		return ctx, a.TargetServer(*name)

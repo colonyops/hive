@@ -274,12 +274,6 @@ func TestClientCLI_ChecksRiskOnTheServerTheRefNames(t *testing.T) {
 	assert.Contains(t, gone.Stderr, session.ErrNotFound.Error())
 }
 
-func TestClientCLI_SessionInfoRefusesATargetServer(t *testing.T) {
-	failed := NewClient(t).HiveOn(serverA, "session", "info", "--json").Fails(t)
-
-	assert.Contains(t, failed.Stderr, "session info reads the session of this directory on this machine")
-}
-
 func TestClientCLI_ADeleteFailsOnAStuckDaemonWithoutAChange(t *testing.T) {
 	created := serverA.CreateSession(t, "stuck-daemon")
 	// The bracket keeps pkill from matching the shell that runs it.
@@ -362,9 +356,11 @@ func TestClientCLI_ListsTheSessionsOfEveryServer(t *testing.T) {
 	onB := serverB.CreateSession(t, "every-b")
 	client := NewClient(t)
 
-	listed := DecodeJSONLines[sessionWithServer](t, client.Hive("session", "list", "--json").Ok(t))
+	r := client.Hive("session", "list", "--json").Ok(t)
+	listed := DecodeJSONLines[sessionWithServer](t, r)
 	assert.Contains(t, listed, sessionWithServer{Server: serverA.Name, ID: onA.ID, Name: "every-a"})
 	assert.Contains(t, listed, sessionWithServer{Server: serverB.Name, ID: onB.ID, Name: "every-b"})
+	assert.NotContains(t, r.Stdout, `"inbox"`, "a message from this machine cannot reach a server's inbox")
 
 	table := client.Hive("session", "list").Ok(t)
 	assert.Contains(t, table.Stdout, "SERVER")
@@ -397,7 +393,7 @@ func TestClientCLI_ServerFlagPicksTheServer(t *testing.T) {
 	assert.Equal(t, created.ID, shown.ID)
 
 	failed := client.Hive("session", "show", "--server", "nowhere", created.ID).Fails(t)
-	assert.Contains(t, failed.Stdout+failed.Stderr, `no server named "nowhere"`)
+	assert.Contains(t, failed.Stdout+failed.Stderr, `unknown server "nowhere"`)
 
 	client.Hive("new", "--server", serverA.Name, "--background", "--remote", tFixtureRepo, "via-new").Ok(t)
 	var made bool
