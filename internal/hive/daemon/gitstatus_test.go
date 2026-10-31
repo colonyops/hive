@@ -35,11 +35,27 @@ func TestGitStatusCache_ClientsWithinTheTTLShareOneRead(t *testing.T) {
 	assert.Equal(t, "branch-a", second["a"].Branch)
 	assert.Equal(t, "branch-c", second["c"].Branch)
 
+	_, err = cache.get(t.Context(), []string{"a", "b"})
+	require.NoError(t, err)
+	assert.Len(t, reads, 2, "every id is fresh, so nothing is read")
+
 	now = now.Add(gitStatusTTL)
 	_, err = cache.get(t.Context(), []string{"a"})
 	require.NoError(t, err)
 
 	assert.Equal(t, [][]string{{"a", "b"}, {"c"}, {"a"}}, reads)
+}
+
+func TestGitStatusCache_ACallerHangingUpDoesNotCancelTheSharedRead(t *testing.T) {
+	cache := newGitStatusCache(func(ctx context.Context, ids []string) (map[string]gitstatus.Status, error) {
+		return map[string]gitstatus.Status{ids[0]: {Resolved: true, Err: ctx.Err()}}, nil
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	got, err := cache.get(ctx, []string{"a"})
+	require.NoError(t, err)
+	assert.NoError(t, got["a"].Err)
 }
 
 func TestGitStatusCache_AFailedReadCachesNothing(t *testing.T) {

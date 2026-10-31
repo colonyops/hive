@@ -172,6 +172,7 @@ var readProcedures = map[string]bool{
 	daemonv1connect.SessionServiceChangesProcedure:       true,
 	daemonv1connect.SessionServiceFileDiffsProcedure:     true,
 	daemonv1connect.SessionServiceBranchesProcedure:      true,
+	daemonv1connect.SessionServiceGitStatusesProcedure:   true,
 }
 
 // fileDiffsTimeout outlasts the daemon's own 15s limit on a batch of diffs, so

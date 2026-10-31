@@ -8,8 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/colonyops/hive/internal/domain/session"
 )
 
 func TestSessionAPI_ReadsGitStatusOnTheServer(t *testing.T) {
@@ -33,15 +31,17 @@ func TestSessionAPI_ReadsGitStatusOnTheServer(t *testing.T) {
 	serverA.Shell(t, "rm -f "+shellQuote(created.Path+"/new-file")).Ok(t)
 }
 
-func TestSessionAPI_PreviewsThePaneOnTheServer(t *testing.T) {
-	created := serverA.CreateSession(t, "preview")
-	api := serverA.API(t)
-	sess, err := api.GetSession(t.Context(), created.ID)
+func TestSessionAPI_GitStatusFailsWhenTheServerStops(t *testing.T) {
+	created := serverB.CreateSession(t, "git-status-stop")
+	api := serverB.API(t)
+	_, err := api.GitStatuses(t.Context(), []string{created.ID})
 	require.NoError(t, err)
-	require.Eventually(t, api.StatusAvailable, 10*time.Second, 200*time.Millisecond)
 
-	assert.Eventually(t, func() bool {
-		st := api.FetchBatch(t.Context(), []*session.Session{&sess}, nil)[sess.ID]
-		return st.PaneContent != ""
-	}, 20*time.Second, 500*time.Millisecond, "the preview carries the fake agent's screen")
+	serverB.Stop(t)
+	started := time.Now()
+	_, err = api.GitStatuses(t.Context(), []string{created.ID})
+
+	require.Error(t, err)
+	assert.Less(t, time.Since(started), 30*time.Second, "a read has a time limit")
+	serverB.Start(t)
 }

@@ -31,7 +31,9 @@ func newGitStatusCache(read func(ctx context.Context, ids []string) (map[string]
 
 // get answers fresh entries from the cache and reads the rest in one batch.
 // Two clients that miss at the same moment both read; the cost is one extra
-// read, which does not justify a wait between them.
+// read, which does not justify a wait between them. The read outlives the
+// caller's context because its result is shared: one client hanging up must
+// not cache a cancelled read for the others. The read has its own time limit.
 func (c *gitStatusCache) get(ctx context.Context, ids []string) (map[string]gitstatus.Status, error) {
 	out := make(map[string]gitstatus.Status, len(ids))
 	var missing []string
@@ -55,7 +57,7 @@ func (c *gitStatusCache) get(ctx context.Context, ids []string) (map[string]gits
 	if len(missing) == 0 {
 		return out, nil
 	}
-	read, err := c.read(ctx, missing)
+	read, err := c.read(context.WithoutCancel(ctx), missing)
 	if err != nil {
 		return nil, err
 	}

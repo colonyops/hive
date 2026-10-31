@@ -4636,8 +4636,8 @@ describe('TerminalMode', () => {
         additions: 0,
         deletions: 0,
         host: '',
-        owner: '',
-        repo: '',
+        owner: 'acme',
+        repo: 'site',
         resolved: true,
         error: '',
       })
@@ -4655,6 +4655,17 @@ describe('TerminalMode', () => {
       expect(wrapper.find('[data-testid="terminal-pane-statusbar-open-editor"]').exists()).toBe(false)
       expect(wrapper.find('[data-testid="terminal-pane-statusbar-reveal"]').exists()).toBe(false)
       expect(wrapper.find('[data-testid="terminal-statusbar-action-open-ci"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="terminal-statusbar-tasks"]').exists()).toBe(false)
+
+      const calls = mocks.SessionGitStatus.mock.calls.length
+      mocks.ListServerSessions.mockResolvedValue([
+        { server: 'box', ssh: 'box', state: 'offline', error: 'refused', sessions: [] },
+      ])
+      await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
+      await wrapper.get('[data-testid="terminal-sessions-refresh"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[data-testid="terminal-pane-host"]').text()).toBe('box')
+      expect(mocks.SessionGitStatus.mock.calls.length).toBe(calls)
 
       wrapper.unmount()
     })

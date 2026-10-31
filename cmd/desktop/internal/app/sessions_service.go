@@ -22,6 +22,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	"github.com/colonyops/hive/internal/hive/servers"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -470,10 +471,19 @@ func (s *SessionsService) SessionGitStatus(ctx context.Context, id string) (gits
 	}
 	if !target.local() {
 		statuses, err := target.api.GitStatuses(ctx, []string{target.id})
-		if err != nil {
-			return gitstatus.Status{}, Wrap(err, KindUnavailable, "reading git status for session %q", id)
+		if errors.Is(err, daemonclient.ErrGitStatusUnsupported) {
+			// Not a passing failure: the status bar shows this until the server
+			// is upgraded, and the frontend keeps a rejected read to itself.
+			return gitstatus.Status{Err: err}, nil
 		}
-		return statuses[target.id], nil
+		if err != nil {
+			return gitstatus.Status{}, serverError(err, KindUnavailable, "reading git status for session %q", id)
+		}
+		status, ok := statuses[target.id]
+		if !ok {
+			return gitstatus.Status{}, Errorf(KindNotFound, "session %q not found", id)
+		}
+		return status, nil
 	}
 	sess, err := s.sessions.GetSession(ctx, target.id)
 	if err != nil {

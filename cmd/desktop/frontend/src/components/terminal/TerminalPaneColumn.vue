@@ -116,14 +116,15 @@ watch(
 const statusBarRow = computed(() => {
   if (!showStatusBar.value || !pool.visibleSlug) return null
   const slug = pool.visibleSlug
-  return (
-    tree.activeSessions.find((row) => row.slug === slug) ?? tree.serverSessions.find((row) => row.slug === slug) ?? null
-  )
+  const onServer = tree.servers.flatMap((list) => list.sessions).filter((row) => row.state === 'active')
+  return tree.activeSessions.find((row) => row.slug === slug) ?? onServer.find((row) => row.slug === slug) ?? null
 })
 // A server session's checkout is on the server: the editor, Finder, and
 // configured actions all run on this machine.
 const statusBarLocal = computed(() => !!statusBarRow.value && !tree.isServerSession(statusBarRow.value))
-const statusBarSessionId = computed(() => statusBarRow.value?.id ?? '')
+// An offline server's row keeps its bar and the badge that names the server,
+// and asks that server nothing.
+const statusBarSessionId = computed(() => (statusBarRow.value?.offline ? '' : (statusBarRow.value?.id ?? '')))
 // The server a session runs on is named here, above the terminal, so nobody
 // types into a server's agent thinking it is this machine's.
 const statusBarHost = computed(() => {
@@ -153,8 +154,10 @@ async function runStatusBarAction(action: (id: string) => Promise<void>): Promis
 
 // owner/repo is exactly the hc repoKey format. Reported continuously, so App.vue
 // can scope Tasks to the attached session's repo from any entry point and not
-// only from this bar's own button.
+// only from this bar's own button. Tasks are this machine's, so a session on a
+// server has no repo to scope them to.
 const sessionRepoKey = computed(() => {
+  if (!statusBarLocal.value) return ''
   const git = sessionGit.value
   return git?.resolved && git.owner && git.repo ? `${git.owner}/${git.repo}` : ''
 })
@@ -208,12 +211,14 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           @click="ops.actions.invoke(action, { slug: statusBarRow.slug, windowId: '' })"
         />
         <IconButton
+          v-if="statusBarLocal"
           label="Changes"
           :icon="IconFileDiff"
           data-testid="terminal-statusbar-changes"
           @click="emit('open-changes')"
         />
         <IconButton
+          v-if="statusBarLocal"
           label="Tasks"
           :icon="IconListTodo"
           data-testid="terminal-statusbar-tasks"
