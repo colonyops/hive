@@ -34,6 +34,7 @@ import { probePane, registerBenchPane, type PaneProbe } from '../lib/terminalPer
 import { appClaimsPaneKey, claimsShiftEnter } from '../lib/terminalKeys'
 import { silenceDeviceReports } from '../lib/terminalReports'
 import { scrolledOffTail } from '../lib/terminalTail'
+import { NO_RETRY, nextRetry } from '../lib/terminalRetry'
 import { paneMayAutoFocus } from '../lib/terminalTree'
 import { searchHighlightColors } from '../lib/terminalTheme'
 import { resizeTerminalPreservingViewport } from '../lib/terminalViewport'
@@ -172,12 +173,7 @@ const RESIZE_DEBOUNCE_MS = 80
 // well inside this; an unanswered vote means something else decided the size.
 const CONSTRAINT_SETTLE_MS = 750
 
-// How long a server's terminal waits before each attach after an ssh drop. The
-// cap gives up after about a minute; the Reconnect button still works after.
-const RECONNECT_DELAYS_MS = [1000, 2000, 5000]
-const MAX_AUTO_RECONNECTS = 12
-// How long a stream must stay up to earn the retries back. The socket opens
-// before the first frame, so an open alone says nothing about the link holding.
+// How long a stream must stay up to earn a server terminal's retries back.
 const RECONNECT_STABLE_MS = 30_000
 
 interface WindowRuntime {
@@ -282,7 +278,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   let resizeTimer: ReturnType<typeof setTimeout> | undefined
   let lastResizeAt = Number.NEGATIVE_INFINITY
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined
-  let autoReconnects = 0
+  let retry = NO_RETRY
   let reconnectStableTimer: ReturnType<typeof setTimeout> | undefined
   let constraintTimer: ReturnType<typeof setTimeout> | undefined
   let constraintDismissed = false
@@ -906,9 +902,12 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     socket.onopen = () => {
       if (disposed) return
       if (server) {
-        reconnectStableTimer = setTimeout(() => {
-          autoReconnects = 0
-        }, RECONNECT_STABLE_MS)
+        retry = nextRetry(retry, { type: 'opened' })
+        if (retry.kind === 'stabilizing') {
+          reconnectStableTimer = setTimeout(() => {
+            retry = nextRetry(retry, { type: 'stable' })
+          }, RECONNECT_STABLE_MS)
+        }
       }
       status.value = 'live'
       endReason.value = null
@@ -934,13 +933,13 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   // "terminated" from "unreachable", so the view attaches again instead, and
   // the attach answers not_found when the session really is gone.
   function scheduleServerReconnect(): void {
-    if (disposed || reconnectTimer || endReason.value === 'stopped' || autoReconnects >= MAX_AUTO_RECONNECTS) return
-    const delay = RECONNECT_DELAYS_MS[Math.min(autoReconnects, RECONNECT_DELAYS_MS.length - 1)]
-    autoReconnects++
+    if (disposed) return
+    retry = nextRetry(retry, { type: endReason.value === 'stopped' ? 'ended' : 'failed' })
+    if (retry.kind !== 'waiting' || reconnectTimer) return
     reconnectTimer = setTimeout(() => {
       reconnectTimer = undefined
       if (!disposed && status.value === 'ended') void reconnect()
-    }, delay)
+    }, retry.delayMs)
   }
 
   function end(reason: TerminalEndReason, detail: string): void {
@@ -1063,6 +1062,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     } catch (e) {
       if (disposed || epoch !== connectionEpoch) return
       if (e instanceof TerminalRequestError && e.kind === 'not_found') {
+        retry = nextRetry(retry, { type: 'ended' })
         const previous = outcomes.outcome(slug)
         if (previous && ['terminated', 'start-failed', 'completed', 'stopped'].includes(previous.reason))
           end(previous.reason, previous.detail)
@@ -1073,6 +1073,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       // Attach answers conflict only for a launch that has not committed. A
       // retry of the attach cannot clear that; a start recovers the session.
       if (e instanceof TerminalRequestError && e.kind === 'conflict') {
+        retry = nextRetry(retry, { type: 'ended' })
         end('interrupted', e.message)
         return
       }
@@ -1088,6 +1089,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   async function reconnect(): Promise<void> {
     clearTimeout(reconnectTimer)
     reconnectTimer = undefined
+    if (server) retry = nextRetry(retry, { type: 'attaching' })
     closeSocket()
     disposeTabs()
     await start()
