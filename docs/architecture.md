@@ -1485,6 +1485,10 @@ them is the constraint (ADR terminal-transport):
   reachability; `Endpoint` builds `{httpBaseURL, wsURL}` from the live bind plus
   the token it was handed.
 
+A session on a server is addressed as `<server>:<slug>`. `TerminalsService`
+routes it to a `tmuxcc.Manager` for that server whose `SSHRunner` runs every
+tmux command over ssh (ADR a-server-s-terminal-runs-tmux-control-mode-over-ssh-and-is-addressed-as-server-slug).
+
 **Launches are bounded adapter transactions** (ADR tmux-launches-use-owned-resource-transactions).
 `internal/platform/tmux/exec` shares ownership-based allocation, observation,
 option restoration, and rollback between session creation and window addition.

@@ -17,11 +17,12 @@ type ServerConfig struct {
 	SSH       string `json:"ssh"        yaml:"ssh"`
 	SSHConfig string `json:"ssh_config" yaml:"ssh_config"`
 	Binary    string `json:"binary"     yaml:"binary"`
+	Tmux      string `json:"tmux"       yaml:"tmux"`
 }
 
 // Host is the ssh target for s.
 func (s ServerConfig) Host() server.Host {
-	return server.Host{Name: s.SSH, ConfigFile: s.SSHConfig, Binary: s.Binary}
+	return server.Host{Name: s.SSH, ConfigFile: s.SSHConfig, Binary: s.Binary, Tmux: s.Tmux}
 }
 
 func (c *Config) validateServers() error {

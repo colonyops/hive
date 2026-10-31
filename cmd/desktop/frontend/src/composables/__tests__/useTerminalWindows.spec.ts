@@ -14,6 +14,7 @@ import {
 } from '../../stores/useTerminalFont'
 import { SYMBOL_FONT, TERMINAL_FONT, terminalFontStack } from '../../lib/terminalFaces'
 import { TerminalRequestError, type PaneLayout, type TerminalClient } from '../../lib/terminalClient'
+import { installTerminalImages } from '../../lib/terminalImages'
 import { paneMayAutoFocus } from '../../lib/terminalTree'
 import { useKeybindings } from '../useKeybindings'
 import { useTerminalOutcomes } from '../../stores/useTerminalOutcomes'
@@ -232,6 +233,10 @@ const xterm = vi.hoisted(() => {
 const wails = vi.hoisted(() => ({ OpenURL: vi.fn(() => Promise.resolve()) }))
 
 vi.mock('@xterm/xterm', () => ({ Terminal: xterm.FakeTerminal }))
+vi.mock('../../lib/terminalImages', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/terminalImages')>()
+  return { ...actual, installTerminalImages: vi.fn(actual.installTerminalImages) }
+})
 
 // The renderer itself is covered against a real xterm in kittyGraphics.spec.ts;
 // these fakes have none of the parser or render surface it registers on.
@@ -1447,6 +1452,111 @@ describe('useTerminalWindows', () => {
     expect(session.status.value).toBe('ended')
     expect(session.endReason.value).toBe('disconnected')
     expect(session.error.value).toBe('Terminal connection lost. The tmux session may still be running.')
+  })
+
+  describe('a terminal on a server', () => {
+    async function attachedRemote(client: MockedClient = fakeClient()) {
+      const session = useTerminalWindows('box:hive-abc', client as unknown as TerminalClient)
+      await session.start()
+      await flushPromises()
+      sockets[0].onopen?.()
+      return { client, session, socket: sockets[0] }
+    }
+
+    it('attaches again after an ssh drop instead of reading the window list', async () => {
+      vi.useFakeTimers()
+      const { client, session, socket } = await attachedRemote()
+
+      socket.onmessage?.({ data: jsonFrame(0x02, { kind: 'exited', windowId: '', message: 'ssh: connection reset' }) })
+      await flushPromises()
+      expect(session.endReason.value).toBe('exited')
+      expect(client.listWindows).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(client.attach).toHaveBeenCalledTimes(2)
+      expect(client.attach).toHaveBeenLastCalledWith('box:hive-abc', expect.any(Number), expect.any(Number))
+      sockets[1].onopen?.()
+      expect(session.status.value).toBe('live')
+    })
+
+    it('backs off while the server does not answer, then stops trying', async () => {
+      vi.useFakeTimers()
+      const client = fakeClient()
+      const { session, socket } = await attachedRemote(client)
+      client.attach.mockRejectedValue(
+        new TerminalRequestError('ssh: connect to host box: Connection refused', 'internal'),
+      )
+
+      socket.onclose?.()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(client.attach).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(1999)
+      expect(client.attach).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(client.attach).toHaveBeenCalledTimes(3)
+
+      await vi.advanceTimersByTimeAsync(4999)
+      expect(client.attach).toHaveBeenCalledTimes(3)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(client.attach).toHaveBeenCalledTimes(4)
+
+      await vi.advanceTimersByTimeAsync(5000 * 20)
+      expect(client.attach).toHaveBeenCalledTimes(13)
+      expect(session.endReason.value).toBe('attach-failed')
+    })
+
+    it('stops trying when each stream opens and drops at once', async () => {
+      vi.useFakeTimers()
+      const { client, socket: first } = await attachedRemote()
+
+      first.onclose?.()
+      await vi.advanceTimersByTimeAsync(5000)
+      for (let drop = 0; drop < 30; drop++) {
+        const socket = sockets[sockets.length - 1]
+        socket.onopen?.()
+        socket.onclose?.()
+        await vi.advanceTimersByTimeAsync(5000)
+      }
+
+      expect(client.attach).toHaveBeenCalledTimes(13)
+    })
+
+    it('earns its retries back once a stream stays up', async () => {
+      vi.useFakeTimers()
+      const { client, socket } = await attachedRemote()
+
+      socket.onclose?.()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(client.attach).toHaveBeenCalledTimes(2)
+      sockets[1].onopen?.()
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      sockets[1].onclose?.()
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(client.attach).toHaveBeenCalledTimes(3)
+    })
+
+    it('refuses an image, which would reach the server as a local path', async () => {
+      const { session } = await attachedRemote()
+
+      session.attachPane('%1', paneHostOf(60, 20))
+
+      expect(vi.mocked(installTerminalImages).mock.lastCall?.[1].refusal).toContain('server box')
+    })
+
+    it('stops when the attach finds the session gone', async () => {
+      vi.useFakeTimers()
+      const client = fakeClient()
+      const { session, socket } = await attachedRemote(client)
+      client.attach.mockRejectedValue(new TerminalRequestError('session "hive-abc" is not running', 'not_found'))
+
+      socket.onclose?.()
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(client.attach).toHaveBeenCalledTimes(2)
+      expect(session.endReason.value).toBe('terminated')
+    })
   })
 
   it('ends when the attach itself fails', async () => {

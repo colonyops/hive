@@ -534,7 +534,18 @@ func TestTerminalsForegroundOfReadsTheWholeWindow(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, tc.want, terminals.foregroundOf(t.Context(), tc.panes))
+			assert.Equal(t, tc.want, terminals.foregroundOf(t.Context(), "hive-abc", tc.panes))
 		})
 	}
+}
+
+func TestTerminals_ServerPaneNeverReadsAsAPrompt(t *testing.T) {
+	terminals := &TerminalsService{foreground: func(context.Context, int) (bool, error) {
+		t.Error("a server's pid must not be looked up on this machine")
+		return true, nil
+	}}
+
+	got := terminals.foregroundOf(t.Context(), "box:hive-abc", []tmuxcc.Pane{{ID: "%1", PID: 42, Active: true, Command: "zsh"}})
+
+	assert.Equal(t, WindowForeground{Running: true, Command: "zsh"}, got)
 }

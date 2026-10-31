@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,7 +20,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/platform/observe"
-	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 )
 
@@ -48,6 +46,10 @@ type ManagerOptions struct {
 	// separately because the two backends share no interface (ADR ephemeral-popup-terminals).
 	Environ func(context.Context) []string
 
+	// Runner builds every tmux command the manager runs. nil means
+	// LocalRunner.
+	Runner Runner
+
 	versionProbe func(context.Context, string) (string, error)
 	newProcess   func(Options) process
 	onEmit       func()
@@ -68,6 +70,7 @@ type Manager struct {
 	log         zerolog.Logger
 	locate      func() (string, error)
 	environ     func(context.Context) []string
+	runner      Runner
 	probe       func(context.Context, string) (string, error)
 	newProcess  func(Options) process
 	onEmit      func()
@@ -101,6 +104,7 @@ func NewManager(ctx context.Context, opts ManagerOptions) *Manager {
 		log:         logutils.Component(opts.Logger, "tmux-control"),
 		locate:      opts.Binary,
 		environ:     opts.Environ,
+		runner:      opts.Runner,
 		probe:       opts.versionProbe,
 		newProcess:  opts.newProcess,
 		onEmit:      opts.onEmit,
@@ -117,14 +121,23 @@ func NewManager(ctx context.Context, opts ManagerOptions) *Manager {
 	if m.environ == nil {
 		m.environ = func(context.Context) []string { return os.Environ() }
 	}
+	if m.runner == nil {
+		m.runner = LocalRunner{}
+	}
 	if m.probe == nil {
-		m.probe = tmuxVersion
+		m.probe = func(ctx context.Context, binary string) (string, error) {
+			return tmuxVersion(ctx, m.runner, binary, m.environ(ctx))
+		}
 	}
 	if m.run == nil {
-		m.run = runTmux
+		m.run = func(ctx context.Context, binary string, env []string, args ...string) ([]string, error) {
+			return runTmux(ctx, m.runner, binary, env, args...)
+		}
 	}
 	if m.input == nil {
-		m.input = inputTmux
+		m.input = func(ctx context.Context, binary string, env []string, stdin io.Reader, args ...string) error {
+			return inputTmux(ctx, m.runner, binary, env, stdin, args...)
+		}
 	}
 	return m
 }
@@ -224,6 +237,7 @@ func (m *Manager) Attach(ctx context.Context, slug string, cols, rows int) ([]Wi
 		Rows:        rows,
 		Binary:      binary,
 		Environ:     m.environ(ctx),
+		Runner:      m.runner,
 		BufferBytes: m.bufferBytes,
 		Logger:      m.log,
 		OnExit:      func(slug, _ string) { m.remove(slug, gen) },
@@ -400,14 +414,21 @@ func (m *Manager) HasSession(ctx context.Context, slug string) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
+	if tmuxAnsweredNo(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+// tmuxAnsweredNo reports that tmux itself ran and exited 1: no such session, or
+// no server at all. ssh exits 255 when it cannot reach the host, so over ssh
+// this is what separates a session that is gone from a server that is offline.
+func tmuxAnsweredNo(err error) bool {
 	var exited interface {
 		error
 		ExitCode() int
 	}
-	if errors.As(err, &exited) && exited.ExitCode() == 1 {
-		return false, nil
-	}
-	return false, err
+	return errors.As(err, &exited) && exited.ExitCode() == 1
 }
 
 // ErrLaunchPending identifies an allocated session that has not committed its launch.
@@ -527,10 +548,15 @@ func (m *Manager) ListAllWindows(ctx context.Context, slugs []string) (map[strin
 		return nil, err
 	}
 	windows := make(map[string][]Window, len(wanted))
-	// A failure here is a server with no sessions on it, which is no windows
+	// tmux answering no is a server with no sessions on it, which is no windows
 	// rather than an error — the same tolerance ListWindows extends to a slug
-	// tmux has never heard of.
-	if lines, err := m.oneShot(ctx, "list-windows", "-a", "-F", sessionWindowsFormat); err == nil {
+	// tmux has never heard of. Any other failure degrades the same way, so one
+	// bad listing does not fail a sweep, but it is logged.
+	lines, err := m.oneShot(ctx, "list-windows", "-a", "-F", sessionWindowsFormat)
+	if err != nil && !tmuxAnsweredNo(err) {
+		m.log.Debug().Err(err).Msg("listing windows failed")
+	}
+	if err == nil {
 		for _, line := range lines {
 			slug, row, ok := strings.Cut(line, " ")
 			if !ok {
@@ -728,10 +754,8 @@ func (m *Manager) remove(slug string, gen uint64) {
 	mc.cancel()
 }
 
-func tmuxVersion(ctx context.Context, binary string) (string, error) {
-	cmd := exec.CommandContext(ctx, binary, "-V")
-	cmd.Dir = tmuxbin.WorkDir()
-	out, err := cmd.Output()
+func tmuxVersion(ctx context.Context, runner Runner, binary string, env []string) (string, error) {
+	out, err := outputTmux(ctx, runner, binary, env, "-V")
 	if err != nil {
 		return "", err
 	}

@@ -20,15 +20,15 @@ func TestTmuxExecsRunInHome(t *testing.T) {
 	t.Chdir(t.TempDir())
 	ctx := t.Context()
 
-	lines, err := runTmux(ctx, bin, nil, "ignored")
+	lines, err := runTmux(ctx, LocalRunner{}, bin, nil, "ignored")
 	require.NoError(t, err)
 	require.Equal(t, []string{home}, lines)
 
-	version, err := tmuxVersion(ctx, bin)
+	version, err := tmuxVersion(ctx, LocalRunner{}, bin, nil)
 	require.NoError(t, err)
 	require.Equal(t, home, strings.TrimSpace(version))
 
-	p := newExecProcess(Options{Slug: "s", Binary: bin})
+	p := newExecProcess(Options{Slug: "s", Binary: bin, Runner: LocalRunner{}})
 	_, stdout, err := p.Start(ctx)
 	require.NoError(t, err)
 	line, err := bufio.NewReader(stdout).ReadString('\n')

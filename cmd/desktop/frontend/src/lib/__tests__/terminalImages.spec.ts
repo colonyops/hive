@@ -27,7 +27,7 @@ afterEach(() => {
   delete (window as Window & { _wails?: unknown })._wails
 })
 
-function pane() {
+function pane(refusal?: string) {
   const parent = document.createElement('div')
   const host = document.createElement('div')
   const textarea = document.createElement('textarea')
@@ -42,6 +42,7 @@ function pane() {
   const dispose = installTerminalImages(host, {
     pasteText: text,
     capture: () => ({ current: () => current, paste, focus }),
+    refusal,
   })
   disposers.push(dispose)
   return {
@@ -63,6 +64,17 @@ function drop(host: HTMLElement, paths = ['/one.png']) {
 }
 
 describe('terminal image input', () => {
+  it('refuses an image for a terminal that cannot take one, before preparing it', async () => {
+    const p = pane('Images cannot be pasted into a terminal on server box.')
+    drop(p.host)
+    await flushPromises()
+    expect(mocks.prepare).not.toHaveBeenCalled()
+    expect(p.paste).not.toHaveBeenCalled()
+    expect(useToasts().toasts.value.map((toast) => toast.message)).toContain(
+      'Images cannot be pasted into a terminal on server box.',
+    )
+  })
+
   it('routes a native drop to exactly one pane, with a separate paste for each image', async () => {
     mocks.prepare.mockResolvedValue(['/one.png ', '/two.png '])
     const first = pane()
