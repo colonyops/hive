@@ -55,8 +55,8 @@ func (s *AppletsService) SpawnKill(handle string) error {
 	return s.applets.SpawnKill(handle)
 }
 
-func (s *AppletsService) KillSpawns(id string) {
-	s.applets.KillSpawns(id)
+func (s *AppletsService) KillSpawns(handles []string) {
+	s.applets.KillSpawns(handles)
 }
 
 func (s *AppletsService) ReadFile(id, path string) (string, error) {

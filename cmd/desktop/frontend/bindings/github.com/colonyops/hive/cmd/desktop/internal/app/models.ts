@@ -119,6 +119,11 @@ export interface Applet {
     "revision": number;
     "runnable": boolean;
     "error": string;
+
+    /**
+     * Titlebar is nil for an applet that offers no title bar page.
+     */
+    "titlebar": AppletTitlebar | null;
 }
 
 /**
@@ -174,6 +179,14 @@ export interface AppletProcess {
     "applet": string;
     "command": string;
     "startedMillis": number;
+}
+
+/**
+ * AppletTitlebar is the page an applet offers for the title bar.
+ */
+export interface AppletTitlebar {
+    "entry": string;
+    "width": number;
 }
 
 /**

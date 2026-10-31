@@ -18,6 +18,7 @@ export type {
     AppletExecResult,
     AppletOutput,
     AppletProcess,
+    AppletTitlebar,
     CommentInput,
     DiagnosticsAgents,
     DiagnosticsContext,

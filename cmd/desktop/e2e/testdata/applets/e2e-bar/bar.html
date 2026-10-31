@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head>
+    <title>E2E bar</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        color: var(--hv-text, red);
+        font: 10px sans-serif;
+        overflow: hidden;
+      }
+      button {
+        font: inherit;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <span id="surface"></span>
+    <button id="menu">m</button>
+    <button id="grow">g</button>
+    <button id="chord">c</button>
+    <button id="command">s</button>
+    <span id="got"></span>
+    <span id="stored"></span>
+    <script>
+      document.querySelector('#surface').textContent = hive.surface
+      document.querySelector('#menu').onclick = () => hive.dropdown({ entry: 'menu.html', width: 240, height: 120 })
+      document.querySelector('#grow').onclick = () => hive.resize({ width: 90 })
+      document.querySelector('#command').onclick = () => hive.navigate('/settings/keybindings')
+      hive.on('message', (text) => {
+        document.querySelector('#got').textContent = text
+      })
+      addEventListener('storage', (event) => {
+        document.querySelector('#stored').textContent = event.newValue
+      })
+    </script>
+  </body>
+</html>

@@ -45,8 +45,26 @@ bridge. Three rules hold that line:
   marker, which runs in a Docker container with no network, or with only the test
   fixture's network in the remote lane.
 
-Nothing runs when a file loads. Commands start when the user opens an applet and its page
-runs them.
+Nothing runs when a file loads. Commands start when the user opens an applet, or puts it
+in the title bar, and its page runs them.
+
+A page is not limited to the panel. An applet with `titlebar:` offers a second page, a
+frame in a slot of the title bar with its own width, and that page can open a dropdown
+frame under the bar. The surfaces share one bridge and differ only in what hosts them, so
+the next place an applet can appear is another host of `AppletFrame` and a key in
+`applet.yaml`.
+
+**The user turns a title bar page on, in Settings or as `applets.titlebar` in
+`settings.yaml`.** It loads with the app and runs until it is turned off, so a file on disk
+must not be enough to start it, for the rule above and because a page in the bar takes
+room the user did not offer. This is the same reason an applet gets no default chord. It
+is one switch and not a permission: once on, the page has what any applet has.
+
+**Whatever a frame starts, that frame stops.** One applet can now have several frames, so
+closing its panel must not end a process its title bar page runs. Frames of one applet
+reach each other through `hive.broadcast`, and share `localStorage` by passing each change
+along, because an opaque origin has no `BroadcastChannel` or `storage` event of its own and
+each frame's save writes the whole store.
 
 ## Consequences
 
@@ -56,7 +74,11 @@ runs them.
   header. It can navigate to one.
 - Cookies and IndexedDB do not work in an opaque origin.
 - Keys in a frame do not reach the app's keymap, so the injected script forwards
-  Escape, and a page keeps it by calling `preventDefault`.
+  Escape, and a page keeps it by calling `preventDefault`. A title bar page or dropdown
+  also forwards command and control chords, because it sits beside the app and one click
+  into it would otherwise leave every shortcut dead. A panel keeps its keys, as a modal does.
+- A dropdown loads again each time it opens. A page that must keep running, such as a music
+  player, lives in the title bar frame and talks to its dropdown.
 - A page falls back to its own directory on a server session: commands run on this
   machine, as a pop-up terminal's do.
 - A built-in does not update on disk, because it is not on disk. Its saved `localStorage`

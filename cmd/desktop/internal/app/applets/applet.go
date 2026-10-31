@@ -24,6 +24,8 @@ const (
 	FileName = "applet.yaml"
 	// DefaultEntry is the page an applet opens on.
 	DefaultEntry = "index.html"
+	// DefaultTitlebarWidth matches the bar's square icon buttons.
+	DefaultTitlebarWidth = 28
 )
 
 // Applet is one applet.yaml. ID is the name of its directory, so an applet can
@@ -46,6 +48,19 @@ type Applet struct {
 	// Width and Height size the applet's panel in pixels. Zero fills the window.
 	Width  int `yaml:"width,omitempty"`
 	Height int `yaml:"height,omitempty"`
+	// Titlebar offers a page for the title bar. It shows once the user turns it on, so a
+	// file on disk neither starts running nor claims room in the bar by itself.
+	Titlebar *Titlebar `yaml:"titlebar,omitempty"`
+}
+
+// Titlebar is the page an applet can show in the title bar.
+type Titlebar struct {
+	// Entry is relative to the applet's directory. Empty uses the applet's Entry, and
+	// the page tells the two apart with hive.surface.
+	Entry string `yaml:"entry,omitempty"`
+	// Width is the slot's width in pixels until the page asks for another. Zero is
+	// DefaultTitlebarWidth, one icon button.
+	Width int `yaml:"width,omitempty"`
 }
 
 // Parse decodes one applet.yaml strictly, so a misspelled key is an error an
@@ -63,6 +78,14 @@ func Parse(id string, raw []byte) (Applet, error) {
 	a.ID = id
 	if a.Entry == "" {
 		a.Entry = DefaultEntry
+	}
+	if a.Titlebar != nil {
+		if a.Titlebar.Entry == "" {
+			a.Titlebar.Entry = a.Entry
+		}
+		if a.Titlebar.Width == 0 {
+			a.Titlebar.Width = DefaultTitlebarWidth
+		}
 	}
 	return a, a.Validate()
 }
@@ -82,6 +105,10 @@ func (a Applet) Validate() error {
 		return fmt.Errorf("entry must be a path inside the applet's directory, got %q", a.Entry)
 	case a.Width < 0 || a.Height < 0:
 		return errors.New("width and height must not be negative")
+	case a.Titlebar != nil && !filepath.IsLocal(a.Titlebar.Entry):
+		return fmt.Errorf("titlebar.entry must be a path inside the applet's directory, got %q", a.Titlebar.Entry)
+	case a.Titlebar != nil && a.Titlebar.Width < 0:
+		return errors.New("titlebar.width must not be negative")
 	}
 	return nil
 }

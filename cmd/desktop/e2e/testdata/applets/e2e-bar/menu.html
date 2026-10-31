@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <head>
+    <title>E2E menu</title>
+  </head>
+  <body>
+    <span id="surface"></span>
+    <button id="send">send</button>
+    <script>
+      document.querySelector('#surface').textContent = hive.surface
+      document.querySelector('#send').onclick = () => {
+        localStorage.setItem('from', 'from the dropdown')
+        hive.broadcast('hello from the dropdown')
+      }
+    </script>
+  </body>
+</html>

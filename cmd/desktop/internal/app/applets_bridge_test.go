@@ -89,7 +89,7 @@ func TestClosingAnAppletStopsItsProcesses(t *testing.T) {
 
 	spawn, err := service.spawn(handle)
 	require.NoError(t, err)
-	service.KillSpawns("page")
+	service.KillSpawns([]string{handle})
 	require.Eventually(t, func() bool { _, ready := spawn.drain(); return ready }, reasonableWait, pollEvery)
 	_, err = service.spawn(handle)
 	assert.Equal(t, KindNotFound, KindOf(err))
@@ -260,6 +260,6 @@ func TestProcessesListsWhatIsRunning(t *testing.T) {
 	assert.Equal(t, "page", running[0].Applet)
 	assert.Equal(t, "sleep 30", running[0].Command)
 
-	service.KillSpawns("page")
+	service.KillSpawns([]string{handle})
 	assert.Empty(t, service.Processes())
 }

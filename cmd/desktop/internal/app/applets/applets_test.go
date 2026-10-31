@@ -176,3 +176,29 @@ func TestSavedStorageDoesNotHideABuiltin(t *testing.T) {
 func onDisk(store *Store) []Entry {
 	return slices.DeleteFunc(store.List(), func(entry Entry) bool { return entry.Applet.Builtin })
 }
+
+func TestParseTitlebar(t *testing.T) {
+	t.Run("an applet without it has none", func(t *testing.T) {
+		a, err := Parse("thing", []byte(minimal))
+		require.NoError(t, err)
+		assert.Nil(t, a.Titlebar)
+	})
+	t.Run("defaults to the applet's page and one icon button", func(t *testing.T) {
+		a, err := Parse("thing", []byte(minimal+"\nentry: app.html\ntitlebar: {}\n"))
+		require.NoError(t, err)
+		assert.Equal(t, &Titlebar{Entry: "app.html", Width: DefaultTitlebarWidth}, a.Titlebar)
+	})
+	t.Run("keeps its own page and width", func(t *testing.T) {
+		a, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  entry: bar.html\n  width: 120\n"))
+		require.NoError(t, err)
+		assert.Equal(t, &Titlebar{Entry: "bar.html", Width: 120}, a.Titlebar)
+	})
+	t.Run("refuses a page outside the directory", func(t *testing.T) {
+		_, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  entry: ../bar.html\n"))
+		assert.ErrorContains(t, err, "titlebar.entry")
+	})
+	t.Run("refuses a negative width", func(t *testing.T) {
+		_, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  width: -1\n"))
+		assert.ErrorContains(t, err, "titlebar.width")
+	})
+}
