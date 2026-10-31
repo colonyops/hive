@@ -176,6 +176,9 @@ const CONSTRAINT_SETTLE_MS = 750
 // cap gives up after about a minute; the Reconnect button still works after.
 const RECONNECT_DELAYS_MS = [1000, 2000, 5000]
 const MAX_AUTO_RECONNECTS = 12
+// How long a stream must stay up to earn the retries back. The socket opens
+// before the first frame, so an open alone says nothing about the link holding.
+const RECONNECT_STABLE_MS = 30_000
 
 interface WindowRuntime {
   host?: HTMLElement
@@ -280,6 +283,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   let lastResizeAt = Number.NEGATIVE_INFINITY
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined
   let autoReconnects = 0
+  let reconnectStableTimer: ReturnType<typeof setTimeout> | undefined
   let constraintTimer: ReturnType<typeof setTimeout> | undefined
   let constraintDismissed = false
   // terminalGrid.ts reads xterm's private _core, which no test against a fake
@@ -901,7 +905,11 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     socket.binaryType = 'arraybuffer'
     socket.onopen = () => {
       if (disposed) return
-      autoReconnects = 0
+      if (server) {
+        reconnectStableTimer = setTimeout(() => {
+          autoReconnects = 0
+        }, RECONNECT_STABLE_MS)
+      }
       status.value = 'live'
       endReason.value = null
       error.value = null
@@ -974,6 +982,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   }
 
   function closeSocket(): void {
+    clearTimeout(reconnectStableTimer)
     if (!socket) return
     socket.onopen = null
     socket.onmessage = null

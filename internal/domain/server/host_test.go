@@ -14,6 +14,7 @@ func TestValidateRejectsUnsafeHosts(t *testing.T) {
 		{Name: ""},
 		{Name: "box", Binary: "hive;rm -rf ~"},
 		{Name: "box", Binary: "$(id)"},
+		{Name: "box", Tmux: "tmux;id"},
 		{Name: "box", ConfigFile: "a\nb"},
 	}
 	for _, h := range bad {

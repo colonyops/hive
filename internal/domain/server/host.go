@@ -16,6 +16,10 @@ type Host struct {
 	ConfigFile string
 	// Binary is the hive path on the remote host. Empty means "hive".
 	Binary string
+	// Tmux is the tmux path on the remote host. Empty means "tmux", found on the
+	// PATH of a non-interactive ssh command, which often lacks a package
+	// manager's directory.
+	Tmux string
 }
 
 var (
@@ -34,6 +38,9 @@ func (h Host) Validate() error {
 	}
 	if h.Binary != "" && !binaryPattern.MatchString(h.Binary) {
 		return fmt.Errorf("remote hive binary %q: use letters, digits, and _ . / ~ - only", h.Binary)
+	}
+	if h.Tmux != "" && !binaryPattern.MatchString(h.Tmux) {
+		return fmt.Errorf("remote tmux binary %q: use letters, digits, and _ . / ~ - only", h.Tmux)
 	}
 	return nil
 }

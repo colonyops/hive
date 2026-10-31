@@ -21,6 +21,11 @@ func TestSSHRunner_QuotesTheRemoteCommand(t *testing.T) {
 	assert.Equal(t, []string{"ada@box", "--", `'tmux' 'display-message' '-p' '-t' '=it'\''s' '#{pane_current_path}'`}, args[len(args)-3:])
 }
 
+func TestSSHRunner_ExpandsAHomeRelativeTmuxOnTheServer(t *testing.T) {
+	cmd := SSHRunner{Host: server.Host{Name: "box"}}.Command(t.Context(), "~/bin/tmux", nil, "-V")
+	assert.Equal(t, `"$HOME"/'bin/tmux' '-V'`, cmd.Args[len(cmd.Args)-1])
+}
+
 func TestSSHRunner_SharesAConnectionThroughControlDir(t *testing.T) {
 	cmd := SSHRunner{Host: server.Host{Name: "box"}, ControlDir: "/tmp/hive-501/ssh"}.Command(t.Context(), "tmux", nil, "-V")
 

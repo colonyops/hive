@@ -217,7 +217,7 @@ func (s *PopupTerminalsService) resolveDir(ctx context.Context, req OpenPopupTer
 //
 // A pop-up runs on this machine, so a server's terminal has no directory here.
 func (s *PopupTerminalsService) terminalDir(ctx context.Context, slug string) (string, error) {
-	if server, _, remote := strings.Cut(slug, ":"); remote {
+	if server, _, remote := splitTarget(slug); remote {
 		return "", Errorf(KindUnavailable, "pop-up terminals run on this machine; session %q is on server %q", slug, server)
 	}
 	dir, err := s.terminals.WorkingDirectory(ctx, slug)

@@ -203,6 +203,15 @@ func TestPopupTerminalsService_LauncherWithoutATerminalIsRefused(t *testing.T) {
 	require.Empty(t, open, "a refused launch spawns nothing")
 }
 
+func TestPopupTerminalsService_RefusesAServersTerminalAsItsDirectory(t *testing.T) {
+	h := checkoutHarness(t, t.TempDir(), session.StateActive)
+	svc := newPopupHarnessWithCatalog(t, h, popupCatalog(t, launcherCatalogYAML))
+
+	_, err := svc.Open(t.Context(), OpenPopupTerminal{Launcher: "lazygit", SessionSlug: "box:hive-x"})
+
+	require.Equal(t, KindUnavailable, KindOf(err))
+}
+
 // A configured cwd pins the launcher, and beats the session the caller was
 // looking at when they pressed the key. It is also what makes one reachable
 // with no session at all: the directory it needs is in the catalog.

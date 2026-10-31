@@ -95,6 +95,49 @@ func TestServerTerminal_AttachTypeResizeAndRecoverFromADrop(t *testing.T) {
 	awaitOutput(t, events, "typed-42")
 }
 
+func TestServerTerminal_HasSessionTellsAGoneSessionFromAnOfflineServer(t *testing.T) {
+	r := serverB.Hive(t, "session", "create", "--json", "--remote", tFixtureRepo, "gone-terminal").Ok(t)
+	created := DecodeJSON[Session](t, r)
+	serverB.DeleteOnCleanup(t, created.ID)
+	m := serverTerminals(t, serverB)
+	ctx := t.Context()
+
+	exists, err := m.HasSession(ctx, created.Name)
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	serverB.Shell(t, "tmux kill-session -t "+shellQuote("="+created.Name)).Ok(t)
+	exists, err = m.HasSession(ctx, created.Name)
+	require.NoError(t, err, "tmux answering no is not a failure")
+	assert.False(t, exists)
+
+	serverB.Stop(t)
+	_, err = m.HasSession(ctx, created.Name)
+	assert.Error(t, err, "an offline server must not read as a gone session")
+}
+
+func TestServerTerminal_RunsATmuxOutsideThePathOfAnSSHCommand(t *testing.T) {
+	serverA.Shell(t, `mkdir -p "$HOME/tmux-elsewhere" && cp "$(command -v tmux)" "$HOME/tmux-elsewhere/hive-test-tmux"`).Ok(t)
+	t.Cleanup(func() { serverA.Shell(t, `rm -rf "$HOME/tmux-elsewhere"`).Ok(t) })
+	host := server.Host{Name: serverA.Name, ConfigFile: sshConfig}
+
+	bare := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{
+		Logger: zerolog.Nop(),
+		Binary: func() (string, error) { return "hive-test-tmux", nil },
+		Runner: tmuxcc.SSHRunner{Host: host},
+	})
+	t.Cleanup(func() { _ = bare.Stop(context.WithoutCancel(t.Context())) })
+	require.ErrorIs(t, bare.Available(t.Context()), tmuxcc.ErrUnavailable)
+
+	configured := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{
+		Logger: zerolog.Nop(),
+		Binary: func() (string, error) { return "~/tmux-elsewhere/hive-test-tmux", nil },
+		Runner: tmuxcc.SSHRunner{Host: host},
+	})
+	t.Cleanup(func() { _ = configured.Stop(context.WithoutCancel(t.Context())) })
+	require.NoError(t, configured.Available(t.Context()))
+}
+
 func awaitPane(t *testing.T, client *tmuxcc.Client, windowID string) string {
 	t.Helper()
 	var pane string
@@ -112,12 +155,12 @@ func awaitPane(t *testing.T, client *tmuxcc.Client, windowID string) string {
 
 func awaitCapture(t *testing.T, m *tmuxcc.Manager, pane, want string) {
 	t.Helper()
-	var last string
-	require.Eventually(t, func() bool {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		screen, err := m.CapturePaneID(t.Context(), pane)
-		last = screen
-		return err == nil && strings.Contains(screen, want)
-	}, 10*time.Second, 100*time.Millisecond, "pane %s never showed %q; last screen:\n%s", pane, want, last)
+		if assert.NoError(c, err) {
+			assert.Contains(c, screen, want)
+		}
+	}, 10*time.Second, 100*time.Millisecond, "pane %s never showed %q", pane, want)
 }
 
 // awaitOutput reads a re-attach's first paint, which replays the scrollback.

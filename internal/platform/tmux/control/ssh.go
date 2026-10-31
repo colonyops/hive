@@ -31,7 +31,7 @@ func (r SSHRunner) Command(ctx context.Context, binary string, env []string, arg
 		binary = defaultBinary
 	}
 	remote := make([]string, 0, len(args)+1)
-	remote = append(remote, sshdial.Quote(binary))
+	remote = append(remote, sshdial.RemotePath(binary))
 	for _, arg := range args {
 		remote = append(remote, sshdial.Quote(arg))
 	}

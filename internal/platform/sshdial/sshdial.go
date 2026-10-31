@@ -17,7 +17,11 @@ import (
 
 // Args are the ssh arguments for `<binary> daemon dial-stdio` on h.
 func Args(h server.Host) []string {
-	return append(Options(h), h.Name, "--", remoteBinary(h.Binary), "daemon", "dial-stdio")
+	binary := "hive"
+	if h.Binary != "" {
+		binary = RemotePath(h.Binary)
+	}
+	return append(Options(h), h.Name, "--", binary, "daemon", "dial-stdio")
 }
 
 // Options are the ssh options every hive connection to h uses, without the
@@ -38,14 +42,13 @@ func Options(h server.Host) []string {
 	)
 }
 
-func remoteBinary(binary string) string {
-	if binary == "" {
-		return "hive"
-	}
-	if rest, ok := strings.CutPrefix(binary, "~/"); ok {
+// RemotePath quotes a program path for the remote shell and keeps a leading
+// "~/" meaning the remote home.
+func RemotePath(path string) string {
+	if rest, ok := strings.CutPrefix(path, "~/"); ok {
 		return `"$HOME"/` + Quote(rest)
 	}
-	return Quote(binary)
+	return Quote(path)
 }
 
 // Quote quotes s for the remote shell, which ssh hands the command to.

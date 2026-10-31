@@ -62,9 +62,8 @@ const serverSweepBudget = 10 * time.Second
 // Wails adapter call. It holds no token, base URL or stream path: what the
 // terminal is reached over is the adapter's, not the core's (ADR terminal-transport).
 //
-// A slug of the form "<server>:<slug>" is the terminal of a session on that
-// server, run over ssh; a bare slug is local. tmux allows no ":" in a session
-// name, so a bare slug never reads as a server's.
+// A target is the terminal of a session: "<server>:<slug>" on that server, run
+// over ssh, or a bare slug, which is local. See splitTarget.
 type TerminalsService struct {
 	manager *tmuxcc.Manager
 	servers terminalServers
@@ -138,21 +137,26 @@ func (s *TerminalsService) Attach(ctx context.Context, target string, cols, rows
 	exists, err := manager.HasSession(ctx, slug)
 	if err != nil {
 		observe.RecordError(span, err)
-		return nil, terminalError(err, "attaching to session %q", slug)
+		if server, _, remote := splitTarget(target); remote && errors.Is(err, tmuxcc.ErrUnavailable) {
+			// The caller sees only the message, and tmux's usual answer for this
+			// on a local machine does not apply to a server.
+			return nil, Wrap(err, KindUnavailable, "server %q has no usable tmux (%v); check ssh to it, or set tmux for it under servers: in config.yaml", server, err)
+		}
+		return nil, terminalError(err, "attaching to session %q", target)
 	}
 	// A session tmux is not running answers the attach rather than failing it,
 	// so the attribute is what separates that span from one that attached.
 	span.SetAttributes(attribute.Bool(attrTerminalRunning, exists))
 	if !exists {
-		return nil, Errorf(KindNotFound, "session %q is not running", slug)
+		return nil, Errorf(KindNotFound, "session %q is not running", target)
 	}
 	if err := manager.CheckLaunch(ctx, slug); err != nil {
-		return nil, terminalError(err, "attaching to session %q", slug)
+		return nil, terminalError(err, "attaching to session %q", target)
 	}
 	windows, err := manager.Attach(ctx, slug, cols, rows)
 	if err != nil {
 		observe.RecordError(span, err)
-		return nil, terminalError(err, "attaching to session %q", slug)
+		return nil, terminalError(err, "attaching to session %q", target)
 	}
 	span.SetAttributes(attribute.Int(attrTerminalWindows, len(windows)))
 	return windows, nil
@@ -166,9 +170,10 @@ func (s *TerminalsService) Attach(ctx context.Context, target string, cols, rows
 //
 // A server's session is started on the server: this app does not have the
 // server's rules to start it with.
-func (s *TerminalsService) Start(ctx context.Context, slug string) (multiplexer.LaunchResult, error) {
-	if server, _, remote := strings.Cut(slug, ":"); remote {
-		return multiplexer.LaunchResult{}, Errorf(KindUnavailable, "session %q is on server %q; start its terminal on that server", slug, server)
+func (s *TerminalsService) Start(ctx context.Context, target string) (multiplexer.LaunchResult, error) {
+	server, slug, remote := splitTarget(target)
+	if remote {
+		return multiplexer.LaunchResult{}, Errorf(KindUnavailable, "session %q is on server %q; start its terminal on that server", target, server)
 	}
 	exists, err := s.manager.HasSession(ctx, slug)
 	if err != nil {
@@ -216,7 +221,7 @@ func (s *TerminalsService) Kill(ctx context.Context, target string) (bool, error
 	}
 	killed, err := manager.KillSession(ctx, slug)
 	if err != nil {
-		return false, terminalError(err, "killing the terminal for session %q", slug)
+		return false, terminalError(err, "killing the terminal for session %q", target)
 	}
 	return killed, nil
 }
@@ -231,7 +236,7 @@ func (s *TerminalsService) ListAllWindows(ctx context.Context, targets []string)
 	local := []string{}
 	remote := map[string][]string{}
 	for _, target := range targets {
-		if server, slug, ok := strings.Cut(target, ":"); ok {
+		if server, slug, isRemote := splitTarget(target); isRemote {
 			remote[server] = append(remote[server], slug)
 			continue
 		}
@@ -281,7 +286,7 @@ func (s *TerminalsService) Subscribe(ctx context.Context, target string) (<-chan
 	}
 	events, unsubscribe, err := manager.Subscribe(slug)
 	if err != nil {
-		return nil, nil, terminalError(err, "subscribing to session %q", slug)
+		return nil, nil, terminalError(err, "subscribing to session %q", target)
 	}
 	return events, unsubscribe, nil
 }
@@ -289,8 +294,8 @@ func (s *TerminalsService) Subscribe(ctx context.Context, target string) (<-chan
 // Write sends bytes to a pane. The pane is named rather than resolved from a
 // window's active pane, because the keystrokes that follow a click into a
 // pane are sent while the select-pane it caused is still in flight.
-func (s *TerminalsService) Write(ctx context.Context, slug, paneID string, p []byte) error {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) Write(ctx context.Context, target, paneID string, p []byte) error {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return err
 	}
@@ -299,8 +304,8 @@ func (s *TerminalsService) Write(ctx context.Context, slug, paneID string, p []b
 
 // Paste inserts text into a pane as a paste rather than as keystrokes, so the
 // pane's program decides how to read it.
-func (s *TerminalsService) Paste(ctx context.Context, slug, paneID string, p []byte) error {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) Paste(ctx context.Context, target, paneID string, p []byte) error {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return err
 	}
@@ -309,8 +314,8 @@ func (s *TerminalsService) Paste(ctx context.Context, slug, paneID string, p []b
 
 // SplitPane splits a pane of an attached session and returns the new pane's
 // id. The new layout, and the new pane's first paint, follow on the stream.
-func (s *TerminalsService) SplitPane(ctx context.Context, slug, paneID string, direction tmuxcc.SplitDirection) (string, error) {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) SplitPane(ctx context.Context, target, paneID string, direction tmuxcc.SplitDirection) (string, error) {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return "", err
 	}
@@ -323,8 +328,8 @@ func (s *TerminalsService) SplitPane(ctx context.Context, slug, paneID string, d
 
 // SelectPane selects paneID when direction is empty; otherwise it selects the
 // neighbor in that direction.
-func (s *TerminalsService) SelectPane(ctx context.Context, slug, paneID string, direction tmuxcc.PaneDirection) error {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) SelectPane(ctx context.Context, target, paneID string, direction tmuxcc.PaneDirection) error {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return err
 	}
@@ -332,8 +337,8 @@ func (s *TerminalsService) SelectPane(ctx context.Context, slug, paneID string, 
 }
 
 // ClosePane kills one pane; the last pane of a window takes the window with it.
-func (s *TerminalsService) ClosePane(ctx context.Context, slug, paneID string) error {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) ClosePane(ctx context.Context, target, paneID string) error {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return err
 	}
@@ -341,8 +346,8 @@ func (s *TerminalsService) ClosePane(ctx context.Context, slug, paneID string) e
 }
 
 // ResizePane sets width and/or height in cells; zero leaves that axis unchanged.
-func (s *TerminalsService) ResizePane(ctx context.Context, slug, paneID string, width, height int) error {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) ResizePane(ctx context.Context, target, paneID string, width, height int) error {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return err
 	}
@@ -351,8 +356,8 @@ func (s *TerminalsService) ResizePane(ctx context.Context, slug, paneID string, 
 
 // ZoomPane toggles a pane between filling its window and its place in the
 // layout.
-func (s *TerminalsService) ZoomPane(ctx context.Context, slug, paneID string) error {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) ZoomPane(ctx context.Context, target, paneID string) error {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return err
 	}
@@ -362,16 +367,16 @@ func (s *TerminalsService) ZoomPane(ctx context.Context, slug, paneID string) er
 // Resize renegotiates the control client's size. Every client attached to a
 // window renders the same grid, and tmux's window-size option decides whose
 // size that is, so this is a vote rather than a resize.
-func (s *TerminalsService) Resize(ctx context.Context, slug string, cols, rows int) error {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) Resize(ctx context.Context, target string, cols, rows int) error {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return err
 	}
-	return terminalError(client.Resize(ctx, cols, rows), "resizing session %q", slug)
+	return terminalError(client.Resize(ctx, cols, rows), "resizing session %q", target)
 }
 
-func (s *TerminalsService) SelectWindow(ctx context.Context, slug, windowID string) error {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) SelectWindow(ctx context.Context, target, windowID string) error {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return err
 	}
@@ -386,33 +391,33 @@ func (s *TerminalsService) SelectWindow(ctx context.Context, slug, windowID stri
 // to be on screen — so a slug with no control client is served by a one-shot,
 // and the attach that follows lists what it made. Either way the window opens
 // where the session's active pane is, not where the session was started.
-func (s *TerminalsService) NewWindow(ctx context.Context, slug string) (windowID string, resultErr error) {
-	s.log.Info().Str("session", slug).Msg("terminal window requested")
+func (s *TerminalsService) NewWindow(ctx context.Context, target string) (windowID string, resultErr error) {
+	s.log.Info().Str("session", target).Msg("terminal window requested")
 	defer func() {
 		if resultErr == nil {
-			s.log.Info().Str("session", slug).Str("window_id", windowID).Msg("terminal window created")
+			s.log.Info().Str("session", target).Str("window_id", windowID).Msg("terminal window created")
 		}
 	}()
-	manager, bare, err := s.route(ctx, slug)
+	manager, slug, err := s.route(ctx, target)
 	if err != nil {
 		return "", err
 	}
-	client, ok := manager.Client(bare)
+	client, ok := manager.Client(slug)
 	if !ok {
-		id, err := manager.NewWindow(ctx, bare)
+		id, err := manager.NewWindow(ctx, slug)
 		if err != nil {
-			s.log.Warn().Str("slug", slug).Str("path", "one-shot").Err(err).Msg("creating a window failed")
+			s.log.Warn().Str("slug", target).Str("path", "one-shot").Err(err).Msg("creating a window failed")
 			if errors.Is(err, tmuxcc.ErrNotAttached) {
-				return "", terminalError(err, "session %q is not running", slug)
+				return "", terminalError(err, "session %q is not running", target)
 			}
-			return "", terminalError(err, "creating a window in session %q", slug)
+			return "", terminalError(err, "creating a window in session %q", target)
 		}
 		return id, nil
 	}
 	id, err := client.NewWindow(ctx)
 	if err != nil {
-		s.log.Warn().Str("slug", slug).Str("path", "control-client").Err(err).Msg("creating a window failed")
-		return "", terminalError(err, "creating a window in session %q", slug)
+		s.log.Warn().Str("slug", target).Str("path", "control-client").Err(err).Msg("creating a window failed")
+		return "", terminalError(err, "creating a window in session %q", target)
 	}
 	return id, nil
 }
@@ -436,13 +441,13 @@ func (s *TerminalsService) WorkingDirectory(ctx context.Context, target string) 
 	}
 	dir, err := manager.CurrentPath(ctx, slug)
 	if err != nil {
-		return "", terminalError(err, "reading the working directory of session %q", slug)
+		return "", terminalError(err, "reading the working directory of session %q", target)
 	}
 	return dir, nil
 }
 
-func (s *TerminalsService) CloseWindow(ctx context.Context, slug, windowID string) error {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) CloseWindow(ctx context.Context, target, windowID string) error {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return err
 	}
@@ -465,8 +470,8 @@ type WindowForeground struct {
 // Uncertainty answers true. A pane whose state cannot be read is one whose work
 // this cannot account for, and the two ways of being wrong do not cost the
 // same: a confirmation nobody needed against a process killed without one.
-func (s *TerminalsService) WindowForeground(ctx context.Context, slug, windowID string) (WindowForeground, error) {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) WindowForeground(ctx context.Context, target, windowID string) (WindowForeground, error) {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return WindowForeground{}, err
 	}
@@ -474,12 +479,12 @@ func (s *TerminalsService) WindowForeground(ctx context.Context, slug, windowID 
 	if err != nil {
 		return WindowForeground{}, terminalError(err, "reading what window %q is running", windowID)
 	}
-	return s.foregroundOf(ctx, panes), nil
+	return s.foregroundOf(ctx, target, panes), nil
 }
 
 // PaneForeground reports whether closing paneID would kill work.
-func (s *TerminalsService) PaneForeground(ctx context.Context, slug, paneID string) (WindowForeground, error) {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) PaneForeground(ctx context.Context, target, paneID string) (WindowForeground, error) {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return WindowForeground{}, err
 	}
@@ -493,7 +498,7 @@ func (s *TerminalsService) PaneForeground(ctx context.Context, slug, paneID stri
 	}
 	for _, pane := range panes {
 		if pane.ID == paneID {
-			return s.foregroundOf(ctx, []tmuxcc.Pane{pane}), nil
+			return s.foregroundOf(ctx, target, []tmuxcc.Pane{pane}), nil
 		}
 	}
 	// A pane the listing no longer holds has nothing left to kill.
@@ -503,10 +508,10 @@ func (s *TerminalsService) PaneForeground(ctx context.Context, slug, paneID stri
 // foregroundOf answers for the whole window, because closing one kills every
 // pane in it. The active pane's process is the one named when several are
 // running: it is the one the user is looking at.
-func (s *TerminalsService) foregroundOf(ctx context.Context, panes []tmuxcc.Pane) WindowForeground {
+func (s *TerminalsService) foregroundOf(ctx context.Context, target string, panes []tmuxcc.Pane) WindowForeground {
 	answer := WindowForeground{}
 	for _, pane := range panes {
-		if pane.Dead || s.paneIsAtAPrompt(ctx, pane) {
+		if pane.Dead || s.paneIsAtAPrompt(ctx, target, pane) {
 			continue
 		}
 		if !answer.Running || pane.Active {
@@ -525,8 +530,11 @@ func (s *TerminalsService) foregroundOf(ctx context.Context, panes []tmuxcc.Pane
 // prompt — it runs under the shell's own name. And the process check alone
 // reads an agent as a prompt, because `sh -c claude` execs claude in place and
 // leaves it as the pane's own process.
-func (s *TerminalsService) paneIsAtAPrompt(ctx context.Context, pane tmuxcc.Pane) bool {
-	if pane.PID <= 0 || !isShell(pane.Command) {
+//
+// A pane on a server never qualifies: its PID names a process over there, and
+// the check reads this machine's process table.
+func (s *TerminalsService) paneIsAtAPrompt(ctx context.Context, target string, pane tmuxcc.Pane) bool {
+	if _, _, remote := splitTarget(target); remote || pane.PID <= 0 || !isShell(pane.Command) {
 		return false
 	}
 	foreground, err := s.foreground(ctx, pane.PID)
@@ -559,20 +567,20 @@ func processForeground(ctx context.Context, pid int) (bool, error) {
 // answers with the order tmux settled on, so a caller renders what happened
 // rather than what it asked for. Window order is tmux session state: the move
 // reaches every other client attached to the same session.
-func (s *TerminalsService) MoveWindow(ctx context.Context, slug, windowID string, position int) ([]tmuxcc.Window, error) {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) MoveWindow(ctx context.Context, target, windowID string, position int) ([]tmuxcc.Window, error) {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return nil, err
 	}
 	windows, err := client.MoveWindow(ctx, windowID, position)
 	if err != nil {
-		return nil, terminalError(err, "moving window %q of session %q", windowID, slug)
+		return nil, terminalError(err, "moving window %q of session %q", windowID, target)
 	}
 	return windows, nil
 }
 
-func (s *TerminalsService) RenameWindow(ctx context.Context, slug, windowID, name string) error {
-	client, err := s.client(ctx, slug)
+func (s *TerminalsService) RenameWindow(ctx context.Context, target, windowID, name string) error {
+	client, err := s.client(ctx, target)
 	if err != nil {
 		return err
 	}
@@ -611,9 +619,9 @@ func (s *TerminalsService) client(ctx context.Context, target string) (*tmuxcc.C
 // route splits a terminal target into the manager that runs it and the tmux
 // session name on that manager's server.
 func (s *TerminalsService) route(ctx context.Context, target string) (*tmuxcc.Manager, string, error) {
-	server, slug, remote := strings.Cut(target, ":")
+	server, slug, remote := splitTarget(target)
 	if !remote {
-		return s.manager, target, nil
+		return s.manager, slug, nil
 	}
 	if slug == "" {
 		return nil, "", Errorf(KindInvalid, "terminal %q names a server but no session", target)
@@ -623,6 +631,17 @@ func (s *TerminalsService) route(ctx context.Context, target string) (*tmuxcc.Ma
 		return nil, "", err
 	}
 	return manager, slug, nil
+}
+
+// splitTarget reads "<server>:<slug>" as a session on that server and anything
+// else as a local slug. tmux allows no ":" in a session name and server names
+// refuse one, so the two forms cannot collide.
+func splitTarget(target string) (server, slug string, remote bool) {
+	server, slug, remote = strings.Cut(target, ":")
+	if !remote {
+		return "", target, false
+	}
+	return server, slug, true
 }
 
 func (s *TerminalsService) serverManager(ctx context.Context, name string) (*tmuxcc.Manager, error) {

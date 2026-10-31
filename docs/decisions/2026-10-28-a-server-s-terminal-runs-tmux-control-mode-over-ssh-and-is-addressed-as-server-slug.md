@@ -41,5 +41,11 @@ plane address a terminal by its slug alone.
   cannot read. The frontend refuses an image for a server's terminal.
 - A pop-up terminal runs on this machine, so it refuses a server's terminal
   as its directory.
+- A server's tmux runs from the PATH of a non-interactive ssh command, which
+  often lacks a package manager's directory. `tmux` under `servers:` names its
+  path, as `binary` does for hive. We did not export a wider PATH in the remote
+  command, because that syntax differs between login shells.
+- Desktop cannot tell whether a server's pane is at a prompt: the check reads
+  this machine's process table. Closing one always asks.
 - A sweep omits the windows of a server that does not answer, so one server
   offline does not fail the sweep of the others.

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"os"
@@ -58,7 +59,7 @@ func newServerTerminals(ctx context.Context, log zerolog.Logger, fleet func() *s
 		newManager: func(name string, host server.Host) *tmuxcc.Manager {
 			return tmuxcc.NewManager(ctx, tmuxcc.ManagerOptions{
 				Logger:  log.With().Str("server", name).Logger(),
-				Binary:  func() (string, error) { return "tmux", nil },
+				Binary:  func() (string, error) { return cmp.Or(host.Tmux, "tmux"), nil },
 				Environ: environ,
 				Runner:  tmuxcc.SSHRunner{Host: host, ControlDir: controlDir},
 			})
@@ -69,6 +70,13 @@ func newServerTerminals(ctx context.Context, log zerolog.Logger, fleet func() *s
 
 // Manager is the tmux manager for the named server.
 func (t *serverTerminals) Manager(ctx context.Context, name string) (*tmuxcc.Manager, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.stopped {
+		return nil, Wrap(tmuxcc.ErrUnavailable, KindUnavailable, "the app is shutting down")
+	}
+	// Under the lock: a reload swaps the fleet and then prunes, so a fleet read
+	// before the lock could store a manager for a host the prune already passed.
 	fleet := t.fleet()
 	if fleet == nil {
 		return nil, Errorf(KindUnavailable, "the server list is not loaded")
@@ -78,12 +86,6 @@ func (t *serverTerminals) Manager(ctx context.Context, name string) (*tmuxcc.Man
 		return nil, Errorf(KindNotFound, "server %q is not under servers: in config.yaml", name)
 	}
 	host := srv.Config().Host()
-
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.stopped {
-		return nil, Wrap(tmuxcc.ErrUnavailable, KindUnavailable, "the app is shutting down")
-	}
 	if current, ok := t.managers[name]; ok {
 		if current.host == host {
 			return current.manager, nil
@@ -98,9 +100,9 @@ func (t *serverTerminals) Manager(ctx context.Context, name string) (*tmuxcc.Man
 // Prune stops the managers of servers the fleet no longer has, or has
 // with a different ssh target.
 func (t *serverTerminals) Prune(ctx context.Context) {
-	fleet := t.fleet()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	fleet := t.fleet()
 	for name, current := range t.managers {
 		var srv *servers.Server
 		if fleet != nil {

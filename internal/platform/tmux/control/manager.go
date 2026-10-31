@@ -414,14 +414,21 @@ func (m *Manager) HasSession(ctx context.Context, slug string) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
+	if tmuxAnsweredNo(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+// tmuxAnsweredNo reports that tmux itself ran and exited 1: no such session, or
+// no server at all. ssh exits 255 when it cannot reach the host, so over ssh
+// this is what separates a session that is gone from a server that is offline.
+func tmuxAnsweredNo(err error) bool {
 	var exited interface {
 		error
 		ExitCode() int
 	}
-	if errors.As(err, &exited) && exited.ExitCode() == 1 {
-		return false, nil
-	}
-	return false, err
+	return errors.As(err, &exited) && exited.ExitCode() == 1
 }
 
 // ErrLaunchPending identifies an allocated session that has not committed its launch.
@@ -541,10 +548,15 @@ func (m *Manager) ListAllWindows(ctx context.Context, slugs []string) (map[strin
 		return nil, err
 	}
 	windows := make(map[string][]Window, len(wanted))
-	// A failure here is a server with no sessions on it, which is no windows
+	// tmux answering no is a server with no sessions on it, which is no windows
 	// rather than an error — the same tolerance ListWindows extends to a slug
-	// tmux has never heard of.
-	if lines, err := m.oneShot(ctx, "list-windows", "-a", "-F", sessionWindowsFormat); err == nil {
+	// tmux has never heard of. Any other failure degrades the same way, so one
+	// bad listing does not fail a sweep, but it is logged.
+	lines, err := m.oneShot(ctx, "list-windows", "-a", "-F", sessionWindowsFormat)
+	if err != nil && !tmuxAnsweredNo(err) {
+		m.log.Debug().Err(err).Msg("listing windows failed")
+	}
+	if err == nil {
 		for _, line := range lines {
 			slug, row, ok := strings.Cut(line, " ")
 			if !ok {
