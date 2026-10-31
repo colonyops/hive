@@ -1,5 +1,6 @@
 import { openView, panesOf } from '../../lib/sessionLayout'
 import { useSessionTabs } from '../../stores/useSessionTabs'
+import { useTerminalAgentIcons } from '../../stores/useTerminalAgentIcons'
 import { flushPromises, mount, type DOMWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
@@ -101,6 +102,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   AppearanceSettings: mocks.AppearanceSettings,
+  SetTerminalMonochromeAgentIcons: vi.fn().mockResolvedValue(undefined),
   CodeViews: mocks.CodeViews,
   SetCodeViews: mocks.SetCodeViews,
   EditorSettings: mocks.EditorSettings,
@@ -2470,7 +2472,7 @@ describe('TerminalMode', () => {
     mocks.EditSession.mockResolvedValue({})
     const { wrapper } = await mountAvailable()
     const row = wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"]')
-    expect(row.get('span[title]').attributes('title')).toContain('auto')
+    expect(row.get('[data-testid="session-tags"]').attributes('aria-label')).toBe('Tags: auto')
 
     await openRowMenu(wrapper, 'hive-fix-parser')
     await wrapper.get('[data-testid="session-menu-edit"]').trigger('click')
@@ -2644,6 +2646,23 @@ describe('TerminalMode', () => {
       ;(slot.element as HTMLElement).getBoundingClientRect = () =>
         ({ left: 0, width: 220, right: 220, top, bottom: top + 28, height: 28, x: 0, y: top }) as DOMRect
     }
+
+    it('gives a monochrome agent icon the color of the other icons in the tree', async () => {
+      const { wrapper, session } = await attached()
+      session.tabs.value = session.tabs.value.map((tab, at) => (at === 0 ? { ...tab, name: 'claude' } : tab))
+      await flushPromises()
+      const mark = () => wrapper.get('[data-testid="terminal-window-row"] [data-agent-icon="claude"]')
+      expect(mark().element.tagName).toBe('IMG')
+
+      useTerminalAgentIcons().setMonochrome(true)
+      await flushPromises()
+      expect(mark().element.tagName.toLowerCase()).toBe('svg')
+      expect(mark().classes()).toContain('text-text-4')
+
+      useTerminalAgentIcons().setMonochrome(false)
+      await flushPromises()
+      wrapper.unmount()
+    })
 
     it('drops a window into the gap the pointer is nearest', async () => {
       const { wrapper, session } = await attached()

@@ -190,6 +190,7 @@ func TestSettingsServiceAppearanceSettingsDefaultsToUnset(t *testing.T) {
 	require.Empty(t, got.CanvasLineSpacing)
 	require.Empty(t, got.CanvasPageWidth)
 	require.False(t, got.TerminalShowScrollbars, "terminal scrollbars ship hidden")
+	require.False(t, got.TerminalMonochromeAgentIcons, "agent icons ship in full color")
 	require.True(t, got.TerminalShowWindows, "the terminal window listing ships on")
 	require.True(t, got.TerminalShowStatusBar, "the session status bar ships on")
 	require.Equal(t, 3, got.TerminalPoolSize, "the attach pool ships at three sessions")
@@ -342,4 +343,16 @@ func TestSettingsServiceTerminalScrollbarsPersistAndRespectEnvironment(t *testin
 	stored, err := settings.LoadPersistedSettings()
 	require.NoError(t, err)
 	require.False(t, stored.Appearance.TerminalShowScrollbars)
+}
+
+func TestSettingsServicePersistsMonochromeAgentIcons(t *testing.T) {
+	t.Setenv(settings.EnvConfigDir, filepath.Join(t.TempDir(), "config"))
+	service := newSettingsService(SettingsDeps{Store: settings.NewStore(settings.SettingsPath())})
+	for _, monochrome := range []bool{true, false} {
+		require.NoError(t, service.SetTerminalMonochromeAgentIcons(t.Context(), monochrome))
+		reopened := newSettingsService(SettingsDeps{Store: settings.NewStore(settings.SettingsPath())})
+		got, err := reopened.Appearance(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, monochrome, got.TerminalMonochromeAgentIcons)
+	}
 }

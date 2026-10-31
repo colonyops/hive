@@ -913,9 +913,10 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <!-- pb-0.5: the fonts sit lowercase letters about 1.4px below the middle of their box. -->
     <footer
       v-if="footerRow"
-      class="flex h-6 shrink-0 items-center gap-1 overflow-hidden border-t border-border bg-raised px-1.5"
+      class="flex h-7 shrink-0 items-center gap-1 overflow-hidden border-t border-border bg-raised px-1.5 pb-0.5"
       aria-label="Session status"
       data-testid="terminal-pane-statusbar"
     >

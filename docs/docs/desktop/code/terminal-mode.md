@@ -49,7 +49,7 @@ For repository sessions, the optional status bar shows the branch, changes again
 
 ### Tags
 
-Tags are short words you put on a session, such as `auto` or `backend`. Hover a session's name to read its tags. The status bar above the terminal lists the attached session's tags. **Edit session…** in the session menu or the command palette changes a session's name and tags in one dialog; clicking the tags in the status bar opens it on the tags. Press <kbd>Enter</kbd> or type a comma to add a tag, and <kbd>Backspace</kbd> to remove the last one. Tags already used on other sessions are suggested.
+Tags are short words you put on a session, such as `auto` or `backend`. A session row with tags shows a tag icon; hover it to read them. The status bar above the terminal lists the attached session's tags. **Edit session…** in the session menu or the command palette changes a session's name and tags in one dialog; clicking the tags in the status bar opens it on the tags. Press <kbd>Enter</kbd> or type a comma to add a tag, and <kbd>Backspace</kbd> to remove the last one. Tags already used on other sessions are suggested.
 
 Tags ignore case, so `Auto` and `auto` are the same tag, and a tag cannot contain a comma. The sidebar filter matches tags as well as names. The hive CLI reads and writes the same tags; see [Sessions](../../cli/getting-started/sessions.md).
 
@@ -227,6 +227,8 @@ An agent outside any chat or Code session, such as one you start in a plain term
 **Settings ▸ Terminal** controls the terminal font, size, weight, line height, letter spacing, visible windows, status bar, and session age badges. Age badges are on by default with a five-day threshold and appear once a Hive session reaches the configured number of whole days since creation. Scratch terminals and pinned chats do not get one.
 
 <kbd>⌘+</kbd> and <kbd>⌘-</kbd> step the text size by 2px from a terminal without opening Settings, up to 64px, and <kbd>⌘0</kbd> puts it back to 13px. On Linux, use <kbd>Ctrl+Shift</kbd> with the same keys.
+
+Turn on **Monochrome agent icons** in **Settings ▸ Terminal** for a subtler look: agent icons in the session tree and tabs then take the color of the icons around them.
 
 Enable **Show scrollbars** in **Settings ▸ Terminal** to drag through scrollback
 in single-pane and zoomed Code terminals. It is off by default and applies to

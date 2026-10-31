@@ -26,7 +26,9 @@ import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import TreeRail from '@hive/ui/components/ui/TreeRail.vue'
 import SessionAddMenu from './SessionAddMenu.vue'
 import SessionTabIcon from './SessionTabIcon.vue'
+import { useTerminalAgentIcons } from '../../stores/useTerminalAgentIcons'
 import SessionRowMenu from '../SessionRowMenu.vue'
+import SessionTagsIndicator from '../SessionTagsIndicator.vue'
 import SidebarToolbar from '../sidebar/SidebarToolbar.vue'
 import SessionFilterButton from './SessionFilterButton.vue'
 import SessionViewBar from './SessionViewBar.vue'
@@ -59,6 +61,7 @@ import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
 import type { TreeWindowRow } from './useTerminalTree'
 
 const props = defineProps<{ active: boolean }>()
+const { monochrome: monochromeAgentIcons } = useTerminalAgentIcons()
 const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panes } = useTerminalModeContext()
 const { openBlank: openNewSession } = useNewSession()
 const sessionTabs = useSessionTabs()
@@ -551,7 +554,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                     <span
                       class="min-w-0 truncate text-body"
                       :class="{ 'text-text-3': tree.rowIdle(row) }"
-                      :title="[row.slug, row.repo, row.tags?.join(', ')].filter(Boolean).join('\n')"
+                      :title="row.repo ? `${row.slug}\n${row.repo}` : row.slug"
                       >{{ row.name }}</span
                     >
                     <BaseIconBadge
@@ -567,6 +570,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                     >
                       <component :is="row.offline ? IconCircleAlert : IconServer" class="size-3" aria-hidden="true" />
                     </BaseIconBadge>
+                    <SessionTagsIndicator v-if="group.kind === 'repo'" :tags="row.tags" />
                     <span class="flex-1" />
                     <BaseBadge
                       v-if="sessionAgeBadges[row.id]"
@@ -689,7 +693,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                             <SessionTabIcon
                               kind="window"
                               :agent="item.win.agent"
-                              :class="item.win.agent ? '' : 'text-text-4'"
+                              :class="item.win.agent && !monochromeAgentIcons ? '' : 'text-text-4'"
                             />
                             <input
                               v-if="rename.windowId === item.win.windowId"
@@ -852,7 +856,10 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
-  padding: 8px 12px;
+  /* The status bar's height, so the two bars' top lines meet across the handle. */
+  height: 28px;
+  /* The fonts sit lowercase letters about 1.4px below the middle of their box. */
+  padding: 0 12px 2px;
   border-top: 1px solid var(--color-border);
   font-family: var(--font-mono);
   font-size: var(--text-caption);
