@@ -42,7 +42,8 @@ bridge. Three rules hold that line:
 - **The headless server build (`-tags server`) has no html applets.** There the asset
   handler and the Wails runtime are an unauthenticated TCP listener, and any local
   process or website could use them. The one exception is the e2e harness, identified by
-  its per-run marker, which runs in a container with no network.
+  its per-run marker, which runs in a Docker container with no network, or with only the
+  test fixture's network in the remote lane.
 
 Nothing runs when a file loads. Commands start when the user opens an applet or acts
 in it.
