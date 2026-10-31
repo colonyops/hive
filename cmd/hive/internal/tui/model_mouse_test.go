@@ -79,8 +79,8 @@ func (*mouseTestGit) Commits(context.Context, string, string, int) ([]git.Commit
 
 func (*mouseTestGit) Branches(context.Context, string, int) ([]string, error) { return nil, nil }
 
-func (*mouseTestGit) FileDiff(context.Context, string, git.DiffRange, git.ChangedFile) (string, error) {
-	return "", nil
+func (*mouseTestGit) FileDiffs(context.Context, string, git.DiffRange, []git.ChangedFile) []git.FileDiffResult {
+	return nil
 }
 func (g *mouseTestGit) IsValidRepo(_ context.Context, _ string) error          { return nil }
 func (g *mouseTestGit) CloneBare(_ context.Context, _, _ string) error         { return nil }

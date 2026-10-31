@@ -51,12 +51,12 @@ describe('useFileDiffs', () => {
       running--
       return paths.map((path) => diff(path))
     })
-    const paths = Array.from({ length: 20 }, (_, index) => `f${index}`)
+    const paths = Array.from({ length: 120 }, (_, index) => `f${index}`)
     const { entries } = setup(paths)
     await flushPromises()
-    expect(mocks.SessionFileDiffs.mock.calls.map(([, , batch]) => (batch as string[]).length)).toEqual([8, 8, 4])
+    expect(mocks.SessionFileDiffs.mock.calls.map(([, , batch]) => (batch as string[]).length)).toEqual([50, 50, 20])
     expect(peak).toBe(1)
-    expect(entries.value.size).toBe(20)
+    expect(entries.value.size).toBe(120)
   })
 
   it('does not read again until a file version moves, and keeps the old diff meanwhile', async () => {

@@ -14,6 +14,8 @@ import (
 	"strings"
 	"syscall"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/colonyops/hive/pkg/executil"
 )
 
@@ -49,6 +51,9 @@ var (
 const (
 	maxDiffBytes      = 2 << 20
 	binarySniffLength = 8 << 10
+	// A batch past this is read file by file, so its memory stays bounded.
+	maxBatchDiffBytes = 32 << 20
+	maxFileReads      = 4
 )
 
 // Polled reads run beside an agent in the checkout, so they must not write
@@ -58,10 +63,11 @@ const (
 //
 // Paths are literal because a file can be named [id].vue, which a pathspec would
 // read as a glob.
-var readFlags = []string{"--no-optional-locks", "--literal-pathspecs", "-c", "core.fsmonitor=false"}
+var readFlags = []string{"--no-optional-locks", "--literal-pathspecs", "-c", "core.fsmonitor=false", "-c", "core.quotePath=false"}
 
-// color.ui=always would otherwise break the parsers.
-var diffFlags = []string{"--no-ext-diff", "--no-textconv", "--no-color"}
+// color.ui=always would otherwise break the parsers, and config can change the
+// prefixes and the submodule format that fileHeader relies on.
+var diffFlags = []string{"--no-ext-diff", "--no-textconv", "--no-color", "--src-prefix=a/", "--dst-prefix=b/", "--submodule=short"}
 
 const readErrorBytes = 500
 
@@ -360,6 +366,95 @@ func (e *Executor) FileDiff(ctx context.Context, dir string, diff DiffRange, fil
 		return "", ErrDiffTooLarge
 	}
 	return stdout.String(), nil
+}
+
+// FileDiffResult is the outcome of one file in FileDiffs. Err holds what FileDiff
+// would return.
+type FileDiffResult struct {
+	Text string
+	Err  error
+}
+
+// FileDiffs returns the diff of each file, in order. One git diff covers the
+// tracked files, because a process and an index copy for each file costs far more
+// than the diff itself. A file that run cannot answer is read on its own: a path
+// git quotes, a file no longer changed, or every file when the run fails or passes
+// maxBatchDiffBytes. So a failure stays with the one file it belongs to.
+func (e *Executor) FileDiffs(ctx context.Context, dir string, diff DiffRange, files []ChangedFile) []FileDiffResult {
+	results := make([]FileDiffResult, len(files))
+	sections := e.trackedSections(ctx, dir, diff, files)
+
+	var reads errgroup.Group
+	reads.SetLimit(maxFileReads)
+	for i, file := range files {
+		if section, ok := sections[fileHeader(file)]; ok && file.Status != FileStatusUntracked {
+			if len(section) > maxDiffBytes {
+				results[i].Err = ErrDiffTooLarge
+			} else {
+				results[i].Text = section
+			}
+			continue
+		}
+		reads.Go(func() error {
+			results[i].Text, results[i].Err = e.FileDiff(ctx, dir, diff, file)
+			return nil
+		})
+	}
+	_ = reads.Wait() // Each read keeps its error in its own result.
+	return results
+}
+
+// trackedSections runs one git diff over files and splits it by file header. It
+// answers nil when the run fails or overflows, which sends every file to its own
+// read, where a real failure is reported against that file.
+func (e *Executor) trackedSections(ctx context.Context, dir string, diff DiffRange, files []ChangedFile) map[string]string {
+	var paths []string
+	for _, file := range files {
+		if file.Status == FileStatusUntracked {
+			continue
+		}
+		if file.OldPath != "" {
+			paths = append(paths, file.OldPath)
+		}
+		paths = append(paths, file.Path)
+	}
+	if len(paths) == 0 {
+		return nil
+	}
+	stdout := &executil.HeadWriter{Max: maxBatchDiffBytes}
+	err := e.withScratchIndex(ctx, dir, func(indexEnv string) error {
+		args := slices.Concat([]string{"--find-renames"}, diff.args, []string{"--"}, paths)
+		return e.readDiff(ctx, dir, indexEnv, stdout, args...)
+	})
+	if err != nil || stdout.Truncated() {
+		return nil
+	}
+	return splitPatch(stdout.String())
+}
+
+func fileHeader(file ChangedFile) string {
+	from := file.OldPath
+	if from == "" {
+		from = file.Path
+	}
+	return "diff --git a/" + from + " b/" + file.Path
+}
+
+// splitPatch keys each file's section by its header line. A line of a hunk always
+// starts with a marker, so only a real header can start with "diff --git".
+func splitPatch(patch string) map[string]string {
+	const boundary = "\ndiff --git "
+	sections := make(map[string]string)
+	for patch != "" {
+		section := patch
+		if end := strings.Index(patch, boundary); end >= 0 {
+			section = patch[:end+1]
+		}
+		patch = patch[len(section):]
+		header, _, _ := strings.Cut(section, "\n")
+		sections[header] = section
+	}
+	return sections
 }
 
 // untrackedDiff writes the diff itself. git diff --no-index hangs on a FIFO and

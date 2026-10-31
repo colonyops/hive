@@ -19,8 +19,11 @@ const (
 	maxLineBytes = 4000
 	// A diff read covers a batch of files, so it gets longer than a list read.
 	diffReadTimeout = 15 * time.Second
-	maxCommits      = 200
-	maxBranches     = 1000
+	// A diff read reuses a list this recent. It outlasts the review view's 5s poll,
+	// so an open view reads each list once. A file reverted since then reads as Gone.
+	listReuse   = 10 * time.Second
+	maxCommits  = 200
+	maxBranches = 1000
 )
 
 // ENUM(branch, uncommitted, staged, unstaged, commit)
@@ -67,21 +70,62 @@ func (s *Service) ReadChanges(ctx context.Context, sess session.Session, target 
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
 
-	changes, diff, err := s.resolveTarget(ctx, sess.Path, target)
+	changes, list, err := s.readList(ctx, sess.Path, target)
 	if err != nil {
 		return Changes{}, err
 	}
 
-	files, err := s.git.ChangedFiles(ctx, sess.Path, diff)
-	if err != nil {
-		return Changes{}, err
-	}
+	files := list.files
 	if len(files) > maxChangedFiles {
 		files = files[:maxChangedFiles]
 		changes.Truncated = true
 	}
 	changes.Files = files
 	return changes, nil
+}
+
+// changeList is what a diff read needs from a list read.
+type changeList struct {
+	diff  git.DiffRange
+	files []git.ChangedFile
+	at    time.Time
+}
+
+func (s *Service) readList(ctx context.Context, dir string, target DiffTarget) (Changes, changeList, error) {
+	changes, diff, err := s.resolveTarget(ctx, dir, target)
+	if err != nil {
+		return Changes{}, changeList{}, err
+	}
+	files, err := s.git.ChangedFiles(ctx, dir, diff)
+	if err != nil {
+		return Changes{}, changeList{}, err
+	}
+	list := changeList{diff: diff, files: files, at: time.Now()}
+
+	s.listsMu.Lock()
+	defer s.listsMu.Unlock()
+	for key, held := range s.lists {
+		if time.Since(held.at) >= listReuse {
+			delete(s.lists, key)
+		}
+	}
+	s.lists[listKey(dir, target)] = list
+	return changes, list, nil
+}
+
+func (s *Service) recentList(ctx context.Context, dir string, target DiffTarget) (changeList, error) {
+	s.listsMu.Lock()
+	list, ok := s.lists[listKey(dir, target)]
+	s.listsMu.Unlock()
+	if ok && time.Since(list.at) < listReuse {
+		return list, nil
+	}
+	_, list, err := s.readList(ctx, dir, target)
+	return list, err
+}
+
+func listKey(dir string, target DiffTarget) string {
+	return strings.Join([]string{dir, target.Base.String(), target.Against, target.Commit}, "\x00")
 }
 
 // ReadBranches lists the full refs a session's checkout can compare against. A
@@ -223,40 +267,51 @@ func (s *Service) ReadFileDiffs(ctx context.Context, sess session.Session, targe
 	ctx, cancel := context.WithTimeout(ctx, diffReadTimeout)
 	defer cancel()
 
-	_, diffRange, err := s.resolveTarget(ctx, sess.Path, target)
+	list, err := s.recentList(ctx, sess.Path, target)
 	if err != nil {
 		return nil, err
 	}
-	files, err := s.git.ChangedFiles(ctx, sess.Path, diffRange)
-	if err != nil {
-		return nil, err
-	}
-	listed := make(map[string]git.ChangedFile, len(files))
-	for _, file := range files {
+	listed := make(map[string]git.ChangedFile, len(list.files))
+	for _, file := range list.files {
 		listed[file.Path] = file
 	}
+
+	var toRead []git.ChangedFile
+	var readAt []int
 	for i, path := range paths {
-		if file, ok := listed[path]; ok {
-			diffs[i] = s.readFileDiff(ctx, sess.Path, diffRange, file)
+		file, ok := listed[path]
+		switch {
+		case !ok:
+		case file.Binary:
+			diffs[i] = FileDiff{Path: path, Binary: true}
+		// Decided from the counts so a generated file never buffers its patch.
+		case file.Additions+file.Deletions > maxDiffLines:
+			diffs[i] = FileDiff{Path: path, Truncated: true}
+		default:
+			toRead = append(toRead, file)
+			readAt = append(readAt, i)
 		}
+	}
+	if len(toRead) == 0 {
+		return diffs, nil
+	}
+	for i, result := range s.git.FileDiffs(ctx, sess.Path, list.diff, toRead) {
+		diffs[readAt[i]] = s.fileDiffOf(sess.Path, toRead[i], result)
 	}
 	return diffs, nil
 }
 
-func (s *Service) readFileDiff(ctx context.Context, dir string, diffRange git.DiffRange, file git.ChangedFile) FileDiff {
+func (s *Service) fileDiffOf(dir string, file git.ChangedFile, result git.FileDiffResult) FileDiff {
 	diff := FileDiff{Path: file.Path}
-	if file.Binary {
-		diff.Binary = true
-		return diff
-	}
-	// Decided from the counts so a generated file never buffers its patch.
-	if file.Additions+file.Deletions > maxDiffLines {
-		diff.Truncated = true
-		return diff
-	}
-	text, err := s.git.FileDiff(ctx, dir, diffRange, file)
+	text, err := result.Text, result.Err
 	switch {
 	case err == nil:
+		// The list can be seconds old. A tracked file with no diff has gone back to
+		// matching its base. An empty untracked file and a pure rename are still changes.
+		if text == "" && file.Status != git.FileStatusUntracked && file.Status != git.FileStatusRenamed {
+			diff.Gone = true
+			return diff
+		}
 		diff.Text, diff.Truncated = clipDiff(text)
 	case errors.Is(err, git.ErrBinaryDiff):
 		diff.Binary = true

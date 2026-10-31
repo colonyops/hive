@@ -497,8 +497,8 @@ func (s *SessionsService) SessionChanges(ctx context.Context, id string, target 
 }
 
 // SessionFileDiffs reads the diffs of paths in the session's checkout, through
-// the session API as SessionChanges does. The caller asks for a batch because
-// each call first re-reads the change list.
+// the session API as SessionChanges does. The caller asks for a batch because one
+// git diff answers it.
 func (s *SessionsService) SessionFileDiffs(ctx context.Context, id string, target gitstatus.DiffTarget, paths []string) ([]gitstatus.FileDiff, error) {
 	if strings.TrimSpace(id) == "" {
 		return nil, Errorf(KindInvalid, "session id is required")

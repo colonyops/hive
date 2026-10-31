@@ -8,7 +8,7 @@ import type {
 import { errorText } from '../lib/appError'
 import { targetKey } from './useSessionChanges'
 
-const BATCH_SIZE = 8
+const BATCH_SIZE = 50
 
 export interface DiffEntry {
   /** The version of the file this diff was read for. */

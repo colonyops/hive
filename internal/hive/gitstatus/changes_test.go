@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"io/fs"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -336,4 +339,78 @@ func TestReadFileDiffsReturnsAFailedList(t *testing.T) {
 	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", defaultBranch: "main", filesErr: errors.New("bad HEAD")}, 1)
 	_, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch}, []string{"a"})
 	require.ErrorContains(t, err, "bad HEAD")
+}
+
+func TestReadFileDiffsReadsABatchInOneCall(t *testing.T) {
+	t.Parallel()
+
+	var batches atomic.Int32
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{
+		branch: "main", defaultBranch: "main", diffBatch: &batches,
+		files: []git.ChangedFile{
+			{Path: "a.go", Status: git.FileStatusModified},
+			{Path: "b.go", Status: git.FileStatusModified},
+			{Path: "image.png", Status: git.FileStatusModified, Binary: true},
+		},
+		diffs: map[string]string{"a.go": "+a\n", "b.go": "+b\n"},
+	}, 1)
+
+	got, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, []string{"b.go", "image.png", "a.go"})
+	require.NoError(t, err)
+	assert.Equal(t, []gitstatus.FileDiff{{Path: "b.go", Text: "+b\n"}, {Path: "image.png", Binary: true}, {Path: "a.go", Text: "+a\n"}}, got)
+	assert.Equal(t, int32(1), batches.Load())
+}
+
+func TestReadFileDiffsReportsAFileThatStoppedDifferingAsGone(t *testing.T) {
+	t.Parallel()
+
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{
+		branch: "main", defaultBranch: "main",
+		files: []git.ChangedFile{
+			{Path: "reverted.go", Status: git.FileStatusModified},
+			{Path: "empty.txt", Status: git.FileStatusUntracked},
+			{Path: "moved.go", OldPath: "old.go", Status: git.FileStatusRenamed},
+		},
+	}, 1)
+
+	got, err := svc.ReadFileDiffs(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, []string{"reverted.go", "empty.txt", "moved.go"})
+	require.NoError(t, err)
+	assert.Equal(t, []gitstatus.FileDiff{{Path: "reverted.go", Gone: true}, {Path: "empty.txt"}, {Path: "moved.go"}}, got)
+}
+
+func TestReadFileDiffsReusesARecentListForTheSameTarget(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		var lists atomic.Int32
+		svc := gitstatus.NewService(zerolog.Nop(), stubGit{
+			branch: "main", defaultBranch: "main",
+			files:  []git.ChangedFile{{Path: "a.go", Status: git.FileStatusModified}},
+			diffs:  map[string]string{"a.go": "+a\n"},
+			onDiff: func(git.DiffRange) { lists.Add(1) },
+		}, 1)
+		staged := gitstatus.DiffTarget{Base: gitstatus.DiffBaseStaged}
+		unstaged := gitstatus.DiffTarget{Base: gitstatus.DiffBaseUnstaged}
+		read := func(target gitstatus.DiffTarget) {
+			_, err := svc.ReadFileDiffs(t.Context(), activeSession(), target, []string{"a.go"})
+			require.NoError(t, err)
+		}
+
+		_, err := svc.ReadChanges(t.Context(), activeSession(), staged)
+		require.NoError(t, err)
+		read(staged)
+		read(staged)
+		assert.Equal(t, int32(1), lists.Load(), "diff reads reuse the list")
+
+		read(unstaged)
+		assert.Equal(t, int32(2), lists.Load(), "another target has its own list")
+
+		_, err = svc.ReadChanges(t.Context(), activeSession(), staged)
+		require.NoError(t, err)
+		assert.Equal(t, int32(3), lists.Load(), "a list read always reads")
+
+		time.Sleep(11 * time.Second)
+		read(staged)
+		assert.Equal(t, int32(4), lists.Load(), "an old list is read again")
+	})
 }

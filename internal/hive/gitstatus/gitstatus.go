@@ -32,7 +32,7 @@ type Git interface {
 	Commits(ctx context.Context, dir, since string, limit int) ([]git.CommitInfo, error)
 	Branches(ctx context.Context, dir string, limit int) ([]string, error)
 	ChangedFiles(ctx context.Context, dir string, diff git.DiffRange) ([]git.ChangedFile, error)
-	FileDiff(ctx context.Context, dir string, diff git.DiffRange, file git.ChangedFile) (string, error)
+	FileDiffs(ctx context.Context, dir string, diff git.DiffRange, files []git.ChangedFile) []git.FileDiffResult
 }
 
 // Status is one checkout's git state.
@@ -82,12 +82,15 @@ type Service struct {
 	git     Git
 	workers int
 	logger  zerolog.Logger
+
+	listsMu sync.Mutex
+	lists   map[string]changeList
 }
 
 // NewService returns a Service that runs at most workers reads at once in a
 // batch. A workers value below one means one.
 func NewService(logger zerolog.Logger, g Git, workers int) *Service {
-	return &Service{git: g, workers: max(workers, 1), logger: logutils.Component(logger, "gitstatus")}
+	return &Service{git: g, workers: max(workers, 1), logger: logutils.Component(logger, "gitstatus"), lists: make(map[string]changeList)}
 }
 
 // Read reads one checkout. A failed branch read stands for the whole status,

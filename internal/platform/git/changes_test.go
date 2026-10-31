@@ -2,11 +2,15 @@ package git_test
 
 import (
 	"bytes"
+	"context"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -552,4 +556,146 @@ func TestMergeBaseRefUsesTheRefItIsGiven(t *testing.T) {
 	got, err := g.MergeBaseRef(t.Context(), dir, "refs/heads/release")
 	require.NoError(t, err)
 	assert.Equal(t, base, got)
+}
+
+// countingExec counts the git diff processes a read starts.
+type countingExec struct {
+	executil.RealExecutor
+	diffs atomic.Int32
+}
+
+func (e *countingExec) RunDirStream(ctx context.Context, dir string, stdout, stderr io.Writer, cmd string, args ...string) error {
+	if slices.Contains(args, "diff") {
+		e.diffs.Add(1)
+	}
+	return e.RealExecutor.RunDirStream(ctx, dir, stdout, stderr, cmd, args...)
+}
+
+func TestFileDiffsMatchesFileDiffForEachFile(t *testing.T) {
+	t.Parallel()
+	dir, g := newRepo(t)
+	runGit(t, dir, "config", "diff.noprefix", "true")
+	runGit(t, dir, "config", "color.ui", "always")
+	writeFile(t, dir, "keep.txt", "one\nchanged\nthree\n")
+	require.NoError(t, os.Remove(filepath.Join(dir, "gone.txt")))
+	runGit(t, dir, "mv", "moved.txt", "renamed.txt")
+	writeFile(t, dir, "renamed.txt", "a\nb\nc\nd\ne\nedited\n")
+	writeFile(t, dir, "[id] with space.txt", "brackets\n")
+	writeFile(t, dir, "caf\u00e9.txt", "accent\n")
+	writeFile(t, dir, `quo"te.txt`, "quoted\n")
+	runGit(t, dir, "add", "[[]id] with space.txt", "caf\u00e9.txt", `quo"te.txt`)
+	writeFile(t, dir, "new.txt", "untracked\n")
+
+	files, err := g.ChangedFiles(t.Context(), dir, git.WorkingTree("HEAD"))
+	require.NoError(t, err)
+	require.Len(t, files, 7)
+
+	results := g.FileDiffs(t.Context(), dir, git.WorkingTree("HEAD"), files)
+	require.Len(t, results, len(files))
+	for i, file := range files {
+		require.NoError(t, results[i].Err, file.Path)
+		assert.Equal(t, diffOf(t, g, dir, file), results[i].Text, file.Path)
+		assert.NotEmpty(t, results[i].Text, file.Path)
+		assert.NotContains(t, results[i].Text, "\x1b[", file.Path)
+	}
+}
+
+func TestFileDiffsRunsOneDiffForTrackedFiles(t *testing.T) {
+	t.Parallel()
+	dir, _ := newRepo(t)
+	counter := &countingExec{}
+	g := git.NewExecutor("git", counter)
+	writeFile(t, dir, "keep.txt", "one\nchanged\nthree\n")
+	writeFile(t, dir, "moved.txt", "changed\n")
+	writeFile(t, dir, "gone.txt", "changed\n")
+	files := []git.ChangedFile{
+		{Path: "keep.txt", Status: git.FileStatusModified},
+		{Path: "moved.txt", Status: git.FileStatusModified},
+		{Path: "gone.txt", Status: git.FileStatusModified},
+	}
+
+	for i, result := range g.FileDiffs(t.Context(), dir, git.WorkingTree("HEAD"), files) {
+		require.NoError(t, result.Err)
+		assert.Contains(t, result.Text, "diff --git a/"+files[i].Path)
+		assert.Equal(t, 1, strings.Count(result.Text, "diff --git "))
+	}
+	assert.Equal(t, int32(1), counter.diffs.Load())
+}
+
+func TestFileDiffsKeepsAnOversizeFileToItself(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		size int
+	}{
+		{name: "past the file cap", size: 3 << 20},
+		{name: "past the batch cap", size: 33 << 20},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir, g := newRepo(t)
+			writeFile(t, dir, "keep.txt", strings.Repeat("x", tt.size)+"\n")
+			writeFile(t, dir, "gone.txt", "small\n")
+
+			results := g.FileDiffs(t.Context(), dir, git.WorkingTree("HEAD"), []git.ChangedFile{
+				{Path: "keep.txt", Status: git.FileStatusModified},
+				{Path: "gone.txt", Status: git.FileStatusModified},
+			})
+			require.ErrorIs(t, results[0].Err, git.ErrDiffTooLarge)
+			require.NoError(t, results[1].Err)
+			assert.Contains(t, results[1].Text, "+small\n")
+		})
+	}
+}
+
+func TestFileDiffsLeavesAFailureWithItsFile(t *testing.T) {
+	t.Parallel()
+	dir, g := newRepo(t)
+	writeFile(t, dir, "new.txt", "untracked\n")
+
+	results := g.FileDiffs(t.Context(), dir, git.WorkingTree("no-such-ref"), []git.ChangedFile{
+		{Path: "keep.txt", Status: git.FileStatusModified},
+		{Path: "new.txt", Status: git.FileStatusUntracked},
+		{Path: "vanished.txt", Status: git.FileStatusUntracked},
+	})
+	require.Error(t, results[0].Err)
+	require.NoError(t, results[1].Err)
+	assert.Contains(t, results[1].Text, "+untracked\n")
+	require.ErrorIs(t, results[2].Err, fs.ErrNotExist)
+}
+
+func TestFileDiffsIsEmptyForAFileBackAtItsBase(t *testing.T) {
+	t.Parallel()
+	dir, g := newRepo(t)
+	writeFile(t, dir, "gone.txt", "changed\n")
+
+	results := g.FileDiffs(t.Context(), dir, git.WorkingTree("HEAD"), []git.ChangedFile{
+		{Path: "keep.txt", Status: git.FileStatusModified},
+		{Path: "gone.txt", Status: git.FileStatusModified},
+	})
+	require.NoError(t, results[0].Err)
+	assert.Empty(t, results[0].Text)
+	assert.Contains(t, results[1].Text, "+changed\n")
+}
+
+func TestFileDiffsWritesNoIndex(t *testing.T) {
+	t.Parallel()
+	dir, g := newRepo(t)
+	writeFile(t, dir, "keep.txt", "one\nchanged\nthree\n")
+	later := time.Now().Add(time.Hour)
+	require.NoError(t, os.Chtimes(filepath.Join(dir, "gone.txt"), later, later))
+	index := filepath.Join(dir, ".git", "index")
+	before, err := os.ReadFile(index)
+	require.NoError(t, err)
+
+	g.FileDiffs(t.Context(), dir, git.WorkingTree("HEAD"), []git.ChangedFile{
+		{Path: "keep.txt", Status: git.FileStatusModified},
+		{Path: "gone.txt", Status: git.FileStatusModified},
+	})
+
+	after, err := os.ReadFile(index)
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
 }

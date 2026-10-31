@@ -51,6 +51,7 @@ type stubGit struct {
 	block            bool
 	diffs            map[string]string
 	diffErrs         map[string]error
+	diffBatch        *atomic.Int32
 }
 
 func (g stubGit) Branch(context.Context, string) (string, error) { return g.branch, g.branchErr }
@@ -110,11 +111,15 @@ func (g stubGit) ChangedFiles(ctx context.Context, _ string, diff git.DiffRange)
 	return g.files, g.filesErr
 }
 
-func (g stubGit) FileDiff(_ context.Context, _ string, _ git.DiffRange, file git.ChangedFile) (string, error) {
-	if err, ok := g.diffErrs[file.Path]; ok {
-		return "", err
+func (g stubGit) FileDiffs(_ context.Context, _ string, _ git.DiffRange, files []git.ChangedFile) []git.FileDiffResult {
+	if g.diffBatch != nil {
+		g.diffBatch.Add(1)
 	}
-	return g.diffs[file.Path], nil
+	results := make([]git.FileDiffResult, len(files))
+	for i, file := range files {
+		results[i] = git.FileDiffResult{Text: g.diffs[file.Path], Err: g.diffErrs[file.Path]}
+	}
+	return results
 }
 
 func activeSession() session.Session {

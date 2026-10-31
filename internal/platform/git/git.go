@@ -58,8 +58,8 @@ type Git interface {
 	Branches(ctx context.Context, dir string, limit int) ([]string, error)
 	// ChangedFiles lists the working tree against ref, plus untracked files.
 	ChangedFiles(ctx context.Context, dir string, diff DiffRange) ([]ChangedFile, error)
-	// FileDiff returns the unified diff of one file against ref.
-	FileDiff(ctx context.Context, dir string, diff DiffRange, file ChangedFile) (string, error)
+	// FileDiffs returns the unified diff of each file, in order.
+	FileDiffs(ctx context.Context, dir string, diff DiffRange, files []ChangedFile) []FileDiffResult
 }
 
 // RemoteIdentity returns the key under which remotes that name the same
