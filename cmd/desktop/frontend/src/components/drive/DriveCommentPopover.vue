@@ -11,6 +11,7 @@ import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { startDrag } from '@hive/ui/composables/useDragGesture'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
+import { formatCombo } from '../../composables/useKeybindings'
 import type { SourceRange } from '../../lib/driveReviewSelection'
 import { isEditableTarget } from '../../lib/isEditableTarget'
 import { labelText, type ReviewLabel } from '../../lib/reviewLabels'
@@ -30,6 +31,8 @@ const props = defineProps<{
   testid: string
 }>()
 const emit = defineEmits<{ save: [text: string]; cancel: [] }>()
+
+const SAVE_KEY = formatCombo('mod+enter')
 
 const text = defineModel<string>('text', { default: '' })
 const popover = ref<HTMLElement | null>(null)
@@ -174,7 +177,9 @@ defineExpose({ contains: (node: Node | null) => !!node && !!popover.value?.conta
       </div>
       <InlineError v-if="error" variant="line" :message="error" :testid="`${testid}-comment-error`" />
       <div class="flex items-center gap-2">
-        <span class="ml-auto font-mono text-micro text-text-4">⌘↵</span>
+        <span class="ml-auto font-mono text-micro text-text-4" :data-testid="`${testid}-comment-key`">{{
+          SAVE_KEY
+        }}</span>
         <BaseButton variant="ghost" size="xs" :data-testid="`${testid}-comment-cancel`" @click="emit('cancel')">
           Cancel
         </BaseButton>

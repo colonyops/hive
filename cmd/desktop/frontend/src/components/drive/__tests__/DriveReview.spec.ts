@@ -143,6 +143,13 @@ describe('DriveReviewCards', () => {
 })
 
 describe('DriveReviewFooter', () => {
+  it('names the key of the platform on the send button', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'X11; Linux x86_64' })
+    const wrapper = await mountPart(DriveReviewFooter)
+    expect(wrapper.get('[data-testid="r-review-send"]').text()).toContain('Ctrl+↵')
+    vi.unstubAllGlobals()
+  })
+
   it('counts what is ready, copies it all, and opens the send dialog on ⌘↵ in the note', async () => {
     const wrapper = await mountPart(DriveReviewFooter)
     expect(wrapper.get('[data-testid="r-review-ready"]').text()).toBe('2 comments ready')

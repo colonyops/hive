@@ -8,6 +8,7 @@ import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import Kbd from '@hive/ui/components/ui/Kbd.vue'
 import TextArea from '@hive/ui/components/ui/TextArea.vue'
 import { useClipboard } from '@hive/ui/composables/useClipboard'
+import { formatCombo } from '../../composables/useKeybindings'
 import { useToasts } from '../../composables/useToasts'
 import { errorText } from '../../lib/appError'
 import { useDriveReview } from '../../stores/useDriveReview'
@@ -20,6 +21,8 @@ const props = defineProps<{
   /** Derives `-review-footer`, `-review-note`, `-review-ready`, `-review-copy`, `-review-send`, and the dialog's ids. */
   testid: string
 }>()
+
+const SEND_KEY = formatCombo('mod+enter')
 
 const store = useDriveReview()
 const { showToast } = useToasts()
@@ -90,7 +93,7 @@ function onKeydown(event: KeyboardEvent): void {
       >
         <template #icon><IconSend class="size-3.5" /></template>
         Send to Agent
-        <Kbd class="text-accent/70">⌘↵</Kbd>
+        <Kbd class="text-accent/70">{{ SEND_KEY }}</Kbd>
       </BaseButton>
     </div>
     <SendToAgentDialog
