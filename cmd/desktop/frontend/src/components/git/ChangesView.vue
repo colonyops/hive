@@ -479,7 +479,6 @@ const KEY_HINTS = [
           data-testid="changes-files-toggle"
           @click="filesOpen = !filesOpen"
         />
-        <span class="text-body font-semibold text-text">Changes</span>
         <span class="flex min-w-0 items-center gap-1 font-mono text-caption text-text-2">
           <IconGitBranch class="size-3 shrink-0 text-text-4" aria-hidden="true" />
           <span class="truncate" data-testid="changes-branch">{{ changes?.branch }}</span>
