@@ -203,13 +203,6 @@ func printSessionHuman(out io.Writer, server string, sess session.Session) {
 }
 
 func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
-	// The working directory finds a session on this machine. Its id can name
-	// a different session on the server, so a lookup there could answer with
-	// the wrong session.
-	if cmd.app.TargetsServer() {
-		return errors.New("session info reads the session of this directory on this machine; use 'hive session show <server>:<id>' for a session on a server")
-	}
-
 	// Detect session from current working directory
 	sessionID, err := cmd.app.Sessions().DetectSession(ctx)
 	if err != nil {
@@ -455,13 +448,15 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 
 // lsSessionInfo is the JSON output format for hive session ls --json.
 type lsSessionInfo struct {
-	Server string   `json:"server"`
-	ID     string   `json:"id"`
-	Name   string   `json:"name"`
-	Repo   string   `json:"repo"`
-	Inbox  string   `json:"inbox"`
+	Server string `json:"server"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Repo   string `json:"repo"`
+	// Inbox and Unread are for a local session only: a server's inbox is in
+	// that server's hive.db, which messages sent from this machine never reach.
+	Inbox  string   `json:"inbox,omitempty"`
 	State  string   `json:"state"`
-	Unread int      `json:"unread"`
+	Unread *int     `json:"unread,omitempty"`
 	Tags   []string `json:"tags"`
 }
 
@@ -513,7 +508,8 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 	showServer := len(listings) > 1
 
 	// A server that does not answer must not hide the sessions that did, so
-	// only a failure of the one server the list shows fails the command.
+	// only a failure of this machine, or of the one server --server names,
+	// fails the command.
 	var normal, corrupted []listedSession
 	for _, listing := range listings {
 		if listing.err != nil {
@@ -590,7 +586,11 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 			}
 		}
 		_, _ = fmt.Fprintln(out)
-		fmt.Fprintf(os.Stderr, "Run 'hive prune' to clean up\n")
+		if showServer || cmd.app.TargetsServer() {
+			fmt.Fprintf(os.Stderr, "Run 'hive prune' on the machine that has them to clean up\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "Run 'hive prune' to clean up\n")
+		}
 	}
 
 	return nil
@@ -724,19 +724,22 @@ func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, server string, s 
 		ID:     s.ID,
 		Name:   s.Name,
 		Repo:   git.ExtractRepoName(s.Remote),
-		Inbox:  s.InboxTopic(),
 		State:  string(s.State),
-		Unread: 0,
 		Tags:   nonNilTags(s.Tags),
 	}
-
-	// The inbox is in this machine's hive.db, so only a local session has one.
-	if server == session.LocalServer {
-		if msgs, err := cmd.app.Messages().GetUnread(ctx, s.ID, s.InboxTopic()); err == nil {
-			info.Unread = len(msgs)
-		}
+	if server != session.LocalServer {
+		return info
 	}
 
+	info.Inbox = s.InboxTopic()
+	unread := 0
+	msgs, err := cmd.app.Messages().GetUnread(ctx, s.ID, s.InboxTopic())
+	if err != nil {
+		cmd.app.Logger.Warn().Err(err).Str("session", s.ID).Msg("read unread messages")
+	} else {
+		unread = len(msgs)
+	}
+	info.Unread = &unread
 	return info
 }
 
