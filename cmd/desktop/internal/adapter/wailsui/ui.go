@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"runtime"
 	"sync"
@@ -227,8 +228,10 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		// Carries recovered bound-method panics. Below warn it narrates every window event.
 		Logger: slog.New(zerolog.NewSlogHandler(wailsLogger(u.logger))),
 		Assets: application.AssetOptions{
-			Handler:    application.AssetFileServerFS(opts.Assets),
-			Middleware: appletAssets(core.Applets, e2e.SmokeMiddleware(core.PipelineDB(), core.Stores, core.HiveConn(), reset, core.PublishLogAppended)),
+			Handler: application.AssetFileServerFS(opts.Assets),
+			Middleware: func(next http.Handler) http.Handler {
+				return guardWailsRuntime(appletAssets(core.Applets, e2e.SmokeMiddleware(core.PipelineDB(), core.Stores, core.HiveConn(), reset, core.PublishLogAppended))(next))
+			},
 		},
 		SingleInstance: u.singleInstance(core.RuntimePaths().DataDir),
 		Mac: application.MacOptions{
