@@ -124,6 +124,17 @@ export interface Applet {
      * Titlebar is nil for an applet that offers no title bar page.
      */
     "titlebar": AppletTitlebar | null;
+    "commands": AppletCommand[] | null;
+}
+
+/**
+ * AppletCommand is a palette row an applet declares, bindable as applet.<id>.<command>.
+ */
+export interface AppletCommand {
+    "id": string;
+    "title": string;
+    "icon": string;
+    "keywords": string[] | null;
 }
 
 /**

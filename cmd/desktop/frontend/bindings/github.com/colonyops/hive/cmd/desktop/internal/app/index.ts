@@ -13,6 +13,7 @@ export type {
     AgentTarget,
     AgentTargetRef,
     Applet,
+    AppletCommand,
     AppletContext,
     AppletExec,
     AppletExecResult,

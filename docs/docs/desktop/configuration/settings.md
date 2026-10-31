@@ -19,6 +19,7 @@ Settings shows or changes:
 - the feeds pinned to the menu bar;
 - connected source accounts and the local webhook listener;
 - actions and quick terminals;
+- the [applets](applets.md) Hive found, which of them are in the title bar, and what they have running;
 - the agent workspace folder location;
 - the addresses of the MCP servers Hive hosts, and how to add one to your own agent;
 - the optional Hive CLI compatibility config;
@@ -55,6 +56,7 @@ Hive Desktop keeps these files under its config directory by default:
 | Flows | `flows/` |
 | Actions | `actions.yml` |
 | Agent workspaces | `workspaces/` |
+| [Applets](applets.md) | `applets/` |
 | Desktop application data | `~/.local/share/hive/desktop/` |
 | Shared CLI and Desktop log | `<Hive data root>/hive.log` |
 | Account tokens | OS keychain |

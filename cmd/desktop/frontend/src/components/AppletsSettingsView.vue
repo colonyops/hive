@@ -3,7 +3,7 @@
 // under the applets directory are the registration, so this page reads them and does
 // not edit them.
 import { useIntervalFn } from '@vueuse/core'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, type DeepReadonly } from 'vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
@@ -63,13 +63,13 @@ async function stop(process: AppletProcess): Promise<void> {
   await pollProcesses()
 }
 
-function status(applet: Applet): { tone: 'success' | 'danger' | 'accent'; label: string } {
+function status(applet: DeepReadonly<Applet>): { tone: 'success' | 'danger' | 'accent'; label: string } {
   if (!applet.runnable) return { tone: 'danger', label: 'Invalid' }
   if (applet.error) return { tone: 'accent', label: 'Running last good file' }
   return { tone: 'success', label: 'Ready' }
 }
 
-function hint(applet: Applet): string {
+function hint(applet: DeepReadonly<Applet>): string {
   const parts = [`applet.${applet.id}`]
   if (applet.builtin) parts.push('ships with Hive')
   const count = running.value.get(applet.id)

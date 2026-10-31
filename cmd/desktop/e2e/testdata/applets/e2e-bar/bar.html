@@ -26,11 +26,16 @@
     <button id="command">s</button>
     <span id="got"></span>
     <span id="stored"></span>
+    <span id="command-run"></span>
     <script>
       document.querySelector('#surface').textContent = hive.surface
       document.querySelector('#menu').onclick = () => hive.dropdown({ entry: 'menu.html', width: 240, height: 120 })
       document.querySelector('#grow').onclick = () => hive.resize({ width: 90 })
       document.querySelector('#command').onclick = () => hive.navigate('/settings/keybindings')
+      hive.setCommands([{ id: 'live', title: 'E2E bar live row' }])
+      hive.on('command', (id) => {
+        document.querySelector('#command-run').textContent = id
+      })
       hive.on('message', (text) => {
         document.querySelector('#got').textContent = text
       })
