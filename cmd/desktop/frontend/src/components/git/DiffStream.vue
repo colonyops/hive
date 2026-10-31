@@ -2,7 +2,7 @@
 // Every changed file's diff in one scroll. CodeView owns the scroller and keeps
 // only the lines near the viewport in the DOM (ADR the-changes-view-renders-through-pierre-diffs).
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { useEventListener } from '@vueuse/core'
+import { useEventListener, useResizeObserver } from '@vueuse/core'
 import {
   CodeView,
   type CodeViewDiffItem,
@@ -59,14 +59,8 @@ const emit = defineEmits<{
 
 // The separator's height is the only row the library's own stylesheet sizes
 // past what its variables reach. No background of its own: the app's shows through.
-//
-// WebKit scrolls composited layers off the main thread, and the code's horizontal
-// scrollers are such layers. A header sharing a layer with what lies beneath it
-// lets them paint over it mid-scroll, though its z-index says otherwise, so it
-// gets a layer of its own.
 const UNSAFE_CSS = `
   :host { --diffs-bg: var(--color-app); }
-  [data-diffs-header][data-sticky] { will-change: transform; }
   [data-separator=metadata] { height: ${DIFF_METRICS.separatorPx}px; }
   ${SEARCH_HIGHLIGHT_CSS}
 `
@@ -88,6 +82,16 @@ let scrollTop = 0
 const headerHosts = new Map<string, HTMLElement>()
 const mountedHeaders = shallowRef<ReadonlySet<string>>(new Set())
 const fileByPath = computed(() => new Map(props.files.map((file) => [file.path, file])))
+
+const pinnedPath = ref<string | null>(null)
+const pinnedFile = computed(() => (pinnedPath.value ? fileByPath.value.get(pinnedPath.value) : undefined))
+// The next file's header pushes the pinned one out as it arrives, as a sticky header does.
+const pinnedPush = ref(0)
+// Stops short of the scroller's scrollbar, which must stay draggable.
+const pinnedWidth = ref(0)
+useResizeObserver(root, () => {
+  pinnedWidth.value = root.value?.clientWidth ?? 0
+})
 
 function setHeaderMounted(path: string, mounted: boolean): void {
   if (mountedHeaders.value.has(path) === mounted) return
@@ -186,7 +190,9 @@ function viewerOptions(): CodeViewOptions<CommentAnnotation, undefined> {
     // A wrapped line would break the fixed row height everything is laid out from.
     overflow: 'scroll',
     hunkSeparators: 'metadata',
-    stickyHeaders: true,
+    // WKWebView paints a sticky header transparent during a fast scroll, so the
+    // header stays pinned from outside the scroller instead.
+    stickyHeaders: false,
     layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
     itemMetrics: { lineHeight: rowPx, diffHeaderHeight: headerPx, hunkSeparatorHeight: separatorPx, spacing: 0 },
     unsafeCSS: UNSAFE_CSS,
@@ -252,6 +258,7 @@ function syncItems(): void {
     (file) => built.has(file.path) || !props.openPaths.has(file.path) || props.entries.has(file.path),
   )
   viewer?.setItems(shown.value.map(itemFor))
+  updatePinned()
   if (pendingJump && built.has(pendingJump)) {
     const path = pendingJump
     pendingJump = null
@@ -275,6 +282,14 @@ function fileAt(top: number): ChangedFile | undefined {
   return found
 }
 
+function updatePinned(): void {
+  const file = fileAt(scrollTop)
+  pinnedPath.value = file?.path ?? null
+  const next = file && shown.value[shown.value.indexOf(file) + 1]
+  const nextTop = next && viewer?.getTopForItem(next.path)
+  pinnedPush.value = nextTop === undefined ? 0 : Math.min(0, nextTop - scrollTop - DIFF_METRICS.headerPx)
+}
+
 function focus(): void {
   root.value?.focus({ preventScroll: true })
 }
@@ -289,7 +304,7 @@ function stepHunk(delta: 1 | -1): boolean {
   if (!viewer) return false
   const { mode } = props
   const files = shown.value
-  // Under the sticky header, where a hunk lands.
+  // Under the pinned header, where a hunk lands.
   const line = scrollTop + DIFF_METRICS.headerPx
   const from = files.findIndex((file) => file.path === fileAt(line)?.path)
   for (let index = from; index >= 0 && index < files.length; index += delta) {
@@ -321,6 +336,7 @@ onMounted(() => {
   created.setup(root.value)
   created.subscribeToScroll((top) => {
     scrollTop = top
+    updatePinned()
     queuePaint()
     const at = fileAt(top + 8)
     if (!pendingJump && at && at.path !== props.current) emit('update:current', at.path)
@@ -348,13 +364,30 @@ watch(platform.theme, (theme) => {
 </script>
 
 <template>
-  <div
-    ref="root"
-    class="diff-stream hive-scroll relative min-w-0 flex-1 overflow-y-auto bg-app outline-none"
-    tabindex="0"
-    aria-label="Diffs"
-    data-testid="changes-stream"
-  >
+  <div class="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+    <div
+      ref="root"
+      class="diff-stream hive-scroll relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-app outline-none"
+      tabindex="0"
+      aria-label="Diffs"
+      data-testid="changes-stream"
+    />
+    <div
+      v-if="pinnedFile"
+      class="absolute top-0 left-0 z-10"
+      :style="{ width: `${pinnedWidth}px`, transform: `translateY(${pinnedPush}px)` }"
+    >
+      <DiffFileHeader
+        :file="pinnedFile"
+        :entry="entries.get(pinnedFile.path)"
+        :open="openPaths.has(pinnedFile.path)"
+        :viewed="viewedPaths.has(pinnedFile.path)"
+        test-prefix="changes-pinned"
+        @fold="emit('fold', pinnedFile!)"
+        @toggle-viewed="emit('toggle-viewed', pinnedFile!)"
+        @open-editor="emit('open-editor')"
+      />
+    </div>
     <Teleport v-for="path in mountedHeaders" :key="path" :to="headerHosts.get(path)">
       <DiffFileHeader
         v-if="fileByPath.get(path)"
@@ -362,7 +395,6 @@ watch(platform.theme, (theme) => {
         :entry="entries.get(path)"
         :open="openPaths.has(path)"
         :viewed="viewedPaths.has(path)"
-        :current="current === path"
         @fold="emit('fold', fileByPath.get(path)!)"
         @toggle-viewed="emit('toggle-viewed', fileByPath.get(path)!)"
         @open-editor="emit('open-editor')"

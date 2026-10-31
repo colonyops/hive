@@ -14,10 +14,12 @@ const props = defineProps<{
   entry: DiffEntry | undefined
   open: boolean
   viewed: boolean
-  current: boolean
+  /** Prefixes the test ids, because the pinned header repeats a file's header in the stream. */
+  testPrefix?: string
 }>()
 const emit = defineEmits<{ fold: []; 'toggle-viewed': []; 'open-editor': [] }>()
 
+const prefix = computed(() => props.testPrefix ?? `changes-file-${props.file.path}`)
 const status = computed(() => gitStatus(props.file.status))
 const fileIcon = computed(() => documentIcon(gitFileName(props.file.path), ''))
 const diff = computed(() => props.entry?.diff)
@@ -37,11 +39,10 @@ const note = computed(() => {
   <!-- Exactly DIFF_METRICS.headerPx tall: CodeView lays out every file from that height. -->
   <div
     class="flex h-8 cursor-pointer items-center gap-2 border-b border-border bg-raised px-2.5"
-    :class="current ? 'changes-file-current' : ''"
     role="button"
     tabindex="-1"
     :aria-expanded="open"
-    :data-testid="`changes-file-${file.path}-header`"
+    :data-testid="`${prefix}-header`"
     @click="emit('fold')"
   >
     <IconChevronRight
@@ -59,10 +60,7 @@ const note = computed(() => {
     <span class="min-w-0 flex-1 truncate font-mono text-body text-text" :title="file.path">
       <span v-if="file.oldPath" class="text-text-4">{{ file.oldPath }} -&gt; </span>{{ file.path }}
     </span>
-    <span
-      v-if="open && !entry"
-      class="shrink-0 text-caption text-text-4"
-      :data-testid="`changes-file-${file.path}-loading`"
+    <span v-if="open && !entry" class="shrink-0 text-caption text-text-4" :data-testid="`${prefix}-loading`"
       >Loading…</span
     >
     <span
@@ -70,7 +68,7 @@ const note = computed(() => {
       class="max-w-[50%] shrink truncate text-caption"
       :class="diff?.error ? 'text-severity-error' : 'text-text-3'"
       :title="note"
-      :data-testid="`changes-file-${file.path}-note`"
+      :data-testid="`${prefix}-note`"
       >{{ note }}</span
     >
     <BaseButton v-if="open && diff?.truncated" variant="secondary" size="xs" @click.stop="emit('open-editor')">
@@ -89,7 +87,7 @@ const note = computed(() => {
           : 'border-strong text-text-2 hover:text-text'
       "
       :aria-pressed="viewed"
-      :data-testid="`changes-file-${file.path}-viewed`"
+      :data-testid="`${prefix}-viewed`"
       @click.stop="emit('toggle-viewed')"
     >
       <IconCheck v-if="viewed" class="size-3" aria-hidden="true" />
@@ -97,9 +95,3 @@ const note = computed(() => {
     </button>
   </div>
 </template>
-
-<style scoped>
-.changes-file-current {
-  box-shadow: inset 2px 0 0 var(--color-accent);
-}
-</style>

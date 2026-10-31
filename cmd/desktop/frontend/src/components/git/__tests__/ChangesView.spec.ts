@@ -9,6 +9,8 @@ import { resetToastsForTests, useToasts } from '../../../composables/useToasts'
 const mocks = vi.hoisted(() => ({
   SessionChanges: vi.fn(),
   SessionBranches: vi.fn(),
+  scroll: null as ((top: number) => void) | null,
+  tops: new Map<string, number>(),
   SessionFileDiffs: vi.fn(),
   OpenSessionInEditor: vi.fn(),
   setRenderOptions: vi.fn(() => Promise.resolve()),
@@ -63,9 +65,11 @@ vi.mock('@pierre/diffs', async (importOriginal) => {
       this.root = root
     }
     cleanUp(): void {}
-    subscribeToScroll(): void {}
-    getTopForItem(): number {
-      return 0
+    subscribeToScroll(listener: (top: number) => void): void {
+      mocks.scroll = listener
+    }
+    getTopForItem(id: string): number {
+      return mocks.tops.get(id) ?? 0
     }
     scrollTo = mocks.scrollTo
     setOptions = mocks.setOptions
@@ -157,6 +161,7 @@ describe('ChangesView', () => {
     resetStores()
     resetToastsForTests()
     vi.clearAllMocks()
+    mocks.tops.clear()
     mocks.OpenSessionInEditor.mockResolvedValue(undefined)
     mocks.SessionChanges.mockResolvedValue(changes([file('a.go'), file('b.go')]))
     mocks.SessionBranches.mockResolvedValue(['refs/heads/main', 'refs/heads/release', 'refs/remotes/origin/release'])
@@ -203,7 +208,7 @@ describe('ChangesView', () => {
     const wrapper = await mountView()
     await press('j')
     expect(mocks.scrollTo).toHaveBeenCalledWith({ type: 'item', id: 'b.go', align: 'start' })
-    expect(wrapper.get(testid('changes-file-b.go-header')).classes()).toContain('changes-file-current')
+    expect(wrapper.get(testid('changes-row-b.go')).attributes('aria-selected')).toBe('true')
     wrapper.unmount()
   })
 
@@ -427,6 +432,32 @@ describe('ChangesView', () => {
 
     await toggle().trigger('click')
     expect(wrapper.find(testid('changes-row-x/y/b.go')).exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('pins the header of the file at the top, and the next header pushes it out', async () => {
+    mocks.tops.set('a.go', 0).set('b.go', 1000)
+    const wrapper = await mountView()
+    const pinned = () => wrapper.get(testid('changes-pinned-header'))
+    const push = () => pinned().element.parentElement!.style.transform
+
+    mocks.scroll!(500)
+    await flushPromises()
+    expect(pinned().text()).toContain('a.go')
+    expect(push()).toBe('translateY(0px)')
+
+    mocks.scroll!(980)
+    await flushPromises()
+    expect(pinned().text()).toContain('a.go')
+    expect(push()).toBe('translateY(-12px)')
+
+    mocks.scroll!(1000)
+    await flushPromises()
+    expect(pinned().text()).toContain('b.go')
+    expect(push()).toBe('translateY(0px)')
+
+    await wrapper.get(testid('changes-pinned-viewed')).trigger('click')
+    expect(wrapper.get(testid('changes-progress')).text()).toBe('1/2 viewed')
     wrapper.unmount()
   })
 
