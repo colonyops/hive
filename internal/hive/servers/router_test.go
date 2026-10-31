@@ -19,6 +19,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemon"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	"github.com/colonyops/hive/internal/hive/hivetest"
 	"github.com/colonyops/hive/internal/hive/servers"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -128,6 +129,34 @@ func TestRouter_SendsACallToTheServerItsIDNames(t *testing.T) {
 	require.NoError(t, router.DeleteSession(t.Context(), "box:"+twinThere.ID))
 	_, err = box.GetSession(t.Context(), twinThere.ID)
 	require.ErrorIs(t, err, session.ErrNotFound)
+}
+
+func TestRouter_ReadsChangesOnTheServerTheIDNames(t *testing.T) {
+	router, _, box := newRouter(t)
+	onBox := create(t, box, "changes")
+	target := gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}
+
+	reads := map[string]func(id string) error{
+		"SessionChanges": func(id string) error {
+			_, err := router.SessionChanges(t.Context(), id, target)
+			return err
+		},
+		"SessionFileDiffs": func(id string) error {
+			_, err := router.SessionFileDiffs(t.Context(), id, target, []string{"a.txt"})
+			return err
+		},
+		"SessionBranches": func(id string) error {
+			_, err := router.SessionBranches(t.Context(), id)
+			return err
+		},
+	}
+	for name, read := range reads {
+		t.Run(name, func(t *testing.T) {
+			require.NotErrorIs(t, read("box:"+onBox.ID), session.ErrNotFound)
+			require.ErrorIs(t, read(onBox.ID), session.ErrNotFound, "a bare id names a session on this machine")
+			require.ErrorIs(t, read("box:missing"), session.ErrNotFound)
+		})
+	}
 }
 
 // switchableDialer reaches socket until it goes down, and then fails like a
