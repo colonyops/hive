@@ -35,6 +35,13 @@ const expansion = useTreeExpansion<string>('hive.git.tree.expanded', {
 
 const rows = computed(() => gitRows(props.files, props.layout, expansion.expanded))
 
+// A collapsed folder hides its files' counts, so it shows their total.
+function folderComments(dir: string): number {
+  let total = 0
+  for (const [path, count] of props.commentCounts ?? []) if (path.startsWith(`${dir}/`)) total += count
+  return total
+}
+
 const rowElements = new Map<string, HTMLElement>()
 
 function rowKey(row: GitRow): string {
@@ -167,6 +174,15 @@ function onMenuSelect(id: string): void {
           aria-hidden="true"
         />
         <span class="min-w-0 flex-1 truncate">{{ row.label }}</span>
+        <span
+          v-if="!expansion.expanded(row.key) && folderComments(row.key)"
+          class="flex shrink-0 items-center gap-0.5 pr-1 font-mono text-caption text-accent"
+          :title="`${folderComments(row.key)} review comments`"
+          :data-testid="`changes-row-${row.key}-comments`"
+        >
+          <IconMessageSquare class="size-3" aria-hidden="true" />
+          {{ folderComments(row.key) }}
+        </span>
       </div>
       <div
         v-else

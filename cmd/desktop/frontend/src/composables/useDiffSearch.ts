@@ -56,8 +56,13 @@ export function useDiffSearch(
   // A new query lands on its first match. A refreshed diff keeps the match the
   // user is on, and does not scroll under them.
   watch(debounced, () => moveTo(matches.value[0] ?? null))
+  // A query can land before the diff holding its first match has been read. That
+  // match is still the one to reveal. A current match that vanished is another
+  // thing: the diff refreshed under the user, so the view must stay put.
   watch(matches, () => {
-    if (activeIndex.value < 0) active.value = matches.value[0] ?? null
+    if (activeIndex.value >= 0) return
+    if (active.value) active.value = matches.value[0] ?? null
+    else moveTo(matches.value[0] ?? null)
   })
 
   function close(): void {

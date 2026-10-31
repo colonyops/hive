@@ -431,6 +431,29 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
+  it('totals a collapsed folder comments on its row', async () => {
+    mocks.SessionChanges.mockResolvedValue(changes([file('z/b.go'), file('z/c.go')]))
+    const wrapper = await mountView()
+    for (const path of ['z/b.go', 'z/c.go']) {
+      await selectLines(path, 1)
+      const field = document.querySelector<HTMLTextAreaElement>(testid('changes-comment-text'))!
+      field.value = 'note'
+      field.dispatchEvent(new Event('input'))
+      await flushPromises()
+      document.querySelector<HTMLButtonElement>(testid('changes-comment-save'))!.click()
+      await flushPromises()
+    }
+    expect(wrapper.find(testid('changes-row-z-comments')).exists()).toBe(false)
+
+    await wrapper
+      .findAll('[role="treeitem"]')
+      .find((row) => row.text() === 'z')!
+      .trigger('click')
+    await flushPromises()
+    expect(wrapper.get(testid('changes-row-z-comments')).text()).toBe('2')
+    wrapper.unmount()
+  })
+
   it('lists sent reviews in the panel and restores one', async () => {
     mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
     mocks.SendChanges.mockResolvedValue(undefined)
