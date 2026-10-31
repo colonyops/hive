@@ -9,7 +9,7 @@ The `windows` field defines tmux windows declaratively. Hive handles session cre
 ```yaml
 windows:
   - name: "{{ agentWindow }}"
-    command: '{{ agentCommand }} {{ agentFlags }}'
+    command: '{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}'
     focus: true
   - name: shell
 ```
@@ -19,7 +19,7 @@ windows:
 ```yaml
 windows:
   - name: claude
-    command: "claude --model opus"
+    command: "claude --model opus{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
     focus: true
   - name: tests
     command: "npm run test:watch"
@@ -31,7 +31,7 @@ windows:
 ```yaml
 windows:
   - name: claude
-    command: "claude"
+    command: "claude{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
     focus: true
   - name: aider
     command: "aider --model sonnet"
@@ -43,7 +43,7 @@ windows:
 ```yaml
 windows:
   - name: claude
-    command: "claude"
+    command: "claude{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
     dir: "{{ .Path }}/frontend"
     focus: true
   - name: shell
@@ -54,7 +54,7 @@ windows:
 ```yaml
 windows:
   - name: "{{ agentWindow }}"
-    command: '{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt }}{{ end }}'
+    command: '{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}'
     focus: true
   - name: shell
 ```
@@ -67,7 +67,7 @@ windows:
 - **`.ContextDir`** - Shared context directory path
 - **`.Owner`** - Repository owner
 - **`.Repo`** - Repository name
-- **`.Prompt`** - Initial prompt (batch sessions only)
+- **`.Prompt`** - Initial prompt (empty unless the session starts with a prompt)
 - **`.DefaultBranch`** - Default branch name (recycle only)
 - **`.ID`** - Session ID (usercommands only)
 - **`.Remote`** - Git remote URL (usercommands only)

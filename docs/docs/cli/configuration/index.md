@@ -33,7 +33,7 @@ rules:
     max_recycled: 5
     windows:
       - name: "{{ agentWindow }}"
-        command: '{{ agentCommand }} {{ agentFlags }}'
+        command: '{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}'
         focus: true
       - name: shell
     commands:
