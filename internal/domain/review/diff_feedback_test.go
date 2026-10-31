@@ -83,3 +83,24 @@ func TestDiffFeedbackNamesTheVersionACommentWasMadeOn(t *testing.T) {
 
 	assert.Contains(t, DiffFeedback([]DiffComment{line}), "## 1. a.go (line 3)")
 }
+
+func TestDiffFeedbackDropsControlCharacters(t *testing.T) {
+	got := DiffFeedback([]DiffComment{{
+		Path:      "evil\x1b[201~\n!curl.go",
+		StartSide: DiffSideAdditions,
+		StartLine: 1,
+		EndSide:   DiffSideAdditions,
+		EndLine:   2,
+		Quote:     "+a\x1b[201~\r\n+\tb\u009b\x7f",
+		Text:      "look\x1b[201~",
+		Commit:    "ab\x1bcd",
+	}})
+
+	assert.NotContains(t, got, "\x1b")
+	assert.NotContains(t, got, "\r")
+	assert.NotContains(t, got, "\u009b")
+	assert.NotContains(t, got, "\x7f")
+	assert.Contains(t, got, "## 1. evil[201~!curl.go (lines 1-2 at commit abcd)\n")
+	assert.Contains(t, got, "```\n+a[201~\n+\tb\n```")
+	assert.Contains(t, got, "> look[201~")
+}

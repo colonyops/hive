@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 )
 
 // DiffSide says which version of a file a diff line number belongs to.
@@ -41,6 +42,10 @@ type DiffComment struct {
 // DiffFeedback formats comments on a session's changes as the text its agent
 // reads, by path and line. It returns "" when there are no comments.
 //
+// Control characters are dropped, because this text is pasted into a pane: before
+// tmux 3.7, ESC[201~ in a file or its name ends the bracketed paste, and what
+// follows reaches the agent as typed keys.
+//
 // Format:
 //
 //	# Code Review Feedback
@@ -76,11 +81,21 @@ func DiffFeedback(comments []DiffComment) string {
 		return cmp.Or(cmp.Compare(a.Path, b.Path), cmp.Compare(a.StartLine, b.StartLine))
 	})
 	for i, c := range sorted {
+		c.Path, c.Commit = dropControl(c.Path, false), dropControl(c.Commit, false)
 		fmt.Fprintf(&b, "\n## %d. %s (%s)\n", i+1, c.Path, diffLineLabel(c))
-		writeFencedQuote(&b, c.Quote)
-		writeQuoted(&b, strings.TrimSpace(c.Text))
+		writeFencedQuote(&b, dropControl(c.Quote, true))
+		writeQuoted(&b, strings.TrimSpace(dropControl(c.Text, true)))
 	}
 	return b.String()
+}
+
+func dropControl(s string, keepNewlines bool) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\t' || (keepNewlines && r == '\n') || !unicode.IsControl(r) {
+			return r
+		}
+		return -1
+	}, s)
 }
 
 func diffLineLabel(c DiffComment) string {
