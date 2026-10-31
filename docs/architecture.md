@@ -1444,7 +1444,7 @@ because it otherwise rewrites the index and holds `index.lock` when it meets a
 touched file, even under `--no-optional-locks`, and that lock can fail an agent's
 own git command. `DiffStats` follows the same rule. A new read in that file must
 too. The frontend reads diffs one batch at a time, outward from the file on screen,
-and stops 200 files away. `@pierre/diffs` renders them: only the lines near the
+and stops at the 200 open files nearest it. `@pierre/diffs` renders them: only the lines near the
 viewport exist in the DOM, and highlighting runs in a worker pool (ADR
 the-changes-view-renders-through-pierre-diffs).
 

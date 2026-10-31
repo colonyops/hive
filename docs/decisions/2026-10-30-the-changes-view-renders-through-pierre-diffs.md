@@ -43,7 +43,7 @@ giving up virtualization.
    its header row, so it adds no row of a different height.
 
 6. **Diffs are read ahead of the viewport,** one batch at a time, outward from the
-   file on screen, up to 200 files away. A file joins the stream only once its diff
+   file on screen, up to the 200 open files nearest it. A file joins the stream only once its diff
    is read, because growing it in place would push everything below it down the
    screen. Reading only what is on screen would leave a scrollbar too short to use.
 

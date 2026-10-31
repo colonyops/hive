@@ -56,9 +56,9 @@ export function gitStatus(status: string): { letter: string; label: string; colo
 const byPath = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 /**
- * The rows the Git pane draws: folders before files at each level, with a chain
+ * The rows of the Changes file list: folders before files at each level, with a chain
  * of single-child folders on one row so deep paths stay readable in a narrow
- * pane. A folder's key is its full path.
+ * rail. A folder's key is its full path.
  */
 export function gitRows(files: ChangedFile[], layout: GitLayout, isOpen: (key: string) => boolean): GitRow[] {
   if (layout === 'flat') {
