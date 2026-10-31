@@ -270,7 +270,7 @@ type SessionServiceClient interface {
 	// read is shared by every client that asks within a few seconds.
 	GitStatuses(context.Context, *connect.Request[v1.GitStatusesRequest]) (*connect.Response[v1.GitStatusesResponse], error)
 	// StartTmux opens the tmux session of a session on the daemon's machine
-	// in the background, by that machine's spawn rules. It creates the session
+	// in the background, by that machine's rules. It creates the session
 	// and starts the agent when no tmux session runs.
 	StartTmux(context.Context, *connect.Request[v1.StartTmuxRequest]) (*connect.Response[v1.StartTmuxResponse], error)
 }
@@ -562,7 +562,7 @@ type SessionServiceHandler interface {
 	// read is shared by every client that asks within a few seconds.
 	GitStatuses(context.Context, *connect.Request[v1.GitStatusesRequest]) (*connect.Response[v1.GitStatusesResponse], error)
 	// StartTmux opens the tmux session of a session on the daemon's machine
-	// in the background, by that machine's spawn rules. It creates the session
+	// in the background, by that machine's rules. It creates the session
 	// and starts the agent when no tmux session runs.
 	StartTmux(context.Context, *connect.Request[v1.StartTmuxRequest]) (*connect.Response[v1.StartTmuxResponse], error)
 }

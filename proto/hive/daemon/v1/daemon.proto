@@ -44,7 +44,7 @@ service SessionService {
   // read is shared by every client that asks within a few seconds.
   rpc GitStatuses(GitStatusesRequest) returns (GitStatusesResponse);
   // StartTmux opens the tmux session of a session on the daemon's machine
-  // in the background, by that machine's spawn rules. It creates the session
+  // in the background, by that machine's rules. It creates the session
   // and starts the agent when no tmux session runs.
   rpc StartTmux(StartTmuxRequest) returns (StartTmuxResponse);
 }
