@@ -19,7 +19,13 @@ export interface TerminalDriveTarget {
 export function useTerminalDrive(
   target: Ref<TerminalDriveTarget | null>,
   active: () => boolean,
-  docs: { ready: () => boolean; open: (path: string | null) => void; close: () => void },
+  docs: {
+    ready: () => boolean
+    open: (path: string | null) => void
+    /** An agent's document: it must not take the screen from what the user is doing. */
+    arrive: (path: string | null) => void
+    close: () => void
+  },
 ) {
   const route = useRoute()
   const { docRequested, docPath, syncDocQuery } = useDriveRoute()
@@ -41,7 +47,7 @@ export function useTerminalDrive(
       { path?: string; open: boolean } | undefined
     if (!payload || !active() || route.name !== 'terminal') return
     if (driveEventAuthor(payload) !== (target.value?.session ?? null)) return
-    if (payload.open) docs.open(payload.path || null)
+    if (payload.open) docs.arrive(payload.path || null)
     else docs.close()
   })
 }

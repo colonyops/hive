@@ -12,6 +12,7 @@ import IconTrash from '~icons/lucide/trash-2'
 import { useCommands, useShellEscape, type Command } from '../../composables/useCommands'
 import type { TerminalWindowTab } from '../../composables/useTerminalWindows'
 import { activePaneOf } from '../../lib/terminalLayout'
+import { closeTab, focusedTab, focusedWindow, revealWindow } from '../../lib/sessionLayout'
 import { paneMayAutoFocus, setTerminalTreeHandles } from '../../lib/terminalTree'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { MenuActionEntry, MenuEntry } from '@hive/ui/types/menu'
@@ -144,7 +145,7 @@ export function attachedSessionCommands(context: TerminalModeContext, attached: 
  * hub; the registrations gate on `active` instead.
  */
 export function useTerminalCommands(context: TerminalModeContext, active: () => boolean): void {
-  const { pool, tree, nav, ops } = context
+  const { pool, tree, nav, ops, panes } = context
   const { current, activeSlug } = pool
 
   useCommands(() => {
@@ -176,6 +177,7 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
     const row = tree.attachedRow.value
     if (row) nav.cursorRequest.value = windowKey(row, tab.windowId)
     paneMayAutoFocus.value = true
+    panes.apply((layout) => revealWindow(layout, tab.windowId))
     void current.value?.select(tab.windowId)
   }
 
@@ -207,11 +209,18 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
         // tmux names the window, so there is no key to point the cursor at yet;
         // it falls back to the active window, which is the new one once it lands.
         nav.cursorRequest.value = ''
-        void ops.newWindowIn(row)
+        void panes.newWindow(row)
       },
       closeWindow: (): void => {
-        const windowId = current.value?.activeWindowId.value
-        if (windowId) void ops.requestCloseWindow(activeSlug.value, windowId, activeTab()?.name ?? '')
+        // The chord closes what is in front of the user, and a view hides the active window.
+        const layout = panes.layout.value
+        const windowId = focusedWindow(layout)
+        if (windowId) {
+          const name = current.value?.tabs.value.find((tab) => tab.windowId === windowId)?.name ?? ''
+          void ops.requestCloseWindow(activeSlug.value, windowId, name)
+        } else {
+          panes.apply((now) => closeTab(now, now.focusedPane, focusedTab(now)))
+        }
       },
       splitPane: (direction): void => {
         paneMayAutoFocus.value = true

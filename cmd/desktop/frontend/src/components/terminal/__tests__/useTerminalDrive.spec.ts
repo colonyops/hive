@@ -29,6 +29,7 @@ async function mountAt(
   target: Ref<TerminalDriveTarget | null>
   active: Ref<boolean>
   open: ReturnType<typeof vi.fn>
+  arrive: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
 }> {
   const router = createAppRouter(createMemoryHistory())
@@ -38,16 +39,17 @@ async function mountAt(
   const target = ref<TerminalDriveTarget | null>(initial)
   const active = ref(true)
   const open = vi.fn()
+  const arrive = vi.fn()
   const close = vi.fn()
   const Host = defineComponent({
     setup() {
-      useTerminalDrive(target, () => active.value, { ready: () => true, open, close })
+      useTerminalDrive(target, () => active.value, { ready: () => true, open, arrive, close })
       return () => null
     },
   })
   mount(Host, { global: { plugins: [router] } })
   await flushPromises()
-  return { router, target, active, open, close }
+  return { router, target, active, open, arrive, close }
 }
 
 describe('useTerminalDrive', () => {
@@ -78,22 +80,22 @@ describe('useTerminalDrive', () => {
   })
 
   it('follows an agent on the session in view', async () => {
-    const { open, close } = await mountAt('/terminal/fix-login')
+    const { arrive, close } = await mountAt('/terminal/fix-login')
 
     wailsEvents.fire('drive:toggle', { open: true, path: 'a.md', session: 'abc123' })
-    expect(open).toHaveBeenCalledWith('a.md')
+    expect(arrive).toHaveBeenCalledWith('a.md')
 
     wailsEvents.fire('drive:toggle', { open: false, session: 'abc123' })
     expect(close).toHaveBeenCalled()
   })
 
   it('ignores an agent in another session, and any agent off-screen', async () => {
-    const { active, open } = await mountAt('/terminal/fix-login')
+    const { active, arrive } = await mountAt('/terminal/fix-login')
 
     wailsEvents.fire('drive:toggle', { open: true, session: 'other' })
     active.value = false
     wailsEvents.fire('drive:toggle', { open: true, session: 'abc123' })
 
-    expect(open).not.toHaveBeenCalled()
+    expect(arrive).not.toHaveBeenCalled()
   })
 })

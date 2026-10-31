@@ -86,6 +86,21 @@ export function openView(layout: SessionLayout, kind: SessionViewKind, target = 
   return appendTab(layout, layout.panes[target] ? target : 0, { id: kind, kind })
 }
 
+/**
+ * For a tab nobody at the keyboard asked for, such as a document an agent opened.
+ * It joins the last pane and takes no focus, so typing in a terminal carries on.
+ */
+export function addViewQuietly(layout: SessionLayout, kind: SessionViewKind): SessionLayout {
+  if (paneWithTab(layout, kind) >= 0) return layout
+  const index = layout.panes.length - 1
+  const pane = layout.panes[index]
+  return withPane(layout, index, {
+    tabs: [...pane.tabs, { id: kind, kind }],
+    activeTab: pane.activeTab ?? kind,
+    picking: false,
+  })
+}
+
 /** The picker names a place, so a view open in the other pane moves here. */
 export function placeView(layout: SessionLayout, kind: SessionViewKind, target: number): SessionLayout {
   const from = paneWithTab(layout, kind)
@@ -140,6 +155,12 @@ export function toggleSplit(layout: SessionLayout): SessionLayout {
     panes: [{ ...first, tabs: [...first.tabs, ...second.tabs], activeTab: first.activeTab ?? second.activeTab }],
     focusedPane: 0,
   }
+}
+
+/** The picker's way out, which also works on a picker left as the only pane. */
+export function cancelPicker(layout: SessionLayout): SessionLayout {
+  if (layout.panes.length > 1) return toggleSplit(layout)
+  return withPane(layout, 0, { picking: false })
 }
 
 /** One button per direction: it splits that way, turns an existing split, or closes a split already that way. */

@@ -23,6 +23,7 @@ export type SessionPanes = ReturnType<typeof useSessionPanes>
 // A new window only has an id once tmux announces it. A request that never lands
 // must not claim some later window.
 const PENDING_WINDOW_MS = 5000
+const WINDOWS_GONE = ['not-started', 'terminated', 'stopped', 'completed']
 
 /**
  * Keeps the visible session's layout and its tmux windows in step. A layout
@@ -50,38 +51,62 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
 
   // A pane a "+" named for the window it is making.
   const newWindowPane = ref<number | null>(null)
+  // A window someone at this keyboard asked for, as opposed to one from an agent
+  // or another client, which must not take the screen from a view.
+  const windowExpected = ref(false)
+  let revealedFromActive = false
   const { start: expirePending, stop: keepPending } = useTimeoutFn(
-    () => (newWindowPane.value = null),
+    () => {
+      newWindowPane.value = null
+      windowExpected.value = false
+    },
     PENDING_WINDOW_MS,
     { immediate: false },
   )
 
   watch(
-    [key, windowIds, activeWindow, () => pool.visible.value?.status.value],
-    ([sessionKey, ids, active, status], before) => {
-      // No windows while attaching says nothing. After an end, the windows are
-      // gone and their tabs go with them.
-      if (!ids.length && status !== 'ended') return
+    [key, windowIds, activeWindow, () => pool.visible.value?.endReason.value],
+    ([sessionKey, ids, active, endReason], before) => {
+      // No windows says nothing while attaching or after a failed attach, when
+      // tmux may be fine. Only these ends mean the windows are gone.
+      if (!ids.length && !WINDOWS_GONE.includes(endReason ?? '')) return
       const target = newWindowPane.value ?? undefined
       apply((current) => reconcileWindows(current, ids, { active, target }))
       if (!before || before[0] !== sessionKey) return
       const known = before[1] ?? []
-      if (ids.some((id) => !known.includes(id))) {
+      const created = ids.find((id) => !known.includes(id))
+      if (created) {
+        if (windowExpected.value) syncWindowOrder(created)
         newWindowPane.value = null
-        keepPending()
       }
       // A first active window is an attach landing, which must not pull the
       // restored tabs away from what they show.
-      if (before[2] && active && active !== before[2]) apply((current) => revealWindow(current, active))
+      if (before[2] && active && active !== before[2]) {
+        const was = focusedWindow(layout.value)
+        if (was || windowExpected.value) apply((current) => revealWindow(current, active))
+        revealedFromActive = focusedWindow(layout.value) !== was
+      }
+      if (created) {
+        windowExpected.value = false
+        keepPending()
+      }
     },
     { immediate: true },
   )
 
-  // Immediately after the layout, so select() runs before the DOM flip it waits for.
-  watch([() => pool.visible.value, () => focusedWindow(layout.value)], ([session, windowId]) => {
+  // Immediately after the layout, so select() runs before the DOM flip it waits
+  // for. The window list is a source because a cold attach lands with the layout
+  // unchanged, and tmux still has to be told which window it shows.
+  watch([() => pool.visible.value, () => focusedWindow(layout.value), windowIds], ([session, windowId], before) => {
     if (!session || !windowId || !session.tabs.value.some((tab) => tab.windowId === windowId)) return
     if (windowId !== session.activeWindowId.value) {
       void session.select(windowId)
+      return
+    }
+    if (before && before[0] === session && before[1] === windowId) return
+    // tmux already made this window active, and whoever did that does not get the keyboard.
+    if (revealedFromActive) {
+      revealedFromActive = false
       return
     }
     void nextTick(() => {
@@ -99,11 +124,12 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
 
   // The active window claims its renderer through select(); the one beside it
   // has to be asked.
-  watch([() => pool.visible.value, onScreen], renderOnScreen, { flush: 'post' })
+  watch([() => pool.visible.value, onScreen, windowIds], renderOnScreen, { flush: 'post' })
 
   function expectWindowIn(pane: number | undefined): void {
     newWindowPane.value = pane ?? null
-    if (pane !== undefined) expirePending()
+    windowExpected.value = true
+    expirePending()
     paneMayAutoFocus.value = true
   }
 
@@ -133,8 +159,12 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
 
   // tmux's order drives the window chords, so a tab that moves takes its window along.
   function syncWindowOrder(windowId: string): void {
+    const session = pool.visible.value
     const position = windowOrder(layout.value).indexOf(windowId)
-    if (position >= 0) void pool.visible.value?.moveWindow(windowId, position)
+    if (!session || position < 0) return
+    if (session.tabs.value.findIndex((tab) => tab.windowId === windowId) !== position) {
+      void session.moveWindow(windowId, position)
+    }
   }
 
   function moveTabTo(tabId: string, pane: number, gap: number): void {

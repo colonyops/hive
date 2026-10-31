@@ -445,7 +445,7 @@ async function sendReview(): Promise<void> {
 // On the window, because a click on a file header moves focus to the panel,
 // which is outside this view's root.
 useEventListener(window, 'keydown', (event: KeyboardEvent) => {
-  if (openModalCount.value > 0 || !props.keysActive) return
+  if (openModalCount.value > 0 || !props.keysActive || event.defaultPrevented) return
   if ((event.metaKey || event.ctrlKey) && !event.altKey) {
     if (event.key === 'f') {
       event.preventDefault()

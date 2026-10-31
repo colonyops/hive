@@ -28,6 +28,8 @@ const props = defineProps<{
   agentSetup?: boolean
   /** Fills a session tab, which owns the width and closing, rather than standing beside a chat. */
   embedded?: boolean
+  /** A session tab stays mounted behind another, and a write there is not one the user saw. */
+  hidden?: boolean
 }>()
 const emit = defineEmits<{
   close: []
@@ -42,15 +44,18 @@ const { document, tree, treeError, paths, shown, loading, error, show } = useDri
 })
 const activity = useDriveActivity()
 
+const reading = computed(() => (props.hidden ? undefined : props.session))
 watch(
-  () => props.session,
+  reading,
   (session, before) => {
     if (before !== undefined) activity.unregisterVisible(before)
-    activity.registerVisible(session)
+    if (session !== undefined) activity.registerVisible(session)
   },
   { immediate: true },
 )
-onBeforeUnmount(() => activity.unregisterVisible(props.session))
+onBeforeUnmount(() => {
+  if (reading.value !== undefined) activity.unregisterVisible(reading.value)
+})
 
 watch(
   () => [props.space, props.path, props.session] as const,

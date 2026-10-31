@@ -36,6 +36,8 @@ import { activityIndicator } from '../../lib/agentActivity'
 import { spaceGroup, type DriveScope } from '../../lib/drive'
 import { launcherIconComponent } from '../../lib/launcherIcons'
 import {
+  addViewQuietly,
+  cancelPicker,
   chooseSplit,
   closeTab,
   focusPane,
@@ -46,10 +48,10 @@ import {
   selectTab,
   terminalPane,
   resizeSplit,
-  toggleSplit,
   type SessionTab,
 } from '../../lib/sessionLayout'
 import { activePaneOf } from '../../lib/terminalLayout'
+import { terminalTreeFocused } from '../../lib/terminalTree'
 import { useDriveActivity } from '../../stores/useDriveActivity'
 import { useTasks } from '../../stores/useTasks'
 import { useTerminalStatusBar } from '../../stores/useTerminalStatusBar'
@@ -70,7 +72,13 @@ const ChangesView = defineAsyncComponent({
   delay: 0,
 })
 
-const props = defineProps<{ paintedActive: boolean; active: boolean; drive: TerminalDriveTarget | null }>()
+const props = defineProps<{
+  paintedActive: boolean
+  active: boolean
+  drive: TerminalDriveTarget | null
+  /** An app overlay has the keyboard, so a view under it must not take its keys. */
+  overlayOpen?: boolean
+}>()
 const emit = defineEmits<{
   'session-repo-key': [repoKey: string]
   'open-drive-page': [scope: DriveScope]
@@ -322,7 +330,14 @@ function openDiff(): void {
 
 function viewHasKeys(index: number, tabId: string): boolean {
   const pane = layout.value.panes[index]
-  return props.active && layout.value.focusedPane === index && !pane.picking && pane.activeTab === tabId
+  return (
+    props.active &&
+    !props.overlayOpen &&
+    !terminalTreeFocused.value &&
+    layout.value.focusedPane === index &&
+    !pane.picking &&
+    pane.activeTab === tabId
+  )
 }
 
 const { setRepoKey } = useTasks()
@@ -342,6 +357,11 @@ useTerminalDrive(toRef(props, 'drive'), () => props.active, {
     panes.apply((current) => {
       const opened = openView(current, 'docs')
       return path ? { ...opened, docPath: path } : opened
+    }),
+  arrive: (path) =>
+    panes.apply((current) => {
+      const added = addViewQuietly(current, 'docs')
+      return path ? { ...added, docPath: path } : added
     }),
   close: () => panes.apply((current) => closeTab(current, Math.max(0, paneWithDocs(current)), 'docs')),
 })
@@ -516,7 +536,7 @@ function pickDoc(path: string | null): void {
             @terminal="panes.newWindow(panes.row!, index)"
             @agent="(agent) => panes.newAgentWindow(panes.row!, agent, index)"
             @view="(view) => panes.apply((current) => placeView(current, view, index))"
-            @cancel="panes.apply(toggleSplit)"
+            @cancel="panes.apply(cancelPicker)"
           />
           <!-- Mounted while open, so a tab switch keeps a diff's scroll and picks;
                a session switch re-keys them, so only the visible session pays. -->
@@ -530,6 +550,7 @@ function pickDoc(path: string | null): void {
             <DrivePane
               v-if="tab.kind === 'docs' && shownDrive"
               embedded
+              :hidden="pane.picking || pane.activeTab !== tab.id"
               :session="shownDrive.session"
               :space="shownDrive.space"
               :path="layout.docPath"

@@ -44,6 +44,7 @@ const props = withDefaults(
     active?: boolean
     /** The space the attached session reads; null for a session with none. */
     drive?: TerminalDriveTarget | null
+    overlayOpen?: boolean
   }>(),
   { active: true, drive: null },
 )
@@ -175,6 +176,7 @@ const knownTags = computed(() => {
         :painted-active="painted"
         :active="props.active"
         :drive="props.drive"
+        :overlay-open="props.overlayOpen"
         @session-repo-key="emit('session-repo-key', $event)"
         @open-drive-page="emit('open-drive-page', $event)"
         @setup="openMcpSettings"

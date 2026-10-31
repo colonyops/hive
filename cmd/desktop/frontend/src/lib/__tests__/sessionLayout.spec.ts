@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_SPLIT_RATIO,
   MIN_SPLIT_RATIO,
+  addViewQuietly,
+  cancelPicker,
   chooseSplit,
   closeTab,
   focusedTab,
@@ -220,6 +222,40 @@ describe('split', () => {
     expect(terminalPane(newSessionLayout())).toBe(0)
     expect(terminalPane(openView(attached(), 'docs'))).toBe(-1)
     expect(terminalPane(placeWindow(toggleSplit(openView(attached('@1', '@2'), 'docs')), '@2', 1))).toBe(1)
+  })
+})
+
+describe('addViewQuietly', () => {
+  it('adds the tab without taking the screen or the keyboard', () => {
+    const layout = addViewQuietly(attached('@1'), 'docs')
+    expect(ids(layout)).toEqual(['window:@1', 'docs'])
+    expect(layout.panes[0].activeTab).toBe('window:@1')
+    expect(focusedWindow(layout)).toBe('@1')
+  })
+
+  it('leaves a tab that is already open alone', () => {
+    const layout = openView(attached('@1'), 'docs')
+    expect(addViewQuietly(layout, 'docs')).toBe(layout)
+  })
+
+  it('joins the second pane of a split, and fills one that was asking', () => {
+    const layout = addViewQuietly(toggleSplit(attached('@1')), 'docs')
+    expect(ids(layout, 1)).toEqual(['docs'])
+    expect(layout.panes[1].picking).toBe(false)
+  })
+})
+
+describe('cancelPicker', () => {
+  it('closes the second pane', () => {
+    expect(cancelPicker(toggleSplit(attached())).panes).toHaveLength(1)
+  })
+
+  it('never opens another picker when the picker is the only pane left', () => {
+    const lone = closeTab(toggleSplit(openView(newSessionLayout(), 'docs')), 0, 'docs')
+    expect(lone.panes).toHaveLength(1)
+    const cancelled = cancelPicker(lone)
+    expect(cancelled.panes).toHaveLength(1)
+    expect(cancelled.panes[0].picking).toBe(false)
   })
 })
 

@@ -48,6 +48,7 @@ import {
   moveTabBeside,
   orderedTabs,
   selectTab,
+  windowOrder,
   windowTabId,
   type SessionTab,
 } from '../../lib/sessionLayout'
@@ -103,7 +104,8 @@ function windowRowActive(row: TerminalSessionRow, win: TreeWindowRow): boolean {
 
 function openViewRow(row: TerminalSessionRow, pane: number, tabId: string): void {
   sessionTabs.apply(row.id, (layout) => selectTab(layout, pane, tabId))
-  attach.selectSession(row.slug)
+  // For the session on screen this would put the keyboard back in its terminal.
+  if (row.slug !== pool.visibleSlug) attach.selectSession(row.slug)
 }
 
 function closeViewRow(row: TerminalSessionRow, pane: number, tabId: string): void {
@@ -308,13 +310,12 @@ const windowDrag = useDragReorder<{ slug: string; windowId: string }, OrderDropT
       id: target.windowId,
       edge: target.edge,
     })
-    if (session && order) void session.moveWindow(dragged.windowId, order.indexOf(dragged.windowId))
     const row = tree.attachable.find((candidate) => candidate.slug === dragged.slug)
-    if (row) {
-      sessionTabs.apply(row.id, (layout) =>
-        moveTabBeside(layout, windowTabId(dragged.windowId), windowTabId(target.windowId), target.edge),
-      )
-    }
+    if (!session || !order || !row) return
+    sessionTabs.apply(row.id, (layout) =>
+      moveTabBeside(layout, windowTabId(dragged.windowId), windowTabId(target.windowId), target.edge),
+    )
+    void session.moveWindow(dragged.windowId, windowOrder(sessionTabs.layoutOf(row.id)).indexOf(dragged.windowId))
   },
 })
 const { target: windowDropTarget } = windowDrag
@@ -486,7 +487,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                   size="sm"
                   class="row-action row-lead"
                   data-testid="terminal-new-window"
-                  @click="ops.newWindowIn(row)"
+                  @click="panes.newWindow(row)"
                 />
                 <span
                   v-if="tree.rowRunning(row)"
