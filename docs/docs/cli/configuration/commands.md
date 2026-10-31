@@ -17,7 +17,7 @@ usercommands:
     help: "Send /tidy to Claude session"
     confirm: "Commit and push changes?"
   open:
-    sh: "open {{ .Path }}"
+    sh: "open {{ .Path | shq }}"
     help: "Open session in Finder"
     silent: true
     exit: "true"
@@ -187,7 +187,7 @@ When a command runs from the document review view, the focused document is expos
 ```yaml
 usercommands:
   AnnotateDoc:
-    sh: "send-claude {{ .Name | shq }} /annotate {{ .Doc.RelPath | shq }}"
+    sh: "{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} '/annotate '{{ .Doc.RelPath | shq }}"
     help: "Send the focused doc to Claude for annotation"
     scope: [review]
     silent: true
@@ -201,7 +201,7 @@ Arguments passed in the command palette are available via the `.Args` template v
 usercommands:
   msg:
     sh: |
-      hive msg pub -t agent.{{ .ID }}.inbox "{{ range .Args }}{{ . }} {{ end }}"
+      hive msg pub -t agent.{{ .ID }}.inbox {{ join .Args " " | shq }}
     help: "Send message to session inbox"
 ```
 
@@ -214,7 +214,7 @@ The `exit` field supports environment variables for conditional behavior:
 ```yaml
 usercommands:
   attach:
-    sh: "tmux attach -t {{ .Name }}"
+    sh: "tmux attach -t {{ .Name | shq }}"
     exit: "$HIVE_POPUP" # Only exit if HIVE_POPUP=true
 ```
 
@@ -296,7 +296,7 @@ Spin up a dedicated reviewer that reviews your branch and sends feedback via inb
 ```yaml
 usercommands:
   ReviewRequest:
-    sh: "~/.config/hive/scripts/request-review.sh {{ .Name }}"
+    sh: "~/.config/hive/scripts/request-review.sh {{ .Name | shq }} {{ agentSend }}"
     help: "Request code review of current branch"
   CheckInbox:
     sh: "hive msg sub -t agent.{{ .ID }}.inbox"
@@ -312,7 +312,7 @@ Common operations bound to single keys:
 ```yaml
 usercommands:
   open:
-    sh: "open {{ .Path }}"
+    sh: "open {{ .Path | shq }}"
     help: "Open in Finder"
     silent: true
     exit: "true"
@@ -343,6 +343,6 @@ Exit hive after opening a session — useful when running hive in a tmux popup:
 ```yaml
 usercommands:
   attach:
-    sh: "tmux attach -t {{ .Name }}"
+    sh: "tmux attach -t {{ .Name | shq }}"
     exit: "$HIVE_POPUP" # Only exit if HIVE_POPUP=true
 ```

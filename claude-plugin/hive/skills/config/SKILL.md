@@ -29,7 +29,7 @@ rules:
   - pattern: ""  # Matches all repos
     windows:
       - name: claude
-        command: "claude"
+        command: "claude{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
         focus: true
       - name: shell
 ```
@@ -46,7 +46,7 @@ rules:
     max_recycled: 3                         # Max recycled sessions
     windows:                                # Declarative tmux windows (recommended)
       - name: claude
-        command: "claude"
+        command: "claude{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
         focus: true
       - name: shell
     recycle: []                             # Commands when recycling
@@ -125,19 +125,19 @@ usercommands:
 ```yaml
 usercommands:
   tidy:
-    sh: "send-claude {{ .Name }} /tidy"
+    sh: "{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} /tidy"
     help: "Run /tidy in Claude session"
     confirm: "Commit and push changes?"
     silent: true
 
   vscode:
-    sh: "code {{ .Path }}"
+    sh: "code {{ .Path | shq }}"
     help: "Open session in VS Code"
     silent: true
     exit: "true"
 
   msg:
-    sh: 'hive msg pub -t agent.{{ .ID }}.inbox "{{ range .Args }}{{ . }} {{ end }}"'
+    sh: 'hive msg pub -t agent.{{ .ID }}.inbox {{ join .Args " " | shq }}'
     help: "Send message to session inbox"
 ```
 

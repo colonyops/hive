@@ -33,7 +33,7 @@ rules:
   - pattern: ".*github\\.com/my-org/.*"
     windows:
       - name: claude
-        command: "claude --model opus"
+        command: "claude --model opus{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
         focus: true
       - name: tests
         command: "npm run test:watch"
@@ -65,7 +65,7 @@ rules:
   - pattern: ".*github\\.com/my-company/.*"
     windows:
       - name: claude
-        command: "claude"
+        command: "claude{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
         focus: true
       - name: shell
     commands:
@@ -79,7 +79,7 @@ rules:
   - pattern: ".*github\\.com/my-username/.*"
     windows:
       - name: claude
-        command: "claude"
+        command: "claude{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
         focus: true
       - name: shell
     commands:
@@ -93,7 +93,7 @@ rules:
   - pattern: ""
     windows:
       - name: claude
-        command: "claude"
+        command: "claude{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
         focus: true
       - name: shell
     commands:
@@ -101,7 +101,7 @@ rules:
 
 usercommands:
   worktree:
-    sh: 'cd {{ .Path }} && git worktree add ../{{ .Repo }}-{{ index .Args 0 }} {{ index .Args 0 }}'
+    sh: 'cd {{ .Path | shq }} && git worktree add {{ printf "../%s-%s" .Repo (index .Args 0) | shq }} {{ index .Args 0 | shq }}'
     help: "Create worktree from branch"
 ```
 
@@ -145,26 +145,26 @@ rules:
 usercommands:
   # Send slash command to running agent
   tidy:
-    sh: "send-claude {{ .Name }} /tidy"
+    sh: "{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} /tidy"
     help: "Run /tidy in Claude session"
     confirm: "Commit and push changes?"
     silent: true
 
   # Open in editor
   vscode:
-    sh: "code {{ .Path }}"
+    sh: "code {{ .Path | shq }}"
     help: "Open session in VS Code"
     silent: true
     exit: "true"
 
   # Git checkout
   checkout:
-    sh: "cd {{ .Path }} && git checkout {{ index .Args 0 }}"
+    sh: "cd {{ .Path | shq }} && git checkout {{ index .Args 0 | shq }}"
     help: "Checkout branch (usage: :checkout branch-name)"
 
   # Attach with exit condition
   attach:
-    sh: "tmux attach -t {{ .Name }}"
+    sh: "tmux attach -t {{ .Name | shq }}"
     exit: "$HIVE_POPUP"  # Exit if HIVE_POPUP env var is true
 ```
 
