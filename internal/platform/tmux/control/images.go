@@ -20,6 +20,8 @@ const imageRedrawPause = 150 * time.Millisecond
 
 const imageRestoreTimeout = 2 * time.Second
 
+const aggressiveResize = "aggressive-resize"
+
 var kittyCommandStart = []byte("\x1b_G")
 
 // imageDetector reports the first Kitty graphics command in each pane's
@@ -157,7 +159,11 @@ func (c *Client) redrawImageWindows(ctx context.Context) {
 // windowSizeOption reads a window's window-size: its own value with -q, or the
 // value in effect, inherited included, with -A.
 func (c *Client) windowSizeOption(ctx context.Context, id, flag string) (string, error) {
-	lines, err := c.gw.Send(ctx, "show-options -w -v "+flag+" -t "+id+" window-size")
+	return c.windowOption(ctx, id, flag, "window-size")
+}
+
+func (c *Client) windowOption(ctx context.Context, id, flag, name string) (string, error) {
+	lines, err := c.gw.Send(ctx, "show-options -w -v "+flag+" -t "+id+" "+name)
 	if err != nil {
 		return "", err
 	}

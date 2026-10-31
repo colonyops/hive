@@ -167,6 +167,66 @@ func TestResizeWindowAsksForThatWindowsOwnGrid(t *testing.T) {
 	require.Error(t, client.ResizeWindow(ctx, "@1", 0, 20))
 }
 
+func TestResizeWindowSizesAWindowThatIsNotCurrent(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setWindows("@1 1 %1 120 40 0 b25f,120x40,0,0,1 claude", "@2 0 %2 120 40 0 b25f,120x40,0,0,2 shell")
+	f.setOption(globalOption, "on")
+
+	ctx := t.Context()
+	client, err := Attach(ctx, ctx, Options{Slug: f.slug, newProcess: f.factory()})
+	require.NoError(t, err)
+
+	require.NoError(t, client.ResizeWindow(ctx, "@2", 60, 20))
+	require.NoError(t, client.ResizeWindow(ctx, "@2", 61, 20))
+	require.Equal(t, []string{
+		"show-options -w -v -q -t @2 aggressive-resize",
+		"show-options -w -v -A -t @2 aggressive-resize",
+		"set-option -w -t @2 aggressive-resize off",
+		"refresh-client -C @2:60x20",
+		"refresh-client -C @2:61x20",
+	}, f.commandsMatching("@2"), "tmux sizes a window that is not current only with the option off, set before the size")
+
+	require.NoError(t, client.Close(context.WithoutCancel(ctx)))
+	require.Contains(t, f.sentCommands(), "set-option -w -t @2 -u aggressive-resize")
+}
+
+func TestResizeWindowLeavesTheOptionAloneWhenItIsOff(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setWindows("@1 1 %1 120 40 0 b25f,120x40,0,0,1 claude")
+	f.setOption(globalOption, "off")
+
+	ctx := t.Context()
+	client, err := Attach(ctx, ctx, Options{Slug: f.slug, newProcess: f.factory()})
+	require.NoError(t, err)
+
+	require.NoError(t, client.ResizeWindow(ctx, "@1", 60, 20))
+	require.NoError(t, client.Close(context.WithoutCancel(ctx)))
+	for _, cmd := range f.sentCommands() {
+		require.NotContains(t, cmd, "set-option -w -t @1 aggressive-resize")
+		require.NotContains(t, cmd, "-u aggressive-resize")
+	}
+}
+
+func TestCloseRestoresAWindowsOwnAggressiveResize(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setWindows("@1 1 %1 120 40 0 b25f,120x40,0,0,1 claude")
+	f.setOption("@1", "on")
+
+	ctx := t.Context()
+	client, err := Attach(ctx, ctx, Options{Slug: f.slug, newProcess: f.factory()})
+	require.NoError(t, err)
+
+	require.NoError(t, client.ResizeWindow(ctx, "@1", 60, 20))
+	require.NoError(t, client.Close(context.WithoutCancel(ctx)))
+	require.Contains(t, f.sentCommands(), "set-option -w -t @1 aggressive-resize on")
+}
+
 // First paint reaches a subscriber that connects after Attach, because the
 // broker buffered it.
 func TestAttachFirstPaintsEachWindow(t *testing.T) {

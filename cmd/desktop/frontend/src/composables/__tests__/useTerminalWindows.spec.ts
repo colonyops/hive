@@ -1059,6 +1059,45 @@ describe('useTerminalWindows', () => {
     expect(client.resize).not.toHaveBeenCalledWith('hive-abc', 60, 20)
   })
 
+  // tmux may apply the session's vote to its current window alone, and the largest
+  // window in a split need not be the current one.
+  it('asks for a grid per window in a split, the largest window too', async () => {
+    vi.useFakeTimers()
+    const client = fakeClient()
+    const session = open(client)
+    await session.start()
+    await flushPromises()
+    expect(session.tabs.value.map((tab) => tab.windowId)).toEqual(['@1', '@2'])
+
+    session.attachTab('@1', paneHostOf(120, 40))
+    session.attachPane('%1', paneHostOf(120, 40))
+    session.attachTab('@2', paneHostOf(60, 20))
+    FakeResizeObserver.instances[0].trigger()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(client.resize).toHaveBeenCalledWith('hive-abc', 120, 40)
+    expect(client.resize).toHaveBeenCalledWith('hive-abc', 120, 40, '@1')
+    expect(client.resize).toHaveBeenCalledWith('hive-abc', 60, 20, '@2')
+    session.dispose()
+  })
+
+  it('needs no grid of its own for the only window on screen', async () => {
+    vi.useFakeTimers()
+    const client = fakeClient()
+    const session = open(client)
+    await session.start()
+    await flushPromises()
+
+    session.attachTab('@1', paneHostOf(120, 40))
+    session.attachPane('%1', paneHostOf(120, 40))
+    FakeResizeObserver.instances[0].trigger()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(client.resize).toHaveBeenCalledWith('hive-abc', 120, 40)
+    expect(client.resize).not.toHaveBeenCalledWith('hive-abc', 120, 40, '@1')
+    session.dispose()
+  })
+
   // Only the shown window's panes claim an atlas renderer; the DOM renderer
   // behind a hidden one keeps the device width unfloored, so its cell differs.
   // tmux order puts the hidden window first, and it opens first.

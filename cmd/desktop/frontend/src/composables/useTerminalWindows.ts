@@ -730,8 +730,9 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     scheduleConstraintCheck()
 
     // The largest box is the session's vote, which every window off screen follows,
-    // so moving the keyboard between panes does not reflow anything. A window on
-    // screen in another size asks for its own grid, the way a tmux split would have it.
+    // so moving the keyboard between panes does not reflow anything. In a split every
+    // window on screen asks for its own grid, the largest too: with aggressive-resize
+    // on, tmux applies the session's vote to the current window alone.
     const largest = proposals.reduce((best, next) => (next.cols * next.rows > best.cols * best.rows ? next : best))
     if (!vote || largest.cols !== vote.cols || largest.rows !== vote.rows) {
       vote = { cols: largest.cols, rows: largest.rows }
@@ -742,8 +743,8 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     }
     for (const proposal of proposals) {
       const own = windowVotes.get(proposal.windowId)
-      const sameAsSession = proposal.cols === vote.cols && proposal.rows === vote.rows
-      if (own ? own.cols === proposal.cols && own.rows === proposal.rows : sameAsSession) continue
+      const asked = own ? own.cols === proposal.cols && own.rows === proposal.rows : proposals.length === 1
+      if (asked) continue
       windowVotes.set(proposal.windowId, { cols: proposal.cols, rows: proposal.rows })
       void client.resize(slug, proposal.cols, proposal.rows, proposal.windowId).catch((e: unknown) => {
         actionError.value = message(e, 'Could not resize the terminal.')

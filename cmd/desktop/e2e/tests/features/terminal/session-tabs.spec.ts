@@ -62,6 +62,15 @@ async function fixture(page: Page) {
   await page.goto('/#/terminal/review')
   await expect(page.getByTestId('session-tab-window:@1')).toBeVisible()
   await expect(page.getByTestId('terminal-window-row').first()).toBeVisible()
+  await dismissSizeBanner(page)
+}
+
+// The mocked windows stay 100x30 whatever size the panes ask for, which raises the
+// tmux size banner 750ms after the last resize. It pushes the tab rows down 55px, so
+// a coordinate read before it lands misses after, and a drag can straddle the shift.
+async function dismissSizeBanner(page: Page) {
+  await page.getByTestId('terminal-size-constraint-dismiss').click()
+  await expect(page.getByTestId('terminal-size-constraint')).toHaveCount(0)
 }
 
 async function addTab(page: Page, pane: string, label: string) {
@@ -331,9 +340,11 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     const diffRow = page.locator('[data-testid="terminal-view-row"][data-view-kind="diff"]')
     await expect(diffRow).toHaveAttribute('data-active', 'true')
     await expect(page.locator('[data-testid="terminal-window-row"][data-active="true"]')).toHaveCount(0)
-    const rail = (await page.getByTestId('terminal-window-rail').boundingBox())!
     const row = (await diffRow.boundingBox())!
-    expect(Math.abs(rail.y - row.y)).toBeLessThan(row.height)
+    // The rail slides to its row, so it arrives a moment after the row is active.
+    await expect
+      .poll(async () => Math.abs((await page.getByTestId('terminal-window-rail').boundingBox())!.y - row.y))
+      .toBeLessThan(row.height)
 
     await page.getByTestId('session-tab-window:@1').click()
     await expect(diffRow).toHaveAttribute('data-active', 'false')
@@ -382,8 +393,9 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     const tasksFit = async () => {
       await show('tasks')
       const pane = await paneBox(page, 'p1')
-      const list = (await page.getByTestId('tasks-list-column').boundingBox())!
-      expect(list.width).toBeGreaterThan(pane.width * 0.9)
+      await expect
+        .poll(async () => (await page.getByTestId('tasks-list-column').boundingBox())?.width ?? 0)
+        .toBeGreaterThan(pane.width * 0.9)
       await expect(page.getByTestId('tasks-empty')).toContainText('No tasks in')
       const text = (await page.getByTestId('tasks-empty').locator('div').first().boundingBox())!
       expect(text.x + text.width).toBeLessThanOrEqual(pane.x + pane.width)
@@ -445,6 +457,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
 
     await page.reload()
     await expect(page.getByTestId('session-pane-p1')).toBeVisible()
+    await dismissSizeBanner(page)
     expect((await paneBox(page, 'p0')).height).toBeCloseTo(size, -1)
   })
 })
