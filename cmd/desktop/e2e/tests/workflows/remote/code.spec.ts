@@ -128,24 +128,24 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
     await page.goto(`/#/terminal/${SLUG}`)
     await findSession(page)
     await expect(sessionRow(page)).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByTestId('session-tab-add-0')).toBeVisible()
+    await expect(page.getByTestId('session-tab-add-p0')).toBeVisible()
     await expect(page.getByTestId('session-status-host')).toHaveText('server-a')
 
-    await page.getByTestId('session-tab-add-0').click()
+    await page.getByTestId('session-tab-add-p0').click()
     await expect(page.getByTestId('new-window-terminal')).toBeVisible()
     await expect(page.getByTestId('new-window-view-diff')).toHaveCount(0)
     await expect(page.getByTestId('new-window-view-tasks')).toHaveCount(0)
     await page.keyboard.press('Escape')
 
-    await page.getByTestId('session-split-row').click()
+    await page.getByTestId('session-split-row-p0').click()
     await expect(page.getByTestId('session-pane-picker')).toBeVisible()
-    const before = (await page.getByTestId('session-pane-0').boundingBox())!
-    const divider = (await page.getByTestId('session-split-divider').boundingBox())!
+    const before = (await page.getByTestId('session-pane-p0').boundingBox())!
+    const divider = (await page.getByTestId('session-split-divider-s1').boundingBox())!
     await page.mouse.move(divider.x + 3, divider.y + 100)
     await page.mouse.down()
     await page.mouse.move(divider.x + 103, divider.y + 100, { steps: 8 })
     await page.mouse.up()
-    expect((await page.getByTestId('session-pane-0').boundingBox())!.width).toBeCloseTo(before.width + 100, -1)
+    expect((await page.getByTestId('session-pane-p0').boundingBox())!.width).toBeCloseTo(before.width + 100, -1)
     await page.screenshot({ path: screenshotPath(`session-tabs-server-${browserName}.png`) })
     await page.getByTestId('session-pane-picker-cancel').click()
   })

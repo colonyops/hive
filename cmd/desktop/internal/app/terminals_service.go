@@ -378,6 +378,16 @@ func (s *TerminalsService) Resize(ctx context.Context, target string, cols, rows
 	return terminalError(client.Resize(ctx, cols, rows), "resizing session %q", target)
 }
 
+// ResizeWindow asks for one window's own grid, for two windows on screen in panes
+// of different sizes. It is a vote like Resize.
+func (s *TerminalsService) ResizeWindow(ctx context.Context, target, windowID string, cols, rows int) error {
+	client, err := s.client(ctx, target)
+	if err != nil {
+		return err
+	}
+	return terminalError(client.ResizeWindow(ctx, windowID, cols, rows), "resizing window %q of session %q", windowID, target)
+}
+
 func (s *TerminalsService) SelectWindow(ctx context.Context, target, windowID string) error {
 	client, err := s.client(ctx, target)
 	if err != nil {

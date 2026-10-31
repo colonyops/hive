@@ -4,6 +4,7 @@ import { useSessionStatuses } from '../../composables/useSessionStatuses'
 import { useTerminalWindowListings } from '../../composables/useTerminalWindowListings'
 import { useWailsEvent } from '../../composables/useWailsEvent'
 import { activityIndicator, type StatusIndicator } from '../../lib/agentActivity'
+import { agentIconID, type AgentIconID } from '../../lib/agentIcon'
 import type { WindowState } from '../../lib/terminalClient'
 import { windowOrder } from '../../lib/sessionLayout'
 import { useAgentSessionsAll } from '../../stores/useAgentSessionsAll'
@@ -30,6 +31,9 @@ export interface TreeWindowRow {
   active: boolean
   live: boolean
   indicator: StatusIndicator | null
+  /** Whose mark the row carries: the tool hive detected, or failing that the window's name. */
+  agent?: AgentIconID
+  working: boolean
 }
 
 export type TerminalTree = ReturnType<typeof useTerminalTree>
@@ -235,6 +239,10 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     return status ? activityIndicator(status.status, status.tool) : null
   }
 
+  function windowAgent(row: TerminalSessionRow, windowId: string, name: string): AgentIconID | undefined {
+    return agentIconID(windowStatus(row, windowId)?.tool ?? '') ?? agentIconID(name)
+  }
+
   // The scratch section is exempt from "always show windows": its tabs are the
   // section itself, and hiding them leaves a heading that says nothing.
   function listedWindows(row: TerminalSessionRow): WindowState[] {
@@ -264,6 +272,8 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
         active: row.slug === activeSlug.value && tab.windowId === live.activeWindowId.value,
         live: true,
         indicator: windowIndicator(row, tab.windowId),
+        agent: windowAgent(row, tab.windowId, tab.name),
+        working: windowStatus(row, tab.windowId)?.status === 'active',
       }))
     }
     return listedWindows(row).map((win) => ({
@@ -272,6 +282,8 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
       active: false,
       live: false,
       indicator: windowIndicator(row, win.windowId),
+      agent: windowAgent(row, win.windowId, win.name),
+      working: windowStatus(row, win.windowId)?.status === 'active',
     }))
   }
 
@@ -320,6 +332,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     isOfflineSlug,
     serverPending,
     reloadServers,
+    serversLoaded,
     hue,
     sessionServer,
     rowRunning,
@@ -327,6 +340,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     groupAttached,
     groupRunning,
     windowStatus,
+    windowAgent,
     windowRowsFor,
   }
 }

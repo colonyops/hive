@@ -2,7 +2,7 @@
 import { computed, type Component } from 'vue'
 import IconTerminal from '~icons/lucide/terminal'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
-import { agentIcon } from '../lib/agentIcon'
+import { agentBrandIcon } from './terminal/agentBrandIcon'
 import type { SessionViewKind } from '../lib/sessionLayout'
 import type { MenuEntry } from '@hive/ui/types/menu'
 
@@ -44,7 +44,7 @@ const entries = computed<MenuEntry[]>(() => [
             kind: 'action' as const,
             id: `agent:${agent}`,
             label: agent === props.defaultAgent ? `${agent} (default)` : agent,
-            icon: agentIcon(agent),
+            icon: agentBrandIcon(agent),
             disabled: !props.running,
             testid: `new-window-agent-${agent}`,
           }))

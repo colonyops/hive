@@ -6,6 +6,7 @@ import { useTerminalActions } from '../../composables/useTerminalActions'
 import { useWailsEvent } from '../../composables/useWailsEvent'
 import { appErrorMessage, errorText } from '../../lib/appError'
 import type { TerminalClient, WindowForeground } from '../../lib/terminalClient'
+import { useSessionTabs } from '../../stores/useSessionTabs'
 import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
 import { useTerminalOutcomes } from '../../stores/useTerminalOutcomes'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
@@ -93,6 +94,8 @@ export function useTerminalSessionOps(options: {
   }
 
   async function killSession(slug: string): Promise<void> {
+    const killed = tree.attachable.value.find((row) => row.slug === slug)
+    if (killed) useSessionTabs().forget(killed.id)
     if (!client.value) return
     await client.value.kill(slug)
     useTerminalOutcomes().report(slug, { reason: 'stopped', detail: 'The terminal was stopped.' })

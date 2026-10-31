@@ -22,5 +22,17 @@ export const useSessionTabs = defineStore('sessionTabs', () => {
     if (next !== current) layouts.value = { ...layouts.value, [key]: next }
   }
 
-  return { layoutOf, apply }
+  function forget(key: string): void {
+    if (!(key in layouts.value)) return
+    const { [key]: _gone, ...rest } = layouts.value
+    layouts.value = rest
+  }
+
+  /** Lets go of every session `keep` says no longer exists. */
+  function retain(keep: (key: string) => boolean): void {
+    const kept = Object.entries(layouts.value).filter(([key]) => keep(key))
+    if (kept.length !== Object.keys(layouts.value).length) layouts.value = Object.fromEntries(kept)
+  }
+
+  return { layoutOf, apply, forget, retain }
 })

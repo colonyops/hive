@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, proxyRefs, ref, toRef, watch, type Component } from 'vue'
+import { computed, nextTick, proxyRefs, ref, toRef, watch } from 'vue'
 import { useNow } from '@vueuse/core'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconCircleAlert from '~icons/lucide/circle-alert'
@@ -13,9 +13,6 @@ import IconPlus from '~icons/lucide/plus'
 import IconRotateCw from '~icons/lucide/rotate-cw'
 import IconServer from '~icons/lucide/server'
 import IconTrash from '~icons/lucide/trash-2'
-import IconFileDiff from '~icons/lucide/file-diff'
-import IconFileText from '~icons/lucide/file-text'
-import IconListTodo from '~icons/lucide/list-todo'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
@@ -28,6 +25,7 @@ import Kbd from '@hive/ui/components/ui/Kbd.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import TreeRail from '@hive/ui/components/ui/TreeRail.vue'
 import SessionAddMenu from './SessionAddMenu.vue'
+import SessionTabIcon from './SessionTabIcon.vue'
 import SessionTagsIndicator from '../SessionTagsIndicator.vue'
 import SessionRowMenu from '../SessionRowMenu.vue'
 import SidebarToolbar from '../sidebar/SidebarToolbar.vue'
@@ -40,7 +38,7 @@ import { useNewSession } from '../../composables/useNewSession'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import { TERMINAL_SIDEBAR } from '../../lib/modeSidebars'
 import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
-import { moveId, type OrderDropTarget } from '../../lib/listOrder'
+import type { OrderDropTarget } from '../../lib/listOrder'
 import {
   closeTab,
   focusedTab,
@@ -65,31 +63,33 @@ const props = defineProps<{ active: boolean }>()
 const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panes } = useTerminalModeContext()
 const { openBlank: openNewSession } = useNewSession()
 const sessionTabs = useSessionTabs()
-const VIEW_ROWS: Partial<Record<SessionTab['kind'], { label: string; icon: Component }>> = {
-  docs: { label: 'Docs', icon: IconFileText },
-  diff: { label: 'Diff', icon: IconFileDiff },
-  tasks: { label: 'Tasks', icon: IconListTodo },
+const VIEW_ROWS: Partial<Record<SessionTab['kind'], { label: string }>> = {
+  docs: { label: 'Docs' },
+  diff: { label: 'Diff' },
+  tasks: { label: 'Tasks' },
 }
 
 // The tree mirrors the tabs: one row each, in tab order. A session that has not
 // been attached yet has no tabs for its listed windows, which come first.
 interface TreeItem {
   key: string
+  /** The tab this row mirrors, which is what a drag moves. */
+  tabId: string
   win: TreeWindowRow | null
-  view: { pane: number; tab: SessionTab } | null
+  view: { pane: string; tab: SessionTab } | null
 }
 
 function treeItemsFor(row: TerminalSessionRow): TreeItem[] {
   const windows = tree.windowRowsFor(row)
   const tabs = orderedTabs(sessionTabs.layoutOf(row.id))
   const placed = tabs.flatMap(({ pane, tab }): TreeItem[] => {
-    if (tab.kind !== 'window') return [{ key: `view:${tab.id}`, win: null, view: { pane, tab } }]
+    if (tab.kind !== 'window') return [{ key: `view:${tab.id}`, tabId: tab.id, win: null, view: { pane, tab } }]
     const win = windows.find((candidate) => candidate.windowId === tab.windowId)
-    return win ? [{ key: win.windowId, win, view: null }] : []
+    return win ? [{ key: win.windowId, tabId: tab.id, win, view: null }] : []
   })
   const unplaced = windows
     .filter((win) => !tabs.some(({ tab }) => tab.id === windowTabId(win.windowId)))
-    .map((win) => ({ key: win.windowId, win, view: null }))
+    .map((win) => ({ key: win.windowId, tabId: windowTabId(win.windowId), win, view: null }))
   return [...unplaced, ...placed]
 }
 
@@ -102,13 +102,13 @@ function windowRowActive(row: TerminalSessionRow, win: TreeWindowRow): boolean {
   return win.active && !(row.slug === pool.visibleSlug && !focusedWindow(sessionTabs.layoutOf(row.id)))
 }
 
-function openViewRow(row: TerminalSessionRow, pane: number, tabId: string): void {
+function openViewRow(row: TerminalSessionRow, pane: string, tabId: string): void {
   sessionTabs.apply(row.id, (layout) => selectTab(layout, pane, tabId))
   // For the session on screen this would put the keyboard back in its terminal.
   if (row.slug !== pool.visibleSlug) attach.selectSession(row.slug)
 }
 
-function closeViewRow(row: TerminalSessionRow, pane: number, tabId: string): void {
+function closeViewRow(row: TerminalSessionRow, pane: string, tabId: string): void {
   sessionTabs.apply(row.id, (layout) => closeTab(layout, pane, tabId))
 }
 const menus = proxyRefs(useTreeRowMenus({ windowMenuAllowed: ops.rowHasWindowActions }))
@@ -235,9 +235,17 @@ const { rails, update: settleRails } = useSelectionRail(
   treeContent,
   [
     '[data-testid="terminal-session-row"][data-attached="true"]',
-    '[data-testid="terminal-window-row"][data-active="true"]',
+    '[data-testid="terminal-window-row"][data-active="true"], [data-testid="terminal-view-row"][data-active="true"]',
   ],
-  { sources: [() => pool.activeSlug, () => pool.current?.activeWindowId.value], settle: () => treeSettled.value },
+  {
+    sources: [
+      () => pool.activeSlug,
+      () => pool.current?.activeWindowId.value,
+      () => focusedTab(panes.layout),
+      () => windowOrder(panes.layout).join(' '),
+    ],
+    settle: () => treeSettled.value,
+  },
 )
 
 // Motion stays off until the tree has been through a frame: on the first paint
@@ -301,35 +309,36 @@ const expandHooks = {
 // A window can only land back in the session it came from, and is movable only
 // while that session holds a control client, which is exactly when the tree
 // renders its live tabs.
-const windowDrag = useDragReorder<{ slug: string; windowId: string }, OrderDropTarget & { windowId: string }>({
+const windowDrag = useDragReorder<{ slug: string; tabId: string }, OrderDropTarget & { tabId: string }>({
   mime: 'application/x-hive-terminal-window',
-  payload: (dragged) => dragged.windowId,
+  payload: (dragged) => dragged.tabId,
   onDrop: (dragged, target) => {
-    const session = pool.pool.get(dragged.slug)
-    const order = moveId(session?.tabs.value.map((tab) => tab.windowId) ?? [], dragged.windowId, {
-      id: target.windowId,
-      edge: target.edge,
-    })
     const row = tree.attachable.find((candidate) => candidate.slug === dragged.slug)
-    if (!session || !order || !row) return
-    sessionTabs.apply(row.id, (layout) =>
-      moveTabBeside(layout, windowTabId(dragged.windowId), windowTabId(target.windowId), target.edge),
-    )
-    void session.moveWindow(dragged.windowId, windowOrder(sessionTabs.layoutOf(row.id)).indexOf(dragged.windowId))
+    if (!row) return
+    sessionTabs.apply(row.id, (layout) => moveTabBeside(layout, dragged.tabId, target.tabId, target.edge))
+    // tmux's order drives the window chords, so a window takes its place there too.
+    if (!dragged.tabId.startsWith('window:')) return
+    const windowId = dragged.tabId.slice('window:'.length)
+    const session = pool.pool.get(dragged.slug)
+    const position = windowOrder(sessionTabs.layoutOf(row.id)).indexOf(windowId)
+    if (session && position >= 0) void session.moveWindow(windowId, position)
   },
 })
 const { target: windowDropTarget } = windowDrag
 
 // Both edges of the dragged window name the gap it already fills, so neither marks a move.
-function onWindowDragOver(event: DragEvent, row: TerminalSessionRow, windowId: string): void {
+function onWindowDragOver(event: DragEvent, row: TerminalSessionRow, item: TreeItem): void {
   const dragged = windowDrag.dragging.value
-  const movable = !!windowId && dragged?.slug === row.slug && dragged.windowId !== windowId
-  windowDrag.over(event, movable ? { id: windowMenuKey(row, windowId), windowId, edge: dropEdge(event) } : null)
+  const movable = dragged?.slug === row.slug && dragged.tabId !== item.tabId
+  windowDrag.over(
+    event,
+    movable ? { id: windowMenuKey(row, item.key), tabId: item.tabId, edge: dropEdge(event) } : null,
+  )
 }
 
-function draggingWindowRow(slug: string, windowId: string): boolean {
+function draggingWindowRow(slug: string, tabId: string): boolean {
   const dragged = windowDrag.dragging.value
-  return dragged?.slug === slug && dragged.windowId === windowId
+  return dragged?.slug === slug && dragged.tabId === tabId
 }
 </script>
 
@@ -489,14 +498,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                   data-testid="terminal-new-window"
                   @click="panes.newWindow(row)"
                 />
-                <span
-                  v-if="tree.rowRunning(row)"
-                  class="row-status text-severity-success"
-                  data-testid="terminal-session-liveness"
-                >
-                  <span class="size-2.5 rounded-full bg-current" aria-hidden="true" />
-                  <span class="sr-only">Terminal running</span>
-                </span>
                 <IconButton
                   :ref="(el) => menus.setRowToggle(row.id, el)"
                   label="Terminal actions"
@@ -601,14 +602,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                         :ignore="[menus.newWindowToggle]"
                         @close="menus.openNewWindow = ''"
                       />
-                      <span
-                        v-if="tree.rowRunning(row)"
-                        class="row-status text-severity-success"
-                        data-testid="terminal-session-liveness"
-                      >
-                        <span class="size-2.5 rounded-full bg-current" aria-hidden="true" />
-                        <span class="sr-only">{{ group.kind === 'chats' ? 'Agent running' : 'Terminal running' }}</span>
-                      </span>
                       <IconButton
                         :ref="(el) => menus.setRowToggle(row.id, el)"
                         :label="group.kind === 'chats' ? 'Chat actions' : 'Session actions'"
@@ -662,12 +655,12 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                           class="window-slot"
                           :class="[
                             dropClass(windowDropTarget, windowMenuKey(row, item.key)),
-                            { 'opacity-40': draggingWindowRow(row.slug, item.key) },
+                            { 'opacity-40': draggingWindowRow(row.slug, item.tabId) },
                           ]"
-                          :draggable="!!item.win?.live && rename.windowId !== item.key"
+                          :draggable="(item.view !== null || !!item.win?.live) && rename.windowId !== item.key"
                           data-testid="terminal-window-slot"
-                          @dragstart="windowDrag.start($event, { slug: row.slug, windowId: item.key })"
-                          @dragover.prevent="onWindowDragOver($event, row, item.win?.windowId ?? '')"
+                          @dragstart="windowDrag.start($event, { slug: row.slug, tabId: item.tabId })"
+                          @dragover.prevent="onWindowDragOver($event, row, item)"
                           @drop.prevent="windowDrag.drop"
                           @dragend="windowDrag.end"
                         >
@@ -688,13 +681,18 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                             :data-testid="item.win.live ? 'terminal-window-row' : 'terminal-listed-window-row'"
                             :data-window-id="item.win.windowId"
                             :data-tree-key="`w:${row.id}:${item.win.windowId}`"
-                            :data-active="item.win.live ? item.win.active : undefined"
+                            :data-active="item.win.live ? windowRowActive(row, item.win) : undefined"
                             @click="nav.openWindow(row, item.win)"
                             @keydown.enter.self.prevent="nav.openWindow(row, item.win)"
                             @keydown.space.self.prevent="nav.openWindow(row, item.win)"
                             @dblclick="rename.start(item.win)"
                             @contextmenu.prevent="menus.toggleWindow(row, item.win.windowId, $event)"
                           >
+                            <SessionTabIcon
+                              kind="window"
+                              :agent="item.win.agent"
+                              :class="item.win.agent ? '' : 'text-text-4'"
+                            />
                             <input
                               v-if="rename.windowId === item.win.windowId"
                               v-model="rename.draft"
@@ -722,7 +720,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                                 @click="ops.requestCloseWindow(row.slug, item.win.windowId, item.win.name)"
                               />
                               <span
-                                v-if="item.win.indicator"
+                                v-if="item.win.indicator && !item.win.working"
                                 class="window-status"
                                 :class="item.win.indicator.color"
                                 :title="item.win.indicator.label"
@@ -773,14 +771,11 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                             role="button"
                             tabindex="-1"
                             data-testid="terminal-view-row"
+                            :data-active="viewRowActive(row, item.view.tab.id)"
                             :data-view-kind="item.view.tab.kind"
                             @click="openViewRow(row, item.view.pane, item.view.tab.id)"
                           >
-                            <component
-                              :is="VIEW_ROWS[item.view.tab.kind]?.icon"
-                              class="mr-1.5 size-3 shrink-0 text-text-4"
-                              aria-hidden="true"
-                            />
+                            <SessionTabIcon :kind="item.view.tab.kind" class="text-text-4" />
                             <span class="min-w-0 flex-1 truncate text-small">{{
                               VIEW_ROWS[item.view.tab.kind]?.label
                             }}</span>
@@ -1044,9 +1039,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
   z-index: 1;
   transition: opacity 0.15s ease;
 }
-.session-row:has(.row-status) .session-age {
-  margin-right: -24px;
-}
 .session-row:is(:hover, .menu-open, :has(.row-trailing:focus-within)) .session-age {
   opacity: 0;
   pointer-events: none;
@@ -1079,12 +1071,10 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
 .row-lead {
   grid-area: 1 / 1;
 }
-.row-status,
 .window-status,
 .row-swap {
   grid-area: 1 / 2;
 }
-.row-status,
 .window-status {
   display: flex;
   width: 18px;
@@ -1093,7 +1083,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
   align-items: center;
   justify-content: center;
 }
-.row-status,
 .window-row.has-swap .window-status {
   pointer-events: none;
 }
@@ -1108,10 +1097,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
 :is(.session-row, .group-row, .window-row):is(:hover, .menu-open) .row-action,
 .row-action:focus-visible {
   opacity: 1;
-}
-:is(.session-row, .group-row):is(:hover, .menu-open) .row-status,
-.row-trailing:focus-within .row-status {
-  opacity: 0;
 }
 .window-row.has-swap:hover .window-status,
 .window-row.has-swap .window-trailing:focus-within .window-status {

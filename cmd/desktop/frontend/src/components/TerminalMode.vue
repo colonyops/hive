@@ -25,7 +25,6 @@ import { useWindowRename } from './terminal/useWindowRename'
 import { useNewSession } from '../composables/useNewSession'
 import { usePaintedActive } from '../composables/usePaintedActive'
 import { useSessionActions } from '../composables/useSessionActions'
-import type { DriveScope } from '../lib/drive'
 import { revealWindow } from '../lib/sessionLayout'
 import { TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 import { useCodeViews } from '../stores/useCodeViews'
@@ -50,7 +49,6 @@ const props = withDefaults(
 )
 const emit = defineEmits<{
   'session-repo-key': [repoKey: string]
-  'open-drive-page': [scope: DriveScope]
 }>()
 const PREPARE_LIMIT_MS = 3000
 const active = (): boolean => props.active
@@ -99,6 +97,7 @@ const attach = useTerminalAttach({
   active,
   paintedActive,
   onSwitch: () => (rename.windowId.value = ''),
+  onSessionClosed: (row) => sessionTabs.forget(row.id),
   onWindowChosen: (row, windowId) => sessionTabs.apply(row.id, (layout) => revealWindow(layout, windowId)),
 })
 const sessions = useSessionActions({ onChanged: () => void tree.reloadSessions() })
@@ -178,7 +177,6 @@ const knownTags = computed(() => {
         :drive="props.drive"
         :overlay-open="props.overlayOpen"
         @session-repo-key="emit('session-repo-key', $event)"
-        @open-drive-page="emit('open-drive-page', $event)"
         @setup="openMcpSettings"
       />
     </div>

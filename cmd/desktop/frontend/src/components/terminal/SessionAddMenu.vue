@@ -13,7 +13,7 @@ const props = withDefaults(
   defineProps<{
     row: TerminalSessionRow
     /** The pane a choice lands in; the session's focused pane without one. */
-    pane?: number
+    pane?: string
     flip?: boolean
     ignore: (HTMLElement | null)[]
     anchor?: HTMLElement | null

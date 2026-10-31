@@ -31,7 +31,7 @@ const idle = {
 }
 
 function win(windowId: string, active = false): TreeWindowRow {
-  return { windowId, name: windowId, active, live: true, indicator: null }
+  return { windowId, name: windowId, active, live: true, indicator: null, working: false }
 }
 
 function setup() {

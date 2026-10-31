@@ -592,32 +592,18 @@ describe('TerminalMode', () => {
     })
 
     const { wrapper } = await mountAt()
-    // Only a running session carries a glyph; an idle one greys its name instead.
-    const liveness = wrapper.findAll('[data-testid="terminal-session-liveness"]')
-    expect(liveness).toHaveLength(1)
-    expect(liveness[0].text()).toBe('Terminal running')
-    expect(liveness[0].get('span[aria-hidden="true"]').classes()).toEqual(
-      expect.arrayContaining(['size-2.5', 'rounded-full', 'bg-current']),
-    )
+    // An idle session greys its name, and a running one carries nothing extra.
+    expect(wrapper.find('[data-testid="terminal-session-liveness"]').exists()).toBe(false)
     const idleRow = wrapper.get('[data-testid="terminal-session-row"][data-slug="stopped"]')
-    expect(idleRow.find('[data-testid="terminal-session-liveness"]').exists()).toBe(false)
     expect(idleRow.get('span').classes()).toContain('text-text-3')
     const liveRow = wrapper.get('[data-testid="terminal-session-row"][data-slug="live"]')
     expect(liveRow.get('span').classes()).not.toContain('text-text-3')
-    expect(liveRow.get('[data-testid="terminal-session-liveness"]').element.parentElement).toBe(
-      liveRow.get('[data-testid="terminal-session-menu-toggle"]').element.parentElement,
-    )
 
+    // A working agent has no glyph of its own: only the states that want attention do.
     const activity = wrapper.findAll('[data-testid="terminal-window-status"]')
-    expect(activity).toHaveLength(4)
+    expect(activity).toHaveLength(3)
     expect(activity.every((indicator) => indicator.find('svg').exists())).toBe(true)
-    expect(activity.every((indicator) => indicator.classes().includes('window-status'))).toBe(true)
-    expect(wrapper.get('[data-testid="terminal-window-status"][data-status="active"]').attributes('title')).toBe(
-      'pi is working',
-    )
-    expect(wrapper.get('[data-testid="terminal-window-status"][data-status="active"] svg').classes()).toContain(
-      'animate-spin',
-    )
+    expect(wrapper.find('[data-testid="terminal-window-status"][data-status="active"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="terminal-window-status"][data-status="approval"]').attributes('title')).toBe(
       'claude needs approval',
     )
@@ -627,7 +613,7 @@ describe('TerminalMode', () => {
     await flushPromises()
 
     expect(wrapper.findAll('[data-testid="terminal-window-row"]')).toHaveLength(4)
-    expect(wrapper.findAll('[data-testid="terminal-window-status"]')).toHaveLength(4)
+    expect(wrapper.findAll('[data-testid="terminal-window-status"]')).toHaveLength(3)
   })
 
   it('opens the new-session dialog from the sidebar header', async () => {
@@ -2828,7 +2814,6 @@ describe('TerminalMode', () => {
 
       expect(listWindows).toHaveBeenCalledWith([SCRATCH_SLUG])
       expect(wrapper.findAll('[data-testid="terminal-listed-window-row"]').map((tab) => tab.text())).toEqual(['zsh'])
-      expect(heading(wrapper).find('[data-testid="terminal-session-liveness"]').exists()).toBe(true)
       wrapper.unmount()
     })
 
@@ -3051,7 +3036,7 @@ describe('TerminalMode', () => {
       })
       const { wrapper } = await mountWithPinnedChat()
 
-      expect(chatRows(wrapper)[0].find('[data-testid="terminal-session-liveness"]').exists()).toBe(true)
+      expect(chatRows(wrapper)[0].classes()).not.toContain('text-text-3')
       wrapper.unmount()
     })
 
@@ -4705,7 +4690,7 @@ describe('TerminalMode', () => {
     it('has no Docs tab until the route asks for one', async () => {
       const { wrapper } = await mountWithDrive('/terminal/hive-fix-parser')
 
-      expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(false)
 
       wrapper.unmount()
     })
@@ -4713,25 +4698,25 @@ describe('TerminalMode', () => {
     it('turns ?doc into a Docs tab and consumes the query, so it cannot follow the route', async () => {
       const { wrapper, router } = await mountWithDrive('/terminal/hive-fix-parser?doc=1')
 
-      expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(true)
       expect(router.currentRoute.value.query.doc).toBeUndefined()
 
       await wrapper.get('[data-testid="session-tab-close-docs"]').trigger('click')
       await flushPromises()
       expect(router.currentRoute.value.params.slug).toBe('hive-fix-parser')
-      expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(false)
 
       wrapper.unmount()
     })
 
     it('keeps the tab mounted while the active terminal window changes', async () => {
       const { wrapper, session } = await mountWithDrive('/terminal/hive-fix-parser?doc=canvases%2Fmermaid.canvas.json')
-      const pane = wrapper.get('[data-testid="drive-pane"]').element
+      const pane = wrapper.get('[data-testid="drive-page"]').element
 
       session.activeWindowId.value = '@2'
       await flushPromises()
 
-      expect(wrapper.get('[data-testid="drive-pane"]').element).toBe(pane)
+      expect(wrapper.get('[data-testid="drive-page"]').element).toBe(pane)
 
       wrapper.unmount()
     })
@@ -4741,21 +4726,11 @@ describe('TerminalMode', () => {
     it('leads from the empty pane to the MCP settings page', async () => {
       const { wrapper, router } = await mountWithDrive('/terminal/hive-fix-parser?doc=1')
 
-      await wrapper.get('[data-testid="drive-pane-setup-open"]').trigger('click')
+      await wrapper.get('[data-testid="drive-page-setup-open"]').trigger('click')
       await flushPromises()
 
       expect(router.currentRoute.value.name).toBe('application-settings')
       expect(router.currentRoute.value.params.section).toBe('mcp')
-
-      wrapper.unmount()
-    })
-
-    it("asks for the full-page view on the session's repository", async () => {
-      const { wrapper } = await mountWithDrive('/terminal/hive-fix-parser?doc=1')
-
-      await wrapper.get('[data-testid="drive-pane-expand"]').trigger('click')
-
-      expect(wrapper.emitted('open-drive-page')).toEqual([[{ space: 'hay-kot/hive', session: '1', path: null }]])
 
       wrapper.unmount()
     })

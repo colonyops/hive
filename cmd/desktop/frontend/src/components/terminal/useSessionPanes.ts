@@ -23,7 +23,7 @@ export type SessionPanes = ReturnType<typeof useSessionPanes>
 // A new window only has an id once tmux announces it. A request that never lands
 // must not claim some later window.
 const PENDING_WINDOW_MS = 5000
-const WINDOWS_GONE = ['not-started', 'terminated', 'stopped', 'completed']
+const SESSION_CLOSED = ['terminated', 'stopped', 'completed']
 
 /**
  * Keeps the visible session's layout and its tmux windows in step. A layout
@@ -50,7 +50,7 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
   const activeWindow = computed(() => pool.visible.value?.activeWindowId.value ?? '')
 
   // A pane a "+" named for the window it is making.
-  const newWindowPane = ref<number | null>(null)
+  const newWindowPane = ref<string | null>(null)
   // A window someone at this keyboard asked for, as opposed to one from an agent
   // or another client, which must not take the screen from a view.
   const windowExpected = ref(false)
@@ -67,9 +67,15 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
   watch(
     [key, windowIds, activeWindow, () => pool.visible.value?.endReason.value],
     ([sessionKey, ids, active, endReason], before) => {
+      // The session was closed, so its tabs go with it. A session merely not
+      // running keeps its Docs, Diff and Tasks for when it starts.
+      if (SESSION_CLOSED.includes(endReason ?? '')) {
+        sessionTabs.forget(sessionKey)
+        return
+      }
       // No windows says nothing while attaching or after a failed attach, when
-      // tmux may be fine. Only these ends mean the windows are gone.
-      if (!ids.length && !WINDOWS_GONE.includes(endReason ?? '')) return
+      // tmux may be fine.
+      if (!ids.length && endReason !== 'not-started') return
       const target = newWindowPane.value ?? undefined
       apply((current) => reconcileWindows(current, ids, { active, target }))
       if (!before || before[0] !== sessionKey) return
@@ -126,24 +132,24 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
   // has to be asked.
   watch([() => pool.visible.value, onScreen, windowIds], renderOnScreen, { flush: 'post' })
 
-  function expectWindowIn(pane: number | undefined): void {
+  function expectWindowIn(pane: string | undefined): void {
     newWindowPane.value = pane ?? null
     windowExpected.value = true
     expirePending()
     paneMayAutoFocus.value = true
   }
 
-  async function newWindow(target: TerminalSessionRow, pane?: number): Promise<void> {
+  async function newWindow(target: TerminalSessionRow, pane?: string): Promise<void> {
     expectWindowIn(pane)
     await ops.newWindowIn(target)
   }
 
-  async function newAgentWindow(target: TerminalSessionRow, agent: string, pane?: number): Promise<void> {
+  async function newAgentWindow(target: TerminalSessionRow, agent: string, pane?: string): Promise<void> {
     expectWindowIn(pane)
     await ops.newAgentWindowIn(target, agent)
   }
 
-  function openViewIn(target: TerminalSessionRow, kind: SessionViewKind, pane?: number): void {
+  function openViewIn(target: TerminalSessionRow, kind: SessionViewKind, pane?: string): void {
     sessionTabs.apply(target.id, (current) => openView(current, kind, pane))
     if (target.slug !== pool.visibleSlug.value) ops.selectRow(target.slug)
   }
@@ -167,10 +173,24 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
     }
   }
 
-  function moveTabTo(tabId: string, pane: number, gap: number): void {
+  function moveTabTo(tabId: string, pane: string, gap: number): void {
     apply((current) => moveTab(current, tabId, pane, gap))
     if (tabId.startsWith('window:')) syncWindowOrder(tabId.slice('window:'.length))
   }
+
+  // A session deleted or recycled while not on screen says nothing to the watcher
+  // above. A server that has not answered says nothing about its sessions, so
+  // layouts wait until every server has.
+  watch(
+    [tree.attachable, tree.sessionsLoaded, tree.serversLoaded],
+    ([rows, loaded, serversLoaded]) => {
+      if (!loaded || !serversLoaded || tree.sessionsError.value || tree.serversError.value) return
+      if (tree.offlineServers.value.length) return
+      const known = new Set(rows.flatMap((candidate) => [candidate.id, candidate.slug]))
+      sessionTabs.retain((sessionKey) => known.has(sessionKey))
+    },
+    { immediate: true },
+  )
 
   return {
     row,

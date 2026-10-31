@@ -277,6 +277,9 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   // and nothing remembered — is a real state rather than a placeholder, because
   // tmux obeys the attach vote and would resize the session to it.
   let vote: TerminalSize | null = rememberedVote(cellMetrics())
+  // Windows that asked tmux for a grid of their own. A window keeps its own once it
+  // has one, so this outlives a tab switch. A new attach is a new client, and starts empty.
+  const windowVotes = new Map<string, TerminalSize>()
   let resizeTimer: ReturnType<typeof setTimeout> | undefined
   let lastResizeAt = Number.NEGATIVE_INFINITY
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined
@@ -708,34 +711,44 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     // shown one — has no rendered box. Voting from one would squeeze every
     // window of the session to a few cells and force the TUI inside to reflow,
     // then reflow back on reveal — the repaint the pool exists to avoid.
-    //
-    // tmux gives this client one grid per session, so two windows on screen in
-    // panes of different sizes share it. The smallest box wins: both fit, and
-    // moving the keyboard between them does not reflow either.
     const shown = tabs.value.filter((candidate) => {
       const box = windows.get(candidate.windowId)?.host
       return !!box?.clientWidth && !!box.clientHeight
     })
-    const tab = shown.find((candidate) => candidate.windowId === activeWindowId.value) ?? shown[0]
-    if (!tab) return
-    const boxes = shown.map((candidate) => windows.get(candidate.windowId)!.host!)
+    if (!shown.length) return
     const measured = measureCell()
     if (!measured) return
-    const proposed = proposeGrid(
-      {
-        width: Math.min(...boxes.map((box) => box.clientWidth)) - scrollbarWidthFor(tab, showScrollbars.value),
-        height: Math.min(...boxes.map((box) => box.clientHeight)),
-      },
-      measured,
-    )
-    if (!proposed) return
-    scheduleConstraintCheck()
-    if (vote && proposed.cols === vote.cols && proposed.rows === vote.rows) return
-    vote = { cols: proposed.cols, rows: proposed.rows }
-    rememberVote(vote, cellMetrics())
-    void client.resize(slug, vote.cols, vote.rows).catch((e: unknown) => {
-      actionError.value = message(e, 'Could not resize the terminal.')
+    const proposals = shown.flatMap((tab) => {
+      const box = windows.get(tab.windowId)!.host!
+      const grid = proposeGrid(
+        { width: box.clientWidth - scrollbarWidthFor(tab, showScrollbars.value), height: box.clientHeight },
+        measured,
+      )
+      return grid ? [{ windowId: tab.windowId, cols: grid.cols, rows: grid.rows }] : []
     })
+    if (!proposals.length) return
+    scheduleConstraintCheck()
+
+    // The largest box is the session's vote, which every window off screen follows,
+    // so moving the keyboard between panes does not reflow anything. A window on
+    // screen in another size asks for its own grid, the way a tmux split would have it.
+    const largest = proposals.reduce((best, next) => (next.cols * next.rows > best.cols * best.rows ? next : best))
+    if (!vote || largest.cols !== vote.cols || largest.rows !== vote.rows) {
+      vote = { cols: largest.cols, rows: largest.rows }
+      rememberVote(vote, cellMetrics())
+      void client.resize(slug, vote.cols, vote.rows).catch((e: unknown) => {
+        actionError.value = message(e, 'Could not resize the terminal.')
+      })
+    }
+    for (const proposal of proposals) {
+      const own = windowVotes.get(proposal.windowId)
+      const sameAsSession = proposal.cols === vote.cols && proposal.rows === vote.rows
+      if (own ? own.cols === proposal.cols && own.rows === proposal.rows : sameAsSession) continue
+      windowVotes.set(proposal.windowId, { cols: proposal.cols, rows: proposal.rows })
+      void client.resize(slug, proposal.cols, proposal.rows, proposal.windowId).catch((e: unknown) => {
+        actionError.value = message(e, 'Could not resize the terminal.')
+      })
+    }
   }
 
   // The grid a pane opens at while tmux has reported no size for it — a
@@ -760,8 +773,9 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       return
     }
     const granted = { cols: tab.width, rows: tab.height }
+    const voted = windowVotes.get(tab.windowId) ?? vote
     sizeConstraint.value =
-      granted.cols === vote.cols && granted.rows === vote.rows ? null : { voted: { ...vote }, granted }
+      granted.cols === voted.cols && granted.rows === voted.rows ? null : { voted: { ...voted }, granted }
   }
 
   // Dismissal lasts as long as this attach: the constraint is a property of the
@@ -1068,6 +1082,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       //
       // 0x0 sets no client size at all: tmux ignores a control client until it
       // sets one, so the session keeps the size its other clients gave it.
+      windowVotes.clear()
       const [, { windows: listed }] = await Promise.all([
         loadTerminalFont(),
         client.attach(slug, vote?.cols ?? 0, vote?.rows ?? 0),

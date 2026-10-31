@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, ref, toRef, watch } from 'vue'
-import { useElementSize } from '@vueuse/core'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
@@ -11,6 +10,7 @@ import IconCode from '~icons/lucide/code'
 import IconColumns2 from '~icons/lucide/columns-2'
 import IconFolderOpen from '~icons/lucide/folder-open'
 import IconInfo from '~icons/lucide/info'
+import IconRotateCw from '~icons/lucide/rotate-cw'
 import IconRows2 from '~icons/lucide/rows-2'
 import IconServer from '~icons/lucide/server'
 import IconPlay from '~icons/lucide/play'
@@ -21,7 +21,7 @@ import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import ChangesLoading from '../git/ChangesLoading.vue'
-import DrivePane from '../drive/DrivePane.vue'
+import DrivePage from '../drive/DrivePage.vue'
 import TasksView from '../tasks/TasksView.vue'
 import SessionPanePicker from './SessionPanePicker.vue'
 import SessionTabRow from './SessionTabRow.vue'
@@ -33,21 +33,30 @@ import { useEditorSettings } from '../../composables/useEditorSettings'
 import { useSessionStatus } from '../../composables/useSessionStatus'
 import { openLink } from '../../composables/useXtermPane'
 import { activityIndicator } from '../../lib/agentActivity'
-import { spaceGroup, type DriveScope } from '../../lib/drive'
+import type { AgentIconID } from '../../lib/agentIcon'
+import type { DriveScope } from '../../lib/drive'
 import { launcherIconComponent } from '../../lib/launcherIcons'
 import {
   addViewQuietly,
-  cancelPicker,
-  chooseSplit,
+  closePane,
   closeTab,
   focusPane,
   offscreenWindows,
   openView,
+  paneBoxes,
+  paneById,
+  panesOf,
   placeView,
   placeWindow,
-  selectTab,
-  terminalPane,
   resizeSplit,
+  selectTab,
+  splitBoxes,
+  splitPane,
+  terminalPane,
+  turnSplit,
+  type LayoutBox,
+  type SessionPane,
+  type SessionSplit,
   type SessionTab,
 } from '../../lib/sessionLayout'
 import { activePaneOf } from '../../lib/terminalLayout'
@@ -81,7 +90,6 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   'session-repo-key': [repoKey: string]
-  'open-drive-page': [scope: DriveScope]
   setup: []
 }>()
 
@@ -204,50 +212,80 @@ const sessionRepoKey = computed(() => {
 watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true })
 
 const layout = computed(() => panes.layout)
-const split = computed(() => layout.value.panes.length > 1)
+const panesList = computed(() => panesOf(layout.value))
+const boxes = computed(() => paneBoxes(layout.value))
+const splits = computed(() => splitBoxes(layout.value))
 const panesHost = ref<HTMLElement | null>(null)
-const { width: panesWidth } = useElementSize(panesHost)
-const stacked = computed(() => {
-  const axis = layout.value.splitAxis
-  if (axis !== 'auto') return axis === 'column'
-  return panesWidth.value > 0 && panesWidth.value < 620
-})
-const { tabDrop, startTabDrag, startResize, stepResize } = useSessionPaneDrag(
-  panes,
-  panesHost,
-  () => layout.value.splitRatio,
-)
+const { tabDrop, startTabDrag, startResize, stepResize } = useSessionPaneDrag(panes, panesHost)
 const TAB_ROW_PX = 30
+const BORDER_PX = 1
+
+const percent = (share: number): string => `${share * 100}%`
+
+function paneStyle(paneId: string): Record<string, string> {
+  const box = boxes.value.get(paneId)
+  if (!box) return {}
+  return { left: percent(box.x), top: percent(box.y), width: percent(box.width), height: percent(box.height) }
+}
 
 // Terminals stay in one parent, because a Terminal binds to one element for its
-// lifetime, so a pane places them by position.
-function paneRegion(index: number): Record<string, string> {
-  if (!split.value) return { inset: `${TAB_ROW_PX}px 0 0 0` }
-  const first = `${layout.value.splitRatio * 100}%`
-  if (stacked.value) {
-    return index === 0
-      ? { left: '0', right: '0', top: `${TAB_ROW_PX}px`, height: `calc(${first} - ${TAB_ROW_PX}px)` }
-      : { left: '0', right: '0', top: `calc(${first} + ${TAB_ROW_PX + 1}px)`, bottom: '0' }
+// lifetime, so a pane places them by position under its tab row.
+function paneRegion(paneId: string): Record<string, string> {
+  const box = boxes.value.get(paneId)
+  if (!box) return { inset: `${TAB_ROW_PX}px 0 0 0` }
+  const left = box.x > 0 ? BORDER_PX : 0
+  const top = TAB_ROW_PX + (box.y > 0 ? BORDER_PX : 0)
+  return {
+    left: `calc(${percent(box.x)} + ${left}px)`,
+    top: `calc(${percent(box.y)} + ${top}px)`,
+    width: `calc(${percent(box.width)} - ${left}px)`,
+    height: `calc(${percent(box.height)} - ${top}px)`,
   }
-  return index === 0
-    ? { top: `${TAB_ROW_PX}px`, bottom: '0', left: '0', width: first }
-    : { top: `${TAB_ROW_PX}px`, bottom: '0', left: `calc(${first} + 1px)`, right: '0' }
 }
 
-function paneFlex(index: number): Record<string, string> | undefined {
-  if (!split.value) return undefined
-  const share = index === 0 ? layout.value.splitRatio : 1 - layout.value.splitRatio
-  return { flex: `${share} 1 0` }
+function dividerStyle(split: SessionSplit, box: LayoutBox): Record<string, string> {
+  if (split.axis === 'row') {
+    return {
+      left: `calc(${percent(box.x + box.width * split.ratio)} - 3px)`,
+      top: percent(box.y),
+      height: percent(box.height),
+      width: '6px',
+    }
+  }
+  return {
+    top: `calc(${percent(box.y + box.height * split.ratio)} - 3px)`,
+    left: percent(box.x),
+    width: percent(box.width),
+    height: '6px',
+  }
 }
 
-const dividerStyle = computed(() => {
-  const at = `calc(${layout.value.splitRatio * 100}% - 3px)`
-  return stacked.value
-    ? { top: at, left: '0', right: '0', height: '6px' }
-    : { left: at, top: '0', bottom: '0', width: '6px' }
+// A pane under a stacked boundary: its tab row is a grab area for that boundary.
+function boundaryAbove(paneId: string): { split: SessionSplit; box: LayoutBox } | undefined {
+  const pane = boxes.value.get(paneId)
+  if (!pane || pane.y === 0) return undefined
+  return splits.value.find(({ split, box }) => {
+    if (split.axis !== 'column') return false
+    const at = box.y + box.height * split.ratio
+    return Math.abs(at - pane.y) < 1e-6 && pane.x >= box.x - 1e-6 && pane.x + pane.width <= box.x + box.width + 1e-6
+  })
+}
+
+function startRowResize(event: PointerEvent, paneId: string): void {
+  const boundary = boundaryAbove(paneId)
+  if (boundary) startResize(event, boundary.split, boundary.box)
+}
+
+// The session's own actions sit once, at the top right of the whole column.
+const actionsPane = computed(() => {
+  for (const pane of panesList.value) {
+    const box = boxes.value.get(pane.id)
+    if (box && box.y === 0 && Math.abs(box.x + box.width - 1) < 1e-6) return pane.id
+  }
+  return ''
 })
 
-const activeWindowRegion = computed(() => paneRegion(panes.onScreen.get(activeWindowId.value) ?? 0))
+const activeWindowRegion = computed(() => paneRegion(panes.onScreen.get(activeWindowId.value) ?? ''))
 const activeWindowOnScreen = computed(() => panes.onScreen.has(activeWindowId.value))
 const statusPane = computed(() => terminalPane(layout.value))
 
@@ -276,6 +314,11 @@ function needsApproval(windowId: string): boolean {
   return !!row && tree.windowStatus(row, windowId)?.status === 'approval'
 }
 
+function tabAgent(tab: SessionTab): AgentIconID | undefined {
+  const row = panes.row
+  return row && tab.kind === 'window' ? tree.windowAgent(row, tab.windowId, windowName(tab.windowId)) : undefined
+}
+
 function tabAttention(tab: SessionTab): boolean {
   if (tab.kind === 'window') return needsApproval(tab.windowId)
   return tab.kind === 'docs' && !!shownDrive.value && driveActivity.isUnseen(shownDrive.value.session)
@@ -287,14 +330,14 @@ function viewTabs(tabList: readonly SessionTab[]): SessionTab[] {
 
 // A running window has a tab and a tree row, so closing its tab closes the window,
 // through the same confirmation as the tree.
-function closePaneTab(index: number, tabId: string): void {
-  const tab = layout.value.panes[index]?.tabs.find((candidate) => candidate.id === tabId)
+function closePaneTab(paneId: string, tabId: string): void {
+  const tab = paneById(layout.value, paneId)?.tabs.find((candidate) => candidate.id === tabId)
   if (tab?.kind === 'window') void ops.requestCloseWindow(pool.visibleSlug, tab.windowId, windowName(tab.windowId))
-  else panes.apply((current) => closeTab(current, index, tabId))
+  else panes.apply((current) => closeTab(current, paneId, tabId))
 }
 
-function placeWindowHere(windowId: string, index: number): void {
-  panes.apply((current) => placeWindow(current, windowId, index))
+function placeWindowHere(windowId: string, paneId: string): void {
+  panes.apply((current) => placeWindow(current, windowId, paneId))
   panes.syncWindowOrder(windowId)
 }
 
@@ -328,20 +371,22 @@ function openDiff(): void {
   panes.apply((current) => openView(current, 'diff'))
 }
 
-function viewHasKeys(index: number, tabId: string): boolean {
-  const pane = layout.value.panes[index]
+function viewShown(pane: SessionPane, tabId: string): boolean {
+  return !pane.picking && pane.activeTab === tabId
+}
+
+function viewHasKeys(pane: SessionPane, tabId: string): boolean {
   return (
     props.active &&
     !props.overlayOpen &&
     !terminalTreeFocused.value &&
-    layout.value.focusedPane === index &&
-    !pane.picking &&
-    pane.activeTab === tabId
+    layout.value.focusedPane === pane.id &&
+    viewShown(pane, tabId)
   )
 }
 
 const { setRepoKey } = useTasks()
-const tasksTabOpen = computed(() => layout.value.panes.some((pane) => pane.tabs.some((tab) => tab.kind === 'tasks')))
+const tasksTabOpen = computed(() => panesList.value.some((pane) => pane.tabs.some((tab) => tab.kind === 'tasks')))
 watch(
   [tasksTabOpen, sessionRepoKey],
   ([open, repoKey]) => {
@@ -350,29 +395,46 @@ watch(
   { immediate: true },
 )
 
+const driveScope = computed<DriveScope | null>(() => {
+  const own = layout.value.docScope
+  if (own) return own
+  return shownDrive.value ? { ...shownDrive.value, path: null } : null
+})
+
+function scopeAt(path: string | null): DriveScope | null {
+  const base = layout.value.docScope ?? (props.drive ? { ...props.drive, path: null } : null)
+  return base && path ? { ...base, path } : base
+}
+
 useTerminalDrive(toRef(props, 'drive'), () => props.active, {
   // Tabs are keyed by the row's id, so a request has to wait for the row.
   ready: () => !!panes.row && pool.activeSlug === pool.visibleSlug,
-  open: (path) =>
+  open: (path) => panes.apply((current) => ({ ...openView(current, 'docs'), docScope: scopeAt(path) })),
+  arrive: (path) => panes.apply((current) => ({ ...addViewQuietly(current, 'docs'), docScope: scopeAt(path) })),
+  close: () =>
     panes.apply((current) => {
-      const opened = openView(current, 'docs')
-      return path ? { ...opened, docPath: path } : opened
+      const pane = panesOf(current).find((candidate) => candidate.tabs.some((tab) => tab.kind === 'docs'))
+      return pane ? closeTab(current, pane.id, 'docs') : current
     }),
-  arrive: (path) =>
-    panes.apply((current) => {
-      const added = addViewQuietly(current, 'docs')
-      return path ? { ...added, docPath: path } : added
-    }),
-  close: () => panes.apply((current) => closeTab(current, Math.max(0, paneWithDocs(current)), 'docs')),
 })
 
-function paneWithDocs(current: typeof layout.value): number {
-  return current.panes.findIndex((pane) => pane.tabs.some((tab) => tab.kind === 'docs'))
-}
-
-function pickDoc(path: string | null): void {
-  panes.apply((current) => ({ ...current, docPath: path }))
-}
+// The full page knows nothing about authors. A Docs tab on screen is the user
+// reading, and one behind another tab is not, so a write there still earns its dot.
+const docsReader = computed(() => {
+  const shownDocs = panesList.value.some((pane) => viewShown(pane, 'docs'))
+  return shownDocs && props.active ? (shownDrive.value?.session ?? undefined) : undefined
+})
+watch(
+  docsReader,
+  (session, before) => {
+    if (before !== undefined) driveActivity.unregisterVisible(before)
+    if (session !== undefined) driveActivity.registerVisible(session)
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => {
+  if (docsReader.value !== undefined) driveActivity.unregisterVisible(docsReader.value)
+})
 </script>
 
 <template>
@@ -447,79 +509,89 @@ function pickDoc(path: string | null): void {
     <div
       ref="panesHost"
       class="relative min-h-0 min-w-0 flex-1"
-      :class="[visible ? 'flex' : 'hidden', stacked ? 'flex-col' : '']"
+      :class="visible ? 'block' : 'hidden'"
       data-testid="session-panes"
     >
       <section
-        v-for="(pane, index) in layout.panes"
-        :key="index"
-        class="flex min-h-0 min-w-0 flex-1 basis-0 flex-col"
-        :style="paneFlex(index)"
-        :data-session-pane="index"
-        :class="index > 0 ? (stacked ? 'border-t border-strong' : 'border-l border-strong') : ''"
-        :aria-label="`Pane ${index + 1}`"
-        :data-testid="`session-pane-${index}`"
-        @pointerdown.capture="panes.apply((current) => focusPane(current, index))"
+        v-for="pane in panesList"
+        :key="pane.id"
+        class="absolute flex min-h-0 min-w-0 flex-col"
+        :class="[
+          (boxes.get(pane.id)?.x ?? 0) > 0 ? 'border-l border-strong' : '',
+          (boxes.get(pane.id)?.y ?? 0) > 0 ? 'border-t border-strong' : '',
+        ]"
+        :style="paneStyle(pane.id)"
+        :data-session-pane="pane.id"
+        :aria-label="`Pane ${pane.id}`"
+        :data-testid="`session-pane-${pane.id}`"
+        @pointerdown.capture="panes.apply((current) => focusPane(current, pane.id))"
       >
         <SessionTabRow
           :pane="pane"
-          :index="index"
-          :focused="layout.focusedPane === index || !split"
+          :focused="layout.focusedPane === pane.id"
           :label="tabLabel"
           :attention="tabAttention"
+          :agent="tabAgent"
           :row="panes.row"
-          :drop-gap="tabDrop?.pane === index ? tabDrop.gap : null"
-          :resizable="split && stacked && index === 1"
+          :drop-gap="tabDrop?.pane === pane.id ? tabDrop.gap : null"
+          :resizable="!!boundaryAbove(pane.id)"
           @tab-drag="startTabDrag"
-          @resize-start="(event) => startResize(event, true)"
-          @select="(tabId) => panes.apply((current) => selectTab(current, index, tabId))"
-          @close="(tabId) => closePaneTab(index, tabId)"
+          @resize-start="(event) => startRowResize(event, pane.id)"
+          @select="(tabId) => panes.apply((current) => selectTab(current, pane.id, tabId))"
+          @close="(tabId) => closePaneTab(pane.id, tabId)"
         >
-          <template v-if="index === layout.panes.length - 1" #actions>
+          <template #actions>
             <div class="ml-auto flex shrink-0 items-center gap-px pl-2">
-              <span
-                v-if="statusBarError"
-                class="max-w-40 truncate px-1.5 text-caption text-severity-error"
-                data-testid="terminal-pane-statusbar-error"
-                >{{ statusBarError }}</span
-              >
-              <template v-if="actionRow">
-                <IconButton
-                  v-if="editorTitle"
-                  :label="`Open in ${editorTitle}`"
-                  :icon="IconCode"
-                  data-testid="terminal-pane-statusbar-open-editor"
-                  @click="runStatusBarAction(OpenSessionInEditor)"
-                />
-                <IconButton
-                  label="Show in Finder"
-                  :icon="IconFolderOpen"
-                  data-testid="terminal-pane-statusbar-reveal"
-                  @click="runStatusBarAction(RevealSession)"
-                />
-                <IconButton
-                  v-for="action in ops.actions.statusBarActions.value"
-                  :key="action.id"
-                  :label="action.label"
-                  :icon="launcherIconComponent(action.icon)"
-                  :data-testid="`terminal-statusbar-action-${action.id}`"
-                  @click="ops.actions.invoke(action, { slug: actionRow!.slug, windowId: '' })"
-                />
-                <span class="mx-1 h-3.5 w-px bg-strong" aria-hidden="true" />
+              <template v-if="pane.id === actionsPane">
+                <span
+                  v-if="statusBarError"
+                  class="max-w-40 truncate px-1.5 text-caption text-severity-error"
+                  data-testid="terminal-pane-statusbar-error"
+                  >{{ statusBarError }}</span
+                >
+                <template v-if="actionRow">
+                  <IconButton
+                    v-if="editorTitle"
+                    :label="`Open in ${editorTitle}`"
+                    :icon="IconCode"
+                    data-testid="terminal-pane-statusbar-open-editor"
+                    @click="runStatusBarAction(OpenSessionInEditor)"
+                  />
+                  <IconButton
+                    label="Show in Finder"
+                    :icon="IconFolderOpen"
+                    data-testid="terminal-pane-statusbar-reveal"
+                    @click="runStatusBarAction(RevealSession)"
+                  />
+                  <IconButton
+                    v-for="action in ops.actions.statusBarActions.value"
+                    :key="action.id"
+                    :label="action.label"
+                    :icon="launcherIconComponent(action.icon)"
+                    :data-testid="`terminal-statusbar-action-${action.id}`"
+                    @click="ops.actions.invoke(action, { slug: actionRow!.slug, windowId: '' })"
+                  />
+                  <span class="mx-1 h-3.5 w-px bg-strong" aria-hidden="true" />
+                </template>
               </template>
               <IconButton
-                :label="split && !stacked ? 'Close the split' : 'Split side by side'"
+                label="Split right"
                 :icon="IconColumns2"
-                :active="split && !stacked"
-                data-testid="session-split-row"
-                @click="panes.apply((current) => chooseSplit(current, 'row', stacked))"
+                :data-testid="`session-split-row-${pane.id}`"
+                @click="panes.apply((current) => splitPane(current, pane.id, 'row'))"
               />
               <IconButton
-                :label="split && stacked ? 'Close the split' : 'Split top and bottom'"
+                label="Split down"
                 :icon="IconRows2"
-                :active="split && stacked"
-                data-testid="session-split-column"
-                @click="panes.apply((current) => chooseSplit(current, 'column', stacked))"
+                :data-testid="`session-split-column-${pane.id}`"
+                @click="panes.apply((current) => splitPane(current, pane.id, 'column'))"
+              />
+              <IconButton
+                v-if="panesList.length > 1"
+                label="Close this pane, keeping its tabs"
+                :icon="IconX"
+                :data-testid="`session-pane-close-${pane.id}`"
+                @click="panes.apply((current) => closePane(current, pane.id))"
               />
             </div>
           </template>
@@ -532,41 +604,36 @@ function pickDoc(path: string | null): void {
             :agents="agents"
             :views="availableViews"
             :can-add-terminal="canAddTerminal"
-            @window="(windowId) => placeWindowHere(windowId, index)"
-            @terminal="panes.newWindow(panes.row!, index)"
-            @agent="(agent) => panes.newAgentWindow(panes.row!, agent, index)"
-            @view="(view) => panes.apply((current) => placeView(current, view, index))"
-            @cancel="panes.apply(cancelPicker)"
+            @window="(windowId) => placeWindowHere(windowId, pane.id)"
+            @terminal="panes.newWindow(panes.row!, pane.id)"
+            @agent="(agent) => panes.newAgentWindow(panes.row!, agent, pane.id)"
+            @view="(view) => panes.apply((current) => placeView(current, view, pane.id))"
+            @cancel="panes.apply((current) => closePane(current, pane.id))"
           />
           <!-- Mounted while open, so a tab switch keeps a diff's scroll and picks;
                a session switch re-keys them, so only the visible session pays. -->
           <div
             v-for="tab in viewTabs(pane.tabs)"
-            v-show="!pane.picking && pane.activeTab === tab.id"
+            v-show="viewShown(pane, tab.id)"
             :key="`${panes.key}:${tab.id}`"
             class="absolute inset-0 flex min-h-0 min-w-0 flex-col bg-app"
             :data-testid="`session-view-${tab.kind}`"
           >
-            <DrivePane
-              v-if="tab.kind === 'docs' && shownDrive"
+            <DrivePage
+              v-if="tab.kind === 'docs' && driveScope"
               embedded
-              :hidden="pane.picking || pane.activeTab !== tab.id"
-              :session="shownDrive.session"
-              :space="shownDrive.space"
-              :path="layout.docPath"
-              :agent-setup="spaceGroup(shownDrive.space) === 'Repositories'"
+              :scope="driveScope"
+              @update:scope="(scope) => panes.apply((current) => ({ ...current, docScope: scope }))"
               @setup="emit('setup')"
               @open-url="openLink"
-              @pick="pickDoc"
-              @open-page="(path) => emit('open-drive-page', { ...shownDrive!, path })"
             />
             <ChangesView
               v-else-if="tab.kind === 'diff' && changesSession"
               embedded
-              :keys-active="viewHasKeys(index, tab.id)"
+              :keys-active="viewHasKeys(pane, tab.id)"
               :session-id="changesSession"
             />
-            <TasksView v-else-if="tab.kind === 'tasks'" embedded :keys-active="viewHasKeys(index, tab.id)" />
+            <TasksView v-else-if="tab.kind === 'tasks'" embedded :keys-active="viewHasKeys(pane, tab.id)" />
           </div>
         </div>
       </section>
@@ -577,9 +644,9 @@ function pickDoc(path: string | null): void {
           v-show="session.entry === visible && panes.onScreen.has(tab.windowId)"
           :key="tab.uid"
           class="absolute flex min-h-0 min-w-0 flex-col"
-          :style="paneRegion(session.entry === visible ? (panes.onScreen.get(tab.windowId) ?? 0) : 0)"
-          :data-session-pane="panes.onScreen.get(tab.windowId) ?? 0"
-          @pointerdown.capture="panes.apply((current) => focusPane(current, panes.onScreen.get(tab.windowId) ?? 0))"
+          :style="paneRegion(panes.onScreen.get(tab.windowId) ?? '')"
+          :data-session-pane="panes.onScreen.get(tab.windowId) ?? ''"
+          @pointerdown.capture="panes.apply((current) => focusPane(current, panes.onScreen.get(tab.windowId) ?? ''))"
         >
           <TerminalTab
             :tab="tab"
@@ -589,23 +656,37 @@ function pickDoc(path: string | null): void {
         </div>
       </template>
       <div
-        v-if="split"
-        class="absolute z-20 touch-none"
-        :class="stacked ? 'cursor-row-resize' : 'cursor-col-resize'"
-        :style="dividerStyle"
+        v-for="{ split, box } in splits"
+        :key="split.id"
+        class="group/divider absolute z-20 touch-none"
+        :class="split.axis === 'column' ? 'cursor-row-resize' : 'cursor-col-resize'"
+        :style="dividerStyle(split, box)"
         role="separator"
         tabindex="0"
-        :aria-orientation="stacked ? 'horizontal' : 'vertical'"
-        :aria-valuenow="Math.round(layout.splitRatio * 100)"
+        :aria-orientation="split.axis === 'column' ? 'horizontal' : 'vertical'"
+        :aria-valuenow="Math.round(split.ratio * 100)"
         aria-label="Resize the panes"
-        data-testid="session-split-divider"
-        @pointerdown="startResize($event, stacked)"
-        @dblclick="panes.apply((current) => resizeSplit(current, 0.5))"
-        @keydown.left.prevent="stepResize(-1)"
-        @keydown.up.prevent="stepResize(-1)"
-        @keydown.right.prevent="stepResize(1)"
-        @keydown.down.prevent="stepResize(1)"
-      />
+        :data-testid="`session-split-divider-${split.id}`"
+        @pointerdown="startResize($event, split, box)"
+        @dblclick="panes.apply((current) => resizeSplit(current, split.id, 0.5))"
+        @keydown.left.prevent="stepResize(split, -1)"
+        @keydown.up.prevent="stepResize(split, -1)"
+        @keydown.right.prevent="stepResize(split, 1)"
+        @keydown.down.prevent="stepResize(split, 1)"
+      >
+        <button
+          type="button"
+          class="absolute flex size-5 cursor-pointer items-center justify-center rounded-full border border-strong bg-raised text-text-3 opacity-0 hover:text-text focus-visible:opacity-100 group-hover/divider:opacity-100"
+          :class="split.axis === 'column' ? 'left-3 top-1/2 -translate-y-1/2' : 'left-1/2 top-9 -translate-x-1/2'"
+          aria-label="Turn this split"
+          title="Turn this split"
+          :data-testid="`session-split-turn-${split.id}`"
+          @pointerdown.stop
+          @click="panes.apply((current) => turnSplit(current, split.id))"
+        >
+          <IconRotateCw class="size-3" aria-hidden="true" />
+        </button>
+      </div>
       <div
         v-if="visible && activeWindowOnScreen"
         class="pointer-events-none absolute flex flex-col"
@@ -673,7 +754,7 @@ function pickDoc(path: string | null): void {
         </Transition>
       </div>
       <div
-        v-if="visible && statusPane >= 0"
+        v-if="visible && statusPane"
         class="pointer-events-none absolute flex flex-col"
         :style="paneRegion(statusPane)"
       >

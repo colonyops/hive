@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -330,6 +331,8 @@ func (c *Client) Paste(ctx context.Context, pane string, p []byte) error {
 	return err
 }
 
+var windowIDPattern = regexp.MustCompile(`^@[0-9]+$`)
+
 // Resize renegotiates the client size. Every client attached to a window
 // renders the same grid and tmux's window-size option picks whose size that is
 // — by default the most recently used client's — so this is a vote, and
@@ -339,6 +342,20 @@ func (c *Client) Resize(ctx context.Context, cols, rows int) error {
 		return err
 	}
 	_, err := c.gw.Send(ctx, fmt.Sprintf("refresh-client -C %d,%d", cols, rows))
+	return err
+}
+
+// ResizeWindow asks for one window's own grid, apart from the size this client
+// votes for the session, so two windows on screen in panes of different sizes
+// can each fit their pane.
+func (c *Client) ResizeWindow(ctx context.Context, windowID string, cols, rows int) error {
+	if err := validateSize(cols, rows); err != nil {
+		return err
+	}
+	if !windowIDPattern.MatchString(windowID) {
+		return fmt.Errorf("invalid window id %q", windowID)
+	}
+	_, err := c.gw.Send(ctx, fmt.Sprintf("refresh-client -C %s:%dx%d", windowID, cols, rows))
 	return err
 }
 

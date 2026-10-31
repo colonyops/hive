@@ -4,7 +4,7 @@ import type { UseTerminalWindows } from '../../../composables/useTerminalWindows
 import type { TreeWindowRow } from '../useTerminalTree'
 import { useWindowRename } from '../useWindowRename'
 
-const live: TreeWindowRow = { windowId: '@1', name: 'agent', active: true, live: true, indicator: null }
+const live: TreeWindowRow = { windowId: '@1', name: 'agent', active: true, live: true, indicator: null, working: false }
 
 function setup() {
   const rename = vi.fn()

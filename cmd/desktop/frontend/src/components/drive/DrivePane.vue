@@ -26,10 +26,6 @@ const props = defineProps<{
   path: string | null
   /** Offers the way to connect an agent while the space is empty, where Hive does not wire the agent itself. */
   agentSetup?: boolean
-  /** Fills a session tab, which owns the width and closing, rather than standing beside a chat. */
-  embedded?: boolean
-  /** A session tab stays mounted behind another, and a write there is not one the user saw. */
-  hidden?: boolean
 }>()
 const emit = defineEmits<{
   close: []
@@ -44,18 +40,15 @@ const { document, tree, treeError, paths, shown, loading, error, show } = useDri
 })
 const activity = useDriveActivity()
 
-const reading = computed(() => (props.hidden ? undefined : props.session))
 watch(
-  reading,
+  () => props.session,
   (session, before) => {
     if (before !== undefined) activity.unregisterVisible(before)
-    if (session !== undefined) activity.registerVisible(session)
+    activity.registerVisible(session)
   },
   { immediate: true },
 )
-onBeforeUnmount(() => {
-  if (reading.value !== undefined) activity.unregisterVisible(reading.value)
-})
+onBeforeUnmount(() => activity.unregisterVisible(props.session))
 
 watch(
   () => [props.space, props.path, props.session] as const,
@@ -112,12 +105,11 @@ const {
 
 <template>
   <aside
-    class="relative flex flex-col bg-pane"
-    :class="embedded ? 'min-h-0 min-w-0 flex-1' : 'shrink-0 border-l border-border'"
-    :style="embedded ? undefined : { width: paneWidth + 'px' }"
+    class="relative flex shrink-0 flex-col border-l border-border bg-pane"
+    :style="{ width: paneWidth + 'px' }"
     data-testid="drive-pane"
   >
-    <PanelResizeHandle v-if="!embedded" edge="left" name="drive-pane" :start="startPaneResize" :step="stepPane" />
+    <PanelResizeHandle edge="left" name="drive-pane" :start="startPaneResize" :step="stepPane" />
 
     <div class="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1">
       <button
@@ -150,13 +142,7 @@ const {
         data-testid="drive-pane-expand"
         @click="emit('open-page', shown)"
       />
-      <IconButton
-        v-if="!embedded"
-        label="Close drive"
-        :icon="IconX"
-        data-testid="drive-pane-close"
-        @click="emit('close')"
-      />
+      <IconButton label="Close drive" :icon="IconX" data-testid="drive-pane-close" @click="emit('close')" />
     </div>
 
     <DriveBrowser
