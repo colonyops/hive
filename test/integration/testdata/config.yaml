@@ -5,7 +5,5 @@ agents:
   testbash:
     command: bash
 rules:
-  - spawn:
-      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
-    batch_spawn:
-      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
+  - windows:
+      - name: shell

@@ -859,7 +859,6 @@ type CreateRequest struct {
 	Prompt          string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	Remote          string                 `protobuf:"bytes,4,opt,name=remote,proto3" json:"remote,omitempty"`
 	Source          string                 `protobuf:"bytes,5,opt,name=source,proto3" json:"source,omitempty"`
-	UseBatchSpawn   bool                   `protobuf:"varint,6,opt,name=use_batch_spawn,json=useBatchSpawn,proto3" json:"use_batch_spawn,omitempty"`
 	CloneStrategy   string                 `protobuf:"bytes,7,opt,name=clone_strategy,json=cloneStrategy,proto3" json:"clone_strategy,omitempty"`
 	SkipSpawn       bool                   `protobuf:"varint,8,opt,name=skip_spawn,json=skipSpawn,proto3" json:"skip_spawn,omitempty"`
 	AgentKey        string                 `protobuf:"bytes,9,opt,name=agent_key,json=agentKey,proto3" json:"agent_key,omitempty"`
@@ -933,13 +932,6 @@ func (x *CreateRequest) GetSource() string {
 		return x.Source
 	}
 	return ""
-}
-
-func (x *CreateRequest) GetUseBatchSpawn() bool {
-	if x != nil {
-		return x.UseBatchSpawn
-	}
-	return false
 }
 
 func (x *CreateRequest) GetCloneStrategy() string {
@@ -3048,15 +3040,14 @@ const file_hive_daemon_v1_daemon_proto_rawDesc = "" +
 	"GetRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"@\n" +
 	"\vGetResponse\x121\n" +
-	"\asession\x18\x01 \x01(\v2\x17.hive.daemon.v1.SessionR\asession\"\xe6\x02\n" +
+	"\asession\x18\x01 \x01(\v2\x17.hive.daemon.v1.SessionR\asession\"\xd5\x02\n" +
 	"\rCreateRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x16\n" +
 	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12\x16\n" +
 	"\x06remote\x18\x04 \x01(\tR\x06remote\x12\x16\n" +
-	"\x06source\x18\x05 \x01(\tR\x06source\x12&\n" +
-	"\x0fuse_batch_spawn\x18\x06 \x01(\bR\ruseBatchSpawn\x12%\n" +
+	"\x06source\x18\x05 \x01(\tR\x06source\x12%\n" +
 	"\x0eclone_strategy\x18\a \x01(\tR\rcloneStrategy\x12\x1d\n" +
 	"\n" +
 	"skip_spawn\x18\b \x01(\bR\tskipSpawn\x12\x1b\n" +
@@ -3064,7 +3055,7 @@ const file_hive_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x04tags\x18\n" +
 	" \x03(\tR\x04tags\x12\x10\n" +
 	"\x03env\x18\v \x03(\tR\x03env\x12)\n" +
-	"\x10collision_suffix\x18\f \x01(\tR\x0fcollisionSuffix\"u\n" +
+	"\x10collision_suffix\x18\f \x01(\tR\x0fcollisionSuffixJ\x04\b\x06\x10\aR\x0fuse_batch_spawn\"u\n" +
 	"\x0eCreateResponse\x12%\n" +
 	"\rprogress_line\x18\x01 \x01(\tH\x00R\fprogressLine\x123\n" +
 	"\asession\x18\x02 \x01(\v2\x17.hive.daemon.v1.SessionH\x00R\asessionB\a\n" +

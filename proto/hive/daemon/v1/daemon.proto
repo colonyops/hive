@@ -121,12 +121,14 @@ message GetResponse {
 // in the background, so the caller attaches itself. remote must be set and
 // source must be absolute: the daemon has its own working directory.
 message CreateRequest {
+  reserved 6;
+  reserved "use_batch_spawn";
+
   string name = 1;
   string session_id = 2;
   string prompt = 3;
   string remote = 4;
   string source = 5;
-  bool use_batch_spawn = 6;
   string clone_strategy = 7;
   bool skip_spawn = 8;
   string agent_key = 9;

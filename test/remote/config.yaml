@@ -10,9 +10,10 @@ agents:
   missing:
     command: no-such-agent
 rules:
-  - spawn:
-      # claude is the fake agent from the fixture image (fake-claude).
-      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }} claude"
+  # claude is the fake agent from the fixture image (fake-claude).
+  - windows:
+      - name: agent
+        command: claude
   # A copy rule makes the server read the create request's source directory,
   # which must be a directory on the server, not on the client.
   - copy:

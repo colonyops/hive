@@ -983,7 +983,7 @@ func (m Model) handleSourcePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleSourceSelection spawns one session per selected item via the same
-// UseBatchSpawn:true path used by `hive batch`, all on a single background
+// background path used by `hive batch`, all on a single background
 // stream. Detail fetches and template rendering run inside the stream so a
 // slow `gh` call never blocks the UI.
 func (m Model) handleSourceSelection(results []sourcepicker.Result) (tea.Model, tea.Cmd) {
@@ -1168,7 +1168,6 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 		Prompt:          rendered.Prompt,
 		Remote:          launch.Remote,
 		Source:          source,
-		UseBatchSpawn:   true,
 		Background:      true,
 		CollisionSuffix: session.Slugify(result.Item.ID),
 		Tags:            rendered.Tags,

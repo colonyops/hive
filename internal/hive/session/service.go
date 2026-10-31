@@ -47,17 +47,16 @@ type LaunchOptions struct {
 
 // CreateOptions configures session creation.
 type CreateOptions struct {
-	Name          string // Session name (used in path)
-	SessionID     string // Session ID (auto-generated if empty)
-	Prompt        string // Prompt to pass to spawned terminal (batch only)
-	Remote        string // Git remote URL to clone (auto-detected if empty)
-	Source        string // Source directory for file copying
-	UseBatchSpawn bool   // Use batch_spawn commands instead of spawn
-	Background    bool   // Create session without attaching to tmux
+	Name       string // Session name (used in path)
+	SessionID  string // Session ID (auto-generated if empty)
+	Prompt     string // Prompt to pass to spawned terminal (batch only)
+	Remote     string // Git remote URL to clone (auto-detected if empty)
+	Source     string // Source directory for file copying
+	Background bool   // Create session without attaching to tmux
 	// CloneStrategy selects the clone method: "full" (default) or "worktree".
 	// Empty resolves via config rule matching, then global config, then "full".
 	CloneStrategy string
-	// SkipSpawn skips the configured spawn strategy (spawn: / batch_spawn: / windows:).
+	// SkipSpawn skips the configured spawn strategy (windows:).
 	// The caller is responsible for launching any terminal or tmux session. Use this
 	// when the session directory is needed but terminal management happens elsewhere
 	// (e.g. CreateSessionWithWindows, which creates the tmux session itself).
@@ -69,8 +68,7 @@ type CreateOptions struct {
 	// Tags are normalized with session.NormalizeTags; an invalid tag
 	// fails the create.
 	Tags []string
-	// Env holds KEY=VALUE pairs for the session's tmux environment. Only a
-	// windows: spawn applies them; spawn: commands run the user's own scripts.
+	// Env holds KEY=VALUE pairs for the session's tmux environment.
 	Env []string
 	// CollisionSuffix is appended to a Name whose slug is taken. Use an id that
 	// is stable across retries, so a retry collides with its own earlier session.
@@ -151,7 +149,7 @@ func NewService(
 		log:        logutils.Component(log, "sessions"),
 		out:        out,
 		err:        err,
-		spawner:    NewSpawner(logutils.Component(log, "spawner"), exec, renderer, client, out, err),
+		spawner:    NewSpawner(logutils.Component(log, "spawner"), renderer, client, out, err),
 		lifecycle:  client,
 		recycler:   NewRecycler(logutils.Component(log, "recycler"), exec, renderer),
 		hookRunner: NewHookRunner(logutils.Component(log, "hooks"), exec, renderer, styler, out, err),
@@ -383,22 +381,13 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	}
 
 	if !opts.SkipSpawn {
-		strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
+		strategy := config.ResolveSpawn(s.config.Rules, remote)
 		renderer, err := s.rendererForAgent(firstNonEmpty(opts.AgentKey, strategy.Agent))
 		if err != nil {
 			return nil, err
 		}
-		switch {
-		case strategy.IsWindows():
-			if err := s.spawner.SpawnWindowsWith(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background, renderer, opts.Env); err != nil {
-				return nil, fmt.Errorf("spawn terminal: %w", err)
-			}
-		case len(strategy.Commands) > 0:
-			if err := s.spawner.SpawnWith(ctx, strategy.Commands, data, renderer); err != nil {
-				return nil, fmt.Errorf("spawn terminal: %w", err)
-			}
-		default:
-			return nil, fmt.Errorf("spawn terminal: no spawn strategy resolved for remote %q", remote)
+		if err := s.spawner.SpawnWindowsWith(ctx, strategy.Windows, data, opts.Background, renderer, opts.Env); err != nil {
+			return nil, fmt.Errorf("spawn terminal: %w", err)
 		}
 	}
 
@@ -1033,10 +1022,7 @@ func (s *Service) KillTmuxWindow(ctx context.Context, target multiplexer.Target)
 // OpenTmuxSession opens (or creates) a tmux session for the given session parameters.
 // It resolves the spawn strategy, renders window templates, and delegates to the spawner.
 func (s *Service) OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) (multiplexer.LaunchResult, error) {
-	strategy := config.ResolveSpawn(s.config.Rules, remote, false)
-	if !strategy.IsWindows() {
-		return multiplexer.LaunchResult{}, fmt.Errorf("tmux action requires windows config (legacy spawn commands should use shell executor)")
-	}
+	strategy := config.ResolveSpawn(s.config.Rules, remote)
 
 	owner, repo := git.ExtractOwnerRepo(remote)
 	tmuxName := session.Slugify(name)

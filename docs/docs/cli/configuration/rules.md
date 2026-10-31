@@ -4,7 +4,7 @@ icon: lucide/regex
 
 # Rules
 
-Rules match repositories by regex pattern against the remote URL and configure how sessions are created, recycled, and set up. Rules are evaluated in order — the last matching rule with spawn/windows config wins, and the last matching `agent` selects the agent profile. An empty pattern (`""`) matches all repositories.
+Rules match repositories by regex pattern against the remote URL and configure how sessions are created, recycled, and set up. Rules are evaluated in order — the last matching rule with windows config wins, and the last matching `agent` selects the agent profile. An empty pattern (`""`) matches all repositories.
 
 ```yaml
 rules:
@@ -36,7 +36,7 @@ rules:
 ```
 
 !!! info "Last match wins"
-    Rules are evaluated in order — the **last** matching rule with spawn/windows config wins, and the **last** matching rule with `agent` selects the agent profile. Place general patterns before specific ones.
+    Rules are evaluated in order — the **last** matching rule with windows config wins, and the **last** matching rule with `agent` selects the agent profile. Place general patterns before specific ones.
 
 ## Rule Fields
 
@@ -48,15 +48,13 @@ rules:
 | `branch_template`  | string         | `hive/{{ .Slug }}-{{ .ID }}` | Go template for the git branch name (worktree only). Variables: `.Name`, `.Slug`, `.Owner`, `.Repo`, `.ID`. The rendered value must be a valid git branch name (no spaces, colons, `~`, `^`, etc.) — session creation fails with a clear error if it isn't. |
 | `agent`            | string         | —                            | Agent profile override for matching repos. Must match a key under `agents`. |
 | `windows`          | []WindowConfig | see below                    | Declarative tmux window layout (recommended)      |
-| `spawn`            | []string       | —                            | Shell commands run after session creation (legacy) |
-| `batch_spawn`      | []string       | —                            | Shell commands for batch session creation (legacy) |
 | `recycle`          | []string       | git fetch/checkout/reset/clean | Commands run when recycling a full-clone session; worktree sessions are deleted |
 | `commands`         | []string       | `[]`                         | Setup commands run after clone                    |
 | `copy`             | []string       | `[]`                         | Glob patterns for files to copy from parent repo  |
 | `max_recycled`     | *int           | `5`                          | Maximum recycled full-clone sessions to keep (0 = unlimited) |
 
-!!! warning "`windows` vs `spawn`/`batch_spawn`"
-    A rule must use either `windows` or `spawn`/`batch_spawn`, not both. If neither is set, the default window layout is used (agent window + shell window). A rule can set `agent` with or without custom `windows`/`spawn` config.
+!!! warning "`spawn` and `batch_spawn` are gone"
+    Hive ignores `spawn` and `batch_spawn` and logs a warning for each rule that still sets them. Use `windows`. If no matching rule sets `windows`, the default window layout is used (agent window + shell window). A rule can set `agent` with or without custom `windows`.
 
 ## Clone Protocol
 
@@ -133,7 +131,7 @@ The `windows` field defines tmux windows declaratively. Each window has:
 !!! warning "`command` vs `panes`"
     A window must use either `command` or `panes`, not both. Use `command` for a single-pane window. Use `panes` when you need splits inside the window.
 
-**Default window layout** (used when no rule specifies `windows` or `spawn`). The template functions render from the resolved agent profile:
+**Default window layout** (used when no rule specifies `windows`). The template functions render from the resolved agent profile:
 
 ```yaml
 windows:
@@ -211,8 +209,6 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | Context                | Variables                                                           |
 | ---------------------- | ------------------------------------------------------------------- |
 | `rules[].windows` / `panes` | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`, `.Prompt` (batch) |
-| `rules[].spawn`        | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`         |
-| `rules[].batch_spawn`  | Same as spawn, plus `.Prompt`                                       |
 | `rules[].commands`     | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`, `.ID` |
 | `rules[].recycle`      | `.DefaultBranch`                                                    |
 | `rules[].branch_template` | `.Name`, `.Slug`, `.Owner`, `.Repo`, `.ID`                     |

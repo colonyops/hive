@@ -59,52 +59,6 @@ windows:
   - name: shell
 ```
 
-## Legacy Spawn Commands
-
-For non-tmux terminals or advanced scripting, use `spawn`/`batch_spawn` with shell commands.
-
-### WezTerm
-
-```yaml
-spawn:
-  - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude'
-```
-
-### Kitty
-
-```yaml
-spawn:
-  - 'kitty @ launch --cwd "{{ .Path }}" --type tab claude'
-```
-
-### Alacritty
-
-```yaml
-spawn:
-  - 'alacritty --working-directory "{{ .Path }}" -e claude &'
-```
-
-### iTerm2 (macOS)
-
-```yaml
-spawn:
-  - osascript -e 'tell application "iTerm" to create window with default profile command "cd {{ .Path | shq }} && claude"'
-```
-
-### Tmux (Shell Commands)
-
-```yaml
-spawn:
-  - tmux new-session -d -s "{{ .Name }}" -c "{{ .Path }}" claude
-```
-
-### Batch Spawn (Background Sessions)
-
-```yaml
-batch_spawn:
-  - tmux new-session -d -s "{{ .Name }}" -c "{{ .Path }}" "claude '{{ .Prompt }}'"
-```
-
 ## Template Variable Reference
 
 - **`.Path`** - Absolute path to session directory
@@ -113,7 +67,7 @@ batch_spawn:
 - **`.ContextDir`** - Shared context directory path
 - **`.Owner`** - Repository owner
 - **`.Repo`** - Repository name
-- **`.Prompt`** - Initial prompt (batch_spawn only)
+- **`.Prompt`** - Initial prompt (batch sessions only)
 - **`.DefaultBranch`** - Default branch name (recycle only)
 - **`.ID`** - Session ID (usercommands only)
 - **`.Remote`** - Git remote URL (usercommands only)

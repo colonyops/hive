@@ -51,7 +51,7 @@ type Ports struct {
 	// PaneSource feeds terminal status. Nil disables status: Status and
 	// Terminal return nil.
 	PaneSource terminal.PaneSource
-	// DataDir holds the bundled scripts the renderer points spawn commands at.
+	// DataDir holds the bundled scripts the renderer points window commands at.
 	DataDir string
 	// Styler, Stdout and Stderr shape hook and file-copy output. Nil means
 	// plain text to io.Discard.

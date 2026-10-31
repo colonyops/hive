@@ -33,24 +33,6 @@ func validConfig(t *testing.T) *Config {
 	}
 }
 
-func TestValidateDeep_InvalidSpawnTemplate(t *testing.T) {
-	cfg := validConfig(t)
-	cfg.Rules = []Rule{
-		{
-			Pattern: "",
-			Spawn:   []string{"echo {{.Path}", "echo {{.Invalid}}"},
-		},
-	}
-
-	err := cfg.ValidateDeep("")
-
-	var fieldErrs criterio.FieldErrors
-	require.ErrorAs(t, err, &fieldErrs)
-	assert.Len(t, fieldErrs, 2)
-	assert.Contains(t, fieldErrs[0].Field, "rules[0].spawn")
-	assert.Contains(t, fieldErrs[0].Err.Error(), "template error")
-}
-
 func TestValidateDeep_InvalidRecycleTemplate(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Rules = []Rule{
@@ -355,7 +337,7 @@ func TestGetRecycleCommands(t *testing.T) {
 		{
 			name: "rule without recycle uses defaults",
 			rules: []Rule{
-				{Pattern: "", Spawn: []string{"echo spawn"}}, // no recycle
+				{Pattern: "", Commands: []string{"echo hello"}}, // no recycle
 			},
 			remote:   "https://github.com/foo/bar",
 			expected: DefaultRecycleCommands,
@@ -599,144 +581,102 @@ func TestDefaultWindows(t *testing.T) {
 }
 
 func TestResolveSpawn(t *testing.T) {
+	const remote = "https://github.com/foo/bar"
 	tests := []struct {
-		name         string
-		rules        []Rule
-		remote       string
-		batch        bool
-		wantWindows  bool
-		wantCommands []string
-		wantAgent    string
+		name        string
+		rules       []Rule
+		wantWindows []WindowConfig
+		wantAgent   string
 	}{
 		{
 			name:        "no rules returns default windows",
-			rules:       nil,
-			remote:      "https://github.com/foo/bar",
-			wantWindows: true,
+			wantWindows: DefaultWindows(),
 		},
 		{
-			name: "windows-only rule",
-			rules: []Rule{
-				{
-					Pattern: "",
-					Windows: []WindowConfig{
-						{Name: "editor", Command: "vim", Focus: true},
-						{Name: "shell"},
-					},
-				},
-			},
-			remote:      "https://github.com/foo/bar",
-			wantWindows: true,
+			name:        "windows-only rule",
+			rules:       []Rule{{Windows: []WindowConfig{{Name: "editor", Command: "vim", Focus: true}, {Name: "shell"}}}},
+			wantWindows: []WindowConfig{{Name: "editor", Command: "vim", Focus: true}, {Name: "shell"}},
 		},
 		{
-			name: "spawn-only rule returns commands",
-			rules: []Rule{
-				{Pattern: "", Spawn: []string{"echo spawn"}},
-			},
-			remote:       "https://github.com/foo/bar",
-			wantWindows:  false,
-			wantCommands: []string{"echo spawn"},
+			name:        "a rule that only sets the removed keys uses default windows",
+			rules:       []Rule{{RemovedSpawn: []string{"echo spawn"}, RemovedBatchSpawn: []string{"echo batch"}}},
+			wantWindows: DefaultWindows(),
 		},
 		{
-			name: "batch_spawn returns batch commands",
+			name: "a later rule with the removed keys does not replace windows",
 			rules: []Rule{
-				{Pattern: "", Spawn: []string{"echo spawn"}, BatchSpawn: []string{"echo batch"}},
+				{Windows: []WindowConfig{{Name: "agent"}}},
+				{Pattern: "github.com/foo/.*", RemovedSpawn: []string{"echo override"}},
 			},
-			remote:       "https://github.com/foo/bar",
-			batch:        true,
-			wantWindows:  false,
-			wantCommands: []string{"echo batch"},
-		},
-		{
-			name: "batch with no batch_spawn falls to default windows",
-			rules: []Rule{
-				{Pattern: "", Spawn: []string{"echo spawn"}},
-			},
-			remote:      "https://github.com/foo/bar",
-			batch:       true,
-			wantWindows: true,
-		},
-		{
-			name: "windows override spawn in later rule",
-			rules: []Rule{
-				{Pattern: "", Spawn: []string{"echo spawn"}},
-				{Pattern: "github.com/foo/.*", Windows: []WindowConfig{{Name: "agent", Focus: true}}},
-			},
-			remote:      "https://github.com/foo/bar",
-			wantWindows: true,
-		},
-		{
-			name: "spawn overrides windows in later rule",
-			rules: []Rule{
-				{Pattern: "", Windows: []WindowConfig{{Name: "agent"}}},
-				{Pattern: "github.com/foo/.*", Spawn: []string{"echo override"}},
-			},
-			remote:       "https://github.com/foo/bar",
-			wantWindows:  false,
-			wantCommands: []string{"echo override"},
+			wantWindows: []WindowConfig{{Name: "agent"}},
 		},
 		{
 			name: "non-matching rule ignored",
 			rules: []Rule{
-				{Pattern: "", Windows: []WindowConfig{{Name: "agent"}}},
-				{Pattern: "github.com/other/.*", Spawn: []string{"echo other"}},
+				{Windows: []WindowConfig{{Name: "agent"}}},
+				{Pattern: "github.com/other/.*", Windows: []WindowConfig{{Name: "other"}}},
 			},
-			remote:      "https://github.com/foo/bar",
-			wantWindows: true,
+			wantWindows: []WindowConfig{{Name: "agent"}},
 		},
 		{
 			name: "last matching rule wins",
 			rules: []Rule{
-				{Pattern: "", Windows: []WindowConfig{{Name: "default"}}},
+				{Windows: []WindowConfig{{Name: "default"}}},
 				{Pattern: "github.com/.*", Windows: []WindowConfig{{Name: "github"}}},
 				{Pattern: "github.com/foo/.*", Windows: []WindowConfig{{Name: "foo"}}},
 			},
-			remote:      "https://github.com/foo/bar",
-			wantWindows: true,
+			wantWindows: []WindowConfig{{Name: "foo"}},
 		},
 		{
-			name: "catch-all pattern matches all",
-			rules: []Rule{
-				{Pattern: "", Windows: []WindowConfig{{Name: "catch-all", Focus: true}, {Name: "shell"}}},
-			},
-			remote:      "https://gitlab.com/some/repo",
-			wantWindows: true,
-		},
-		{
-			name: "agent-only matching rule uses default windows",
-			rules: []Rule{
-				{Pattern: "", Agent: "aider"},
-			},
-			remote:      "https://github.com/foo/bar",
-			wantWindows: true,
+			name:        "agent-only matching rule uses default windows",
+			rules:       []Rule{{Agent: "aider"}},
+			wantWindows: DefaultWindows(),
 			wantAgent:   "aider",
 		},
 		{
 			name: "last matching agent wins independently of windows",
 			rules: []Rule{
-				{Pattern: "", Agent: "claude", Windows: []WindowConfig{{Name: "default"}}},
+				{Agent: "claude", Windows: []WindowConfig{{Name: "default"}}},
 				{Pattern: "github.com/foo/.*", Agent: "aider"},
 			},
-			remote:      "https://github.com/foo/bar",
-			wantWindows: true,
+			wantWindows: []WindowConfig{{Name: "default"}},
 			wantAgent:   "aider",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := validConfig(t)
-			cfg.Rules = tt.rules
-
-			strategy := ResolveSpawn(cfg.Rules, tt.remote, tt.batch)
-			assert.Equal(t, tt.wantWindows, strategy.IsWindows(), "IsWindows mismatch")
+			strategy := ResolveSpawn(tt.rules, remote)
+			assert.Equal(t, tt.wantWindows, strategy.Windows)
 			assert.Equal(t, tt.wantAgent, strategy.Agent)
-
-			if tt.wantCommands != nil {
-				assert.Equal(t, tt.wantCommands, strategy.Commands)
-			}
 		})
 	}
+}
+
+// A config from before spawn was removed must load: an upgrade must not stop
+// hive from starting, even for a template the old validation rejected.
+func TestLoad_KeepsAConfigWithRemovedSpawnKeys(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(`
+rules:
+  - spawn: ["wezterm cli spawn -- claude"]
+    batch_spawn: ["{{ .Broken"]
+    commands: ["echo setup"]
+  - windows: [{name: agent}]
+    spawn: ["echo both"]
+  - commands: ["echo clean"]
+`), 0o600))
+
+	cfg, err := Load(path, t.TempDir())
+	require.NoError(t, err)
+	require.NoError(t, cfg.ValidateDeep(path))
+
+	assert.Equal(t, []string{"echo setup"}, cfg.Rules[0].Commands)
+	got := cfg.RemovedSpawnWarnings()
+	require.Len(t, got, 2)
+	assert.Equal(t, "rule 0", got[0].Item)
+	assert.Equal(t, "rule 1", got[1].Item)
+	assert.Contains(t, got[0].Message, "use windows")
 }
 
 func TestValidate_WindowsMutualExclusive(t *testing.T) {
@@ -745,24 +685,6 @@ func TestValidate_WindowsMutualExclusive(t *testing.T) {
 		rule    Rule
 		wantErr string
 	}{
-		{
-			name: "windows and spawn",
-			rule: Rule{
-				Pattern: "",
-				Windows: []WindowConfig{{Name: "agent"}},
-				Spawn:   []string{"echo spawn"},
-			},
-			wantErr: "cannot have both windows and spawn",
-		},
-		{
-			name: "windows and batch_spawn",
-			rule: Rule{
-				Pattern:    "",
-				Windows:    []WindowConfig{{Name: "agent"}},
-				BatchSpawn: []string{"echo batch"},
-			},
-			wantErr: "cannot have both windows and batch_spawn",
-		},
 		{
 			name: "windows only is valid",
 			rule: Rule{
@@ -792,13 +714,6 @@ func TestValidate_WindowsMutualExclusive(t *testing.T) {
 				}},
 			},
 			wantErr: "must be one of: horizontal, vertical",
-		},
-		{
-			name: "spawn only is valid",
-			rule: Rule{
-				Pattern: "",
-				Spawn:   []string{"echo spawn"},
-			},
 		},
 	}
 

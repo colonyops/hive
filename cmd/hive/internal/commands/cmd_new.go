@@ -6,13 +6,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
-	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
 )
@@ -74,15 +75,12 @@ func sessionCreateFlags(f *createSessionFlags) []cli.Flag {
 // session. Progress may be nil (service output then goes to the service's
 // default writers).
 func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *createSessionFlags, progress io.Writer) (*session.Session, error) {
-	if f.agent != "" {
-		if _, ok := app.Config.Agents.Profiles[f.agent]; !ok {
-			return nil, fmt.Errorf("unknown agent %q", f.agent)
-		}
+	if err := checkAgent(ctx, app, f.agent); err != nil {
+		return nil, err
 	}
 
-	// A server cannot read a path on this machine or show this terminal.
-	// Remote create (#743) and remote attach (#745) replace the
-	// TargetsServer checks.
+	// A server cannot read a path on this machine, so a create there gets no
+	// source and its copy: rules copy nothing.
 	source := f.source
 	switch {
 	case source != "" && app.TargetsServer():
@@ -108,11 +106,18 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 	if err := resolveCreateLocation(ctx, app, &opts); err != nil {
 		return nil, err
 	}
+	if app.TargetsServer() && f.remote == "" && isLocalPath(opts.Remote) {
+		return nil, fmt.Errorf("this checkout's remote %q is a path on this machine, which the server cannot clone; pass --remote with a URL the server can reach", opts.Remote)
+	}
 	sess, err := app.SessionAPI().CreateSession(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
-	if !f.background && !app.TargetsServer() && createsTmuxSession(app, opts.Remote) && canAttach() {
+	switch {
+	case f.background:
+	case app.TargetsServer():
+		showRemoteAttach(app, *sess, progress)
+	case canAttach():
 		if err := app.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(*sess), multiplexer.AttachStreams{}); err != nil {
 			return sess, fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
 		}
@@ -120,11 +125,52 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 	return sess, nil
 }
 
-// createsTmuxSession reports whether the spawn strategy for remote creates
-// the tmux session Target names. Legacy spawn commands run whatever the user
-// wrote, which may open a terminal tab instead, so there is nothing to attach.
-func createsTmuxSession(app *app.App, remote string) bool {
-	return hiveconfig.ResolveSpawn(app.Config.Rules, remote, false).IsWindows()
+// checkAgent refuses an agent profile that the machine which spawns the
+// session does not have.
+func checkAgent(ctx context.Context, app *app.App, agent string) error {
+	if agent == "" {
+		return nil
+	}
+	if !app.TargetsServer() {
+		if _, ok := app.Config.Agents.Profiles[agent]; !ok {
+			return fmt.Errorf("unknown agent %q", agent)
+		}
+		return nil
+	}
+	options, err := app.SessionAPI().SessionLaunchOptions(ctx)
+	if err != nil {
+		return fmt.Errorf("read the agent profiles of server %s: %w", app.DefaultServer(), err)
+	}
+	if !slices.Contains(options.Agents, agent) {
+		return fmt.Errorf("server %s has no agent %q; its agents are %s", app.DefaultServer(), agent, strings.Join(options.Agents, ", "))
+	}
+	return nil
+}
+
+// showRemoteAttach prints how to reach a new session on a server, which the
+// CLI cannot attach to yet (#745).
+func showRemoteAttach(app *app.App, sess session.Session, progress io.Writer) {
+	if progress == nil {
+		progress = os.Stderr
+	}
+	server, ok := app.Servers.Server(app.DefaultServer())
+	if !ok {
+		return
+	}
+	cfg := server.Config()
+	args := []string{"ssh", "-t"}
+	if cfg.SSHConfig != "" {
+		args = append(args, "-F", tmpl.ShellQuote(cfg.SSHConfig))
+	}
+	args = append(args, cfg.SSH, "--", "tmux", "attach", "-t", tmpl.ShellQuote(sessionsvc.Target(sess).Session))
+	_, _ = fmt.Fprintf(progress, "Attach with: %s\n", strings.Join(args, " "))
+}
+
+// isLocalPath reports whether a git remote names a path on this machine
+// instead of a URL another machine can clone.
+func isLocalPath(remote string) bool {
+	return strings.HasPrefix(remote, "/") || strings.HasPrefix(remote, ".") ||
+		strings.HasPrefix(remote, "~") || strings.HasPrefix(remote, "file://")
 }
 
 // canAttach reports whether a tmux client can show the new session: inside

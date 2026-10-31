@@ -375,7 +375,7 @@ func (c *capturingExec) RunDirStream(_ context.Context, _ string, _ io.Writer, _
 
 func TestCreateSession_AgentKeyOverridesSpawnRenderer(t *testing.T) {
 	store := newMockStore()
-	exec := &capturingStreamExec{}
+	mux := &capturingMux{}
 	cfg := &config.Config{
 		DataDir: t.TempDir(),
 		GitPath: "git",
@@ -387,12 +387,12 @@ func TestCreateSession_AgentKeyOverridesSpawnRenderer(t *testing.T) {
 			},
 		},
 		Rules: []config.Rule{
-			{Pattern: "", Spawn: []string{"{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}},
+			{Pattern: "", Windows: []config.WindowConfig{{Name: "agent", Command: "{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}}},
 		},
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewService(log, store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, io.Discard, io.Discard, testMultiplexer{})
+	svc := NewService(log, store, &mockGit{}, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, io.Discard, io.Discard, mux)
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:     "agent override",
@@ -400,13 +400,13 @@ func TestCreateSession_AgentKeyOverridesSpawnRenderer(t *testing.T) {
 		AgentKey: "aider",
 	})
 	require.NoError(t, err)
-	require.Len(t, exec.streamCommands, 1)
-	assert.Equal(t, "aider-bin|aider|--yes --model sonnet", exec.streamCommands[0])
+	require.Len(t, mux.windows, 1)
+	assert.Equal(t, "aider-bin|aider|--yes --model sonnet", mux.windows[0].Command)
 }
 
 func TestCreateSession_RuleAgentOverridesSpawnRenderer(t *testing.T) {
 	store := newMockStore()
-	exec := &capturingStreamExec{}
+	mux := &capturingMux{}
 	cfg := &config.Config{
 		DataDir: t.TempDir(),
 		GitPath: "git",
@@ -418,25 +418,25 @@ func TestCreateSession_RuleAgentOverridesSpawnRenderer(t *testing.T) {
 			},
 		},
 		Rules: []config.Rule{
-			{Pattern: "", Agent: "aider", Spawn: []string{"{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}},
+			{Pattern: "", Agent: "aider", Windows: []config.WindowConfig{{Name: "agent", Command: "{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}}},
 		},
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewService(log, store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, io.Discard, io.Discard, testMultiplexer{})
+	svc := NewService(log, store, &mockGit{}, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, io.Discard, io.Discard, mux)
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:   "rule agent override",
 		Remote: testRemote,
 	})
 	require.NoError(t, err)
-	require.Len(t, exec.streamCommands, 1)
-	assert.Equal(t, "aider-bin|aider|--model sonnet", exec.streamCommands[0])
+	require.Len(t, mux.windows, 1)
+	assert.Equal(t, "aider-bin|aider|--model sonnet", mux.windows[0].Command)
 }
 
 func TestCreateSession_AgentKeyOverridesRuleAgent(t *testing.T) {
 	store := newMockStore()
-	exec := &capturingStreamExec{}
+	mux := &capturingMux{}
 	cfg := &config.Config{
 		DataDir: t.TempDir(),
 		GitPath: "git",
@@ -449,12 +449,12 @@ func TestCreateSession_AgentKeyOverridesRuleAgent(t *testing.T) {
 			},
 		},
 		Rules: []config.Rule{
-			{Pattern: "", Agent: "aider", Spawn: []string{"{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}},
+			{Pattern: "", Agent: "aider", Windows: []config.WindowConfig{{Name: "agent", Command: "{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}}},
 		},
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewService(log, store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, io.Discard, io.Discard, testMultiplexer{})
+	svc := NewService(log, store, &mockGit{}, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, io.Discard, io.Discard, mux)
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:     "cli agent override",
@@ -462,8 +462,8 @@ func TestCreateSession_AgentKeyOverridesRuleAgent(t *testing.T) {
 		AgentKey: "codex",
 	})
 	require.NoError(t, err)
-	require.Len(t, exec.streamCommands, 1)
-	assert.Equal(t, "codex-bin|codex|--fast", exec.streamCommands[0])
+	require.Len(t, mux.windows, 1)
+	assert.Equal(t, "codex-bin|codex|--fast", mux.windows[0].Command)
 }
 
 func TestCreateSession_UnknownAgentKey(t *testing.T) {
@@ -475,7 +475,7 @@ func TestCreateSession_UnknownAgentKey(t *testing.T) {
 			Default:  "claude",
 			Profiles: map[string]config.AgentProfile{"claude": {Command: "claude"}},
 		},
-		Rules: []config.Rule{{Pattern: "", Spawn: []string{"{{ agentCommand }}"}}},
+		Rules: []config.Rule{{Pattern: "", Windows: []config.WindowConfig{{Name: "agent", Command: "{{ agentCommand }}"}}}},
 	}
 	svc := newTestService(t, store, cfg)
 
@@ -488,26 +488,14 @@ func TestCreateSession_UnknownAgentKey(t *testing.T) {
 	assert.Contains(t, err.Error(), `unknown agent "missing"`)
 }
 
-type capturingStreamExec struct {
-	streamCommands []string
+// capturingMux records the windows a create hands to tmux.
+type capturingMux struct {
+	testMultiplexer
+	windows []multiplexer.WindowSpec
 }
 
-func (c *capturingStreamExec) Run(_ context.Context, _ string, _ ...string) ([]byte, error) {
-	return nil, nil
-}
-
-func (c *capturingStreamExec) RunDir(_ context.Context, _ string, _ string, _ ...string) ([]byte, error) {
-	return nil, nil
-}
-
-func (c *capturingStreamExec) RunStream(_ context.Context, _ io.Writer, _ io.Writer, cmd string, args ...string) error {
-	if cmd == "sh" && len(args) == 2 && args[0] == "-c" {
-		c.streamCommands = append(c.streamCommands, args[1])
-	}
-	return nil
-}
-
-func (c *capturingStreamExec) RunDirStream(_ context.Context, _ string, _ io.Writer, _ io.Writer, _ string, _ ...string) error {
+func (c *capturingMux) CreateSession(_ context.Context, spec multiplexer.SessionSpec) error {
+	c.windows = spec.Windows
 	return nil
 }
 
