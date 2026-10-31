@@ -35,6 +35,8 @@ const props = withDefaults(
     closeOnBackdrop?: boolean
     trapFocus?: boolean
     bodyClass?: string
+    /** The host draws its own header and scrolling: no header, no body padding or scroll. */
+    bare?: boolean
     /** Where focus goes when the sheet closes; defaults to whatever held it when it opened. */
     returnFocusTo?: HTMLElement | null
   }>(),
@@ -129,7 +131,7 @@ defineExpose({ body: bodyRef })
         :start="startResize"
         :step="stepResize"
       />
-      <header class="shrink-0 border-b border-row bg-pane px-[18px] py-[15px]">
+      <header v-if="!bare" class="shrink-0 border-b border-row bg-pane px-[18px] py-[15px]">
         <div :class="['flex items-center', large ? 'gap-3' : 'gap-2.5']">
           <slot name="icon">
             <BaseIconBadge
@@ -168,7 +170,13 @@ defineExpose({ body: bodyRef })
           />
         </div>
       </header>
-      <div ref="bodyRef" :class="['hive-scroll min-h-0 flex-1 overflow-y-auto px-[18px] py-[15px]', bodyClass]">
+      <div
+        ref="bodyRef"
+        :class="[
+          bare ? 'flex min-h-0 flex-1 flex-col' : 'hive-scroll min-h-0 flex-1 overflow-y-auto px-[18px] py-[15px]',
+          bodyClass,
+        ]"
+      >
         <slot />
       </div>
       <footer v-if="$slots.footer" class="shrink-0 border-t border-row bg-raised px-[18px] py-[13px]">

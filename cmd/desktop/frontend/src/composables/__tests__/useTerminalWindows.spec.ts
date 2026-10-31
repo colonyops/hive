@@ -372,8 +372,14 @@ function fakeClient(): MockedClient {
   }
 }
 
+// A session left running keeps its debounced vote on a real timer, and that
+// timer can fire inside a later test and overwrite the remembered vote.
+const openSessions: ReturnType<typeof useTerminalWindows>[] = []
+
 function open(client: MockedClient) {
-  return useTerminalWindows('hive-abc', client as unknown as TerminalClient)
+  const session = useTerminalWindows('hive-abc', client as unknown as TerminalClient)
+  openSessions.push(session)
+  return session
 }
 
 // happy-dom lays nothing out, so a plain div measures 0×0 — which the
@@ -505,6 +511,7 @@ describe('useTerminalWindows', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    for (const session of openSessions.splice(0)) session.dispose()
     Reflect.deleteProperty(navigator, 'userAgent')
   })
 

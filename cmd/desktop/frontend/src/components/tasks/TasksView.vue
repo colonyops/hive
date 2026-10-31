@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Tasks hub view over hc's issue tracker, laid out after Linear: the epic
-// hierarchy as a list, or a status board, beside a detail pane. This owns the view mode, filters, repo scope, refresh, prune,
-// and keyboard navigation; TaskDetailPane owns everything about the
-// selection through the same useTasks() singleton.
+// hierarchy as a list beside a detail pane, or a status board with the detail
+// in a drawer over it. This owns the view mode, filters, repo scope, refresh,
+// prune, row actions, and keyboard navigation; TaskDetail owns everything about
+// the selection through the same useTasks() singleton.
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onKeyStroke } from '@vueuse/core'
 import IconEraser from '~icons/lucide/eraser'
@@ -13,6 +14,7 @@ import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
+import DrawerSheet from '@hive/ui/components/ui/DrawerSheet.vue'
 import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 import SearchField from '@hive/ui/components/ui/SearchField.vue'
 import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
@@ -28,9 +30,12 @@ import { errorText } from '../../lib/appError'
 import { isEditableTarget } from '../../lib/isEditableTarget'
 import {
   buildTaskTree,
+  doneToggleStatus,
   filterCounts,
   groupByStatus,
+  matchesTaskFilter,
   subtaskCounts,
+  TASK_DETAIL_PANEL,
   TASK_FILTERS,
   type TaskBoardColumn,
   type TaskStatus,
@@ -38,8 +43,10 @@ import {
   type TaskViewMode,
 } from '../../lib/tasksPresentation'
 import TaskBoard from './TaskBoard.vue'
+import TaskDetail from './TaskDetail.vue'
 import TaskDetailPane from './TaskDetailPane.vue'
 import TaskRow from './TaskRow.vue'
+import { useTaskDelete } from './useTaskDelete'
 import { useTaskStatusChange } from './useTaskStatusChange'
 
 const emit = defineEmits<{ close: [] }>()
@@ -147,6 +154,18 @@ watch(
   { immediate: true },
 )
 
+// Closing a task under a filter that hides closed ones drops its row. The
+// selection takes the row that moved into its place, so closing several in a
+// row keeps the position instead of stranding the pane on a task with no row.
+watch(navIds, (ids, previous) => {
+  const id = selectedId.value
+  if (view.value !== 'list' || !id || !ids.length || ids.includes(id)) return
+  const item = items.value.find((candidate) => candidate.id === id)
+  if (!item || matchesTaskFilter(item, filter.value)) return
+  const index = previous.indexOf(id)
+  if (index !== -1) select(ids[Math.min(index, ids.length - 1)])
+})
+
 // A scope pointing at a repo with no items — opened from a session whose
 // repo has none yet, or persisted and since pruned empty — must stay a
 // visible, re-selectable choice: TaskRepoKeys() only lists repos that still
@@ -164,13 +183,23 @@ watch(statusChange.error, (message) => {
   if (message) showToast(message, { severity: 'error' })
 })
 
-// The board opens the detail pane as a peek over a chosen card, so the
-// columns get the full width the rest of the time; the list always shows it.
+const taskDelete = useTaskDelete()
+
+// The board's detail is a modal drawer over the columns: they never reflow, and
+// because a drawer registers as an open modal, the board's keys stop until it
+// closes. Sync, because a vanished selection is replaced in the same flush the
+// list lands in, and the drawer must close rather than show the replacement.
 const peekOpen = ref(false)
-const detailShown = computed(() => view.value === 'list' || peekOpen.value)
 watch(view, () => {
   peekOpen.value = false
 })
+watch(
+  selectedId,
+  (id) => {
+    if (id === null) peekOpen.value = false
+  },
+  { flush: 'sync' },
+)
 
 function openPeek(id: string): void {
   select(id)
@@ -280,14 +309,23 @@ onKeyStroke(['ArrowLeft', 'ArrowRight', 'h', 'l'], (event) => {
 // suppress, so unlike the arrows above this never calls preventDefault(). A
 // yank has no button to flip to a check, so a toast is the feedback — the
 // feed's copy-link convention for anchor-less copies.
-const { copy: copySelectedId, status: yankStatus } = useClipboard()
-onKeyStroke('y', (event) => {
-  const id = selectedId.value
-  if (!id || !keyIsOurs(event)) return
-  void copySelectedId(id).then(() => {
+const { copy: copyToClipboard, status: yankStatus } = useClipboard()
+function copyId(id: string): void {
+  void copyToClipboard(id).then(() => {
     if (yankStatus.value === 'error') showToast('Could not copy to the clipboard', { severity: 'error' })
     else showToast(`Copied ${id}`, { severity: 'success' })
   })
+}
+onKeyStroke('y', (event) => {
+  const id = selectedId.value
+  if (!id || !keyIsOurs(event)) return
+  copyId(id)
+})
+
+onKeyStroke('d', (event) => {
+  const item = items.value.find((candidate) => candidate.id === selectedId.value)
+  if (!item || !keyIsOurs(event)) return
+  statusChange.request(item, doneToggleStatus(item.status))
 })
 
 // ── Prune ────────────────────────────────────────────────────────────────
@@ -319,12 +357,6 @@ async function requestPrune(): Promise<void> {
 }
 
 useEscapeToClose(() => emit('close'))
-useEscapeToClose(
-  () => {
-    peekOpen.value = false
-  },
-  { enabled: () => view.value === 'board' && peekOpen.value },
-)
 
 onMounted(() => {
   startLiveUpdates()
@@ -504,14 +536,29 @@ onUnmounted(() => {
             :session-name="sessionNameById.get(row.node.item.sessionId)"
             @select="select"
             @toggle="toggleCollapsed"
+            @status="statusChange.request"
+            @copy="copyId"
+            @delete="taskDelete.request"
           />
         </div>
       </div>
 
-      <TaskDetailPane v-if="detailShown" :closable="view === 'board'" @close="peekOpen = false" />
+      <TaskDetailPane v-if="view === 'list'" />
     </div>
+
+    <DrawerSheet
+      v-if="view === 'board' && peekOpen"
+      bare
+      title="Task details"
+      testid="task-detail-pane"
+      v-bind="TASK_DETAIL_PANEL"
+      @close="peekOpen = false"
+    >
+      <TaskDetail closable @close="peekOpen = false" />
+    </DrawerSheet>
 
     <ConfirmationHost :confirmation="pruneConfirmation" />
     <ConfirmationHost :confirmation="statusChange.confirmation" />
+    <ConfirmationHost :confirmation="taskDelete.confirmation" />
   </div>
 </template>

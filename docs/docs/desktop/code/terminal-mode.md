@@ -143,11 +143,13 @@ Open **Tasks** from the Code status bar, the command palette, or its configured 
 Switch between two layouts at the top of the view:
 
 - **List** shows epics with their subtasks nested under them. Filter it by status with the tabs on the right of the toolbar.
-- **Board** shows a column for every status (Open, In Progress, Done, Cancelled). Drag a card to another column to change its status. Click a card to open its details beside the board, and press <kbd>Esc</kbd> to close them.
+- **Board** shows a column for every status (Open, In Progress, Done, Cancelled). Drag a card to another column to change its status. Click a card to open its details in a drawer over the columns. Press <kbd>Esc</kbd> or click outside the drawer to go back to the board.
 
 Search by title or ID, pick a repository (type in the picker to find one), and inspect epics, subtasks, blockers, comments, checkpoints, and linked sessions. You can change task status, follow blocker links, and prune completed work from the Tasks toolbar. Cancelling a task, or closing an epic that still has open subtasks, asks you to confirm first.
 
-Use <kbd>J</kbd> and <kbd>K</kbd> (or the arrow keys) to move the selection. On the board, <kbd>H</kbd> and <kbd>L</kbd> move between columns. In the list, they fold and unfold epics. <kbd>Y</kbd> copies the selected task's ID.
+Each list row has its own actions. Click the status icon to pick a status, or hover the row for **Mark done** (**Reopen** on a closed task) and a menu with every status, **Copy ID**, and **Delete**. Right-clicking a row opens the same menu.
+
+Use <kbd>J</kbd> and <kbd>K</kbd> (or the arrow keys) to move the selection. On the board, <kbd>H</kbd> and <kbd>L</kbd> move between columns. In the list, they fold and unfold epics. <kbd>D</kbd> marks the selected task done, or reopens it if it is closed. <kbd>Y</kbd> copies the selected task's ID.
 
 ## Drive
 

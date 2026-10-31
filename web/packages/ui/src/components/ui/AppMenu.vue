@@ -36,7 +36,8 @@ const props = defineProps<{
   /** Which anchor edge the panel lines up with. `end` (the default) suits a
    * host at the right of its pane; `start` suits one at the left edge of the
    * window, where `end` would push the panel off-screen. Submenus open toward
-   * the same side. Ignored with `anchor`. */
+   * the same side. With `anchor`, `start` also frees the panel from the anchor's
+   * width, so a small toggle can anchor it. */
   align?: 'start' | 'end'
 }>()
 const emit = defineEmits<{ select: [id: string]; close: [] }>()
@@ -69,8 +70,8 @@ function closeSubmenu(): void {
 
 // ── Anchored (teleported) placement ──────────────────────────────────────
 const ANCHOR_GAP = 5
-// Entry menus stay under ~180px tall, so the hosts' inline heuristic holds
-// here too: within that of the viewport bottom, open upward.
+// The hosts' inline heuristic holds here too: within this, or the panel's own
+// height when it is taller, of the viewport bottom, open upward.
 const FLIP_WITHIN = 180
 
 const anchoredStyle = ref<Record<string, string>>({})
@@ -79,15 +80,16 @@ function measure(): void {
   const el = props.anchor
   if (!el) return
   const rect = el.getBoundingClientRect()
-  const width = Math.min(230, rect.width)
-  const flip = rect.bottom > window.innerHeight - FLIP_WITHIN
+  const start = props.align === 'start'
+  const width = start ? 230 : Math.min(230, rect.width)
+  const flip = rect.bottom > window.innerHeight - Math.max(FLIP_WITHIN, root.value?.offsetHeight ?? 0)
   // Teleported, it layers with AppSelect's popover, above a modal or a hub
   // overlay that may host its anchor.
   anchoredStyle.value = {
     position: 'fixed',
     zIndex: '50',
     right: 'auto',
-    left: `${rect.right - width}px`,
+    left: `${start ? rect.left : rect.right - width}px`,
     width: `${width}px`,
     top: flip ? 'auto' : `${rect.bottom + ANCHOR_GAP}px`,
     bottom: flip ? `${window.innerHeight - rect.top + ANCHOR_GAP}px` : 'auto',
