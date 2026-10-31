@@ -1,4 +1,4 @@
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import { useTasks } from '../stores/useTasks'
 
 /**
@@ -6,7 +6,7 @@ import { useTasks } from '../stores/useTasks'
  * navigating away from it (hay-kot/hive-desktop#441), so they are overlays,
  * not routes. A title-bar icon or a command toggles each one.
  */
-export function useHubOverlays(terminalActive: Ref<boolean>) {
+export function useHubOverlays(terminalActive: Ref<boolean>, changesSession: Ref<string | null>) {
   const tasksOpen = ref(false)
   const activityOpen = ref(false)
   const changesOpen = ref(false)
@@ -29,6 +29,12 @@ export function useHubOverlays(terminalActive: Ref<boolean>) {
   function toggleChanges(): void {
     changesOpen.value = !changesOpen.value
   }
+
+  // The palette can leave Code from over the overlay. Staying open with no session
+  // to draw, it would be an invisible overlay that suppresses the keymap.
+  watch(changesSession, (session) => {
+    if (!session) changesOpen.value = false
+  })
 
   function toggleActivity(): void {
     activityOpen.value = !activityOpen.value

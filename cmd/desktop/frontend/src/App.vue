@@ -68,7 +68,7 @@ const { mode, terminalActive, agentsActive, hubActive, settingsActive, driveActi
 const { terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
 useModePreload(() => shellLoaded.value && !onboardingActive.value, appMode.prepareTerminal)
-const overlays = useHubOverlays(terminalActive)
+const overlays = useHubOverlays(terminalActive, appMode.codeChangesSession)
 const { tasksOpen, activityOpen, actionRunsOpen, changesOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
 const reveal = useReveal(nav, session, feed.showToast, appMode.openDrive)
