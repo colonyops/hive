@@ -136,6 +136,50 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(frame.locator("#result")).toContainText('"bypassed":false');
   });
 
+  test("a foreign page framing the applet's own page gets no token", async ({
+    page,
+  }) => {
+    await openApplet(page, "E2E page");
+    const frame = page.frameLocator('[data-testid="applet-frame"]');
+    await expect(frame.locator("#result")).toContainText('"file":"written"');
+
+    await frame.locator("#frame-own-page").click();
+    await expect(frame.locator("#left")).toHaveText("no token");
+
+    await page.getByTestId("applet-page-close").click();
+    await openApplet(page, "E2E page");
+    await expect(frame.locator("#result")).toContainText('"bypassed":false');
+  });
+
+  test("the Wails runtime refuses a call that is not the app's own", async ({
+    page,
+  }) => {
+    const call = `/wails/runtime?object=0&method=0&args=${encodeURIComponent(
+      JSON.stringify({
+        "call-id": "e2e",
+        methodID: 2190116655,
+        args: ["e2e-page", { command: "touch bypassed" }],
+      }),
+    )}`;
+    const refused = [
+      await page.request.get(call),
+      await page.request.post(call),
+      await page.request.post(call, {
+        headers: { "x-wails-client-id": "e2e", Origin: "null" },
+      }),
+      await page.request.post(call, {
+        headers: { "x-wails-client-id": "e2e", Origin: "https://evil.example" },
+      }),
+    ];
+    expect(refused.map((response) => response.status())).toEqual([
+      403, 403, 403, 403,
+    ]);
+
+    await openApplet(page, "E2E page");
+    const frame = page.frameLocator('[data-testid="applet-frame"]');
+    await expect(frame.locator("#result")).toContainText('"bypassed":false');
+  });
+
   test("a title bar page runs once turned on, opens a dropdown, and talks to it", async ({
     page,
     browserName,

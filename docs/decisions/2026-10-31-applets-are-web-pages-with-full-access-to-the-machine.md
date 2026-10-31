@@ -31,12 +31,21 @@ in Go (`prompts/templates/applets.tmpl`), and the page sends only the answers. A
 of the same name replaces a built-in.
 
 Unrestricted applies to the applet the user opened, not to whatever else can reach the
-bridge. Three rules hold that line:
+bridge. A frame can reach a remote page through one link, so these rules hold that line:
 
 - **A page proves itself with a token.** A frame keeps its window when it navigates, so
   `event.source` alone would answer a remote page reached through a link. The token is
   injected only into pages `Asset` serves, and those responses carry no CORS header, so
   a page in the frame cannot fetch one to read it.
+- **A page sends its token only to Hive.** A remote page could otherwise frame an applet's
+  own page and read the token off its first message. The bridge posts only when its parent
+  is the top window, which a page cannot fake, so `window.hive` rejects every call in a page
+  nested any deeper, including an applet's own.
+- **The Wails runtime takes calls only from the app's own page.** Wails runs a bound method
+  on any request to `/wails/runtime`, including a `GET` an image makes, and that path has no
+  token. WKWebView sends no preflight to a custom scheme, so a custom header alone proves
+  nothing. A call must be a `POST` with `x-wails-client-id`, and with no `Origin` or the
+  app's own.
 - **The native build serves pages through the asset handler**, not the loopback server,
   so nothing outside the webview can read an applet's files or reach the bridge.
 - **The headless server build (`-tags server`) has no applets.** There the asset handler

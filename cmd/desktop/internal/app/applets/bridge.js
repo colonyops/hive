@@ -37,7 +37,12 @@
     else resolve(event.data.result)
   })
 
+  // Hive frames a page directly under its own window. Anything else above this page may be
+  // a foreign page framing it to read the token off the first message, so nothing is sent.
+  const framedByHive = parent !== window && parent === top
+
   function call(method, args = {}) {
+    if (!framedByHive) return Promise.reject(new Error('window.hive works only in a page Hive opened itself.'))
     return new Promise((resolve, reject) => {
       const id = ++nextID
       pending.set(id, { resolve, reject })
@@ -94,8 +99,10 @@
     close: () => call('close'),
   }
 
+  const notify = (method, args) => call(method, args).catch(() => {})
+
   call('theme').then(applyTheme, () => {})
-  void call('ready')
+  notify('ready')
 
   // The frame has an opaque origin, where the real localStorage throws. Generated
   // pages reach for it constantly, so this one works the same and persists per applet.
@@ -104,13 +111,13 @@
   let saving = null
   const save = () => {
     clearTimeout(saving)
-    saving = setTimeout(() => call('saveStorage', { encoded: JSON.stringify(Object.fromEntries(store)) }), 200)
+    saving = setTimeout(() => notify('saveStorage', { encoded: JSON.stringify(Object.fromEntries(store)) }), 200)
   }
   // Every frame of an applet keeps its own copy and saves all of it, so each change
   // crosses to the others at once. Otherwise a frame's next save would undo theirs.
   const changed = (key, value) => {
     save()
-    void call('storageChanged', { key, value })
+    notify('storageChanged', { key, value })
   }
   const applyStorage = ({ key, value }) => {
     if (key === null) store.clear()
@@ -156,7 +163,7 @@
     setTimeout(() => {
       if (event.defaultPrevented) return
       if (event.key === 'Escape' && !continuing) {
-        void call('close')
+        notify('close')
         return
       }
       const { key, code, metaKey, ctrlKey, altKey, shiftKey } = event

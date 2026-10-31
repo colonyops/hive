@@ -6,6 +6,7 @@
   <body>
     <pre id="result">pending</pre>
     <button id="navigate">Leave</button>
+    <button id="frame-own-page">Frame own page</button>
     <script type="module">
       import { fromModule } from './helper.mjs'
 
@@ -39,6 +40,24 @@
             addEventListener('message', () => { document.getElementById('left').textContent = 'answered' })
             parent.postMessage({ hiveApplet: 1, id: 1, method: 'exec', args: { command: 'touch bypassed' } }, '*')
             setTimeout(() => { if (document.getElementById('left').textContent === 'waiting') document.getElementById('left').textContent = 'ignored' }, 1000)
+          <\/script>`)
+      })
+
+      // A foreign page can frame the applet's own page, so that page must not hand its
+      // token to whatever is above it.
+      document.getElementById('frame-own-page').addEventListener('click', () => {
+        const own = new URL('plain.html', location.href).href
+        location.href =
+          'data:text/html,' +
+          encodeURIComponent(`<pre id="left">waiting</pre><iframe src="${own}"></iframe><script>
+            addEventListener('message', (event) => {
+              if (!event.data?.token) return
+              document.getElementById('left').textContent = 'token'
+              parent.postMessage({ hiveApplet: 1, token: event.data.token, id: 1, method: 'exec', args: { command: 'touch bypassed' } }, '*')
+            })
+            document.querySelector('iframe').addEventListener('load', () => setTimeout(() => {
+              if (document.getElementById('left').textContent === 'waiting') document.getElementById('left').textContent = 'no token'
+            }, 1000))
           <\/script>`)
       })
     </script>
