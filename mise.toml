@@ -120,6 +120,10 @@ description = "Run every Go test in the module: the CLI, the desktop, and the sh
 env = { HIVE_DEFAULT_AGENT = "" }
 run = "go test ./..."
 
+[tasks."test:tmux"]
+description = "Run the tests that drive a real tmux server inside Docker; `test` skips them on a machine with a running tmux server"
+run = "scripts/test-real-tmux.sh"
+
 [tasks."test:race"]
 description = "Run all go tests with the race detector; CI runs this on main"
 env = { HIVE_DEFAULT_AGENT = "" }
@@ -247,6 +251,7 @@ run = [
   { tasks = ["desktop:frontend:build", "desktop:frontend:test", "desktop:frontend:format:check", "desktop:frontend:lint"] },
   { tasks = ["ui:test", "ui:format:check", "ui:lint"] },
   { tasks = ["drive-server:frontend:build", "drive-server:frontend:test", "drive-server:frontend:format:check", "drive-server:frontend:lint"] },
+  { tasks = ["test:tmux"] },
   { tasks = ["cli:integration"] },
   { tasks = ["cli:remote:test"] },
   { tasks = ["cli:smoke:test"] },
