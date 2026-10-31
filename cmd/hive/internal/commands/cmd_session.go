@@ -791,9 +791,8 @@ func (cmd *SessionCmd) attachCmd() *cli.Command {
 		Name:      "attach",
 		Usage:     "Open a session's terminal",
 		UsageText: "hive session attach <[server:]id>",
-		Description: `Attaches this terminal to the session's tmux session. When the session's
-spawn rule makes a tmux session and none runs, it starts one first, with the
-agent.
+		Description: `Attaches this terminal to the session's tmux session. When none runs, it
+starts one first, with the agent.
 
 For a session on a server, the terminal runs over ssh. Inside tmux it opens in
 a new window, so you keep the current one.`,
@@ -815,8 +814,13 @@ func (cmd *SessionCmd) runAttach(ctx context.Context, c *cli.Command) error {
 	if ref.Server != session.LocalServer {
 		return cmd.app.AttachServerSession(ctx, ref.Server, sess)
 	}
-	if _, err := api.StartTmuxSession(ctx, sess.ID); err != nil {
+	result, err := api.StartTmuxSession(ctx, sess.ID)
+	if err != nil {
 		return fmt.Errorf("start session %s: %w", sess.Name, err)
+	}
+	if result.Completed {
+		fmt.Fprintf(os.Stderr, "session %s: %v\n", sess.Name, app.ErrSessionCompleted)
+		return nil
 	}
 	streams := multiplexer.AttachStreams{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}
 	return cmd.app.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(sess), streams)
