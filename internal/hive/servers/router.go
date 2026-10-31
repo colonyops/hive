@@ -229,6 +229,30 @@ func (r *Router) SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOpt
 	return r.fleet.Local().SessionLaunchOptions(ctx)
 }
 
+func (r *Router) SessionChanges(ctx context.Context, id string, target gitstatus.DiffTarget) (gitstatus.Changes, error) {
+	ref, api, err := r.route(id)
+	if err != nil {
+		return gitstatus.Changes{}, err
+	}
+	return api.SessionChanges(ctx, ref.ID, target)
+}
+
+func (r *Router) SessionFileDiffs(ctx context.Context, id string, target gitstatus.DiffTarget, paths []string) ([]gitstatus.FileDiff, error) {
+	ref, api, err := r.route(id)
+	if err != nil {
+		return nil, err
+	}
+	return api.SessionFileDiffs(ctx, ref.ID, target, paths)
+}
+
+func (r *Router) SessionBranches(ctx context.Context, id string) ([]string, error) {
+	ref, api, err := r.route(id)
+	if err != nil {
+		return nil, err
+	}
+	return api.SessionBranches(ctx, ref.ID)
+}
+
 func (r *Router) StartTmuxSession(ctx context.Context, id string) (multiplexer.LaunchResult, error) {
 	ref, api, err := r.route(id)
 	if err != nil {
