@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import { screenshotPath } from '../../../fixtures/paths.js'
 import { expect, tag, test } from '../../../fixtures/test.js'
 
 async function openApplet(page: Page, title: string): Promise<void> {
@@ -27,7 +28,8 @@ test.describe('applets', { tag: [tag.applets] }, () => {
     const titles = page.getByTestId('command-palette-command-title')
     await expect(titles.filter({ hasText: 'Applet Builder' })).toHaveCount(1)
     await expect(titles.filter({ hasText: 'E2E page' })).toHaveCount(1)
-    await expect(titles).toHaveCount(2)
+    await expect(titles.filter({ hasText: 'E2E bar' })).toHaveCount(1)
+    await expect(titles).toHaveCount(3)
   })
 
   test('the builder fits on one screen and copies a prompt that asks what to build', async ({ page }) => {
@@ -94,6 +96,58 @@ test.describe('applets', { tag: [tag.applets] }, () => {
     await page.getByTestId('applet-page-close').click()
     await openApplet(page, 'E2E page')
     await expect(frame.locator('#result')).toContainText('"bypassed":false')
+  })
+
+  test('a title bar page runs once turned on, opens a dropdown, and talks to it', async ({ page, browserName }) => {
+    const slot = page.getByTestId('titlebar-applet-e2e-bar')
+    await expect(slot).toHaveCount(0)
+
+    await page.goto('/#/settings/applets')
+    const toggle = page.getByTestId('settings-applet-e2e-bar-titlebar')
+    await expect(page.getByTestId('settings-applet-e2e-page-titlebar')).toHaveCount(0)
+    await toggle.click()
+    await expect(slot).toBeVisible()
+
+    const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]')
+    await expect(bar.locator('#surface')).toHaveText('titlebar')
+    await expect(slot).toHaveCSS('width', '60px')
+    const header = await page.getByTestId('titlebar').boundingBox()
+    const box = await slot.boundingBox()
+    expect(box!.y - header!.y).toBe(header!.y + header!.height - (box!.y + box!.height))
+
+    await bar.locator('#grow').click()
+    await expect(slot).toHaveCSS('width', '90px')
+
+    await bar.locator('#menu').click()
+    const dropdown = page.getByTestId('applet-dropdown')
+    await expect(dropdown).toBeVisible()
+    const menu = page.frameLocator('[data-testid="applet-dropdown-frame"]')
+    await expect(menu.locator('#surface')).toHaveText('dropdown')
+    await menu.locator('#send').click()
+    await expect(bar.locator('#got')).toHaveText('hello from the dropdown')
+    await expect(bar.locator('#stored')).toHaveText('from the dropdown')
+
+    await bar.locator('#menu').click()
+    await expect(dropdown).toHaveCount(0)
+
+    await bar.locator('#menu').click()
+    await expect(dropdown).toBeVisible()
+    await page.getByTestId('titlebar').click({ position: { x: 400, y: 20 } })
+    await expect(dropdown).toHaveCount(0)
+
+    await page.screenshot({ path: screenshotPath(`applet-titlebar-${browserName}.png`), clip: header! })
+
+    await bar.locator('#chord').focus()
+    await page.keyboard.press('Meta+k')
+    await expect(page.getByTestId('command-palette-input')).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    await bar.locator('#command').click()
+    await expect(page).toHaveURL(/#\/settings\/keybindings/)
+
+    await page.goto('/#/settings/applets')
+    await toggle.click()
+    await expect(slot).toHaveCount(0)
   })
 
   test('the asset route hides saved storage and gives a page no CORS', async ({ page }) => {

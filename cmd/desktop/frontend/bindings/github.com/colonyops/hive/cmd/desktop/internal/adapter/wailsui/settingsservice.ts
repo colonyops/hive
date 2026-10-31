@@ -163,3 +163,11 @@ export function SetTerminalShowWindows(show: boolean): $CancellablePromise<void>
 export function SetTheme(theme: string): $CancellablePromise<void> {
     return $Call.ByID(4185056443, theme);
 }
+
+export function SetTitlebarApplets(ids: string[] | null): $CancellablePromise<void> {
+    return $Call.ByID(3425349082, ids);
+}
+
+export function TitlebarApplets(): $CancellablePromise<string[] | null> {
+    return $Call.ByID(2178995738);
+}

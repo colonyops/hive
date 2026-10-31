@@ -70,6 +70,13 @@ type NotificationSettings struct {
 	Sound    bool   `yaml:"sound"    env:"HIVE_DESKTOP_NOTIFICATIONS_SOUND"`
 }
 
+// AppletsSettings holds what the user has chosen to do with their applets.
+type AppletsSettings struct {
+	// Titlebar lists the applets shown in the title bar, in order. An id with no such
+	// applet stays listed, so an applet being rewritten keeps its place.
+	Titlebar []string `yaml:"titlebar,omitempty"`
+}
+
 type Appearance struct {
 	Theme string `yaml:"theme,omitempty" env:"HIVE_DESKTOP_APPEARANCE_THEME"`
 	// FontFamily names the family the app's chrome draws with and
@@ -481,6 +488,7 @@ type Settings struct {
 	// No omitempty: with terminal_show_windows off and nothing else set the
 	// struct is all-zero, and an omitted section would read back as defaults.
 	Appearance      Appearance              `yaml:"appearance"`
+	Applets         AppletsSettings         `yaml:"applets,omitempty"`
 	Profiles        ProfileSettings         `yaml:"profiles,omitempty"`
 	MenuBar         MenuBarSettings         `yaml:"menu_bar,omitempty"`
 	HTTP            HTTPSettings            `yaml:"http"`

@@ -271,6 +271,23 @@ func (s *SettingsService) SetTerminalShowStatusBar(_ context.Context, show bool)
 	return Wrap(err, KindInternal, "saving settings")
 }
 
+// TitlebarApplets lists the applets the user put in the title bar, in order.
+func (s *SettingsService) TitlebarApplets(context.Context) ([]string, error) {
+	cfg, err := s.store.Effective()
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "reading settings")
+	}
+	return cfg.Applets.Titlebar, nil
+}
+
+func (s *SettingsService) SetTitlebarApplets(_ context.Context, ids []string) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Applets.Titlebar = ids
+		return nil
+	})
+	return Wrap(err, KindInternal, "saving settings")
+}
+
 func (s *SettingsService) SetTerminalPoolSize(_ context.Context, size int) error {
 	_, err := s.store.Update(func(current *settings.Settings) error {
 		current.Appearance.TerminalPoolSize = size

@@ -4,6 +4,7 @@ import IconLayoutGrid from '~icons/lucide/layout-grid'
 import ActionInputsDialog from '../components/ActionInputsDialog.vue'
 import ActionRunsView from '../components/ActionRunsView.vue'
 import ActivityView from '../components/ActivityView.vue'
+import AppletDropdown from '../components/applets/AppletDropdown.vue'
 import AppletHost from '../components/applets/AppletHost.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import ErrorDialog from '../components/ErrorDialog.vue'
@@ -158,6 +159,7 @@ onMounted(() => {
     @save="profileActions.submitNewProfile"
   />
   <AppletHost />
+  <AppletDropdown />
   <HubOverlay v-if="tasksOpen" label="Tasks" testid="tasks-overlay" @close="tasksOpen = false">
     <TasksView @close="tasksOpen = false" />
   </HubOverlay>

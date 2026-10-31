@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useApplets } from '../../../stores/useApplets'
 import { resetStores } from '../../../stores/defineStore'
 import { usePopupTerminal } from '../../../stores/usePopupTerminal'
 import AppletFrame from '../AppletFrame.vue'
@@ -25,9 +26,9 @@ vi.mock(
 
 const applet = { id: 'pong', title: 'Pong', entry: 'index.html', revision: 7 }
 
-function setup() {
+function setup(extra: object = {}) {
   const wrapper = mount(AppletFrame, {
-    props: { applet: applet as never, sessionSlug: 'sess' },
+    props: { applet: applet as never, sessionSlug: 'sess', ...extra },
     attachTo: document.body,
   })
   const frame = wrapper.get('iframe').element
@@ -112,11 +113,144 @@ describe('AppletFrame', () => {
     wrapper.unmount()
   })
 
-  it('closes on request and stops the processes the page started', async () => {
+  it('closes on request and stops only the processes this frame started', async () => {
+    service.Spawn.mockResolvedValue('p1')
     const { wrapper, send } = setup()
+    await send('spawn', { command: 'sleep 60' })
     await send('close')
     expect(wrapper.emitted('close')).toHaveLength(1)
     wrapper.unmount()
-    expect(service.KillSpawns).toHaveBeenCalledWith('pong')
+    expect(service.KillSpawns).toHaveBeenCalledWith(['p1'])
+  })
+
+  it('stops nothing when the frame started nothing', () => {
+    const { wrapper } = setup()
+    wrapper.unmount()
+    expect(service.KillSpawns).not.toHaveBeenCalled()
+  })
+
+  it('does not stop a process that already ended', async () => {
+    service.Spawn.mockResolvedValue('p1')
+    service.SpawnRead.mockResolvedValue({ stdout: '', stderr: '', done: true, code: 0 })
+    const { wrapper, send } = setup()
+    await send('spawn', { command: 'true' })
+    await send('spawnRead', { handle: 'p1' })
+    wrapper.unmount()
+    expect(service.KillSpawns).not.toHaveBeenCalled()
+  })
+
+  describe('in the title bar', () => {
+    function titlebar(surface = 'titlebar') {
+      return setup({ surface, entry: 'bar.html' })
+    }
+
+    it('says which surface it is on, and loads its own entry', () => {
+      const { wrapper, frame } = titlebar()
+      expect(frame.getAttribute('src')).toBe('/__applet/pong/bar.html?r=7&surface=titlebar')
+      wrapper.unmount()
+    })
+
+    it('does not take focus when it loads', async () => {
+      const { wrapper, frame } = titlebar()
+      const focus = vi.spyOn(frame, 'focus')
+      await wrapper.get('iframe').trigger('load')
+      expect(focus).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('opens a dropdown from its own frame, and a second call closes it', async () => {
+      const { wrapper, frame, send } = titlebar()
+      await send('dropdown', { entry: 'menu.html', width: 200, height: 100 })
+      expect(useApplets().dropdown.value).toMatchObject({
+        entry: 'menu.html',
+        width: 200,
+        height: 100,
+        anchor: frame,
+      })
+      await send('dropdown', { entry: 'menu.html' })
+      expect(useApplets().dropdown.value).toBeNull()
+      wrapper.unmount()
+    })
+
+    it('refuses a dropdown from any other surface', async () => {
+      const { wrapper, replies, send } = setup()
+      await send('dropdown')
+      expect(replies).toEqual([{ hiveApplet: 1, id: 1, error: 'Only a title bar page can open a dropdown.' }])
+      expect(useApplets().dropdown.value).toBeNull()
+      wrapper.unmount()
+    })
+
+    it('passes a resize to its host, and a panel refuses one', async () => {
+      const bar = titlebar()
+      await bar.send('resize', { width: 120 })
+      expect(bar.wrapper.emitted('resize')).toEqual([[{ width: 120 }]])
+      bar.wrapper.unmount()
+
+      const panel = setup()
+      await panel.send('resize', { width: 120 })
+      expect(panel.wrapper.emitted('resize')).toBeUndefined()
+      panel.wrapper.unmount()
+    })
+
+    it('hands a chord to the app keymap', async () => {
+      const { wrapper, send } = titlebar()
+      const seen: KeyboardEvent[] = []
+      const listener = (event: KeyboardEvent) => seen.push(event)
+      window.addEventListener('keydown', listener)
+      await send('key', { key: 'k', metaKey: true })
+      window.removeEventListener('keydown', listener)
+      expect(seen).toHaveLength(1)
+      expect(seen[0]).toMatchObject({ key: 'k', metaKey: true })
+      wrapper.unmount()
+    })
+
+    it('runs an app command for the page', async () => {
+      const { wrapper, send } = titlebar()
+      const run = vi.fn()
+      useApplets().setCommandRunner(run)
+      await send('command', { id: 'settings.open' })
+      expect(run).toHaveBeenCalledWith('settings.open')
+      wrapper.unmount()
+    })
+
+    it('tells the page when the session on screen changes', async () => {
+      const { wrapper, replies } = titlebar()
+      await wrapper.setProps({ sessionSlug: 'other' })
+      expect(replies).toEqual([{ hiveApplet: 1, event: 'session', data: 'other' }])
+      wrapper.unmount()
+    })
+  })
+
+  describe('with another frame of the same applet open', () => {
+    function pair() {
+      const first = setup()
+      const second = setup({ surface: 'titlebar' })
+      return { first, second }
+    }
+
+    it('carries a broadcast to the other frame and not back', async () => {
+      const { first, second } = pair()
+      await first.send('broadcast', { data: { playing: true } })
+      expect(second.replies).toEqual([{ hiveApplet: 1, event: 'message', data: { playing: true } }])
+      expect(first.replies).toEqual([{ hiveApplet: 1, id: 1 }])
+      first.wrapper.unmount()
+      second.wrapper.unmount()
+    })
+
+    it('carries a storage change to the other frame', async () => {
+      const { first, second } = pair()
+      await first.send('storageChanged', { key: 'k', value: 'v' })
+      expect(second.replies).toEqual([{ hiveApplet: 1, storage: { key: 'k', value: 'v' } }])
+      first.wrapper.unmount()
+      second.wrapper.unmount()
+    })
+
+    it('stops reaching a frame that closed', async () => {
+      const { first, second } = pair()
+      second.wrapper.unmount()
+      await first.send('broadcast', { data: 1 })
+      expect(second.replies).toEqual([])
+      first.wrapper.unmount()
+    })
   })
 })

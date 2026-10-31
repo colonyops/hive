@@ -1,0 +1,5 @@
+version: 1
+title: E2E bar
+titlebar:
+  entry: bar.html
+  width: 60

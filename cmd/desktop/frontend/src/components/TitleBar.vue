@@ -14,6 +14,7 @@ import IconPanelRightOpen from '~icons/lucide/panel-right-open'
 import IconSearch from '~icons/lucide/search'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconArrowUpCircle from '~icons/lucide/arrow-up-circle'
+import AppletTitlebarSlot from './applets/AppletTitlebarSlot.vue'
 import JobsPopover from './JobsPopover.vue'
 import TitleBarMenu from './TitleBarMenu.vue'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
@@ -21,6 +22,7 @@ import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import Kbd from '@hive/ui/components/ui/Kbd.vue'
 import Spinner from '@hive/ui/components/ui/Spinner.vue'
 import SegmentedControl, { type SegmentedControlOption } from '@hive/ui/components/ui/SegmentedControl.vue'
+import { useApplets } from '../stores/useApplets'
 
 // One button grammar for the whole chrome, with a fixed slot per zone. The bar
 // is two clusters, not three centered columns — a window-centered palette sat
@@ -30,7 +32,8 @@ import SegmentedControl, { type SegmentedControlOption } from '@hive/ui/componen
 //            switch. The cluster owns all of the bar's slack, so the empty
 //            middle stays a drag surface. Below the labels breakpoint
 //            (min-[860px]) the mode segments drop their labels to icons.
-//   right  — status chips, then the command-palette launcher (compact, width
+//   right  — status chips, then the pages of the applets the user put here, then
+//            the command-palette launcher (compact, width
 //            clamped to the window so it gives way before the tabs do), then
 //            app-level utilities (Activity, Views) as one icon run, then the
 //            preview (right-panel) toggle bracketing the far
@@ -105,6 +108,7 @@ const emit = defineEmits<{
 // them and keep the height in sync with InvisibleTitleBarHeight (42) in main.go
 // so the controls stay vertically centered.
 const isMac = navigator.userAgent.includes('Mac')
+const applets = useApplets()
 
 const modeOptions: SegmentedControlOption<'hub' | 'terminal' | 'agents'>[] = [
   { value: 'hub', label: 'Inbox', title: 'Inbox' },
@@ -139,10 +143,13 @@ function onTitlebarDblclick(event: MouseEvent): void {
 </script>
 
 <template>
+  <!-- The rule is drawn over the bar, not as a border, so it takes no height from the
+       row: the controls center on the whole bar, as the native traffic lights do. -->
   <header
-    class="relative flex shrink-0 items-center border-b border-border bg-raised"
+    class="relative flex shrink-0 items-center bg-raised after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border"
     :class="isMac ? 'h-[42px]' : 'h-10'"
     style="--wails-draggable: drag"
+    data-testid="titlebar"
     @dblclick="onTitlebarDblclick"
   >
     <!-- Left: panel toggle (frame) · feed history · mode switch -->
@@ -263,6 +270,9 @@ function onTitlebarDblclick(event: MouseEvent): void {
           "
         />
       </div>
+      <template v-if="profileName">
+        <AppletTitlebarSlot v-for="applet in applets.titlebar.value" :key="applet.id" :applet="applet" />
+      </template>
       <button
         v-if="profileName"
         type="button"

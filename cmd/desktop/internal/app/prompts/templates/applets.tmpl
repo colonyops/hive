@@ -9,7 +9,7 @@ is intended: do what the request needs.
 Write the applet to {{.Env.AppletsDir}}/<id>/. The directory name is the applet's id:
 a slug of lowercase letters, digits and hyphens. It holds an `applet.yaml` and the
 page. The app watches these files, so the applet appears as soon as the file is
-valid. Nothing runs until the user opens it.
+valid. Nothing runs until the user opens it or puts it in the title bar.
 
 ```yaml
 version: 1
@@ -27,6 +27,7 @@ Unknown keys are errors.
 - `cwd`: where commands run. Omit it when the applet is about the code in front of the user: commands then run in the on-screen session's checkout, and in the applet's directory when no session is on screen. Set `"~"` or an absolute path when the applet works anywhere. A relative path is relative to the applet's directory.
 - `entry`: the page, default `index.html`.
 - `width` and `height`: the panel in pixels. The default fills the window.
+- `titlebar`: offers a page for the title bar, with `entry` (default: the applet's own `entry`) and `width` in pixels (default 28, one icon button). See "In the title bar".
 
 ## The page
 
@@ -45,7 +46,13 @@ close button over the top right corner of the page, so leave about 52px clear th
 - `hive.toast(message, {severity, body})` shows a Hive toast. `severity` is `info`, `success`, `warning`, or `error`.
 - `hive.copy(text)` puts text on the clipboard.
 - `hive.context()` resolves to `{id, title, dir, cwd, sessionSlug}`.
-- `hive.close()` closes the applet.
+- `hive.close()` closes the applet. In a title bar page it closes the page's dropdown.
+- `hive.surface` is `page`, `titlebar` or `dropdown`, for one file that serves several.
+- `hive.open()` opens the applet's panel from any of them.
+- `hive.broadcast(data)` sends to the applet's other open frames, which listen with `hive.on('message', fn)`.
+- `hive.on('session', fn)` reports the slug of the session on screen when it changes. `hive.on` returns a function that stops listening.
+- `hive.commands()` resolves to Hive's commands as `{id, title, group}`, and `hive.command(id)` runs one, so a page can do what the command palette can.
+- `hive.navigate(path)` goes to a route of the app: `/hub`, `/terminal/<session-slug>`, `/settings/<section>`.
 
 Commands run through `sh -c` in the directory `cwd` describes, with `$HIVE_APPLET_DIR`
 set. Pass values to a command through `env` and quote them in the command
@@ -65,11 +72,29 @@ Escape closes the applet unless your keydown handler calls `preventDefault()`. U
 that to let Escape back out of a dialog or a filter first. Keys typed in the page do
 not reach Hive's own shortcuts. Audio needs a user gesture first, as on any page.
 
+## In the title bar
+
+Use this for something that is always there: an indicator, media controls, a shortcut to
+another part of the app. With `titlebar:` in `applet.yaml`, the applet can show a page in
+Hive's title bar once the user turns it on in Settings > Applets, or adds its id to
+`applets.titlebar` in `settings.yaml` when they ask you to. It then loads with the app and
+keeps running until they turn it off, so keep what it polls cheap.
+
+- The slot is 28px tall. Set `html, body { margin: 0; height: 100%; background: transparent; }` so the page sits on the bar, and match Hive's 28px controls with a 8px radius and a `--hv-chip` hover fill. Use `--hv-*` colours.
+- `hive.resize({width})` changes the slot's width. Width `0` hides the slot and keeps the page running, for an indicator that only shows when there is something to say.
+- `hive.dropdown({entry, width, height})` opens a panel under the bar and a second call closes it, so call it from a click. It closes when the user clicks elsewhere or presses Escape. `hive.resize({width, height})` from its page resizes it. It loads fresh on each open, so anything that must keep going, such as audio or a long-running process, belongs in the title bar page. Keep the two in step with `hive.broadcast`.
+- `localStorage` is shared between an applet's frames, and the `storage` event fires as it does in a browser.
+- Closing a panel or dropdown stops only what that frame spawned.
+- Command and control chords typed in a title bar page or dropdown reach Hive's shortcuts unless your handler calls `preventDefault()`.
+
+If the applet is only for the title bar, the palette still opens its `entry` as a panel, so
+make that page useful too: settings or a larger view.
+
 ## Check your work
 
 1. Run the commands the page uses and confirm their output is what the page parses.
 2. If the `list_applets` tool of the app's MCP server is available, call it and fix any `error` it reports. Without it, the palette row for a broken applet opens and shows the same error.
-3. Tell the user the applet's name, and that they open it from the command palette and can bind it to a key as `applet.<id>`.
+3. Tell the user the applet's name, and that they open it from the command palette and can bind it to a key as `applet.<id>`. For a title bar page, also tell them to turn it on in Settings > Applets.
 {{with .Brief}}
 {{if eq .Style "hive"}}{{template "applet-style-hive"}}{{end -}}
 {{if eq .Style "website"}}

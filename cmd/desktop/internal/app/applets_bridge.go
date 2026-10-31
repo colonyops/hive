@@ -519,12 +519,14 @@ func (s *AppletsService) Processes() []AppletProcess {
 	return out
 }
 
-// KillSpawns stops every process an applet started, and is what closing it means.
-func (s *AppletsService) KillSpawns(id string) {
+// KillSpawns stops the processes one frame started, and is what closing that frame
+// means. It takes handles rather than an applet id because an applet can have several
+// frames open, and closing its panel must not stop what its title bar page runs.
+func (s *AppletsService) KillSpawns(handles []string) {
 	s.spawns.mu.Lock()
 	defer s.spawns.mu.Unlock()
-	for handle, spawn := range s.spawns.live {
-		if spawn.applet == id {
+	for _, handle := range handles {
+		if spawn, ok := s.spawns.live[handle]; ok {
 			spawn.cancel()
 			delete(s.spawns.live, handle)
 		}

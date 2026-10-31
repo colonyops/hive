@@ -1,11 +1,24 @@
-import { computed, readonly, ref, watch } from 'vue'
+import { computed, readonly, ref, shallowReadonly, shallowRef, watch } from 'vue'
 import { List } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
+import {
+  SetTitlebarApplets,
+  TitlebarApplets,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
 import type { Applet } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { appletCommandID, setAppletCommands } from '../keybindings/catalog'
 import { launcherIconComponent } from '../lib/launcherIcons'
 import { defineStore } from './defineStore'
+import { usePersistedSetting } from './usePersistedSetting'
 import { useResource } from './useResource'
+
+export interface AppletDropdown {
+  applet: Applet
+  entry: string
+  width: number
+  height: number
+  anchor: HTMLElement
+}
 
 // The applets on disk and the one on screen. Each is a bindable command, so this
 // is what turns a file an agent wrote into a palette row and a chord (ADR
@@ -21,6 +34,75 @@ export const useApplets = defineStore('applets', () => {
   const sessionSlug = ref('')
 
   const open = computed(() => catalog.data.value.find((applet) => applet.id === openID.value) ?? null)
+
+  const titlebarIDs = usePersistedSetting<string[]>({
+    initial: [],
+    read: async () => (await TitlebarApplets()) ?? [],
+    write: (ids) => SetTitlebarApplets(ids),
+    label: 'the title bar applets',
+  })
+  const titlebar = computed(() =>
+    titlebarIDs.value.value.flatMap((id) => {
+      const applet = catalog.data.value.find((candidate) => candidate.id === id)
+      return applet?.runnable && applet.titlebar ? [applet] : []
+    }),
+  )
+
+  function isInTitlebar(id: string): boolean {
+    return titlebarIDs.value.value.includes(id)
+  }
+
+  function setInTitlebar(id: string, shown: boolean): void {
+    const others = titlebarIDs.value.value.filter((other) => other !== id)
+    titlebarIDs.set(shown ? [...others, id] : others)
+  }
+
+  const dropdown = shallowRef<AppletDropdown | null>(null)
+
+  function toggleDropdown(next: AppletDropdown): void {
+    const current = dropdown.value
+    dropdown.value = current?.applet.id === next.applet.id && current.entry === next.entry ? null : next
+  }
+
+  function closeDropdown(): void {
+    dropdown.value = null
+  }
+
+  // The session on screen now. A title bar page outlives any one session, so it follows
+  // this where a panel stays on the session it opened over.
+  const liveSessionSlug = ref('')
+
+  function setLiveSession(slug: string): void {
+    liveSessionSlug.value = slug
+  }
+
+  let commandRunner: (id: string) => void = () => {}
+
+  function setCommandRunner(run: (id: string) => void): void {
+    commandRunner = run
+  }
+
+  function runCommand(id: string): void {
+    commandRunner(id)
+  }
+
+  // An applet's open frames, so one can reach the others. Windows are not state a view
+  // renders, so this stays out of the reactive graph.
+  const frames = new Map<string, Set<() => Window | null | undefined>>()
+
+  function connectFrame(id: string, target: () => Window | null | undefined): () => void {
+    const connected = frames.get(id) ?? new Set()
+    frames.set(id, connected)
+    connected.add(target)
+    return () => connected.delete(target)
+  }
+
+  function otherFrames(id: string, self: Window): Window[] {
+    return [...(frames.get(id) ?? [])].flatMap((target) => {
+      const frame = target()
+      return frame && frame !== self ? [frame] : []
+    })
+  }
 
   watch(
     catalog.data,
@@ -68,5 +150,18 @@ export const useApplets = defineStore('applets', () => {
     reload: catalog.reload,
     toggle,
     close,
+    titlebar,
+    isInTitlebar,
+    setInTitlebar,
+    // Shallow: the anchor is a DOM node, whose methods refuse a readonly proxy.
+    dropdown: shallowReadonly(dropdown),
+    toggleDropdown,
+    closeDropdown,
+    liveSessionSlug: readonly(liveSessionSlug),
+    setLiveSession,
+    setCommandRunner,
+    runCommand,
+    connectFrame,
+    otherFrames,
   }
 })

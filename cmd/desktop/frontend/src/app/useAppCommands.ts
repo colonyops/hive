@@ -250,6 +250,8 @@ export function useAppCommands(deps: AppCommandDeps) {
   }
 
   useAppPaletteRows(deps, runCommand, contextActive)
+  applets.setCommandRunner(runCommand)
+  watch(onScreenSessionSlug, applets.setLiveSession, { immediate: true })
 
   return { runCommand, contextActive, popupTerminalMounted }
 }

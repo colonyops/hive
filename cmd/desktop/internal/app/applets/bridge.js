@@ -3,6 +3,8 @@
   delete window.__hiveToken
   let nextID = 0
   const pending = new Map()
+  const surface = new URLSearchParams(location.search).get('surface') ?? 'page'
+  const listeners = { message: new Set(), session: new Set() }
 
   const applyTheme = (theme) => {
     for (const [name, value] of Object.entries(theme)) document.documentElement.style.setProperty(name, value)
@@ -12,6 +14,14 @@
     if (event.source !== parent || event.data?.hiveApplet !== 1) return
     if (event.data.theme) {
       applyTheme(event.data.theme)
+      return
+    }
+    if (event.data.storage) {
+      applyStorage(event.data.storage)
+      return
+    }
+    if (event.data.event) {
+      for (const listener of listeners[event.data.event] ?? []) listener(event.data.data)
       return
     }
     if (!pending.has(event.data.id)) return
@@ -42,6 +52,19 @@
   }
 
   window.hive = {
+    surface,
+    on(event, listener) {
+      if (!listeners[event]) throw new Error(`hive has no event "${event}"`)
+      listeners[event].add(listener)
+      return () => listeners[event].delete(listener)
+    },
+    broadcast: (data) => call('broadcast', { data }),
+    open: () => call('open'),
+    dropdown: (options = {}) => call('dropdown', options),
+    resize: (size) => call('resize', size),
+    command: (id) => call('command', { id }),
+    commands: () => call('commands'),
+    navigate: (path) => call('navigate', { path }),
     context: () => call('context'),
     exec: (command, options = {}) => call('exec', { command, ...options }),
     async spawn(command, options = {}) {
@@ -73,6 +96,18 @@
     clearTimeout(saving)
     saving = setTimeout(() => call('saveStorage', { encoded: JSON.stringify(Object.fromEntries(store)) }), 200)
   }
+  // Every frame of an applet keeps its own copy and saves all of it, so each change
+  // crosses to the others at once. Otherwise a frame's next save would undo theirs.
+  const changed = (key, value) => {
+    save()
+    void call('storageChanged', { key, value })
+  }
+  const applyStorage = ({ key, value }) => {
+    if (key === null) store.clear()
+    else if (value === null) store.delete(key)
+    else store.set(key, value)
+    dispatchEvent(new StorageEvent('storage', { key, newValue: value }))
+  }
   const storage = {
     get length() {
       return store.size
@@ -81,15 +116,15 @@
     getItem: (key) => store.get(String(key)) ?? null,
     setItem(key, value) {
       store.set(String(key), String(value))
-      save()
+      changed(String(key), String(value))
     },
     removeItem(key) {
       store.delete(String(key))
-      save()
+      changed(String(key), null)
     },
     clear() {
       store.clear()
-      save()
+      changed(null, null)
     },
   }
   Object.defineProperty(window, 'localStorage', { value: storage, configurable: true })
@@ -97,10 +132,20 @@
   // Keys in a frame never reach the app, so Escape closes the applet from here. A page
   // that wants Escape for itself calls preventDefault, which is only settled once its
   // own listeners have run.
+  //
+  // A panel is modal, so its keys stay its own. A title bar page sits beside the app,
+  // and one click into it would otherwise leave every shortcut dead until the user
+  // clicked elsewhere, so it hands on what a chord would be.
   addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return
+    const chord = surface !== 'page' && (event.metaKey || event.ctrlKey)
+    if (event.key !== 'Escape' && !chord) return
     setTimeout(() => {
-      if (!event.defaultPrevented) void call('close')
+      if (event.defaultPrevented) return
+      if (event.key === 'Escape') void call('close')
+      else {
+        const { key, code, metaKey, ctrlKey, altKey, shiftKey } = event
+        void call('key', { key, code, metaKey, ctrlKey, altKey, shiftKey })
+      }
     })
   })
 })()

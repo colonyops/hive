@@ -7,6 +7,7 @@ import { computed, onMounted, ref } from 'vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
+import AppSwitch from '@hive/ui/components/ui/AppSwitch.vue'
 import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import CopyButton from '@hive/ui/components/ui/CopyButton.vue'
@@ -121,6 +122,15 @@ onMounted(() => {
             :data-testid="`settings-applet-${applet.id}-state`"
             >{{ status(applet).label }}</BaseBadge
           >
+          <AppSwitch
+            v-if="applet.titlebar"
+            size="sm"
+            label="Title bar"
+            :model-value="applets.isInTitlebar(applet.id)"
+            :disabled="!applet.runnable"
+            :testid="`settings-applet-${applet.id}-titlebar`"
+            @update:model-value="applets.setInTitlebar(applet.id, $event)"
+          />
           <BaseButton
             variant="secondary"
             size="xs"
@@ -134,7 +144,7 @@ onMounted(() => {
 
     <SettingsSection
       title="Running processes"
-      description="Long-running commands started by open applets. Closing an applet stops its own."
+      description="Long-running commands started by applets. Closing a panel or dropdown stops what it started, and a title bar page's keep running while it is in the title bar."
       boxed
     >
       <InlineError v-if="processError" variant="line" class="px-4 py-3.5" :message="processError" />

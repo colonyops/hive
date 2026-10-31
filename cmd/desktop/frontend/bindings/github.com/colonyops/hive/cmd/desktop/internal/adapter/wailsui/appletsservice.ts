@@ -30,8 +30,8 @@ export function Exec(id: string, req: app$0.AppletExec): $CancellablePromise<app
     return $Call.ByID(2190116655, id, req);
 }
 
-export function KillSpawns(id: string): $CancellablePromise<void> {
-    return $Call.ByID(3115435170, id);
+export function KillSpawns(handles: string[] | null): $CancellablePromise<void> {
+    return $Call.ByID(3115435170, handles);
 }
 
 export function List(): $CancellablePromise<app$0.Applet[] | null> {

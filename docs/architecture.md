@@ -1425,8 +1425,13 @@ opened in `AppletFrame`
   native build nothing outside the webview can reach them. The server build's asset
   handler is a TCP listener, so it refuses applets outside the e2e harness
   (`buildServesAppletPages`).
-- **A spawned process belongs to its applet.** Closing it, editing it, or closing the
-  app ends the process. Settings › Applets lists what is running.
+- **A spawned process belongs to the frame that started it.** Closing that frame, editing
+  the applet, or closing the app ends the process. Settings › Applets lists what is running.
+- **A page can appear on more than one surface.** `AppletFrame` with `useAppletBridge` is
+  the whole of a surface: the panel (`AppletHost`), the title bar slot
+  (`AppletTitlebarSlot`), and the dropdown under it (`AppletDropdown`). A new extension
+  point is another host, not another bridge. The user turns the title bar on per applet
+  (`applets.titlebar` in `settings.yaml`), because that page runs without being opened.
 - **A built-in lives in the binary** (`applets/builtin/`). The Applet Builder is one. Its
   page sends answers, and the prompt's words stay in `prompts/templates/applets.tmpl`.
 - **Applets are a palette scope.** They have their own tab, and while filtering All, one

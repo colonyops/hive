@@ -282,6 +282,14 @@ func (s *SettingsService) SetTerminalShowWindows(ctx context.Context, show bool)
 	return s.settings.SetTerminalShowWindows(ctx, show)
 }
 
+func (s *SettingsService) TitlebarApplets(ctx context.Context) ([]string, error) {
+	return s.settings.TitlebarApplets(ctx)
+}
+
+func (s *SettingsService) SetTitlebarApplets(ctx context.Context, ids []string) error {
+	return s.settings.SetTitlebarApplets(ctx, ids)
+}
+
 func (s *SettingsService) SetTerminalShowStatusBar(ctx context.Context, show bool) error {
 	return s.settings.SetTerminalShowStatusBar(ctx, show)
 }

@@ -33,6 +33,14 @@ type Applet struct {
 	Revision int64  `json:"revision"`
 	Runnable bool   `json:"runnable"`
 	Error    string `json:"error"`
+	// Titlebar is nil for an applet that offers no title bar page.
+	Titlebar *AppletTitlebar `json:"titlebar"`
+}
+
+// AppletTitlebar is the page an applet offers for the title bar.
+type AppletTitlebar struct {
+	Entry string `json:"entry"`
+	Width int    `json:"width"`
 }
 
 // AppletsService serves applets their files and answers window.hive (ADR
@@ -98,6 +106,9 @@ func appletOf(entry applets.Entry) Applet {
 		Entry:    a.Entry,
 		Width:    a.Width,
 		Height:   a.Height,
+	}
+	if a.Titlebar != nil {
+		out.Titlebar = &AppletTitlebar{Entry: a.Titlebar.Entry, Width: a.Titlebar.Width}
 	}
 	if entry.Err != nil {
 		out.Error = entry.Err.Error()
