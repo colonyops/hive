@@ -11,6 +11,8 @@ import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useToasts } from '../../composables/useToasts'
 import { errorText } from '../../lib/appError'
 import { useDriveReview } from '../../stores/useDriveReview'
+import { AgentTargets } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reviewservice'
+import type { AgentTarget } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const props = defineProps<{
   space: string
@@ -39,6 +41,14 @@ async function copyAll(): Promise<void> {
     return
   }
   if (copyStatus.value === 'error') showToast('Could not copy to the clipboard', { severity: 'error' })
+}
+
+async function loadTargets(): Promise<AgentTarget[]> {
+  return (await AgentTargets()) ?? []
+}
+
+function deliver(target: AgentTarget): Promise<string | null> {
+  return store.send(props.space, props.path, { kind: target.kind, id: target.id, pane: target.pane })
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -83,6 +93,12 @@ function onKeydown(event: KeyboardEvent): void {
         <Kbd class="text-accent/70">⌘↵</Kbd>
       </BaseButton>
     </div>
-    <SendToAgentDialog v-if="sending" :space="space" :path="path" :testid="testid" @close="sending = false" />
+    <SendToAgentDialog
+      v-if="sending"
+      :load="loadTargets"
+      :deliver="deliver"
+      :testid="testid"
+      @close="sending = false"
+    />
   </div>
 </template>

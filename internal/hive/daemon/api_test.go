@@ -18,6 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
@@ -57,6 +58,19 @@ func TestClientDrivesTheSessionAPIThroughTheDaemon(t *testing.T) {
 	risk, err := client.CheckSessionRisk(ctx, created.ID)
 	require.NoError(t, err)
 	assert.Equal(t, sessionsvc.Risk{}, risk)
+
+	changes, err := client.SessionChanges(ctx, created.ID, gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted})
+	require.NoError(t, err)
+	assert.True(t, changes.Resolved)
+	assert.Equal(t, gitstatus.DiffBaseUncommitted, changes.Base)
+	assert.Empty(t, changes.Files)
+
+	_, err = client.SessionChanges(ctx, "no-such-session", gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch})
+	require.ErrorIs(t, err, session.ErrNotFound)
+
+	diffs, err := client.SessionFileDiffs(ctx, created.ID, gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, []string{"not-changed.txt"})
+	require.NoError(t, err)
+	assert.Equal(t, []gitstatus.FileDiff{{Path: "not-changed.txt", State: gitstatus.FileDiffStateGone}}, diffs)
 
 	options, err := client.SessionLaunchOptions(ctx)
 	require.NoError(t, err)

@@ -171,6 +171,30 @@ func (s *sessionServer) LaunchOptions(ctx context.Context, _ *connect.Request[da
 	return connect.NewResponse(wire.LaunchOptionsToProto(options)), nil
 }
 
+func (s *sessionServer) Changes(ctx context.Context, req *connect.Request[daemonv1.ChangesRequest]) (*connect.Response[daemonv1.ChangesResponse], error) {
+	changes, err := s.api.SessionChanges(ctx, req.Msg.GetId(), wire.DiffTargetFromProto(req.Msg.GetTarget()))
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(wire.ChangesToProto(changes)), nil
+}
+
+func (s *sessionServer) FileDiffs(ctx context.Context, req *connect.Request[daemonv1.FileDiffsRequest]) (*connect.Response[daemonv1.FileDiffsResponse], error) {
+	diffs, err := s.api.SessionFileDiffs(ctx, req.Msg.GetId(), wire.DiffTargetFromProto(req.Msg.GetTarget()), req.Msg.GetPaths())
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(wire.FileDiffsToProto(diffs)), nil
+}
+
+func (s *sessionServer) Branches(ctx context.Context, req *connect.Request[daemonv1.BranchesRequest]) (*connect.Response[daemonv1.BranchesResponse], error) {
+	refs, err := s.api.SessionBranches(ctx, req.Msg.GetId())
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(&daemonv1.BranchesResponse{Refs: wire.RefsToProto(refs)}), nil
+}
+
 func (s *sessionServer) Statuses(ctx context.Context, req *connect.Request[daemonv1.StatusesRequest]) (*connect.Response[daemonv1.StatusesResponse], error) {
 	all, err := s.api.ListSessions(ctx)
 	if err != nil {

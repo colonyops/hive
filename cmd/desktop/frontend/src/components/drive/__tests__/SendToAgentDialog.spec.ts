@@ -3,20 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SendToAgentDialog from '../SendToAgentDialog.vue'
 import type { AgentTarget } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
-vi.mock('../../../composables/useWailsEvent', () => ({ useWailsEvent: vi.fn() }))
-
 const toasts = vi.hoisted(() => ({ showToast: vi.fn() }))
 vi.mock('../../../composables/useToasts', () => ({ useToasts: () => toasts }))
 
-const reviews = vi.hoisted(() => ({
-  Review: vi.fn().mockResolvedValue({ sessionId: 's', current: true, comments: [] }),
-  AgentTargets: vi.fn(),
-  Send: vi.fn(),
-}))
-vi.mock(
-  '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reviewservice',
-  () => reviews,
-)
+const host = { load: vi.fn(), deliver: vi.fn() }
 
 function target(kind: string, id: string, pane: string, label: string, status: string): AgentTarget {
   return { kind, id, pane, label, status }
@@ -30,7 +20,7 @@ const targets = [
 
 async function mountDialog() {
   const wrapper = mount(SendToAgentDialog, {
-    props: { space: 'workspaces/ws', path: 'plans/p.md', testid: 'r' },
+    props: { load: host.load, deliver: host.deliver, testid: 'r' },
     attachTo: document.body,
   })
   await flushPromises()
@@ -42,8 +32,8 @@ const row = (index: number) => document.querySelector<HTMLButtonElement>(`[data-
 describe('SendToAgentDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    reviews.AgentTargets.mockResolvedValue(targets)
-    reviews.Send.mockResolvedValue(undefined)
+    host.load.mockResolvedValue(targets)
+    host.deliver.mockResolvedValue(null)
   })
 
   it('groups Code before Chats and disables an agent on a prompt', async () => {
@@ -68,17 +58,13 @@ describe('SendToAgentDialog', () => {
     await flushPromises()
     document.querySelector<HTMLButtonElement>('[data-testid="r-send-submit"]')!.click()
     await flushPromises()
-    expect(reviews.Send).toHaveBeenCalledWith('workspaces/ws', 'plans/p.md', '', {
-      kind: 'session',
-      id: 's1',
-      pane: '%1',
-    })
+    expect(host.deliver).toHaveBeenCalledWith(targets[0])
     expect(toasts.showToast).toHaveBeenCalledWith('Sent to app / feat · claude')
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
   it('shows a failed send inline and stays open', async () => {
-    reviews.Send.mockRejectedValue(new Error('pane gone'))
+    host.deliver.mockResolvedValue('pane gone')
     const wrapper = await mountDialog()
     row(0).click()
     await flushPromises()
@@ -89,7 +75,7 @@ describe('SendToAgentDialog', () => {
   })
 
   it('says so when no agent is running', async () => {
-    reviews.AgentTargets.mockResolvedValue([])
+    host.load.mockResolvedValue([])
     await mountDialog()
     expect(document.querySelector('[data-testid="r-send-empty"]')!.textContent).toContain('No agents are running.')
   })

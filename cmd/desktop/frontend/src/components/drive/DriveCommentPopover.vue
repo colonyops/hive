@@ -22,6 +22,8 @@ const props = defineProps<{
   /** The selection's box in the viewport. */
   rect: SelectionRect
   range: SourceRange
+  /** What the header calls the lines, when `L12–14` alone would not say where. */
+  label?: string
   busy: boolean
   error: string | null
   /** Derives `-comment-popover`, `-comment-grip`, `-comment-text`, `-comment-save`, and `-comment-cancel`. */
@@ -74,10 +76,12 @@ function startMove(event: PointerEvent): void {
   })
 }
 
-const lines = computed(() =>
-  props.range.startLine === props.range.endLine
-    ? `L${props.range.startLine}`
-    : `L${props.range.startLine}–${props.range.endLine}`,
+const lines = computed(
+  () =>
+    props.label ??
+    (props.range.startLine === props.range.endLine
+      ? `L${props.range.startLine}`
+      : `L${props.range.startLine}–${props.range.endLine}`),
 )
 
 useEscapeToClose(() => emit('cancel'))

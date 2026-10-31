@@ -145,7 +145,22 @@ func (s *ReviewService) codeTargets(ctx context.Context, id string) ([]resolvedT
 			})
 		}
 	}
+	disambiguateLabels(targets)
 	return targets, nil
+}
+
+// disambiguateLabels names the pane where two agents would otherwise read the
+// same: a session often runs two windows both called after the tool.
+func disambiguateLabels(targets []resolvedTarget) {
+	seen := make(map[string]int, len(targets))
+	for _, t := range targets {
+		seen[t.Label]++
+	}
+	for i := range targets {
+		if seen[targets[i].Label] > 1 {
+			targets[i].Label += " (" + targets[i].Pane + ")"
+		}
+	}
 }
 
 // chatTargets lists running chats, or the one chat id when it is set.

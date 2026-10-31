@@ -27,7 +27,8 @@ type Git interface {
 	Branch(ctx context.Context, dir string) (string, error)
 	// DefaultBranch returns the default branch name (e.g., "main" or "master") for the repository.
 	DefaultBranch(ctx context.Context, dir string) (string, error)
-	// DiffStats returns the number of lines added and deleted compared to the default branch.
+	// DiffStats returns the lines added and deleted in the working tree against
+	// the merge base with the default branch, or against HEAD without one.
 	DiffStats(ctx context.Context, dir string) (additions, deletions int, err error)
 	// IsValidRepo checks if dir contains a valid git repository.
 	IsValidRepo(ctx context.Context, dir string) error
@@ -43,6 +44,22 @@ type Git interface {
 	// It first checks the upstream tracking branch; if none is set, it falls back to comparing
 	// against origin/<default branch>. Returns false (no risk) on any git error.
 	HasUnpushedCommits(ctx context.Context, dir string) (bool, error)
+	// MergeBase returns the commit where HEAD left branch.
+	MergeBase(ctx context.Context, dir, branch string) (string, error)
+	// MergeBaseRef returns the commit where HEAD left a full ref.
+	MergeBaseRef(ctx context.Context, dir, ref string) (string, error)
+	// ResolveCommit returns the full id of rev.
+	ResolveCommit(ctx context.Context, dir, rev string) (string, error)
+	// CommitRange returns the range that shows one commit.
+	CommitRange(ctx context.Context, dir, commit string) (DiffRange, error)
+	// Commits lists the commits on HEAD after since, newest first.
+	Commits(ctx context.Context, dir, since string, limit int) ([]CommitInfo, error)
+	// Branches lists the full refs of local and remote branches.
+	Branches(ctx context.Context, dir string, limit int) ([]string, error)
+	// ChangedFiles lists what differs across diff, plus untracked files when diff includes the working tree.
+	ChangedFiles(ctx context.Context, dir string, diff DiffRange) ([]ChangedFile, error)
+	// FileDiffs returns the unified diff of each file, in order.
+	FileDiffs(ctx context.Context, dir string, diff DiffRange, files []ChangedFile) []FileDiffResult
 }
 
 // RemoteIdentity returns the key under which remotes that name the same

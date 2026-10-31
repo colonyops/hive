@@ -161,6 +161,20 @@ export interface CanvasWire {
 }
 
 /**
+ * ChangedFile is one file in the review view. Stamp changes when the file's diff
+ * can, so a held diff can be read again.
+ */
+export interface ChangedFile {
+    "path": string;
+    "oldPath": string;
+    "status": string;
+    "additions": number;
+    "deletions": number;
+    "binary": boolean;
+    "stamp": string;
+}
+
+/**
  * AtUnixMs is Date.now(); zero leaves only the backend's own timestamp.
  */
 export interface ClientLogEntry {
@@ -191,6 +205,15 @@ export interface CommentWire {
  */
 export interface DevToolsInfo {
     "enabled": boolean;
+}
+
+/**
+ * DiffTarget says what a read compares. See gitstatus.DiffTarget.
+ */
+export interface DiffTarget {
+    "base": string;
+    "against": string;
+    "commit": string;
 }
 
 /**
@@ -602,6 +625,30 @@ export interface ServerSessions {
     "sessions": SessionSummary[] | null;
 }
 
+/**
+ * SessionChanges is what the review view lists. Base is the base the read used:
+ * a branch read with no merge base falls back to "uncommitted".
+ */
+export interface SessionChanges {
+    "resolved": boolean;
+    "branch": string;
+    "defaultBranch": string;
+    "base": string;
+    "branchAvailable": boolean;
+    "against": string;
+    "commit": string;
+    "commits": SessionCommit[] | null;
+    "files": ChangedFile[] | null;
+    "truncated": boolean;
+}
+
+export interface SessionCommit {
+    "id": string;
+    "subject": string;
+    "author": string;
+    "unix": number;
+}
+
 export interface SessionCondition {
     "field": string;
     "op": string;
@@ -628,6 +675,17 @@ export interface SessionDetail {
     "updatedAt": string;
 }
 
+/**
+ * SessionFileDiff is one file's diff. State is a gitstatus.FileDiffState, which
+ * says whether Text or Error applies.
+ */
+export interface SessionFileDiff {
+    "path": string;
+    "state": string;
+    "text": string;
+    "error": string;
+}
+
 export interface SessionFilter {
     "match": string;
     "conditions": SessionCondition[] | null;
@@ -645,7 +703,8 @@ export interface SessionGitStatus {
     "unpushed": boolean;
 
     /**
-     * Additions and Deletions are lines against the default branch, not HEAD.
+     * Additions and Deletions are the working tree against the merge base with
+     * the default branch.
      */
     "additions": number;
     "deletions": number;

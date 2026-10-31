@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 
 const setRepoKey = vi.hoisted(() => vi.fn())
 vi.mock('../../stores/useTasks', () => ({ useTasks: () => ({ setRepoKey }) }))
@@ -10,7 +10,7 @@ describe('useHubOverlays', () => {
   it('scopes Tasks to the attached session only when opening it from terminal mode', () => {
     setRepoKey.mockClear()
     const terminalActive = ref(true)
-    const overlays = useHubOverlays(terminalActive)
+    const overlays = useHubOverlays(terminalActive, ref(null))
     overlays.terminalSessionRepoKey.value = 'acme/site'
 
     overlays.toggleTasks()
@@ -28,7 +28,7 @@ describe('useHubOverlays', () => {
 
   it('leaves the persisted scope alone when the session has no resolved repo', () => {
     setRepoKey.mockClear()
-    const overlays = useHubOverlays(ref(true))
+    const overlays = useHubOverlays(ref(true), ref(null))
 
     overlays.toggleTasks()
 
@@ -37,10 +37,24 @@ describe('useHubOverlays', () => {
   })
 
   it('toggles Activity', () => {
-    const overlays = useHubOverlays(ref(false))
+    const overlays = useHubOverlays(ref(false), ref(null))
     overlays.toggleActivity()
     expect(overlays.activityOpen.value).toBe(true)
     overlays.toggleActivity()
     expect(overlays.activityOpen.value).toBe(false)
+  })
+
+  it('closes Changes when no session is left for it to show, and keeps it open across a switch', async () => {
+    const session = ref<string | null>('a')
+    const overlays = useHubOverlays(ref(true), session)
+    overlays.toggleChanges()
+
+    session.value = 'b'
+    await nextTick()
+    expect(overlays.changesOpen.value).toBe(true)
+
+    session.value = null
+    await nextTick()
+    expect(overlays.changesOpen.value).toBe(false)
   })
 })

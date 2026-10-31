@@ -14,6 +14,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => mocks)
 
+const review = vi.hoisted(() => ({
+  comments: vi.fn(),
+  forget: vi.fn(),
+  copy: vi.fn(),
+}))
+vi.mock('../../stores/useChangesReview', () => ({ useChangesReview: () => review }))
+
 const session: SessionSummary = {
   id: 's1',
   name: 'review 81',
@@ -33,6 +40,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   resetToastsForTests()
   mocks.SessionRisk.mockResolvedValue(noRisk)
+  review.comments.mockReturnValue([])
+  review.copy.mockResolvedValue(null)
 })
 
 describe('riskDescription', () => {
@@ -182,5 +191,62 @@ describe('useSessionActions edit and read', () => {
 
     actions.closeDetail()
     expect(actions.detail.value).toBeNull()
+  })
+})
+
+describe('unsent review comments', () => {
+  const unsent = [{ id: 'c1', text: 'rename this' }]
+
+  beforeEach(() => {
+    mocks.DeleteSession.mockResolvedValue(undefined)
+    mocks.RecycleSession.mockResolvedValue(undefined)
+  })
+
+  async function confirmed(operation: 'requestDelete' | 'requestRecycle') {
+    const actions = useSessionActions()
+    await actions[operation](session)
+    const details = actions.confirmation.options.value?.details ?? []
+    await actions.confirmation.confirm()
+    return details
+  }
+
+  it('warns before a delete, then offers them once the session is gone', async () => {
+    review.comments.mockReturnValue(unsent)
+    const details = await confirmed('requestDelete')
+    expect(details).toContainEqual({ tone: 'danger', text: '1 review comment has not been sent.' })
+    expect(review.forget).toHaveBeenCalledWith('s1')
+
+    const toast = useToasts().toasts.value.find((candidate) => candidate.actions.length)!
+    expect(toast.message).toBe('1 unsent comment from review 81')
+    expect(toast.duration).toBe(0)
+    toast.actions[0].onClick()
+    expect(review.copy).toHaveBeenCalledWith(unsent)
+  })
+
+  it('keeps them when the delete fails', async () => {
+    review.comments.mockReturnValue(unsent)
+    mocks.DeleteSession.mockRejectedValue(new Error('busy'))
+    await confirmed('requestDelete')
+    expect(review.forget).not.toHaveBeenCalled()
+  })
+
+  it('keeps them through a recycle that keeps the session', async () => {
+    review.comments.mockReturnValue(unsent)
+    const details = await confirmed('requestRecycle')
+    expect(details).toContainEqual({ tone: 'danger', text: '1 review comment has not been sent.' })
+    expect(review.forget).not.toHaveBeenCalled()
+  })
+
+  it('drops them with a worktree session, which a recycle deletes', async () => {
+    review.comments.mockReturnValue(unsent)
+    mocks.SessionRisk.mockResolvedValue({ ...noRisk, recycleDeletes: true })
+    await confirmed('requestRecycle')
+    expect(review.forget).toHaveBeenCalledWith('s1')
+  })
+
+  it('says nothing when there are none', async () => {
+    const details = await confirmed('requestDelete')
+    expect(details.map((detail) => detail.text).join()).not.toContain('review comment')
+    expect(useToasts().toasts.value.some((toast) => toast.actions.length)).toBe(false)
   })
 })

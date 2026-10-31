@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { defineAsyncComponent, onMounted } from 'vue'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import ActionInputsDialog from '../components/ActionInputsDialog.vue'
 import ActionRunsView from '../components/ActionRunsView.vue'
+import ChangesLoading from '../components/git/ChangesLoading.vue'
 import ActivityView from '../components/ActivityView.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import ErrorDialog from '../components/ErrorDialog.vue'
@@ -36,6 +37,8 @@ const props = defineProps<{
   profileActions: ReturnType<typeof useProfileActions>
   feedCommands: ReturnType<typeof useFeedCommands>
   openActivityItem: (link: ActivityItemLink) => Promise<void>
+  /** The session on screen in Code whose checkout Changes reads. */
+  changesSession: string | null
 }>()
 
 // The composables' result objects keep their identity for App's lifetime.
@@ -55,7 +58,16 @@ const {
   createProfileError,
 } = feed
 const { pendingNavigation, unsavedChangesBusy } = nav
-const { tasksOpen, activityOpen, actionRunsOpen, actionRunsRunId } = overlays
+// Its diff library and highlighter load only when a review opens.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
+const ChangesView = defineAsyncComponent({
+  loader: () => import('../components/git/ChangesView.vue'),
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
+  loadingComponent: ChangesLoading,
+  delay: 0,
+})
+
+const { tasksOpen, activityOpen, actionRunsOpen, actionRunsRunId, changesOpen } = overlays
 const { newProfileOpen } = profileActions
 const flowsSession = useFlowsSession()
 const { open: reportDialogOpen } = useReportDialog()
@@ -158,6 +170,14 @@ onMounted(() => {
   />
   <HubOverlay v-if="tasksOpen" label="Tasks" testid="tasks-overlay" @close="tasksOpen = false">
     <TasksView @close="tasksOpen = false" />
+  </HubOverlay>
+  <HubOverlay
+    v-if="changesOpen && changesSession"
+    label="Changes"
+    testid="changes-overlay"
+    @close="changesOpen = false"
+  >
+    <ChangesView :session-id="changesSession" @close="changesOpen = false" />
   </HubOverlay>
   <HubOverlay v-if="actionRunsOpen" label="Action runs" testid="action-runs-overlay" @close="actionRunsOpen = false">
     <ActionRunsView
