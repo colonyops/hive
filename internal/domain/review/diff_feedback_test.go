@@ -16,18 +16,22 @@ func TestDiffFeedbackOrdersByPathAndLine(t *testing.T) {
 	got := DiffFeedback([]DiffComment{
 		{Path: "b.go", StartSide: DiffSideAdditions, StartLine: 3, EndSide: DiffSideAdditions, EndLine: 3, Quote: "+x := 1", Text: "rename"},
 		{Path: "a.go", StartSide: DiffSideAdditions, StartLine: 9, EndSide: DiffSideAdditions, EndLine: 12, Quote: "+y", Text: "two\nlines"},
+		{Path: "a.go", StartSide: DiffSideAdditions, StartLine: 2, EndSide: DiffSideAdditions, EndLine: 2, Text: "first"},
 	})
 
 	assert.Equal(t, `# Code Review Feedback
 
-I reviewed the changes in this session and have 2 pieces of feedback:
+I reviewed the changes in this session and have 3 pieces of feedback:
 
-## 1. a.go (lines 9-12)
+## 1. a.go (line 2)
+> first
+
+## 2. a.go (lines 9-12)
 `+"```\n+y\n```"+`
 > two
 > lines
 
-## 2. b.go (line 3)
+## 3. b.go (line 3)
 `+"```\n+x := 1\n```"+`
 > rename
 `, got)

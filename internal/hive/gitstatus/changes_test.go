@@ -256,9 +256,11 @@ func TestReadChangesStopsAtTheFileCap(t *testing.T) {
 func TestReadChangesAppliesTheReadTimeout(t *testing.T) {
 	t.Parallel()
 
-	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", defaultBranch: "main", block: true}, 1)
-	_, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch})
-	require.ErrorIs(t, err, context.DeadlineExceeded)
+	synctest.Test(t, func(t *testing.T) {
+		svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", defaultBranch: "main", block: true}, 1)
+		_, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch})
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	})
 }
 
 func TestReadFileDiffsReportsEachFileOnItsOwn(t *testing.T) {

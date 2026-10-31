@@ -122,6 +122,22 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
     await expect.poll(() => attached).toContain(SLUG)
   })
 
+  test('does not offer Changes for a server session', async ({ page }) => {
+    await stubTerminals(page)
+    await page.goto(`/#/terminal/${SLUG}`)
+    await expect(page.getByTestId('terminal-mode')).toBeVisible()
+    await findSession(page)
+    await expect(sessionRow(page)).toBeVisible({ timeout: 30_000 })
+
+    await page.keyboard.press('Meta+k')
+    await page.getByTestId('command-palette-input').fill('Toggle Changes')
+    await expect(page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+
+    await page.keyboard.press('Meta+Alt+g')
+    await expect(page.getByTestId('changes-view')).toHaveCount(0)
+  })
+
   test('deletes the session on the server', async ({ page }) => {
     await stubTerminals(page)
     await page.goto('/#/terminal')

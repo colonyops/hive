@@ -136,8 +136,6 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await page.keyboard.press('v')
     await expect(page.getByTestId('changes-progress')).toHaveText('1/4 viewed')
 
-    await page.keyboard.press('n')
-    await expect(stream).toContainText('var new = 2')
     await page.keyboard.press('j')
     await expect(page.getByTestId('changes-file-web/ui/App.vue-header')).toBeVisible()
 
@@ -248,6 +246,24 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await page.keyboard.press('Escape')
     await expect(popover).toBeHidden()
     await expect(page.getByTestId('changes-view')).toBeVisible()
+  })
+
+  test('steps through hunks in the rendered diff (mock terminal)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 420 })
+    await changesFixture(page)
+    await openChanges(page)
+    const stream = page.getByTestId('changes-stream')
+    const top = () => stream.evaluate((element) => element.scrollTop)
+    expect(await top()).toBe(0)
+
+    await page.keyboard.press('n')
+    await expect.poll(top).toBeGreaterThan(0)
+    const first = await top()
+    await page.keyboard.press('n')
+    await expect.poll(top).toBeGreaterThan(first)
+    const second = await top()
+    await page.keyboard.press('N')
+    await expect.poll(top).toBeLessThan(second)
   })
 
   test('dragging a panel divider selects no text (mock terminal)', async ({ page, browserName }) => {

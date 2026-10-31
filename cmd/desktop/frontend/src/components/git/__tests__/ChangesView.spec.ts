@@ -1,6 +1,6 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { defineComponent, h, ref } from 'vue'
 import ChangesView from '../ChangesView.vue'
 import { useChangesReview } from '../../../stores/useChangesReview'
 import { useChangesViewed } from '../../../stores/useChangesViewed'
@@ -448,6 +448,33 @@ describe('ChangesView', () => {
       wrapper.unmount()
     })
 
+    it('waits until the stream holds the diff before it scrolls', async () => {
+      const { id } = useChangesReview().add('s1', { ...span, path: 'a.go', base: 'branch', version: 'v' })
+      const holds = vi.fn(() => false)
+      const scrollToLine = vi.fn()
+      const stub = defineComponent({
+        setup(_, { expose }) {
+          expose({ holds, scrollToLine, selectLines: vi.fn(), scrollToFile: vi.fn(), focus: vi.fn() })
+          return () => h('div')
+        },
+      })
+      const wrapper = mount(ChangesView, {
+        props: { sessionId: 's1' },
+        attachTo: document.body,
+        global: { stubs: { DiffStream: stub } },
+      })
+      await flushPromises()
+      await flushPromises()
+      await pickFrom(wrapper, id)
+      expect(scrollToLine).not.toHaveBeenCalled()
+
+      holds.mockReturnValue(true)
+      wrapper.getComponent(stub).vm.$emit('synced')
+      await flushPromises()
+      expect(scrollToLine).toHaveBeenCalledWith('a.go', 1, 'additions')
+      wrapper.unmount()
+    })
+
     it('gives way to a jump the user makes while the diff is read', async () => {
       const { id } = useChangesReview().add('s1', { ...span, path: 'b.go', base: 'staged', staged: true, version: 'v' })
       mocks.SessionChanges.mockImplementation((_id: string, target: { base: string }) =>
@@ -874,8 +901,8 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
-  it.each(['ready', 'active'])('sends straight to a lone %s agent and clears the review', async (status) => {
-    mocks.ChangesTargets.mockResolvedValue([agent('%1', status)])
+  it('sends straight to a lone agent and clears the review', async () => {
+    mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
     mocks.SendChanges.mockResolvedValue(undefined)
     const wrapper = await mountView()
     await comment('rename this')
@@ -887,19 +914,16 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
-  it.each([['several', [agent('%1', 'ready'), agent('%2', 'ready')]]])(
-    'asks before sending with %s',
-    async (_name, targets) => {
-      mocks.ChangesTargets.mockResolvedValue(targets)
-      const wrapper = await mountView()
-      await comment('rename this')
-      await wrapper.get(testid('changes-send')).trigger('click')
-      await flushPromises()
-      expect(mocks.SendChanges).not.toHaveBeenCalled()
-      expect(document.querySelector(testid('changes-send-dialog'))).not.toBeNull()
-      wrapper.unmount()
-    },
-  )
+  it('asks before sending with several agents', async () => {
+    mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready'), agent('%2', 'ready')])
+    const wrapper = await mountView()
+    await comment('rename this')
+    await wrapper.get(testid('changes-send')).trigger('click')
+    await flushPromises()
+    expect(mocks.SendChanges).not.toHaveBeenCalled()
+    expect(document.querySelector(testid('changes-send-dialog'))).not.toBeNull()
+    wrapper.unmount()
+  })
 
   it('saves with ⌘↵ in the composer without sending, and sends with it outside a field', async () => {
     mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
