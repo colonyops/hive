@@ -331,6 +331,9 @@ function stepHunk(delta: 1 | -1): boolean {
     const target = delta > 0 ? tops.find((at) => at > line + 2) : tops.findLast((at) => at < line - 2)
     if (target !== undefined) {
       viewer.scrollTo({ type: 'position', position: target - DIFF_METRICS.headerPx })
+      // The scroll is reported a frame later, and a key pressed before then must
+      // step on from here rather than to this hunk again.
+      scrollTop = target - DIFF_METRICS.headerPx
       return true
     }
   }

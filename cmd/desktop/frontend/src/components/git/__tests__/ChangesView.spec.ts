@@ -331,6 +331,14 @@ describe('ChangesView', () => {
       wrapper.unmount()
     })
 
+    it('moves on when pressed again before the scroll is reported', async () => {
+      const wrapper = await mountTwoFiles()
+      await press('n')
+      await press('n')
+      expect(mocks.scrollTo).toHaveBeenLastCalledWith(atPosition(1000))
+      wrapper.unmount()
+    })
+
     it('measures hunks by side-by-side rows in that mode', async () => {
       const wrapper = await mountTwoFiles()
       await press('s')
