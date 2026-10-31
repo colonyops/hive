@@ -236,6 +236,22 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await expect(page.getByTestId('changes-view')).toBeVisible()
   })
 
+  test('dragging a panel divider selects no text (mock terminal)', async ({ page, browserName }) => {
+    await changesFixture(page)
+    await openChanges(page)
+    const box = (await page.getByTestId('resize-handle-changes-files').boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + 200, box.y + 160, { steps: 8 })
+    await page.mouse.move(box.x - 120, box.y + 300, { steps: 8 })
+    const selection = await page.evaluate(() => document.getSelection()?.type)
+    await page.mouse.up()
+    // In WebKit, the macOS app's engine, a caret means the press began a selection.
+    // Chromium places one from any press, and it never grows once selectstart is cancelled.
+    if (browserName === 'webkit') expect(selection).toBe('None')
+    else expect(selection).not.toBe('Range')
+  })
+
   test('searches every diff and steps through the matches (mock terminal)', async ({ page, browserName }) => {
     await changesFixture(page)
     await openChanges(page)
