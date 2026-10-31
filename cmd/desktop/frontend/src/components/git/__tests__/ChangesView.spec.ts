@@ -379,6 +379,78 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
+  describe('loading', () => {
+    const loader = (wrapper: VueWrapper) => wrapper.find(testid('changes-loading')).exists()
+
+    it('covers the tree and the diffs until the first diffs land, so they appear together', async () => {
+      let answerList: (value: unknown) => void = () => {}
+      let answerDiffs: (value: unknown) => void = () => {}
+      mocks.SessionChanges.mockImplementationOnce(() => new Promise((resolve) => (answerList = resolve)))
+      mocks.SessionFileDiffs.mockImplementationOnce(() => new Promise((resolve) => (answerDiffs = resolve)))
+      const wrapper = await mountView()
+      expect(loader(wrapper)).toBe(true)
+
+      answerList(changes([file('a.go')]))
+      await flushPromises()
+      expect(loader(wrapper)).toBe(true)
+
+      answerDiffs([{ path: 'a.go', text: '@@ -1 +1 @@\n-old\n+new\n', ...noState }])
+      await flushPromises()
+      expect(loader(wrapper)).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('covers them again when the target moves', async () => {
+      const wrapper = await mountView()
+      expect(loader(wrapper)).toBe(false)
+      mocks.SessionChanges.mockImplementationOnce(() => new Promise(() => {}))
+      await pick(wrapper, 'changes-target', 'staged')
+      expect(loader(wrapper)).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('leaves a poll alone', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        const wrapper = await mountView()
+        mocks.SessionChanges.mockClear()
+        mocks.SessionChanges.mockImplementationOnce(() => new Promise(() => {}))
+        await vi.advanceTimersByTimeAsync(5_000)
+        expect(mocks.SessionChanges).toHaveBeenCalledOnce()
+        expect(loader(wrapper)).toBe(false)
+        wrapper.unmount()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('gives way to the error when the file list cannot be read', async () => {
+      mocks.SessionChanges.mockRejectedValueOnce(new Error('no checkout'))
+      const wrapper = await mountView()
+      expect(loader(wrapper)).toBe(false)
+      expect(wrapper.find(testid('changes-error')).exists()).toBe(true)
+      wrapper.unmount()
+    })
+
+    it.each([
+      ['a failed read', () => Promise.reject(new Error('git failed'))],
+      ['an empty answer', () => Promise.resolve([])],
+    ])('stops waiting after %s', async (_name, read) => {
+      mocks.SessionFileDiffs.mockImplementationOnce(read)
+      const wrapper = await mountView()
+      expect(loader(wrapper)).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('does not wait for diffs when no file changed', async () => {
+      mocks.SessionChanges.mockResolvedValue(changes([]))
+      const wrapper = await mountView()
+      expect(loader(wrapper)).toBe(false)
+      expect(wrapper.find(testid('changes-empty')).exists()).toBe(true)
+      wrapper.unmount()
+    })
+  })
+
   it('reads nothing against a new target until its file list lands', async () => {
     const wrapper = await mountView()
     mocks.SessionFileDiffs.mockClear()

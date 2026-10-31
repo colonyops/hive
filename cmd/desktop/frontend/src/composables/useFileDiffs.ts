@@ -1,4 +1,4 @@
-import { shallowRef, watch, type Ref } from 'vue'
+import { ref, shallowRef, watch, type Ref } from 'vue'
 import { SessionFileDiffs as ReadFileDiffs } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type {
   ChangedFile,
@@ -32,8 +32,13 @@ export function useFileDiffs(
   target: Ref<DiffTarget>,
   files: Ref<ChangedFile[]>,
   wanted: Ref<string[]>,
-): { entries: Ref<ReadonlyMap<string, DiffEntry>> } {
+): {
+  entries: Ref<ReadonlyMap<string, DiffEntry>>
+  /** The first read for this session and target has answered, even if it failed. */
+  answered: Ref<boolean>
+} {
   const entries = shallowRef<ReadonlyMap<string, DiffEntry>>(new Map())
+  const answered = ref(false)
   let reading = false
   // A read that started before a session or target change must not land after it.
   let generation = 0
@@ -77,6 +82,7 @@ export function useFileDiffs(
     const next = new Map(entries.value)
     for (const diff of diffs) next.set(diff.path, { version: current.get(diff.path) ?? '', diff })
     entries.value = next
+    answered.value = true
     // A failed request waits for the next poll, or it would retry in a tight loop.
     if (!failed && !diffs.some((diff) => diff.error)) void pump()
   }
@@ -84,9 +90,10 @@ export function useFileDiffs(
   watch([sessionId, () => targetKey(target.value)], () => {
     generation++
     entries.value = new Map()
+    answered.value = false
     void pump()
   })
   watch([files, wanted], () => void pump(), { immediate: true })
 
-  return { entries }
+  return { entries, answered }
 }

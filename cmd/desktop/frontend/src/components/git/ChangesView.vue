@@ -27,6 +27,7 @@ import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
+import ChangesLoading from './ChangesLoading.vue'
 import ChangesReviewPanel from './ChangesReviewPanel.vue'
 import ChangesTargetPicker from './ChangesTargetPicker.vue'
 import DiffSearchBar from './DiffSearchBar.vue'
@@ -164,7 +165,12 @@ const wanted = computed(() => {
   const open = readOrder(files.value, center).filter((file) => openPaths.value.has(file.path))
   return open.slice(0, READ_WINDOW).map((file) => file.path)
 })
-const { entries } = useFileDiffs(sessionId, target, files, wanted)
+const { entries, answered } = useFileDiffs(sessionId, target, files, wanted)
+// The file tree and the diffs appear together. Alone, the tree lands first and the
+// diffs one read later. A failed read ends the wait, because its error is what to show.
+const loading = computed(
+  () => !error.value && (pending.value || !changes.value || (openPaths.value.size > 0 && !answered.value)),
+)
 
 // Arrow keys and Page Down scroll what has focus. HubOverlay focuses the panel
 // one tick after it mounts, which is after this child, so this waits one more.
@@ -545,7 +551,8 @@ const KEY_HINTS = [
 
     <InlineError v-if="error" class="mx-3 mt-2 shrink-0" :message="error" testid="changes-error" />
 
-    <div class="flex min-h-0 flex-1">
+    <div class="relative flex min-h-0 flex-1">
+      <ChangesLoading v-if="loading" class="absolute inset-0 z-20" />
       <aside
         v-if="filesOpen"
         class="relative flex shrink-0 flex-col border-r border-border"

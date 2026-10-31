@@ -3,6 +3,7 @@ import { defineAsyncComponent, onMounted } from 'vue'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import ActionInputsDialog from '../components/ActionInputsDialog.vue'
 import ActionRunsView from '../components/ActionRunsView.vue'
+import ChangesLoading from '../components/git/ChangesLoading.vue'
 import ActivityView from '../components/ActivityView.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import ErrorDialog from '../components/ErrorDialog.vue'
@@ -59,7 +60,12 @@ const {
 const { pendingNavigation, unsavedChangesBusy } = nav
 // Its diff library and highlighter load only when a review opens.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
-const ChangesView = defineAsyncComponent(() => import('../components/git/ChangesView.vue'))
+const ChangesView = defineAsyncComponent({
+  loader: () => import('../components/git/ChangesView.vue'),
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
+  loadingComponent: ChangesLoading,
+  delay: 0,
+})
 
 const { tasksOpen, activityOpen, actionRunsOpen, actionRunsRunId, changesOpen } = overlays
 const { newProfileOpen } = profileActions
