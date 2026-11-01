@@ -68,8 +68,8 @@ const { mode, terminalActive, agentsActive, hubActive, settingsActive, driveActi
 const { terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
 useModePreload(() => shellLoaded.value && !onboardingActive.value, appMode.prepareTerminal)
-const overlays = useHubOverlays(terminalActive, appMode.codeChangesSession)
-const { tasksOpen, activityOpen, actionRunsOpen, changesOpen, terminalSessionRepoKey } = overlays
+const overlays = useHubOverlays(terminalActive)
+const { tasksOpen, activityOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
 const reveal = useReveal(nav, session, feed.showToast, appMode.openDrive)
 const feedCommands = useFeedCommands(feed, confirmation)
@@ -94,7 +94,6 @@ useGlobalKeymap({
   paletteOpen: palette.open,
   activityOpen,
   tasksOpen,
-  changesOpen,
   actionRunsOpen,
 })
 
@@ -172,7 +171,7 @@ useWailsEvent('flows:updated', () => {
           :active="terminalActive"
           :sidebar-collapsed="terminalSidebarCollapsed"
           :drive="appMode.codeDrive.value"
-          :overlay-open="tasksOpen || changesOpen || activityOpen || actionRunsOpen"
+          :overlay-open="tasksOpen || activityOpen || actionRunsOpen"
           @session-repo-key="terminalSessionRepoKey = $event"
         />
         <AgentsMode
@@ -253,7 +252,6 @@ useWailsEvent('flows:updated', () => {
       :profile-actions="profileActions"
       :feed-commands="feedCommands"
       :open-activity-item="reveal.openActivityItem"
-      :changes-session="appMode.codeChangesSession.value"
     />
     <PopupTerminal v-if="popupTerminalMounted" />
   </main>

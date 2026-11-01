@@ -1056,13 +1056,4 @@ describe('ChangesView', () => {
     expect(wrapper.get(testid('changes-search-count')).text()).toBe('1 of 2')
     wrapper.unmount()
   })
-
-  it('closes on Escape and from its button', async () => {
-    const wrapper = await mountView()
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    expect(wrapper.emitted('close')).toHaveLength(1)
-    await wrapper.get(testid('changes-close')).trigger('click')
-    expect(wrapper.emitted('close')).toHaveLength(2)
-    wrapper.unmount()
-  })
 })

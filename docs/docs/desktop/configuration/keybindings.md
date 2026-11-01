@@ -20,7 +20,6 @@ The command palette at <kbd>⌘K</kbd> can run commands with or without a shortc
 | Open Settings | <kbd>⌘,</kbd> or <kbd>g</kbd> then <kbd>s</kbd> |
 | Show or hide the current sidebar | <kbd>⌘B</kbd> (Windows/Linux: <kbd>Ctrl+B</kbd>) |
 | Show or hide the right panel | <kbd>⌘⌥B</kbd> (Windows/Linux: <kbd>Ctrl+Alt+B</kbd>) |
-| Review the session's [changes](../code/terminal-mode.md#changes) | <kbd>⌘⌥G</kbd> (Windows/Linux: <kbd>Ctrl+Alt+G</kbd>) |
 | Show or hide a document's comments | <kbd>⌘⇧M</kbd> (Windows/Linux: <kbd>Ctrl+Shift+M</kbd>) |
 | Go to Inbox | <kbd>g</kbd> then <kbd>i</kbd> |
 | Go to Code | <kbd>g</kbd> then <kbd>c</kbd> |

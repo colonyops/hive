@@ -152,7 +152,7 @@ Use <kbd>J</kbd> and <kbd>K</kbd> (or the arrow keys) to move the selection. On 
 
 ## Changes
 
-**Changes** shows what an agent changed in the session on screen, without leaving Hive. It needs a repository session on this machine on screen, so scratch terminals, pinned chats, and sessions on a server don't offer it. Open it with <kbd>⌘⌥G</kbd> (Windows/Linux: <kbd>Ctrl+Alt+G</kbd>), **Toggle Changes** in the command palette, the file button in the status bar, or the line counts beside the branch. It opens over the session and closes with <kbd>Esc</kbd>. To [rebind](../configuration/keybindings.md#rebinding) the shortcut, use the command id `changes.toggle`.
+**Changes** shows what an agent changed in the session on screen, without leaving Hive. It needs a repository session on this machine on screen, so scratch terminals, pinned chats, and sessions on a server don't offer it. To open it, add a **Diff** tab with the session's `+` button, or select the line counts beside the branch in the status bar.
 
 Every changed file's diff sits in one scroll, with the files listed beside it. The picker in the header chooses what to review:
 
@@ -176,7 +176,6 @@ Branch changes, Uncommitted, and Unstaged include untracked files.
 | <kbd>b</kbd> | Show or hide the file list |
 | <kbd>r</kbd> | Show or hide the comments panel |
 | <kbd>⌘↵</kbd> (Windows/Linux: <kbd>Ctrl+Enter</kbd>) | Send your comments to the agent |
-| <kbd>Esc</kbd> | Close |
 
 The view refreshes every 5 seconds while it's open and the window has focus. A viewed file comes back unviewed when it changes again. Viewed marks last until you quit Hive.
 

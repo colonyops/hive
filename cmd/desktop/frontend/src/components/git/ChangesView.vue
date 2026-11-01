@@ -17,14 +17,12 @@ import IconList from '~icons/lucide/list'
 import IconListTree from '~icons/lucide/list-tree'
 import IconPanelLeft from '~icons/lucide/panel-left'
 import IconRows2 from '~icons/lucide/rows-2'
-import IconX from '~icons/lucide/x'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import Kbd from '@hive/ui/components/ui/Kbd.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
-import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import ChangesLoading from './ChangesLoading.vue'
@@ -57,16 +55,11 @@ import type { AgentTarget } from '../../../bindings/github.com/colonyops/hive/cm
 const props = withDefaults(
   defineProps<{
     sessionId: string
-    /** Lives in a session tab, which owns closing: Escape and the close button are the overlay's. */
-    embedded?: boolean
     /** A tab is mounted while another shows, and its bare keys must not fire from there. */
     keysActive?: boolean
   }>(),
-  { embedded: false, keysActive: true },
+  { keysActive: true },
 )
-const emit = defineEmits<{ close: [] }>()
-
-useEscapeToClose(() => emit('close'), { enabled: () => !props.embedded })
 const openModalCount = useOpenModalCount()
 
 const sessionId = toRef(props, 'sessionId')
@@ -186,13 +179,8 @@ const loading = computed(
   () => !error.value && (pending.value || !changes.value || (openPaths.value.size > 0 && !answered.value)),
 )
 
-// Arrow keys and Page Down scroll what has focus. HubOverlay focuses the panel
-// one tick after it mounts, which is after this child, so this waits one more.
-onMounted(() => {
-  void nextTick()
-    .then(() => nextTick())
-    .then(() => stream.value?.focus())
-})
+// Arrow keys and Page Down scroll what has focus.
+onMounted(() => stream.value?.focus())
 watch(
   () => files.value.map((file) => file.path).join('\n'),
   () => {
@@ -520,14 +508,12 @@ const KEY_HINTS = [
   ['b', 'files'],
   ['r', 'comments'],
   [SEND_KEY, 'send'],
-  ['esc', 'close'],
 ]
-const keyHints = computed(() => (props.embedded ? KEY_HINTS.filter(([key]) => key !== 'esc') : KEY_HINTS))
 </script>
 
 <template>
   <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="changes-view">
-    <ViewHeader :class="embedded ? 'overflow-x-auto' : ''">
+    <ViewHeader class="overflow-x-auto">
       <template #title>
         <IconButton
           :label="filesOpen ? 'Hide files' : 'Show files'"
@@ -597,10 +583,6 @@ const keyHints = computed(() => (props.embedded ? KEY_HINTS.filter(([key]) => ke
             >{{ comments.length }}</span
           >
         </span>
-        <template v-if="!embedded">
-          <span class="mx-1 h-4 w-px bg-strong" aria-hidden="true" />
-          <IconButton label="Close" :icon="IconX" size="lg" data-testid="changes-close" @click="emit('close')" />
-        </template>
       </template>
     </ViewHeader>
 
@@ -733,7 +715,7 @@ const keyHints = computed(() => (props.embedded ? KEY_HINTS.filter(([key]) => ke
     <div
       class="flex shrink-0 flex-wrap items-center gap-x-3.5 gap-y-0.5 border-t border-border px-3 py-1 text-caption text-text-3"
     >
-      <span v-for="[key, label] in keyHints" :key="key" class="flex items-center gap-1">
+      <span v-for="[key, label] in KEY_HINTS" :key="key" class="flex items-center gap-1">
         <Kbd>{{ key }}</Kbd>
         {{ label }}
       </span>

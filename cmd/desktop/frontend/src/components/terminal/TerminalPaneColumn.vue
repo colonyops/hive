@@ -629,7 +629,6 @@ onBeforeUnmount(() => {
             />
             <ChangesView
               v-else-if="tab.kind === 'diff' && changesSession"
-              embedded
               :keys-active="viewHasKeys(pane, tab.id)"
               :session-id="changesSession"
             />

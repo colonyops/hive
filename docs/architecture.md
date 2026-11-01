@@ -1433,8 +1433,8 @@ place that turns a `Location` into a route or an overlay. A new area adds an
 ### Terminal sessions
 
 **Changes is read-only and reads through `sessionapi`.** The Changes view is a
-hub overlay over the session in Code, not a route or a side pane: it needs more
-width than the right slot has, and it takes key focus away from the terminal.
+session's Diff tab in Code, not a route or a side pane: it needs more width than
+the right slot has.
 Its reads (`SessionChanges`, `SessionFileDiffs`, `SessionBranches`) go through
 `sessionapi` to `gitstatus`, so they read the checkout on the machine that holds
 it. A `gitstatus.DiffTarget` says what the first two compare: the working tree
@@ -2102,8 +2102,8 @@ Three rules govern it, and each is a consequence of that:
   — in two ways, which is the distinction to get right before adding to it.
 
   A command **pierces** when the catalog marks it `piercesPane`: it is claimed
-  on the binding alone, whatever modifiers it carries. The pop-up toggle,
-  `tasks.toggle`, and `changes.toggle`, because the combo that opens an overlay
+  on the binding alone, whatever modifiers it carries. The pop-up toggle
+  and `tasks.toggle`, because the combo that opens an overlay
   has to close it, and
   `drive.toggle`, because the chat that wrote a document is a focused pane and
   the chord that opens the page from there has to work from inside it;
