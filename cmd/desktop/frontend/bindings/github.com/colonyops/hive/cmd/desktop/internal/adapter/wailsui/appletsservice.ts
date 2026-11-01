@@ -18,6 +18,10 @@ export function BridgeToken(id: string): $CancellablePromise<string> {
     return $Call.ByID(2552326400, id);
 }
 
+export function CancelExport(token: string): $CancellablePromise<void> {
+    return $Call.ByID(1839208006, token);
+}
+
 export function CancelImport(token: string): $CancellablePromise<void> {
     return $Call.ByID(116663997, token);
 }
@@ -38,8 +42,8 @@ export function Exec(id: string, req: app$0.AppletExec): $CancellablePromise<app
     return $Call.ByID(2190116655, id, req);
 }
 
-export function Export(id: string, dest: string): $CancellablePromise<void> {
-    return $Call.ByID(746956496, id, dest);
+export function Export(token: string, dest: string): $CancellablePromise<void> {
+    return $Call.ByID(746956496, token, dest);
 }
 
 export function ExportPreview(id: string): $CancellablePromise<app$0.AppletExportPreview> {
@@ -68,6 +72,10 @@ export function ReadFile(id: string, path: string): $CancellablePromise<string> 
 
 export function SaveStorage(id: string, encoded: string): $CancellablePromise<void> {
     return $Call.ByID(757107892, id, encoded);
+}
+
+export function SetEnabled(id: string, enabled: boolean): $CancellablePromise<void> {
+    return $Call.ByID(4020324047, id, enabled);
 }
 
 export function Spawn(id: string, req: app$0.AppletExec): $CancellablePromise<string> {

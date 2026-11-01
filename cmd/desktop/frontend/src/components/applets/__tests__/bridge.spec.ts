@@ -34,7 +34,7 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
   Render: render,
 }))
 
-const applet = { id: 'pong', title: 'Pong', entry: 'index.html', revision: 1 }
+const applet = { id: 'applet-builder', title: 'Pong', entry: 'index.html', revision: 1 }
 
 interface Hive {
   exec(command: string, options?: object): Promise<unknown>
@@ -58,7 +58,35 @@ interface PageWindow {
 
 type Listener = (event: { source?: unknown; data?: unknown; key?: string; defaultPrevented?: boolean }) => void
 
-function loadPage(storage: Record<string, string> = {}) {
+// Delivers as a real port does: cloned, so what cannot cross throws, and held until the far
+// end listens.
+class FakePort {
+  other!: FakePort
+  held: unknown[] = []
+  private listener: ((event: { data: unknown }) => void) | null = null
+  set onmessage(next: ((event: { data: unknown }) => void) | null) {
+    this.listener = next
+    for (const data of this.held.splice(0)) queueMicrotask(() => this.listener?.({ data }))
+  }
+  postMessage(message: unknown) {
+    const data = structuredClone(message)
+    const to = this.other
+    if (to.listener) queueMicrotask(() => to.listener?.({ data }))
+    else to.held.push(data)
+  }
+  close() {}
+}
+
+class FakeChannel {
+  port1 = new FakePort()
+  port2 = new FakePort()
+  constructor() {
+    this.port1.other = this.port2
+    this.port2.other = this.port1
+  }
+}
+
+function loadPage(storage: Record<string, string> = {}, top?: unknown) {
   const wrapper = mount(AppletFrame, {
     props: { applet: applet as never, sessionSlug: 'sess' },
     attachTo: document.body,
@@ -70,18 +98,23 @@ function loadPage(storage: Record<string, string> = {}) {
     __hiveStorage: storage,
   } as unknown as PageWindow
   const parent = {
-    postMessage(data: unknown) {
-      window.dispatchEvent(new MessageEvent('message', { data, source: frameWindow }))
+    postMessage(data: unknown, _target: string, ports: FakePort[] = []) {
+      const event = new MessageEvent('message', { data, source: frameWindow })
+      Object.defineProperty(event, 'ports', { value: ports })
+      window.dispatchEvent(event)
     },
   }
-  vi.spyOn(frameWindow, 'postMessage').mockImplementation((data: unknown) => {
-    for (const listener of listeners.message ?? []) listener({ source: parent, data })
-  })
   const addEventListener = (type: string, listener: Listener) => {
     ;(listeners[type] ??= []).push(listener)
   }
   // eslint-disable-next-line no-new-func, @typescript-eslint/no-implied-eval -- running the script a page receives is the point
-  new Function('window', 'parent', 'addEventListener', bridgeSource)(page, parent, addEventListener)
+  new Function('window', 'parent', 'top', 'addEventListener', 'MessageChannel', bridgeSource)(
+    page,
+    parent,
+    top ?? parent,
+    addEventListener,
+    FakeChannel,
+  )
   return { wrapper, page, listeners }
 }
 
@@ -90,6 +123,54 @@ describe('bridge.js', () => {
     resetStores()
     for (const mock of Object.values(service)) mock.mockReset()
     service.BridgeToken.mockResolvedValue('secret')
+  })
+
+  it('sends nothing to a parent that is not the top window, and rejects every call', async () => {
+    const seen: unknown[] = []
+    const onWindow = (event: MessageEvent) => seen.push(event.data)
+    window.addEventListener('message', onWindow)
+    const { wrapper, page } = loadPage({}, { someone: 'above the framing page' })
+    await flushPromises()
+    await expect(page.hive.exec('true')).rejects.toThrow('only in a page Hive opened')
+    page.localStorage.setItem('a', '1')
+    expect(page.localStorage.getItem('a')).toBe('1')
+    window.removeEventListener('message', onWindow)
+    expect(seen).toEqual([])
+    expect(service.Exec).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('returns a no-op from an event this Hive does not have', () => {
+    const { wrapper, page } = loadPage()
+    const stop = page.hive.on('from-a-later-hive', () => {})
+    expect(() => stop()).not.toThrow()
+    wrapper.unmount()
+  })
+
+  it('settles hive.commands after a shortcut is rebound', async () => {
+    const { wrapper, page } = loadPage()
+    useKeybindings().addBinding('palette.toggle', 'mod+shift+y')
+    const rows = await (page.hive as unknown as { commands(): Promise<{ id: string; keys: string[] }[]> }).commands()
+    expect(rows.find((row) => row.id === 'palette.toggle')?.keys).toContain('mod+shift+y')
+    useKeybindings().clearAll()
+    wrapper.unmount()
+  })
+
+  it('saves a write made just before closing', async () => {
+    const { wrapper, page } = loadPage()
+    page.localStorage.setItem('last', 'word')
+    await page.hive.close()
+    expect(service.SaveStorage).toHaveBeenCalledWith('applet-builder', '{"last":"word"}')
+    wrapper.unmount()
+  })
+
+  it('saves a pending write when the page goes away', async () => {
+    const { wrapper, page, listeners } = loadPage()
+    page.localStorage.setItem('last', 'word')
+    for (const listener of listeners.pagehide ?? []) listener({})
+    await flushPromises()
+    expect(service.SaveStorage).toHaveBeenCalledWith('applet-builder', '{"last":"word"}')
+    wrapper.unmount()
   })
 
   it('takes the token and the saved storage off the window', () => {
@@ -112,8 +193,11 @@ describe('bridge.js', () => {
     await expect(page.hive.context()).resolves.toEqual({ id: 'pong' })
     await page.hive.toast('hello')
 
-    expect(service.Exec).toHaveBeenCalledWith('pong', expect.objectContaining({ command: 'echo hi', timeoutMillis: 5 }))
-    expect(service.WriteFile).toHaveBeenCalledWith('pong', 'a.txt', 'body')
+    expect(service.Exec).toHaveBeenCalledWith(
+      'applet-builder',
+      expect.objectContaining({ command: 'echo hi', timeoutMillis: 5 }),
+    )
+    expect(service.WriteFile).toHaveBeenCalledWith('applet-builder', 'a.txt', 'body')
     wrapper.unmount()
   })
 
@@ -171,7 +255,7 @@ describe('bridge.js', () => {
       await vi.advanceTimersByTimeAsync(250)
       await flushPromises()
       expect(service.SaveStorage).toHaveBeenCalledTimes(1)
-      expect(service.SaveStorage).toHaveBeenCalledWith('pong', '{"b":"2"}')
+      expect(service.SaveStorage).toHaveBeenCalledWith('applet-builder', '{"b":"2"}')
       wrapper.unmount()
     } finally {
       vi.useRealTimers()
@@ -278,13 +362,13 @@ describe('bridge.js', () => {
     it('holds a command until the page listens', async () => {
       const { wrapper, page } = loadPage()
       await flushPromises()
-      useApplets().deliverCommand('pong', 'next')
+      useApplets().deliverCommand('applet-builder', 'next')
       await flushPromises()
       const heard: unknown[] = []
       page.hive.on('command', (id) => heard.push(id))
       expect(heard).toEqual(['next'])
 
-      useApplets().deliverCommand('pong', 'again')
+      useApplets().deliverCommand('applet-builder', 'again')
       await flushPromises()
       expect(heard).toEqual(['next', 'again'])
       wrapper.unmount()

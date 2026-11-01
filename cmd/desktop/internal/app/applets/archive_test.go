@@ -88,7 +88,7 @@ func TestRoundTripKeepsTheFilesAndLeavesLocalStateBehind(t *testing.T) {
 	require.NoError(t, os.WriteFile(outside, []byte("private key"), 0o600))
 	require.NoError(t, os.Symlink(outside, filepath.Join(dir, "key")))
 
-	applet, err := Parse("radio", []byte(archiveYAML))
+	applet, err := Parse("radio", []byte(archiveYAML), "")
 	require.NoError(t, err)
 	applet.Dir = dir
 
@@ -96,13 +96,13 @@ func TestRoundTripKeepsTheFilesAndLeavesLocalStateBehind(t *testing.T) {
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{".localstorage.json", ".env", ".git", "matches.log", "key"}, list.LeftOut)
 
-	var packed bytes.Buffer
-	require.NoError(t, Pack(applet, &packed))
+	packed, err := Pack(applet, "")
+	require.NoError(t, err)
 	for _, leaked := range []string{"private key", "TOKEN=1", "secret", dir} {
-		assert.NotContains(t, unzipAll(t, packed.Bytes()), leaked)
+		assert.NotContains(t, unzipAll(t, packed.Data), leaked)
 	}
 
-	archive, err := Unpack(packed.Bytes())
+	archive, err := Unpack(packed.Data, "")
 	require.NoError(t, err)
 	assert.Equal(t, "radio", archive.Applet.ID)
 
@@ -116,7 +116,7 @@ func TestRoundTripKeepsTheFilesAndLeavesLocalStateBehind(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fs.FileMode(0o644), info.Mode().Perm())
 
-	store := NewStore(root)
+	store := NewStore(root, "")
 	require.NoError(t, store.Reload())
 	_, ok := store.Get("radio")
 	assert.True(t, ok)
@@ -140,15 +140,15 @@ func unzipAll(t *testing.T, raw []byte) string {
 func TestPackWritesTheFormatVersion(t *testing.T) {
 	dir := t.TempDir()
 	writeTree(t, dir, map[string]string{"applet.yaml": archiveYAML, "index.html": "x"})
-	var packed bytes.Buffer
-	require.NoError(t, Pack(Applet{ID: "radio", Dir: dir}, &packed))
-	reader, err := zip.NewReader(bytes.NewReader(packed.Bytes()), int64(packed.Len()))
+	packed, err := Pack(Applet{ID: "radio", Dir: dir}, "1.2.3")
+	require.NoError(t, err)
+	reader, err := zip.NewReader(bytes.NewReader(packed.Data), int64(len(packed.Data)))
 	require.NoError(t, err)
 	data, err := readZipEntry(reader.File[0], maxArchiveManifest)
 	require.NoError(t, err)
 	var manifest archiveManifest
 	require.NoError(t, json.Unmarshal(data, &manifest))
-	assert.Equal(t, archiveManifest{Format: ArchiveFormat, ID: "radio"}, manifest)
+	assert.Equal(t, archiveManifest{Format: ArchiveFormat, ID: "radio", Hive: "1.2.3"}, manifest)
 }
 
 func TestPackRefusesWhatImportWouldRefuse(t *testing.T) {
@@ -189,36 +189,35 @@ func TestUnpackRefusesHostileFiles(t *testing.T) {
 		"long path":              {validEntries(zipEntry{name: "files/" + strings.Repeat("a", maxArchivePathBytes+1)}), "longer"},
 		"no manifest":            {[]zipEntry{{name: "files/applet.yaml", body: archiveYAML}}, "no hive-applet.json"},
 		"manifest not json":      {[]zipEntry{{name: ArchiveManifestName, body: "{"}}, "not valid"},
-		"manifest extra key":     {[]zipEntry{{name: ArchiveManifestName, body: `{"format":1,"id":"a","run":"x"}`}}, "not valid"},
 		"newer format":           {[]zipEntry{{name: ArchiveManifestName, body: `{"format":99,"id":"radio"}`}}, "Update Hive"},
 		"no format":              {[]zipEntry{{name: ArchiveManifestName, body: `{"id":"radio"}`}}, "no valid format"},
 		"id with a path":         {[]zipEntry{{name: ArchiveManifestName, body: `{"format":1,"id":"../evil"}`}, {name: "files/applet.yaml", body: archiveYAML}}, "invalid applet id"},
 		"no applet.yaml":         {[]zipEntry{manifestEntry("radio"), {name: "files/index.html", body: "x"}}, "no applet.yaml"},
-		"yaml unknown key":       {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: archiveYAML + "autostart: true\n"}}, "not valid"},
+		"yaml wrong shape":       {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: archiveYAML + "titlebar: nope\n"}}, "not valid"},
 		"yaml not yaml":          {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: "{{{"}}, "not valid"},
 		"missing entry page":     {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: archiveYAML}}, "no page"},
 		"long title":             {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: "version: 1\ntitle: " + strings.Repeat("t", maxArchiveTitleRunes+1) + "\n"}, {name: "files/index.html"}}, "title is longer"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := Unpack(buildZip(t, tc.entries...))
+			_, err := Unpack(buildZip(t, tc.entries...), "")
 			require.ErrorContains(t, err, tc.want)
 		})
 	}
 	t.Run("title bar page missing", func(t *testing.T) {
 		_, err := Unpack(buildZip(t, manifestEntry("radio"),
 			zipEntry{name: "files/applet.yaml", body: archiveYAML + "titlebar:\n  entry: bar.html\n"},
-			zipEntry{name: "files/index.html"}))
+			zipEntry{name: "files/index.html"}), "")
 		require.ErrorContains(t, err, "no page")
 	})
 	t.Run("not a zip", func(t *testing.T) {
-		_, err := Unpack([]byte("just some text"))
+		_, err := Unpack([]byte("just some text"), "")
 		require.ErrorContains(t, err, "not a Hive applet file")
 	})
 }
 
 func TestUnpackEnforcesItsLimits(t *testing.T) {
 	t.Run("archive size", func(t *testing.T) {
-		_, err := Unpack(make([]byte, MaxArchiveBytes+1))
+		_, err := Unpack(make([]byte, MaxArchiveBytes+1), "")
 		require.ErrorContains(t, err, "larger than")
 	})
 	t.Run("file count", func(t *testing.T) {
@@ -226,7 +225,7 @@ func TestUnpackEnforcesItsLimits(t *testing.T) {
 		for i := range MaxArchiveFiles {
 			entries = append(entries, zipEntry{name: fmt.Sprintf("files/f%d.js", i)})
 		}
-		_, err := Unpack(buildZip(t, entries...))
+		_, err := Unpack(buildZip(t, entries...), "")
 		require.ErrorContains(t, err, "limit")
 	})
 	t.Run("a zip bomb past the total", func(t *testing.T) {
@@ -234,7 +233,7 @@ func TestUnpackEnforcesItsLimits(t *testing.T) {
 		_, err := Unpack(buildZip(t, validEntries(
 			zipEntry{name: "files/a.bin", body: body},
 			zipEntry{name: "files/b.bin", body: body},
-		)...))
+		)...), "")
 		require.ErrorContains(t, err, "unpacks past")
 	})
 	t.Run("a header that lies about the size", func(t *testing.T) {
@@ -263,7 +262,7 @@ func TestUnpackEnforcesItsLimits(t *testing.T) {
 				raw[offset+4] ^= 0xff
 			}
 		}
-		_, err = Unpack(raw)
+		_, err = Unpack(raw, "")
 		require.Error(t, err)
 	})
 }
@@ -272,13 +271,13 @@ func TestUnpackNeedsATitlebarOnlyToOffer(t *testing.T) {
 	archive, err := Unpack(buildZip(t, manifestEntry("radio"),
 		zipEntry{name: "files/applet.yaml", body: archiveYAML + "titlebar:\n  entry: bar.html\n"},
 		zipEntry{name: "files/index.html"},
-		zipEntry{name: "files/bar.html"}))
+		zipEntry{name: "files/bar.html"}), "")
 	require.NoError(t, err)
 	assert.Equal(t, "bar.html", archive.Applet.Titlebar.Entry)
 }
 
 func TestInstallNeverReplacesAndLeavesNothingBehind(t *testing.T) {
-	archive, err := Unpack(buildZip(t, validEntries()...))
+	archive, err := Unpack(buildZip(t, validEntries()...), "")
 	require.NoError(t, err)
 
 	parent := t.TempDir()
@@ -310,7 +309,7 @@ func TestInstallLeavesNothingWhenAWriteFails(t *testing.T) {
 }
 
 func TestInstallDoesNotFollowASymlinkAtTheTarget(t *testing.T) {
-	archive, err := Unpack(buildZip(t, validEntries()...))
+	archive, err := Unpack(buildZip(t, validEntries()...), "")
 	require.NoError(t, err)
 	root := t.TempDir()
 	elsewhere := t.TempDir()

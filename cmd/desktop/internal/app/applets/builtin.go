@@ -33,7 +33,7 @@ func loadBuiltins(root string) map[string]Entry {
 		if err != nil {
 			panic(err)
 		}
-		applet, err := Parse(id, raw)
+		applet, err := Parse(id, raw, "")
 		if err != nil {
 			panic(fmt.Errorf("built-in applet %q: %w", id, err))
 		}

@@ -12,41 +12,47 @@
     for (const [name, value] of Object.entries(theme)) document.documentElement.style.setProperty(name, value)
   }
 
-  addEventListener('message', (event) => {
-    if (event.source !== parent || event.data?.hiveApplet !== 1) return
-    if (event.data.theme) {
-      applyTheme(event.data.theme)
+  const receive = ({ data }) => {
+    if (data.theme) {
+      applyTheme(data.theme)
       return
     }
-    if (event.data.storage) {
-      applyStorage(event.data.storage)
+    if (data.storage) {
+      applyStorage(data.storage)
       return
     }
-    if (event.data.event) {
-      if (event.data.event === 'command' && listeners.command.size === 0) {
-        heldCommands.push(event.data.data)
+    if (data.event) {
+      if (data.event === 'command' && listeners.command.size === 0) {
+        heldCommands.push(data.data)
         return
       }
-      for (const listener of listeners[event.data.event] ?? []) listener(event.data.data)
+      for (const listener of listeners[data.event] ?? []) listener(data.data)
       return
     }
-    if (!pending.has(event.data.id)) return
-    const { resolve, reject } = pending.get(event.data.id)
-    pending.delete(event.data.id)
-    if ('error' in event.data) reject(new Error(event.data.error))
-    else resolve(event.data.result)
-  })
+    if (!pending.has(data.id)) return
+    const { resolve, reject } = pending.get(data.id)
+    pending.delete(data.id)
+    if ('error' in data) reject(new Error(data.error))
+    else resolve(data.result)
+  }
 
   // Hive frames a page directly under its own window. Anything else above this page may be
   // a foreign page framing it to read the token off the first message, so nothing is sent.
   const framedByHive = parent !== window && parent === top
+
+  // Everything after the handshake crosses this port, which a page the frame navigates to
+  // does not hold. The frame's window goes with the frame, so posting to it would hand
+  // whatever loads next the replies and events meant for this page.
+  const channel = new MessageChannel()
+  channel.port1.onmessage = receive
+  if (framedByHive) parent.postMessage({ hiveApplet: 1, token, method: 'connect' }, '*', [channel.port2])
 
   function call(method, args = {}) {
     if (!framedByHive) return Promise.reject(new Error('window.hive works only in a page Hive opened itself.'))
     return new Promise((resolve, reject) => {
       const id = ++nextID
       pending.set(id, { resolve, reject })
-      parent.postMessage({ hiveApplet: 1, token, id, method, args }, '*')
+      channel.port1.postMessage({ id, method, args })
     })
   }
 
@@ -65,7 +71,8 @@
   window.hive = {
     surface,
     on(event, listener) {
-      if (!listeners[event]) throw new Error(`hive has no event "${event}"`)
+      // A page written for a later Hive must still load here.
+      if (!listeners[event]) return () => {}
       listeners[event].add(listener)
       if (event === 'command') heldCommands.splice(0).forEach((id) => listener(id))
       return () => listeners[event].delete(listener)
@@ -96,7 +103,10 @@
     toast: (message, options = {}) => call('toast', { message, ...options }),
     copy: (text) => call('copy', { text }),
     authoringPrompt: (brief) => call('authoringPrompt', { brief }),
-    close: () => call('close'),
+    close() {
+      saveNow()
+      return call('close')
+    },
   }
 
   const notify = (method, args) => call(method, args).catch(() => {})
@@ -109,10 +119,21 @@
   const store = new Map(Object.entries(window.__hiveStorage ?? {}))
   delete window.__hiveStorage
   let saving = null
+  const writeStorage = () => {
+    saving = null
+    notify('saveStorage', { encoded: JSON.stringify(Object.fromEntries(store)) })
+  }
   const save = () => {
     clearTimeout(saving)
-    saving = setTimeout(() => notify('saveStorage', { encoded: JSON.stringify(Object.fromEntries(store)) }), 200)
+    saving = setTimeout(writeStorage, 200)
   }
+  // The timer dies with the page, and a write just before closing must still land.
+  function saveNow() {
+    if (saving === null) return
+    clearTimeout(saving)
+    writeStorage()
+  }
+  addEventListener('pagehide', saveNow)
   // Every frame of an applet keeps its own copy and saves all of it, so each change
   // crosses to the others at once. Otherwise a frame's next save would undo theirs.
   const changed = (key, value) => {
@@ -163,6 +184,7 @@
     setTimeout(() => {
       if (event.defaultPrevented) return
       if (event.key === 'Escape' && !continuing) {
+        saveNow()
         notify('close')
         return
       }

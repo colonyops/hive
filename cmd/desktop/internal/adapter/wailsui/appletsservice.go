@@ -27,8 +27,16 @@ func (s *AppletsService) ExportPreview(id string) (app.AppletExportPreview, erro
 	return s.applets.ExportPreview(id)
 }
 
-func (s *AppletsService) Export(id, dest string) error {
-	return s.applets.Export(id, dest)
+func (s *AppletsService) Export(token, dest string) error {
+	return s.applets.Export(token, dest)
+}
+
+func (s *AppletsService) CancelExport(token string) {
+	s.applets.CancelExport(token)
+}
+
+func (s *AppletsService) SetEnabled(id string, enabled bool) error {
+	return s.applets.SetEnabled(id, enabled)
 }
 
 func (s *AppletsService) PrepareImport(encoded string) (app.AppletImportPreview, error) {

@@ -21,6 +21,8 @@ export interface PersistedSetting<T> {
   set: (next: T) => void
   /** Resolves once the stored value has been read; for an action relative to it. */
   whenHydrated: () => Promise<void>
+  /** Reads the stored value again, after something other than `set` changed it. */
+  reload: () => Promise<void>
 }
 
 /**
@@ -36,7 +38,7 @@ export function usePersistedSetting<T>(options: PersistedSettingOptions<T>): Per
   let persistChain: Promise<void> = Promise.resolve()
 
   // A write made while the read is in flight must win over the read's result.
-  const hydration = (async () => {
+  async function load(): Promise<void> {
     const startedAt = version
     try {
       const stored = await options.read()
@@ -46,7 +48,8 @@ export function usePersistedSetting<T>(options: PersistedSettingOptions<T>): Per
     } finally {
       hydrated.value = true
     }
-  })()
+  }
+  const hydration = load()
 
   function set(next: T): void {
     version++
@@ -63,5 +66,6 @@ export function usePersistedSetting<T>(options: PersistedSettingOptions<T>): Per
     hydrated: readonly(hydrated),
     set,
     whenHydrated: () => hydration,
+    reload: load,
   }
 }

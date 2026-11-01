@@ -4,7 +4,9 @@ import { resetStores } from '../../stores/defineStore'
 import AppletsSettingsView from '../AppletsSettingsView.vue'
 
 const service = vi.hoisted(() => ({
+  CancelExport: vi.fn(),
   CancelImport: vi.fn(),
+  SetEnabled: vi.fn(),
   ConfirmImport: vi.fn(),
   Dir: vi.fn(),
   Export: vi.fn(),
@@ -31,6 +33,7 @@ const applet = {
   height: 0,
   revision: 1,
   runnable: true,
+  enabled: true,
   error: '',
 }
 
@@ -64,11 +67,48 @@ describe('AppletsSettingsView', () => {
     const wrapper = await render()
     const state = (id: string) => wrapper.get(`[data-testid="settings-applet-${id}-state"]`).text()
 
-    expect(state('docker')).toBe('Ready')
+    expect(wrapper.find('[data-testid="settings-applet-docker-state"]').exists()).toBe(false)
     expect(state('stale')).toBe('Running last good file')
     expect(state('broken')).toBe('Invalid')
     expect(wrapper.get('[data-testid="settings-applet-broken"]').text()).toContain('title is required')
-    expect(wrapper.get('[data-testid="settings-applet-applet-builder"]').text()).toContain('ships with Hive')
+    expect(wrapper.get('[data-testid="settings-applet-applet-builder"]').text()).toContain('Ships with Hive')
+    wrapper.unmount()
+  })
+
+  it('turns an applet off and back on, and an off applet cannot open', async () => {
+    service.SetEnabled.mockResolvedValue(undefined)
+    const wrapper = await render()
+    const open = () => wrapper.get('[data-testid="settings-applet-docker-open"]').element as HTMLButtonElement
+    expect(open().disabled).toBe(false)
+
+    service.List.mockResolvedValue([{ ...applet, enabled: false }])
+    await wrapper.get('[data-testid="settings-applet-docker-enabled"]').trigger('click')
+    await flushPromises()
+    expect(service.SetEnabled).toHaveBeenCalledWith('docker', false)
+    expect(wrapper.get('[data-testid="settings-applet-docker-state"]').text()).toBe('Off')
+    expect(open().disabled).toBe(true)
+
+    service.List.mockResolvedValue([applet])
+    await wrapper.get('[data-testid="settings-applet-docker-enabled"]').trigger('click')
+    await flushPromises()
+    expect(service.SetEnabled).toHaveBeenCalledWith('docker', true)
+    expect(wrapper.find('[data-testid="settings-applet-docker-state"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('shows why turning one off failed', async () => {
+    service.SetEnabled.mockRejectedValue(new Error('saving settings failed'))
+    const wrapper = await render()
+    await wrapper.get('[data-testid="settings-applet-docker-enabled"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="settings-applets-share-error"]').text()).toContain('saving settings failed')
+    wrapper.unmount()
+  })
+
+  it('lists what this Hive skipped in the file', async () => {
+    service.List.mockResolvedValue([{ ...applet, warnings: ['this version of Hive ignores "sidebar"'] }])
+    const wrapper = await render()
+    expect(wrapper.get('[data-testid="settings-applet-docker-warnings"]').text()).toContain('"sidebar"')
     wrapper.unmount()
   })
 
@@ -116,6 +156,7 @@ describe('AppletsSettingsView', () => {
 
     it('shows what an export includes and leaves out', async () => {
       service.ExportPreview.mockResolvedValue({
+        token: 'export-token',
         id: 'docker',
         title: 'Docker',
         fileName: 'docker.hiveapplet',
@@ -129,6 +170,46 @@ describe('AppletsSettingsView', () => {
       expect(document.querySelector('[data-testid="applet-export-left-out"]')?.textContent).toContain(
         '.localstorage.json',
       )
+      wrapper.unmount()
+      expect(service.CancelExport).toHaveBeenCalledWith('export-token')
+    })
+
+    it('shows the newest file when two are read at once', async () => {
+      let finishFirst: (value: object) => void = () => {}
+      service.PrepareImport.mockImplementationOnce(() => new Promise((resolve) => (finishFirst = resolve)))
+      service.PrepareImport.mockResolvedValueOnce({
+        token: 'second',
+        id: 'b',
+        suggestedId: 'b',
+        title: 'Second',
+        entry: 'index.html',
+        files: [],
+        totalBytes: 0,
+      })
+      const wrapper = await mountView()
+      vi.useRealTimers()
+      const input = wrapper.get('[data-testid="settings-applets-import-input"]').element as HTMLInputElement
+      const choose = (name: string) => {
+        Object.defineProperty(input, 'files', { value: [new File(['x'], name)], configurable: true })
+        input.dispatchEvent(new Event('change'))
+      }
+      choose('first.hiveapplet')
+      await vi.waitFor(() => expect(service.PrepareImport).toHaveBeenCalledTimes(1))
+      choose('second.hiveapplet')
+      await vi.waitFor(() =>
+        expect(document.querySelector('[data-testid="applet-import-title"]')?.textContent).toBe('Second'),
+      )
+      finishFirst({
+        token: 'first',
+        id: 'a',
+        suggestedId: 'a',
+        title: 'First',
+        entry: 'index.html',
+        files: [],
+        totalBytes: 0,
+      })
+      await flushPromises()
+      expect(document.querySelector('[data-testid="applet-import-title"]')?.textContent).toBe('Second')
       wrapper.unmount()
     })
 

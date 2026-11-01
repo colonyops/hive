@@ -36,9 +36,10 @@ type popupOpenRequest struct {
 	// Command is a shell command line — it is run through a login shell, so what
 	// a user would type in their own terminal is what runs. Empty opens an
 	// interactive shell.
-	Command string `json:"command"`
-	Cols    int    `json:"cols"`
-	Rows    int    `json:"rows"`
+	Command string   `json:"command"`
+	Env     []string `json:"env"`
+	Cols    int      `json:"cols"`
+	Rows    int      `json:"rows"`
 }
 
 func (b popupOpenRequest) Validate() error {
@@ -112,6 +113,7 @@ func (ctrl *Controller) PopupTerminalOpen(w http.ResponseWriter, r *http.Request
 		SessionSlug: body.SessionSlug,
 		Dir:         body.Dir,
 		Command:     body.Command,
+		Env:         body.Env,
 		Cols:        body.Cols,
 		Rows:        body.Rows,
 	})

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 )
 
@@ -30,13 +31,15 @@ func (e Entry) Usable() bool { return e.Applet.Version != 0 }
 // costs no I/O.
 type Store struct {
 	root string
+	// hostVersion is the Hive this catalog runs on, which a file can say is too old.
+	hostVersion string
 
 	mu      sync.RWMutex
 	entries map[string]Entry
 }
 
-func NewStore(root string) *Store {
-	return &Store{root: root, entries: map[string]Entry{}}
+func NewStore(root, hostVersion string) *Store {
+	return &Store{root: root, hostVersion: hostVersion, entries: map[string]Entry{}}
 }
 
 func (s *Store) Root() string { return s.root }
@@ -53,6 +56,12 @@ func IsWatchedFile(path string) bool {
 		return true
 	}
 	return false
+}
+
+// SkipsWatch names a folder that holds no part of a page an edit would change, and can be
+// large enough to run out of file watches.
+func SkipsWatch(dir string) bool {
+	return strings.HasPrefix(dir, ".") || dir == "node_modules"
 }
 
 // Reload rereads every applet. A directory with no applet.yaml is not an applet
@@ -81,7 +90,7 @@ func (s *Store) Reload() error {
 		}
 		if err == nil {
 			var applet Applet
-			if applet, err = Parse(id, raw); err == nil {
+			if applet, err = Parse(id, raw, s.hostVersion); err == nil {
 				applet.Dir = path
 				next[id] = Entry{Applet: applet, Revision: newestChange(path)}
 				continue
@@ -102,19 +111,25 @@ func (s *Store) Reload() error {
 }
 
 func newestChange(dir string) int64 {
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		return 0
-	}
 	var newest int64
-	for _, file := range files {
-		if !IsWatchedFile(file.Name()) {
-			continue
+	// A file that cannot be read has no time to report, and the next reload tries again.
+	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return nil
+		case entry.IsDir():
+			if path != dir && SkipsWatch(entry.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		case !IsWatchedFile(path):
+			return nil
 		}
-		if info, err := file.Info(); err == nil {
+		if info, err := entry.Info(); err == nil {
 			newest = max(newest, info.ModTime().UnixMilli())
 		}
-	}
+		return nil
+	})
 	return newest
 }
 

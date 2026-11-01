@@ -75,6 +75,38 @@ type AppletsSettings struct {
 	// Titlebar lists the applets shown in the title bar, in order. An id with no such
 	// applet stays listed, so an applet being rewritten keeps its place.
 	Titlebar []string `yaml:"titlebar,omitempty"`
+	// Disabled lists the applets the user turned off. An id with no such applet stays
+	// listed, for the same reason.
+	Disabled []string `yaml:"disabled,omitempty"`
+}
+
+// appletSurfaceLists holds one row per name in applets.Surfaces. A new surface is a field
+// above and a row here.
+var appletSurfaceLists = map[string]func(*AppletsSettings) *[]string{
+	"titlebar": func(a *AppletsSettings) *[]string { return &a.Titlebar },
+}
+
+// Surface returns the list of applets the user put on a surface.
+func (a *AppletsSettings) Surface(name string) (*[]string, bool) {
+	list, ok := appletSurfaceLists[name]
+	if !ok {
+		return nil, false
+	}
+	return list(a), true
+}
+
+// Forget removes every choice made about an id, for a new applet taking that id.
+func (a *AppletsSettings) Forget(id string) {
+	lists := []*[]string{&a.Disabled}
+	for _, list := range appletSurfaceLists {
+		lists = append(lists, list(a))
+	}
+	for _, list := range lists {
+		*list = slices.DeleteFunc(slices.Clone(*list), func(other string) bool { return other == id })
+		if len(*list) == 0 {
+			*list = nil
+		}
+	}
 }
 
 type Appearance struct {

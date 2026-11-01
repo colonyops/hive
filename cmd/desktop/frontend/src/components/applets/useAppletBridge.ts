@@ -21,13 +21,13 @@ import { useKeybindings } from '../../composables/useKeybindings'
 import { useToasts } from '../../composables/useToasts'
 import { appletCommandID, commandById, commands } from '../../keybindings/catalog'
 import { router } from '../../router'
-import { useApplets, type AppletFrameHandle, type AppletPageRow } from '../../stores/useApplets'
+import { SURFACES, type AppletSurface } from '../../stores/appletSurfaces'
+import { BUILDER_ID, useApplets, type AppletFrameHandle, type AppletPageRow } from '../../stores/useApplets'
 import { usePopupTerminal } from '../../stores/usePopupTerminal'
-
-export type AppletSurface = 'page' | 'titlebar' | 'dropdown'
 
 export const DEFAULT_DROPDOWN_WIDTH = 320
 export const DEFAULT_DROPDOWN_HEIGHT = 360
+const PORT_LINGER_MS = 1000
 
 type AppletBrief = NonNullable<Parameters<typeof Render>[1]['appletBrief']>
 
@@ -75,16 +75,38 @@ function readTheme(): Record<string, string> {
   return Object.fromEntries(THEME_PROPERTIES.map((name) => [name, computed.getPropertyValue(name).trim()]))
 }
 
-// A row goes in the palette, so a wrong one should say so to the page that sent it rather
-// than draw a blank row.
+const rowText = (value: unknown): string =>
+  typeof value === 'string' || typeof value === 'number' ? String(value) : ''
+const optionalString = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined)
+
+// A row goes in the palette, so one with no id or title should say so to the page that sent
+// it rather than draw a blank row. A scope this Hive does not know falls back to the default,
+// and a field of the wrong type is left out, so a page for a later Hive still fills its rows
+// and one bad field cannot throw inside the palette.
 function parsePageRows(rows: unknown): AppletPageRow[] {
   if (!Array.isArray(rows)) throw new Error('setCommands takes a list of rows.')
-  return rows.map((row: Partial<AppletPageRow>) => {
-    if (!row?.id || !row.title) throw new Error('A palette row needs an id and a title.')
-    if (row.scope !== undefined && row.scope !== 'goto' && row.scope !== 'actions')
-      throw new Error(`A palette row's scope is goto or actions, not "${String(row.scope)}".`)
-    return { ...row, id: String(row.id), title: String(row.title) }
+  return rows.map((row: Record<string, unknown> | null) => {
+    const id = rowText(row?.id)
+    const title = rowText(row?.title)
+    if (!row || !id || !title) throw new Error('A palette row needs an id and a title.')
+    return {
+      id,
+      title,
+      group: optionalString(row.group),
+      keywords: Array.isArray(row.keywords) ? row.keywords.filter((word) => typeof word === 'string') : undefined,
+      icon: optionalString(row.icon),
+      hint: optionalString(row.hint),
+      kind: optionalString(row.kind),
+      scope: row.scope === 'goto' || row.scope === 'actions' ? row.scope : undefined,
+    }
   })
+}
+
+// What a page's relative cwd means for a command it runs: under where its commands run.
+function terminalDir(cwd: unknown, context: { cwd: string }): string {
+  const asked = typeof cwd === 'string' ? cwd : ''
+  if (asked === '') return context.cwd
+  return asked.startsWith('/') || asked.startsWith('~') ? asked : `${context.cwd}/${asked}`
 }
 
 export interface AppletBridgeOptions {
@@ -109,11 +131,17 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
   const clipboard = useClipboard()
   const token = BridgeToken(id)
 
-  useMutationObserver(
-    document.documentElement,
-    () => frame.value?.contentWindow?.postMessage({ hiveApplet: 1, theme: readTheme() }, '*'),
-    { attributeFilter: ['data-theme'] },
-  )
+  // The page's own end of the channel. It stays with that page when the frame navigates, so
+  // nothing here can reach what loads next.
+  let port: MessagePort | null = null
+
+  function post(message: object): void {
+    port?.postMessage({ hiveApplet: 1, ...message })
+  }
+
+  useMutationObserver(document.documentElement, () => post({ theme: readTheme() }), {
+    attributeFilter: ['data-theme'],
+  })
 
   const keybindings = useKeybindings()
   const palette = useCommandPalette()
@@ -123,12 +151,12 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
   const queuedCommands: string[] = []
 
   function postCommand(command: string): void {
-    frame.value?.contentWindow?.postMessage({ hiveApplet: 1, event: 'command', data: command }, '*')
+    post({ event: 'command', data: command })
   }
 
   const handle: AppletFrameHandle = {
     surface: options.surface(),
-    window: () => frame.value?.contentWindow,
+    post,
     deliverCommand(command) {
       if (pageReady) postCommand(command)
       else queuedCommands.push(command)
@@ -137,7 +165,7 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
   const disconnect = applets.connectFrame(id, handle)
 
   watch(options.sessionSlug, (slug) => {
-    frame.value?.contentWindow?.postMessage({ hiveApplet: 1, event: 'session', data: slug }, '*')
+    post({ event: 'session', data: slug })
   })
 
   const processes = new Set<string>()
@@ -157,11 +185,11 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     timeoutMillis: Number(args.timeout ?? 0),
   })
 
-  function others(self: Window, message: object): void {
-    for (const peer of applets.otherFrames(id, self)) peer.postMessage({ hiveApplet: 1, ...message }, '*')
+  function others(message: object): void {
+    for (const peer of applets.otherFrames(id, handle)) peer.post(message)
   }
 
-  const methods: Record<string, (args: BridgeArgs, source: Window) => unknown> = {
+  const methods: Record<string, (args: BridgeArgs) => unknown> = {
     context: () => Context(id, options.sessionSlug()),
     theme: readTheme,
     exec: (args) => Exec(id, execRequest(args)),
@@ -182,11 +210,15 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     readFile: (args) => ReadFile(id, String(args.path)),
     writeFile: (args) => WriteFile(id, String(args.path), String(args.content)),
     saveStorage: (args) => SaveStorage(id, String(args.encoded)),
-    storageChanged: (args, source) => others(source, { storage: args as object }),
-    broadcast: (args, source) => others(source, { event: 'message', data: args.data as unknown }),
+    storageChanged: (args) => others({ storage: args as object }),
+    broadcast: (args) => others({ event: 'message', data: args.data as unknown }),
     async terminal(args) {
       const context = await Context(id, options.sessionSlug())
-      popupTerminal.launch({ command: String(args.command ?? ''), dir: String(args.cwd ?? context.cwd) })
+      popupTerminal.launch({
+        command: String(args.command ?? ''),
+        dir: terminalDir(args.cwd, context),
+        env: [`HIVE_APPLET_DIR=${context.dir}`],
+      })
     },
     toast(args) {
       const severity = args.severity as 'info' | 'success' | 'warning' | 'error' | undefined
@@ -195,7 +227,10 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     async copy(args) {
       if (!(await clipboard.copy(String(args.text ?? '')))) throw new Error('The clipboard refused the text.')
     },
+    // The Applet Builder's own call, kept off the API so its shape can change with the
+    // prompt. A directory that replaces the Builder keeps it.
     async authoringPrompt(args) {
+      if (id !== BUILDER_ID) throw new Error('hive.authoringPrompt is only for the Applet Builder.')
       const prompt = await Render('applets', {
         webhookPath: '',
         webhookSample: '',
@@ -206,7 +241,7 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     close: () => options.close(),
     open: () => applets.runCommand(appletCommandID(id)),
     dropdown(args) {
-      if (options.surface() !== 'titlebar' || !frame.value)
+      if (!SURFACES[options.surface()].canOpenDropdown || !frame.value)
         throw new Error('Only a title bar page can open a dropdown.')
       const applet = options.applet()
       applets.toggleDropdown({
@@ -218,7 +253,7 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
       })
     },
     resize(args) {
-      if (options.surface() === 'page') throw new Error('A panel takes its size from applet.yaml.')
+      if (!SURFACES[options.surface()].resizable) throw new Error('A panel takes its size from applet.yaml.')
       options.resize({ width: args.width as number | undefined, height: args.height as number | undefined })
     },
     ready() {
@@ -235,7 +270,8 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
         id: commandID,
         title,
         group,
-        keys: keybindings.combosFor(commandID),
+        // An override is a reactive array, which postMessage cannot clone.
+        keys: [...keybindings.combosFor(commandID)],
       })),
     setCommands(args) {
       applets.setFrameRows(handle, id, parsePageRows(args.rows))
@@ -253,33 +289,44 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     },
   }
 
-  useEventListener(window, 'message', (event: MessageEvent) => {
-    const source = frame.value?.contentWindow
-    const message = event.data as {
-      hiveApplet?: number
-      token?: string
-      id?: number
-      method?: string
-      args?: BridgeArgs
-    } | null
-    if (!source || event.source !== source || message?.hiveApplet !== 1) return
+  function serve(event: MessageEvent, from: MessagePort): void {
+    const message = event.data as { id?: number; method?: string; args?: BridgeArgs }
+    // A page saves its storage as it goes away, which can land after the frame has.
+    if (closed && message.method !== 'saveStorage') return
     const reply = (body: { result?: unknown; error?: string }) => {
-      source.postMessage({ hiveApplet: 1, id: message.id, ...body }, '*')
+      try {
+        from.postMessage({ hiveApplet: 1, id: message.id, ...body })
+      } catch (cause) {
+        // What a method returned cannot cross. The page must not wait forever for it.
+        from.postMessage({ hiveApplet: 1, id: message.id, error: `hive could not send its reply: ${String(cause)}` })
+      }
     }
+    const method = methods[message.method ?? '']
+    if (!method) {
+      reply({ error: `hive has no method "${message.method}"` })
+      return
+    }
+    Promise.resolve()
+      .then(() => method(message.args ?? {}))
+      .then(
+        (result) => reply({ result }),
+        (cause: unknown) => reply({ error: cause instanceof Error ? cause.message : String(cause) }),
+      )
+  }
+
+  // The only message that arrives on the window. It proves the page with the token, and
+  // hands over the port everything else uses.
+  useEventListener(window, 'message', (event: MessageEvent) => {
+    const message = event.data as { hiveApplet?: number; token?: string; method?: string } | null
+    const [from] = event.ports
+    if (event.source !== frame.value?.contentWindow || message?.hiveApplet !== 1) return
+    if (message.method !== 'connect' || !from) return
     void token.then(
       (expected) => {
-        if (message.token !== expected) return
-        const method = methods[message.method ?? '']
-        if (!method) {
-          reply({ error: `hive has no method "${message.method}"` })
-          return
-        }
-        Promise.resolve()
-          .then(() => method(message.args ?? {}, source))
-          .then(
-            (result) => reply({ result }),
-            (cause: unknown) => reply({ error: cause instanceof Error ? cause.message : String(cause) }),
-          )
+        if (message.token !== expected || closed) return
+        port?.close()
+        port = from
+        from.onmessage = (received) => serve(received, from)
       },
       () => {},
     )
@@ -297,5 +344,8 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     closed = true
     disconnect()
     endProcesses()
+    // Left open for now, for the save a page sends as it goes away.
+    const last = port
+    setTimeout(() => last?.close(), PORT_LINGER_MS)
   })
 }
