@@ -1,11 +1,16 @@
 import { ref, type Ref } from 'vue'
 import { startDrag } from '@hive/ui/composables/useDragGesture'
-import { resizeSplit, type PanelBox, type PanelSplit } from '../../lib/panelLayout'
-import type { SessionPanelsCore } from '../terminal/useSessionPanels'
+import { resizeSplit, type PanelBox, type PanelLayout, type PanelSplit } from '../../lib/panelLayout'
 
 export interface TabDrop {
   panel: string
   gap: number
+}
+
+/** What a drag changes: the layout, through its owner, and a tab's place. */
+export interface PanelDragTarget {
+  apply(rule: (layout: PanelLayout) => PanelLayout): void
+  moveTabTo(tabId: string, panel: string, gap: number): void
 }
 
 const DRAG_THRESHOLD_PX = 4
@@ -46,7 +51,7 @@ function dropAt(x: number, y: number): TabDrop | null {
  * for file drops, and a Terminal or a document iframe under the pointer would
  * swallow its events. Capture keeps them coming across both.
  */
-export function usePanelDrag(panels: Pick<SessionPanelsCore, 'apply' | 'moveTabTo'>, host: Ref<HTMLElement | null>) {
+export function usePanelDrag(panels: PanelDragTarget, host: Ref<HTMLElement | null>) {
   const tabDrop = ref<TabDrop | null>(null)
 
   function startTabDrag(event: PointerEvent, tabId: string): void {

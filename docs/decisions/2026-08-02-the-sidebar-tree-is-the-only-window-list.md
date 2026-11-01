@@ -1,6 +1,6 @@
 # The sidebar tree is the only window list
 
-- **Status:** accepted
+- **Status:** point 1 superseded by [a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows](2026-11-01-a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows.md); points 2 to 4 stand
 - **Date:** 2026-08-02
 
 ## Context

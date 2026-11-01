@@ -1,24 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import IconPlus from '~icons/lucide/plus'
 import IconX from '~icons/lucide/x'
-import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { useElementSize } from '@vueuse/core'
-import type { AgentIconID } from '../../lib/agentIcon'
-import { windowIdOf } from '../../lib/windowTabs'
 import type { Panel, PanelTab } from '../../lib/panelLayout'
-import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
-import SessionAddMenu from './SessionAddMenu.vue'
-import SessionTabIcon from './SessionTabIcon.vue'
 
 const props = defineProps<{
   panel: Panel
   focused: boolean
   label: (tab: PanelTab) => string
   attention: (tab: PanelTab) => boolean
-  agent: (tab: PanelTab) => AgentIconID | undefined
-  /** The session a "+" adds to, once its row has landed. */
-  row: TerminalSessionRow | null
+  /** Window names are commands and paths, so they read in the mono face. */
+  mono?: (tab: PanelTab) => boolean
   /** The gap a dragged tab would land in, when this row is the target. */
   dropGap: number | null
   /** In a stacked split this row is the boundary, so its empty space resizes. */
@@ -30,9 +22,6 @@ const emit = defineEmits<{
   'tab-drag': [event: PointerEvent, tabId: string]
   'resize-start': [event: PointerEvent]
 }>()
-
-const menuOpen = ref(false)
-const addButton = ref<HTMLElement | null>(null)
 
 function shown(tab: PanelTab): boolean {
   return !props.panel.picking && tab.id === props.panel.activeTab
@@ -88,8 +77,8 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
           :title="label(tab)"
           @click="emit('select', tab.id)"
         >
-          <SessionTabIcon :kind="tab.kind" :agent="agent(tab)" />
-          <span v-if="!compact || shown(tab)" class="min-w-0 truncate" :class="windowIdOf(tab) ? 'font-mono' : ''">{{
+          <slot name="icon" :tab="tab" />
+          <span v-if="!compact || shown(tab)" class="min-w-0 truncate" :class="mono?.(tab) ? 'font-mono' : ''">{{
             label(tab)
           }}</span>
           <span
@@ -114,23 +103,8 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
       </div>
     </div>
 
-    <div ref="addButton" class="relative ml-0.5 flex shrink-0 items-center">
-      <IconButton
-        label="Open a tab"
-        :icon="IconPlus"
-        size="sm"
-        :active="menuOpen"
-        :data-testid="`panel-tab-add-${panel.id}`"
-        @click="menuOpen = !menuOpen"
-      />
-      <SessionAddMenu
-        v-if="menuOpen && row"
-        :row="row"
-        :panel="panel.id"
-        :anchor="addButton"
-        :ignore="[addButton]"
-        @close="menuOpen = false"
-      />
+    <div class="relative ml-0.5 flex shrink-0 items-center">
+      <slot name="add" :panel="panel" />
     </div>
 
     <slot name="actions" />

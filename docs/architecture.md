@@ -1608,9 +1608,14 @@ faces are a separate pair of settings on a separate pane — `appearance.
 font_family` and `mono_font_family`, written from Settings ▸ Appearance — and a
 terminal takes nothing from them (ADR the-app-s-faces-are-picked-from-installed-fonts-not-from-a-bundled-set).
 
-**The sidebar tree is a session's only window list.** There is no tab strip to
-keep in step with it, and a window's controls — close, rename, and the add on
-its session's row — live on the rows themselves (ADR the-sidebar-tree-is-the-only-window-list).
+**A session is a panel layout, and the tree mirrors it.** What a session shows
+in Code is a tree of splits with tabbed panels at the leaves, kept in
+`lib/panelLayout` and persisted per session id; the sidebar tree lists the same
+tabs in the same order, so a select, close or drag on either surface is one
+layout rule drawn twice (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows,
+which supersedes the one-list rule of ADR the-sidebar-tree-is-the-only-window-list).
+A window's controls — close, rename, and the add on its session's row — still
+live on the rows themselves. The layers are in [Session panels](#session-panels).
 
 The Hive session row's add menu offers a terminal or a configured agent
 profile. A peer agent window shares the session's checkout and record;
@@ -1768,7 +1773,10 @@ in place of the pane's own process. Anything unreadable answers `running`, and
 the question is asked at the moment of the close rather than swept with the
 window listing — what a pane runs changes with nothing announced.
 
-**Window order is tmux's, and a reorder is a move rather than a swap.**
+**Window order on screen is the layout's, tmux follows it, and a reorder is a
+move rather than a swap.** The tabs and the tree draw the layout's order, and a
+window tab that moves moves its window in tmux to the matching position so the
+numbered chords agree (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows).
 `POST /api/terminal/windows/move` takes a window id and the index it ends up at,
 because a reorder means a destination and not a neighbour; the core reads the
 current order and picks the tmux insertion that expresses it, anchored on a
@@ -1777,9 +1785,9 @@ from. Three rules hold it together and each answers something tmux does:
 
 - **The answer is a window set, not an acknowledgement.** The order is session
   state every attached client shares, so the move replies with what tmux settled
-  on and the strip renders that rather than the order it asked for. The tab
-  strip and the sidebar's window well are two views of that one order and either
-  can drag it, so neither holds an arrangement of its own.
+  on. A merge of two panels can leave tmux's order different from the tabs',
+  and one move cannot always repair it, so the view reads windows in tab order
+  (`inTabOrder`) rather than repairing tmux.
 - **A move is an unlink and a relink**, so tmux announces the window it moved as
   closed. `tmuxcc` suppresses that close for the window in flight — acting on it
   tears the tab and its terminal down, and the reconcile behind it can only
@@ -2018,6 +2026,53 @@ Kitty graphics bypass the cells. A stream filter in front of `term.write`
 rewrites each Kitty APC into a private OSC carrying a per-terminal nonce, and
 `lib/kitty` draws its placements on a canvas layer over the screen, anchored to
 xterm markers (ADR kitty-graphics-render-from-the-pane-stream-through-a-private-osc).
+
+#### Session panels
+
+A Code session is a **panel layout**: a tree of splits with tabbed panels at the
+leaves, as in tmux, with a tmux window or a view (Drive, Diff, Tasks) behind
+each tab (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows).
+"Pane" is tmux's word and stays with tmux's panes inside a window; the app's
+tiling leaf is a panel. The layers, and what each is allowed to know:
+
+- **`lib/panelLayout`** is the tiling and knows nothing about its tabs. A tab
+  is `{ id, kind, params? }`; the layout places, splits, merges, resizes and
+  syncs tabs, and reads neither `kind` nor `params`. Every rule returns the
+  same object when nothing changed, which is what lets `usePanelLayouts` skip
+  a storage write on a poll.
+- **`lib/windowTabs`** binds tmux's window as one tab kind: a window has
+  exactly one tab, `windowIdOf(tab)` is the only reader of how its id is
+  spelled, and `reconcileWindows` makes the window tabs mirror the session's
+  windows. Which windows exist is tmux's to say; their order on screen is the
+  layout's, and a moved tab moves its window in tmux to match.
+- **`components/terminal/panelViews.ts`** declares each view once: kind,
+  label, icon, and which sessions offer it. The picker, the add menus, the tab
+  row and the tree read it. A view is open once per session, so its tab id is
+  its kind, and a view's own state (the Drive scope) rides on its tab's
+  `params` and goes with the tab. A new view is one entry here and one branch
+  in the Code host's content slot.
+- **`useSessionPanels(source)`** keeps a layout and a `PanelWindowSource` in
+  step: window ids, the active window, closed and pending flags, and select,
+  move, render and focus. It imports neither the pool, the tree nor the
+  session ops. `useCodePanels` builds the source from the attach pool and adds
+  what only Code has: new windows and agents, and the sweep that drops the
+  layout of a session that is gone.
+- **`components/panels/PanelLayoutHost`** draws a layout: panel boxes, tab
+  rows, dividers, tab drag and split resize, with the layout rules applied
+  through the `apply` it is handed. It takes content through slots and emits
+  `close-tab` alone, because closing a window tab asks tmux first. The Code
+  host, `TerminalPaneColumn`, fills the slots: the view components, the picker,
+  the session's actions, and the floating layer.
+- **Terminals render in a floating layer the host positions, not inside a
+  panel.** An xterm element is bound for its lifetime and the pool keeps every
+  session's terminals mounted, so panel content cannot own them. The host
+  computes one geometry and exposes it to the floating slot; nothing else may
+  compute where a panel's content box is.
+
+Two rules for a view: it owns no close (the host draws the control and handles
+Escape), and one mounted behind another tab takes no keys (`keysActive`). Code
+has no right Drive pane: Drive is a tab there, and the title bar's right toggle
+names the Chats pane alone.
 
 #### Pop-up terminals
 
