@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,9 @@ const (
 	desktopDriveMCPPath = "/mcp/drive"
 	desktopCallTimeout  = 10 * time.Second
 
+	// The desktop's own bounds, copied from cmd/desktop/internal/app, which the
+	// CLI must not import (depguard). The desktop checks every call too; these
+	// only refuse before a connection is made.
 	minSplitShare = 0.2
 	maxSplitShare = 0.8
 )
@@ -110,15 +114,15 @@ func (cmd *DesktopCmd) tabOpenCmd() *cli.Command {
 		Name:      "open",
 		Usage:     "Open a tab, or start a terminal window",
 		ArgsUsage: "<drive|diff|tasks|terminal>",
-		Description: `--path applies to drive. --window places an existing terminal window; --name
-and --command start a new one.`,
+		Description: `--path applies to drive. --window places an existing terminal window; without
+it, terminal starts a new window, a shell in the session's checkout, that
+--name names.`,
 		Flags: append(desktopCallFlags(),
 			&cli.StringFlag{Name: "path", Usage: "Drive document, or a canvas by name or path (drive only)"},
 			placementFlag(false),
 			&cli.StringFlag{Name: "anchor", Usage: "Tab the placement is relative to"},
 			&cli.StringFlag{Name: "window", Usage: "Existing terminal window to place (terminal only)"},
 			&cli.StringFlag{Name: "name", Usage: "Name of a new terminal window (terminal only)"},
-			&cli.StringFlag{Name: "command", Usage: "Command a new terminal window runs (terminal only)"},
 		),
 		Action: func(ctx context.Context, c *cli.Command) error {
 			view, err := oneArg(c, "open", "<view>")
@@ -131,7 +135,7 @@ and --command start a new one.`,
 				}
 			}
 			args := map[string]any{"view": view}
-			for _, name := range []string{"path", "placement", "anchor", "window", "name", "command"} {
+			for _, name := range []string{"path", "placement", "anchor", "window", "name"} {
 				if v := c.String(name); v != "" {
 					args[name] = v
 				}
@@ -303,8 +307,11 @@ func (cmd *DesktopCmd) callTool(ctx context.Context, c *cli.Command, tool string
 	// The standalone SSE stream carries server-initiated messages, which a
 	// one-shot call never reads. Skipping it saves a request, and a negative
 	// MaxRetries stops a refused connection from retrying inside the timeout.
+	// The HTTP client carries its own timeout because Close sends the session
+	// DELETE on a context of its own, outside ctx.
 	transport := &mcp.StreamableClientTransport{
 		Endpoint:             strings.TrimRight(baseURL, "/") + desktopDriveMCPPath,
+		HTTPClient:           &http.Client{Timeout: desktopCallTimeout},
 		MaxRetries:           -1,
 		DisableStandaloneSSE: true,
 	}
@@ -320,9 +327,11 @@ func (cmd *DesktopCmd) callTool(ctx context.Context, c *cli.Command, tool string
 	}
 	args["session"] = session
 
+	// The desktop answered the connection, so a failure here is the call's
+	// own: a tool this desktop does not have, or arguments it refused.
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
 	if err != nil {
-		return desktopConnectError(baseURL, fmt.Errorf("call %s: %w", tool, err))
+		return fmt.Errorf("call %s: %w", tool, err)
 	}
 	if res.IsError {
 		return errors.New(toolResultText(res, tool))

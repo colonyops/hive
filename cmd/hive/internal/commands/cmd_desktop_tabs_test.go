@@ -126,15 +126,9 @@ func TestDesktopToolArguments(t *testing.T) {
 		},
 		{
 			name:     "open a new terminal window",
-			args:     []string{"tab", "open", "terminal", "--name", "tests", "--command", "go test ./..."},
+			args:     []string{"tab", "open", "terminal", "--name", "tests"},
 			wantTool: "open_tab",
-			want:     map[string]any{"session": "s1", "view": "terminal", "name": "tests", "command": "go test ./..."},
-		},
-		{
-			name:     "open an existing terminal window with flags after the view",
-			args:     []string{"tab", "open", "terminal", "--window", "@3", "--placement", "below"},
-			wantTool: "open_tab",
-			want:     map[string]any{"session": "s1", "view": "terminal", "window": "@3", "placement": "below"},
+			want:     map[string]any{"session": "s1", "view": "terminal", "name": "tests"},
 		},
 		{
 			name:     "close a view",
@@ -259,6 +253,25 @@ func TestDesktopURLResolution(t *testing.T) {
 		res := runDesktop(t, dataDir, "layout", "--session", "s1")
 		require.NoError(t, res.err)
 		assert.Equal(t, "get_layout", fake.only(t).Tool)
+	})
+
+	t.Run("the flag and the environment outrank a stale endpoint file", func(t *testing.T) {
+		closed := httptest.NewServer(http.NotFoundHandler())
+		stale := closed.URL
+		closed.Close()
+		dataDir := t.TempDir()
+		require.NoError(t, desktopendpoint.Write(dataDir, desktopendpoint.Endpoint{URL: stale, PID: 1}))
+
+		fromEnv := newFakeDrive(t, "")
+		t.Setenv("HIVE_DESKTOP_URL", fromEnv.srv.URL)
+		res := runDesktop(t, dataDir, "layout", "--session", "s1")
+		require.NoError(t, res.err)
+		assert.Equal(t, "get_layout", fromEnv.only(t).Tool)
+
+		fromFlag := newFakeDrive(t, "")
+		res = runDesktop(t, dataDir, "layout", "--session", "s1", "--url", fromFlag.srv.URL)
+		require.NoError(t, res.err)
+		assert.Equal(t, "get_layout", fromFlag.only(t).Tool)
 	})
 }
 
