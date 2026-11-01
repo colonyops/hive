@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -271,21 +272,67 @@ func (s *SettingsService) SetTerminalShowStatusBar(_ context.Context, show bool)
 	return Wrap(err, KindInternal, "saving settings")
 }
 
-// TitlebarApplets lists the applets the user put in the title bar, in order.
-func (s *SettingsService) TitlebarApplets(context.Context) ([]string, error) {
+// AppletSurface lists the applets the user put on a surface, in order.
+func (s *SettingsService) AppletSurface(_ context.Context, surface string) ([]string, error) {
 	cfg, err := s.store.Effective()
 	if err != nil {
 		return nil, Wrap(err, KindInternal, "reading settings")
 	}
-	return cfg.Applets.Titlebar, nil
+	list, ok := cfg.Applets.Surface(surface)
+	if !ok {
+		return nil, Errorf(KindInvalid, "no applet surface %q", surface)
+	}
+	return *list, nil
 }
 
-func (s *SettingsService) SetTitlebarApplets(_ context.Context, ids []string) error {
+func (s *SettingsService) SetAppletSurface(_ context.Context, surface string, ids []string) error {
 	_, err := s.store.Update(func(current *settings.Settings) error {
-		current.Applets.Titlebar = ids
+		list, ok := current.Applets.Surface(surface)
+		if !ok {
+			return Errorf(KindInvalid, "no applet surface %q", surface)
+		}
+		*list = ids
 		return nil
 	})
 	return Wrap(err, KindInternal, "saving settings")
+}
+
+// AppletDisabled reports whether the user turned an applet off.
+func (s *SettingsService) AppletDisabled(id string) (bool, error) {
+	cfg, err := s.store.Effective()
+	if err != nil {
+		return false, err
+	}
+	return slices.Contains(cfg.Applets.Disabled, id), nil
+}
+
+// SetAppletDisabled turns an applet off or back on.
+func (s *SettingsService) SetAppletDisabled(id string, disabled bool) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		others := slices.DeleteFunc(slices.Clone(current.Applets.Disabled), func(other string) bool { return other == id })
+		if disabled {
+			others = append(others, id)
+		}
+		if len(others) == 0 {
+			others = nil
+		}
+		current.Applets.Disabled = others
+		return nil
+	})
+	return err
+}
+
+// ForgetApplet removes every choice made about an id: its place on each surface, whether
+// it was off, and its chords, including those of commands the new applet does not declare.
+func (s *SettingsService) ForgetApplet(id string) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Applets.Forget(id)
+		maps.DeleteFunc(current.Keybindings, func(command string, _ []string) bool {
+			return command == "applet."+id || strings.HasPrefix(command, "applet."+id+".")
+		})
+		return nil
+	})
+	return err
 }
 
 func (s *SettingsService) SetTerminalPoolSize(_ context.Context, size int) error {

@@ -13,6 +13,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
+	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 
@@ -39,7 +42,11 @@ const (
 	maxArchivePathBytes  = 255
 	maxArchivePathDepth  = 16
 	maxArchiveManifest   = 4 << 10
+	maxArchiveYAML       = 256 << 10
 	maxArchiveTitleRunes = 120
+	maxArchiveCwdBytes   = 1 << 10
+	maxArchiveCommands   = 200
+	maxArchiveKeywords   = 32
 )
 
 // ErrAppletExists reports that an id is taken. Nothing replaces an applet on import.
@@ -69,15 +76,25 @@ type PackList struct {
 	LeftOut []string
 }
 
+// PackedApplet is an export, whole in memory, with what it holds.
+type PackedApplet struct {
+	Data []byte
+	List PackList
+}
+
+// archiveManifest ignores fields it does not know when read, so format 1 can grow. Format
+// rises only for a layout an older Hive would misread. Hive is the exporting version, for
+// a bug report: nothing reads it.
 type archiveManifest struct {
 	Format int    `json:"format"`
 	ID     string `json:"id"`
+	Hive   string `json:"hive,omitempty"`
 }
 
 // isLocalState matches what an applet's directory holds for this machine rather than as
 // part of the applet: its saved storage, hidden files such as .env and .git, and logs.
 func isLocalState(name string) bool {
-	return strings.HasPrefix(name, ".") || filepath.Ext(name) == ".log"
+	return strings.HasPrefix(name, ".") || strings.EqualFold(filepath.Ext(name), ".log")
 }
 
 // ListPack walks an applet's directory for what Pack would write. It follows no symlink,
@@ -134,39 +151,83 @@ func ListPack(dir string) (PackList, error) {
 	return list, nil
 }
 
-// Pack writes one applet's directory as an archive. It records no timestamp, owner or
-// path from this machine: the entries are the relative paths and their contents.
-func Pack(applet Applet, w io.Writer) error {
+// Pack reads one applet's directory into an archive. It records no timestamp, owner or
+// path from this machine: the entries are the relative paths and their contents. It runs
+// the checks an import would, so what cannot be imported fails here, for the person who
+// can fix it. The result is held in memory, so what the user reviews is what gets written.
+func Pack(applet Applet, hiveVersion string) (PackedApplet, error) {
 	list, err := ListPack(applet.Dir)
 	if err != nil {
-		return err
+		return PackedApplet{}, err
 	}
+	root, err := os.OpenRoot(applet.Dir)
+	if err != nil {
+		return PackedApplet{}, fmt.Errorf("applets: reading %s: %w", applet.Dir, err)
+	}
+	defer func() { _ = root.Close() }()
+
+	files := make([]ArchiveFile, 0, len(list.Files))
+	remaining := int64(MaxUnpackedBytes)
+	for i, file := range list.Files {
+		data, err := readPackFile(root, file.Path, remaining)
+		if err != nil {
+			return PackedApplet{}, err
+		}
+		remaining -= int64(len(data))
+		list.Files[i].Bytes = int64(len(data))
+		files = append(files, ArchiveFile{Path: file.Path, Data: data})
+	}
+	if _, err := parseArchiveApplet(applet.ID, files, hiveVersion); err != nil {
+		return PackedApplet{}, err
+	}
+
 	var buf bytes.Buffer
 	archive := zip.NewWriter(&buf)
-	manifest, err := json.Marshal(archiveManifest{Format: ArchiveFormat, ID: applet.ID})
+	manifest, err := json.Marshal(archiveManifest{Format: ArchiveFormat, ID: applet.ID, Hive: hiveVersion})
 	if err != nil {
-		return err
+		return PackedApplet{}, err
 	}
 	if err := writeZipEntry(archive, ArchiveManifestName, manifest); err != nil {
-		return err
+		return PackedApplet{}, err
 	}
-	for _, file := range list.Files {
-		data, err := os.ReadFile(filepath.Join(applet.Dir, filepath.FromSlash(file.Path)))
-		if err != nil {
-			return fmt.Errorf("applets: reading %s: %w", file.Path, err)
-		}
-		if err := writeZipEntry(archive, archiveFilesPrefix+file.Path, data); err != nil {
-			return err
+	for _, file := range files {
+		if err := writeZipEntry(archive, archiveFilesPrefix+file.Path, file.Data); err != nil {
+			return PackedApplet{}, err
 		}
 	}
 	if err := archive.Close(); err != nil {
-		return err
+		return PackedApplet{}, err
 	}
 	if buf.Len() > MaxArchiveBytes {
-		return fmt.Errorf("this applet packs to %d MB, and the limit is %d MB", buf.Len()>>20, MaxArchiveBytes>>20)
+		return PackedApplet{}, fmt.Errorf("this applet packs to %d MB, and the limit is %d MB", buf.Len()>>20, MaxArchiveBytes>>20)
 	}
-	_, err = w.Write(buf.Bytes())
-	return err
+	return PackedApplet{Data: buf.Bytes(), List: list}, nil
+}
+
+// readPackFile reopens what ListPack saw, which a running page can have changed since. The
+// root keeps a link from reaching outside the applet, O_NONBLOCK keeps a FIFO from hanging
+// the export, and the limit holds against a file that grew.
+func readPackFile(root *os.Root, rel string, limit int64) ([]byte, error) {
+	file, err := root.OpenFile(filepath.FromSlash(rel), os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, fmt.Errorf("applets: reading %s: %w", rel, err)
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("applets: reading %s: %w", rel, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%q is not a regular file. Try the export again", rel)
+	}
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil {
+		return nil, fmt.Errorf("applets: reading %s: %w", rel, err)
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("this applet is larger than the limit of %d MB", MaxUnpackedBytes>>20)
+	}
+	return data, nil
 }
 
 func writeZipEntry(archive *zip.Writer, name string, data []byte) error {
@@ -180,8 +241,9 @@ func writeZipEntry(archive *zip.Writer, name string, data []byte) error {
 
 // Unpack reads a shared file, which it treats as hostile. It writes nothing, and every
 // problem refuses the whole file. A zip has no hard links, so the entry type check covers
-// symlinks and every other special file.
-func Unpack(raw []byte) (Archive, error) {
+// symlinks and every other special file. A warning from Parse carries only names it has
+// already reduced to plain text.
+func Unpack(raw []byte, hiveVersion string) (Archive, error) {
 	if len(raw) > MaxArchiveBytes {
 		return Archive{}, fmt.Errorf("this file is larger than the %d MB limit", MaxArchiveBytes>>20)
 	}
@@ -211,6 +273,10 @@ func Unpack(raw []byte) (Archive, error) {
 		rel, ok := strings.CutPrefix(entry.Name, archiveFilesPrefix)
 		if !ok {
 			return Archive{}, fmt.Errorf("this file has an entry outside files/: %q", entry.Name)
+		}
+		// A zip made by hand with zip -r lists the folder itself.
+		if rel == "" {
+			continue
 		}
 		if err := checkArchivePath(strings.TrimSuffix(rel, "/")); err != nil {
 			return Archive{}, err
@@ -244,7 +310,7 @@ func Unpack(raw []byte) (Archive, error) {
 	if err != nil {
 		return Archive{}, err
 	}
-	applet, err := parseArchiveApplet(id, files)
+	applet, err := parseArchiveApplet(id, files, hiveVersion)
 	if err != nil {
 		return Archive{}, err
 	}
@@ -258,7 +324,7 @@ func checkArchivePath(rel string) error {
 		return errors.New("this file has an entry with no name")
 	case len(rel) > maxArchivePathBytes:
 		return fmt.Errorf("this file has a path longer than %d bytes", maxArchivePathBytes)
-	case strings.ContainsAny(rel, "\\\x00:"):
+	case strings.ContainsAny(rel, "\\\x00:") || !isPlainText(rel):
 		return fmt.Errorf("this file has an unsafe path: %q", rel)
 	case path.IsAbs(rel) || path.Clean(rel) != rel || !filepath.IsLocal(filepath.FromSlash(rel)):
 		return fmt.Errorf("this file has a path outside the applet: %q", rel)
@@ -307,9 +373,7 @@ func readZipEntry(entry *zip.File, limit int64) ([]byte, error) {
 
 func parseArchiveManifest(raw []byte) (string, error) {
 	var manifest archiveManifest
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&manifest); err != nil {
+	if err := json.Unmarshal(raw, &manifest); err != nil {
 		return "", fmt.Errorf("this file's %s is not valid: %w", ArchiveManifestName, err)
 	}
 	switch {
@@ -323,7 +387,7 @@ func parseArchiveManifest(raw []byte) (string, error) {
 	return manifest.ID, nil
 }
 
-func parseArchiveApplet(id string, files []ArchiveFile) (Applet, error) {
+func parseArchiveApplet(id string, files []ArchiveFile, hiveVersion string) (Applet, error) {
 	has := func(name string) bool {
 		return slices.ContainsFunc(files, func(file ArchiveFile) bool { return file.Path == name })
 	}
@@ -331,20 +395,81 @@ func parseArchiveApplet(id string, files []ArchiveFile) (Applet, error) {
 	if index < 0 {
 		return Applet{}, fmt.Errorf("this file has no %s", FileName)
 	}
-	applet, err := Parse(id, files[index].Data)
+	if len(files[index].Data) > maxArchiveYAML {
+		return Applet{}, fmt.Errorf("this file's %s is larger than %d KB", FileName, maxArchiveYAML>>10)
+	}
+	applet, err := Parse(id, files[index].Data, hiveVersion)
 	if err != nil {
+		if _, tooOld := errors.AsType[*UpdateHiveError](err); tooOld {
+			return Applet{}, err
+		}
 		return Applet{}, fmt.Errorf("this file's %s is not valid: %w", FileName, err)
 	}
-	if len([]rune(applet.Title)) > maxArchiveTitleRunes {
-		return Applet{}, fmt.Errorf("this file's title is longer than %d characters", maxArchiveTitleRunes)
+	if err := checkArchiveText(applet); err != nil {
+		return Applet{}, err
 	}
 	if !has(filepath.ToSlash(applet.Entry)) {
 		return Applet{}, fmt.Errorf("this file has no page %q, which its %s opens", applet.Entry, FileName)
 	}
-	if applet.Titlebar != nil && !has(filepath.ToSlash(applet.Titlebar.Entry)) {
-		return Applet{}, fmt.Errorf("this file has no page %q, which its %s shows in the title bar", applet.Titlebar.Entry, FileName)
+	for _, surface := range Surfaces {
+		if page, offered := surface.Page(applet); offered && !has(filepath.ToSlash(page)) {
+			return Applet{}, fmt.Errorf("this file has no page %q, which its %s shows in %s", page, FileName, surface.Label)
+		}
 	}
 	return applet, nil
+}
+
+// checkArchiveText bounds what the import dialog and the palette show. Those fields decide
+// whether someone trusts the file, so nothing in them may stall the page, push the warning
+// out of sight, or reorder what is on screen.
+func checkArchiveText(applet Applet) error {
+	if len(applet.Commands) > maxArchiveCommands {
+		return fmt.Errorf("this file has more than %d commands", maxArchiveCommands)
+	}
+	if len(applet.Cwd) > maxArchiveCwdBytes || !isPlainText(applet.Cwd) {
+		return errors.New("this file's cwd is too long or has characters that are not safe to show")
+	}
+	if err := checkArchiveTitle("title", applet.Title); err != nil {
+		return err
+	}
+	if !isPlainText(applet.Entry) {
+		return errors.New("this file's entry has characters that are not safe to show")
+	}
+	for _, command := range applet.Commands {
+		if err := checkArchiveTitle("command title", command.Title); err != nil {
+			return err
+		}
+		if len(command.Keywords) > maxArchiveKeywords {
+			return fmt.Errorf("this file has a command with more than %d keywords", maxArchiveKeywords)
+		}
+		for _, keyword := range command.Keywords {
+			if err := checkArchiveTitle("command keyword", keyword); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func checkArchiveTitle(what, text string) error {
+	if len([]rune(text)) > maxArchiveTitleRunes {
+		return fmt.Errorf("this file's %s is longer than %d characters", what, maxArchiveTitleRunes)
+	}
+	if !isPlainText(text) {
+		return fmt.Errorf("this file's %s has characters that are not safe to show", what)
+	}
+	return nil
+}
+
+// isPlainText refuses control characters, line separators and the invisible format
+// characters that reorder text. The zero width joiner stays, because emoji are built on it.
+func isPlainText(text string) bool {
+	if !utf8.ValidString(text) {
+		return false
+	}
+	return !strings.ContainsFunc(text, func(r rune) bool {
+		return r != '\u200d' && unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp)
+	})
 }
 
 // Install writes the archive as a new applet under root. The directory appears whole or

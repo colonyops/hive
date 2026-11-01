@@ -121,6 +121,18 @@ export interface Applet {
     "error": string;
 
     /**
+     * Enabled is false for an applet the user turned off. It stays listed, and nothing
+     * of it runs.
+     */
+    "enabled": boolean;
+
+    /**
+     * Warnings names what this Hive skipped in the file, such as a key from a later
+     * release. The applet runs without it.
+     */
+    "warnings": string[] | null;
+
+    /**
      * Titlebar is nil for an applet that offers no title bar page.
      */
     "titlebar": AppletTitlebar | null;
@@ -175,6 +187,10 @@ export interface AppletExecResult {
  * AppletExportPreview is what an export would contain, for the user to read first.
  */
 export interface AppletExportPreview {
+    /**
+     * Token names the export the list describes, so what the user saves is what they read.
+     */
+    "token": string;
     "id": string;
     "title": string;
     "fileName": string;
@@ -211,6 +227,11 @@ export interface AppletImportPreview {
     "commands": AppletCommand[] | null;
     "files": AppletFile[] | null;
     "totalBytes": number;
+
+    /**
+     * Warnings names what this Hive would skip in the file. Each is plain text.
+     */
+    "warnings": string[] | null;
 }
 
 /**

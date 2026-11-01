@@ -25,7 +25,7 @@ func TestBuiltinsParse(t *testing.T) {
 }
 
 func TestParseDefaults(t *testing.T) {
-	applet, err := Parse("thing", []byte(minimal))
+	applet, err := Parse("thing", []byte(minimal), "")
 	require.NoError(t, err)
 	assert.Equal(t, "thing", applet.ID)
 	assert.Equal(t, DefaultEntry, applet.Entry)
@@ -35,22 +35,20 @@ func TestParseRefuses(t *testing.T) {
 	for name, body := range map[string]string{
 		"wrong version": "version: 2\ntitle: T\n",
 		"no title":      "version: 1\n",
-		"unknown key":   "version: 1\ntitle: T\nview: table\n",
-		"unknown icon":  "version: 1\ntitle: T\nicon: nope\n",
+		"wrong shape":   "version: 1\ntitle: T\ntitlebar: nope\n",
 		"entry outside": "version: 1\ntitle: T\nentry: ../outside.html\n",
 		"command id":    "version: 1\ntitle: T\ncommands:\n  - {id: not.a.slug, title: C}\n",
 		"command twice": "version: 1\ntitle: T\ncommands:\n  - {id: c, title: C}\n  - {id: c, title: D}\n",
 		"command title": "version: 1\ntitle: T\ncommands:\n  - {id: c}\n",
-		"command icon":  "version: 1\ntitle: T\ncommands:\n  - {id: c, title: C, icon: nope}\n",
 		"negative size": "version: 1\ntitle: T\nwidth: -1\n",
 		"empty file":    "",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := Parse("thing", []byte(body))
+			_, err := Parse("thing", []byte(body), "")
 			require.Error(t, err)
 		})
 	}
-	_, err := Parse("Bad Name", []byte(minimal))
+	_, err := Parse("Bad Name", []byte(minimal), "")
 	require.Error(t, err)
 }
 
@@ -70,7 +68,7 @@ func write(t *testing.T, root, id, body string) {
 
 func TestStoreKeepsLastGoodAndReportsTheError(t *testing.T) {
 	root := t.TempDir()
-	store := NewStore(root)
+	store := NewStore(root, "")
 	write(t, root, "thing", minimal)
 	require.NoError(t, store.Reload())
 	applet, ok := store.Get("thing")
@@ -89,7 +87,7 @@ func TestStoreKeepsLastGoodAndReportsTheError(t *testing.T) {
 
 func TestABrokenFileKeepsTheRevisionSoARunningPageStaysUp(t *testing.T) {
 	root := t.TempDir()
-	store := NewStore(root)
+	store := NewStore(root, "")
 	write(t, root, "thing", minimal)
 	require.NoError(t, store.Reload())
 	before := onDisk(store)[0].Revision
@@ -102,7 +100,7 @@ func TestABrokenFileKeepsTheRevisionSoARunningPageStaysUp(t *testing.T) {
 
 func TestRevisionFollowsPagesButNotData(t *testing.T) {
 	root := t.TempDir()
-	store := NewStore(root)
+	store := NewStore(root, "")
 	write(t, root, "thing", minimal)
 	write(t, root, "other", minimal)
 	require.NoError(t, store.Reload())
@@ -134,7 +132,7 @@ func TestRevisionFollowsPagesButNotData(t *testing.T) {
 
 func TestStoreListsAFileThatNeverLoaded(t *testing.T) {
 	root := t.TempDir()
-	store := NewStore(root)
+	store := NewStore(root, "")
 	write(t, root, "broken", "version: 2")
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "unfinished"), 0o755))
 	require.NoError(t, store.Reload())
@@ -148,7 +146,7 @@ func TestStoreListsAFileThatNeverLoaded(t *testing.T) {
 }
 
 func TestStoreMissingRootHasOnlyBuiltins(t *testing.T) {
-	store := NewStore(filepath.Join(t.TempDir(), "absent"))
+	store := NewStore(filepath.Join(t.TempDir(), "absent"), "")
 	require.NoError(t, store.Reload())
 	assert.Empty(t, onDisk(store))
 	_, ok := store.Get(BuilderID)
@@ -157,7 +155,7 @@ func TestStoreMissingRootHasOnlyBuiltins(t *testing.T) {
 
 func TestADirectoryReplacesTheBuiltinOfItsName(t *testing.T) {
 	root := t.TempDir()
-	store := NewStore(root)
+	store := NewStore(root, "")
 	write(t, root, BuilderID, minimal)
 	require.NoError(t, store.Reload())
 	applet, ok := store.Get(BuilderID)
@@ -168,7 +166,7 @@ func TestADirectoryReplacesTheBuiltinOfItsName(t *testing.T) {
 
 func TestSavedStorageDoesNotHideABuiltin(t *testing.T) {
 	root := t.TempDir()
-	store := NewStore(root)
+	store := NewStore(root, "")
 	require.NoError(t, os.MkdirAll(filepath.Join(root, BuilderID), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, BuilderID, ".localstorage.json"), []byte("{}"), 0o600))
 	require.NoError(t, store.Reload())
@@ -183,32 +181,47 @@ func onDisk(store *Store) []Entry {
 
 func TestParseTitlebar(t *testing.T) {
 	t.Run("an applet without it has none", func(t *testing.T) {
-		a, err := Parse("thing", []byte(minimal))
+		a, err := Parse("thing", []byte(minimal), "")
 		require.NoError(t, err)
 		assert.Nil(t, a.Titlebar)
 	})
 	t.Run("defaults to the applet's page and one icon button", func(t *testing.T) {
-		a, err := Parse("thing", []byte(minimal+"\nentry: app.html\ntitlebar: {}\n"))
+		a, err := Parse("thing", []byte(minimal+"\nentry: app.html\ntitlebar: {}\n"), "")
 		require.NoError(t, err)
 		assert.Equal(t, &Titlebar{Entry: "app.html", Width: DefaultTitlebarWidth}, a.Titlebar)
 	})
 	t.Run("keeps its own page and width", func(t *testing.T) {
-		a, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  entry: bar.html\n  width: 120\n"))
+		a, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  entry: bar.html\n  width: 120\n"), "")
 		require.NoError(t, err)
 		assert.Equal(t, &Titlebar{Entry: "bar.html", Width: 120}, a.Titlebar)
 	})
 	t.Run("refuses a page outside the directory", func(t *testing.T) {
-		_, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  entry: ../bar.html\n"))
+		_, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  entry: ../bar.html\n"), "")
 		assert.ErrorContains(t, err, "titlebar.entry")
 	})
 	t.Run("refuses a negative width", func(t *testing.T) {
-		_, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  width: -1\n"))
+		_, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  width: -1\n"), "")
 		assert.ErrorContains(t, err, "titlebar.width")
 	})
 }
 
 func TestParseCommands(t *testing.T) {
-	applet, err := Parse("radio", []byte(minimal+"commands:\n  - id: next\n    title: Next station\n    icon: play\n    keywords: [skip]\n"))
+	applet, err := Parse("radio", []byte(minimal+"commands:\n  - id: next\n    title: Next station\n    icon: play\n    keywords: [skip]\n"), "")
 	require.NoError(t, err)
 	assert.Equal(t, []Command{{ID: "next", Title: "Next station", Icon: "play", Keywords: []string{"skip"}}}, applet.Commands)
+}
+
+func TestRevisionSeesAnEditInASubfolder(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "pages"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "node_modules"), 0o755))
+	page := filepath.Join(dir, "pages", "index.html")
+	require.NoError(t, os.WriteFile(page, []byte("x"), 0o600))
+	then := time.Now().Add(-time.Hour)
+	require.NoError(t, os.Chtimes(page, then, then))
+	assert.Equal(t, then.UnixMilli(), newestChange(dir))
+
+	skipped := filepath.Join(dir, "node_modules", "dep.js")
+	require.NoError(t, os.WriteFile(skipped, []byte("x"), 0o600))
+	assert.Equal(t, then.UnixMilli(), newestChange(dir), "a skipped folder does not reload the page")
 }

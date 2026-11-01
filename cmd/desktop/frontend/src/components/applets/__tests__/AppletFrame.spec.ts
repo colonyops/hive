@@ -35,19 +35,26 @@ function setup(extra: object = {}) {
   const frame = wrapper.get('iframe').element
   const source = frame.contentWindow as Window
   const replies: unknown[] = []
-  vi.spyOn(source, 'postMessage').mockImplementation((message: unknown) => {
-    replies.push(message)
-  })
-  const send = async (method: string, args: object = {}, from: unknown = source, token: unknown = 'secret') => {
-    window.dispatchEvent(
-      new MessageEvent('message', {
-        data: { hiveApplet: 1, token, id: 1, method, args },
-        source: from as Window,
-      }),
-    )
+  const port = {
+    onmessage: null as ((event: { data: unknown }) => void) | null,
+    postMessage: (message: unknown) => replies.push(message),
+    close: vi.fn(),
+  }
+  const connect = async (from: unknown = source, token: unknown = 'secret') => {
+    const event = new MessageEvent('message', {
+      data: { hiveApplet: 1, token, method: 'connect' },
+      source: from as Window,
+    })
+    Object.defineProperty(event, 'ports', { value: [port] })
+    window.dispatchEvent(event)
     await flushPromises()
   }
-  return { wrapper, frame, replies, send }
+  const send = async (method: string, args: object = {}, from: unknown = source, token: unknown = 'secret') => {
+    await connect(from, token)
+    port.onmessage?.({ data: { id: 1, method, args } })
+    await flushPromises()
+  }
+  return { wrapper, frame, replies, send, connect, port }
 }
 
 describe('AppletFrame', () => {
@@ -112,6 +119,40 @@ describe('AppletFrame', () => {
     await send('terminal', { command: 'top' })
     expect(usePopupTerminal().request.value).toMatchObject({ command: 'top', dir: '/work' })
     wrapper.unmount()
+  })
+
+  it('gives a terminal what hive.exec gets: the applet directory and a relative cwd', async () => {
+    service.Context.mockResolvedValue({ cwd: '/work', dir: '/applets/pong' })
+    const { wrapper, send } = setup()
+    await send('terminal', { command: 'top', cwd: 'sub' })
+    expect(usePopupTerminal().request.value).toMatchObject({
+      dir: '/work/sub',
+      env: ['HIVE_APPLET_DIR=/applets/pong'],
+    })
+    await send('terminal', { command: 'top', cwd: '~/x' })
+    expect(usePopupTerminal().request.value).toMatchObject({ dir: '~/x' })
+    wrapper.unmount()
+  })
+
+  it('answers nothing on the window, so a page the frame navigates to hears nothing', async () => {
+    service.Exec.mockResolvedValue({ stdout: '', stderr: '', code: 0 })
+    const { wrapper, frame, send } = setup()
+    const onWindow = vi.spyOn(frame.contentWindow as Window, 'postMessage')
+    await send('exec', { command: 'true' })
+    await wrapper.setProps({ sessionSlug: 'other' })
+    expect(onWindow).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('takes only a save after the frame has gone', async () => {
+    const { wrapper, send, port } = setup()
+    await send('ready')
+    wrapper.unmount()
+    port.onmessage?.({ data: { id: 2, method: 'saveStorage', args: { encoded: '{}' } } })
+    port.onmessage?.({ data: { id: 3, method: 'exec', args: { command: 'true' } } })
+    await flushPromises()
+    expect(service.SaveStorage).toHaveBeenCalledWith('pong', '{}')
+    expect(service.Exec).not.toHaveBeenCalled()
   })
 
   it('closes on request and stops only the processes this frame started', async () => {
@@ -256,7 +297,8 @@ describe('AppletFrame', () => {
     })
 
     it('tells the page when the session on screen changes', async () => {
-      const { wrapper, replies } = titlebar()
+      const { wrapper, replies, connect } = titlebar()
+      await connect()
       await wrapper.setProps({ sessionSlug: 'other' })
       expect(replies).toEqual([{ hiveApplet: 1, event: 'session', data: 'other' }])
       wrapper.unmount()
@@ -296,14 +338,18 @@ describe('AppletFrame', () => {
       wrapper.unmount()
     })
 
+    it('falls back on a scope this Hive does not know, and leaves out a field of the wrong type', async () => {
+      const { wrapper, send, replies } = setup()
+      await send('setCommands', { rows: [{ id: 'a', title: 'A', scope: 'nowhere', keywords: 5, hint: 7 }] })
+      expect(replies).toEqual([{ hiveApplet: 1, id: 1, result: undefined }])
+      const [row] = useApplets().pageRows.value
+      expect(row).toMatchObject({ id: 'applet:pong:a', title: 'A', scope: undefined, hint: undefined })
+      wrapper.unmount()
+    })
+
     it.each([
       ['not a list', 'nope', 'setCommands takes a list of rows.'],
       ['no title', [{ id: 'a' }], 'A palette row needs an id and a title.'],
-      [
-        'bad scope',
-        [{ id: 'a', title: 'A', scope: 'nowhere' }],
-        'A palette row\'s scope is goto or actions, not "nowhere".',
-      ],
     ])('refuses %s', async (_name, rows, error) => {
       const { wrapper, send, replies } = setup()
       await send('setCommands', { rows })
@@ -351,6 +397,7 @@ describe('AppletFrame', () => {
 
     it('carries a broadcast to the other frame and not back', async () => {
       const { first, second } = pair()
+      await second.connect()
       await first.send('broadcast', { data: { playing: true } })
       expect(second.replies).toEqual([{ hiveApplet: 1, event: 'message', data: { playing: true } }])
       expect(first.replies).toEqual([{ hiveApplet: 1, id: 1 }])
@@ -360,6 +407,7 @@ describe('AppletFrame', () => {
 
     it('carries a storage change to the other frame', async () => {
       const { first, second } = pair()
+      await second.connect()
       await first.send('storageChanged', { key: 'k', value: 'v' })
       expect(second.replies).toEqual([{ hiveApplet: 1, storage: { key: 'k', value: 'v' } }])
       first.wrapper.unmount()

@@ -5,6 +5,7 @@ package dirwatch
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -20,12 +21,16 @@ import (
 const (
 	relevantOps   = fsnotify.Create | fsnotify.Write | fsnotify.Rename | fsnotify.Remove
 	structuralOps = fsnotify.Create | fsnotify.Rename | fsnotify.Remove
+	// maxDeepWatches keeps one large tree from using up the process's file descriptors.
+	maxDeepWatches = 4096
 )
 
 type options struct {
 	debounce  time.Duration
 	component string
 	subdirs   bool
+	deep      bool
+	skip      func(dir string) bool
 }
 
 type Option func(*options)
@@ -45,6 +50,15 @@ func WithComponent(name string) Option {
 // already inside produces no event for those files.
 func WithSubdirectories() Option {
 	return func(o *options) { o.subdirs = true }
+}
+
+// WithAllSubdirectories watches subdirectories at every depth, apart from any skip names.
+func WithAllSubdirectories(skip func(dir string) bool) Option {
+	return func(o *options) {
+		o.subdirs = true
+		o.deep = true
+		o.skip = skip
+	}
 }
 
 type Watcher struct {
@@ -153,7 +167,7 @@ func (w *Watcher) handle(event fsnotify.Event) bool {
 		return false
 	}
 	changed := w.match(event.Name)
-	if w.opts.subdirs && event.Op&structuralOps != 0 && filepath.Dir(event.Name) == w.root && w.resync() {
+	if w.opts.subdirs && event.Op&structuralOps != 0 && (w.opts.deep || filepath.Dir(event.Name) == w.root) && w.resync() {
 		changed = true
 	}
 	return changed
@@ -161,7 +175,7 @@ func (w *Watcher) handle(event fsnotify.Event) bool {
 
 // resync reports whether the subdirectory watch set changed.
 func (w *Watcher) resync() bool {
-	entries, err := os.ReadDir(w.root)
+	current, err := w.subdirectories()
 	if err != nil {
 		if !os.IsNotExist(err) {
 			w.logger.Warn().Err(err).Msg("root read failed")
@@ -172,13 +186,6 @@ func (w *Watcher) resync() bool {
 		}
 		clear(w.watched)
 		return changed
-	}
-
-	current := make(map[string]bool, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			current[filepath.Join(w.root, entry.Name())] = true
-		}
 	}
 
 	changed := false
@@ -202,4 +209,42 @@ func (w *Watcher) resync() bool {
 		changed = true
 	}
 	return changed
+}
+
+func (w *Watcher) subdirectories() (map[string]bool, error) {
+	current := map[string]bool{}
+	if !w.opts.deep {
+		entries, err := os.ReadDir(w.root)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				current[filepath.Join(w.root, entry.Name())] = true
+			}
+		}
+		return current, nil
+	}
+	err := filepath.WalkDir(w.root, func(path string, entry fs.DirEntry, err error) error {
+		switch {
+		case err != nil && path == w.root:
+			return err
+		case err != nil:
+			w.logger.Debug().Err(err).Str("subdir", path).Msg("subdirectory read failed")
+			return nil
+		case !entry.IsDir() || path == w.root:
+			return nil
+		case w.opts.skip != nil && w.opts.skip(entry.Name()):
+			return filepath.SkipDir
+		case len(current) >= maxDeepWatches:
+			w.logger.Warn().Int("limit", maxDeepWatches).Msg("too many subdirectories to watch")
+			return filepath.SkipAll
+		}
+		current[path] = true
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return current, nil
 }

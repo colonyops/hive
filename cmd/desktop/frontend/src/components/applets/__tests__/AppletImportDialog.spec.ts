@@ -106,10 +106,12 @@ describe('AppletImportDialog', () => {
   })
 
   it('refuses an id in the catalog and takes nothing from the applet there', async () => {
-    service.List.mockResolvedValue([{ id: 'radio', title: 'Mine', runnable: true, titlebar: { entry: 'b', width: 1 } }])
+    service.List.mockResolvedValue([
+      { id: 'radio', title: 'Mine', runnable: true, enabled: true, titlebar: { entry: 'b', width: 1 } },
+    ])
     const applets = useApplets()
     await applets.reload()
-    applets.setInTitlebar('radio', true)
+    applets.setPlaced('titlebar', 'radio', true)
     const wrapper = open()
     await flushPromises()
     await tickTrust()
@@ -117,25 +119,57 @@ describe('AppletImportDialog', () => {
     await flushPromises()
     expect(service.ConfirmImport).not.toHaveBeenCalled()
     expect(byID('applet-import-error')?.textContent).toContain('already exists')
-    expect(applets.isInTitlebar('radio')).toBe(true)
+    expect(applets.isPlaced('titlebar', 'radio')).toBe(true)
     wrapper.unmount()
   })
 
-  it('gives the new applet nothing an old one of that id had', async () => {
+  it('leaves clearing the id to Go, and reads back what it changed', async () => {
     const applets = useApplets()
     const keybindings = useKeybindings()
-    applets.setInTitlebar('radio', true)
-    // A setting the old applet left behind: the id is not in the catalog any more.
+    const placements = vi.spyOn(applets, 'reloadPlacements')
+    applets.setPlaced('titlebar', 'radio', true)
     keybindings.removeBinding('applet.radio', 'mod+r')
-    expect(keybindings.isOverridden('applet.radio')).toBe(true)
     const wrapper = open()
     await flushPromises()
     await tickTrust()
     byID('applet-import-confirm')?.click()
     await flushPromises()
-    expect(applets.isInTitlebar('radio')).toBe(false)
-    expect(keybindings.isOverridden('applet.radio')).toBe(false)
     expect(service.ConfirmImport).toHaveBeenCalledWith('token', 'radio')
+    expect(service.CancelImport).not.toHaveBeenCalled()
+    keybindings.clearAll()
+    placements.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('takes nothing from the id when the import fails, and offers another id', async () => {
+    service.ConfirmImport.mockRejectedValue(new Error('an applet called "radio" already exists. Choose another id'))
+    const applets = useApplets()
+    applets.setPlaced('titlebar', 'radio', true)
+    const wrapper = open()
+    await flushPromises()
+    expect(byID('applet-import-id')).toBeNull()
+    await tickTrust()
+    byID('applet-import-confirm')?.click()
+    await flushPromises()
+    expect(applets.isPlaced('titlebar', 'radio')).toBe(true)
+    expect(byID('applet-import-error')?.textContent).toContain('already exists')
+    expect(byID('applet-import-id')).not.toBeNull()
+    wrapper.unmount()
+  })
+
+  it('drops the waiting file when it goes away without an answer', async () => {
+    const wrapper = open()
+    await flushPromises()
+    wrapper.unmount()
+    expect(service.CancelImport).toHaveBeenCalledWith('token')
+  })
+
+  it('says which keys this Hive ignores, and what that means', async () => {
+    const wrapper = open({ warnings: ['this version of Hive ignores "permissions"'] })
+    await flushPromises()
+    const ignored = byID('applet-import-ignored')?.textContent
+    expect(ignored).toContain('"permissions"')
+    expect(ignored).toContain('meant to limit the applet')
     wrapper.unmount()
   })
 

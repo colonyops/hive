@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -87,6 +86,9 @@ func (s *AppletsService) page(id string) (applets.Applet, error) {
 	}
 	if !s.pages {
 		return applets.Applet{}, Errorf(KindUnavailable, appletPagesUnavailable)
+	}
+	if s.isDisabled(id) {
+		return applets.Applet{}, Errorf(KindUnavailable, "%s is turned off. Turn it on in Settings", applet.Title)
 	}
 	return applet, nil
 }
@@ -166,17 +168,68 @@ func hasHiddenSegment(name string) bool {
 	})
 }
 
-var htmlHead = regexp.MustCompile(`(?i)<head[^>]*>`)
-
 func injectBridge(page []byte, token string, storage []byte) []byte {
 	// The JSON sits inside a script element, so a stored "</script>" must not end it.
 	var safe bytes.Buffer
 	json.HTMLEscape(&safe, storage)
 	script := []byte(`<script>window.__hiveToken="` + token + `";window.__hiveStorage=` + safe.String() + ";" + applets.BridgeScript() + "</script>")
-	if at := htmlHead.FindIndex(page); at != nil {
-		return append(append(append([]byte{}, page[:at[1]]...), script...), page[at[1]:]...)
+	at := bridgeInsertAt(page)
+	return append(append(append([]byte{}, page[:at]...), script...), page[at:]...)
+}
+
+// bridgeInsertAt finds the first place a script can go that is ahead of the page's own
+// and does not end the prologue: anything before a doctype would put the page in quirks
+// mode. It reads the start of the document as the parser does, so a <header> or a <head>
+// inside a comment is not mistaken for the head.
+func bridgeInsertAt(page []byte) int {
+	at := 0
+	for {
+		rest := bytes.TrimPrefix(page[at:], []byte("\xef\xbb\xbf"))
+		rest = bytes.TrimLeft(rest, " \t\r\n\f")
+		start := len(page) - len(rest)
+		end := -1
+		switch {
+		case bytes.HasPrefix(rest, []byte("<!--")):
+			if closes := bytes.Index(rest, []byte("-->")); closes >= 0 {
+				end = closes + len("-->")
+			}
+		case hasTag(rest, "<!doctype"), hasTag(rest, "<html"):
+			end = tagEnd(rest)
+		case hasTag(rest, "<head"):
+			if tag := tagEnd(rest); tag >= 0 {
+				return start + tag
+			}
+		}
+		if end < 0 {
+			return at
+		}
+		at = start + end
 	}
-	return append(script, page...)
+}
+
+func hasTag(rest []byte, name string) bool {
+	if len(rest) <= len(name) || !strings.EqualFold(string(rest[:len(name)]), name) {
+		return false
+	}
+	return strings.IndexByte(" \t\r\n\f/>", rest[len(name)]) >= 0
+}
+
+// tagEnd returns the offset just past the tag's ">", which an attribute value can contain.
+func tagEnd(rest []byte) int {
+	var quote byte
+	for i, c := range rest {
+		switch {
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			}
+		case c == '"' || c == '\'':
+			quote = c
+		case c == '>':
+			return i + 1
+		}
+	}
+	return -1
 }
 
 func readAppletStorage(dir string) []byte {

@@ -58,6 +58,7 @@ import (
 	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
 	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
+	"github.com/colonyops/hive/pkg/logutils"
 )
 
 // Config is everything App needs that it cannot resolve itself.
@@ -374,7 +375,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.popupTerminals = ptyterm.NewManager(ptyterm.ManagerOptions{Environ: a.execEnv.Environ})
 
 	a.openActions(cfg.Paths.ActionsPath, cfg.Logger)
-	a.openApplets(cfg.Paths.AppletsDir, cfg.Logger)
+	a.openApplets(cfg.Paths.AppletsDir, cfg.Build.Version, cfg.Logger)
 	a.openFlows(cfg.Paths.FlowsDir, cfg.Logger)
 	a.openAgentWorkspaces(cfg.Paths.AgentWorkspacesDir, cfg.Logger)
 	a.actionStore.SetUsageChecker(newActionUsage(a.flowStore, a.Stores.OutputCommands))
@@ -533,7 +534,15 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	})
 	a.Terminals = newTerminalsService(TerminalsDeps{Manager: a.terminals, Servers: a.serverTerminals, Starter: a.Sessions, Home: os.UserHomeDir, Logger: cfg.Logger})
 	a.PopupTerminals = newPopupTerminalsService(PopupTerminalsDeps{Manager: a.popupTerminals, Terminals: a.Terminals, Directory: a.Sessions, Catalog: a.actionStore})
-	a.Applets = newAppletsService(a.appletStore, a.execEnv.Environ, a.PopupTerminals.terminalDir)
+	a.Applets = newAppletsService(AppletsDeps{
+		Catalog:     a.appletStore,
+		Environ:     a.execEnv.Environ,
+		SessionDir:  a.PopupTerminals.terminalDir,
+		HiveVersion: cfg.Build.Version,
+		Preferences: a.Settings,
+		Updated:     func() { a.Events.Publish(a.ctx, events.AppletsUpdated{Count: len(a.appletStore.List())}) },
+		Logger:      logutils.Component(cfg.Logger, "applets"),
+	})
 	a.Diagnostics = &DiagnosticsService{paths: cfg.Paths, jobs: a.Jobs, build: cfg.Build, environ: a.execEnv.Environ, hive: a.HiveConfig, commands: a.profileCommands, webhooks: a.Webhooks, reveal: a.System.revealPath}
 	a.Tasks = newTasksService(a.hive)
 	a.Review = newReviewService(ReviewDeps{
@@ -907,8 +916,8 @@ func (a *App) openActions(path string, logger zerolog.Logger) {
 // openApplets loads the applet catalog and watches each applet's file, so an
 // agent's write appears without a restart. A watcher that fails to start costs
 // hot-reload and nothing else, as for actions.yml.
-func (a *App) openApplets(dir string, logger zerolog.Logger) {
-	a.appletStore = applets.NewStore(dir)
+func (a *App) openApplets(dir, hiveVersion string, logger zerolog.Logger) {
+	a.appletStore = applets.NewStore(dir, hiveVersion)
 	reload := func() {
 		if err := a.appletStore.Reload(); err != nil {
 			logger.Warn().Err(err).Msg("applets reload failed")
@@ -918,7 +927,7 @@ func (a *App) openApplets(dir string, logger zerolog.Logger) {
 	watcher, err := dirwatch.New(dir, applets.IsWatchedFile, func() {
 		reload()
 		a.Events.Publish(a.ctx, events.AppletsUpdated{Count: len(a.appletStore.List())})
-	}, logger, dirwatch.WithSubdirectories(), dirwatch.WithComponent("applets-watcher"))
+	}, logger, dirwatch.WithAllSubdirectories(applets.SkipsWatch), dirwatch.WithComponent("applets-watcher"))
 	if err != nil {
 		logger.Warn().Err(err).Msg("applets hot-reload unavailable")
 		return

@@ -5,7 +5,8 @@ import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import type { Applet } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { usePopupTerminal } from '../../stores/usePopupTerminal'
-import { useAppletBridge, type AppletSurface } from './useAppletBridge'
+import { SURFACES, type AppletSurface } from '../../stores/appletSurfaces'
+import { useAppletBridge } from './useAppletBridge'
 
 // Hosts one of an applet's pages. The frame has an opaque origin, so a page can do what
 // it likes to itself without reaching Hive's DOM or storage, and what it asks of the
@@ -18,12 +19,13 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ close: []; resize: [size: { width?: number; height?: number }] }>()
 
+const rules = computed(() => SURFACES[props.surface])
 const popupTerminal = usePopupTerminal()
 const frame = ref<HTMLIFrameElement | null>(null)
 
 const src = computed(() => {
   const path = (props.entry ?? props.applet.entry).split('/').map(encodeURIComponent).join('/')
-  const surface = props.surface === 'page' ? '' : `&surface=${props.surface}`
+  const surface = rules.value.panel ? '' : `&surface=${props.surface}`
   return `/__applet/${encodeURIComponent(props.applet.id)}/${path}?r=${props.applet.revision}${surface}`
 })
 
@@ -37,18 +39,18 @@ useAppletBridge({
 })
 
 // A page's Escape arrives through the bridge. This one is for focus outside the frame.
-// The title bar has nothing to close, and must not take Escape from whatever has focus.
-useEscapeToClose(() => emit('close'), { enabled: () => props.surface !== 'titlebar' && !popupTerminal.visible.value })
+// A surface with nothing to close must not take Escape from whatever has focus.
+useEscapeToClose(() => emit('close'), { enabled: () => rules.value.escapeCloses && !popupTerminal.visible.value })
 
-// A title bar page loads with the app and on every edit, and must not take focus from
-// what the user is typing in.
+// A page that loads with the app and on every edit must not take focus from what the
+// user is typing in.
 function focusFrame(): void {
-  if (props.surface !== 'titlebar') frame.value?.focus()
+  if (rules.value.takesFocus) frame.value?.focus()
 }
 </script>
 
 <template>
-  <div class="relative min-h-0 flex-1" :data-testid="surface === 'page' ? 'applet-page' : undefined">
+  <div class="relative min-h-0 flex-1" :data-testid="rules.panel ? 'applet-page' : undefined">
     <iframe
       ref="frame"
       :key="applet.revision"
@@ -57,11 +59,11 @@ function focusFrame(): void {
       sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads allow-pointer-lock"
       allow="autoplay; fullscreen; clipboard-read; clipboard-write; camera; microphone; gamepad"
       class="absolute inset-0 size-full border-0"
-      :data-testid="surface === 'page' ? 'applet-frame' : `applet-${surface}-frame`"
+      :data-testid="rules.panel ? 'applet-frame' : `applet-${surface}-frame`"
       @load="focusFrame"
     />
     <IconButton
-      v-if="surface === 'page'"
+      v-if="rules.panel"
       class="absolute top-2 right-2 opacity-40 hover:opacity-100"
       label="Close"
       :icon="IconX"

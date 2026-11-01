@@ -34,6 +34,15 @@ An applet can add its own rows to the command palette at <kbd>⌘K</kbd>:
 
 Shortcuts keep working with focus inside a page, as long as they use <kbd>⌘</kbd>, <kbd>Ctrl</kbd> or <kbd>⌥</kbd>. While a panel is open, only <kbd>⌘K</kbd>, that applet's own key, and that applet's commands run. A page can keep a shortcut for itself. See [Keyboard shortcuts](keybindings.md#applets).
 
+## Turn one off
+
+Each applet has a switch in **Settings ▸ Applets**. An applet that is off stays listed and keeps its files, saved data, title bar place and shortcuts, but it does not run, serve its pages or appear in the palette. Turning it off closes what it has open and stops what it started. In `settings.yaml`:
+
+```yaml
+applets:
+  disabled: [radio]
+```
+
 ## Put one in the title bar
 
 An applet can offer a page for the title bar, such as an indicator, music controls, or a shortcut to another part of the app. Ask for one when you ask the agent for the applet.
@@ -111,7 +120,7 @@ The page gets `window.hive`:
 | `hive.setCommands(rows)` | Replaces the palette rows this page added |
 | `hive.on('command', fn)` | Reports the id of the applet's command or row that was run |
 | `hive.openPalette(query)` | Opens the command palette on a query. `+`, `@` or `>` first picks a tab |
-| `hive.navigate(path)` | Goes to a route of the app |
+| `hive.navigate(path)` | Goes to a route of the app, such as `/settings/applets` |
 | `hive.broadcast(data)`, `hive.on('message', fn)` | Talks to the applet's other open frames |
 | `hive.on('session', fn)` | Reports the session on screen when it changes |
 | `hive.surface` | `page`, `titlebar`, or `dropdown` |
@@ -184,7 +193,7 @@ hive.on('command', (id) => {
 })
 ```
 
-A command goes to the title bar page if it is on. Otherwise the panel opens and the page there gets it, even if it starts listening after it loads. To have a command open a dropdown, call `hive.dropdown()` from the listener in the title bar page.
+A command goes to the applet's running persistent page, which today means the title bar page if it is on. Otherwise the panel opens and the page there gets it, even if it starts listening after it loads. To have a command open a dropdown, call `hive.dropdown()` from the listener in the title bar page.
 
 For rows that change, such as things only a running page knows about, call `hive.setCommands`. Each call replaces the rows that page added before, and they disappear when the page closes or reloads. They arrive through the same `hive.on('command')`. Only `id` and `title` are required.
 
@@ -219,5 +228,25 @@ addEventListener('keydown', (event) => {
 Keys with no modifier stay in the page, apart from <kbd>esc</kbd>, so typing never runs a Hive shortcut. The exception is the rest of a sequence such as <kbd>⌘G</kbd> then <kbd>i</kbd>, which goes to Hive once the first step has started it.
 
 If a file is invalid, the palette marks the applet **(invalid)** and opening it shows the error. An applet that loaded before keeps running its last valid version.
+
+### Keep an applet working across releases
+
+`version` in `applet.yaml` is the format of the file, and stays `1`. It is not a release number for your applet, and a future `release:` key would hold that.
+
+A key this Hive does not know, or an icon it does not have, is a warning: the applet opens without it, and **Settings ▸ Applets** and the palette say so. A wrong value under a key Hive knows is an error. A file with a later `version` asks you to update Hive.
+
+To need a later Hive, add `hive`. An older one then asks you to update instead of running the file:
+
+```yaml
+version: 1
+hive: ">=0.60"
+title: Music
+```
+
+Always set `hive` when a key limits what the applet may do, because an older Hive would otherwise ignore the limit and run the applet without it.
+
+Command ids and routes that `hive.command`, `hive.commands` and `hive.navigate` reach are part of this API. If Hive renames one, the old name keeps working.
+
+`close` and `resize` act on the frame that calls them, and mean what fits its surface. `open` and `dropdown` act on another surface. New verbs follow the same rule.
 
 To replace the Applet Builder with your own, create a directory named `applet-builder`.

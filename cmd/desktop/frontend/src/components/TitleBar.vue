@@ -271,7 +271,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
         />
       </div>
       <template v-if="profileName">
-        <AppletTitlebarSlot v-for="applet in applets.titlebar.value" :key="applet.id" :applet="applet" />
+        <AppletTitlebarSlot v-for="applet in applets.placed.titlebar?.value" :key="applet.id" :applet="applet" />
       </template>
       <button
         v-if="profileName"

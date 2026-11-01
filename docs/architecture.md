@@ -1419,8 +1419,11 @@ opened in `AppletFrame`
   `AppletsService` through `postMessage` and `AppletFrame`, and runs what it is asked.
   The opaque-origin frame protects the app from a page's mistakes. Do not add
   permission checks here without revisiting the ADR.
-- **The bridge answers only the applet's own pages.** `AppletFrame` checks a token that
-  only pages served by `Asset` hold, because a navigated frame keeps its window.
+- **The bridge answers only the applet's own pages.** A page hands `useAppletBridge` a
+  `MessagePort` with a token only pages served by `Asset` hold, and everything after that
+  crosses the port, because a navigated frame keeps its window. The page sends the token
+  only when its parent is the top window, and `guardWailsRuntime` refuses a bound-method
+  call that is not the app's own.
 - **A page's files are served by `appletAssets` on the Wails asset handler**, so in the
   native build nothing outside the webview can reach them. The server build's asset
   handler is a TCP listener, so it refuses applets outside the e2e harness
@@ -1429,13 +1432,22 @@ opened in `AppletFrame`
   the applet, or closing the app ends the process. Settings › Applets lists what is running.
 - **A page can appear on more than one surface.** `AppletFrame` with `useAppletBridge` is
   the whole of a surface: the panel (`AppletHost`), the title bar slot
-  (`AppletTitlebarSlot`), and the dropdown under it (`AppletDropdown`). A new extension
-  point is another host, not another bridge. The user turns the title bar on per applet
-  (`applets.titlebar` in `settings.yaml`), because that page runs without being opened.
+  (`AppletTitlebarSlot`), and the dropdown under it (`AppletDropdown`). What differs between
+  them is one row of `SURFACES` (`stores/appletSurfaces.ts`). A new extension point is that
+  row, a row of `applets.Surfaces`, a list in `settings.AppletsSettings`, and a host, not
+  another bridge. The user turns the title bar on per applet (`applets.titlebar` in
+  `settings.yaml`), because that page runs without being opened.
+- **`applet.yaml` reads forward.** A key or icon this Hive does not know is a warning on the
+  entry (`applets/compat.go`). A wrong shape under a known key is an error, and a later
+  `version` or an unmet `hive:` refuses with "update Hive".
+- **A user can turn an applet off** (`applets.disabled`). `AppletsService.page` refuses it, so
+  it serves nothing and its bridge is dead, and the store drops its palette rows.
 - **Sharing goes through `applets/archive.go`.** `Unpack` treats a `.hiveapplet` as hostile
   and writes nothing. `AppletsService` holds the checked file in memory under a token until
   the user confirms in `AppletImportDialog`, and `Install` renames a finished directory into
-  place. It never replaces an applet.
+  place. It never replaces an applet. `ConfirmImport` then clears what `settings.yaml` holds
+  for the id. An export is read whole by `ExportPreview` and held under a token, so what
+  `Export` writes is what the user reviewed.
 - **A built-in lives in the binary** (`applets/builtin/`). The Applet Builder is one. Its
   page sends answers, and the prompt's words stay in `prompts/templates/applets.tmpl`.
 - **Applets are a palette scope.** They have their own tab, and while filtering All, one

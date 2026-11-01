@@ -59,9 +59,10 @@ in the title bar, and its page runs them.
 
 A page is not limited to the panel. An applet with `titlebar:` offers a second page, a
 frame in a slot of the title bar with its own width, and that page can open a dropdown
-frame under the bar. The surfaces share one bridge and differ only in what hosts them, so
-the next place an applet can appear is another host of `AppletFrame` and a key in
-`applet.yaml`.
+frame under the bar. The surfaces share one bridge and differ only in what hosts them and in
+one row of a table of rules, so the next place an applet can appear is that row, another host
+of `AppletFrame`, and a key in `applet.yaml`. Settings, the import dialog and import cleanup
+read the list of surfaces, so a new one needs no change there.
 
 **The user turns a title bar page on, in Settings or as `applets.titlebar` in
 `settings.yaml`.** It loads with the app and runs until it is turned off, so a file on disk
@@ -80,21 +81,51 @@ each frame's save writes the whole store.
 `settings.yaml`. A row from `hive.setCommands` is data a running page knows about, such as a
 list of stations, and its life is the page's. This is the split the rest of the palette has
 between commands and object rows. A declared command carries no default chord, for the same
-reason as `applet.<id>`. It goes to one frame, the title bar page if it is running, because
+reason as `applet.<id>`. It goes to one frame, the running persistent surface, because
 that frame is the one that keeps running and two frames acting on it would run it twice.
-With no page to take it, the panel opens, and the bridge holds the command until the page
+Today that is the title bar page. With no page to take it, the panel opens, and the bridge holds the command until the page
 listens.
 
 **Sharing is where the first rule stops holding.** This ADR's case for no restrictions is
 that an applet is written by or for the person who runs it. An import breaks that, so it
 gets the one warning in this design, and it still adds no permission, since an applet that
 someone trusts has the access any applet has. A `.hiveapplet` is a zip holding
-`hive-applet.json`, with a format number and the id, and the files under `files/`. The file
+`hive-applet.json`, with a format number, the id and the exporting Hive version, and the files
+under `files/`. The file
 is hostile until the user confirms: it is checked whole in memory and installed by renaming
 a finished directory in, so nothing lands early or partly. Import never replaces an applet,
-because a replace is how someone else's update overwrites what a user trusted, and it clears
-any title bar place or chord the id still has in `settings.yaml`, so a file cannot inherit
-what the user gave another applet of that name.
+because a replace is how someone else's update overwrites what a user trusted, and once
+installed it clears any place, off switch or chord the id still has in `settings.yaml`, in Go,
+so a file cannot inherit what the user gave another applet of that name.
+
+**Shared files have to keep working, so both formats read forward.** A file outlives the Hive
+that wrote it, and hosts in the wild keep whatever parser they shipped with. `hive-applet.json`
+ignores fields it does not know, and `format` rises only for a layout an older Hive would
+misread. In `applet.yaml`, `version` is the format and never the applet's own release. A key this
+Hive does not know, at any depth, or an unknown icon or palette scope, is a warning and is
+skipped. A wrong shape under a known key stays an error. A later `version` or an unmet `hive:`
+refuses with "update Hive". Warnings quote a name only if it is plain ASCII, and skipped values
+reach nothing, so a hostile file cannot use one to reach a path, a command or the page.
+
+**Ignoring a key must not fail open on a limit.** If a later Hive adds a key that restricts an
+applet, an older Hive that ignores it would run the applet with more power than its author
+meant. So a key that limits what an applet can do must ship with `hive:` set to the release that
+understands it, or with a new `version`, and an older Hive then refuses the file rather than
+running it without the limit. `hive:` itself fails closed: a value this Hive cannot read refuses
+the file. An applet with no such key has full access, as every applet has today. The import
+dialog lists every skipped key and says a limit among them would not apply.
+
+**Hive's command ids and routes are part of the applet API.** A shared page names them through
+`hive.command`, `hive.commands` and `hive.navigate`, so a rename keeps the old name as an alias. A
+snapshot test of the set makes a rename a visible diff. The other option was a curated list that
+refuses the rest: it would cost less to keep, and take away most of what those calls are for.
+
+**Verbs follow one rule.** `close` and `resize` act on the frame that calls them, and mean what
+fits its surface. `open` and `dropdown` act on another surface.
+
+**A user can turn an applet off,** in Settings or as `applets.disabled`. This is a choice about
+the applet and not a limit on it: the applet is off or has its full access. Its bridge stops
+answering and its pages stop being served, in Go, so the rule holds whatever the frontend does.
 
 ## Consequences
 
@@ -107,6 +138,9 @@ what the user gave another applet of that name.
 - A page cannot `fetch` another HTML file of its own, because that response has no CORS
   header. It can navigate to one.
 - Cookies and IndexedDB do not work in an opaque origin.
+- `window.hive` rejects every call in a page nested inside another, including an applet's own.
+- A page a frame navigates to gets no reply or event, because those cross a `MessagePort` that
+  stays with the page that opened it.
 - Keys in a frame do not reach the app's keymap, so the injected script forwards Escape
   and any command, control or option chord, and a page keeps one by calling `preventDefault`.
   One click into a page would otherwise leave every shortcut dead, and the chord that opened

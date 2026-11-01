@@ -2,11 +2,14 @@
 // A directory can hold more than its author remembers, so the export shows what goes in
 // before anything leaves.
 import { Dialogs } from '@wailsio/runtime'
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import BaseModal from '@hive/ui/components/ui/BaseModal.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
-import { Export } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
+import {
+  CancelExport,
+  Export,
+} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
 import type { AppletExportPreview } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { useToasts } from '../../composables/useToasts'
 import { formatBytes } from '../../lib/bytes'
@@ -19,6 +22,12 @@ const WIDTH = 520
 const { showToast } = useToasts()
 const busy = ref(false)
 const error = ref('')
+let saved = false
+
+// The export waits in memory until it is saved, however this dialog goes away.
+onBeforeUnmount(() => {
+  if (!saved) void CancelExport(props.preview.token)
+})
 
 async function save(): Promise<void> {
   busy.value = true
@@ -26,7 +35,8 @@ async function save(): Promise<void> {
   try {
     const dest = await Dialogs.SaveFile({ Filename: props.preview.fileName, Title: `Export ${props.preview.title}` })
     if (!dest) return
-    await Export(props.preview.id, dest)
+    await Export(props.preview.token, dest)
+    saved = true
     showToast(`Exported ${props.preview.title}`, { severity: 'success', body: dest })
     emit('close')
   } catch (e) {

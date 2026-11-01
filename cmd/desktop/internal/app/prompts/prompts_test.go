@@ -368,6 +368,6 @@ func TestAppletsPromptSchemaParses(t *testing.T) {
 	require.True(t, found)
 	body, _, found := strings.Cut(rest, "```")
 	require.True(t, found)
-	_, err = applets.Parse("containers", []byte(body))
+	_, err = applets.Parse("containers", []byte(body), "")
 	require.NoError(t, err)
 }

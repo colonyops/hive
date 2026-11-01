@@ -6,16 +6,13 @@
 package applets
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/icons"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/slug"
 )
 
@@ -36,10 +33,16 @@ type Applet struct {
 	// built-in has its page in the binary, and keeps only its saved storage here.
 	Dir string `yaml:"-"`
 	// Builtin marks an applet Hive ships. A directory of the same name replaces it.
-	Builtin bool   `yaml:"-"`
-	Version int    `yaml:"version"`
-	Title   string `yaml:"title"`
-	Icon    string `yaml:"icon,omitempty"`
+	Builtin bool `yaml:"-"`
+	// Warnings names what this Hive skipped in the file, such as a key from a later
+	// release. The applet still runs.
+	Warnings []string `yaml:"-"`
+	// Version is the format of this file, not a release of the applet.
+	Version int `yaml:"version"`
+	// Hive is the oldest Hive that can run this applet, as ">=0.60".
+	Hive  string `yaml:"hive,omitempty"`
+	Title string `yaml:"title"`
+	Icon  string `yaml:"icon,omitempty"`
 	// Cwd pins the applet's commands to one directory. Empty follows the session on
 	// screen, and the applet's own directory without one.
 	Cwd string `yaml:"cwd,omitempty"`
@@ -76,19 +79,27 @@ type Titlebar struct {
 	Width int `yaml:"width,omitempty"`
 }
 
-// Parse decodes one applet.yaml strictly, so a misspelled key is an error an
-// agent can read rather than a feature that silently does nothing.
-func Parse(id string, raw []byte) (Applet, error) {
+// Parse decodes one applet.yaml for the Hive at hostVersion. It reads forward: a later
+// release's key or icon is a warning, so an applet written there still opens here. A wrong
+// shape under a key this Hive knows stays an error, and so does a file that says this Hive
+// is too old (ADR applets-are-web-pages-with-full-access-to-the-machine).
+func Parse(id string, raw []byte, hostVersion string) (Applet, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return Applet{}, err
+	}
+	if doc.Kind == 0 {
+		return Applet{}, errors.New("the file is empty")
+	}
+	if err := checkCompatibility(&doc, hostVersion); err != nil {
+		return Applet{}, err
+	}
 	var a Applet
-	dec := yaml.NewDecoder(bytes.NewReader(raw))
-	dec.KnownFields(true)
-	if err := dec.Decode(&a); err != nil {
-		if errors.Is(err, io.EOF) {
-			return Applet{}, errors.New("the file is empty")
-		}
+	if err := doc.Decode(&a); err != nil {
 		return Applet{}, err
 	}
 	a.ID = id
+	a.Warnings = a.dropUnknownIcons(ignoredKeys(&doc))
 	if a.Entry == "" {
 		a.Entry = DefaultEntry
 	}
@@ -112,8 +123,6 @@ func (a Applet) Validate() error {
 		return fmt.Errorf("directory name %q is not a valid slug (lowercase letters, digits, hyphens, starting with a letter or digit, max %d chars)", a.ID, slug.MaxLen)
 	case strings.TrimSpace(a.Title) == "":
 		return errors.New("title is required")
-	case !icons.ValidLauncher(a.Icon):
-		return fmt.Errorf("unknown icon %q", a.Icon)
 	case !filepath.IsLocal(a.Entry):
 		return fmt.Errorf("entry must be a path inside the applet's directory, got %q", a.Entry)
 	case a.Width < 0 || a.Height < 0:
@@ -136,8 +145,6 @@ func (a Applet) validateCommands() error {
 			return fmt.Errorf("commands[%d].id %q is used twice", i, command.ID)
 		case strings.TrimSpace(command.Title) == "":
 			return fmt.Errorf("commands[%d].title is required", i)
-		case !icons.ValidLauncher(command.Icon):
-			return fmt.Errorf("commands[%d].icon: unknown icon %q", i, command.Icon)
 		}
 		seen[command.ID] = true
 	}

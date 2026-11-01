@@ -65,12 +65,16 @@ test.describe("applets", { tag: [tag.applets] }, () => {
 
   test("settings lists the applets and what they have running", async ({
     page,
+    browserName,
   }) => {
     await page.goto("/#/settings/applets");
     await expect(
-      page.getByTestId("settings-applet-applet-builder-state"),
-    ).toHaveText("Ready");
+      page.getByTestId("settings-applet-applet-builder"),
+    ).toContainText("Ships with Hive");
     await expect(page.getByTestId("settings-applet-e2e-page")).toBeVisible();
+    await page
+      .getByTestId("settings-applets")
+      .screenshot({ path: screenshotPath(`applets-settings-${browserName}.png`) });
     await expect(
       page.getByTestId("settings-applets-processes-empty"),
     ).toBeVisible();
@@ -134,6 +138,41 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await page.getByTestId("applet-page-close").click();
     await openApplet(page, "E2E page");
     await expect(frame.locator("#result")).toContainText('"bypassed":false');
+  });
+
+  test("an applet that is off does not run, serve or show in the palette", async ({
+    page,
+  }) => {
+    await page.goto("/#/settings/applets");
+    const enabled = page.getByTestId("settings-applet-e2e-page-enabled");
+    await enabled.click();
+    await expect(page.getByTestId("settings-applet-e2e-page-state")).toHaveText(
+      "Off",
+    );
+    await expect(page.getByTestId("settings-applet-e2e-page-open")).toBeDisabled();
+    expect(
+      (await page.request.get("/__applet/e2e-page/index.html")).status(),
+    ).toBe(404);
+
+    await page.keyboard.press("Meta+k");
+    await page.getByTestId("command-palette-input").fill("E2E page");
+    await expect(
+      page
+        .getByTestId("command-palette-command-title")
+        .filter({ hasText: "E2E page" }),
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    await enabled.click();
+    await expect(page.getByTestId("settings-applet-e2e-page-state")).toHaveCount(
+      0,
+    );
+    expect(
+      (await page.request.get("/__applet/e2e-page/index.html")).status(),
+    ).toBe(200);
+    await openApplet(page, "E2E page");
+    const frame = page.frameLocator('[data-testid="applet-frame"]');
+    await expect(frame.locator("#result")).toContainText('"file":"written"');
   });
 
   test("a foreign page framing the applet's own page gets no token", async ({

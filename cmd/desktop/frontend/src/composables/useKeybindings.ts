@@ -609,6 +609,8 @@ export function useKeybindings() {
     resetToDefault,
     clearAll,
     isOverridden,
+    /** Reads the overrides again, after something other than this composable changed them. */
+    reload: hydrateFromSettings,
     conflicts,
     stepSequence,
     /** Module state; the hint pill reads this to know what's pending. */

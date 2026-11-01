@@ -3,9 +3,12 @@ package app
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
@@ -33,6 +36,12 @@ type Applet struct {
 	Revision int64  `json:"revision"`
 	Runnable bool   `json:"runnable"`
 	Error    string `json:"error"`
+	// Enabled is false for an applet the user turned off. It stays listed, and nothing
+	// of it runs.
+	Enabled bool `json:"enabled"`
+	// Warnings names what this Hive skipped in the file, such as a key from a later
+	// release. The applet runs without it.
+	Warnings []string `json:"warnings"`
 	// Titlebar is nil for an applet that offers no title bar page.
 	Titlebar *AppletTitlebar `json:"titlebar"`
 	Commands []AppletCommand `json:"commands"`
@@ -69,8 +78,27 @@ type AppletsService struct {
 	// gets, including the refusal for a session on a server.
 	sessionDir func(context.Context, string) (string, error)
 
-	importMu      sync.Mutex
+	// hiveVersion is this build's, which a file can say is too old and an export records.
+	hiveVersion string
+	preferences appletPreferences
+	updated     func()
+	logger      zerolog.Logger
+
+	shareMu       sync.Mutex
 	pendingImport *pendingAppletImport
+	pendingExport *pendingAppletExport
+}
+
+// appletPreferences is what the user chose about applets, kept in settings.yaml.
+type appletPreferences interface {
+	AppletDisabled(id string) (bool, error)
+	SetAppletDisabled(id string, disabled bool) error
+	ForgetApplet(id string) error
+}
+
+type pendingAppletExport struct {
+	token string
+	data  []byte
 }
 
 type pendingAppletImport struct {
@@ -78,14 +106,54 @@ type pendingAppletImport struct {
 	archive applets.Archive
 }
 
-func newAppletsService(catalog *applets.Store, environ func(context.Context) []string, sessionDir func(context.Context, string) (string, error)) *AppletsService {
+// AppletsDeps is what AppletsService needs from the rest of the app.
+type AppletsDeps struct {
+	Catalog     *applets.Store
+	Environ     func(context.Context) []string
+	SessionDir  func(context.Context, string) (string, error)
+	HiveVersion string
+	Preferences appletPreferences
+	// Updated tells every window the catalog changed.
+	Updated func()
+	Logger  zerolog.Logger
+}
+
+func newAppletsService(deps AppletsDeps) *AppletsService {
 	return &AppletsService{
-		catalog:    catalog,
-		environ:    environ,
-		sessionDir: sessionDir,
-		pages:      buildServesAppletPages || settings.E2EHarnessMarkerValid(),
-		tokens:     map[string]string{},
+		catalog:     deps.Catalog,
+		environ:     deps.Environ,
+		sessionDir:  deps.SessionDir,
+		hiveVersion: deps.HiveVersion,
+		preferences: deps.Preferences,
+		updated:     deps.Updated,
+		logger:      deps.Logger,
+		pages:       buildServesAppletPages || settings.E2EHarnessMarkerValid(),
+		tokens:      map[string]string{},
 	}
+}
+
+// isDisabled reads settings.yaml. A file that cannot be read leaves applets running, as it
+// leaves the rest of the app, rather than stopping every applet over one bad edit.
+func (s *AppletsService) isDisabled(id string) bool {
+	disabled, err := s.preferences.AppletDisabled(id)
+	if err != nil {
+		s.logger.Warn().Err(err).Str("applet", id).Msg("could not read whether an applet is turned off")
+		return false
+	}
+	return disabled
+}
+
+// SetEnabled turns an applet on or off. The frames an applet has open close when the
+// frontend hears the catalog changed, and what they started stops with them.
+func (s *AppletsService) SetEnabled(id string, enabled bool) error {
+	if !slices.ContainsFunc(s.catalog.List(), func(entry applets.Entry) bool { return entry.Applet.ID == id }) {
+		return Errorf(KindNotFound, "unknown applet %q", id)
+	}
+	if err := s.preferences.SetAppletDisabled(id, !enabled); err != nil {
+		return Wrap(err, KindInternal, "saving settings")
+	}
+	s.updated()
+	return nil
 }
 
 // List returns the catalog, broken files included.
@@ -98,6 +166,7 @@ func (s *AppletsService) List(context.Context) []Applet {
 			continue
 		}
 		applet := appletOf(entry)
+		applet.Enabled = !s.isDisabled(entry.Applet.ID)
 		if !s.pages {
 			applet.Runnable = false
 			applet.Error = appletPagesUnavailable
@@ -123,6 +192,7 @@ func appletOf(entry applets.Entry) Applet {
 		Entry:    a.Entry,
 		Width:    a.Width,
 		Height:   a.Height,
+		Warnings: a.Warnings,
 		Commands: make([]AppletCommand, 0, len(a.Commands)),
 	}
 	for _, command := range a.Commands {

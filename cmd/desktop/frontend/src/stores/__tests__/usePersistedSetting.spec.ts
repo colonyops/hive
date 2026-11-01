@@ -69,6 +69,15 @@ describe('usePersistedSetting', () => {
     expect(write).toHaveBeenCalledWith(4)
   })
 
+  it('reads the stored value again on reload', async () => {
+    const read = vi.fn().mockResolvedValueOnce(3).mockResolvedValueOnce(9)
+    const setting = usePersistedSetting({ initial: 0, read, write: vi.fn(), label: 'the size' })
+    await setting.whenHydrated()
+    expect(setting.value.value).toBe(3)
+    await setting.reload()
+    expect(setting.value.value).toBe(9)
+  })
+
   it('lets a write made during the read win over the read result', async () => {
     const read = deferred<number>()
     const setting = usePersistedSetting({

@@ -1,18 +1,23 @@
-import { computed, readonly, ref, shallowReadonly, shallowRef, watch } from 'vue'
-import { List } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
+import { computed, readonly, ref, shallowReadonly, shallowRef, watch, type ComputedRef } from 'vue'
 import {
-  SetTitlebarApplets,
-  TitlebarApplets,
+  List,
+  SetEnabled,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
+import {
+  AppletSurface as ReadAppletSurface,
+  SetAppletSurface,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
 import type { Applet } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
-import type { AppletSurface } from '../components/applets/useAppletBridge'
 import type { Command } from '../composables/useCommands'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { appletCommandID, setAppletCommands } from '../keybindings/catalog'
 import { launcherIconComponent } from '../lib/launcherIcons'
+import { PLACEABLE_SURFACES, SURFACES, type AppletSurface } from './appletSurfaces'
 import { defineStore } from './defineStore'
 import { usePersistedSetting } from './usePersistedSetting'
 import { useResource } from './useResource'
+
+export const BUILDER_ID = 'applet-builder'
 
 export interface AppletDropdown {
   applet: Applet
@@ -25,7 +30,7 @@ export interface AppletDropdown {
 // One open frame of an applet, as the rest of the applet and the palette reach it.
 export interface AppletFrameHandle {
   surface: AppletSurface
-  window: () => Window | null | undefined
+  post: (message: object) => void
   deliverCommand: (id: string) => void
 }
 
@@ -44,6 +49,11 @@ export interface AppletPageRow {
 // The applets on disk and the one on screen. Each is a bindable command, so this
 // is what turns a file an agent wrote into a palette row and a chord (ADR
 // applets-are-web-pages-with-full-access-to-the-machine).
+function appletPaletteTitle(applet: Applet): string {
+  if (!applet.runnable) return `${applet.title} (invalid)`
+  return applet.warnings?.length ? `${applet.title} (warnings)` : applet.title
+}
+
 export const useApplets = defineStore('applets', () => {
   const catalog = useResource(async () => (await List()) ?? [], {
     initial: [] as Applet[],
@@ -54,28 +64,54 @@ export const useApplets = defineStore('applets', () => {
   // cannot switch sessions behind the overlay.
   const sessionSlug = ref('')
 
-  const open = computed(() => catalog.data.value.find((applet) => applet.id === openID.value) ?? null)
+  const open = computed(() => catalog.data.value.find((applet) => applet.id === openID.value && applet.enabled) ?? null)
 
-  const titlebarIDs = usePersistedSetting<string[]>({
-    initial: [],
-    read: async () => (await TitlebarApplets()) ?? [],
-    write: (ids) => SetTitlebarApplets(ids),
-    label: 'the title bar applets',
-  })
-  const titlebar = computed(() =>
-    titlebarIDs.value.value.flatMap((id) => {
-      const applet = catalog.data.value.find((candidate) => candidate.id === id)
-      return applet?.runnable && applet.titlebar ? [applet] : []
-    }),
+  const placements = new Map(
+    PLACEABLE_SURFACES.map(({ surface, placement }) => [
+      surface,
+      usePersistedSetting<string[]>({
+        initial: [],
+        read: async () => (await ReadAppletSurface(surface)) ?? [],
+        write: (ids) => SetAppletSurface(surface, ids),
+        label: `the applets in ${placement.where}`,
+      }),
+    ]),
   )
 
-  function isInTitlebar(id: string): boolean {
-    return titlebarIDs.value.value.includes(id)
+  function placedIDs(surface: AppletSurface): readonly string[] {
+    return placements.get(surface)?.value.value ?? []
   }
 
-  function setInTitlebar(id: string, shown: boolean): void {
-    const others = titlebarIDs.value.value.filter((other) => other !== id)
-    titlebarIDs.set(shown ? [...others, id] : others)
+  // Each surface's applets, in the user's order, among those that can run.
+  const placed = Object.fromEntries(
+    PLACEABLE_SURFACES.map(({ surface, placement }) => [
+      surface,
+      computed(() =>
+        placedIDs(surface).flatMap((id) => {
+          const applet = catalog.data.value.find((candidate) => candidate.id === id)
+          return applet?.runnable && applet.enabled && placement.offeredPage(applet) ? [applet] : []
+        }),
+      ),
+    ]),
+  ) as Partial<Record<AppletSurface, ComputedRef<Applet[]>>>
+
+  function isPlaced(surface: AppletSurface, id: string): boolean {
+    return placedIDs(surface).includes(id)
+  }
+
+  function setPlaced(surface: AppletSurface, id: string, shown: boolean): void {
+    const others = placedIDs(surface).filter((other) => other !== id)
+    placements.get(surface)?.set(shown ? [...others, id] : others)
+  }
+
+  // Go owns what an import clears, so what it changed is read back from settings.yaml.
+  async function reloadPlacements(): Promise<void> {
+    await Promise.all([...placements.values()].map((placement) => placement.reload()))
+  }
+
+  async function setEnabled(id: string, enabled: boolean): Promise<void> {
+    await SetEnabled(id, enabled)
+    await catalog.reload()
   }
 
   const dropdown = shallowRef<AppletDropdown | null>(null)
@@ -117,7 +153,7 @@ export const useApplets = defineStore('applets', () => {
     const connected = frames.get(id) ?? new Set()
     frames.set(id, connected)
     connected.add(handle)
-    if (handle.surface === 'page') {
+    if (SURFACES[handle.surface].panel) {
       commandsForPanel.get(id)?.forEach((command) => handle.deliverCommand(command))
       commandsForPanel.delete(id)
     }
@@ -127,19 +163,17 @@ export const useApplets = defineStore('applets', () => {
     }
   }
 
-  function otherFrames(id: string, self: Window): Window[] {
-    return [...(frames.get(id) ?? [])].flatMap((handle) => {
-      const frame = handle.window()
-      return frame && frame !== self ? [frame] : []
-    })
+  function otherFrames(id: string, self: AppletFrameHandle): AppletFrameHandle[] {
+    return [...(frames.get(id) ?? [])].filter((handle) => handle !== self)
   }
 
-  // The title bar page first, because it is the one that keeps running: a panel over it
-  // may come and go, and two frames acting on one command would run it twice.
+  // The running persistent surface first, because it is the one that keeps running: a panel
+  // over it may come and go, and two frames acting on one command would run it twice.
   function deliverCommand(id: string, command: string): boolean {
     const connected = [...(frames.get(id) ?? [])]
     const target =
-      connected.find((handle) => handle.surface === 'titlebar') ?? connected.find((handle) => handle.surface === 'page')
+      connected.find((handle) => SURFACES[handle.surface].persistent) ??
+      connected.find((handle) => SURFACES[handle.surface].panel)
     target?.deliverCommand(command)
     return target !== undefined
   }
@@ -185,31 +219,39 @@ export const useApplets = defineStore('applets', () => {
   watch(
     catalog.data,
     (applets) => {
+      if (openID.value !== null && !applets.some((applet) => applet.id === openID.value && applet.enabled)) {
+        openID.value = null
+      }
+      if (dropdown.value && !applets.some((applet) => applet.id === dropdown.value?.applet.id && applet.enabled)) {
+        dropdown.value = null
+      }
       // Unbound until the user says otherwise: a file an agent wrote must not claim a
       // chord the app never offered it.
       setAppletCommands(
-        applets.flatMap((applet) => [
-          {
-            id: appletCommandID(applet.id),
-            title: applet.runnable ? applet.title : `${applet.title} (invalid)`,
-            group: 'Applets',
-            keywords: ['applet', applet.id],
-            icon: launcherIconComponent(applet.icon),
-            defaultCombos: [],
-            context: 'global' as const,
-            scope: 'applets' as const,
-          },
-          ...(applet.runnable ? (applet.commands ?? []) : []).map((command) => ({
-            id: appletCommandID(applet.id, command.id),
-            title: command.title,
-            group: applet.title,
-            keywords: ['applet', applet.id, applet.title, ...(command.keywords ?? [])],
-            icon: launcherIconComponent(command.icon || applet.icon),
-            defaultCombos: [],
-            context: 'global' as const,
-            scope: 'applets' as const,
-          })),
-        ]),
+        applets
+          .filter((applet) => applet.enabled)
+          .flatMap((applet) => [
+            {
+              id: appletCommandID(applet.id),
+              title: appletPaletteTitle(applet),
+              group: 'Applets',
+              keywords: ['applet', applet.id],
+              icon: launcherIconComponent(applet.icon),
+              defaultCombos: [],
+              context: 'global' as const,
+              scope: 'applets' as const,
+            },
+            ...(applet.runnable ? (applet.commands ?? []) : []).map((command) => ({
+              id: appletCommandID(applet.id, command.id),
+              title: command.title,
+              group: applet.title,
+              keywords: ['applet', applet.id, applet.title, ...(command.keywords ?? [])],
+              icon: launcherIconComponent(command.icon || applet.icon),
+              defaultCombos: [],
+              context: 'global' as const,
+              scope: 'applets' as const,
+            })),
+          ]),
       )
     },
     { immediate: true },
@@ -240,9 +282,11 @@ export const useApplets = defineStore('applets', () => {
     reload: catalog.reload,
     toggle,
     close,
-    titlebar,
-    isInTitlebar,
-    setInTitlebar,
+    placed,
+    isPlaced,
+    setPlaced,
+    reloadPlacements,
+    setEnabled,
     // Shallow: the anchor is a DOM node, whose methods refuse a readonly proxy.
     dropdown: shallowReadonly(dropdown),
     toggleDropdown,

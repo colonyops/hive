@@ -20,6 +20,10 @@ export function AppearanceSettings(): $CancellablePromise<$models.AppearanceSett
     return $Call.ByID(1460512141);
 }
 
+export function AppletSurface(surface: string): $CancellablePromise<string[] | null> {
+    return $Call.ByID(4174280925, surface);
+}
+
 export function CodeViews(): $CancellablePromise<$models.SessionView[] | null> {
     return $Call.ByID(3760072883);
 }
@@ -58,6 +62,10 @@ export function OnboardingSettings(): $CancellablePromise<$models.OnboardingSett
 
 export function ReviewLabels(): $CancellablePromise<$models.ReviewLabel[] | null> {
     return $Call.ByID(2130138097);
+}
+
+export function SetAppletSurface(surface: string, ids: string[] | null): $CancellablePromise<void> {
+    return $Call.ByID(1667772573, surface, ids);
 }
 
 export function SetCanvasFontSize(size: string): $CancellablePromise<void> {
@@ -162,12 +170,4 @@ export function SetTerminalShowWindows(show: boolean): $CancellablePromise<void>
  */
 export function SetTheme(theme: string): $CancellablePromise<void> {
     return $Call.ByID(4185056443, theme);
-}
-
-export function SetTitlebarApplets(ids: string[] | null): $CancellablePromise<void> {
-    return $Call.ByID(3425349082, ids);
-}
-
-export function TitlebarApplets(): $CancellablePromise<string[] | null> {
-    return $Call.ByID(2178995738);
 }

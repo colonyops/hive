@@ -19,7 +19,7 @@ Settings shows or changes:
 - the feeds pinned to the menu bar;
 - connected source accounts and the local webhook listener;
 - actions and quick terminals;
-- the [applets](applets.md) Hive found, which of them are in the title bar, and what they have running;
+- the [applets](applets.md) Hive found, which of them are on or in the title bar, and what they have running;
 - the agent workspace folder location;
 - the addresses of the MCP servers Hive hosts, and how to add one to your own agent;
 - the optional Hive CLI compatibility config;

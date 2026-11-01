@@ -225,9 +225,9 @@ func TestDrainHoldsBackAHalfWrittenCharacter(t *testing.T) {
 }
 
 func TestBuiltinServesFromTheBinaryAndKeepsStorageOnDisk(t *testing.T) {
-	store := applets.NewStore(t.TempDir())
+	store := applets.NewStore(t.TempDir(), "")
 	require.NoError(t, store.Reload())
-	service := newAppletsService(store, func(context.Context) []string { return os.Environ() }, func(context.Context, string) (string, error) { return "", nil })
+	service := newAppletsService(testAppletDeps(store, func(context.Context, string) (string, error) { return "", nil }))
 	service.pages = true
 
 	asset, err := service.Asset(applets.BuilderID, "")
@@ -242,9 +242,9 @@ func TestBuiltinServesFromTheBinaryAndKeepsStorageOnDisk(t *testing.T) {
 }
 
 func TestServerBuildHidesBuiltins(t *testing.T) {
-	store := applets.NewStore(t.TempDir())
+	store := applets.NewStore(t.TempDir(), "")
 	require.NoError(t, store.Reload())
-	service := newAppletsService(store, func(context.Context) []string { return os.Environ() }, func(context.Context, string) (string, error) { return "", nil })
+	service := newAppletsService(testAppletDeps(store, func(context.Context, string) (string, error) { return "", nil }))
 	service.pages = false
 	assert.Empty(t, service.List(t.Context()))
 }
@@ -262,4 +262,31 @@ func TestProcessesListsWhatIsRunning(t *testing.T) {
 
 	service.KillSpawns([]string{handle})
 	assert.Empty(t, service.Processes())
+}
+
+func TestInjectBridgePlacement(t *testing.T) {
+	script := "<script>window.__hiveToken="
+	for name, tc := range map[string]struct{ page, before, after string }{
+		"a head":                 {"<!doctype html><html><head><title>t</title></head>", "<head>", "<title>"},
+		"no head keeps doctype":  {"<!doctype html><div>bar</div>", "<!doctype html>", "<div>"},
+		"a header is not a head": {"<!doctype html><script>hive.exec()</script><header class=x>", "<!doctype html>", "<script>hive.exec"},
+		"a head in a comment":    {"<!doctype html><!-- <head> --><p>hi", "<!-- <head> -->", "<p>"},
+		"a real head after one":  {"<!-- <head> --><!DOCTYPE html><HTML lang=en><HEAD id='a>b'><meta>", "<HEAD id='a>b'>", "<meta>"},
+		"nothing but text":       {"hello", "", "hello"},
+		"an unclosed comment":    {"<!-- never ends", "", "<!-- never"},
+		"a byte order mark":      {"\xef\xbb\xbf<!doctype html><p>", "<!doctype html>", "<p>"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out := string(injectBridge([]byte(tc.page), "tok", []byte("{}")))
+			at := strings.Index(out, script)
+			require.GreaterOrEqual(t, at, 0)
+			assert.True(t, strings.HasSuffix(out[:at], tc.before), "%q comes before the script in %q", tc.before, out[:at])
+			end := strings.LastIndex(out, "</script>")
+			if tc.after != "" {
+				assert.Contains(t, out[at:], tc.after)
+				assert.Less(t, at, strings.Index(out, tc.after), "the page's %q comes after the bridge", tc.after)
+			}
+			assert.Positive(t, end)
+		})
+	}
 }
