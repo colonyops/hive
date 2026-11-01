@@ -6,7 +6,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/internal/domain/drive"
 )
 
@@ -166,36 +165,5 @@ func (s *DriveService) DeleteDocument(ctx context.Context, session, path string)
 	if err := d.Delete(ctx, caller.space, path, caller.author); err != nil {
 		return documentError(err, caller.space, path)
 	}
-	return nil
-}
-
-// OpenDocument asks the UI to show path in the Drive tab of the calling chat
-// or Code session, adding the tab behind the tab in front when none is open.
-// Like SetDriveOpen it is UI intent, applied only while the user is viewing
-// that chat or session.
-func (s *DriveService) OpenDocument(ctx context.Context, session, path string) error {
-	d, caller, err := s.open(ctx, session)
-	if err != nil {
-		return err
-	}
-	if caller.space.Kind == drive.SpaceKindShared {
-		return Errorf(KindInvalid, "the shared space has no Drive tab to open or close; the user reads it in the Drive page")
-	}
-	if path != "" {
-		if err := drive.ValidatePath(path); err != nil {
-			return documentError(err, caller.space, path)
-		}
-		isDir, err := s.isDir(d, caller.space, path)
-		if err != nil {
-			return err
-		}
-		if isDir {
-			return Errorf(KindInvalid, "%q is a folder; open a document inside it", path)
-		}
-	}
-	s.events.Publish(ctx, events.DriveToggleRequested{
-		Session: caller.author.Session, HiveSession: caller.author.HiveSession,
-		Space: caller.space.Key, Path: path, Open: true,
-	})
 	return nil
 }

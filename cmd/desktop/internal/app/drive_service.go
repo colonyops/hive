@@ -244,42 +244,6 @@ func (s *DriveService) ListCanvases(ctx context.Context, session string) ([]driv
 	return s.listCanvases(ctx, d, caller.space)
 }
 
-// SetDriveOpen asks the UI to open or close the Drive tab of the calling chat
-// or Code session. Opening adds the tab behind the tab in front when none is
-// open. It is UI intent, applied only while the user is viewing that chat or
-// session, so an agent can surface what it made without taking the screen
-// from the user. Opening with a name requires that canvas to exist; empty
-// leaves the tab's own pick.
-func (s *DriveService) SetDriveOpen(ctx context.Context, session, name string, open bool) error {
-	d, caller, err := s.open(ctx, session)
-	if err != nil {
-		return err
-	}
-	if caller.space.Kind == drive.SpaceKindShared {
-		return Errorf(KindInvalid, "the shared space has no Drive tab to open or close; the user reads it in the Drive page")
-	}
-	pinned := ""
-	if open && name != "" {
-		path, err := canvasPath(name)
-		if err != nil {
-			return err
-		}
-		c, ok, err := d.LoadCanvas(ctx, caller.space, path)
-		if err != nil {
-			return driveError(err, name)
-		}
-		if !ok {
-			return canvasNotFound(name)
-		}
-		pinned = c.Path
-	}
-	s.events.Publish(ctx, events.DriveToggleRequested{
-		Session: caller.author.Session, HiveSession: caller.author.HiveSession,
-		Space: caller.space.Key, Path: pinned, Open: open,
-	})
-	return nil
-}
-
 // GetCanvasAt is the UI's read: by space key and canvas name or path. A
 // canvas nothing was written under answers empty rather than an error, so
 // the Drive tab never flashes a failure for one deleted while it was open. html

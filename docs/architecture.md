@@ -2085,10 +2085,13 @@ Stop does. Layouts live in their own store, `useChatPanelLayouts`
 (`hive.chats.panel-layouts`), keyed by chat id: a chat pinned to Code shares
 its id, and Code's sweep drops keys it does not know. Closing or deleting a
 chat forgets its layout; an agent that exits keeps it. The Agents sidebar does
-not mirror a chat's tabs. `components/panels/useSessionDrive.ts` is the one
-way into a session's Drive tab from outside it, for both hosts: `?doc` on the
-host's route opens the tab and is consumed, and an agent's `drive:toggle`
-adds the tab quietly or closes it, honored only for the session on screen.
+not mirror a chat's tabs. `components/panels/useSessionTabs.ts` is the one
+way into a session's tabs from outside it, for both hosts: `?doc` on the
+host's route opens the Drive tab and is consumed, and an agent's `session:tab`
+opens a view behind the tab in front (`addTabQuietly`) or beside it in a split
+(`addTabBeside`), or closes it, honored only for the session on screen and
+only for a view the host offers. The wire says `drive`; the frontend's kind is
+`docs`, and the composable is the one place that maps between them.
 
 #### Pop-up terminals
 
@@ -2461,19 +2464,23 @@ session or hive session) of a write. The desktop forwarder passes it through
 and publishes nothing of its own: one change, one event. `wailsui.drive`
 subscribes with `events.Buffer(64)`, not `Coalesce()`, because the payload is a
 per-space delta with an author and must not be dropped. It reaches the
-frontend as `drive:updated`, and a request to open or close the session's
-Drive tab as `drive:toggle`. Whether the tab is open is UI intent, not stored
-state, so `drive:toggle` carries the whole message, and the frontend honors it
-only for the chat or session in view. The agent learns its own session id from
+frontend as `drive:updated`, and a request to open or close one of the
+session's tabs as `session:tab` (view, path, placement, open). Whether a tab
+is open is UI intent, not stored state, so `session:tab` carries the whole
+message, buffered rather than coalesced because two asks for two views are
+both intents, and the frontend honors it only for the chat or session in
+view. The agent learns its own session id from
 `HIVE_AGENT_SESSION`, injected at launch via `tmux new-session -e`.
 
 **Agents write through `mcpsrv`.** One app-hosted server, `hive-drive`, mounts
 at `/mcp/drive` and at `/mcp/canvas`; the old address keeps answering for
-existing agent configurations. It has sixteen tools: the ten canvas tools,
+existing agent configurations. It has fifteen tools: the eight canvas tools,
 whose `canvas` argument is a name or a path (`reports/perf` files at
-`reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), and six document
-tools: `list_documents`, `read_document`, `write_document`, `move_document`,
-`delete_document` and `open_document`. `read_document` reads markdown, html
+`reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), five document
+tools: `list_documents`, `read_document`, `write_document`, `move_document`
+and `delete_document`, and two tab tools: `open_tab` (`view` is `drive`,
+`diff` or `tasks`; `path`, for `drive`, is a document path or a canvas name;
+`placement` is `behind` or `beside`) and `close_tab`. `read_document` reads markdown, html
 and any other UTF-8 text file, and answers `not_found` for hive state files
 (`kv.json`, `kv.json.lock`). An app-hosted catalogue entry declares
 its mount as `Descriptor.RuntimePath`, joined with the live loopback base when
@@ -2484,8 +2491,8 @@ configuration, and Settings ▸ MCP servers lists it.
 
 **A session resolves to a space.** The `session` argument is `global`, a chat's
 record id, or the caller's working directory. `global` is the `shared` space,
-which sits beside no session and so has no Drive tab: `open_document`,
-`open_canvas` and `close_canvas` refuse it.
+which sits beside no session and so has no tabs: `open_tab` and `close_tab`
+refuse it, and they refuse `diff` and `tasks` for a chat, which has only Drive.
 The `@global` store is gone, but canvas tool results still name the shared
 space's owner `@global`, so agents and `hive://canvas` links that match on it
 keep working.

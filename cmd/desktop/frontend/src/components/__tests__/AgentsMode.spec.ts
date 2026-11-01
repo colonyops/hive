@@ -159,7 +159,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 }))
 
 // Captures every useWailsEvent registration so a test can fire drive:updated
-// and drive:toggle by hand.
+// and session:tab by hand.
 const wailsEvents = vi.hoisted(() => ({
   handlers: [] as Array<[string, (event: { data: unknown }) => void]>,
   fire(name: string, data: unknown) {
@@ -1128,23 +1128,43 @@ describe('AgentsMode', () => {
     expect(router.currentRoute.value.query.chat).toBeUndefined()
   })
 
-  // open_document, open_canvas and close_canvas arrive as drive:toggle. Only
-  // the open chat's ask is honored -- an agent must never drag the user away
-  // from another chat. An agent's tab arrives behind the terminal.
-  it('opens and closes the Drive tab on drive:toggle for the open chat only', async () => {
+  // open_tab and close_tab arrive as session:tab. Only the open chat's ask is
+  // honored -- an agent must never drag the user away from another chat. An
+  // agent's tab arrives behind the terminal unless it asks to sit beside it.
+  it('opens and closes the Drive tab on session:tab for the open chat only', async () => {
     const { wrapper } = await mountWithOpenChat()
 
-    wailsEvents.fire('drive:toggle', { session: '99', path: '', open: true })
+    wailsEvents.fire('session:tab', { session: '99', view: 'drive', path: '', placement: 'behind', open: true })
     await flushPromises()
     expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(false)
 
-    wailsEvents.fire('drive:toggle', { session: '7', path: 'plans/x.md', open: true })
+    wailsEvents.fire('session:tab', {
+      session: '7',
+      view: 'drive',
+      path: 'plans/x.md',
+      placement: 'behind',
+      open: true,
+    })
     await flushPromises()
     expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(true)
 
-    wailsEvents.fire('drive:toggle', { session: '7', path: '', open: false })
+    wailsEvents.fire('session:tab', { session: '7', view: 'drive', path: '', placement: 'behind', open: false })
     await flushPromises()
     expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(false)
+  })
+
+  it('shows the Drive tab beside the terminal when the agent asks for it, and ignores a Diff tab', async () => {
+    const { wrapper } = await mountWithOpenChat()
+
+    wailsEvents.fire('session:tab', { session: '7', view: 'diff', path: '', placement: 'beside', open: true })
+    await flushPromises()
+    expect(wrapper.findAll('section[data-panel]')).toHaveLength(1)
+
+    wailsEvents.fire('session:tab', { session: '7', view: 'drive', path: '', placement: 'beside', open: true })
+    await flushPromises()
+    expect(wrapper.findAll('section[data-panel]')).toHaveLength(2)
+    expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="agents-session-pane"]').attributes('style') ?? '').not.toContain('display: none')
   })
 
   it('opens the Drive tab on a ?doc link and shows the terminal again when it closes', async () => {

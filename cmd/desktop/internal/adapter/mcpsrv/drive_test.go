@@ -163,39 +163,59 @@ func TestCanvasNamesFileUnderPaths(t *testing.T) {
 	assert.ElementsMatch(t, []string{"reports/2026-10/perf", "plan"}, names)
 }
 
-func TestOpenDocumentPublishesTheToggle(t *testing.T) {
+func TestTabToolsPublishTheRequest(t *testing.T) {
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
 	var mu sync.Mutex
-	var toggles []events.DriveToggleRequested
-	cancel := events.Subscribe(t.Context(), core.Events, "test.drive-toggle", events.Buffer(8), func(_ context.Context, e events.DriveToggleRequested) {
+	var tabs []events.SessionTabRequested
+	cancel := events.Subscribe(t.Context(), core.Events, "test.session-tab", events.Buffer(8), func(_ context.Context, e events.SessionTabRequested) {
 		mu.Lock()
 		defer mu.Unlock()
-		toggles = append(toggles, e)
+		tabs = append(tabs, e)
 	})
 	t.Cleanup(cancel)
+	waitTabs := func(n int) []events.SessionTabRequested {
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return len(tabs) == n
+		}, 2*time.Second, 5*time.Millisecond)
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]events.SessionTabRequested(nil), tabs...)
+	}
 
-	text := callErr(t, session, "open_document", map[string]any{"session": id, "path": "plans/ghost.md"})
+	text := callErr(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "path": "plans/ghost.md"})
 	assert.Contains(t, text, "not_found", "the document must exist")
 
 	var wrote documentView
 	call(t, session, "write_document", map[string]any{"session": id, "path": "plans/auth.md", "body": "x"}, &wrote)
-	var pane struct {
+	var opened struct {
 		Requested string `json:"requested"`
+		View      string `json:"view"`
+		Path      string `json:"path"`
 	}
-	call(t, session, "open_document", map[string]any{"session": id, "path": "plans/auth.md"}, &pane)
-	assert.Equal(t, "open", pane.Requested)
+	call(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "path": "plans/auth.md", "placement": "beside"}, &opened)
+	assert.Equal(t, "open", opened.Requested)
+	assert.Equal(t, "plans/auth.md", opened.Path)
 
-	require.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return len(toggles) == 1
-	}, 2*time.Second, 5*time.Millisecond)
-	mu.Lock()
-	defer mu.Unlock()
-	assert.Equal(t, events.DriveToggleRequested{Session: id, Space: "workspaces/demo", Path: "plans/auth.md", Open: true}, toggles[0])
+	var closed struct {
+		Requested string `json:"requested"`
+		View      string `json:"view"`
+	}
+	call(t, session, "close_tab", map[string]any{"session": id, "view": "drive"}, &closed)
+	assert.Equal(t, "close", closed.Requested)
 
-	text = callErr(t, session, "open_document", map[string]any{"session": "global", "path": "x.md"})
-	assert.Contains(t, text, "invalid", "the shared space has no Drive tab")
+	assert.Equal(t, []events.SessionTabRequested{
+		{Session: id, Space: "workspaces/demo", View: "drive", Path: "plans/auth.md", Placement: "beside", Open: true},
+		{Session: id, Space: "workspaces/demo", View: "drive"},
+	}, waitTabs(2))
+
+	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "diff"})
+	assert.Contains(t, text, "invalid", "a chat has only a Drive tab")
+	text = callErr(t, session, "open_tab", map[string]any{"session": "global", "view": "drive"})
+	assert.Contains(t, text, "invalid", "the shared space has no tabs")
+	text = callErr(t, session, "close_tab", map[string]any{"session": "global", "view": "drive"})
+	assert.Contains(t, text, "invalid", "the shared space has no tabs")
 }

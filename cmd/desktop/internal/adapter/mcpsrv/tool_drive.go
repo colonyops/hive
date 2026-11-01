@@ -50,7 +50,7 @@ func (ctrl *DriveController) registerDocuments(srv *mcp.Server) {
 			"link does nothing. It is not sanitized like a canvas html block, " +
 			"and the canvas hv- classes do not apply. The body is capped at 2 MiB. A .canvas.json path is refused: write " +
 			"canvas blocks with put_blocks. Answers with the entry as stored. No Drive tab opens by itself; use " +
-			"open_document when the user should look now.",
+			"open_tab when the user should look now.",
 	}, ctrl.WriteDocument)
 
 	addTool(srv, &mcp.Tool{
@@ -68,16 +68,6 @@ func (ctrl *DriveController) registerDocuments(srv *mcp.Server) {
 			"is no recursive delete and no trash. Answers with the path it deleted. Only delete what you made obsolete " +
 			"yourself; the user may be keeping the rest.",
 	}, ctrl.DeleteDocument)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "open_document",
-		Title: "Open a document in the Drive tab",
-		Description: "Ask Hive to show a document in the Drive tab of this chat or Code session when you give its path (it must " +
-			"exist). With no Drive tab open, Hive adds one behind the tab in front, with an unseen dot; it never takes the " +
-			"screen from what the user is doing. Like open_canvas it applies only while the user is viewing this chat or " +
-			"session. Call it when you finish something worth reading now, not on every write. The shared space has no " +
-			"Drive tab to open; the user reads it in the Drive page.",
-	}, ctrl.OpenDocument)
 }
 
 type listDocumentsInput struct {
@@ -106,11 +96,6 @@ type moveDocumentInput struct {
 type deleteDocumentInput struct {
 	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
 	Path    string `json:"path"    jsonschema:"The document, or empty folder, to delete."`
-}
-
-type openDocumentInput struct {
-	Session string `json:"session"        jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
-	Path    string `json:"path,omitempty" jsonschema:"Document to show, by its path in the space; must exist. Omit to leave the Drive tab on its own pick."`
 }
 
 type documentEntry struct {
@@ -193,13 +178,6 @@ func (ctrl *DriveController) DeleteDocument(ctx context.Context, _ *mcp.CallTool
 		return nil, deleteDocumentResult{}, ctrl.toolError(err)
 	}
 	return nil, deleteDocumentResult{Deleted: in.Path}, nil
-}
-
-func (ctrl *DriveController) OpenDocument(ctx context.Context, _ *mcp.CallToolRequest, in openDocumentInput) (*mcp.CallToolResult, driveOpenResult, error) {
-	if err := ctrl.core.Drive.OpenDocument(ctx, in.Session, in.Path); err != nil {
-		return nil, driveOpenResult{}, ctrl.toolError(err)
-	}
-	return nil, driveOpenResult{Requested: "open"}, nil
 }
 
 func documentEntryFrom(e drive.Entry) documentEntry {

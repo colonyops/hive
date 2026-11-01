@@ -68,17 +68,20 @@ type DriveChanged struct {
 	HiveSession string
 }
 
-// DriveToggleRequested reports an agent asked to open or close the Drive tab
-// of its chat or Code session. Unlike the wake-up events the payload is the
+// SessionTabRequested reports an agent asked to open or close one tab beside
+// its chat or Code session. Unlike the wake-up events the payload is the
 // whole message: whether a tab is open is UI intent, not stored state to
-// re-read. Path pins one document of Space when opening; empty leaves the
-// tab's own pick. The asker is a chat (Session) or a hive session (HiveSession),
-// never both.
-type DriveToggleRequested struct {
+// re-read. The asker is a chat (Session) or a hive session (HiveSession),
+// never both. View is drive, diff or tasks. Path pins one document of Space
+// in the Drive view; empty leaves the tab's own pick. Placement is behind or
+// beside and applies only when opening; an empty one on a close is unused.
+type SessionTabRequested struct {
 	Session     string
 	HiveSession string
 	Space       string
+	View        string
 	Path        string
+	Placement   string
 	Open        bool
 }
 
@@ -121,7 +124,7 @@ func (ActionsUpdated) eventName() string         { return "actions.updated" }
 func (MenuBarUpdated) eventName() string         { return "menu-bar.updated" }
 func (AgentWorkspacesUpdated) eventName() string { return "agent-workspaces.updated" }
 func (DriveChanged) eventName() string           { return "drive.changed" }
-func (DriveToggleRequested) eventName() string   { return "drive.toggle-requested" }
+func (SessionTabRequested) eventName() string    { return "session.tab-requested" }
 func (SchedulesUpdated) eventName() string       { return "schedules.updated" }
 func (ConnectionUpdated) eventName() string      { return "connection.updated" }
 func (NotificationRaised) eventName() string     { return "notification.raised" }

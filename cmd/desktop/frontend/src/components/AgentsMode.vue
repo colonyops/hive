@@ -35,8 +35,8 @@ import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { useChatPanels } from './agents/useChatPanels'
-import { useSessionDrive } from './panels/useSessionDrive'
-import { docsScopeOf, viewOfTab, viewTab, withDocsScope } from './terminal/panelViews'
+import { useSessionTabs } from './panels/useSessionTabs'
+import { docsScopeOf, viewOfTab, viewTab, withDocsScope, type SessionViewKind } from './terminal/panelViews'
 import { useDriveActivity } from '../stores/useDriveActivity'
 import { useNewSession } from '../composables/useNewSession'
 import { usePaintedActive } from '../composables/usePaintedActive'
@@ -45,6 +45,7 @@ import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXter
 import { workspaceSpaceKey, type DriveScope } from '../lib/drive'
 import { agentIconID } from '../lib/agentIcon'
 import {
+  addTabBeside,
   addTabQuietly,
   closePanel,
   closeTab,
@@ -180,7 +181,7 @@ const panels = useChatPanels({
 const layout = panels.layout
 const openChat = computed(() => recents.value.find((row) => row.id === openSessionId.value) ?? null)
 const chatAgent = computed(() => (openChat.value ? agentIconID(openChat.value.agent) : undefined))
-const chatViews = ['docs'] as const
+const chatViews: readonly SessionViewKind[] = ['docs']
 const paneShown = computed(() => (paneWindowId.value ? !!panels.windowPanel.value : true))
 const paneRegionPanel = computed(() => panels.windowPanel.value ?? panels.statusPanel.value)
 
@@ -225,14 +226,19 @@ function scopeAt(path: string | null): DriveScope | null {
   return base && path ? { ...base, path } : base
 }
 
-useSessionDrive('agents', driveTarget, () => props.active, {
+useSessionTabs('agents', driveTarget, () => props.active, {
   ready: () => paneStatus.value === 'live' && openSessionId.value === routeChatId.value,
-  open: (path) => panels.apply((current) => withDocsScope(openTab(current, viewTab('docs')), scopeAt(path))),
-  arrive: (path) => panels.apply((current) => withDocsScope(addTabQuietly(current, viewTab('docs')), scopeAt(path))),
-  close: () =>
+  reveal: (path) => panels.apply((current) => withDocsScope(openTab(current, viewTab('docs')), scopeAt(path))),
+  open: (view, path, placement) => {
+    if (!chatViews.includes(view)) return
+    const place = placement === 'beside' ? addTabBeside : addTabQuietly
+    panels.apply((current) => withDocsScope(place(current, viewTab('docs')), scopeAt(path)))
+  },
+  close: (view) =>
     panels.apply((current) => {
-      const panel = panelWithTab(current, viewTab('docs').id)
-      return panel ? closeTab(current, panel.id, viewTab('docs').id) : current
+      const tab = viewTab(view)
+      const panel = panelWithTab(current, tab.id)
+      return panel ? closeTab(current, panel.id, tab.id) : current
     }),
 })
 

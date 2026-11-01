@@ -240,19 +240,6 @@ export interface DocumentWire {
 }
 
 /**
- * DriveToggle is the drive:toggle payload: whose Drive tab to open or close, a
- * chat's or a hive session's, and the document to pin when opening (empty
- * leaves the tab's pick).
- */
-export interface DriveToggle {
-    "session": string;
-    "hiveSession": string;
-    "space": string;
-    "path": string;
-    "open": boolean;
-}
-
-/**
  * DriveWrite is the drive:updated payload: the space and the document paths
  * that changed, and who wrote them when an agent did through the desktop, a
  * chat (Session) or a hive session (HiveSession), never both. Both are empty
@@ -740,6 +727,21 @@ export interface SessionSummary {
     "canvasOwner": string;
     "tags": string[] | null;
     "createdAt": string;
+}
+
+/**
+ * SessionTab is the session:tab payload: whose tab to open or close, a chat's
+ * or a hive session's, which view, and for the Drive view the document to pin
+ * (empty leaves the tab's pick). Placement is behind or beside.
+ */
+export interface SessionTab {
+    "session": string;
+    "hiveSession": string;
+    "space": string;
+    "view": string;
+    "path": string;
+    "placement": string;
+    "open": boolean;
 }
 
 /**

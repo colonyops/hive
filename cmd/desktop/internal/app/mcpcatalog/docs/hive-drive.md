@@ -31,8 +31,8 @@ It is one of three things:
 - Outside a chat and a hive session it is the word `global`, and the space is
   `shared`. A directory inside no hive session is `not_found`, not global:
   pass `global` yourself. The shared space sits beside no chat or session and has
-  no Drive tab, so `open_document`, `open_canvas` and `close_canvas` refuse it;
-  the user reads it in the Drive page.
+  no tabs, so `open_tab` and `close_tab` refuse it; the user reads it in the
+  Drive page.
 
 ## Paths and kinds
 
@@ -99,16 +99,35 @@ either key in the tool. Copy and save include all of them in a YAML header.
   Answers with the entry at its new path.
 - `delete_document`: delete a document, a canvas, or an empty folder, and
   answer with the path deleted. There is no recursive delete and no trash.
-- `open_document`: ask to show a document in this chat's or session's Drive
-  tab, the one at `path` when you give one. It must exist. With no Drive tab
-  open, Hive adds one behind the tab in front, with an unseen dot; it never
-  takes the screen from what the user is doing.
 
 A write while a Drive tab is open behind another tab lights a dot on that tab.
 With no Drive tab open, a write shows nothing until the user opens Drive, so
-call `open_document` when something is finished and worth reading now, not on
-every write. Opening is best-effort: it applies only while the user is
-viewing this chat or session, and there is no acknowledgment either way.
+call `open_tab` when something is finished and worth reading now, not on every
+write.
+
+## Tabs
+
+Drive, Diff and Tasks open as tabs beside the terminal of a chat or Code
+session. Two tools ask for them:
+
+- `open_tab`: open the tab for a `view`. `drive` is the session's documents
+  and canvases, `diff` is the Code session's changes, `tasks` is its task
+  board. A chat has only `drive`; `diff` and `tasks` belong to a Code session.
+  `path` is for `drive` only: a document by its path in the space, or a canvas
+  by name or path (`perf` is `canvases/perf.canvas.json`). It must exist, and a
+  folder is refused. Omit it to leave the tab on its own pick. `placement` is
+  `behind` (the default) or `beside`. `behind` adds the tab behind the tab in
+  front, with an unseen dot, and never takes the screen. `beside` splits the
+  panel in front and opens the tab next to it, so the user sees it at once; use
+  it for a result the user asked to see side by side with the terminal. Both
+  leave the keyboard where it is, and a tab that is already open stays where it
+  is. The answer names the `view` and the resolved `path`, empty when none was
+  given.
+- `close_tab`: close the tab for a `view` wherever it sits. Documents and
+  canvases are untouched.
+
+Both are best-effort: they apply only while the user is viewing this chat or
+session, and there is no acknowledgment either way.
 
 ## Canvases
 
@@ -150,9 +169,6 @@ The canvas tools:
   order.
 - `list_canvases`: every canvas in the space, including ones earlier chats
   made, most recently updated first.
-- `open_canvas` / `close_canvas`: ask to show a canvas in the Drive tab,
-  optionally pinned to one canvas, or to close the tab (documents are
-  untouched). They follow the same rules as `open_document`.
 
 ## Writing a Mermaid diagram
 

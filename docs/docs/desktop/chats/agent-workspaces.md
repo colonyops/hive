@@ -176,16 +176,17 @@ A [Code session's](../code/terminal-mode.md#drive) checkout links its space as `
 
 ### Let an agent write
 
-An agent with **Hive Drive** enabled can publish documents beside its chat. The seeded Hive workspace has it on. The MCP server is at `/mcp/drive`; the older address `/mcp/canvas` answers the same server, so existing agent setups keep working. The six document tools are:
+An agent with **Hive Drive** enabled can publish documents beside its chat. The seeded Hive workspace has it on. The MCP server is at `/mcp/drive`; the older address `/mcp/canvas` answers the same server, so existing agent setups keep working. The five document tools are:
 
 - `list_documents`
 - `read_document`
 - `write_document`
 - `move_document`
 - `delete_document`
-- `open_document`
 
-The ten canvas tools remain. A canvas name can include folders, so `reports/perf` is filed as `reports/perf.canvas.json`, and a bare name is filed under `canvases/`. An agent can only write `.md` and `.html` documents with `write_document`. `read_document` reads markdown, html, and any other text file in the space.
+Two tab tools put a result in front of you. `open_tab` opens a view beside the chat or Code session: `drive` on a document or canvas, or, in Code, `diff` or `tasks`. It opens the tab behind the one you are reading, with a dot, or beside it in a new split when the agent asks for `placement: beside`. `close_tab` closes that view. Both apply only while you are viewing that chat or session.
+
+The eight canvas tools remain. A canvas name can include folders, so `reports/perf` is filed as `reports/perf.canvas.json`, and a bare name is filed under `canvases/`. An agent can only write `.md` and `.html` documents with `write_document`. `read_document` reads markdown, html, and any other text file in the space.
 
 A repository with no documents yet links to the setup in **Settings ▸ MCP servers**.
 

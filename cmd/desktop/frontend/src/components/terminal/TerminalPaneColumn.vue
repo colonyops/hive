@@ -36,6 +36,7 @@ import type { AgentIconID } from '../../lib/agentIcon'
 import type { DriveScope } from '../../lib/drive'
 import { launcherIconComponent } from '../../lib/launcherIcons'
 import {
+  addTabBeside,
   addTabQuietly,
   closePanel,
   closeTab,
@@ -60,7 +61,7 @@ import {
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { docsScopeOf, viewOfTab, viewTab, withDocsScope } from './panelViews'
 import { useTerminalModeContext } from './terminalModeContext'
-import { useSessionDrive, type SessionDriveTarget } from '../panels/useSessionDrive'
+import { useSessionTabs, type SessionDriveTarget } from '../panels/useSessionTabs'
 
 // Its diff library and highlighter load only when a Diff tab opens.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
@@ -311,16 +312,23 @@ function scopeAt(path: string | null): DriveScope | null {
   return base && path ? { ...base, path } : base
 }
 
-useSessionDrive('terminal', toRef(props, 'drive'), () => props.active, {
+useSessionTabs('terminal', toRef(props, 'drive'), () => props.active, {
   // Tabs are keyed by the row's id, so a request has to wait for the row.
   ready: () => !!panels.row && pool.activeSlug === pool.visibleSlug,
-  open: (path) => panels.apply((current) => withDocsScope(openTab(current, viewTab('docs')), scopeAt(path))),
-  arrive: (path) => panels.apply((current) => withDocsScope(addTabQuietly(current, viewTab('docs')), scopeAt(path))),
-  close: () =>
+  reveal: (path) => panels.apply((current) => withDocsScope(openTab(current, viewTab('docs')), scopeAt(path))),
+  open: (view, path, placement) => {
+    if (!panels.row || !panels.viewsFor(panels.row).includes(view)) return
+    const place = placement === 'beside' ? addTabBeside : addTabQuietly
     panels.apply((current) => {
-      const docs = viewTab('docs')
-      const panel = panelWithTab(current, docs.id)
-      return panel ? closeTab(current, panel.id, docs.id) : current
+      const placed = place(current, viewTab(view))
+      return view === 'docs' ? withDocsScope(placed, scopeAt(path)) : placed
+    })
+  },
+  close: (view) =>
+    panels.apply((current) => {
+      const tab = viewTab(view)
+      const panel = panelWithTab(current, tab.id)
+      return panel ? closeTab(current, panel.id, tab.id) : current
     }),
 })
 

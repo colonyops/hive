@@ -71,15 +71,21 @@ tab, a pop-up or another window. None of that would carry to a second host.
     and keeps the layouts in a store of their own, keyed by chat id. Its
     sidebar does not mirror the tabs: a chat row is a chat, not a list. The
     right-hand Drive pane beside a chat is removed rather than kept beside the
-    tabs, so `open_document`, `open_canvas`, `close_canvas`, `?doc` and a
-    `canvas=` link all mean one thing in both areas: the session's Drive tab.
-    The title bar's right toggle keeps the Inbox preview and the Drive page's
-    comments and names Drive nowhere.
+    tabs, so `?doc` and a `canvas=` link mean one thing in both areas: the
+    session's Drive tab. The title bar's right toggle keeps the Inbox preview
+    and the Drive page's comments and names Drive nowhere.
+11. **Agents address tabs, not a pane.** The MCP tools `open_document`,
+    `open_canvas` and `close_canvas` are replaced by `open_tab` and
+    `close_tab`, which name a view (`drive`, `diff`, `tasks`) and, for an
+    open, a placement: `behind` the tab in front with an unseen dot, or
+    `beside` it in a new split. Neither takes the keyboard. No old name is
+    kept: an agent reads the tool list when it connects, so compatibility
+    would only preserve the pane in the vocabulary.
 
 ## Consequences
 
 - A second host reuses `lib/panelLayout`, `PanelLayoutHost`,
-  `useSessionPanels` and `useSessionDrive` with its own `PanelWindowSource`
+  `useSessionPanels` and `useSessionTabs` with its own `PanelWindowSource`
   and floating layer. It does not reuse `TerminalPaneColumn`, which is Code's
   host. Chats is the first such host.
 - Adding a view is one entry in `panelViews.ts` and one branch in the Code

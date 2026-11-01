@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_SPLIT_RATIO,
   MIN_SPLIT_RATIO,
+  addTabBeside,
   addTabQuietly,
   closePanel,
   closeTab,
@@ -193,6 +194,35 @@ describe('addTabQuietly', () => {
     const layout = addTabQuietly(splitPanel(attached('@1'), 'p0', 'row'), view('docs'))
     expect(ids(layout, 1)).toEqual(['docs'])
     expect(panelsOf(layout)[1].picking).toBe(true)
+  })
+})
+
+describe('addTabBeside', () => {
+  it('splits the focused panel and shows the tab in the new one', () => {
+    const layout = addTabBeside(attached('@1'), view('docs'))
+    expect(panelsOf(layout)).toHaveLength(2)
+    expect(splitBoxes(layout).map(({ split }) => split.axis)).toEqual(['row'])
+    expect(ids(layout, 0)).toEqual(['window:@1'])
+    expect(ids(layout, 1)).toEqual(['docs'])
+    expect(panelsOf(layout)[1].activeTab).toBe('docs')
+    expect(panelsOf(layout)[1].picking).toBe(false)
+    expect(shownTabs(layout).get(panelId(layout, 1))?.id).toBe('docs')
+  })
+
+  it('keeps the keyboard where the user had it', () => {
+    const layout = addTabBeside(attached('@1'), view('docs'))
+    expect(layout.focusedPanel).toBe('p0')
+    expect(focusedTab(layout)).toBe('window:@1')
+  })
+
+  it('leaves a tab that is already open alone', () => {
+    const layout = openTab(attached('@1'), view('docs'))
+    expect(addTabBeside(layout, view('docs'))).toBe(layout)
+  })
+
+  it('does nothing the second time', () => {
+    const once = addTabBeside(attached('@1'), view('docs'))
+    expect(addTabBeside(once, view('docs'))).toBe(once)
   })
 })
 

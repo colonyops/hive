@@ -15,6 +15,7 @@ import (
 func (ctrl *DriveController) register(srv *mcp.Server) {
 	ctrl.registerCanvas(srv)
 	ctrl.registerDocuments(srv)
+	ctrl.registerTabs(srv)
 }
 
 func (ctrl *DriveController) registerCanvas(srv *mcp.Server) {
@@ -33,7 +34,7 @@ func (ctrl *DriveController) registerCanvas(srv *mcp.Server) {
 			"required; http, https or mailto only). Answers with the canvas metadata and the stored block; read_canvas " +
 			"returns the full surface. No Drive tab opens by itself: a write while one " +
 			"is open behind another tab lights a dot on it, and with none open it shows nothing until the user opens " +
-			"Drive. Use open_canvas when the result deserves the user's attention now. Writing a first layout of several blocks? put_blocks does it in one call.",
+			"Drive. Use open_tab when the result deserves the user's attention now. Writing a first layout of several blocks? put_blocks does it in one call.",
 	}, ctrl.PutBlock)
 
 	addTool(srv, &mcp.Tool{
@@ -86,25 +87,6 @@ func (ctrl *DriveController) registerCanvas(srv *mcp.Server) {
 			"nothing was written under is not_found — use list_canvases to see what exists. Use this to re-orient after " +
 			"a long conversation instead of assuming what you last wrote.",
 	}, ctrl.ReadCanvas)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "open_canvas",
-		Title: "Open a canvas in the Drive tab",
-		Description: "Ask Hive to open the Drive tab of this chat or Code session, optionally on one canvas by " +
-			"name (the name must exist — put_block first). With no Drive tab open, Hive adds one behind the tab in front, " +
-			"with an unseen dot; it never takes the screen from what the user is doing. It applies only while the user is " +
-			"viewing this chat or session. A write while a Drive tab is open behind another tab already lights a dot on it, " +
-			"so call this when you finish something worth looking at now, not on every write. A global canvas lives in the " +
-			"shared space, which has no Drive tab; the user reads it in the Drive page.",
-	}, ctrl.OpenCanvas)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "close_canvas",
-		Title: "Close the Drive tab",
-		Description: "Ask Hive to close the Drive tab of this chat or Code session. Like open_canvas it applies only while the " +
-			"user is viewing this chat or session. Canvases and documents are untouched — this closes the tab, not the " +
-			"content.",
-	}, ctrl.CloseCanvas)
 
 	addTool(srv, &mcp.Tool{
 		Name:  "list_canvases",
@@ -221,15 +203,6 @@ type deleteCanvasResult struct {
 	Deleted string `json:"deleted" jsonschema:"The name of the canvas that was deleted."`
 }
 
-type openCanvasInput struct {
-	Session string `json:"session"          jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
-	Canvas  string `json:"canvas,omitempty" jsonschema:"Canvas to show in the Drive tab, by name or path; must exist. Omit to leave the tab on its own pick."`
-}
-
-type driveOpenResult struct {
-	Requested string `json:"requested" jsonschema:"The request handed to the UI: open or close. Delivery is best-effort — it applies only while the user is viewing this chat or session, and there is no acknowledgment either way."`
-}
-
 func (ctrl *DriveController) PutBlock(ctx context.Context, _ *mcp.CallToolRequest, in putBlockInput) (*mcp.CallToolResult, canvasWriteResult, error) {
 	c, err := ctrl.core.Drive.PutBlock(ctx, in.Session, in.Canvas, in.CanvasTitle, in.Before, drive.Block{
 		ID: in.ID, Kind: in.Kind, Title: in.Title, Body: in.Body, URL: in.URL,
@@ -289,20 +262,6 @@ func (ctrl *DriveController) ReadCanvas(ctx context.Context, _ *mcp.CallToolRequ
 		return nil, canvasResult{}, ctrl.toolError(err)
 	}
 	return nil, canvasResultFrom(c), nil
-}
-
-func (ctrl *DriveController) OpenCanvas(ctx context.Context, _ *mcp.CallToolRequest, in openCanvasInput) (*mcp.CallToolResult, driveOpenResult, error) {
-	if err := ctrl.core.Drive.SetDriveOpen(ctx, in.Session, in.Canvas, true); err != nil {
-		return nil, driveOpenResult{}, ctrl.toolError(err)
-	}
-	return nil, driveOpenResult{Requested: "open"}, nil
-}
-
-func (ctrl *DriveController) CloseCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasSessionInput) (*mcp.CallToolResult, driveOpenResult, error) {
-	if err := ctrl.core.Drive.SetDriveOpen(ctx, in.Session, "", false); err != nil {
-		return nil, driveOpenResult{}, ctrl.toolError(err)
-	}
-	return nil, driveOpenResult{Requested: "close"}, nil
 }
 
 func (ctrl *DriveController) ListCanvases(ctx context.Context, _ *mcp.CallToolRequest, in canvasSessionInput) (*mcp.CallToolResult, canvasListResult, error) {

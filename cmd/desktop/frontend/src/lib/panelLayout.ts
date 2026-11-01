@@ -265,6 +265,18 @@ export function splitPanel(layout: PanelLayout, panelId: string, axis: SplitAxis
   return { ...layout, root, nextId: layout.nextId + 1, focusedPanel: added.id }
 }
 
+/**
+ * For a tab nobody at the keyboard asked for that should still be seen at once.
+ * It opens in a new panel beside the focused one, and focus stays where it was.
+ */
+export function addTabBeside(layout: PanelLayout, tab: PanelTab): PanelLayout {
+  if (panelWithTab(layout, tab.id)) return layout
+  const focused = panelById(layout, layout.focusedPanel) ?? firstPanel(layout.root)
+  const split = splitPanel(layout, focused.id, 'row')
+  const added = `p${layout.nextId}`
+  return { ...withPanel(split, added, { tabs: [tab], activeTab: tab.id, picking: false }), focusedPanel: focused.id }
+}
+
 /** Closes a panel without losing anything: its tabs join the neighbour. */
 export function closePanel(layout: PanelLayout, panelId: string): PanelLayout {
   const panel = panelById(layout, panelId)

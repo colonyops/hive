@@ -100,7 +100,7 @@ export function ancestorPaths(path: string): string[] {
 }
 
 /**
- * The author a drive:updated or drive:toggle event names, or null when it
+ * The author a drive:updated or session:tab event names, or null when it
  * names none: a change the watcher found on disk has no author.
  */
 export function driveEventAuthor(data: unknown): DriveAuthor | null {

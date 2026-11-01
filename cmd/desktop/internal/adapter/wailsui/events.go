@@ -59,11 +59,10 @@ func registerEvents() struct{} {
 	// event has to reach the frontend: the subscription buffers rather than
 	// coalesces, and a Drive tab re-reads the named space on receipt.
 	application.RegisterEvent[DriveWrite](driveUpdatedEvent)
-	// drive:toggle carries an agent's ask to open or close the Drive tab
-	// of its chat or Code session. Whether a tab is open is UI intent, not state to re-read, so
-	// the payload is the whole message; coalescing keeps only the latest ask,
-	// which is the final intent anyway.
-	application.RegisterEvent[DriveToggle](driveToggleEvent)
+	// session:tab carries an agent's ask to open or close one tab beside its
+	// chat or Code session. Whether a tab is open is UI intent, not state to
+	// re-read, so the payload is the whole message.
+	application.RegisterEvent[SessionTab](sessionTabEvent)
 	// schedules:updated carries the workspace whose scheduled chats changed:
 	// its manifest was written, or one of its schedules ran. The Chats area
 	// re-reads its workspace and chat lists on receipt.
@@ -143,10 +142,11 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		events.Subscribe(ctx, bus, "wailsui.drive", events.Buffer(64), func(_ context.Context, e events.DriveChanged) {
 			emitDriveUpdated(DriveWrite{Space: e.Space, Paths: e.Paths, Session: e.Session, HiveSession: e.HiveSession})
 		}),
-		events.Subscribe(ctx, bus, "wailsui.drive-toggle", events.Coalesce(), func(_ context.Context, e events.DriveToggleRequested) {
-			emitDriveToggle(DriveToggle{
-				Session: e.Session, HiveSession: e.HiveSession,
-				Space: e.Space, Path: e.Path, Open: e.Open,
+		// Buffered, not coalesced: asks for two views in a row are two intents.
+		events.Subscribe(ctx, bus, "wailsui.session-tab", events.Buffer(16), func(_ context.Context, e events.SessionTabRequested) {
+			emitSessionTab(SessionTab{
+				Session: e.Session, HiveSession: e.HiveSession, Space: e.Space,
+				View: e.View, Path: e.Path, Placement: e.Placement, Open: e.Open,
 			})
 		}),
 		events.Subscribe(ctx, bus, "wailsui.schedules", events.Coalesce(), func(_ context.Context, e events.SchedulesUpdated) {
@@ -210,7 +210,7 @@ func emitActivityAppended(id int64) {
 
 const (
 	driveUpdatedEvent = "drive:updated"
-	driveToggleEvent  = "drive:toggle"
+	sessionTabEvent   = "session:tab"
 )
 
 // DriveWrite is the drive:updated payload: the space and the document paths
@@ -228,19 +228,21 @@ func emitDriveUpdated(write DriveWrite) {
 	emitEvent(driveUpdatedEvent, write)
 }
 
-// DriveToggle is the drive:toggle payload: whose Drive tab to open or close, a
-// chat's or a hive session's, and the document to pin when opening (empty
-// leaves the tab's pick).
-type DriveToggle struct {
+// SessionTab is the session:tab payload: whose tab to open or close, a chat's
+// or a hive session's, which view, and for the Drive view the document to pin
+// (empty leaves the tab's pick). Placement is behind or beside.
+type SessionTab struct {
 	Session     string `json:"session"`
 	HiveSession string `json:"hiveSession"`
 	Space       string `json:"space"`
+	View        string `json:"view"`
 	Path        string `json:"path"`
+	Placement   string `json:"placement"`
 	Open        bool   `json:"open"`
 }
 
-func emitDriveToggle(toggle DriveToggle) {
-	emitEvent(driveToggleEvent, toggle)
+func emitSessionTab(tab SessionTab) {
+	emitEvent(sessionTabEvent, tab)
 }
 
 // emitEvent is the drive emitters' door to the webview. A var so a test can
