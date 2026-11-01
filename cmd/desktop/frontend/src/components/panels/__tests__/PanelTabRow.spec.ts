@@ -22,6 +22,7 @@ function mountRow(props: Record<string, unknown> = {}) {
       label: (tab: { id: string }) => `label ${tab.id}`,
       attention: (tab: { id: string }) => tab.id === 'b',
       dropGap: null,
+      dragging: null,
       resizable: false,
       ...props,
     },
@@ -72,6 +73,18 @@ describe('PanelTabRow', () => {
   it('draws the drop marker at the target gap', () => {
     expect(mountRow({ dropGap: 1 }).findAll('[data-testid="panel-tab-drop-marker"]')).toHaveLength(1)
     expect(mountRow().find('[data-testid="panel-tab-drop-marker"]').exists()).toBe(false)
+  })
+
+  it('marks a drop into a row with no tabs', () => {
+    const empty = { ...panel, tabs: [], activeTab: null }
+    expect(mountRow({ panel: empty, dropGap: 0 }).find('[data-testid="panel-tab-drop-marker"]').exists()).toBe(true)
+    expect(mountRow({ panel: empty }).find('[data-testid="panel-tab-drop-marker"]').exists()).toBe(false)
+  })
+
+  it('fades the tab being dragged where it sits', () => {
+    const wrapper = mountRow({ dragging: 'b' })
+    expect(wrapper.get('[data-testid="panel-tab-b"]').classes()).toContain('opacity-40')
+    expect(wrapper.get('[data-testid="panel-tab-a"]').classes()).not.toContain('opacity-40')
   })
 
   it('starts a boundary resize from the row only when resizable', async () => {

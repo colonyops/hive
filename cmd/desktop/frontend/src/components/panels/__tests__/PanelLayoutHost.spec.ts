@@ -1,7 +1,24 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import type { Panel, PanelLayout, PanelTab } from '../../../lib/panelLayout'
 import PanelLayoutHost from '../PanelLayoutHost.vue'
+
+const rect = (x: number, y: number, width: number, height: number): DOMRect => ({
+  x,
+  y,
+  left: x,
+  top: y,
+  right: x + width,
+  bottom: y + height,
+  width,
+  height,
+  toJSON: () => ({}),
+})
+
+const pointer = (type: string, clientX: number, clientY: number): void => {
+  window.dispatchEvent(new PointerEvent(type, { clientX, clientY, pointerId: 1 }))
+}
 
 const tab = (id: string, kind = 'note'): PanelTab => ({ id, kind })
 
@@ -150,5 +167,69 @@ describe('PanelLayoutHost', () => {
     )
     expect(wrapper.text()).toContain('lead p1')
     expect(wrapper.text()).not.toContain('lead p0')
+  })
+
+  it('shows the dragged tab, washes the panel it would join, and drops it there', async () => {
+    const moveTab = vi.fn()
+    const wrapper = mount(PanelLayoutHost, {
+      attachTo: document.body,
+      props: { layout: twoPanels(), apply: vi.fn(), moveTab, tabLabel: (t: PanelTab) => `label ${t.id}` },
+      slots: { icon: '<i data-testid="icon" />' },
+    })
+    // jsdom lays nothing out: two panels side by side, each 400 wide, rows 30 deep.
+    const rects: Record<string, DOMRect> = {
+      'panel-tab-row-p0': rect(0, 0, 400, 30),
+      'panel-tab-row-p1': rect(400, 0, 400, 30),
+      'panel-tab-a': rect(0, 0, 100, 30),
+      'panel-tab-b': rect(100, 0, 100, 30),
+      'panel-tab-c': rect(400, 0, 100, 30),
+    }
+    const measure = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      return rects[this.getAttribute('data-testid') ?? ''] ?? rect(0, 0, 0, 0)
+    })
+    // Under a row the app's floating layer answers the hit test; the section stands in for it.
+    const p1 = document.querySelector('[data-testid="panel-p1"]')
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: (x: number, y: number) => (x >= 400 && y > 30 ? p1 : null),
+    })
+    const ghost = () => document.body.querySelector('[data-testid="panel-drag-ghost"]')
+    try {
+      await wrapper
+        .get('[data-testid="panel-tab-a"]')
+        .trigger('pointerdown', { clientX: 50, clientY: 15, pointerId: 1 })
+      pointer('pointermove', 52, 15)
+      await nextTick()
+      expect(ghost()).toBeNull()
+
+      pointer('pointermove', 600, 200)
+      await nextTick()
+      expect(wrapper.get('[data-testid="panel-tab-a"]').classes()).toContain('opacity-40')
+      expect(ghost()?.textContent).toContain('label a')
+      expect(ghost()?.querySelector('[data-testid="icon"]')).not.toBeNull()
+      expect(wrapper.get('[data-testid="panel-drop-target"]').attributes('style')).toContain('left: 50%')
+      expect(
+        wrapper.get('[data-testid="panel-tab-row-p1"]').find('[data-testid="panel-tab-drop-marker"]').exists(),
+      ).toBe(true)
+
+      pointer('pointermove', 150, 15)
+      await nextTick()
+      expect(wrapper.find('[data-testid="panel-drop-target"]').exists()).toBe(false)
+      expect(
+        wrapper.get('[data-testid="panel-tab-row-p0"]').find('[data-testid="panel-tab-drop-marker"]').exists(),
+      ).toBe(true)
+
+      pointer('pointermove', 600, 200)
+      pointer('pointerup', 600, 200)
+      await nextTick()
+      expect(moveTab).toHaveBeenCalledWith('a', 'p1', 1)
+      expect(ghost()).toBeNull()
+      expect(wrapper.find('[data-testid="panel-drop-target"]').exists()).toBe(false)
+      expect(wrapper.get('[data-testid="panel-tab-a"]').classes()).not.toContain('opacity-40')
+    } finally {
+      measure.mockRestore()
+      delete (document as { elementFromPoint?: unknown }).elementFromPoint
+      wrapper.unmount()
+    }
   })
 })

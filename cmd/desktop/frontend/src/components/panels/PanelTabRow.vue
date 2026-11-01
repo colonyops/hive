@@ -14,6 +14,8 @@ const props = defineProps<{
   mono?: (tab: PanelTab) => boolean
   /** The gap a dragged tab would land in, when this row is the target. */
   dropGap: number | null
+  /** The tab being dragged, in this row or another; it fades where it sits. */
+  dragging: string | null
   /** In a stacked split this row is the boundary, so its empty space resizes. */
   resizable: boolean
 }>()
@@ -30,6 +32,11 @@ function shown(tab: PanelTab): boolean {
 
 function closeLabel(tab: PanelTab): string {
   return `Close ${props.label(tab)}`
+}
+
+function markerAt(at: number): boolean {
+  if (props.dropGap === null) return false
+  return props.dropGap === at || (props.dropGap === props.panel.tabs.length && at === props.panel.tabs.length - 1)
 }
 
 // Measured per row, because either side of a split can be the narrow one. Only
@@ -49,7 +56,12 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
     :data-testid="`panel-tab-row-${panel.id}`"
     @pointerdown.self="resizable && emit('resize-start', $event)"
   >
-    <div class="panel-tabs flex min-w-0 shrink items-stretch overflow-x-auto" role="tablist">
+    <TransitionGroup
+      name="panel-tab"
+      tag="div"
+      class="panel-tabs flex min-w-0 shrink items-stretch overflow-x-auto"
+      role="tablist"
+    >
       <div
         v-for="(tab, at) in panel.tabs"
         :key="tab.id"
@@ -58,13 +70,14 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
         :class="[
           shown(tab) ? (focused ? 'panel-tab-focused' : 'panel-tab-shown') : 'text-text-2',
           compact && !shown(tab) ? 'shrink-0' : 'min-w-[56px]',
+          dragging === tab.id ? 'panel-tab-dragging opacity-40' : '',
         ]"
         :data-testid="`panel-tab-${tab.id}`"
         :data-shown="shown(tab)"
         @pointerdown="emit('tab-drag', $event, tab.id)"
       >
         <span
-          v-if="dropGap === at || (dropGap === panel.tabs.length && at === panel.tabs.length - 1)"
+          v-if="markerAt(at)"
           class="pointer-events-none absolute inset-y-1 z-10 w-0.5 rounded bg-accent"
           :class="dropGap === at ? '-left-px' : '-right-px'"
           data-testid="panel-tab-drop-marker"
@@ -103,7 +116,13 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
           <IconX class="size-3" aria-hidden="true" />
         </button>
       </div>
-    </div>
+    </TransitionGroup>
+    <!-- An empty row has no tab to hang the marker on. -->
+    <span
+      v-if="!panel.tabs.length && dropGap !== null"
+      class="my-1 ml-1 w-0.5 rounded bg-accent"
+      data-testid="panel-tab-drop-marker"
+    />
 
     <div class="relative ml-0.5 flex shrink-0 items-center">
       <slot name="add" :panel="panel" />
@@ -142,5 +161,36 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
 }
 .panel-tab-shown::after {
   background: var(--color-text-4);
+}
+.panel-tab-dragging,
+.panel-tab-dragging * {
+  cursor: grabbing;
+}
+
+/* The tree's timing: fast enough to read as instant. A leaving tab drops out of
+   flow so its neighbours glide over through .panel-tab-move (FLIP) instead of
+   snapping. */
+.panel-tab-enter-active,
+.panel-tab-leave-active,
+.panel-tab-move {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.panel-tab-enter-from,
+.panel-tab-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.panel-tab-leave-active {
+  position: absolute;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-tab-enter-active,
+  .panel-tab-leave-active,
+  .panel-tab-move {
+    transition: none;
+  }
 }
 </style>

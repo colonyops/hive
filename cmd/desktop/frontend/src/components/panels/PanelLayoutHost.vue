@@ -9,11 +9,13 @@ import {
   closePanel,
   focusPanel,
   panelBoxes,
+  panelWithTab,
   panelsOf,
   resizeSplit,
   selectTab,
   splitBoxes,
   splitPanel,
+  tabById,
   turnSplit,
   type Panel,
   type PanelBox,
@@ -64,10 +66,19 @@ const panelList = computed(() => panelsOf(props.layout))
 const boxes = computed(() => panelBoxes(props.layout))
 const splits = computed(() => splitBoxes(props.layout))
 const root = ref<HTMLElement | null>(null)
-const { tabDrop, startTabDrag, startResize, stepResize } = usePanelDrag(
+const { tabDrop, dragging, pointer, startTabDrag, startResize, stepResize } = usePanelDrag(
   { apply: (rule) => props.apply(rule), moveTabTo: (tabId, panel, gap) => props.moveTab(tabId, panel, gap) },
   root,
 )
+
+// The drag image a pointer drag lacks, and the panel the tab would join. Its
+// own panel is not washed: there the gap marker alone says where it lands.
+const draggedTab = computed(() => (dragging.value ? tabById(props.layout, dragging.value) : undefined))
+const dropTargetPanel = computed(() => {
+  if (!dragging.value || !tabDrop.value) return ''
+  return panelWithTab(props.layout, dragging.value)?.id === tabDrop.value.panel ? '' : tabDrop.value.panel
+})
+const GHOST_OFFSET_PX = 12
 
 const percent = (share: number): string => `${share * 100}%`
 
@@ -175,6 +186,7 @@ function contentTabs(tabs: readonly PanelTab[]): PanelTab[] {
         :attention="tabAttention"
         :mono="tabMono"
         :drop-gap="tabDrop?.panel === panel.id ? tabDrop.gap : null"
+        :dragging="dragging"
         :resizable="!!boundaryAbove(panel.id)"
         @tab-drag="startTabDrag"
         @resize-start="(event) => startRowResize(event, panel.id)"
@@ -237,6 +249,31 @@ function contentTabs(tabs: readonly PanelTab[]): PanelTab[] {
 
     <slot name="floating" :region="region" />
 
+    <!-- Above the floating layer, which paints over the sections it belongs to. -->
+    <Transition name="panel-drop">
+      <div
+        v-if="dropTargetPanel"
+        :key="dropTargetPanel"
+        class="panel-drop-target pointer-events-none absolute z-30"
+        :style="panelStyle(dropTargetPanel)"
+        data-testid="panel-drop-target"
+      />
+    </Transition>
+
+    <Teleport to="body">
+      <div
+        v-if="draggedTab && pointer"
+        class="pointer-events-none fixed z-50 flex items-center gap-1.5 rounded border border-strong bg-raised px-2.5 py-1 text-small text-text shadow-lg"
+        :style="{ left: `${pointer.x + GHOST_OFFSET_PX}px`, top: `${pointer.y + GHOST_OFFSET_PX}px` }"
+        data-testid="panel-drag-ghost"
+      >
+        <slot name="icon" :tab="draggedTab" />
+        <span class="max-w-[168px] truncate" :class="tabMono(draggedTab) ? 'font-mono' : ''">{{
+          tabLabel(draggedTab)
+        }}</span>
+      </div>
+    </Teleport>
+
     <div
       v-for="{ split, box } in splits"
       :key="split.id"
@@ -271,3 +308,26 @@ function contentTabs(tabs: readonly PanelTab[]): PanelTab[] {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* The tree's insertion line, drawn around the whole panel: an inset ring, so a
+   terminal under it keeps its size, over a wash that reads through the content. */
+.panel-drop-target {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+.panel-drop-enter-active,
+.panel-drop-leave-active {
+  transition: opacity 0.15s ease;
+}
+.panel-drop-enter-from,
+.panel-drop-leave-to {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel-drop-enter-active,
+  .panel-drop-leave-active {
+    transition: none;
+  }
+}
+</style>

@@ -49,10 +49,21 @@ function dropAt(x: number, y: number): TabDrop | null {
 /**
  * Pointer drags rather than HTML drag and drop: WKWebView claims a native drag
  * for file drops, and a Terminal or a document iframe under the pointer would
- * swallow its events. Capture keeps them coming across both.
+ * swallow its events. Capture keeps them coming across both. Without a native
+ * drag there is no drag image either, so `dragging` and `pointer` let the host
+ * draw one.
  */
 export function usePanelDrag(panels: PanelDragTarget, host: Ref<HTMLElement | null>) {
   const tabDrop = ref<TabDrop | null>(null)
+  /** The tab a press has carried past the drag threshold, until it is let go. */
+  const dragging = ref<string | null>(null)
+  const pointer = ref<{ x: number; y: number } | null>(null)
+
+  function settle(): void {
+    tabDrop.value = null
+    dragging.value = null
+    pointer.value = null
+  }
 
   function startTabDrag(event: PointerEvent, tabId: string): void {
     if (event.button !== 0) return
@@ -60,19 +71,21 @@ export function usePanelDrag(panels: PanelDragTarget, host: Ref<HTMLElement | nu
     // drag and cancel the pointer. The click that selects the tab still fires.
     event.preventDefault()
     const { clientX: startX, clientY: startY } = event
-    let dragging = false
     startDrag(event, {
       pointerCapture: true,
       onMove: (move) => {
-        dragging ||= Math.hypot(move.clientX - startX, move.clientY - startY) >= DRAG_THRESHOLD_PX
-        if (dragging) tabDrop.value = dropAt(move.clientX, move.clientY)
+        if (!dragging.value && Math.hypot(move.clientX - startX, move.clientY - startY) < DRAG_THRESHOLD_PX) return
+        dragging.value = tabId
+        pointer.value = { x: move.clientX, y: move.clientY }
+        tabDrop.value = dropAt(move.clientX, move.clientY)
       },
       onEnd: () => {
         const drop = tabDrop.value
-        tabDrop.value = null
-        if (drop) panels.moveTabTo(tabId, drop.panel, drop.gap)
+        const tab = dragging.value
+        settle()
+        if (drop && tab) panels.moveTabTo(tab, drop.panel, drop.gap)
       },
-      onCancel: () => (tabDrop.value = null),
+      onCancel: settle,
     })
   }
 
@@ -97,5 +110,5 @@ export function usePanelDrag(panels: PanelDragTarget, host: Ref<HTMLElement | nu
     panels.apply((current) => resizeSplit(current, split.id, split.ratio + direction * KEY_STEP))
   }
 
-  return { tabDrop, startTabDrag, startResize, stepResize }
+  return { tabDrop, dragging, pointer, startTabDrag, startResize, stepResize }
 }
