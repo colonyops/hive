@@ -1,10 +1,10 @@
 import { ref, type Ref } from 'vue'
 import { startDrag } from '@hive/ui/composables/useDragGesture'
-import { resizeSplit, type LayoutBox, type SessionSplit } from '../../lib/sessionLayout'
-import type { SessionPanes } from './useSessionPanes'
+import { resizeSplit, type PanelBox, type PanelSplit } from '../../lib/panelLayout'
+import type { SessionPanelsCore } from '../terminal/useSessionPanels'
 
 export interface TabDrop {
-  pane: string
+  panel: string
   gap: number
 }
 
@@ -15,30 +15,30 @@ const KEY_STEP = 0.05
 // pixels, so a drop at the very start of a row has to be read from the geometry.
 const ROW_EDGE_PX = 12
 
-function paneAt(x: number, y: number): string | undefined {
-  const under = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-session-pane]')
-  if (under?.dataset.sessionPane) return under.dataset.sessionPane
-  for (const pane of document.querySelectorAll<HTMLElement>('section[data-session-pane]')) {
-    const row = document.querySelector(`[data-testid="session-tab-row-${pane.dataset.sessionPane}"]`)
+function panelAt(x: number, y: number): string | undefined {
+  const under = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-panel]')
+  if (under?.dataset.panel) return under.dataset.panel
+  for (const panel of document.querySelectorAll<HTMLElement>('section[data-panel]')) {
+    const row = document.querySelector(`[data-testid="panel-tab-row-${panel.dataset.panel}"]`)
     const box = row?.getBoundingClientRect()
     if (box && y >= box.top && y <= box.bottom && x >= box.left - ROW_EDGE_PX && x <= box.right + ROW_EDGE_PX) {
-      return pane.dataset.sessionPane
+      return panel.dataset.panel
     }
   }
   return undefined
 }
 
-/** Where a pointer would drop a tab: the gap nearest it in the pane it is over. */
+/** Where a pointer would drop a tab: the gap nearest it in the panel it is over. */
 function dropAt(x: number, y: number): TabDrop | null {
-  const id = paneAt(x, y)
+  const id = panelAt(x, y)
   if (!id) return null
-  const row = document.querySelector(`[data-testid="session-tab-row-${id}"]`)
-  const tabs = [...(row?.querySelectorAll('[data-session-tab]') ?? [])]
+  const row = document.querySelector(`[data-testid="panel-tab-row-${id}"]`)
+  const tabs = [...(row?.querySelectorAll('[data-panel-tab]') ?? [])]
   const gap = tabs.findIndex((tab) => {
     const box = tab.getBoundingClientRect()
     return x < box.left + box.width / 2
   })
-  return { pane: id, gap: gap < 0 ? tabs.length : gap }
+  return { panel: id, gap: gap < 0 ? tabs.length : gap }
 }
 
 /**
@@ -46,7 +46,7 @@ function dropAt(x: number, y: number): TabDrop | null {
  * for file drops, and a Terminal or a document iframe under the pointer would
  * swallow its events. Capture keeps them coming across both.
  */
-export function useSessionPaneDrag(panes: Pick<SessionPanes, 'apply' | 'moveTabTo'>, host: Ref<HTMLElement | null>) {
+export function usePanelDrag(panels: Pick<SessionPanelsCore, 'apply' | 'moveTabTo'>, host: Ref<HTMLElement | null>) {
   const tabDrop = ref<TabDrop | null>(null)
 
   function startTabDrag(event: PointerEvent, tabId: string): void {
@@ -65,7 +65,7 @@ export function useSessionPaneDrag(panes: Pick<SessionPanes, 'apply' | 'moveTabT
       onEnd: () => {
         const drop = tabDrop.value
         tabDrop.value = null
-        if (drop) panes.moveTabTo(tabId, drop.pane, drop.gap)
+        if (drop) panels.moveTabTo(tabId, drop.panel, drop.gap)
       },
       onCancel: () => (tabDrop.value = null),
     })
@@ -73,7 +73,7 @@ export function useSessionPaneDrag(panes: Pick<SessionPanes, 'apply' | 'moveTabT
 
   // Keeps the offset from the boundary to where it was grabbed, because a stacked
   // tab row is a grab area 30px deep and the boundary must not jump to the pointer.
-  function startResize(event: PointerEvent, split: SessionSplit, box: LayoutBox): void {
+  function startResize(event: PointerEvent, split: PanelSplit, box: PanelBox): void {
     const rect = host.value?.getBoundingClientRect()
     if (!rect || event.button !== 0) return
     event.preventDefault()
@@ -84,12 +84,12 @@ export function useSessionPaneDrag(panes: Pick<SessionPanes, 'apply' | 'moveTabT
     const offset = ratioAt(event) - split.ratio
     startDrag(event, {
       pointerCapture: true,
-      onMove: (move) => panes.apply((current) => resizeSplit(current, split.id, ratioAt(move) - offset)),
+      onMove: (move) => panels.apply((current) => resizeSplit(current, split.id, ratioAt(move) - offset)),
     })
   }
 
-  function stepResize(split: SessionSplit, direction: number): void {
-    panes.apply((current) => resizeSplit(current, split.id, split.ratio + direction * KEY_STEP))
+  function stepResize(split: PanelSplit, direction: number): void {
+    panels.apply((current) => resizeSplit(current, split.id, split.ratio + direction * KEY_STEP))
   }
 
   return { tabDrop, startTabDrag, startResize, stepResize }

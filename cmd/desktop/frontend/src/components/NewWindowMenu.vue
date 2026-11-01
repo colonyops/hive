@@ -3,7 +3,7 @@ import { computed, type Component } from 'vue'
 import IconTerminal from '~icons/lucide/terminal'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import { agentBrandIcon } from './terminal/agentBrandIcon'
-import type { SessionViewKind } from '../lib/sessionLayout'
+import type { SessionViewKind } from './terminal/panelViews'
 import type { MenuEntry } from '@hive/ui/types/menu'
 
 const props = defineProps<{

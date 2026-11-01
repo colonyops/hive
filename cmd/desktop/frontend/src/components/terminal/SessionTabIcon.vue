@@ -1,19 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import IconFileDiff from '~icons/lucide/file-diff'
-import IconFolderTree from '~icons/lucide/folder-tree'
-import IconListTodo from '~icons/lucide/list-todo'
 import IconTerminal from '~icons/lucide/terminal'
 import claudeCodeMark from '../../assets/agents/claude-code.svg'
 import codexMark from '../../assets/agents/codex.svg'
 import piMark from '../../assets/agents/pi.svg'
 import AgentIcon from '../AgentIcon.vue'
 import type { AgentIconID } from '../../lib/agentIcon'
-import type { SessionTab } from '../../lib/sessionLayout'
 import { useTerminalAgentIcons } from '../../stores/useTerminalAgentIcons'
+import { isSessionViewKind, sessionView } from './panelViews'
 
 // One mark for a tab and for its tree row, so the two read as the same thing.
-const props = defineProps<{ kind: SessionTab['kind']; agent?: AgentIconID }>()
+const props = defineProps<{ kind: string; agent?: AgentIconID }>()
 
 const MARKS: Partial<Record<AgentIconID, string>> = { claude: claudeCodeMark, codex: codexMark, pi: piMark }
 // The full-color marks' shapes, so turning the setting on changes only the color. Pi's
@@ -31,7 +28,7 @@ const MONOCHROME_MARKS: Partial<Record<AgentIconID, { viewBox: string; path: str
 }
 const { monochrome } = useTerminalAgentIcons()
 const monochromeMark = computed(() => (monochrome.value && props.agent ? MONOCHROME_MARKS[props.agent] : undefined))
-const VIEWS = { window: IconTerminal, docs: IconFolderTree, diff: IconFileDiff, tasks: IconListTodo }
+const icon = computed(() => (isSessionViewKind(props.kind) ? sessionView(props.kind).icon : IconTerminal))
 </script>
 
 <template>
@@ -55,5 +52,5 @@ const VIEWS = { window: IconTerminal, docs: IconFolderTree, diff: IconFileDiff, 
     :data-agent-icon="agent"
   />
   <AgentIcon v-else-if="agent" :id="agent" class="size-3.5 shrink-0" />
-  <component :is="VIEWS[kind]" v-else class="size-3.5 shrink-0" aria-hidden="true" />
+  <component :is="icon" v-else class="size-3.5 shrink-0" aria-hidden="true" />
 </template>

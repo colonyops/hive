@@ -11,7 +11,7 @@ import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
 import TerminalPaneColumn from './terminal/TerminalPaneColumn.vue'
 import TerminalSidebar from './terminal/TerminalSidebar.vue'
 import { provideTerminalMode } from './terminal/terminalModeContext'
-import { useSessionPanes } from './terminal/useSessionPanes'
+import { useCodePanels } from './terminal/useCodePanels'
 import { useSessionTreeView } from './terminal/useSessionTreeView'
 import { useSessionViewMenus } from './terminal/useSessionViewMenus'
 import { useTerminalAttach } from './terminal/useTerminalAttach'
@@ -25,10 +25,10 @@ import { useWindowRename } from './terminal/useWindowRename'
 import { useNewSession } from '../composables/useNewSession'
 import { usePaintedActive } from '../composables/usePaintedActive'
 import { useSessionActions } from '../composables/useSessionActions'
-import { revealWindow } from '../lib/sessionLayout'
+import { revealWindow } from '../lib/windowTabs'
 import { TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 import { useCodeViews } from '../stores/useCodeViews'
-import { useSessionTabs } from '../stores/useSessionTabs'
+import { usePanelLayouts } from '../stores/usePanelLayouts'
 import { useTerminalAvailability } from '../stores/useTerminalAvailability'
 import { useTerminalPoolSize } from '../stores/useTerminalPoolSize'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
@@ -79,30 +79,30 @@ useTimeoutFn(stopPreparing, PREPARE_LIMIT_MS)
 onMounted(() => {
   if (preparing.value) tree.sweepListings()
 })
-// A pool reveal draws its pane; coming back to the same session has to as well,
+// A pool reveal draws its terminal; coming back to the same session has to as well,
 // or output taken while hidden waits two frames for the observer.
 watch(
   () => props.active,
   (shown) => {
-    if (shown) panes.renderOnScreen()
+    if (shown) panels.renderOnScreen()
   },
   { flush: 'post' },
 )
 const viewMenus = useSessionViewMenus(tree)
 const rename = useWindowRename(pool.visible)
-const sessionTabs = useSessionTabs()
+const panelLayouts = usePanelLayouts()
 const attach = useTerminalAttach({
   pool,
   tree,
   active,
   paintedActive,
   onSwitch: () => (rename.windowId.value = ''),
-  onSessionClosed: (row) => sessionTabs.forget(row.id),
-  onWindowChosen: (row, windowId) => sessionTabs.apply(row.id, (layout) => revealWindow(layout, windowId)),
+  onSessionClosed: (row) => panelLayouts.forget(row.id),
+  onWindowChosen: (row, windowId) => panelLayouts.apply(row.id, (layout) => revealWindow(layout, windowId)),
 })
 const sessions = useSessionActions({ onChanged: () => void tree.reloadSessions() })
 const ops = useTerminalSessionOps({ pool, tree, attach, confirmation: sessions.confirmation, paintedActive })
-const panes = useSessionPanes({ pool, tree, ops })
+const panels = useCodePanels({ pool, tree, ops })
 const nav = useTreeKeyboardNav({
   groups: view.groups,
   expanded: view.expansion.expanded,
@@ -116,7 +116,7 @@ const nav = useTreeKeyboardNav({
   startSession: attach.startSession,
   goToWindow: attach.goToWindow,
 })
-const context = { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panes }
+const context = { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panels }
 provideTerminalMode(context)
 useTerminalCommands(context, active)
 

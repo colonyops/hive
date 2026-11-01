@@ -33,13 +33,13 @@ test('a terminal keeps its scrollback across a drag and a direction change', asy
   await page.keyboard.type('for i in $(seq 1 400); do echo mark-$((i*7)); done\n')
   await findsOnce(page, 'mark-707')
 
-  await page.getByTestId('session-split-row-p0').click()
-  await page.getByTestId('session-pane-picker-terminal').click()
+  await page.getByTestId('panel-split-row-p0').click()
+  await page.getByTestId('panel-picker-terminal').click()
   await expect(page.locator('[data-testid="terminal-pane-host"]:visible')).toHaveCount(2, { timeout: 15_000 })
-  await expect(page.getByTestId('session-tab-row-p1').locator('[data-session-tab]')).toHaveCount(1)
+  await expect(page.getByTestId('panel-tab-row-p1').locator('[data-panel-tab]')).toHaveCount(1)
   await page.screenshot({ path: `${screenshots}/session-tabs-real-tmux-split.png` })
 
-  const divider = (await page.getByTestId('session-split-divider-s1').boundingBox())!
+  const divider = (await page.getByTestId('panel-divider-s1').boundingBox())!
   const middle = { x: divider.x + divider.width / 2, y: divider.y + divider.height / 2 }
   await dragTo(page, middle, { x: middle.x + 150, y: middle.y })
 
@@ -52,8 +52,8 @@ test('a terminal keeps its scrollback across a drag and a direction change', asy
   await page.keyboard.type('[ "$(stty size)" != "$(cat /tmp/right-size)" ] && echo GRIDS-DIFFER-$((1+1))\n')
   await findsOnce(page, 'GRIDS-DIFFER-2')
 
-  await page.getByTestId('session-split-divider-s1').hover()
-  await page.getByTestId('session-split-turn-s1').click()
+  await page.getByTestId('panel-divider-s1').hover()
+  await page.getByTestId('panel-turn-s1').click()
   await page.screenshot({ path: `${screenshots}/session-tabs-real-tmux-stacked.png` })
 
   await page.locator('[data-testid="terminal-pane-host"]:visible').first().click()

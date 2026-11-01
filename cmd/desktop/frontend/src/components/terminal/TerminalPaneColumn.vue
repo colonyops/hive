@@ -23,7 +23,7 @@ import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import ChangesLoading from '../git/ChangesLoading.vue'
 import DrivePage from '../drive/DrivePage.vue'
 import TasksView from '../tasks/TasksView.vue'
-import SessionPanePicker from './SessionPanePicker.vue'
+import SessionPanelPicker from './SessionPanelPicker.vue'
 import SessionTabRow from './SessionTabRow.vue'
 import SessionTagsStatus from '../SessionTagsStatus.vue'
 import SessionStatusChips from '../SessionStatusChips.vue'
@@ -37,28 +37,27 @@ import type { AgentIconID } from '../../lib/agentIcon'
 import type { DriveScope } from '../../lib/drive'
 import { launcherIconComponent } from '../../lib/launcherIcons'
 import {
-  addViewQuietly,
-  closePane,
+  addTabQuietly,
+  closePanel,
   closeTab,
-  focusPane,
-  offscreenWindows,
-  openView,
-  paneBoxes,
-  paneById,
-  panesOf,
-  placeView,
-  placeWindow,
+  focusPanel,
+  openTab,
+  panelBoxes,
+  panelById,
+  panelWithTab,
+  panelsOf,
+  placeTab,
   resizeSplit,
   selectTab,
   splitBoxes,
-  splitPane,
-  terminalPane,
+  splitPanel,
   turnSplit,
-  type LayoutBox,
-  type SessionPane,
-  type SessionSplit,
-  type SessionTab,
-} from '../../lib/sessionLayout'
+  type Panel,
+  type PanelBox,
+  type PanelSplit,
+  type PanelTab,
+} from '../../lib/panelLayout'
+import { offscreenWindows, placeWindow, terminalPanel, windowIdOf } from '../../lib/windowTabs'
 import { activePaneOf } from '../../lib/terminalLayout'
 import { terminalTreeFocused } from '../../lib/terminalTree'
 import { useDriveActivity } from '../../stores/useDriveActivity'
@@ -68,8 +67,9 @@ import {
   OpenSessionInEditor,
   RevealSession,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
+import { usePanelDrag } from '../panels/usePanelDrag'
+import { docsScopeOf, viewOfTab, viewTab, withDocsScope } from './panelViews'
 import { useTerminalModeContext } from './terminalModeContext'
-import { useSessionPaneDrag } from './useSessionPaneDrag'
 import { useTerminalDrive, type TerminalDriveTarget } from './useTerminalDrive'
 
 // Its diff library and highlighter load only when a Diff tab opens.
@@ -93,7 +93,7 @@ const emit = defineEmits<{
   setup: []
 }>()
 
-const { pool, tree, attach, ops, sessions, panes } = useTerminalModeContext()
+const { pool, tree, attach, ops, sessions, panels } = useTerminalModeContext()
 const visible = computed(() => pool.visible)
 
 const tabs = computed(() => visible.value?.tabs.value ?? [])
@@ -175,7 +175,7 @@ const actionRow = computed(() => tree.activeSessions.find((row) => row.slug === 
 const statusBarRow = computed(() => (showStatusBar.value ? actionRow.value : null))
 const footerRow = computed(() => {
   if (!showStatusBar.value) return null
-  return statusBarRow.value ?? (panes.row?.server ? panes.row : null)
+  return statusBarRow.value ?? (panels.row?.server ? panels.row : null)
 })
 const agentStatus = computed(() => {
   const row = footerRow.value
@@ -211,27 +211,27 @@ const sessionRepoKey = computed(() => {
 })
 watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true })
 
-const layout = computed(() => panes.layout)
-const panesList = computed(() => panesOf(layout.value))
-const boxes = computed(() => paneBoxes(layout.value))
+const layout = computed(() => panels.layout)
+const panelList = computed(() => panelsOf(layout.value))
+const boxes = computed(() => panelBoxes(layout.value))
 const splits = computed(() => splitBoxes(layout.value))
-const panesHost = ref<HTMLElement | null>(null)
-const { tabDrop, startTabDrag, startResize, stepResize } = useSessionPaneDrag(panes, panesHost)
+const panelsHost = ref<HTMLElement | null>(null)
+const { tabDrop, startTabDrag, startResize, stepResize } = usePanelDrag(panels, panelsHost)
 const TAB_ROW_PX = 30
 const BORDER_PX = 1
 
 const percent = (share: number): string => `${share * 100}%`
 
-function paneStyle(paneId: string): Record<string, string> {
-  const box = boxes.value.get(paneId)
+function panelStyle(panelId: string): Record<string, string> {
+  const box = boxes.value.get(panelId)
   if (!box) return {}
   return { left: percent(box.x), top: percent(box.y), width: percent(box.width), height: percent(box.height) }
 }
 
 // Terminals stay in one parent, because a Terminal binds to one element for its
-// lifetime, so a pane places them by position under its tab row.
-function paneRegion(paneId: string): Record<string, string> {
-  const box = boxes.value.get(paneId)
+// lifetime, so a panel places them by position under its tab row.
+function panelRegion(panelId: string): Record<string, string> {
+  const box = boxes.value.get(panelId)
   if (!box) return { inset: `${TAB_ROW_PX}px 0 0 0` }
   const left = box.x > 0 ? BORDER_PX : 0
   const top = TAB_ROW_PX + (box.y > 0 ? BORDER_PX : 0)
@@ -243,7 +243,7 @@ function paneRegion(paneId: string): Record<string, string> {
   }
 }
 
-function dividerStyle(split: SessionSplit, box: LayoutBox): Record<string, string> {
+function dividerStyle(split: PanelSplit, box: PanelBox): Record<string, string> {
   if (split.axis === 'row') {
     return {
       left: `calc(${percent(box.x + box.width * split.ratio)} - 3px)`,
@@ -260,85 +260,79 @@ function dividerStyle(split: SessionSplit, box: LayoutBox): Record<string, strin
   }
 }
 
-// A pane under a stacked boundary: its tab row is a grab area for that boundary.
-function boundaryAbove(paneId: string): { split: SessionSplit; box: LayoutBox } | undefined {
-  const pane = boxes.value.get(paneId)
-  if (!pane || pane.y === 0) return undefined
+// A panel under a stacked boundary: its tab row is a grab area for that boundary.
+function boundaryAbove(panelId: string): { split: PanelSplit; box: PanelBox } | undefined {
+  const panel = boxes.value.get(panelId)
+  if (!panel || panel.y === 0) return undefined
   return splits.value.find(({ split, box }) => {
     if (split.axis !== 'column') return false
     const at = box.y + box.height * split.ratio
-    return Math.abs(at - pane.y) < 1e-6 && pane.x >= box.x - 1e-6 && pane.x + pane.width <= box.x + box.width + 1e-6
+    return Math.abs(at - panel.y) < 1e-6 && panel.x >= box.x - 1e-6 && panel.x + panel.width <= box.x + box.width + 1e-6
   })
 }
 
-function startRowResize(event: PointerEvent, paneId: string): void {
-  const boundary = boundaryAbove(paneId)
+function startRowResize(event: PointerEvent, panelId: string): void {
+  const boundary = boundaryAbove(panelId)
   if (boundary) startResize(event, boundary.split, boundary.box)
 }
 
 // The session's own actions sit once, at the top right of the whole column.
-const actionsPane = computed(() => {
-  for (const pane of panesList.value) {
-    const box = boxes.value.get(pane.id)
-    if (box && box.y === 0 && Math.abs(box.x + box.width - 1) < 1e-6) return pane.id
+const actionsPanel = computed(() => {
+  for (const panel of panelList.value) {
+    const box = boxes.value.get(panel.id)
+    if (box && box.y === 0 && Math.abs(box.x + box.width - 1) < 1e-6) return panel.id
   }
   return ''
 })
 
-const activeWindowRegion = computed(() => paneRegion(panes.onScreen.get(activeWindowId.value) ?? ''))
-const activeWindowOnScreen = computed(() => panes.onScreen.has(activeWindowId.value))
-const statusPane = computed(() => terminalPane(layout.value))
+const activeWindowRegion = computed(() => panelRegion(panels.onScreen.get(activeWindowId.value) ?? ''))
+const activeWindowOnScreen = computed(() => panels.onScreen.has(activeWindowId.value))
+const statusPanel = computed(() => terminalPanel(layout.value))
 
 function windowName(windowId: string): string {
   const tab = tabs.value.find((candidate) => candidate.windowId === windowId)
   return tab?.name || windowId
 }
 
-function tabLabel(tab: SessionTab): string {
-  switch (tab.kind) {
-    case 'window':
-      return windowName(tab.windowId)
-    case 'docs':
-      return 'Drive'
-    case 'diff':
-      return 'Diff'
-    case 'tasks':
-      return 'Tasks'
-  }
+function tabLabel(tab: PanelTab): string {
+  const windowId = windowIdOf(tab)
+  return windowId ? windowName(windowId) : (viewOfTab(tab)?.label ?? tab.id)
 }
 
 const driveActivity = useDriveActivity()
 
 function needsApproval(windowId: string): boolean {
-  const row = panes.row
+  const row = panels.row
   return !!row && tree.windowStatus(row, windowId)?.status === 'approval'
 }
 
-function tabAgent(tab: SessionTab): AgentIconID | undefined {
-  const row = panes.row
-  return row && tab.kind === 'window' ? tree.windowAgent(row, tab.windowId, windowName(tab.windowId)) : undefined
+function tabAgent(tab: PanelTab): AgentIconID | undefined {
+  const row = panels.row
+  const windowId = windowIdOf(tab)
+  return row && windowId ? tree.windowAgent(row, windowId, windowName(windowId)) : undefined
 }
 
-function tabAttention(tab: SessionTab): boolean {
-  if (tab.kind === 'window') return needsApproval(tab.windowId)
+function tabAttention(tab: PanelTab): boolean {
+  const windowId = windowIdOf(tab)
+  if (windowId) return needsApproval(windowId)
   return tab.kind === 'docs' && !!shownDrive.value && driveActivity.isUnseen(shownDrive.value.session)
 }
 
-function viewTabs(tabList: readonly SessionTab[]): SessionTab[] {
-  return tabList.filter((tab) => tab.kind !== 'window')
+function viewTabs(tabList: readonly PanelTab[]): PanelTab[] {
+  return tabList.filter((tab) => !!viewOfTab(tab))
 }
 
 // A running window has a tab and a tree row, so closing its tab closes the window,
 // through the same confirmation as the tree.
-function closePaneTab(paneId: string, tabId: string): void {
-  const tab = paneById(layout.value, paneId)?.tabs.find((candidate) => candidate.id === tabId)
-  if (tab?.kind === 'window') void ops.requestCloseWindow(pool.visibleSlug, tab.windowId, windowName(tab.windowId))
-  else panes.apply((current) => closeTab(current, paneId, tabId))
+function closePanelTab(panelId: string, tabId: string): void {
+  const windowId = windowIdOf(panelById(layout.value, panelId)?.tabs.find((candidate) => candidate.id === tabId))
+  if (windowId) void ops.requestCloseWindow(pool.visibleSlug, windowId, windowName(windowId))
+  else panels.apply((current) => closeTab(current, panelId, tabId))
 }
 
-function placeWindowHere(windowId: string, paneId: string): void {
-  panes.apply((current) => placeWindow(current, windowId, paneId))
-  panes.syncWindowOrder(windowId)
+function placeWindowHere(windowId: string, panelId: string): void {
+  panels.apply((current) => placeWindow(current, windowId, panelId))
+  panels.syncWindowOrder(windowId)
 }
 
 // The mode hides on a trip to the hub, and props.drive empties with it. A tab
@@ -353,11 +347,11 @@ watch(
 )
 
 const changesSession = computed(() => {
-  const row = panes.row
+  const row = panels.row
   return row && tree.isHiveSession(row) && !tree.isServerSession(row) ? row.id : ''
 })
-const availableViews = computed(() => (panes.row ? panes.viewsFor(panes.row) : []))
-const canAddTerminal = computed(() => !!panes.row && !tree.isChat(panes.row))
+const availableViews = computed(() => (panels.row ? panels.viewsFor(panels.row) : []))
+const canAddTerminal = computed(() => !!panels.row && !tree.isChat(panels.row))
 const agents = computed(() => (changesSession.value && !ops.agentWindowBusy ? ops.agentProfiles : []))
 
 const pickerWindows = computed(() =>
@@ -368,25 +362,25 @@ const pickerWindows = computed(() =>
 )
 
 function openDiff(): void {
-  panes.apply((current) => openView(current, 'diff'))
+  panels.apply((current) => openTab(current, viewTab('diff')))
 }
 
-function viewShown(pane: SessionPane, tabId: string): boolean {
-  return !pane.picking && pane.activeTab === tabId
+function viewShown(panel: Panel, tabId: string): boolean {
+  return !panel.picking && panel.activeTab === tabId
 }
 
-function viewHasKeys(pane: SessionPane, tabId: string): boolean {
+function viewHasKeys(panel: Panel, tabId: string): boolean {
   return (
     props.active &&
     !props.overlayOpen &&
     !terminalTreeFocused.value &&
-    layout.value.focusedPane === pane.id &&
-    viewShown(pane, tabId)
+    layout.value.focusedPanel === panel.id &&
+    viewShown(panel, tabId)
   )
 }
 
 const { setRepoKey } = useTasks()
-const tasksTabOpen = computed(() => panesList.value.some((pane) => pane.tabs.some((tab) => tab.kind === 'tasks')))
+const tasksTabOpen = computed(() => panelList.value.some((panel) => panel.tabs.some((tab) => tab.kind === 'tasks')))
 watch(
   [tasksTabOpen, sessionRepoKey],
   ([open, repoKey]) => {
@@ -396,32 +390,33 @@ watch(
 )
 
 const driveScope = computed<DriveScope | null>(() => {
-  const own = layout.value.docScope
+  const own = docsScopeOf(layout.value)
   if (own) return own
   return shownDrive.value ? { ...shownDrive.value, path: null } : null
 })
 
 function scopeAt(path: string | null): DriveScope | null {
-  const base = layout.value.docScope ?? (props.drive ? { ...props.drive, path: null } : null)
+  const base = docsScopeOf(layout.value) ?? (props.drive ? { ...props.drive, path: null } : null)
   return base && path ? { ...base, path } : base
 }
 
 useTerminalDrive(toRef(props, 'drive'), () => props.active, {
   // Tabs are keyed by the row's id, so a request has to wait for the row.
-  ready: () => !!panes.row && pool.activeSlug === pool.visibleSlug,
-  open: (path) => panes.apply((current) => ({ ...openView(current, 'docs'), docScope: scopeAt(path) })),
-  arrive: (path) => panes.apply((current) => ({ ...addViewQuietly(current, 'docs'), docScope: scopeAt(path) })),
+  ready: () => !!panels.row && pool.activeSlug === pool.visibleSlug,
+  open: (path) => panels.apply((current) => withDocsScope(openTab(current, viewTab('docs')), scopeAt(path))),
+  arrive: (path) => panels.apply((current) => withDocsScope(addTabQuietly(current, viewTab('docs')), scopeAt(path))),
   close: () =>
-    panes.apply((current) => {
-      const pane = panesOf(current).find((candidate) => candidate.tabs.some((tab) => tab.kind === 'docs'))
-      return pane ? closeTab(current, pane.id, 'docs') : current
+    panels.apply((current) => {
+      const docs = viewTab('docs')
+      const panel = panelWithTab(current, docs.id)
+      return panel ? closeTab(current, panel.id, docs.id) : current
     }),
 })
 
 // The full page knows nothing about authors. A Drive tab on screen is the user
 // reading, and one behind another tab is not, so a write there still earns its dot.
 const docsReader = computed(() => {
-  const shownDocs = panesList.value.some((pane) => viewShown(pane, 'docs'))
+  const shownDocs = panelList.value.some((panel) => viewShown(panel, 'docs'))
   return shownDocs && props.active ? (shownDrive.value?.session ?? undefined) : undefined
 })
 watch(
@@ -507,42 +502,42 @@ onBeforeUnmount(() => {
     <!-- Hidden rather than unmounted without a session: a pooled session's terminals keep
          their elements, or each would lose its screen. -->
     <div
-      ref="panesHost"
+      ref="panelsHost"
       class="relative min-h-0 min-w-0 flex-1"
       :class="visible ? 'block' : 'hidden'"
-      data-testid="session-panes"
+      data-testid="panel-layout"
     >
       <section
-        v-for="pane in panesList"
-        :key="pane.id"
+        v-for="panel in panelList"
+        :key="panel.id"
         class="absolute flex min-h-0 min-w-0 flex-col"
         :class="[
-          (boxes.get(pane.id)?.x ?? 0) > 0 ? 'border-l border-strong' : '',
-          (boxes.get(pane.id)?.y ?? 0) > 0 ? 'border-t border-strong' : '',
+          (boxes.get(panel.id)?.x ?? 0) > 0 ? 'border-l border-strong' : '',
+          (boxes.get(panel.id)?.y ?? 0) > 0 ? 'border-t border-strong' : '',
         ]"
-        :style="paneStyle(pane.id)"
-        :data-session-pane="pane.id"
-        :aria-label="`Pane ${pane.id}`"
-        :data-testid="`session-pane-${pane.id}`"
-        @pointerdown.capture="panes.apply((current) => focusPane(current, pane.id))"
+        :style="panelStyle(panel.id)"
+        :data-panel="panel.id"
+        :aria-label="`Panel ${panel.id}`"
+        :data-testid="`panel-${panel.id}`"
+        @pointerdown.capture="panels.apply((current) => focusPanel(current, panel.id))"
       >
         <SessionTabRow
-          :pane="pane"
-          :focused="layout.focusedPane === pane.id"
+          :panel="panel"
+          :focused="layout.focusedPanel === panel.id"
           :label="tabLabel"
           :attention="tabAttention"
           :agent="tabAgent"
-          :row="panes.row"
-          :drop-gap="tabDrop?.pane === pane.id ? tabDrop.gap : null"
-          :resizable="!!boundaryAbove(pane.id)"
+          :row="panels.row"
+          :drop-gap="tabDrop?.panel === panel.id ? tabDrop.gap : null"
+          :resizable="!!boundaryAbove(panel.id)"
           @tab-drag="startTabDrag"
-          @resize-start="(event) => startRowResize(event, pane.id)"
-          @select="(tabId) => panes.apply((current) => selectTab(current, pane.id, tabId))"
-          @close="(tabId) => closePaneTab(pane.id, tabId)"
+          @resize-start="(event) => startRowResize(event, panel.id)"
+          @select="(tabId) => panels.apply((current) => selectTab(current, panel.id, tabId))"
+          @close="(tabId) => closePanelTab(panel.id, tabId)"
         >
           <template #actions>
             <div class="ml-auto flex shrink-0 items-center gap-px pl-2">
-              <template v-if="pane.id === actionsPane">
+              <template v-if="panel.id === actionsPanel">
                 <span
                   v-if="statusBarError"
                   class="max-w-40 truncate px-1.5 text-caption text-severity-error"
@@ -577,62 +572,62 @@ onBeforeUnmount(() => {
               <IconButton
                 label="Split right"
                 :icon="IconColumns2"
-                :data-testid="`session-split-row-${pane.id}`"
-                @click="panes.apply((current) => splitPane(current, pane.id, 'row'))"
+                :data-testid="`panel-split-row-${panel.id}`"
+                @click="panels.apply((current) => splitPanel(current, panel.id, 'row'))"
               />
               <IconButton
                 label="Split down"
                 :icon="IconRows2"
-                :data-testid="`session-split-column-${pane.id}`"
-                @click="panes.apply((current) => splitPane(current, pane.id, 'column'))"
+                :data-testid="`panel-split-column-${panel.id}`"
+                @click="panels.apply((current) => splitPanel(current, panel.id, 'column'))"
               />
               <IconButton
-                v-if="panesList.length > 1"
-                label="Close this pane, keeping its tabs"
+                v-if="panelList.length > 1"
+                label="Close this panel, keeping its tabs"
                 :icon="IconX"
-                :data-testid="`session-pane-close-${pane.id}`"
-                @click="panes.apply((current) => closePane(current, pane.id))"
+                :data-testid="`panel-close-${panel.id}`"
+                @click="panels.apply((current) => closePanel(current, panel.id))"
               />
             </div>
           </template>
         </SessionTabRow>
 
         <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
-          <SessionPanePicker
-            v-if="pane.picking"
+          <SessionPanelPicker
+            v-if="panel.picking"
             :windows="pickerWindows"
             :agents="agents"
             :views="availableViews"
             :can-add-terminal="canAddTerminal"
-            @window="(windowId) => placeWindowHere(windowId, pane.id)"
-            @terminal="panes.newWindow(panes.row!, pane.id)"
-            @agent="(agent) => panes.newAgentWindow(panes.row!, agent, pane.id)"
-            @view="(view) => panes.apply((current) => placeView(current, view, pane.id))"
-            @cancel="panes.apply((current) => closePane(current, pane.id))"
+            @window="(windowId) => placeWindowHere(windowId, panel.id)"
+            @terminal="panels.newWindow(panels.row!, panel.id)"
+            @agent="(agent) => panels.newAgentWindow(panels.row!, agent, panel.id)"
+            @view="(view) => panels.apply((current) => placeTab(current, viewTab(view), panel.id))"
+            @cancel="panels.apply((current) => closePanel(current, panel.id))"
           />
           <!-- Mounted while open, so a tab switch keeps a diff's scroll and picks;
                a session switch re-keys them, so only the visible session pays. -->
           <div
-            v-for="tab in viewTabs(pane.tabs)"
-            v-show="viewShown(pane, tab.id)"
-            :key="`${panes.key}:${tab.id}`"
+            v-for="tab in viewTabs(panel.tabs)"
+            v-show="viewShown(panel, tab.id)"
+            :key="`${panels.key}:${tab.id}`"
             class="absolute inset-0 flex min-h-0 min-w-0 flex-col bg-app"
-            :data-testid="`session-view-${tab.kind}`"
+            :data-testid="`panel-view-${tab.kind}`"
           >
             <DrivePage
               v-if="tab.kind === 'docs' && driveScope"
               embedded
               :scope="driveScope"
-              @update:scope="(scope) => panes.apply((current) => ({ ...current, docScope: scope }))"
+              @update:scope="(scope) => panels.apply((current) => withDocsScope(current, scope))"
               @setup="emit('setup')"
               @open-url="openLink"
             />
             <ChangesView
               v-else-if="tab.kind === 'diff' && changesSession"
-              :keys-active="viewHasKeys(pane, tab.id)"
+              :keys-active="viewHasKeys(panel, tab.id)"
               :session-id="changesSession"
             />
-            <TasksView v-else-if="tab.kind === 'tasks'" embedded :keys-active="viewHasKeys(pane, tab.id)" />
+            <TasksView v-else-if="tab.kind === 'tasks'" embedded :keys-active="viewHasKeys(panel, tab.id)" />
           </div>
         </div>
       </section>
@@ -640,17 +635,17 @@ onBeforeUnmount(() => {
       <template v-for="session in pool.paneSessions" :key="session.slug">
         <div
           v-for="tab in session.tabs"
-          v-show="session.entry === visible && panes.onScreen.has(tab.windowId)"
+          v-show="session.entry === visible && panels.onScreen.has(tab.windowId)"
           :key="tab.uid"
           class="absolute flex min-h-0 min-w-0 flex-col"
-          :style="paneRegion(panes.onScreen.get(tab.windowId) ?? '')"
-          :data-session-pane="panes.onScreen.get(tab.windowId) ?? ''"
-          @pointerdown.capture="panes.apply((current) => focusPane(current, panes.onScreen.get(tab.windowId) ?? ''))"
+          :style="panelRegion(panels.onScreen.get(tab.windowId) ?? '')"
+          :data-panel="panels.onScreen.get(tab.windowId) ?? ''"
+          @pointerdown.capture="panels.apply((current) => focusPanel(current, panels.onScreen.get(tab.windowId) ?? ''))"
         >
           <TerminalTab
             :tab="tab"
             :session="session.entry"
-            :active="session.entry === visible && panes.onScreen.has(tab.windowId)"
+            :active="session.entry === visible && panels.onScreen.has(tab.windowId)"
           />
         </div>
       </template>
@@ -664,10 +659,10 @@ onBeforeUnmount(() => {
         tabindex="0"
         :aria-orientation="split.axis === 'column' ? 'horizontal' : 'vertical'"
         :aria-valuenow="Math.round(split.ratio * 100)"
-        aria-label="Resize the panes"
-        :data-testid="`session-split-divider-${split.id}`"
+        aria-label="Resize the panels"
+        :data-testid="`panel-divider-${split.id}`"
         @pointerdown="startResize($event, split, box)"
-        @dblclick="panes.apply((current) => resizeSplit(current, split.id, 0.5))"
+        @dblclick="panels.apply((current) => resizeSplit(current, split.id, 0.5))"
         @keydown.left.prevent="stepResize(split, -1)"
         @keydown.up.prevent="stepResize(split, -1)"
         @keydown.right.prevent="stepResize(split, 1)"
@@ -679,9 +674,9 @@ onBeforeUnmount(() => {
           :class="split.axis === 'column' ? 'left-3 top-1/2 -translate-y-1/2' : 'left-1/2 top-9 -translate-x-1/2'"
           aria-label="Turn this split"
           title="Turn this split"
-          :data-testid="`session-split-turn-${split.id}`"
+          :data-testid="`panel-turn-${split.id}`"
           @pointerdown.stop
-          @click="panes.apply((current) => turnSplit(current, split.id))"
+          @click="panels.apply((current) => turnSplit(current, split.id))"
         >
           <IconRotateCw class="size-3" aria-hidden="true" />
         </button>
@@ -753,9 +748,9 @@ onBeforeUnmount(() => {
         </Transition>
       </div>
       <div
-        v-if="visible && statusPane"
+        v-if="visible && statusPanel"
         class="pointer-events-none absolute flex flex-col"
-        :style="paneRegion(statusPane)"
+        :style="panelRegion(statusPanel)"
       >
         <div
           v-if="!tabs.length && status !== 'ended'"

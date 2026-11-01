@@ -5,17 +5,18 @@ import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { useElementSize } from '@vueuse/core'
 import type { AgentIconID } from '../../lib/agentIcon'
-import type { SessionPane, SessionTab } from '../../lib/sessionLayout'
+import { windowIdOf } from '../../lib/windowTabs'
+import type { Panel, PanelTab } from '../../lib/panelLayout'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import SessionAddMenu from './SessionAddMenu.vue'
 import SessionTabIcon from './SessionTabIcon.vue'
 
 const props = defineProps<{
-  pane: SessionPane
+  panel: Panel
   focused: boolean
-  label: (tab: SessionTab) => string
-  attention: (tab: SessionTab) => boolean
-  agent: (tab: SessionTab) => AgentIconID | undefined
+  label: (tab: PanelTab) => string
+  attention: (tab: PanelTab) => boolean
+  agent: (tab: PanelTab) => AgentIconID | undefined
   /** The session a "+" adds to, once its row has landed. */
   row: TerminalSessionRow | null
   /** The gap a dragged tab would land in, when this row is the target. */
@@ -33,11 +34,11 @@ const emit = defineEmits<{
 const menuOpen = ref(false)
 const addButton = ref<HTMLElement | null>(null)
 
-function shown(tab: SessionTab): boolean {
-  return !props.pane.picking && tab.id === props.pane.activeTab
+function shown(tab: PanelTab): boolean {
+  return !props.panel.picking && tab.id === props.panel.activeTab
 }
 
-function closeLabel(tab: SessionTab): string {
+function closeLabel(tab: PanelTab): string {
   return `Close ${props.label(tab)}`
 }
 
@@ -46,7 +47,7 @@ function closeLabel(tab: SessionTab): string {
 const TAB_MIN_WIDTH_PX = 110
 const rowEl = ref<HTMLElement | null>(null)
 const { width: rowWidth } = useElementSize(rowEl)
-const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pane.tabs.length + 1) < TAB_MIN_WIDTH_PX)
+const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.panel.tabs.length + 1) < TAB_MIN_WIDTH_PX)
 </script>
 
 <template>
@@ -54,28 +55,28 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
     ref="rowEl"
     class="flex h-[30px] shrink-0 items-stretch border-b border-border bg-sidebar pr-1"
     :class="resizable ? 'cursor-row-resize' : ''"
-    :data-testid="`session-tab-row-${pane.id}`"
+    :data-testid="`panel-tab-row-${panel.id}`"
     @pointerdown.self="resizable && emit('resize-start', $event)"
   >
-    <div class="session-tabs flex min-w-0 shrink items-stretch overflow-x-auto" role="tablist">
+    <div class="panel-tabs flex min-w-0 shrink items-stretch overflow-x-auto" role="tablist">
       <div
-        v-for="(tab, at) in pane.tabs"
+        v-for="(tab, at) in panel.tabs"
         :key="tab.id"
-        data-session-tab
-        class="session-tab group relative flex min-w-0 max-w-[168px] shrink touch-none select-none items-center text-small"
+        data-panel-tab
+        class="panel-tab group relative flex min-w-0 max-w-[168px] shrink touch-none select-none items-center text-small"
         :class="[
-          shown(tab) ? (focused ? 'session-tab-focused' : 'session-tab-shown') : 'text-text-2',
+          shown(tab) ? (focused ? 'panel-tab-focused' : 'panel-tab-shown') : 'text-text-2',
           compact && !shown(tab) ? 'shrink-0' : 'min-w-[56px]',
         ]"
-        :data-testid="`session-tab-${tab.id}`"
+        :data-testid="`panel-tab-${tab.id}`"
         :data-shown="shown(tab)"
         @pointerdown="emit('tab-drag', $event, tab.id)"
       >
         <span
-          v-if="dropGap === at || (dropGap === pane.tabs.length && at === pane.tabs.length - 1)"
+          v-if="dropGap === at || (dropGap === panel.tabs.length && at === panel.tabs.length - 1)"
           class="pointer-events-none absolute inset-y-1 z-10 w-0.5 rounded bg-accent"
           :class="dropGap === at ? '-left-px' : '-right-px'"
-          data-testid="session-tab-drop-marker"
+          data-testid="panel-tab-drop-marker"
         />
         <button
           type="button"
@@ -88,16 +89,13 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
           @click="emit('select', tab.id)"
         >
           <SessionTabIcon :kind="tab.kind" :agent="agent(tab)" />
-          <span
-            v-if="!compact || shown(tab)"
-            class="min-w-0 truncate"
-            :class="tab.kind === 'window' ? 'font-mono' : ''"
-            >{{ label(tab) }}</span
-          >
+          <span v-if="!compact || shown(tab)" class="min-w-0 truncate" :class="windowIdOf(tab) ? 'font-mono' : ''">{{
+            label(tab)
+          }}</span>
           <span
             v-if="attention(tab)"
             class="size-1.5 shrink-0 rounded-full bg-accent"
-            :data-testid="`session-tab-attention-${tab.id}`"
+            :data-testid="`panel-tab-attention-${tab.id}`"
           />
         </button>
         <button
@@ -107,7 +105,7 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
           :class="shown(tab) ? 'opacity-100' : ''"
           :aria-label="closeLabel(tab)"
           :title="closeLabel(tab)"
-          :data-testid="`session-tab-close-${tab.id}`"
+          :data-testid="`panel-tab-close-${tab.id}`"
           @pointerdown.stop
           @click="emit('close', tab.id)"
         >
@@ -122,13 +120,13 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
         :icon="IconPlus"
         size="sm"
         :active="menuOpen"
-        :data-testid="`session-tab-add-${pane.id}`"
+        :data-testid="`panel-tab-add-${panel.id}`"
         @click="menuOpen = !menuOpen"
       />
       <SessionAddMenu
         v-if="menuOpen && row"
         :row="row"
-        :pane="pane.id"
+        :panel="panel.id"
         :anchor="addButton"
         :ignore="[addButton]"
         @close="menuOpen = false"
@@ -140,33 +138,33 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
 </template>
 
 <style scoped>
-.session-tabs {
+.panel-tabs {
   scrollbar-width: none;
 }
-.session-tabs::-webkit-scrollbar {
+.panel-tabs::-webkit-scrollbar {
   display: none;
 }
 /* The tree's language: flat rows, a hover wash, and an accent rail on what is
    selected, here along the bottom edge because the tabs run sideways. */
-.session-tab:hover {
+.panel-tab:hover {
   background: var(--color-chip);
 }
-.session-tab-focused {
+.panel-tab-focused {
   font-weight: 500;
   color: var(--color-accent);
 }
-.session-tab-shown {
+.panel-tab-shown {
   color: var(--color-text);
 }
-.session-tab-focused::after,
-.session-tab-shown::after {
+.panel-tab-focused::after,
+.panel-tab-shown::after {
   content: '';
   position: absolute;
   inset: auto 0 -1px;
   height: 2px;
   background: var(--color-accent);
 }
-.session-tab-shown::after {
+.panel-tab-shown::after {
   background: var(--color-text-4);
 }
 </style>

@@ -6,7 +6,7 @@ import { useTerminalActions } from '../../composables/useTerminalActions'
 import { useWailsEvent } from '../../composables/useWailsEvent'
 import { appErrorMessage, errorText } from '../../lib/appError'
 import type { TerminalClient, WindowForeground } from '../../lib/terminalClient'
-import { useSessionTabs } from '../../stores/useSessionTabs'
+import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
 import { useTerminalOutcomes } from '../../stores/useTerminalOutcomes'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
@@ -97,7 +97,7 @@ export function useTerminalSessionOps(options: {
     if (!client.value) return
     const killed = tree.attachable.value.find((row) => row.slug === slug)
     await client.value.kill(slug)
-    if (killed) useSessionTabs().forget(killed.id)
+    if (killed) usePanelLayouts().forget(killed.id)
     useTerminalOutcomes().report(slug, { reason: 'stopped', detail: 'The terminal was stopped.' })
     // Re-attaching the killed session lands it on the start panel; a pooled one
     // that is not on screen is simply let go.

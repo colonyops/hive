@@ -60,7 +60,7 @@ async function fixture(page: Page) {
   })
   await page.routeWebSocket('**/api/terminal/stream?*', () => {})
   await page.goto('/#/terminal/review')
-  await expect(page.getByTestId('session-tab-window:@1')).toBeVisible()
+  await expect(page.getByTestId('panel-tab-window:@1')).toBeVisible()
   await expect(page.getByTestId('terminal-window-row').first()).toBeVisible()
   await dismissSizeBanner(page)
 }
@@ -74,15 +74,15 @@ async function dismissSizeBanner(page: Page) {
 }
 
 async function addTab(page: Page, pane: string, label: string) {
-  await page.getByTestId(`session-tab-add-${pane}`).click()
+  await page.getByTestId(`panel-tab-add-${pane}`).click()
   await page.getByTestId(`new-window-view-${label.toLowerCase()}`).click()
 }
 
 function tabIds(page: Page, pane: string): Promise<string[]> {
   return page
-    .getByTestId(`session-tab-row-${pane}`)
-    .locator('[data-session-tab]')
-    .evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute('data-testid')!.replace('session-tab-', '')))
+    .getByTestId(`panel-tab-row-${pane}`)
+    .locator('[data-panel-tab]')
+    .evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute('data-testid')!.replace('panel-tab-', '')))
 }
 
 async function center(target: Locator) {
@@ -99,11 +99,11 @@ async function dragTo(page: Page, from: { x: number; y: number }, to: { x: numbe
 }
 
 async function dragTabBefore(page: Page, tab: string, before: string) {
-  const target = (await page.getByTestId(`session-tab-${before}`).boundingBox())!
-  await dragTo(page, await center(page.getByTestId(`session-tab-${tab}`)), { x: target.x + 2, y: target.y + target.height / 2 })
+  const target = (await page.getByTestId(`panel-tab-${before}`).boundingBox())!
+  await dragTo(page, await center(page.getByTestId(`panel-tab-${tab}`)), { x: target.x + 2, y: target.y + target.height / 2 })
 }
 
-const paneBox = async (page: Page, pane: string) => (await page.getByTestId(`session-pane-${pane}`).boundingBox())!
+const paneBox = async (page: Page, pane: string) => (await page.getByTestId(`panel-${pane}`).boundingBox())!
 
 test.describe('session tabs', { tag: [tag.terminal] }, () => {
   test('opens each tab once, and restores a session after another', async ({ page, browserName }) => {
@@ -113,17 +113,17 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await addTab(page, 'p0', 'Tasks')
     await addTab(page, 'p0', 'Diff')
     expect(await tabIds(page, 'p0')).toEqual(['window:@1', 'window:@2', 'docs', 'diff', 'tasks'])
-    await expect(page.getByTestId('session-tab-diff')).toHaveAttribute('data-shown', 'true')
+    await expect(page.getByTestId('panel-tab-diff')).toHaveAttribute('data-shown', 'true')
     await expect(page.getByTestId('changes-view')).toBeVisible()
     await expect(page.getByTestId('titlebar-toggle-preview')).toBeDisabled()
     await page.screenshot({ path: screenshotPath(`session-tabs-tabs-${browserName}.png`) })
 
     await page.locator('[data-testid="terminal-session-row"][data-slug="other"]').click()
-    await expect(page.getByTestId('session-tab-window:@1')).toHaveAttribute('data-shown', 'true')
+    await expect(page.getByTestId('panel-tab-window:@1')).toHaveAttribute('data-shown', 'true')
     expect(await tabIds(page, 'p0')).toEqual(['window:@1', 'window:@2'])
 
     await page.locator('[data-testid="terminal-session-row"][data-slug="review"]').click()
-    await expect(page.getByTestId('session-tab-diff')).toHaveAttribute('data-shown', 'true')
+    await expect(page.getByTestId('panel-tab-diff')).toHaveAttribute('data-shown', 'true')
     expect(await tabIds(page, 'p0')).toEqual(['window:@1', 'window:@2', 'docs', 'diff', 'tasks'])
   })
 
@@ -136,33 +136,33 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
 
   test('splits through the picker, and puts Terminal beside Diff', async ({ page, browserName }) => {
     await fixture(page)
-    await page.getByTestId('session-split-row-p0').click()
-    const picker = page.getByTestId('session-pane-picker')
+    await page.getByTestId('panel-split-row-p0').click()
+    const picker = page.getByTestId('panel-picker')
     await expect(picker).toContainText('What goes here?')
-    await expect(page.getByTestId('session-pane-picker-window-@2')).toBeVisible()
+    await expect(page.getByTestId('panel-picker-window-@2')).toBeVisible()
     await page.screenshot({ path: screenshotPath(`session-tabs-picker-${browserName}.png`) })
 
-    await page.getByTestId('session-pane-picker-view-diff').click()
+    await page.getByTestId('panel-picker-view-diff').click()
     await expect(picker).toBeHidden()
     await expect(page.getByTestId('changes-view')).toBeVisible()
     await expect(page.locator('[data-testid="terminal-pane"][data-window-id="@1"]')).toBeVisible()
     await page.screenshot({ path: screenshotPath(`session-tabs-terminal-beside-diff-${browserName}.png`) })
 
-    await page.getByTestId('session-tab-close-diff').click()
-    await expect(page.getByTestId('session-pane-p1')).toHaveCount(0)
+    await page.getByTestId('panel-tab-close-diff').click()
+    await expect(page.getByTestId('panel-p1')).toHaveCount(0)
   })
 
   test('shows a second window beside the first, and a window keeps one tab', async ({ page }) => {
     await fixture(page)
-    await page.getByTestId('session-split-row-p0').click()
-    await page.getByTestId('session-pane-picker-window-@2').click()
+    await page.getByTestId('panel-split-row-p0').click()
+    await page.getByTestId('panel-picker-window-@2').click()
     await expect(page.locator('[data-testid="terminal-pane"][data-window-id="@1"]')).toBeVisible()
     await expect(page.locator('[data-testid="terminal-pane"][data-window-id="@2"]')).toBeVisible()
     expect(await tabIds(page, 'p0')).toEqual(['window:@1'])
     expect(await tabIds(page, 'p1')).toEqual(['window:@2'])
 
-    await page.getByTestId('session-pane-close-p1').click()
-    await expect(page.getByTestId('session-pane-p1')).toHaveCount(0)
+    await page.getByTestId('panel-close-p1').click()
+    await expect(page.getByTestId('panel-p1')).toHaveCount(0)
     expect(await tabIds(page, 'p0')).toEqual(['window:@1', 'window:@2'])
   })
 
@@ -195,7 +195,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await expect.poll(tree).toEqual(await tabsAsTree())
 
     await page.locator('[data-testid="terminal-window-row"][data-window-id="@1"]').click()
-    await expect(page.getByTestId('session-tab-window:@1')).toHaveAttribute('data-shown', 'true')
+    await expect(page.getByTestId('panel-tab-window:@1')).toHaveAttribute('data-shown', 'true')
   })
 
   test('offers the same + menu on a session row and on a tab row', async ({ page }) => {
@@ -206,7 +206,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
         .locator('[data-testid^="new-window-"]')
         .evaluateAll((rows) => rows.map((row) => row.getAttribute('data-testid')))
 
-    await page.getByTestId('session-tab-add-p0').click()
+    await page.getByTestId('panel-tab-add-p0').click()
     const fromTabs = await items()
     expect(fromTabs).toEqual(expect.arrayContaining(['new-window-terminal', 'new-window-view-docs', 'new-window-view-diff', 'new-window-view-tasks']))
     await page.keyboard.press('Escape')
@@ -217,7 +217,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     expect(await items()).toEqual(fromTabs)
 
     await page.getByTestId('new-window-view-tasks').click()
-    await expect(page.getByTestId('session-tab-tasks')).toHaveAttribute('data-shown', 'true')
+    await expect(page.getByTestId('panel-tab-tasks')).toHaveAttribute('data-shown', 'true')
   })
 
   test('drags tabs along a row and between panes', async ({ page, browserName }) => {
@@ -232,23 +232,23 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await dragTabBefore(page, 'diff', 'window:@1')
     await expect.poll(() => tabIds(page, 'p0')).toEqual(['diff', 'window:@1', 'window:@2', 'tasks', 'docs'])
 
-    await page.getByTestId('session-split-row-p0').click()
-    await page.getByTestId('session-pane-picker-window-@2').click()
-    const row = (await page.getByTestId('session-tab-row-p1').boundingBox())!
-    await dragTo(page, await center(page.getByTestId('session-tab-diff')), { x: row.x + row.width / 2, y: row.y + row.height / 2 })
+    await page.getByTestId('panel-split-row-p0').click()
+    await page.getByTestId('panel-picker-window-@2').click()
+    const row = (await page.getByTestId('panel-tab-row-p1').boundingBox())!
+    await dragTo(page, await center(page.getByTestId('panel-tab-diff')), { x: row.x + row.width / 2, y: row.y + row.height / 2 })
     await expect.poll(() => tabIds(page, 'p1')).toEqual(['window:@2', 'diff'])
     expect(await tabIds(page, 'p0')).toEqual(['window:@1', 'tasks', 'docs'])
     await expect(page.getByTestId('changes-view')).toBeVisible()
     await page.screenshot({ path: screenshotPath(`session-tabs-drag-${browserName}.png`) })
 
     // Over a terminal rather than a row, which would swallow the pointer without capture.
-    await page.getByTestId('session-tab-window:@1').click()
+    await page.getByTestId('panel-tab-window:@1').click()
     const terminal = await center(page.locator('[data-testid="terminal-pane"]:visible').first())
-    await dragTo(page, await center(page.getByTestId('session-tab-window:@2')), terminal)
+    await dragTo(page, await center(page.getByTestId('panel-tab-window:@2')), terminal)
     await expect.poll(() => tabIds(page, 'p0')).toContain('window:@2')
 
     await page.reload()
-    await expect(page.getByTestId('session-tab-window:@1')).toBeVisible()
+    await expect(page.getByTestId('panel-tab-window:@1')).toBeVisible()
     expect(await tabIds(page, 'p1')).toEqual(['diff'])
   })
 
@@ -264,30 +264,30 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await page.screenshot({ path: screenshotPath(`session-tabs-tree-${browserName}.png`) })
 
     await page.locator('[data-testid="terminal-view-row"][data-view-kind="docs"]').click()
-    await expect(page.getByTestId('session-tab-docs')).toHaveAttribute('data-shown', 'true')
+    await expect(page.getByTestId('panel-tab-docs')).toHaveAttribute('data-shown', 'true')
 
     const diffRow = page.locator('[data-testid="terminal-view-row"][data-view-kind="diff"]')
     await diffRow.hover()
     await diffRow.getByTestId('terminal-close-view').click()
-    await expect(page.getByTestId('session-tab-diff')).toHaveCount(0)
+    await expect(page.getByTestId('panel-tab-diff')).toHaveCount(0)
     await expect(rows).toHaveCount(1)
 
-    await page.getByTestId('session-tab-close-docs').click()
+    await page.getByTestId('panel-tab-close-docs').click()
     await expect(rows).toHaveCount(0)
   })
 
   test('splits within splits, either way, and restores them', async ({ page, browserName }) => {
     await fixture(page)
-    await page.getByTestId('session-split-row-p0').click()
-    await page.getByTestId('session-pane-picker-view-tasks').click()
+    await page.getByTestId('panel-split-row-p0').click()
+    await page.getByTestId('panel-picker-view-tasks').click()
     let [first, second] = [await paneBox(page, 'p0'), await paneBox(page, 'p1')]
     expect(second.x).toBeGreaterThan(first.x + first.width - 2)
     expect(second.y).toBe(first.y)
     await page.screenshot({ path: screenshotPath(`session-tabs-side-by-side-${browserName}.png`) })
 
     // Within the right side, as tmux would.
-    await page.getByTestId('session-split-column-p1').click()
-    await page.getByTestId('session-pane-picker-window-@2').click()
+    await page.getByTestId('panel-split-column-p1').click()
+    await page.getByTestId('panel-picker-window-@2').click()
     const [right, below] = [await paneBox(page, 'p1'), await paneBox(page, 'p2')]
     expect(below.y).toBeGreaterThan(right.y + right.height - 2)
     expect(below.x).toBe(right.x)
@@ -295,22 +295,22 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await page.screenshot({ path: screenshotPath(`session-tabs-nested-${browserName}.png`) })
 
     // And within the left side, so three levels sit side by side.
-    await page.getByTestId('session-split-column-p0').click()
-    await expect(page.getByTestId('session-pane-p3')).toBeVisible()
-    await page.getByTestId('session-pane-picker-cancel').click()
-    await expect(page.getByTestId('session-pane-p3')).toHaveCount(0)
+    await page.getByTestId('panel-split-column-p0').click()
+    await expect(page.getByTestId('panel-p3')).toBeVisible()
+    await page.getByTestId('panel-picker-cancel').click()
+    await expect(page.getByTestId('panel-p3')).toHaveCount(0)
 
     // One split turns; the others stay.
-    const divider = page.getByTestId('session-split-divider-s2')
+    const divider = page.getByTestId('panel-divider-s2')
     await divider.hover()
-    await page.getByTestId('session-split-turn-s2').click()
+    await page.getByTestId('panel-turn-s2').click()
     const [turnedA, turnedB] = [await paneBox(page, 'p1'), await paneBox(page, 'p2')]
     expect(turnedB.x).toBeGreaterThan(turnedA.x)
     expect(turnedB.y).toBe(turnedA.y)
     await page.screenshot({ path: screenshotPath(`session-tabs-stacked-${browserName}.png`) })
 
     await page.reload()
-    await expect(page.getByTestId('session-pane-p2')).toBeVisible()
+    await expect(page.getByTestId('panel-p2')).toBeVisible()
     expect((await paneBox(page, 'p2')).x).toBeGreaterThan((await paneBox(page, 'p1')).x)
     expect(await tabIds(page, 'p1')).toEqual(['tasks'])
 
@@ -318,7 +318,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     expect(second.x).toBeGreaterThan(first.x)
 
     await page.locator('[data-testid="terminal-session-row"][data-slug="other"]').click()
-    await expect(page.getByTestId('session-pane-p1')).toHaveCount(0)
+    await expect(page.getByTestId('panel-p1')).toHaveCount(0)
   })
 
   test('drags a Drive, Diff or Tasks row in the tree, and the tabs follow', async ({ page, browserName }) => {
@@ -346,7 +346,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
       .poll(async () => Math.abs((await page.getByTestId('terminal-window-rail').boundingBox())!.y - row.y))
       .toBeLessThan(row.height)
 
-    await page.getByTestId('session-tab-window:@1').click()
+    await page.getByTestId('panel-tab-window:@1').click()
     await expect(diffRow).toHaveAttribute('data-active', 'false')
     await expect(page.locator('[data-testid="terminal-window-row"][data-window-id="@1"]')).toHaveAttribute('data-active', 'true')
   })
@@ -371,19 +371,19 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await addTab(page, 'p0', 'Drive')
     await addTab(page, 'p0', 'Diff')
     await page.reload()
-    await expect(page.getByTestId('session-tab-diff')).toHaveAttribute('data-shown', 'true')
+    await expect(page.getByTestId('panel-tab-diff')).toHaveAttribute('data-shown', 'true')
     expect(await tabIds(page, 'p0')).toEqual(['window:@1', 'window:@2', 'docs', 'diff'])
   })
 
   test('keeps every view usable at half width and at the clamp', async ({ page, browserName }) => {
     test.setTimeout(60_000)
     await fixture(page)
-    await page.getByTestId('session-split-row-p0').click()
-    await page.getByTestId('session-pane-picker-view-tasks').click()
+    await page.getByTestId('panel-split-row-p0').click()
+    await page.getByTestId('panel-picker-view-tasks').click()
     await addTab(page, 'p1', 'Drive')
     await addTab(page, 'p1', 'Diff')
 
-    const show = (kind: string) => page.getByTestId(`session-tab-${kind}`).click()
+    const show = (kind: string) => page.getByTestId(`panel-tab-${kind}`).click()
     const shots = async (width: string) => {
       for (const kind of ['tasks', 'docs', 'diff']) {
         await show(kind)
@@ -411,7 +411,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     expect((await page.getByTestId('tasks-list-column').boundingBox())!.width).toBeGreaterThan(320)
     await shots('half')
 
-    const divider = await center(page.getByTestId('session-split-divider-s1'))
+    const divider = await center(page.getByTestId('panel-divider-s1'))
     await dragTo(page, divider, { x: 5000, y: divider.y })
     expect((await paneBox(page, 'p1')).width).toBeLessThan(260)
     await tasksFit()
@@ -420,34 +420,34 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
 
   test('drags the boundary to resize both ways, keeps it, and clamps it', async ({ page, browserName }) => {
     await fixture(page)
-    await page.getByTestId('session-split-row-p0').click()
-    await page.getByTestId('session-pane-picker-window-@2').click()
+    await page.getByTestId('panel-split-row-p0').click()
+    await page.getByTestId('panel-picker-window-@2').click()
     const terminal = await page.locator('[data-testid="terminal-pane"][data-window-id="@1"]').elementHandle()
 
     const before = await paneBox(page, 'p0')
-    const divider = await center(page.getByTestId('session-split-divider-s1'))
+    const divider = await center(page.getByTestId('panel-divider-s1'))
     await dragTo(page, divider, { x: divider.x + 180, y: divider.y })
     expect((await paneBox(page, 'p0')).width).toBeCloseTo(before.width + 180, -1)
     await page.screenshot({ path: screenshotPath(`session-tabs-resize-${browserName}.png`) })
 
-    const far = await center(page.getByTestId('session-split-divider-s1'))
+    const far = await center(page.getByTestId('panel-divider-s1'))
     await dragTo(page, far, { x: 2, y: far.y })
     const total = before.width * 2
     expect((await paneBox(page, 'p0')).width).toBeCloseTo(total * 0.2, -1)
 
     // The stacked boundary: the lower tab row's empty space is the grab area too.
-    const turn = page.getByTestId('session-split-divider-s1')
+    const turn = page.getByTestId('panel-divider-s1')
     await turn.hover()
-    await page.getByTestId('session-split-turn-s1').click()
-    await page.getByTestId('session-split-divider-s1').dblclick()
+    await page.getByTestId('panel-turn-s1').click()
+    await page.getByTestId('panel-divider-s1').dblclick()
     const top = await paneBox(page, 'p0')
-    const row = (await page.getByTestId('session-tab-row-p1').boundingBox())!
+    const row = (await page.getByTestId('panel-tab-row-p1').boundingBox())!
     const grab = { x: row.x + row.width * 0.5, y: row.y + row.height / 2 }
     await dragTo(page, grab, { x: grab.x, y: grab.y + 120 })
     expect((await paneBox(page, 'p0')).height).toBeCloseTo(top.height + 120, -1)
     await page.screenshot({ path: screenshotPath(`session-tabs-resize-stacked-${browserName}.png`) })
 
-    const stackedDivider = await center(page.getByTestId('session-split-divider-s1'))
+    const stackedDivider = await center(page.getByTestId('panel-divider-s1'))
     await dragTo(page, stackedDivider, { x: stackedDivider.x + 40, y: stackedDivider.y - 60 })
     const size = (await paneBox(page, 'p0')).height
     expect(size).toBeCloseTo(top.height + 60, -1)
@@ -456,7 +456,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     expect(await terminal!.evaluate((node) => node.isConnected)).toBe(true)
 
     await page.reload()
-    await expect(page.getByTestId('session-pane-p1')).toBeVisible()
+    await expect(page.getByTestId('panel-p1')).toBeVisible()
     await dismissSizeBanner(page)
     expect((await paneBox(page, 'p0')).height).toBeCloseTo(size, -1)
   })

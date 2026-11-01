@@ -1,5 +1,6 @@
-import { openView, panesOf } from '../../lib/sessionLayout'
-import { useSessionTabs } from '../../stores/useSessionTabs'
+import { openTab, panelsOf } from '../../lib/panelLayout'
+import { usePanelLayouts } from '../../stores/usePanelLayouts'
+import { viewTab } from '../terminal/panelViews'
 import { useTerminalAgentIcons } from '../../stores/useTerminalAgentIcons'
 import { flushPromises, mount, type DOMWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -2943,7 +2944,7 @@ describe('TerminalMode', () => {
 
     it('keeps the tabs when the kill fails', async () => {
       localStorage.clear()
-      useSessionTabs().apply(SCRATCH_SLUG, (layout) => openView(layout, 'docs'))
+      usePanelLayouts().apply(SCRATCH_SLUG, (layout) => openTab(layout, viewTab('docs')))
       mocks.createTerminalClient.mockReturnValue({
         kill: vi.fn().mockRejectedValue(new Error('tmux said no')),
         listWindows: fakeListWindows({ [SCRATCH_SLUG]: [oneTab] }),
@@ -2956,7 +2957,9 @@ describe('TerminalMode', () => {
       document.querySelector<HTMLButtonElement>('[data-testid="session-confirmation-confirm"]')?.click()
       await flushPromises()
 
-      const tabs = panesOf(useSessionTabs().layoutOf(SCRATCH_SLUG)).flatMap((pane) => pane.tabs.map((tab) => tab.id))
+      const tabs = panelsOf(usePanelLayouts().layoutOf(SCRATCH_SLUG)).flatMap((panel) =>
+        panel.tabs.map((tab) => tab.id),
+      )
       expect(tabs).toContain('docs')
       wrapper.unmount()
     })
@@ -4635,7 +4638,7 @@ describe('TerminalMode', () => {
       await wrapper.get('[data-testid="session-status-diff"]').trigger('click')
       await flushPromises()
 
-      expect(wrapper.get('[data-testid="session-tab-diff"]').attributes('data-shown')).toBe('true')
+      expect(wrapper.get('[data-testid="panel-tab-diff"]').attributes('data-shown')).toBe('true')
 
       wrapper.unmount()
     })
@@ -4742,7 +4745,7 @@ describe('TerminalMode', () => {
       expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(true)
       expect(router.currentRoute.value.query.doc).toBeUndefined()
 
-      await wrapper.get('[data-testid="session-tab-close-docs"]').trigger('click')
+      await wrapper.get('[data-testid="panel-tab-close-docs"]').trigger('click')
       await flushPromises()
       expect(router.currentRoute.value.params.slug).toBe('hive-fix-parser')
       expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(false)

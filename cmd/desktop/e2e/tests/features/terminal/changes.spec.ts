@@ -160,7 +160,7 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
   })
 
   async function addDiffTab(page: Page) {
-    await page.getByTestId('session-tab-add-p0').click()
+    await page.getByTestId('panel-tab-add-p0').click()
     await page.getByTestId('new-window-view-diff').click()
   }
 

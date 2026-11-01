@@ -50,13 +50,13 @@ test('a window in a split fits its pane without being activated', async ({ page 
   // A common tmux setting, under which tmux sizes only a session's current window.
   tmux('set-option', '-g', 'aggressive-resize', 'on')
 
-  await page.getByTestId('session-split-row-p0').click()
-  await page.getByTestId('session-pane-picker-terminal').click()
+  await page.getByTestId('panel-split-row-p0').click()
+  await page.getByTestId('panel-picker-terminal').click()
   await expect(panes(page)).toHaveCount(2, { timeout: 15_000 })
   await expectEveryGridFits(page)
   const current = activeWindow()
 
-  const divider = (await page.getByTestId('session-split-divider-s1').boundingBox())!
+  const divider = (await page.getByTestId('panel-divider-s1').boundingBox())!
   const y = divider.y + divider.height / 2
   const dragBoundary = async (from: number, to: number) => {
     await page.mouse.move(from, y)

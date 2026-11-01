@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import IconFileDiff from '~icons/lucide/file-diff'
-import IconFolderTree from '~icons/lucide/folder-tree'
-import IconListTodo from '~icons/lucide/list-todo'
 import IconPlus from '~icons/lucide/plus'
 import IconTerminal from '~icons/lucide/terminal'
-import type { SessionViewKind } from '../../lib/sessionLayout'
+import { sessionView, type SessionViewKind } from './panelViews'
 
 defineProps<{
   windows: { windowId: string; name: string }[]
@@ -20,19 +17,13 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-const VIEWS = {
-  docs: { label: 'Drive', icon: IconFolderTree },
-  diff: { label: 'Diff', icon: IconFileDiff },
-  tasks: { label: 'Tasks', icon: IconListTodo },
-}
-
 const heading = 'mb-1 mt-3 font-mono text-micro font-semibold uppercase tracking-wider text-text-3'
 const row =
   'flex h-[27px] w-full max-w-[280px] cursor-pointer items-center gap-2 rounded px-2 text-left text-small text-text-2 hover:bg-chip hover:text-text'
 </script>
 
 <template>
-  <div class="hive-scroll min-h-0 flex-1 overflow-auto bg-app p-3.5" data-testid="session-pane-picker">
+  <div class="hive-scroll min-h-0 flex-1 overflow-auto bg-app p-3.5" data-testid="panel-picker">
     <h4 class="m-0 text-small font-semibold text-text">What goes here?</h4>
 
     <template v-if="windows.length">
@@ -42,7 +33,7 @@ const row =
         :key="win.windowId"
         type="button"
         :class="row"
-        :data-testid="`session-pane-picker-window-${win.windowId}`"
+        :data-testid="`panel-picker-window-${win.windowId}`"
         @click="emit('window', win.windowId)"
       >
         <IconTerminal class="size-3.5 shrink-0" aria-hidden="true" />
@@ -53,7 +44,7 @@ const row =
 
     <template v-if="canAddTerminal">
       <div :class="heading">New terminal</div>
-      <button type="button" :class="row" data-testid="session-pane-picker-terminal" @click="emit('terminal')">
+      <button type="button" :class="row" data-testid="panel-picker-terminal" @click="emit('terminal')">
         <IconPlus class="size-3.5 shrink-0" aria-hidden="true" />New terminal
       </button>
       <button
@@ -61,7 +52,7 @@ const row =
         :key="agent"
         type="button"
         :class="row"
-        :data-testid="`session-pane-picker-agent-${agent}`"
+        :data-testid="`panel-picker-agent-${agent}`"
         @click="emit('agent', agent)"
       >
         <IconPlus class="size-3.5 shrink-0" aria-hidden="true" />New {{ agent }} agent
@@ -75,17 +66,19 @@ const row =
         :key="view"
         type="button"
         :class="row"
-        :data-testid="`session-pane-picker-view-${view}`"
+        :data-testid="`panel-picker-view-${view}`"
         @click="emit('view', view)"
       >
-        <component :is="VIEWS[view].icon" class="size-3.5 shrink-0" aria-hidden="true" />{{ VIEWS[view].label }}
+        <component :is="sessionView(view).icon" class="size-3.5 shrink-0" aria-hidden="true" />{{
+          sessionView(view).label
+        }}
       </button>
     </template>
 
     <button
       type="button"
       class="mt-3 cursor-pointer rounded px-2 py-1 text-caption text-text-3 hover:bg-chip hover:text-text"
-      data-testid="session-pane-picker-cancel"
+      data-testid="panel-picker-cancel"
       @click="emit('cancel')"
     >
       Cancel split

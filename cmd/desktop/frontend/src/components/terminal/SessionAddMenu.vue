@@ -1,36 +1,32 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import IconFileDiff from '~icons/lucide/file-diff'
-import IconFolderTree from '~icons/lucide/folder-tree'
-import IconListTodo from '~icons/lucide/list-todo'
 import NewWindowMenu from '../NewWindowMenu.vue'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
-import type { SessionViewKind } from '../../lib/sessionLayout'
+import { sessionView } from './panelViews'
 import { useTerminalModeContext } from './terminalModeContext'
 
 // The one "+" menu, for a session row in the tree and for a tab row alike.
 const props = withDefaults(
   defineProps<{
     row: TerminalSessionRow
-    /** The pane a choice lands in; the session's focused pane without one. */
-    pane?: string
+    /** The panel a choice lands in; the session's focused panel without one. */
+    panel?: string
     flip?: boolean
     ignore: (HTMLElement | null)[]
     anchor?: HTMLElement | null
   }>(),
-  { pane: undefined, flip: false, anchor: undefined },
+  { panel: undefined, flip: false, anchor: undefined },
 )
 const emit = defineEmits<{ close: [] }>()
 
-const { tree, ops, panes } = useTerminalModeContext()
+const { tree, ops, panels } = useTerminalModeContext()
 
-const VIEWS = {
-  docs: { label: 'Drive', icon: IconFolderTree },
-  diff: { label: 'Diff', icon: IconFileDiff },
-  tasks: { label: 'Tasks', icon: IconListTodo },
-}
-
-const views = computed(() => panes.viewsFor(props.row).map((kind: SessionViewKind) => ({ kind, ...VIEWS[kind] })))
+const views = computed(() =>
+  panels.viewsFor(props.row).map((kind) => {
+    const { label, icon } = sessionView(kind)
+    return { kind, label, icon }
+  }),
+)
 </script>
 
 <template>
@@ -45,9 +41,9 @@ const views = computed(() => panes.viewsFor(props.row).map((kind: SessionViewKin
     :failed="!row.server && ops.agentProfilesFailed"
     :views="views"
     @close="emit('close')"
-    @terminal="panes.newWindow(row, pane)"
-    @agent="panes.newAgentWindow(row, $event, pane)"
-    @view="panes.openViewIn(row, $event, pane)"
+    @terminal="panels.newWindow(row, panel)"
+    @agent="panels.newAgentWindow(row, $event, panel)"
+    @view="panels.openViewIn(row, $event, panel)"
     @retry="ops.loadAgentProfiles"
   />
 </template>
