@@ -25,6 +25,7 @@ async function mountAt(
   path: string,
   initial: SessionDriveTarget | null = session,
   routeName: 'terminal' | 'agents' = 'terminal',
+  withOpenWindow = true,
 ): Promise<{
   router: Router
   target: Ref<SessionDriveTarget | null>
@@ -32,6 +33,7 @@ async function mountAt(
   reveal: ReturnType<typeof vi.fn>
   open: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
+  openWindow: ReturnType<typeof vi.fn>
 }> {
   const router = createAppRouter(createMemoryHistory())
   await router.push(path)
@@ -42,15 +44,22 @@ async function mountAt(
   const reveal = vi.fn()
   const open = vi.fn()
   const close = vi.fn()
+  const openWindow = vi.fn()
   const Host = defineComponent({
     setup() {
-      useSessionTabs(routeName, target, () => active.value, { ready: () => true, reveal, open, close })
+      useSessionTabs(routeName, target, () => active.value, {
+        ready: () => true,
+        reveal,
+        open,
+        close,
+        openWindow: withOpenWindow ? openWindow : undefined,
+      })
       return () => null
     },
   })
   mount(Host, { global: { plugins: [router] } })
   await flushPromises()
-  return { router, target, active, reveal, open, close }
+  return { router, target, active, reveal, open, close, openWindow }
 }
 
 function fireTab(payload: Record<string, unknown>) {
@@ -125,6 +134,39 @@ describe('useSessionTabs', () => {
 
     expect(close).toHaveBeenNthCalledWith(1, 'tasks')
     expect(close).toHaveBeenNthCalledWith(2, 'docs')
+  })
+
+  it('hands a terminal window to the host with its placement', async () => {
+    const { open, openWindow } = await mountAt('/terminal/fix-login')
+
+    fireTab({ view: 'terminal', window: '@12', placement: 'beside' })
+    fireTab({ view: 'terminal', window: '@13' })
+
+    expect(openWindow).toHaveBeenNthCalledWith(1, '@12', 'beside')
+    expect(openWindow).toHaveBeenNthCalledWith(2, '@13', 'behind')
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('ignores a terminal that names no window', async () => {
+    const { open, close, openWindow } = await mountAt('/terminal/fix-login')
+
+    fireTab({ view: 'terminal', window: '' })
+    fireTab({ view: 'terminal' })
+    fireTab({ view: 'terminal', window: '@12', open: false })
+
+    expect(openWindow).not.toHaveBeenCalled()
+    expect(open).not.toHaveBeenCalled()
+    expect(close).not.toHaveBeenCalled()
+  })
+
+  it('ignores a terminal when the host cannot place windows', async () => {
+    const { open, close, openWindow } = await mountAt('/workspaces/web-app?chat=7', session, 'agents', false)
+
+    fireTab({ view: 'terminal', window: '@12' })
+
+    expect(openWindow).not.toHaveBeenCalled()
+    expect(open).not.toHaveBeenCalled()
+    expect(close).not.toHaveBeenCalled()
   })
 
   it('ignores a view it does not know', async () => {

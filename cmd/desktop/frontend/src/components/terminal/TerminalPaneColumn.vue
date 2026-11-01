@@ -330,6 +330,9 @@ useSessionTabs('terminal', toRef(props, 'drive'), () => props.active, {
       const panel = panelWithTab(current, tab.id)
       return panel ? closeTab(current, panel.id, tab.id) : current
     }),
+  openWindow: (windowId, placement) => {
+    if (panels.row && !tree.isChat(panels.row)) panels.placeArrivingWindow(windowId, placement)
+  },
 })
 
 // The full page knows nothing about authors. A Drive tab on screen is the user

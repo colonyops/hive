@@ -17,6 +17,7 @@ import {
   panelBoxes,
   panelsOf,
   placeTab,
+  placeTabBeside,
   resizeSplit,
   selectTab,
   shownTabs,
@@ -223,6 +224,43 @@ describe('addTabBeside', () => {
   it('does nothing the second time', () => {
     const once = addTabBeside(attached('@1'), view('docs'))
     expect(addTabBeside(once, view('docs'))).toBe(once)
+  })
+})
+
+describe('placeTabBeside', () => {
+  it('moves a tab out of the focused panel into a new split', () => {
+    const layout = placeTabBeside(attached('@1', '@2'), win('@2'))
+    expect(panelsOf(layout)).toHaveLength(2)
+    expect(splitBoxes(layout).map(({ split }) => split.axis)).toEqual(['row'])
+    expect(ids(layout, 0)).toEqual(['window:@1'])
+    expect(ids(layout, 1)).toEqual(['window:@2'])
+    expect(panelsOf(layout)[0].activeTab).toBe('window:@1')
+    expect(panelsOf(layout)[1].activeTab).toBe('window:@2')
+    expect(panelsOf(layout)[1].picking).toBe(false)
+  })
+
+  it('adds a tab that is not open the same way', () => {
+    const layout = placeTabBeside(attached('@1'), view('docs'))
+    expect(ids(layout, 0)).toEqual(['window:@1'])
+    expect(ids(layout, 1)).toEqual(['docs'])
+    expect(panelsOf(layout)[1].picking).toBe(false)
+  })
+
+  it('leaves a tab that is open in another panel alone', () => {
+    const layout = splitWith(attached('@1', '@2'), '@2')
+    const other = focusPanel(layout, panelId(layout, 0))
+    expect(placeTabBeside(other, win('@2'))).toBe(other)
+  })
+
+  it('leaves a tab that is alone in the focused panel alone', () => {
+    const layout = attached('@1')
+    expect(placeTabBeside(layout, win('@1'))).toBe(layout)
+  })
+
+  it('keeps the keyboard where the user had it', () => {
+    const layout = placeTabBeside(attached('@1', '@2'), win('@2'))
+    expect(layout.focusedPanel).toBe('p0')
+    expect(focusedTab(layout)).toBe('window:@1')
   })
 })
 

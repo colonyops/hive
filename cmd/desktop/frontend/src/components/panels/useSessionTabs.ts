@@ -15,6 +15,7 @@ export type SessionTabPlacement = 'behind' | 'beside'
 
 interface SessionTabPayload {
   view?: string
+  window?: string
   path?: string
   placement?: string
   open: boolean
@@ -46,6 +47,8 @@ export function useSessionTabs(
     /** An agent's ask. It must not take the keyboard. */
     open: (view: SessionViewKind, path: string | null, placement: SessionTabPlacement) => void
     close: (view: SessionViewKind) => void
+    /** An agent's terminal. The window tab itself arrives with tmux's window list; this says where it goes. */
+    openWindow?: (windowId: string, placement: SessionTabPlacement) => void
   },
 ) {
   const route = useRoute()
@@ -66,9 +69,14 @@ export function useSessionTabs(
     const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as SessionTabPayload | undefined
     if (!payload || !active() || route.name !== routeName) return
     if (driveEventAuthor(payload) !== (target.value?.session ?? null)) return
+    const placement = payload.placement === 'beside' ? 'beside' : 'behind'
+    if (payload.view === 'terminal') {
+      if (payload.open && payload.window) handlers.openWindow?.(payload.window, placement)
+      return
+    }
     const view = VIEW_OF_WIRE.get(payload.view ?? '')
     if (!view) return
-    if (payload.open) handlers.open(view, payload.path || null, payload.placement === 'beside' ? 'beside' : 'behind')
+    if (payload.open) handlers.open(view, payload.path || null, placement)
     else handlers.close(view)
   })
 }

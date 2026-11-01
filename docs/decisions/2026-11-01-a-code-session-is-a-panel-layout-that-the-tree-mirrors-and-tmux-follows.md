@@ -76,11 +76,14 @@ tab, a pop-up or another window. None of that would carry to a second host.
     and the Drive page's comments and names Drive nowhere.
 11. **Agents address tabs, not a pane.** The MCP tools `open_document`,
     `open_canvas` and `close_canvas` are replaced by `open_tab` and
-    `close_tab`, which name a view (`drive`, `diff`, `tasks`) and, for an
-    open, a placement: `behind` the tab in front with an unseen dot, or
-    `beside` it in a new split. Neither takes the keyboard. No old name is
-    kept: an agent reads the tool list when it connects, so compatibility
-    would only preserve the pane in the vocabulary.
+    `close_tab`, which name a view (`drive`, `diff`, `tasks`, `terminal`)
+    and, for an open, a placement: `behind` the tab in front with an unseen
+    dot, or `beside` it in a new split. Neither takes the keyboard. A
+    `terminal` is a tmux window the backend creates detached, with an
+    optional name and command, or an existing window named by id or name;
+    `close_tab` refuses it, because closing a window kills what runs in it.
+    No old name is kept: an agent reads the tool list when it connects, so
+    compatibility would only preserve the pane in the vocabulary.
 
 ## Consequences
 

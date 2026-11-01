@@ -121,6 +121,22 @@ func TestSubscribeEmitsDriveEventsUnderTheirFrontendNames(t *testing.T) {
 	}, receiveEmitted(t, sink))
 }
 
+func TestSubscribeCarriesTheTerminalWindowOfASessionTab(t *testing.T) {
+	sink := make(chan emitted, 1)
+	swapEmitEvent(t, sink)
+
+	bus := events.New(zerolog.Nop())
+	t.Cleanup(bus.Close)
+	cancel := Subscribe(t.Context(), bus, nil)
+	t.Cleanup(cancel)
+
+	bus.Publish(t.Context(), events.SessionTabRequested{HiveSession: "abc123", Space: "acme/site", View: "terminal", Window: "@3", Placement: "beside", Open: true})
+	require.Equal(t, emitted{
+		name: "session:tab",
+		data: SessionTab{HiveSession: "abc123", Space: "acme/site", View: "terminal", Window: "@3", Placement: "beside", Open: true},
+	}, receiveEmitted(t, sink))
+}
+
 // Two asks for two views in a row are two intents, so none may coalesce away.
 func TestSubscribeEmitsEverySessionTabRequestInOrder(t *testing.T) {
 	sink := make(chan emitted, 2)

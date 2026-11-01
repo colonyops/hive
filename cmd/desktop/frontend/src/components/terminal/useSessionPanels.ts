@@ -1,11 +1,13 @@
 import { useTimeoutFn } from '@vueuse/core'
 import { computed, nextTick, ref, watch, type Ref } from 'vue'
-import { moveTab, type PanelLayout } from '../../lib/panelLayout'
+import { moveTab, panelWithTab, placeTabBeside, splitPanel, type PanelLayout } from '../../lib/panelLayout'
 import { paneMayAutoFocus } from '../../lib/terminalTree'
 import {
   focusedWindow,
   reconcileWindows,
   revealWindow,
+  windowTab,
+  windowTabId,
   windowIdOfTab,
   windowOrder,
   windowsOnScreen,
@@ -134,6 +136,30 @@ export function useSessionPanels(source: PanelWindowSource, layouts = usePanelLa
     paneMayAutoFocus.value = true
   }
 
+  /**
+   * Where a window an agent made goes. It is created detached, so tmux keeps
+   * its active window and nothing here reveals it. Behind needs nothing: the
+   * reconcile appends its tab to the focused panel without selecting it.
+   */
+  function placeArrivingWindow(windowId: string, placement: 'behind' | 'beside'): void {
+    if (placement !== 'beside') return
+    if (panelWithTab(layout.value, windowTabId(windowId))) {
+      apply((current) => placeTabBeside(current, windowTab(windowId)))
+      return
+    }
+    // The event beat tmux's window list, so make the panel now and let the tab
+    // land in it. Unlike a "+", this window neither takes the focus nor
+    // reorders tmux's windows.
+    const before = layout.value
+    const split = splitPanel(before, before.focusedPanel, 'row')
+    if (split === before) return
+    // splitPanel focuses the panel it adds.
+    const added = split.focusedPanel
+    apply(() => ({ ...split, focusedPanel: before.focusedPanel }))
+    newWindowPanel.value = added
+    expirePending()
+  }
+
   // tmux's numbering should agree with the tabs, so a tab that moves takes its window along.
   function syncWindowOrder(windowId: string): void {
     const position = windowOrder(layout.value).indexOf(windowId)
@@ -147,5 +173,14 @@ export function useSessionPanels(source: PanelWindowSource, layouts = usePanelLa
     if (windowId) syncWindowOrder(windowId)
   }
 
-  return { layout, onScreen, apply, renderOnScreen, expectWindowIn, moveTabTo, syncWindowOrder }
+  return {
+    layout,
+    onScreen,
+    apply,
+    renderOnScreen,
+    expectWindowIn,
+    placeArrivingWindow,
+    moveTabTo,
+    syncWindowOrder,
+  }
 }

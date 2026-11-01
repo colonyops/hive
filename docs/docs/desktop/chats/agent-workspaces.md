@@ -184,7 +184,7 @@ An agent with **Hive Drive** enabled can publish documents beside its chat. The 
 - `move_document`
 - `delete_document`
 
-Two tab tools put a result in front of you. `open_tab` opens a view beside the chat or Code session: `drive` on a document or canvas, or, in Code, `diff` or `tasks`. It opens the tab behind the one you are reading, with a dot, or beside it in a new split when the agent asks for `placement: beside`. `close_tab` closes that view. Both apply only while you are viewing that chat or session.
+Two tab tools put a result in front of you. `open_tab` opens a view beside the chat or Code session: `drive` on a document or canvas, or, in Code, `diff`, `tasks`, or a `terminal`. A terminal is a new tmux window in the session's checkout, with an optional name and a command to run, such as a test watcher; the window stays open as a shell when the command ends. The agent can also name an existing window to place. The tab opens behind the one you are reading, with a dot, or beside it in a new split when the agent asks for `placement: beside`. `close_tab` closes a Drive, Diff, or Tasks tab; a terminal closes from its tab. Both apply only while you are viewing that chat or session.
 
 The eight canvas tools remain. A canvas name can include folders, so `reports/perf` is filed as `reports/perf.canvas.json`, and a bare name is filed under `canvases/`. An agent can only write `.md` and `.html` documents with `write_document`. `read_document` reads markdown, html, and any other text file in the space.
 

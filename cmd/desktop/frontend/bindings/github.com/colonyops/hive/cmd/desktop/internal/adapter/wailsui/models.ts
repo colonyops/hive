@@ -731,8 +731,9 @@ export interface SessionSummary {
 
 /**
  * SessionTab is the session:tab payload: whose tab to open or close, a chat's
- * or a hive session's, which view, and for the Drive view the document to pin
- * (empty leaves the tab's pick). Placement is behind or beside.
+ * or a hive session's, which view, for the Drive view the document to pin
+ * (empty leaves the tab's pick), and for the terminal view the tmux window id
+ * to show. Placement is behind or beside.
  */
 export interface SessionTab {
     "session": string;
@@ -740,6 +741,7 @@ export interface SessionTab {
     "space": string;
     "view": string;
     "path": string;
+    "window": string;
     "placement": string;
     "open": boolean;
 }

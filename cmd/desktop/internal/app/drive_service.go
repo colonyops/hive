@@ -23,6 +23,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/hive"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/colonyops/hive/pkg/osopen"
 )
@@ -56,7 +57,10 @@ type DriveService struct {
 	sessions canvasSessionResolver
 	events   *events.Bus
 	reveal   func(string) error
-	logger   zerolog.Logger
+	// terminals is nil when tmux windows are not wired in; a terminal tab then
+	// answers KindUnavailable.
+	terminals sessionTerminals
+	logger    zerolog.Logger
 }
 
 type DriveDeps struct {
@@ -66,13 +70,15 @@ type DriveDeps struct {
 	Logger   zerolog.Logger
 	// Reveal shows an absolute path in the file manager; nil is osopen.Reveal.
 	Reveal func(string) error
+	// Terminals starts and finds the tmux windows of Code sessions.
+	Terminals sessionTerminals
 }
 
 func newDriveService(d DriveDeps) *DriveService {
 	if d.Reveal == nil {
 		d.Reveal = osopen.Reveal
 	}
-	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, logger: logutils.Component(d.Logger, "desktop.drive")}
+	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, terminals: d.Terminals, logger: logutils.Component(d.Logger, "desktop.drive")}
 }
 
 // driveCaller is who a tool call comes from and the space its canvases
@@ -80,6 +86,10 @@ func newDriveService(d DriveDeps) *DriveService {
 type driveCaller struct {
 	space  drive.Space
 	author drive.Author
+	// checkout and tmuxSession are set for a hive session only: its working
+	// tree and the name of its tmux session.
+	checkout    string
+	tmuxSession string
 }
 
 // GetCanvas is one canvas in the calling session's space. A name nothing
@@ -855,7 +865,10 @@ func (s *DriveService) resolve(ctx context.Context, session string) (driveCaller
 		return driveCaller{}, Errorf(KindInvalid,
 			"hive session %q has a remote with no owner and repository to file canvases under", sess.Name)
 	}
-	return driveCaller{space: space, author: drive.Author{HiveSession: sess.ID}}, nil
+	return driveCaller{
+		space: space, author: drive.Author{HiveSession: sess.ID},
+		checkout: sess.Path, tmuxSession: sessionsvc.Target(sess).Session,
+	}, nil
 }
 
 type driveTarget struct {

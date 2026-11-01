@@ -277,6 +277,22 @@ export function addTabBeside(layout: PanelLayout, tab: PanelTab): PanelLayout {
   return { ...withPanel(split, added, { tabs: [tab], activeTab: tab.id, picking: false }), focusedPanel: focused.id }
 }
 
+/**
+ * Like `addTabBeside`, for a tab that may be open already. One open in a panel
+ * other than the focused one is beside something, so it stays. One in the
+ * focused panel moves out into the new split, unless it is that panel's only
+ * tab, which would leave nothing to be beside.
+ */
+export function placeTabBeside(layout: PanelLayout, tab: PanelTab): PanelLayout {
+  const from = panelWithTab(layout, tab.id)
+  if (from && (from.id !== layout.focusedPanel || from.tabs.length === 1)) return layout
+  const focused = panelById(layout, layout.focusedPanel) ?? firstPanel(layout.root)
+  const split = splitPanel(layout, focused.id, 'row')
+  const added = `p${layout.nextId}`
+  const cleared = from ? removeTab(split, from.id, tab.id) : split
+  return { ...withPanel(cleared, added, { tabs: [tab], activeTab: tab.id, picking: false }), focusedPanel: focused.id }
+}
+
 /** Closes a panel without losing anything: its tabs join the neighbour. */
 export function closePanel(layout: PanelLayout, panelId: string): PanelLayout {
   const panel = panelById(layout, panelId)

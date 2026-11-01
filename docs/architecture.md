@@ -2091,7 +2091,12 @@ host's route opens the Drive tab and is consumed, and an agent's `session:tab`
 opens a view behind the tab in front (`addTabQuietly`) or beside it in a split
 (`addTabBeside`), or closes it, honored only for the session on screen and
 only for a view the host offers. The wire says `drive`; the frontend's kind is
-`docs`, and the composable is the one place that maps between them.
+`docs`, and the composable is the one place that maps between them. A
+`terminal` ask names a tmux window the backend created detached or found; the
+tab itself still arrives through the reconcile, and
+`useSessionPanels.placeArrivingWindow` only decides where it lands: nowhere
+special for `behind`, a new split for `beside`, whether the tab is already
+there or the event beat the listing.
 
 #### Pop-up terminals
 
@@ -2479,8 +2484,10 @@ whose `canvas` argument is a name or a path (`reports/perf` files at
 `reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), five document
 tools: `list_documents`, `read_document`, `write_document`, `move_document`
 and `delete_document`, and two tab tools: `open_tab` (`view` is `drive`,
-`diff` or `tasks`; `path`, for `drive`, is a document path or a canvas name;
-`placement` is `behind` or `beside`) and `close_tab`. `read_document` reads markdown, html
+`diff`, `tasks` or `terminal`; `path`, for `drive`, is a document path or a
+canvas name; `window`, `name` and `command`, for `terminal`, pick an existing
+window or start a new detached one in the checkout; `placement` is `behind` or
+`beside`) and `close_tab`, which takes every view but `terminal`. `read_document` reads markdown, html
 and any other UTF-8 text file, and answers `not_found` for hive state files
 (`kv.json`, `kv.json.lock`). An app-hosted catalogue entry declares
 its mount as `Descriptor.RuntimePath`, joined with the live loopback base when

@@ -483,6 +483,8 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Sessions: a.Stores.AgentSessions,
 		Events:   a.Events,
 		Logger:   cfg.Logger,
+		Terminals: newTmuxWindows(a.terminals, newTmuxRunner(
+			func(ctx context.Context) (string, error) { return a.resolveTmuxBinary(ctx) }, a.execEnv.Environ)),
 	})
 	a.AgentWorkspaces = newAgentWorkspacesService(AgentWorkspacesDeps{
 		Store:           a.agentWorkspaceStore,

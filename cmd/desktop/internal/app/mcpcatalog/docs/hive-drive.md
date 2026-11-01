@@ -107,12 +107,13 @@ write.
 
 ## Tabs
 
-Drive, Diff and Tasks open as tabs beside the terminal of a chat or Code
-session. Two tools ask for them:
+Drive, Diff, Tasks and terminals open as tabs beside the terminal of a chat or
+Code session. Two tools ask for them:
 
 - `open_tab`: open the tab for a `view`. `drive` is the session's documents
   and canvases, `diff` is the Code session's changes, `tasks` is its task
-  board. A chat has only `drive`; `diff` and `tasks` belong to a Code session.
+  board, `terminal` is a tmux window of the Code session. A chat has only
+  `drive`; `diff`, `tasks` and `terminal` belong to a Code session.
   `path` is for `drive` only: a document by its path in the space, or a canvas
   by name or path (`perf` is `canvases/perf.canvas.json`). It must exist, and a
   folder is refused. Omit it to leave the tab on its own pick. `placement` is
@@ -121,10 +122,24 @@ session. Two tools ask for them:
   panel in front and opens the tab next to it, so the user sees it at once; use
   it for a result the user asked to see side by side with the terminal. Both
   leave the keyboard where it is, and a tab that is already open stays where it
-  is. The answer names the `view` and the resolved `path`, empty when none was
-  given.
-- `close_tab`: close the tab for a `view` wherever it sits. Documents and
-  canvases are untouched.
+  is. The answer names the `view`, the resolved `path` (empty when none was
+  given) and, for `terminal`, the `window` id.
+- `close_tab`: close the tab for a `view` (`drive`, `diff` or `tasks`)
+  wherever it sits. Documents and canvases are untouched. A `terminal` is not
+  closable here: it closes from its tab or its shell.
+
+A `terminal` opens detached, so it never takes the keyboard or the screen. The
+session must be running; start it in Code first. Three inputs apply to
+`terminal` only, and any of them with another view is refused:
+
+- `name`: the name of the new window.
+- `command`: a shell command the new window runs in the session's checkout.
+  The window stays open as a shell after the command exits, so the user can
+  read the output. Use it for something the user will watch, like a test
+  watcher or a log tail, not for work you can run yourself.
+- `window`: an existing window of the session, by tmux id (`@3`) or exact
+  window name. It is placed instead of starting one, so it excludes `name` and
+  `command`. A window the session does not have is `not_found`.
 
 Both are best-effort: they apply only while the user is viewing this chat or
 session, and there is no acknowledgment either way.

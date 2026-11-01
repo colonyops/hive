@@ -146,7 +146,7 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		events.Subscribe(ctx, bus, "wailsui.session-tab", events.Buffer(16), func(_ context.Context, e events.SessionTabRequested) {
 			emitSessionTab(SessionTab{
 				Session: e.Session, HiveSession: e.HiveSession, Space: e.Space,
-				View: e.View, Path: e.Path, Placement: e.Placement, Open: e.Open,
+				View: e.View, Path: e.Path, Window: e.Window, Placement: e.Placement, Open: e.Open,
 			})
 		}),
 		events.Subscribe(ctx, bus, "wailsui.schedules", events.Coalesce(), func(_ context.Context, e events.SchedulesUpdated) {
@@ -229,14 +229,16 @@ func emitDriveUpdated(write DriveWrite) {
 }
 
 // SessionTab is the session:tab payload: whose tab to open or close, a chat's
-// or a hive session's, which view, and for the Drive view the document to pin
-// (empty leaves the tab's pick). Placement is behind or beside.
+// or a hive session's, which view, for the Drive view the document to pin
+// (empty leaves the tab's pick), and for the terminal view the tmux window id
+// to show. Placement is behind or beside.
 type SessionTab struct {
 	Session     string `json:"session"`
 	HiveSession string `json:"hiveSession"`
 	Space       string `json:"space"`
 	View        string `json:"view"`
 	Path        string `json:"path"`
+	Window      string `json:"window"`
 	Placement   string `json:"placement"`
 	Open        bool   `json:"open"`
 }

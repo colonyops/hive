@@ -108,9 +108,43 @@ func updateSessions(updates []events.DriveChanged) []string {
 }
 
 type driveFixture struct {
-	svc     *DriveService
-	signals *canvasSignals
-	harness *hiveHarness
+	svc       *DriveService
+	signals   *canvasSignals
+	harness   *hiveHarness
+	terminals *fakeTerminals
+}
+
+// openTab is the drive-view call shape the older tab tests use.
+func (f driveFixture) openTab(ctx context.Context, session, view, path, placement string) (string, error) {
+	res, err := f.svc.OpenTab(ctx, OpenTabRequest{Session: session, View: view, Path: path, Placement: placement})
+	return res.Path, err
+}
+
+type createdWindow struct{ Slug, Dir, Name, Command string }
+
+// fakeTerminals stands in for tmux: the sessions in running exist, and the
+// windows map answers an id or a name with the window's id.
+type fakeTerminals struct {
+	running map[string]bool
+	windows map[string]string
+	created []createdWindow
+}
+
+func (f *fakeTerminals) HasSession(_ context.Context, slug string) (bool, error) {
+	return f.running[slug], nil
+}
+
+func (f *fakeTerminals) NewWindow(_ context.Context, slug, dir, name, command string) (string, error) {
+	f.created = append(f.created, createdWindow{slug, dir, name, command})
+	return fmt.Sprintf("@%d", 10+len(f.created)), nil
+}
+
+func (f *fakeTerminals) FindWindow(_ context.Context, _, idOrName string) (string, error) {
+	id, ok := f.windows[idOrName]
+	if !ok {
+		return "", Errorf(KindNotFound, "no window %q", idOrName)
+	}
+	return id, nil
 }
 
 // newDriveFixture is a DriveService over a real engine whose context root is
@@ -134,12 +168,17 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 	h.save(t, hiveSessions...)
 	forwardDriveChanges(t.Context(), h.engine.Bus(), bus)
 	go h.engine.Bus().Start(t.Context())
+	terminals := &fakeTerminals{
+		running: map[string]bool{siteSession.Slug: true},
+		windows: map[string]string{"@3": "@3", "logs": "@4"},
+	}
 	svc := newDriveService(DriveDeps{
-		Engine:   func() *hive.Engine { return h.engine },
-		Sessions: fakeCanvasSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
-		Events:   bus,
+		Engine:    func() *hive.Engine { return h.engine },
+		Sessions:  fakeCanvasSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
+		Events:    bus,
+		Terminals: terminals,
 	})
-	return driveFixture{svc: svc, signals: signals, harness: h}
+	return driveFixture{svc: svc, signals: signals, harness: h, terminals: terminals}
 }
 
 func (f driveFixture) contextDir() string { return f.harness.cfg.ContextDir() }
@@ -429,31 +468,31 @@ func TestOpenTabResolvesAndPublishes(t *testing.T) {
 	f := newDriveFixture(t)
 	ctx := t.Context()
 
-	path, err := f.svc.OpenTab(ctx, "1", "drive", "", "")
+	path, err := f.openTab(ctx, "1", "drive", "", "")
 	require.NoError(t, err, "opening without a path leaves the tab's own pick")
 	assert.Empty(t, path)
-	_, err = f.svc.OpenTab(ctx, "1", "drive", "ghost", "")
+	_, err = f.openTab(ctx, "1", "drive", "ghost", "")
 	assert.Equal(t, KindNotFound, KindOf(err), "an unknown path is not found")
 
 	_, err = f.svc.PutBlock(ctx, "1", "plan", "", "", markdownBlock("a", "x"))
 	require.NoError(t, err)
-	path, err = f.svc.OpenTab(ctx, "1", "drive", "plan", "beside")
+	path, err = f.openTab(ctx, "1", "drive", "plan", "beside")
 	require.NoError(t, err)
 	assert.Equal(t, "canvases/plan.canvas.json", path, "a canvas name resolves to its file")
-	path, err = f.svc.OpenTab(ctx, "1", "drive", "canvases/plan.canvas.json", "behind")
+	path, err = f.openTab(ctx, "1", "drive", "canvases/plan.canvas.json", "behind")
 	require.NoError(t, err)
 	assert.Equal(t, "canvases/plan.canvas.json", path, "a canvas path stands for itself")
 
 	_, err = f.svc.WriteDocument(ctx, "1", "plans/auth.md", []byte("x"))
 	require.NoError(t, err)
-	path, err = f.svc.OpenTab(ctx, "1", "drive", "plans/auth.md", "")
+	path, err = f.openTab(ctx, "1", "drive", "plans/auth.md", "")
 	require.NoError(t, err)
 	assert.Equal(t, "plans/auth.md", path)
-	_, err = f.svc.OpenTab(ctx, "1", "drive", "plans", "")
+	_, err = f.openTab(ctx, "1", "drive", "plans", "")
 	assert.Equal(t, KindInvalid, KindOf(err), "a folder is not a document")
 
 	require.NoError(t, f.svc.CloseTab(ctx, "1", "drive"))
-	_, err = f.svc.OpenTab(ctx, "99", "drive", "", "")
+	_, err = f.openTab(ctx, "99", "drive", "", "")
 	assert.Equal(t, KindNotFound, KindOf(err))
 
 	space := "workspaces/ws"
@@ -482,11 +521,86 @@ func TestOpenTabRejectsWhatAnAgentCannotAct(t *testing.T) {
 		"path escaping the space": {"1", "drive", "../x.md", ""},
 		"unknown view in code":    {code, "", "", ""},
 	} {
-		_, err := f.svc.OpenTab(ctx, tc.session, tc.view, tc.path, tc.placement)
+		_, err := f.openTab(ctx, tc.session, tc.view, tc.path, tc.placement)
 		assert.Equal(t, KindInvalid, KindOf(err), name)
 	}
 	f.signals.requireNoUpdates(t, "a refused request publishes nothing")
 	assert.Empty(t, f.signals.Tabs())
+}
+
+func TestOpenTabRejectsTerminalRequestsThatCannotWork(t *testing.T) {
+	f := newDriveFixture(t, siteSession)
+	ctx := t.Context()
+	code := siteSession.Path
+
+	for name, req := range map[string]OpenTabRequest{
+		"terminal from a chat":         {Session: "1", View: "terminal"},
+		"window with command":          {Session: code, View: "terminal", Window: "@3", Command: "make"},
+		"window with name":             {Session: code, View: "terminal", Window: "@3", Name: "x"},
+		"name with the drive view":     {Session: "1", View: "drive", Name: "x"},
+		"command with the diff view":   {Session: code, View: "diff", Command: "make"},
+		"window with the tasks view":   {Session: code, View: "tasks", Window: "@3"},
+		"path with the terminal view":  {Session: code, View: "terminal", Path: "plans/a.md"},
+		"terminal in the shared space": {Session: "global", View: "terminal"},
+	} {
+		_, err := f.svc.OpenTab(ctx, req)
+		assert.Equal(t, KindInvalid, KindOf(err), name)
+	}
+
+	f.terminals.running = nil
+	_, err := f.svc.OpenTab(ctx, OpenTabRequest{Session: code, View: "terminal"})
+	require.Error(t, err)
+	assert.Equal(t, KindInvalid, KindOf(err), "a session that is not running")
+	assert.Contains(t, err.Error(), "start it in Code first")
+
+	f.terminals.running = map[string]bool{siteSession.Slug: true}
+	_, err = f.svc.OpenTab(ctx, OpenTabRequest{Session: code, View: "terminal", Window: "ghost"})
+	assert.Equal(t, KindNotFound, KindOf(err), "a window the session does not have")
+
+	assert.Empty(t, f.terminals.created, "a refused request starts no window")
+	assert.Empty(t, f.signals.Tabs())
+}
+
+func TestOpenTabStartsATerminalInTheCheckout(t *testing.T) {
+	f := newDriveFixture(t, siteSession)
+	ctx := t.Context()
+
+	res, err := f.svc.OpenTab(ctx, OpenTabRequest{
+		Session: siteSession.Path + "/cmd/api", View: "terminal", Name: "tests", Command: "make test", Placement: "beside",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, OpenTabResult{Window: "@11"}, res)
+	assert.Equal(t, []createdWindow{{Slug: "fix-login", Dir: "/work/site-abc123", Name: "tests", Command: "make test"}}, f.terminals.created,
+		"the window starts in the checkout root, not the agent's subdirectory")
+
+	res, err = f.svc.OpenTab(ctx, OpenTabRequest{Session: siteSession.Path, View: "terminal", Window: "logs"})
+	require.NoError(t, err)
+	assert.Equal(t, OpenTabResult{Window: "@4"}, res, "a name resolves to the window id")
+	assert.Len(t, f.terminals.created, 1, "placing a window starts none")
+
+	assert.Equal(t, []events.SessionTabRequested{
+		{HiveSession: "abc123", Space: "acme/site", View: "terminal", Window: "@11", Placement: "beside", Open: true},
+		{HiveSession: "abc123", Space: "acme/site", View: "terminal", Window: "@4", Placement: "behind", Open: true},
+	}, f.signals.waitTabs(t, 2))
+}
+
+func TestOpenTabUsesTheSessionsTmuxName(t *testing.T) {
+	named := siteSession
+	named.SetMeta(session.MetaTmuxSession, "renamed")
+	f := newDriveFixture(t, named)
+	f.terminals.running = map[string]bool{"renamed": true}
+
+	_, err := f.svc.OpenTab(t.Context(), OpenTabRequest{Session: named.Path, View: "terminal"})
+	require.NoError(t, err)
+	require.Len(t, f.terminals.created, 1)
+	assert.Equal(t, "renamed", f.terminals.created[0].Slug)
+}
+
+func TestOpenTabTerminalIsUnavailableWithoutTmux(t *testing.T) {
+	f := newDriveFixture(t, siteSession)
+	f.svc.terminals = nil
+	_, err := f.svc.OpenTab(t.Context(), OpenTabRequest{Session: siteSession.Path, View: "terminal"})
+	assert.Equal(t, KindUnavailable, KindOf(err))
 }
 
 func TestCloseTabAppliesTheSameCallerRules(t *testing.T) {
@@ -496,6 +610,7 @@ func TestCloseTabAppliesTheSameCallerRules(t *testing.T) {
 	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, "1", "diff")), "a chat has no Diff tab")
 	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, "1", "board")), "an unknown view")
 	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, "global", "drive")), "the shared space has no tabs")
+	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, siteSession.Path, "terminal")), "a terminal closes from its tab or shell")
 
 	require.NoError(t, f.svc.CloseTab(ctx, siteSession.Path, "tasks"))
 	assert.Equal(t, []events.SessionTabRequested{
@@ -681,14 +796,14 @@ func TestAgentsOutsideEverySessionShareTheSharedSpace(t *testing.T) {
 	notes := events.DriveChanged{Space: drive.SharedKey, Paths: []string{"canvases/notes.canvas.json"}}
 	assert.Equal(t, []events.DriveChanged{notes, notes}, updates, "shared writes still wake the readers, with no author")
 
-	_, err = f.svc.OpenTab(ctx, "global", "drive", "notes", "")
+	_, err = f.openTab(ctx, "global", "drive", "notes", "")
 	assert.Equal(t, KindInvalid, KindOf(err), "a shared canvas has no Drive tab")
 }
 
 func TestOpenTabNamesTheHiveSession(t *testing.T) {
 	f := newDriveFixture(t, siteSession)
 
-	path, err := f.svc.OpenTab(t.Context(), siteSession.Path, "diff", "", "beside")
+	path, err := f.openTab(t.Context(), siteSession.Path, "diff", "", "beside")
 	require.NoError(t, err)
 	assert.Empty(t, path)
 

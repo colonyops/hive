@@ -130,6 +130,77 @@ describe('useSessionPanels', () => {
     })
   })
 
+  describe('a window an agent made', () => {
+    const layoutNow = () => usePanelLayouts().layoutOf(KEY)
+
+    it('joins the focused panel without being selected when it goes behind', async () => {
+      const source = fakeSource(['@1'])
+      const { panels } = mountPanels(source)
+      await flushPromises()
+
+      panels.placeArrivingWindow('@2', 'behind')
+      source.windowIds.value = ['@1', '@2']
+      await flushPromises()
+
+      expect(panelsOf(layoutNow())).toHaveLength(1)
+      expect(panelsOf(layoutNow())[0].tabs.map((tab) => tab.id)).toEqual(['window:@1', 'window:@2'])
+      expect(focusedWindow(layoutNow())).toBe('@1')
+    })
+
+    it('moves a tab that is already there into a split beside the focused panel', async () => {
+      const source = fakeSource(['@1', '@2'])
+      const { panels } = mountPanels(source)
+      await flushPromises()
+
+      panels.placeArrivingWindow('@2', 'beside')
+      await flushPromises()
+
+      const [left, right] = panelsOf(layoutNow())
+      expect(left.tabs.map((tab) => tab.id)).toEqual(['window:@1'])
+      expect(right.activeTab).toBe('window:@2')
+      expect(focusedWindow(layoutNow())).toBe('@1')
+    })
+
+    it('splits ahead of the tmux listing and takes the window when it lands', async () => {
+      const source = fakeSource(['@1'])
+      const { panels } = mountPanels(source)
+      await flushPromises()
+      source.focus.mockClear()
+
+      panels.placeArrivingWindow('@2', 'beside')
+      expect(panelsOf(layoutNow())[1].picking).toBe(true)
+      expect(layoutNow().focusedPanel).toBe('p0')
+
+      source.windowIds.value = ['@1', '@2']
+      await flushPromises()
+
+      const [left, right] = panelsOf(layoutNow())
+      expect(left.tabs.map((tab) => tab.id)).toEqual(['window:@1'])
+      expect(right.tabs.map((tab) => tab.id)).toEqual(['window:@2'])
+      expect(right.picking).toBe(false)
+      expect(right.activeTab).toBe('window:@2')
+      expect(focusedWindow(layoutNow())).toBe('@1')
+      expect(source.moveWindow).not.toHaveBeenCalled()
+      expect(source.focus).not.toHaveBeenCalled()
+    })
+
+    it('leaves a later window out of the panel once the first one landed', async () => {
+      const source = fakeSource(['@1'])
+      const { panels } = mountPanels(source)
+      await flushPromises()
+
+      panels.placeArrivingWindow('@2', 'beside')
+      source.windowIds.value = ['@1', '@2']
+      await flushPromises()
+      source.windowIds.value = ['@1', '@2', '@3']
+      await flushPromises()
+
+      const [left, right] = panelsOf(layoutNow())
+      expect(left.tabs.map((tab) => tab.id)).toEqual(['window:@1', 'window:@3'])
+      expect(right.tabs.map((tab) => tab.id)).toEqual(['window:@2'])
+    })
+  })
+
   describe('layout to tmux', () => {
     it('selects the window a click focused', async () => {
       const source = fakeSource(['@1', '@2'])

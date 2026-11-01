@@ -72,15 +72,18 @@ type DriveChanged struct {
 // its chat or Code session. Unlike the wake-up events the payload is the
 // whole message: whether a tab is open is UI intent, not stored state to
 // re-read. The asker is a chat (Session) or a hive session (HiveSession),
-// never both. View is drive, diff or tasks. Path pins one document of Space
-// in the Drive view; empty leaves the tab's own pick. Placement is behind or
-// beside and applies only when opening; an empty one on a close is unused.
+// never both. View is drive, diff, tasks or terminal. Path pins one document of
+// Space in the Drive view; empty leaves the tab's own pick. Window is the tmux
+// window id (@3) a terminal tab shows, already started or found; empty for the
+// other views. Placement is behind or beside and applies only when opening; an
+// empty one on a close is unused.
 type SessionTabRequested struct {
 	Session     string
 	HiveSession string
 	Space       string
 	View        string
 	Path        string
+	Window      string
 	Placement   string
 	Open        bool
 }

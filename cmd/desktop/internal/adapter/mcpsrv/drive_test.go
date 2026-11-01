@@ -192,12 +192,15 @@ func TestTabToolsPublishTheRequest(t *testing.T) {
 	var wrote documentView
 	call(t, session, "write_document", map[string]any{"session": id, "path": "plans/auth.md", "body": "x"}, &wrote)
 	var opened struct {
-		Requested string `json:"requested"`
-		View      string `json:"view"`
-		Path      string `json:"path"`
+		Requested string  `json:"requested"`
+		View      string  `json:"view"`
+		Path      string  `json:"path"`
+		Window    *string `json:"window"`
 	}
 	call(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "path": "plans/auth.md", "placement": "beside"}, &opened)
 	assert.Equal(t, "open", opened.Requested)
+	require.NotNil(t, opened.Window, "the result always carries window")
+	assert.Empty(t, *opened.Window, "and it is empty for a drive tab")
 	assert.Equal(t, "plans/auth.md", opened.Path)
 
 	var closed struct {
@@ -214,6 +217,14 @@ func TestTabToolsPublishTheRequest(t *testing.T) {
 
 	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "diff"})
 	assert.Contains(t, text, "invalid", "a chat has only a Drive tab")
+	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "terminal"})
+	assert.Contains(t, text, "a chat has one terminal", "new terminals belong to a Code session")
+	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "terminal", "window": "@3", "command": "make"})
+	assert.Contains(t, text, "window places an existing terminal")
+	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "name": "x"})
+	assert.Contains(t, text, "apply only to the terminal view")
+	text = callErr(t, session, "close_tab", map[string]any{"session": id, "view": "terminal"})
+	assert.Contains(t, text, "a terminal closes from its tab or its shell")
 	text = callErr(t, session, "open_tab", map[string]any{"session": "global", "view": "drive"})
 	assert.Contains(t, text, "invalid", "the shared space has no tabs")
 	text = callErr(t, session, "close_tab", map[string]any{"session": "global", "view": "drive"})
