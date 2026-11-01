@@ -141,7 +141,7 @@ A session's windows show as tabs above the terminal, in the order the sidebar li
 
 The two buttons at the right of the tab row split the panel to the right or downward. The new panel asks what goes in it: a window that is behind another tab, a new terminal or agent, or a view. Splits nest, and each one can go either way.
 
-- Drag a tab to reorder it or to move it into another panel. Moving a window's tab moves the window in tmux too, so <kbd>⌘1</kbd> to <kbd>⌘9</kbd> count the tabs as you see them.
+- Drag a tab to reorder it or to move it into another panel. Moving a window's tab moves the window in tmux too, so <kbd>⌘1</kbd> to <kbd>⌘9</kbd> count the windows in the order their tabs appear; a Drive, Diff, or Tasks tab is skipped.
 - Drag the divider between two panels to resize them. Double-click it to size them evenly, or press the arrow keys while it has focus. The button on the divider turns a side-by-side split into a stacked one, and back.
 - **Close this panel** merges its tabs into the panel beside it. <kbd>⌘W</kbd> closes the tab in front of you: a window's tab asks tmux first, and a view's tab closes at once.
 
@@ -151,7 +151,7 @@ An agent in the session can arrange these tabs too, from MCP or from `hive dt`. 
 
 ## Tasks
 
-Open **Tasks** from the Code status bar, the command palette, or its configured shortcut, or add a **Tasks** tab to a session with its `+` button. It reads the same `hive hc` task tree used by coding agents and the CLI. See the hive CLI [task tracking guide](../../cli/getting-started/task-tracking.md) for the shared task model.
+Open **Tasks** from the command palette or its configured shortcut, or add a **Tasks** tab to a session with its `+` button. It reads the same `hive hc` task tree used by coding agents and the CLI. See the hive CLI [task tracking guide](../../cli/getting-started/task-tracking.md) for the shared task model.
 
 Switch between two layouts at the top of the view:
 

@@ -79,9 +79,16 @@ tab, a pop-up or another window. None of that would carry to a second host.
     `close_tab`, which name a view (`drive`, `diff`, `tasks`, `terminal`)
     and, for an open, a placement: `behind` the tab in front with an unseen
     dot, or `beside` it in a new split. Neither takes the keyboard. A
-    `terminal` is a tmux window the backend creates detached, with an
-    optional name and command, or an existing window named by id or name.
-    No old name is kept: an agent reads the tool list when it connects, so
+    `terminal` is a tmux window the backend creates detached, a login shell
+    in the session's checkout with an optional name, or an existing window
+    named by id or name. The tool takes no command. The `hive-drive` server
+    is unauthenticated behind the loopback bind because it runs nothing a
+    caller writes (ADR mcp-replaces-the-agent-facing-http-api); a window it
+    opens runs the user's shell with no input, and `close_tab` kills a
+    window of the caller's own session. A command would make the surface
+    command execution, which that ADR keeps behind the terminal token, so a
+    terminal with a command is a later decision, not a flag here. No old
+    name is kept: an agent reads the tool list when it connects, so
     compatibility would only preserve the pane in the vocabulary.
 12. **An agent can do with the layout what the user can.** `move_tab`,
     `focus_tab`, `close_panel`, `resize_split` and `turn_split` ride the same
@@ -107,7 +114,8 @@ tab, a pop-up or another window. None of that would carry to a second host.
   host's content slot.
 - Layouts the prototype saved under `hive.code.session-tabs` are not read; the
   key changed with the shape.
-- `terminal.select-window-1` to `-9` count the session's tabs across panels in
-  tree order, not tmux indices.
+- `terminal.select-window-1` to `-9` count the session's windows in the order
+  their tabs appear across panels, not tmux indices; a Drive, Diff or Tasks
+  tab is skipped.
 - Closing a Drive tab forgets where it was reading; reopening follows the
   session's own space.

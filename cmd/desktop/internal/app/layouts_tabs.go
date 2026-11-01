@@ -6,7 +6,6 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/internal/domain/drive"
-	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 )
 
 // TabView names a view that opens as a tab beside a chat or Code session.
@@ -91,8 +90,8 @@ func parseTabRef(s string) (TabRef, error) {
 	return TabRef{View: TabViewTerminal, Window: s}, nil
 }
 
-// OpenTabRequest is one open_tab call. Path applies to the drive view;
-// Window, Name and Command to the terminal view.
+// OpenTabRequest is one open_tab call. Path applies to the drive view; Window
+// and Name to the terminal view.
 type OpenTabRequest struct {
 	Session   string
 	View      string
@@ -101,9 +100,8 @@ type OpenTabRequest struct {
 	// Window places an existing window of the session, by tmux id or exact
 	// name, instead of starting one.
 	Window string
-	// Name and Command shape the window a terminal request starts.
-	Name    string
-	Command string
+	// Name names the window a terminal request starts.
+	Name string
 	// Anchor is a tab reference: the tab to place relative to. Empty is the
 	// tab in front of the focused panel.
 	Anchor string
@@ -122,8 +120,10 @@ type OpenTabResult struct {
 // or session, so an agent can surface what it made without taking the screen
 // from the user. A path names an existing document or canvas of the Drive
 // view; a canvas may be given by name. The terminal view starts a detached
-// tmux window of the Code session, or places one that exists.
-func (s *DriveService) OpenTab(ctx context.Context, req OpenTabRequest) (OpenTabResult, error) {
+// tmux window of the Code session, a login shell in its checkout, or places
+// one that exists. It takes no command: this surface runs nothing an agent
+// writes (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows).
+func (s *LayoutsService) OpenTab(ctx context.Context, req OpenTabRequest) (OpenTabResult, error) {
 	v, err := parseTabView(req.View)
 	if err != nil {
 		return OpenTabResult{}, err
@@ -139,7 +139,7 @@ func (s *DriveService) OpenTab(ctx context.Context, req OpenTabRequest) (OpenTab
 	if err != nil {
 		return OpenTabResult{}, err
 	}
-	d, caller, err := s.open(ctx, req.Session)
+	caller, err := s.callers.tabCaller(ctx, req.Session)
 	if err != nil {
 		return OpenTabResult{}, err
 	}
@@ -155,7 +155,7 @@ func (s *DriveService) OpenTab(ctx context.Context, req OpenTabRequest) (OpenTab
 	switch v {
 	case TabViewDrive:
 		if req.Path != "" {
-			if res.Path, err = s.resolveTabPath(ctx, d, caller.space, req.Path); err != nil {
+			if res.Path, err = s.callers.resolveTabPath(ctx, caller, req.Path); err != nil {
 				return OpenTabResult{}, err
 			}
 		}
@@ -180,7 +180,7 @@ func optionalTabRef(s string) (TabRef, bool, error) {
 	return ref, err == nil, err
 }
 
-func (s *DriveService) publishLayout(ctx context.Context, caller driveCaller, e events.SessionLayoutRequested) {
+func (s *LayoutsService) publishLayout(ctx context.Context, caller driveCaller, e events.SessionLayoutRequested) {
 	e.Session = caller.author.Session
 	e.HiveSession = caller.author.HiveSession
 	e.Space = caller.space.Key
@@ -193,10 +193,10 @@ func checkTabInputs(v TabView, req OpenTabRequest) error {
 	switch {
 	case req.Path != "" && v != TabViewDrive:
 		return Errorf(KindInvalid, "path applies only to the drive view; %s has no document to pick", v)
-	case v != TabViewTerminal && (req.Window != "" || req.Name != "" || req.Command != ""):
-		return Errorf(KindInvalid, "window, name and command apply only to the terminal view; %s takes none", v)
-	case req.Window != "" && (req.Name != "" || req.Command != ""):
-		return Errorf(KindInvalid, "window places an existing terminal; omit name and command, or omit window to start a new one")
+	case v != TabViewTerminal && (req.Window != "" || req.Name != ""):
+		return Errorf(KindInvalid, "window and name apply only to the terminal view; %s takes neither", v)
+	case req.Window != "" && req.Name != "":
+		return Errorf(KindInvalid, "window places an existing terminal; omit name, or omit window to start a new one")
 	}
 	return nil
 }
@@ -204,21 +204,21 @@ func checkTabInputs(v TabView, req OpenTabRequest) error {
 // terminalWindow finds or starts the window a terminal request names and
 // answers its id. A hive session's tmux session may not be running: the
 // window belongs to it, so a request never starts one.
-func (s *DriveService) terminalWindow(ctx context.Context, caller driveCaller, req OpenTabRequest) (string, error) {
+func (s *LayoutsService) terminalWindow(ctx context.Context, caller driveCaller, req OpenTabRequest) (string, error) {
 	if err := s.requireRunning(ctx, caller); err != nil {
 		return "", err
 	}
 	if req.Window != "" {
 		return s.terminals.FindWindow(ctx, caller.tmuxSession, req.Window)
 	}
-	id, err := s.terminals.NewWindow(ctx, caller.tmuxSession, caller.checkout, req.Name, req.Command)
+	id, err := s.terminals.NewWindow(ctx, caller.tmuxSession, caller.checkout, req.Name)
 	if err != nil {
 		return "", terminalError(err, "starting a terminal in session %q", caller.tmuxSession)
 	}
 	return id, nil
 }
 
-func (s *DriveService) requireRunning(ctx context.Context, caller driveCaller) error {
+func (s *LayoutsService) requireRunning(ctx context.Context, caller driveCaller) error {
 	if s.terminals == nil {
 		return Errorf(KindUnavailable, "terminals are not available here")
 	}
@@ -237,7 +237,7 @@ func (s *DriveService) requireRunning(ctx context.Context, caller driveCaller) e
 // untouched. A terminal is a tmux window of a Code session: closing it kills
 // the window and everything running in it, and the UI's reconcile removes the
 // tab, so no event is published.
-func (s *DriveService) CloseTab(ctx context.Context, session, view, window string) error {
+func (s *LayoutsService) CloseTab(ctx context.Context, session, view, window string) error {
 	v, err := parseTabView(view)
 	if err != nil {
 		return err
@@ -245,7 +245,7 @@ func (s *DriveService) CloseTab(ctx context.Context, session, view, window strin
 	if window != "" && v != TabViewTerminal {
 		return Errorf(KindInvalid, "window applies only to the terminal view; %s takes none", v)
 	}
-	_, caller, err := s.open(ctx, session)
+	caller, err := s.callers.tabCaller(ctx, session)
 	if err != nil {
 		return err
 	}
@@ -259,7 +259,7 @@ func (s *DriveService) CloseTab(ctx context.Context, session, view, window strin
 	return nil
 }
 
-func (s *DriveService) closeTerminal(ctx context.Context, caller driveCaller, window string) error {
+func (s *LayoutsService) closeTerminal(ctx context.Context, caller driveCaller, window string) error {
 	if err := checkTabSpace(caller); err != nil {
 		return err
 	}
@@ -273,7 +273,7 @@ func (s *DriveService) closeTerminal(ctx context.Context, caller driveCaller, wi
 	if err != nil {
 		return err
 	}
-	return s.terminals.CloseWindow(ctx, caller.tmuxSession, ref.Window)
+	return terminalError(s.terminals.CloseWindow(ctx, caller.tmuxSession, ref.Window), "closing window %q of session %q", ref.Window, caller.tmuxSession)
 }
 
 // MoveTabRequest is one move_tab call. Tab and Anchor are tab references.
@@ -288,7 +288,7 @@ type MoveTabRequest struct {
 // right after the anchor, or at the end of the focused panel with no anchor;
 // beside and below split the anchor's panel, or the focused one, and move the
 // tab into the new panel.
-func (s *DriveService) MoveTab(ctx context.Context, req MoveTabRequest) error {
+func (s *LayoutsService) MoveTab(ctx context.Context, req MoveTabRequest) error {
 	tab, err := parseTabRef(req.Tab)
 	if err != nil {
 		return err
@@ -301,7 +301,7 @@ func (s *DriveService) MoveTab(ctx context.Context, req MoveTabRequest) error {
 	if err != nil {
 		return err
 	}
-	_, caller, err := s.open(ctx, req.Session)
+	caller, err := s.callers.tabCaller(ctx, req.Session)
 	if err != nil {
 		return err
 	}
@@ -324,7 +324,7 @@ func (s *DriveService) MoveTab(ctx context.Context, req MoveTabRequest) error {
 // not told here: the UI selects a focused window itself, and only while the
 // session is on screen, so an agent cannot switch the user's tmux window
 // behind another view.
-func (s *DriveService) FocusTab(ctx context.Context, session, tab string) error {
+func (s *LayoutsService) FocusTab(ctx context.Context, session, tab string) error {
 	caller, ref, err := s.resolveTabCall(ctx, session, tab)
 	if err != nil {
 		return err
@@ -335,7 +335,7 @@ func (s *DriveService) FocusTab(ctx context.Context, session, tab string) error 
 
 // ClosePanel asks the UI to close the panel holding a tab. Its tabs join the
 // neighbour panel, and the last panel stays.
-func (s *DriveService) ClosePanel(ctx context.Context, session, tab string) error {
+func (s *LayoutsService) ClosePanel(ctx context.Context, session, tab string) error {
 	caller, ref, err := s.resolveTabCall(ctx, session, tab)
 	if err != nil {
 		return err
@@ -347,7 +347,7 @@ func (s *DriveService) ClosePanel(ctx context.Context, session, tab string) erro
 // ResizeSplit asks the UI to give the side holding the tab's panel share of
 // its nearest split. A share outside [0.2, 0.8] is refused: the UI clamps to
 // the same range, and an agent that asks for 0.95 should learn it cannot have it.
-func (s *DriveService) ResizeSplit(ctx context.Context, session, tab string, share float64) error {
+func (s *LayoutsService) ResizeSplit(ctx context.Context, session, tab string, share float64) error {
 	if share < minSplitShare || share > maxSplitShare {
 		return Errorf(KindInvalid, "share %v is outside %v to %v", share, minSplitShare, maxSplitShare)
 	}
@@ -361,7 +361,7 @@ func (s *DriveService) ResizeSplit(ctx context.Context, session, tab string, sha
 
 // TurnSplit asks the UI to turn the tab's nearest split between side by side
 // and stacked.
-func (s *DriveService) TurnSplit(ctx context.Context, session, tab string) error {
+func (s *LayoutsService) TurnSplit(ctx context.Context, session, tab string) error {
 	caller, ref, err := s.resolveTabCall(ctx, session, tab)
 	if err != nil {
 		return err
@@ -370,12 +370,12 @@ func (s *DriveService) TurnSplit(ctx context.Context, session, tab string) error
 	return nil
 }
 
-func (s *DriveService) resolveTabCall(ctx context.Context, session, tab string) (driveCaller, TabRef, error) {
+func (s *LayoutsService) resolveTabCall(ctx context.Context, session, tab string) (driveCaller, TabRef, error) {
 	ref, err := parseTabRef(tab)
 	if err != nil {
 		return driveCaller{}, TabRef{}, err
 	}
-	_, caller, err := s.open(ctx, session)
+	caller, err := s.callers.tabCaller(ctx, session)
 	if err != nil {
 		return driveCaller{}, TabRef{}, err
 	}
@@ -383,7 +383,7 @@ func (s *DriveService) resolveTabCall(ctx context.Context, session, tab string) 
 	return caller, ref, err
 }
 
-func (s *DriveService) publishTab(ctx context.Context, caller driveCaller, verb TabVerb, ref TabRef, share float64) {
+func (s *LayoutsService) publishTab(ctx context.Context, caller driveCaller, verb TabVerb, ref TabRef, share float64) {
 	s.publishLayout(ctx, caller, events.SessionLayoutRequested{
 		Verb: string(verb), View: string(ref.View), Window: ref.Window, Share: share,
 	})
@@ -392,7 +392,7 @@ func (s *DriveService) publishTab(ctx context.Context, caller driveCaller, verb 
 // resolveTab applies the caller's rules to a tab reference and turns a window
 // name into its id. A chat has its Drive tab and its one terminal, which
 // carries no window; a Code session names every terminal by its window.
-func (s *DriveService) resolveTab(ctx context.Context, caller driveCaller, ref TabRef) (TabRef, error) {
+func (s *LayoutsService) resolveTab(ctx context.Context, caller driveCaller, ref TabRef) (TabRef, error) {
 	if err := checkTabSpace(caller); err != nil {
 		return TabRef{}, err
 	}
@@ -436,33 +436,4 @@ func checkTabCaller(caller driveCaller, view TabView) error {
 		return Errorf(KindInvalid, "a chat has only a Drive tab; Diff and Tasks belong to a Code session")
 	}
 	return nil
-}
-
-// resolveTabPath maps what an agent typed to the path the Drive tab shows: a
-// document at that path, else the canvas that name or path stands for.
-func (s *DriveService) resolveTabPath(ctx context.Context, d *drivesvc.Service, space drive.Space, path string) (string, error) {
-	if err := drive.ValidatePath(path); err != nil {
-		return "", documentError(err, space, path)
-	}
-	isDir, err := s.isDir(d, space, path)
-	switch {
-	case err == nil && isDir:
-		return "", Errorf(KindInvalid, "%q is a folder; open a document inside it", path)
-	case err == nil:
-		return path, nil
-	case KindOf(err) != KindNotFound:
-		return "", err
-	}
-	cp, err := canvasPath(path)
-	if err != nil {
-		return "", documentNotFound(space, path)
-	}
-	c, ok, err := d.LoadCanvas(ctx, space, cp)
-	if err != nil {
-		return "", driveError(err, path)
-	}
-	if !ok {
-		return "", documentNotFound(space, path)
-	}
-	return c.Path, nil
 }

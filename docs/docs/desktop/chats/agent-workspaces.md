@@ -184,7 +184,7 @@ An agent with **Hive Drive** enabled can publish documents beside its chat. The 
 - `move_document`
 - `delete_document`
 
-The layout tools on the same server (`open_tab`, `close_tab`, `move_tab`, `focus_tab`, `close_panel`, `resize_split`, `turn_split`, and `get_layout`) let the agent arrange the tabs beside its chat, open Drive on a document, and in Code start a terminal with a command. See [Agents and the layout](../code/agent-layout.md).
+The layout tools on the same server (`open_tab`, `close_tab`, `move_tab`, `focus_tab`, `close_panel`, `resize_split`, `turn_split`, and `get_layout`) let the agent arrange the tabs beside its chat, open Drive on a document, and in Code open a terminal. See [Agents and the layout](../code/agent-layout.md).
 
 The eight canvas tools remain. A canvas name can include folders, so `reports/perf` is filed as `reports/perf.canvas.json`, and a bare name is filed under `canvases/`. An agent can only write `.md` and `.html` documents with `write_document`. `read_document` reads markdown, html, and any other text file in the space.
 

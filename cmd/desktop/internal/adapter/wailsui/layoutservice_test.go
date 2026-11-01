@@ -29,7 +29,7 @@ func TestLayoutServiceReportReachesTheMirror(t *testing.T) {
 		},
 	}))
 
-	got, onScreen, known := mirror.Layout("code", "abc123")
+	got, onScreen, known := mirror.Reported("code", "abc123")
 	require.True(t, known)
 	assert.True(t, onScreen)
 	assert.Equal(t, app.PanelLayoutReport{

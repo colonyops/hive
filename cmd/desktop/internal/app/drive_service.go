@@ -57,12 +57,7 @@ type DriveService struct {
 	sessions canvasSessionResolver
 	events   *events.Bus
 	reveal   func(string) error
-	// terminals is nil when tmux windows are not wired in; a terminal tab then
-	// answers KindUnavailable.
-	terminals sessionTerminals
-	// layouts is the mirror get_layout reads; nil answers KindUnavailable.
-	layouts *LayoutsService
-	logger  zerolog.Logger
+	logger   zerolog.Logger
 }
 
 type DriveDeps struct {
@@ -72,17 +67,13 @@ type DriveDeps struct {
 	Logger   zerolog.Logger
 	// Reveal shows an absolute path in the file manager; nil is osopen.Reveal.
 	Reveal func(string) error
-	// Terminals starts and finds the tmux windows of Code sessions.
-	Terminals sessionTerminals
-	// Layouts holds the panel layouts the frontend reports.
-	Layouts *LayoutsService
 }
 
 func newDriveService(d DriveDeps) *DriveService {
 	if d.Reveal == nil {
 		d.Reveal = osopen.Reveal
 	}
-	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, terminals: d.Terminals, layouts: d.Layouts, logger: logutils.Component(d.Logger, "desktop.drive")}
+	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, logger: logutils.Component(d.Logger, "desktop.drive")}
 }
 
 // driveCaller is who a tool call comes from and the space its canvases
@@ -812,6 +803,45 @@ func (s *DriveService) open(ctx context.Context, session string) (*drivesvc.Serv
 		return nil, driveCaller{}, err
 	}
 	return d, caller, nil
+}
+
+func (s *DriveService) tabCaller(ctx context.Context, session string) (driveCaller, error) {
+	_, caller, err := s.open(ctx, session)
+	return caller, err
+}
+
+// resolveTabPath maps what an agent typed to the path the Drive tab shows: a
+// document at that path, else the canvas that name or path stands for.
+func (s *DriveService) resolveTabPath(ctx context.Context, caller driveCaller, path string) (string, error) {
+	d, err := s.engineDrive()
+	if err != nil {
+		return "", err
+	}
+	space := caller.space
+	if err := drive.ValidatePath(path); err != nil {
+		return "", documentError(err, space, path)
+	}
+	isDir, err := s.isDir(d, space, path)
+	switch {
+	case err == nil && isDir:
+		return "", Errorf(KindInvalid, "%q is a folder; open a document inside it", path)
+	case err == nil:
+		return path, nil
+	case KindOf(err) != KindNotFound:
+		return "", err
+	}
+	cp, err := canvasPath(path)
+	if err != nil {
+		return "", documentNotFound(space, path)
+	}
+	c, ok, err := d.LoadCanvas(ctx, space, cp)
+	if err != nil {
+		return "", driveError(err, path)
+	}
+	if !ok {
+		return "", documentNotFound(space, path)
+	}
+	return c.Path, nil
 }
 
 // resolve reads the tool's session argument. A UUID is a chat's record id;

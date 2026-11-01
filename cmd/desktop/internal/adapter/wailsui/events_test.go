@@ -96,7 +96,7 @@ func receiveEmitted(t *testing.T, sink <-chan emitted) emitted {
 }
 
 // The event names are the frontend's contract: it listens for drive:updated
-// and session:tab by string, so this pins them.
+// and session:layout by string, so this pins them.
 func TestSubscribeEmitsDriveEventsUnderTheirFrontendNames(t *testing.T) {
 	sink := make(chan emitted, 2)
 	swapEmitEvent(t, sink)

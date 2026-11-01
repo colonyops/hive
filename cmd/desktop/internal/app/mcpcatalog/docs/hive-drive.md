@@ -110,8 +110,10 @@ write.
 Drive, Diff, Tasks and terminals open as tabs in panels beside a chat or Code
 session. A panel holds tabs, and a split joins two panels side by side or
 stacked. You can do with the layout what the user can. Every call below is a
-request to the app: it applies only while the user is viewing this chat or
-session, and there is no acknowledgment.
+request to the app: the tab change applies only while the user is viewing this
+chat or session, and there is no acknowledgment. The tmux side of `terminal`
+is the exception: `open_tab` starts or finds the window and `close_tab` kills
+it whether or not the session is on screen.
 
 A tab reference names one tab, in a `tab` or `anchor` input:
 
@@ -165,18 +167,17 @@ the user: the first takes the screen, the second ends a running process. Use
 for a result use `open_tab`, which leaves the focus where it is. Close only a
 window you started.
 
-A `terminal` opens detached, so it never takes the keyboard or the screen. The
-session must be running; start it in Code first. Three inputs apply to
-`open_tab` with `terminal` only, and any of them with another view is refused:
+A `terminal` opens detached, so it never takes the keyboard or the screen. A
+new one is a shell in the session's checkout with nothing running in it: the
+tool takes no command, so run your own work yourself and open a terminal for
+the user to type in. The session must be running; start it in Code first. Two
+inputs apply to `open_tab` with `terminal` only, and either with another view
+is refused:
 
 - `name`: the name of the new window.
-- `command`: a shell command the new window runs in the session's checkout.
-  The window stays open as a shell after the command exits, so the user can
-  read the output. Use it for something the user will watch, like a test
-  watcher or a log tail, not for work you can run yourself.
 - `window`: an existing window of the session, by tmux id (`@3`) or exact
-  window name. It is placed instead of starting one, so it excludes `name` and
-  `command`. A window the session does not have is `not_found`.
+  window name. It is placed instead of starting one, so it excludes `name`. A
+  window the session does not have is `not_found`.
 
 ## Canvases
 

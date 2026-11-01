@@ -14,17 +14,17 @@ func (ctrl *DriveController) registerTabs(srv *mcp.Server) {
 		Title: "Open a tab or terminal beside the session",
 		Description: "Ask Hive to open a tab beside this chat or Code session. view is drive (the session's documents and " +
 			"canvases), diff (the Code session's changes), tasks (its task board) or terminal (a tmux window of the Code " +
-			"session). It applies only while the user is viewing this chat or session, and there is no acknowledgment. A " +
-			"chat has only drive; diff, tasks and terminal belong to a Code session. The shared space (global) sits beside " +
-			"no session, so it has no tabs; the user reads it in the Drive page. path, for drive only, shows one document " +
-			"by its path in the space, or a canvas by name or path (perf is canvases/perf.canvas.json); it must exist. " +
-			"Omit it to leave the tab on its own pick. terminal starts a new window in the session's checkout, or places " +
-			"one that exists. It opens detached, so it never takes the keyboard or the screen. window, for terminal only, " +
-			"places an existing window of the session by tmux id (@3) or exact name instead of starting one, and excludes " +
-			"name and command. name, for terminal only, names the new window. command, for terminal only, runs in the " +
-			"checkout, and the window stays as a shell after it exits so the user can read the output. Use command for " +
-			"something the user will watch, like a test watcher or a log tail, not for work you can run yourself. The " +
-			"session must be running; start it in Code first. placement behind (the default) adds the tab behind the tab " +
+			"session). The tab applies only while the user is viewing this chat or session, and there is no " +
+			"acknowledgment; a terminal's tmux window is started whether or not they are. A chat has only drive; diff, " +
+			"tasks and terminal belong to a Code session. The shared space (global) sits beside no session, so it has no " +
+			"tabs; the user reads it in the Drive page. path, for drive only, shows one document by its path in the space, " +
+			"or a canvas by name or path (perf is canvases/perf.canvas.json); it must exist. Omit it to leave the tab on " +
+			"its own pick. terminal starts a new window in the session's checkout, a shell with nothing running in it, or " +
+			"places one that exists. It opens detached, so it never takes the keyboard or the screen. It takes no command: " +
+			"run your own work yourself, and open a terminal for the user to type in. window, for terminal only, places " +
+			"an existing window of the session by tmux id (@3) or exact name instead of starting one, and excludes name. " +
+			"name, for terminal only, names the new window. The session must be running; start it in Code first. " +
+			"placement behind (the default) adds the tab behind the tab " +
 			"in front, with an unseen dot, and never takes the screen; beside splits the panel in front and opens the tab " +
 			"next to it, and below splits it downward, so the user sees it at once. All leave the keyboard where it is, " +
 			"and a tab that is already open stays where it is under any. anchor, a tab reference (drive, diff, tasks, " +
@@ -39,10 +39,11 @@ func (ctrl *DriveController) registerTabs(srv *mcp.Server) {
 		Name:  "close_tab",
 		Title: "Close a tab",
 		Description: "Ask Hive to close this chat or Code session's tab for a view (drive, diff or tasks), wherever it " +
-			"sits. Like open_tab it applies only while the user is viewing this chat or session. Documents and canvases " +
-			"are untouched; this closes the tab, not the content. view terminal needs window (a tmux window of the Code " +
-			"session, by id or exact name) and kills that window through tmux: it ends what runs in it, and the tab goes " +
-			"with it. Only close a window you started. A chat's terminal is the chat, so close_tab refuses it.",
+			"sits. Like open_tab, the tab closes only while the user is viewing this chat or session. Documents and " +
+			"canvases are untouched; this closes the tab, not the content. view terminal needs window (a tmux window of " +
+			"the Code session, by id or exact name) and kills that window through tmux whether or not the session is on " +
+			"screen: it ends what runs in it, and the tab goes with it. Only close a window you started. A chat's " +
+			"terminal is the chat, so close_tab refuses it.",
 	}, ctrl.CloseTab)
 
 	addTool(srv, &mcp.Tool{
@@ -101,9 +102,8 @@ type openTabInput struct {
 	Path      string `json:"path,omitempty"      jsonschema:"Drive only: the document to show, by its path in the space, or a canvas by name or path (perf is canvases/perf.canvas.json). It must exist. Omit to leave the tab on its own pick."`
 	Placement string `json:"placement,omitempty" jsonschema:"behind (default) adds the tab behind the tab in front, with an unseen dot, and never takes the screen. beside splits the panel in front and opens the tab next to it; below splits it downward. A tab that is already open stays where it is."`
 	Anchor    string `json:"anchor,omitempty"    jsonschema:"The tab to place relative to: drive, diff, tasks, terminal (a chat's one terminal), or a window of the Code session by id (@3) or exact name. Omit for the tab in front of the focused panel."`
-	Window    string `json:"window,omitempty"    jsonschema:"Terminal only: an existing window of the session, by tmux id (@3) or exact window name. It is placed instead of starting one, so name and command must be empty."`
-	Name      string `json:"name,omitempty"      jsonschema:"Terminal only: the name of the new window."`
-	Command   string `json:"command,omitempty"   jsonschema:"Terminal only: a shell command the new window runs in the session's checkout. The window stays open as a shell after it exits, so the user can read the output. Use it for something the user will watch, like tests or a log, not for work you can run yourself."`
+	Window    string `json:"window,omitempty"    jsonschema:"Terminal only: an existing window of the session, by tmux id (@3) or exact window name. It is placed instead of starting one, so name must be empty."`
+	Name      string `json:"name,omitempty"      jsonschema:"Terminal only: the name of the new window. The window is a shell in the session's checkout with nothing running in it."`
 }
 
 type closeTabInput struct {
@@ -181,9 +181,9 @@ type closeTabResult struct {
 }
 
 func (ctrl *DriveController) OpenTab(ctx context.Context, _ *mcp.CallToolRequest, in openTabInput) (*mcp.CallToolResult, openTabResult, error) {
-	res, err := ctrl.core.Drive.OpenTab(ctx, app.OpenTabRequest{
+	res, err := ctrl.core.Layouts.OpenTab(ctx, app.OpenTabRequest{
 		Session: in.Session, View: in.View, Path: in.Path, Placement: in.Placement, Anchor: in.Anchor,
-		Window: in.Window, Name: in.Name, Command: in.Command,
+		Window: in.Window, Name: in.Name,
 	})
 	if err != nil {
 		return nil, openTabResult{}, ctrl.toolError(err)
@@ -192,31 +192,31 @@ func (ctrl *DriveController) OpenTab(ctx context.Context, _ *mcp.CallToolRequest
 }
 
 func (ctrl *DriveController) CloseTab(ctx context.Context, _ *mcp.CallToolRequest, in closeTabInput) (*mcp.CallToolResult, closeTabResult, error) {
-	if err := ctrl.core.Drive.CloseTab(ctx, in.Session, in.View, in.Window); err != nil {
+	if err := ctrl.core.Layouts.CloseTab(ctx, in.Session, in.View, in.Window); err != nil {
 		return nil, closeTabResult{}, ctrl.toolError(err)
 	}
 	return nil, closeTabResult{Requested: "close", View: in.View}, nil
 }
 
 func (ctrl *DriveController) MoveTab(ctx context.Context, _ *mcp.CallToolRequest, in moveTabInput) (*mcp.CallToolResult, layoutRequestResult, error) {
-	err := ctrl.core.Drive.MoveTab(ctx, app.MoveTabRequest{Session: in.Session, Tab: in.Tab, Placement: in.Placement, Anchor: in.Anchor})
+	err := ctrl.core.Layouts.MoveTab(ctx, app.MoveTabRequest{Session: in.Session, Tab: in.Tab, Placement: in.Placement, Anchor: in.Anchor})
 	return layoutRequest(ctrl, "move", in.Tab, err)
 }
 
 func (ctrl *DriveController) FocusTab(ctx context.Context, _ *mcp.CallToolRequest, in tabInput) (*mcp.CallToolResult, layoutRequestResult, error) {
-	return layoutRequest(ctrl, "focus", in.Tab, ctrl.core.Drive.FocusTab(ctx, in.Session, in.Tab))
+	return layoutRequest(ctrl, "focus", in.Tab, ctrl.core.Layouts.FocusTab(ctx, in.Session, in.Tab))
 }
 
 func (ctrl *DriveController) ClosePanel(ctx context.Context, _ *mcp.CallToolRequest, in tabInput) (*mcp.CallToolResult, layoutRequestResult, error) {
-	return layoutRequest(ctrl, "close_panel", in.Tab, ctrl.core.Drive.ClosePanel(ctx, in.Session, in.Tab))
+	return layoutRequest(ctrl, "close_panel", in.Tab, ctrl.core.Layouts.ClosePanel(ctx, in.Session, in.Tab))
 }
 
 func (ctrl *DriveController) ResizeSplit(ctx context.Context, _ *mcp.CallToolRequest, in resizeSplitInput) (*mcp.CallToolResult, layoutRequestResult, error) {
-	return layoutRequest(ctrl, "resize", in.Tab, ctrl.core.Drive.ResizeSplit(ctx, in.Session, in.Tab, in.Share))
+	return layoutRequest(ctrl, "resize", in.Tab, ctrl.core.Layouts.ResizeSplit(ctx, in.Session, in.Tab, in.Share))
 }
 
 func (ctrl *DriveController) TurnSplit(ctx context.Context, _ *mcp.CallToolRequest, in tabInput) (*mcp.CallToolResult, layoutRequestResult, error) {
-	return layoutRequest(ctrl, "turn", in.Tab, ctrl.core.Drive.TurnSplit(ctx, in.Session, in.Tab))
+	return layoutRequest(ctrl, "turn", in.Tab, ctrl.core.Layouts.TurnSplit(ctx, in.Session, in.Tab))
 }
 
 func layoutRequest(ctrl *DriveController, verb, tab string, err error) (*mcp.CallToolResult, layoutRequestResult, error) {
@@ -227,7 +227,7 @@ func layoutRequest(ctrl *DriveController, verb, tab string, err error) (*mcp.Cal
 }
 
 func (ctrl *DriveController) GetLayout(ctx context.Context, _ *mcp.CallToolRequest, in layoutInput) (*mcp.CallToolResult, layoutResult, error) {
-	view, err := ctrl.core.Drive.Layout(ctx, in.Session)
+	view, err := ctrl.core.Layouts.Layout(ctx, in.Session)
 	if err != nil {
 		return nil, layoutResult{}, ctrl.toolError(err)
 	}

@@ -44,23 +44,20 @@ const layoutUnknownNote = "the frontend has not reported this layout: the app ma
 
 // Layout reads the panel layout of the calling chat or Code session from the
 // mirror. It never reaches the browser, so it answers the last report.
-func (s *DriveService) Layout(ctx context.Context, session string) (LayoutView, error) {
-	_, caller, err := s.open(ctx, session)
+func (s *LayoutsService) Layout(ctx context.Context, session string) (LayoutView, error) {
+	caller, err := s.callers.tabCaller(ctx, session)
 	if err != nil {
 		return LayoutView{}, err
 	}
 	if err := checkTabSpace(caller); err != nil {
 		return LayoutView{}, err
 	}
-	if s.layouts == nil {
-		return LayoutView{}, Errorf(KindUnavailable, "the layout mirror is not available here")
-	}
 	kind, key := LayoutKindCode, caller.author.HiveSession
 	chat := caller.author.Session != ""
 	if chat {
 		kind, key = LayoutKindChats, caller.author.Session
 	}
-	report, onScreen, known := s.layouts.Layout(kind, key)
+	report, onScreen, known := s.Reported(kind, key)
 	if !known {
 		return LayoutView{Panels: []LayoutPanel{}, Splits: []LayoutSplit{}, Note: layoutUnknownNote}, nil
 	}
@@ -113,7 +110,7 @@ func layoutPanelOf(n PanelNodeReport, chat bool, names map[string]string) Layout
 // windowNames maps a hive session's tmux window ids to their names. A chat's
 // tmux session is not known to the drive caller, and a listing that fails
 // costs only the names, so both answer an empty map.
-func (s *DriveService) windowNames(ctx context.Context, caller driveCaller) map[string]string {
+func (s *LayoutsService) windowNames(ctx context.Context, caller driveCaller) map[string]string {
 	if s.terminals == nil || caller.tmuxSession == "" {
 		return nil
 	}

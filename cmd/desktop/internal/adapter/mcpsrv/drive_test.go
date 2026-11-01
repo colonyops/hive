@@ -220,7 +220,7 @@ func TestTabToolsPublishTheRequest(t *testing.T) {
 	assert.Contains(t, text, "invalid", "a chat has only a Drive tab")
 	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "terminal"})
 	assert.Contains(t, text, "a chat has one terminal", "new terminals belong to a Code session")
-	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "terminal", "window": "@3", "command": "make"})
+	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "terminal", "window": "@3", "name": "x"})
 	assert.Contains(t, text, "window places an existing terminal")
 	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "name": "x"})
 	assert.Contains(t, text, "apply only to the terminal view")

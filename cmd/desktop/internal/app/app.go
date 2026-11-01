@@ -479,15 +479,17 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.ClientLog = newClientLogService(cfg.Logger)
 	a.Observability = newObservabilityService(cfg.SettingsStore, cfg.Settings.Telemetry, cfg.TelemetryRuntime)
 	a.DevTools = newDevToolsService(cfg.Settings.Development.DevTools.Enabled)
-	a.Layouts = &LayoutsService{}
 	a.Drive = newDriveService(DriveDeps{
 		Engine:   func() *hive.Engine { return a.hive },
 		Sessions: a.Stores.AgentSessions,
 		Events:   a.Events,
 		Logger:   cfg.Logger,
-		Layouts:  a.Layouts,
-		Terminals: newTmuxWindows(a.terminals, newTmuxRunner(
-			func(ctx context.Context) (string, error) { return a.resolveTmuxBinary(ctx) }, a.execEnv.Environ)),
+	})
+	a.Layouts = newLayoutsService(LayoutsDeps{
+		Callers:   a.Drive,
+		Terminals: newTmuxWindows(a.terminals),
+		Events:    a.Events,
+		Logger:    cfg.Logger,
 	})
 	a.AgentWorkspaces = newAgentWorkspacesService(AgentWorkspacesDeps{
 		Store:           a.agentWorkspaceStore,

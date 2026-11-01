@@ -58,8 +58,10 @@ individual choices; this document describes the shape everything fits into.
 > capabilities as tools over `app.App`, on the same single loopback `http`
 > server (on by default) that hosts the webhook listener (ADR agent-http-api). It is
 > stateless, so it holds nothing between requests and joins no lifecycle, and
-> it is unauthenticated behind the loopback bind because it spawns nothing
-> (ADR mcp-replaces-the-agent-facing-http-api). It replaced the REST control surface that preceded it, whose
+> it is unauthenticated behind the loopback bind because it runs nothing a
+> caller writes: the one process it starts is the user's shell in a detached
+> window of the caller's own Code session, with no command
+> (ADR mcp-replaces-the-agent-facing-http-api, ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows). It replaced the REST control surface that preceded it, whose
 > routes and generated OpenAPI document are deleted rather than deprecated —
 > `tools/list`, inferred from the same Go types the handlers take, is what
 > makes it self-describing now.
@@ -2488,22 +2490,24 @@ its own session id from
 
 **Agents write through `mcpsrv`.** One app-hosted server, `hive-drive`, mounts
 at `/mcp/drive` and at `/mcp/canvas`; the old address keeps answering for
-existing agent configurations. It has fifteen tools: the eight canvas tools,
+existing agent configurations. It has twenty-one tools: the eight canvas tools,
 whose `canvas` argument is a name or a path (`reports/perf` files at
 `reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), five document
 tools: `list_documents`, `read_document`, `write_document`, `move_document`
 and `delete_document`, and eight layout tools: `open_tab` (`view` is `drive`,
 `diff`, `tasks` or `terminal`; `path`, for `drive`, is a document path or a
 canvas name; `window`, `name` and `command`, for `terminal`, pick an existing
-window or start a new detached one in the checkout; `placement` is `behind`,
-`beside` or `below`, relative to an optional `anchor`), `close_tab` (a
-terminal needs `window` and is killed through the tmux runner, with no event),
-`move_tab`, `focus_tab`, `close_panel`, `resize_split`, `turn_split` and
-`get_layout`. A tab is addressed by one string: a view name, `terminal` for a
-chat's one window, or a Code window by tmux id or exact name, which
-`parseTabRef` and `FindWindow` resolve before anything is published
-(`cmd/desktop/internal/app/drive_tabs.go`). `get_layout` answers from
-`app.LayoutsService`, an in-memory mirror the frontend fills through the Wails
+window or start a new detached one in the checkout, a shell with no command;
+`placement` is `behind`, `beside` or `below`, relative to an optional
+`anchor`), `close_tab` (a terminal needs `window` and is killed through
+`tmuxcc.Manager.KillWindow`, with no event), `move_tab`, `focus_tab`,
+`close_panel`, `resize_split`, `turn_split` and `get_layout`. The verbs are
+`app.LayoutsService` (`layouts_tabs.go`), which asks `app.DriveService` only
+who a session argument is and what document a Drive tab opens on. A tab is
+addressed by one string: a view name, `terminal` for a chat's one window, or a
+Code window by tmux id or exact name, which `parseTabRef` and `FindWindow`
+resolve before anything is published. `get_layout` answers from the same
+service's in-memory mirror, which the frontend fills through the Wails
 `LayoutService.Report` whenever a layout store changes (debounced, with the
 key on screen), joined with tmux window names; the layout itself still lives
 only in the browser, and `known: false` says the frontend has not reported

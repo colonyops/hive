@@ -30,7 +30,7 @@ A tab is named by what it shows:
 | `turn_split` | `hive dt split turn <tab>` | Turns the split between side by side and stacked. |
 | `get_layout` | `hive dt layout` | Prints the panels, their tabs, and the splits as JSON. |
 
-A new terminal opens detached, so it never takes the keyboard. `--name` names the window and `--command` runs a command in the session's checkout; the window stays open as a shell when the command ends, so its output stays readable. An agent should use it for something you will watch, such as a test watcher or a log.
+A new terminal opens detached, so it never takes the keyboard. It is a shell in the session's checkout with nothing running in it, and `--name` names the window. The tool takes no command: an agent runs its own work itself and opens a terminal for you to type in.
 
 ## From the CLI
 
@@ -38,7 +38,7 @@ The commands find the running app through a file the desktop writes in the hive 
 
 ```bash
 hive dt layout | jq
-hive dt tab open terminal --name tests --command 'npm test -- --watch' --placement beside
+hive dt tab open terminal --name tests --placement beside
 hive dt tab move drive --placement below --anchor tests
 hive dt split resize tests --share 0.4
 ```
