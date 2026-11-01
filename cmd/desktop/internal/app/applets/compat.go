@@ -43,28 +43,24 @@ var (
 // "update Hive" rather than a type error. An unreadable hive: refuses, because it is the
 // one key an author can use to keep an older Hive from running the file.
 func checkCompatibility(doc *yaml.Node, hostVersion string) error {
-	root := doc
-	if root.Kind == yaml.DocumentNode && len(root.Content) == 1 {
-		root = root.Content[0]
+	// Decoded rather than read off the keys, so a merge or an alias key means here what it
+	// means to the decode that follows. A type error still fills the fields that fit, and
+	// that decode reports it.
+	var gate struct {
+		Version int    `yaml:"version"`
+		Hive    string `yaml:"hive"`
 	}
-	if root.Kind != yaml.MappingNode {
-		return nil
+	_ = doc.Decode(&gate)
+	if gate.Version > FormatVersion {
+		return &UpdateHiveError{fmt.Sprintf("this applet uses file format %d, and this version of Hive reads format %d. Update Hive to use it", gate.Version, FormatVersion)}
 	}
-	if value := mappingValue(root, "version"); value != nil {
-		var version int
-		if value.Decode(&version) == nil && version > FormatVersion {
-			return &UpdateHiveError{fmt.Sprintf("this applet uses file format %d, and this version of Hive reads format %d. Update Hive to use it", version, FormatVersion)}
+	if gate.Hive == "" {
+		if hasRootKey(doc, "hive") {
+			return errBadMinimumHive
 		}
-	}
-	value := mappingValue(root, "hive")
-	if value == nil {
 		return nil
 	}
-	var requirement string
-	if value.Decode(&requirement) != nil {
-		return errBadMinimumHive
-	}
-	match := minimumHive.FindStringSubmatch(strings.TrimSpace(requirement))
+	match := minimumHive.FindStringSubmatch(strings.TrimSpace(gate.Hive))
 	if match == nil {
 		return errBadMinimumHive
 	}
@@ -78,7 +74,7 @@ func checkCompatibility(doc *yaml.Node, hostVersion string) error {
 		return nil
 	}
 	if have, ok := releaseNumbers(running[1:]); ok && slices.Compare(have, needed) < 0 {
-		minimum := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(requirement), ">="))
+		minimum := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(gate.Hive), ">="))
 		return &UpdateHiveError{fmt.Sprintf("this applet needs Hive %s or later, and this is Hive %s. Update Hive to use it", minimum, strings.TrimPrefix(running[0], "v"))}
 	}
 	return nil
@@ -99,22 +95,28 @@ func releaseNumbers(parts []string) ([]int, bool) {
 	return numbers, true
 }
 
-func mappingValue(mapping *yaml.Node, key string) *yaml.Node {
-	for i := 0; i+1 < len(mapping.Content); i += 2 {
-		if mapping.Content[i].Value == key {
-			return mapping.Content[i+1]
+// hasRootKey finds a key the gate read as empty, such as a null or a list, which must
+// refuse rather than count as no requirement.
+func hasRootKey(doc *yaml.Node, key string) bool {
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+		return false
+	}
+	root := doc.Content[0]
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == key {
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 // ignoredKeys lists the keys Applet has no field for, at any depth, read from the struct's
 // own tags so a new field needs no change here. The decode that follows skips them.
 func ignoredKeys(doc *yaml.Node) []string {
-	seen := map[string]bool{}
-	collectIgnored(doc, reflect.TypeFor[Applet](), "", seen)
-	keys := make([]string, 0, len(seen))
-	for key := range seen {
+	walk := ignoredKeyWalk{seen: map[string]bool{}, visited: map[ignoredKeyVisit]bool{}}
+	walk.visit(doc, reflect.TypeFor[Applet](), "")
+	keys := make([]string, 0, len(walk.seen))
+	for key := range walk.seen {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
@@ -125,20 +127,39 @@ func ignoredKeys(doc *yaml.Node) []string {
 	return warnings
 }
 
-func collectIgnored(node *yaml.Node, t reflect.Type, path string, seen map[string]bool) {
+type ignoredKeyVisit struct {
+	node *yaml.Node
+	kind reflect.Type
+	path string
+}
+
+// ignoredKeyWalk remembers what it has been through, because aliases can reach one node
+// many times over.
+type ignoredKeyWalk struct {
+	seen    map[string]bool
+	visited map[ignoredKeyVisit]bool
+}
+
+func (w ignoredKeyWalk) visit(node *yaml.Node, t reflect.Type, path string) {
 	for node.Kind == yaml.DocumentNode && len(node.Content) == 1 {
 		node = node.Content[0]
 	}
 	if node.Kind == yaml.AliasNode {
 		node = node.Alias
 	}
+	step := ignoredKeyVisit{node, t, path}
+	if w.visited[step] {
+		return
+	}
+	w.visited[step] = true
+
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() == reflect.Slice {
 		if node.Kind == yaml.SequenceNode {
 			for _, item := range node.Content {
-				collectIgnored(item, t.Elem(), path, seen)
+				w.visit(item, t.Elem(), path)
 			}
 		}
 		return
@@ -148,19 +169,46 @@ func collectIgnored(node *yaml.Node, t reflect.Type, path string, seen map[strin
 	}
 	fields := yamlFields(t)
 	for i := 0; i+1 < len(node.Content); i += 2 {
-		key := node.Content[i].Value
-		if key == "<<" {
+		keyNode, value := node.Content[i], node.Content[i+1]
+		if keyNode.ShortTag() == "!!merge" {
+			w.visitMerged(value, t, path)
 			continue
 		}
+		key := mappingKey(keyNode)
 		if field, known := fields[key]; known {
-			collectIgnored(node.Content[i+1], field, path+key+".", seen)
+			w.visit(value, field, path+key+".")
 			continue
 		}
 		if !plainValue.MatchString(key) {
 			key = "a key with an unusual name"
 		}
-		seen[path+key] = true
+		w.seen[path+key] = true
 	}
+}
+
+func (w ignoredKeyWalk) visitMerged(value *yaml.Node, t reflect.Type, path string) {
+	if value.Kind == yaml.AliasNode {
+		value = value.Alias
+	}
+	if value.Kind == yaml.SequenceNode {
+		for _, item := range value.Content {
+			w.visitMerged(item, t, path)
+		}
+		return
+	}
+	w.visit(value, t, path)
+}
+
+// mappingKey reads a key as the decoder does, through an alias or a binary tag.
+func mappingKey(node *yaml.Node) string {
+	if node.Kind == yaml.AliasNode {
+		node = node.Alias
+	}
+	var key string
+	if node.Kind != yaml.ScalarNode || node.Decode(&key) != nil {
+		return ""
+	}
+	return key
 }
 
 func yamlFields(t reflect.Type) map[string]reflect.Type {

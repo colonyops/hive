@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +19,7 @@ import (
 type fakeAppletPreferences struct {
 	disabled  map[string]bool
 	forgotten []string
+	forgetErr error
 }
 
 func (f *fakeAppletPreferences) AppletDisabled(id string) (bool, error) { return f.disabled[id], nil }
@@ -28,7 +31,7 @@ func (f *fakeAppletPreferences) SetAppletDisabled(id string, disabled bool) erro
 
 func (f *fakeAppletPreferences) ForgetApplet(id string) error {
 	f.forgotten = append(f.forgotten, id)
-	return nil
+	return f.forgetErr
 }
 
 func testAppletDeps(store *applets.Store, sessionDir func(context.Context, string) (string, error)) AppletsDeps {
@@ -316,4 +319,77 @@ func TestImportPreviewCarriesOnlyPlainWarnings(t *testing.T) {
 		`this version of Hive ignores "sidebar"`,
 		`this version of Hive has no icon "laser", so it shows the default`,
 	}, preview.Warnings)
+}
+
+func TestImportLeavesNothingWhenTheIDCannotBeCleared(t *testing.T) {
+	service := appletHarness(t, "existing", "version: 1\ntitle: Existing\n")
+	preferences := &fakeAppletPreferences{disabled: map[string]bool{}, forgetErr: errors.New("read-only settings.yaml")}
+	service.preferences = preferences
+	preview, err := service.PrepareImport(packedApplet(t, "radio", "version: 1\ntitle: Radio\n"))
+	require.NoError(t, err)
+
+	require.ErrorContains(t, service.ConfirmImport(preview.Token, "radio"), "nothing was imported")
+	assert.NoDirExists(t, filepath.Join(service.catalog.Root(), "radio"))
+
+	preferences.forgetErr = nil
+	require.NoError(t, service.ConfirmImport(preview.Token, "radio"), "the file is still waiting")
+	assert.DirExists(t, filepath.Join(service.catalog.Root(), "radio"))
+}
+
+func TestTurningAnAppletOffStopsWhatItHasRunning(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	other := filepath.Join(service.catalog.Root(), "other")
+	require.NoError(t, os.MkdirAll(other, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(other, applets.FileName), []byte("version: 1\ntitle: Other\n"), 0o600))
+	require.NoError(t, service.catalog.Reload())
+
+	handle, err := service.Spawn(t.Context(), "thing", AppletExec{Command: "sleep 30"})
+	require.NoError(t, err)
+	kept, err := service.Spawn(t.Context(), "other", AppletExec{Command: "sleep 30"})
+	require.NoError(t, err)
+	defer func() { require.NoError(t, service.SpawnKill(kept)) }()
+
+	started := make(chan struct{})
+	finished := make(chan error, 1)
+	go func() {
+		close(started)
+		_, err := service.Exec(t.Context(), "thing", AppletExec{Command: "sleep 30"})
+		finished <- err
+	}()
+	<-started
+	require.Eventually(t, func() bool {
+		service.spawns.mu.Lock()
+		defer service.spawns.mu.Unlock()
+		return len(service.spawns.execs) == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	require.NoError(t, service.SetEnabled("thing", false))
+
+	select {
+	case <-finished:
+	case <-time.After(15 * time.Second):
+		t.Fatal("a running hive.exec outlived the switch")
+	}
+	spawn, err := service.spawn(handle)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		spawn.mu.Lock()
+		defer spawn.mu.Unlock()
+		return spawn.done
+	}, 15*time.Second, 10*time.Millisecond, "a spawned process outlived the switch")
+
+	other2, err := service.spawn(kept)
+	require.NoError(t, err)
+	other2.mu.Lock()
+	defer other2.mu.Unlock()
+	assert.False(t, other2.done, "another applet's process keeps running")
+}
+
+func TestAPageCanStillSaveAsItIsTurnedOff(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	require.NoError(t, service.SetEnabled("thing", false))
+	require.NoError(t, service.SaveStorage("thing", `{"last":"word"}`))
+	saved, err := os.ReadFile(filepath.Join(service.catalog.Root(), "thing", appletStorageFile))
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"last":"word"}`, string(saved))
 }

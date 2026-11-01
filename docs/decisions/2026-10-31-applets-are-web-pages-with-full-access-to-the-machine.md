@@ -37,6 +37,15 @@ bridge. A frame can reach a remote page through one link, so these rules hold th
   `event.source` alone would answer a remote page reached through a link. The token is
   injected only into pages `Asset` serves, and those responses carry no CORS header, so
   a page in the frame cannot fetch one to read it.
+- **A foreign page cannot read an applet's data.** Its origin in the frame is `null`, the same
+  as the applet's own page. So a data file crosses only for a `Referer` from that applet's own
+  pages, which a page cannot set. WebKit, which the app runs on, sends it. Chromium sends an
+  opaque frame none, so a page there reads its data with `hive.readFile`. Page code and fonts load with no `Referer`, so they cross for
+  any frame: a foreign page can read the code of an applet that is on, and a secret does not
+  belong there.
+- **Popups stay inert.** A top-level window that framed an applet page would pass the check on
+  its parent. Neither Wails nor Hive creates a window for `window.open` today. If that changes,
+  drop `allow-popups-to-escape-sandbox` from the frame first.
 - **A page sends its token only to Hive.** A remote page could otherwise frame an applet's
   own page and read the token off its first message. The bridge posts only when its parent
   is the top window, which a page cannot fake, so `window.hive` rejects every call in a page
@@ -94,8 +103,8 @@ someone trusts has the access any applet has. A `.hiveapplet` is a zip holding
 under `files/`. The file
 is hostile until the user confirms: it is checked whole in memory and installed by renaming
 a finished directory in, so nothing lands early or partly. Import never replaces an applet,
-because a replace is how someone else's update overwrites what a user trusted, and once
-installed it clears any place, off switch or chord the id still has in `settings.yaml`, in Go,
+because a replace is how someone else's update overwrites what a user trusted, and just
+before it lands it clears any place, off switch or chord the id still has in `settings.yaml`, in Go,
 so a file cannot inherit what the user gave another applet of that name.
 
 **Shared files have to keep working, so both formats read forward.** A file outlives the Hive
@@ -113,7 +122,8 @@ meant. So a key that limits what an applet can do must ship with `hive:` set to 
 understands it, or with a new `version`, and an older Hive then refuses the file rather than
 running it without the limit. `hive:` itself fails closed: a value this Hive cannot read refuses
 the file. An applet with no such key has full access, as every applet has today. The import
-dialog lists every skipped key and says a limit among them would not apply.
+dialog lists the skipped keys, up to 20, and says a limit among them would not apply. `hive:` and
+`version` are read as the decoder reads them, so a merge or an alias key cannot get past them.
 
 **Hive's command ids and routes are part of the applet API.** A shared page names them through
 `hive.command`, `hive.commands` and `hive.navigate`, so a rename keeps the old name as an alias. A
@@ -124,8 +134,10 @@ refuses the rest: it would cost less to keep, and take away most of what those c
 fits its surface. `open` and `dropdown` act on another surface.
 
 **A user can turn an applet off,** in Settings or as `applets.disabled`. This is a choice about
-the applet and not a limit on it: the applet is off or has its full access. Its bridge stops
-answering and its pages stop being served, in Go, so the rule holds whatever the frontend does.
+the applet and not a limit on it: the applet is off or has its full access. Go stops serving its
+pages, refuses the bridge calls that reach the machine, and stops what it has running, including
+a `hive.exec`. The switch also closes its frames. `settings.yaml` has no watcher, so a hand edit
+stops new calls at once and closes its frames at the next launch.
 
 ## Consequences
 
@@ -135,6 +147,10 @@ answering and its pages stop being served, in Go, so the rule holds whatever the
   user from the applet.
 - An export cannot tell every data file a page wrote from one its author wrote, so it leaves
   out hidden files and logs and shows the user the list.
+- Watching stops at 1024 files and folders below each applet, because a watch on macOS holds a
+  descriptor per file. An edit in a folder past that does not reload the page.
+- A `hive.exec` a closed panel started finishes or times out. A page has no handle for it, and
+  only turning the applet off stops it.
 - A page cannot `fetch` another HTML file of its own, because that response has no CORS
   header. It can navigate to one.
 - Cookies and IndexedDB do not work in an opaque origin.

@@ -143,14 +143,18 @@ func (s *AppletsService) isDisabled(id string) bool {
 	return disabled
 }
 
-// SetEnabled turns an applet on or off. The frames an applet has open close when the
-// frontend hears the catalog changed, and what they started stops with them.
+// SetEnabled turns an applet on or off. Its frames close when the frontend hears the
+// catalog changed. What it has running stops here, because a page has no handle for a
+// running hive.exec, and a frontend that reloaded has lost the ones it had.
 func (s *AppletsService) SetEnabled(id string, enabled bool) error {
 	if !slices.ContainsFunc(s.catalog.List(), func(entry applets.Entry) bool { return entry.Applet.ID == id }) {
 		return Errorf(KindNotFound, "unknown applet %q", id)
 	}
 	if err := s.preferences.SetAppletDisabled(id, !enabled); err != nil {
 		return Wrap(err, KindInternal, "saving settings")
+	}
+	if !enabled {
+		s.spawns.stopApplet(id)
 	}
 	s.updated()
 	return nil

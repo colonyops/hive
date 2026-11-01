@@ -1,6 +1,7 @@
 package dirwatch
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -53,4 +54,26 @@ func TestAllSubdirectoriesSeesAnEditAtAnyDepthAndSkipsWhatItIsTold(t *testing.T)
 	case <-time.After(3 * time.Second):
 		t.Fatal("an edit in a folder made after the start reported nothing")
 	}
+}
+
+func TestAllSubdirectoriesSpendsABudgetOnFilesNotFolders(t *testing.T) {
+	root := t.TempDir()
+	big := filepath.Join(root, "radio", "a-big")
+	small := filepath.Join(root, "radio", "b-small")
+	other := filepath.Join(root, "other", "pages")
+	for _, dir := range []string{big, small, other} {
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+	}
+	for i := range maxDeepEntries + 1 {
+		require.NoError(t, os.WriteFile(filepath.Join(big, fmt.Sprintf("f%d", i)), nil, 0o600))
+	}
+
+	watcher, err := New(root, func(string) bool { return true }, func() {}, zerolog.Nop(), WithAllSubdirectories(nil))
+	require.NoError(t, err)
+	defer watcher.Close()
+
+	assert.False(t, watcher.watched[big], "a folder over the budget would hold a descriptor per file")
+	assert.True(t, watcher.watched[filepath.Join(root, "radio")], "the applet itself is always watched")
+	assert.True(t, watcher.watched[small], "one large folder does not cost its siblings")
+	assert.True(t, watcher.watched[other], "nor another applet")
 }

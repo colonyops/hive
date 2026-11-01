@@ -276,6 +276,10 @@ func (s *AppletsService) WriteFile(id, path, content string) error {
 	if err != nil {
 		return err
 	}
+	return writeAppletFile(resolved, path, content)
+}
+
+func writeAppletFile(resolved, path, content string) error {
 	if err := os.MkdirAll(filepath.Dir(resolved), 0o755); err != nil {
 		return Wrap(err, KindInternal, "creating the directory of %q", path)
 	}
@@ -290,7 +294,15 @@ func (s *AppletsService) SaveStorage(id, encoded string) error {
 	if !json.Valid([]byte(encoded)) {
 		return Errorf(KindInvalid, "applet storage is not JSON")
 	}
-	return s.WriteFile(id, appletStorageFile, encoded)
+	// Not through page: a page saves as it closes, which is also what turning it off does.
+	applet, err := s.applet(id)
+	if err != nil {
+		return err
+	}
+	if !s.pages {
+		return Errorf(KindUnavailable, appletPagesUnavailable)
+	}
+	return writeAppletFile(filepath.Join(applet.Dir, appletStorageFile), appletStorageFile, encoded)
 }
 
 // command builds the process. Its context is detached because RunShellProcess owns
@@ -347,6 +359,10 @@ func (s *AppletsService) Exec(ctx context.Context, id string, req AppletExec) (A
 	}
 	runCtx, stop := context.WithTimeout(ctx, timeout)
 	defer stop()
+	defer s.spawns.trackExec(id, stop)()
+	if s.isDisabled(id) {
+		return AppletExecResult{}, Errorf(KindUnavailable, "this applet was turned off")
+	}
 
 	stdout := &executil.HeadWriter{Max: maxAppletStdout}
 	stderr := &executil.HeadWriter{Max: maxAppletStdout}
@@ -372,6 +388,46 @@ type spawnTable struct {
 	mu   sync.Mutex
 	next int
 	live map[string]*appletSpawn
+	// execs holds what a running hive.exec needs to be stopped, since its page has no
+	// handle for it.
+	execs map[int]runningExec
+}
+
+type runningExec struct {
+	applet string
+	cancel context.CancelFunc
+}
+
+func (t *spawnTable) trackExec(applet string, cancel context.CancelFunc) (untrack func()) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.execs == nil {
+		t.execs = map[int]runningExec{}
+	}
+	t.next++
+	key := t.next
+	t.execs[key] = runningExec{applet, cancel}
+	return func() {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		delete(t.execs, key)
+	}
+}
+
+// stopApplet ends everything an applet has running, whichever frame started it.
+func (t *spawnTable) stopApplet(applet string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, spawn := range t.live {
+		if spawn.applet == applet {
+			spawn.cancel()
+		}
+	}
+	for _, running := range t.execs {
+		if running.applet == applet {
+			running.cancel()
+		}
+	}
 }
 
 type appletSpawn struct {
@@ -440,6 +496,9 @@ func (s *AppletsService) Spawn(ctx context.Context, id string, req AppletExec) (
 	handle := fmt.Sprintf("p%d", s.spawns.next)
 	s.spawns.live[handle] = spawn
 	s.spawns.mu.Unlock()
+	if s.isDisabled(id) {
+		cancel()
+	}
 
 	go func() {
 		code, err := exitResult(dispatch.RunShellProcess(runCtx, proc))

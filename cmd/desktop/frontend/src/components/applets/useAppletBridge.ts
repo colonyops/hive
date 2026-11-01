@@ -324,7 +324,13 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     void token.then(
       (expected) => {
         if (message.token !== expected || closed) return
-        port?.close()
+        // A new port is a new page in this frame, so what the last one set up goes with it.
+        if (port && port !== from) {
+          port.close()
+          endProcesses()
+          pageReady = false
+          applets.setFrameRows(handle, id, [])
+        }
         port = from
         from.onmessage = (received) => serve(received, from)
       },

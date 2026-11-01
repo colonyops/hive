@@ -7,11 +7,16 @@
     <pre id="result">pending</pre>
     <button id="navigate">Leave</button>
     <button id="frame-own-page">Frame own page</button>
+    <button id="read-data">Read data as a foreign page</button>
     <script type="module">
       import { fromModule } from './helper.mjs'
 
       const result = {
         fromModule,
+        ownData: await fetch('data.json').then(
+          (response) => response.json(),
+          () => 'blocked',
+        ),
         visits: Number(localStorage.getItem('visits') ?? 0),
         bypassed: (await hive.exec('test -e bypassed')).code === 0,
       }
@@ -40,6 +45,20 @@
             addEventListener('message', () => { document.getElementById('left').textContent = 'answered' })
             parent.postMessage({ hiveApplet: 1, id: 1, method: 'exec', args: { command: 'touch bypassed' } }, '*')
             setTimeout(() => { if (document.getElementById('left').textContent === 'waiting') document.getElementById('left').textContent = 'ignored' }, 1000)
+          <\/script>`)
+      })
+
+      // The frame's origin is opaque, and so is a foreign page's in it, so what this page
+      // can fetch must not be open to that page too.
+      document.getElementById('read-data').addEventListener('click', () => {
+        const data = new URL('data.json', location.href).href
+        location.href =
+          'data:text/html,' +
+          encodeURIComponent(`<pre id="left">waiting</pre><script>
+            fetch('${data}').then((r) => r.text()).then(
+              (text) => { document.getElementById('left').textContent = 'read ' + text },
+              () => { document.getElementById('left').textContent = 'blocked' },
+            )
           <\/script>`)
       })
 

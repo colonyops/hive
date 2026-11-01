@@ -6,8 +6,10 @@
 package applets
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 
@@ -84,12 +86,13 @@ type Titlebar struct {
 // shape under a key this Hive knows stays an error, and so does a file that says this Hive
 // is too old (ADR applets-are-web-pages-with-full-access-to-the-machine).
 func Parse(id string, raw []byte, hostVersion string) (Applet, error) {
+	decoder := yaml.NewDecoder(bytes.NewReader(raw))
 	var doc yaml.Node
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
+	if err := decoder.Decode(&doc); err != nil {
+		if errors.Is(err, io.EOF) {
+			return Applet{}, errors.New("the file is empty")
+		}
 		return Applet{}, err
-	}
-	if doc.Kind == 0 {
-		return Applet{}, errors.New("the file is empty")
 	}
 	if err := checkCompatibility(&doc, hostVersion); err != nil {
 		return Applet{}, err
@@ -99,7 +102,12 @@ func Parse(id string, raw []byte, hostVersion string) (Applet, error) {
 		return Applet{}, err
 	}
 	a.ID = id
-	a.Warnings = a.dropUnknownIcons(ignoredKeys(&doc))
+	warnings := ignoredKeys(&doc)
+	var next yaml.Node
+	if err := decoder.Decode(&next); !errors.Is(err, io.EOF) {
+		warnings = append(warnings, "this file has a second YAML document, and Hive reads only the first")
+	}
+	a.Warnings = a.dropUnknownIcons(warnings)
 	if a.Entry == "" {
 		a.Entry = DefaultEntry
 	}

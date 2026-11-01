@@ -36,7 +36,7 @@ Shortcuts keep working with focus inside a page, as long as they use <kbd>⌘</k
 
 ## Turn one off
 
-Each applet has a switch in **Settings ▸ Applets**. An applet that is off stays listed and keeps its files, saved data, title bar place and shortcuts, but it does not run, serve its pages or appear in the palette. Turning it off closes what it has open and stops what it started. In `settings.yaml`:
+Each applet has a switch in **Settings ▸ Applets**. An applet that is off stays listed and keeps its files, saved data, title bar place and shortcuts, but it does not run, serve its pages or appear in the palette. Turning it off closes what it has open and stops everything it has running. In `settings.yaml`, where a change to the list closes open pages at the next launch:
 
 ```yaml
 applets:
@@ -149,7 +149,7 @@ The slot is 28px tall, and a page with a transparent background sits directly on
 | `hive.resize({width, height})` | Resizes the slot or dropdown. Width `0` hides the slot and keeps the page running |
 | `hive.dropdown({entry, width, height})` | Opens a panel under the bar, or closes it if it is open |
 
-A dropdown loads again each time it opens, so put anything that has to keep going, such as audio, in the title bar page and talk to it with `hive.broadcast`. `localStorage` is shared between an applet's frames. Closing a panel or dropdown stops only the processes it started.
+A dropdown loads again each time it opens, so put anything that has to keep going, such as audio, in the title bar page and talk to it with `hive.broadcast`. `localStorage` is shared between an applet's frames. Closing a panel or dropdown stops only the `hive.spawn` processes it started. A `hive.exec` already running finishes or times out.
 
 A small title bar page looks like this:
 

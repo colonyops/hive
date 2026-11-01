@@ -73,3 +73,39 @@ func TestAppletAssetsReportAMissingFile(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, response.Code)
 	assert.Empty(t, response.Header().Get("Access-Control-Allow-Origin"))
 }
+
+func TestAppletDataCrossesOnlyToThatAppletsOwnPages(t *testing.T) {
+	source := fakeAppletAssets{
+		"pong/config.json": {Name: "config.json", ContentType: "application/json", Body: []byte("{}")},
+		"pong/game.MJS":    {Name: "game.MJS", ContentType: "text/javascript", Body: []byte("code")},
+	}
+	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	tests := []struct {
+		name    string
+		path    string
+		referer string
+		want    string
+	}{
+		{"its own page", "/__applet/pong/config.json", "wails://example.com/__applet/pong/index.html", "null"},
+		{"only the origin", "/__applet/pong/config.json", "http://example.com/", ""},
+		{"a foreign page", "/__applet/pong/config.json", "http://127.0.0.1:50399/evil.html", ""},
+		{"a foreign page with a matching path", "/__applet/pong/config.json", "https://evil.example/__applet/pong/x.html", ""},
+		{"another applet", "/__applet/pong/config.json", "wails://example.com/__applet/other/index.html", ""},
+		{"a similar applet id", "/__applet/pong/config.json", "wails://example.com/__applet/pong-2/index.html", ""},
+		{"the app itself by a path", "/__applet/pong/config.json", "wails://example.com/settings", ""},
+		{"no referer", "/__applet/pong/config.json", "", ""},
+		{"a module, which sends no referer", "/__applet/pong/game.MJS", "", "null"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			if tt.referer != "" {
+				request.Header.Set("Referer", tt.referer)
+			}
+			recorder := httptest.NewRecorder()
+			appletAssets(source, nil)(next).ServeHTTP(recorder, request)
+			require.Equal(t, http.StatusOK, recorder.Code)
+			assert.Equal(t, tt.want, recorder.Header().Get("Access-Control-Allow-Origin"))
+		})
+	}
+}

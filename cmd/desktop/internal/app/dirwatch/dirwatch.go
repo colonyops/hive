@@ -5,7 +5,6 @@ package dirwatch
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -21,8 +20,9 @@ import (
 const (
 	relevantOps   = fsnotify.Create | fsnotify.Write | fsnotify.Rename | fsnotify.Remove
 	structuralOps = fsnotify.Create | fsnotify.Rename | fsnotify.Remove
-	// maxDeepWatches keeps one large tree from using up the process's file descriptors.
-	maxDeepWatches = 4096
+	// maxDeepEntries is how many files and folders each folder directly under the root may
+	// have watched below it, which keeps one large tree from using up file descriptors.
+	maxDeepEntries = 1024
 )
 
 type options struct {
@@ -70,10 +70,11 @@ type Watcher struct {
 	watcher  *fsnotify.Watcher
 	watched  map[string]bool
 
-	started  atomic.Bool
-	stopOnce sync.Once
-	stop     chan struct{}
-	done     chan struct{}
+	warnedDeep atomic.Bool
+	started    atomic.Bool
+	stopOnce   sync.Once
+	stop       chan struct{}
+	done       chan struct{}
 }
 
 // New creates root if it is missing and watches it. Nothing is delivered
@@ -225,26 +226,49 @@ func (w *Watcher) subdirectories() (map[string]bool, error) {
 		}
 		return current, nil
 	}
-	err := filepath.WalkDir(w.root, func(path string, entry fs.DirEntry, err error) error {
-		switch {
-		case err != nil && path == w.root:
-			return err
-		case err != nil:
-			w.logger.Debug().Err(err).Str("subdir", path).Msg("subdirectory read failed")
-			return nil
-		case !entry.IsDir() || path == w.root:
-			return nil
-		case w.opts.skip != nil && w.opts.skip(entry.Name()):
-			return filepath.SkipDir
-		case len(current) >= maxDeepWatches:
-			w.logger.Warn().Int("limit", maxDeepWatches).Msg("too many subdirectories to watch")
-			return filepath.SkipAll
-		}
-		current[path] = true
-		return nil
-	})
+	entries, err := os.ReadDir(w.root)
 	if err != nil {
 		return nil, err
 	}
+	for _, entry := range entries {
+		if !entry.IsDir() || (w.opts.skip != nil && w.opts.skip(entry.Name())) {
+			continue
+		}
+		top := filepath.Join(w.root, entry.Name())
+		current[top] = true
+		budget := maxDeepEntries
+		w.addSubdirectories(top, &budget, current)
+	}
 	return current, nil
+}
+
+// addSubdirectories spends budget on entries before watching the folder that holds them,
+// because a kqueue watch on a folder opens a descriptor for each file in it. One folder too
+// large to watch costs its own edits and leaves the rest of the tree watched.
+func (w *Watcher) addSubdirectories(dir string, budget *int, current map[string]bool) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		w.logger.Debug().Err(err).Str("subdir", dir).Msg("subdirectory read failed")
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || (w.opts.skip != nil && w.opts.skip(entry.Name())) {
+			continue
+		}
+		sub := filepath.Join(dir, entry.Name())
+		held, err := os.ReadDir(sub)
+		if err != nil {
+			w.logger.Debug().Err(err).Str("subdir", sub).Msg("subdirectory read failed")
+			continue
+		}
+		if len(held) > *budget {
+			if !w.warnedDeep.Swap(true) {
+				w.logger.Warn().Int("limit", maxDeepEntries).Str("subdir", sub).Msg("too many files to watch, so edits there will not reload")
+			}
+			continue
+		}
+		*budget -= len(held)
+		current[sub] = true
+		w.addSubdirectories(sub, budget, current)
+	}
 }

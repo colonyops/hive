@@ -3,6 +3,9 @@ package wailsui
 import (
 	"bytes"
 	"net/http"
+	"net/url"
+	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,6 +19,26 @@ import (
 // the webview can read them. The server build refuses them: its asset handler is the
 // network listener (ADR applets-are-web-pages-with-full-access-to-the-machine).
 const appletAssetPrefix = "/__applet/"
+
+// A module script or a font loads with no Referer at all, so these cross for any frame.
+var appletCodeExtensions = []string{".js", ".mjs", ".css", ".woff", ".woff2", ".ttf", ".otf"}
+
+// mayCrossToOpaqueFrame decides who can read a file. The frame's origin is opaque, so its
+// own fetch arrives with Origin: null, and so does one from a foreign page the frame
+// navigated to. A page holds the bridge token, so it never crosses. What a page wrote to
+// its folder crosses only for that applet's own pages, told apart by Referer, which a page
+// cannot set. WebKit sends the page's URL. Chromium sends an opaque frame nothing, so there
+// a page cannot fetch its own data file either, and reads it with hive.readFile.
+func mayCrossToOpaqueFrame(r *http.Request, id, name string) bool {
+	if slices.Contains(appletCodeExtensions, strings.ToLower(path.Ext(name))) {
+		return true
+	}
+	referer, err := url.Parse(r.Header.Get("Referer"))
+	if err != nil || referer.Host == "" || referer.Host != r.Host {
+		return false
+	}
+	return strings.HasPrefix(referer.Path, appletAssetPrefix+id+"/")
+}
 
 type appletAssetSource interface {
 	Asset(id, name string) (app.AppletAsset, error)
@@ -38,10 +61,7 @@ func appletAssets(applets appletAssetSource, inner application.Middleware) appli
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
-			// The frame's origin is opaque, so a module script or a fetch of its own file
-			// is cross-origin and arrives with Origin: null. A page holds the bridge token,
-			// and a frame navigated elsewhere is also null, so a page gets no CORS at all.
-			if !asset.HoldsToken {
+			if !asset.HoldsToken && mayCrossToOpaqueFrame(r, id, asset.Name) {
 				w.Header().Set("Access-Control-Allow-Origin", "null")
 			}
 			w.Header().Set("Cache-Control", "no-store")
