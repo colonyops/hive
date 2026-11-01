@@ -18,7 +18,10 @@ const paneFormat = "#{q:session_name}" + paneDelimiter + "#{window_index}" + pan
 	"#{pane_id}" + paneDelimiter + "#{pane_pid}" + paneDelimiter + "#{q:pane_title}" + paneDelimiter +
 	"#{q:@hive-session}" + paneDelimiter + "#{pane_in_mode}"
 
-// ListPanes returns every pane visible to the current tmux server.
+// ListPanes returns every pane visible to the current tmux server. A row that
+// does not parse costs only that pane, because callers treat an error as every
+// pane gone. It is an error only when no row parses, as a format that tmux and
+// this package disagree on would produce.
 func (c *Client) ListPanes(ctx context.Context) ([]multiplexer.Pane, error) {
 	stdout, _, err := c.runner.Capture(ctx, "list-panes", "-a", "-F", paneFormat)
 	if err != nil {
@@ -30,12 +33,21 @@ func (c *Client) ListPanes(ctx context.Context) ([]multiplexer.Pane, error) {
 	}
 	lines := strings.Split(trimmed, "\n")
 	panes := make([]multiplexer.Pane, 0, len(lines))
+	var firstErr error
 	for i, line := range lines {
 		pane, parseErr := parsePaneRow(line)
 		if parseErr != nil {
-			return nil, fmt.Errorf("parse tmux pane row %d: %w", i+1, parseErr)
+			parseErr = fmt.Errorf("parse tmux pane row %d: %w", i+1, parseErr)
+			c.log.Debug().Err(parseErr).Msg("skipping tmux pane row")
+			if firstErr == nil {
+				firstErr = parseErr
+			}
+			continue
 		}
 		panes = append(panes, pane)
+	}
+	if len(panes) == 0 {
+		return nil, firstErr
 	}
 	return panes, nil
 }
@@ -81,9 +93,13 @@ func parsePaneRow(line string) (multiplexer.Pane, error) {
 	if err != nil {
 		return multiplexer.Pane{}, fmt.Errorf("activity: %w", err)
 	}
-	pid, err := strconv.ParseInt(parts[7], 10, 64)
-	if err != nil {
-		return multiplexer.Pane{}, fmt.Errorf("pid: %w", err)
+	// tmux 3.8 reports no pid for a dead pane kept by remain-on-exit.
+	var pid int64
+	if parts[7] != "" {
+		pid, err = strconv.ParseInt(parts[7], 10, 64)
+		if err != nil {
+			return multiplexer.Pane{}, fmt.Errorf("pid: %w", err)
+		}
 	}
 	if parts[10] != "0" && parts[10] != "1" {
 		return multiplexer.Pane{}, fmt.Errorf("pane mode %q is invalid", parts[10])
