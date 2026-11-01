@@ -453,6 +453,38 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     expect(onDisk.status()).toBe(404);
   });
 
+  test("deleting an applet asks first, then removes its files and its row", async ({
+    page,
+  }) => {
+    await page.goto("/#/settings/applets");
+    await page
+      .getByTestId("settings-applets-import-input")
+      .setInputFiles(
+        testdataPath("applet-archives", "e2e-imported.hiveapplet"),
+      );
+    await page.getByTestId("applet-import-trust").check();
+    await page.getByTestId("applet-import-confirm").click();
+    const row = page.getByTestId("settings-applet-e2e-imported");
+    await expect(row).toBeVisible();
+    await expect(
+      page.getByTestId("settings-applet-applet-builder-delete"),
+    ).toHaveCount(0);
+
+    await page.getByTestId("settings-applet-e2e-imported-delete").click();
+    await page.getByTestId("settings-applet-delete-cancel").click();
+    await expect(row).toBeVisible();
+    expect(
+      (await page.request.get("/__applet/e2e-imported/index.html")).status(),
+    ).toBe(200);
+
+    await page.getByTestId("settings-applet-e2e-imported-delete").click();
+    await page.getByTestId("settings-applet-delete-confirm").click();
+    await expect(row).toHaveCount(0);
+    expect(
+      (await page.request.get("/__applet/e2e-imported/index.html")).status(),
+    ).toBe(404);
+  });
+
   test("an import never replaces an applet, and a hostile file is refused", async ({
     page,
   }) => {

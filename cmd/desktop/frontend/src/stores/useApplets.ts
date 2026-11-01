@@ -1,5 +1,6 @@
 import { computed, readonly, ref, shallowReadonly, shallowRef, watch, type ComputedRef } from 'vue'
 import {
+  Delete,
   List,
   SetEnabled,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
@@ -112,6 +113,11 @@ export const useApplets = defineStore('applets', () => {
   async function setEnabled(id: string, enabled: boolean): Promise<void> {
     await SetEnabled(id, enabled)
     await catalog.reload()
+  }
+
+  async function remove(id: string): Promise<void> {
+    await Delete(id)
+    await Promise.all([catalog.reload(), reloadPlacements()])
   }
 
   const dropdown = shallowRef<AppletDropdown | null>(null)
@@ -287,6 +293,7 @@ export const useApplets = defineStore('applets', () => {
     setPlaced,
     reloadPlacements,
     setEnabled,
+    remove,
     // Shallow: the anchor is a DOM node, whose methods refuse a readonly proxy.
     dropdown: shallowReadonly(dropdown),
     toggleDropdown,

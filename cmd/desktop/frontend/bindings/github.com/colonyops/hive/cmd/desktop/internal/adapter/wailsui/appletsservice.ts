@@ -34,6 +34,10 @@ export function Context(id: string, sessionSlug: string): $CancellablePromise<ap
     return $Call.ByID(1499792253, id, sessionSlug);
 }
 
+export function Delete(id: string): $CancellablePromise<void> {
+    return $Call.ByID(1365119949, id);
+}
+
 export function Dir(): $CancellablePromise<string> {
     return $Call.ByID(1873811801);
 }

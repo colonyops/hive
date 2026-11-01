@@ -39,6 +39,10 @@ func (s *AppletsService) SetEnabled(id string, enabled bool) error {
 	return s.applets.SetEnabled(id, enabled)
 }
 
+func (s *AppletsService) Delete(id string) error {
+	return s.applets.Delete(id)
+}
+
 func (s *AppletsService) PrepareImport(encoded string) (app.AppletImportPreview, error) {
 	return s.applets.PrepareImport(encoded)
 }

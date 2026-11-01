@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -157,6 +158,44 @@ func (s *AppletsService) SetEnabled(id string, enabled bool) error {
 		s.spawns.stopApplet(id)
 	}
 	s.updated()
+	return nil
+}
+
+// Delete removes an applet's folder, saved data included, and every choice settings.yaml
+// holds for it. A broken applet can go too, so this reads the list rather than s.applet.
+// Settings go first: a failure there leaves the applet whole, and a failure after it can
+// be retried. Deleting a folder that replaced a built-in brings the built-in back.
+func (s *AppletsService) Delete(id string) error {
+	if !s.pages {
+		return Errorf(KindUnavailable, "%s", appletPagesUnavailable)
+	}
+	entries := s.catalog.List()
+	index := slices.IndexFunc(entries, func(entry applets.Entry) bool { return entry.Applet.ID == id })
+	if index < 0 {
+		return Errorf(KindNotFound, "unknown applet %q", id)
+	}
+	applet := entries[index].Applet
+	if applet.Builtin {
+		return Errorf(KindInvalid, "%s ships with Hive and cannot be deleted. Turn it off instead", applet.Title)
+	}
+	if err := s.preferences.ForgetApplet(id); err != nil {
+		return Wrap(err, KindInternal, "nothing was deleted, because settings.yaml could not be cleared for %s", id)
+	}
+	s.spawns.stopApplet(id)
+	removeErr := os.RemoveAll(applet.Dir)
+	reloadErr := s.catalog.Reload()
+	// A page on screen can start something until the reload above makes its id unknown.
+	s.spawns.stopApplet(id)
+	s.tokensMu.Lock()
+	delete(s.tokens, id)
+	s.tokensMu.Unlock()
+	s.updated()
+	if removeErr != nil {
+		return Wrap(removeErr, KindInternal, "deleting %s", applet.Dir)
+	}
+	if reloadErr != nil {
+		return Wrap(reloadErr, KindInternal, "reloading the applets")
+	}
 	return nil
 }
 

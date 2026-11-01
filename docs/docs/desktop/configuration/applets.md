@@ -15,7 +15,7 @@ Paste the prompt to an agent. The agent asks what the applet should do, then wri
 
 In a chat, you can also just ask. Workspaces with the `hive` skill package carry the `hive-applets` skill.
 
-The applet appears as soon as its file is valid. If you dislike it, ask for changes or delete its directory.
+The applet appears as soon as its file is valid. If you dislike it, ask for changes or [delete it](#delete-one).
 
 ## Open one
 
@@ -42,6 +42,12 @@ Each applet has a switch in **Settings ▸ Applets**. An applet that is off stay
 applets:
   disabled: [radio]
 ```
+
+## Delete one
+
+Press the trash icon on the applet in **Settings ▸ Applets** and confirm. This stops everything it has running and removes its folder, saved data, title bar place and shortcuts. It cannot be undone, so [export it](#share-one) first if you might want it back.
+
+A built-in applet has no delete, so turn it off instead. Deleting a folder that [replaced the Applet Builder](#keep-an-applet-working-across-releases) brings the built-in back.
 
 ## Put one in the title bar
 
@@ -76,7 +82,7 @@ The file holds no settings, shortcuts or other data from your machine. Hive cann
 
 **To import**, press **Import** and choose the file. Hive shows the warning, the applet's name, its files, and what would run. Nothing is on disk until you tick **I trust who this came from** and press **Import applet**. Cancel is the default and leaves nothing behind.
 
-An import never replaces an applet. If the id is taken, Hive offers a new one. To update an applet, delete its folder first, which also deletes its saved data. An imported applet starts with nothing:
+An import never replaces an applet. If the id is taken, Hive offers a new one. To update an applet, [delete it](#delete-one) first, which also deletes its saved data. An imported applet starts with nothing:
 
 - Nothing runs until you open it.
 - A title bar page stays off until you turn it on, even if that id was in your title bar before.
