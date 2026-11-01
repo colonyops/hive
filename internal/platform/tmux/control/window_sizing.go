@@ -18,9 +18,14 @@ const (
 
 // windowSizing is what a client knows about the windows it gave a size of their
 // own. The mutex is held across gateway round trips, each bounded by
-// imageRestoreTimeout, so that a resize and Close cannot interleave.
+// stateChangeTimeout, so that a resize and Close cannot interleave.
+//
+// sized is every window this client sent a size for; prepared is the subset
+// whose aggressive-resize it turned off. They differ when the preparation
+// failed, and the size still went out.
 type windowSizing struct {
 	mu       sync.Mutex
+	sized    map[string]struct{}
 	prepared map[string]struct{}
 	closed   bool
 }
@@ -38,13 +43,19 @@ type windowSizing struct {
 func (c *Client) sizeWhileNotCurrent(ctx context.Context, id string) {
 	c.sizing.mu.Lock()
 	defer c.sizing.mu.Unlock()
-	if _, prepared := c.sizing.prepared[id]; prepared || c.sizing.closed {
+	if c.sizing.closed {
+		return
+	}
+	if c.sizing.sized == nil {
+		c.sizing.sized = map[string]struct{}{}
+	}
+	c.sizing.sized[id] = struct{}{}
+	if _, prepared := c.sizing.prepared[id]; prepared {
 		return
 	}
 	// Not cancelled with the request: tmux can apply a change before a cancelled
-	// Send returns, and the mark and the option must not part ways. Bounded
-	// because a frozen server must not hold Close behind this mutex.
-	prepare, cancel := context.WithTimeout(context.WithoutCancel(ctx), imageRestoreTimeout)
+	// Send returns, and the mark and the option must not part ways.
+	prepare, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.stateChangeTimeout)
 	defer cancel()
 	if err := c.turnOffAggressiveResize(prepare, id); err != nil {
 		c.log.Debug().Err(err).Str("window", id).Msg("preparing a window for its own size failed")
@@ -85,14 +96,19 @@ func (c *Client) turnOffAggressiveResize(ctx context.Context, id string) error {
 
 // clearWindowSizes drops the per-window sizes this client asked for. A surface
 // that re-attaches to a live client starts its votes over, and a size it no
-// longer knows about would otherwise outrank the session's size for good.
+// longer knows about would otherwise outrank the session's size for good. A
+// window whose clear failed stays recorded, so the next re-attach tries again.
 func (c *Client) clearWindowSizes(ctx context.Context) {
 	c.sizing.mu.Lock()
 	defer c.sizing.mu.Unlock()
-	for id := range c.sizing.prepared {
-		if _, err := c.gw.Send(ctx, "refresh-client -C "+id+":"); err != nil {
+	clearCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.stateChangeTimeout)
+	defer cancel()
+	for id := range c.sizing.sized {
+		if _, err := c.gw.Send(clearCtx, "refresh-client -C "+id+":"); err != nil {
 			c.log.Debug().Err(err).Str("window", id).Msg("clearing a window's own size failed")
+			continue
 		}
+		delete(c.sizing.sized, id)
 	}
 }
 
@@ -104,7 +120,7 @@ func (c *Client) restoreAggressiveResize(ctx context.Context) {
 	defer c.sizing.mu.Unlock()
 	c.sizing.closed = true
 
-	restore, cancel := context.WithTimeout(context.WithoutCancel(ctx), imageRestoreTimeout)
+	restore, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.stateChangeTimeout)
 	defer cancel()
 	if c.otherControlClients(restore) {
 		return
@@ -138,17 +154,25 @@ func (c *Client) restoreAggressiveResize(ctx context.Context) {
 	}
 }
 
-// otherControlClients reports another control client on this session. A failed
-// read counts as none: leaving the option changed is the worse of the two.
+// otherControlClients reports another control client on this session. The
+// session is named by its id, which a rename does not change: Close runs after
+// RenameSessionIfPresent has renamed it, when every client already reports the
+// new name. A failed read counts as none: leaving the option changed is the
+// worse of the two.
 func (c *Client) otherControlClients(ctx context.Context) bool {
-	lines, err := c.gw.Send(ctx, `list-clients -F "#{client_control_mode} #{client_session}"`)
+	ids, err := c.gw.Send(ctx, `display-message -p "#{session_id}"`)
+	if err != nil || len(ids) == 0 || strings.TrimSpace(ids[0]) == "" {
+		c.log.Debug().Err(err).Msg("reading the session id to restore aggressive-resize failed")
+		return false
+	}
+	lines, err := c.gw.Send(ctx, "list-clients -t "+strings.TrimSpace(ids[0])+` -F "#{client_control_mode}"`)
 	if err != nil {
 		c.log.Debug().Err(err).Msg("listing clients to restore aggressive-resize failed")
 		return false
 	}
 	control := 0
 	for _, line := range lines {
-		if mode, session, _ := strings.Cut(line, " "); mode == "1" && session == c.slug {
+		if strings.TrimSpace(line) == "1" {
 			control++
 		}
 	}

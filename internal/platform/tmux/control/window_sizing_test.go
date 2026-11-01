@@ -15,10 +15,30 @@ const (
 
 func attachSizing(t *testing.T, f *fakeTmux) *Client {
 	t.Helper()
+	return attachSizingBounded(t, f, 0)
+}
+
+// attachSizingBounded shortens the bound on state-changing round trips, for a
+// test that freezes the fake server and waits for that bound to pass.
+func attachSizingBounded(t *testing.T, f *fakeTmux, bound time.Duration) *Client {
+	t.Helper()
 	ctx := t.Context()
-	client, err := Attach(ctx, ctx, Options{Slug: f.slug, newProcess: f.factory()})
+	client, err := Attach(ctx, ctx, Options{Slug: f.slug, newProcess: f.factory(), stateChangeTimeout: bound})
 	require.NoError(t, err)
 	return client
+}
+
+const frozenBound = 50 * time.Millisecond
+
+// waitClosed fails when Close has not returned once the bound and the detach
+// have had three times their room.
+func waitClosed(t *testing.T, closed <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-closed:
+	case <-time.After(3*frozenBound + detachTimeout):
+		t.Fatal("Close stayed behind a frozen server")
+	}
 }
 
 func TestResizeWindowSizesAWindowThatIsNotCurrent(t *testing.T) {
@@ -136,6 +156,40 @@ func TestCloseCountsOnlyControlClientsOnThisSession(t *testing.T) {
 	require.Contains(t, f.sentCommands(), "set-option -w -t @1 -u aggressive-resize")
 }
 
+// RenameSessionIfPresent renames the session and closes the client after, when
+// every client reports the new name; the count must still find them.
+func TestCloseCountsControlClientsBySessionIDAfterARename(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setWindows(twoWindows1)
+	f.setMark("@1", aggressiveResizeInherited)
+	client := attachSizing(t, f)
+	f.renameSession("hive-renamed")
+	f.setClients("1 hive-renamed", "1 hive-renamed")
+
+	require.NoError(t, client.Close(context.WithoutCancel(t.Context())))
+	require.Empty(t, f.commandsMatching("set-option -w -t @1"))
+}
+
+// A client count that cannot be read restores anyway: leaving the option off
+// for good is the worse of the two outcomes.
+func TestCloseRestoresWhenTheClientCountCannotBeRead(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setWindows(twoWindows1)
+	f.setMark("@1", aggressiveResizeInherited)
+	f.setClients("1 hive-demo", "1 hive-demo")
+	f.mu.Lock()
+	f.failures["list-clients"] = "no"
+	f.mu.Unlock()
+	client := attachSizing(t, f)
+
+	require.NoError(t, client.Close(context.WithoutCancel(t.Context())))
+	require.Contains(t, f.sentCommands(), "set-option -w -t @1 -u aggressive-resize")
+}
+
 // The request context ending, as a reloading webview does, must not stop the
 // change half way: tmux may already have applied the part that was sent.
 func TestResizeWindowFinishesThePreparationWhenTheRequestIsCancelled(t *testing.T) {
@@ -190,14 +244,14 @@ func TestResizeAfterCloseChangesNothing(t *testing.T) {
 }
 
 // A frozen server must not hold Close behind a preparation: it gives up after
-// imageRestoreTimeout, and then the kill in teardown can run.
+// the state-change bound, and then the kill in teardown can run.
 func TestAFrozenServerCannotHoldClosePastThePreparationBound(t *testing.T) {
 	t.Parallel()
 
 	f := newFakeTmux(t, "hive-demo")
 	f.setWindows(twoWindows1)
 	f.setOption(globalOption, "on")
-	client := attachSizing(t, f)
+	client := attachSizingBounded(t, f, frozenBound)
 	f.setSilent("show-options")
 
 	resized := make(chan struct{})
@@ -212,12 +266,36 @@ func TestAFrozenServerCannotHoldClosePastThePreparationBound(t *testing.T) {
 		defer close(closed)
 		_ = client.Close(context.WithoutCancel(t.Context()))
 	}()
-	select {
-	case <-closed:
-	case <-time.After(3*imageRestoreTimeout + detachTimeout):
-		t.Fatal("Close stayed behind a preparation on a frozen server")
-	}
+	waitClosed(t, closed)
 	<-resized
+}
+
+// A re-attach clears the per-window sizes on the attach request's context,
+// which has no deadline; a frozen server must not hold Close behind that
+// either.
+func TestAFrozenServerCannotHoldClosePastTheClearBound(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setWindows(twoWindows1)
+	client := attachSizingBounded(t, f, frozenBound)
+	require.NoError(t, client.ResizeWindow(t.Context(), "@1", 60, 20))
+	f.setSilent("refresh-client -C @1:")
+
+	renegotiated := make(chan struct{})
+	go func() {
+		defer close(renegotiated)
+		_ = client.Renegotiate(context.WithoutCancel(t.Context()), 120, 40)
+	}()
+	f.awaitCommands(t, "refresh-client -C @1:", 2)
+
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		_ = client.Close(context.WithoutCancel(t.Context()))
+	}()
+	waitClosed(t, closed)
+	<-renegotiated
 }
 
 // A surface that re-attaches to a live client knows no per-window sizes any more,
@@ -234,4 +312,24 @@ func TestRenegotiateClearsPerWindowSizes(t *testing.T) {
 	require.NoError(t, client.ResizeWindow(ctx, "@2", 60, 20))
 	require.NoError(t, client.Renegotiate(ctx, 120, 40))
 	require.Contains(t, f.sentCommands(), "refresh-client -C @2:")
+}
+
+// The size goes out even when the option could not be changed, so the clear
+// must cover that window too.
+func TestRenegotiateClearsASizeWhosePreparationFailed(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setWindows(twoWindows1)
+	f.setOption(globalOption, "on")
+	f.mu.Lock()
+	f.failures["set-option -w -t @1 aggressive-resize"] = "no"
+	f.mu.Unlock()
+	client := attachSizing(t, f)
+	t.Cleanup(func() { _ = client.Close(context.WithoutCancel(t.Context())) })
+
+	ctx := t.Context()
+	require.NoError(t, client.ResizeWindow(ctx, "@1", 60, 20))
+	require.NoError(t, client.Renegotiate(ctx, 120, 40))
+	require.Contains(t, f.sentCommands(), "refresh-client -C @1:")
 }
