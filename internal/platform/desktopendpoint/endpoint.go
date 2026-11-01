@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/colonyops/hive/pkg/atomicfile"
 )
 
 // ErrNotRunning means no endpoint file exists: Hive Desktop is not running, or
@@ -40,31 +42,8 @@ func Write(dataDir string, e Endpoint) error {
 	if err != nil {
 		return fmt.Errorf("encode endpoint: %w", err)
 	}
-
-	tmp, err := os.CreateTemp(filepath.Dir(path), "endpoint-*.tmp")
-	if err != nil {
-		return fmt.Errorf("create endpoint temp file: %w", err)
-	}
-	tmpPath := tmp.Name()
-	cleanup := func() { _ = os.Remove(tmpPath) }
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		cleanup()
+	if err := atomicfile.Write(path, data, 0o600); err != nil {
 		return fmt.Errorf("write endpoint: %w", err)
-	}
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return fmt.Errorf("set endpoint mode: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		cleanup()
-		return fmt.Errorf("close endpoint: %w", err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		cleanup()
-		return fmt.Errorf("replace endpoint: %w", err)
 	}
 	return nil
 }
