@@ -1441,12 +1441,15 @@ opened in `AppletFrame`
   entry (`applets/compat.go`). A wrong shape under a known key is an error, and a later
   `version` or an unmet `hive:` refuses with "update Hive".
 - **A user can turn an applet off** (`applets.disabled`). `AppletsService.page` refuses it, so
-  it serves nothing and its bridge is dead, and the store drops its palette rows.
+  it serves nothing, `SetEnabled` stops what it has running, and the store closes its frames and
+  drops its palette rows.
+- **A data file crosses to a frame only for its own applet.** `appletAssets` reads `Referer`,
+  because a foreign page in the frame has the same `null` origin as the applet's page.
 - **Sharing goes through `applets/archive.go`.** `Unpack` treats a `.hiveapplet` as hostile
   and writes nothing. `AppletsService` holds the checked file in memory under a token until
   the user confirms in `AppletImportDialog`, and `Install` renames a finished directory into
-  place. It never replaces an applet. `ConfirmImport` then clears what `settings.yaml` holds
-  for the id. An export is read whole by `ExportPreview` and held under a token, so what
+  place. It never replaces an applet. `ConfirmImport` clears what `settings.yaml` holds for the
+  id just before that rename, and a failed clear imports nothing. An export is read whole by `ExportPreview` and held under a token, so what
   `Export` writes is what the user reviewed.
 - **A built-in lives in the binary** (`applets/builtin/`). The Applet Builder is one. Its
   page sends answers, and the prompt's words stay in `prompts/templates/applets.tmpl`.

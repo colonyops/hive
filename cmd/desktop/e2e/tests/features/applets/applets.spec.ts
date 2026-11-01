@@ -190,6 +190,24 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(frame.locator("#result")).toContainText('"bypassed":false');
   });
 
+  test("a page reads its own data file, and a foreign page in its frame cannot", async ({
+    page,
+    browserName,
+  }) => {
+    await openApplet(page, "E2E page");
+    const frame = page.frameLocator('[data-testid="applet-frame"]');
+    // Chromium sends an opaque frame no Referer, so it cannot tell the two apart and refuses
+    // both. WebKit, which the app runs on, sends one.
+    await expect(frame.locator("#result")).toContainText(
+      browserName === "webkit"
+        ? '"ownData":{"from":"data file"}'
+        : '"ownData":"blocked"',
+    );
+
+    await frame.locator("#read-data").click();
+    await expect(frame.locator("#left")).toHaveText("blocked");
+  });
+
   test("the Wails runtime refuses a call that is not the app's own", async ({
     page,
   }) => {

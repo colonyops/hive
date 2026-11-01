@@ -144,6 +144,31 @@ describe('AppletFrame', () => {
     wrapper.unmount()
   })
 
+  it('treats a new port as a new page: what the last one set up goes with it', async () => {
+    service.Spawn.mockResolvedValue('p1')
+    const { wrapper, frame, send, port } = setup()
+    await send('ready')
+    await send('spawn', { command: 'sleep 60' })
+    await send('setCommands', { rows: [{ id: 'jazz', title: 'Jazz' }] })
+    expect(useApplets().pageRows.value).toHaveLength(1)
+
+    const next = { onmessage: null, postMessage: vi.fn(), close: vi.fn() }
+    const event = new MessageEvent('message', {
+      data: { hiveApplet: 1, token: 'secret', method: 'connect' },
+      source: frame.contentWindow,
+    })
+    Object.defineProperty(event, 'ports', { value: [next] })
+    window.dispatchEvent(event)
+    await flushPromises()
+
+    expect(port.close).toHaveBeenCalled()
+    expect(service.KillSpawns).toHaveBeenCalledWith(['p1'])
+    expect(useApplets().pageRows.value).toEqual([])
+    useApplets().deliverCommand('pong', 'held')
+    expect(next.postMessage).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('takes only a save after the frame has gone', async () => {
     const { wrapper, send, port } = setup()
     await send('ready')

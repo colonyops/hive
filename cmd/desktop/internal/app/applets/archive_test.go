@@ -107,7 +107,7 @@ func TestRoundTripKeepsTheFilesAndLeavesLocalStateBehind(t *testing.T) {
 	assert.Equal(t, "radio", archive.Applet.ID)
 
 	root := t.TempDir()
-	require.NoError(t, archive.Install(root, "radio"))
+	require.NoError(t, archive.Install(root, "radio", nil))
 	body, err := os.ReadFile(filepath.Join(root, "radio", "lib", "stations.js"))
 	require.NoError(t, err)
 	assert.Equal(t, "export const s = 1", string(body))
@@ -284,16 +284,16 @@ func TestInstallNeverReplacesAndLeavesNothingBehind(t *testing.T) {
 	root := filepath.Join(parent, "applets")
 	writeTree(t, filepath.Join(root, "radio"), map[string]string{"mine.txt": "keep me"})
 
-	require.ErrorIs(t, archive.Install(root, "radio"), ErrAppletExists)
-	require.ErrorIs(t, archive.Install(root, BuilderID), ErrAppletExists)
-	require.Error(t, archive.Install(root, "../evil"))
-	require.Error(t, archive.Install(root, "Bad Name"))
+	require.ErrorIs(t, archive.Install(root, "radio", nil), ErrAppletExists)
+	require.ErrorIs(t, archive.Install(root, BuilderID, nil), ErrAppletExists)
+	require.Error(t, archive.Install(root, "../evil", nil))
+	require.Error(t, archive.Install(root, "Bad Name", nil))
 	body, err := os.ReadFile(filepath.Join(root, "radio", "mine.txt"))
 	require.NoError(t, err)
 	assert.Equal(t, "keep me", string(body))
 	assert.ElementsMatch(t, []string{"applets"}, dirNames(t, parent), "no staging directory stays")
 
-	require.NoError(t, archive.Install(root, "radio-2"))
+	require.NoError(t, archive.Install(root, "radio-2", nil))
 	assert.FileExists(t, filepath.Join(root, "radio-2", "index.html"))
 	assert.ElementsMatch(t, []string{"applets"}, dirNames(t, parent))
 }
@@ -303,7 +303,7 @@ func TestInstallLeavesNothingWhenAWriteFails(t *testing.T) {
 	root := filepath.Join(parent, "applets")
 	// Two files that collide on disk, which only a hand-built Archive can reach.
 	archive := Archive{Files: []ArchiveFile{{Path: "a.js"}, {Path: "a.js"}}}
-	require.Error(t, archive.Install(root, "radio"))
+	require.Error(t, archive.Install(root, "radio", nil))
 	assert.ElementsMatch(t, []string{"applets"}, dirNames(t, parent))
 	assert.Empty(t, dirNames(t, root))
 }
@@ -314,7 +314,7 @@ func TestInstallDoesNotFollowASymlinkAtTheTarget(t *testing.T) {
 	root := t.TempDir()
 	elsewhere := t.TempDir()
 	require.NoError(t, os.Symlink(elsewhere, filepath.Join(root, "radio")))
-	require.ErrorIs(t, archive.Install(root, "radio"), ErrAppletExists)
+	require.ErrorIs(t, archive.Install(root, "radio", nil), ErrAppletExists)
 	assert.Empty(t, dirNames(t, elsewhere))
 }
 

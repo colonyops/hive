@@ -237,3 +237,57 @@ func TestPackRecordsTheExportingVersionAndNothingReadsIt(t *testing.T) {
 	_, err = Unpack(packed.Data, "0.1.0")
 	assert.NoError(t, err, "the exporter's version does not limit who can import")
 }
+
+func TestHiveRequirementHoldsHoweverTheFileSpellsIt(t *testing.T) {
+	for name, body := range map[string]string{
+		"plain":       "hive: \">=999.0\"\n",
+		"merge":       "<<: {hive: \">=999.0\"}\n",
+		"merge alias": "x-a: &a {hive: \">=999.0\"}\n<<: *a\n",
+		"merge list":  "x-a: &a {hive: \">=999.0\"}\n<<: [*a]\n",
+		"alias key":   "x-k: &k hive\n*k : \">=999.0\"\n",
+		"binary key":  "!!binary aGl2ZQ==: \">=999.0\"\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Parse("x", []byte("version: 1\ntitle: T\n"+body), "0.60.0")
+			var update *UpdateHiveError
+			require.ErrorAs(t, err, &update)
+		})
+	}
+	t.Run("a merged value this Hive cannot read refuses", func(t *testing.T) {
+		_, err := Parse("x", []byte("version: 1\ntitle: T\n<<: {hive: garbage}\n"), "0.60.0")
+		assert.ErrorIs(t, err, errBadMinimumHive)
+	})
+	t.Run("a merged later format says to update", func(t *testing.T) {
+		_, err := Parse("x", []byte("title: T\n<<: {version: 2}\n"), "0.60.0")
+		var update *UpdateHiveError
+		require.ErrorAs(t, err, &update)
+	})
+	t.Run("a null refuses", func(t *testing.T) {
+		_, err := Parse("x", []byte("version: 1\ntitle: T\nhive: null\n"), "0.60.0")
+		assert.ErrorIs(t, err, errBadMinimumHive)
+	})
+}
+
+func TestIgnoredKeysAreSeenThroughAnySpelling(t *testing.T) {
+	warned := func(t *testing.T, body string) []string {
+		t.Helper()
+		a, err := Parse("x", []byte("version: 1\ntitle: T\n"+body), "")
+		require.NoError(t, err)
+		return a.Warnings
+	}
+	ignores := func(key string) string { return fmt.Sprintf("this version of Hive ignores %q", key) }
+
+	assert.Contains(t, warned(t, "<<: {limit-network: true}\n"), ignores("limit-network"))
+	assert.Contains(t, warned(t, "titlebar: {<<: {sandbox: true}}\n"), ignores("titlebar.sandbox"))
+	assert.Contains(t, warned(t, "x-a: &a {sandbox: true}\n<<: [*a]\n"), ignores("sandbox"))
+	assert.Contains(t, warned(t, "x-k: &k real-name\n*k : 1\n"), ignores("real-name"))
+	assert.Contains(t, warned(t, "\"<<\": {limit-network: true}\n"), ignores("a key with an unusual name"), "quoted, this is a key and not a merge")
+	assert.Contains(t, warned(t, "---\nversion: 1\ntitle: second\n"), "this file has a second YAML document, and Hive reads only the first")
+	assert.Empty(t, warned(t, "<<: {icon: play}\n"), "a merged key Hive knows is not a warning")
+}
+
+func TestPackPathsRefuseWhatACaseInsensitiveDiskWouldMerge(t *testing.T) {
+	require.ErrorContains(t, checkPackPaths([]PackedFile{{Path: "README.md"}, {Path: "Readme.md"}}), "differ only by case")
+	require.ErrorContains(t, checkPackPaths([]PackedFile{{Path: "a"}, {Path: "A/b"}}), "file and a folder")
+	assert.NoError(t, checkPackPaths([]PackedFile{{Path: "a.js"}, {Path: "b/a.js"}}))
+}

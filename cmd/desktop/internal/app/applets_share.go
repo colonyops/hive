@@ -201,26 +201,35 @@ func (s *AppletsService) PrepareImport(encoded string) (AppletImportPreview, err
 
 // ConfirmImport installs the file PrepareImport checked, as a new applet called id. It
 // never replaces one. An id that is taken leaves the file waiting, so the user can pick
-// another. Once installed, the id forgets what settings.yaml still holds for it, so a file
-// cannot inherit a place or a chord the user gave another applet of that name.
+// another. The id first forgets what settings.yaml still holds for it, so a file cannot
+// inherit a place or a chord the user gave another applet of that name.
 func (s *AppletsService) ConfirmImport(token, id string) error {
 	s.shareMu.Lock()
 	defer s.shareMu.Unlock()
 	if s.pendingImport == nil || s.pendingImport.token != token {
 		return Errorf(KindNotFound, "that import is no longer waiting. Choose the file again")
 	}
-	if err := s.pendingImport.archive.Install(s.catalog.Root(), id); err != nil {
-		if errors.Is(err, applets.ErrAppletExists) {
+	// Cleared before the applet lands: a title bar place still listed for this id would
+	// otherwise run the imported page with nobody having turned it on.
+	var forgetErr error
+	forget := func() error {
+		forgetErr = s.preferences.ForgetApplet(id)
+		return forgetErr
+	}
+	if err := s.pendingImport.archive.Install(s.catalog.Root(), id, forget); err != nil {
+		switch {
+		case errors.Is(err, applets.ErrAppletExists):
 			return Errorf(KindConflict, "an applet called %q already exists. Choose another id", id)
+		case forgetErr != nil:
+			return Wrap(err, KindInternal, "nothing was imported, because settings.yaml could not be cleared for %s", id)
 		}
 		return Wrap(err, KindInvalid, "importing %s", id)
 	}
 	s.pendingImport = nil
-	forgetErr := s.preferences.ForgetApplet(id)
 	if err := s.catalog.Reload(); err != nil {
 		return Wrap(err, KindInternal, "reloading the applets")
 	}
-	return Wrap(forgetErr, KindInternal, "imported %s, but could not clear what settings.yaml held for that id", id)
+	return nil
 }
 
 // CancelImport drops a waiting file.

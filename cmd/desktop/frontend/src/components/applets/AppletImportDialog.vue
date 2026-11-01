@@ -75,7 +75,9 @@ async function confirm(): Promise<void> {
   try {
     await ConfirmImport(props.preview.token, target)
     settled = true
-    await Promise.all([applets.reload(), applets.reloadPlacements(), keybindings.reload()])
+    // Places first: the catalog is what would mount a title bar page for a stale one.
+    await Promise.all([applets.reloadPlacements(), keybindings.reload()])
+    await applets.reload()
     showToast(`Imported ${props.preview.title}`, { severity: 'success', body: 'Nothing is running until you open it.' })
     emit('close')
   } catch (e) {

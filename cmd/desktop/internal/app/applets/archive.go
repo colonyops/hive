@@ -166,6 +166,9 @@ func Pack(applet Applet, hiveVersion string) (PackedApplet, error) {
 	}
 	defer func() { _ = root.Close() }()
 
+	if err := checkPackPaths(list.Files); err != nil {
+		return PackedApplet{}, err
+	}
 	files := make([]ArchiveFile, 0, len(list.Files))
 	remaining := int64(MaxUnpackedBytes)
 	for i, file := range list.Files {
@@ -202,6 +205,19 @@ func Pack(applet Applet, hiveVersion string) (PackedApplet, error) {
 		return PackedApplet{}, fmt.Errorf("this applet packs to %d MB, and the limit is %d MB", buf.Len()>>20, MaxArchiveBytes>>20)
 	}
 	return PackedApplet{Data: buf.Bytes(), List: list}, nil
+}
+
+// checkPackPaths finds what a case-sensitive disk can hold and an import refuses.
+func checkPackPaths(files []PackedFile) error {
+	seen := make(map[string]bool, len(files))
+	for _, file := range files {
+		key := archivePathKey(file.Path)
+		if seen[key] {
+			return fmt.Errorf("this applet has two files that differ only by case: %q", file.Path)
+		}
+		seen[key] = true
+	}
+	return checkFilesAreNotDirectories(seen)
 }
 
 // readPackFile reopens what ListPack saw, which a running page can have changed since. The
@@ -287,8 +303,7 @@ func Unpack(raw []byte, hiveVersion string) (Archive, error) {
 		if !entry.Mode().IsRegular() || strings.HasSuffix(rel, "/") {
 			return Archive{}, fmt.Errorf("%q is not a regular file, and only regular files can be imported", rel)
 		}
-		// A case-insensitive disk would write these over one another.
-		key := strings.ToLower(norm.NFC.String(rel))
+		key := archivePathKey(rel)
 		if seen[key] {
 			return Archive{}, fmt.Errorf("this file has %q twice", rel)
 		}
@@ -316,6 +331,11 @@ func Unpack(raw []byte, hiveVersion string) (Archive, error) {
 	}
 	slices.SortFunc(files, func(a, b ArchiveFile) int { return strings.Compare(a.Path, b.Path) })
 	return Archive{Applet: applet, Files: files}, nil
+}
+
+// archivePathKey is what a case-insensitive disk would treat as one file.
+func archivePathKey(rel string) string {
+	return strings.ToLower(norm.NFC.String(rel))
 }
 
 func checkArchivePath(rel string) error {
@@ -474,8 +494,9 @@ func isPlainText(text string) bool {
 
 // Install writes the archive as a new applet under root. The directory appears whole or
 // not at all: it is written beside root, where the catalog does not look, and renamed in.
-// Files get plain permissions, so the archive cannot mark anything executable.
-func (a Archive) Install(root, id string) (err error) {
+// Files get plain permissions, so the archive cannot mark anything executable. A failure
+// from beforeRename, which may be nil, leaves nothing behind.
+func (a Archive) Install(root, id string, beforeRename func() error) (err error) {
 	if !slug.Valid(id) {
 		return fmt.Errorf("%q is not a valid applet id", id)
 	}
@@ -510,6 +531,11 @@ func (a Archive) Install(root, id string) (err error) {
 			return err
 		}
 		if err := writeNewFile(dest, file.Data); err != nil {
+			return err
+		}
+	}
+	if beforeRename != nil {
+		if err := beforeRename(); err != nil {
 			return err
 		}
 	}
