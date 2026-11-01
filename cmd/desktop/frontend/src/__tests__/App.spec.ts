@@ -3420,7 +3420,7 @@ describe('App', () => {
   // A hive session's documents belong to its repository's space, so the
   // title bar's right toggle and the full-page view both work from Code with
   // no chat.
-  it('leaves Docs to the session tabs in Code, and opens the full page on its repository', async () => {
+  it('leaves Drive to the session tabs in Code, and opens the full page on its repository', async () => {
     mocks.AgentsAvailable.mockResolvedValue({ available: true, reason: '' })
     mocks.agentsClient = {
       workspaces: vi.fn().mockResolvedValue({

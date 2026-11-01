@@ -4728,7 +4728,7 @@ describe('TerminalMode', () => {
       return { wrapper, router, session }
     }
 
-    it('has no Docs tab until the route asks for one', async () => {
+    it('has no Drive tab until the route asks for one', async () => {
       const { wrapper } = await mountWithDrive('/terminal/hive-fix-parser')
 
       expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(false)
@@ -4736,7 +4736,7 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
-    it('turns ?doc into a Docs tab and consumes the query, so it cannot follow the route', async () => {
+    it('turns ?doc into a Drive tab and consumes the query, so it cannot follow the route', async () => {
       const { wrapper, router } = await mountWithDrive('/terminal/hive-fix-parser?doc=1')
 
       expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(true)

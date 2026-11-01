@@ -299,7 +299,7 @@ function tabLabel(tab: SessionTab): string {
     case 'window':
       return windowName(tab.windowId)
     case 'docs':
-      return 'Docs'
+      return 'Drive'
     case 'diff':
       return 'Diff'
     case 'tasks':
@@ -418,7 +418,7 @@ useTerminalDrive(toRef(props, 'drive'), () => props.active, {
     }),
 })
 
-// The full page knows nothing about authors. A Docs tab on screen is the user
+// The full page knows nothing about authors. A Drive tab on screen is the user
 // reading, and one behind another tab is not, so a write there still earns its dot.
 const docsReader = computed(() => {
   const shownDocs = panesList.value.some((pane) => viewShown(pane, 'docs'))

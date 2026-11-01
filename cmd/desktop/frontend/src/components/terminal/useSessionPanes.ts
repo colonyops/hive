@@ -68,7 +68,7 @@ export function useSessionPanes(options: { pool: TerminalPool; tree: TerminalTre
     [key, windowIds, activeWindow, () => pool.visible.value?.endReason.value],
     ([sessionKey, ids, active, endReason], before) => {
       // The session was closed, so its tabs go with it. A session merely not
-      // running keeps its Docs, Diff and Tasks for when it starts.
+      // running keeps its Drive, Diff and Tasks for when it starts.
       if (SESSION_CLOSED.includes(endReason ?? '')) {
         sessionTabs.forget(sessionKey)
         return

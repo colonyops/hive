@@ -66,7 +66,7 @@ const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panes }
 const { openBlank: openNewSession } = useNewSession()
 const sessionTabs = useSessionTabs()
 const VIEW_ROWS: Partial<Record<SessionTab['kind'], { label: string }>> = {
-  docs: { label: 'Docs' },
+  docs: { label: 'Drive' },
   diff: { label: 'Diff' },
   tasks: { label: 'Tasks' },
 }

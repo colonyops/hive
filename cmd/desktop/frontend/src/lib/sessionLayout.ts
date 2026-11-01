@@ -40,7 +40,7 @@ export interface SessionLayout {
   root: LayoutNode
   focusedPane: string
   nextId: number
-  /** Where the Docs tab is reading; null follows the session's own space. */
+  /** Where the Drive tab is reading; null follows the session's own space. */
   docScope: DriveScope | null
 }
 

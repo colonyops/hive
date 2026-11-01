@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import IconFileDiff from '~icons/lucide/file-diff'
-import IconFileText from '~icons/lucide/file-text'
+import IconFolderTree from '~icons/lucide/folder-tree'
 import IconListTodo from '~icons/lucide/list-todo'
 import IconPlus from '~icons/lucide/plus'
 import IconTerminal from '~icons/lucide/terminal'
@@ -21,7 +21,7 @@ const emit = defineEmits<{
 }>()
 
 const VIEWS = {
-  docs: { label: 'Docs', icon: IconFileText },
+  docs: { label: 'Drive', icon: IconFolderTree },
   diff: { label: 'Diff', icon: IconFileDiff },
   tasks: { label: 'Tasks', icon: IconListTodo },
 }

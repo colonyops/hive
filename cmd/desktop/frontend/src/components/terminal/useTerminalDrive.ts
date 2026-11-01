@@ -11,7 +11,7 @@ export interface TerminalDriveTarget {
 }
 
 /**
- * The ways into a session's Docs tab from outside it. ?doc is how a reveal
+ * The ways into a session's Drive tab from outside it. ?doc is how a reveal
  * links to a document, and an agent's open_document arrives as drive:toggle.
  * The tab owns the document after that, so the query is consumed: left in
  * place, it would follow the route into the next session.

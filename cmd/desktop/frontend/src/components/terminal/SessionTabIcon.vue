@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import IconFileDiff from '~icons/lucide/file-diff'
-import IconFileText from '~icons/lucide/file-text'
+import IconFolderTree from '~icons/lucide/folder-tree'
 import IconListTodo from '~icons/lucide/list-todo'
 import IconTerminal from '~icons/lucide/terminal'
 import claudeCodeMark from '../../assets/agents/claude-code.svg'
@@ -31,7 +31,7 @@ const MONOCHROME_MARKS: Partial<Record<AgentIconID, { viewBox: string; path: str
 }
 const { monochrome } = useTerminalAgentIcons()
 const monochromeMark = computed(() => (monochrome.value && props.agent ? MONOCHROME_MARKS[props.agent] : undefined))
-const VIEWS = { window: IconTerminal, docs: IconFileText, diff: IconFileDiff, tasks: IconListTodo }
+const VIEWS = { window: IconTerminal, docs: IconFolderTree, diff: IconFileDiff, tasks: IconListTodo }
 </script>
 
 <template>

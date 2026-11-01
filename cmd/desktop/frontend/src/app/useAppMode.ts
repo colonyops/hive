@@ -184,7 +184,7 @@ export function useAppMode(
 
   // One control per frame edge: the right toggle names the detail preview in
   // Inbox and the drive pane in Chats (hay-kot/hive-desktop#432). Code has no
-  // right pane: Docs is a session tab there.
+  // right pane: Drive is a session tab there.
   const driveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
   const previewToggleCollapsed = computed(() => {
     if (driveActive.value) return review.pageCommentsCollapsed.value

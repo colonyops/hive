@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import IconFileDiff from '~icons/lucide/file-diff'
-import IconFileText from '~icons/lucide/file-text'
+import IconFolderTree from '~icons/lucide/folder-tree'
 import IconListTodo from '~icons/lucide/list-todo'
 import NewWindowMenu from '../NewWindowMenu.vue'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
@@ -25,7 +25,7 @@ const emit = defineEmits<{ close: [] }>()
 const { tree, ops, panes } = useTerminalModeContext()
 
 const VIEWS = {
-  docs: { label: 'Docs', icon: IconFileText },
+  docs: { label: 'Drive', icon: IconFolderTree },
   diff: { label: 'Diff', icon: IconFileDiff },
   tasks: { label: 'Tasks', icon: IconListTodo },
 }

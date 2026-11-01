@@ -108,7 +108,7 @@ const paneBox = async (page: Page, pane: string) => (await page.getByTestId(`ses
 test.describe('session tabs', { tag: [tag.terminal] }, () => {
   test('opens each tab once, and restores a session after another', async ({ page, browserName }) => {
     await fixture(page)
-    await addTab(page, 'p0', 'Docs')
+    await addTab(page, 'p0', 'Drive')
     await addTab(page, 'p0', 'Diff')
     await addTab(page, 'p0', 'Tasks')
     await addTab(page, 'p0', 'Diff')
@@ -168,7 +168,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
 
   test('mirrors the tabs in the tree, one row each and in the same order', async ({ page, browserName }) => {
     await fixture(page)
-    await addTab(page, 'p0', 'Docs')
+    await addTab(page, 'p0', 'Drive')
     await addTab(page, 'p0', 'Diff')
     const tree = () =>
       page
@@ -222,7 +222,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
 
   test('drags tabs along a row and between panes', async ({ page, browserName }) => {
     await fixture(page)
-    await addTab(page, 'p0', 'Docs')
+    await addTab(page, 'p0', 'Drive')
     await addTab(page, 'p0', 'Diff')
     await addTab(page, 'p0', 'Tasks')
 
@@ -252,15 +252,15 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     expect(await tabIds(page, 'p1')).toEqual(['diff'])
   })
 
-  test('lists Docs, Diff and Tasks in the tree', async ({ page, browserName }) => {
+  test('lists Drive, Diff and Tasks in the tree', async ({ page, browserName }) => {
     await fixture(page)
     const rows = page.getByTestId('terminal-view-row')
     await expect(rows).toHaveCount(0)
 
-    await addTab(page, 'p0', 'Docs')
+    await addTab(page, 'p0', 'Drive')
     await addTab(page, 'p0', 'Diff')
     await expect(rows).toHaveCount(2)
-    await expect(page.locator('[data-testid="terminal-view-row"][data-view-kind="docs"]')).toContainText('Docs')
+    await expect(page.locator('[data-testid="terminal-view-row"][data-view-kind="docs"]')).toContainText('Drive')
     await page.screenshot({ path: screenshotPath(`session-tabs-tree-${browserName}.png`) })
 
     await page.locator('[data-testid="terminal-view-row"][data-view-kind="docs"]').click()
@@ -321,9 +321,9 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await expect(page.getByTestId('session-pane-p1')).toHaveCount(0)
   })
 
-  test('drags a Docs, Diff or Tasks row in the tree, and the tabs follow', async ({ page, browserName }) => {
+  test('drags a Drive, Diff or Tasks row in the tree, and the tabs follow', async ({ page, browserName }) => {
     await fixture(page)
-    await addTab(page, 'p0', 'Docs')
+    await addTab(page, 'p0', 'Drive')
     await addTab(page, 'p0', 'Diff')
     const docs = page.locator('[data-testid="terminal-view-row"][data-view-kind="docs"]')
     const window1 = page.locator('[data-testid="terminal-window-row"][data-window-id="@1"]')
@@ -351,9 +351,9 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await expect(page.locator('[data-testid="terminal-window-row"][data-window-id="@1"]')).toHaveAttribute('data-active', 'true')
   })
 
-  test('embeds the global Docs view in the tab', async ({ page, browserName }) => {
+  test('embeds the global Drive view in the tab', async ({ page, browserName }) => {
     await fixture(page)
-    await addTab(page, 'p0', 'Docs')
+    await addTab(page, 'p0', 'Drive')
     await expect(page.getByTestId('drive-page')).toBeVisible()
     await expect(page.getByTestId('drive-pane')).toHaveCount(0)
     await expect(page.getByTestId('drive-page-sidebar')).toBeVisible()
@@ -368,7 +368,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
 
   test('brings tabs back after a restart', async ({ page }) => {
     await fixture(page)
-    await addTab(page, 'p0', 'Docs')
+    await addTab(page, 'p0', 'Drive')
     await addTab(page, 'p0', 'Diff')
     await page.reload()
     await expect(page.getByTestId('session-tab-diff')).toHaveAttribute('data-shown', 'true')
@@ -380,7 +380,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await fixture(page)
     await page.getByTestId('session-split-row-p0').click()
     await page.getByTestId('session-pane-picker-view-tasks').click()
-    await addTab(page, 'p1', 'Docs')
+    await addTab(page, 'p1', 'Drive')
     await addTab(page, 'p1', 'Diff')
 
     const show = (kind: string) => page.getByTestId(`session-tab-${kind}`).click()
