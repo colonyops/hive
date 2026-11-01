@@ -11,6 +11,15 @@ async function openApplet(page: Page, title: string): Promise<void> {
   await page.keyboard.press("Enter");
 }
 
+async function toggleTitlebar(page: Page): Promise<void> {
+  await page.getByTestId("settings-applet-e2e-bar-places").click();
+  await page.getByTestId("settings-applet-e2e-bar-places-titlebar").click();
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByTestId("settings-applet-e2e-bar-places-menu"),
+  ).toHaveCount(0);
+}
+
 test.describe("applets", { tag: [tag.applets] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
@@ -79,7 +88,12 @@ test.describe("applets", { tag: [tag.applets] }, () => {
       page.getByTestId("settings-applets-processes-empty"),
     ).toBeVisible();
 
+    await page.getByTestId("settings-applet-applet-builder-details").click();
+    await page
+      .getByTestId("settings-applet-details")
+      .screenshot({ path: screenshotPath(`applets-details-${browserName}.png`) });
     await page.getByTestId("settings-applet-applet-builder-open").click();
+    await expect(page.getByTestId("settings-applet-details")).toHaveCount(0);
     await expect(
       page
         .frameLocator('[data-testid="applet-frame"]')
@@ -149,7 +163,9 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(page.getByTestId("settings-applet-e2e-page-state")).toHaveText(
       "Off",
     );
+    await page.getByTestId("settings-applet-e2e-page-details").click();
     await expect(page.getByTestId("settings-applet-e2e-page-open")).toBeDisabled();
+    await page.getByTestId("settings-applet-details-close").click();
     expect(
       (await page.request.get("/__applet/e2e-page/index.html")).status(),
     ).toBe(404);
@@ -245,11 +261,10 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(slot).toHaveCount(0);
 
     await page.goto("/#/settings/applets");
-    const toggle = page.getByTestId("settings-applet-e2e-bar-titlebar");
     await expect(
-      page.getByTestId("settings-applet-e2e-page-titlebar"),
+      page.getByTestId("settings-applet-e2e-page-places"),
     ).toHaveCount(0);
-    await toggle.click();
+    await toggleTitlebar(page);
     await expect(slot).toBeVisible();
 
     const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]');
@@ -295,7 +310,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(page).toHaveURL(/#\/settings\/keybindings/);
 
     await page.goto("/#/settings/applets");
-    await toggle.click();
+    await toggleTitlebar(page);
     await expect(slot).toHaveCount(0);
   });
 
@@ -303,8 +318,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     page,
   }) => {
     await page.goto("/#/settings/applets");
-    const toggle = page.getByTestId("settings-applet-e2e-bar-titlebar");
-    await toggle.click();
+    await toggleTitlebar(page);
     const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]');
     await expect(bar.locator("#surface")).toHaveText("titlebar");
 
@@ -316,7 +330,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(bar.locator("#command-run")).toHaveText("live");
 
     await page.goto("/#/settings/applets");
-    await toggle.click();
+    await toggleTitlebar(page);
     await expect(page.getByTestId("titlebar-applet-e2e-bar")).toHaveCount(0);
 
     await page.keyboard.press("Meta+k");
@@ -365,8 +379,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await bind("E2E page", "Meta+Shift+y");
     await bind("E2E bar ping", "Meta+Shift+u");
     await page.goto("/#/settings/applets");
-    const toggle = page.getByTestId("settings-applet-e2e-bar-titlebar");
-    await toggle.click();
+    await toggleTitlebar(page);
     const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]');
     await expect(bar.locator("#surface")).toHaveText("titlebar");
 
@@ -391,7 +404,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(overlay).toHaveCount(0);
 
     await page.goto("/#/settings/applets");
-    await toggle.click();
+    await toggleTitlebar(page);
     await unbind("E2E page");
     await unbind("E2E bar ping");
   });
@@ -466,10 +479,14 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await page.getByTestId("applet-import-confirm").click();
     const row = page.getByTestId("settings-applet-e2e-imported");
     await expect(row).toBeVisible();
+    await page.getByTestId("settings-applet-applet-builder-details").click();
     await expect(
-      page.getByTestId("settings-applet-applet-builder-delete"),
+      page.getByTestId("settings-applet-applet-builder-more"),
     ).toHaveCount(0);
+    await page.getByTestId("settings-applet-details-close").click();
 
+    await page.getByTestId("settings-applet-e2e-imported-details").click();
+    await page.getByTestId("settings-applet-e2e-imported-more").click();
     await page.getByTestId("settings-applet-e2e-imported-delete").click();
     await page.getByTestId("settings-applet-delete-cancel").click();
     await expect(row).toBeVisible();
@@ -477,6 +494,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
       (await page.request.get("/__applet/e2e-imported/index.html")).status(),
     ).toBe(200);
 
+    await page.getByTestId("settings-applet-e2e-imported-more").click();
     await page.getByTestId("settings-applet-e2e-imported-delete").click();
     await page.getByTestId("settings-applet-delete-confirm").click();
     await expect(row).toHaveCount(0);
@@ -524,9 +542,13 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     page,
   }) => {
     await page.goto("/#/settings/applets");
+    await page.getByTestId("settings-applet-applet-builder-details").click();
     await expect(
-      page.getByTestId("settings-applet-applet-builder-export"),
+      page.getByTestId("settings-applet-applet-builder-more"),
     ).toHaveCount(0);
+    await page.getByTestId("settings-applet-details-close").click();
+    await page.getByTestId("settings-applet-e2e-bar-details").click();
+    await page.getByTestId("settings-applet-e2e-bar-more").click();
     await page.getByTestId("settings-applet-e2e-bar-export").click();
     const files = page.getByTestId("applet-export-files");
     await expect(files).toContainText("applet.yaml");

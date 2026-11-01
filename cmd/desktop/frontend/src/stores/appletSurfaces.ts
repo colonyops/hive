@@ -1,9 +1,15 @@
+import type { Component } from 'vue'
+import IconPanelTop from '~icons/lucide/panel-top'
+
 export type AppletSurface = 'page' | 'titlebar' | 'dropdown'
 
 // A surface the user chooses per applet, kept in settings.yaml under this surface's name.
 export interface AppletPlacement {
-  /** The switch in Settings. */
+  /** The name in Settings. */
   label: string
+  icon: Component
+  /** What being placed here means, under the switch in Settings. */
+  description: string
   /** Finishes a sentence, as in "It offers bar.html for the title bar." */
   where: string
   /** The page an applet offers here, read from an Applet or an import preview. */
@@ -47,6 +53,8 @@ export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
     canOpenDropdown: true,
     placement: {
       label: 'Title bar',
+      icon: IconPanelTop,
+      description: 'Loads with the app and keeps running until you turn it off.',
       where: 'the title bar',
       offeredPage: (applet) => applet.titlebar?.entry,
     },
