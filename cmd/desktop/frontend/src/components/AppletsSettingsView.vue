@@ -13,6 +13,7 @@ import CopyButton from '@hive/ui/components/ui/CopyButton.vue'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { useConfirmation } from '@hive/ui/composables/useConfirmation'
+import AppletDetailsDrawer from './applets/AppletDetailsDrawer.vue'
 import AppletExportDialog from './applets/AppletExportDialog.vue'
 import AppletImportDialog from './applets/AppletImportDialog.vue'
 import AppletSettingsRow from './applets/AppletSettingsRow.vue'
@@ -118,6 +119,16 @@ async function startExport(id: string): Promise<void> {
 
 const builderOn = computed(() => applets.applets.value.some((applet) => applet.id === BUILDER_ID && applet.enabled))
 
+const detailsID = ref<string | null>(null)
+// By id, so the drawer follows a reload and closes when the applet's folder goes away.
+const details = computed(() => applets.applets.value.find((applet) => applet.id === detailsID.value) ?? null)
+const detailsProcesses = computed(() => processes.value.filter((process) => process.applet === detailsID.value))
+
+function openFromDetails(id: string): void {
+  detailsID.value = null
+  applets.toggle(id, '')
+}
+
 async function setEnabled(id: string, enabled: boolean): Promise<void> {
   shareError.value = ''
   try {
@@ -160,7 +171,7 @@ onMounted(() => {
   <SettingsPage testid="settings-applets">
     <SettingsSection
       title="Registered applets"
-      description="Every folder under the applets folder with an applet.yaml. Changes load as they are saved. An applet that is off does not run or show in the palette. Bind one to a key in Keyboard shortcuts."
+      description="Changes load as they are saved. An applet that is off does not run or show in the palette."
       boxed
     >
       <template #actions>
@@ -196,9 +207,7 @@ onMounted(() => {
         :key="applet.id"
         :applet="applet"
         :running="running.get(applet.id) ?? 0"
-        @open="applets.toggle(applet.id, '')"
-        @export="startExport(applet.id)"
-        @delete="requestDelete(applet.id, applet.title)"
+        @details="detailsID = applet.id"
         @enabled="setEnabled(applet.id, $event)"
       />
     </SettingsSection>
@@ -248,6 +257,20 @@ onMounted(() => {
         </div>
       </SettingsRow>
     </SettingsSection>
+    <AppletDetailsDrawer
+      v-if="details"
+      :key="details.id"
+      :applet="details"
+      :processes="detailsProcesses"
+      :dir="dir"
+      :error="shareError || processError"
+      @close="detailsID = null"
+      @open="openFromDetails(details.id)"
+      @export="startExport(details.id)"
+      @delete="requestDelete(details.id, details.title)"
+      @enabled="setEnabled(details.id, $event)"
+      @stop="stop"
+    />
     <AppletImportDialog
       v-if="importPreview"
       :key="importPreview.token"

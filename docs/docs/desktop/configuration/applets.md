@@ -45,7 +45,7 @@ applets:
 
 ## Delete one
 
-Press the trash icon on the applet in **Settings ▸ Applets** and confirm. This stops everything it has running and removes its folder, saved data, title bar place and shortcuts. It cannot be undone, so [export it](#share-one) first if you might want it back.
+In **Settings ▸ Applets**, select the applet, press **⋯ ▸ Delete**, and confirm. This stops everything it has running and removes its folder, saved data, title bar place and shortcuts. It cannot be undone, so [export it](#share-one) first if you might want it back.
 
 A built-in applet has no delete, so turn it off instead. Deleting a folder that [replaced the Applet Builder](#keep-an-applet-working-across-releases) brings the built-in back.
 
@@ -53,7 +53,7 @@ A built-in applet has no delete, so turn it off instead. Deleting a folder that 
 
 An applet can offer a page for the title bar, such as an indicator, music controls, or a shortcut to another part of the app. Ask for one when you ask the agent for the applet.
 
-Turn it on in **Settings ▸ Applets** with its **Title bar** switch. The page then loads with the app and keeps running until you turn it off.
+Turn it on in **Settings ▸ Applets**, from the places menu on its row or the **Title bar** switch in its details. The page then loads with the app and keeps running until you turn it off.
 
 Hive never adds one for you: a new applet stays out of the bar until you turn it on. To set the order, list the ids in `settings.yaml`:
 
@@ -69,7 +69,7 @@ Export and import are in **Settings ▸ Applets**.
 !!! warning "Only import applets from people you trust"
     An applet has full access to your machine, as you. Hive does not review or limit it. Once you open it, it can run any command or program, keep processes running, read, change and delete any of your files, reach the network and send what it reads anywhere, use your clipboard, ask for your camera and microphone, and run Hive's commands. Importing one is the same as running a program someone sent you.
 
-**To export**, press **Export** on the applet, check the list of files, and save. You get one `.hiveapplet` file.
+**To export**, select the applet, press **⋯ ▸ Export**, check the list of files, and save. You get one `.hiveapplet` file.
 
 | In the file | Left out |
 | --- | --- |
@@ -93,7 +93,7 @@ Hive refuses a file that is over 32 MB, unpacks past 64 MB, or has more than 500
 
 ## See what is registered
 
-**Settings ▸ Applets** lists every applet Hive found and whether its file loaded, with the error if not. It also shows what applets have running, so you can stop a process, and where the applets folder is.
+**Settings ▸ Applets** lists every applet Hive found and whether its file loaded, with the error if not. It also shows what applets have running, so you can stop a process, and where the applets folder is. Select an applet to see where it lives, what it has running, its commands and its files.
 
 ## The files
 
