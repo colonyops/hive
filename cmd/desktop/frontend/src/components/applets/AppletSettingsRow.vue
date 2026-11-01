@@ -3,6 +3,7 @@
 // page, and a status shows only when there is something to say.
 import { computed, type DeepReadonly } from 'vue'
 import IconPlay from '~icons/lucide/play'
+import IconTrash from '~icons/lucide/trash-2'
 import IconUpload from '~icons/lucide/upload'
 import AppSwitch from '@hive/ui/components/ui/AppSwitch.vue'
 import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
@@ -13,7 +14,7 @@ import { PLACEABLE_SURFACES } from '../../stores/appletSurfaces'
 import { useApplets } from '../../stores/useApplets'
 
 const props = defineProps<{ applet: DeepReadonly<Applet>; running: number }>()
-const emit = defineEmits<{ open: []; export: []; enabled: [value: boolean] }>()
+const emit = defineEmits<{ open: []; export: []; delete: []; enabled: [value: boolean] }>()
 
 const applets = useApplets()
 const icon = computed(() => launcherIconComponent(props.applet.icon))
@@ -91,9 +92,21 @@ function placementLabel(label: string): string {
           @update:model-value="applets.setPlaced(surface, applet.id, $event)"
         />
       </div>
-      <div class="flex w-14 justify-end gap-0.5">
+      <div class="grid w-16 grid-cols-3 justify-items-end gap-0.5">
+        <IconButton
+          v-if="!applet.builtin"
+          class="col-start-1"
+          :icon="IconTrash"
+          :label="`Delete ${applet.title}`"
+          tooltip="Delete"
+          tone="danger"
+          size="sm"
+          :data-testid="`settings-applet-${applet.id}-delete`"
+          @click="emit('delete')"
+        />
         <IconButton
           v-if="!applet.builtin && applet.runnable"
+          class="col-start-2"
           :icon="IconUpload"
           :label="`Export ${applet.title}`"
           tooltip="Export"
@@ -102,6 +115,7 @@ function placementLabel(label: string): string {
           @click="emit('export')"
         />
         <IconButton
+          class="col-start-3"
           :icon="IconPlay"
           :label="`Open ${applet.title}`"
           tooltip="Open"

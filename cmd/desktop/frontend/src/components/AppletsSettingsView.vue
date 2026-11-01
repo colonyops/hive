@@ -1,16 +1,18 @@
 <script setup lang="ts">
 // Which applets Hive found, whether each loaded, and what they have running. The files
 // under the applets directory are the registration, so this page only reads them, apart
-// from importing a new one.
+// from importing a new one and deleting one.
 import { useIntervalFn } from '@vueuse/core'
 import { computed, onMounted, ref } from 'vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
 import CopyButton from '@hive/ui/components/ui/CopyButton.vue'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
+import { useConfirmation } from '@hive/ui/composables/useConfirmation'
 import AppletExportDialog from './applets/AppletExportDialog.vue'
 import AppletImportDialog from './applets/AppletImportDialog.vue'
 import AppletSettingsRow from './applets/AppletSettingsRow.vue'
@@ -26,6 +28,7 @@ import type {
   AppletImportPreview,
   AppletProcess,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import { useKeybindings } from '../composables/useKeybindings'
 import { useSystemSettings } from '../composables/useSystemSettings'
 import { BUILDER_ID, useApplets } from '../stores/useApplets'
 
@@ -124,6 +127,22 @@ async function setEnabled(id: string, enabled: boolean): Promise<void> {
   }
 }
 
+const keybindings = useKeybindings()
+const deletion = useConfirmation()
+
+function requestDelete(id: string, title: string): void {
+  deletion.request({
+    title: 'Delete applet',
+    description: `Delete ${title}? This removes its folder and saved data from this machine, along with its title bar place and shortcuts. It cannot be undone.`,
+    confirmLabel: 'Delete applet',
+    testid: 'settings-applet-delete',
+    onConfirm: async () => {
+      await applets.remove(id)
+      await keybindings.reload()
+    },
+  })
+}
+
 function startedAt(process: AppletProcess): string {
   return new Date(process.startedMillis).toLocaleTimeString()
 }
@@ -179,6 +198,7 @@ onMounted(() => {
         :running="running.get(applet.id) ?? 0"
         @open="applets.toggle(applet.id, '')"
         @export="startExport(applet.id)"
+        @delete="requestDelete(applet.id, applet.title)"
         @enabled="setEnabled(applet.id, $event)"
       />
     </SettingsSection>
@@ -240,5 +260,6 @@ onMounted(() => {
       :preview="exportPreview"
       @close="exportPreview = null"
     />
+    <ConfirmationHost :confirmation="deletion" />
   </SettingsPage>
 </template>

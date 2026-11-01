@@ -8,6 +8,7 @@ const service = vi.hoisted(() => ({
   CancelImport: vi.fn(),
   SetEnabled: vi.fn(),
   ConfirmImport: vi.fn(),
+  Delete: vi.fn(),
   Dir: vi.fn(),
   Export: vi.fn(),
   ExportPreview: vi.fn(),
@@ -103,6 +104,53 @@ describe('AppletsSettingsView', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="settings-applets-share-error"]').text()).toContain('saving settings failed')
     wrapper.unmount()
+  })
+
+  describe('delete', () => {
+    async function mountView() {
+      const wrapper = mount(AppletsSettingsView, { attachTo: document.body })
+      await flushPromises()
+      return wrapper
+    }
+    const confirmButton = () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="settings-applet-delete-confirm"]')
+
+    it('offers delete for anything on disk, broken included, and not for a built-in', async () => {
+      const wrapper = await mountView()
+      expect(wrapper.find('[data-testid="settings-applet-docker-delete"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="settings-applet-broken-delete"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="settings-applet-applet-builder-delete"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('deletes nothing until the user confirms, then drops the row', async () => {
+      service.Delete.mockResolvedValue(undefined)
+      const wrapper = await mountView()
+      await wrapper.get('[data-testid="settings-applet-docker-delete"]').trigger('click')
+      await flushPromises()
+      expect(service.Delete).not.toHaveBeenCalled()
+      expect(document.body.textContent).toContain('Delete Docker?')
+
+      service.List.mockResolvedValue([])
+      confirmButton()?.click()
+      await flushPromises()
+      expect(service.Delete).toHaveBeenCalledWith('docker')
+      expect(wrapper.find('[data-testid="settings-applet-docker"]').exists()).toBe(false)
+      expect(confirmButton()).toBeNull()
+      wrapper.unmount()
+    })
+
+    it('keeps the dialog open with the reason when the delete fails', async () => {
+      service.Delete.mockRejectedValue(new Error('settings.yaml could not be cleared'))
+      const wrapper = await mountView()
+      await wrapper.get('[data-testid="settings-applet-docker-delete"]').trigger('click')
+      await flushPromises()
+      confirmButton()?.click()
+      await flushPromises()
+      expect(document.body.textContent).toContain('settings.yaml could not be cleared')
+      expect(wrapper.find('[data-testid="settings-applet-docker"]').exists()).toBe(true)
+      wrapper.unmount()
+    })
   })
 
   it('lists what this Hive skipped in the file', async () => {

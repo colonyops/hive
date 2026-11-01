@@ -141,6 +141,74 @@ func TestDisabledAppletIsListedAndServesNothing(t *testing.T) {
 	require.Error(t, service.SetEnabled("absent", true))
 }
 
+func TestDeleteRemovesTheFolderAndWhatSettingsHold(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	dir := filepath.Dir(appletOnDisk(t, service, "thing").Path)
+	preferences := &fakeAppletPreferences{disabled: map[string]bool{}}
+	service.preferences = preferences
+	updates := 0
+	service.updated = func() { updates++ }
+	_, err := service.BridgeToken("thing")
+	require.NoError(t, err)
+	handle, err := service.Spawn(t.Context(), "thing", AppletExec{Command: "sleep 60"})
+	require.NoError(t, err)
+
+	require.NoError(t, service.Delete("thing"))
+
+	assert.NoDirExists(t, dir)
+	assert.Equal(t, []string{"thing"}, preferences.forgotten)
+	assert.Equal(t, 1, updates)
+	assert.NotContains(t, service.tokens, "thing")
+	assert.Eventually(t, func() bool {
+		output, err := service.SpawnRead(t.Context(), handle)
+		return err != nil || output.Done
+	}, 5*time.Second, 10*time.Millisecond, "what it had running stops")
+	_, err = service.Exec(t.Context(), "thing", AppletExec{Command: "true"})
+	require.Error(t, err)
+	require.Error(t, service.Delete("thing"))
+}
+
+func TestDeleteTakesABrokenApplet(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitlebar: nope\n")
+	dir := filepath.Dir(appletOnDisk(t, service, "thing").Path)
+	require.False(t, appletOnDisk(t, service, "thing").Runnable)
+
+	require.NoError(t, service.Delete("thing"))
+	assert.NoDirExists(t, dir)
+}
+
+func TestDeleteRefusesABuiltinAndOnlyRevealsOneAFolderReplaced(t *testing.T) {
+	service := appletHarness(t, applets.BuilderID, "version: 1\ntitle: My builder\n")
+	replaced := appletOnDisk(t, service, applets.BuilderID)
+	require.False(t, replaced.Builtin)
+
+	require.NoError(t, service.Delete(applets.BuilderID))
+	assert.NoDirExists(t, filepath.Dir(replaced.Path))
+	assert.True(t, appletOnDisk(t, service, applets.BuilderID).Builtin)
+
+	require.ErrorContains(t, service.Delete(applets.BuilderID), "ships with Hive")
+	assert.True(t, appletOnDisk(t, service, applets.BuilderID).Builtin)
+}
+
+func TestDeleteLeavesTheAppletWholeWhenSettingsCannotBeCleared(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	dir := filepath.Dir(appletOnDisk(t, service, "thing").Path)
+	service.preferences = &fakeAppletPreferences{disabled: map[string]bool{}, forgetErr: errors.New("read-only")}
+
+	require.ErrorContains(t, service.Delete("thing"), "nothing was deleted")
+	assert.DirExists(t, dir)
+	assert.True(t, appletOnDisk(t, service, "thing").Runnable)
+}
+
+func TestDeleteIsRefusedWithoutPages(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	dir := filepath.Dir(appletOnDisk(t, service, "thing").Path)
+	service.pages = false
+
+	require.Error(t, service.Delete("thing"))
+	assert.DirExists(t, dir)
+}
+
 func TestBuiltinIsListed(t *testing.T) {
 	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
 	builder := appletOnDisk(t, service, applets.BuilderID)
