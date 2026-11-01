@@ -21,7 +21,7 @@ func (ctrl *DriveController) registerDocuments(srv *mcp.Server) {
 	addTool(srv, &mcp.Tool{
 		Name:  "list_documents",
 		Title: "List documents",
-		Description: "List a folder of Hive Drive, the document tree the user sees in the pane beside this chat or Code session. " +
+		Description: "List a folder of Hive Drive, the document tree the user sees in the Drive tab of this chat or Code session. " +
 			"Your session decides the space: a chat's workspace, a hive session's repository (the folder a checkout links as .hive), " +
 			"or the shared space for global. Each entry has a kind (dir, markdown, html, canvas, or file for anything else), its path " +
 			"inside the space, name, title, size and modified time; markdown and canvas entries carry their front matter as front. " +
@@ -49,7 +49,7 @@ func (ctrl *DriveController) registerDocuments(srv *mcp.Server) {
 			"load over https or as data: URLs; forms and frames do not work; a #fragment link scrolls the page and a relative " +
 			"link does nothing. It is not sanitized like a canvas html block, " +
 			"and the canvas hv- classes do not apply. The body is capped at 2 MiB. A .canvas.json path is refused: write " +
-			"canvas blocks with put_blocks. Answers with the entry as stored. The pane does not open by itself; use " +
+			"canvas blocks with put_blocks. Answers with the entry as stored. No Drive tab opens by itself; use " +
 			"open_document when the user should look now.",
 	}, ctrl.WriteDocument)
 
@@ -71,11 +71,12 @@ func (ctrl *DriveController) registerDocuments(srv *mcp.Server) {
 
 	addTool(srv, &mcp.Tool{
 		Name:  "open_document",
-		Title: "Open a document in the pane",
-		Description: "Ask Hive to open the drive pane beside this chat or Code session, showing one document when you give its " +
-			"path (it must exist). Like open_canvas it applies only while the user is viewing this chat or session and never " +
-			"pulls them away from something else. Open when you finish something worth reading, not on every write. The shared " +
-			"space has no pane.",
+		Title: "Open a document in the Drive tab",
+		Description: "Ask Hive to show a document in the Drive tab of this chat or Code session when you give its path (it must " +
+			"exist). With no Drive tab open, Hive adds one behind the tab in front, with an unseen dot; it never takes the " +
+			"screen from what the user is doing. Like open_canvas it applies only while the user is viewing this chat or " +
+			"session. Call it when you finish something worth reading now, not on every write. The shared space has no " +
+			"Drive tab to open; the user reads it in the Drive page.",
 	}, ctrl.OpenDocument)
 }
 
@@ -109,7 +110,7 @@ type deleteDocumentInput struct {
 
 type openDocumentInput struct {
 	Session string `json:"session"        jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
-	Path    string `json:"path,omitempty" jsonschema:"Document to show, by its path in the space; must exist. Omit to open on the pane's own pick."`
+	Path    string `json:"path,omitempty" jsonschema:"Document to show, by its path in the space; must exist. Omit to leave the Drive tab on its own pick."`
 }
 
 type documentEntry struct {
@@ -194,11 +195,11 @@ func (ctrl *DriveController) DeleteDocument(ctx context.Context, _ *mcp.CallTool
 	return nil, deleteDocumentResult{Deleted: in.Path}, nil
 }
 
-func (ctrl *DriveController) OpenDocument(ctx context.Context, _ *mcp.CallToolRequest, in openDocumentInput) (*mcp.CallToolResult, paneResult, error) {
+func (ctrl *DriveController) OpenDocument(ctx context.Context, _ *mcp.CallToolRequest, in openDocumentInput) (*mcp.CallToolResult, driveOpenResult, error) {
 	if err := ctrl.core.Drive.OpenDocument(ctx, in.Session, in.Path); err != nil {
-		return nil, paneResult{}, ctrl.toolError(err)
+		return nil, driveOpenResult{}, ctrl.toolError(err)
 	}
-	return nil, paneResult{Requested: "open"}, nil
+	return nil, driveOpenResult{Requested: "open"}, nil
 }
 
 func documentEntryFrom(e drive.Entry) documentEntry {

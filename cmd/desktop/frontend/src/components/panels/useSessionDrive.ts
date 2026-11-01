@@ -4,8 +4,8 @@ import { useDriveRoute } from '../../composables/useDriveRoute'
 import { useWailsEvent } from '../../composables/useWailsEvent'
 import { driveEventAuthor, type DriveAuthor } from '../../lib/drive'
 
-/** The space the attached session reads, and who it is as an author. */
-export interface TerminalDriveTarget {
+/** The space the open session reads, and who it is as an author. */
+export interface SessionDriveTarget {
   space: string
   session: DriveAuthor
 }
@@ -14,10 +14,12 @@ export interface TerminalDriveTarget {
  * The ways into a session's Drive tab from outside it. ?doc is how a reveal
  * links to a document, and an agent's open_document arrives as drive:toggle.
  * The tab owns the document after that, so the query is consumed: left in
- * place, it would follow the route into the next session.
+ * place, it would follow the route into the next session. It acts only on
+ * the route of the area that hosts the tabs, because both areas stay mounted.
  */
-export function useTerminalDrive(
-  target: Ref<TerminalDriveTarget | null>,
+export function useSessionDrive(
+  routeName: 'terminal' | 'agents',
+  target: Ref<SessionDriveTarget | null>,
   active: () => boolean,
   docs: {
     ready: () => boolean
@@ -31,7 +33,7 @@ export function useTerminalDrive(
   const { docRequested, docPath, syncDocQuery } = useDriveRoute()
 
   watch(
-    () => route.name === 'terminal' && docRequested.value && !!target.value && docs.ready(),
+    () => route.name === routeName && docRequested.value && !!target.value && docs.ready(),
     (requested) => {
       if (!requested) return
       docs.open(docPath.value)
@@ -40,12 +42,11 @@ export function useTerminalDrive(
     { immediate: true },
   )
 
-  // Honored only for the session in view, for the Chats pane's reason: an agent
-  // must never drag the user away.
+  // Honored only for the session in view: an agent must never drag the user away.
   useWailsEvent('drive:toggle', (event) => {
     const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as
       { path?: string; open: boolean } | undefined
-    if (!payload || !active() || route.name !== 'terminal') return
+    if (!payload || !active() || route.name !== routeName) return
     if (driveEventAuthor(payload) !== (target.value?.session ?? null)) return
     if (payload.open) docs.arrive(payload.path || null)
     else docs.close()

@@ -65,12 +65,23 @@ tab, a pop-up or another window. None of that would carry to a second host.
 9. **A layout is persisted per session id** in localStorage. A session the
    user closed forgets its layout; one that is merely not running keeps its
    views for when it starts.
+10. **Chats is the second host, and the Drive pane is gone.** An open chat is
+    a layout of one window tab, its terminal, with Drive as its only view;
+    `useChatPanels` builds the `PanelWindowSource` from the chat pane's state
+    and keeps the layouts in a store of their own, keyed by chat id. Its
+    sidebar does not mirror the tabs: a chat row is a chat, not a list. The
+    right-hand Drive pane beside a chat is removed rather than kept beside the
+    tabs, so `open_document`, `open_canvas`, `close_canvas`, `?doc` and a
+    `canvas=` link all mean one thing in both areas: the session's Drive tab.
+    The title bar's right toggle keeps the Inbox preview and the Drive page's
+    comments and names Drive nowhere.
 
 ## Consequences
 
-- A second host reuses `lib/panelLayout`, `PanelLayoutHost` and
-  `useSessionPanels` with its own `PanelWindowSource` and floating layer. It
-  does not reuse `TerminalPaneColumn`, which is Code's host.
+- A second host reuses `lib/panelLayout`, `PanelLayoutHost`,
+  `useSessionPanels` and `useSessionDrive` with its own `PanelWindowSource`
+  and floating layer. It does not reuse `TerminalPaneColumn`, which is Code's
+  host. Chats is the first such host.
 - Adding a view is one entry in `panelViews.ts` and one branch in the Code
   host's content slot.
 - Layouts the prototype saved under `hive.code.session-tabs` are not read; the

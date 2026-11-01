@@ -223,10 +223,10 @@ func TestCanvasPaneToggle(t *testing.T) {
 		Requested string `json:"requested"`
 	}
 	call(t, session, "open_canvas", map[string]any{"session": id}, &pane)
-	assert.Equal(t, "open", pane.Requested, "the result reports the ask, not a pane state nothing acknowledges")
+	assert.Equal(t, "open", pane.Requested, "the result reports the ask, not a Drive tab state nothing acknowledges")
 
 	text := callErr(t, session, "open_canvas", map[string]any{"session": id, "canvas": "ghost"})
-	assert.Contains(t, text, "not_found", "pinning the pane to a canvas requires it to exist")
+	assert.Contains(t, text, "not_found", "pinning the Drive tab to a canvas requires it to exist")
 
 	var wrote canvasWriteView
 	call(t, session, "put_block", map[string]any{"session": id, "canvas": "plan", "id": "a", "kind": "markdown", "body": "x"}, &wrote)

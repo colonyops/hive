@@ -2,7 +2,7 @@ import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { openTab, panelBoxes, panelsOf, resizeSplit, splitBoxes, splitPanel } from '../../lib/panelLayout'
 import { resetStores } from '../defineStore'
-import { usePanelLayouts } from '../usePanelLayouts'
+import { useChatPanelLayouts, usePanelLayouts } from '../usePanelLayouts'
 
 const STORAGE_KEY = 'hive.code.panel-layouts'
 const docs = { id: 'docs', kind: 'docs' }
@@ -71,5 +71,18 @@ describe('usePanelLayouts', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ a: { panels: [] } }))
 
     expect(panelsOf(usePanelLayouts().layoutOf('a'))).toHaveLength(1)
+  })
+
+  it('keeps Chats layouts out of the Code map, whatever the ids', async () => {
+    usePanelLayouts().apply('7', (layout) => openTab(layout, diff))
+    useChatPanelLayouts().apply('7', (layout) => openTab(layout, docs))
+    await nextTick()
+
+    expect(panelsOf(usePanelLayouts().layoutOf('7'))[0].activeTab).toBe('diff')
+    expect(panelsOf(useChatPanelLayouts().layoutOf('7'))[0].activeTab).toBe('docs')
+
+    usePanelLayouts().retain(() => false)
+    expect(panelsOf(useChatPanelLayouts().layoutOf('7'))[0].tabs).toHaveLength(1)
+    expect(JSON.parse(localStorage.getItem('hive.chats.panel-layouts') ?? '{}')).toHaveProperty('7')
   })
 })

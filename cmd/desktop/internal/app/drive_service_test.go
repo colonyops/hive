@@ -272,7 +272,7 @@ func TestCanvasHTMLBlockRejectionNamesTheOffender(t *testing.T) {
 	require.NoError(t, err, "the vocabulary itself is accepted")
 }
 
-// The pane's read is the seam between stored agent source and the app's own
+// The UI's read is the seam between stored agent source and the app's own
 // webview; the agent's read-back is not, so the two disagree by design.
 func TestCanvasHTMLIsSanitizedOnTheWayOutNotIn(t *testing.T) {
 	f := newDriveFixture(t)
@@ -425,20 +425,20 @@ func TestCanvasMutationsOnUnknownCanvasAreNotFound(t *testing.T) {
 	f.signals.requireNoUpdates(t, "a mutation on an unknown canvas never notifies")
 }
 
-func TestCanvasSetPaneOpen(t *testing.T) {
+func TestCanvasSetDriveOpen(t *testing.T) {
 	f := newDriveFixture(t)
 	ctx := t.Context()
 
-	require.NoError(t, f.svc.SetPaneOpen(ctx, "1", "", true), "opening without a name leaves the pane's own pick")
-	err := f.svc.SetPaneOpen(ctx, "1", "ghost", true)
+	require.NoError(t, f.svc.SetDriveOpen(ctx, "1", "", true), "opening without a name leaves the tab's own pick")
+	err := f.svc.SetDriveOpen(ctx, "1", "ghost", true)
 	assert.Equal(t, KindNotFound, KindOf(err), "opening pinned to a canvas requires it to exist")
 
 	_, err = f.svc.PutBlock(ctx, "1", "plan", "", "", markdownBlock("a", "x"))
 	require.NoError(t, err)
-	require.NoError(t, f.svc.SetPaneOpen(ctx, "1", "plan", true))
-	require.NoError(t, f.svc.SetPaneOpen(ctx, "1", "canvases/plan.canvas.json", true), "a document path pins the same canvas")
-	require.NoError(t, f.svc.SetPaneOpen(ctx, "1", "", false))
-	err = f.svc.SetPaneOpen(ctx, "99", "", true)
+	require.NoError(t, f.svc.SetDriveOpen(ctx, "1", "plan", true))
+	require.NoError(t, f.svc.SetDriveOpen(ctx, "1", "canvases/plan.canvas.json", true), "a document path pins the same canvas")
+	require.NoError(t, f.svc.SetDriveOpen(ctx, "1", "", false))
+	err = f.svc.SetDriveOpen(ctx, "99", "", true)
 	assert.Equal(t, KindNotFound, KindOf(err))
 
 	assert.Equal(t, []events.DriveToggleRequested{
@@ -628,14 +628,14 @@ func TestAgentsOutsideEverySessionShareTheSharedSpace(t *testing.T) {
 	notes := events.DriveChanged{Space: drive.SharedKey, Paths: []string{"canvases/notes.canvas.json"}}
 	assert.Equal(t, []events.DriveChanged{notes, notes}, updates, "shared writes still wake the readers, with no author")
 
-	err = f.svc.SetPaneOpen(ctx, "global", "notes", true)
-	assert.Equal(t, KindInvalid, KindOf(err), "a shared canvas has no pane")
+	err = f.svc.SetDriveOpen(ctx, "global", "notes", true)
+	assert.Equal(t, KindInvalid, KindOf(err), "a shared canvas has no Drive tab")
 }
 
 func TestCanvasPaneToggleNamesTheHiveSession(t *testing.T) {
 	f := newDriveFixture(t, siteSession)
 
-	require.NoError(t, f.svc.SetPaneOpen(t.Context(), siteSession.Path, "", true))
+	require.NoError(t, f.svc.SetDriveOpen(t.Context(), siteSession.Path, "", true))
 
 	toggles := f.signals.waitToggles(t, 1)
 	assert.Equal(t, events.DriveToggleRequested{HiveSession: "abc123", Space: "acme/site", Open: true}, toggles[0])

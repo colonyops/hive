@@ -59,7 +59,7 @@ type AgentWorkspacesUpdated struct{ Count int }
 // them, and empty means the whole space. The content is stored state a
 // reader re-reads. Session or HiveSession names the chat or hive session
 // whose agent wrote through the desktop, never both; both are empty for a
-// change the drive watcher found on disk, which wakes a pane without
+// change the drive watcher found on disk, which wakes a Drive tab without
 // marking anything unseen.
 type DriveChanged struct {
 	Space       string
@@ -68,11 +68,11 @@ type DriveChanged struct {
 	HiveSession string
 }
 
-// DriveToggleRequested reports an agent asked to open or close the drive
-// pane beside its chat. Unlike the wake-up events the payload is the whole
-// message: pane visibility is UI intent, not stored state to re-read. Path
-// pins one document of Space when opening; empty leaves the pane's own
-// pick. The asker is a chat (Session) or a hive session (HiveSession),
+// DriveToggleRequested reports an agent asked to open or close the Drive tab
+// of its chat or Code session. Unlike the wake-up events the payload is the
+// whole message: whether a tab is open is UI intent, not stored state to
+// re-read. Path pins one document of Space when opening; empty leaves the
+// tab's own pick. The asker is a chat (Session) or a hive session (HiveSession),
 // never both.
 type DriveToggleRequested struct {
 	Session     string

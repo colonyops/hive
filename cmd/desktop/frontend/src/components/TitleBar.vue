@@ -59,11 +59,10 @@ import SegmentedControl, { type SegmentedControlOption } from '@hive/ui/componen
 // shown as a pulsing amber dot. sidebarCollapsed drives the panel-toggle glyph;
 // canToggleSidebar disables the toggle in views with no left panel (settings,
 // flows, onboarding). previewCollapsed/canTogglePreview are the same pair for
-// the right-hand pane — the detail preview in Inbox, the drive in Chats and
-// Code, the comments on the Drive page. previewUnseen is that pane's attention dot: an agent wrote to a
-// document that is not on screen. updateAvailable renders a click-to-install chip in
-// the right cluster, independent of profileName so it can show during
-// onboarding too.
+// the right-hand pane — the detail preview in Inbox, the comments on the Drive
+// page. Code and Chats have none: Drive is a session tab there. updateAvailable
+// renders a click-to-install chip in the right cluster, independent of
+// profileName so it can show during onboarding too.
 const props = defineProps<{
   profileName?: string
   mode?: 'hub' | 'terminal' | 'agents' | 'settings' | 'drive'
@@ -82,7 +81,6 @@ const props = defineProps<{
   canToggleSidebar?: boolean
   previewCollapsed?: boolean
   canTogglePreview?: boolean
-  previewUnseen?: boolean
 }>()
 const emit = defineEmits<{
   'set-mode': [mode: 'hub' | 'terminal' | 'agents']
@@ -112,10 +110,7 @@ const modeOptions: SegmentedControlOption<'hub' | 'terminal' | 'agents'>[] = [
   { value: 'agents', label: 'Chats', title: 'Chats' },
 ]
 const modeIcons = { hub: IconInbox, terminal: IconCode, agents: IconMessagesSquare }
-const rightPane = computed(() => {
-  if (props.mode === 'drive') return 'comments'
-  return props.mode === 'terminal' || props.mode === 'agents' ? 'drive' : 'preview'
-})
+const rightPane = computed(() => (props.mode === 'drive' ? 'comments' : 'preview'))
 const jobsRoot = ref<HTMLElement | null>(null)
 const jobsOpen = ref(false)
 
@@ -310,18 +305,12 @@ function onTitlebarDblclick(event: MouseEvent): void {
         :label="`${previewCollapsed ? 'Show' : 'Hide'} ${rightPane}`"
         :icon="previewCollapsed ? IconPanelRightOpen : IconPanelRightClose"
         size="lg"
-        class="relative ml-1"
+        class="ml-1"
         style="--wails-draggable: no-drag"
         :disabled="!canTogglePreview"
         data-testid="titlebar-toggle-preview"
         @click="emit('toggle-preview')"
-      >
-        <span
-          v-if="previewUnseen && previewCollapsed"
-          class="absolute right-1 top-1 size-[6px] rounded-full bg-accent ring-2 ring-raised"
-          data-testid="titlebar-preview-unseen"
-        />
-      </IconButton>
+      />
     </div>
   </header>
 </template>

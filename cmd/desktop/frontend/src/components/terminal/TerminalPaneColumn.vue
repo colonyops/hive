@@ -60,7 +60,7 @@ import {
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { docsScopeOf, viewOfTab, viewTab, withDocsScope } from './panelViews'
 import { useTerminalModeContext } from './terminalModeContext'
-import { useTerminalDrive, type TerminalDriveTarget } from './useTerminalDrive'
+import { useSessionDrive, type SessionDriveTarget } from '../panels/useSessionDrive'
 
 // Its diff library and highlighter load only when a Diff tab opens.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
@@ -74,7 +74,7 @@ const ChangesView = defineAsyncComponent({
 const props = defineProps<{
   paintedActive: boolean
   active: boolean
-  drive: TerminalDriveTarget | null
+  drive: SessionDriveTarget | null
   /** An app overlay has the keyboard, so a view under it must not take its keys. */
   overlayOpen?: boolean
 }>()
@@ -311,7 +311,7 @@ function scopeAt(path: string | null): DriveScope | null {
   return base && path ? { ...base, path } : base
 }
 
-useTerminalDrive(toRef(props, 'drive'), () => props.active, {
+useSessionDrive('terminal', toRef(props, 'drive'), () => props.active, {
   // Tabs are keyed by the row's id, so a request has to wait for the row.
   ready: () => !!panels.row && pool.activeSlug === pool.visibleSlug,
   open: (path) => panels.apply((current) => withDocsScope(openTab(current, viewTab('docs')), scopeAt(path))),

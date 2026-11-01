@@ -2070,9 +2070,25 @@ tiling leaf is a panel. The layers, and what each is allowed to know:
   compute where a panel's content box is.
 
 Two rules for a view: it owns no close (the host draws the control and handles
-Escape), and one mounted behind another tab takes no keys (`keysActive`). Code
-has no right Drive pane: Drive is a tab there, and the title bar's right toggle
-names the Chats pane alone.
+Escape), and one mounted behind another tab takes no keys (`keysActive`).
+Neither Code nor Chats has a right Drive pane: Drive is a tab in both, and the
+title bar's right toggle names the Inbox preview and the Drive page's comments
+alone.
+
+**Chats is the second host.** `components/agents/useChatPanels.ts` builds a
+`PanelWindowSource` from the open chat's pane state: one window, the chat's
+terminal, so select, move and render are no-ops and `pending` covers a resume
+whose window is not known yet. `AgentsMode.vue` hosts `PanelLayoutHost`, places
+the chat's xterm element in the floating layer, offers one view (Drive) from
+`ChatTabAdd` and the picker, and closes the window tab the way the sidebar's
+Stop does. Layouts live in their own store, `useChatPanelLayouts`
+(`hive.chats.panel-layouts`), keyed by chat id: a chat pinned to Code shares
+its id, and Code's sweep drops keys it does not know. Closing or deleting a
+chat forgets its layout; an agent that exits keeps it. The Agents sidebar does
+not mirror a chat's tabs. `components/panels/useSessionDrive.ts` is the one
+way into a session's Drive tab from outside it, for both hosts: `?doc` on the
+host's route opens the tab and is consumed, and an agent's `drive:toggle`
+adds the tab quietly or closes it, honored only for the session on screen.
 
 #### Pop-up terminals
 
@@ -2404,8 +2420,8 @@ MCP flag, so its generated `.codex/config.toml` is loaded alongside whatever
 the user's own global codex config already has, and the UI states that rather
 than leaving an unbounded tool set looking identical to a bounded one.
 
-**Hive Drive** is one document tree under the context root, shown in a pane
-beside a chat or a Code session and in a full-page overlay
+**Hive Drive** is one document tree under the context root, shown in a Drive
+tab beside a chat or a Code session and in a full-page overlay
 ([ADR hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it](decisions/2026-10-11-hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it.md)).
 A canvas is one document kind in it.
 
@@ -2419,8 +2435,8 @@ service set, and `Reload` calls its `Reconfigure`. It keeps an in-memory
 snapshot per space, scanned lazily on the first `Tree` or `Search` of that
 space, with front matter read from the head of each markdown file. No index
 sits in `hive.db`. A `Reconfigure` with a new context root publishes one
-`drive.changed` per previously scanned space, with empty paths, so panes
-refresh. Documents are `.md`, `.html` and `.canvas.json`; `Write`
+`drive.changed` per previously scanned space, with empty paths, so Drive
+tabs refresh. Documents are `.md`, `.html` and `.canvas.json`; `Write`
 accepts only the first two, and a canvas changes through its block methods.
 A document is identified by `(space, path)`, so a move is a rename.
 
@@ -2445,10 +2461,10 @@ session or hive session) of a write. The desktop forwarder passes it through
 and publishes nothing of its own: one change, one event. `wailsui.drive`
 subscribes with `events.Buffer(64)`, not `Coalesce()`, because the payload is a
 per-space delta with an author and must not be dropped. It reaches the
-frontend as `drive:updated`, and a request to open or close the pane as
-`drive:toggle`. Pane visibility is UI intent, not stored state, so
-`drive:toggle` carries the whole message, and the frontend honors it only for
-the chat in view. The agent learns its own session id from
+frontend as `drive:updated`, and a request to open or close the session's
+Drive tab as `drive:toggle`. Whether the tab is open is UI intent, not stored
+state, so `drive:toggle` carries the whole message, and the frontend honors it
+only for the chat or session in view. The agent learns its own session id from
 `HIVE_AGENT_SESSION`, injected at launch via `tmux new-session -e`.
 
 **Agents write through `mcpsrv`.** One app-hosted server, `hive-drive`, mounts
@@ -2468,7 +2484,8 @@ configuration, and Settings ▸ MCP servers lists it.
 
 **A session resolves to a space.** The `session` argument is `global`, a chat's
 record id, or the caller's working directory. `global` is the `shared` space,
-which has no pane: `open_document`, `open_canvas` and `close_canvas` refuse it.
+which sits beside no session and so has no Drive tab: `open_document`,
+`open_canvas` and `close_canvas` refuse it.
 The `@global` store is gone, but canvas tool results still name the shared
 space's owner `@global`, so agents and `hive://canvas` links that match on it
 keep working.
@@ -2496,8 +2513,8 @@ and logged; a `.json` that is not a canvas stays as a plain file.
 **The frontend** reads the drive through `stores/useDrive.ts` (spaces, trees by
 space key, search; it reloads a space on `drive:updated` and every loaded space
 when the window regains focus). `components/drive/*` holds the tree, the
-browser, the reader, the pane and the full-page view; `DrivePane` mounts in
-Chats and in Code, riding `?doc=` on the route. `lib/drive.ts` holds the scope,
+browser, the reader and the page; `DrivePage` is both the full page and, as
+`embedded`, the Drive tab in Chats and in Code. `lib/drive.ts` holds the scope,
 the space-group rule and `linkTarget`, which resolves a link in a document:
 `http`, `https` and `mailto` open outside the app, a relative or `.hive/`
 reference that names a document in the space opens it in place, and anything
@@ -2505,9 +2522,9 @@ else leads nowhere. The full page is the `drive` route, an area of its own
 like Settings, rendered in the main frame; its scope is the route's query
 (`space`, `doc`, `session`), so a document is a link and history restores it.
 `useAppMode` owns the navigation: `drive.toggle`, the views menu, a palette
-row, the pane's expand button and a `hive://drive` link open it, and closing
-returns to the page it was opened from. The reader is one renderer for both
-surfaces, so a document does not read differently in the pane and on the page.
+row and a `hive://drive` link open it, and closing returns to the page it was
+opened from. The reader is one renderer for both surfaces, so a document does
+not read differently in the tab and on the page.
 Fenced code is highlighted by shiki on the oniguruma WASM engine, never
 inside a render: `stores/useCodeHighlight.ts` answers a fence from its cache
 or queues it, drains the queue in slices between frames, and bumps a reactive
@@ -2600,7 +2617,7 @@ what the stylesheet defines and the doc page teaches, held together by
 `TestHTMLVocabularyIsStyledAndDocumented`, but it gates nothing. What keeps
 that safe is one line of CSS: `contain: layout` on `.hv-html` makes the block
 the containing block for fixed and absolute descendants, so a block that
-positions itself cannot paint outside the pane.
+positions itself cannot paint outside its panel.
 
 The agent-workspace watcher is the same `dirwatch.Watcher` that actions and
 flows use, with `WithSubdirectories`: fsnotify is not recursive and the tree

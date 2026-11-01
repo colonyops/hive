@@ -11,7 +11,7 @@ import (
 )
 
 // maxDocumentBytes caps one write_document body. A document is read back
-// whole into an agent's context and rendered whole in the pane, so a larger
+// whole into an agent's context and rendered whole in the Drive tab, so a larger
 // one is a mistake on both ends.
 const maxDocumentBytes = 2 << 20
 
@@ -169,16 +169,17 @@ func (s *DriveService) DeleteDocument(ctx context.Context, session, path string)
 	return nil
 }
 
-// OpenDocument asks the UI to open the drive pane beside the calling chat or
-// Code session, pinned to path when one is given. Like SetPaneOpen it is UI
-// intent, applied only while the user is viewing that chat or session.
+// OpenDocument asks the UI to show path in the Drive tab of the calling chat
+// or Code session, adding the tab behind the tab in front when none is open.
+// Like SetDriveOpen it is UI intent, applied only while the user is viewing
+// that chat or session.
 func (s *DriveService) OpenDocument(ctx context.Context, session, path string) error {
 	d, caller, err := s.open(ctx, session)
 	if err != nil {
 		return err
 	}
 	if caller.space.Kind == drive.SpaceKindShared {
-		return Errorf(KindInvalid, "the shared space has no pane to open or close; the user reads it in the Drive page")
+		return Errorf(KindInvalid, "the shared space has no Drive tab to open or close; the user reads it in the Drive page")
 	}
 	if path != "" {
 		if err := drive.ValidatePath(path); err != nil {

@@ -138,7 +138,6 @@ useWailsEvent('flows:updated', () => {
         :can-toggle-sidebar="appMode.canToggleSidebar.value"
         :preview-collapsed="appMode.previewToggleCollapsed.value"
         :can-toggle-preview="appMode.canTogglePreview.value"
-        :preview-unseen="appMode.previewUnseen.value"
         @set-mode="appMode.setMode"
         @back="router.back()"
         @forward="router.forward()"
@@ -179,7 +178,6 @@ useWailsEvent('flows:updated', () => {
           v-show="agentsActive"
           :active="agentsActive"
           :sidebar-collapsed="agentsSidebarCollapsed"
-          @open-drive-page="appMode.openDrive"
         />
         <SettingsView
           v-if="settingsActive"

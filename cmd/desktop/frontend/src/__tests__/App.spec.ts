@@ -3006,37 +3006,22 @@ describe('App', () => {
     },
   )
 
-  // #432: the canvas is the right-hand pane in Chats, so the title bar's
-  // right-panel toggle drives it — the same slot the detail preview uses in
-  // Inbox. It used to carry its own button in the pane status bar.
-  it('drives the Chats drive pane from the title bar right-panel toggle', async () => {
+  // Drive is a session tab in Chats as it is in Code, so the right toggle has
+  // no pane to drive there, with a chat open or not.
+  it('leaves the title bar right-panel toggle off in Chats', async () => {
     const { wrapper, router } = await mountAppWithRouter()
 
     await wrapper.get('[data-testid="titlebar-mode-agents"]').trigger('click')
     await vi.waitFor(() => expect(agentsOnScreen(wrapper)).toBe(true))
     await flushPromises()
-
-    // No chat open: the drive pane has nothing to show beside, so the slot is off.
     expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('disabled')).toBe('')
 
     await router.replace({ name: 'agents', params: { workspace: 'web-app' }, query: { chat: '7' } })
     await flushPromises()
 
     const toggle = wrapper.get('[data-testid="titlebar-toggle-preview"]')
-    expect(toggle.attributes('disabled')).toBeUndefined()
-    expect(toggle.attributes('aria-label')).toBe('Show drive')
-
-    await toggle.trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBe('1')
-    expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe('Hide drive')
-
-    await wrapper.get('[data-testid="titlebar-toggle-preview"]').trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBeUndefined()
-
-    // The Inbox preview is a different pane on the same slot and is untouched.
-    expect(localStorage.getItem('hive.panel.detailpane.collapsed')).not.toBe('true')
+    expect(toggle.attributes('disabled')).toBe('')
+    expect(wrapper.find('[data-testid="titlebar-preview-unseen"]').exists()).toBe(false)
 
     wrapper.unmount()
   })

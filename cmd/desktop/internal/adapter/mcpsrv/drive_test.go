@@ -197,5 +197,5 @@ func TestOpenDocumentPublishesTheToggle(t *testing.T) {
 	assert.Equal(t, events.DriveToggleRequested{Session: id, Space: "workspaces/demo", Path: "plans/auth.md", Open: true}, toggles[0])
 
 	text = callErr(t, session, "open_document", map[string]any{"session": "global", "path": "x.md"})
-	assert.Contains(t, text, "invalid", "the shared space has no pane")
+	assert.Contains(t, text, "invalid", "the shared space has no Drive tab")
 }

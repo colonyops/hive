@@ -16,7 +16,7 @@ import { useSessionTreeView } from './terminal/useSessionTreeView'
 import { useSessionViewMenus } from './terminal/useSessionViewMenus'
 import { useTerminalAttach } from './terminal/useTerminalAttach'
 import { useTerminalCommands } from './terminal/useTerminalCommands'
-import type { TerminalDriveTarget } from './terminal/useTerminalDrive'
+import type { SessionDriveTarget } from './panels/useSessionDrive'
 import { useTerminalPool } from './terminal/useTerminalPool'
 import { useTerminalSessionOps } from './terminal/useTerminalSessionOps'
 import { useTerminalTree } from './terminal/useTerminalTree'
@@ -42,7 +42,7 @@ const props = withDefaults(
     sidebarCollapsed?: boolean
     active?: boolean
     /** The space the attached session reads; null for a session with none. */
-    drive?: TerminalDriveTarget | null
+    drive?: SessionDriveTarget | null
     overlayOpen?: boolean
   }>(),
   { active: true, drive: null },

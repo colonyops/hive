@@ -240,9 +240,9 @@ export interface DocumentWire {
 }
 
 /**
- * DriveToggle is the drive:toggle payload: whose pane to open or close, a
+ * DriveToggle is the drive:toggle payload: whose Drive tab to open or close, a
  * chat's or a hive session's, and the document to pin when opening (empty
- * leaves the pane's pick).
+ * leaves the tab's pick).
  */
 export interface DriveToggle {
     "session": string;

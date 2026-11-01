@@ -31,7 +31,7 @@ export function useAppMode(
   shellLoaded: Ref<boolean>,
 ) {
   const { route, router } = nav
-  const { routeChatId, docRequested, docPath, docUnseen, syncDocQuery } = useDriveRoute()
+  const { routeChatId, docPath } = useDriveRoute()
   const review = useDriveReview()
   const { recents } = useAgentSessionsAll()
   const { sessions: codeSessions } = useTerminalSessions()
@@ -175,29 +175,22 @@ export function useAppMode(
   })
 
   // One control per frame edge: the right toggle names the detail preview in
-  // Inbox and the drive pane in Chats (hay-kot/hive-desktop#432). Code has no
-  // right pane: Drive is a session tab there.
-  const driveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
-  const previewToggleCollapsed = computed(() => {
-    if (driveActive.value) return review.pageCommentsCollapsed.value
-    return driveAvailable.value ? !docRequested.value : previewCollapsed.value
-  })
-  const canTogglePreview = computed(
-    () => feedViewActive.value || driveAvailable.value || (driveActive.value && review.pageReviewed.value),
+  // Inbox and the comments on the Drive page. Code and Chats have no right
+  // pane: Drive is a session tab in both.
+  const previewToggleCollapsed = computed(() =>
+    driveActive.value ? review.pageCommentsCollapsed.value : previewCollapsed.value,
   )
-  const previewUnseen = computed(() => driveAvailable.value && docUnseen.value)
+  const canTogglePreview = computed(() => feedViewActive.value || (driveActive.value && review.pageReviewed.value))
 
   function togglePreview(): void {
     if (terminalActive.value) return
     if (driveActive.value) review.togglePageComments()
-    else if (driveAvailable.value) syncDocQuery(!docRequested.value)
     else previewCollapsed.value = !previewCollapsed.value
   }
 
-  // What the drive pane beside the open chat or Code session shows, or would
-  // show: the full-page view opens on the same document. A chat's workspace is
-  // its own and need not be the focused one, which is the fallback with no
-  // chat open.
+  // What the open chat's or Code session's Drive tab shows, or would show: the
+  // full-page view opens on the same document. A chat's workspace is its own
+  // and need not be the focused one, which is the fallback with no chat open.
   const viewDriveScope = computed<DriveScope | null>(() => {
     if (codeDrive.value) return { ...codeDrive.value, path: docPath.value }
     if (!agentsActive.value) return null
@@ -284,7 +277,6 @@ export function useAppMode(
     toggleSidebar,
     previewToggleCollapsed,
     canTogglePreview,
-    previewUnseen,
     togglePreview,
     codeDrive,
     viewDriveScope,

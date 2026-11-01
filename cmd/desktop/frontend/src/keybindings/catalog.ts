@@ -305,12 +305,11 @@ export const commandCatalog: BindableCommand[] = [
   },
   {
     // The right-hand twin of the sidebar toggle: the title bar's right
-    // button in every view, the preview in Inbox, the drive in Chats and
-    // Code, the comments on the Drive page.
+    // button, the preview in Inbox and the comments on the Drive page.
     id: 'view.toggle-panel',
     title: 'Toggle right panel',
     group: 'View',
-    keywords: ['panel', 'right', 'preview', 'drive', 'comments', 'show', 'hide', 'collapse'],
+    keywords: ['panel', 'right', 'preview', 'comments', 'show', 'hide', 'collapse'],
     icon: IconPanelRight,
     defaultCombos: ['mod+alt+b'],
     context: 'panel',

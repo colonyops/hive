@@ -1,3 +1,4 @@
+import { nextTick } from 'vue'
 import { createMemoryHistory, type Router } from 'vue-router'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -769,19 +770,20 @@ describe('AgentsMode', () => {
   })
 
   // A route naming a chat that cannot be attached leaves the live one alone:
-  // clearing ?chat here would drop ?doc too and unmount the drive pane of
-  // a chat that is still running.
+  // clearing ?chat here would drop ?doc too, and the live chat's Drive tab
+  // would never open.
   it('keeps the live chat in the route when the routed chat is dead', async () => {
     const client = fakeClient()
     client.allSessions.mockResolvedValue([{ ...chatRow, id: '9', name: 'Second', terminalId: '' }])
-    const { router } = await mountWithOpenChat(client)
+    const { wrapper, router } = await mountWithOpenChat(client)
 
     await router.push({ name: 'agents', params: { workspace: 'web-app' }, query: { chat: '9', doc: '1' } })
     await flushPromises()
 
     expect(client.resumeSession).not.toHaveBeenCalled()
     expect(router.currentRoute.value.query.chat).toBe('7')
-    expect(router.currentRoute.value.query.doc).toBe('1')
+    expect(router.currentRoute.value.query.doc).toBeUndefined()
+    expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(true)
   })
 
   // Clicking the row already open in the pane must not tear it down and
@@ -1094,75 +1096,116 @@ describe('AgentsMode', () => {
     expect(newSession.open.value).toBe(false)
   })
 
-  // The drive pane is a sibling pane: opening and closing it must never re-key or
-  // unmount the terminal host — the same element survives the round trip.
-  it('keeps the terminal pane element across a drive pane toggle', async () => {
+  // The terminal's element is placed by position, never moved: opening and
+  // closing the Drive tab beside it must keep xterm's screen.
+  it('keeps the terminal pane element across a Drive tab opening and closing', async () => {
     const { wrapper, router } = await mountWithOpenChat()
     const paneBefore = wrapper.find('[data-testid="agents-session-pane"]').element
 
     await setDoc(router, '1')
-    expect(router.currentRoute.value.query.doc).toBe('1')
-    expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(true)
+    expect(router.currentRoute.value.query.doc).toBeUndefined()
+    expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="agents-session-pane"]').element).toBe(paneBefore)
 
-    await setDoc(router, undefined)
-    expect(router.currentRoute.value.query.doc).toBeUndefined()
-    expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="panel-tab-close-docs"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="agents-session-pane"]').element).toBe(paneBefore)
   })
 
-  // ?doc names a view of the open chat, so with no chat open it renders
-  // nothing — and closing the chat takes the query along.
-  it('renders no drive pane without an open chat, and drops ?doc with the chat', async () => {
+  // ?doc names a view of the open chat, so with no chat open it opens
+  // nothing, and closing the chat takes the query along.
+  it('has no Drive tab without an open chat, and drops ?doc with the chat', async () => {
     const { wrapper: idle } = await mountAgentsMode('/workspaces/web-app?doc=1')
-    expect(idle.find('[data-testid="drive-pane"]').exists()).toBe(false)
+    expect(idle.find('[data-testid="panel-view-docs"]').exists()).toBe(false)
 
     const { wrapper, router } = await mountWithOpenChat()
-    await setDoc(router, '1')
-    expect(router.currentRoute.value.query.doc).toBe('1')
-
     wrapper.findComponent(AgentsSidebar).vm.$emit('close-session', { ...chatRow })
     await flushPromises()
+    await setDoc(router, '1')
 
+    expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(false)
     expect(router.currentRoute.value.query.chat).toBeUndefined()
-    expect(router.currentRoute.value.query.doc).toBeUndefined()
   })
 
   // open_document, open_canvas and close_canvas arrive as drive:toggle. Only
-  // the open chat's ask is honored — an agent must never drag the user away
-  // from another chat.
-  it('opens and closes the pane on drive:toggle for the open chat only', async () => {
-    const { wrapper, router } = await mountWithOpenChat()
+  // the open chat's ask is honored -- an agent must never drag the user away
+  // from another chat. An agent's tab arrives behind the terminal.
+  it('opens and closes the Drive tab on drive:toggle for the open chat only', async () => {
+    const { wrapper } = await mountWithOpenChat()
 
     wailsEvents.fire('drive:toggle', { session: '99', path: '', open: true })
     await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBeUndefined()
+    expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(false)
 
     wailsEvents.fire('drive:toggle', { session: '7', path: 'plans/x.md', open: true })
     await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBe('plans/x.md')
-    expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(true)
 
     wailsEvents.fire('drive:toggle', { session: '7', path: '', open: false })
     await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBeUndefined()
-    expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(false)
   })
 
-  it("keeps the open chat's write seen when its pane was open for it and then closes", async () => {
-    const { router } = await mountWithOpenChat()
-    await setDoc(router, '1')
+  it('opens the Drive tab on a ?doc link and shows the terminal again when it closes', async () => {
+    const { wrapper, router } = await mountWithOpenChat()
 
-    wailsEvents.fire('drive:updated', { space: 'workspaces/web-app', paths: ['x.md'], session: '7', hiveSession: '' })
+    await setDoc(router, 'plans/x.md')
+    expect(wrapper.get('[data-testid="panel-tab-docs"]').attributes('data-shown')).toBe('true')
+    expect(wrapper.get('[data-testid="agents-session-pane"]').attributes('style')).toContain('display: none')
+
+    await wrapper.get('[data-testid="panel-tab-close-docs"]').trigger('click')
     await flushPromises()
-    await setDoc(router, undefined)
+    expect(wrapper.get('[data-testid="agents-session-pane"]').attributes('style') ?? '').not.toContain('display: none')
+  })
+
+  it("sees the open chat's write while the Drive tab is shown, and not behind the terminal tab", async () => {
+    const { wrapper, router } = await mountWithOpenChat()
+    await setDoc(router, '1')
+    const write = () =>
+      wailsEvents.fire('drive:updated', { space: 'workspaces/web-app', paths: ['x.md'], session: '7', hiveSession: '' })
+
+    write()
+    await flushPromises()
     expect(useDriveActivity().isUnseen('7')).toBe(false)
 
-    wailsEvents.fire('drive:updated', { space: 'workspaces/web-app', paths: ['x.md'], session: '7', hiveSession: '' })
+    await wrapper.get('[data-testid="panel-tab-window:w1"] [role="tab"]').trigger('click')
+    await flushPromises()
+    write()
     await flushPromises()
     expect(useDriveActivity().isUnseen('7')).toBe(true)
+    expect(wrapper.find('[data-testid="panel-tab-attention-docs"]').exists()).toBe(true)
 
-    await setDoc(router, '1')
+    await wrapper.get('[data-testid="panel-tab-docs"] [role="tab"]').trigger('click')
+    await flushPromises()
     expect(useDriveActivity().isUnseen('7')).toBe(false)
+  })
+
+  it('names the window tab after the chat and stops the chat from its close button', async () => {
+    const client = fakeClient()
+    client.allSessions.mockResolvedValue([{ ...chatRow, name: 'Refactor auth' }])
+    const { wrapper } = await mountWithOpenChat(client)
+
+    expect(wrapper.get('[data-testid="panel-tab-window:w1"]').text()).toContain('Refactor auth')
+
+    await wrapper.get('[data-testid="panel-tab-close-window:w1"]').trigger('click')
+    await flushPromises()
+
+    expect(client.closeSession).toHaveBeenCalledWith('7')
+  })
+
+  it("keeps the chat's layout under the Chats key, and forgets it when the chat stops", async () => {
+    const { wrapper, router } = await mountWithOpenChat()
+    await setDoc(router, '1')
+    await nextTick()
+
+    expect(JSON.parse(localStorage.getItem('hive.chats.panel-layouts') ?? '{}')).toHaveProperty('7')
+    expect(localStorage.getItem('hive.code.panel-layouts')).toBeNull()
+
+    wrapper.findComponent(AgentsSidebar).vm.$emit('close-session', { ...chatRow })
+    await flushPromises()
+    await nextTick()
+
+    expect(JSON.parse(localStorage.getItem('hive.chats.panel-layouts') ?? '{}')).not.toHaveProperty('7')
   })
 })

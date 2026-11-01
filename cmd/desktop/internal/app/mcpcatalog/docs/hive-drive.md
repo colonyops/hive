@@ -1,8 +1,8 @@
 # Hive Drive
 
 The `hive-drive` MCP server is an agent's output surface. Its tools put
-documents in front of the user, in a pane beside the conversation, in a chat
-or in a Code session, while the session keeps running. It is the difference
+documents in front of the user, in the Drive tab of a chat or a Code
+session, while the session keeps running. It is the difference
 between describing a plan in terminal scrollback and handing the user one to
 read (ADR hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it).
 
@@ -30,9 +30,9 @@ It is one of three things:
   checkout itself.
 - Outside a chat and a hive session it is the word `global`, and the space is
   `shared`. A directory inside no hive session is `not_found`, not global:
-  pass `global` yourself. The shared space has no pane, so `open_document`,
-  `open_canvas` and `close_canvas` refuse it; the user reads it in the drive
-  view.
+  pass `global` yourself. The shared space sits beside no chat or session and has
+  no Drive tab, so `open_document`, `open_canvas` and `close_canvas` refuse it;
+  the user reads it in the Drive page.
 
 ## Paths and kinds
 
@@ -99,12 +99,15 @@ either key in the tool. Copy and save include all of them in a YAML header.
   Answers with the entry at its new path.
 - `delete_document`: delete a document, a canvas, or an empty folder, and
   answer with the path deleted. There is no recursive delete and no trash.
-- `open_document`: ask to open the pane beside this chat or session, showing
-  the document at `path` when you give one. It must exist.
+- `open_document`: ask to show a document in this chat's or session's Drive
+  tab, the one at `path` when you give one. It must exist. With no Drive tab
+  open, Hive adds one behind the tab in front, with an unseen dot; it never
+  takes the screen from what the user is doing.
 
-The pane does not open by itself: a write while it is closed lights an unseen
-dot on its toggle. Open it when something is finished and worth reading, not
-on every write. Opening is best-effort: it applies only while the user is
+A write while a Drive tab is open behind another tab lights a dot on that tab.
+With no Drive tab open, a write shows nothing until the user opens Drive, so
+call `open_document` when something is finished and worth reading now, not on
+every write. Opening is best-effort: it applies only while the user is
 viewing this chat or session, and there is no acknowledgment either way.
 
 ## Canvases
@@ -147,8 +150,9 @@ The canvas tools:
   order.
 - `list_canvases`: every canvas in the space, including ones earlier chats
   made, most recently updated first.
-- `open_canvas` / `close_canvas`: ask to show or hide the pane, optionally
-  pinned to one canvas. They follow the same rules as `open_document`.
+- `open_canvas` / `close_canvas`: ask to show a canvas in the Drive tab,
+  optionally pinned to one canvas, or to close the tab (documents are
+  untouched). They follow the same rules as `open_document`.
 
 ## Writing a Mermaid diagram
 
@@ -178,7 +182,7 @@ support can render the exported diagram too.
 
 How a block looks is yours. Any class, any `style` attribute, any colour or
 size — nothing in the allowlist is second-guessed, and a block renders inside
-the pane it was written for, so it cannot paint over the rest of the app.
+the tab it was written for, so it cannot paint over the rest of the app.
 
 What a block may **reach** is not yours: no script, no event handler, no
 embedded document, and links only to `http`, `https` or `mailto`. A write that
@@ -219,7 +223,7 @@ and `alt` on `img`, `colspan`/`rowspan` and `scope` on cells, `open` on
 
 **Layout** — `hv-stack` (vertical, evenly spaced), `hv-row` (horizontal,
 wraps), `hv-grid` with one of `hv-cols-2`, `hv-cols-3`, `hv-cols-4`, `hv-cols-5`,
-`hv-cols-6` (equal columns; they collapse to one when the pane is narrow, and
+`hv-cols-6` (equal columns; they collapse to one when the panel is narrow, and
 five or six drop to three first, so pick for the content, not for a width you
 cannot see).
 
@@ -250,9 +254,9 @@ Prose and boxes cannot say which node feeds which, or which path is a return
 path. Draw that as an `svg`: you place the geometry, Hive picks the size and
 every colour, exactly as it does for the classes above.
 
-Give the `svg` a `viewBox` and it scales to whatever width the user dragged
-the pane to, which is usually what you want. State a `width` and `height`
-instead and it keeps that size, up to the width of the pane.
+Give the `svg` a `viewBox` and it scales to whatever width the user sized
+the panel to, which is usually what you want. State a `width` and `height`
+instead and it keeps that size, up to the width of the panel.
 
 The role classes below are defaults, not rules. An unclassed shape still
 follows the theme; a `fill` or `stroke` attribute, or a `style`, overrides

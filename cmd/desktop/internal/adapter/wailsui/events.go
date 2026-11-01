@@ -57,10 +57,10 @@ func registerEvents() struct{} {
 	// for a write an agent made through the desktop, its chat or hive
 	// session. The payload is a per-space delta with an author, so every
 	// event has to reach the frontend: the subscription buffers rather than
-	// coalesces, and a pane re-reads the named space on receipt.
+	// coalesces, and a Drive tab re-reads the named space on receipt.
 	application.RegisterEvent[DriveWrite](driveUpdatedEvent)
-	// drive:toggle carries an agent's ask to open or close the drive pane
-	// beside its chat. Pane visibility is UI intent, not state to re-read, so
+	// drive:toggle carries an agent's ask to open or close the Drive tab
+	// of its chat or Code session. Whether a tab is open is UI intent, not state to re-read, so
 	// the payload is the whole message; coalescing keeps only the latest ask,
 	// which is the final intent anyway.
 	application.RegisterEvent[DriveToggle](driveToggleEvent)
@@ -228,9 +228,9 @@ func emitDriveUpdated(write DriveWrite) {
 	emitEvent(driveUpdatedEvent, write)
 }
 
-// DriveToggle is the drive:toggle payload: whose pane to open or close, a
+// DriveToggle is the drive:toggle payload: whose Drive tab to open or close, a
 // chat's or a hive session's, and the document to pin when opening (empty
-// leaves the pane's pick).
+// leaves the tab's pick).
 type DriveToggle struct {
 	Session     string `json:"session"`
 	HiveSession string `json:"hiveSession"`

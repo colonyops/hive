@@ -47,7 +47,7 @@ type Area string
 //	drive   Space, Path
 //
 // Slug is a tmux session name, so a code link also reaches a session hive did
-// not create. Canvas on a code or chats link opens the pane beside it; on a
+// not create. Canvas on a code or chats link opens the session's Drive tab on that canvas; on a
 // canvas link it is the canvas the full-page view opens.
 type Location struct {
 	Area      Area   `json:"area"`
