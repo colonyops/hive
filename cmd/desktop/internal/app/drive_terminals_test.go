@@ -35,6 +35,10 @@ func (r *recordingRunner) Interactive(context.Context, multiplexer.AttachStreams
 	return errors.New("unused")
 }
 
+func TestKillWindowArgsNameTheSessionAndWindow(t *testing.T) {
+	assert.Equal(t, []string{"kill-window", "-t", "=fix-login:@4"}, killWindowArgs("fix-login", "@4"))
+}
+
 func TestNewWindowArgsStartsDetachedInTheCheckout(t *testing.T) {
 	assert.Equal(t,
 		[]string{"new-window", "-d", "-t", "=fix-login:", "-c", "/work/site", "-P", "-F", "#{window_id}"},

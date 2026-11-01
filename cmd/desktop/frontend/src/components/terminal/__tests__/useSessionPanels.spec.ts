@@ -1,7 +1,7 @@
 import { effectScope, nextTick, ref } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { openTab, panelsOf, selectTab, splitPanel } from '../../../lib/panelLayout'
+import { focusPanel, openTab, panelsOf, selectTab, splitBoxes, splitPanel } from '../../../lib/panelLayout'
 import { paneMayAutoFocus } from '../../../lib/terminalTree'
 import { focusedWindow, placeWindow, windowTab } from '../../../lib/windowTabs'
 import { usePanelLayouts } from '../../../stores/usePanelLayouts'
@@ -198,6 +198,73 @@ describe('useSessionPanels', () => {
       const [left, right] = panelsOf(layoutNow())
       expect(left.tabs.map((tab) => tab.id)).toEqual(['window:@1', 'window:@3'])
       expect(right.tabs.map((tab) => tab.id)).toEqual(['window:@2'])
+    })
+
+    it('stacks the panel below the focused one when it goes below', async () => {
+      const source = fakeSource(['@1'])
+      const { panels } = mountPanels(source)
+      await flushPromises()
+
+      panels.placeArrivingWindow('@2', 'below')
+      source.windowIds.value = ['@1', '@2']
+      await flushPromises()
+
+      const [top, bottom] = panelsOf(layoutNow())
+      expect(splitBoxes(layoutNow()).map(({ split }) => split.axis)).toEqual(['column'])
+      expect(top.tabs.map((tab) => tab.id)).toEqual(['window:@1'])
+      expect(bottom.tabs.map((tab) => tab.id)).toEqual(['window:@2'])
+      expect(layoutNow().focusedPanel).toBe('p0')
+    })
+
+    it('moves a tab that is already there into a column split', async () => {
+      const source = fakeSource(['@1', '@2'])
+      const { panels } = mountPanels(source)
+      await flushPromises()
+
+      panels.placeArrivingWindow('@2', 'below')
+
+      expect(splitBoxes(layoutNow()).map(({ split }) => split.axis)).toEqual(['column'])
+      expect(panelsOf(layoutNow())[1].activeTab).toBe('window:@2')
+    })
+
+    // p0 holds @1 and p1 holds @3, with the keyboard in p1.
+    function splitWithKeyboardInSecond(): void {
+      usePanelLayouts().apply(KEY, (layout) => {
+        const split = splitPanel(layout, 'p0', 'row')
+        return focusPanel(placeWindow(split, '@3', 'p1'), 'p1')
+      })
+    }
+
+    it('splits the anchor panel, not the focused one', async () => {
+      const source = fakeSource(['@1', '@3'])
+      const { panels } = mountPanels(source)
+      await flushPromises()
+      splitWithKeyboardInSecond()
+
+      panels.placeArrivingWindow('@2', 'beside', 'p0')
+      source.windowIds.value = ['@1', '@3', '@2']
+      await flushPromises()
+
+      expect(layoutNow().focusedPanel).toBe('p1')
+      const byId = new Map(panelsOf(layoutNow()).map((panel) => [panel.id, panel.tabs.map((tab) => tab.id)]))
+      expect(byId.get('p0')).toEqual(['window:@1'])
+      expect(byId.get('p1')).toEqual(['window:@3'])
+      expect(byId.get('p2')).toEqual(['window:@2'])
+    })
+
+    it('lands behind in the anchor panel when that is not the focused one', async () => {
+      const source = fakeSource(['@1', '@3'])
+      const { panels } = mountPanels(source)
+      await flushPromises()
+      splitWithKeyboardInSecond()
+
+      panels.placeArrivingWindow('@2', 'behind', 'p0')
+      source.windowIds.value = ['@1', '@3', '@2']
+      await flushPromises()
+
+      expect(panelsOf(layoutNow())[0].tabs.map((tab) => tab.id)).toEqual(['window:@1', 'window:@2'])
+      expect(panelsOf(layoutNow())[1].tabs.map((tab) => tab.id)).toEqual(['window:@3'])
+      expect(layoutNow().focusedPanel).toBe('p1')
     })
   })
 

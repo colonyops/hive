@@ -35,9 +35,11 @@ import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { useChatPanels } from './agents/useChatPanels'
-import { useSessionTabs } from './panels/useSessionTabs'
+import { useSessionLayout } from './panels/useSessionLayout'
+import { closePanelRule, focusRule, moveRule, openViewRule, resizeRule, turnRule } from './panels/sessionTabRefs'
 import { docsScopeOf, viewOfTab, viewTab, withDocsScope, type SessionViewKind } from './terminal/panelViews'
 import { useDriveActivity } from '../stores/useDriveActivity'
+import { useChatPanelLayouts } from '../stores/usePanelLayouts'
 import { useNewSession } from '../composables/useNewSession'
 import { usePaintedActive } from '../composables/usePaintedActive'
 import { usePerf } from '../composables/usePerf'
@@ -45,8 +47,6 @@ import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXter
 import { workspaceSpaceKey, type DriveScope } from '../lib/drive'
 import { agentIconID } from '../lib/agentIcon'
 import {
-  addTabBeside,
-  addTabQuietly,
   closePanel,
   closeTab,
   focusPanel,
@@ -226,13 +226,14 @@ function scopeAt(path: string | null): DriveScope | null {
   return base && path ? { ...base, path } : base
 }
 
-useSessionTabs('agents', driveTarget, () => props.active, {
+useSessionLayout('agents', driveTarget, () => props.active, {
   ready: () => paneStatus.value === 'live' && openSessionId.value === routeChatId.value,
   reveal: (path) => panels.apply((current) => withDocsScope(openTab(current, viewTab('docs')), scopeAt(path))),
-  open: (view, path, placement) => {
+  open: (view, path, placement, anchor) => {
     if (!chatViews.includes(view)) return
-    const place = placement === 'beside' ? addTabBeside : addTabQuietly
-    panels.apply((current) => withDocsScope(place(current, viewTab('docs')), scopeAt(path)))
+    panels.apply((current) =>
+      withDocsScope(openViewRule(current, viewTab('docs'), placement, anchor, paneWindowId.value), scopeAt(path)),
+    )
   },
   close: (view) =>
     panels.apply((current) => {
@@ -240,7 +241,19 @@ useSessionTabs('agents', driveTarget, () => props.active, {
       const panel = panelWithTab(current, tab.id)
       return panel ? closeTab(current, panel.id, tab.id) : current
     }),
+  move: (tab, placement, anchor) =>
+    panels.apply((current) => moveRule(current, tab, placement, anchor, paneWindowId.value)),
+  focus: (tab) => panels.apply((current) => focusRule(current, tab, paneWindowId.value)),
+  closePanel: (tab) => panels.apply((current) => closePanelRule(current, tab, paneWindowId.value)),
+  resize: (tab, share) => panels.apply((current) => resizeRule(current, tab, share, paneWindowId.value)),
+  turn: (tab) => panels.apply((current) => turnRule(current, tab, paneWindowId.value)),
 })
+
+const chatLayouts = useChatPanelLayouts()
+watch([() => props.active, panels.key], ([active, key]) => chatLayouts.markOnScreen(active ? key : ''), {
+  immediate: true,
+})
+onBeforeUnmount(() => chatLayouts.markOnScreen(''))
 
 function setupDrive(): void {
   const workspace = workspaces.value.find((candidate) => candidate.dir === paneWorkspaceDir.value)

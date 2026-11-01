@@ -59,10 +59,10 @@ func registerEvents() struct{} {
 	// event has to reach the frontend: the subscription buffers rather than
 	// coalesces, and a Drive tab re-reads the named space on receipt.
 	application.RegisterEvent[DriveWrite](driveUpdatedEvent)
-	// session:tab carries an agent's ask to open or close one tab beside its
-	// chat or Code session. Whether a tab is open is UI intent, not state to
-	// re-read, so the payload is the whole message.
-	application.RegisterEvent[SessionTab](sessionTabEvent)
+	// session:layout carries an agent's ask to change the panel layout beside
+	// its chat or Code session. The layout is UI intent, not state to re-read,
+	// so the payload is the whole message.
+	application.RegisterEvent[SessionLayout](sessionLayoutEvent)
 	// schedules:updated carries the workspace whose scheduled chats changed:
 	// its manifest was written, or one of its schedules ran. The Chats area
 	// re-reads its workspace and chat lists on receipt.
@@ -143,10 +143,11 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 			emitDriveUpdated(DriveWrite{Space: e.Space, Paths: e.Paths, Session: e.Session, HiveSession: e.HiveSession})
 		}),
 		// Buffered, not coalesced: asks for two views in a row are two intents.
-		events.Subscribe(ctx, bus, "wailsui.session-tab", events.Buffer(16), func(_ context.Context, e events.SessionTabRequested) {
-			emitSessionTab(SessionTab{
-				Session: e.Session, HiveSession: e.HiveSession, Space: e.Space,
-				View: e.View, Path: e.Path, Window: e.Window, Placement: e.Placement, Open: e.Open,
+		events.Subscribe(ctx, bus, "wailsui.session-layout", events.Buffer(16), func(_ context.Context, e events.SessionLayoutRequested) {
+			emitSessionLayout(SessionLayout{
+				Session: e.Session, HiveSession: e.HiveSession, Space: e.Space, Verb: e.Verb,
+				View: e.View, Window: e.Window, AnchorView: e.AnchorView, AnchorWindow: e.AnchorWindow,
+				Path: e.Path, Placement: e.Placement, Share: e.Share,
 			})
 		}),
 		events.Subscribe(ctx, bus, "wailsui.schedules", events.Coalesce(), func(_ context.Context, e events.SchedulesUpdated) {
@@ -209,8 +210,8 @@ func emitActivityAppended(id int64) {
 }
 
 const (
-	driveUpdatedEvent = "drive:updated"
-	sessionTabEvent   = "session:tab"
+	driveUpdatedEvent  = "drive:updated"
+	sessionLayoutEvent = "session:layout"
 )
 
 // DriveWrite is the drive:updated payload: the space and the document paths
@@ -228,23 +229,28 @@ func emitDriveUpdated(write DriveWrite) {
 	emitEvent(driveUpdatedEvent, write)
 }
 
-// SessionTab is the session:tab payload: whose tab to open or close, a chat's
-// or a hive session's, which view, for the Drive view the document to pin
-// (empty leaves the tab's pick), and for the terminal view the tmux window id
-// to show. Placement is behind or beside.
-type SessionTab struct {
-	Session     string `json:"session"`
-	HiveSession string `json:"hiveSession"`
-	Space       string `json:"space"`
-	View        string `json:"view"`
-	Path        string `json:"path"`
-	Window      string `json:"window"`
-	Placement   string `json:"placement"`
-	Open        bool   `json:"open"`
+// SessionLayout is the session:layout payload: whose layout to change, a
+// chat's or a hive session's, and the verb (open, close, move, focus,
+// close_panel, resize or turn). View and Window name the tab acted on, and
+// AnchorView and AnchorWindow the tab an open or move places relative to.
+// Path pins a Drive document on open, Placement is behind, beside or below,
+// and Share is the resize share (0 when unused).
+type SessionLayout struct {
+	Session      string  `json:"session"`
+	HiveSession  string  `json:"hiveSession"`
+	Space        string  `json:"space"`
+	Verb         string  `json:"verb"`
+	View         string  `json:"view"`
+	Window       string  `json:"window"`
+	AnchorView   string  `json:"anchorView"`
+	AnchorWindow string  `json:"anchorWindow"`
+	Path         string  `json:"path"`
+	Placement    string  `json:"placement"`
+	Share        float64 `json:"share"`
 }
 
-func emitSessionTab(tab SessionTab) {
-	emitEvent(sessionTabEvent, tab)
+func emitSessionLayout(layout SessionLayout) {
+	emitEvent(sessionLayoutEvent, layout)
 }
 
 // emitEvent is the drive emitters' door to the webview. A var so a test can

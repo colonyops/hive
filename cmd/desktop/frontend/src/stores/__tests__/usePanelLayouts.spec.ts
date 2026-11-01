@@ -85,4 +85,24 @@ describe('usePanelLayouts', () => {
     expect(panelsOf(useChatPanelLayouts().layoutOf('7'))[0].tabs).toHaveLength(1)
     expect(JSON.parse(localStorage.getItem('hive.chats.panel-layouts') ?? '{}')).toHaveProperty('7')
   })
+
+  it('tracks the key on screen, apart from the Chats store', () => {
+    usePanelLayouts().markOnScreen('a')
+
+    expect(usePanelLayouts().onScreen.value).toBe('a')
+    expect(useChatPanelLayouts().onScreen.value).toBe('')
+
+    usePanelLayouts().markOnScreen('')
+    expect(usePanelLayouts().onScreen.value).toBe('')
+  })
+
+  it('exposes every stored layout for a reader that watches them', async () => {
+    const layouts = usePanelLayouts()
+    layouts.apply('a', (layout) => openTab(layout, docs))
+    layouts.apply('b', (layout) => splitPanel(layout, 'p0', 'row'))
+    await nextTick()
+
+    expect(Object.keys(layouts.layouts.value)).toEqual(['a', 'b'])
+    expect(panelsOf(layouts.layouts.value.b)).toHaveLength(2)
+  })
 })

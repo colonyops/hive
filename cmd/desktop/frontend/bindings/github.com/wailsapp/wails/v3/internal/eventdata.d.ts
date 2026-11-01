@@ -25,7 +25,7 @@ declare module "@wailsio/runtime" {
             "notification:activated": wailsui$0.NotificationActivation;
             "notification:toast": wailsui$0.NotificationToast;
             "schedules:updated": string;
-            "session:tab": wailsui$0.SessionTab;
+            "session:layout": wailsui$0.SessionLayout;
             "sessions:create-failed": string;
             "sessions:updated": string;
             "tasks:updated": string;

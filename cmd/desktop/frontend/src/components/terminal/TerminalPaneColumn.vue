@@ -36,8 +36,6 @@ import type { AgentIconID } from '../../lib/agentIcon'
 import type { DriveScope } from '../../lib/drive'
 import { launcherIconComponent } from '../../lib/launcherIcons'
 import {
-  addTabBeside,
-  addTabQuietly,
   closePanel,
   closeTab,
   focusPanel,
@@ -53,6 +51,7 @@ import { offscreenWindows, placeWindow, terminalPanel, windowIdOf } from '../../
 import { activePaneOf } from '../../lib/terminalLayout'
 import { terminalTreeFocused } from '../../lib/terminalTree'
 import { useDriveActivity } from '../../stores/useDriveActivity'
+import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { useTasks } from '../../stores/useTasks'
 import { useTerminalStatusBar } from '../../stores/useTerminalStatusBar'
 import {
@@ -61,7 +60,16 @@ import {
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { docsScopeOf, viewOfTab, viewTab, withDocsScope } from './panelViews'
 import { useTerminalModeContext } from './terminalModeContext'
-import { useSessionTabs, type SessionDriveTarget } from '../panels/useSessionTabs'
+import { useSessionLayout, type SessionDriveTarget } from '../panels/useSessionLayout'
+import {
+  anchorPanelOf,
+  closePanelRule,
+  focusRule,
+  moveRule,
+  openViewRule,
+  resizeRule,
+  turnRule,
+} from '../panels/sessionTabRefs'
 
 // Its diff library and highlighter load only when a Diff tab opens.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
@@ -312,15 +320,14 @@ function scopeAt(path: string | null): DriveScope | null {
   return base && path ? { ...base, path } : base
 }
 
-useSessionTabs('terminal', toRef(props, 'drive'), () => props.active, {
+useSessionLayout('terminal', toRef(props, 'drive'), () => props.active, {
   // Tabs are keyed by the row's id, so a request has to wait for the row.
   ready: () => !!panels.row && pool.activeSlug === pool.visibleSlug,
   reveal: (path) => panels.apply((current) => withDocsScope(openTab(current, viewTab('docs')), scopeAt(path))),
-  open: (view, path, placement) => {
+  open: (view, path, placement, anchor) => {
     if (!panels.row || !panels.viewsFor(panels.row).includes(view)) return
-    const place = placement === 'beside' ? addTabBeside : addTabQuietly
     panels.apply((current) => {
-      const placed = place(current, viewTab(view))
+      const placed = openViewRule(current, viewTab(view), placement, anchor)
       return view === 'docs' ? withDocsScope(placed, scopeAt(path)) : placed
     })
   },
@@ -330,10 +337,26 @@ useSessionTabs('terminal', toRef(props, 'drive'), () => props.active, {
       const panel = panelWithTab(current, tab.id)
       return panel ? closeTab(current, panel.id, tab.id) : current
     }),
-  openWindow: (windowId, placement) => {
-    if (panels.row && !tree.isChat(panels.row)) panels.placeArrivingWindow(windowId, placement)
+  openWindow: (windowId, placement, anchor) => {
+    if (panels.row && !tree.isChat(panels.row)) {
+      panels.placeArrivingWindow(windowId, placement, anchorPanelOf(layout.value, anchor))
+    }
   },
+  move: (tab, placement, anchor) => {
+    panels.apply((current) => moveRule(current, tab, placement, anchor))
+    if (tab.view === 'terminal' && tab.window) panels.syncWindowOrder(tab.window)
+  },
+  focus: (tab) => panels.apply((current) => focusRule(current, tab)),
+  closePanel: (tab) => panels.apply((current) => closePanelRule(current, tab)),
+  resize: (tab, share) => panels.apply((current) => resizeRule(current, tab, share)),
+  turn: (tab) => panels.apply((current) => turnRule(current, tab)),
 })
+
+const panelLayouts = usePanelLayouts()
+watch([() => props.active, () => panels.key], ([active, key]) => panelLayouts.markOnScreen(active ? key : ''), {
+  immediate: true,
+})
+onBeforeUnmount(() => panelLayouts.markOnScreen(''))
 
 // The full page knows nothing about authors. A Drive tab on screen is the user
 // reading, and one behind another tab is not, so a write there still earns its dot.

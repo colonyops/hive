@@ -120,6 +120,7 @@ func TestCanvasToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"put_block", "put_blocks", "remove_block", "set_frontmatter", "clear_canvas", "delete_canvas", "read_canvas", "list_canvases",
 		"list_documents", "read_document", "write_document", "move_document", "delete_document", "open_tab", "close_tab",
+		"move_tab", "focus_tab", "close_panel", "resize_split", "turn_split", "get_layout",
 	}, names)
 }
 

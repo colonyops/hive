@@ -112,33 +112,16 @@ func TestSubscribeEmitsDriveEventsUnderTheirFrontendNames(t *testing.T) {
 		data: DriveWrite{Space: "acme/site", Paths: []string{"plans/a.md"}, HiveSession: "abc123"},
 	}, receiveEmitted(t, sink))
 
-	bus.Publish(t.Context(), events.SessionTabRequested{
-		Session: "7", Space: "workspaces/ws", View: "drive", Path: "canvases/plan.canvas.json", Placement: "beside", Open: true,
+	bus.Publish(t.Context(), events.SessionLayoutRequested{
+		Session: "7", Space: "workspaces/ws", Verb: "open", View: "drive", Path: "canvases/plan.canvas.json", Placement: "beside",
 	})
 	require.Equal(t, emitted{
-		name: "session:tab",
-		data: SessionTab{Session: "7", Space: "workspaces/ws", View: "drive", Path: "canvases/plan.canvas.json", Placement: "beside", Open: true},
+		name: "session:layout",
+		data: SessionLayout{Session: "7", Space: "workspaces/ws", Verb: "open", View: "drive", Path: "canvases/plan.canvas.json", Placement: "beside"},
 	}, receiveEmitted(t, sink))
 }
 
-func TestSubscribeCarriesTheTerminalWindowOfASessionTab(t *testing.T) {
-	sink := make(chan emitted, 1)
-	swapEmitEvent(t, sink)
-
-	bus := events.New(zerolog.Nop())
-	t.Cleanup(bus.Close)
-	cancel := Subscribe(t.Context(), bus, nil)
-	t.Cleanup(cancel)
-
-	bus.Publish(t.Context(), events.SessionTabRequested{HiveSession: "abc123", Space: "acme/site", View: "terminal", Window: "@3", Placement: "beside", Open: true})
-	require.Equal(t, emitted{
-		name: "session:tab",
-		data: SessionTab{HiveSession: "abc123", Space: "acme/site", View: "terminal", Window: "@3", Placement: "beside", Open: true},
-	}, receiveEmitted(t, sink))
-}
-
-// Two asks for two views in a row are two intents, so none may coalesce away.
-func TestSubscribeEmitsEverySessionTabRequestInOrder(t *testing.T) {
+func TestSubscribeCarriesTheWindowsAndShareOfASessionLayout(t *testing.T) {
 	sink := make(chan emitted, 2)
 	swapEmitEvent(t, sink)
 
@@ -147,15 +130,44 @@ func TestSubscribeEmitsEverySessionTabRequestInOrder(t *testing.T) {
 	cancel := Subscribe(t.Context(), bus, nil)
 	t.Cleanup(cancel)
 
-	bus.Publish(t.Context(), events.SessionTabRequested{HiveSession: "abc123", Space: "acme/site", View: "diff", Placement: "behind", Open: true})
-	bus.Publish(t.Context(), events.SessionTabRequested{HiveSession: "abc123", Space: "acme/site", View: "tasks", Placement: "behind", Open: true})
+	bus.Publish(t.Context(), events.SessionLayoutRequested{
+		HiveSession: "abc123", Space: "acme/site", Verb: "move", View: "terminal", Window: "@3",
+		AnchorView: "terminal", AnchorWindow: "@1", Placement: "below",
+	})
 	require.Equal(t, emitted{
-		name: "session:tab",
-		data: SessionTab{HiveSession: "abc123", Space: "acme/site", View: "diff", Placement: "behind", Open: true},
+		name: "session:layout",
+		data: SessionLayout{
+			HiveSession: "abc123", Space: "acme/site", Verb: "move", View: "terminal", Window: "@3",
+			AnchorView: "terminal", AnchorWindow: "@1", Placement: "below",
+		},
+	}, receiveEmitted(t, sink))
+
+	bus.Publish(t.Context(), events.SessionLayoutRequested{HiveSession: "abc123", Space: "acme/site", Verb: "resize", View: "diff", Share: 0.3})
+	require.Equal(t, emitted{
+		name: "session:layout",
+		data: SessionLayout{HiveSession: "abc123", Space: "acme/site", Verb: "resize", View: "diff", Share: 0.3},
+	}, receiveEmitted(t, sink))
+}
+
+// Two asks in a row are two intents, so none may coalesce away.
+func TestSubscribeEmitsEverySessionLayoutRequestInOrder(t *testing.T) {
+	sink := make(chan emitted, 2)
+	swapEmitEvent(t, sink)
+
+	bus := events.New(zerolog.Nop())
+	t.Cleanup(bus.Close)
+	cancel := Subscribe(t.Context(), bus, nil)
+	t.Cleanup(cancel)
+
+	bus.Publish(t.Context(), events.SessionLayoutRequested{HiveSession: "abc123", Space: "acme/site", Verb: "open", View: "diff", Placement: "behind"})
+	bus.Publish(t.Context(), events.SessionLayoutRequested{HiveSession: "abc123", Space: "acme/site", Verb: "open", View: "tasks", Placement: "behind"})
+	require.Equal(t, emitted{
+		name: "session:layout",
+		data: SessionLayout{HiveSession: "abc123", Space: "acme/site", Verb: "open", View: "diff", Placement: "behind"},
 	}, receiveEmitted(t, sink))
 	require.Equal(t, emitted{
-		name: "session:tab",
-		data: SessionTab{HiveSession: "abc123", Space: "acme/site", View: "tasks", Placement: "behind", Open: true},
+		name: "session:layout",
+		data: SessionLayout{HiveSession: "abc123", Space: "acme/site", Verb: "open", View: "tasks", Placement: "behind"},
 	}, receiveEmitted(t, sink))
 }
 

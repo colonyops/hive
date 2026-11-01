@@ -68,24 +68,32 @@ type DriveChanged struct {
 	HiveSession string
 }
 
-// SessionTabRequested reports an agent asked to open or close one tab beside
-// its chat or Code session. Unlike the wake-up events the payload is the
-// whole message: whether a tab is open is UI intent, not stored state to
-// re-read. The asker is a chat (Session) or a hive session (HiveSession),
-// never both. View is drive, diff, tasks or terminal. Path pins one document of
-// Space in the Drive view; empty leaves the tab's own pick. Window is the tmux
-// window id (@3) a terminal tab shows, already started or found; empty for the
-// other views. Placement is behind or beside and applies only when opening; an
-// empty one on a close is unused.
-type SessionTabRequested struct {
-	Session     string
-	HiveSession string
-	Space       string
-	View        string
-	Path        string
-	Window      string
-	Placement   string
-	Open        bool
+// SessionLayoutRequested reports an agent asked to change the panel layout
+// beside its chat or Code session. Unlike the wake-up events the payload is
+// the whole message: the layout is UI intent held by the browser, not stored
+// state to re-read. The asker is a chat (Session) or a hive session
+// (HiveSession), never both.
+//
+// Verb is open, close, move, focus, close_panel, resize or turn. View and
+// Window name the tab acted on: View is drive, diff, tasks or terminal, and
+// Window is the tmux window id (@3) of a Code session's terminal, empty for
+// the other views and for a chat's one terminal. AnchorView and AnchorWindow
+// name the tab an open or move places relative to, empty for the tab in front
+// of the focused panel. Path pins one document of Space in the Drive view on
+// open; empty leaves the tab's own pick. Placement is behind, beside or below
+// and applies to open and move. Share is the resize share, 0 when unused.
+type SessionLayoutRequested struct {
+	Session      string
+	HiveSession  string
+	Space        string
+	Verb         string
+	View         string
+	Window       string
+	AnchorView   string
+	AnchorWindow string
+	Path         string
+	Placement    string
+	Share        float64
 }
 
 // SchedulesUpdated reports that a workspace's manifest was written or one of
@@ -127,7 +135,7 @@ func (ActionsUpdated) eventName() string         { return "actions.updated" }
 func (MenuBarUpdated) eventName() string         { return "menu-bar.updated" }
 func (AgentWorkspacesUpdated) eventName() string { return "agent-workspaces.updated" }
 func (DriveChanged) eventName() string           { return "drive.changed" }
-func (SessionTabRequested) eventName() string    { return "session.tab-requested" }
+func (SessionLayoutRequested) eventName() string { return "session.layout-requested" }
 func (SchedulesUpdated) eventName() string       { return "schedules.updated" }
 func (ConnectionUpdated) eventName() string      { return "connection.updated" }
 func (NotificationRaised) eventName() string     { return "notification.raised" }

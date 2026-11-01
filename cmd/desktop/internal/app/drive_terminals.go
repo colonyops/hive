@@ -20,6 +20,10 @@ type sessionTerminals interface {
 	// FindWindow answers the id of the session's window that idOrName names:
 	// a tmux id (@3) or an exact window name. A miss is KindNotFound.
 	FindWindow(ctx context.Context, slug, idOrName string) (string, error)
+	// WindowNames answers the name of each of the session's windows by id.
+	WindowNames(ctx context.Context, slug string) (map[string]string, error)
+	// CloseWindow kills a window and everything running in it.
+	CloseWindow(ctx context.Context, slug, windowID string) error
 }
 
 var windowIDPattern = regexp.MustCompile(`^@[0-9]+$`)
@@ -79,6 +83,32 @@ func newWindowArgs(slug, dir, name, command string) []string {
 		args = append(args, "--", "sh", "-c", command+"\n"+`exec "${SHELL:-sh}" -l`)
 	}
 	return args
+}
+
+// CloseWindow goes through the runner, not an attached control client, so a
+// window closes whether or not the session is open in Code.
+func (t *tmuxWindows) CloseWindow(ctx context.Context, slug, windowID string) error {
+	_, stderr, err := t.runner.Capture(ctx, killWindowArgs(slug, windowID)...)
+	if err != nil {
+		return fmt.Errorf("tmux kill-window %s in %s: %w: %s", windowID, slug, err, strings.TrimSpace(string(stderr)))
+	}
+	return nil
+}
+
+func killWindowArgs(slug, windowID string) []string {
+	return []string{"kill-window", "-t", "=" + slug + ":" + windowID}
+}
+
+func (t *tmuxWindows) WindowNames(ctx context.Context, slug string) (map[string]string, error) {
+	windows, err := t.listWindows(ctx, slug)
+	if err != nil {
+		return nil, terminalError(err, "listing the windows of session %q", slug)
+	}
+	names := make(map[string]string, len(windows))
+	for _, w := range windows {
+		names[w.ID] = w.Name
+	}
+	return names, nil
 }
 
 func (t *tmuxWindows) FindWindow(ctx context.Context, slug, idOrName string) (string, error) {

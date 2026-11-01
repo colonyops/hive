@@ -7,18 +7,23 @@ import {
   closePanel,
   closeTab,
   focusPanel,
+  focusTab,
   focusedTab,
   isPanelLayout,
   moveTab,
+  moveTabBehind,
   moveTabBeside,
+  moveTabToSplit,
   newPanelLayout,
   openTab,
   orderedTabs,
   panelBoxes,
   panelsOf,
+  parentSplitOf,
   placeTab,
   placeTabBeside,
   resizeSplit,
+  resizeSplitFor,
   selectTab,
   shownTabs,
   splitBoxes,
@@ -26,6 +31,7 @@ import {
   syncTabs,
   tabById,
   turnSplit,
+  turnSplitFor,
   withTabParams,
   type PanelLayout,
   type PanelTab,
@@ -261,6 +267,196 @@ describe('placeTabBeside', () => {
     const layout = placeTabBeside(attached('@1', '@2'), win('@2'))
     expect(layout.focusedPanel).toBe('p0')
     expect(focusedTab(layout)).toBe('window:@1')
+  })
+})
+
+describe('placing against an anchor panel', () => {
+  // p0 holds @1 and diff; p1 holds @2 and sits beside it.
+  function twoPanels(): PanelLayout {
+    const layout = splitWith(openTab(attached('@1', '@2'), view('diff')), '@2')
+    return focusPanel(layout, 'p0')
+  }
+
+  it('stacks a new tab below the focused panel', () => {
+    const layout = addTabBeside(attached('@1'), view('docs'), 'column')
+    expect(splitBoxes(layout).map(({ split }) => split.axis)).toEqual(['column'])
+    expect(ids(layout, 1)).toEqual(['docs'])
+    expect(layout.focusedPanel).toBe('p0')
+  })
+
+  it('splits the anchor panel, not the focused one, and leaves focus alone', () => {
+    const start = twoPanels()
+    const layout = addTabBeside(start, view('docs'), 'column', 'p1')
+    expect(layout.focusedPanel).toBe('p0')
+    expect(panelsOf(layout).map((panel) => panel.id)).toEqual(['p0', 'p1', 'p2'])
+    expect(ids(layout, 2)).toEqual(['docs'])
+    const [row] = splitBoxes(layout)
+    expect(row.split.axis).toBe('row')
+    expect(row.split.second.kind).toBe('split')
+  })
+
+  it('falls back to the first panel for an anchor that does not exist', () => {
+    const layout = addTabBeside(attached('@1'), view('docs'), 'row', 'gone')
+    expect(panelsOf(layout)).toHaveLength(2)
+  })
+
+  it('moves a tab out of the anchor panel into a split below it', () => {
+    const layout = placeTabBeside(attached('@1', '@2'), win('@2'), 'column')
+    expect(splitBoxes(layout).map(({ split }) => split.axis)).toEqual(['column'])
+    expect(ids(layout, 0)).toEqual(['window:@1'])
+    expect(ids(layout, 1)).toEqual(['window:@2'])
+  })
+
+  it('moves a tab out of a panel that is the anchor but not focused', () => {
+    const start = focusPanel(splitWith(attached('@1', '@2', '@3'), '@3'), 'p1')
+    const layout = placeTabBeside(start, win('@2'), 'row', 'p0')
+    expect(ids(layout, 0)).toEqual(['window:@1'])
+    expect(layout.focusedPanel).toBe('p1')
+    expect(panelsOf(layout).flatMap((panel) => panel.tabs.map((tab) => tab.id))).toContain('window:@2')
+  })
+
+  it('leaves a tab that is open in a panel other than the anchor alone', () => {
+    const layout = twoPanels()
+    expect(placeTabBeside(layout, win('@2'), 'row', 'p0')).toBe(layout)
+  })
+})
+
+describe('moveTabToSplit', () => {
+  it('moves a tab from another panel into a new split of the anchor', () => {
+    const start = splitWith(attached('@1', '@2'), '@2')
+    const layout = moveTabToSplit(start, 'window:@2', 'column', 'p0')
+    expect(panelsOf(layout).map((panel) => panel.tabs.map((tab) => tab.id))).toEqual([['window:@1'], ['window:@2']])
+    expect(splitBoxes(layout).map(({ split }) => split.axis)).toEqual(['column'])
+  })
+
+  it('closes the panel the tab left empty', () => {
+    const start = splitWith(attached('@1', '@2'), '@2')
+    const layout = moveTabToSplit(openTab(start, view('docs'), 'p0'), 'window:@2', 'row', 'p0')
+    expect(panelsOf(layout)).toHaveLength(2)
+    expect(ids(layout, 1)).toEqual(['window:@2'])
+  })
+
+  it('keeps focus where it was', () => {
+    const start = splitWith(attached('@1', '@2'), '@2')
+    const layout = moveTabToSplit(focusPanel(start, 'p0'), 'window:@2', 'row', 'p0')
+    expect(layout.focusedPanel).toBe('p0')
+  })
+
+  it('leaves a tab alone in the anchor panel, and a tab that is not open', () => {
+    const layout = attached('@1')
+    expect(moveTabToSplit(layout, 'window:@1', 'row', 'p0')).toBe(layout)
+    expect(moveTabToSplit(layout, 'docs', 'row', 'p0')).toBe(layout)
+  })
+})
+
+describe('moveTabBehind', () => {
+  it('puts a tab right after the anchor, in the anchor panel', () => {
+    const start = splitWith(openTab(attached('@1', '@2'), view('docs'), 'p0'), '@2')
+    const layout = moveTabBehind(start, 'window:@2', 'window:@1')
+    expect(ids(layout, 0)).toEqual(['window:@1', 'window:@2', 'docs'])
+    expect(panelsOf(layout)).toHaveLength(1)
+  })
+
+  it('goes to the end of the focused panel without an anchor', () => {
+    const start = openTab(attached('@1', '@2'), view('docs'))
+    const layout = moveTabBehind(start, 'window:@1')
+    expect(ids(layout)).toEqual(['window:@2', 'docs', 'window:@1'])
+  })
+
+  it('does not select the moved tab or move focus', () => {
+    const start = focusPanel(splitWith(openTab(attached('@1'), view('docs')), '@2'), 'p0')
+    const layout = moveTabBehind(start, 'window:@2', 'docs')
+    expect(ids(layout, 0)).toEqual(['window:@1', 'docs', 'window:@2'])
+    expect(panelsOf(layout)[0].activeTab).toBe('docs')
+    expect(layout.focusedPanel).toBe('p0')
+  })
+
+  it('keeps the moved tab selected when it moves within its panel', () => {
+    const start = selectTab(attached('@1', '@2', '@3'), 'p0', 'window:@1')
+    const layout = moveTabBehind(start, 'window:@1', 'window:@2')
+    expect(ids(layout)).toEqual(['window:@2', 'window:@1', 'window:@3'])
+    expect(panelsOf(layout)[0].activeTab).toBe('window:@1')
+  })
+
+  it('does nothing when the order would not change', () => {
+    const layout = attached('@1', '@2')
+    expect(moveTabBehind(layout, 'window:@2')).toBe(layout)
+    expect(moveTabBehind(layout, 'window:@2', 'window:@1')).toBe(layout)
+  })
+
+  it('does nothing for a tab or an anchor that is not open, or a tab behind itself', () => {
+    const layout = attached('@1', '@2')
+    expect(moveTabBehind(layout, 'docs', 'window:@1')).toBe(layout)
+    expect(moveTabBehind(layout, 'window:@1', 'docs')).toBe(layout)
+    expect(moveTabBehind(layout, 'window:@1', 'window:@1')).toBe(layout)
+  })
+})
+
+describe('focusTab', () => {
+  it('brings the tab forward and gives its panel the keyboard', () => {
+    const start = focusPanel(splitWith(openTab(attached('@1'), view('docs')), '@2'), 'p1')
+    const layout = focusTab(start, 'docs')
+    expect(layout.focusedPanel).toBe('p0')
+    expect(focusedTab(layout)).toBe('docs')
+  })
+
+  it('does nothing for a tab that is not open', () => {
+    const layout = attached('@1')
+    expect(focusTab(layout, 'docs')).toBe(layout)
+  })
+})
+
+describe('parentSplitOf', () => {
+  it('names the split around a panel and the side it is on', () => {
+    const layout = splitPanel(attached('@1'), 'p0', 'row')
+    expect(parentSplitOf(layout, 'p0')).toMatchObject({ side: 'first', split: { id: 's1' } })
+    expect(parentSplitOf(layout, 'p1')).toMatchObject({ side: 'second', split: { id: 's1' } })
+  })
+
+  it('finds the nearest split in a nested tree', () => {
+    const layout = splitPanel(splitPanel(attached('@1'), 'p0', 'row'), 'p1', 'column')
+    expect(parentSplitOf(layout, 'p2')).toMatchObject({ side: 'second', split: { id: 's2', axis: 'column' } })
+    expect(parentSplitOf(layout, 'p0')).toMatchObject({ side: 'first', split: { id: 's1' } })
+  })
+
+  it('has nothing for a lone or unknown panel', () => {
+    expect(parentSplitOf(attached('@1'), 'p0')).toBeUndefined()
+    expect(parentSplitOf(splitPanel(attached('@1'), 'p0', 'row'), 'gone')).toBeUndefined()
+  })
+})
+
+describe('resizeSplitFor and turnSplitFor', () => {
+  const split = () => splitPanel(attached('@1'), 'p0', 'row')
+  const ratioOf = (layout: PanelLayout) => splitBoxes(layout)[0].split.ratio
+
+  it('gives the first panel the share', () => {
+    expect(ratioOf(resizeSplitFor(split(), 'p0', 0.7))).toBe(0.7)
+  })
+
+  it('gives the second panel the share by shrinking the first', () => {
+    expect(ratioOf(resizeSplitFor(split(), 'p1', 0.7))).toBeCloseTo(0.3)
+  })
+
+  it('clamps like a drag does', () => {
+    expect(ratioOf(resizeSplitFor(split(), 'p0', 0.99))).toBe(MAX_SPLIT_RATIO)
+    expect(ratioOf(resizeSplitFor(split(), 'p0', 0))).toBe(MIN_SPLIT_RATIO)
+  })
+
+  it('resizes only the nearest split', () => {
+    const nested = splitPanel(split(), 'p1', 'column')
+    const layout = resizeSplitFor(nested, 'p2', 0.6)
+    expect(splitBoxes(layout).map(({ split: found }) => found.ratio)).toEqual([0.5, 0.4])
+  })
+
+  it('turns the split around the panel', () => {
+    expect(splitBoxes(turnSplitFor(split(), 'p1'))[0].split.axis).toBe('column')
+  })
+
+  it('does nothing without a split', () => {
+    const layout = attached('@1')
+    expect(resizeSplitFor(layout, 'p0', 0.7)).toBe(layout)
+    expect(turnSplitFor(layout, 'p0')).toBe(layout)
+    expect(turnSplitFor(split(), 'gone')).toEqual(split())
   })
 })
 

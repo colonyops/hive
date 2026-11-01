@@ -265,32 +265,76 @@ export function splitPanel(layout: PanelLayout, panelId: string, axis: SplitAxis
   return { ...layout, root, nextId: layout.nextId + 1, focusedPanel: added.id }
 }
 
+/** A split on `anchorPanelId` holding `tab`. Focus stays where it was, because nobody at the keyboard asked for it. */
+function splitOffTab(
+  layout: PanelLayout,
+  tab: PanelTab,
+  from: Panel | undefined,
+  axis: SplitAxis,
+  anchorPanelId: string,
+): PanelLayout {
+  const anchor = panelById(layout, anchorPanelId) ?? firstPanel(layout.root)
+  const split = splitPanel(layout, anchor.id, axis)
+  const added = `p${layout.nextId}`
+  const cleared = from ? removeTab(split, from.id, tab.id) : split
+  const placed = withPanel(cleared, added, { tabs: [tab], activeTab: tab.id, picking: false })
+  const focusedPanel = panelById(layout, layout.focusedPanel) ? layout.focusedPanel : anchor.id
+  return dropEmptyPanels({ ...placed, focusedPanel })
+}
+
 /**
  * For a tab nobody at the keyboard asked for that should still be seen at once.
- * It opens in a new panel beside the focused one, and focus stays where it was.
+ * It opens in a new panel split off `anchorPanelId`, the focused panel by
+ * default, and focus stays where it was.
  */
-export function addTabBeside(layout: PanelLayout, tab: PanelTab): PanelLayout {
+export function addTabBeside(
+  layout: PanelLayout,
+  tab: PanelTab,
+  axis: SplitAxis = 'row',
+  anchorPanelId = layout.focusedPanel,
+): PanelLayout {
   if (panelWithTab(layout, tab.id)) return layout
-  const focused = panelById(layout, layout.focusedPanel) ?? firstPanel(layout.root)
-  const split = splitPanel(layout, focused.id, 'row')
-  const added = `p${layout.nextId}`
-  return { ...withPanel(split, added, { tabs: [tab], activeTab: tab.id, picking: false }), focusedPanel: focused.id }
+  return splitOffTab(layout, tab, undefined, axis, anchorPanelId)
 }
 
 /**
  * Like `addTabBeside`, for a tab that may be open already. One open in a panel
- * other than the focused one is beside something, so it stays. One in the
- * focused panel moves out into the new split, unless it is that panel's only
- * tab, which would leave nothing to be beside.
+ * other than the anchor is beside something, so it stays. One in the anchor
+ * panel moves out into the new split, unless it is that panel's only tab,
+ * which would leave nothing to be beside.
  */
-export function placeTabBeside(layout: PanelLayout, tab: PanelTab): PanelLayout {
+export function placeTabBeside(
+  layout: PanelLayout,
+  tab: PanelTab,
+  axis: SplitAxis = 'row',
+  anchorPanelId = layout.focusedPanel,
+): PanelLayout {
   const from = panelWithTab(layout, tab.id)
-  if (from && (from.id !== layout.focusedPanel || from.tabs.length === 1)) return layout
-  const focused = panelById(layout, layout.focusedPanel) ?? firstPanel(layout.root)
-  const split = splitPanel(layout, focused.id, 'row')
-  const added = `p${layout.nextId}`
-  const cleared = from ? removeTab(split, from.id, tab.id) : split
-  return { ...withPanel(cleared, added, { tabs: [tab], activeTab: tab.id, picking: false }), focusedPanel: focused.id }
+  const anchor = panelById(layout, anchorPanelId) ?? firstPanel(layout.root)
+  if (from && (from.id !== anchor.id || from.tabs.length === 1)) return layout
+  return splitOffTab(layout, tab, from, axis, anchor.id)
+}
+
+/**
+ * Moves an open tab into a new split of `anchorPanelId`, from whichever panel
+ * it is in. A tab alone in the anchor panel has nothing to be beside, so it stays.
+ */
+export function moveTabToSplit(
+  layout: PanelLayout,
+  tabId: string,
+  axis: SplitAxis = 'row',
+  anchorPanelId = layout.focusedPanel,
+): PanelLayout {
+  const from = panelWithTab(layout, tabId)
+  const anchor = panelById(layout, anchorPanelId)
+  if (!from || !anchor || (from.id === anchor.id && from.tabs.length === 1)) return layout
+  return splitOffTab(
+    layout,
+    from.tabs.find((tab) => tab.id === tabId)!,
+    from,
+    axis,
+    anchor.id,
+  )
 }
 
 /** Closes a panel without losing anything: its tabs join the neighbour. */
@@ -332,6 +376,33 @@ export function turnSplit(layout: PanelLayout, splitId: string): PanelLayout {
   return root === layout.root ? layout : { ...layout, root }
 }
 
+/** The split whose direct child is the panel, and which side of it the panel is. */
+export function parentSplitOf(
+  layout: PanelLayout,
+  panelId: string,
+): { split: PanelSplit; side: 'first' | 'second' } | undefined {
+  const walk = (node: PanelNode): { split: PanelSplit; side: 'first' | 'second' } | undefined => {
+    if (node.kind === 'panel') return undefined
+    if (node.first.kind === 'panel' && node.first.id === panelId) return { split: node, side: 'first' }
+    if (node.second.kind === 'panel' && node.second.id === panelId) return { split: node, side: 'second' }
+    return walk(node.first) ?? walk(node.second)
+  }
+  return walk(layout.root)
+}
+
+/** Gives the panel `share` of the split it sits in. A panel with no split around it has nothing to resize. */
+export function resizeSplitFor(layout: PanelLayout, panelId: string, share: number): PanelLayout {
+  const parent = parentSplitOf(layout, panelId)
+  if (!parent) return layout
+  return resizeSplit(layout, parent.split.id, parent.side === 'first' ? share : 1 - share)
+}
+
+/** Turns the split the panel sits in. */
+export function turnSplitFor(layout: PanelLayout, panelId: string): PanelLayout {
+  const parent = parentSplitOf(layout, panelId)
+  return parent ? turnSplit(layout, parent.split.id) : layout
+}
+
 /** `gap` counts tabs in the target panel as they stand before the move. */
 export function moveTab(layout: PanelLayout, tabId: string, target: string, gap: number): PanelLayout {
   const from = panelWithTab(layout, tabId)
@@ -358,6 +429,40 @@ export function moveTabBeside(
   if (!panel) return layout
   const at = panel.tabs.findIndex((tab) => tab.id === besideId)
   return moveTab(layout, tabId, panel.id, edge === 'after' ? at + 1 : at)
+}
+
+/**
+ * Puts an open tab right after the anchor tab, in the anchor's panel, or at the
+ * end of the focused panel without one. It is for a move nobody at the keyboard
+ * asked for, so it neither selects the tab nor moves focus.
+ */
+export function moveTabBehind(layout: PanelLayout, tabId: string, anchorTabId?: string): PanelLayout {
+  const from = panelWithTab(layout, tabId)
+  if (!from || anchorTabId === tabId) return layout
+  const anchorPanel =
+    anchorTabId === undefined
+      ? (panelById(layout, layout.focusedPanel) ?? firstPanel(layout.root))
+      : panelWithTab(layout, anchorTabId)
+  if (!anchorPanel) return layout
+  const tab = from.tabs.find((candidate) => candidate.id === tabId)!
+  const cleared = removeTab(layout, from.id, tabId)
+  const destination = panelById(cleared, anchorPanel.id)!
+  const at =
+    anchorTabId === undefined
+      ? destination.tabs.length
+      : destination.tabs.findIndex((candidate) => candidate.id === anchorTabId) + 1
+  const tabs = [...destination.tabs.slice(0, at), tab, ...destination.tabs.slice(at)]
+  if (from.id === destination.id && tabs.every((candidate, index) => candidate.id === from.tabs[index].id))
+    return layout
+  const keepsSelection = from.id === destination.id && from.activeTab === tabId
+  const activeTab = keepsSelection ? tabId : (destination.activeTab ?? tabId)
+  return dropEmptyPanels(withPanel(cleared, destination.id, { tabs, activeTab }))
+}
+
+/** Brings an open tab forward in its panel and gives that panel the keyboard. */
+export function focusTab(layout: PanelLayout, tabId: string): PanelLayout {
+  const panel = panelWithTab(layout, tabId)
+  return panel ? selectTab(layout, panel.id, tabId) : layout
 }
 
 /**

@@ -105,32 +105,69 @@ With no Drive tab open, a write shows nothing until the user opens Drive, so
 call `open_tab` when something is finished and worth reading now, not on every
 write.
 
-## Tabs
+## Tabs and layout
 
-Drive, Diff, Tasks and terminals open as tabs beside the terminal of a chat or
-Code session. Two tools ask for them:
+Drive, Diff, Tasks and terminals open as tabs in panels beside a chat or Code
+session. A panel holds tabs, and a split joins two panels side by side or
+stacked. You can do with the layout what the user can. Every call below is a
+request to the app: it applies only while the user is viewing this chat or
+session, and there is no acknowledgment.
 
-- `open_tab`: open the tab for a `view`. `drive` is the session's documents
-  and canvases, `diff` is the Code session's changes, `tasks` is its task
-  board, `terminal` is a tmux window of the Code session. A chat has only
-  `drive`; `diff`, `tasks` and `terminal` belong to a Code session.
-  `path` is for `drive` only: a document by its path in the space, or a canvas
-  by name or path (`perf` is `canvases/perf.canvas.json`). It must exist, and a
-  folder is refused. Omit it to leave the tab on its own pick. `placement` is
-  `behind` (the default) or `beside`. `behind` adds the tab behind the tab in
-  front, with an unseen dot, and never takes the screen. `beside` splits the
-  panel in front and opens the tab next to it, so the user sees it at once; use
-  it for a result the user asked to see side by side with the terminal. Both
-  leave the keyboard where it is, and a tab that is already open stays where it
-  is. The answer names the `view`, the resolved `path` (empty when none was
-  given) and, for `terminal`, the `window` id.
-- `close_tab`: close the tab for a `view` (`drive`, `diff` or `tasks`)
-  wherever it sits. Documents and canvases are untouched. A `terminal` is not
-  closable here: it closes from its tab or its shell.
+A tab reference names one tab, in a `tab` or `anchor` input:
+
+- `drive`, `diff` or `tasks` name that view. A chat has only `drive`.
+- `terminal` names a chat's one terminal.
+- Anything else is a tmux window of a Code session, by id (`@3`) or exact
+  name. A Code session must name its window; `terminal` alone is refused.
+
+The tools:
+
+- `open_tab`: open the tab for a `view` (`drive`, `diff`, `tasks` or
+  `terminal`). `path`, for `drive`, is a document by its path in the space or a
+  canvas by name or path (`perf` is `canvases/perf.canvas.json`); it must
+  exist, and a folder is refused. `placement` is `behind` (the default; behind
+  a tab, with an unseen dot, never takes the screen), `beside` (a split to the
+  right) or `below` (a split downward). `anchor` is the tab to place relative
+  to; omit it for the tab in front of the focused panel. A tab that is already
+  open stays where it is. The answer names the `view`, the resolved `path` and,
+  for `terminal`, the `window` id.
+- `close_tab`: close the tab for `drive`, `diff` or `tasks`. Documents and
+  canvases are untouched. `terminal` needs `window` and kills that tmux window
+  and what runs in it; only close a window you started. A chat's terminal is
+  the chat, so it is refused.
+- `move_tab`: move `tab`. `placement` `behind` puts it in the anchor's panel
+  right after the anchor, or at the end of the focused panel with no anchor.
+  `beside` and `below` split the anchor's panel (or the focused one) and move
+  the tab into the new panel.
+- `focus_tab`: bring `tab` forward and focus its panel. A window is also
+  selected in tmux, by the app and only while the session is on screen.
+- `close_panel`: close the panel that holds `tab`. Its tabs join the
+  neighbouring panel, and the last panel stays.
+- `resize_split`: give the side that holds `tab` a `share` of its nearest
+  split, from 0.2 to 0.8.
+- `turn_split`: turn the nearest split of `tab` between side by side and
+  stacked.
+- `get_layout`: read the layout the app last reported: `panels` with their
+  `tabs` (each spelled the way the tools take it, with `kind`, the window
+  `name` for a Code session, and `shown` for the panel's front tab),
+  `focusedPanel`, `splits` (`axis` `row` is side by side, `column` is
+  stacked; `first` and `second` are panel or split ids), and `onScreen`. When
+  `known` is `false` the app has not reported this layout yet, for instance
+  just after it started or when the session has never been open in Code; act
+  without it.
+
+Call `get_layout` first when you are not sure what is open. Layout changes may
+land after the call returns, so read again before you build on one.
+
+`focus_tab` and `close_tab` on a terminal are the two that take something from
+the user: the first takes the screen, the second ends a running process. Use
+`focus_tab` when the user asked to see something, not to show off a result;
+for a result use `open_tab`, which leaves the focus where it is. Close only a
+window you started.
 
 A `terminal` opens detached, so it never takes the keyboard or the screen. The
 session must be running; start it in Code first. Three inputs apply to
-`terminal` only, and any of them with another view is refused:
+`open_tab` with `terminal` only, and any of them with another view is refused:
 
 - `name`: the name of the new window.
 - `command`: a shell command the new window runs in the session's checkout.
@@ -140,9 +177,6 @@ session must be running; start it in Code first. Three inputs apply to
 - `window`: an existing window of the session, by tmux id (`@3`) or exact
   window name. It is placed instead of starting one, so it excludes `name` and
   `command`. A window the session does not have is `not_found`.
-
-Both are best-effort: they apply only while the user is viewing this chat or
-session, and there is no acknowledgment either way.
 
 ## Canvases
 

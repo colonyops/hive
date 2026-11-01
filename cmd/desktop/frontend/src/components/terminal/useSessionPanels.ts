@@ -1,6 +1,14 @@
 import { useTimeoutFn } from '@vueuse/core'
 import { computed, nextTick, ref, watch, type Ref } from 'vue'
-import { moveTab, panelWithTab, placeTabBeside, splitPanel, type PanelLayout } from '../../lib/panelLayout'
+import {
+  moveTab,
+  panelById,
+  panelWithTab,
+  placeTabBeside,
+  splitPanel,
+  type PanelLayout,
+  type SplitAxis,
+} from '../../lib/panelLayout'
 import { paneMayAutoFocus } from '../../lib/terminalTree'
 import {
   focusedWindow,
@@ -13,6 +21,7 @@ import {
   windowsOnScreen,
 } from '../../lib/windowTabs'
 import { usePanelLayouts } from '../../stores/usePanelLayouts'
+import type { SessionTabPlacement } from '../panels/useSessionLayout'
 
 /** What a layout's window tabs mirror. The Code view builds one from its attach pool. */
 export interface PanelWindowSource {
@@ -137,21 +146,34 @@ export function useSessionPanels(source: PanelWindowSource, layouts = usePanelLa
   }
 
   /**
-   * Where a window an agent made goes. It is created detached, so tmux keeps
-   * its active window and nothing here reveals it. Behind needs nothing: the
-   * reconcile appends its tab to the focused panel without selecting it.
+   * Where a window an agent made goes: next to the anchor panel, the focused
+   * one by default. It is created detached, so tmux keeps its active window and
+   * nothing here reveals it. Behind in the focused panel needs nothing: the
+   * reconcile appends its tab there without selecting it.
    */
-  function placeArrivingWindow(windowId: string, placement: 'behind' | 'beside'): void {
-    if (placement !== 'beside') return
-    if (panelWithTab(layout.value, windowTabId(windowId))) {
-      apply((current) => placeTabBeside(current, windowTab(windowId)))
+  function placeArrivingWindow(
+    windowId: string,
+    placement: SessionTabPlacement,
+    anchorPanelId = layout.value.focusedPanel,
+  ): void {
+    const before = layout.value
+    const anchor = panelById(before, anchorPanelId) ? anchorPanelId : before.focusedPanel
+    const present = !!panelWithTab(before, windowTabId(windowId))
+    if (placement === 'behind') {
+      if (present || anchor === before.focusedPanel) return
+      newWindowPanel.value = anchor
+      expirePending()
+      return
+    }
+    const axis: SplitAxis = placement === 'below' ? 'column' : 'row'
+    if (present) {
+      apply((current) => placeTabBeside(current, windowTab(windowId), axis, anchor))
       return
     }
     // The event beat tmux's window list, so make the panel now and let the tab
     // land in it. Unlike a "+", this window neither takes the focus nor
     // reorders tmux's windows.
-    const before = layout.value
-    const split = splitPanel(before, before.focusedPanel, 'row')
+    const split = splitPanel(before, anchor, axis)
     if (split === before) return
     // splitPanel focuses the panel it adds.
     const added = split.focusedPanel

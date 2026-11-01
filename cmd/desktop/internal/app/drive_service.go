@@ -60,7 +60,9 @@ type DriveService struct {
 	// terminals is nil when tmux windows are not wired in; a terminal tab then
 	// answers KindUnavailable.
 	terminals sessionTerminals
-	logger    zerolog.Logger
+	// layouts is the mirror get_layout reads; nil answers KindUnavailable.
+	layouts *LayoutsService
+	logger  zerolog.Logger
 }
 
 type DriveDeps struct {
@@ -72,13 +74,15 @@ type DriveDeps struct {
 	Reveal func(string) error
 	// Terminals starts and finds the tmux windows of Code sessions.
 	Terminals sessionTerminals
+	// Layouts holds the panel layouts the frontend reports.
+	Layouts *LayoutsService
 }
 
 func newDriveService(d DriveDeps) *DriveService {
 	if d.Reveal == nil {
 		d.Reveal = osopen.Reveal
 	}
-	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, terminals: d.Terminals, logger: logutils.Component(d.Logger, "desktop.drive")}
+	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, terminals: d.Terminals, layouts: d.Layouts, logger: logutils.Component(d.Logger, "desktop.drive")}
 }
 
 // driveCaller is who a tool call comes from and the space its canvases

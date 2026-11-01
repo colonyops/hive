@@ -147,6 +147,8 @@ The two buttons at the right of the tab row split the panel to the right or down
 
 The sidebar lists every tab of a session in the same order, windows and views alike. Select a view's row to bring it forward, and drag rows to reorder them. Hive remembers each session's tabs and splits across restarts, and forgets them when you close the session.
 
+An agent in the session can arrange these tabs too, from MCP or from `hive dt`. See [Agents and the layout](agent-layout.md).
+
 ## Tasks
 
 Open **Tasks** from the Code status bar, the command palette, or its configured shortcut, or add a **Tasks** tab to a session with its `+` button. It reads the same `hive hc` task tree used by coding agents and the CLI. See the hive CLI [task tracking guide](../../cli/getting-started/task-tracking.md) for the shared task model.

@@ -159,7 +159,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 }))
 
 // Captures every useWailsEvent registration so a test can fire drive:updated
-// and session:tab by hand.
+// and session:layout by hand.
 const wailsEvents = vi.hoisted(() => ({
   handlers: [] as Array<[string, (event: { data: unknown }) => void]>,
   fire(name: string, data: unknown) {
@@ -1128,27 +1128,27 @@ describe('AgentsMode', () => {
     expect(router.currentRoute.value.query.chat).toBeUndefined()
   })
 
-  // open_tab and close_tab arrive as session:tab. Only the open chat's ask is
+  // An agent's layout verbs arrive as session:layout. Only the open chat's ask is
   // honored -- an agent must never drag the user away from another chat. An
   // agent's tab arrives behind the terminal unless it asks to sit beside it.
-  it('opens and closes the Drive tab on session:tab for the open chat only', async () => {
+  it('opens and closes the Drive tab on session:layout for the open chat only', async () => {
     const { wrapper } = await mountWithOpenChat()
 
-    wailsEvents.fire('session:tab', { session: '99', view: 'drive', path: '', placement: 'behind', open: true })
+    wailsEvents.fire('session:layout', { session: '99', verb: 'open', view: 'drive', path: '', placement: 'behind' })
     await flushPromises()
     expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(false)
 
-    wailsEvents.fire('session:tab', {
+    wailsEvents.fire('session:layout', {
       session: '7',
+      verb: 'open',
       view: 'drive',
       path: 'plans/x.md',
       placement: 'behind',
-      open: true,
     })
     await flushPromises()
     expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(true)
 
-    wailsEvents.fire('session:tab', { session: '7', view: 'drive', path: '', placement: 'behind', open: false })
+    wailsEvents.fire('session:layout', { session: '7', verb: 'close', view: 'drive', path: '', placement: 'behind' })
     await flushPromises()
     expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(false)
   })
@@ -1156,15 +1156,36 @@ describe('AgentsMode', () => {
   it('shows the Drive tab beside the terminal when the agent asks for it, and ignores a Diff tab', async () => {
     const { wrapper } = await mountWithOpenChat()
 
-    wailsEvents.fire('session:tab', { session: '7', view: 'diff', path: '', placement: 'beside', open: true })
+    wailsEvents.fire('session:layout', { session: '7', verb: 'open', view: 'diff', path: '', placement: 'beside' })
     await flushPromises()
     expect(wrapper.findAll('section[data-panel]')).toHaveLength(1)
 
-    wailsEvents.fire('session:tab', { session: '7', view: 'drive', path: '', placement: 'beside', open: true })
+    wailsEvents.fire('session:layout', { session: '7', verb: 'open', view: 'drive', path: '', placement: 'beside' })
     await flushPromises()
     expect(wrapper.findAll('section[data-panel]')).toHaveLength(2)
     expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="agents-session-pane"]').attributes('style') ?? '').not.toContain('display: none')
+  })
+
+  it("moves the Drive tab beside the chat's terminal when the agent asks for it", async () => {
+    const { wrapper } = await mountWithOpenChat()
+    wailsEvents.fire('session:layout', { session: '7', verb: 'open', view: 'drive', path: '', placement: 'behind' })
+    await flushPromises()
+    expect(wrapper.findAll('section[data-panel]')).toHaveLength(1)
+
+    wailsEvents.fire('session:layout', {
+      session: '7',
+      verb: 'move',
+      view: 'drive',
+      window: '',
+      anchorView: 'terminal',
+      anchorWindow: '',
+      placement: 'beside',
+    })
+    await flushPromises()
+
+    expect(wrapper.findAll('section[data-panel]')).toHaveLength(2)
+    expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(true)
   })
 
   it('opens the Drive tab on a ?doc link and shows the terminal again when it closes', async () => {

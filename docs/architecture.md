@@ -2085,18 +2085,26 @@ Stop does. Layouts live in their own store, `useChatPanelLayouts`
 (`hive.chats.panel-layouts`), keyed by chat id: a chat pinned to Code shares
 its id, and Code's sweep drops keys it does not know. Closing or deleting a
 chat forgets its layout; an agent that exits keeps it. The Agents sidebar does
-not mirror a chat's tabs. `components/panels/useSessionTabs.ts` is the one
-way into a session's tabs from outside it, for both hosts: `?doc` on the
-host's route opens the Drive tab and is consumed, and an agent's `session:tab`
-opens a view behind the tab in front (`addTabQuietly`) or beside it in a split
-(`addTabBeside`), or closes it, honored only for the session on screen and
-only for a view the host offers. The wire says `drive`; the frontend's kind is
-`docs`, and the composable is the one place that maps between them. A
-`terminal` ask names a tmux window the backend created detached or found; the
-tab itself still arrives through the reconcile, and
+not mirror a chat's tabs. `components/panels/useSessionLayout.ts` is the one
+way into a session's layout from outside it, for both hosts: `?doc` on the
+host's route opens the Drive tab and is consumed, and an agent's
+`session:layout` is dispatched by verb to the host's handlers, honored only
+for the session on screen and only for a view the host offers. The wire's tab
+reference (`view` plus `window`, and the anchor's) becomes a tab id in
+`components/panels/sessionTabRefs.ts`, the one place that maps `drive` to the
+frontend's `docs` kind and a chat's `terminal` to its pane's window; the same
+file holds the rule each verb applies (`openViewRule`, `moveRule`,
+`focusRule`, `closePanelRule`, `resizeRule`, `turnRule`) so the two hosts
+share them. `lib/panelLayout` grew the rules the verbs need: `addTabBeside`
+and `placeTabBeside` take an axis and an anchor panel, `moveTabBehind`,
+`moveTabToSplit`, `focusTab`, `parentSplitOf` with `resizeSplitFor` and
+`turnSplitFor`. A `terminal` ask names a tmux window the backend created
+detached or found; the tab itself still arrives through the reconcile, and
 `useSessionPanels.placeArrivingWindow` only decides where it lands: nowhere
-special for `behind`, a new split for `beside`, whether the tab is already
-there or the event beat the listing.
+special for `behind`, a new split on the anchor for `beside` or `below`,
+whether the tab is already there or the event beat the listing. Each layout
+store reports its map and the key on screen to Go (`lib/layoutReport.ts`,
+`LayoutService.Report`), which is how `get_layout` answers.
 
 #### Pop-up terminals
 
@@ -2469,12 +2477,13 @@ session or hive session) of a write. The desktop forwarder passes it through
 and publishes nothing of its own: one change, one event. `wailsui.drive`
 subscribes with `events.Buffer(64)`, not `Coalesce()`, because the payload is a
 per-space delta with an author and must not be dropped. It reaches the
-frontend as `drive:updated`, and a request to open or close one of the
-session's tabs as `session:tab` (view, path, placement, open). Whether a tab
-is open is UI intent, not stored state, so `session:tab` carries the whole
-message, buffered rather than coalesced because two asks for two views are
-both intents, and the frontend honors it only for the chat or session in
-view. The agent learns its own session id from
+frontend as `drive:updated`, and a layout request as `session:layout` (a
+`verb`: open, close, move, focus, close_panel, resize or turn, with the tab,
+an optional anchor, path, placement and share). Whether a tab is open is UI
+intent, not stored state, so `session:layout` carries the whole message,
+buffered rather than coalesced because two asks in a row are both intents, and
+the frontend honors it only for the chat or session in view. The agent learns
+its own session id from
 `HIVE_AGENT_SESSION`, injected at launch via `tmux new-session -e`.
 
 **Agents write through `mcpsrv`.** One app-hosted server, `hive-drive`, mounts
@@ -2483,11 +2492,29 @@ existing agent configurations. It has fifteen tools: the eight canvas tools,
 whose `canvas` argument is a name or a path (`reports/perf` files at
 `reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), five document
 tools: `list_documents`, `read_document`, `write_document`, `move_document`
-and `delete_document`, and two tab tools: `open_tab` (`view` is `drive`,
+and `delete_document`, and eight layout tools: `open_tab` (`view` is `drive`,
 `diff`, `tasks` or `terminal`; `path`, for `drive`, is a document path or a
 canvas name; `window`, `name` and `command`, for `terminal`, pick an existing
-window or start a new detached one in the checkout; `placement` is `behind` or
-`beside`) and `close_tab`, which takes every view but `terminal`. `read_document` reads markdown, html
+window or start a new detached one in the checkout; `placement` is `behind`,
+`beside` or `below`, relative to an optional `anchor`), `close_tab` (a
+terminal needs `window` and is killed through the tmux runner, with no event),
+`move_tab`, `focus_tab`, `close_panel`, `resize_split`, `turn_split` and
+`get_layout`. A tab is addressed by one string: a view name, `terminal` for a
+chat's one window, or a Code window by tmux id or exact name, which
+`parseTabRef` and `FindWindow` resolve before anything is published
+(`cmd/desktop/internal/app/drive_tabs.go`). `get_layout` answers from
+`app.LayoutsService`, an in-memory mirror the frontend fills through the Wails
+`LayoutService.Report` whenever a layout store changes (debounced, with the
+key on screen), joined with tmux window names; the layout itself still lives
+only in the browser, and `known: false` says the frontend has not reported
+yet. The hive CLI reaches the same tools as an MCP client: `hive dt layout`,
+`hive dt tab open|close|move|focus`, `hive dt panel close`, `hive dt split
+resize|turn`, with `--session` defaulting to `HIVE_AGENT_SESSION` or the
+working directory and `--url` to the endpoint file the desktop writes at
+`<hive data dir>/desktop/endpoint.json` after `core.Start`
+(`internal/platform/desktopendpoint`; removed on shutdown only when its PID is
+this process, because a dev build beside the installed app shares the
+directory). `read_document` reads markdown, html
 and any other UTF-8 text file, and answers `not_found` for hive state files
 (`kv.json`, `kv.json.lock`). An app-hosted catalogue entry declares
 its mount as `Descriptor.RuntimePath`, joined with the live loopback base when

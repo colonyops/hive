@@ -43,7 +43,7 @@ type canvasSignals struct {
 	bus     *events.Bus
 	mu      sync.Mutex
 	updates []events.DriveChanged
-	tabs    []events.SessionTabRequested
+	tabs    []events.SessionLayoutRequested
 }
 
 func (s *canvasSignals) addUpdate(e events.DriveChanged) {
@@ -52,7 +52,7 @@ func (s *canvasSignals) addUpdate(e events.DriveChanged) {
 	s.updates = append(s.updates, e)
 }
 
-func (s *canvasSignals) addTab(e events.SessionTabRequested) {
+func (s *canvasSignals) addTab(e events.SessionLayoutRequested) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.tabs = append(s.tabs, e)
@@ -64,7 +64,7 @@ func (s *canvasSignals) Updates() []events.DriveChanged {
 	return slices.Clone(s.updates)
 }
 
-func (s *canvasSignals) Tabs() []events.SessionTabRequested {
+func (s *canvasSignals) Tabs() []events.SessionLayoutRequested {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.tabs)
@@ -79,7 +79,7 @@ func (s *canvasSignals) waitUpdates(t *testing.T, n int) []events.DriveChanged {
 	return s.Updates()
 }
 
-func (s *canvasSignals) waitTabs(t *testing.T, n int) []events.SessionTabRequested {
+func (s *canvasSignals) waitTabs(t *testing.T, n int) []events.SessionLayoutRequested {
 	t.Helper()
 	require.Eventually(t, func() bool { return len(s.Tabs()) == n }, eventWait, 5*time.Millisecond)
 	return s.Tabs()
@@ -112,6 +112,7 @@ type driveFixture struct {
 	signals   *canvasSignals
 	harness   *hiveHarness
 	terminals *fakeTerminals
+	layouts   *LayoutsService
 }
 
 // openTab is the drive-view call shape the older tab tests use.
@@ -127,7 +128,9 @@ type createdWindow struct{ Slug, Dir, Name, Command string }
 type fakeTerminals struct {
 	running map[string]bool
 	windows map[string]string
+	names   map[string]string
 	created []createdWindow
+	closed  []string
 }
 
 func (f *fakeTerminals) HasSession(_ context.Context, slug string) (bool, error) {
@@ -147,6 +150,15 @@ func (f *fakeTerminals) FindWindow(_ context.Context, _, idOrName string) (strin
 	return id, nil
 }
 
+func (f *fakeTerminals) WindowNames(context.Context, string) (map[string]string, error) {
+	return f.names, nil
+}
+
+func (f *fakeTerminals) CloseWindow(_ context.Context, slug, windowID string) error {
+	f.closed = append(f.closed, slug+" "+windowID)
+	return nil
+}
+
 // newDriveFixture is a DriveService over a real engine whose context root is
 // a temp dir, with chat "1" in workspace "ws" and the given hive sessions
 // saved in hive.db.
@@ -158,7 +170,7 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 		signals.addUpdate(e)
 	})
 	t.Cleanup(cancelUpdated)
-	cancelTabbed := events.Subscribe(t.Context(), bus, "test.canvas-tabbed", events.Buffer(64), func(_ context.Context, e events.SessionTabRequested) {
+	cancelTabbed := events.Subscribe(t.Context(), bus, "test.canvas-tabbed", events.Buffer(64), func(_ context.Context, e events.SessionLayoutRequested) {
 		signals.addTab(e)
 	})
 	t.Cleanup(cancelTabbed)
@@ -171,14 +183,17 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 	terminals := &fakeTerminals{
 		running: map[string]bool{siteSession.Slug: true},
 		windows: map[string]string{"@3": "@3", "logs": "@4"},
+		names:   map[string]string{"@3": "claude", "@4": "logs"},
 	}
+	layouts := &LayoutsService{}
 	svc := newDriveService(DriveDeps{
 		Engine:    func() *hive.Engine { return h.engine },
 		Sessions:  fakeCanvasSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
 		Events:    bus,
 		Terminals: terminals,
+		Layouts:   layouts,
 	})
-	return driveFixture{svc: svc, signals: signals, harness: h, terminals: terminals}
+	return driveFixture{svc: svc, signals: signals, harness: h, terminals: terminals, layouts: layouts}
 }
 
 func (f driveFixture) contextDir() string { return f.harness.cfg.ContextDir() }
@@ -491,17 +506,17 @@ func TestOpenTabResolvesAndPublishes(t *testing.T) {
 	_, err = f.openTab(ctx, "1", "drive", "plans", "")
 	assert.Equal(t, KindInvalid, KindOf(err), "a folder is not a document")
 
-	require.NoError(t, f.svc.CloseTab(ctx, "1", "drive"))
+	require.NoError(t, f.svc.CloseTab(ctx, "1", "drive", ""))
 	_, err = f.openTab(ctx, "99", "drive", "", "")
 	assert.Equal(t, KindNotFound, KindOf(err))
 
 	space := "workspaces/ws"
-	assert.Equal(t, []events.SessionTabRequested{
-		{Session: "1", Space: space, View: "drive", Placement: "behind", Open: true},
-		{Session: "1", Space: space, View: "drive", Path: "canvases/plan.canvas.json", Placement: "beside", Open: true},
-		{Session: "1", Space: space, View: "drive", Path: "canvases/plan.canvas.json", Placement: "behind", Open: true},
-		{Session: "1", Space: space, View: "drive", Path: "plans/auth.md", Placement: "behind", Open: true},
-		{Session: "1", Space: space, View: "drive"},
+	assert.Equal(t, []events.SessionLayoutRequested{
+		{Session: "1", Space: space, Verb: "open", View: "drive", Placement: "behind"},
+		{Session: "1", Space: space, Verb: "open", View: "drive", Path: "canvases/plan.canvas.json", Placement: "beside"},
+		{Session: "1", Space: space, Verb: "open", View: "drive", Path: "canvases/plan.canvas.json", Placement: "behind"},
+		{Session: "1", Space: space, Verb: "open", View: "drive", Path: "plans/auth.md", Placement: "behind"},
+		{Session: "1", Space: space, Verb: "close", View: "drive"},
 	}, f.signals.waitTabs(t, 5))
 	f.signals.waitUpdates(t, 2)
 }
@@ -578,9 +593,9 @@ func TestOpenTabStartsATerminalInTheCheckout(t *testing.T) {
 	assert.Equal(t, OpenTabResult{Window: "@4"}, res, "a name resolves to the window id")
 	assert.Len(t, f.terminals.created, 1, "placing a window starts none")
 
-	assert.Equal(t, []events.SessionTabRequested{
-		{HiveSession: "abc123", Space: "acme/site", View: "terminal", Window: "@11", Placement: "beside", Open: true},
-		{HiveSession: "abc123", Space: "acme/site", View: "terminal", Window: "@4", Placement: "behind", Open: true},
+	assert.Equal(t, []events.SessionLayoutRequested{
+		{HiveSession: "abc123", Space: "acme/site", Verb: "open", View: "terminal", Window: "@11", Placement: "beside"},
+		{HiveSession: "abc123", Space: "acme/site", Verb: "open", View: "terminal", Window: "@4", Placement: "behind"},
 	}, f.signals.waitTabs(t, 2))
 }
 
@@ -607,14 +622,14 @@ func TestCloseTabAppliesTheSameCallerRules(t *testing.T) {
 	f := newDriveFixture(t, siteSession)
 	ctx := t.Context()
 
-	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, "1", "diff")), "a chat has no Diff tab")
-	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, "1", "board")), "an unknown view")
-	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, "global", "drive")), "the shared space has no tabs")
-	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, siteSession.Path, "terminal")), "a terminal closes from its tab or shell")
+	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, "1", "diff", "")), "a chat has no Diff tab")
+	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, "1", "board", "")), "an unknown view")
+	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, "global", "drive", "")), "the shared space has no tabs")
+	assert.Equal(t, KindInvalid, KindOf(f.svc.CloseTab(ctx, siteSession.Path, "terminal", "")), "a terminal closes from its tab or shell")
 
-	require.NoError(t, f.svc.CloseTab(ctx, siteSession.Path, "tasks"))
-	assert.Equal(t, []events.SessionTabRequested{
-		{HiveSession: "abc123", Space: "acme/site", View: "tasks"},
+	require.NoError(t, f.svc.CloseTab(ctx, siteSession.Path, "tasks", ""))
+	assert.Equal(t, []events.SessionLayoutRequested{
+		{HiveSession: "abc123", Space: "acme/site", Verb: "close", View: "tasks"},
 	}, f.signals.waitTabs(t, 1))
 }
 
@@ -807,8 +822,8 @@ func TestOpenTabNamesTheHiveSession(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, path)
 
-	assert.Equal(t, []events.SessionTabRequested{
-		{HiveSession: "abc123", Space: "acme/site", View: "diff", Placement: "beside", Open: true},
+	assert.Equal(t, []events.SessionLayoutRequested{
+		{HiveSession: "abc123", Space: "acme/site", Verb: "open", View: "diff", Placement: "beside"},
 	}, f.signals.waitTabs(t, 1))
 }
 

@@ -3,7 +3,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 // ?doc is how a reveal or a link asks a session's Drive tab to open, in Chats
 // and in Code alike: bare, it means "you pick", and ?doc=<path> names one
-// document. The tab consumes the query once it has opened (useSessionTabs), so
+// document. The tab consumes the query once it has opened (useSessionLayout), so
 // the query is a request, not state. Everything is derived from the route, so
 // each caller resolves it against its own useRoute().
 export function useDriveRoute() {

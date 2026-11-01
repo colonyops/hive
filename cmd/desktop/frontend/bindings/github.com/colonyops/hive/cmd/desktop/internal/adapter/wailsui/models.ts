@@ -370,6 +370,17 @@ export interface KeybindingSettings {
 }
 
 /**
+ * LayoutReport is every layout of one kind. Kind is code or chats, OnScreen
+ * the key on screen in that kind's area (empty for none), and Layouts is keyed
+ * by hive session id for code and chat session id for chats.
+ */
+export interface LayoutReport {
+    "kind": string;
+    "onScreen": string;
+    "layouts": { [_ in string]?: PanelLayoutWire } | null;
+}
+
+/**
  * MarkImageView is a stored feed-mark image: the content Hash a source node
  * records in its config and the normalized PNG as a data URL for preview.
  */
@@ -456,6 +467,32 @@ export interface ObservabilitySettings {
  */
 export interface OnboardingSettings {
     "completed": boolean;
+}
+
+export interface PanelLayoutWire {
+    "root": PanelNodeWire;
+    "focusedPanel": string;
+}
+
+/**
+ * PanelNodeWire is a panel or a split, by Kind. A split's two Children are
+ * its first and second side.
+ */
+export interface PanelNodeWire {
+    "kind": string;
+    "id": string;
+    "tabs": PanelTabWire[] | null;
+    "activeTab": string;
+    "picking": boolean;
+    "axis": string;
+    "ratio": number;
+    "children": PanelNodeWire[] | null;
+}
+
+export interface PanelTabWire {
+    "id": string;
+    "kind": string;
+    "windowId": string;
 }
 
 /**
@@ -709,6 +746,28 @@ export interface SessionGitStatus {
 }
 
 /**
+ * SessionLayout is the session:layout payload: whose layout to change, a
+ * chat's or a hive session's, and the verb (open, close, move, focus,
+ * close_panel, resize or turn). View and Window name the tab acted on, and
+ * AnchorView and AnchorWindow the tab an open or move places relative to.
+ * Path pins a Drive document on open, Placement is behind, beside or below,
+ * and Share is the resize share (0 when unused).
+ */
+export interface SessionLayout {
+    "session": string;
+    "hiveSession": string;
+    "space": string;
+    "verb": string;
+    "view": string;
+    "window": string;
+    "anchorView": string;
+    "anchorWindow": string;
+    "path": string;
+    "placement": string;
+    "share": number;
+}
+
+/**
  * SessionSummary is the session row shown in Code. CreatedAt starts with the
  * current logical session even when Hive reuses an older clone.
  * 
@@ -727,23 +786,6 @@ export interface SessionSummary {
     "canvasOwner": string;
     "tags": string[] | null;
     "createdAt": string;
-}
-
-/**
- * SessionTab is the session:tab payload: whose tab to open or close, a chat's
- * or a hive session's, which view, for the Drive view the document to pin
- * (empty leaves the tab's pick), and for the terminal view the tmux window id
- * to show. Placement is behind or beside.
- */
-export interface SessionTab {
-    "session": string;
-    "hiveSession": string;
-    "space": string;
-    "view": string;
-    "path": string;
-    "window": string;
-    "placement": string;
-    "open": boolean;
 }
 
 /**

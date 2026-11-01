@@ -80,15 +80,27 @@ tab, a pop-up or another window. None of that would carry to a second host.
     and, for an open, a placement: `behind` the tab in front with an unseen
     dot, or `beside` it in a new split. Neither takes the keyboard. A
     `terminal` is a tmux window the backend creates detached, with an
-    optional name and command, or an existing window named by id or name;
-    `close_tab` refuses it, because closing a window kills what runs in it.
+    optional name and command, or an existing window named by id or name.
     No old name is kept: an agent reads the tool list when it connects, so
     compatibility would only preserve the pane in the vocabulary.
+12. **An agent can do with the layout what the user can.** `move_tab`,
+    `focus_tab`, `close_panel`, `resize_split` and `turn_split` ride the same
+    `session:layout` event as `open_tab` and `close_tab`, each a verb the
+    host applies with the layout's own rules, so there is no second set of
+    rules for agents. A tab is addressed by what it shows, never by a panel
+    id, because panel ids are the frontend's. Two verbs take something from
+    the user and say so: `focus_tab` takes the screen, and `close_tab` on a
+    terminal kills the window. `get_layout` reads a mirror the frontend
+    reports to Go; the browser stays the only owner of the layout, and Go
+    never writes it. The hive CLI (`hive dt tab`, `panel`, `split`, `layout`)
+    is an MCP client of the same tools, found through an endpoint file the
+    desktop writes in the data directory the two programs share, so a shell
+    and an MCP agent cannot drift apart.
 
 ## Consequences
 
 - A second host reuses `lib/panelLayout`, `PanelLayoutHost`,
-  `useSessionPanels` and `useSessionTabs` with its own `PanelWindowSource`
+  `useSessionPanels` and `useSessionLayout` with its own `PanelWindowSource`
   and floating layer. It does not reuse `TerminalPaneColumn`, which is Code's
   host. Chats is the first such host.
 - Adding a view is one entry in `panelViews.ts` and one branch in the Code
