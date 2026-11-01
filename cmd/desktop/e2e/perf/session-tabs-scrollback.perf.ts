@@ -43,13 +43,15 @@ test('a terminal keeps its scrollback across a drag and a direction change', asy
   const middle = { x: divider.x + divider.width / 2, y: divider.y + divider.height / 2 }
   await dragTo(page, middle, { x: middle.x + 150, y: middle.y })
 
-  // Panes of different sizes: each window gets its own tmux grid.
-  await page.waitForTimeout(800)
+  // Panes of different sizes: each window gets its own tmux grid. The resize
+  // lands when tmux answers, so the left pane polls until its grid differs.
   const [left, right] = await page.locator('[data-testid="terminal-pane-host"]:visible').all()
   await right.click()
   await page.keyboard.type('stty size > /tmp/right-size\n')
   await left.click()
-  await page.keyboard.type('[ "$(stty size)" != "$(cat /tmp/right-size)" ] && echo GRIDS-DIFFER-$((1+1))\n')
+  await page.keyboard.type(
+    'until [ "$(stty size)" != "$(cat /tmp/right-size)" ]; do sleep 0.1; done; echo GRIDS-DIFFER-$((1+1))\n',
+  )
   await findsOnce(page, 'GRIDS-DIFFER-2')
 
   await page.getByTestId('panel-divider-s1').hover()

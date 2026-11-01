@@ -2,12 +2,22 @@ import { computed, nextTick, ref, type Ref } from 'vue'
 import { isEditableTarget } from '../../lib/isEditableTarget'
 import { paneMayAutoFocus, terminalTreeFocused } from '../../lib/terminalTree'
 import type { TerminalSessionGroup, TerminalSessionRow } from '../../stores/useTerminalSessions'
-import type { TreeWindowRow } from './useTerminalTree'
+import type { TreeItem, TreeWindowRow } from './useTerminalTree'
 
 export type TreeKeyboardNav = ReturnType<typeof useTreeKeyboardNav>
 
 export const sessionKey = (row: TerminalSessionRow): string => `s:${row.id}`
 export const windowKey = (row: TerminalSessionRow, windowId: string): string => `w:${row.id}:${windowId}`
+export const viewKey = (row: TerminalSessionRow, tabId: string): string => `v:${row.id}:${tabId}`
+
+// A row's id can hold a colon (a server's rows do), so the last one splits the key.
+function parseKey(key: string): { kind: string; rowID: string; id: string } {
+  const kind = key.slice(0, key.indexOf(':'))
+  const rest = key.slice(kind.length + 1)
+  if (kind === 's') return { kind, rowID: rest, id: '' }
+  const at = rest.lastIndexOf(':')
+  return { kind, rowID: rest.slice(0, at), id: rest.slice(at + 1) }
+}
 
 /**
  * The session tree's arrow-key walk. An arrow is a click on the next row, not
@@ -15,10 +25,10 @@ export const windowKey = (row: TerminalSessionRow, windowId: string): string => 
  * rather than a selection and a pending cursor to reconcile.
  *
  * Only rows a click does something to are walked: a repo header collapses on
- * click, so it stays mouse- and Tab-reachable. A running session is its
- * windows, so its own row drops out unless it has no windows to stand in for
- * it (window listing off). Rows are keyed rather than indexed, because the tree
- * re-sorts under a poll.
+ * click, so it stays mouse- and Tab-reachable. A running session is its tabs,
+ * windows and views alike, so its own row drops out unless it has none to
+ * stand in for it (window listing off). Rows are keyed rather than indexed,
+ * because the tree re-sorts under a poll.
  */
 export function useTreeKeyboardNav(options: {
   groups: Ref<TerminalSessionGroup[]>
@@ -27,11 +37,13 @@ export function useTreeKeyboardNav(options: {
   attachedRow: Ref<TerminalSessionRow | null>
   activeSlug: Ref<string>
   windowRowsFor: (row: TerminalSessionRow) => TreeWindowRow[]
+  treeItemsFor: (row: TerminalSessionRow) => TreeItem[]
   rowRunning: (row: TerminalSessionRow) => boolean
   renaming: () => boolean
   selectSession: (slug: string) => void
   startSession: (slug: string) => Promise<void>
   goToWindow: (row: TerminalSessionRow, win: TreeWindowRow) => Promise<void>
+  openView: (row: TerminalSessionRow, panel: string, tabId: string) => void
 }) {
   const root = ref<HTMLElement | null>(null)
   const filterInput = ref<{ select: () => void } | null>(null)
@@ -42,9 +54,9 @@ export function useTreeKeyboardNav(options: {
       if (!options.expanded(group)) continue
       for (const row of group.sessions) {
         if (row.offline) continue
-        const windows = options.windowRowsFor(row)
-        if (!options.rowRunning(row) || !windows.length) keys.push(sessionKey(row))
-        for (const win of windows) keys.push(windowKey(row, win.windowId))
+        const items = options.treeItemsFor(row)
+        if (!options.rowRunning(row) || !items.length) keys.push(sessionKey(row))
+        for (const item of items) keys.push(item.win ? windowKey(row, item.win.windowId) : viewKey(row, item.tabId))
       }
     }
     return keys
@@ -82,14 +94,19 @@ export function useTreeKeyboardNav(options: {
   // the two part company: a click there means "put me back in the pane", and an
   // arrow that did the same would hand the next keystroke to tmux.
   async function activate(key: string): Promise<void> {
-    const [kind, rowID, windowId] = key.split(':')
+    const { kind, rowID, id } = parseKey(key)
     const row = options.rows.value.find((candidate) => candidate.id === rowID)
     if (!row) return
     if (kind === 's') {
       if (row.slug !== options.activeSlug.value) options.selectSession(row.slug)
       return
     }
-    const win = options.windowRowsFor(row).find((candidate) => candidate.windowId === windowId)
+    if (kind === 'v') {
+      const item = options.treeItemsFor(row).find((candidate) => candidate.view && candidate.tabId === id)
+      if (item?.view) options.openView(row, item.view.panel, item.tabId)
+      return
+    }
+    const win = options.windowRowsFor(row).find((candidate) => candidate.windowId === id)
     if (win) await options.goToWindow(row, win)
   }
 
@@ -144,6 +161,11 @@ export function useTreeKeyboardNav(options: {
     void options.goToWindow(row, win)
   }
 
+  function clickView(row: TerminalSessionRow, panel: string, tabId: string): void {
+    cursorRequest.value = viewKey(row, tabId)
+    options.openView(row, panel, tabId)
+  }
+
   function clickSession(row: TerminalSessionRow): void {
     cursorRequest.value = sessionKey(row)
     paneMayAutoFocus.value = true
@@ -169,6 +191,7 @@ export function useTreeKeyboardNav(options: {
     focusTree,
     focusFilter,
     openWindow,
+    clickView,
     clickSession,
     enterSession,
   }

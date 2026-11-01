@@ -22,6 +22,7 @@ import {
   type PanelTab,
 } from '../../lib/panelLayout'
 import PanelTabRow from './PanelTabRow.vue'
+import { TAB_ROW_PX } from './panelTabRow'
 import { usePanelDrag } from './usePanelDrag'
 
 const props = withDefaults(
@@ -57,7 +58,6 @@ defineSlots<{
   floating(props: { region: (panelId: string) => Record<string, string> }): unknown
 }>()
 
-const TAB_ROW_PX = 30
 const BORDER_PX = 1
 
 const panelList = computed(() => panelsOf(props.layout))
@@ -126,6 +126,8 @@ function startRowResize(event: PointerEvent, panelId: string): void {
   if (boundary) startResize(event, boundary.split, boundary.box)
 }
 
+// The session's own actions sit where one pane had them, in the top right
+// corner; exactly one panel reaches it however the layout is split.
 const leadPanel = computed(() => {
   for (const panel of panelList.value) {
     const box = boxes.value.get(panel.id)

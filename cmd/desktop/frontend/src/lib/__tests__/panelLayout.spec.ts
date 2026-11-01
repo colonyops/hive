@@ -13,6 +13,7 @@ import {
   moveTab,
   moveTabBehind,
   moveTabBeside,
+  moveTabToEnd,
   moveTabToSplit,
   newPanelLayout,
   openTab,
@@ -116,6 +117,12 @@ describe('syncTabs', () => {
     const layout = splitWith(attached('@1', '@2'), '@2')
     expect(syncTabs(layout, 'window', ['@1'], win).focusedPanel).toBe(panelId(layout, 0))
   })
+
+  it('falls back to the focused panel, not the first, when the panel that asked is gone', () => {
+    const layout = focusPanel(splitWith(attached('@1', '@2'), '@2'), 'p1')
+    const synced = syncTabs(layout, 'window', ['@1', '@2', '@3'], win, { target: 'gone' })
+    expect(ids(synced, 1)).toEqual(['window:@2', 'window:@3'])
+  })
 })
 
 describe('tabs', () => {
@@ -169,6 +176,25 @@ describe('tabs', () => {
     expect(withTabParams(layout, 'nope', {})).toBe(layout)
   })
 
+  it('returns the same layout for params that say the same', () => {
+    const scope = { space: 'acme/site', path: 'plans/x.md', session: null }
+    const layout = openTab(attached(), { id: 'docs', kind: 'docs', params: { scope } })
+    expect(withTabParams(layout, 'docs', { scope: { ...scope } })).toBe(layout)
+    expect(withTabParams(layout, 'docs', { scope: { ...scope, path: null } })).not.toBe(layout)
+    expect(withTabParams(layout, 'docs', { scope, extra: 1 })).not.toBe(layout)
+  })
+
+  it('returns the same layout when the tab is already selected and its panel focused', () => {
+    const layout = attached('@1', '@2')
+    expect(selectTab(layout, 'p0', 'window:@1')).toBe(layout)
+    expect(selectTab(layout, 'p0', 'window:@2')).not.toBe(layout)
+    const split = splitWith(attached('@1', '@2'), '@2')
+    const other = focusPanel(split, 'p0')
+    expect(selectTab(other, panelId(split, 1), 'window:@2')).not.toBe(other)
+    const asking = splitPanel(openTab(attached(), view('diff')), 'p0', 'row')
+    expect(selectTab(asking, 'p0', 'window:@1')).not.toBe(asking)
+  })
+
   it('reports what each panel shows, and nothing while it asks', () => {
     const split = splitWith(attached('@1', '@2'), '@2')
     expect([...shownTabs(split).entries()].map(([panel, tab]) => [panel, tab.id])).toEqual([
@@ -197,10 +223,35 @@ describe('addTabQuietly', () => {
     expect(addTabQuietly(layout, view('docs'))).toBe(layout)
   })
 
-  it('joins the last panel, behind its picker', () => {
+  it('joins the focused panel, behind its picker', () => {
     const layout = addTabQuietly(splitPanel(attached('@1'), 'p0', 'row'), view('docs'))
     expect(ids(layout, 1)).toEqual(['docs'])
     expect(panelsOf(layout)[1].picking).toBe(true)
+  })
+
+  it('joins the focused panel when it is not the last one', () => {
+    const start = focusPanel(splitWith(attached('@1', '@2'), '@2'), 'p0')
+    const layout = addTabQuietly(start, view('docs'))
+    expect(ids(layout, 0)).toEqual(['window:@1', 'docs'])
+    expect(ids(layout, 1)).toEqual(['window:@2'])
+    expect(focusedTab(layout)).toBe('window:@1')
+  })
+})
+
+describe('moveTabToEnd', () => {
+  it('moves a tab to the end of another panel without selecting it or moving focus', () => {
+    const start = focusPanel(splitWith(attached('@1', '@2', '@3'), '@3'), 'p1')
+    const layout = moveTabToEnd(start, 'window:@2', 'p0')
+    expect(ids(layout, 0)).toEqual(['window:@1', 'window:@2'])
+    expect(panelsOf(layout)[0].activeTab).toBe('window:@1')
+    expect(layout.focusedPanel).toBe('p1')
+  })
+
+  it('does nothing for a tab already last, or a tab or panel that is not there', () => {
+    const layout = attached('@1', '@2')
+    expect(moveTabToEnd(layout, 'window:@2', 'p0')).toBe(layout)
+    expect(moveTabToEnd(layout, 'docs', 'p0')).toBe(layout)
+    expect(moveTabToEnd(layout, 'window:@1', 'nope')).toBe(layout)
   })
 })
 
@@ -519,6 +570,7 @@ describe('nested splits', () => {
     const cancelled = closePanel(lone, panelId(lone))
     expect(panelsOf(cancelled)).toHaveLength(1)
     expect(panelsOf(cancelled)[0].picking).toBe(false)
+    expect(closePanel(cancelled, panelId(cancelled))).toBe(cancelled)
   })
 
   it('moves a tab out of a panel when the picker names it', () => {

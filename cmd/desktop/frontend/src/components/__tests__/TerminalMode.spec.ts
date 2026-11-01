@@ -27,6 +27,7 @@ import {
   paneMayAutoFocus,
   selectTerminalWindow,
   stepTerminalWindow,
+  terminalTreeFocused,
 } from '../../lib/terminalTree'
 import { createAppRouter } from '../../router'
 import { resetStores } from '../../stores/defineStore'
@@ -151,6 +152,14 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   Spaces: vi.fn().mockResolvedValue([]),
   Tree: vi.fn().mockResolvedValue({ path: '', name: '', kind: 'dir', children: [] }),
   Document: vi.fn(),
+}))
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/tasksservice', () => ({
+  ListTasks: vi.fn().mockResolvedValue([]),
+  TaskDetail: vi.fn(),
+  SetTaskStatus: vi.fn(),
+  DeleteTask: vi.fn(),
+  PruneTasks: vi.fn(),
+  TaskRepoKeys: vi.fn().mockResolvedValue([]),
 }))
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
@@ -314,6 +323,14 @@ async function mountAvailable(session = fakeSession()) {
 
 function storedRestore() {
   return JSON.parse(localStorage.getItem('hive.terminal.restore') ?? 'null')
+}
+
+// Every useWailsEvent in the mounted tree registered through Events.On, so an
+// event is fired by replaying its handlers.
+function fireWails(name: string, data: unknown): void {
+  for (const [registered, handler] of mocks.On.mock.calls as [string, (event: { data: unknown }) => void][]) {
+    if (registered === name) handler({ data })
+  }
 }
 
 describe('TerminalMode', () => {
@@ -604,11 +621,13 @@ describe('TerminalMode', () => {
     const liveRow = wrapper.get('[data-testid="terminal-session-row"][data-slug="live"]')
     expect(liveRow.get('span').classes()).not.toContain('text-text-3')
 
-    // A working agent has no glyph of its own: only the states that want attention do.
+    // Every window carries its state in the tree, a working agent as a spinner.
     const activity = wrapper.findAll('[data-testid="terminal-window-status"]')
-    expect(activity).toHaveLength(3)
+    expect(activity).toHaveLength(4)
     expect(activity.every((indicator) => indicator.find('svg').exists())).toBe(true)
-    expect(wrapper.find('[data-testid="terminal-window-status"][data-status="active"]').exists()).toBe(false)
+    const working = wrapper.get('[data-testid="terminal-window-status"][data-status="active"]')
+    expect(working.attributes('title')).toBe('pi is working')
+    expect(working.get('svg').classes()).toContain('animate-spin')
     expect(wrapper.get('[data-testid="terminal-window-status"][data-status="approval"]').attributes('title')).toBe(
       'claude needs approval',
     )
@@ -618,7 +637,9 @@ describe('TerminalMode', () => {
     await flushPromises()
 
     expect(wrapper.findAll('[data-testid="terminal-window-row"]')).toHaveLength(4)
-    expect(wrapper.findAll('[data-testid="terminal-window-status"]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-testid="terminal-window-status"]')).toHaveLength(4)
+    expect(wrapper.find('[data-testid="session-status-agent"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="session-status-host"]').exists()).toBe(false)
   })
 
   it('opens the new-session dialog from the sidebar header', async () => {
@@ -4775,6 +4796,132 @@ describe('TerminalMode', () => {
 
       expect(router.currentRoute.value.name).toBe('application-settings')
       expect(router.currentRoute.value.params.section).toBe('mcp')
+
+      wrapper.unmount()
+    })
+  })
+
+  describe('session tabs as the Code host', () => {
+    const drive = { space: 'hay-kot/hive', session: '1' }
+
+    async function mountSession(path: string, hostDrive = drive) {
+      const session = fakeSession()
+      mocks.useTerminalWindows.mockReturnValue(session)
+      const router = createAppRouter(createMemoryHistory())
+      await router.push(path)
+      await router.isReady()
+      const wrapper = mount(TerminalMode, {
+        props: { drive: hostDrive },
+        global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
+      })
+      await flushPromises()
+      return { wrapper, router, session }
+    }
+
+    it('offers the agents in the picker of a running session', async () => {
+      const { wrapper } = await mountSession('/terminal/hive-fix-parser')
+
+      await wrapper.get('[data-testid="panel-split-row-p0"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="panel-picker-terminal"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="panel-picker-agent-claude"]').exists()).toBe(true)
+
+      wrapper.unmount()
+    })
+
+    it('offers no agent in the picker of a session that is not running, as the + menu does', async () => {
+      mocks.SessionStatuses.mockResolvedValue({
+        items: [
+          { sessionId: '1', running: true, windows: [] },
+          { sessionId: '2', running: false, windows: [] },
+        ],
+        pollIntervalMs: 60_000,
+      })
+      const { wrapper } = await mountSession('/terminal/hive-bump-deps')
+      expect(
+        wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-bump-deps"]').attributes('data-attached'),
+      ).toBe('true')
+
+      await wrapper.get('[data-testid="panel-split-row-p0"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="panel-picker-terminal"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="panel-picker-agent-claude"]').exists()).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    // Every view stays mounted behind the tab in front and reads its keys off the
+    // window, so the host says which one the keys belong to.
+    it('hands the keys to the view in front, and to none while the tree has them', async () => {
+      const { wrapper } = await mountSession('/terminal/hive-fix-parser')
+      usePanelLayouts().apply('1', (layout) => openTab(openTab(layout, viewTab('docs')), viewTab('tasks')))
+      await flushPromises()
+
+      const tasks = () => wrapper.findComponent({ name: 'TasksView' })
+      expect(tasks().props('keysActive')).toBe(true)
+
+      await wrapper.get('[data-testid="panel-tab-docs"] [role="tab"]').trigger('click')
+      await flushPromises()
+      expect(tasks().props('keysActive')).toBe(false)
+
+      await wrapper.get('[data-testid="panel-tab-tasks"] [role="tab"]').trigger('click')
+      await flushPromises()
+      expect(tasks().props('keysActive')).toBe(true)
+      terminalTreeFocused.value = true
+      await flushPromises()
+      expect(tasks().props('keysActive')).toBe(false)
+      terminalTreeFocused.value = false
+
+      wrapper.unmount()
+    })
+
+    it("opens a view behind the tab in front on an agent's ask, without taking the screen", async () => {
+      const { wrapper } = await mountSession('/terminal/hive-fix-parser')
+
+      fireWails('session:layout', { session: '1', verb: 'open', view: 'tasks', placement: 'behind' })
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="panel-tab-tasks"]').attributes('data-shown')).toBe('false')
+      expect(shownWindow(wrapper)).toBe('@1')
+      expect(wrapper.findAll('section[data-panel]')).toHaveLength(1)
+
+      wrapper.unmount()
+    })
+
+    it("refuses a view the session cannot show, as the picker does for a server's session", async () => {
+      mocks.ListServerSessions.mockResolvedValue([
+        {
+          server: 'box',
+          ssh: 'ada@box',
+          state: 'connected',
+          error: '',
+          sessions: [
+            {
+              server: 'box',
+              id: 'box:9',
+              name: 'remote work',
+              slug: 'box:remote-work',
+              repo: '/home/hive/repo.git',
+              repoIdentity: '/home/hive/repo.git',
+              state: 'active',
+              canvasOwner: '',
+              tags: [],
+              createdAt: '',
+            },
+          ],
+        },
+      ])
+      const { wrapper } = await mountSession('/terminal/box:remote-work', { space: 'hay-kot/hive', session: 'box:9' })
+
+      fireWails('session:layout', { session: 'box:9', verb: 'open', view: 'diff', placement: 'behind' })
+      fireWails('session:layout', { session: 'box:9', verb: 'open', view: 'tasks', placement: 'beside' })
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="panel-tab-diff"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="panel-tab-tasks"]').exists()).toBe(false)
+      expect(wrapper.findAll('section[data-panel]')).toHaveLength(1)
 
       wrapper.unmount()
     })

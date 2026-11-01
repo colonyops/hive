@@ -77,7 +77,7 @@ export function usePanelDrag(panels: PanelDragTarget, host: Ref<HTMLElement | nu
   }
 
   // Keeps the offset from the boundary to where it was grabbed, because a stacked
-  // tab row is a grab area 30px deep and the boundary must not jump to the pointer.
+  // tab row is a grab area as deep as the row and the boundary must not jump to the pointer.
   function startResize(event: PointerEvent, split: PanelSplit, box: PanelBox): void {
     const rect = host.value?.getBoundingClientRect()
     if (!rect || event.button !== 0) return

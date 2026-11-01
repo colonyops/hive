@@ -5,6 +5,7 @@ import {
   focusTab,
   moveTabBehind,
   moveTabToSplit,
+  panelById,
   panelWithTab,
   resizeSplitFor,
   turnSplitFor,
@@ -14,21 +15,15 @@ import {
   type SplitAxis,
 } from '../../lib/panelLayout'
 import { windowTabId } from '../../lib/windowTabs'
-import { viewTab, type SessionViewKind } from '../terminal/panelViews'
+import { viewTab } from '../terminal/panelViews'
 import type { SessionTabPlacement, TabRef } from './useSessionLayout'
 
-const KIND_OF_VIEW: Record<Exclude<TabRef['view'], 'terminal'>, SessionViewKind> = {
-  drive: 'docs',
-  diff: 'diff',
-  tasks: 'tasks',
-}
-
 /**
- * The layout tab id a wire ref names. A terminal with no window is the host's
+ * The layout tab id a ref names. A terminal with no window is the host's
  * own window, which only Chats has, so `ownWindowId` is how it says so.
  */
 export function tabIdOf(ref: TabRef, ownWindowId?: string): string | undefined {
-  if (ref.view !== 'terminal') return viewTab(KIND_OF_VIEW[ref.view]).id
+  if (ref.view !== 'terminal') return viewTab(ref.view).id
   const windowId = ref.window || ownWindowId
   return windowId ? windowTabId(windowId) : undefined
 }
@@ -49,9 +44,9 @@ export function axisOf(placement: SessionTabPlacement): SplitAxis {
 }
 
 /**
- * A view an agent opened. Behind with no anchor joins the last panel, so the
- * user's current tab stays in front. Behind an anchor that is open goes right
- * after it, in its panel.
+ * A view an agent opened. Behind with no anchor joins the focused panel behind
+ * the tab in front, so the user's current tab stays in front. Behind an anchor
+ * that is open goes right after it, in its panel.
  */
 export function openViewRule(
   layout: PanelLayout,
@@ -90,9 +85,13 @@ export function focusRule(layout: PanelLayout, tab: TabRef, ownWindowId?: string
   return tabId ? focusTab(layout, tabId) : layout
 }
 
+/** Closing a panel merges it into its neighbour; the agent's verb does not move the keyboard while its panel survives. */
 export function closePanelRule(layout: PanelLayout, tab: TabRef, ownWindowId?: string): PanelLayout {
   const panel = panelOfRef(layout, tab, ownWindowId)
-  return panel ? closePanel(layout, panel.id) : layout
+  if (!panel) return layout
+  const closed = closePanel(layout, panel.id)
+  if (closed === layout || closed.focusedPanel === layout.focusedPanel) return closed
+  return panelById(closed, layout.focusedPanel) ? { ...closed, focusedPanel: layout.focusedPanel } : closed
 }
 
 export function resizeRule(layout: PanelLayout, tab: TabRef, share: number, ownWindowId?: string): PanelLayout {

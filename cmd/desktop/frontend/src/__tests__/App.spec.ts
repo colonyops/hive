@@ -27,6 +27,8 @@ import { applicationSettingsSections, createAppRouter } from '../router'
 import TerminalMode from '../components/TerminalMode.vue'
 import DrivePage from '../components/drive/DrivePage.vue'
 import SettingsView from '../components/SettingsView.vue'
+import { viewTab, withDocsScope } from '../components/terminal/panelViews'
+import { newPanelLayout, openTab } from '../lib/panelLayout'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { setTerminalTreeHandles, type TerminalTreeHandles } from '../lib/terminalTree'
 import { ListSessions } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
@@ -3404,8 +3406,18 @@ describe('App', () => {
 
   // A hive session's documents belong to its repository's space, so the
   // title bar's right toggle and the full-page view both work from Code with
-  // no chat.
-  it('leaves Drive to the session tabs in Code, and opens the full page on its repository', async () => {
+  // no chat. The full page opens on the document the session's Drive tab reads.
+  it('leaves Drive to the session tabs in Code, and opens the full page on the tab’s document', async () => {
+    localStorage.setItem(
+      'hive.code.panel-layouts',
+      JSON.stringify({
+        s1: withDocsScope(openTab(newPanelLayout(), viewTab('docs')), {
+          space: 'hay-kot/hive',
+          path: 'plans/x.md',
+          session: 's1',
+        }),
+      }),
+    )
     mocks.AgentsAvailable.mockResolvedValue({ available: true, reason: '' })
     mocks.agentsClient = {
       workspaces: vi.fn().mockResolvedValue({
@@ -3442,7 +3454,7 @@ describe('App', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', metaKey: true, shiftKey: true }))
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('drive')
-    expect(router.currentRoute.value.query).toEqual({ space: 'hay-kot/hive', session: 's1' })
+    expect(router.currentRoute.value.query).toEqual({ space: 'hay-kot/hive', doc: 'plans/x.md', session: 's1' })
     expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(true)
     expect(mocks.DriveTree).toHaveBeenCalledWith('hay-kot/hive')
 

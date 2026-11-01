@@ -172,16 +172,18 @@ describe('useSessionLayout', () => {
     expect(openWindow).toHaveBeenCalledWith('@12', 'below', null)
   })
 
-  it('passes the anchor of an open, and no anchor when both halves are empty', async () => {
+  it('passes the anchor of an open as a layout kind, and no anchor when both halves are empty', async () => {
     const { open, openWindow } = await mountAt('/terminal/fix-login')
 
     fireTab({ view: 'drive', placement: 'beside', anchorView: 'terminal', anchorWindow: '@3' })
     fireTab({ view: 'terminal', window: '@12', placement: 'beside', anchorView: 'diff' })
     fireTab({ view: 'tasks', anchorView: '', anchorWindow: '' })
+    fireTab({ view: 'diff', anchorView: 'drive' })
 
     expect(open).toHaveBeenNthCalledWith(1, 'docs', null, 'beside', { view: 'terminal', window: '@3' })
     expect(openWindow).toHaveBeenCalledWith('@12', 'beside', { view: 'diff', window: '' })
     expect(open).toHaveBeenNthCalledWith(2, 'tasks', null, 'behind', null)
+    expect(open).toHaveBeenNthCalledWith(3, 'diff', null, 'behind', { view: 'docs', window: '' })
   })
 
   it('moves a tab relative to an anchor', async () => {
@@ -190,7 +192,7 @@ describe('useSessionLayout', () => {
     fireTab({ verb: 'move', view: 'drive', placement: 'beside', anchorView: 'terminal', anchorWindow: '@3' })
     fireTab({ verb: 'move', view: 'terminal', window: '@4' })
 
-    expect(move).toHaveBeenNthCalledWith(1, { view: 'drive', window: '' }, 'beside', { view: 'terminal', window: '@3' })
+    expect(move).toHaveBeenNthCalledWith(1, { view: 'docs', window: '' }, 'beside', { view: 'terminal', window: '@3' })
     expect(move).toHaveBeenNthCalledWith(2, { view: 'terminal', window: '@4' }, 'behind', null)
   })
 
@@ -211,7 +213,7 @@ describe('useSessionLayout', () => {
 
     fireTab({ verb: 'resize', view: 'drive', share: 0.65 })
 
-    expect(resize).toHaveBeenCalledWith({ view: 'drive', window: '' }, 0.65)
+    expect(resize).toHaveBeenCalledWith({ view: 'docs', window: '' }, 0.65)
   })
 
   it('ignores a resize with no usable share', async () => {

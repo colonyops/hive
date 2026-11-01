@@ -131,7 +131,8 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await fixture(page)
     await page.getByTestId('session-status-diff').click()
     await expect(page.getByTestId('changes-view')).toBeVisible()
-    await expect(page.getByTestId('session-status-host')).toHaveText('Local')
+    // A local session names no host; only a server session does.
+    await expect(page.getByTestId('session-status-host')).toHaveCount(0)
   })
 
   test('splits through the picker, and puts Terminal beside Diff', async ({ page, browserName }) => {

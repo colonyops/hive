@@ -160,7 +160,9 @@ export function focusPanel(layout: PanelLayout, id: string): PanelLayout {
 }
 
 export function selectTab(layout: PanelLayout, panelId: string, tabId: string): PanelLayout {
-  if (!panelById(layout, panelId)?.tabs.some((tab) => tab.id === tabId)) return layout
+  const panel = panelById(layout, panelId)
+  if (!panel?.tabs.some((tab) => tab.id === tabId)) return layout
+  if (panel.activeTab === tabId && !panel.picking && layout.focusedPanel === panelId) return layout
   return { ...withPanel(layout, panelId, { activeTab: tabId, picking: false }), focusedPanel: panelId }
 }
 
@@ -178,11 +180,12 @@ export function openTab(layout: PanelLayout, tab: PanelTab, target = layout.focu
 
 /**
  * For a tab nobody at the keyboard asked for, such as a document an agent opened.
- * It joins the last panel and takes no focus, so typing in a terminal carries on.
+ * It joins the focused panel behind the tab in front, and takes no focus, so
+ * typing in a terminal carries on.
  */
 export function addTabQuietly(layout: PanelLayout, tab: PanelTab): PanelLayout {
   if (panelWithTab(layout, tab.id)) return layout
-  const panel = panelsOf(layout).at(-1)!
+  const panel = panelById(layout, layout.focusedPanel) ?? firstPanel(layout.root)
   return withPanel(layout, panel.id, { tabs: [...panel.tabs, tab], activeTab: panel.activeTab ?? tab.id })
 }
 
@@ -195,10 +198,21 @@ export function placeTab(layout: PanelLayout, tab: PanelTab, target: string): Pa
   return appendTab(layout, target, tab)
 }
 
-/** Replaces a tab's `params`. The same layout comes back for a tab that is not open. */
+function sameParams(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  const keys = Object.keys(a)
+  if (keys.length !== Object.keys(b).length) return false
+  const left = a as Record<string, unknown>
+  const right = b as Record<string, unknown>
+  return keys.every((key) => key in right && sameParams(left[key], right[key]))
+}
+
+/** Replaces a tab's `params`. The same layout comes back for a tab that is not open, or params that say the same. */
 export function withTabParams(layout: PanelLayout, tabId: string, params: PanelTab['params']): PanelLayout {
   const panel = panelWithTab(layout, tabId)
   if (!panel) return layout
+  if (sameParams(panel.tabs.find((tab) => tab.id === tabId)?.params, params)) return layout
   return withPanel(layout, panel.id, { tabs: panel.tabs.map((tab) => (tab.id === tabId ? { ...tab, params } : tab)) })
 }
 
@@ -342,7 +356,7 @@ export function closePanel(layout: PanelLayout, panelId: string): PanelLayout {
   const panel = panelById(layout, panelId)
   if (!panel) return layout
   const neighbour = neighbourOf(layout.root, panelId)
-  if (!neighbour) return withPanel(layout, panelId, { picking: false })
+  if (!neighbour) return panel.picking ? withPanel(layout, panelId, { picking: false }) : layout
   const merged = withPanel(withoutPanel(layout, panelId), neighbour.id, {
     tabs: [...neighbour.tabs, ...panel.tabs],
     activeTab: neighbour.activeTab ?? panel.activeTab,
@@ -431,32 +445,45 @@ export function moveTabBeside(
   return moveTab(layout, tabId, panel.id, edge === 'after' ? at + 1 : at)
 }
 
+/** A move nobody at the keyboard asked for: the tab lands at `at` in `target` without being selected or moving focus. */
+function moveTabWithoutFocus(
+  layout: PanelLayout,
+  tabId: string,
+  target: string,
+  at: (tabs: readonly PanelTab[]) => number,
+): PanelLayout {
+  const from = panelWithTab(layout, tabId)
+  if (!from || !panelById(layout, target)) return layout
+  const tab = from.tabs.find((candidate) => candidate.id === tabId)!
+  const cleared = removeTab(layout, from.id, tabId)
+  const destination = panelById(cleared, target)!
+  const index = at(destination.tabs)
+  const tabs = [...destination.tabs.slice(0, index), tab, ...destination.tabs.slice(index)]
+  if (from.id === target && tabs.every((candidate, position) => candidate.id === from.tabs[position].id)) return layout
+  const keepsSelection = from.id === target && from.activeTab === tabId
+  const activeTab = keepsSelection ? tabId : (destination.activeTab ?? tabId)
+  return dropEmptyPanels(withPanel(cleared, target, { tabs, activeTab }))
+}
+
 /**
  * Puts an open tab right after the anchor tab, in the anchor's panel, or at the
- * end of the focused panel without one. It is for a move nobody at the keyboard
- * asked for, so it neither selects the tab nor moves focus.
+ * end of the focused panel without one. It neither selects the tab nor moves focus.
  */
 export function moveTabBehind(layout: PanelLayout, tabId: string, anchorTabId?: string): PanelLayout {
-  const from = panelWithTab(layout, tabId)
-  if (!from || anchorTabId === tabId) return layout
+  if (anchorTabId === tabId) return layout
   const anchorPanel =
     anchorTabId === undefined
       ? (panelById(layout, layout.focusedPanel) ?? firstPanel(layout.root))
       : panelWithTab(layout, anchorTabId)
   if (!anchorPanel) return layout
-  const tab = from.tabs.find((candidate) => candidate.id === tabId)!
-  const cleared = removeTab(layout, from.id, tabId)
-  const destination = panelById(cleared, anchorPanel.id)!
-  const at =
-    anchorTabId === undefined
-      ? destination.tabs.length
-      : destination.tabs.findIndex((candidate) => candidate.id === anchorTabId) + 1
-  const tabs = [...destination.tabs.slice(0, at), tab, ...destination.tabs.slice(at)]
-  if (from.id === destination.id && tabs.every((candidate, index) => candidate.id === from.tabs[index].id))
-    return layout
-  const keepsSelection = from.id === destination.id && from.activeTab === tabId
-  const activeTab = keepsSelection ? tabId : (destination.activeTab ?? tabId)
-  return dropEmptyPanels(withPanel(cleared, destination.id, { tabs, activeTab }))
+  return moveTabWithoutFocus(layout, tabId, anchorPanel.id, (tabs) =>
+    anchorTabId === undefined ? tabs.length : tabs.findIndex((candidate) => candidate.id === anchorTabId) + 1,
+  )
+}
+
+/** Puts an open tab at the end of `target`. It neither selects the tab nor moves focus. */
+export function moveTabToEnd(layout: PanelLayout, tabId: string, target: string): PanelLayout {
+  return moveTabWithoutFocus(layout, tabId, target, (tabs) => tabs.length)
 }
 
 /** Brings an open tab forward in its panel and gives that panel the keyboard. */
@@ -489,7 +516,8 @@ export function syncTabs(
   }
   const missing = wanted.filter((tab) => !panelWithTab(next, tab.id))
   if (missing.length) {
-    const target = panelById(next, options.target ?? next.focusedPanel) ?? firstPanel(next.root)
+    const asked = options.target ? panelById(next, options.target) : undefined
+    const target = asked ?? panelById(next, next.focusedPanel) ?? firstPanel(next.root)
     // Only a tab this panel asked for answers its picker. One that arrived on
     // its own joins behind it, and the question stays on screen.
     const picking = target.picking && target.id !== options.target

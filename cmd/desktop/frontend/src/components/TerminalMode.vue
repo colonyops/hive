@@ -25,6 +25,7 @@ import { useWindowRename } from './terminal/useWindowRename'
 import { useNewSession } from '../composables/useNewSession'
 import { usePaintedActive } from '../composables/usePaintedActive'
 import { useSessionActions } from '../composables/useSessionActions'
+import { selectTab } from '../lib/panelLayout'
 import { revealWindow } from '../lib/windowTabs'
 import { TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 import { useCodeViews } from '../stores/useCodeViews'
@@ -110,11 +111,17 @@ const nav = useTreeKeyboardNav({
   attachedRow: tree.attachedRow,
   activeSlug: pool.activeSlug,
   windowRowsFor: tree.windowRowsFor,
+  treeItemsFor: tree.treeItemsFor,
   rowRunning: tree.rowRunning,
   renaming: () => !!rename.windowId.value,
   selectSession: attach.selectSession,
   startSession: attach.startSession,
   goToWindow: attach.goToWindow,
+  openView: (row, panel, tabId) => {
+    panelLayouts.apply(row.id, (layout) => selectTab(layout, panel, tabId))
+    // For the session on screen this would put the keyboard back in its terminal.
+    if (row.slug !== pool.visibleSlug.value) attach.selectSession(row.slug)
+  },
 })
 const context = { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panels }
 provideTerminalMode(context)

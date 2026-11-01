@@ -4,9 +4,12 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentsMode from '../AgentsMode.vue'
 import AgentsSidebar from '../AgentsSidebar.vue'
+import ChatTabAdd from '../agents/ChatTabAdd.vue'
 import { resetNewSessionForTests, useNewSession } from '../../composables/useNewSession'
+import { newPanelLayout, openTab } from '../../lib/panelLayout'
 import { createAppRouter } from '../../router'
 import { useDriveActivity } from '../../stores/useDriveActivity'
+import { viewTab } from '../terminal/panelViews'
 import { tooltipFor } from '../../test-utils/tooltip'
 import type { MissingSkillPackage } from '../../lib/agentWorkspacesClient'
 
@@ -1248,5 +1251,44 @@ describe('AgentsMode', () => {
     await nextTick()
 
     expect(JSON.parse(localStorage.getItem('hive.chats.panel-layouts') ?? '{}')).not.toHaveProperty('7')
+  })
+
+  // A chat that ended outside this pane never passes through closeRow, so the
+  // listing is what lets its layout go.
+  it('lets go of the layout of a chat the listing no longer has, and keeps the rest', async () => {
+    const stored = { '99': openTab(newPanelLayout(), viewTab('docs')), '7': openTab(newPanelLayout(), viewTab('docs')) }
+    localStorage.setItem('hive.chats.panel-layouts', JSON.stringify(stored))
+    const client = fakeClient()
+    client.allSessions.mockResolvedValue([chatRow])
+
+    await mountWithOpenChat(client)
+    await nextTick()
+
+    const layouts = JSON.parse(localStorage.getItem('hive.chats.panel-layouts') ?? '{}')
+    expect(layouts).not.toHaveProperty('99')
+    expect(layouts).toHaveProperty('7')
+  })
+
+  it('writes no layout while a launch is still answering and there is no chat to key it by', async () => {
+    const client = fakeClient()
+    let answer!: (session: Awaited<ReturnType<typeof client.startSession>>) => void
+    const launched = client.startSession.getMockImplementation()!()
+    client.startSession.mockImplementation(() => new Promise((resolve) => (answer = resolve)))
+    mocks.createAgentWorkspacesClient.mockReturnValue(client)
+    const { wrapper } = await mountAgentsMode('/workspaces/web-app')
+    wrapper.findComponent(AgentsSidebar).vm.$emit('request-new-session')
+    await flushPromises()
+    void useNewSession().submit({ workspace: 'web-app', name: 'New Chat' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="agents-pane-opening"]').exists()).toBe(true)
+
+    wrapper.findComponent(ChatTabAdd).vm.$emit('view', 'docs')
+    await flushPromises()
+    await nextTick()
+    expect(Object.keys(JSON.parse(localStorage.getItem('hive.chats.panel-layouts') ?? '{}'))).not.toContain('')
+
+    answer(await launched)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="agents-pane-opening"]').exists()).toBe(false)
   })
 })

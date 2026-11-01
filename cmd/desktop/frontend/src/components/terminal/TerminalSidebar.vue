@@ -40,8 +40,8 @@ import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import { TERMINAL_SIDEBAR } from '../../lib/modeSidebars'
 import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
 import type { OrderDropTarget } from '../../lib/listOrder'
-import { closeTab, moveTabBeside, orderedTabs, selectTab, focusedTab, type PanelTab } from '../../lib/panelLayout'
-import { focusedWindow, windowIdOf, windowIdOfTab, windowOrder, windowTabId } from '../../lib/windowTabs'
+import { closeTab, moveTabBeside, focusedTab } from '../../lib/panelLayout'
+import { focusedWindow, windowIdOfTab, windowOrder } from '../../lib/windowTabs'
 import { terminalTreeFocused } from '../../lib/terminalTree'
 import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { sessionAgeDays, useTerminalSessionAge } from '../../stores/useTerminalSessionAge'
@@ -50,38 +50,14 @@ import type { MenuEntry } from '@hive/ui/types/menu'
 import { viewOfTab } from './panelViews'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
-import type { TreeWindowRow } from './useTerminalTree'
+import type { TreeItem, TreeWindowRow } from './useTerminalTree'
+import { viewKey } from './useTreeKeyboardNav'
 
 const props = defineProps<{ active: boolean }>()
 const { monochrome: monochromeAgentIcons } = useTerminalAgentIcons()
 const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panels } = useTerminalModeContext()
 const { openBlank: openNewSession } = useNewSession()
 const panelLayouts = usePanelLayouts()
-
-// The tree mirrors the tabs: one row each, in tab order. A session that has not
-// been attached yet has no tabs for its listed windows, which come first.
-interface TreeItem {
-  key: string
-  /** The tab this row mirrors, which is what a drag moves. */
-  tabId: string
-  win: TreeWindowRow | null
-  view: { panel: string; tab: PanelTab } | null
-}
-
-function treeItemsFor(row: TerminalSessionRow): TreeItem[] {
-  const windows = tree.windowRowsFor(row)
-  const tabs = orderedTabs(panelLayouts.layoutOf(row.id))
-  const placed = tabs.flatMap(({ panel, tab }): TreeItem[] => {
-    const windowId = windowIdOf(tab)
-    if (!windowId) return [{ key: `view:${tab.id}`, tabId: tab.id, win: null, view: { panel, tab } }]
-    const win = windows.find((candidate) => candidate.windowId === windowId)
-    return win ? [{ key: win.windowId, tabId: tab.id, win, view: null }] : []
-  })
-  const unplaced = windows
-    .filter((win) => !tabs.some(({ tab }) => tab.id === windowTabId(win.windowId)))
-    .map((win) => ({ key: win.windowId, tabId: windowTabId(win.windowId), win, view: null }))
-  return [...unplaced, ...placed]
-}
 
 function viewRowActive(row: TerminalSessionRow, tabId: string): boolean {
   return row.slug === pool.visibleSlug && focusedTab(panelLayouts.layoutOf(row.id)) === tabId
@@ -90,12 +66,6 @@ function viewRowActive(row: TerminalSessionRow, tabId: string): boolean {
 // tmux's active window is not what the keyboard is in while a view has the focus.
 function windowRowActive(row: TerminalSessionRow, win: TreeWindowRow): boolean {
   return win.active && !(row.slug === pool.visibleSlug && !focusedWindow(panelLayouts.layoutOf(row.id)))
-}
-
-function openViewRow(row: TerminalSessionRow, panel: string, tabId: string): void {
-  panelLayouts.apply(row.id, (layout) => selectTab(layout, panel, tabId))
-  // For the session on screen this would put the keyboard back in its terminal.
-  if (row.slug !== pool.visibleSlug) attach.selectSession(row.slug)
 }
 
 function closeViewRow(row: TerminalSessionRow, panel: string, tabId: string): void {
@@ -636,12 +606,12 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                     </div>
                   </div>
                   <Transition name="tree-expand" v-bind="expandHooks">
-                    <div v-if="treeItemsFor(row).length && view.expansion.expanded(group)">
+                    <div v-if="tree.treeItemsFor(row).length && view.expansion.expanded(group)">
                       <TransitionGroup name="tree" tag="div" class="relative flex flex-col pb-1">
                         <!-- The slot carries the drag and its marker: the row's ::before and
                              ::after draw the tree connector. -->
                         <div
-                          v-for="(item, index) in treeItemsFor(row)"
+                          v-for="(item, index) in tree.treeItemsFor(row)"
                           :key="item.key"
                           class="window-slot"
                           :class="[
@@ -660,7 +630,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                             class="window-row"
                             :class="{
                               'window-row-flush': group.kind === 'scratch',
-                              'window-row-last': index === treeItemsFor(row).length - 1,
+                              'window-row-last': index === tree.treeItemsFor(row).length - 1,
                               'window-row-active': windowRowActive(row, item.win),
                               'window-row-on-screen':
                                 row.slug === pool.visibleSlug && panels.onScreen.has(item.win.windowId),
@@ -711,7 +681,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                                 @click="ops.requestCloseWindow(row.slug, item.win.windowId, item.win.name)"
                               />
                               <span
-                                v-if="item.win.indicator && !item.win.working"
+                                v-if="item.win.indicator"
                                 class="window-status"
                                 :class="item.win.indicator.color"
                                 :title="item.win.indicator.label"
@@ -756,15 +726,18 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                             class="window-row has-swap"
                             :class="{
                               'window-row-flush': group.kind === 'scratch',
-                              'window-row-last': index === treeItemsFor(row).length - 1,
+                              'window-row-last': index === tree.treeItemsFor(row).length - 1,
                               'window-row-active': viewRowActive(row, item.view.tab.id),
                             }"
                             role="button"
-                            tabindex="-1"
+                            :tabindex="nav.tabStopKey === viewKey(row, item.view.tab.id) ? 0 : -1"
                             data-testid="terminal-view-row"
+                            :data-tree-key="viewKey(row, item.view.tab.id)"
                             :data-active="viewRowActive(row, item.view.tab.id)"
                             :data-view-kind="item.view.tab.kind"
-                            @click="openViewRow(row, item.view.panel, item.view.tab.id)"
+                            @click="nav.clickView(row, item.view.panel, item.view.tab.id)"
+                            @keydown.enter.self.prevent="nav.clickView(row, item.view.panel, item.view.tab.id)"
+                            @keydown.space.self.prevent="nav.clickView(row, item.view.panel, item.view.tab.id)"
                           >
                             <SessionTabIcon :kind="item.view.tab.kind" class="text-text-4" />
                             <span class="min-w-0 flex-1 truncate text-small">{{

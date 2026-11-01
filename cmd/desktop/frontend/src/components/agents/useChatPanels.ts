@@ -1,5 +1,6 @@
 import { computed, ref, type Ref } from 'vue'
 import { isEditableTarget } from '../../lib/isEditableTarget'
+import type { PanelLayout } from '../../lib/panelLayout'
 import { terminalPanel } from '../../lib/windowTabs'
 import { useChatPanelLayouts } from '../../stores/usePanelLayouts'
 import { useSessionPanels, type PanelWindowSource } from '../terminal/useSessionPanels'
@@ -48,9 +49,15 @@ export function useChatPanels(pane: ChatPaneState) {
   }
   const core = useSessionPanels(source, layouts)
 
+  // The tab row is up while a launch is still answering, when there is no chat
+  // to key a layout by yet, so a click there writes nothing.
+  function apply(rule: (layout: PanelLayout) => PanelLayout): void {
+    if (key.value) core.apply(rule)
+  }
+
   const windowPanel = computed(() => (live.value ? core.onScreen.value.get(pane.windowId.value) : undefined))
   // Before the window is known, or with its tab behind another, the pane's states still need a place.
   const statusPanel = computed(() => terminalPanel(core.layout.value))
 
-  return { ...core, key, windowPanel, statusPanel, forget: layouts.forget }
+  return { ...core, apply, key, windowPanel, statusPanel, forget: layouts.forget }
 }

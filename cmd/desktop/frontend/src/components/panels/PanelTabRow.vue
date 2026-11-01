@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import IconX from '~icons/lucide/x'
 import { useElementSize } from '@vueuse/core'
 import type { Panel, PanelTab } from '../../lib/panelLayout'
+import { TAB_ROW_PX } from './panelTabRow'
 
 const props = defineProps<{
   panel: Panel
@@ -42,8 +43,9 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
 <template>
   <div
     ref="rowEl"
-    class="flex h-[30px] shrink-0 items-stretch border-b border-border bg-sidebar pr-1"
+    class="flex shrink-0 items-stretch border-b border-border bg-sidebar pr-1"
     :class="resizable ? 'cursor-row-resize' : ''"
+    :style="{ height: `${TAB_ROW_PX}px` }"
     :data-testid="`panel-tab-row-${panel.id}`"
     @pointerdown.self="resizable && emit('resize-start', $event)"
   >

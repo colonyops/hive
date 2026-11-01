@@ -71,6 +71,11 @@ describe('window tabs', () => {
     expect(revealWindow(layout, '@2')).toBe(layout)
   })
 
+  it('returns the same layout when the window is already in front, so a poll costs no write', () => {
+    const layout = attached('@1', '@2')
+    expect(revealWindow(layout, '@1')).toBe(layout)
+  })
+
   it('brings the terminal forward from behind a view', () => {
     expect(panelsOf(revealWindow(openTab(attached('@1'), docs), '@1'))[0].activeTab).toBe('window:@1')
   })

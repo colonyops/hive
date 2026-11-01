@@ -5,8 +5,9 @@ import { useTerminalWindowListings } from '../../composables/useTerminalWindowLi
 import { useWailsEvent } from '../../composables/useWailsEvent'
 import { activityIndicator, type StatusIndicator } from '../../lib/agentActivity'
 import { agentIconID, type AgentIconID } from '../../lib/agentIcon'
+import { orderedTabs, type PanelTab } from '../../lib/panelLayout'
 import type { WindowState } from '../../lib/terminalClient'
-import { windowOrder } from '../../lib/windowTabs'
+import { windowIdOf, windowOrder, windowTabId } from '../../lib/windowTabs'
 import { useAgentSessionsAll } from '../../stores/useAgentSessionsAll'
 import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
@@ -33,7 +34,15 @@ export interface TreeWindowRow {
   indicator: StatusIndicator | null
   /** Whose mark the row carries: the tool hive detected, or failing that the window's name. */
   agent?: AgentIconID
-  working: boolean
+}
+
+/** A row under a session: a window or a view, each the mirror of one tab. */
+export interface TreeItem {
+  key: string
+  /** The tab this row mirrors, which is what a drag moves. */
+  tabId: string
+  win: TreeWindowRow | null
+  view: { panel: string; tab: PanelTab } | null
 }
 
 export type TerminalTree = ReturnType<typeof useTerminalTree>
@@ -273,7 +282,6 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
         live: true,
         indicator: windowIndicator(row, tab.windowId),
         agent: windowAgent(row, tab.windowId, tab.name),
-        working: windowStatus(row, tab.windowId)?.status === 'active',
       }))
     }
     return listedWindows(row).map((win) => ({
@@ -283,7 +291,6 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
       live: false,
       indicator: windowIndicator(row, win.windowId),
       agent: windowAgent(row, win.windowId, win.name),
-      working: windowStatus(row, win.windowId)?.status === 'active',
     }))
   }
 
@@ -298,6 +305,34 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
 
   function windowRowsFor(row: TerminalSessionRow): TreeWindowRow[] {
     return windowRows.value[row.id] ?? []
+  }
+
+  // The rows mirror the tabs, in the layout's order. A window no tab holds yet,
+  // as before the session's first attach, follows them: that is where the window
+  // chords count it, so the walk and the chords agree.
+  function buildTreeItems(row: TerminalSessionRow): TreeItem[] {
+    const windows = windowRowsFor(row)
+    const tabs = orderedTabs(panelLayouts.layoutOf(row.id))
+    const placed = tabs.flatMap(({ panel, tab }): TreeItem[] => {
+      const windowId = windowIdOf(tab)
+      if (!windowId) return [{ key: `view:${tab.id}`, tabId: tab.id, win: null, view: { panel, tab } }]
+      const win = windows.find((candidate) => candidate.windowId === windowId)
+      return win ? [{ key: win.windowId, tabId: tab.id, win, view: null }] : []
+    })
+    const unplaced = windows
+      .filter((win) => !tabs.some(({ tab }) => tab.id === windowTabId(win.windowId)))
+      .map((win) => ({ key: win.windowId, tabId: windowTabId(win.windowId), win, view: null }))
+    return [...placed, ...unplaced]
+  }
+
+  const treeItems = computed<Record<string, TreeItem[]>>(() => {
+    const items: Record<string, TreeItem[]> = {}
+    for (const row of attachable.value) items[row.id] = buildTreeItems(row)
+    return items
+  })
+
+  function treeItemsFor(row: TerminalSessionRow): TreeItem[] {
+    return treeItems.value[row.id] ?? []
   }
 
   return {
@@ -343,5 +378,6 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     windowStatus,
     windowAgent,
     windowRowsFor,
+    treeItemsFor,
   }
 }

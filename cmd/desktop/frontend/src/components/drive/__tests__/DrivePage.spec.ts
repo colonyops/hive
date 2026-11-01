@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, ref } from 'vue'
 import DrivePage from '../DrivePage.vue'
 import type { DriveScope } from '../../../lib/drive'
+import { useDriveReview } from '../../../stores/useDriveReview'
 import type { EntryWire } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { chooseOption, openSelect } from '@hive/ui/test-utils/select'
 import { doc, documentFor, folder, root, space } from '../../../test-utils/drive'
@@ -68,13 +69,14 @@ const trees: Record<string, EntryWire> = {
 }
 
 // The view is controlled: AppDialogs owns the scope and hands back each change.
-async function mountPage(initial: Partial<DriveScope> = {}) {
+async function mountPage(initial: Partial<DriveScope> = {}, props: { embedded?: boolean } = {}) {
   const scope = ref<DriveScope>({ space: 'e2e/repo', path: null, session: null, ...initial })
   const host = defineComponent({
     emits: ['close', 'open-url'],
     setup(_, { emit }) {
       return () =>
         h(DrivePage, {
+          ...props,
           scope: scope.value,
           'onUpdate:scope': (next: DriveScope) => (scope.value = next),
           onClose: () => emit('close'),
@@ -349,6 +351,22 @@ describe('DrivePage', () => {
 
     const second = await mountPage()
     expect(second.wrapper.find('[data-testid="drive-page-review-header"]').exists()).toBe(true)
+  })
+
+  // The flag gates the review chord on the full page; a copy in a session tab,
+  // which may sit behind another tab, must not flip it.
+  it('leaves the page review flag alone when embedded, and offers its own comments toggle', async () => {
+    const { wrapper } = await mountPage({}, { embedded: true })
+    await wrapper.get('[data-testid="drive-page-review-toggle"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="drive-page-review-count"]').text()).toBe('1')
+    expect(useDriveReview().pageReviewed.value).toBe(false)
+    expect(wrapper.find('[data-testid="drive-page-comments-toggle"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="drive-page-close"]').exists()).toBe(false)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(wrapper.emitted('close')).toBeUndefined()
   })
 
   it('offers no review toggle on a canvas', async () => {

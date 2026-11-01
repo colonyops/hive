@@ -3,7 +3,7 @@ import { useRoute } from 'vue-router'
 import { useDriveRoute } from '../../composables/useDriveRoute'
 import { useWailsEvent } from '../../composables/useWailsEvent'
 import { driveEventAuthor, type DriveAuthor } from '../../lib/drive'
-import type { SessionViewKind } from '../terminal/panelViews'
+import { viewKindOfWire, type SessionViewKind } from '../terminal/panelViews'
 
 /** The space the open session reads, and who it is as an author. */
 export interface SessionDriveTarget {
@@ -13,11 +13,12 @@ export interface SessionDriveTarget {
 
 export type SessionTabPlacement = 'behind' | 'beside' | 'below'
 
-type WireView = 'drive' | 'diff' | 'tasks' | 'terminal'
-
-/** A tab as the wire names it. A terminal with no window is the chat's own, in Chats. */
+/**
+ * A tab an agent named, with the view already resolved from the wire's name to
+ * the layout's kind. A terminal with no window is the chat's own, in Chats.
+ */
 export interface TabRef {
-  view: WireView
+  view: SessionViewKind | 'terminal'
   window: string
 }
 
@@ -32,16 +33,10 @@ interface SessionLayoutPayload {
   share?: number
 }
 
-// The wire names the Drive view "drive"; the frontend's kind for it is "docs".
-const VIEW_OF_WIRE = new Map<string, SessionViewKind>([
-  ['drive', 'docs'],
-  ['diff', 'diff'],
-  ['tasks', 'tasks'],
-])
-
 function tabRefOf(view: string | undefined, window: string | undefined): TabRef | null {
-  if (view !== 'drive' && view !== 'diff' && view !== 'tasks' && view !== 'terminal') return null
-  return { view, window: window ?? '' }
+  if (view === 'terminal') return { view, window: window ?? '' }
+  const kind = viewKindOfWire(view)
+  return kind ? { view: kind, window: window ?? '' } : null
 }
 
 function placementOf(placement: string | undefined): SessionTabPlacement {
@@ -104,12 +99,12 @@ export function useSessionLayout(
           if (tab.window) handlers.openWindow?.(tab.window, placement, anchor)
           return
         }
-        handlers.open(VIEW_OF_WIRE.get(tab.view)!, payload.path || null, placement, anchor)
+        handlers.open(tab.view, payload.path || null, placement, anchor)
         return
       }
       case 'close':
         // Go kills the window itself, and its tab leaves with the window.
-        if (tab.view !== 'terminal') handlers.close(VIEW_OF_WIRE.get(tab.view)!)
+        if (tab.view !== 'terminal') handlers.close(tab.view)
         return
       case 'move':
         handlers.move(tab, placement, anchor)

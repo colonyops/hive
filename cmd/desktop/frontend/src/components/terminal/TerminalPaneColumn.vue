@@ -31,7 +31,6 @@ import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useEditorSettings } from '../../composables/useEditorSettings'
 import { useSessionStatus } from '../../composables/useSessionStatus'
 import { openLink } from '../../composables/useXtermPane'
-import { activityIndicator } from '../../lib/agentActivity'
 import type { AgentIconID } from '../../lib/agentIcon'
 import type { DriveScope } from '../../lib/drive'
 import { launcherIconComponent } from '../../lib/launcherIcons'
@@ -176,11 +175,6 @@ const footerRow = computed(() => {
   if (!showStatusBar.value) return null
   return statusBarRow.value ?? (panels.row?.server ? panels.row : null)
 })
-const agentStatus = computed(() => {
-  const row = footerRow.value
-  const status = row ? tree.windowStatus(row, activeWindowId.value) : undefined
-  return status ? activityIndicator(status.status, status.tool) : null
-})
 const statusBarSessionId = computed(() => statusBarRow.value?.id ?? '')
 const {
   git: sessionGit,
@@ -278,7 +272,10 @@ const changesSession = computed(() => {
 })
 const availableViews = computed(() => (panels.row ? panels.viewsFor(panels.row) : []))
 const canAddTerminal = computed(() => !!panels.row && !tree.isChat(panels.row))
-const agents = computed(() => (changesSession.value && !ops.agentWindowBusy ? ops.agentProfiles : []))
+// An agent needs a running tmux session to open in, as the "+" menu says in its own words.
+const agents = computed(() =>
+  changesSession.value && panels.row && tree.rowRunning(panels.row) && !ops.agentWindowBusy ? ops.agentProfiles : [],
+)
 
 const pickerWindows = computed(() =>
   offscreenWindows(
@@ -320,7 +317,10 @@ function scopeAt(path: string | null): DriveScope | null {
   return base && path ? { ...base, path } : base
 }
 
-useSessionLayout('terminal', toRef(props, 'drive'), () => props.active, {
+// The route names the session an ask is checked against, and the pool the one
+// its layout is written to. During a cold attach the pool still shows the
+// outgoing session, so an ask waits until the two agree.
+useSessionLayout('terminal', toRef(props, 'drive'), () => props.active && pool.activeSlug === pool.visibleSlug, {
   // Tabs are keyed by the row's id, so a request has to wait for the row.
   ready: () => !!panels.row && pool.activeSlug === pool.visibleSlug,
   reveal: (path) => panels.apply((current) => withDocsScope(openTab(current, viewTab('docs')), scopeAt(path))),
@@ -805,19 +805,10 @@ onBeforeUnmount(() => {
           @edit="sessions.requestEdit(statusBarRow!, 'tags')"
         />
       </div>
-      <div class="flex shrink-0 items-center gap-1 pl-2 text-caption text-text-3">
-        <span v-if="agentStatus" class="flex items-center gap-1" data-testid="session-status-agent">
-          <component
-            :is="agentStatus.icon"
-            class="size-3"
-            :class="[agentStatus.color, agentStatus.animated ? 'animate-spin' : '']"
-            aria-hidden="true"
-          />{{ agentStatus.label }}
-        </span>
-        <span v-if="agentStatus" class="mx-1 h-3 w-px bg-border" aria-hidden="true" />
+      <div v-if="footerRow.server" class="flex shrink-0 items-center gap-1 pl-2 text-caption text-text-3">
         <span class="flex items-center gap-1" data-testid="session-status-host">
-          <IconServer v-if="footerRow.server" class="size-3 text-text-4" aria-hidden="true" />
-          {{ footerRow.server || 'Local' }}
+          <IconServer class="size-3 text-text-4" aria-hidden="true" />
+          {{ footerRow.server }}
         </span>
       </div>
     </footer>

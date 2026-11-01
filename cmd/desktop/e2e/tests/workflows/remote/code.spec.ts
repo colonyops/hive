@@ -150,18 +150,6 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
     await page.getByTestId('panel-picker-cancel').click()
   })
 
-  test('does not offer Changes for a server session', async ({ page }) => {
-    await stubTerminals(page)
-    await page.goto(`/#/terminal/${SLUG}`)
-    await expect(page.getByTestId('terminal-mode')).toBeVisible()
-    await findSession(page)
-    await expect(sessionRow(page)).toBeVisible({ timeout: 30_000 })
-
-    await page.getByTestId('panel-tab-add-p0').click()
-    await expect(page.getByTestId('new-window-terminal')).toBeVisible()
-    await expect(page.getByTestId('new-window-view-diff')).toHaveCount(0)
-  })
-
   test('deletes the session on the server', async ({ page }) => {
     await stubTerminals(page)
     await page.goto('/#/terminal')

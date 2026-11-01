@@ -164,37 +164,36 @@ describe('useCodePanels', () => {
       return mounted
     }
 
-    it.each(['stopped', 'terminated', 'completed'])('closes every tab when the session is %s', async (reason) => {
+    it('closes every tab when the user stops the session', async () => {
       const session = fakeSession(['@1'])
       await withTabs(session)
 
       session.tabs.value = []
-      session.endReason.value = reason
+      session.endReason.value = 'stopped'
       await flushPromises()
 
       expect(panelsOf(usePanelLayouts().layoutOf(KEY))[0].tabs).toEqual([])
     })
 
-    it.each(['attach-failed', 'interrupted', 'disconnected'])(
-      'keeps every tab after %s, when tmux may be fine',
-      async (reason) => {
-        const session = fakeSession(['@1'])
-        await withTabs(session)
-
-        session.tabs.value = []
-        session.endReason.value = reason
-        await flushPromises()
-
-        expect(panelsOf(usePanelLayouts().layoutOf(KEY))[0].tabs.map((tab) => tab.id)).toEqual(['window:@1', 'diff'])
-      },
-    )
-
-    it('keeps the views of a session that is only not running', async () => {
+    it('keeps every tab after a failed attach, when tmux may be fine', async () => {
       const session = fakeSession(['@1'])
       await withTabs(session)
 
       session.tabs.value = []
-      session.endReason.value = 'not-started'
+      session.endReason.value = 'attach-failed'
+      await flushPromises()
+
+      expect(panelsOf(usePanelLayouts().layoutOf(KEY))[0].tabs.map((tab) => tab.id)).toEqual(['window:@1', 'diff'])
+    })
+
+    // A session that ended on its own offers Restart, and the Diff is what the
+    // user wants to read at that moment.
+    it.each(['not-started', 'terminated'])('keeps the views of a session that is %s', async (reason) => {
+      const session = fakeSession(['@1'])
+      await withTabs(session)
+
+      session.tabs.value = []
+      session.endReason.value = reason
       await flushPromises()
 
       expect(panelsOf(usePanelLayouts().layoutOf(KEY))[0].tabs.map((tab) => tab.id)).toEqual(['diff'])

@@ -1,6 +1,6 @@
 import { effectScope, nextTick, ref } from 'vue'
 import { flushPromises } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { focusPanel, openTab, panelsOf, selectTab, splitBoxes, splitPanel } from '../../../lib/panelLayout'
 import { paneMayAutoFocus } from '../../../lib/terminalTree'
 import { focusedWindow, placeWindow, windowTab } from '../../../lib/windowTabs'
@@ -35,7 +35,7 @@ type FakeSource = ReturnType<typeof fakeSource>
 
 function mountPanels(source: FakeSource) {
   const scope = effectScope()
-  const panels = scope.run(() => useSessionPanels(source))!
+  const panels = scope.run(() => useSessionPanels(source, usePanelLayouts()))!
   return { panels, scope }
 }
 
@@ -43,6 +43,9 @@ describe('useSessionPanels', () => {
   beforeEach(() => {
     localStorage.clear()
     paneMayAutoFocus.value = true
+  })
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   describe('a window activated by an agent or another client', () => {
@@ -126,6 +129,28 @@ describe('useSessionPanels', () => {
 
       panels.moveTabTo('diff', 'p0', 0)
 
+      expect(source.moveWindow).not.toHaveBeenCalled()
+    })
+
+    // Only setTimeout is faked: flushPromises itself drains through setImmediate.
+    it('forgets a request that never landed, so a later window does not claim its panel', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      const source = fakeSource(['@1'])
+      const { panels } = mountPanels(source)
+      await flushPromises()
+      const layouts = usePanelLayouts()
+      layouts.apply(KEY, (layout) => focusPanel(splitPanel(layout, 'p0', 'row'), 'p0'))
+      const asked = panelsOf(layouts.layoutOf(KEY))[1].id
+
+      panels.expectWindowIn(asked)
+      vi.advanceTimersByTime(5000)
+      source.windowIds.value = ['@1', '@2']
+      await flushPromises()
+
+      const [first, second] = panelsOf(layouts.layoutOf(KEY))
+      expect(first.tabs.map((tab) => tab.id)).toEqual(['window:@1', 'window:@2'])
+      expect(second.picking).toBe(true)
+      expect(focusedWindow(layouts.layoutOf(KEY))).toBe('@1')
       expect(source.moveWindow).not.toHaveBeenCalled()
     })
   })
@@ -265,6 +290,36 @@ describe('useSessionPanels', () => {
       expect(panelsOf(layoutNow())[0].tabs.map((tab) => tab.id)).toEqual(['window:@1', 'window:@2'])
       expect(panelsOf(layoutNow())[1].tabs.map((tab) => tab.id)).toEqual(['window:@3'])
       expect(layoutNow().focusedPanel).toBe('p1')
+    })
+
+    it('moves a window the list announced first behind the anchor, without selecting it', async () => {
+      const source = fakeSource(['@1', '@3'], '@3')
+      const { panels } = mountPanels(source)
+      await flushPromises()
+      splitWithKeyboardInSecond()
+      source.windowIds.value = ['@1', '@3', '@2']
+      await flushPromises()
+      expect(panelsOf(layoutNow())[1].tabs.map((tab) => tab.id)).toEqual(['window:@3', 'window:@2'])
+
+      panels.placeArrivingWindow('@2', 'behind', 'p0')
+      await flushPromises()
+
+      expect(panelsOf(layoutNow())[0].tabs.map((tab) => tab.id)).toEqual(['window:@1', 'window:@2'])
+      expect(panelsOf(layoutNow())[1].tabs.map((tab) => tab.id)).toEqual(['window:@3'])
+      expect(panelsOf(layoutNow())[1].activeTab).toBe('window:@3')
+      expect(layoutNow().focusedPanel).toBe('p1')
+      expect(focusedWindow(layoutNow())).toBe('@3')
+    })
+
+    it('leaves a window alone that is already in the anchor panel', async () => {
+      const source = fakeSource(['@1', '@2'])
+      const { panels } = mountPanels(source)
+      await flushPromises()
+      const before = layoutNow()
+
+      panels.placeArrivingWindow('@1', 'behind', 'p0')
+
+      expect(layoutNow()).toBe(before)
     })
   })
 

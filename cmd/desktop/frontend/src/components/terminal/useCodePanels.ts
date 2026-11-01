@@ -2,7 +2,7 @@ import { computed, watch } from 'vue'
 import { openTab } from '../../lib/panelLayout'
 import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
-import { viewTab, viewsFor, type SessionViewKind } from './panelViews'
+import { viewTab, viewsFor, type SessionViewHost, type SessionViewKind } from './panelViews'
 import { useSessionPanels, type PanelWindowSource } from './useSessionPanels'
 import type { TerminalPool } from './useTerminalPool'
 import type { TerminalSessionOps } from './useTerminalSessionOps'
@@ -10,7 +10,23 @@ import type { TerminalTree } from './useTerminalTree'
 
 export type SessionPanels = ReturnType<typeof useCodePanels>
 
-const SESSION_CLOSED = ['terminated', 'stopped', 'completed']
+// A session whose tmux session is gone has no windows to list; one that was
+// never started is the same. An attach that failed says nothing about tmux.
+const SESSION_GONE = ['not-started', 'terminated', 'completed']
+
+/** The questions a view asks of a session, answered from the tree's row. */
+export function codeViewHost(
+  row: TerminalSessionRow,
+  tree: Pick<TerminalTree, 'isChat' | 'isHiveSession' | 'isServerSession'>,
+): SessionViewHost {
+  return {
+    chat: tree.isChat(row),
+    // A pinned chat and the scratch terminal have no session checkout, and a
+    // server's session has none on this machine.
+    localCheckout: tree.isHiveSession(row) && !tree.isServerSession(row),
+    drive: !!row.canvasOwner,
+  }
+}
 
 /** The Code view's panels: the visible session's attach, and the rows and ops around it. */
 export function useCodePanels(options: { pool: TerminalPool; tree: TerminalTree; ops: TerminalSessionOps }) {
@@ -28,8 +44,10 @@ export function useCodePanels(options: { pool: TerminalPool; tree: TerminalTree;
     key,
     windowIds,
     activeWindow: computed(() => pool.visible.value?.activeWindowId.value ?? ''),
-    closed: computed(() => SESSION_CLOSED.includes(endReason.value)),
-    pending: computed(() => !windowIds.value.length && endReason.value !== 'not-started'),
+    // A session the user stopped is over; one that ended on its own can restart
+    // and keeps its views for that.
+    closed: computed(() => endReason.value === 'stopped'),
+    pending: computed(() => !windowIds.value.length && !SESSION_GONE.includes(endReason.value)),
     select: (windowId) => void pool.visible.value?.select(windowId),
     moveWindow: (windowId, position) => void pool.visible.value?.moveWindow(windowId, position),
     render(onScreen) {
@@ -79,6 +97,6 @@ export function useCodePanels(options: { pool: TerminalPool; tree: TerminalTree;
     newWindow,
     newAgentWindow,
     openViewIn,
-    viewsFor: (target: TerminalSessionRow): SessionViewKind[] => viewsFor(target, tree),
+    viewsFor: (target: TerminalSessionRow): SessionViewKind[] => viewsFor(codeViewHost(target, tree)),
   }
 }

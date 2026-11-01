@@ -2,6 +2,7 @@ import { useTimeoutFn } from '@vueuse/core'
 import { computed, nextTick, ref, watch, type Ref } from 'vue'
 import {
   moveTab,
+  moveTabToEnd,
   panelById,
   panelWithTab,
   placeTabBeside,
@@ -20,8 +21,10 @@ import {
   windowOrder,
   windowsOnScreen,
 } from '../../lib/windowTabs'
-import { usePanelLayouts } from '../../stores/usePanelLayouts'
+import type { usePanelLayouts } from '../../stores/usePanelLayouts'
 import type { SessionTabPlacement } from '../panels/useSessionLayout'
+
+export type PanelLayouts = ReturnType<typeof usePanelLayouts>
 
 /** What a layout's window tabs mirror. The Code view builds one from its attach pool. */
 export interface PanelWindowSource {
@@ -29,7 +32,7 @@ export interface PanelWindowSource {
   key: Ref<string>
   windowIds: Ref<readonly string[]>
   activeWindow: Ref<string>
-  /** The session ended for good (stopped, terminated, completed), so its layout goes with it. */
+  /** The user closed the session for good, so its layout goes with it. */
   closed: Ref<boolean>
   /** No window list yet, which says nothing: attaching, or an attach that failed while tmux may be fine. */
   pending: Ref<boolean>
@@ -52,7 +55,7 @@ const PENDING_WINDOW_MS = 5000
  * layout. Both directions settle, because selecting the focused window changes
  * neither.
  */
-export function useSessionPanels(source: PanelWindowSource, layouts = usePanelLayouts()) {
+export function useSessionPanels(source: PanelWindowSource, layouts: PanelLayouts) {
   const layout = computed(() => layouts.layoutOf(source.key.value))
   const onScreen = computed(() => windowsOnScreen(layout.value))
 
@@ -149,7 +152,9 @@ export function useSessionPanels(source: PanelWindowSource, layouts = usePanelLa
    * Where a window an agent made goes: next to the anchor panel, the focused
    * one by default. It is created detached, so tmux keeps its active window and
    * nothing here reveals it. Behind in the focused panel needs nothing: the
-   * reconcile appends its tab there without selecting it.
+   * reconcile appends its tab there without selecting it. tmux's window list
+   * often lands before the agent's ask does, so a tab that is already open
+   * moves rather than waits.
    */
   function placeArrivingWindow(
     windowId: string,
@@ -158,15 +163,20 @@ export function useSessionPanels(source: PanelWindowSource, layouts = usePanelLa
   ): void {
     const before = layout.value
     const anchor = panelById(before, anchorPanelId) ? anchorPanelId : before.focusedPanel
-    const present = !!panelWithTab(before, windowTabId(windowId))
+    const tabId = windowTabId(windowId)
+    const home = panelWithTab(before, tabId)
     if (placement === 'behind') {
-      if (present || anchor === before.focusedPanel) return
+      if (home) {
+        if (home.id !== anchor) apply((current) => moveTabToEnd(current, tabId, anchor))
+        return
+      }
+      if (anchor === before.focusedPanel) return
       newWindowPanel.value = anchor
       expirePending()
       return
     }
     const axis: SplitAxis = placement === 'below' ? 'column' : 'row'
-    if (present) {
+    if (home) {
       apply((current) => placeTabBeside(current, windowTab(windowId), axis, anchor))
       return
     }

@@ -24,8 +24,8 @@ import {
 import type { TabRef } from '../useSessionLayout'
 
 describe('tabIdOf', () => {
-  it('names a view by its tab id, with drive as docs', () => {
-    expect(tabIdOf({ view: 'drive', window: '' })).toBe('docs')
+  it('names a view by its tab id', () => {
+    expect(tabIdOf({ view: 'docs', window: '' })).toBe('docs')
     expect(tabIdOf({ view: 'diff', window: '' })).toBe('diff')
     expect(tabIdOf({ view: 'tasks', window: '' })).toBe('tasks')
   })
@@ -47,7 +47,7 @@ describe('tabIdOf', () => {
 
 describe('layout rules over refs', () => {
   const terminal = (window: string): TabRef => ({ view: 'terminal', window })
-  const drive: TabRef = { view: 'drive', window: '' }
+  const drive: TabRef = { view: 'docs', window: '' }
   const tabIds = (layout: PanelLayout) => panelsOf(layout).map((panel) => panel.tabs.map((tab) => tab.id))
 
   function withWindows(...windows: string[]): PanelLayout {
@@ -79,9 +79,16 @@ describe('layout rules over refs', () => {
       expect(tabIds(layout)).toEqual([['window:@1', 'docs', 'window:@2']])
     })
 
-    it('puts a view behind with no anchor in the last panel', () => {
+    it('puts a view behind with no anchor at the end of the focused panel, as the wire promises', () => {
       const layout = openViewRule(withWindows('@1', '@2'), viewTab('docs'), 'behind', null)
       expect(tabIds(layout)).toEqual([['window:@1', 'window:@2', 'docs']])
+
+      const split = splitPanel(withWindows('@1'), 'p0', 'row')
+      const keyboardFirst = focusPanel(placeTab(split, windowTab('@2'), 'p1'), 'p0')
+      const placed = openViewRule(keyboardFirst, viewTab('docs'), 'behind', null)
+      expect(tabIds(placed)).toEqual([['window:@1', 'docs'], ['window:@2']])
+      expect(placed.focusedPanel).toBe('p0')
+      expect(panelsOf(placed)[0].activeTab).toBe('window:@1')
     })
 
     it('leaves a view that is open alone when it goes behind', () => {
@@ -125,6 +132,22 @@ describe('layout rules over refs', () => {
 
     it('closes the panel of the tab, its tabs joining the neighbour', () => {
       expect(tabIds(closePanelRule(split(), terminal('@2')))).toEqual([['window:@1', 'window:@2']])
+    })
+
+    it('leaves the keyboard where it was when its panel survives the close', () => {
+      // p0 beside a column of p1 over p2, with the keyboard in p2.
+      const rows = splitPanel(withWindows('@1'), 'p0', 'row')
+      const columns = splitPanel(placeTab(rows, windowTab('@2'), 'p1'), 'p1', 'column')
+      const layout = focusPanel(placeTab(columns, windowTab('@3'), 'p2'), 'p2')
+
+      const closed = closePanelRule(layout, terminal('@1'))
+      expect(tabIds(closed)).toEqual([['window:@2', 'window:@1'], ['window:@3']])
+      expect(closed.focusedPanel).toBe('p2')
+    })
+
+    it('hands the keyboard to the neighbour when the focused panel closes', () => {
+      const layout = focusPanel(split(), 'p1')
+      expect(closePanelRule(layout, terminal('@2')).focusedPanel).toBe('p0')
     })
 
     it('resizes the split so the tab panel has the share', () => {

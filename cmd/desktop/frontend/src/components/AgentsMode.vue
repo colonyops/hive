@@ -37,7 +37,7 @@ import { useWailsEvent } from '../composables/useWailsEvent'
 import { useChatPanels } from './agents/useChatPanels'
 import { useSessionLayout } from './panels/useSessionLayout'
 import { closePanelRule, focusRule, moveRule, openViewRule, resizeRule, turnRule } from './panels/sessionTabRefs'
-import { docsScopeOf, viewOfTab, viewTab, withDocsScope, type SessionViewKind } from './terminal/panelViews'
+import { docsScopeOf, viewOfTab, viewTab, viewsFor, withDocsScope } from './terminal/panelViews'
 import { useDriveActivity } from '../stores/useDriveActivity'
 import { useChatPanelLayouts } from '../stores/usePanelLayouts'
 import { useNewSession } from '../composables/useNewSession'
@@ -102,7 +102,7 @@ const {
   resetOpenWorkspace,
   workspacesLoaded,
 } = useAgentWorkspaces()
-const { recents, reload: reloadRecents } = useAgentSessionsAll()
+const { recents, recentsLoaded, recentsError, reload: reloadRecents } = useAgentSessionsAll()
 
 // An enabled name skills.yml does not define has two causes that produce the
 // same bare warning: a manifest written before packages were the enablement
@@ -181,7 +181,8 @@ const panels = useChatPanels({
 const layout = panels.layout
 const openChat = computed(() => recents.value.find((row) => row.id === openSessionId.value) ?? null)
 const chatAgent = computed(() => (openChat.value ? agentIconID(openChat.value.agent) : undefined))
-const chatViews: readonly SessionViewKind[] = ['docs']
+// A chat reads its workspace's space and has no checkout of its own.
+const chatViews = viewsFor({ chat: true, localCheckout: false, drive: true })
 const paneShown = computed(() => (paneWindowId.value ? !!panels.windowPanel.value : true))
 const paneRegionPanel = computed(() => panels.windowPanel.value ?? panels.statusPanel.value)
 
@@ -254,6 +255,18 @@ watch([() => props.active, panels.key], ([active, key]) => chatLayouts.markOnScr
   immediate: true,
 })
 onBeforeUnmount(() => chatLayouts.markOnScreen(''))
+
+// A chat that ended outside this pane, or was pruned, says nothing to the
+// layout watcher, so the listing is what lets its layout go. The open chat is
+// kept while the listing that follows its launch is still on its way.
+watch(
+  [recents, recentsLoaded, recentsError],
+  ([rows, loaded, error]) => {
+    if (!loaded || error) return
+    chatLayouts.retain((key) => key === panels.key.value || rows.some((row) => row.id === key))
+  },
+  { immediate: true },
+)
 
 function setupDrive(): void {
   const workspace = workspaces.value.find((candidate) => candidate.dir === paneWorkspaceDir.value)

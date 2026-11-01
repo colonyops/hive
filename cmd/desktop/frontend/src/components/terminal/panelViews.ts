@@ -4,44 +4,63 @@ import IconFolderTree from '~icons/lucide/folder-tree'
 import IconListTodo from '~icons/lucide/list-todo'
 import type { DriveScope } from '../../lib/drive'
 import { tabById, withTabParams, type PanelLayout, type PanelTab } from '../../lib/panelLayout'
-import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 
-export type SessionViewKind = 'docs' | 'diff' | 'tasks'
-
-/** The questions a view's availability asks about a session; the tree answers them. */
-export interface SessionKinds {
-  isChat(row: TerminalSessionRow): boolean
-  isHiveSession(row: TerminalSessionRow): boolean
-  isServerSession(row: TerminalSessionRow): boolean
+/**
+ * What a view's availability asks about the session hosting it. Each host
+ * answers from what it has: Code from the tree's row, Chats from its pane.
+ */
+export interface SessionViewHost {
+  /** A pinned chat in Code, or the open chat in Chats. */
+  chat: boolean
+  /** A hive session with its checkout on this machine. */
+  localCheckout: boolean
+  /** The session has a Drive space of its own to read. */
+  drive: boolean
 }
+
+const VIEWS = [
+  {
+    kind: 'docs',
+    wire: 'drive',
+    label: 'Drive',
+    icon: IconFolderTree,
+    offeredTo: (host: SessionViewHost) => host.drive || host.chat,
+  },
+  {
+    kind: 'diff',
+    wire: 'diff',
+    label: 'Diff',
+    icon: IconFileDiff,
+    offeredTo: (host: SessionViewHost) => host.localCheckout,
+  },
+  {
+    kind: 'tasks',
+    wire: 'tasks',
+    label: 'Tasks',
+    icon: IconListTodo,
+    offeredTo: (host: SessionViewHost) => host.localCheckout,
+  },
+] as const
+
+/** The layout's name for a view, which is also its tab id. */
+export type SessionViewKind = (typeof VIEWS)[number]['kind']
+/** The name an agent and the MCP tools use for a view. */
+export type SessionViewWire = (typeof VIEWS)[number]['wire']
 
 export interface SessionViewSpec {
   kind: SessionViewKind
+  wire: SessionViewWire
   label: string
   icon: Component
-  offeredTo(row: TerminalSessionRow, kinds: SessionKinds): boolean
+  offeredTo(host: SessionViewHost): boolean
 }
-
-// A pinned chat and the scratch terminal have no session checkout, and a
-// server's session has none on this machine.
-const hasLocalCheckout = (row: TerminalSessionRow, kinds: SessionKinds): boolean =>
-  kinds.isHiveSession(row) && !kinds.isServerSession(row)
 
 /**
  * The views a session can open beside its windows, declared once: the picker,
- * the add menus, the tab row and the tree all read this list. Each is open once
- * per session at most, so a view's tab id is its kind.
+ * the add menus, the tab row, the tree and the wire all read this list. Each is
+ * open once per session at most, so a view's tab id is its kind.
  */
-export const SESSION_VIEWS: readonly SessionViewSpec[] = [
-  {
-    kind: 'docs',
-    label: 'Drive',
-    icon: IconFolderTree,
-    offeredTo: (row, kinds) => !!row.canvasOwner || kinds.isChat(row),
-  },
-  { kind: 'diff', label: 'Diff', icon: IconFileDiff, offeredTo: hasLocalCheckout },
-  { kind: 'tasks', label: 'Tasks', icon: IconListTodo, offeredTo: hasLocalCheckout },
-]
+export const SESSION_VIEWS: readonly SessionViewSpec[] = VIEWS
 
 export function isSessionViewKind(kind: string): kind is SessionViewKind {
   return SESSION_VIEWS.some((view) => view.kind === kind)
@@ -49,6 +68,11 @@ export function isSessionViewKind(kind: string): kind is SessionViewKind {
 
 export function sessionView(kind: SessionViewKind): SessionViewSpec {
   return SESSION_VIEWS.find((view) => view.kind === kind)!
+}
+
+/** The view a wire name stands for, or nothing for a name the wire does not know. */
+export function viewKindOfWire(wire: string | undefined): SessionViewKind | undefined {
+  return SESSION_VIEWS.find((view) => view.wire === wire)?.kind
 }
 
 /** The view a tab shows, or nothing for a window. */
@@ -60,8 +84,8 @@ export function viewTab(kind: SessionViewKind): PanelTab {
   return { id: kind, kind }
 }
 
-export function viewsFor(row: TerminalSessionRow, kinds: SessionKinds): SessionViewKind[] {
-  return SESSION_VIEWS.filter((view) => view.offeredTo(row, kinds)).map((view) => view.kind)
+export function viewsFor(host: SessionViewHost): SessionViewKind[] {
+  return SESSION_VIEWS.filter((view) => view.offeredTo(host)).map((view) => view.kind)
 }
 
 function isDriveScope(value: unknown): value is DriveScope {
