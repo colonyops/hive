@@ -102,8 +102,12 @@ const emit = defineEmits<{
 
 // macOS draws its native traffic lights over the top-left of this bar
 // (hidden-inset chrome configured in cmd/desktop/main.go). Pad the left cluster past
-// them and keep the height in sync with InvisibleTitleBarHeight (42) in main.go
-// so the controls stay vertically centered.
+// them and keep the height in sync with InvisibleTitleBarHeight (43) in
+// wailsui/ui.go so the controls stay vertically centered.
+//
+// Both heights are odd on purpose: the bottom border takes 1px, and an even
+// content box under it centers the 28px controls on a whole pixel. An odd one
+// centers them on a half pixel, which splits their margins 7/6 on a 1x display.
 const isMac = navigator.userAgent.includes('Mac')
 
 const modeOptions: SegmentedControlOption<'hub' | 'terminal' | 'agents'>[] = [
@@ -141,7 +145,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
 <template>
   <header
     class="relative flex shrink-0 items-center border-b border-border bg-raised"
-    :class="isMac ? 'h-[42px]' : 'h-10'"
+    :class="isMac ? 'h-[43px]' : 'h-[41px]'"
     style="--wails-draggable: drag"
     @dblclick="onTitlebarDblclick"
   >

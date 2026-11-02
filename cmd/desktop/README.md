@@ -13,8 +13,8 @@ The visible 1360×864 Hive window uses native hidden-inset titlebar chrome: a
 `MacTitleBar` with `AppearsTransparent`, `HideTitle`, `FullSizeContent`,
 `UseToolbar`, and `HideToolbarSeparator`, pinned to
 `MacToolbarStyleUnifiedCompact` so AppKit cannot drift the toolbar height
-across macOS versions, and `InvisibleTitleBarHeight: 42` so the traffic
-lights center on the 42px HTML titlebar.
+across macOS versions, and `InvisibleTitleBarHeight: 43` so the traffic
+lights center on the 43px HTML titlebar.
 
 Closing the window hides it rather than destroying it, via a `WindowClosing`
 hook registered with `RegisterHook`. It must be a hook, not `OnWindowEvent`:
@@ -33,7 +33,7 @@ shell embeds only the retina `tray-templateTemplate@2x.png`; the 1x PNG is
 still generated and committed as an asset but not embedded.
 
 Manual native-shell verification remains required: check the Dock icon,
-native traffic lights centered on the 42px titlebar, close-hides-window,
+native traffic lights centered on the 43px titlebar, close-hides-window,
 reopening from the Dock and from the tray menu, profile checkbox toggles and
 live menu refresh, template-icon tinting in light and dark menu bars, and Quit
 from the tray menu.
