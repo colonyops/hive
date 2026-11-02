@@ -47,6 +47,7 @@ type DocumentWire struct {
 	Markdown string      `json:"markdown"`
 	HTML     string      `json:"html"`
 	Canvas   *CanvasWire `json:"canvas"`
+	Image    string      `json:"image"`
 }
 
 // CanvasWire is one canvas with its html blocks sanitized. Timestamps are
@@ -106,7 +107,7 @@ func hitWiresOf(hits []drivesvc.Hit) []HitWire {
 }
 
 func documentWireOf(d app.DocumentView) DocumentWire {
-	out := DocumentWire{Space: spaceWireOf(d.Space), Entry: entryWireOf(d.Entry), Markdown: d.Markdown, HTML: d.HTML}
+	out := DocumentWire{Space: spaceWireOf(d.Space), Entry: entryWireOf(d.Entry), Markdown: d.Markdown, HTML: d.HTML, Image: d.Image}
 	if d.Canvas != nil {
 		c := canvasWireOf(*d.Canvas)
 		out.Canvas = &c

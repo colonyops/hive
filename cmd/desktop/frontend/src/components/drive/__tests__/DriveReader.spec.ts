@@ -39,6 +39,15 @@ describe('DriveReader', () => {
     expect(wrapper.emitted('open')).toEqual([['canvases/report.canvas.json'], ['research/r.md']])
   })
 
+  it('draws an image file', async () => {
+    const image = 'data:image/png;base64,cG5n'
+    const wrapper = await mountReader(documentFor('acme/site', doc('shots/login.png'), { image }))
+
+    expect(wrapper.get('[data-testid="r-image"]').attributes('src')).toBe(image)
+    expect(wrapper.get('[data-testid="r-image"]').attributes('alt')).toBe('login.png')
+    expect(wrapper.find('[data-testid="r-file"]').exists()).toBe(false)
+  })
+
   it('says a plain file is not shown', async () => {
     const wrapper = await mountReader(documentFor('acme/site', doc('notes.txt')))
     expect(wrapper.find('[data-testid="r-file"]').exists()).toBe(true)

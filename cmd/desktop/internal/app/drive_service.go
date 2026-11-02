@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"html"
@@ -387,6 +388,29 @@ type DocumentView struct {
 	Markdown string        `json:"markdown,omitempty"` // raw: the frontend's sanitizing renderer handles it
 	HTML     string        `json:"html,omitempty"`     // CSP meta injected first
 	Canvas   *drive.Canvas `json:"canvas,omitempty"`   // html blocks sanitized
+	Image    string        `json:"image,omitempty"`    // data URL; empty for a file that is not a drawable image
+}
+
+// maxImageBytes caps the image a document carries. It crosses the binding whole
+// as base64, so a larger file stays a plain file the user opens elsewhere.
+const maxImageBytes = 32 << 20
+
+var imageMediaTypes = map[string]string{
+	".avif": "image/avif",
+	".gif":  "image/gif",
+	".ico":  "image/x-icon",
+	".jpeg": "image/jpeg",
+	".jpg":  "image/jpeg",
+	".png":  "image/png",
+	".svg":  "image/svg+xml",
+	".webp": "image/webp",
+}
+
+func imageMediaType(entry drive.Entry) string {
+	if entry.Size > maxImageBytes {
+		return ""
+	}
+	return imageMediaTypes[strings.ToLower(pathpkg.Ext(entry.Path))]
 }
 
 // Spaces is every space in the drive: repositories, then workspaces, then
@@ -483,6 +507,13 @@ func (s *DriveService) Document(ctx context.Context, space, path string) (Docume
 				return DocumentView{}, err
 			}
 			view.Canvas = &c
+		}
+		if mediaType := imageMediaType(entry); mediaType != "" {
+			_, body, err := d.Read(ctx, parsed, path)
+			if err != nil {
+				return DocumentView{}, documentError(err, parsed, path)
+			}
+			view.Image = "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(body)
 		}
 		return view, nil
 	case drive.KindMarkdown, drive.KindHtml, drive.KindDir:

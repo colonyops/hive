@@ -236,6 +236,7 @@ export interface DocumentWire {
     "markdown": string;
     "html": string;
     "canvas": CanvasWire | null;
+    "image": string;
 }
 
 /**

@@ -46,13 +46,14 @@ export function space(key: string, name = key): SpaceWire {
 export function documentFor(
   spaceKey: string,
   entry: EntryWire,
-  body: { markdown?: string; html?: string; canvas?: Partial<CanvasWire> } = {},
+  body: { markdown?: string; html?: string; image?: string; canvas?: Partial<CanvasWire> } = {},
 ): DocumentWire {
   return {
     space: space(spaceKey),
     entry,
     markdown: body.markdown ?? '',
     html: body.html ?? '',
+    image: body.image ?? '',
     canvas: body.canvas
       ? {
           space: spaceKey,

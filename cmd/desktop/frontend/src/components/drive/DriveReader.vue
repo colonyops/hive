@@ -33,7 +33,7 @@ const props = defineProps<{
   /** Lets the user select text to comment on and shows the document's comments. */
   commentable?: boolean
   /**
-   * Derives `-document`, `-markdown`, `-block-<id>` (with `-html` and `-link`), `-frame`, `-file`, `-error`,
+   * Derives `-document`, `-markdown`, `-block-<id>` (with `-html` and `-link`), `-frame`, `-image`, `-file`, `-error`,
    * `-empty`, `-block-comment`, and the comment popover's ids (DriveCommentPopover).
    */
   testid: string
@@ -321,10 +321,17 @@ function commentOnBlock(): void {
   </DocumentReader>
   <div v-else class="flex min-h-0 flex-col" :style="bareStyle" :data-testid="`${testid}-document`">
     <InlineError v-if="error" :testid="`${testid}-error`" variant="line" class="leading-relaxed" :message="error" />
+    <img
+      v-else-if="document?.image"
+      :src="document.image"
+      :alt="document.entry.name"
+      class="h-auto max-w-full self-center"
+      :data-testid="`${testid}-image`"
+    />
     <EmptyState
       v-else-if="document"
       variant="inline"
-      message="Hive shows markdown, html, and canvas documents. Open this file in another app to read it."
+      message="Hive can't show this file. Open it in another app to read it."
       :data-testid="`${testid}-file`"
     />
     <EmptyState v-else-if="!loading" variant="inline" message="Nothing here yet." :data-testid="`${testid}-empty`" />

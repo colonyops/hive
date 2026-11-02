@@ -2454,6 +2454,8 @@ like Settings, rendered in the main frame; its scope is the route's query
 row, the pane's expand button and a `hive://drive` link open it, and closing
 returns to the page it was opened from. The reader is one renderer for both
 surfaces, so a document does not read differently in the pane and on the page.
+An image file is still `kind: file` in the tree; `Document` adds it as a data
+URL up to a size cap, and the reader draws that in place of the plain file note.
 Fenced code is highlighted by shiki on the oniguruma WASM engine, never
 inside a render: `stores/useCodeHighlight.ts` answers a fence from its cache
 or queues it, drains the queue in slices between frames, and bumps a reactive
