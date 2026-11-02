@@ -5,9 +5,8 @@ package process
 // ProcessInfo holds raw OS-level data for a single process.
 type ProcessInfo struct {
 	PID  int
-	Comm string            // short binary name (from p_comm / /proc/N/comm)
-	Argv []string          // full argument list (may be nil on macOS hardened runtime)
-	Env  map[string]string // environment (nil if unavailable)
+	Comm string   // short binary name (from p_comm / /proc/N/comm)
+	Argv []string // full argument list (may be nil on macOS hardened runtime)
 }
 
 // CandidateProcesses is returned by Candidates. It contains the foreground
@@ -79,6 +78,5 @@ func readProcessInfo(pid int, r ProcessReader) ProcessInfo {
 		PID:  pid,
 		Comm: r.Comm(pid),
 		Argv: argv,
-		Env:  r.Environ(pid),
 	}
 }

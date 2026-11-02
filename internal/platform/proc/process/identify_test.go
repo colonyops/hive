@@ -109,7 +109,6 @@ type fakeProc struct {
 	tpgid   int
 	comm    string
 	argv    []string
-	env     map[string]string
 	argvErr error
 }
 
@@ -127,5 +126,4 @@ func (f fakeReader) Cmdline(pid int) ([]string, error) {
 	}
 	return p.argv, nil
 }
-func (f fakeReader) Environ(pid int) map[string]string { return f.procs[pid].env }
-func (f fakeReader) Children(pid int) ([]int, error)   { return f.children[pid], nil }
+func (f fakeReader) Children(pid int) ([]int, error) { return f.children[pid], nil }

@@ -72,7 +72,7 @@ func TestClassify_Tier2_ProcessTree(t *testing.T) {
 	}{
 		{
 			name:     "direct_claude_binary",
-			reader:   processReader(map[int]fakeProc{100: {tpgid: 200}, 200: {comm: testToolClaude, argv: []string{testToolClaude}, env: map[string]string{"CLAUDECODE": "1"}}}),
+			reader:   processReader(map[int]fakeProc{100: {tpgid: 200}, 200: {comm: testToolClaude, argv: []string{testToolClaude}}}),
 			wantHit:  true,
 			wantTool: testToolClaude,
 		},
@@ -104,8 +104,8 @@ func TestClassify_Tier2_ProcessTree(t *testing.T) {
 		},
 		{name: "shell_fallthrough", reader: processReader(map[int]fakeProc{100: {tpgid: 200}, 200: {comm: "zsh", argv: []string{"zsh"}}}), wantHit: false},
 		{
-			name:     "nil_env_argv_fallback",
-			reader:   processReader(map[int]fakeProc{100: {tpgid: 200}, 200: {comm: "node", argv: []string{"node", "/opt/claude"}, env: nil}}),
+			name:     "node_argv_path",
+			reader:   processReader(map[int]fakeProc{100: {tpgid: 200}, 200: {comm: "node", argv: []string{"node", "/opt/claude"}}}),
 			wantHit:  true,
 			wantTool: testToolClaude,
 		},
@@ -328,7 +328,6 @@ type fakeReader struct {
 	tpgidCalls    int
 	commCalls     int
 	cmdlineCalls  int
-	environCalls  int
 	childrenCalls int
 }
 
@@ -336,7 +335,6 @@ type fakeProc struct {
 	tpgid   int
 	comm    string
 	argv    []string
-	env     map[string]string
 	argvErr error
 }
 
@@ -375,11 +373,6 @@ func (f *fakeReader) Cmdline(pid int) ([]string, error) {
 		return nil, proc.argvErr
 	}
 	return proc.argv, nil
-}
-
-func (f *fakeReader) Environ(pid int) map[string]string {
-	f.environCalls++
-	return f.procs[pid].env
 }
 
 func (f *fakeReader) Children(pid int) ([]int, error) {

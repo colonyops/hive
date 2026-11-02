@@ -1019,8 +1019,7 @@ func (f *fakeProcessReader) Cmdline(pid int) ([]string, error) {
 	}
 	return nil, nil
 }
-func (f *fakeProcessReader) Environ(int) map[string]string { return nil }
-func (f *fakeProcessReader) Children(int) ([]int, error)   { return nil, nil }
+func (f *fakeProcessReader) Children(int) ([]int, error) { return nil, nil }
 
 type blockingStatusCapture struct {
 	content string

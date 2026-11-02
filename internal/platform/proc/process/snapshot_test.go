@@ -18,7 +18,6 @@ type fakeBase struct {
 func (f *fakeBase) TPGID(pid int) (int, error)        { return pid, nil }
 func (f *fakeBase) Comm(pid int) string               { return "" }
 func (f *fakeBase) Cmdline(pid int) ([]string, error) { return nil, nil }
-func (f *fakeBase) Environ(pid int) map[string]string { return nil }
 func (f *fakeBase) Children(pid int) ([]int, error) {
 	f.childrenCalls++
 	return f.children[pid], nil
@@ -70,7 +69,7 @@ func TestSnapshotReader_DelegatesOtherMethods(t *testing.T) {
 	base := &fakeBase{}
 	snap := snapshotWithMap(base, nil)
 
-	// TPGID, Comm, Cmdline, Environ all delegate to base without panicking.
+	// TPGID, Comm, Cmdline all delegate to base without panicking.
 	tpgid, err := snap.TPGID(42)
 	require.NoError(t, err)
 	assert.Equal(t, 42, tpgid)
@@ -79,7 +78,6 @@ func TestSnapshotReader_DelegatesOtherMethods(t *testing.T) {
 	argv, err := snap.Cmdline(42)
 	require.NoError(t, err)
 	assert.Nil(t, argv)
-	assert.Nil(t, snap.Environ(42))
 }
 
 func TestNewSnapshotReader_LiveOS(t *testing.T) {

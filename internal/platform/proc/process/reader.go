@@ -9,8 +9,6 @@ type ProcessReader interface {
 	Comm(pid int) string
 	// Cmdline returns the full argument list for pid.
 	Cmdline(pid int) ([]string, error)
-	// Environ returns the environment map for pid, or nil if unavailable.
-	Environ(pid int) map[string]string
 	// Children returns direct child PIDs of the given pid.
 	// Used for depth-2 wrapper detection (e.g., node → claude).
 	Children(pid int) ([]int, error)
@@ -27,9 +25,6 @@ func (OSReader) Comm(pid int) string { return commForPID(pid) }
 
 // Cmdline returns the full argument list for pid.
 func (OSReader) Cmdline(pid int) ([]string, error) { return cmdlineForPID(pid) }
-
-// Environ returns the environment map for pid, or nil if unavailable.
-func (OSReader) Environ(pid int) map[string]string { return environForPID(pid) }
 
 // Children returns direct child PIDs of the given pid.
 func (OSReader) Children(pid int) ([]int, error) { return childrenForPID(pid) }

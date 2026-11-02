@@ -58,24 +58,6 @@ func cmdlineForPID(pid int) ([]string, error) {
 	return parts, nil
 }
 
-func environForPID(pid int) map[string]string {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
-	if err != nil || len(data) == 0 {
-		return nil
-	}
-	env := make(map[string]string)
-	for entry := range strings.SplitSeq(strings.TrimRight(string(data), "\x00"), "\x00") {
-		k, v, _ := strings.Cut(entry, "=")
-		if k != "" {
-			env[k] = v
-		}
-	}
-	if len(env) == 0 {
-		return nil
-	}
-	return env
-}
-
 func childrenForPID(pid int) ([]int, error) {
 	children, err := childrenFromTaskFiles(pid)
 	if err == nil {

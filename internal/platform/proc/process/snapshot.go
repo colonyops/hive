@@ -47,7 +47,6 @@ func SetSnapshotChildren(s *SnapshotReader, m map[int][]int) {
 func (s *SnapshotReader) TPGID(pid int) (int, error)        { return s.base.TPGID(pid) }
 func (s *SnapshotReader) Comm(pid int) string               { return s.base.Comm(pid) }
 func (s *SnapshotReader) Cmdline(pid int) ([]string, error) { return s.base.Cmdline(pid) }
-func (s *SnapshotReader) Environ(pid int) map[string]string { return s.base.Environ(pid) }
 
 // SnapshotCache shares one process-table snapshot across refresh cycles that
 // fall within maxAge of each other. On darwin a snapshot copies the whole

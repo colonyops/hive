@@ -5,7 +5,6 @@ package process
 import (
 	"bytes"
 	"encoding/binary"
-	"strings"
 
 	"golang.org/x/sys/unix"
 )
@@ -34,13 +33,11 @@ func commForPID(pid int) string {
 }
 
 func cmdlineForPID(pid int) ([]string, error) {
-	argv, _ := kernProcArgs2(pid)
-	return argv, nil
-}
-
-func environForPID(pid int) map[string]string {
-	_, env := kernProcArgs2(pid)
-	return env
+	data, err := unix.SysctlRaw("kern.procargs2", pid)
+	if err != nil || len(data) < 4 {
+		return nil, nil
+	}
+	return parseKernProcargs2(data), nil
 }
 
 func childrenForPID(pid int) ([]int, error) {
@@ -57,22 +54,11 @@ func childrenForPID(pid int) ([]int, error) {
 	return children, nil
 }
 
-// kernProcArgs2 fetches argv and env for a process via kern.procargs2.
-// On macOS with hardened runtime, env may be empty (zeroed by kernel) — in
-// that case env is returned as nil to signal unavailability.
-func kernProcArgs2(pid int) (argv []string, env map[string]string) {
-	data, err := unix.SysctlRaw("kern.procargs2", pid)
-	if err != nil || len(data) < 4 {
-		return nil, nil
-	}
-	return parseKernProcargs2(data)
-}
-
-// parseKernProcargs2 parses the KERN_PROCARGS2 sysctl output.
+// parseKernProcargs2 returns argv from the KERN_PROCARGS2 sysctl output.
 // Layout: [argc int32][exec_path\0][padding NULs][argv[0]\0 ... argv[n]\0][env\0...]
-func parseKernProcargs2(data []byte) (argv []string, env map[string]string) {
+func parseKernProcargs2(data []byte) []string {
 	if len(data) < 4 {
-		return nil, nil
+		return nil
 	}
 	argc := int(binary.LittleEndian.Uint32(data[:4]))
 	rest := data[4:]
@@ -81,7 +67,7 @@ func parseKernProcargs2(data []byte) (argv []string, env map[string]string) {
 	if idx := bytes.IndexByte(rest, 0); idx >= 0 {
 		rest = rest[idx+1:]
 	} else {
-		return nil, nil
+		return nil
 	}
 
 	// Skip padding NULs
@@ -89,41 +75,15 @@ func parseKernProcargs2(data []byte) (argv []string, env map[string]string) {
 		rest = rest[1:]
 	}
 
-	// Parse argv
-	argv = make([]string, 0, argc)
+	argv := make([]string, 0, argc)
 	for i := 0; i < argc && len(rest) > 0; i++ {
 		idx := bytes.IndexByte(rest, 0)
 		if idx < 0 {
 			argv = append(argv, string(rest))
-			rest = nil
 			break
 		}
 		argv = append(argv, string(rest[:idx]))
 		rest = rest[idx+1:]
 	}
-
-	// Parse env (NUL-terminated key=value pairs until empty entry or end)
-	env = make(map[string]string)
-	for len(rest) > 0 {
-		idx := bytes.IndexByte(rest, 0)
-		var entry string
-		if idx < 0 {
-			entry = string(rest)
-			rest = nil
-		} else {
-			entry = string(rest[:idx])
-			rest = rest[idx+1:]
-		}
-		if entry == "" {
-			break
-		}
-		k, v, _ := strings.Cut(entry, "=")
-		if k != "" {
-			env[k] = v
-		}
-	}
-	if len(env) == 0 {
-		env = nil // unavailable (hardened runtime may zero env)
-	}
-	return argv, env
+	return argv
 }
