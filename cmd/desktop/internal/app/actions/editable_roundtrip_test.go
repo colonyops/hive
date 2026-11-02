@@ -82,6 +82,7 @@ func populateNonZero(t *testing.T, v reflect.Value, seed *int) {
 // editable-catalog branch (editableFromAction) does not silently drop the
 // type either.
 func TestActionTypesRoundTripThroughTheYAMLWriterAndLoader(t *testing.T) {
+	t.Parallel()
 	for _, actionType := range Types() {
 		t.Run(actionType, func(t *testing.T) {
 			factory, ok := registry[actionType]
@@ -135,18 +136,21 @@ type fakeUnregisteredConfig struct{}
 func (fakeUnregisteredConfig) Validate() error { return nil }
 
 func TestActionNodeFailsClosedOnAConfigTypeItDoesNotKnow(t *testing.T) {
+	t.Parallel()
 	_, err := actionNode(Action{ID: "mystery", Type: "mystery", Config: fakeUnregisteredConfig{}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mystery")
 }
 
 func TestEditableFromActionFailsClosedOnAConfigTypeItDoesNotKnow(t *testing.T) {
+	t.Parallel()
 	_, err := editableFromAction(Action{ID: "mystery", Type: "mystery", Config: fakeUnregisteredConfig{}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mystery")
 }
 
 func TestLaunchTagsRoundTripThroughTheWriterAndTheEditableCatalog(t *testing.T) {
+	t.Parallel()
 	original := Action{
 		ID:     "spawn",
 		Label:  "Spawn",
@@ -173,6 +177,7 @@ func TestLaunchTagsRoundTripThroughTheWriterAndTheEditableCatalog(t *testing.T) 
 }
 
 func TestActionIconRoundTripsThroughTheWriterAndTheEditableCatalog(t *testing.T) {
+	t.Parallel()
 	original := Action{
 		ID:      "open-repo",
 		Label:   "Open repo",

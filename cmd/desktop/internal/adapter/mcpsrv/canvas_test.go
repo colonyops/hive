@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/app/apptest"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -22,17 +24,7 @@ import (
 // in-memory transport, the hive-drive tool table under test instead.
 func testCanvasSession(t *testing.T) (*app.App, *mcp.ClientSession) {
 	t.Helper()
-	root := t.TempDir()
-	t.Setenv(settings.EnvDataDir, filepath.Join(root, "data"))
-	t.Setenv("HIVE_CONFIG", filepath.Join(root, "hive.yaml"))
-	t.Setenv(settings.EnvConfigDir, filepath.Join(root, "config"))
-	t.Setenv(settings.EnvMockMode, "feed")
-
-	core, err := app.New(t.Context(), app.Config{
-		Settings: settings.DefaultSettings(),
-		MockMode: settings.MockMode(),
-		Logger:   zerolog.Nop(),
-	})
+	core, err := app.New(t.Context(), apptest.Config(t))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
 
@@ -101,6 +93,7 @@ type canvasWriteView struct {
 }
 
 func TestCanvasToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
+	t.Parallel()
 	_, session := testCanvasSession(t)
 
 	res, err := session.ListTools(t.Context(), nil)
@@ -125,6 +118,7 @@ func TestCanvasToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 }
 
 func TestCanvasRoundTrip(t *testing.T) {
+	t.Parallel()
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
@@ -217,6 +211,7 @@ func TestCanvasRoundTrip(t *testing.T) {
 }
 
 func TestTabToolsReportTheAsk(t *testing.T) {
+	t.Parallel()
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
@@ -248,6 +243,7 @@ func TestTabToolsReportTheAsk(t *testing.T) {
 }
 
 func TestCanvasToolErrors(t *testing.T) {
+	t.Parallel()
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
@@ -291,6 +287,7 @@ func TestCanvasToolErrors(t *testing.T) {
 // RuntimePaths mcpcatalog declares — the literals live in core so the
 // registry stays adapter-free, and this is what keeps them from drifting.
 func TestCanvasCatalogueAgreement(t *testing.T) {
+	t.Parallel()
 	desktop, ok := mcpcatalog.Lookup("hive-desktop")
 	require.True(t, ok)
 	assert.Equal(t, mcpsrv.PathPrefix, desktop.RuntimePath)

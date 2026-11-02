@@ -24,6 +24,7 @@ func logMessages(t *testing.T, out *bytes.Buffer) []string {
 }
 
 func TestLogWriterKeepsAcceptingWritesAfterAnOverlongLine(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	w := newLogWriter(zerolog.New(&out), zerolog.InfoLevel)
 
@@ -51,6 +52,7 @@ func TestLogWriterKeepsAcceptingWritesAfterAnOverlongLine(t *testing.T) {
 }
 
 func TestLogWriterJoinsPartialWritesIntoLines(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	w := newLogWriter(zerolog.New(&out), zerolog.InfoLevel)
 	_, _ = w.Write([]byte("hel"))

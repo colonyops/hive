@@ -11,6 +11,7 @@ import (
 )
 
 func TestToastView_View_empty(t *testing.T) {
+	t.Parallel()
 	c := NewToastController()
 	v := NewToastView(c)
 
@@ -18,6 +19,7 @@ func TestToastView_View_empty(t *testing.T) {
 }
 
 func TestToastView_View_renders_each_level(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		level notify.Level
 		icon  string
@@ -43,6 +45,7 @@ func TestToastView_View_renders_each_level(t *testing.T) {
 }
 
 func TestToastView_View_stacks_multiple(t *testing.T) {
+	t.Parallel()
 	c := NewToastController()
 	v := NewToastView(c)
 
@@ -60,6 +63,7 @@ func TestToastView_View_stacks_multiple(t *testing.T) {
 }
 
 func TestToastView_Overlay_empty_returns_background(t *testing.T) {
+	t.Parallel()
 	c := NewToastController()
 	v := NewToastView(c)
 
@@ -68,6 +72,7 @@ func TestToastView_Overlay_empty_returns_background(t *testing.T) {
 }
 
 func TestToastView_Overlay_positions_lower_right(t *testing.T) {
+	t.Parallel()
 	c := NewToastController()
 	v := NewToastView(c)
 

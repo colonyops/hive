@@ -37,6 +37,7 @@ func makeEpic(id string, now time.Time) hc.Item {
 }
 
 func TestFetchBlockedSet_ExplicitBlocker(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -67,6 +68,7 @@ func TestFetchBlockedSet_ExplicitBlocker(t *testing.T) {
 }
 
 func TestFetchBlockedSet_ClosedBlocker(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -93,6 +95,7 @@ func TestFetchBlockedSet_ClosedBlocker(t *testing.T) {
 }
 
 func TestListBlockers_EmptyWhenBlockersDone(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -125,6 +128,7 @@ func TestListBlockers_EmptyWhenBlockersDone(t *testing.T) {
 }
 
 func TestFetchHCItem_BlockerIDs(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)

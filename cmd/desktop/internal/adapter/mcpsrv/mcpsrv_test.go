@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/app/apptest"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -43,23 +45,14 @@ var update = flag.Bool("update", false, "rewrite golden files")
 // deterministically.
 func testSession(t *testing.T, seedConfig ...func(t *testing.T, configDir string)) (*app.App, *mcp.ClientSession) {
 	t.Helper()
-	root := t.TempDir()
-	configDir := filepath.Join(root, "config")
-	t.Setenv(settings.EnvDataDir, filepath.Join(root, "data"))
-	t.Setenv("HIVE_CONFIG", filepath.Join(root, "hive.yaml"))
-	t.Setenv(settings.EnvConfigDir, configDir)
-	t.Setenv(settings.EnvMockMode, "feed")
+	cfg := apptest.Config(t)
 
 	for _, seed := range seedConfig {
-		require.NoError(t, os.MkdirAll(configDir, 0o755))
-		seed(t, configDir)
+		require.NoError(t, os.MkdirAll(cfg.Paths.ConfigDir, 0o755))
+		seed(t, cfg.Paths.ConfigDir)
 	}
 
-	core, err := app.New(t.Context(), app.Config{
-		Settings: settings.DefaultSettings(),
-		MockMode: settings.MockMode(),
-		Logger:   zerolog.Nop(),
-	})
+	core, err := app.New(t.Context(), cfg)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
 
@@ -128,6 +121,7 @@ func textOf(res *mcp.CallToolResult) string {
 }
 
 func TestToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	res, err := session.ListTools(t.Context(), nil)
@@ -160,6 +154,7 @@ func TestToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 }
 
 func TestToolsListMatchesGolden(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	res, err := session.ListTools(t.Context(), nil)
@@ -169,6 +164,7 @@ func TestToolsListMatchesGolden(t *testing.T) {
 }
 
 func TestInboxToolsMatchGolden(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	require.NoError(t, core.Flows.Save(t.Context(), webhookFlow()))
 
@@ -221,6 +217,7 @@ func assertGoldenJSON(t *testing.T, name string, value any) {
 }
 
 func TestGetStatusReportsTheBuildAndWebhookListener(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	var got struct {
@@ -236,6 +233,7 @@ func TestGetStatusReportsTheBuildAndWebhookListener(t *testing.T) {
 }
 
 func TestProfileLifecycle(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	var created struct {
@@ -272,6 +270,7 @@ func TestProfileLifecycle(t *testing.T) {
 // the node-image tools all require one — so without this the headline tool
 // cannot be driven from the server alone.
 func TestGetFlowReportsNodeIDsAndWires(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	require.NoError(t, core.Flows.Save(t.Context(), webhookFlow()))
 
@@ -304,6 +303,7 @@ func TestGetFlowReportsNodeIDsAndWires(t *testing.T) {
 // The graph you cannot run is the one you most need to read, so a profile whose
 // file does not parse answers with its error rather than not_found.
 func TestGetFlowReportsAProfileThatDoesNotParse(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t, func(t *testing.T, configDir string) {
 		t.Helper()
 		flowsDir := filepath.Join(configDir, "flows")
@@ -325,6 +325,7 @@ func TestGetFlowReportsAProfileThatDoesNotParse(t *testing.T) {
 }
 
 func TestGetFlowReportsAnUnknownProfileAsNotFound(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	assert.Contains(t, callErr(t, session, "get_flow", map[string]any{"profileId": "nope"}),
@@ -332,6 +333,7 @@ func TestGetFlowReportsAnUnknownProfileAsNotFound(t *testing.T) {
 }
 
 func TestListInboxReturnsSeededItemsWithTheirFeed(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	seedItem(t, core, "hive", "ext-1", `{"n":1}`)
 
@@ -354,6 +356,7 @@ func TestListInboxReturnsSeededItemsWithTheirFeed(t *testing.T) {
 // a tool that answers happily in a test and blows a client's limit against
 // production data is a tool nobody can rely on.
 func TestListInboxOmitsPayloadsByDefault(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	seedItem(t, core, "hive", "ext-1", `{"n":1}`)
 
@@ -376,6 +379,7 @@ func TestListInboxOmitsPayloadsByDefault(t *testing.T) {
 }
 
 func TestListInboxItemEventsOmitsEventDetailByDefault(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	id := seedItem(t, core, "hive", "ext-1", `{}`)
 
@@ -393,6 +397,7 @@ func TestListInboxItemEventsOmitsEventDetailByDefault(t *testing.T) {
 // it. Reporting only the feeds with rows makes a real-but-empty feed, a
 // nonexistent one and a typo the same answer.
 func TestListFeedsIncludesADeclaredFeedNothingHasLandedIn(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	require.NoError(t, core.Flows.Save(t.Context(), webhookFlow()))
 
@@ -414,6 +419,7 @@ func TestListFeedsIncludesADeclaredFeedNothingHasLandedIn(t *testing.T) {
 }
 
 func TestListFeedsReportsAnUnknownProfileAsNotFound(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	assert.Contains(t, callErr(t, session, "list_feeds", map[string]any{"profile": "nope"}),
@@ -424,6 +430,7 @@ func TestListFeedsReportsAnUnknownProfileAsNotFound(t *testing.T) {
 // profile whose flow file is gone but whose inbox rows survived is a state
 // worth being able to read, and gating the read on the graph would hide it.
 func TestListInboxReadsAProfileWithRowsButNoFlow(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	seedItem(t, core, "orphaned", "ext-orphan", `{}`)
 
@@ -438,6 +445,7 @@ func TestListInboxReadsAProfileWithRowsButNoFlow(t *testing.T) {
 }
 
 func TestListInboxReportsAnUnknownProfileOrFeedAsNotFound(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	require.NoError(t, core.Flows.Save(t.Context(), webhookFlow()))
 
@@ -451,6 +459,7 @@ func TestListInboxReportsAnUnknownProfileOrFeedAsNotFound(t *testing.T) {
 // has to as well — and mock mode has no hive sessions behind it, which is what
 // makes the seeded link one hive cannot account for and the read drop it.
 func TestListItemSessionsResolvesAnItemAndReconcilesOnRead(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	id := seedItem(t, core, "p1", "PR_1", `{}`)
 	seedItem(t, core, "p2", "PR_1", `{}`) // same external id, second profile
@@ -478,6 +487,7 @@ func TestListItemSessionsResolvesAnItemAndReconcilesOnRead(t *testing.T) {
 }
 
 func TestListInboxItemEventsReportsAnUnknownItemIDAsNotFound(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	assert.Contains(t, callErr(t, session, "list_inbox_item_events", map[string]any{"itemId": 9999}),
@@ -485,6 +495,7 @@ func TestListInboxItemEventsReportsAnUnknownItemIDAsNotFound(t *testing.T) {
 }
 
 func TestListInboxRequiresProfileWhenFeedIsSet(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	msg := callErr(t, session, "list_inbox", map[string]any{"feed": "hive/prs"})
@@ -492,6 +503,7 @@ func TestListInboxRequiresProfileWhenFeedIsSet(t *testing.T) {
 }
 
 func TestListInboxItemEventsResolvesAnExternalID(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	seedItem(t, core, "hive", "ext-1", `{}`)
 
@@ -505,6 +517,7 @@ func TestListInboxItemEventsResolvesAnExternalID(t *testing.T) {
 }
 
 func TestListInboxItemEventsReportsAnUnknownExternalIDAsNotFound(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	msg := callErr(t, session, "list_inbox_item_events", map[string]any{"externalId": "nope"})
@@ -512,6 +525,7 @@ func TestListInboxItemEventsReportsAnUnknownExternalIDAsNotFound(t *testing.T) {
 }
 
 func TestListInboxItemEventsNeedsAnIdentifier(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	msg := callErr(t, session, "list_inbox_item_events", struct{}{})
@@ -519,6 +533,7 @@ func TestListInboxItemEventsNeedsAnIdentifier(t *testing.T) {
 }
 
 func TestListActionsReportsTheCatalogAndItsLoadStatus(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	var got struct {
@@ -535,6 +550,7 @@ func TestListActionsReportsTheCatalogAndItsLoadStatus(t *testing.T) {
 // reported error an editor cannot tell "accepted" from "rejected and ignored"
 // (issue hay-kot/hive-desktop#111). This is the failure the tool's valid/error pair exists for.
 func TestListActionsSurfacesAParseError(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t, func(t *testing.T, configDir string) {
 		t.Helper()
 		require.NoError(t, os.WriteFile(filepath.Join(configDir, "actions.yml"), []byte(
@@ -559,6 +575,7 @@ func TestListActionsSurfacesAParseError(t *testing.T) {
 // Mock mode wires no producer, and the Kind has to reach the agent so it can
 // tell "nothing to refresh here" from a transient failure worth retrying.
 func TestRefreshSourcesIsUnavailableInMockMode(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	msg := callErr(t, session, "refresh_sources", struct{}{})
@@ -569,6 +586,7 @@ func TestRefreshSourcesIsUnavailableInMockMode(t *testing.T) {
 // by content hash rather than by id, and it round-trips through the same
 // base64-in/image-out contract the avatar does.
 func TestNodeImageLifecycle(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	require.NoError(t, core.Flows.Save(t.Context(), webhookFlow()))
 
@@ -609,6 +627,7 @@ func TestNodeImageLifecycle(t *testing.T) {
 // that cannot complete a handshake. This drives the real handler over TCP with
 // a real streamable client — main.go's path, minus the shared listener.
 func TestHandlerServesToolsOverHTTP(t *testing.T) {
+	t.Parallel()
 	core, _ := testSession(t)
 	seedItem(t, core, "hive", "ext-http", `{}`)
 
@@ -641,6 +660,7 @@ func TestHandlerServesToolsOverHTTP(t *testing.T) {
 // desktop-api skill documents exactly this curl recipe for when an MCP client
 // is not set up, so it is worth pinning.
 func TestRawJSONRPCPostNeedsNoHandshake(t *testing.T) {
+	t.Parallel()
 	core, _ := testSession(t)
 	srv := httptest.NewServer(mcpsrv.New(core, zerolog.Nop(), mcpsrv.Options{Version: "test"}).Handler())
 	t.Cleanup(srv.Close)
@@ -740,6 +760,7 @@ func webhookFlow() flow.Flow {
 // The image tools answer with an image content block rather than a structured
 // value, so a model that can see images gets the avatar itself.
 func TestProfileImageRoundTripsThroughBase64(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	var created struct {
@@ -776,6 +797,7 @@ func TestProfileImageRoundTripsThroughBase64(t *testing.T) {
 // delete_profile is the only irreversible tool here, so its answer must never
 // be a constant: a mistyped id has to be distinguishable from a deletion.
 func TestDeleteProfileReportsAnUnknownProfileAsNotFound(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	assert.Contains(t, callErr(t, session, "delete_profile", map[string]any{"profileId": "this-never-existed"}),
@@ -786,6 +808,7 @@ func TestDeleteProfileReportsAnUnknownProfileAsNotFound(t *testing.T) {
 // exists, so answering it for a mistyped id sends the caller looking for an
 // avatar rather than for their typo.
 func TestProfileImageDistinguishesAMissingProfileFromAMissingAvatar(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	var created struct {
@@ -803,6 +826,7 @@ func TestProfileImageDistinguishesAMissingProfileFromAMissingAvatar(t *testing.T
 // An app.Error's Msg is written as a context prefix, so dropping its wrapped
 // cause leaves an agent holding a dangling phrase with no reason in it.
 func TestAToolErrorCarriesTheWrappedCause(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	msg := callErr(t, session, "clear_profile_image", map[string]any{"profileId": "nope"})
@@ -813,6 +837,7 @@ func TestAToolErrorCarriesTheWrappedCause(t *testing.T) {
 // A data URL is accepted because an agent handed one by another tool will
 // otherwise forget to strip the prefix.
 func TestSetProfileImageAcceptsADataURL(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	var created struct {
@@ -830,6 +855,7 @@ func TestSetProfileImageAcceptsADataURL(t *testing.T) {
 }
 
 func TestSetProfileImageRejectsNonBase64(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	var created struct {
@@ -844,6 +870,7 @@ func TestSetProfileImageRejectsNonBase64(t *testing.T) {
 }
 
 func TestExecuteFlowNeedsExactlyOneFlowSource(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	msg := callErr(t, session, "execute_flow", map[string]any{
@@ -858,6 +885,7 @@ func TestExecuteFlowNeedsExactlyOneFlowSource(t *testing.T) {
 // whose inferred schema is an array — passing models.Msg straight through as
 // the tool's input type makes every real payload unrepresentable.
 func TestExecuteFlowDeliversAnObjectPayloadAndCommitsNothing(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 
 	var got struct {
@@ -895,6 +923,7 @@ func TestExecuteFlowDeliversAnObjectPayloadAndCommitsNothing(t *testing.T) {
 // graph comes back many times over. The default drops received, which is
 // derivable from the upstream's emitted, and counts drops bodies entirely.
 func TestExecuteFlowDetailControlsHowManyCopiesOfAPayloadComeBack(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	run := func(t *testing.T, detail string) (nodes []struct {
@@ -953,6 +982,7 @@ func TestExecuteFlowDetailControlsHowManyCopiesOfAPayloadComeBack(t *testing.T) 
 // absent key: absent is what "this detail level did not report it" means, and
 // the run's collections are non-nil precisely so tooling can count them.
 func TestExecuteFlowDistinguishesAnEmptyEmissionFromAnOmittedOne(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	require.NoError(t, core.Flows.Save(t.Context(), webhookFlow()))
 
@@ -978,6 +1008,7 @@ func TestExecuteFlowDistinguishesAnEmptyEmissionFromAnOmittedOne(t *testing.T) {
 }
 
 func TestExecuteFlowRejectsAnUnknownDetailLevel(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	msg := callErr(t, session, "execute_flow", map[string]any{
@@ -991,6 +1022,7 @@ func TestExecuteFlowRejectsAnUnknownDetailLevel(t *testing.T) {
 // against the inferred schema first, which is what "declared capabilities"
 // buys at this boundary.
 func TestSchemaValidationRejectsAWronglyTypedArgument(t *testing.T) {
+	t.Parallel()
 	_, session := testSession(t)
 
 	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -1020,6 +1052,7 @@ wires: []
 `
 
 func TestDiagnosticsToolReadsJobsAndReportsMissingEvidence(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	id := core.Jobs.Begin(t.Context(), "Create session", "new-session", "review 347")
 	core.Jobs.Fail(t.Context(), id, "tmux spawn failed")

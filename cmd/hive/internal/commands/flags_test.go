@@ -8,6 +8,7 @@ import (
 )
 
 func TestFlagsResolvedLogFile(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		flag Flags

@@ -20,6 +20,7 @@ steps:
 `
 
 func TestParseScenario_Valid(t *testing.T) {
+	t.Parallel()
 	spec, err := parseScenario([]byte(validScenarioYAML))
 	require.NoError(t, err)
 
@@ -47,6 +48,7 @@ func TestParseScenario_Valid(t *testing.T) {
 }
 
 func TestParseScenario_MissingName(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 steps:
   - key: Enter
@@ -56,6 +58,7 @@ steps:
 }
 
 func TestParseScenario_NoSteps(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: empty
 steps: []
@@ -65,6 +68,7 @@ steps: []
 }
 
 func TestParseScenario_UnknownTopLevelField(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: bogus
 bogus_field: 1
@@ -76,6 +80,7 @@ steps:
 }
 
 func TestParseScenario_UnknownStepKind(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: bad-step
 steps:
@@ -87,6 +92,7 @@ steps:
 }
 
 func TestParseScenario_MultipleKindsInOneStep(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: bad-step
 steps:
@@ -98,6 +104,7 @@ steps:
 }
 
 func TestParseScenario_EmptyStep(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: bad-step
 steps:
@@ -107,6 +114,7 @@ steps:
 }
 
 func TestParseScenario_ExpectMissingState(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: bad-expect
 steps:
@@ -117,6 +125,7 @@ steps:
 }
 
 func TestParseScenario_ExpectMissingWithinPolls(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: bad-expect
 steps:
@@ -127,6 +136,7 @@ steps:
 }
 
 func TestParseScenario_ExpectUnknownState(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: bad-expect
 steps:
@@ -137,6 +147,7 @@ steps:
 }
 
 func TestParseScenario_ExpectNonPositiveWithinPolls(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: bad-expect
 steps:
@@ -147,6 +158,7 @@ steps:
 }
 
 func TestParseScenario_ExpectNonPositiveHoldsForPolls(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: bad-expect
 steps:
@@ -157,6 +169,7 @@ steps:
 }
 
 func TestParseScenario_ExpectUnknownField(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: bad-expect
 steps:
@@ -167,6 +180,7 @@ steps:
 }
 
 func TestParseScenario_ExpectNotAMapping(t *testing.T) {
+	t.Parallel()
 	_, err := parseScenario([]byte(`
 scenario: bad-expect
 steps:
@@ -182,6 +196,7 @@ func poll(n int, status terminal.Status, step int) scenarioPoll {
 }
 
 func TestScoreScenario_ImmediateDetectionPasses(t *testing.T) {
+	t.Parallel()
 	spec := &scenarioSpec{
 		Name: "immediate",
 		Steps: []scenarioStep{
@@ -202,6 +217,7 @@ func TestScoreScenario_ImmediateDetectionPasses(t *testing.T) {
 }
 
 func TestScoreScenario_DetectionLatencyReported(t *testing.T) {
+	t.Parallel()
 	spec := &scenarioSpec{
 		Name: "latent",
 		Steps: []scenarioStep{
@@ -222,6 +238,7 @@ func TestScoreScenario_DetectionLatencyReported(t *testing.T) {
 }
 
 func TestScoreScenario_NeverObservedFails(t *testing.T) {
+	t.Parallel()
 	spec := &scenarioSpec{
 		Name: "never",
 		Steps: []scenarioStep{
@@ -243,6 +260,7 @@ func TestScoreScenario_NeverObservedFails(t *testing.T) {
 }
 
 func TestScoreScenario_DetectedOutsideWithinPollsFails(t *testing.T) {
+	t.Parallel()
 	spec := &scenarioSpec{
 		Name: "late",
 		Steps: []scenarioStep{
@@ -262,6 +280,7 @@ func TestScoreScenario_DetectedOutsideWithinPollsFails(t *testing.T) {
 }
 
 func TestScoreScenario_HoldsForPollsSatisfied(t *testing.T) {
+	t.Parallel()
 	spec := &scenarioSpec{
 		Name: "holds",
 		Steps: []scenarioStep{
@@ -280,6 +299,7 @@ func TestScoreScenario_HoldsForPollsSatisfied(t *testing.T) {
 }
 
 func TestScoreScenario_HoldsForPollsRevertedFails(t *testing.T) {
+	t.Parallel()
 	spec := &scenarioSpec{
 		Name: "reverts",
 		Steps: []scenarioStep{
@@ -300,6 +320,7 @@ func TestScoreScenario_HoldsForPollsRevertedFails(t *testing.T) {
 }
 
 func TestScoreScenario_HoldsForPollsExhaustsWindowFails(t *testing.T) {
+	t.Parallel()
 	spec := &scenarioSpec{
 		Name: "short-window",
 		Steps: []scenarioStep{
@@ -321,6 +342,7 @@ func TestScoreScenario_HoldsForPollsExhaustsWindowFails(t *testing.T) {
 // success-criteria case: an expectation can pass while the log still shows
 // an unrelated blip on the way there, and that blip must count as a flap.
 func TestScoreScenario_UnexpectedTransitionIncrementsFlapCount(t *testing.T) {
+	t.Parallel()
 	spec := &scenarioSpec{
 		Name: "flappy",
 		Steps: []scenarioStep{
@@ -344,6 +366,7 @@ func TestScoreScenario_UnexpectedTransitionIncrementsFlapCount(t *testing.T) {
 }
 
 func TestScoreScenario_MultipleExpectationsAcrossSteps(t *testing.T) {
+	t.Parallel()
 	spec := &scenarioSpec{
 		Name: "multi",
 		Steps: []scenarioStep{
@@ -370,6 +393,7 @@ func TestScoreScenario_MultipleExpectationsAcrossSteps(t *testing.T) {
 }
 
 func TestScoreScenario_NoExpectations(t *testing.T) {
+	t.Parallel()
 	spec := &scenarioSpec{
 		Name: "no-expects",
 		Steps: []scenarioStep{

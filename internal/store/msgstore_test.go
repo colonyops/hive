@@ -13,6 +13,7 @@ import (
 )
 
 func TestMsgStore_PublishAndSubscribe(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -39,6 +40,7 @@ func TestMsgStore_PublishAndSubscribe(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeNotFound(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -51,6 +53,7 @@ func TestMsgStore_SubscribeNotFound(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeSince(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -77,6 +80,7 @@ func TestMsgStore_SubscribeSince(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeWildcard(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -103,6 +107,7 @@ func TestMsgStore_SubscribeWildcard(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeAll(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -126,6 +131,7 @@ func TestMsgStore_SubscribeAll(t *testing.T) {
 }
 
 func TestMsgStore_List(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -145,6 +151,7 @@ func TestMsgStore_List(t *testing.T) {
 }
 
 func TestMsgStore_ListEmpty(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -158,6 +165,7 @@ func TestMsgStore_ListEmpty(t *testing.T) {
 }
 
 func TestMsgStore_Retention(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -182,6 +190,7 @@ func TestMsgStore_Retention(t *testing.T) {
 }
 
 func TestMsgStore_RetentionBoundaries(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("exact limit", func(t *testing.T) {
@@ -250,6 +259,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 }
 
 func TestMsgStore_Prune(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -273,6 +283,7 @@ func TestMsgStore_Prune(t *testing.T) {
 }
 
 func TestMsgStore_MessageOrdering(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -298,6 +309,7 @@ func TestMsgStore_MessageOrdering(t *testing.T) {
 }
 
 func TestMsgStore_WildcardOrdering(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -324,6 +336,7 @@ func TestMsgStore_WildcardOrdering(t *testing.T) {
 }
 
 func TestMsgStore_Acknowledge(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -358,6 +371,7 @@ func TestMsgStore_Acknowledge(t *testing.T) {
 }
 
 func TestMsgStore_Acknowledge_EmptyConsumer(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -370,6 +384,7 @@ func TestMsgStore_Acknowledge_EmptyConsumer(t *testing.T) {
 }
 
 func TestMsgStore_GetUnread_EmptyConsumer(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -382,6 +397,7 @@ func TestMsgStore_GetUnread_EmptyConsumer(t *testing.T) {
 }
 
 func TestMsgStore_GetUnread_Wildcard(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -409,6 +425,7 @@ func TestMsgStore_GetUnread_Wildcard(t *testing.T) {
 }
 
 func TestMsgStore_GetUnread_NoMessages(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -423,6 +440,7 @@ func TestMsgStore_GetUnread_NoMessages(t *testing.T) {
 }
 
 func TestMsgStore_PublishMultipleTopics(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -448,6 +466,7 @@ func TestMsgStore_PublishMultipleTopics(t *testing.T) {
 }
 
 func TestMsgStore_PublishWildcardExpansion(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()
@@ -488,6 +507,7 @@ func TestMsgStore_PublishWildcardExpansion(t *testing.T) {
 }
 
 func TestMsgStore_AcknowledgeIdempotent(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
 	defer func() { _ = database.Close() }()

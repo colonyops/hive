@@ -43,6 +43,7 @@ func diffComment(text string) DiffCommentInput {
 }
 
 func TestChangesTargetsListsOnlyThatSessionsAgents(t *testing.T) {
+	t.Parallel()
 	targets, err := changesFixture(&fakeAgentInput{}).ChangesTargets(t.Context(), "s1")
 	require.NoError(t, err)
 	panes := make([]string, 0, len(targets))
@@ -53,6 +54,7 @@ func TestChangesTargetsListsOnlyThatSessionsAgents(t *testing.T) {
 }
 
 func TestSendChangesPastesIntoThePane(t *testing.T) {
+	t.Parallel()
 	input := &fakeAgentInput{}
 	svc := changesFixture(input)
 	require.NoError(t, svc.SendChanges(t.Context(), "s1", "%1", []DiffCommentInput{diffComment("rename")}))
@@ -63,6 +65,7 @@ func TestSendChangesPastesIntoThePane(t *testing.T) {
 }
 
 func TestSendChangesRefusals(t *testing.T) {
+	t.Parallel()
 	badRange := diffComment("x")
 	badRange.StartLine = 0
 	cases := []struct {
@@ -91,6 +94,7 @@ func TestSendChangesRefusals(t *testing.T) {
 }
 
 func TestSendChangesReportsAFailedPaste(t *testing.T) {
+	t.Parallel()
 	svc := changesFixture(&fakeAgentInput{err: errors.New("tmux gone")})
 	err := svc.SendChanges(t.Context(), "s1", "%1", []DiffCommentInput{diffComment("x")})
 	require.Error(t, err)
@@ -98,6 +102,7 @@ func TestSendChangesReportsAFailedPaste(t *testing.T) {
 }
 
 func TestChangesFeedbackFormatsWithoutTheSession(t *testing.T) {
+	t.Parallel()
 	text, err := newReviewService(ReviewDeps{}).ChangesFeedback(t.Context(), []DiffCommentInput{diffComment("rename")})
 	require.NoError(t, err)
 	assert.Contains(t, text, "a.go (line 4)")
@@ -105,6 +110,7 @@ func TestChangesFeedbackFormatsWithoutTheSession(t *testing.T) {
 }
 
 func TestChangesTargetsTellApartAgentsThatReadTheSame(t *testing.T) {
+	t.Parallel()
 	code := &fakeCodeAgents{
 		sessions: []session.Session{{ID: "s1", Name: "one", State: session.StateActive}},
 		panes: map[string][]statussvc.AgentPane{"s1": {

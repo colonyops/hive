@@ -21,6 +21,7 @@ func newTestKVStore(t *testing.T) *KVStore {
 }
 
 func TestKVStore_SetAndGet(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -40,6 +41,7 @@ func TestKVStore_SetAndGet(t *testing.T) {
 }
 
 func TestKVStore_GetNotFound(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -53,6 +55,7 @@ func TestKVStore_GetNotFound(t *testing.T) {
 }
 
 func TestKVStore_SetOverwrite(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -65,6 +68,7 @@ func TestKVStore_SetOverwrite(t *testing.T) {
 }
 
 func TestKVStore_Delete(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -77,6 +81,7 @@ func TestKVStore_Delete(t *testing.T) {
 }
 
 func TestKVStore_Has(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -91,6 +96,7 @@ func TestKVStore_Has(t *testing.T) {
 }
 
 func TestKVStore_ListKeys(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -104,6 +110,7 @@ func TestKVStore_ListKeys(t *testing.T) {
 }
 
 func TestKVStore_GetRaw(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -118,6 +125,7 @@ func TestKVStore_GetRaw(t *testing.T) {
 }
 
 func TestKVStore_TTLExpiry(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -139,6 +147,7 @@ func TestKVStore_TTLExpiry(t *testing.T) {
 }
 
 func TestKVStore_TTLNotExpired(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -154,6 +163,7 @@ func TestKVStore_TTLNotExpired(t *testing.T) {
 }
 
 func TestKVStore_SweepExpired(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -171,6 +181,7 @@ func TestKVStore_SweepExpired(t *testing.T) {
 }
 
 func TestKVStore_GetRawExpired(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 

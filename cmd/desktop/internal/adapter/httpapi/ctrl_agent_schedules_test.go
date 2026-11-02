@@ -20,6 +20,7 @@ const seededWorkspace = "hive"
 // saves it and answers with what it wrote, and workspaces/open lists it joined
 // with its run state. There is no schedules list route of its own.
 func TestAgentWorkspaceViewCarriesTheSchedulesTheEditorWrote(t *testing.T) {
+	t.Parallel()
 	h := newAgentHarness(t)
 
 	resp := h.post(t, AgentWorkspacesPathPrefix+"schedules/runs", "", agentScheduleRunsRequest{Workspace: seededWorkspace, ID: "weekly"})
@@ -65,6 +66,7 @@ func (h *terminalHarness) saveWorkspaceSchedules(t *testing.T, schedules ...agen
 // The frontend sends limit 0 for "however many you think", so the default has
 // to be applied somewhere; this pins where.
 func TestAgentScheduleRunsAppliesTheDefaultLimit(t *testing.T) {
+	t.Parallel()
 	h := newAgentHarness(t)
 
 	// A run points at its chat only while the chat exists, so the runs here

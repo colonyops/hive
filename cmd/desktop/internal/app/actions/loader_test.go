@@ -47,6 +47,7 @@ actions:
 `
 
 func TestLoadActions_MultiActionFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", multiActionYAML)
 
@@ -79,12 +80,14 @@ func TestLoadActions_MultiActionFile(t *testing.T) {
 }
 
 func TestLoadActions_MissingFile_IsEmptySetNotError(t *testing.T) {
+	t.Parallel()
 	got, err := LoadCatalog(filepath.Join(t.TempDir(), "nope.yml"))
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
 
 func TestLoadActions_EmptyFile_IsEmptySetNotError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", "")
 
@@ -94,6 +97,7 @@ func TestLoadActions_EmptyFile_IsEmptySetNotError(t *testing.T) {
 }
 
 func TestLoadActions_VersionMismatch_IsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", `version: 2
 actions: []
@@ -104,6 +108,7 @@ actions: []
 }
 
 func TestLoadActions_UnknownTopLevelField_IsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", `version: 1
 bogus: true
@@ -114,6 +119,7 @@ actions: []
 }
 
 func TestLoadActions_DuplicateID_IsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", `version: 1
 actions:
@@ -132,6 +138,7 @@ actions:
 }
 
 func TestLoadActions_BadSlug_IsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", `version: 1
 actions:
@@ -146,6 +153,7 @@ actions:
 }
 
 func TestLoadActions_MissingLabel_IsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", `version: 1
 actions:
@@ -159,6 +167,7 @@ actions:
 }
 
 func TestLoadActions_UnsupportedLaunchSessionPost_IsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", `version: 1
 actions:
@@ -174,6 +183,7 @@ actions:
 }
 
 func TestLoadActions_MissingRequiredPerTypeField_IsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", `version: 1
 actions:
@@ -191,8 +201,8 @@ actions:
 // driven through LoadActions -> configmigrate.ActionsSet.Apply -> parseActions
 // with a temporarily raised Current, and must come out as a valid catalog.
 func TestLoadActions_InjectedSetMigratesThroughRealLoader(t *testing.T) {
-	original := configmigrate.ActionsSet
-	configmigrate.ActionsSet = configmigrate.Set{
+	t.Parallel()
+	set := configmigrate.Set{
 		Name:     "actions",
 		Baseline: 1,
 		Current:  2,
@@ -200,17 +210,17 @@ func TestLoadActions_InjectedSetMigratesThroughRealLoader(t *testing.T) {
 			{To: 2, Migrate: func(doc map[string]any) error { return nil }},
 		},
 	}
-	t.Cleanup(func() { configmigrate.ActionsSet = original })
 
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", multiActionYAML)
 
-	got, err := LoadCatalog(path)
+	got, err := loadCatalog(path, set)
 	require.NoError(t, err)
 	require.Len(t, got.Actions, 3)
 }
 
 func TestLoadActions_CorruptFileErrors(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", "not: [unterminated")
 	_, err := LoadCatalog(path)
@@ -220,6 +230,7 @@ func TestLoadActions_CorruptFileErrors(t *testing.T) {
 // TestLoadActions_CurrentFileIsNotRewritten proves the read path is pure
 // Apply: loading an already-current actions.yml must never write to disk.
 func TestLoadActions_CurrentFileIsNotRewritten(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", multiActionYAML)
 	before, err := os.ReadFile(path)
@@ -234,6 +245,7 @@ func TestLoadActions_CurrentFileIsNotRewritten(t *testing.T) {
 }
 
 func TestLoadActions_BadDuration_IsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := writeActionsFile(t, dir, "actions.yml", `version: 1
 actions:

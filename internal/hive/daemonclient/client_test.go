@@ -96,6 +96,7 @@ func serveWithControl(t *testing.T, path string, handler daemonv1connect.Session
 }
 
 func TestClientRetriesAReadOnce(t *testing.T) {
+	t.Parallel()
 	path := socketPath(t)
 	server := &countingServer{}
 	listener := serve(t, path, server, 1)
@@ -108,6 +109,7 @@ func TestClientRetriesAReadOnce(t *testing.T) {
 }
 
 func TestClientGivesUpOnAReadAfterOneRetry(t *testing.T) {
+	t.Parallel()
 	path := socketPath(t)
 	listener := serve(t, path, &countingServer{}, 5)
 	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop()})
@@ -118,6 +120,7 @@ func TestClientGivesUpOnAReadAfterOneRetry(t *testing.T) {
 }
 
 func TestClientDoesNotRetryAMutation(t *testing.T) {
+	t.Parallel()
 	path := socketPath(t)
 	server := &countingServer{}
 	listener := serve(t, path, server, 1)
@@ -129,6 +132,7 @@ func TestClientDoesNotRetryAMutation(t *testing.T) {
 }
 
 func TestClientStartsTheDaemonWhenTheSocketIsMissing(t *testing.T) {
+	t.Parallel()
 	path := socketPath(t)
 	var starts atomic.Int32
 	client := New(Options{
@@ -149,6 +153,7 @@ func TestClientStartsTheDaemonWhenTheSocketIsMissing(t *testing.T) {
 }
 
 func TestClientWithoutAutoStartReportsTheDialError(t *testing.T) {
+	t.Parallel()
 	client := New(Options{Dialer: UnixDialer(socketPath(t)), Logger: zerolog.Nop()})
 	_, err := client.ListSessions(t.Context())
 	require.Error(t, err)
@@ -156,6 +161,7 @@ func TestClientWithoutAutoStartReportsTheDialError(t *testing.T) {
 }
 
 func TestStarterBacksOffAfterAFailedStart(t *testing.T) {
+	t.Parallel()
 	now := time.Unix(1000, 0)
 	var starts int
 	spawnErr := errors.New("no hive binary")
@@ -184,6 +190,7 @@ func TestStarterBacksOffAfterAFailedStart(t *testing.T) {
 }
 
 func TestStarterSkipsTheStartWhenADaemonAlreadyAnswers(t *testing.T) {
+	t.Parallel()
 	s := &starter{start: func(context.Context) error { t.Fatal("started a second daemon"); return nil }, now: time.Now}
 	require.NoError(t, s.ensure(t.Context(), func() bool { return true }))
 }
@@ -199,6 +206,7 @@ func (s *helloServer) Hello(context.Context, *connect.Request[daemonv1.HelloRequ
 }
 
 func TestStatusAvailableRetriesAHelloThatFailed(t *testing.T) {
+	t.Parallel()
 	path := socketPath(t)
 	now := time.Unix(1000, 0)
 	var nowMu sync.Mutex
@@ -265,6 +273,7 @@ func (s slowServer) Recycle(ctx context.Context, _ *connect.Request[daemonv1.Rec
 }
 
 func TestClientReadTimeoutBoundsOnlyReads(t *testing.T) {
+	t.Parallel()
 	const timeout = 50 * time.Millisecond
 	path := socketPath(t)
 	serve(t, path, slowServer{slow: 4 * timeout}, 0)
@@ -278,6 +287,7 @@ func TestClientReadTimeoutBoundsOnlyReads(t *testing.T) {
 }
 
 func TestClientGitStatusesNamesADaemonThatPredatesThem(t *testing.T) {
+	t.Parallel()
 	path := socketPath(t)
 	serve(t, path, slowServer{}, 0)
 	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop()})
@@ -287,6 +297,7 @@ func TestClientGitStatusesNamesADaemonThatPredatesThem(t *testing.T) {
 }
 
 func TestClientDeleteTimeoutBoundsADelete(t *testing.T) {
+	t.Parallel()
 	const timeout = 50 * time.Millisecond
 	path := socketPath(t)
 	serve(t, path, slowServer{slow: time.Minute}, 0)
@@ -307,6 +318,7 @@ func (stuckHelloServer) Hello(ctx context.Context, _ *connect.Request[daemonv1.H
 }
 
 func TestClientStopsAChangeWhenTheDaemonIsStuck(t *testing.T) {
+	t.Parallel()
 	path := socketPath(t)
 	sessions := &countingServer{}
 	serveWithControl(t, path, sessions, stuckHelloServer{}, 0)
@@ -319,6 +331,7 @@ func TestClientStopsAChangeWhenTheDaemonIsStuck(t *testing.T) {
 }
 
 func TestExplain(t *testing.T) {
+	t.Parallel()
 	timedOut := connect.NewError(connect.CodeDeadlineExceeded, context.DeadlineExceeded)
 	refused := connect.NewError(connect.CodeUnavailable, errors.New("dial: EOF"))
 	dropped := connect.NewError(connect.CodeUnknown, fmt.Errorf("protocol error: %w", io.ErrUnexpectedEOF))
@@ -384,6 +397,7 @@ func TestExplain(t *testing.T) {
 }
 
 func TestTimeoutFor(t *testing.T) {
+	t.Parallel()
 	c := New(Options{
 		Logger:         zerolog.Nop(),
 		ReadTimeout:    time.Second,
@@ -407,6 +421,7 @@ func TestTimeoutFor(t *testing.T) {
 }
 
 func TestClientWithoutReadTimeoutSendsNoHelloBeforeAChange(t *testing.T) {
+	t.Parallel()
 	path := socketPath(t)
 	sessions := &countingServer{}
 	control := &helloServer{}

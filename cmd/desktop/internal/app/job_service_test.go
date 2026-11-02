@@ -28,6 +28,7 @@ func newTestJobService(t *testing.T) (*JobService, <-chan events.JobsUpdated) {
 }
 
 func TestJobService_ListAndListActive(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -70,6 +71,7 @@ func TestJobService_ListAndListActive(t *testing.T) {
 }
 
 func TestJobService_RecordsLifecycleLabelsAndPublishes(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
@@ -118,6 +120,7 @@ func TestJobService_RecordsLifecycleLabelsAndPublishes(t *testing.T) {
 }
 
 func TestJobService_TrackRunsToCompletionUnlinkedToACommand(t *testing.T) {
+	t.Parallel()
 	service, _ := newTestJobService(t)
 
 	ran := make(chan struct{})
@@ -140,6 +143,7 @@ func TestJobService_TrackRunsToCompletionUnlinkedToACommand(t *testing.T) {
 }
 
 func TestJobService_TrackRecordsFailure(t *testing.T) {
+	t.Parallel()
 	service, _ := newTestJobService(t)
 
 	id := service.Track(t.Context(), "Create session", "new-session", "sess-2", func(context.Context) error {
@@ -156,6 +160,7 @@ func TestJobService_TrackRecordsFailure(t *testing.T) {
 // Begin runs before Track forks, while Done or Fail runs on the background
 // goroutine after fn returns. Assert ordering, not only eventual delivery.
 func TestJobService_TrackPublishesTerminalTransitionAfterFnReturns(t *testing.T) {
+	t.Parallel()
 	service, ch := newTestJobService(t)
 
 	release := make(chan struct{})
@@ -183,6 +188,7 @@ func TestJobService_TrackPublishesTerminalTransitionAfterFnReturns(t *testing.T)
 }
 
 func TestJobService_ListActiveUsesBackendClockWindow(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
@@ -214,6 +220,7 @@ func TestJobService_ListActiveUsesBackendClockWindow(t *testing.T) {
 // A failed write and a zero id both leave the bus quiet: JobsUpdated promises
 // a row changed, and neither changed one.
 func TestJobService_FailedWritesAndZeroTransitionsPublishNothing(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	require.NoError(t, db.Close())

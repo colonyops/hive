@@ -306,6 +306,11 @@ func DefaultConfig() Config {
 // Load reads configuration from the given path and sets the data directory.
 // If configPath is empty or doesn't exist, returns defaults with the provided dataDir.
 func Load(configPath, dataDir string) (*Config, error) {
+	return LoadFromEnv(configPath, dataDir, os.Getenv)
+}
+
+// LoadFromEnv is Load with the environment the overrides read.
+func LoadFromEnv(configPath, dataDir string, getenv func(string) string) (*Config, error) {
 	cfg := DefaultConfig()
 
 	data, err := ReadFile(configPath)
@@ -318,7 +323,7 @@ func Load(configPath, dataDir string) (*Config, error) {
 		}
 	}
 
-	cfg.Complete(dataDir)
+	cfg.complete(dataDir, getenv)
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
@@ -348,13 +353,17 @@ func ReadFile(configPath string) ([]byte, error) {
 // environment overrides. Load calls it; a program that decodes the file into
 // its own struct calls it on the embedded Config before validating.
 func (c *Config) Complete(dataDir string) {
+	c.complete(dataDir, os.Getenv)
+}
+
+func (c *Config) complete(dataDir string, getenv func(string) string) {
 	c.DataDir = dataDir
 	if len(c.Workspaces) == 0 && len(c.RepoDirsCompat) > 0 {
 		c.Workspaces = c.RepoDirsCompat
 	}
 	c.RepoDirsCompat = nil
 	c.applyDefaults()
-	c.applyEnvironmentOverrides()
+	c.applyEnvironmentOverrides(getenv)
 }
 
 // applyDefaults sets default values for any unset configuration options.
@@ -420,7 +429,7 @@ func (c *Config) applyTerminalConfirmDefaults() {
 	}
 }
 
-func (c *Config) applyEnvironmentOverrides() {
+func (c *Config) applyEnvironmentOverrides(getenv func(string) string) {
 	overrides := []struct {
 		env    string
 		target *string
@@ -431,7 +440,7 @@ func (c *Config) applyEnvironmentOverrides() {
 	}
 
 	for _, override := range overrides {
-		if value := os.Getenv(override.env); value != "" {
+		if value := getenv(override.env); value != "" {
 			*override.target = value
 		}
 	}

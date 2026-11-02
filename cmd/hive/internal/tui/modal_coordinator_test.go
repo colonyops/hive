@@ -15,6 +15,7 @@ const testBackground = "background"
 func noSpinner() spinner.Model { return spinner.New() }
 
 func TestModalCoordinator_Overlay_NoModal(t *testing.T) {
+	t.Parallel()
 	mc := NewModalCoordinator()
 	bg := "background content"
 	got := mc.Overlay(stateNormal, bg, noSpinner(), "")
@@ -22,6 +23,7 @@ func TestModalCoordinator_Overlay_NoModal(t *testing.T) {
 }
 
 func TestModalCoordinator_Overlay_ConfirmModal(t *testing.T) {
+	t.Parallel()
 	mc := NewModalCoordinator()
 	mc.Confirm = NewModal("Confirm", "Are you sure?")
 	bg := testBackground
@@ -31,6 +33,7 @@ func TestModalCoordinator_Overlay_ConfirmModal(t *testing.T) {
 }
 
 func TestModalCoordinator_Overlay_OutputModal(t *testing.T) {
+	t.Parallel()
 	mc := NewModalCoordinator()
 	mc.Output = NewOutputModal("Processing")
 	bg := testBackground
@@ -39,6 +42,7 @@ func TestModalCoordinator_Overlay_OutputModal(t *testing.T) {
 }
 
 func TestModalCoordinator_Overlay_HelpDialog(t *testing.T) {
+	t.Parallel()
 	mc := NewModalCoordinator()
 	mc.Help = components.NewHelpDialog("Keyboard Shortcuts", []components.HelpDialogSection{
 		{
@@ -52,6 +56,7 @@ func TestModalCoordinator_Overlay_HelpDialog(t *testing.T) {
 }
 
 func TestModalCoordinator_Overlay_NotificationModal(t *testing.T) {
+	t.Parallel()
 	mc := NewModalCoordinator()
 	mc.Notification = NewNotificationModal(zerolog.Nop(), &stubStore{}, 80, 24)
 	bg := testBackground
@@ -60,6 +65,7 @@ func TestModalCoordinator_Overlay_NotificationModal(t *testing.T) {
 }
 
 func TestModalCoordinator_Overlay_NilHelp(t *testing.T) {
+	t.Parallel()
 	mc := NewModalCoordinator()
 	// Help is nil but state says showingHelp — should return bg unchanged
 	bg := testBackground
@@ -68,6 +74,7 @@ func TestModalCoordinator_Overlay_NilHelp(t *testing.T) {
 }
 
 func TestModalCoordinator_Overlay_NilNotification(t *testing.T) {
+	t.Parallel()
 	mc := NewModalCoordinator()
 	bg := testBackground
 	got := mc.Overlay(stateShowingNotifications, bg, noSpinner(), "")
@@ -75,6 +82,7 @@ func TestModalCoordinator_Overlay_NilNotification(t *testing.T) {
 }
 
 func TestModalCoordinator_Overlay_LoadingState(t *testing.T) {
+	t.Parallel()
 	mc := NewModalCoordinator()
 	bg := testBackground
 	got := mc.Overlay(stateLoading, bg, noSpinner(), "Processing...")

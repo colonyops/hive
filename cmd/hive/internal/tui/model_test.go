@@ -174,6 +174,7 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 }
 
 func TestHandleBgStreamCompleteIgnoresStaleCompletion(t *testing.T) {
+	t.Parallel()
 	firstDone := make(chan error)
 	var secondDone <-chan error = make(chan error)
 	var secondOutput <-chan string = make(chan string)
@@ -194,6 +195,7 @@ func TestHandleBgStreamCompleteIgnoresStaleCompletion(t *testing.T) {
 }
 
 func TestHandleBgStreamCompletePartialFailureStillRefreshes(t *testing.T) {
+	t.Parallel()
 	var done <-chan error = make(chan error)
 	m := Model{modals: NewModalCoordinator(), sessionsView: &sessions.View{}}
 	m.modals.BgStreamDone = done
@@ -225,6 +227,7 @@ func TestHandleBgStreamCompletePartialFailureStillRefreshes(t *testing.T) {
 }
 
 func TestHandleStreamingModalKeyDoesNotOverwriteActiveBackgroundStream(t *testing.T) {
+	t.Parallel()
 	var activeDone <-chan error = make(chan error)
 	var streamDone <-chan error = make(chan error)
 	var streamOutput <-chan string = make(chan string)
@@ -327,6 +330,7 @@ func getUnexportedField[T any](t *testing.T, target any, field string) T {
 }
 
 func TestPromotedKeysAreOverridable(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		view      ViewType
@@ -499,6 +503,7 @@ func TestPromotedKeysAreOverridable(t *testing.T) {
 }
 
 func TestPromotedKeysDefaultBehavior(t *testing.T) {
+	t.Parallel()
 	t.Run("sessions g refreshes git statuses", func(t *testing.T) {
 		m := newKeybindingPrecedenceModel(t, nil)
 		m = switchTestView(t, m, ViewSessions)
@@ -574,6 +579,7 @@ func TestPromotedKeysDefaultBehavior(t *testing.T) {
 }
 
 func TestReviewQuestionMarkDoesNotOpenGlobalHelpDialog(t *testing.T) {
+	t.Parallel()
 	m := newKeybindingPrecedenceModel(t, nil)
 	m = switchTestView(t, m, ViewReview)
 
@@ -586,6 +592,7 @@ func TestReviewQuestionMarkDoesNotOpenGlobalHelpDialog(t *testing.T) {
 }
 
 func TestCtrlCAlwaysQuits(t *testing.T) {
+	t.Parallel()
 	m := newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
 		cfg.UserCommands["SentinelNotifications"] = config.UserCommand{
 			Action: act.TypeNotifications,
@@ -603,6 +610,7 @@ func TestCtrlCAlwaysQuits(t *testing.T) {
 }
 
 func TestFilterModeSwallowsKeys(t *testing.T) {
+	t.Parallel()
 	m := newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
 		cfg.UserCommands["SentinelTodoPanel"] = config.UserCommand{
 			Action: act.TypeTodoPanel,
@@ -666,6 +674,7 @@ func TestKVFilterDoesNotLeakAcrossViews(t *testing.T) {
 }
 
 func TestUnknownCommandDoesNotFallBack(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		bind func(*config.Config)
@@ -702,6 +711,7 @@ func TestUnknownCommandDoesNotFallBack(t *testing.T) {
 }
 
 func TestModalDismissalQIgnoresNormalModeOverride(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		open       func(t *testing.T, m Model) Model

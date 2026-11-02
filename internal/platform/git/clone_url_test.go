@@ -10,6 +10,7 @@ import (
 )
 
 func TestItemRepoLocation(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name, repo, itemURL, https, ssh string
 	}{
@@ -34,6 +35,7 @@ func TestItemRepoLocation(t *testing.T) {
 }
 
 func TestItemRepoLocationRejects(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, repo, itemURL string }{
 		{"no host", "acme/site", ""},
 		{"invalid url", "acme/site", "https://%broken"},
@@ -52,6 +54,7 @@ func TestItemRepoLocationRejects(t *testing.T) {
 }
 
 func TestIsExplicitRemote(t *testing.T) {
+	t.Parallel()
 	for _, repo := range []string{
 		"https://user@git.example.test:9443/group/repo.git",
 		"ssh://custom@git.example.test:2222/group/repo.git",
@@ -69,6 +72,7 @@ func TestIsExplicitRemote(t *testing.T) {
 }
 
 func TestRemoteProtocol(t *testing.T) {
+	t.Parallel()
 	for remote, want := range map[string]session.CloneProtocol{
 		"https://github.com/acme/site.git":         session.CloneProtocolHttps,
 		"ssh://git@ghe.example.com:2222/acme/site": session.CloneProtocolSsh,

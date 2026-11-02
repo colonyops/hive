@@ -21,6 +21,7 @@ func confirmTestRun(t *testing.T, st *Stores, actionID string) OutputCommand {
 }
 
 func TestActionRunStore_LogTailAndPaging(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	row := confirmTestRun(t, st, "a")
 	lines := make([]NewActionRunLogLine, 0, 9)
@@ -43,6 +44,7 @@ func TestActionRunStore_LogTailAndPaging(t *testing.T) {
 }
 
 func TestActionRunStore_ListJoinsTheFinishedCommand(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	row := confirmTestRun(t, st, "deploy")
 	require.NoError(t, st.OutputCommands.Complete(t.Context(), row.ID, row.ClaimToken, ""))
@@ -57,6 +59,7 @@ func TestActionRunStore_ListJoinsTheFinishedCommand(t *testing.T) {
 }
 
 func TestActionRunLogGoesWithItsRun(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	active := confirmTestRun(t, st, "active")
 	old := confirmTestRun(t, st, "old")

@@ -15,6 +15,7 @@ import (
 )
 
 func TestRunTopic_DefaultPrefix(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	cfg := &config.Config{
@@ -46,6 +47,7 @@ func TestRunTopic_DefaultPrefix(t *testing.T) {
 }
 
 func TestRunTopic_CustomPrefixFlag(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	cfg := &config.Config{
@@ -76,6 +78,7 @@ func TestRunTopic_CustomPrefixFlag(t *testing.T) {
 }
 
 func TestRunTopic_EmptyPrefixFlag(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	cfg := &config.Config{
@@ -109,6 +112,7 @@ func TestRunTopic_EmptyPrefixFlag(t *testing.T) {
 }
 
 func TestRunTopic_EmptyConfigPrefix(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	cfg := &config.Config{
@@ -139,6 +143,7 @@ func TestRunTopic_EmptyConfigPrefix(t *testing.T) {
 }
 
 func TestRunTopic_Uniqueness(t *testing.T) {
+	t.Parallel()
 	// Generate multiple topic IDs and verify they're unique
 	seen := make(map[string]bool)
 

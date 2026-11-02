@@ -11,6 +11,7 @@ import (
 // Every action written before terminal mode existed declares no targets, and
 // must keep meaning exactly what it meant then.
 func TestHasTarget_NoDeclarationIsAnItemAction(t *testing.T) {
+	t.Parallel()
 	a := Action{ID: "x", Type: "shell", Config: &ShellConfig{CommandTemplate: "true"}}
 	assert.True(t, a.HasTarget(TargetItem))
 	assert.False(t, a.HasTarget(TargetSession))
@@ -19,6 +20,7 @@ func TestHasTarget_NoDeclarationIsAnItemAction(t *testing.T) {
 }
 
 func TestHasTarget_DeclaringTerminalDropsTheItemSurface(t *testing.T) {
+	t.Parallel()
 	a, err := decodeAction(t, `id: open
 label: Open
 type: shell
@@ -32,6 +34,7 @@ command_template: "true"
 }
 
 func TestDecode_TargetsAreCaseInsensitiveAndItemOnlyCollapses(t *testing.T) {
+	t.Parallel()
 	a, err := decodeAction(t, `id: open
 label: Open
 type: shell
@@ -55,6 +58,7 @@ command_template: "true"
 }
 
 func TestValidateActions_RejectsAnUnknownTarget(t *testing.T) {
+	t.Parallel()
 	a, err := decodeAction(t, `id: open
 label: Open
 type: shell
@@ -68,6 +72,7 @@ command_template: "true"
 }
 
 func TestValidateActions_StatusBarIsATerminalTargetWithAnIcon(t *testing.T) {
+	t.Parallel()
 	a, err := decodeAction(t, `id: open-repo
 label: Open repo
 type: shell
@@ -85,6 +90,7 @@ command_template: "true"
 }
 
 func TestValidateActions_RejectsALaunchSessionOnTheStatusBar(t *testing.T) {
+	t.Parallel()
 	a, err := decodeAction(t, `id: launch
 label: Launch
 type: launch-session
@@ -95,6 +101,7 @@ targets: [statusbar]
 }
 
 func TestValidateActions_RejectsADuplicateTarget(t *testing.T) {
+	t.Parallel()
 	a, err := decodeAction(t, `id: open
 label: Open
 type: shell
@@ -109,6 +116,7 @@ command_template: "true"
 // is clicked, so a launch-session action that cannot serve a terminal target
 // never appears in one.
 func TestValidateActions_RejectsALaunchSessionTerminalTarget(t *testing.T) {
+	t.Parallel()
 	for _, target := range []string{TargetSession, TargetWindow} {
 		t.Run(target, func(t *testing.T) {
 			a, err := decodeAction(t, `id: spawn
@@ -124,6 +132,7 @@ prompt_template: "go"
 }
 
 func TestTerminalCapable(t *testing.T) {
+	t.Parallel()
 	assert.False(t, Action{Config: &LaunchSessionConfig{}}.TerminalCapable())
 	assert.True(t, Action{Config: &ShellConfig{}}.TerminalCapable())
 	assert.True(t, Action{Config: &ClipboardConfig{}}.TerminalCapable())
@@ -131,6 +140,7 @@ func TestTerminalCapable(t *testing.T) {
 }
 
 func TestEditableCatalog_SpellsOutTheDefaultTarget(t *testing.T) {
+	t.Parallel()
 	e, err := editableFromAction(Action{ID: "x", Label: "X", Type: "shell", Config: &ShellConfig{CommandTemplate: "true"}})
 	require.NoError(t, err)
 	assert.Equal(t, []string{TargetItem}, e.Targets)
@@ -143,6 +153,7 @@ func TestEditableCatalog_SpellsOutTheDefaultTarget(t *testing.T) {
 }
 
 func TestYAMLWriter_RoundTripsTerminalTargets(t *testing.T) {
+	t.Parallel()
 	store := NewActionStore(filepath.Join(t.TempDir(), "actions.yml"))
 	original := Action{
 		ID: "open", Label: "Open", Type: "shell",
@@ -160,6 +171,7 @@ func TestYAMLWriter_RoundTripsTerminalTargets(t *testing.T) {
 }
 
 func TestEditableCatalog_RoundTripsTerminalTargets(t *testing.T) {
+	t.Parallel()
 	e, err := editableFromAction(Action{
 		ID: "x", Label: "X", Type: "shell",
 		Targets: []string{TargetSession, TargetWindow},

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os/exec"
 	"regexp"
 	"runtime"
 	"slices"
@@ -18,7 +17,6 @@ import (
 
 	"github.com/colonyops/hive/internal/platform/tmux/control"
 	"github.com/colonyops/hive/internal/platform/tmuxtest"
-	"github.com/colonyops/hive/pkg/executil"
 )
 
 // These tests drive a real tmux server. Each one gets a server of its own and
@@ -28,7 +26,7 @@ import (
 type tmuxFixture struct {
 	t      *testing.T
 	slug   string
-	socket string
+	server *tmuxtest.Server
 }
 
 // startTmux boots a private tmux server holding one detached session named
@@ -36,16 +34,14 @@ type tmuxFixture struct {
 func startTmux(t *testing.T, slug string) *tmuxFixture {
 	t.Helper()
 
-	fixture := &tmuxFixture{t: t, slug: slug, socket: tmuxtest.Private(t)}
-	fixture.tmux("-f", "/dev/null", "new-session", "-d", "-s", slug, "-n", "claude", "-x", "120", "-y", "40", "sh")
+	fixture := &tmuxFixture{t: t, slug: slug, server: tmuxtest.New(t)}
+	fixture.tmux("new-session", "-d", "-s", slug, "-n", "claude", "-x", "120", "-y", "40", "sh")
 	return fixture
 }
 
 func (f *tmuxFixture) tmux(args ...string) string {
 	f.t.Helper()
-	cmd := exec.CommandContext(f.t.Context(), "tmux", append([]string{"-S", f.socket}, args...)...)
-	cmd.Env = executil.WithoutEnv(nil, "TMUX", "TMUX_PANE")
-	out, err := cmd.CombinedOutput()
+	out, err := f.server.Command(f.t.Context(), "", nil, args...).CombinedOutput()
 	require.NoErrorf(f.t, err, "tmux %v: %s", args, out)
 	return string(out)
 }
@@ -200,9 +196,10 @@ func outputContains(t *testing.T, frame []byte, want string) bool {
 // Attach is what hands the frontend its initial tab set; the stream carries the
 // deltas from there, plus the first paint and the attached lifecycle frame.
 func TestTmuxAttachReturnsWindowsAndStreamsEvents(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-attach")
 	tmux.newWindow("shell")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 
 	attached := h.attach(t, tmux.slug)
 	require.Len(t, attached.Windows, 2, "both of the session's windows are reported")
@@ -256,11 +253,12 @@ func TestTmuxAttachReturnsWindowsAndStreamsEvents(t *testing.T) {
 // silently, and a window running something names it so the user can be told
 // what is about to stop.
 func TestTmuxWindowForegroundNamesWhatACloseWouldKill(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-foreground")
 	// tmux runs a window's command through sh -c, which execs it: the pane's own
 	// process becomes the work rather than parenting it.
 	tmux.tmux("new-window", "-t", tmux.slug, "-n", "agent", "sleep 300")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 
 	attached := h.attach(t, tmux.slug)
 	byName := map[string]string{}
@@ -304,8 +302,9 @@ func (h *terminalHarness) awaitForeground(t *testing.T, slug, windowID string, w
 // dressed as an internal fault: that is the answer the terminal view turns into
 // its "start this session" panel, so it has to be classified, not narrated.
 func TestTmuxAttachReportsASessionThatIsNotRunning(t *testing.T) {
-	startTmux(t, "hive-known")
-	h := newTerminalHarness(t)
+	t.Parallel()
+	tmux := startTmux(t, "hive-known")
+	h := newTerminalHarnessOn(t, tmux.server)
 
 	resp := h.post(t, "/api/terminal/attach", testToken, map[string]any{"slug": "hive-never-spawned", "cols": 120, "rows": 40})
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -332,8 +331,9 @@ func TestTmuxAttachReportsASessionThatIsNotRunning(t *testing.T) {
 // the backlog, and everything the pane shows was written before the new stream
 // existed.
 func TestTmuxReattachAfterATransportDropRepaints(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-redrop")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	h.attach(t, tmux.slug)
 
 	conn := h.dial(t, tmux.slug)
@@ -361,8 +361,9 @@ func TestTmuxReattachAfterATransportDropRepaints(t *testing.T) {
 // Killing is the terminal's lifecycle alone: tmux loses the session, and the
 // attach that follows is the not-running answer the start panel is built on.
 func TestTmuxKillEndsTheSession(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-doomed")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	h.attach(t, tmux.slug)
 
 	resp := h.post(t, "/api/terminal/kill", testToken, map[string]any{"slug": tmux.slug})
@@ -391,7 +392,7 @@ func TestTmuxSizesAWindowThatIsNotCurrentAndRestoresTheOption(t *testing.T) {
 	tmux := startTmux(t, "hive-aggressive")
 	tmux.tmux("set-option", "-g", "aggressive-resize", "on")
 	tmux.newWindow("second")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	windows := h.attach(t, tmux.slug).Windows
 	require.Len(t, windows, 2)
 	behind := windows[0].WindowID
@@ -423,7 +424,7 @@ func TestTmuxRestoresWhatAnEarlierClientLeftBehind(t *testing.T) {
 	tmux.tmux("set-option", "-w", "-t", id, "@hive-aggressive-resize", "inherit")
 	tmux.tmux("set-option", "-w", "-t", id, "aggressive-resize", "off")
 
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	h.attach(t, tmux.slug)
 	h.detach(t, tmux.slug)
 
@@ -435,7 +436,7 @@ func TestTmuxRestoresWhatAnEarlierClientLeftBehind(t *testing.T) {
 // from before the drop must not keep a window away from the session's size.
 func TestTmuxReattachClearsAWindowsOwnSize(t *testing.T) {
 	tmux := startTmux(t, "hive-reattach-size")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	id := h.attach(t, tmux.slug).Windows[0].WindowID
 
 	resp := h.post(t, "/api/terminal/resize", testToken, map[string]any{"slug": tmux.slug, "cols": 50, "rows": 20, "windowId": id})
@@ -452,8 +453,9 @@ func TestTmuxReattachClearsAWindowsOwnSize(t *testing.T) {
 
 // A slug tmux is already running needs no start, and must not be respawned over.
 func TestTmuxStartIsANoOpForALiveSession(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-running")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 
 	resp := h.post(t, "/api/terminal/start", testToken, map[string]any{"slug": tmux.slug})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -471,9 +473,10 @@ func TestTmuxStartIsANoOpForALiveSession(t *testing.T) {
 // a has-session probe and a list-windows, so the sweep spawned two tmux
 // processes per row.
 func TestTmuxListWindowsAnswersWithoutAnAttach(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-list")
 	tmux.newWindow("shell")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 
 	resp := h.post(t, "/api/terminal/windows/list", testToken,
 		map[string]any{"slugs": []string{tmux.slug, "hive-never-spawned"}})
@@ -497,10 +500,11 @@ func TestTmuxListWindowsAnswersWithoutAnAttach(t *testing.T) {
 // tmux reports a moved window as closed, and a torn-down tab would come back
 // blank and unselected.
 func TestTmuxMoveWindowReordersWithoutDisturbingThePane(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-move")
 	tmux.newWindow("shell")
 	tmux.newWindow("logs")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 
 	attached := h.attach(t, tmux.slug)
 	require.Len(t, attached.Windows, 3)
@@ -528,8 +532,9 @@ func TestTmuxMoveWindowReordersWithoutDisturbingThePane(t *testing.T) {
 }
 
 func TestTmuxMoveWindowRejectsAPositionThatIsNotThere(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-move-bad")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	attached := h.attach(t, tmux.slug)
 
 	resp := h.post(t, "/api/terminal/windows/move", testToken,
@@ -581,8 +586,9 @@ func activeName(t *testing.T, result attachResult) string {
 }
 
 func TestTmuxOutputFrameCarriesPaneOutput(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-output")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	h.attach(t, tmux.slug)
 
 	conn := h.dial(t, tmux.slug)
@@ -602,8 +608,9 @@ func TestTmuxOutputFrameCarriesPaneOutput(t *testing.T) {
 // Input rides the WebSocket rather than REST, so this is the only proof that
 // keystrokes reach the pane at all.
 func TestTmuxInputFrameReachesThePane(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-input")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	attached := h.attach(t, tmux.slug)
 
 	conn := h.dial(t, tmux.slug)
@@ -623,13 +630,14 @@ func TestTmuxInputFrameReachesThePane(t *testing.T) {
 // knows it: nothing in a first paint carries the mode, so the emulator on the
 // other end of the stream cannot decide (ADR pastes-are-tmux-paste-buffer-operations-not-keystrokes).
 func TestTmuxPasteIsBracketedOnlyWhenThePaneAsksForIt(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-paste")
 	// cat -v renders what the pane received; the DECSET is what a TUI emits to
 	// ask for bracketed paste, and the fixture's plain sh never does.
 	tmux.tmux("new-window", "-t", tmux.slug, "-n", "bracketed", `printf '\033[?2004h'; cat -v`)
 	tmux.tmux("new-window", "-t", tmux.slug, "-n", "plain", "cat -v")
 
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	attached := h.attach(t, tmux.slug)
 
 	conn := h.dial(t, tmux.slug)
@@ -653,10 +661,11 @@ func TestTmuxPasteIsBracketedOnlyWhenThePaneAsksForIt(t *testing.T) {
 }
 
 func TestTmuxImagePathPasteUsesNamedPaneWithoutSubmitting(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-images")
 	tmux.tmux("new-window", "-t", tmux.slug, "-n", "target", `printf '\033[?2004h'; cat -v`)
 	tmux.tmux("new-window", "-t", tmux.slug, "-n", "other", "cat -v")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	attached := h.attach(t, tmux.slug)
 	for _, text := range []string{`/tmp/image\ one.png `, `/tmp/image\ two.png `} {
 		resp := h.post(t, "/api/terminal/panes/paste", testToken, terminalPasteRequest{Slug: tmux.slug, PaneID: paneIDNamed(t, attached, "target"), Text: text})
@@ -695,8 +704,9 @@ func paneIDNamed(t *testing.T, attached attachResult, name string) string {
 // send none: a placeholder would resize the session — and every agent redrawing
 // inside it — to a size nobody asked for.
 func TestTmuxUnsizedAttachLeavesTheSessionAtItsOwnSize(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-unsized")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 
 	resp := h.post(t, "/api/terminal/attach", testToken, map[string]any{"slug": tmux.slug, "cols": 0, "rows": 0})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -717,8 +727,9 @@ func TestTmuxUnsizedAttachLeavesTheSessionAtItsOwnSize(t *testing.T) {
 }
 
 func TestTmuxResizeAndDetachLeaveTheSessionRunning(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-detach")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	h.attach(t, tmux.slug)
 
 	conn := h.dial(t, tmux.slug)
@@ -752,15 +763,16 @@ func TestTmuxResizeAndDetachLeaveTheSessionRunning(t *testing.T) {
 		}
 	}
 
-	out, err := exec.CommandContext(t.Context(), "tmux", "has-session", "-t", tmux.slug).CombinedOutput()
+	out, err := tmux.server.Command(t.Context(), "", nil, "has-session", "-t", tmux.slug).CombinedOutput()
 	require.NoErrorf(t, err, "detaching the control client leaves the tmux session alive: %s", out)
 }
 
 // Two sessions on one server: a control client must see only its own.
 func TestTmuxAttachIsScopedToItsSession(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-scope-one")
 	tmux.tmux("-f", "/dev/null", "new-session", "-d", "-s", "hive-scope-two", "-n", "other", "sh")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 
 	attached := h.attach(t, tmux.slug)
 	require.Len(t, attached.Windows, 1)
@@ -790,8 +802,9 @@ func TestTmuxAttachIsScopedToItsSession(t *testing.T) {
 
 // The stream must publish the split layout before the new pane's first paint.
 func TestTmuxSplitStreamsEveryPaneAndCloseTakesItBack(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-split")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	attached := h.attach(t, tmux.slug)
 	window := attached.Windows[0]
 	require.Equal(t, []string{window.ActivePane}, leafPanes(window.Layout), "an unsplit window is one leaf")
@@ -878,8 +891,9 @@ func TestTmuxSplitStreamsEveryPaneAndCloseTakesItBack(t *testing.T) {
 }
 
 func TestTmuxPaneResizeZoomAndSelect(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-panes")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	attached := h.attach(t, tmux.slug)
 	window := attached.Windows[0]
 	top := window.ActivePane
@@ -993,8 +1007,9 @@ func (h *terminalHarness) awaitPaneForeground(t *testing.T, slug, paneID string,
 // be rescued by a repaint, so the flood refills the backlog inside the resync
 // cooldown and the client falls back to the exit it always took.
 func TestTmuxBrokerOverflowResyncsThenEndsTheStream(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-overflow")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	h.attach(t, tmux.slug)
 
 	conn := h.dial(t, tmux.slug)
@@ -1071,7 +1086,7 @@ func TestTmuxAppCloseEndsTheStreamWithoutLeakingGoroutines(t *testing.T) {
 	settleGoroutines(t)
 	before := runtime.NumGoroutine()
 
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	h.attach(t, tmux.slug)
 	conn := h.dial(t, tmux.slug)
 	readUntil(t, conn, "the attached lifecycle frame", func(f []byte) bool { return isLifecycle(f, "attached") })
@@ -1107,8 +1122,9 @@ func TestTmuxAppCloseEndsTheStreamWithoutLeakingGoroutines(t *testing.T) {
 
 // An oversized input frame is a protocol violation, not something to truncate.
 func TestTmuxStreamRejectsOversizedInputFrames(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-inputcap")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 	attached := h.attach(t, tmux.slug)
 
 	conn := h.dial(t, tmux.slug)
@@ -1168,8 +1184,9 @@ func scrollPane(f *tmuxFixture, target string) string {
 // seeing what it did before you got there. First paint carries tmux's own
 // scrollback so the tab opens with history behind it, not just the screen.
 func TestTmuxFirstPaintReplaysScrollback(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-scrollback")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 
 	scrolledAway := scrollPane(tmux, tmux.slug)
 	require.NotContains(t, tmux.tmux("capture-pane", "-p", "-t", tmux.slug), scrolledAway,
@@ -1193,8 +1210,9 @@ func TestTmuxFirstPaintReplaysScrollback(t *testing.T) {
 // would seat the pane's top row partway down its viewport, and every
 // cursor-addressed redraw the program made afterwards would land rows off.
 func TestTmuxFirstPaintAlignsAnAlternateScreenPane(t *testing.T) {
+	t.Parallel()
 	tmux := startTmux(t, "hive-altscreen")
-	h := newTerminalHarness(t)
+	h := newTerminalHarnessOn(t, tmux.server)
 
 	scrolledAway := scrollPane(tmux, tmux.slug)
 	tmux.tmux("send-keys", "-t", tmux.slug, `printf '\033[?1049h\033[H\033[2JALT-TOP-ROW\n'`, "Enter")

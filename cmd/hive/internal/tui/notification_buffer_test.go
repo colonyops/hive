@@ -11,11 +11,13 @@ import (
 )
 
 func TestNotificationBuffer_Drain_empty_returnsNil(t *testing.T) {
+	t.Parallel()
 	b := NewNotificationBuffer()
 	assert.Nil(t, b.Drain())
 }
 
 func TestNotificationBuffer_PushDrain_orderAndClear(t *testing.T) {
+	t.Parallel()
 	b := NewNotificationBuffer()
 	b.Push(notify.Notification{Level: notify.LevelInfo, Message: "first"})
 	b.Push(notify.Notification{Level: notify.LevelWarning, Message: "second"})
@@ -28,6 +30,7 @@ func TestNotificationBuffer_PushDrain_orderAndClear(t *testing.T) {
 }
 
 func TestNotificationBuffer_Push_setsCreatedAtWhenZero(t *testing.T) {
+	t.Parallel()
 	b := NewNotificationBuffer()
 	b.Push(notify.Notification{Level: notify.LevelInfo, Message: "stamp me"})
 
@@ -37,6 +40,7 @@ func TestNotificationBuffer_Push_setsCreatedAtWhenZero(t *testing.T) {
 }
 
 func TestNotificationBuffer_WaitForSignal_bufferedSignal(t *testing.T) {
+	t.Parallel()
 	b := NewNotificationBuffer()
 	b.Push(notify.Notification{Level: notify.LevelInfo, Message: "queued"})
 
@@ -46,6 +50,7 @@ func TestNotificationBuffer_WaitForSignal_bufferedSignal(t *testing.T) {
 }
 
 func TestNotificationBuffer_WaitForSignal_singleSignalDrainsAll(t *testing.T) {
+	t.Parallel()
 	b := NewNotificationBuffer()
 	b.Push(notify.Notification{Level: notify.LevelInfo, Message: "one"})
 	b.Push(notify.Notification{Level: notify.LevelInfo, Message: "two"})
@@ -61,6 +66,7 @@ func TestNotificationBuffer_WaitForSignal_singleSignalDrainsAll(t *testing.T) {
 }
 
 func TestNotificationBuffer_ConcurrentPush_noLoss(t *testing.T) {
+	t.Parallel()
 	b := NewNotificationBuffer()
 	const count = 200
 

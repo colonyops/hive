@@ -64,6 +64,7 @@ func (m *mockGit) RemoteURL(_ context.Context, dir string) (string, error) {
 }
 
 func TestScanRepoDirs(t *testing.T) {
+	t.Parallel()
 	// Create temp directory structure
 	tmpDir := t.TempDir()
 
@@ -109,6 +110,7 @@ func TestScanRepoDirs(t *testing.T) {
 }
 
 func TestScanRepoDirs_EmptyDirs(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	discovered, err := ScanRepoDirs(ctx, zerolog.Nop(), nil, &mockGit{})
 	require.NoError(t, err)
@@ -116,6 +118,7 @@ func TestScanRepoDirs_EmptyDirs(t *testing.T) {
 }
 
 func TestScanRepoDirs_NonexistentDir(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	discovered, err := ScanRepoDirs(ctx, zerolog.Nop(), []string{"/nonexistent/path"}, &mockGit{})
 	require.NoError(t, err)
@@ -123,6 +126,7 @@ func TestScanRepoDirs_NonexistentDir(t *testing.T) {
 }
 
 func TestScanRepoDirs_MultipleDirs(t *testing.T) {
+	t.Parallel()
 	tmpDir1 := t.TempDir()
 	tmpDir2 := t.TempDir()
 

@@ -10,6 +10,7 @@ import (
 )
 
 func TestStores_WithinTxJoinsTwoStoresAndCommits(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -33,6 +34,7 @@ func TestStores_WithinTxJoinsTwoStoresAndCommits(t *testing.T) {
 }
 
 func TestStores_WithinTxRollsBackBothWrites(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	errAbort := errors.New("abort")
@@ -61,6 +63,7 @@ func TestStores_WithinTxRollsBackBothWrites(t *testing.T) {
 // two-connection pool) and that only the outermost caller decides the
 // outcome: the inner call returning nil must not commit the outer unit.
 func TestStores_WithinTxJoinsAnAlreadyOpenTransaction(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	errAbort := errors.New("abort")

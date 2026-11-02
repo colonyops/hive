@@ -176,6 +176,7 @@ func activeTab(p Picker) *tabState {
 }
 
 func TestPicker_RemoteSearchDispatchesDebouncedQuery(t *testing.T) {
+	t.Parallel()
 	items := []sources.Item{
 		{ID: "1", Title: "alpha"},
 		{ID: "2", Title: "beta"},
@@ -201,6 +202,7 @@ func TestPicker_RemoteSearchDispatchesDebouncedQuery(t *testing.T) {
 // results from a previous picker instance (generation) and results for a
 // query the user has since changed.
 func TestPicker_StaleSearchResultsAreDropped(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		msg  func(p Picker) sourceSearchResultMsg
@@ -237,6 +239,7 @@ func TestPicker_StaleSearchResultsAreDropped(t *testing.T) {
 }
 
 func TestPicker_SelectionAndCancel(t *testing.T) {
+	t.Parallel()
 	items := []sources.Item{{ID: "1", Title: "alpha"}}
 	fake := newFakeTUISource(fakeManifest(), items)
 	p := newTestPicker(fake, fakeManifest(), "", 80, 24)
@@ -269,6 +272,7 @@ func pressSpace(t *testing.T, p Picker) Picker {
 }
 
 func TestPicker_SpaceTogglesMark(t *testing.T) {
+	t.Parallel()
 	items := []sources.Item{
 		{ID: "1", Title: "alpha"},
 		{ID: "2", Title: "beta"},
@@ -296,6 +300,7 @@ func TestPicker_SpaceTogglesMark(t *testing.T) {
 }
 
 func TestPicker_EnterSpawnsMarkedItems(t *testing.T) {
+	t.Parallel()
 	items := []sources.Item{
 		{ID: "1", Title: "alpha"},
 		{ID: "2", Title: "beta"},
@@ -320,6 +325,7 @@ func TestPicker_EnterSpawnsMarkedItems(t *testing.T) {
 }
 
 func TestPicker_MarksSurviveRemoteSearch(t *testing.T) {
+	t.Parallel()
 	items := []sources.Item{
 		{ID: "1", Title: "alpha"},
 		{ID: "2", Title: "beta"},
@@ -345,6 +351,7 @@ func TestPicker_MarksSurviveRemoteSearch(t *testing.T) {
 }
 
 func TestPicker_MarksAcrossTabs(t *testing.T) {
+	t.Parallel()
 	m1 := fakeManifest()
 	m1.ID = "prs"
 	m2 := fakeManifest()
@@ -376,6 +383,7 @@ func TestPicker_MarksAcrossTabs(t *testing.T) {
 }
 
 func TestPicker_MarkCapRefusesFurtherMarks(t *testing.T) {
+	t.Parallel()
 	items := make([]sources.Item, maxMarkedItems+2)
 	for i := range items {
 		items[i] = sources.Item{ID: fmt.Sprintf("%d", i+1), Title: fmt.Sprintf("item %d", i+1)}
@@ -397,6 +405,7 @@ func TestPicker_MarkCapRefusesFurtherMarks(t *testing.T) {
 }
 
 func TestPicker_MarkedRowRendersGlyphAndCount(t *testing.T) {
+	t.Parallel()
 	items := []sources.Item{
 		{ID: "1", Title: "alpha"},
 		{ID: "2", Title: "beta"},
@@ -421,6 +430,7 @@ func TestPicker_MarkedRowRendersGlyphAndCount(t *testing.T) {
 }
 
 func TestPicker_EmptyResultsShowsEmptyState(t *testing.T) {
+	t.Parallel()
 	fake := newFakeTUISource(fakeManifest(), nil)
 	p := newTestPicker(fake, fakeManifest(), "test-repo", 80, 24)
 	p = drainPicker(t, p, p.Init())
@@ -439,6 +449,7 @@ func TestPicker_EmptyResultsShowsEmptyState(t *testing.T) {
 }
 
 func TestPicker_SearchErrorRendersInBody(t *testing.T) {
+	t.Parallel()
 	fake := newFakeTUISource(fakeManifest(), nil)
 	fake.searchErr = fmt.Errorf("gh: unauthenticated")
 
@@ -451,6 +462,7 @@ func TestPicker_SearchErrorRendersInBody(t *testing.T) {
 }
 
 func TestPicker_ViewFitsTerminal(t *testing.T) {
+	t.Parallel()
 	sizes := []struct{ width, height int }{
 		{80, 24},
 		{90, 24},
@@ -474,6 +486,7 @@ func TestPicker_ViewFitsTerminal(t *testing.T) {
 }
 
 func TestPicker_NavigateModeIsDefault(t *testing.T) {
+	t.Parallel()
 	items := []sources.Item{
 		{ID: "1", Title: "alpha"},
 		{ID: "2", Title: "beta"},
@@ -515,6 +528,7 @@ func TestPicker_NavigateModeIsDefault(t *testing.T) {
 }
 
 func TestPicker_TabSwitching(t *testing.T) {
+	t.Parallel()
 	items1 := []sources.Item{{ID: "1", Title: "PR one"}}
 	items2 := []sources.Item{{ID: "2", Title: "Issue one"}, {ID: "3", Title: "Issue two"}}
 
@@ -561,6 +575,7 @@ func TestPicker_TabSwitching(t *testing.T) {
 }
 
 func TestPicker_TabBarRendering(t *testing.T) {
+	t.Parallel()
 	m1 := fakeManifest()
 	m1.ID = "prs"
 	m1.DisplayName = "Pull Requests"
@@ -581,6 +596,7 @@ func TestPicker_TabBarRendering(t *testing.T) {
 }
 
 func TestPicker_RetryOnError(t *testing.T) {
+	t.Parallel()
 	fake := newFakeTUISource(fakeManifest(), nil)
 	fake.searchErr = fmt.Errorf("rate limited")
 
@@ -603,6 +619,7 @@ func TestPicker_RetryOnError(t *testing.T) {
 }
 
 func TestTableCellStyle(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		key   string
@@ -630,6 +647,7 @@ func TestTableCellStyle(t *testing.T) {
 }
 
 func TestNumberColumnWidth_AlignsShortAndLongNumbers(t *testing.T) {
+	t.Parallel()
 	items := []sources.Item{
 		{ID: "9", Title: "Short", Fields: map[string]any{"number": 9}},
 		{ID: "1315", Title: "Long", Fields: map[string]any{"number": 1315}},
@@ -647,6 +665,7 @@ func TestNumberColumnWidth_AlignsShortAndLongNumbers(t *testing.T) {
 }
 
 func TestPicker_ActiveFilterVisibleOutsideSearchMode(t *testing.T) {
+	t.Parallel()
 	items := []sources.Item{
 		{ID: "1", Title: "alpha"},
 		{ID: "2", Title: "beta"},
@@ -672,6 +691,7 @@ func TestPicker_ActiveFilterVisibleOutsideSearchMode(t *testing.T) {
 }
 
 func TestPicker_ScopeShownInTabBar(t *testing.T) {
+	t.Parallel()
 	p := newTestPicker(
 		newFakeTUISource(fakeManifest(), nil),
 		fakeManifest(), "myorg/myrepo", 80, 24,
@@ -706,6 +726,7 @@ func cardItems(n int) []sources.Item {
 }
 
 func TestPicker_CardRowIsTwoLines(t *testing.T) {
+	t.Parallel()
 	manifest := cardManifest()
 	item := sources.Item{ID: "1", Title: strings.Repeat("long title ", 20), Fields: map[string]any{
 		"number": 1, "author": "octocat", "review": "changes requested", "ci": "failing",
@@ -726,6 +747,7 @@ func TestPicker_CardRowIsTwoLines(t *testing.T) {
 }
 
 func TestRenderCardContent_PlainIsANSIFree(t *testing.T) {
+	t.Parallel()
 	manifest := cardManifest()
 	p := newTestPicker(newFakeTUISource(manifest, nil), manifest, "test-repo", 90, 24)
 	item := sources.Item{ID: "1", Title: "First reference item", Fields: map[string]any{
@@ -742,6 +764,7 @@ func TestRenderCardContent_PlainIsANSIFree(t *testing.T) {
 }
 
 func TestPicker_CardLayoutFitsTerminal(t *testing.T) {
+	t.Parallel()
 	sizes := []struct{ width, height int }{
 		{80, 24}, {90, 24}, {100, 30}, {120, 38}, {120, 50}, {200, 60},
 	}
@@ -759,6 +782,7 @@ func TestPicker_CardLayoutFitsTerminal(t *testing.T) {
 }
 
 func TestPicker_WideTerminalCapsModalWidth(t *testing.T) {
+	t.Parallel()
 	manifest := cardManifest()
 	p := newTestPicker(newFakeTUISource(manifest, cardItems(3)), manifest, "", 240, 60)
 	p = drainPicker(t, p, p.Init())
@@ -768,6 +792,7 @@ func TestPicker_WideTerminalCapsModalWidth(t *testing.T) {
 }
 
 func TestPicker_CardScrollFollowsCursorByItem(t *testing.T) {
+	t.Parallel()
 	manifest := cardManifest()
 	items := cardItems(12)
 	// Small height keeps the item capacity below the item count so

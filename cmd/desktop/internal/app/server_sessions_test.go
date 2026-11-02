@@ -267,6 +267,7 @@ func TestServerSessions_ServersReportsEachCheck(t *testing.T) {
 }
 
 func TestServerStateOf(t *testing.T) {
+	t.Parallel()
 	incompatible := fmt.Errorf("hello: %w", &wire.IncompatibleError{DaemonVersion: "old"})
 	assert.Equal(t, server.StateIncompatible, serverStateOf(incompatible))
 	assert.Equal(t, server.StateOffline, serverStateOf(errors.New("exit status 255")))

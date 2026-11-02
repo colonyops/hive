@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/colonyops/hive/cmd/desktop/internal/app/apptest"
 
 	"github.com/coder/websocket"
 	"github.com/rs/zerolog"
@@ -15,24 +16,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 )
 
 // newAgentHarness mirrors newTerminalHarness (terminal_test.go) but mounts only
 // the ptyterm stream the agent-workspace surface needs.
 func newAgentHarness(t *testing.T) *terminalHarness {
 	t.Helper()
-	root := t.TempDir()
-	t.Setenv(settings.EnvDataDir, filepath.Join(root, "data"))
-	t.Setenv("HIVE_CONFIG", filepath.Join(root, "hive.yaml"))
-	t.Setenv(settings.EnvConfigDir, filepath.Join(root, "config"))
-	t.Setenv(settings.EnvMockMode, "feed")
-
-	core, err := app.New(t.Context(), app.Config{
-		Settings: settings.DefaultSettings(),
-		MockMode: settings.MockMode(),
-		Logger:   zerolog.Nop(),
-	})
+	core, err := app.New(t.Context(), apptest.Config(t))
 	require.NoError(t, err)
 
 	origins := []string{testOrigin}
@@ -59,6 +49,7 @@ func newAgentHarness(t *testing.T) *terminalHarness {
 // shell or a tmux attach is. Both a body route and the shared PTY stream a
 // session rides must enforce it.
 func TestAgentControlPlaneRequiresTheBearerToken(t *testing.T) {
+	t.Parallel()
 	h := newAgentHarness(t)
 
 	resp := h.post(t, AgentWorkspacesPathPrefix+"workspaces", "", struct{}{})
@@ -96,6 +87,7 @@ func TestAgentControlPlaneRequiresTheBearerToken(t *testing.T) {
 // The phase otherwise has no criterion that drives a handler at all: a valid
 // token must return the workspace payload with root populated.
 func TestAgentWorkspacesListsOverTheWire(t *testing.T) {
+	t.Parallel()
 	h := newAgentHarness(t)
 
 	resp := h.post(t, AgentWorkspacesPathPrefix+"workspaces", testToken, struct{}{})

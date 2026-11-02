@@ -12,6 +12,7 @@ import (
 )
 
 func TestHCStore_ListItemsBySessionFilter(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -47,6 +48,7 @@ func TestHCStore_ListItemsBySessionFilter(t *testing.T) {
 }
 
 func TestHCStore_AddComment_and_ListComments(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -78,6 +80,7 @@ func TestHCStore_AddComment_and_ListComments(t *testing.T) {
 }
 
 func TestHCStore_UpdateItem_noAutoComment(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -105,6 +108,7 @@ func TestHCStore_UpdateItem_noAutoComment(t *testing.T) {
 }
 
 func TestHCStore_PruneRemovesDescendantsOfPrunedRoot(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -192,6 +196,7 @@ func TestHCStore_PruneRemovesDescendantsOfPrunedRoot(t *testing.T) {
 }
 
 func TestHCStore_PruneDryRunIncludesDescendants(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -238,6 +243,7 @@ func TestHCStore_PruneDryRunIncludesDescendants(t *testing.T) {
 }
 
 func TestHCStore_NextItem_returnsLeafTask(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -278,6 +284,7 @@ func TestHCStore_NextItem_returnsLeafTask(t *testing.T) {
 }
 
 func TestHCStore_NextItem_returnsNotFoundWhenEmpty(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -291,6 +298,7 @@ func TestHCStore_NextItem_returnsNotFoundWhenEmpty(t *testing.T) {
 }
 
 func TestHCStore_NextItem_withEpicFilter(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -350,6 +358,7 @@ func TestHCStore_NextItem_withEpicFilter(t *testing.T) {
 }
 
 func TestHCStore_GetItem_notFound(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -363,6 +372,7 @@ func TestHCStore_GetItem_notFound(t *testing.T) {
 }
 
 func TestHCStore_ListItems_EpicAndStatusFilter(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -424,6 +434,7 @@ func TestHCStore_ListItems_EpicAndStatusFilter(t *testing.T) {
 }
 
 func TestHCStore_NextItem_ResumeInProgress(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -475,6 +486,7 @@ func TestHCStore_NextItem_ResumeInProgress(t *testing.T) {
 }
 
 func TestHCStore_Blocked_ParentWithOpenChild(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -532,6 +544,7 @@ func TestHCStore_Blocked_ParentWithOpenChild(t *testing.T) {
 }
 
 func TestHCStore_ListRepoKeys(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("returns distinct sorted repo keys", func(t *testing.T) {
@@ -623,6 +636,7 @@ func TestHCStore_ListRepoKeys(t *testing.T) {
 }
 
 func TestHCStore_PruneScopesCommentsToStatusesAndItemUpdatedAt(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -715,6 +729,7 @@ func TestHCStore_PruneScopesCommentsToStatusesAndItemUpdatedAt(t *testing.T) {
 }
 
 func TestHCStore_DeleteItemCascadesToDescendants(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -742,6 +757,7 @@ func TestHCStore_DeleteItemCascadesToDescendants(t *testing.T) {
 }
 
 func TestHCStore_DeleteItemCascadesComments(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)

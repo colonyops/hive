@@ -44,6 +44,7 @@ func serveBoth(t *testing.T, path string, control daemonv1connect.DaemonServiceH
 }
 
 func TestCheckProtocolRefusesAnIncompatibleDaemon(t *testing.T) {
+	t.Parallel()
 	path := socketPath(t)
 	sessions := &countingServer{}
 	serveBoth(t, path, versionedServer{protocol: wire.ProtocolVersion + 1}, sessions)
@@ -59,6 +60,7 @@ func TestCheckProtocolRefusesAnIncompatibleDaemon(t *testing.T) {
 }
 
 func TestCheckProtocolPassesACompatibleDaemon(t *testing.T) {
+	t.Parallel()
 	path := socketPath(t)
 	sessions := &countingServer{}
 	serveBoth(t, path, versionedServer{protocol: wire.ProtocolVersion}, sessions)
@@ -72,6 +74,7 @@ func TestCheckProtocolPassesACompatibleDaemon(t *testing.T) {
 }
 
 func TestCheckProtocolPassesADaemonFromBeforeTheField(t *testing.T) {
+	t.Parallel()
 	path := socketPath(t)
 	sessions := &countingServer{}
 	serveBoth(t, path, versionedServer{protocol: 0}, sessions)
@@ -84,6 +87,7 @@ func TestCheckProtocolPassesADaemonFromBeforeTheField(t *testing.T) {
 }
 
 func TestCheckProtocolDoesNotMultiplyRetries(t *testing.T) {
+	t.Parallel()
 	var dials atomic.Int32
 	client := New(Options{
 		Logger:        zerolog.Nop(),

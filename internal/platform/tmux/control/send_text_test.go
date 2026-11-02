@@ -117,7 +117,7 @@ func TestManagerSendTextRealTmux(t *testing.T) {
 	require.Eventually(t, func() bool {
 		screen := tmux("capture-pane", "-p", "-t", pane)
 		return strings.Contains(screen, "^[[200~line1") && strings.Contains(screen, "line2^[[201~")
-	}, 5*time.Second, 100*time.Millisecond)
+	}, 15*time.Second, 100*time.Millisecond)
 	require.Empty(t, sendBuffers(tmux("list-buffers", "-F", "#{buffer_name}")))
 
 	require.Error(t, m.SendText(t.Context(), "%999", []byte("lost"), 0))

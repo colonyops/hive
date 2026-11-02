@@ -10,6 +10,7 @@ import (
 )
 
 func TestStarterSeedFetchesAsTheGivenAccount(t *testing.T) {
+	t.Parallel()
 	seed := starterSeed(seedRef)
 
 	sources := 0
@@ -28,6 +29,7 @@ func TestStarterSeedFetchesAsTheGivenAccount(t *testing.T) {
 }
 
 func TestStarterSeedShipsAReviewRequestsNotifyBranch(t *testing.T) {
+	t.Parallel()
 	seed := starterSeed(seedRef)
 
 	nodesByID := map[string]flow.Node{}

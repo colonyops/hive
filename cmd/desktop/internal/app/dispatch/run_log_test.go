@@ -42,6 +42,7 @@ func (s *memoryRunLogSink) texts() []string {
 }
 
 func TestRunLog_SplitsStreamsIntoLinesAndFlushesTheRemainderOnClose(t *testing.T) {
+	t.Parallel()
 	sink := &memoryRunLogSink{}
 	log := newRunLog(t.Context(), sink, 7, 2, zerolog.Nop())
 	log.Systemf("$ build")
@@ -56,6 +57,7 @@ func TestRunLog_SplitsStreamsIntoLinesAndFlushesTheRemainderOnClose(t *testing.T
 }
 
 func TestRunLog_StopsAtTheAttemptBoundWithOneMarker(t *testing.T) {
+	t.Parallel()
 	sink := &memoryRunLogSink{}
 	log := newRunLog(t.Context(), sink, 1, 1, zerolog.Nop())
 	line := strings.Repeat("x", 1023) + "\n"
@@ -70,6 +72,7 @@ func TestRunLog_StopsAtTheAttemptBoundWithOneMarker(t *testing.T) {
 }
 
 func TestRunLog_NilDiscards(t *testing.T) {
+	t.Parallel()
 	var log *RunLog
 	log.Systemf("ignored")
 	_, err := log.Stdout().Write([]byte("ignored\n"))

@@ -12,6 +12,7 @@ import (
 )
 
 func TestNotifyStore(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("save and list", func(t *testing.T) {

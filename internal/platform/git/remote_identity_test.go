@@ -7,6 +7,7 @@ import (
 )
 
 func TestRemoteIdentity_GitHubTransportsAreEquivalent(t *testing.T) {
+	t.Parallel()
 	https := "https://github.com/owner/repo.git"
 	ssh := "git@github.com:owner/repo.git"
 	sshURL := "ssh://git@github.com/owner/repo.git"
@@ -24,6 +25,7 @@ func TestRemoteIdentity_GitHubTransportsAreEquivalent(t *testing.T) {
 }
 
 func TestRemoteIdentity_OtherForgeTransportsAreEquivalent(t *testing.T) {
+	t.Parallel()
 	for _, remote := range []string{
 		"https://git.example.test/team/sub/Repo.git",
 		"ssh://git@git.example.test/team/sub/Repo.git",
@@ -37,6 +39,7 @@ func TestRemoteIdentity_OtherForgeTransportsAreEquivalent(t *testing.T) {
 }
 
 func TestRemoteIdentity_KeepsDistinctRepositoriesApart(t *testing.T) {
+	t.Parallel()
 	assert.False(t, EquivalentRemote("git@github.com:owner/repo.git", "git@gitlab.com:owner/repo.git"))
 	assert.False(t, EquivalentRemote("https://git.example.test/owner/Repo", "https://git.example.test/owner/repo"))
 	assert.False(t, EquivalentRemote("ssh://git@git.example.test:2222/owner/repo", "git@git.example.test:owner/repo"))
@@ -48,6 +51,7 @@ func TestRemoteIdentity_KeepsDistinctRepositoriesApart(t *testing.T) {
 }
 
 func TestRemoteIdentity_ReturnsUnrecognizedRemotesUnchanged(t *testing.T) {
+	t.Parallel()
 	for _, remote := range []string{"/repos/project.git", "./a:b", "owner/repo", "file:///repos/project.git", "https://", "https://github.com/"} {
 		assert.Equal(t, remote, RemoteIdentity(remote), remote)
 	}
@@ -55,6 +59,7 @@ func TestRemoteIdentity_ReturnsUnrecognizedRemotesUnchanged(t *testing.T) {
 }
 
 func TestWebURL(t *testing.T) {
+	t.Parallel()
 	for remote, want := range map[string]string{
 		"https://github.com/owner/repo.git":             "https://github.com/owner/repo",
 		"git@github.com:owner/repo.git":                 "https://github.com/owner/repo",

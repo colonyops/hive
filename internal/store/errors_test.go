@@ -8,6 +8,7 @@ import (
 )
 
 func TestIsNotFoundError(t *testing.T) {
+	t.Parallel()
 	// This is a simple helper, just verify it works
 	err := os.ErrNotExist
 	assert.True(t, os.IsNotExist(err), "Should recognize os.ErrNotExist")

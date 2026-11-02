@@ -32,6 +32,7 @@ func newClient(t *testing.T) *daemonclient.Client {
 }
 
 func TestClientDrivesTheSessionAPIThroughTheDaemon(t *testing.T) {
+	t.Parallel()
 	client := newClient(t)
 	ctx := t.Context()
 
@@ -103,12 +104,14 @@ func TestClientDrivesTheSessionAPIThroughTheDaemon(t *testing.T) {
 }
 
 func TestClientGetsNotFoundForAMissingSession(t *testing.T) {
+	t.Parallel()
 	_, err := newClient(t).GetSession(t.Context(), "missing")
 	require.ErrorIs(t, err, session.ErrNotFound)
 	assert.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 }
 
 func TestClientEditsTagsThroughTheDaemon(t *testing.T) {
+	t.Parallel()
 	client := newClient(t)
 	ctx := t.Context()
 	created, err := client.CreateSession(ctx, sessionsvc.CreateOptions{Name: "tagged", Remote: remote, SkipSpawn: true})
@@ -133,6 +136,7 @@ func TestClientEditsTagsThroughTheDaemon(t *testing.T) {
 }
 
 func TestCreateWithoutARemoteIsInvalid(t *testing.T) {
+	t.Parallel()
 	client := newClient(t)
 	_, err := client.CreateSession(t.Context(), sessionsvc.CreateOptions{Name: "x", SkipSpawn: true})
 	assert.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
@@ -142,6 +146,7 @@ func TestCreateWithoutARemoteIsInvalid(t *testing.T) {
 }
 
 func TestConcurrentCreatesKeepTheirOwnProgress(t *testing.T) {
+	t.Parallel()
 	client := newClient(t)
 	names := []string{"alpha", "bravo", "charlie", "delta"}
 	progress := make([]strings.Builder, len(names))
@@ -167,6 +172,7 @@ func TestConcurrentCreatesKeepTheirOwnProgress(t *testing.T) {
 }
 
 func TestCreateFromRequestFailureArrivesAsALaunchError(t *testing.T) {
+	t.Parallel()
 	exec := &executiltest.Exec{Responses: []executiltest.Response{{Err: errors.New("clone failed"), Stderr: []byte("fatal: repository not found")}}}
 	d := runDaemonWith(t, t.TempDir(), daemonOpts{exec: exec})
 	client := daemonclient.New(daemonclient.Options{Dialer: daemonclient.UnixDialer(d.socket), Logger: zerolog.Nop()})
@@ -199,6 +205,7 @@ func (e *recycleOutput) RunDirStream(ctx context.Context, dir string, stdout, st
 }
 
 func TestRecycleThroughTheDaemonStreamsProgressAndSucceeds(t *testing.T) {
+	t.Parallel()
 	d := runDaemonWith(t, t.TempDir(), daemonOpts{exec: &recycleOutput{}})
 	client := daemonclient.New(daemonclient.Options{Dialer: daemonclient.UnixDialer(d.socket), Logger: zerolog.Nop()})
 	created, err := client.CreateSession(t.Context(), sessionsvc.CreateOptions{Name: "reuse", Remote: remote, SkipSpawn: true})

@@ -437,6 +437,7 @@ func TestWorker_FailingExecutor_RetriesThenMarksFailed(t *testing.T) {
 }
 
 func TestWorker_ConfirmFailureReturnsPersistedDiagnostics(t *testing.T) {
+	t.Parallel()
 	db := openTestPipelineDB(t)
 	exec := &fakeExecutor{err: fmt.Errorf("boom"), result: ExecutionResult{Attempted: true, Log: ExecutionLog{Stdout: "partial output", Stderr: "failure output"}}}
 	recorder := &fakeJobRecorder{}
@@ -454,6 +455,7 @@ func TestWorker_ConfirmFailureReturnsPersistedDiagnostics(t *testing.T) {
 }
 
 func TestWorker_DoesNotRetryInterruptedInteractiveCommandAfterReopen(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	db, err := queries.Open(t.Context(), dir, queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -497,6 +499,7 @@ func TestWorker_BadPayload_FailsWithoutCallingExecutor(t *testing.T) {
 }
 
 func TestWorker_LongManualActionDoesNotBlockAutomaticDispatch(t *testing.T) {
+	t.Parallel()
 	db := openTestPipelineDB(t)
 	blocker := &blockingExecutor{started: make(chan OutputData, 1), release: make(chan struct{})}
 	quick := &fakeExecutor{result: ExecutionResult{Attempted: true}}
@@ -533,6 +536,7 @@ func TestWorker_LongManualActionDoesNotBlockAutomaticDispatch(t *testing.T) {
 }
 
 func TestWorker_CancelStopsRunningActionWithoutRetry(t *testing.T) {
+	t.Parallel()
 	db := openTestPipelineDB(t)
 	blocker := &blockingExecutor{started: make(chan OutputData, 1), release: make(chan struct{})}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"manual": launchSessionAction("manual", false)},

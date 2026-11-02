@@ -43,6 +43,7 @@ func do(t *testing.T, proxy *Proxy, method, target string, body string, headers 
 }
 
 func TestProxyServesSecondRequestFromCache(t *testing.T) {
+	t.Parallel()
 	var calls atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -86,6 +87,7 @@ func TestProxyIsolatesCacheByToken(t *testing.T) {
 }
 
 func TestProxyRevalidatesWithETagAndServesStoredBody(t *testing.T) {
+	t.Parallel()
 	var (
 		calls          atomic.Int64
 		sawIfNoneMatch string
@@ -119,6 +121,7 @@ func TestProxyRevalidatesWithETagAndServesStoredBody(t *testing.T) {
 }
 
 func TestProxyCachesGraphQLByRequestBody(t *testing.T) {
+	t.Parallel()
 	var calls atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -144,6 +147,7 @@ func TestProxyCachesGraphQLByRequestBody(t *testing.T) {
 }
 
 func TestProxyCoalescesConcurrentIdenticalRequests(t *testing.T) {
+	t.Parallel()
 	var calls atomic.Int64
 	release := make(chan struct{})
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -174,6 +178,7 @@ func TestProxyCoalescesConcurrentIdenticalRequests(t *testing.T) {
 }
 
 func TestProxyServesStaleWhenUpstreamFails(t *testing.T) {
+	t.Parallel()
 	var fail atomic.Bool
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if fail.Load() {
@@ -197,6 +202,7 @@ func TestProxyServesStaleWhenUpstreamFails(t *testing.T) {
 }
 
 func TestProxyDoesNotCacheErrorResponses(t *testing.T) {
+	t.Parallel()
 	var calls atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := calls.Add(1)
@@ -224,6 +230,7 @@ func TestProxyDoesNotCacheErrorResponses(t *testing.T) {
 }
 
 func TestProxyPassesThroughUnknownRoutes(t *testing.T) {
+	t.Parallel()
 	var method, path string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		method, path = r.Method, r.URL.Path
@@ -241,6 +248,7 @@ func TestProxyPassesThroughUnknownRoutes(t *testing.T) {
 }
 
 func TestProxyForwardsQueryString(t *testing.T) {
+	t.Parallel()
 	var query string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		query = r.URL.RawQuery
@@ -257,6 +265,7 @@ func TestProxyForwardsQueryString(t *testing.T) {
 }
 
 func TestClassify(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		method, path string
 		kind         routeKind
@@ -286,12 +295,14 @@ func TestClassify(t *testing.T) {
 }
 
 func TestCacheKeyIsOrderInsensitiveForQueryParams(t *testing.T) {
+	t.Parallel()
 	a := CacheKey(http.MethodGet, "/notifications", "all=true&per_page=50", "t", nil)
 	b := CacheKey(http.MethodGet, "/notifications", "per_page=50&all=true", "t", nil)
 	assert.Equal(t, a, b)
 }
 
 func TestCacheKeyVariesByEveryInput(t *testing.T) {
+	t.Parallel()
 	base := CacheKey(http.MethodGet, "/user", "a=1", "token", []byte("body"))
 	assert.NotEqual(t, base, CacheKey(http.MethodPost, "/user", "a=1", "token", []byte("body")))
 	assert.NotEqual(t, base, CacheKey(http.MethodGet, "/other", "a=1", "token", []byte("body")))
@@ -301,6 +312,7 @@ func TestCacheKeyVariesByEveryInput(t *testing.T) {
 }
 
 func TestCacheKeyIgnoresBearerPrefix(t *testing.T) {
+	t.Parallel()
 	// The client always sends "Bearer x", but a hand-rolled curl call may not.
 	assert.Equal(t,
 		CacheKey(http.MethodGet, "/user", "", "Bearer x", nil),
@@ -308,6 +320,7 @@ func TestCacheKeyIgnoresBearerPrefix(t *testing.T) {
 }
 
 func TestCacheRoundTripAndFreshness(t *testing.T) {
+	t.Parallel()
 	cache := testCache(t, time.Minute)
 	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
 	cache.now = func() time.Time { return now }
@@ -347,6 +360,7 @@ func TestCacheRoundTripAndFreshness(t *testing.T) {
 }
 
 func TestCacheSurvivesReopen(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "cache.db")
 	cache, err := OpenCache(path, time.Minute)
 	require.NoError(t, err)

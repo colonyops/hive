@@ -78,6 +78,7 @@ func TestPerfRecordingIsInertWhenTheSettingIsOff(t *testing.T) {
 }
 
 func TestOpenPerfRecorderDegradesWhenTheFileCannotBeOpened(t *testing.T) {
+	t.Parallel()
 	// A regular file where the state directory should be: MkdirAll fails, and
 	// startup has to continue without recording rather than refuse to boot.
 	blocked := filepath.Join(t.TempDir(), "blocked")

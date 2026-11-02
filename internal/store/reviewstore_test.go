@@ -13,6 +13,7 @@ import (
 )
 
 func TestReviewStore(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("create and get session", func(t *testing.T) {

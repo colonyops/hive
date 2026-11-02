@@ -26,6 +26,7 @@ func telemetrySettingsFixture() settings.TelemetrySettings {
 }
 
 func TestObservabilitySettingsReportConfigurationAndStartupState(t *testing.T) {
+	t.Parallel()
 	store := settings.NewStore(t.TempDir() + "/settings.yaml")
 	configured := telemetrySettingsFixture()
 	_, err := store.Update(func(current *settings.Settings) error {
@@ -45,6 +46,7 @@ func TestObservabilitySettingsReportConfigurationAndStartupState(t *testing.T) {
 }
 
 func TestObservabilitySettingsReportRestartRequiredPerDestination(t *testing.T) {
+	t.Parallel()
 	store := settings.NewStore(t.TempDir() + "/settings.yaml")
 	startup := telemetrySettingsFixture()
 	current := startup
@@ -65,6 +67,7 @@ func TestObservabilitySettingsReportRestartRequiredPerDestination(t *testing.T) 
 }
 
 func TestObservabilitySettingsReportDisabledPreparedDestinations(t *testing.T) {
+	t.Parallel()
 	store := settings.NewStore(t.TempDir() + "/settings.yaml")
 	prepared := telemetrySettingsFixture()
 	prepared.Enabled = false

@@ -82,6 +82,8 @@ type Options struct {
 	Timeout time.Duration
 	// Probe is the seam tests replace. Zero runs the real login shell.
 	Probe func(ctx context.Context, shell string) (map[string]string, error)
+	// Pinned wins over both this process's environment and the login shell's.
+	Pinned map[string]string
 }
 
 // Resolver answers what PATH a subprocess runs with. It asks the user's login
@@ -93,6 +95,7 @@ type Resolver struct {
 	shell   string
 	timeout time.Duration
 	probe   func(ctx context.Context, shell string) (map[string]string, error)
+	pinned  map[string]string
 
 	// mu serializes the probe as well as guarding path and env, so concurrent
 	// hooks spawn one shell between them rather than one each.
@@ -110,7 +113,7 @@ type Resolver struct {
 }
 
 func NewResolver(opts Options) *Resolver {
-	r := &Resolver{logger: logutils.Component(opts.Logger, "execenv"), shell: opts.Shell, timeout: opts.Timeout, probe: opts.Probe}
+	r := &Resolver{logger: logutils.Component(opts.Logger, "execenv"), shell: opts.Shell, timeout: opts.Timeout, probe: opts.Probe, pinned: opts.Pinned}
 	if r.shell == "" {
 		r.shell = os.Getenv("SHELL")
 	}
@@ -149,6 +152,9 @@ func (r *Resolver) Path(ctx context.Context) string {
 // reads from the environment is only reachable through the probe
 // (ADR hive-env-overrides-resolve-through-the-login-shell).
 func (r *Resolver) Getenv(ctx context.Context, name string) string {
+	if value, ok := r.pinned[name]; ok {
+		return value
+	}
 	if value := os.Getenv(name); value != "" {
 		return value
 	}
@@ -243,6 +249,10 @@ func (r *Resolver) Environ(ctx context.Context) []string {
 	r.resolveLocked(ctx)
 	if r.environ == nil || !slices.Equal(current, r.environFrom) {
 		r.environ = mergeEnviron(current, r.env, r.path)
+		// Appended, because exec keeps the last value of a repeated name.
+		for _, name := range slices.Sorted(maps.Keys(r.pinned)) {
+			r.environ = append(r.environ, name+"="+r.pinned[name])
+		}
 		r.environFrom = current
 	}
 	return slices.Clip(r.environ)

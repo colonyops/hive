@@ -28,6 +28,7 @@ func (r *notifyActivityRecorder) Record(_ context.Context, event activity.Event)
 // action resolution against the live flow set, and the executor. Only the OS
 // itself is faked.
 func TestNotifyTerminal_DeliversThroughTheWorker(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -106,6 +107,7 @@ func TestNotifyTerminal_DeliversThroughTheWorker(t *testing.T) {
 // A notify node the author deleted (or renamed) leaves its queued commands
 // unresolvable. They must fail visibly rather than hang in the queue.
 func TestNotifyTerminal_DeletedNodeFailsItsQueuedCommand(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)

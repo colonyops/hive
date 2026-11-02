@@ -14,6 +14,7 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 func TestHCStore_UpdateItem_TitleDesc(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 
 	type args struct {
@@ -116,6 +117,7 @@ func TestHCStore_UpdateItem_TitleDesc(t *testing.T) {
 }
 
 func TestHCStore_BulkUpdateStatus(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)

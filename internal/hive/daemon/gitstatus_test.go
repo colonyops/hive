@@ -13,6 +13,7 @@ import (
 )
 
 func TestGitStatusCache_ClientsWithinTheTTLShareOneRead(t *testing.T) {
+	t.Parallel()
 	var reads [][]string
 	cache := newGitStatusCache(func(_ context.Context, ids []string) (map[string]gitstatus.Status, error) {
 		reads = append(reads, ids)
@@ -47,6 +48,7 @@ func TestGitStatusCache_ClientsWithinTheTTLShareOneRead(t *testing.T) {
 }
 
 func TestGitStatusCache_ACallerHangingUpDoesNotCancelTheSharedRead(t *testing.T) {
+	t.Parallel()
 	cache := newGitStatusCache(func(ctx context.Context, ids []string) (map[string]gitstatus.Status, error) {
 		return map[string]gitstatus.Status{ids[0]: {Resolved: true, Err: ctx.Err()}}, nil
 	})
@@ -59,6 +61,7 @@ func TestGitStatusCache_ACallerHangingUpDoesNotCancelTheSharedRead(t *testing.T)
 }
 
 func TestGitStatusCache_AFailedReadCachesNothing(t *testing.T) {
+	t.Parallel()
 	fail := true
 	cache := newGitStatusCache(func(_ context.Context, ids []string) (map[string]gitstatus.Status, error) {
 		if fail {

@@ -9,8 +9,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// ownershipCheckInterval is a variable so a test need not wait for it.
-var ownershipCheckInterval = 30 * time.Second
+const defaultOwnershipCheckInterval = 30 * time.Second
 
 // claim remembers a file the daemon holds by identity, not by path, so the
 // daemon can tell when the path names another file.

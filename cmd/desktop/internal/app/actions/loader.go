@@ -36,6 +36,10 @@ type actionsFile struct {
 // empty-but-present file is treated the same way. Any other read error, or a
 // schema/validation failure, returns a non-nil error and a zero Catalog.
 func LoadCatalog(path string) (Catalog, error) {
+	return loadCatalog(path, configmigrate.ActionsSet)
+}
+
+func loadCatalog(path string, set configmigrate.Set) (Catalog, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -43,14 +47,14 @@ func LoadCatalog(path string) (Catalog, error) {
 		}
 		return Catalog{}, fmt.Errorf("read actions %q: %w", path, err)
 	}
-	data, _, err := configmigrate.ActionsSet.Apply(raw)
+	data, _, err := set.Apply(raw)
 	if err != nil {
 		return Catalog{}, err
 	}
 	if data == nil {
 		return Catalog{}, nil
 	}
-	return parseCatalog(data)
+	return parseCatalogAt(data, set.Current)
 }
 
 // parseCatalog strictly decodes the actions document, checks version ==
@@ -59,6 +63,10 @@ func LoadCatalog(path string) (Catalog, error) {
 // output, so it must never route through configmigrate.ActionsSet.Apply —
 // only the read path (LoadCatalog) migrates.
 func parseCatalog(data []byte) (Catalog, error) {
+	return parseCatalogAt(data, configmigrate.ActionsSet.Current)
+}
+
+func parseCatalogAt(data []byte, currentVersion int) (Catalog, error) {
 	if len(bytes.TrimSpace(data)) == 0 {
 		return Catalog{}, nil
 	}
@@ -70,8 +78,8 @@ func parseCatalog(data []byte) (Catalog, error) {
 		return Catalog{}, fmt.Errorf("actions: %w", err)
 	}
 
-	if file.Version != configmigrate.ActionsSet.Current {
-		return Catalog{}, fmt.Errorf("actions: version must be %d, got %d", configmigrate.ActionsSet.Current, file.Version)
+	if file.Version != currentVersion {
+		return Catalog{}, fmt.Errorf("actions: version must be %d, got %d", currentVersion, file.Version)
 	}
 
 	if err := validateActions(file.Actions); err != nil {

@@ -12,6 +12,7 @@ import (
 )
 
 func TestBatchInput_Validate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		input   BatchInput
@@ -120,6 +121,7 @@ func TestBatchInput_Validate(t *testing.T) {
 }
 
 func TestBatchInput_JSON(t *testing.T) {
+	t.Parallel()
 	jsonInput := `{
 		"sessions": [
 			{"name": "task1", "session_id": "abc123", "agent": "claude"},
@@ -142,6 +144,7 @@ func TestBatchInput_JSON(t *testing.T) {
 }
 
 func TestBatchCmd_validateAgents(t *testing.T) {
+	t.Parallel()
 	cmd := &BatchCmd{
 		app: &app.App{
 			Config: &config.Config{
@@ -176,6 +179,7 @@ func TestBatchCmd_validateAgents(t *testing.T) {
 }
 
 func TestBatchCmd_agentForSession(t *testing.T) {
+	t.Parallel()
 	cmd := &BatchCmd{agent: "aider"}
 
 	assert.Equal(t, "aider", cmd.agentForSession(BatchSession{Name: "task1"}))
@@ -183,6 +187,7 @@ func TestBatchCmd_agentForSession(t *testing.T) {
 }
 
 func TestCountByStatus(t *testing.T) {
+	t.Parallel()
 	results := []BatchResult{
 		{Status: StatusCreated},
 		{Status: StatusCreated},

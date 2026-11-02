@@ -306,6 +306,15 @@ What belongs in integration tests vs unit tests:
 - **Integration**: end-to-end CLI flag wiring, stdin/stdout behavior, multi-command workflows, session detection
 - **Unit**: business logic, validation rules, store behavior (using real SQLite via `db.Open(t.TempDir(), ...)`), service orchestration
 
+#### Real-tmux Unit Tests
+
+Unit tests may drive a real tmux on the host, because each one owns a private server:
+
+- **`tmuxtest.New(t)`**: a server reached only through its socket. It changes no process state, so the test can call `t.Parallel()`, and it satisfies `tmuxcc.Runner`, so a `tmuxcc.Manager` stays on it. Use this one.
+- **`tmuxtest.Private(t)`**: for code that resolves its server from the environment and takes no Runner. It rewrites the environment, so the test stays serial.
+
+Never run a bare `tmux` command in a test. `mise run test` also runs with `TMUX` unset and `TMUX_TMPDIR` pointing at a scratch directory, so a test that forgets cannot reach a developer's server. Integration tests stay in Docker.
+
 #### Remote Server Tests
 
 `test/remote/` tests hive against two real servers, `server-a` and `server-b`:

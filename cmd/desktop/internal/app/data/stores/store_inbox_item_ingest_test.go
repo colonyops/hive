@@ -17,6 +17,7 @@ func observation(payload string) models.Observation {
 }
 
 func TestIngestObservation_DuplicatePayloadWritesNothing(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	current := observation(`{"v":1}`)
@@ -38,6 +39,7 @@ func TestIngestObservation_DuplicatePayloadWritesNothing(t *testing.T) {
 // original — which would strand the row that carries the user's triage
 // decisions. See issue hay-kot/hive-desktop#95.
 func TestIngestObservation_HealsChangedLegacyEmptyScopeItemInPlace(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	legacy, err := db.InsertInboxItem(ctx, queries.InsertInboxItemParams{
@@ -61,6 +63,7 @@ func TestIngestObservation_HealsChangedLegacyEmptyScopeItemInPlace(t *testing.T)
 }
 
 func TestIngestObservation_TrivialChangeUpdatesItemWithoutEvent(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	first, err := st.InboxItems.IngestObservation(ctx, activityClassifier("initial"), IngestObservationParams{
@@ -89,6 +92,7 @@ func TestIngestObservation_TrivialChangeUpdatesItemWithoutEvent(t *testing.T) {
 }
 
 func TestIngestObservation_ConcurrentRevisionsAreMonotonic(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	var wg sync.WaitGroup
@@ -114,6 +118,7 @@ func TestIngestObservation_ConcurrentRevisionsAreMonotonic(t *testing.T) {
 }
 
 func TestApplyTransitionResurfacePolicies(t *testing.T) {
+	t.Parallel()
 	now := int64(1)
 	manual := ItemTriageState{ArchivedAt: &now, ArchivedActor: models.ArchivedActorManual.String()}
 	activity := models.Classification{Attention: models.AttentionActivity}
@@ -136,6 +141,7 @@ func TestApplyTransitionResurfacePolicies(t *testing.T) {
 }
 
 func TestIngestObservation_ManualArchiveIsNotClobberedByTerminalIngest(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	active := observation(`{"state":"open"}`)
@@ -157,6 +163,7 @@ func TestIngestObservation_ManualArchiveIsNotClobberedByTerminalIngest(t *testin
 }
 
 func TestIngestObservation_RetainedManualArchiveGetsManualReason(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	current := observation(`{"v":1}`)
@@ -179,6 +186,7 @@ func TestIngestObservation_RetainedManualArchiveGetsManualReason(t *testing.T) {
 }
 
 func TestIngestObservation_RetainedSystemArchivePreservesReason(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	current := observation(`{"state":"closed","v":1}`)
@@ -201,6 +209,7 @@ func TestIngestObservation_RetainedSystemArchivePreservesReason(t *testing.T) {
 }
 
 func TestIngestObservation_BackfillsMissingOccurrenceKeyWithOffset(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	result, err := st.InboxItems.IngestObservation(t.Context(), activityClassifier(""), IngestObservationParams{
 		ProfileID: "p",
@@ -223,6 +232,7 @@ func TestIngestObservation_BackfillsMissingOccurrenceKeyWithOffset(t *testing.T)
 }
 
 func TestIngestObservation_NullOccurrenceDoesNotDeduplicate(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	for i := range 2 {
@@ -237,6 +247,7 @@ func TestIngestObservation_NullOccurrenceDoesNotDeduplicate(t *testing.T) {
 }
 
 func TestIngestObservationBoundsDetail(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	detail := make([]byte, maxEventDetailBytes+100)
 	_, err := st.InboxItems.IngestObservation(t.Context(), testClassifier{func(*models.Observation, models.Observation) models.Classification {

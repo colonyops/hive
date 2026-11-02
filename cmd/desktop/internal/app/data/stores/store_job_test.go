@@ -10,6 +10,7 @@ import (
 )
 
 func TestJobs_LifecyclePagingAndActiveWindow(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
@@ -85,6 +86,7 @@ func TestJobs_LifecyclePagingAndActiveWindow(t *testing.T) {
 }
 
 func TestJobs_ActiveJobPersistsAcrossReopen(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	ctx := t.Context()
 	db, err := queries.Open(t.Context(), dir, queries.DefaultOpenOptions())

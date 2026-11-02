@@ -14,6 +14,7 @@ import (
 )
 
 func TestStatusOptionsFromConfig_NoTerminalSectionMatchesDefaultOptions(t *testing.T) {
+	t.Parallel()
 	cfg, err := config.Load("", t.TempDir())
 	require.NoError(t, err)
 
@@ -22,6 +23,7 @@ func TestStatusOptionsFromConfig_NoTerminalSectionMatchesDefaultOptions(t *testi
 }
 
 func TestDefaultMissingToleranceMatchesConfigDefault(t *testing.T) {
+	t.Parallel()
 	// Config-less constructions (tmuxstatus.New, test seams) fall back to
 	// tmuxstatus.DefaultMissingTolerance while production reads the config
 	// default.
@@ -31,6 +33,7 @@ func TestDefaultMissingToleranceMatchesConfigDefault(t *testing.T) {
 }
 
 func TestStatusOptionsFromConfig_YAMLRoundTrip(t *testing.T) {
+	t.Parallel()
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
 	yaml := "terminal:\n" +
 		"  status:\n" +

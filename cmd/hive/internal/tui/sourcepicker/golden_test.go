@@ -19,11 +19,13 @@ func goldenPicker(t *testing.T, manifest sources.Manifest, items []sources.Item)
 }
 
 func TestPickerGolden_EmptyResults(t *testing.T) {
+	t.Parallel()
 	p := goldenPicker(t, fakeManifest(), nil)
 	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
 }
 
 func TestPickerGolden_ErrorState(t *testing.T) {
+	t.Parallel()
 	fake := newFakeTUISource(fakeManifest(), nil)
 	fake.searchErr = errGoldenDetail
 	p := newTestPicker(fake, fakeManifest(), "test-repo", 90, 24)
@@ -38,6 +40,7 @@ type goldenDetailError string
 func (e goldenDetailError) Error() string { return string(e) }
 
 func TestPickerGolden_CardLayout(t *testing.T) {
+	t.Parallel()
 	manifest := sources.Manifest{
 		ID:          "fake-prs-card",
 		DisplayName: "Fake Pull Requests",

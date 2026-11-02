@@ -18,6 +18,7 @@ func newKVViewWithKeys(keys []string) *KVView {
 // --- SelectAtRow ---
 
 func TestKVView_SelectAtRow_ClickInPreview_NoOp(t *testing.T) {
+	t.Parallel()
 	v := newKVViewWithKeys([]string{"key-a", "key-b", "key-c"})
 	// listWidth = int(100 * 0.20) = 20; x=50 >= 20 → no-op
 	v.SelectAtRow(50, 1)
@@ -25,6 +26,7 @@ func TestKVView_SelectAtRow_ClickInPreview_NoOp(t *testing.T) {
 }
 
 func TestKVView_SelectAtRow_HeaderRow_NoOp(t *testing.T) {
+	t.Parallel()
 	v := newKVViewWithKeys([]string{"key-a", "key-b", "key-c"})
 	// headerRows=1 (no filter); listRow = contentY - 1 = -1 → no-op
 	v.SelectAtRow(0, 0)
@@ -32,6 +34,7 @@ func TestKVView_SelectAtRow_HeaderRow_NoOp(t *testing.T) {
 }
 
 func TestKVView_SelectAtRow_HappyPath(t *testing.T) {
+	t.Parallel()
 	v := newKVViewWithKeys([]string{"key-a", "key-b", "key-c"})
 	// headerRows=1; contentY=1 → listRow=0, idx=offset+0=0
 	v.SelectAtRow(0, 1)
@@ -43,6 +46,7 @@ func TestKVView_SelectAtRow_HappyPath(t *testing.T) {
 }
 
 func TestKVView_SelectAtRow_FilterActive_FilterLineIsNoOp(t *testing.T) {
+	t.Parallel()
 	v := newKVViewWithKeys([]string{"alpha", "beta", "gamma"})
 	v.StartFilter()
 	v.AddFilterRune('a')
@@ -53,6 +57,7 @@ func TestKVView_SelectAtRow_FilterActive_FilterLineIsNoOp(t *testing.T) {
 }
 
 func TestKVView_SelectAtRow_FilterActive_ContentY2_SelectsFirst(t *testing.T) {
+	t.Parallel()
 	v := newKVViewWithKeys([]string{"alpha", "beta", "gamma"})
 	v.StartFilter()
 	v.AddFilterRune('a') // matches "alpha" and "gamma" (2 items)
@@ -65,6 +70,7 @@ func TestKVView_SelectAtRow_FilterActive_ContentY2_SelectsFirst(t *testing.T) {
 }
 
 func TestKVView_SelectAtRow_EmptyFiltered_NoOp(t *testing.T) {
+	t.Parallel()
 	v := newKVViewWithKeys([]string{"alpha", "beta"})
 	v.StartFilter()
 	v.AddFilterRune('z') // no matches
@@ -76,6 +82,7 @@ func TestKVView_SelectAtRow_EmptyFiltered_NoOp(t *testing.T) {
 }
 
 func TestKVView_SelectAtRow_BeyondFiltered_NoOp(t *testing.T) {
+	t.Parallel()
 	v := newKVViewWithKeys([]string{"key-a"})
 	// filtered has 1 entry; contentY=10 → idx=9 >= 1 → no-op
 	v.SelectAtRow(0, 10)

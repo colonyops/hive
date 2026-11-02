@@ -9,6 +9,7 @@ import (
 )
 
 func TestAction_DecodesEnvelopeInputs(t *testing.T) {
+	t.Parallel()
 	a, err := decodeAction(t, `id: ignore-alert
 label: Ignore alert
 type: clipboard

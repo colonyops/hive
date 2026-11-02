@@ -132,6 +132,7 @@ actions:
 }
 
 func TestPipelineService_ActionViewsAndInvocationUseActionStore(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -194,6 +195,7 @@ func TestPipelineService_ActionViewsAndInvocationUseActionStore(t *testing.T) {
 // again with no rerun prompt, and InvokeAction refuses a clipboard action so it
 // can never enqueue a durable command.
 func TestPipelineService_RenderClipboardActionIsRenderOnlyAndRepeatable(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -228,6 +230,7 @@ func TestPipelineService_RenderClipboardActionIsRenderOnlyAndRepeatable(t *testi
 }
 
 func TestPipelineService_RenderClipboardActionAppliesToWholeSelection(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -259,6 +262,7 @@ func TestPipelineService_RenderClipboardActionAppliesToWholeSelection(t *testing
 // webhook item regardless of payload shape. (d) an unknown itemID errors
 // (no panic) from both ActionViews and InvokeAction.
 func TestPipelineService_ActionViewsAndInvokeAreCapabilityGatedNotSourceGated(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -327,6 +331,7 @@ func TestPipelineService_ActionViewsAndInvokeAreCapabilityGatedNotSourceGated(t 
 }
 
 func TestPipelineService_AttemptedFailureReturnsPersistedActionRun(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -359,6 +364,7 @@ func (attemptedFailureExecutor) Execute(context.Context, actions.Action, dispatc
 }
 
 func TestPipelineService_ActionRunSurvivesDatabaseReopen(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
 	dir := t.TempDir()
 	db, err := queries.Open(t.Context(), dir, queries.DefaultOpenOptions())
@@ -382,6 +388,7 @@ func TestPipelineService_ActionRunSurvivesDatabaseReopen(t *testing.T) {
 }
 
 func TestPipelineService_ActionRunLocationResolvesTheOriginatingItem(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -406,6 +413,7 @@ func TestPipelineService_ActionRunLocationResolvesTheOriginatingItem(t *testing.
 }
 
 func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -433,6 +441,7 @@ func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing
 }
 
 func TestInboxService_NewSessionDraftUsesTheInjectedRemoteGenerator(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -450,6 +459,7 @@ func TestInboxService_NewSessionDraftUsesTheInjectedRemoteGenerator(t *testing.T
 }
 
 func TestInboxService_NewSessionDraft(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -494,6 +504,7 @@ func TestInboxService_NewSessionDraft(t *testing.T) {
 // so an incomplete or stale form is refused before it becomes a durable
 // command.
 func TestInboxService_DeclaredInputsAreViewedAndPreflighted(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte(`version: 1
 actions:
@@ -551,6 +562,7 @@ actions:
 // A stale revision must map to KindConflict, not KindNotFound. The generic
 // not-found transform would still match sql.ErrNoRows and misreport deletion.
 func TestInboxService_ToggleArchivedStaleRevisionIsConflict(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -568,6 +580,7 @@ func TestInboxService_ToggleArchivedStaleRevisionIsConflict(t *testing.T) {
 }
 
 func TestInboxService_MissingRowsMapOntoKinds(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)

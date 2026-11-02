@@ -55,6 +55,7 @@ func nodeNumber(t *testing.T, node map[string]any) int {
 }
 
 func TestRewriteGraphQLNoOverlayLeavesBodyUntouched(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	out := store.RewriteGraphQL([]byte(graphQLBody))
 	assert.True(t, bytes.Equal([]byte(graphQLBody), out),
@@ -62,6 +63,7 @@ func TestRewriteGraphQLNoOverlayLeavesBodyUntouched(t *testing.T) {
 }
 
 func TestRewriteGraphQLObservesItemsWithoutOverlay(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	store.RewriteGraphQL([]byte(graphQLBody))
 
@@ -79,6 +81,7 @@ func TestRewriteGraphQLObservesItemsWithoutOverlay(t *testing.T) {
 }
 
 func TestRewriteGraphQLAppliesMutations(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	labels := []string{"needs-review", "urgent"}
 	store.Apply("hay-kot/hive-desktop#58", Mutations{
@@ -105,6 +108,7 @@ func TestRewriteGraphQLAppliesMutations(t *testing.T) {
 }
 
 func TestRewriteGraphQLStampsUpdatedAtWhenUnset(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	store.Apply("hay-kot/hive-desktop#58", Mutations{Reason: new("comment")})
 
@@ -115,6 +119,7 @@ func TestRewriteGraphQLStampsUpdatedAtWhenUnset(t *testing.T) {
 }
 
 func TestRewriteGraphQLHonorsExplicitUpdatedAt(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	explicit := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	store.Apply("hay-kot/hive-desktop#58", Mutations{UpdatedAt: &explicit})
@@ -124,6 +129,7 @@ func TestRewriteGraphQLHonorsExplicitUpdatedAt(t *testing.T) {
 }
 
 func TestRewriteGraphQLAbsentDropsNode(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	store.Apply("hay-kot/hive-desktop#58", Mutations{Absent: new(true)})
 
@@ -133,6 +139,7 @@ func TestRewriteGraphQLAbsentDropsNode(t *testing.T) {
 }
 
 func TestRewriteGraphQLStateLookup(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	store.Apply("hay-kot/hive-desktop#58", Mutations{State: new("merged"), Absent: new(true)})
 
@@ -153,6 +160,7 @@ func TestRewriteGraphQLStateLookup(t *testing.T) {
 }
 
 func TestRewriteGraphQLMalformedBodyIsReturnedUnchanged(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	store.Apply("hay-kot/hive-desktop#58", Mutations{State: new("closed")})
 
@@ -180,6 +188,7 @@ func notificationEntries(t *testing.T, body []byte) []map[string]any {
 }
 
 func TestRewriteNotificationsSetsReasonAndMarksUnread(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	store.Apply("hay-kot/hive-desktop#58", Mutations{Reason: new("approval_requested")})
 
@@ -194,6 +203,7 @@ func TestRewriteNotificationsSetsReasonAndMarksUnread(t *testing.T) {
 }
 
 func TestRewriteNotificationsIgnoresNonItemSubjects(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	store.RewriteNotifications([]byte(notificationsBody))
 
@@ -205,6 +215,7 @@ func TestRewriteNotificationsIgnoresNonItemSubjects(t *testing.T) {
 }
 
 func TestMergeSimulationIsConsistentAcrossShapes(t *testing.T) {
+	t.Parallel()
 	// The whole point of one overlay driving every response shape: a merge has
 	// to leave the search result *and* have the state lookup report it merged.
 	// Rewriting only one shape produces a state the real API cannot return.
@@ -228,6 +239,7 @@ func TestMergeSimulationIsConsistentAcrossShapes(t *testing.T) {
 }
 
 func TestStoreApplyMergesSuccessiveMutations(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	store.Apply("a/b#1", Mutations{Reason: new("review_requested")})
 	merged := store.Apply("a/b#1", Mutations{State: new("closed")})
@@ -239,6 +251,7 @@ func TestStoreApplyMergesSuccessiveMutations(t *testing.T) {
 }
 
 func TestStoreClearRestoresUpstream(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	store.Apply("hay-kot/hive-desktop#58", Mutations{Absent: new(true)})
 	store.Clear("hay-kot/hive-desktop#58")
@@ -247,6 +260,7 @@ func TestStoreClearRestoresUpstream(t *testing.T) {
 }
 
 func TestStoreSeedsObservedItemsFromConfigOverlays(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t, Overlay{
 		Match: Matcher{Repo: "acme/widgets", Num: 3},
 		Set:   Mutations{State: new("closed")},
@@ -258,6 +272,7 @@ func TestStoreSeedsObservedItemsFromConfigOverlays(t *testing.T) {
 }
 
 func TestNumberFromAPIURL(t *testing.T) {
+	t.Parallel()
 	cases := map[string]int{
 		"https://api.github.com/repos/o/r/pulls/58": 58,
 		"https://api.github.com/repos/o/r/issues/1": 1,
@@ -276,6 +291,7 @@ func TestNumberFromAPIURL(t *testing.T) {
 }
 
 func TestItemsSortOverlaidFirst(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	base := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
 	for i, key := range []string{"a/b#1", "a/b#2", "a/b#3"} {
@@ -295,6 +311,7 @@ func TestItemsSortOverlaidFirst(t *testing.T) {
 }
 
 func TestObservedItemsAreBounded(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	base := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
 	for i := range maxObservedItems + 50 {
@@ -314,6 +331,7 @@ func TestObservedItemsAreBounded(t *testing.T) {
 }
 
 func TestOverlaidItemsSurviveEviction(t *testing.T) {
+	t.Parallel()
 	store := fixedStore(t)
 	base := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
 

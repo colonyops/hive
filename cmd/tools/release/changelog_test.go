@@ -31,6 +31,7 @@ const (
 // entry has to be promoted, under the version's own name and with a summary,
 // before publishing.
 func TestReleaseEntry(t *testing.T) {
+	t.Parallel()
 	version := mustVersion(t, "0.60.0")
 
 	entry, err := releaseEntry(embeddedProduct("ok", map[string]string{"0.60.0.md": entryWithSummary}), version)
@@ -50,6 +51,7 @@ func TestReleaseEntry(t *testing.T) {
 }
 
 func TestValidateEntriesChecksEveryProduct(t *testing.T) {
+	t.Parallel()
 	version := mustVersion(t, "0.60.0")
 	products := []product{
 		embeddedProduct("first", map[string]string{"0.60.0.md": entryWithSummary}),
@@ -66,6 +68,7 @@ func TestValidateEntriesChecksEveryProduct(t *testing.T) {
 }
 
 func TestRequireAdvances(t *testing.T) {
+	t.Parallel()
 	taken := []releaseVersion{mustParseVersion(t, "0.59.0"), mustParseVersion(t, "0.60.0")}
 	for _, version := range []string{"0.60.0", "0.59.1"} {
 		if err := requireAdvances(mustVersion(t, version), taken, "published"); err == nil {
@@ -82,6 +85,7 @@ func TestRequireAdvances(t *testing.T) {
 
 // A heading inside a code block is text, not a section.
 func TestDemoteHeadingsLeavesFencedCodeAlone(t *testing.T) {
+	t.Parallel()
 	body := "## Added\n\n- a thing\n\n```sh\n# a comment\n```\n\n## Fixed\n\n- another"
 	want := "### Added\n\n- a thing\n\n```sh\n# a comment\n```\n\n### Fixed\n\n- another"
 	if got := demoteHeadings(body); got != want {
@@ -90,6 +94,7 @@ func TestDemoteHeadingsLeavesFencedCodeAlone(t *testing.T) {
 }
 
 func TestRenderReleaseNotesBody(t *testing.T) {
+	t.Parallel()
 	version := mustVersion(t, "0.60.0")
 	body := renderReleaseNotesBody(version, "https://dl.hivedesktop.com", []productNotes{
 		{product: cliProduct, entry: releasenotes.Entry{Summary: "No changes to the hive CLI."}},
@@ -113,6 +118,7 @@ func changelog(versions ...string) releasenotes.Entries {
 }
 
 func TestSelectPendingVersion(t *testing.T) {
+	t.Parallel()
 	published := []releaseVersion{mustParseVersion(t, "0.59.0"), mustParseVersion(t, "0.60.0")}
 
 	tests := []struct {
@@ -165,6 +171,7 @@ func TestSelectPendingVersion(t *testing.T) {
 // what makes a file listing readable, so it has to survive the markdown a note
 // opens with.
 func TestFragmentSlug(t *testing.T) {
+	t.Parallel()
 	for note, want := range map[string]string{
 		"**A notify terminal node**, so a feed can notify on new items.": "a-notify-terminal-node-so-a-feed",
 		"**Refresh now fetches.**":                                       "refresh-now-fetches",
@@ -181,6 +188,7 @@ func TestFragmentSlug(t *testing.T) {
 // A name the tool builds has to be a name the parser accepts, or a fragment
 // lands that no build can read.
 func TestFragmentSlugProducesAParseableName(t *testing.T) {
+	t.Parallel()
 	for _, note := range []string{
 		"**A thing.** It does something.",
 		"`code` and ▸ symbols -- and punctuation!",
@@ -194,6 +202,7 @@ func TestFragmentSlugProducesAParseableName(t *testing.T) {
 }
 
 func TestNewFragmentRejectsANoteWithNoWords(t *testing.T) {
+	t.Parallel()
 	if _, err := newFragment(cliProduct, releasenotes.KindAdded, "   "); err == nil {
 		t.Fatal("expected an empty note to be rejected")
 	}
@@ -203,6 +212,7 @@ func TestNewFragmentRejectsANoteWithNoWords(t *testing.T) {
 }
 
 func TestParseProduct(t *testing.T) {
+	t.Parallel()
 	for _, p := range products {
 		got, err := parseProduct(p.name)
 		if err != nil || got.dir != p.dir {
@@ -217,6 +227,7 @@ func TestParseProduct(t *testing.T) {
 // The release tool writes into a product's directory and reads it back
 // through the product's embed, so the two have to name the same tree.
 func TestProductDirMatchesItsEmbed(t *testing.T) {
+	t.Parallel()
 	for _, p := range products {
 		onDisk, err := releasenotes.Load(os.DirFS(filepath.Join("..", "..", "..", p.dir)))
 		if err != nil {
@@ -233,6 +244,7 @@ func TestProductDirMatchesItsEmbed(t *testing.T) {
 }
 
 func TestWriteNewFileRefusesToOverwrite(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "note.md")
 	if err := writeNewFile(path, []byte("first")); err != nil {
 		t.Fatal(err)
@@ -255,6 +267,7 @@ func TestWriteNewFileRefusesToOverwrite(t *testing.T) {
 // name. The name holds the current second, so the test occupies the name for
 // this second and the next instead of racing the clock.
 func TestNewFragmentNamesTheFileItRefusedToReplace(t *testing.T) {
+	t.Parallel()
 	p := product{name: "test", dir: t.TempDir()}
 	if err := os.MkdirAll(p.unreleasedDir(), 0o755); err != nil {
 		t.Fatal(err)
@@ -290,6 +303,7 @@ func testProduct(t *testing.T, name string, fragments map[string]string) product
 }
 
 func TestWritePromotionsWritesOneEntryPerProduct(t *testing.T) {
+	t.Parallel()
 	version := mustVersion(t, "0.5.0")
 	changed := testProduct(t, "changed", map[string]string{"20260912T135002-a-thing.md": "**A thing.**"})
 	untouched := testProduct(t, "untouched", nil)
@@ -322,6 +336,7 @@ func TestWritePromotionsWritesOneEntryPerProduct(t *testing.T) {
 }
 
 func TestWritePromotionsRefusesAnExistingEntryBeforeWritingAnything(t *testing.T) {
+	t.Parallel()
 	version := mustVersion(t, "0.5.0")
 	first := testProduct(t, "first", map[string]string{"20260912T135002-a-thing.md": "**A thing.**"})
 	second := testProduct(t, "second", map[string]string{"20260912T135003-another.md": "**Another.**"})
@@ -342,6 +357,7 @@ func TestWritePromotionsRefusesAnExistingEntryBeforeWritingAnything(t *testing.T
 }
 
 func TestWritePromotionsRefusesWhenNoProductHasFragments(t *testing.T) {
+	t.Parallel()
 	products := []product{testProduct(t, "a", nil), testProduct(t, "b", nil)}
 
 	_, err := writePromotions(products, mustVersion(t, "0.5.0"), time.Now())

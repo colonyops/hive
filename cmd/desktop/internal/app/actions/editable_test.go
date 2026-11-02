@@ -15,6 +15,7 @@ func launchEditable(id string) EditableAction {
 }
 
 func TestActionStoreEditableCRUDPreservesUnrelatedCommentsAndRejectsBadLatestDisk(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	original := "# catalog header\nversion: 1\nactions:\n  # keep this comment\n  - id: existing\n    label: Existing\n    type: shell\n    command_template: true\n"
 	require.NoError(t, os.WriteFile(path, []byte(original), 0o600))
@@ -46,6 +47,7 @@ func TestActionStoreEditableCRUDPreservesUnrelatedCommentsAndRejectsBadLatestDis
 }
 
 func TestActionStoreListPreservesDetailFlagAndAppliesToIsCaseInsensitive(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte("version: 1\nactions:\n  - id: visible\n    label: Visible\n    type: shell\n    show_in_detail: true\n    applies_to: [PR]\n    command_template: true\n  - id: hidden\n    label: Hidden\n    type: shell\n    applies_to: [pr]\n    command_template: true\n"), 0o600))
 	s := NewActionStore(path)

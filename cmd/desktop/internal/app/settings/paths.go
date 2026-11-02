@@ -72,6 +72,8 @@ type ResolveOptions struct {
 	// AgentWorkspacesDir is settings' agent_workspaces.dir. Empty resolves to
 	// <ConfigDir>/workspaces; a leading `~` is expanded here.
 	AgentWorkspacesDir string
+	// Env reads the HIVE_DESKTOP_* overrides. Nil is the process environment.
+	Env func(string) string
 	// Getenv reads the hive data dir variables. main passes the login shell's
 	// environment, where a user exports HIVE_DATA_DIR for the CLI. nil reads
 	// only HIVE_DESKTOP_HIVE_DATA_DIR from this process, so a test that
@@ -82,8 +84,13 @@ type ResolveOptions struct {
 // ResolvePaths applies explicit environment overrides over bootstrap and
 // settings values, then XDG defaults.
 func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
-	dataDir, dataEnv := os.LookupEnv(EnvDataDir)
-	dataOverride := dataEnv && dataDir != ""
+	env := opts.Env
+	if env == nil {
+		env = os.Getenv
+	}
+
+	dataDir := env(EnvDataDir)
+	dataOverride := dataDir != ""
 	if !dataOverride {
 		dataDir = b.DataDir
 		if dataDir == "" {
@@ -91,8 +98,8 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 		}
 	}
 
-	configDir, configEnv := os.LookupEnv(EnvConfigDir)
-	configOverride := configEnv && configDir != ""
+	configDir := env(EnvConfigDir)
+	configOverride := configDir != ""
 	if !configOverride {
 		configDir = b.ConfigDir
 		if configDir == "" {
@@ -102,14 +109,14 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 
 	getenv := opts.Getenv
 	if getenv == nil {
-		getenv = desktopOnlyGetenv
+		getenv = desktopOnlyGetenv(env)
 	}
 	// DataDir, not config.DefaultDataDir, is the fallback: an isolated desktop
 	// data dir keeps its hive.db beside it.
 	hiveDataDir := config.ResolveDataDir(getenv, dataDir)
 
 	stateDir := filepath.Join(dataDir, "desktop")
-	flowsDir := os.Getenv(EnvFlowsDir)
+	flowsDir := env(EnvFlowsDir)
 	if flowsDir == "" {
 		if opts.MockMode == MockOnboarding {
 			flowsDir = onboardingFlowsDir()
@@ -118,13 +125,13 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 			flowsDir = filepath.Join(configDir, "flows")
 		}
 	}
-	actionsPath := os.Getenv(EnvActionsPath)
+	actionsPath := env(EnvActionsPath)
 	if actionsPath == "" {
 		actionsPath = filepath.Join(configDir, "actions.yml")
 	}
 
-	agentWorkspacesDir, agentWorkspacesEnv := os.LookupEnv(EnvAgentWorkspacesDir)
-	if !agentWorkspacesEnv || agentWorkspacesDir == "" {
+	agentWorkspacesDir := env(EnvAgentWorkspacesDir)
+	if agentWorkspacesDir == "" {
 		agentWorkspacesDir = opts.AgentWorkspacesDir
 	}
 	if agentWorkspacesDir == "" {
@@ -165,11 +172,13 @@ func LogHiveDataDir(logger zerolog.Logger, paths Paths, probeErr error) {
 	logger.Info().Str("hive_data_dir", paths.HiveDataDir).Msg("resolved the hive data dir")
 }
 
-func desktopOnlyGetenv(name string) string {
-	if name != EnvHiveDataDir {
-		return ""
+func desktopOnlyGetenv(env func(string) string) func(string) string {
+	return func(name string) string {
+		if name != EnvHiveDataDir {
+			return ""
+		}
+		return env(name)
 	}
-	return os.Getenv(name)
 }
 
 func envMockMode() string {

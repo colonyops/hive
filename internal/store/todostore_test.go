@@ -28,6 +28,7 @@ func newTestTodo(id string) todo.Todo {
 }
 
 func TestTodoStore(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("create and get", func(t *testing.T) {

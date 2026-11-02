@@ -66,6 +66,7 @@ func kvMsg(id string) models.Msg {
 }
 
 func TestRun_DedupFunctionNotifiesExactlyOnce(t *testing.T) {
+	t.Parallel()
 	db := openKVTestDB(t)
 	ctx := t.Context()
 	runner := kvTestRunner(t, db, dedupScript)
@@ -82,6 +83,7 @@ func TestRun_DedupFunctionNotifiesExactlyOnce(t *testing.T) {
 }
 
 func TestRun_KVSetThenThrowPersistsNothing(t *testing.T) {
+	t.Parallel()
 	db := openKVTestDB(t)
 	ctx := t.Context()
 	runner := kvTestRunner(t, db, `
@@ -107,6 +109,7 @@ func TestRun_KVSetThenThrowPersistsNothing(t *testing.T) {
 }
 
 func TestRun_DedupMemoryIsDurableAcrossRunners(t *testing.T) {
+	t.Parallel()
 	db := openKVTestDB(t)
 	ctx := t.Context()
 
@@ -121,6 +124,7 @@ func TestRun_DedupMemoryIsDurableAcrossRunners(t *testing.T) {
 }
 
 func TestRunReplay_IsFullyInert(t *testing.T) {
+	t.Parallel()
 	db := openKVTestDB(t)
 	ctx := t.Context()
 

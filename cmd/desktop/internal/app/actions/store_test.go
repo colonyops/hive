@@ -18,6 +18,7 @@ func ids(list []Action) []string {
 }
 
 func TestActionStore_ListGet(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte(multiActionYAML), 0o644))
@@ -37,12 +38,14 @@ func TestActionStore_ListGet(t *testing.T) {
 }
 
 func TestActionStore_MissingFile_IsEmptyNotError(t *testing.T) {
+	t.Parallel()
 	store := NewActionStore(filepath.Join(t.TempDir(), "nope.yml"))
 	assert.Empty(t, store.List())
 	assert.NoError(t, store.Err())
 }
 
 func TestActionStore_Reload_RetainsLastGoodOnFailure(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte(multiActionYAML), 0o644))
@@ -66,6 +69,7 @@ actions:
 }
 
 func TestActionStore_Reload_RetainsLastGoodOnVersionReject(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte(multiActionYAML), 0o644))
@@ -85,6 +89,7 @@ func TestActionStore_Reload_RetainsLastGoodOnVersionReject(t *testing.T) {
 }
 
 func TestActionStore_Reload_PicksUpValidEdit(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte(`version: 1

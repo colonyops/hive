@@ -11,6 +11,7 @@ import (
 )
 
 func TestNewCommandPalette(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"review": {Sh: "send-claude {{ .Name }} /review", Help: "Send to Claude for review"},
 		"open":   {Sh: "open {{ .Path }}"},
@@ -26,6 +27,7 @@ func TestNewCommandPalette(t *testing.T) {
 }
 
 func TestCommandPalette_Selection(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"test": {Sh: "echo test"},
 	}
@@ -46,6 +48,7 @@ func TestCommandPalette_Selection(t *testing.T) {
 }
 
 func TestCommandPalette_Cancel(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"test": {Sh: "echo test"},
 	}
@@ -59,6 +62,7 @@ func TestCommandPalette_Cancel(t *testing.T) {
 }
 
 func TestCommandPalette_View(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"test": {Sh: "echo test", Help: "Test command"},
 	}
@@ -72,6 +76,7 @@ func TestCommandPalette_View(t *testing.T) {
 }
 
 func TestCommandPalette_ViewWithLongHelpText(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"review": {
 			Sh:   "send-claude {{ .Name }} /review",
@@ -91,6 +96,7 @@ func TestCommandPalette_ViewWithLongHelpText(t *testing.T) {
 }
 
 func TestCommandPalette_WithArgs(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"deploy": {Sh: "deploy {{ index .Args 0 }}"},
 	}
@@ -122,6 +128,7 @@ func TestCommandPalette_WithArgs(t *testing.T) {
 }
 
 func TestCommandPalette_Filtering(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"deploy":  {Sh: "deploy"},
 		"delete":  {Sh: "delete"},
@@ -150,6 +157,7 @@ func TestCommandPalette_Filtering(t *testing.T) {
 }
 
 func TestCommandPalette_FuzzyMatching(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"deploy-staging": {Sh: "deploy-staging"},
 		"deploy-prod":    {Sh: "deploy-prod"},
@@ -187,6 +195,7 @@ func TestCommandPalette_FuzzyMatching(t *testing.T) {
 }
 
 func TestCommandPalette_Navigation(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"first":  {Sh: "first"},
 		"second": {Sh: "second"},
@@ -224,6 +233,7 @@ func TestCommandPalette_Navigation(t *testing.T) {
 }
 
 func TestCommandPalette_MultipleArgs(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"cmd": {Sh: "cmd {{ index .Args 0 }} {{ index .Args 1 }}"},
 	}
@@ -244,6 +254,7 @@ func TestCommandPalette_MultipleArgs(t *testing.T) {
 }
 
 func TestCommandPalette_NoMatch(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"deploy": {Sh: "deploy"},
 	}
@@ -265,6 +276,7 @@ func TestCommandPalette_NoMatch(t *testing.T) {
 }
 
 func TestCommandPalette_TabAutoFill(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"deploy":  {Sh: "deploy"},
 		"delete":  {Sh: "delete"},
@@ -296,6 +308,7 @@ func TestCommandPalette_TabAutoFill(t *testing.T) {
 }
 
 func TestCommandPalette_TabAutoFillPreservesArgs(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"deploy": {Sh: "deploy {{ index .Args 0 }}"},
 		"delete": {Sh: "delete {{ index .Args 0 }}"},
@@ -326,6 +339,7 @@ func TestCommandPalette_TabAutoFillPreservesArgs(t *testing.T) {
 }
 
 func TestCommandPalette_Scrolling(t *testing.T) {
+	t.Parallel()
 	// Create more than 12 commands to test scrolling
 	cmds := make(map[string]config.UserCommand)
 	for i := 1; i <= 20; i++ {
@@ -390,6 +404,7 @@ func TestCommandPalette_Scrolling(t *testing.T) {
 }
 
 func TestCommandPalette_ScrollingWithFiltering(t *testing.T) {
+	t.Parallel()
 	// Create more than 12 commands
 	cmds := make(map[string]config.UserCommand)
 	for i := 1; i <= 20; i++ {
@@ -421,6 +436,7 @@ func TestCommandPalette_ScrollingWithFiltering(t *testing.T) {
 }
 
 func TestCommandPalette_ViewWithScrolling(t *testing.T) {
+	t.Parallel()
 	// Create 15 commands
 	cmds := make(map[string]config.UserCommand)
 	for i := 1; i <= 15; i++ {
@@ -461,6 +477,7 @@ func TestCommandPalette_ViewWithScrolling(t *testing.T) {
 }
 
 func TestCommandPalette_TasksView_ShowsOnlyTaskAndGlobalCommands(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"Recycle":      {Action: act.TypeRecycle, Help: "recycle", Scope: []string{"sessions"}},
 		"TasksRefresh": {Action: act.TypeTasksRefresh, Help: "refresh tasks", Scope: []string{"tasks"}},
@@ -480,6 +497,7 @@ func TestCommandPalette_TasksView_ShowsOnlyTaskAndGlobalCommands(t *testing.T) {
 }
 
 func TestCommandPalette_SessionsView_DoesNotShowTaskCommands(t *testing.T) {
+	t.Parallel()
 	cmds := map[string]config.UserCommand{
 		"Recycle":      {Action: act.TypeRecycle, Help: "recycle", Scope: []string{"sessions"}},
 		"TasksRefresh": {Action: act.TypeTasksRefresh, Help: "refresh tasks", Scope: []string{"tasks"}},

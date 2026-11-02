@@ -27,6 +27,7 @@ func clientLogLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 }
 
 func TestClientLogWritesEntriesThroughTheRootLogger(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	svc := newClientLogService(zerolog.New(&buf).Level(zerolog.DebugLevel))
 	at := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
@@ -62,6 +63,7 @@ func TestClientLogWritesEntriesThroughTheRootLogger(t *testing.T) {
 }
 
 func TestClientLogClampsTheLevel(t *testing.T) {
+	t.Parallel()
 	cases := map[string]zerolog.Level{
 		"fatal":   zerolog.ErrorLevel,
 		"panic":   zerolog.ErrorLevel,
@@ -76,6 +78,7 @@ func TestClientLogClampsTheLevel(t *testing.T) {
 }
 
 func TestClientLogDropsEntriesBelowTheRootLevel(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	svc := newClientLogService(zerolog.New(&buf).Level(zerolog.WarnLevel))
 
@@ -88,6 +91,7 @@ func TestClientLogDropsEntriesBelowTheRootLevel(t *testing.T) {
 }
 
 func TestClientLogBoundsUntrustedInput(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	svc := newClientLogService(zerolog.New(&buf))
 
@@ -114,6 +118,7 @@ func TestClientLogBoundsUntrustedInput(t *testing.T) {
 }
 
 func TestClientLogCollapsesAFloodIntoOneCount(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	svc := newClientLogService(zerolog.New(&buf))
 
@@ -136,6 +141,7 @@ func TestClientLogCollapsesAFloodIntoOneCount(t *testing.T) {
 }
 
 func TestClientLogComponentIsAlwaysUnderWebview(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "webview", clientLogComponent(""))
 	assert.Equal(t, "webview", clientLogComponent("  !!"))
 	assert.Equal(t, "webview.terminal-windows", clientLogComponent("Terminal-Windows"))

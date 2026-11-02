@@ -32,6 +32,7 @@ func createActive(t *testing.T, client *daemonclient.Client, name string) *sessi
 }
 
 func TestStatusesBeforeTheFirstTickAreLoadingPlaceholders(t *testing.T) {
+	t.Parallel()
 	client := newStatusClient(t, time.Hour)
 	asked := createActive(t, client, "asked")
 	createActive(t, client, "other")
@@ -48,6 +49,7 @@ func TestStatusesBeforeTheFirstTickAreLoadingPlaceholders(t *testing.T) {
 }
 
 func TestStatusesAfterATickCarryTheFetchedStatus(t *testing.T) {
+	t.Parallel()
 	client := newStatusClient(t, 20*time.Millisecond)
 	sess := createActive(t, client, "agent")
 

@@ -85,6 +85,7 @@ func TestCreateFromRequestReportsTheFailedOperationAndItsCheckout(t *testing.T) 
 }
 
 func TestCreateFromRequestReportsWhyACloneWasRefused(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{DataDir: t.TempDir()}
 	missing := filepath.Join(t.TempDir(), "no-such-repo")
 
@@ -106,6 +107,7 @@ func TestCreateFromRequestReportsWhyACloneWasRefused(t *testing.T) {
 // CreateSession reads these options and nothing else from a launch, so a field
 // that falls out of the mapping changes the session with no error.
 func TestLaunchRequestMapsOntoCreateOptions(t *testing.T) {
+	t.Parallel()
 	progress := &progressLog{}
 	req := LaunchRequest{
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://github.com/colonyops/hive.git",
@@ -129,6 +131,7 @@ func TestLaunchRequestMapsOntoCreateOptions(t *testing.T) {
 }
 
 func TestCreateFromRequestPrefersAnEquivalentConfiguredCheckout(t *testing.T) {
+	t.Parallel()
 	workspaceDir := filepath.Join(t.TempDir(), "workspaces")
 	checkout := filepath.Join(workspaceDir, "hive")
 	require.NoError(t, mkdirGitDir(checkout))
@@ -148,6 +151,7 @@ func TestCreateFromRequestPrefersAnEquivalentConfiguredCheckout(t *testing.T) {
 }
 
 func TestCreateFromRequestKeepsTheRequestedSpellingWhenAProtocolIsSet(t *testing.T) {
+	t.Parallel()
 	workspaceDir := filepath.Join(t.TempDir(), "workspaces")
 	require.NoError(t, mkdirGitDir(filepath.Join(workspaceDir, "hive")))
 
@@ -169,6 +173,7 @@ func TestCreateFromRequestKeepsTheRequestedSpellingWhenAProtocolIsSet(t *testing
 // A taken name is the caller's to resolve with another name, so it arrives
 // as the sentinel rather than as a failure draft.
 func TestCreateFromRequestPassesADuplicateNameThrough(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	store.sessions["taken"] = session.Session{ID: "taken", Name: "review", Slug: "review", State: session.StateActive}
 	svc := newTestService(t, store, nil)
@@ -180,6 +185,7 @@ func TestCreateFromRequestPassesADuplicateNameThrough(t *testing.T) {
 }
 
 func TestProgressLogKeepsTheLastLineAndBoundsTheTail(t *testing.T) {
+	t.Parallel()
 	progress := &progressLog{}
 	for i := range maxProgressTailLines + 5 {
 		_, _ = progress.Write([]byte("step " + string(rune('a'+i%26)) + "\n"))
@@ -194,6 +200,7 @@ func TestProgressLogKeepsTheLastLineAndBoundsTheTail(t *testing.T) {
 }
 
 func TestProgressLogSplitsPartialWritesIntoLines(t *testing.T) {
+	t.Parallel()
 	progress := &progressLog{}
 	_, _ = progress.Write([]byte("Executing rules...\nhook: "))
 	_, _ = progress.Write([]byte("command not found\n\n"))

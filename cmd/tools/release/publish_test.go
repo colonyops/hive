@@ -35,6 +35,7 @@ func TestParsePublishOptionsResumeNeedsNoSigningSecrets(t *testing.T) {
 }
 
 func TestParsePublishOptionsRejectsUnsafeResumeCombinations(t *testing.T) {
+	t.Parallel()
 	for _, flag := range []string{"--force", "--skip-upload", "--skip-notarize"} {
 		t.Run(flag, func(t *testing.T) {
 			_, err := parsePublishOptions([]string{"1.2.3", "--resume", flag})

@@ -8,6 +8,7 @@ import (
 )
 
 func TestWebhookCaptureStore_UpsertAndGet(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 

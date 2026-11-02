@@ -23,6 +23,7 @@ func openTestDB(t *testing.T) *DB {
 }
 
 func TestOpen_FreshDB_AppliesBaseline(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 
@@ -47,6 +48,7 @@ func TestOpen_FreshDB_AppliesBaseline(t *testing.T) {
 }
 
 func TestMigration10PreservesExistingAgentWorkspaceTmuxNames(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	conn, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "migration.db"))
 	require.NoError(t, err)
@@ -70,6 +72,7 @@ func TestMigration10PreservesExistingAgentWorkspaceTmuxNames(t *testing.T) {
 }
 
 func TestMigration12RekeysAgentWorkspaceReferences(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	conn, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "migration.db"), sqlite.Options{
 		MaxOpenConns: 2,
@@ -146,6 +149,7 @@ func TestMigration12RekeysAgentWorkspaceReferences(t *testing.T) {
 }
 
 func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	ctx := t.Context()
 	first, err := Open(t.Context(), dir, DefaultOpenOptions())
@@ -184,6 +188,7 @@ func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {
 }
 
 func TestOpen_Idempotent(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	first, err := Open(t.Context(), dir, DefaultOpenOptions())
@@ -204,6 +209,7 @@ func TestOpen_Idempotent(t *testing.T) {
 }
 
 func TestOpen_CreatesMissingParentDir(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "does", "not", "exist")
 
 	database, err := Open(t.Context(), dir, DefaultOpenOptions())

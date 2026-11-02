@@ -28,6 +28,7 @@ launchers:
 `
 
 func TestLaunchers_ParseBesideTheActionsInOneFile(t *testing.T) {
+	t.Parallel()
 	got, err := parseCatalog([]byte(launcherYAML))
 	require.NoError(t, err)
 
@@ -41,6 +42,7 @@ func TestLaunchers_ParseBesideTheActionsInOneFile(t *testing.T) {
 // Launcher ids and action ids are separate namespaces: nothing resolves a
 // launcher against the action catalog, so sharing an id is unambiguous.
 func TestLaunchers_MayShareAnIDWithAnAction(t *testing.T) {
+	t.Parallel()
 	_, err := parseCatalog([]byte(`version: 1
 actions:
   - id: lazygit
@@ -56,6 +58,7 @@ launchers:
 }
 
 func TestLaunchers_RejectMalformedEntries(t *testing.T) {
+	t.Parallel()
 	for name, body := range map[string]string{
 		"no id":          "  - label: lazygit\n    command: lazygit\n",
 		"bad slug":       "  - id: Lazy_Git\n    label: lazygit\n    command: lazygit\n",
@@ -76,6 +79,7 @@ func TestLaunchers_RejectMalformedEntries(t *testing.T) {
 // The store owns the whole file, so a launcher written through it must land in
 // its own list and leave the actions — and their comments — untouched.
 func TestActionStore_LauncherCRUDLeavesTheActionsAlone(t *testing.T) {
+	t.Parallel()
 	path := writeActionsFile(t, t.TempDir(), "actions.yml", `version: 1
 # a comment a hand edit put here
 actions:
@@ -114,6 +118,7 @@ actions:
 // An invalid launcher must never reach disk, the same guarantee action CRUD
 // gives: the store validates the candidate before it writes.
 func TestActionStore_RefusesAnInvalidLauncher(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	s := NewActionStore(path)
 
@@ -125,6 +130,7 @@ func TestActionStore_RefusesAnInvalidLauncher(t *testing.T) {
 // A file with no launchers list gains one on the first write, and a file with
 // no actions list is still a valid place to put a launcher.
 func TestActionStore_CreatesTheLauncherListOnDemand(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	s := NewActionStore(path)
 

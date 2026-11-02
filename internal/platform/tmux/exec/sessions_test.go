@@ -11,6 +11,7 @@ import (
 )
 
 func TestCreateSessionCreatesPanesAndFocus(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{}
 	client := newStartupClient(runner, 0)
 	client.getenv = func(string) string { return "" }
@@ -35,6 +36,7 @@ func TestCreateSessionCreatesPanesAndFocus(t *testing.T) {
 }
 
 func TestCreateSessionSetsTheSessionEnvironment(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{}
 	client := newStartupClient(runner, 0)
 	client.getenv = func(string) string { return "" }
@@ -51,6 +53,7 @@ func TestCreateSessionSetsTheSessionEnvironment(t *testing.T) {
 }
 
 func TestCreateSessionCleansPartialSession(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{failure: func(_ context.Context, args []string) error {
 		if args[0] == "split-window" {
 			return assert.AnError
@@ -67,6 +70,7 @@ func TestCreateSessionCleansPartialSession(t *testing.T) {
 }
 
 func TestAttachOrSwitchUsesInteractiveStreamsOutsideTmux(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{}
 	client := New(zerolog.Nop(), runner)
 	client.getenv = func(string) string { return "" }
@@ -80,6 +84,7 @@ func TestAttachOrSwitchUsesInteractiveStreamsOutsideTmux(t *testing.T) {
 }
 
 func TestOpenExistingSessionModes(t *testing.T) {
+	t.Parallel()
 	t.Run("background does not attach", func(t *testing.T) {
 		runner := &fakeRunner{}
 		client := New(zerolog.Nop(), runner)
@@ -109,6 +114,7 @@ func TestOpenExistingSessionModes(t *testing.T) {
 }
 
 func TestAttachOrSwitchInsideTmux(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{}
 	client := New(zerolog.Nop(), runner)
 	client.getenv = func(string) string { return "/tmp/tmux" }
@@ -119,6 +125,7 @@ func TestAttachOrSwitchInsideTmux(t *testing.T) {
 }
 
 func TestAddWindowsPreservesDirectoriesAndFocus(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{}
 	client := newStartupClient(runner, 0)
 	windows := []multiplexer.WindowSpec{
@@ -137,6 +144,7 @@ func TestAddWindowsPreservesDirectoriesAndFocus(t *testing.T) {
 }
 
 func TestRenameSessionAcceptsASessionAlreadyRenamed(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{results: []runnerResult{
 		{err: absentSessionError{}}, // rename-session: old is gone
 		{},                          // has-session =new: present
@@ -150,6 +158,7 @@ func TestRenameSessionAcceptsASessionAlreadyRenamed(t *testing.T) {
 }
 
 func TestRenameSessionFailsWhenNeitherSessionExists(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{results: []runnerResult{
 		{err: absentSessionError{}},
 		{err: absentSessionError{}},
@@ -160,6 +169,7 @@ func TestRenameSessionFailsWhenNeitherSessionExists(t *testing.T) {
 }
 
 func TestRenameSessionFailsWhenBothSessionsExist(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{results: []runnerResult{
 		{err: assert.AnError}, // rename-session: duplicate name
 		{},                    // has-session =new: present

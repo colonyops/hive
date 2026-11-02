@@ -12,6 +12,7 @@ import (
 // prompt be registry-driven: every registered type must document itself, and
 // no orphan doc may linger for a type that was removed.
 func TestActionDocsCoverEveryRegisteredType(t *testing.T) {
+	t.Parallel()
 	for _, actionType := range Types() {
 		doc, err := Doc(actionType)
 		require.NoErrorf(t, err, "action type %q has no docs/%s.md", actionType, actionType)
@@ -32,6 +33,7 @@ func TestActionDocsCoverEveryRegisteredType(t *testing.T) {
 // TestExampleYAMLIsValid keeps the actions prompt's worked example honest: the
 // bytes an agent is shown as a model document have to load cleanly.
 func TestExampleYAMLIsValid(t *testing.T) {
+	t.Parallel()
 	parsed, err := parseCatalog([]byte(ExampleYAML()))
 	require.NoError(t, err)
 	require.NotEmpty(t, parsed.Actions)
@@ -49,6 +51,7 @@ func TestExampleYAMLIsValid(t *testing.T) {
 }
 
 func TestTypesIsSorted(t *testing.T) {
+	t.Parallel()
 	types := Types()
 	require.Len(t, types, len(registry))
 	assert.IsIncreasing(t, types)

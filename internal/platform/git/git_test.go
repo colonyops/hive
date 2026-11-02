@@ -7,6 +7,7 @@ import (
 )
 
 func TestExtractHost(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		remote string
 		want   string
@@ -31,6 +32,7 @@ func TestExtractHost(t *testing.T) {
 }
 
 func TestExtractOwnerRepo(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		remote    string
 		wantOwner string
@@ -56,6 +58,7 @@ func TestExtractOwnerRepo(t *testing.T) {
 }
 
 func TestExtractRepoName(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		remote   string
 		wantRepo string

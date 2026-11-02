@@ -29,6 +29,7 @@ func testPaths(t *testing.T) settings.Paths {
 }
 
 func TestReportSave(t *testing.T) {
+	t.Parallel()
 	paths := testPaths(t)
 	svc := newReportService(paths, settings.NewStore(paths.SettingsPath), report.Build{Version: "9.9.9"}, zerolog.Nop())
 
@@ -72,6 +73,7 @@ func TestReportSave(t *testing.T) {
 }
 
 func TestReportSaveOmitsEverySurfaceByDefault(t *testing.T) {
+	t.Parallel()
 	paths := testPaths(t)
 	if err := os.WriteFile(paths.LogFile, []byte("2026-09-14 INF /Users/somebody/private-repo\n"), 0o600); err != nil {
 		t.Fatal(err)

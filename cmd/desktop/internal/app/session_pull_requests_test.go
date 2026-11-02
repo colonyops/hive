@@ -37,6 +37,7 @@ const openPRBody = `{"data":{"r0":{"pullRequests":{"nodes":[{"number":311,"state
   "commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"PENDING"}}}]}}]}}}}`
 
 func TestSessionPullRequestsAnswersFromCacheUntilRefreshed(t *testing.T) {
+	t.Parallel()
 	server, calls := graphQLServer(t, openPRBody)
 	lookup := newSessionForges(newGitHubForge(ghclient.NewClient(ghclient.WithAPIBase(server.URL)), connectedStore(t)))
 	key := SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
@@ -63,6 +64,7 @@ func TestSessionPullRequestsAnswersFromCacheUntilRefreshed(t *testing.T) {
 }
 
 func TestSessionPullRequestsRereadsOnceTheEntryIsStale(t *testing.T) {
+	t.Parallel()
 	server, calls := graphQLServer(t, openPRBody)
 	lookup := newSessionForges(newGitHubForge(ghclient.NewClient(ghclient.WithAPIBase(server.URL)), connectedStore(t)))
 	now := time.Now()
@@ -82,6 +84,7 @@ func TestSessionPullRequestsRereadsOnceTheEntryIsStale(t *testing.T) {
 // true — the failure mode the `gh`-backed path has, since it caches an empty
 // result on error for the whole TTL.
 func TestSessionPullRequestsKeepsItsEmptyAnswersDistinct(t *testing.T) {
+	t.Parallel()
 	server, _ := graphQLServer(t, `{"data":{"r0":{"pullRequests":{"nodes":[]}}}}`)
 	client := ghclient.NewClient(ghclient.WithAPIBase(server.URL))
 	key := SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
@@ -110,6 +113,7 @@ func TestSessionPullRequestsKeepsItsEmptyAnswersDistinct(t *testing.T) {
 // A failed lookup is an error, never a cached "none" — and nothing is cached,
 // so the next poll retries instead of showing a blank badge for the TTL.
 func TestSessionPullRequestsReportsAFailedLookupAndCachesNothing(t *testing.T) {
+	t.Parallel()
 	var calls atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)

@@ -28,6 +28,7 @@ func countFeedClaims(t *testing.T, db *queries.DB) int {
 }
 
 func TestFeedClaimStore_UpsertIsIdempotent(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	itemID := seedClaimItem(t, db, "item-1")
@@ -39,6 +40,7 @@ func TestFeedClaimStore_UpsertIsIdempotent(t *testing.T) {
 }
 
 func TestFeedClaimStore_DeleteNotInSnapshot(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	kept := seedClaimItem(t, db, "kept")
@@ -52,6 +54,7 @@ func TestFeedClaimStore_DeleteNotInSnapshot(t *testing.T) {
 }
 
 func TestFeedClaimStore_DeleteForSourceAll(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	itemID := seedClaimItem(t, db, "item-1")
@@ -62,6 +65,7 @@ func TestFeedClaimStore_DeleteForSourceAll(t *testing.T) {
 }
 
 func TestFeedClaimStore_DeleteForFeeds(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	itemID := seedClaimItem(t, db, "item-1")
@@ -77,6 +81,7 @@ func TestFeedClaimStore_DeleteForFeeds(t *testing.T) {
 }
 
 func TestFeedClaimStore_DeleteForRemovedSources(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	itemID := seedClaimItem(t, db, "item-1")
@@ -92,6 +97,7 @@ func TestFeedClaimStore_DeleteForRemovedSources(t *testing.T) {
 }
 
 func TestFeedClaimStore_DeleteUnarchivedByProfile(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	itemID := seedClaimItem(t, db, "item-1")

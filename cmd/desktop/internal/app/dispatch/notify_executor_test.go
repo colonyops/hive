@@ -74,6 +74,7 @@ func notifyCommand() models.NotifyCommand {
 func openGate() gateTest { return gateTest{policy: NotificationPolicy{Allowed: true, Sound: true}} }
 
 func TestNotifyExecutor_RendersTemplatesAndLinksTheItem(t *testing.T) {
+	t.Parallel()
 	notifier := &notifierTest{}
 	executor := NewNotifyExecutor(notifier, openGate(), itemLocatorTest{id: 42}, zerolog.Nop())
 
@@ -93,6 +94,7 @@ func TestNotifyExecutor_RendersTemplatesAndLinksTheItem(t *testing.T) {
 // An item the inbox no longer holds still notifies — the click just has
 // nothing to select.
 func TestNotifyExecutor_DeliversWithoutAResolvableItem(t *testing.T) {
+	t.Parallel()
 	notifier := &notifierTest{}
 	executor := NewNotifyExecutor(notifier, openGate(), itemLocatorTest{err: errors.New("gone")}, zerolog.Nop())
 
@@ -103,6 +105,7 @@ func TestNotifyExecutor_DeliversWithoutAResolvableItem(t *testing.T) {
 }
 
 func TestNotifyExecutor_GlobalSettingsWinOverTheNode(t *testing.T) {
+	t.Parallel()
 	t.Run("notifications off suppresses delivery", func(t *testing.T) {
 		notifier := &notifierTest{}
 		executor := NewNotifyExecutor(notifier, gateTest{}, itemLocatorTest{}, zerolog.Nop())
@@ -126,6 +129,7 @@ func TestNotifyExecutor_GlobalSettingsWinOverTheNode(t *testing.T) {
 }
 
 func TestNotifyExecutor_SkipsStaleCommands(t *testing.T) {
+	t.Parallel()
 	notifier := &notifierTest{}
 	executor := NewNotifyExecutor(notifier, openGate(), itemLocatorTest{id: 42}, zerolog.Nop())
 
@@ -139,6 +143,7 @@ func TestNotifyExecutor_SkipsStaleCommands(t *testing.T) {
 }
 
 func TestNotifyExecutor_CoalescesRepeatsForTheSameItem(t *testing.T) {
+	t.Parallel()
 	notifier := &notifierTest{}
 	executor := NewNotifyExecutor(notifier, openGate(), itemLocatorTest{id: 42}, zerolog.Nop())
 	now := time.Now()
@@ -172,6 +177,7 @@ func TestNotifyExecutor_CoalescesRepeatsForTheSameItem(t *testing.T) {
 // suppresses inside it and delivers past it, and an explicit 0 means every
 // accepted delivery may interrupt.
 func TestNotifyExecutor_CooldownIsConfigurable(t *testing.T) {
+	t.Parallel()
 	withCooldown := func(cooldown time.Duration) actions.Action {
 		action := notifyAction()
 		cfg, ok := action.Config.(*NotifyActionConfig)
@@ -246,6 +252,7 @@ func TestNotifyExecutor_CooldownIsConfigurable(t *testing.T) {
 // Two notify nodes fed by the same message are independent destinations, so
 // one firing must not silence the other.
 func TestNotifyExecutor_CooldownIsPerNode(t *testing.T) {
+	t.Parallel()
 	notifier := &notifierTest{}
 	executor := NewNotifyExecutor(notifier, openGate(), itemLocatorTest{}, zerolog.Nop())
 
@@ -260,6 +267,7 @@ func TestNotifyExecutor_CooldownIsPerNode(t *testing.T) {
 }
 
 func TestNotifyExecutor_RejectsBlankTitleAndBadConfig(t *testing.T) {
+	t.Parallel()
 	notifier := &notifierTest{}
 	executor := NewNotifyExecutor(notifier, openGate(), itemLocatorTest{}, zerolog.Nop())
 
@@ -289,6 +297,7 @@ func TestNotifyExecutor_RejectsBlankTitleAndBadConfig(t *testing.T) {
 }
 
 func TestNotifyExecutor_ReportsDeliveryFailure(t *testing.T) {
+	t.Parallel()
 	notifier := &notifierTest{err: errors.New("permission denied")}
 	executor := NewNotifyExecutor(notifier, openGate(), itemLocatorTest{}, zerolog.Nop())
 
@@ -300,6 +309,7 @@ func TestNotifyExecutor_ReportsDeliveryFailure(t *testing.T) {
 // The delivery preference decides where a notification surfaces; the executor
 // only carries the gate's verdict through to the adapter.
 func TestNotifyExecutor_CarriesInAppDelivery(t *testing.T) {
+	t.Parallel()
 	notifier := &notifierTest{}
 	gate := gateTest{policy: NotificationPolicy{Allowed: true, Sound: true, InApp: true}}
 	executor := NewNotifyExecutor(notifier, gate, itemLocatorTest{id: 42}, zerolog.Nop())

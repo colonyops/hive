@@ -13,6 +13,7 @@ import (
 )
 
 func TestServer_StartAndShutdown(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		port int
@@ -39,6 +40,7 @@ func TestServer_StartAndShutdown(t *testing.T) {
 }
 
 func TestServer_PprofEndpoints(t *testing.T) {
+	t.Parallel()
 	server := New(zerolog.Nop(), 0)
 
 	ctx := context.Background()

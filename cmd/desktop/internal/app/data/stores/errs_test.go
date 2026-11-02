@@ -11,6 +11,7 @@ import (
 )
 
 func TestErrTransformQueryOne_WrapsNotFoundAndUnwrapsToSqlErrNoRows(t *testing.T) {
+	t.Parallel()
 	err := errTransformQueryOne("widget", "42", sql.ErrNoRows)
 	require.Error(t, err)
 	assert.True(t, IsNotFound(err))
@@ -20,6 +21,7 @@ func TestErrTransformQueryOne_WrapsNotFoundAndUnwrapsToSqlErrNoRows(t *testing.T
 }
 
 func TestErrTransformQueryOne_PassesThroughOtherErrorsAndNil(t *testing.T) {
+	t.Parallel()
 	require.NoError(t, errTransformQueryOne("widget", "42", nil))
 
 	other := fmt.Errorf("disk on fire")
@@ -29,6 +31,7 @@ func TestErrTransformQueryOne_PassesThroughOtherErrorsAndNil(t *testing.T) {
 }
 
 func TestErrTransformQueryMany_SwallowsNoRowsPassesOthers(t *testing.T) {
+	t.Parallel()
 	assert.NoError(t, errTransformQueryMany(sql.ErrNoRows))
 	assert.NoError(t, errTransformQueryMany(nil))
 
@@ -39,16 +42,19 @@ func TestErrTransformQueryMany_SwallowsNoRowsPassesOthers(t *testing.T) {
 // A stale revision must not satisfy IsNotFound, or callers can mistake a
 // retryable conflict for a deleted row.
 func TestErrStale_IsNotANotFoundError(t *testing.T) {
+	t.Parallel()
 	assert.False(t, IsNotFound(ErrStale))
 	assert.False(t, IsNotFound(fmt.Errorf("wrapped: %w", ErrStale)))
 }
 
 func TestIsNotFound_FalseForNilAndUnrelatedErrors(t *testing.T) {
+	t.Parallel()
 	assert.False(t, IsNotFound(nil))
 	assert.False(t, IsNotFound(errors.New("plain")))
 }
 
 func TestWrap_NilInNilOut(t *testing.T) {
+	t.Parallel()
 	require.NoError(t, wrap("doing a thing", nil))
 	assert.EqualError(t, wrap("doing a thing", errors.New("boom")), "doing a thing: boom")
 }

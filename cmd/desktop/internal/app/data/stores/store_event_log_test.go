@@ -13,6 +13,7 @@ import (
 )
 
 func TestAppend_ReadFrom_Monotonic(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -53,6 +54,7 @@ func TestAppend_ReadFrom_Monotonic(t *testing.T) {
 }
 
 func TestReadForConsumer_ResumesFromPersistedOffset(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -69,6 +71,7 @@ func TestReadForConsumer_ResumesFromPersistedOffset(t *testing.T) {
 }
 
 func TestReadForConsumer_LoadsPayloadsOnlyForRoutedTopics(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -99,6 +102,7 @@ func TestReadForConsumer_LoadsPayloadsOnlyForRoutedTopics(t *testing.T) {
 }
 
 func TestListLatestSnapshots_ReturnsLatestSnapshotPerOwnedSource(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -121,6 +125,7 @@ func TestListLatestSnapshots_ReturnsLatestSnapshotPerOwnedSource(t *testing.T) {
 }
 
 func TestListLatestSnapshots_HonorsCapturedTail(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -138,6 +143,7 @@ func TestListLatestSnapshots_HonorsCapturedTail(t *testing.T) {
 }
 
 func TestReadFrom_EmptySnapshotSurvivesJSON(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 

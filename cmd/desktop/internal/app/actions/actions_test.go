@@ -17,6 +17,7 @@ func decodeAction(t *testing.T, yamlStr string) (Action, error) {
 }
 
 func TestAction_DecodesEnvelopeAndConfig(t *testing.T) {
+	t.Parallel()
 	a, err := decodeAction(t, `id: spawn-review
 label: Spawn review agent
 type: launch-session
@@ -37,6 +38,7 @@ agent: claude
 }
 
 func TestAction_DecodesShellWithoutLegacyFields(t *testing.T) {
+	t.Parallel()
 	_, err := decodeAction(t, `id: shell-echo
 label: Echo
 type: shell
@@ -46,6 +48,7 @@ command_template: "echo hi"
 }
 
 func TestAction_UnknownType_IsHardError(t *testing.T) {
+	t.Parallel()
 	_, err := decodeAction(t, `id: x
 label: X
 type: not-a-real-type
@@ -55,6 +58,7 @@ type: not-a-real-type
 }
 
 func TestAction_UnknownPerTypeField_IsHardError(t *testing.T) {
+	t.Parallel()
 	_, err := decodeAction(t, `id: x
 label: X
 type: shell
@@ -66,6 +70,7 @@ extra_field: nope
 }
 
 func TestAction_ReservedKeysDoNotTripStrictPerTypeDecode(t *testing.T) {
+	t.Parallel()
 	a, err := decodeAction(t, `id: x
 label: X
 type: publish-message
@@ -80,11 +85,13 @@ topic: pipeline.pr-events
 }
 
 func TestAction_NonMapping_IsError(t *testing.T) {
+	t.Parallel()
 	_, err := decodeAction(t, `"just a string"`)
 	require.Error(t, err)
 }
 
 func TestLaunchSessionConfig_Validate_RequiresPromptTemplate(t *testing.T) {
+	t.Parallel()
 	cfg := &LaunchSessionConfig{}
 	require.Error(t, cfg.Validate())
 
@@ -93,6 +100,7 @@ func TestLaunchSessionConfig_Validate_RequiresPromptTemplate(t *testing.T) {
 }
 
 func TestShellConfig_Validate_RequiresCommandTemplate(t *testing.T) {
+	t.Parallel()
 	cfg := &ShellConfig{}
 	require.Error(t, cfg.Validate())
 
@@ -101,6 +109,7 @@ func TestShellConfig_Validate_RequiresCommandTemplate(t *testing.T) {
 }
 
 func TestPublishMessageConfig_Validate_RequiresTopic(t *testing.T) {
+	t.Parallel()
 	cfg := &PublishMessageConfig{}
 	require.Error(t, cfg.Validate())
 
@@ -110,6 +119,7 @@ func TestPublishMessageConfig_Validate_RequiresTopic(t *testing.T) {
 }
 
 func TestLaunchSessionConfig_PostHookTimeoutNeedsAPostHook(t *testing.T) {
+	t.Parallel()
 	err := (&LaunchSessionConfig{PromptTemplate: "go", PostHookTimeout: time.Minute}).Validate()
 	require.ErrorContains(t, err, "post_hook_timeout is set without post_hook")
 
@@ -118,12 +128,14 @@ func TestLaunchSessionConfig_PostHookTimeoutNeedsAPostHook(t *testing.T) {
 }
 
 func TestLaunchSessionConfig_TagTemplates(t *testing.T) {
+	t.Parallel()
 	require.NoError(t, (&LaunchSessionConfig{PromptTemplate: "go", RepoTemplate: "r", Tags: []string{"auto", "pr-{{ .Payload.number }}"}}).Validate())
 	require.ErrorContains(t, (&LaunchSessionConfig{PromptTemplate: "go", RepoTemplate: "r", Tags: []string{"{{ .Payload"}}).Validate(), "tags[0]")
 	require.ErrorContains(t, (&LaunchSessionConfig{PromptTemplate: "go", RepoTemplate: "r", Tags: []string{"auto", " "}}).Validate(), "tags[1] is blank")
 }
 
 func TestLaunchSessionConfig_WorkspaceTarget(t *testing.T) {
+	t.Parallel()
 	workspace := Action{Config: &LaunchSessionConfig{PromptTemplate: "triage", Workspace: "alerts"}}
 	require.NoError(t, workspace.Config.Validate())
 	assert.True(t, workspace.HeadlessCapable())
