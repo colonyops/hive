@@ -34,8 +34,8 @@ plane address a terminal by its slug alone.
 
 ## Consequences
 
-- Desktop cannot start a server's tmux session: it does not have the server's
-  rules. `Start` refuses until the daemon has an RPC for it.
+- Desktop does not have the server's rules, so `Start` asks the daemon to open
+  the tmux session (`sessionapi.API.StartTmuxSession`) and then attaches.
 - Images are pasted as local file paths (ADR
   terminal-image-input-is-delivered-as-local-file-references), which a server
   cannot read. The frontend refuses an image for a server's terminal.
