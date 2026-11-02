@@ -51,7 +51,7 @@ type FlowsUpdated struct{ Reason string }
 type ActionsUpdated struct{ Count int }
 
 // AppletsUpdated reports that the applet catalog was reloaded.
-type AppletsUpdated struct{ Count int }
+type AppletsUpdated struct{}
 
 type MenuBarUpdated struct{}
 

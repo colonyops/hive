@@ -7,17 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 )
-
-func TestEverySurfaceHasAListInSettings(t *testing.T) {
-	var cfg settings.AppletsSettings
-	for _, surface := range applets.Surfaces {
-		_, ok := cfg.Surface(surface.Name)
-		assert.True(t, ok, surface.Name)
-	}
-}
 
 func TestForgetAppletClearsEveryChoiceForThatIDAndNoOther(t *testing.T) {
 	service := &SettingsService{store: settings.NewStore(filepath.Join(t.TempDir(), "settings.yaml"))}

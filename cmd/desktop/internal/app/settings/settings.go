@@ -84,8 +84,7 @@ type AppletsSettings struct {
 	Disabled []string `yaml:"disabled,omitempty"`
 }
 
-// appletSurfaceLists holds one row per name in applets.Surfaces. A new surface is a field
-// above and a row here.
+// appletSurfaceLists holds one row per surface the user can place an applet on.
 var appletSurfaceLists = map[string]func(*AppletsSettings) *[]string{
 	"titlebar": func(a *AppletsSettings) *[]string { return &a.Titlebar },
 	"tab":      func(a *AppletsSettings) *[]string { return &a.Tabs },
@@ -109,9 +108,6 @@ func (a *AppletsSettings) Forget(id string) {
 	}
 	for _, list := range lists {
 		*list = slices.DeleteFunc(slices.Clone(*list), func(other string) bool { return other == id })
-		if len(*list) == 0 {
-			*list = nil
-		}
 	}
 }
 

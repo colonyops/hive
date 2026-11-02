@@ -57,7 +57,7 @@ type Applet struct {
 	// file on disk neither starts running nor claims room in the bar by itself.
 	Titlebar *Titlebar `yaml:"titlebar,omitempty"`
 	// Commands are the applet's palette rows that a user can bind to a key, as
-	// applet.<id>.<command>. They carry no default chord, for the reason applet.<id> has none.
+	// applet.<id>.<command>. They carry no default chord, so a file cannot claim a key.
 	Commands []Command `yaml:"commands,omitempty"`
 }
 

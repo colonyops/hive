@@ -62,7 +62,6 @@ type AppletExecResult struct {
 	Code   int    `json:"code"`
 }
 
-// AppletContext is what a page can ask about where it is running.
 type AppletContext struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
@@ -71,7 +70,6 @@ type AppletContext struct {
 	SessionSlug string `json:"sessionSlug"`
 }
 
-// AppletAsset is one file of an applet, ready to serve.
 type AppletAsset struct {
 	Name        string
 	ContentType string
@@ -95,7 +93,6 @@ func (s *AppletsService) page(id string) (applets.Applet, error) {
 	return applet, nil
 }
 
-// Context answers hive.context().
 func (s *AppletsService) Context(ctx context.Context, id, sessionSlug string) (AppletContext, error) {
 	applet, err := s.page(id)
 	if err != nil {
@@ -297,10 +294,8 @@ func writeAppletFile(resolved, path, content string) error {
 	if err := os.MkdirAll(filepath.Dir(resolved), 0o755); err != nil {
 		return Wrap(err, KindInternal, "creating the directory of %q", path)
 	}
-	if err := os.WriteFile(resolved, []byte(content), 0o644); err != nil { //nolint:gosec // the page asked for this file on the user's behalf
-		return Wrap(err, KindInternal, "writing %q", path)
-	}
-	return nil
+	//nolint:gosec // the page asked for this file on the user's behalf
+	return Wrap(os.WriteFile(resolved, []byte(content), 0o644), KindInternal, "writing %q", path)
 }
 
 // SaveStorage persists the page's localStorage beside it.
@@ -353,7 +348,7 @@ func (s *AppletsService) command(ctx context.Context, id string, req AppletExec)
 	}
 	proc := exec.CommandContext(context.WithoutCancel(ctx), "sh", "-c", req.Command)
 	proc.Dir = dir
-	proc.Env = append(s.environ(ctx), appletEnv(applet)...)
+	proc.Env = append(s.environ(ctx), "HIVE_APPLET_DIR="+applet.Dir)
 	for _, key := range slices.Sorted(maps.Keys(req.Env)) {
 		proc.Env = append(proc.Env, key+"="+req.Env[key])
 	}
@@ -370,7 +365,6 @@ func exitResult(err error) (int, error) {
 	return -1, err
 }
 
-// Exec answers hive.exec.
 func (s *AppletsService) Exec(ctx context.Context, id string, req AppletExec) (AppletExecResult, error) {
 	proc, err := s.command(ctx, id, req)
 	if err != nil {
@@ -394,10 +388,7 @@ func (s *AppletsService) Exec(ctx context.Context, id string, req AppletExec) (A
 	proc.Stdout, proc.Stderr = stdout, stderr
 	proc.Stdin = strings.NewReader(req.Stdin)
 	code, err := exitResult(dispatch.RunShellProcess(runCtx, proc))
-	if err != nil {
-		return AppletExecResult{Stdout: stdout.String(), Stderr: stderr.String(), Code: code}, Wrap(err, KindUnavailable, "running %q", req.Command)
-	}
-	return AppletExecResult{Stdout: stdout.String(), Stderr: stderr.String(), Code: code}, nil
+	return AppletExecResult{Stdout: stdout.String(), Stderr: stderr.String(), Code: code}, Wrap(err, KindUnavailable, "running %q", req.Command)
 }
 
 // AppletOutput is what a spawned process has done since the last read. Done is set
@@ -430,9 +421,6 @@ type runningExec struct {
 func (t *spawnTable) trackExec(applet string, cancel context.CancelFunc, finished <-chan struct{}) (untrack func()) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.execs == nil {
-		t.execs = map[int]runningExec{}
-	}
 	t.next++
 	key := t.next
 	t.execs[key] = runningExec{applet, cancel, finished}
@@ -520,9 +508,6 @@ func (s *AppletsService) Spawn(ctx context.Context, id string, req AppletExec) (
 	spawn.stdin = stdin
 
 	s.spawns.mu.Lock()
-	if s.spawns.live == nil {
-		s.spawns.live = map[string]*appletSpawn{}
-	}
 	s.spawns.next++
 	handle := fmt.Sprintf("p%d", s.spawns.next)
 	s.spawns.live[handle] = spawn
@@ -614,7 +599,6 @@ func takeWholeRunes(buffer *strings.Builder, final bool) string {
 	return text[:whole]
 }
 
-// SpawnWrite sends text to the process's stdin.
 func (s *AppletsService) SpawnWrite(handle, data string) error {
 	spawn, err := s.spawn(handle)
 	if err != nil {
@@ -636,7 +620,6 @@ func (s *AppletsService) SpawnKill(handle string) error {
 	return nil
 }
 
-// AppletProcess is a process an applet has running, for Settings to show.
 type AppletProcess struct {
 	Handle        string `json:"handle"`
 	Applet        string `json:"applet"`

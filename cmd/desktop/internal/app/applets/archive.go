@@ -431,10 +431,8 @@ func parseArchiveApplet(id string, files []ArchiveFile, hiveVersion string) (App
 	if !has(filepath.ToSlash(applet.Entry)) {
 		return Applet{}, fmt.Errorf("this file has no page %q, which its %s opens", applet.Entry, FileName)
 	}
-	for _, surface := range Surfaces {
-		if page, offered := surface.Page(applet); offered && !has(filepath.ToSlash(page)) {
-			return Applet{}, fmt.Errorf("this file has no page %q, which its %s shows in %s", page, FileName, surface.Label)
-		}
+	if applet.Titlebar != nil && !has(filepath.ToSlash(applet.Titlebar.Entry)) {
+		return Applet{}, fmt.Errorf("this file has no page %q, which its %s shows in the title bar", applet.Titlebar.Entry, FileName)
 	}
 	return applet, nil
 }

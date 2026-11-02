@@ -3,15 +3,12 @@ package app
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
-	"os"
-	"path/filepath"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
+	"github.com/colonyops/hive/pkg/atomicfile"
 )
 
-// AppletFile is one file of an applet being shared.
 type AppletFile struct {
 	Path  string `json:"path"`
 	Bytes int64  `json:"bytes"`
@@ -21,7 +18,6 @@ type AppletFile struct {
 type AppletExportPreview struct {
 	// Token names the export the list describes, so what the user saves is what they read.
 	Token    string       `json:"token"`
-	ID       string       `json:"id"`
 	Title    string       `json:"title"`
 	FileName string       `json:"fileName"`
 	Files    []AppletFile `json:"files"`
@@ -72,13 +68,8 @@ func (s *AppletsService) ExportPreview(id string) (AppletExportPreview, error) {
 	if err != nil {
 		return AppletExportPreview{}, Errorf(KindInvalid, "%s", err.Error())
 	}
-	token, err := appletShareToken()
-	if err != nil {
-		return AppletExportPreview{}, err
-	}
 	preview := AppletExportPreview{
-		Token:    token,
-		ID:       applet.ID,
+		Token:    rand.Text(),
 		Title:    applet.Title,
 		FileName: applet.ID + applets.ArchiveExtension,
 		Files:    make([]AppletFile, 0, len(packed.List.Files)),
@@ -92,59 +83,31 @@ func (s *AppletsService) ExportPreview(id string) (AppletExportPreview, error) {
 	}
 	s.shareMu.Lock()
 	defer s.shareMu.Unlock()
-	s.pendingExport = &pendingAppletExport{token: token, data: packed.Data}
+	s.pendingExport = &pendingAppletExport{token: preview.Token, data: packed.Data}
 	return preview, nil
 }
 
 // Export writes the export ExportPreview holds to dest, an absolute path from the native
 // save dialog. The file appears whole or not at all.
-func (s *AppletsService) Export(token, dest string) (err error) {
+func (s *AppletsService) Export(token, dest string) error {
 	s.shareMu.Lock()
 	defer s.shareMu.Unlock()
 	if s.pendingExport == nil || s.pendingExport.token != token {
 		return Errorf(KindNotFound, "that export is no longer waiting. Start it again")
 	}
-	file, err := os.CreateTemp(filepath.Dir(dest), ".applet-export-*")
-	if err != nil {
-		return Wrap(err, KindInternal, "writing %s", dest)
-	}
-	defer func() {
-		if err != nil {
-			_ = file.Close()
-			_ = os.Remove(file.Name())
-		}
-	}()
-	if _, err := file.Write(s.pendingExport.data); err != nil {
-		return Wrap(err, KindInternal, "writing %s", dest)
-	}
-	if err := file.Close(); err != nil {
-		return Wrap(err, KindInternal, "writing %s", dest)
-	}
-	if err := os.Chmod(file.Name(), 0o644); err != nil {
-		return Wrap(err, KindInternal, "writing %s", dest)
-	}
-	if err := os.Rename(file.Name(), dest); err != nil {
+	if err := atomicfile.Write(dest, s.pendingExport.data, 0o644); err != nil {
 		return Wrap(err, KindInternal, "writing %s", dest)
 	}
 	s.pendingExport = nil
 	return nil
 }
 
-// CancelExport drops a waiting export.
 func (s *AppletsService) CancelExport(token string) {
 	s.shareMu.Lock()
 	defer s.shareMu.Unlock()
 	if s.pendingExport != nil && s.pendingExport.token == token {
 		s.pendingExport = nil
 	}
-}
-
-func appletShareToken() (string, error) {
-	token := make([]byte, 16)
-	if _, err := rand.Read(token); err != nil {
-		return "", Wrap(err, KindInternal, "preparing the file")
-	}
-	return hex.EncodeToString(token), nil
 }
 
 // PrepareImport checks a shared file and holds it in memory for the user to confirm. It
@@ -164,18 +127,13 @@ func (s *AppletsService) PrepareImport(encoded string) (AppletImportPreview, err
 	if err != nil {
 		return AppletImportPreview{}, Errorf(KindInvalid, "%s", err.Error())
 	}
-	token, err := appletShareToken()
-	if err != nil {
-		return AppletImportPreview{}, err
-	}
-
 	applet := archive.Applet
 	suggestedID, err := applets.FreeID(s.catalog.Root(), applet.ID)
 	if err != nil {
 		return AppletImportPreview{}, Wrap(err, KindInternal, "reading the applets folder")
 	}
 	preview := AppletImportPreview{
-		Token:       token,
+		Token:       rand.Text(),
 		ID:          applet.ID,
 		SuggestedID: suggestedID,
 		Title:       applet.Title,
@@ -230,13 +188,9 @@ func (s *AppletsService) ConfirmImport(token, id string) error {
 		return Wrap(err, KindInternal, "importing %s", id)
 	}
 	s.pendingImport = nil
-	if err := s.catalog.Reload(); err != nil {
-		return Wrap(err, KindInternal, "reloading the applets")
-	}
-	return nil
+	return Wrap(s.catalog.Reload(), KindInternal, "reloading the applets")
 }
 
-// CancelImport drops a waiting file.
 func (s *AppletsService) CancelImport(token string) {
 	s.shareMu.Lock()
 	defer s.shareMu.Unlock()

@@ -130,6 +130,7 @@ func newAppletsService(deps AppletsDeps) *AppletsService {
 		logger:      deps.Logger,
 		pages:       buildServesAppletPages || settings.E2EHarnessMarkerValid(),
 		tokens:      map[string]string{},
+		spawns:      spawnTable{live: map[string]*appletSpawn{}, execs: map[int]runningExec{}},
 	}
 }
 
@@ -193,10 +194,7 @@ func (s *AppletsService) Delete(id string) error {
 	if removeErr != nil {
 		return Wrap(removeErr, KindInternal, "deleting %s", applet.Dir)
 	}
-	if reloadErr != nil {
-		return Wrap(reloadErr, KindInternal, "reloading the applets")
-	}
-	return nil
+	return Wrap(reloadErr, KindInternal, "reloading the applets")
 }
 
 // List returns the catalog, broken files included.
@@ -278,8 +276,4 @@ func (s *AppletsService) dir(ctx context.Context, applet applets.Applet, session
 		expanded = filepath.Join(applet.Dir, expanded)
 	}
 	return expanded, nil
-}
-
-func appletEnv(applet applets.Applet) []string {
-	return []string{"HIVE_APPLET_DIR=" + applet.Dir}
 }

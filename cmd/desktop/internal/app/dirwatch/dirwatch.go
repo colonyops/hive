@@ -214,18 +214,6 @@ func (w *Watcher) resync() bool {
 
 func (w *Watcher) subdirectories() (map[string]bool, error) {
 	current := map[string]bool{}
-	if !w.opts.deep {
-		entries, err := os.ReadDir(w.root)
-		if err != nil {
-			return nil, err
-		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				current[filepath.Join(w.root, entry.Name())] = true
-			}
-		}
-		return current, nil
-	}
 	entries, err := os.ReadDir(w.root)
 	if err != nil {
 		return nil, err
@@ -236,8 +224,10 @@ func (w *Watcher) subdirectories() (map[string]bool, error) {
 		}
 		top := filepath.Join(w.root, entry.Name())
 		current[top] = true
-		budget := maxDeepEntries
-		w.addSubdirectories(top, &budget, current)
+		if w.opts.deep {
+			budget := maxDeepEntries
+			w.addSubdirectories(top, &budget, current)
+		}
 	}
 	return current, nil
 }

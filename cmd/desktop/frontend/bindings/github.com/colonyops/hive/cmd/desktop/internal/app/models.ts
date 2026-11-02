@@ -149,9 +149,6 @@ export interface AppletCommand {
     "keywords": string[] | null;
 }
 
-/**
- * AppletContext is what a page can ask about where it is running.
- */
 export interface AppletContext {
     "id": string;
     "title": string;
@@ -191,16 +188,12 @@ export interface AppletExportPreview {
      * Token names the export the list describes, so what the user saves is what they read.
      */
     "token": string;
-    "id": string;
     "title": string;
     "fileName": string;
     "files": AppletFile[] | null;
     "leftOut": string[] | null;
 }
 
-/**
- * AppletFile is one file of an applet being shared.
- */
 export interface AppletFile {
     "path": string;
     "bytes": number;
@@ -245,9 +238,6 @@ export interface AppletOutput {
     "code": number;
 }
 
-/**
- * AppletProcess is a process an applet has running, for Settings to show.
- */
 export interface AppletProcess {
     "handle": string;
     "applet": string;

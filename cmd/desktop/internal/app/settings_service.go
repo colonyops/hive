@@ -351,9 +351,6 @@ func (s *SettingsService) SetAppletDisabled(id string, disabled bool) error {
 		if disabled {
 			others = append(others, id)
 		}
-		if len(others) == 0 {
-			others = nil
-		}
 		current.Applets.Disabled = others
 		return nil
 	})

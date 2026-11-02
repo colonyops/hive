@@ -57,8 +57,7 @@ type Env struct {
 	FlowsDir string
 	// ActionsPath is the actions.yml location.
 	ActionsPath string
-	// AppletsDir holds one directory per applet.
-	AppletsDir string
+	AppletsDir  string
 	// SettingsPath is the settings.yaml location.
 	SettingsPath string
 	// WebhookBaseURL is the local listener's base URL, already including the

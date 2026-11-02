@@ -551,7 +551,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		SessionDir:  a.PopupTerminals.terminalDir,
 		HiveVersion: cfg.Build.Version,
 		Preferences: a.Settings,
-		Updated:     func() { a.Events.Publish(a.ctx, events.AppletsUpdated{Count: len(a.appletStore.List())}) },
+		Updated:     func() { a.Events.Publish(a.ctx, events.AppletsUpdated{}) },
 		Logger:      logutils.Component(cfg.Logger, "applets"),
 	})
 	a.Diagnostics = &DiagnosticsService{paths: cfg.Paths, jobs: a.Jobs, build: cfg.Build, environ: a.execEnv.Environ, hive: a.HiveConfig, commands: a.profileCommands, webhooks: a.Webhooks, reveal: a.System.revealPath}
@@ -927,7 +927,7 @@ func (a *App) openActions(path string, logger zerolog.Logger) {
 	a.actionsWatcher = watcher
 }
 
-// openApplets loads the applet catalog and watches each applet's file, so an
+// openApplets loads the applet catalog and watches the applets folder, so an
 // agent's write appears without a restart. A watcher that fails to start costs
 // hot-reload and nothing else, as for actions.yml.
 func (a *App) openApplets(dir, hiveVersion string, logger zerolog.Logger) {
@@ -940,7 +940,7 @@ func (a *App) openApplets(dir, hiveVersion string, logger zerolog.Logger) {
 	reload()
 	watcher, err := dirwatch.New(dir, applets.IsWatchedFile, func() {
 		reload()
-		a.Events.Publish(a.ctx, events.AppletsUpdated{Count: len(a.appletStore.List())})
+		a.Events.Publish(a.ctx, events.AppletsUpdated{})
 	}, logger, dirwatch.WithAllSubdirectories(applets.SkipsWatch), dirwatch.WithComponent("applets-watcher"))
 	if err != nil {
 		logger.Warn().Err(err).Msg("applets hot-reload unavailable")

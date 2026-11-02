@@ -11,7 +11,6 @@ import (
 //go:embed builtin
 var builtins embed.FS
 
-// BuilderID is the built-in applet that builds an authoring prompt.
 const BuilderID = "applet-builder"
 
 // ReadBuiltin returns one file of a built-in applet.
