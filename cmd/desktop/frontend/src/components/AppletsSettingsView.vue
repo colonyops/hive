@@ -30,6 +30,7 @@ import type {
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { useKeybindings } from '../composables/useKeybindings'
 import { useSystemSettings } from '../composables/useSystemSettings'
+import type { AppletSurface } from '../stores/appletSurfaces'
 import { BUILDER_ID, useApplets } from '../stores/useApplets'
 
 const PROCESS_POLL_MS = 2000
@@ -137,6 +138,15 @@ async function setEnabled(id: string, enabled: boolean): Promise<void> {
   }
 }
 
+async function setSurface(id: string, surface: AppletSurface, on: boolean): Promise<void> {
+  shareError.value = ''
+  try {
+    await applets.setSurface(id, surface, on)
+  } catch (e) {
+    shareError.value = e instanceof Error ? e.message : 'Could not change where that applet shows.'
+  }
+}
+
 const keybindings = useKeybindings()
 const deletion = useConfirmation()
 
@@ -164,6 +174,13 @@ onMounted(() => {
 
 <template>
   <SettingsPage testid="settings-applets">
+    <div
+      class="rounded-md border border-severity-warning-border bg-severity-warning-tint px-3 py-2 text-small leading-relaxed text-severity-warning"
+      role="note"
+      data-testid="settings-applets-experimental"
+    >
+      Applets are experimental. How they work, and the <span class="font-mono">applet.yaml</span> format, may change.
+    </div>
     <SettingsSection
       title="Registered applets"
       description="Changes load as they are saved. An applet that is off does not run or show in the palette."
@@ -264,6 +281,7 @@ onMounted(() => {
       @export="startExport(details.id)"
       @delete="requestDelete(details.id, details.title)"
       @enabled="setEnabled(details.id, $event)"
+      @surface="(surface, on) => setSurface(details!.id, surface, on)"
       @stop="stop"
     />
     <AppletImportDialog

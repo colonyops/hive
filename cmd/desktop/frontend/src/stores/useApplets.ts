@@ -3,6 +3,7 @@ import {
   Delete,
   List,
   SetEnabled,
+  SetSurface,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
 import type { Applet } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import type { Command } from '../composables/useCommands'
@@ -133,6 +134,11 @@ export const useApplets = defineStore('applets', () => {
 
   async function setEnabled(id: string, enabled: boolean): Promise<void> {
     await SetEnabled(id, enabled)
+    await catalog.reload()
+  }
+
+  async function setSurface(id: string, surface: AppletSurface, on: boolean): Promise<void> {
+    await SetSurface(id, surface, on)
     await catalog.reload()
   }
 
@@ -349,6 +355,7 @@ export const useApplets = defineStore('applets', () => {
     titlebarApplets,
     closeSavedTabs,
     setEnabled,
+    setSurface,
     remove,
     // Shallow: the anchor is a DOM node, whose methods refuse a readonly proxy.
     dropdown: shallowReadonly(dropdown),

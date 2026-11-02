@@ -9,6 +9,7 @@ const service = vi.hoisted(() => ({
   SetEnabled: vi.fn(),
   ConfirmImport: vi.fn(),
   Delete: vi.fn(),
+  SetSurface: vi.fn(),
   Dir: vi.fn(),
   Export: vi.fn(),
   ExportPreview: vi.fn(),
@@ -72,11 +73,6 @@ describe('AppletsSettingsView', () => {
     await flushPromises()
   }
 
-  async function openMore(id: string) {
-    inBody(`settings-applet-${id}-more`)?.click()
-    await flushPromises()
-  }
-
   it('says whether each applet loaded, and why not', async () => {
     const wrapper = await render()
     const state = (id: string) => wrapper.get(`[data-testid="settings-applet-${id}-state"]`).text()
@@ -126,7 +122,6 @@ describe('AppletsSettingsView', () => {
 
     async function requestDelete(wrapper: Awaited<ReturnType<typeof render>>, id: string) {
       await openDetails(wrapper, id)
-      await openMore(id)
       inBody(`settings-applet-${id}-delete`)?.click()
       await flushPromises()
     }
@@ -135,13 +130,14 @@ describe('AppletsSettingsView', () => {
       const wrapper = await render()
       for (const id of ['docker', 'broken']) {
         await openDetails(wrapper, id)
-        await openMore(id)
         expect(inBody(`settings-applet-${id}-delete`)).not.toBeNull()
         inBody('settings-applet-details-close')?.click()
         await flushPromises()
       }
       await openDetails(wrapper, 'applet-builder')
-      expect(inBody('settings-applet-applet-builder-more')).toBeNull()
+      expect(inBody('settings-applet-applet-builder-delete')).toBeNull()
+      expect(inBody('settings-applet-applet-builder-export')).toBeNull()
+      expect(inBody('settings-applet-applet-builder-open')).not.toBeNull()
       wrapper.unmount()
     })
 
@@ -224,6 +220,12 @@ describe('AppletsSettingsView', () => {
     wrapper.unmount()
   })
 
+  it('says applets are experimental', async () => {
+    const wrapper = await render()
+    expect(wrapper.get('[data-testid="settings-applets-experimental"]').text()).toContain('experimental')
+    wrapper.unmount()
+  })
+
   describe('surfaces', () => {
     const everywhere = { tab: true, popup: { width: 0, height: 0 }, titlebar: { entry: 'bar.html', width: 28 } }
 
@@ -236,12 +238,32 @@ describe('AppletsSettingsView', () => {
       wrapper.unmount()
     })
 
-    it('lists only the surfaces the file names in the details', async () => {
+    it('writes a switch through to the file, and locks the title bar with no page for it', async () => {
+      service.SetSurface.mockResolvedValue(undefined)
       const wrapper = await render()
       await openDetails(wrapper, 'docker')
-      expect(inBody('settings-applet-docker-surface-popup')).not.toBeNull()
-      expect(inBody('settings-applet-docker-surface-tab')).toBeNull()
-      expect(inBody('settings-applet-docker-surface-titlebar')).toBeNull()
+      expect(inBody('settings-applet-docker-titlebar')?.hasAttribute('disabled')).toBe(true)
+      inBody('settings-applet-docker-tab')?.click()
+      await flushPromises()
+      expect(service.SetSurface).toHaveBeenCalledWith('docker', 'tab', true)
+      wrapper.unmount()
+    })
+
+    it('shows why a switch did not take', async () => {
+      service.SetSurface.mockRejectedValue(new Error('edit it by hand'))
+      const wrapper = await render()
+      await openDetails(wrapper, 'docker')
+      inBody('settings-applet-docker-tab')?.click()
+      await flushPromises()
+      expect(inBody('settings-applet-details-error')?.textContent).toContain('edit it by hand')
+      wrapper.unmount()
+    })
+
+    it('fixes where a built-in shows, because it has no file', async () => {
+      const wrapper = await render()
+      await openDetails(wrapper, 'applet-builder')
+      expect(inBody('settings-applet-applet-builder-tab')?.hasAttribute('disabled')).toBe(true)
+      expect(inBody('settings-applet-applet-builder-popup')?.hasAttribute('disabled')).toBe(true)
       wrapper.unmount()
     })
 
@@ -275,11 +297,9 @@ describe('AppletsSettingsView', () => {
         await flushPromises()
       }
       await openDetails(wrapper, 'docker')
-      await openMore('docker')
       expect(inBody('settings-applet-docker-export')).not.toBeNull()
       await close()
       await openDetails(wrapper, 'broken')
-      await openMore('broken')
       expect(inBody('settings-applet-broken-export')).toBeNull()
       wrapper.unmount()
     })
@@ -295,7 +315,6 @@ describe('AppletsSettingsView', () => {
       })
       const wrapper = await render()
       await openDetails(wrapper, 'docker')
-      await openMore('docker')
       inBody('settings-applet-docker-export')?.click()
       await flushPromises()
       expect(document.querySelector('[data-testid="applet-export-files"]')?.textContent).toContain('index.html')

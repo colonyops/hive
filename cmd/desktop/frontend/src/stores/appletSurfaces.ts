@@ -8,7 +8,7 @@ export type AppletSurface = 'tab' | 'popup' | 'titlebar' | 'dropdown'
 /** What applet.yaml says about where an applet shows, read from an Applet or an import preview. */
 interface DeclaresSurfaces {
   entry: string
-  surfaces: { tab: boolean; popup: object | null; titlebar: { entry: string } | null }
+  surfaces: { tab: boolean; popup: object | null; titlebar: { entry: string } | null; titlebarPage?: string }
 }
 
 // A surface an applet's file can name under surfaces:.
@@ -18,8 +18,10 @@ interface AppletDeclaredSurface {
   icon: Component
   /** What listing it means. */
   description: string
-  /** The page the applet shows here, or nothing if its file does not name this surface. */
+  /** The page the applet shows here, or nothing while this surface is off. */
   page: (applet: DeclaresSurfaces) => string | undefined
+  /** Whether a switch can turn this on. Only the title bar needs a page of its own. */
+  available: (applet: DeclaresSurfaces) => boolean
 }
 
 interface AppletSurfaceRules {
@@ -51,6 +53,7 @@ export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
       icon: IconSquareStack,
       description: "In a session's + menu. Opens as a tab beside the session's terminals.",
       page: (applet) => (applet.surfaces.tab ? applet.entry : undefined),
+      available: () => true,
     },
   },
   popup: {
@@ -63,6 +66,7 @@ export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
       icon: IconAppWindow,
       description: 'Opens over the app from the palette or its shortcut.',
       page: (applet) => (applet.surfaces.popup ? applet.entry : undefined),
+      available: () => true,
     },
   },
   titlebar: {
@@ -75,6 +79,7 @@ export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
       icon: IconPanelTop,
       description: 'Loads with the app and keeps running until you turn the applet off.',
       page: (applet) => applet.surfaces.titlebar?.entry,
+      available: (applet) => !!applet.surfaces.titlebarPage,
     },
   },
   dropdown: {

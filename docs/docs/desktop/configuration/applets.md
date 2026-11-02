@@ -5,6 +5,9 @@ description: Ask an agent for a web page that says where it belongs, as a sessio
 
 # Applets
 
+!!! warning "Experimental"
+    Applets are experimental. How they work, and the `applet.yaml` format, may change.
+
 An applet is a web page that opens as a session tab or a pop-up. It can be a Docker viewer, a Git graph, a dashboard, a game, or whatever else you want, and it can run any command on your machine.
 
 ## Make one
@@ -55,7 +58,7 @@ A tab sits beside the session's terminals and Drive, and you can drag it between
 
 The same shortcut brings a tab forward, and closes a pop-up.
 
-To change where an applet shows, edit its file or ask the agent to. **Settings ▸ Applets** shows what the file says.
+To change where an applet shows, select it in **Settings ▸ Applets** and use the switches, which save to its `applet.yaml`. Turning a surface off writes `enabled: false`, so it keeps its size and page for when you turn it back on. You can also edit the file. A title bar needs a page, so that switch stays off until the file lists `surfaces.titlebar`. The Applet Builder ships with Hive and has no file, so where it shows is fixed.
 
 Agents can open and close a tab too, with [`open_tab` and `close_tab`](../code/agent-layout.md).
 
@@ -79,7 +82,7 @@ applets:
 
 ## Delete one
 
-In **Settings ▸ Applets**, select the applet, press **⋯ ▸ Delete**, and confirm. This stops everything it has running and removes its folder, saved data, session tabs and shortcuts. It cannot be undone, so [export it](#share-one) first if you might want it back.
+In **Settings ▸ Applets**, select the applet, press **Delete applet**, and confirm. This stops everything it has running and removes its folder, saved data, session tabs and shortcuts. It cannot be undone, so [export it](#share-one) first if you might want it back.
 
 A built-in applet has no delete, so turn it off instead. Deleting a folder that [replaced the Applet Builder](#keep-an-applet-working-across-releases) brings the built-in back.
 
@@ -90,7 +93,7 @@ Export and import are in **Settings ▸ Applets**.
 !!! warning "Only import applets from people you trust"
     An applet has full access to your machine, as you. Hive does not review or limit it. Once you open it, it can run any command or program, keep processes running, read, change and delete any of your files, reach the network and send what it reads anywhere, use your clipboard, ask for your camera and microphone, and run Hive's commands. Importing one is the same as running a program someone sent you.
 
-**To export**, select the applet, press **⋯ ▸ Export**, check the list of files, and save. You get one `.hiveapplet` file.
+**To export**, select the applet, press **Export**, check the list of files, and save. You get one `.hiveapplet` file.
 
 | In the file | Left out |
 | --- | --- |

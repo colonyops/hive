@@ -99,17 +99,29 @@ func (s *Surfaces) UnmarshalYAML(node *yaml.Node) error {
 
 func (s Surfaces) none() bool { return s.Tab == nil && s.Popup == nil && s.Titlebar == nil }
 
-// TabSurface has no settings yet: a tab takes its size from its panel.
-type TabSurface struct{}
+// ShowsTab, ShowsPopup and ShowsTitlebar say whether the surface is listed and not turned off.
+func (s Surfaces) ShowsTab() bool      { return s.Tab != nil && isOn(s.Tab.Enabled) }
+func (s Surfaces) ShowsPopup() bool    { return s.Popup != nil && isOn(s.Popup.Enabled) }
+func (s Surfaces) ShowsTitlebar() bool { return s.Titlebar != nil && isOn(s.Titlebar.Enabled) }
+
+func isOn(enabled *bool) bool { return enabled == nil || *enabled }
+
+// TabSurface takes its size from its panel.
+type TabSurface struct {
+	// Enabled false turns the surface off and keeps its settings. Unset is on.
+	Enabled *bool `yaml:"enabled,omitempty"`
+}
 
 // PopupSurface sizes the pop-up in pixels. Zero fills the window.
 type PopupSurface struct {
-	Width  int `yaml:"width,omitempty"`
-	Height int `yaml:"height,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty"`
+	Width   int   `yaml:"width,omitempty"`
+	Height  int   `yaml:"height,omitempty"`
 }
 
 // TitlebarSurface is the page an applet shows in the title bar.
 type TitlebarSurface struct {
+	Enabled *bool `yaml:"enabled,omitempty"`
 	// Entry is relative to the applet's directory. Empty uses the applet's Entry, and
 	// the page tells the two apart with hive.surface.
 	Entry string `yaml:"entry,omitempty"`

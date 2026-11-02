@@ -68,8 +68,9 @@ bridge. A frame can reach a remote page through one link, so these rules hold th
 **An applet's file says where it shows.** `surfaces:` in `applet.yaml` lists `tab`, `popup` and
 `titlebar`, each a map, so a later release can add a setting to one without moving a key. A file
 that lists none is a pop-up. The file is the one registration: the applet is written by or for
-the person running it, so a second list in `settings.yaml` only makes them say it twice. They can
-edit the file, or turn the applet off.
+the person running it, so a second list in `settings.yaml` only makes them say it twice. The switches
+in Settings edit that file, and off is `enabled: false`, so a surface keeps its page and size. A
+built-in has no file, so where it shows is fixed.
 
 So a title bar page runs as soon as its file is valid, with nobody opening it. Everything else
 runs when the user or an agent opens it. The surfaces share one bridge and differ only in what

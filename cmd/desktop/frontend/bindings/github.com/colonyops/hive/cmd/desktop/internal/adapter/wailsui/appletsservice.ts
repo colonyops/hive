@@ -82,6 +82,10 @@ export function SetEnabled(id: string, enabled: boolean): $CancellablePromise<vo
     return $Call.ByID(4020324047, id, enabled);
 }
 
+export function SetSurface(id: string, surface: string, on: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3888080753, id, surface, on);
+}
+
 export function Spawn(id: string, req: app$0.AppletExec): $CancellablePromise<string> {
     return $Call.ByID(3454783833, id, req);
 }

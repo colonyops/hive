@@ -1439,7 +1439,9 @@ opened in `AppletFrame`
   (`stores/appletSurfaces.ts`). `surfaces:` in `applet.yaml` is the only registration, with a
   map per surface so a later release can add a setting without moving a key. A new extension
   point is that row, a key under `surfaces:`, and a host, not another bridge. A file that names
-  no surface is a pop-up. A title bar page runs as soon as its file is valid.
+  no surface is a pop-up. A title bar page runs as soon as its file is valid. The switches in
+  Settings write `enabled:` back to the file (`applets.SetSurface`), so there is no second list.
+  A built-in has no file, so its surfaces are fixed.
 - **A session tab is a layout tab, and its frame floats.** `lib/appletTabs` names it
   `applet:<id>`, one per session, and the layout places it like any view. Its iframe sits in
   the panel host's floating layer in an order no drag changes, because moving an iframe in

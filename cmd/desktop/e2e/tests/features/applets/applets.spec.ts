@@ -364,6 +364,33 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await unbind("E2E bar ping");
   });
 
+  test("a switch in Settings changes where an applet shows, by its file", async ({
+    page,
+    browserName,
+  }) => {
+    await page.goto("/#/settings/applets");
+    await expect(page.getByTestId("settings-applets-experimental")).toBeVisible();
+    await page.screenshot({
+      path: screenshotPath(`applet-settings-${browserName}.png`),
+    });
+    await page.getByTestId("settings-applet-e2e-bar-details").click();
+    await page.screenshot({
+      path: screenshotPath(`applet-details-${browserName}.png`),
+    });
+    const bar = page.getByTestId("titlebar-applet-e2e-bar");
+    await expect(bar).toBeVisible();
+
+    await page.getByTestId("settings-applet-e2e-bar-titlebar").click();
+    await expect(bar).toHaveCount(0);
+    await expect(page.getByTestId("settings-applet-details-issue")).toHaveCount(0);
+
+    await page.getByTestId("settings-applet-e2e-bar-titlebar").click();
+    await expect(bar).toBeVisible();
+    const slot = await bar.boundingBox();
+    expect(slot!.width).toBe(60);
+    await page.getByTestId("settings-applet-details-close").click();
+  });
+
   test("an import warns first, cancels by default, and cancel leaves nothing behind", async ({
     page,
   }) => {
@@ -420,15 +447,12 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     const row = page.getByTestId("settings-applet-e2e-imported");
     await expect(row).toBeVisible();
     await page.getByTestId("settings-applet-e2e-imported-details").click();
-    await page.getByTestId("settings-applet-e2e-imported-more").click();
     await page.getByTestId("settings-applet-e2e-imported-delete").click();
     await page.getByTestId("settings-applet-delete-cancel").click();
     await expect(row).toBeVisible();
     expect(
       (await page.request.get("/__applet/e2e-imported/index.html")).status(),
     ).toBe(200);
-
-    await page.getByTestId("settings-applet-e2e-imported-more").click();
     await page.getByTestId("settings-applet-e2e-imported-delete").click();
     await page.getByTestId("settings-applet-delete-confirm").click();
     await expect(row).toHaveCount(0);
@@ -478,11 +502,10 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await page.goto("/#/settings/applets");
     await page.getByTestId("settings-applet-applet-builder-details").click();
     await expect(
-      page.getByTestId("settings-applet-applet-builder-more"),
+      page.getByTestId("settings-applet-applet-builder-export"),
     ).toHaveCount(0);
     await page.getByTestId("settings-applet-details-close").click();
     await page.getByTestId("settings-applet-e2e-bar-details").click();
-    await page.getByTestId("settings-applet-e2e-bar-more").click();
     await page.getByTestId("settings-applet-e2e-bar-export").click();
     const files = page.getByTestId("applet-export-files");
     await expect(files).toContainText("applet.yaml");

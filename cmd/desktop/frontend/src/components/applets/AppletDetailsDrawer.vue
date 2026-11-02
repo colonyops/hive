@@ -1,19 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, type DeepReadonly } from 'vue'
-import IconEllipsis from '~icons/lucide/ellipsis'
+import { computed, type DeepReadonly } from 'vue'
 import IconFolder from '~icons/lucide/folder'
 import IconPlay from '~icons/lucide/play'
-import IconTrash from '~icons/lucide/trash-2'
-import IconUpload from '~icons/lucide/upload'
-import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import AppSwitch from '@hive/ui/components/ui/AppSwitch.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import BaseIconBadge from '@hive/ui/components/ui/BaseIconBadge.vue'
 import DrawerSheet from '@hive/ui/components/ui/DrawerSheet.vue'
-import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import Kbd from '@hive/ui/components/ui/Kbd.vue'
-import type { MenuEntry } from '@hive/ui/types/menu'
 import SettingsHeading from '../settings/SettingsHeading.vue'
 import type { Applet, AppletProcess } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { formatCombo, useKeybindings } from '../../composables/useKeybindings'
@@ -22,7 +16,7 @@ import { appletCommandID } from '../../keybindings/catalog'
 import { requestedEditorFilter } from '../../keybindings/keymapRows'
 import { launcherIconComponent } from '../../lib/launcherIcons'
 import { router } from '../../router'
-import { DECLARED_SURFACES } from '../../stores/appletSurfaces'
+import { DECLARED_SURFACES, type AppletSurface } from '../../stores/appletSurfaces'
 
 const props = defineProps<{
   applet: DeepReadonly<Applet>
@@ -36,6 +30,7 @@ const emit = defineEmits<{
   export: []
   delete: []
   enabled: [value: boolean]
+  surface: [surface: AppletSurface, on: boolean]
   stop: [process: AppletProcess]
 }>()
 
@@ -43,7 +38,6 @@ const keybindings = useKeybindings()
 const { revealPath } = useSystemSettings()
 
 const icon = computed(() => launcherIconComponent(props.applet.icon))
-const shownOn = computed(() => DECLARED_SURFACES.filter(({ declared }) => declared.page(props.applet)))
 const opens = computed(() => !props.applet.runnable || props.applet.surfaces.tab || !!props.applet.surfaces.popup)
 const folder = computed(() => `${props.dir}/${props.applet.id}`)
 
@@ -57,33 +51,8 @@ const commands = computed(() =>
   ].map((command) => ({ ...command, keys: keybindings.combosFor(command.id).map((combo) => formatCombo(combo)) })),
 )
 
-const menu = ref<HTMLElement | null>(null)
-const menuOpen = ref(false)
-
-const menuEntries = computed<MenuEntry[]>(() => {
-  if (props.applet.builtin) return []
-  const id = props.applet.id
-  return [
-    ...(props.applet.runnable
-      ? [
-          {
-            kind: 'action' as const,
-            id: 'export',
-            label: 'Export',
-            icon: IconUpload,
-            testid: `settings-applet-${id}-export`,
-          },
-        ]
-      : []),
-    { kind: 'action' as const, id: 'delete', label: 'Delete', icon: IconTrash, testid: `settings-applet-${id}-delete` },
-  ]
-})
-
-function onMenuSelect(id: string): void {
-  menuOpen.value = false
-  if (id === 'export') emit('export')
-  else if (id === 'delete') emit('delete')
-}
+const canExport = computed(() => !props.applet.builtin && props.applet.runnable)
+const hasActions = computed(() => !props.applet.builtin || opens.value)
 
 function openShortcuts(): void {
   requestedEditorFilter.value = props.applet.title
@@ -106,32 +75,6 @@ function openShortcuts(): void {
       </BaseIconBadge>
     </template>
     <template #header-actions>
-      <BaseButton
-        v-if="opens"
-        variant="secondary"
-        size="xs"
-        :disabled="!applet.enabled"
-        :data-testid="`settings-applet-${applet.id}-open`"
-        @click="emit('open')"
-      >
-        <IconPlay class="size-3" aria-hidden="true" />Open
-      </BaseButton>
-      <div v-if="menuEntries.length" ref="menu" class="relative">
-        <IconButton
-          :icon="IconEllipsis"
-          :label="`More for ${applet.title}`"
-          size="lg"
-          :data-testid="`settings-applet-${applet.id}-more`"
-          @click="menuOpen = !menuOpen"
-        />
-        <AppMenu
-          v-if="menuOpen"
-          :ignore="[menu]"
-          :entries="menuEntries"
-          @select="onMenuSelect"
-          @close="menuOpen = false"
-        />
-      </div>
       <AppSwitch
         :aria-label="`Turn ${applet.title} on`"
         :model-value="applet.enabled"
@@ -163,20 +106,41 @@ function openShortcuts(): void {
         <SettingsHeading level="group" title="Where it shows" />
         <div class="mt-1 divide-y divide-border">
           <div
-            v-for="{ surface, declared } in shownOn"
+            v-for="{ surface, declared } in DECLARED_SURFACES"
             :key="surface"
             class="flex items-center gap-2.5 py-2"
             :data-testid="`settings-applet-${applet.id}-surface-${surface}`"
           >
-            <component :is="declared.icon" class="size-3.5 shrink-0 text-text-3" aria-hidden="true" />
+            <component
+              :is="declared.icon"
+              class="size-3.5 shrink-0"
+              :class="declared.available(applet) ? 'text-text-3' : 'text-text-4'"
+              aria-hidden="true"
+            />
             <div class="min-w-0 flex-1">
-              <div class="text-small font-medium text-text">{{ declared.label }}</div>
-              <p class="mt-0.5 text-caption leading-relaxed text-text-3">{{ declared.description }}</p>
+              <div class="text-small font-medium" :class="declared.available(applet) ? 'text-text' : 'text-text-4'">
+                {{ declared.label }}
+              </div>
+              <p v-if="declared.available(applet)" class="mt-0.5 text-caption leading-relaxed text-text-3">
+                {{ declared.description }}
+              </p>
+              <p v-else class="mt-0.5 text-caption leading-relaxed text-text-4">
+                This applet has no page for here. Add <span class="font-mono">surfaces.{{ surface }}</span> to
+                applet.yaml.
+              </p>
             </div>
+            <AppSwitch
+              :aria-label="`${declared.label}: ${applet.title}`"
+              :model-value="!!declared.page(applet)"
+              :disabled="applet.builtin || !declared.available(applet)"
+              :testid="`settings-applet-${applet.id}-${surface}`"
+              @update:model-value="emit('surface', surface, $event)"
+            />
           </div>
         </div>
         <p class="mt-1 text-caption text-text-3">
-          Its file decides this. Change <span class="font-mono">surfaces:</span> in applet.yaml.
+          <template v-if="applet.builtin">This applet ships with Hive, so where it shows is fixed.</template>
+          <template v-else>Saved in its <span class="font-mono">applet.yaml</span>.</template>
         </p>
       </section>
 
@@ -241,5 +205,37 @@ function openShortcuts(): void {
         </div>
       </section>
     </div>
+
+    <template v-if="hasActions" #footer>
+      <div class="flex items-center gap-2.5">
+        <button
+          v-if="!applet.builtin"
+          type="button"
+          class="cursor-pointer text-small text-text-3 hover:text-severity-error"
+          :data-testid="`settings-applet-${applet.id}-delete`"
+          @click="emit('delete')"
+        >
+          Delete applet
+        </button>
+        <div class="flex-1" />
+        <BaseButton
+          v-if="canExport"
+          variant="secondary"
+          size="sm"
+          :data-testid="`settings-applet-${applet.id}-export`"
+          @click="emit('export')"
+          >Export</BaseButton
+        >
+        <BaseButton
+          v-if="opens"
+          size="sm"
+          :disabled="!applet.enabled"
+          :data-testid="`settings-applet-${applet.id}-open`"
+          @click="emit('open')"
+        >
+          <IconPlay class="size-3" aria-hidden="true" />Open
+        </BaseButton>
+      </div>
+    </template>
   </DrawerSheet>
 </template>

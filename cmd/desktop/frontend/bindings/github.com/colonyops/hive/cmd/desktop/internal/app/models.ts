@@ -249,12 +249,14 @@ export interface AppletProcess {
 
 /**
  * AppletSurfaces is where an applet's file says it shows. Popup and Titlebar are nil for an
- * applet that does not show there.
+ * applet that does not show there. TitlebarPage names the page its file has for the title
+ * bar, whether that is on or off, because a switch can only turn on what has a page.
  */
 export interface AppletSurfaces {
     "tab": boolean;
     "popup": AppletPopup | null;
     "titlebar": AppletTitlebar | null;
+    "titlebarPage": string;
 }
 
 /**

@@ -13,6 +13,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
+	"github.com/colonyops/hive/pkg/atomicfile"
 	"github.com/colonyops/hive/pkg/pathutil"
 )
 
@@ -46,11 +47,13 @@ type Applet struct {
 }
 
 // AppletSurfaces is where an applet's file says it shows. Popup and Titlebar are nil for an
-// applet that does not show there.
+// applet that does not show there. TitlebarPage names the page its file has for the title
+// bar, whether that is on or off, because a switch can only turn on what has a page.
 type AppletSurfaces struct {
-	Tab      bool            `json:"tab"`
-	Popup    *AppletPopup    `json:"popup"`
-	Titlebar *AppletTitlebar `json:"titlebar"`
+	Tab          bool            `json:"tab"`
+	Popup        *AppletPopup    `json:"popup"`
+	Titlebar     *AppletTitlebar `json:"titlebar"`
+	TitlebarPage string          `json:"titlebarPage"`
 }
 
 // AppletPopup sizes the pop-up in pixels. Zero fills the window.
@@ -208,6 +211,40 @@ func (s *AppletsService) Delete(id string) error {
 	return Wrap(reloadErr, KindInternal, "reloading the applets")
 }
 
+// SetSurface turns one surface of an applet on or off by editing its applet.yaml, which
+// stays the only record of where it shows. A built-in has no file to edit. What it writes
+// must parse, so a switch cannot break a file that works.
+func (s *AppletsService) SetSurface(id, surface string, on bool) error {
+	if !s.pages {
+		return Errorf(KindUnavailable, "%s", appletPagesUnavailable)
+	}
+	applet, err := s.applet(id)
+	if err != nil {
+		return err
+	}
+	if applet.Builtin {
+		return Errorf(KindInvalid, "%s ships with Hive, so where it shows is fixed", applet.Title)
+	}
+	path := filepath.Join(applet.Dir, applets.FileName)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return Wrap(err, KindInternal, "reading %s", path)
+	}
+	edited, err := applets.SetSurface(raw, surface, on)
+	if err != nil {
+		return Errorf(KindInvalid, "%s", err.Error())
+	}
+	if _, err := applets.Parse(id, edited, s.hiveVersion); err != nil {
+		return Errorf(KindInvalid, "%s", err.Error())
+	}
+	if err := atomicfile.Write(path, edited, 0o644); err != nil {
+		return Wrap(err, KindInternal, "writing %s", path)
+	}
+	reloadErr := s.catalog.Reload()
+	s.updated()
+	return Wrap(reloadErr, KindInternal, "reloading the applets")
+}
+
 // List returns the catalog, broken files included.
 func (s *AppletsService) List(context.Context) []Applet {
 	entries := s.catalog.List()
@@ -262,12 +299,15 @@ func appletCommandsOf(a applets.Applet) []AppletCommand {
 }
 
 func appletSurfacesOf(a applets.Applet) AppletSurfaces {
-	out := AppletSurfaces{Tab: a.Surfaces.Tab != nil}
-	if popup := a.Surfaces.Popup; popup != nil {
-		out.Popup = &AppletPopup{Width: popup.Width, Height: popup.Height}
+	out := AppletSurfaces{Tab: a.Surfaces.ShowsTab()}
+	if a.Surfaces.ShowsPopup() {
+		out.Popup = &AppletPopup{Width: a.Surfaces.Popup.Width, Height: a.Surfaces.Popup.Height}
 	}
 	if bar := a.Surfaces.Titlebar; bar != nil {
-		out.Titlebar = &AppletTitlebar{Entry: bar.Entry, Width: bar.Width}
+		out.TitlebarPage = bar.Entry
+	}
+	if a.Surfaces.ShowsTitlebar() {
+		out.Titlebar = &AppletTitlebar{Entry: a.Surfaces.Titlebar.Entry, Width: a.Surfaces.Titlebar.Width}
 	}
 	return out
 }
@@ -279,7 +319,7 @@ func (s *AppletsService) CheckTab(id string) error {
 	if err != nil {
 		return err
 	}
-	if applet.Surfaces.Tab == nil {
+	if !applet.Surfaces.ShowsTab() {
 		return Errorf(KindInvalid, "%s does not list surfaces.tab in its %s, so it has no tab", applet.Title, applets.FileName)
 	}
 	return nil

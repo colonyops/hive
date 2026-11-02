@@ -85,7 +85,7 @@ const shownOn = computed(() =>
       <span
         class="hidden max-w-40 truncate text-small text-text-3 @[600px]/pane:inline"
         :data-testid="`settings-applet-${applet.id}-surfaces`"
-        >{{ shownOn }}</span
+        >{{ shownOn || 'Nowhere' }}</span
       >
       <AppSwitch
         :aria-label="`Turn ${applet.title} on`"

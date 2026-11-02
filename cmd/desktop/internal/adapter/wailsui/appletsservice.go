@@ -39,6 +39,10 @@ func (s *AppletsService) SetEnabled(id string, enabled bool) error {
 	return s.applets.SetEnabled(id, enabled)
 }
 
+func (s *AppletsService) SetSurface(id, surface string, on bool) error {
+	return s.applets.SetSurface(id, surface, on)
+}
+
 func (s *AppletsService) Delete(id string) error {
 	return s.applets.Delete(id)
 }

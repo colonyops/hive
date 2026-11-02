@@ -34,6 +34,7 @@ A key Hive does not know is a warning in `list_applets`, and the applet still op
   - `tab`: in a session's + menu, as a tab beside its terminals. Takes no settings: `tab: {}`.
   - `popup`: over the app, from the command palette or a key, with `width` and `height` in pixels. The default fills the window.
   - `titlebar`: a page in the title bar, with `entry` (default: the applet's own `entry`) and `width` in pixels (default 28, one icon button). See "In the title bar".
+  - Each takes `enabled: false`, which turns it off and keeps its settings. The switches in Settings > Applets write this, so leave it alone unless the user asks.
 - `commands`: palette rows the user can bind to a key, each with `id` (a slug), `title`, and optional `icon` and `keywords`. See "In the command palette".
 
 ## The page

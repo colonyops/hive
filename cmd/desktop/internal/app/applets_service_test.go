@@ -123,6 +123,26 @@ func TestCheckTabFollowsTheFile(t *testing.T) {
 	assert.Equal(t, KindInvalid, KindOf(popup.CheckTab("pop")))
 }
 
+func TestSetSurfaceEditsTheFileAndTheCatalogFollows(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	path := appletOnDisk(t, service, "thing").Path
+
+	require.NoError(t, service.SetSurface("thing", "tab", true))
+	applet := appletOnDisk(t, service, "thing")
+	assert.True(t, applet.Surfaces.Tab)
+	assert.NotNil(t, applet.Surfaces.Popup, "the pop-up it had stays")
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "tab: {}")
+
+	require.NoError(t, service.SetSurface("thing", "popup", false))
+	assert.Nil(t, appletOnDisk(t, service, "thing").Surfaces.Popup)
+
+	assert.Equal(t, KindInvalid, KindOf(service.SetSurface("thing", "titlebar", true)), "it has no page for the bar")
+	assert.Equal(t, KindNotFound, KindOf(service.SetSurface("ghost", "tab", true)))
+	assert.Equal(t, KindInvalid, KindOf(service.SetSurface("applet-builder", "tab", true)), "a built-in has no file")
+}
+
 func TestBrokenAppletIsListedAndNotRunnable(t *testing.T) {
 	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\nsurfaces: {titlebar: nope}\n")
 	applet := appletOnDisk(t, service, "thing")
