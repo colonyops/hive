@@ -23,7 +23,7 @@ const html = computed(() => renderGithubMarkdown(props.body, highlight))
 .release-notes :deep(h1),
 .release-notes :deep(h2),
 .release-notes :deep(h3) {
-  margin: 18px 0 6px;
+  margin: 1.125rem 0 0.375rem;
   color: var(--color-text);
   font-weight: 650;
   line-height: 1.3;
@@ -38,12 +38,12 @@ const html = computed(() => renderGithubMarkdown(props.body, highlight))
   margin-bottom: 0;
 }
 .release-notes :deep(p) {
-  margin: 8px 0;
+  margin: 0.5rem 0;
 }
 .release-notes :deep(ul),
 .release-notes :deep(ol) {
-  margin: 8px 0;
-  padding-left: 20px;
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
 }
 .release-notes :deep(ul) {
   list-style: disc;
@@ -52,7 +52,7 @@ const html = computed(() => renderGithubMarkdown(props.body, highlight))
   list-style: decimal;
 }
 .release-notes :deep(li) {
-  margin: 5px 0;
+  margin: 0.3125rem 0;
 }
 .release-notes :deep(li)::marker {
   color: var(--color-text-4);
@@ -62,7 +62,7 @@ const html = computed(() => renderGithubMarkdown(props.body, highlight))
   font-weight: 650;
 }
 .release-notes :deep(code) {
-  padding: 1px 5px;
+  padding: 1px 0.3125rem;
   border-radius: var(--radius-md);
   background: var(--color-card);
   font-family: var(--font-mono);

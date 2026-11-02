@@ -49,7 +49,7 @@ onMounted(() => {
           placeholder="None"
           aria-label="Default editor"
           testid="general-editor-command"
-          class="min-w-[200px]"
+          class="min-w-50"
           @update:model-value="setCommand"
         />
       </SettingsRow>

@@ -75,7 +75,7 @@ function optionClass(selected: boolean): string[] {
   }
   return [
     'flex items-center gap-1.5 rounded-md px-2.5 font-medium',
-    props.size === 'sm' ? 'h-[22px] text-caption' : 'h-[26px] text-small',
+    props.size === 'sm' ? 'h-5.5 text-caption' : 'h-6.5 text-small',
     selected ? 'bg-chip text-text' : 'text-text-2 hover:text-text',
   ]
 }

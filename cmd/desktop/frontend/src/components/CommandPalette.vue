@@ -395,9 +395,9 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-panel {
   position: relative;
   z-index: 1;
-  width: 720px;
-  max-width: calc(100vw - 48px);
-  max-height: min(608px, 76vh);
+  width: 45rem;
+  max-width: calc(100vw - 3rem);
+  max-height: min(38rem, 76vh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -411,8 +411,8 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-tabs {
   display: flex;
   align-items: flex-end;
-  gap: 4px;
-  padding: 10px 14px 0;
+  gap: 0.25rem;
+  padding: 0.625rem 0.875rem 0;
   border-bottom: 1px solid var(--color-row);
   flex-shrink: 0;
 }
@@ -420,9 +420,9 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-tab {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 0.3125rem;
   margin-bottom: -1px;
-  padding: 6px 10px 8px;
+  padding: 0.375rem 0.625rem 0.5rem;
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -451,15 +451,15 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-input-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
   border-bottom: 1px solid var(--color-row);
-  padding: 16px 18px;
+  padding: 1rem 1.125rem;
   flex-shrink: 0;
 }
 
 .palette-search-icon {
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
   color: var(--color-text-3);
   flex-shrink: 0;
   user-select: none;
@@ -485,12 +485,12 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-results {
   flex: 1;
   overflow-y: auto;
-  padding: 0 8px 8px;
+  padding: 0 0.5rem 0.5rem;
 }
 
 /* Section header — muted mono uppercase */
 .palette-group-header {
-  padding: 12px 6px 4px;
+  padding: 0.75rem 0.375rem 0.25rem;
   font-family: var(--font-mono);
   font-size: var(--text-micro);
   font-weight: 600;
@@ -504,9 +504,9 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
   width: 100%;
-  padding: 9px 10px;
+  padding: 0.5625rem 0.625rem;
   border-radius: var(--radius-lg);
   font-size: var(--text-reading);
   color: var(--color-text-2);
@@ -531,8 +531,8 @@ function onKeydown(e: KeyboardEvent): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 1.625rem;
+  height: 1.625rem;
   border-radius: var(--radius-lg);
   background: var(--color-chip);
   color: var(--color-text-2);
@@ -540,8 +540,8 @@ function onKeydown(e: KeyboardEvent): void {
 }
 
 .palette-chip svg {
-  width: 14px;
-  height: 14px;
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 /* Scope prefix while filtering — the group, read per row instead of as a header */
@@ -584,7 +584,7 @@ function onKeydown(e: KeyboardEvent): void {
   color: var(--color-accent-contrast);
   background: var(--color-accent);
   border-radius: var(--radius-md);
-  padding: 4px 9px;
+  padding: 0.25rem 0.5625rem;
   line-height: 1;
 }
 
@@ -593,8 +593,8 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-footer {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 16px;
+  gap: 1rem;
+  padding: 0.625rem 1rem;
   border-top: 1px solid var(--color-row);
   background: var(--color-raised);
   font-family: var(--font-mono);

@@ -75,8 +75,8 @@ const emit = defineEmits<{ run: []; 'open-log': [commandId: number] }>()
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 11px;
-  padding: 8px 11px;
+  gap: 0.6875rem;
+  padding: 0.5rem 0.6875rem;
   text-align: left;
   cursor: pointer;
 }
@@ -89,7 +89,7 @@ const emit = defineEmits<{ run: []; 'open-log': [commandId: number] }>()
 .action-row-icon {
   display: inline-flex;
   flex: none;
-  width: 14px;
+  width: 0.875rem;
   justify-content: center;
 }
 .action-row-label {
@@ -117,7 +117,7 @@ const emit = defineEmits<{ run: []; 'open-log': [commandId: number] }>()
 }
 .action-run-line {
   overflow: hidden;
-  padding: 0 11px 8px 36px;
+  padding: 0 0.6875rem 0.5rem 2.25rem;
   font-size: var(--text-caption);
   color: var(--color-text-3);
   text-overflow: ellipsis;
@@ -128,7 +128,7 @@ const emit = defineEmits<{ run: []; 'open-log': [commandId: number] }>()
 }
 .action-log-link {
   flex: none;
-  padding: 8px 11px 8px 4px;
+  padding: 0.5rem 0.6875rem 0.5rem 0.25rem;
   cursor: pointer;
   font-size: var(--text-caption);
   color: var(--color-accent);

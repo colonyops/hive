@@ -67,12 +67,15 @@ export function useGlobalKeymap({
     kb.clearPendingSequence()
   }
 
+  // Changes is an overlay with a surface of its own, and a text size only changes how things read.
+  const firesOverOverlays = (id: string): boolean => /\.text-size-(increase|decrease|reset)$/.test(id)
+
   function dispatchIfActive(id: string): boolean {
     const command = commandById.value.get(id)
     if (!command) return false
     // A different modal (report, new-profile, a confirm stacked inside Tasks)
     // still swallows an overlay's own toggle like any other command.
-    if (anyOverlayOpen.value && id !== 'palette.toggle' && !closesOwnOverlay(id)) return false
+    if (anyOverlayOpen.value && id !== 'palette.toggle' && !closesOwnOverlay(id) && !firesOverOverlays(id)) return false
     if (!contextActive(command.context)) return false
     runCommand(id)
     return true

@@ -76,6 +76,8 @@ const emit = defineEmits<{
   'add-node-at': [type: string, x: number, y: number]
 }>()
 
+// Cards are laid out from these constants and scale with the canvas pan and zoom,
+// so card text stays in px rather than following the interface scale.
 const CARD_WIDTH = 176
 const CARD_HEIGHT = 52
 const PORT_WIDTH = 9
@@ -711,10 +713,10 @@ onBeforeUnmount(() => {
               <component :is="defFor(node)?.glyph" :class="isLogoMark(node) ? 'size-full' : 'size-3.5'" />
             </span>
             <div class="min-w-0 flex-1">
-              <div class="truncate text-small font-semibold text-text" data-testid="flow-node-title">
+              <div class="flow-card-title truncate font-semibold text-text" data-testid="flow-node-title">
                 {{ titleFor(node) }}
               </div>
-              <div class="truncate font-mono text-micro text-text-3">{{ node.type }}</div>
+              <div class="flow-card-detail truncate font-mono text-text-3">{{ node.type }}</div>
             </div>
           </div>
 
@@ -754,7 +756,7 @@ onBeforeUnmount(() => {
             :style="{ background: statusDotColor(node) }"
           />
           <span
-            class="truncate font-mono text-micro"
+            class="flow-card-detail truncate font-mono"
             :style="{ color: statusTextColor(node) }"
             data-testid="flow-node-status"
             >{{ statusText(node) }}</span
@@ -776,6 +778,12 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.flow-card-title {
+  font-size: 12.5px;
+}
+.flow-card-detail {
+  font-size: 10.5px;
+}
 .port {
   border-radius: var(--radius-sm);
   background: var(--color-node-port);
@@ -801,7 +809,7 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   pointer-events: none;
   font-family: var(--font-mono);
-  font-size: var(--text-micro);
+  font-size: 10.5px;
   color: var(--color-accent);
   background: var(--color-pane);
   border: 1px solid var(--color-accent);

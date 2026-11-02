@@ -209,12 +209,12 @@ function cardStyle(id: string): Record<string, string> | undefined {
       >
         <span
           v-if="alignTo && store.active.value === comment.id"
-          class="absolute top-[22px] -left-4 h-px w-3 bg-accent/50"
+          class="absolute top-5.5 -left-4 h-px w-3 bg-accent/50"
           aria-hidden="true"
         />
         <div class="flex items-center gap-2">
           <span
-            class="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-accent font-mono text-micro font-semibold text-accent-contrast"
+            class="flex size-4.5 shrink-0 items-center justify-center rounded-full bg-accent font-mono text-micro font-semibold text-accent-contrast"
             >{{ index + 1 }}</span
           >
           <span class="text-small font-semibold text-text">You</span>
@@ -243,7 +243,7 @@ function cardStyle(id: string): Record<string, string> | undefined {
           <component
             :is="labelOf(labels, comment.text)!.icon"
             v-if="labelOf(labels, comment.text)"
-            class="mt-[3px] size-3.5 shrink-0 text-accent"
+            class="mt-0.75 size-3.5 shrink-0 text-accent"
             aria-hidden="true"
           />
           <span class="min-w-0">{{ comment.text }}</span>

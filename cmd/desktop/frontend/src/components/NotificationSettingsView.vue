@@ -97,7 +97,7 @@ onMounted(() => {
       </SettingsRow>
       <SettingsRow label="Where they appear" :hint="deliveryHint">
         <AppSelect
-          class="w-[210px]"
+          class="w-52.5"
           :model-value="delivery"
           :options="deliveryOptions"
           :disabled="!notificationsEnabled"

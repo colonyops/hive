@@ -1,11 +1,13 @@
 <script setup lang="ts">
-// Appearance: how the app's own chrome is drawn, everywhere. A terminal draws
-// itself from Settings ▸ Terminal and takes nothing from here (ADR settings-sections-name-the-surface-they-change).
+// Appearance: how the app's own chrome is drawn, plus the text size of every
+// surface in one place (ADR text-sizes-are-per-surface-percentages). A terminal's
+// other typography is on Settings ▸ Terminal (ADR settings-sections-name-the-surface-they-change).
 import { computed, onMounted } from 'vue'
 import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
+import SurfaceScaleRow from './settings/SurfaceScaleRow.vue'
 import ThemePicker from './settings/ThemePicker.vue'
 import { loadInstalledFonts, useInstalledFonts } from '../composables/useInstalledFonts'
 import {
@@ -19,8 +21,16 @@ import {
 } from '../composables/useAppFont'
 import type { Theme } from '@hive/ui/lib/themes'
 import { setTheme, useTheme } from '../composables/useTheme'
+import { surfaceLabels, surfaces, type Surface } from '../stores/useSurfaceScale'
 
 const { theme } = useTheme()
+
+const sizeHints: Record<Surface, string> = {
+  interface: 'Menus, sidebars, the feed, and settings.',
+  document: 'Drive documents, in the pane and the full page.',
+  code: 'Diffs in Changes and code fields.',
+  terminal: 'Code terminals, chats, and the pop-up panel. tmux re-fits the grid.',
+}
 const { sans, mono } = useAppFont()
 const { all: allFamilies, monospace: monoFamilies } = useInstalledFonts()
 
@@ -56,6 +66,21 @@ onMounted(loadInstalledFonts)
     </SettingsSection>
 
     <SettingsSection
+      title="Text size"
+      description="Each area scales on its own. The text size shortcuts change the one you last clicked."
+      boxed
+    >
+      <SurfaceScaleRow
+        v-for="surface in surfaces"
+        :key="surface"
+        :surface="surface"
+        :label="surfaceLabels[surface]"
+        :hint="sizeHints[surface]"
+        :testid="`settings-appearance-scale-${surface}`"
+      />
+    </SettingsSection>
+
+    <SettingsSection
       title="Typography"
       description="The faces the app's chrome is drawn with. Terminals keep their own — see Settings ▸ Terminal."
       boxed
@@ -66,7 +91,7 @@ onMounted(loadInstalledFonts)
         testid="settings-appearance-font-family"
       >
         <AppSelect
-          class="w-[220px]"
+          class="w-55"
           :model-value="sans"
           :options="sansOptions"
           searchable
@@ -82,7 +107,7 @@ onMounted(loadInstalledFonts)
         testid="settings-appearance-mono-font-family"
       >
         <AppSelect
-          class="w-[220px]"
+          class="w-55"
           :model-value="mono"
           :options="monoOptions"
           searchable

@@ -177,6 +177,15 @@ describe('useGlobalKeymap overlay gate', () => {
     expect(runCommand).not.toHaveBeenCalled()
   })
 
+  it('steps the text size while an overlay is open, as Changes is around its diffs', () => {
+    const close = openModal()
+
+    press('=', { metaKey: true })
+
+    expect(runCommand).toHaveBeenCalledWith('view.text-size-increase')
+    close()
+  })
+
   it('reopens the gate once the modal closes', () => {
     activeContexts.add('feed')
     const close = openModal()

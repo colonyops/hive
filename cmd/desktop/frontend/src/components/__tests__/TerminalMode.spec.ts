@@ -62,7 +62,7 @@ const mocks = vi.hoisted(() => ({
   createTerminalClient: vi.fn(),
   useTerminalWindows: vi.fn(),
   openBlank: vi.fn(),
-  SetTerminalFontSize: vi.fn(),
+  SetTerminalScale: vi.fn(),
   AppearanceSettings: vi.fn(),
   CodeViews: vi.fn(),
   SetCodeViews: vi.fn(),
@@ -110,7 +110,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   SetCodeViews: mocks.SetCodeViews,
   EditorSettings: mocks.EditorSettings,
   SetEditor: vi.fn(),
-  SetTerminalFontSize: mocks.SetTerminalFontSize,
+  SetTerminalScale: mocks.SetTerminalScale,
   SetTerminalShowWindows: vi.fn(),
   SetTerminalShowStatusBar: vi.fn(),
   SetTerminalSessionAge: vi.fn(),
@@ -397,7 +397,7 @@ describe('TerminalMode', () => {
     // about it see a bare terminal; a test that wants it turns it on.
     mocks.AppearanceSettings.mockResolvedValue({
       theme: '',
-      terminalFontSizePx: 13,
+      terminalScale: 100,
       terminalShowWindows: true,
       terminalShowStatusBar: false,
       terminalPoolSize: 3,
@@ -505,7 +505,7 @@ describe('TerminalMode', () => {
     ])
     mocks.AppearanceSettings.mockResolvedValue({
       theme: '',
-      terminalFontSizePx: 13,
+      terminalScale: 100,
       terminalShowWindows: true,
       terminalShowStatusBar: false,
       terminalPoolSize: 3,

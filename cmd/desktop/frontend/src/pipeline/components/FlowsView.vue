@@ -131,21 +131,21 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
         <div class="relative">
           <button
             type="button"
-            class="flex h-[30px] cursor-pointer items-center gap-1.5 rounded-lg border border-strong bg-chip px-2.5 text-small text-text hover:border-card"
+            class="flex h-7.5 cursor-pointer items-center gap-1.5 rounded-lg border border-strong bg-chip px-2.5 text-small text-text hover:border-card"
             data-testid="flow-selector-toggle"
             @click="flowMenuOpen = !flowMenuOpen"
           >
             <IconWorkflow class="size-3.5 shrink-0 text-accent" />
-            <span class="max-w-[180px] truncate">{{ activeFlow?.name || 'Select a flow' }}</span>
+            <span class="max-w-45 truncate">{{ activeFlow?.name || 'Select a flow' }}</span>
             <IconChevronDown class="size-3.5 shrink-0 text-text-3" />
           </button>
 
           <div
             v-if="flowMenuOpen"
-            class="absolute left-0 top-[calc(100%+6px)] z-20 w-[240px] overflow-hidden rounded-lg border border-strong bg-pane shadow-popover"
+            class="absolute left-0 top-[calc(100%+6px)] z-20 w-60 overflow-hidden rounded-lg border border-strong bg-pane shadow-popover"
             data-testid="flow-selector-menu"
           >
-            <div class="hive-scroll max-h-[240px] overflow-y-auto p-1">
+            <div class="hive-scroll max-h-60 overflow-y-auto p-1">
               <button
                 v-for="f in flows"
                 :key="f.id"
@@ -172,7 +172,7 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
         <div class="flex-1" />
 
         <div
-          class="flex h-[30px] items-center overflow-hidden rounded-lg border border-strong bg-chip font-mono text-small text-text-2"
+          class="flex h-7.5 items-center overflow-hidden rounded-lg border border-strong bg-chip font-mono text-small text-text-2"
         >
           <IconButton
             label="Zoom out"
@@ -193,7 +193,7 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
           />
         </div>
         <button
-          class="flex h-[30px] cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-strong bg-chip px-2.5 text-small text-text-2 hover:border-card hover:text-text"
+          class="flex h-7.5 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-strong bg-chip px-2.5 text-small text-text-2 hover:border-card hover:text-text"
           data-testid="canvas-fit"
           @click="canvasRef?.fit()"
         >
@@ -204,14 +204,14 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
 
         <BaseButton
           size="xs"
-          class="h-[30px]"
+          class="h-7.5"
           :busy="saving"
           :disabled="!dirty || !activeFlow"
           data-testid="deploy-button"
           @click="deploy"
         >
           <template #icon>
-            <span v-if="dirty" class="size-[7px] rounded-full bg-accent-contrast/50" data-testid="deploy-dirty-dot" />
+            <span v-if="dirty" class="size-1.75 rounded-full bg-accent-contrast/50" data-testid="deploy-dirty-dot" />
           </template>
           {{ saving ? 'Deploying…' : 'Deploy' }}
         </BaseButton>
@@ -241,7 +241,7 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
       </div>
 
       <div
-        class="flex h-[30px] shrink-0 items-center gap-3.5 border-t border-row bg-canvas-toolbar px-3.5 font-mono text-micro text-text-3"
+        class="flex h-7.5 shrink-0 items-center gap-3.5 border-t border-row bg-canvas-toolbar px-3.5 font-mono text-micro text-text-3"
         data-testid="canvas-status-strip"
       >
         <span v-if="dirty" class="flex items-center gap-1.5" data-testid="flow-dirty-indicator">
@@ -249,10 +249,10 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
           <span class="text-text-2">{{ filePath }}</span>
         </span>
         <span v-else-if="activeFlow" data-testid="flow-saved-indicator">{{ filePath }}</span>
-        <span v-if="error" class="max-w-[240px] truncate text-severity-error" data-testid="flow-editor-error">{{
+        <span v-if="error" class="max-w-60 truncate text-severity-error" data-testid="flow-editor-error">{{
           error
         }}</span>
-        <span v-if="flowLoadError" class="max-w-[200px] truncate text-severity-error" data-testid="flow-load-error">{{
+        <span v-if="flowLoadError" class="max-w-50 truncate text-severity-error" data-testid="flow-load-error">{{
           flowLoadError
         }}</span>
 

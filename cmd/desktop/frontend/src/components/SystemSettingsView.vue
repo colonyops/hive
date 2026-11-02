@@ -63,7 +63,7 @@ onMounted(() => {
       @click="reportProblem"
     >
       <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-tint text-accent">
-        <IconBug class="size-[18px]" />
+        <IconBug class="size-4.5" />
       </span>
       <div class="min-w-0 flex-1">
         <div class="text-body font-semibold text-text">Report a problem</div>
@@ -81,7 +81,7 @@ onMounted(() => {
       @click="openBundleDialog"
     >
       <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-app text-text-2">
-        <IconLifeBuoy class="size-[18px]" />
+        <IconLifeBuoy class="size-4.5" />
       </span>
       <div class="min-w-0 flex-1">
         <div class="text-body font-semibold text-text">Save a diagnostic bundle</div>

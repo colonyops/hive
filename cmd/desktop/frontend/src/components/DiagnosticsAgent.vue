@@ -140,6 +140,7 @@ onBeforeUnmount(() => {
       ref="host"
       class="min-h-0 flex-1 bg-app p-1.5"
       data-terminal-input-scope
+      data-scale-surface="terminal"
       data-testid="diagnostics-agent-terminal"
       @click="pane.term.value?.focus()"
     />

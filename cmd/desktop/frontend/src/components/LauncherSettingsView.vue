@@ -92,7 +92,7 @@ function requestDelete(launcher: Launcher): void {
         @delete="requestDelete(launcher)"
       >
         <template #badges>
-          <BaseBadge class="border border-row !bg-app px-[7px] py-0.5 font-mono text-caption">{{
+          <BaseBadge class="border border-row !bg-app px-1.75 py-0.5 font-mono text-caption">{{
             launcher.command
           }}</BaseBadge>
           <BaseBadge v-if="launcher.cwd" class="px-2 py-0.5 font-mono text-caption !text-text-2">{{

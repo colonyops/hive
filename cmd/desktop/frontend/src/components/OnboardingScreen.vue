@@ -108,10 +108,10 @@ function submit() {
 <template>
   <div class="flex min-h-0 flex-1" data-testid="onboarding">
     <!-- Left: brand panel with onboarding steps -->
-    <aside class="flex w-[470px] shrink-0 flex-col border-r border-border bg-raised px-11 py-12">
+    <aside class="flex w-117.5 shrink-0 flex-col border-r border-border bg-raised px-11 py-12">
       <div class="mb-10 flex items-center gap-3">
         <div
-          class="flex size-[38px] items-center justify-center rounded-xl bg-accent-tint font-mono text-heading font-bold text-accent"
+          class="flex size-9.5 items-center justify-center rounded-xl bg-accent-tint font-mono text-heading font-bold text-accent"
         >
           h
         </div>
@@ -120,7 +120,7 @@ function submit() {
       <h1 class="mb-3 text-display font-semibold leading-[1.25] tracking-[-.02em]">
         Triage GitHub and<br />spin up sessions.
       </h1>
-      <p class="mb-11 max-w-[330px] text-sm leading-relaxed text-text-3">
+      <p class="mb-11 max-w-82.5 text-sm leading-relaxed text-text-3">
         {{
           card === 'hive'
             ? 'Point Hive at your agent and your repositories, then connect the account it triages.'
@@ -138,7 +138,7 @@ function submit() {
         >
           <span
             aria-hidden="true"
-            class="flex size-[30px] shrink-0 items-center justify-center rounded-full text-body font-semibold"
+            class="flex size-7.5 shrink-0 items-center justify-center rounded-full text-body font-semibold"
             :class="
               step.step === activeStep
                 ? 'bg-accent text-accent-contrast'
@@ -160,15 +160,15 @@ function submit() {
     <!-- my-auto lets an over-height card scroll from its top; items-center
          would clip both ends. -->
     <section class="flex min-h-0 flex-1 justify-center overflow-y-auto bg-pane p-10">
-      <div class="my-auto" :class="card === 'hive' ? 'w-[560px] max-w-full' : 'w-[420px] text-center'">
+      <div class="my-auto" :class="card === 'hive' ? 'w-140 max-w-full' : 'w-105 text-center'">
         <div
-          class="mx-auto mb-5 flex size-[60px] items-center justify-center rounded-2xl border border-strong bg-chip text-text"
+          class="mx-auto mb-5 flex size-15 items-center justify-center rounded-2xl border border-strong bg-chip text-text"
         >
-          <IconAlertTriangle v-if="confirmingSkip" class="size-[30px]" />
-          <IconFolderGit2 v-else-if="card === 'hive'" class="size-[30px]" />
-          <IconBell v-else-if="card === 'permissions'" class="size-[30px]" />
-          <IconBot v-else-if="card === 'agent'" class="size-[30px]" />
-          <IconGithub v-else class="size-[30px]" />
+          <IconAlertTriangle v-if="confirmingSkip" class="size-7.5" />
+          <IconFolderGit2 v-else-if="card === 'hive'" class="size-7.5" />
+          <IconBell v-else-if="card === 'permissions'" class="size-7.5" />
+          <IconBot v-else-if="card === 'agent'" class="size-7.5" />
+          <IconGithub v-else class="size-7.5" />
         </div>
         <h2 class="mb-2 text-xl font-semibold tracking-[-.01em]" :class="card === 'hive' ? 'text-center' : ''">
           {{ heading }}
@@ -356,7 +356,7 @@ function submit() {
             Open the link and enter this code to authorize Hive on your account.
           </p>
           <div
-            class="mb-2.5 rounded-xl border border-strong bg-app px-4 py-[18px] font-mono text-display-lg font-semibold tracking-[.28em] text-accent"
+            class="mb-2.5 rounded-xl border border-strong bg-app px-4 py-4.5 font-mono text-display-lg font-semibold tracking-[.28em] text-accent"
             data-testid="onboarding-user-code"
           >
             {{ deviceFlow?.userCode }}

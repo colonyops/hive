@@ -24,7 +24,7 @@ defineProps<{ rail: SelectionRail }>()
   left: 0;
   top: 0;
   z-index: 1;
-  width: 3px;
+  width: 0.1875rem;
   background: var(--color-accent);
   opacity: 0;
   pointer-events: none;

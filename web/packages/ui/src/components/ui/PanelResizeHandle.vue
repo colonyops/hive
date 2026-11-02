@@ -76,21 +76,21 @@ function onKeydown(e: KeyboardEvent): void {
 .panel-resize-handle-right {
   top: 0;
   bottom: 0;
-  width: 6px;
+  width: 0.375rem;
   cursor: col-resize;
 }
 .panel-resize-handle-left {
-  left: -3px;
+  left: -0.1875rem;
 }
 .panel-resize-handle-right {
-  right: -3px;
+  right: -0.1875rem;
 }
 .panel-resize-handle-left::after,
 .panel-resize-handle-right::after {
   top: 50%;
   left: 50%;
-  width: 3px;
-  height: 36px;
+  width: 0.1875rem;
+  height: 2.25rem;
   transform: translate(-50%, -50%);
 }
 
@@ -99,21 +99,21 @@ function onKeydown(e: KeyboardEvent): void {
 .panel-resize-handle-bottom {
   left: 0;
   right: 0;
-  height: 6px;
+  height: 0.375rem;
   cursor: row-resize;
 }
 .panel-resize-handle-top {
-  top: -3px;
+  top: -0.1875rem;
 }
 .panel-resize-handle-bottom {
-  bottom: -3px;
+  bottom: -0.1875rem;
 }
 .panel-resize-handle-top::after,
 .panel-resize-handle-bottom::after {
   top: 50%;
   left: 50%;
-  width: 36px;
-  height: 3px;
+  width: 2.25rem;
+  height: 0.1875rem;
   transform: translate(-50%, -50%);
 }
 

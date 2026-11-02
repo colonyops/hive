@@ -316,7 +316,7 @@ onMounted(async () => {
            sheet's bottom edge, the way InlineConfirm is designed to sit. -->
       <InlineConfirm
         v-if="schedules.draft?.removing"
-        class="-mx-[18px] -my-[13px]"
+        class="-mx-4.5 -my-3.25"
         title="Remove this schedule?"
         description="It leaves agent-workspace.yaml when you save the workspace."
         confirm-label="Remove"
@@ -355,7 +355,7 @@ onMounted(async () => {
       </div>
       <InlineConfirm
         v-else-if="confirming"
-        class="-mx-[18px] -my-[13px]"
+        class="-mx-4.5 -my-3.25"
         title="Delete this workspace?"
         :description="`Every live chat in ${workspace!.name || workspace!.dir} closes, its chat history is removed, and ${deletedPath} is deleted from disk with everything in it — AGENTS.md, docs, canvases, and anything else written there. This cannot be undone.`"
         confirm-label="Delete"
@@ -367,7 +367,7 @@ onMounted(async () => {
       />
       <InlineConfirm
         v-else-if="discarding"
-        class="-mx-[18px] -my-[13px]"
+        class="-mx-4.5 -my-3.25"
         title="Discard your changes?"
         description="Nothing here is written until you save. Closing now leaves agent-workspace.yaml exactly as it was."
         confirm-label="Discard"

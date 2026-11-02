@@ -349,7 +349,7 @@ onClickOutside(
           v-if="visible.length"
           :id="listboxId"
           ref="list"
-          class="hive-scroll flex min-h-0 flex-col gap-0.5 overflow-y-auto p-[5px]"
+          class="hive-scroll flex min-h-0 flex-col gap-0.5 overflow-y-auto p-1.25"
           role="listbox"
           :aria-label="ariaLabel"
         >
@@ -361,7 +361,7 @@ onClickOutside(
           >
             <p
               v-if="startsGroup(index)"
-              class="px-[9px] pb-1 pt-2 text-micro font-medium uppercase tracking-wide text-text-4"
+              class="px-2.25 pb-1 pt-2 text-micro font-medium uppercase tracking-wide text-text-4"
               :data-testid="testid ? `${testid}-group-${option.group}` : undefined"
               aria-hidden="true"
             >
@@ -369,7 +369,7 @@ onClickOutside(
             </p>
             <button
               type="button"
-              class="flex w-full gap-2 rounded-md px-[9px] py-[7px] text-left disabled:cursor-not-allowed disabled:opacity-40"
+              class="flex w-full gap-2 rounded-md px-2.25 py-1.75 text-left disabled:cursor-not-allowed disabled:opacity-40"
               :class="[optionClass(option, index), option.hint ? 'items-start' : 'items-center']"
               :data-testid="testid ? `${testid}-option-${option.value}` : undefined"
               :disabled="option.disabled"

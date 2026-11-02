@@ -33,7 +33,7 @@ async function cancel(commandId: number): Promise<void> {
 
 <template>
   <section
-    class="absolute right-0 top-[calc(100%+6px)] z-50 w-[340px] overflow-hidden rounded-lg border border-border bg-raised shadow-xl"
+    class="absolute right-0 top-[calc(100%+6px)] z-50 w-85 overflow-hidden rounded-lg border border-border bg-raised shadow-xl"
     style="--wails-draggable: no-drag"
     role="dialog"
     aria-label="Action jobs"

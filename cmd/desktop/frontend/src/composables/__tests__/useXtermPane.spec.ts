@@ -53,9 +53,9 @@ vi.mock('../../lib/terminalFaces', async (importOriginal) => ({
   loadTerminalFaces: mocks.loadTerminalFaces,
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
-  AppearanceSettings: vi.fn().mockResolvedValue({ theme: '', terminalFontSizePx: 13, terminalFontFamily: '' }),
+  AppearanceSettings: vi.fn().mockResolvedValue({ theme: '', terminalScale: 100, terminalFontFamily: '' }),
   SetTheme: vi.fn(),
-  SetTerminalFontSize: vi.fn(),
+  SetTerminalScale: vi.fn(),
   SetTerminalFontFamily: vi.fn(),
   SetTerminalFontWeights: vi.fn(),
   SetTerminalLineHeight: vi.fn(),

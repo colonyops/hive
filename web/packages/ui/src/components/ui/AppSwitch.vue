@@ -16,8 +16,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const dims = computed(() =>
   props.size === 'sm'
-    ? { track: 'h-[14px] w-[24px]', knob: 'top-[2px] size-[10px]', on: 'left-[12px]', off: 'left-[2px]' }
-    : { track: 'h-[17px] w-[30px]', knob: 'top-[3px] size-[11px]', on: 'left-[16px]', off: 'left-[3px]' },
+    ? { track: 'h-3.5 w-6', knob: 'top-0.5 size-2.5', on: 'left-3', off: 'left-0.5' }
+    : { track: 'h-4.25 w-7.5', knob: 'top-0.75 size-2.75', on: 'left-4', off: 'left-0.75' },
 )
 </script>
 

@@ -33,7 +33,7 @@ const drag = useDragReorder<TaskItem, TaskStatus>({
     <section
       v-for="column in columns"
       :key="column.status"
-      class="flex min-h-0 min-w-[280px] max-w-[400px] flex-1 flex-col rounded-xl border transition-colors"
+      class="flex min-h-0 min-w-70 max-w-100 flex-1 flex-col rounded-xl border transition-colors"
       :class="
         drag.dragging.value && drag.target.value === column.status
           ? 'border-accent bg-accent-tint'

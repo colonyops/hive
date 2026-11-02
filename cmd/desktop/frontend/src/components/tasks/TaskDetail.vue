@@ -184,7 +184,7 @@ watch(selectedId, () => {
         data-testid="task-detail-copy-id"
         @click="copyId"
       >
-        <span class="max-w-[110px] truncate">{{ idCopied ? 'Copied' : detail.id }}</span>
+        <span class="max-w-27.5 truncate">{{ idCopied ? 'Copied' : detail.id }}</span>
         <component :is="idCopied ? IconCheck : IconCopy" class="size-3 shrink-0" />
       </button>
       <IconButton
@@ -223,7 +223,7 @@ watch(selectedId, () => {
 
         <div>
           <div class="flex flex-wrap items-center gap-1.5" data-testid="task-detail-properties">
-            <div class="w-[136px] rounded-md border border-card">
+            <div class="w-34 rounded-md border border-card">
               <AppSelect
                 :model-value="detail.status"
                 :options="STATUS_OPTIONS"
@@ -236,7 +236,7 @@ watch(selectedId, () => {
               />
             </div>
             <span
-              class="inline-flex h-[31px] items-center gap-1.5 rounded-md border border-card px-2.5 text-caption text-text-2"
+              class="inline-flex h-7.75 items-center gap-1.5 rounded-md border border-card px-2.5 text-caption text-text-2"
               data-testid="task-detail-type"
             >
               <component
@@ -248,7 +248,7 @@ watch(selectedId, () => {
             </span>
             <span
               v-if="detail.sessionId"
-              class="inline-flex h-[31px] min-w-0 max-w-[220px] items-center gap-1.5 rounded-md border border-card px-2.5 text-caption text-text-2"
+              class="inline-flex h-7.75 min-w-0 max-w-55 items-center gap-1.5 rounded-md border border-card px-2.5 text-caption text-text-2"
               :title="`Session ${sessionLabel}`"
               data-testid="task-detail-session"
             >
@@ -331,7 +331,7 @@ watch(selectedId, () => {
         <section data-testid="task-detail-description">
           <h2 class="mb-2 text-small font-medium text-text-3">Description</h2>
           <template v-if="bodyHtml">
-            <div class="relative" :class="descriptionClamped ? 'max-h-[280px] overflow-hidden' : ''">
+            <div class="relative" :class="descriptionClamped ? 'max-h-70 overflow-hidden' : ''">
               <!-- eslint-disable vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->
               <div
                 ref="descriptionEl"
@@ -371,7 +371,7 @@ watch(selectedId, () => {
               data-testid="task-comment"
             >
               <span
-                class="absolute -left-[4.5px] top-1.5 size-2 rounded-full"
+                class="absolute -left-[0.28125rem] top-1.5 size-2 rounded-full"
                 :class="isCheckpoint(comment) ? 'bg-accent' : 'bg-strong'"
                 aria-hidden="true"
               />

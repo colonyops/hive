@@ -164,7 +164,7 @@ onUnmounted(commitCapture)
           placeholder="Filter shortcuts…"
           aria-label="Filter shortcuts"
           testid="keybinding-filter"
-          class="w-[220px]"
+          class="w-55"
         />
       </template>
     </SettingsHeading>
@@ -261,16 +261,16 @@ onUnmounted(commitCapture)
 .combo {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 0.1875rem;
 }
 /* A readable key cap: bright, mono, with a subtle physical-key bottom edge. */
 .keycap {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 26px;
-  height: 25px;
-  padding: 0 9px;
+  min-width: 1.625rem;
+  height: 1.5625rem;
+  padding: 0 0.5625rem;
   border: 1px solid var(--color-strong);
   border-bottom-width: 2px;
   border-radius: var(--radius-md);
@@ -296,9 +296,9 @@ onUnmounted(commitCapture)
 .capture-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-height: 25px;
-  padding: 2px 10px 2px 6px;
+  gap: 0.3125rem;
+  min-height: 1.5625rem;
+  padding: 0.125rem 0.625rem 0.125rem 0.375rem;
   cursor: pointer;
   border: 1px dashed var(--color-accent);
   border-radius: var(--radius-md);

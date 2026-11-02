@@ -122,7 +122,7 @@ const drag = useDragReorder<string>({
     <template v-if="confirming" #footer>
       <!-- The strip escapes the footer's own padding so it reads as the sheet's bottom edge. -->
       <InlineConfirm
-        class="-mx-[18px] -my-[13px]"
+        class="-mx-4.5 -my-3.25"
         :title="`Delete “${confirming.name}”?`"
         description="It leaves settings.yaml. Sessions are not touched."
         testid="code-views-drawer-confirm"
@@ -142,9 +142,9 @@ const drag = useDragReorder<string>({
 .view-row::after {
   content: '';
   position: absolute;
-  left: 8px;
-  right: 8px;
-  height: 2px;
+  left: 0.5rem;
+  right: 0.5rem;
+  height: 0.125rem;
   border-radius: var(--radius-xs);
   background: var(--color-accent);
   opacity: 0;

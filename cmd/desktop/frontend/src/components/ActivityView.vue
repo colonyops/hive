@@ -139,7 +139,7 @@ onMounted(() => {
         placeholder="Filter activity…"
         aria-label="Filter activity"
         testid="activity-search"
-        class="w-[230px]"
+        class="w-57.5"
       />
     </div>
 
@@ -169,7 +169,7 @@ onMounted(() => {
       />
 
       <template v-for="group in ledger" v-else :key="group.key">
-        <div class="sticky -top-px z-[1] flex items-center gap-3 border-b border-row bg-app px-5 py-2 pt-[9px]">
+        <div class="sticky -top-px z-[1] flex items-center gap-3 border-b border-row bg-app px-5 py-2 pt-2.25">
           <span class="font-mono text-micro uppercase tracking-[.14em] text-text-2">{{ group.label }}</span>
           <span v-if="group.isRelative" class="font-mono text-micro uppercase tracking-[.06em] text-text-4">{{
             group.dateLabel
@@ -187,10 +187,8 @@ onMounted(() => {
             :class="style.rail || 'hover:bg-row-hover'"
             data-testid="activity-row"
           >
-            <span class="w-[72px] shrink-0 pt-px font-mono text-caption text-text-3">{{
-              timeLabel(event.createdAt)
-            }}</span>
-            <span class="flex w-4 shrink-0 justify-center pt-[7px]"
+            <span class="w-18 shrink-0 pt-px font-mono text-caption text-text-3">{{ timeLabel(event.createdAt) }}</span>
+            <span class="flex w-4 shrink-0 justify-center pt-1.75"
               ><span class="size-1.5 rounded-full" :class="style.dot"
             /></span>
             <div class="min-w-0 flex-1 pl-3">
@@ -241,7 +239,7 @@ onMounted(() => {
     <!-- status strip -->
     <div
       v-if="events.length && !error"
-      class="flex h-[30px] shrink-0 items-center gap-3.5 border-t border-row bg-sidebar px-5 font-mono text-caption text-text-3"
+      class="flex h-7.5 shrink-0 items-center gap-3.5 border-t border-row bg-sidebar px-5 font-mono text-caption text-text-3"
       data-testid="activity-status"
     >
       <span class="flex items-center gap-1.5"

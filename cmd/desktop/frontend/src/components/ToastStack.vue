@@ -21,11 +21,7 @@ const overflowCount = computed(() => Math.max(0, props.toasts.length - MAX_VISIB
        to body after this stack in DOM order): a toast is ephemeral feedback
        and must stay visible when fired from inside an overlay, e.g. the Tasks
        overlay's yank. -->
-  <div
-    v-if="toasts.length"
-    class="fixed bottom-[22px] right-[22px] z-50 flex w-[376px] flex-col gap-3"
-    data-testid="toast-stack"
-  >
+  <div v-if="toasts.length" class="fixed bottom-5.5 right-5.5 z-50 flex w-94 flex-col gap-3" data-testid="toast-stack">
     <TransitionGroup name="toast">
       <ToastCard v-for="toast in visible" :key="toast.id" :toast="toast" @dismiss="emit('dismiss', toast.id)" />
     </TransitionGroup>

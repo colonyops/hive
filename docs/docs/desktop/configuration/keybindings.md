@@ -30,8 +30,8 @@ The command palette at <kbd>⌘K</kbd> can run commands with or without a shortc
 | Move through feed items | <kbd>j</kbd>/<kbd>k</kbd> |
 | Open an item | <kbd>o</kbd> or <kbd>Enter</kbd> |
 | Archive an item | <kbd>e</kbd> |
-| Increase or decrease terminal text size | <kbd>⌘+</kbd>/<kbd>⌘-</kbd> (Windows/Linux, from a terminal: <kbd>Ctrl+Shift+=</kbd>/<kbd>Ctrl+Shift+-</kbd>) |
-| Reset terminal text size | <kbd>⌘0</kbd> (Windows/Linux, from a terminal: <kbd>Ctrl+Shift+0</kbd>) |
+| Increase or decrease text size of the area you last clicked | <kbd>⌘+</kbd>/<kbd>⌘-</kbd> (Windows/Linux: <kbd>Ctrl+=</kbd>/<kbd>Ctrl+-</kbd>; from a terminal: <kbd>Ctrl+Shift+=</kbd>/<kbd>Ctrl+Shift+-</kbd>) |
+| Reset text size of the area you last clicked | <kbd>⌘0</kbd> (Windows/Linux: <kbd>Ctrl+0</kbd>; from a terminal: <kbd>Ctrl+Shift+0</kbd>) |
 
 Use <kbd>?</kbd> for the full list because it always matches the installed version.
 
@@ -61,7 +61,7 @@ On Linux, a shortcut whose first key already uses Shift, such as `mod+shift+b`, 
 
 **Find** (`terminal.find`) opens the search bar over a Code terminal. Over the session list and other views, <kbd>⌘F</kbd> searches the current view instead.
 
-**Text size** (`terminal.text-size-increase`, `-decrease`, `-reset`) steps the terminal font by 2px a press, between 8px and 64px, wherever a terminal is on screen (a Code session, Chats, or the pop-up panel) and saves the result to the same setting. On macOS these chords no longer zoom the window, and **Zoom In**, **Zoom Out** and **Actual Size** are gone from the **View** menu, because window zoom scales the window instead of reflowing the terminal grid.
+**Text size** (`view.text-size-increase`, `-decrease`, `-reset`) steps the area you last clicked or focused through 75, 80, 90, 100, 110, 120, 130, 150, 175, and 200%, within that area's range: a terminal, a Drive document, a diff or code field, or otherwise the interface. `interface.`, `document.`, `code.`, and `terminal.text-size-*` act on one area wherever you are and have no default key. The sizes are in **Settings ▸ Appearance ▸ Text size**. On macOS these chords do not zoom the window, and **Zoom In**, **Zoom Out** and **Actual Size** are gone from the **View** menu, because window zoom scales the window instead of reflowing the terminal grid.
 
 **Toggle sidebar** (`terminal.toggle-sidebar`) shows or hides the sidebar in Inbox, Code, Chats, and the Drive page's folder tree. It uses <kbd>⌘B</kbd> on macOS and <kbd>Ctrl+B</kbd> on Windows and Linux, including inside a focused terminal. On macOS, <kbd>Ctrl+B</kbd> still reaches the terminal. On Windows and Linux, rebind this command in **Settings ▸ Keyboard** if you need <kbd>Ctrl+B</kbd> for tmux.
 

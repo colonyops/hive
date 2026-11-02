@@ -21,7 +21,7 @@ const emit = defineEmits<{ edit: [event: MouseEvent]; delete: [] }>()
     <template #icon>
       <slot name="leading" />
       <BaseIconBadge :size="38" rounded="rounded-xl" class="border border-accent/35 bg-accent-tint text-accent">
-        <component :is="icon" class="size-[17px]" />
+        <component :is="icon" class="size-4.25" />
       </BaseIconBadge>
     </template>
     <div class="min-w-0 flex-1">
@@ -55,19 +55,19 @@ const emit = defineEmits<{ edit: [event: MouseEvent]; delete: [] }>()
 .config-item::after {
   content: '';
   position: absolute;
-  left: 8px;
-  right: 8px;
-  height: 2px;
+  left: 0.5rem;
+  right: 0.5rem;
+  height: 0.125rem;
   border-radius: var(--radius-xs);
   background: var(--color-accent);
   opacity: 0;
   pointer-events: none;
 }
 .config-item::before {
-  top: -7px;
+  top: -0.4375rem;
 }
 .config-item::after {
-  bottom: -7px;
+  bottom: -0.4375rem;
 }
 .config-item.drop-before::before,
 .config-item.drop-after::after {

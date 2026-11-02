@@ -345,27 +345,42 @@ func TestSettings_DropsDevelopmentInstanceID(t *testing.T) {
 	assert.Contains(t, development, "github", "an unrelated development value is untouched")
 }
 
-func TestSettings_TurnsTheTerminalFontSizeIntoPixels(t *testing.T) {
+func TestSettings_TurnsTextSizesIntoScales(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name  string
-		value string
-		want  any
+		name         string
+		from         string
+		terminal     string
+		canvas       string
+		wantTerminal any
+		wantDocument any
 	}{
-		{"a name", "large", 14},
-		{"the largest name", "xxl", 18},
-		{"a quoted number", `"15"`, 15},
-		{"an integer", "20", 20},
-		{"empty", `""`, nil},
-		{"unreadable", "enormous", nil},
+		{name: "a v5 terminal name", from: "5", terminal: "large", wantTerminal: 108},
+		{name: "a v5 quoted number", from: "5", terminal: `"15"`, wantTerminal: 115},
+		{name: "a v5 unreadable name", from: "5", terminal: "enormous"},
+		{name: "the default size stays explicit", from: "6", terminal: "13", wantTerminal: 100},
+		{name: "the smallest size", from: "6", terminal: "8", wantTerminal: 62},
+		{name: "the largest size", from: "6", terminal: "64", wantTerminal: 492},
+		{name: "zero", from: "6", terminal: "0"},
+		{name: "small preset", from: "6", canvas: "small", wantDocument: 89},
+		{name: "medium preset is the default", from: "6", canvas: "medium"},
+		{name: "large preset", from: "6", canvas: "large", wantDocument: 115},
+		{name: "xl preset", from: "6", canvas: "xl", wantDocument: 133},
+		{name: "unknown preset", from: "6", canvas: "huge"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			raw := []byte("version: 5\nappearance:\n  theme: midnight\n  terminal_font_size: " + tc.value + "\n")
-			migrated, changed, err := SettingsSet.Apply(raw)
+			raw := "version: " + tc.from + "\nappearance:\n  theme: midnight\n"
+			if tc.terminal != "" {
+				raw += "  terminal_font_size: " + tc.terminal + "\n"
+			}
+			if tc.canvas != "" {
+				raw += "  canvas_font_size: " + tc.canvas + "\n"
+			}
+			migrated, changed, err := SettingsSet.Apply([]byte(raw))
 			require.NoError(t, err)
 			require.True(t, changed)
 
@@ -373,12 +388,11 @@ func TestSettings_TurnsTheTerminalFontSizeIntoPixels(t *testing.T) {
 			assert.Equal(t, SettingsSet.Current, doc["version"])
 			appearance, ok := doc["appearance"].(map[string]any)
 			require.True(t, ok)
-			if tc.want == nil {
-				assert.NotContains(t, appearance, "terminal_font_size")
-			} else {
-				assert.Equal(t, tc.want, appearance["terminal_font_size"])
-			}
-			assert.Equal(t, "midnight", appearance["theme"], "an unrelated appearance value is untouched")
+			assert.Equal(t, "midnight", appearance["theme"])
+			assert.NotContains(t, appearance, "terminal_font_size")
+			assert.NotContains(t, appearance, "canvas_font_size")
+			assert.Equal(t, tc.wantTerminal, appearance["terminal_scale"])
+			assert.Equal(t, tc.wantDocument, appearance["document_scale"])
 		})
 	}
 }

@@ -17,15 +17,9 @@ import DiffFileHeader from './DiffFileHeader.vue'
 import { usePerf } from '../../composables/usePerf'
 import { useScrollGestureSpan } from '../../composables/useScrollGestureSpan'
 import type { DiffEntry } from '../../composables/useFileDiffs'
+import { useSurfaceScale } from '../../stores/useSurfaceScale'
 import { diffThemeName, diffWorkerPool } from '../../lib/diffHighlight'
-import {
-  DIFF_METRICS,
-  diffHasText,
-  emptyFileDiff,
-  hunkOffsets,
-  parseFileDiff,
-  type DiffMode,
-} from '../../lib/diffItems'
+import { diffMetrics, diffHasText, emptyFileDiff, hunkOffsets, parseFileDiff, type DiffMode } from '../../lib/diffItems'
 import type { DiffSearchMatch, DiffSide } from '../../lib/diffReview'
 import { clearSearchPaint, paintSearch, SEARCH_HIGHLIGHT_CSS } from '../../lib/diffSearchPaint'
 import { diffTextSelection, type DiffLineSelection } from '../../lib/diffSelection'
@@ -61,9 +55,9 @@ const emit = defineEmits<{
 
 // The separator's height is the only row the library's own stylesheet sizes
 // past what its variables reach. No background of its own: the app's shows through.
-const UNSAFE_CSS = `
+const unsafeCss = (separatorPx: number): string => `
   :host { --diffs-bg: var(--color-app); }
-  [data-separator=metadata] { height: ${DIFF_METRICS.separatorPx}px; }
+  [data-separator=metadata] { height: ${separatorPx}px; }
   ${SEARCH_HIGHLIGHT_CSS}
 `
 
@@ -187,8 +181,15 @@ function queuePaint(): void {
   })
 }
 
+const { scales } = useSurfaceScale()
+const metrics = computed(() => diffMetrics(scales.code.value, scales.interface.value))
+const rowStyle = computed(() => ({
+  '--diffs-font-size': `${metrics.value.fontPx}px`,
+  '--diffs-line-height': `${metrics.value.rowPx}px`,
+}))
+
 function viewerOptions(): CodeViewOptions<CommentAnnotation, undefined> {
-  const { headerPx, rowPx, separatorPx } = DIFF_METRICS
+  const { headerPx, rowPx, separatorPx } = metrics.value
   return {
     diffStyle: props.mode,
     // A wrapped line would break the fixed row height everything is laid out from.
@@ -199,7 +200,7 @@ function viewerOptions(): CodeViewOptions<CommentAnnotation, undefined> {
     stickyHeaders: false,
     layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
     itemMetrics: { lineHeight: rowPx, diffHeaderHeight: headerPx, hunkSeparatorHeight: separatorPx, spacing: 0 },
-    unsafeCSS: UNSAFE_CSS,
+    unsafeCSS: unsafeCss(separatorPx),
     enableLineSelection: true,
     enableGutterUtility: true,
     lineHoverHighlight: 'number',
@@ -299,7 +300,7 @@ function updatePinned(): void {
   pinnedPath.value = file?.path ?? null
   const next = file && shown.value[shown.value.indexOf(file) + 1]
   const nextTop = next && viewer?.getTopForItem(next.path)
-  pinnedPush.value = nextTop === undefined ? 0 : Math.min(0, nextTop - scrollTop - DIFF_METRICS.headerPx)
+  pinnedPush.value = nextTop === undefined ? 0 : Math.min(0, nextTop - scrollTop - metrics.value.headerPx)
 }
 
 function focus(): void {
@@ -319,7 +320,7 @@ function stepHunk(delta: 1 | -1): boolean {
   const { mode } = props
   const files = shown.value
   // Under the pinned header, where a hunk lands.
-  const line = scrollTop + DIFF_METRICS.headerPx
+  const line = scrollTop + metrics.value.headerPx
   const from = files.findIndex((file) => file.path === fileAt(line)?.path)
   for (let index = from; index >= 0 && index < files.length; index += delta) {
     const file = files[index]
@@ -327,13 +328,13 @@ function stepHunk(delta: 1 | -1): boolean {
     const top = viewer.getTopForItem(file.path)
     const hunks = built.get(file.path)?.item.fileDiff.hunks
     if (top === undefined || !hunks) continue
-    const tops = hunkOffsets(hunks, mode).map((offset) => top + offset)
+    const tops = hunkOffsets(hunks, mode, metrics.value).map((offset) => top + offset)
     const target = delta > 0 ? tops.find((at) => at > line + 2) : tops.findLast((at) => at < line - 2)
     if (target !== undefined) {
-      viewer.scrollTo({ type: 'position', position: target - DIFF_METRICS.headerPx })
+      viewer.scrollTo({ type: 'position', position: target - metrics.value.headerPx })
       // The scroll is reported a frame later, and a key pressed before then must
       // step on from here rather than to this hunk again.
-      scrollTop = target - DIFF_METRICS.headerPx
+      scrollTop = target - metrics.value.headerPx
       return true
     }
   }
@@ -369,7 +370,7 @@ onBeforeUnmount(() => {
 watch(() => [props.files, props.entries, props.openPaths, props.comments] as const, syncItems, { flush: 'post' })
 watch(() => [props.searchQuery, props.activeMatch] as const, queuePaint)
 watch(
-  () => props.mode,
+  () => [props.mode, metrics.value] as const,
   () => viewer?.setOptions(viewerOptions()),
   { flush: 'post' },
 )
@@ -391,6 +392,8 @@ watch(
     <div
       ref="root"
       class="diff-stream hive-scroll relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-app outline-none"
+      :style="rowStyle"
+      data-scale-surface="code"
       tabindex="0"
       aria-label="Diffs"
       data-testid="changes-stream"
@@ -440,8 +443,6 @@ watch(
 .diff-stream {
   --diffs-font-family: var(--font-mono);
   --diffs-header-font-family: var(--font-mono);
-  --diffs-font-size: 13px;
-  --diffs-line-height: 20px;
   --diffs-font-features: 'liga' 0, 'calt' 0;
   --diffs-gap-block: 0px;
   --diffs-addition-color-override: var(--color-severity-success);

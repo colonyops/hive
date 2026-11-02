@@ -2,7 +2,6 @@ import { computed } from 'vue'
 import {
   AppearanceSettings as GetAppearanceSettings,
   SetTerminalFontFamily as PersistTerminalFontFamily,
-  SetTerminalFontSize as PersistTerminalFontSize,
   SetTerminalFontWeights as PersistTerminalFontWeights,
   SetTerminalLetterSpacing as PersistTerminalLetterSpacing,
   SetTerminalLineHeight as PersistTerminalLineHeight,
@@ -10,16 +9,10 @@ import {
 import { TERMINAL_FONT } from '../lib/terminalFaces'
 import { defineStore } from './defineStore'
 import { usePersistedSetting, type PersistedSetting } from './usePersistedSetting'
+import { useSurfaceScale } from './useSurfaceScale'
 import { createLogger } from '../lib/log'
 
 const log = createLogger('terminal-font')
-
-// The bounds repeat settings.MinTerminalFontSizePx / MaxTerminalFontSizePx,
-// which govern the file (ADR the-terminal-text-size-is-a-pixel-count).
-export const minTerminalFontSizePx = 8
-export const maxTerminalFontSizePx = 64
-export const terminalFontSizeStepPx = 2
-export const defaultTerminalFontSizePx = 13
 
 // The weights the bundled face ships, which is what makes each one a distinct
 // rendering rather than a label over the same outlines: CSS matches a requested
@@ -64,10 +57,6 @@ export const defaultTerminalLineHeight: TerminalLineHeight = 1.2
 // Must stay 0: it doubles as the "nothing persisted" value in settings.yaml.
 export const defaultTerminalLetterSpacing: TerminalLetterSpacing = 0
 
-export function clampTerminalFontSize(px: number): number {
-  return Math.min(maxTerminalFontSizePx, Math.max(minTerminalFontSizePx, Math.round(px)))
-}
-
 function isTerminalFontWeight(value: number | null): value is TerminalFontWeight {
   return terminalFontWeights.includes(value as TerminalFontWeight)
 }
@@ -99,15 +88,7 @@ export const useTerminalFont = defineStore('terminalFont', () => {
     }
   }
 
-  const px = usePersistedSetting<number>({
-    initial: defaultTerminalFontSizePx,
-    read: async () => {
-      const stored = (await readAppearance())?.terminalFontSizePx ?? 0
-      return stored > 0 ? clampTerminalFontSize(stored) : undefined
-    },
-    write: (next) => PersistTerminalFontSize(next),
-    label: 'the terminal font size',
-  })
+  const { terminalPx: px } = useSurfaceScale()
   // Empty is the bundled face rather than a sentinel name, so a settings.yaml
   // written before this setting existed reads as "shipped default".
   const family = usePersistedSetting<string>({
@@ -155,25 +136,6 @@ export const useTerminalFont = defineStore('terminalFont', () => {
     label: 'the terminal letter spacing',
   })
 
-  function setFontSize(value: number): void {
-    const next = clampTerminalFontSize(value)
-    if (next === px.value.value) return
-    px.set(next)
-  }
-
-  // Waits for hydration because the step is relative: taken from the unhydrated
-  // default it would write a neighbour of 13px over whatever settings.yaml holds.
-  async function stepFontSize(delta: 1 | -1): Promise<void> {
-    await px.whenHydrated()
-    setFontSize(px.value.value + delta * terminalFontSizeStepPx)
-  }
-
-  // Before hydration the size already equals the default, so the write would be skipped.
-  async function resetFontSize(): Promise<void> {
-    await px.whenHydrated()
-    setFontSize(defaultTerminalFontSizePx)
-  }
-
   function setFontFamily(next: string): void {
     // The bundled face is stored as empty so it tracks the shipped font rather
     // than pinning today's name into a user's settings.yaml.
@@ -187,7 +149,7 @@ export const useTerminalFont = defineStore('terminalFont', () => {
    */
   function cellMetrics(): string {
     return [
-      px.value.value,
+      px.value,
       family.value.value,
       weight.value.value,
       weightBold.value.value,
@@ -197,7 +159,7 @@ export const useTerminalFont = defineStore('terminalFont', () => {
   }
 
   return {
-    px: px.value,
+    px,
     family: family.value,
     /** The family to show selected: the bundled face stands in for empty. */
     selectedFamily: computed(() => family.value.value || TERMINAL_FONT),
@@ -205,9 +167,6 @@ export const useTerminalFont = defineStore('terminalFont', () => {
     weightBold: weightBold.value,
     lineHeight: lineHeight.value,
     letterSpacing: letterSpacing.value,
-    setFontSize,
-    stepFontSize,
-    resetFontSize,
     setFontFamily,
     setFontWeight: weight.set,
     setFontWeightBold: weightBold.set,

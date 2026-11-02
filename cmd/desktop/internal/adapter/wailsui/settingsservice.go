@@ -48,9 +48,12 @@ type AppearanceSettings struct {
 	// FontFamily is the family the app's chrome draws with and MonoFontFamily
 	// the one its monospace text draws with. Empty is the bundled face; a
 	// generic keyword (system-ui, ui-monospace) is the platform stack.
-	FontFamily         string `json:"fontFamily"`
-	MonoFontFamily     string `json:"monoFontFamily"`
-	TerminalFontSizePx int    `json:"terminalFontSizePx"`
+	FontFamily     string `json:"fontFamily"`
+	MonoFontFamily string `json:"monoFontFamily"`
+	InterfaceScale int    `json:"interfaceScale"`
+	DocumentScale  int    `json:"documentScale"`
+	CodeScale      int    `json:"codeScale"`
+	TerminalScale  int    `json:"terminalScale"`
 	// TerminalFontFamily is an installed monospace family for the terminal
 	// alone; empty is the bundled face.
 	TerminalFontFamily string `json:"terminalFontFamily"`
@@ -80,7 +83,6 @@ type AppearanceSettings struct {
 	TerminalSessionAgeThresholdDays int  `json:"terminalSessionAgeThresholdDays"`
 	// Canvas typography is stored as preset names. The frontend owns the maps
 	// from those names to CSS values and heals unknown values.
-	CanvasFontSize    string `json:"canvasFontSize"`
 	CanvasLineSpacing string `json:"canvasLineSpacing"`
 	CanvasPageWidth   string `json:"canvasPageWidth"`
 }
@@ -205,7 +207,10 @@ func (s *SettingsService) AppearanceSettings(ctx context.Context) (AppearanceSet
 		Theme:                           current.Theme,
 		FontFamily:                      current.FontFamily,
 		MonoFontFamily:                  current.MonoFontFamily,
-		TerminalFontSizePx:              current.TerminalFontSizePx,
+		InterfaceScale:                  current.InterfaceScale,
+		DocumentScale:                   current.DocumentScale,
+		CodeScale:                       current.CodeScale,
+		TerminalScale:                   current.TerminalScale,
 		TerminalFontFamily:              current.TerminalFontFamily,
 		TerminalFontWeight:              current.TerminalFontWeight,
 		TerminalFontWeightBold:          current.TerminalFontWeightBold,
@@ -218,7 +223,6 @@ func (s *SettingsService) AppearanceSettings(ctx context.Context) (AppearanceSet
 		TerminalPoolSize:                current.TerminalPoolSize,
 		TerminalShowSessionAge:          current.TerminalShowSessionAge,
 		TerminalSessionAgeThresholdDays: current.TerminalSessionAgeThresholdDays,
-		CanvasFontSize:                  current.CanvasFontSize,
 		CanvasLineSpacing:               current.CanvasLineSpacing,
 		CanvasPageWidth:                 current.CanvasPageWidth,
 	}, nil
@@ -256,8 +260,20 @@ func (s *SettingsService) SetMonoFontFamily(ctx context.Context, family string) 
 	return s.settings.SetMonoFontFamily(ctx, family)
 }
 
-func (s *SettingsService) SetTerminalFontSize(ctx context.Context, px int) error {
-	return s.settings.SetTerminalFontSize(ctx, px)
+func (s *SettingsService) SetInterfaceScale(ctx context.Context, percent int) error {
+	return s.settings.SetInterfaceScale(ctx, percent)
+}
+
+func (s *SettingsService) SetDocumentScale(ctx context.Context, percent int) error {
+	return s.settings.SetDocumentScale(ctx, percent)
+}
+
+func (s *SettingsService) SetCodeScale(ctx context.Context, percent int) error {
+	return s.settings.SetCodeScale(ctx, percent)
+}
+
+func (s *SettingsService) SetTerminalScale(ctx context.Context, percent int) error {
+	return s.settings.SetTerminalScale(ctx, percent)
 }
 
 func (s *SettingsService) SetTerminalFontFamily(ctx context.Context, family string) error {
@@ -298,10 +314,6 @@ func (s *SettingsService) SetTerminalPoolSize(ctx context.Context, size int) err
 
 func (s *SettingsService) SetTerminalSessionAge(ctx context.Context, enabled bool, thresholdDays int) error {
 	return s.settings.SetTerminalSessionAge(ctx, enabled, thresholdDays)
-}
-
-func (s *SettingsService) SetCanvasFontSize(ctx context.Context, size string) error {
-	return s.settings.SetCanvasFontSize(ctx, size)
 }
 
 func (s *SettingsService) SetCanvasLineSpacing(ctx context.Context, spacing string) error {

@@ -444,9 +444,9 @@ onUnmounted(() => {
         placeholder="Search by title or ID…"
         aria-label="Search tasks"
         testid="tasks-search"
-        class="h-[31px] w-[260px] max-w-full"
+        class="h-7.75 w-65 max-w-full"
       />
-      <div class="w-[220px] max-w-full">
+      <div class="w-55 max-w-full">
         <AppSelect
           :model-value="repoKey"
           :options="repoOptions"

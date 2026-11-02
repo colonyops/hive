@@ -5,8 +5,7 @@ import type { DocumentWire } from '../../../../bindings/github.com/colonyops/hiv
 import { doc, documentFor } from '../../../test-utils/drive'
 
 const settingsBindings = vi.hoisted(() => ({
-  AppearanceSettings: vi.fn().mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' }),
-  SetCanvasFontSize: vi.fn(),
+  AppearanceSettings: vi.fn().mockResolvedValue({ canvasLineSpacing: '' }),
   SetCanvasLineSpacing: vi.fn(),
   ReviewLabels: vi.fn().mockResolvedValue(null),
 }))
@@ -63,10 +62,10 @@ describe('DriveReader', () => {
   })
 
   it('passes the reading settings to the document', async () => {
-    settingsBindings.AppearanceSettings.mockResolvedValueOnce({ canvasFontSize: 'xl', canvasLineSpacing: 'relaxed' })
+    settingsBindings.AppearanceSettings.mockResolvedValue({ documentScale: 133, canvasLineSpacing: 'relaxed' })
     const wrapper = await mountReader(documentFor('acme/site', doc('plans/x.md'), { markdown: '# X' }))
     const style = (wrapper.get('[data-testid="r-document"]').element as HTMLElement).style
-    expect(style.getPropertyValue('--hv-font-size')).toBe('18px')
+    expect(style.getPropertyValue('--hv-font-size')).toBe('17.96px')
     expect(style.getPropertyValue('--hv-line-height')).toBe('1.85')
   })
 })

@@ -82,19 +82,20 @@
   --font-sans: "Inter Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  /* No --line-height companions, so a text-* token sets only font-size and
-     the element keeps the line-height it inherits. Tailwind's own text-xs
+  /* Rem, so the root font size is the interface scale: at 100% these are
+     10.5px through 32px. No --line-height companions, so a text-* token sets
+     only font-size and the element keeps the line-height it inherits. Tailwind's own text-xs
      and text-sm still set theirs. */
-  --text-micro: 10.5px;
-  --text-caption: 11.5px;
-  --text-small: 12.5px;
-  --text-body: 13.5px;
-  --text-reading: 14px;
-  --text-title: 15px;
-  --text-lead: 16px;
-  --text-heading: 17px;
-  --text-display: 28px;
-  --text-display-lg: 32px;
+  --text-micro: 0.65625rem;
+  --text-caption: 0.71875rem;
+  --text-small: 0.78125rem;
+  --text-body: 0.84375rem;
+  --text-reading: 0.875rem;
+  --text-title: 0.9375rem;
+  --text-lead: 1rem;
+  --text-heading: 1.0625rem;
+  --text-display: 1.75rem;
+  --text-display-lg: 2rem;
 
   --radius-*: initial;
   --radius: 4px;
@@ -717,6 +718,10 @@
 
 .hive-scroll::-webkit-scrollbar-track {
   background: transparent;
+}
+
+html {
+  font-size: calc(var(--interface-scale, 1) * 100%);
 }
 
 body {

@@ -6,9 +6,9 @@ import {
   defaultTerminalFontWeightBold,
   defaultTerminalLetterSpacing,
   defaultTerminalLineHeight,
-  defaultTerminalFontSizePx,
   useTerminalFont,
 } from '../../stores/useTerminalFont'
+import { useSurfaceScale } from '../../stores/useSurfaceScale'
 import { terminalFontStack } from '../../lib/terminalFaces'
 
 const xterm = vi.hoisted(() => {
@@ -55,7 +55,7 @@ const mocks = vi.hoisted(() => ({ loadTerminalFaces: vi.fn() }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   AppearanceSettings: vi.fn().mockResolvedValue({
     theme: '',
-    terminalFontSizePx: 13,
+    terminalScale: 100,
     terminalFontFamily: '',
     terminalFontWeight: 0,
     terminalFontWeightBold: 0,
@@ -66,7 +66,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   }),
   Fonts: vi.fn().mockResolvedValue({ all: [], monospace: [] }),
   SetTheme: vi.fn(),
-  SetTerminalFontSize: vi.fn(),
+  SetTerminalScale: vi.fn(),
   SetTerminalFontFamily: vi.fn(),
   SetTerminalFontWeights: vi.fn(),
   SetTerminalLineHeight: vi.fn(),
@@ -98,7 +98,7 @@ describe('TerminalPreview', () => {
     const [term] = xterm.FakeTerminal.instances
     expect(term.options).toMatchObject({
       fontFamily: terminalFontStack(''),
-      fontSize: defaultTerminalFontSizePx,
+      fontSize: 13,
       fontWeight: defaultTerminalFontWeight,
       fontWeightBold: defaultTerminalFontWeightBold,
       lineHeight: defaultTerminalLineHeight,
@@ -125,7 +125,7 @@ describe('TerminalPreview', () => {
     const [term] = xterm.FakeTerminal.instances
     expect(mocks.loadTerminalFaces).toHaveBeenCalledWith(
       '',
-      defaultTerminalFontSizePx,
+      13,
       defaultTerminalFontWeight,
       defaultTerminalFontWeightBold,
     )
@@ -138,7 +138,7 @@ describe('TerminalPreview', () => {
     const font = useTerminalFont()
     font.setLineHeight(1.5)
     font.setLetterSpacing(2)
-    font.setFontSize(16)
+    useSurfaceScale().setScale('terminal', 120)
     await flushPromises()
 
     expect(xterm.FakeTerminal.instances).toHaveLength(1)

@@ -188,7 +188,7 @@ onClickOutside(
           v-if="rowCount"
           :id="listboxId"
           ref="list"
-          class="hive-scroll flex min-h-0 flex-col gap-0.5 overflow-y-auto p-[5px]"
+          class="hive-scroll flex min-h-0 flex-col gap-0.5 overflow-y-auto p-1.25"
           role="listbox"
           aria-label="Repository"
         >
@@ -200,7 +200,7 @@ onClickOutside(
           >
             <button
               type="button"
-              class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left text-body"
+              class="flex w-full items-center gap-2 rounded-md px-2.25 py-1.75 text-left text-body"
               :class="
                 index === active ? 'bg-hover text-text' : repo.remote === modelValue ? 'text-text' : 'text-text-2'
               "
@@ -225,7 +225,7 @@ onClickOutside(
           <li v-if="custom" role="option" :aria-selected="false">
             <button
               type="button"
-              class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left text-body"
+              class="flex w-full items-center gap-2 rounded-md px-2.25 py-1.75 text-left text-body"
               :class="active === ranked.length ? 'bg-hover text-text' : 'text-text-2'"
               :data-testid="testid ? `${testid}-custom` : undefined"
               @mousedown.prevent

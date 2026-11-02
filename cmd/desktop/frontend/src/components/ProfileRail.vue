@@ -43,7 +43,7 @@ function onKeydown(e: KeyboardEvent, id: string): void {
 </script>
 
 <template>
-  <aside class="flex w-[58px] shrink-0 flex-col items-center gap-2.5 border-r border-border bg-raised py-3">
+  <aside class="flex w-14.5 shrink-0 flex-col items-center gap-2.5 border-r border-border bg-raised py-3">
     <AppTooltip
       v-for="profile in profiles"
       :key="profile.id"
@@ -55,7 +55,7 @@ function onKeydown(e: KeyboardEvent, id: string): void {
         :data-enabled="profile.enabled"
         data-testid="profile-tile"
         draggable="true"
-        class="relative flex size-[38px] cursor-pointer items-center justify-center rounded-xl border border-card bg-chip font-mono text-sm font-semibold text-text-2 transition-colors hover:bg-hover hover:text-text"
+        class="relative flex size-9.5 cursor-pointer items-center justify-center rounded-xl border border-card bg-chip font-mono text-sm font-semibold text-text-2 transition-colors hover:bg-hover hover:text-text"
         :class="[
           dropClass(dropTarget, profile.id),
           {
@@ -73,7 +73,7 @@ function onKeydown(e: KeyboardEvent, id: string): void {
       >
         <span
           v-if="profile.id === activeProfileId"
-          class="absolute bottom-2 left-[-13px] top-2 w-[3px] rounded-sm bg-accent"
+          class="absolute bottom-2 left-[-13px] top-2 w-0.75 rounded-sm bg-accent"
         />
         <img
           v-if="profile.image"

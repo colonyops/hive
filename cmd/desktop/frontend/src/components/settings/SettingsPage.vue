@@ -10,7 +10,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="flex w-full max-w-[920px] flex-col gap-7" :data-testid="testid">
+  <div class="flex w-full max-w-230 flex-col gap-7" :data-testid="testid">
     <slot />
   </div>
 </template>

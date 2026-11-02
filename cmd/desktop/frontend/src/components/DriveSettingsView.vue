@@ -7,28 +7,20 @@ import ReviewLabelsEditor from './settings/ReviewLabelsEditor.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
+import SurfaceScaleRow from './settings/SurfaceScaleRow.vue'
 import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
 import {
-  canvasFontSizeLabels,
-  canvasFontSizePx,
-  canvasFontSizes,
   canvasLineSpacingLabels,
   canvasLineSpacings,
   canvasPageWidthLabels,
   canvasPageWidths,
   useCanvasSettings,
-  type CanvasFontSize,
   type CanvasLineSpacing,
   type CanvasPageWidth,
 } from '../stores/useCanvasSettings'
 
-const { fontSize, lineSpacing, pageWidth, setFontSize, setLineSpacing, setPageWidth } = useCanvasSettings()
+const { lineSpacing, pageWidth, setLineSpacing, setPageWidth } = useCanvasSettings()
 
-const fontSizeOptions = canvasFontSizes.map((value) => ({
-  value,
-  label: `${canvasFontSizePx[value]}px`,
-  title: canvasFontSizeLabels[value],
-}))
 const lineSpacingOptions = canvasLineSpacings.map((value) => ({
   value,
   label: canvasLineSpacingLabels[value],
@@ -46,18 +38,12 @@ const pageWidthOptions = canvasPageWidths.map((value) => ({
       description="How document text is drawn. Changes apply to every open document immediately."
       boxed
     >
-      <SettingsRow
-        label="Font size"
+      <SurfaceScaleRow
+        surface="document"
+        label="Text size"
         hint="Applies to headings, body text, cards, and diagrams in every markdown and canvas document."
-      >
-        <SegmentedControl
-          :model-value="fontSize"
-          :options="fontSizeOptions"
-          aria-label="Document text size"
-          testid="settings-drive-font-size"
-          @update:model-value="setFontSize($event as CanvasFontSize)"
-        />
-      </SettingsRow>
+        testid="settings-drive-scale"
+      />
       <SettingsRow
         label="Line spacing"
         hint="Changes the vertical rhythm of Markdown and HTML. Copy and save keep the original content."

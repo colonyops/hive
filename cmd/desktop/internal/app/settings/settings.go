@@ -79,8 +79,13 @@ type Appearance struct {
 	// stack.
 	FontFamily     string `yaml:"font_family,omitempty"      env:"HIVE_DESKTOP_APPEARANCE_FONT_FAMILY"`
 	MonoFontFamily string `yaml:"mono_font_family,omitempty" env:"HIVE_DESKTOP_APPEARANCE_MONO_FONT_FAMILY"`
-	// Pixels; 0 is the shipped default.
-	TerminalFontSize int `yaml:"terminal_font_size,omitempty" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_FONT_SIZE"`
+	// InterfaceScale, DocumentScale, CodeScale and TerminalScale size each
+	// surface as a percent of its shipped size, independently of the others.
+	// 0 means 100; see scale.go for the ranges.
+	InterfaceScale int `yaml:"interface_scale,omitempty" env:"HIVE_DESKTOP_APPEARANCE_INTERFACE_SCALE"`
+	DocumentScale  int `yaml:"document_scale,omitempty"  env:"HIVE_DESKTOP_APPEARANCE_DOCUMENT_SCALE"`
+	CodeScale      int `yaml:"code_scale,omitempty"      env:"HIVE_DESKTOP_APPEARANCE_CODE_SCALE"`
+	TerminalScale  int `yaml:"terminal_scale,omitempty"  env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_SCALE"`
 	// TerminalFontFamily names an installed monospace family for the terminal
 	// only, leaving the rest of the UI alone. Empty is the bundled face.
 	TerminalFontFamily string `yaml:"terminal_font_family,omitempty" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_FONT_FAMILY"`
@@ -115,9 +120,8 @@ type Appearance struct {
 	// The threshold is measured in whole days from the session's creation time.
 	TerminalShowSessionAge          bool `yaml:"terminal_show_session_age"           env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_SHOW_SESSION_AGE"`
 	TerminalSessionAgeThresholdDays int  `yaml:"terminal_session_age_threshold_days" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_SESSION_AGE_THRESHOLD_DAYS"`
-	// CanvasFontSize, CanvasLineSpacing and CanvasPageWidth are preset names
-	// interpreted by the frontend. Empty takes the shipped defaults.
-	CanvasFontSize    string `yaml:"canvas_font_size,omitempty"    env:"HIVE_DESKTOP_APPEARANCE_CANVAS_FONT_SIZE"`
+	// CanvasLineSpacing and CanvasPageWidth are preset names interpreted by the
+	// frontend. Empty takes the shipped defaults.
 	CanvasLineSpacing string `yaml:"canvas_line_spacing,omitempty" env:"HIVE_DESKTOP_APPEARANCE_CANVAS_LINE_SPACING"`
 	CanvasPageWidth   string `yaml:"canvas_page_width,omitempty"   env:"HIVE_DESKTOP_APPEARANCE_CANVAS_PAGE_WIDTH"`
 }

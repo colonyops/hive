@@ -250,7 +250,7 @@ useSubmitShortcut(submit)
       :data-testid="`${testid}-failure`"
     >
       <div class="flex items-start gap-2">
-        <IconCircleAlert class="mt-px size-[15px] shrink-0 text-severity-error" />
+        <IconCircleAlert class="mt-px size-3.75 shrink-0 text-severity-error" />
         <div class="min-w-0 flex-1">
           <div class="text-small font-semibold text-severity-error">This session was not created</div>
           <p class="mt-0.5 break-words text-small leading-[1.45] text-text-2" :data-testid="`${testid}-failure-reason`">

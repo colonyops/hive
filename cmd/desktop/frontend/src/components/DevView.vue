@@ -241,7 +241,7 @@ useEscapeToClose(() => emit('close'))
           <div class="flex flex-col gap-3.5 rounded-xl border border-card bg-raised p-4">
             <div class="flex flex-col gap-3.5 @[420px]/pane:flex-row @[420px]/pane:items-center @[420px]/pane:gap-4">
               <span
-                class="flex size-[34px] shrink-0 items-center justify-center rounded-lg border border-card bg-chip font-mono text-body font-semibold text-accent"
+                class="flex size-8.5 shrink-0 items-center justify-center rounded-lg border border-card bg-chip font-mono text-body font-semibold text-accent"
                 >ms</span
               >
               <div class="min-w-0 flex-1">

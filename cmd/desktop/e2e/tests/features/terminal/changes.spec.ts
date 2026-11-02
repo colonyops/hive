@@ -249,6 +249,37 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await expect.poll(top).toBeLessThan(second)
   })
 
+  test('the text size chord scales the diff it was pressed over and keeps its layout (mock terminal)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 420 })
+    await changesFixture(page)
+    await openChanges(page)
+    const stream = page.getByTestId('changes-stream')
+    const line = stream.locator('[data-line]').first()
+    await expect(line).toBeVisible()
+    // Undefined while the virtualized list mounts or remounts the row.
+    const rowHeight = async () => (await line.boundingBox())?.height
+    await expect.poll(rowHeight).toBe(20)
+    await line.click({ position: { x: 200, y: 10 } })
+
+    await page.keyboard.press('Control+=')
+    await expect.poll(rowHeight).toBe(22)
+    const { sizes, gapless } = await stream.locator('[data-line]').evaluateAll((rows) => {
+      const boxes = rows.map((row) => row.getBoundingClientRect())
+      return {
+        sizes: [...new Set(boxes.map((box) => box.height))],
+        gapless: boxes.slice(1, 4).every((box, index) => box.top >= boxes[index].top),
+      }
+    })
+    expect(sizes).toEqual([22])
+    expect(gapless).toBe(true)
+
+    await page.keyboard.press('n')
+    await expect.poll(() => stream.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+
+    await page.keyboard.press('Control+0')
+    await expect.poll(rowHeight).toBe(20)
+  })
+
   test('dragging a panel divider selects no text (mock terminal)', async ({ page, browserName }) => {
     await changesFixture(page)
     await openChanges(page)

@@ -9,10 +9,8 @@ import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
 import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
 import SettingsStepper from './settings/SettingsStepper.vue'
+import SurfaceScaleRow from './settings/SurfaceScaleRow.vue'
 import {
-  maxTerminalFontSizePx,
-  minTerminalFontSizePx,
-  terminalFontSizeStepPx,
   terminalFontWeightLabels,
   terminalFontWeights,
   terminalLetterSpacings,
@@ -40,14 +38,12 @@ import { useTerminalShowWindows } from '../stores/useTerminalShowWindows'
 const TerminalPreview = defineAsyncComponent(() => import('./settings/TerminalPreview.vue'))
 
 const {
-  px: fontSizePx,
   selectedFamily: fontFamily,
   weight: fontWeight,
   weightBold: fontWeightBold,
   lineHeight,
   letterSpacing,
   setFontFamily,
-  setFontSize,
   setFontWeight,
   setFontWeightBold,
   setLineHeight,
@@ -131,7 +127,7 @@ onMounted(() => {
         testid="settings-terminal-font-family"
       >
         <AppSelect
-          class="w-[220px]"
+          class="w-55"
           :model-value="fontFamily"
           :options="fontFamilyOptions"
           searchable
@@ -141,21 +137,12 @@ onMounted(() => {
           @update:model-value="setFontFamily"
         />
       </SettingsRow>
-      <SettingsRow
-        label="Font size"
-        hint="Applies immediately to open terminals; tmux re-fits their grid. The text size shortcuts step it by the same amount from a terminal."
-      >
-        <SettingsStepper
-          :model-value="fontSizePx"
-          :display="`${fontSizePx}px`"
-          :min="minTerminalFontSizePx"
-          :max="maxTerminalFontSizePx"
-          :step="terminalFontSizeStepPx"
-          aria-label="Font size"
-          testid="settings-terminal-font-size"
-          @update:model-value="setFontSize"
-        />
-      </SettingsRow>
+      <SurfaceScaleRow
+        surface="terminal"
+        label="Text size"
+        hint="Applies immediately to open terminals; tmux re-fits their grid."
+        testid="settings-terminal-scale"
+      />
       <SettingsRow
         label="Font weight"
         hint="The weight normal text draws at. A family that ships fewer weights renders the nearest one it has."

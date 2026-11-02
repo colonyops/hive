@@ -36,9 +36,9 @@ const tooltip = computed(() => props.feed.description || props.feed.name)
   position: relative;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 0.5625rem;
   width: 100%;
-  padding: 7px 8px;
+  padding: 0.4375rem 0.5rem;
   border-radius: var(--radius-lg);
   color: var(--color-text-2);
   font-size: var(--text-body);
@@ -66,8 +66,8 @@ const tooltip = computed(() => props.feed.description || props.feed.name)
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
   border: 1px solid var(--color-strong);
   border-radius: var(--radius-md);
   background: var(--color-app);

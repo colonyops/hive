@@ -74,7 +74,7 @@ function onDragStart(e: DragEvent, type: string) {
           >
             <span
               class="flex shrink-0 items-center justify-center rounded-md"
-              :class="def.logoMark ? 'size-[25px] p-[2px]' : 'size-[22px]'"
+              :class="def.logoMark ? 'size-6.25 p-0.5' : 'size-5.5'"
               :style="{
                 background: def.tint ?? 'var(--color-accent-tint)',
                 color: def.accentToken ?? 'var(--color-accent)',

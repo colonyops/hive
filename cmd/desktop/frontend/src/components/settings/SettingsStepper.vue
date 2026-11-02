@@ -10,7 +10,9 @@ const props = defineProps<{
   display: string
   min: number
   max: number
-  step: number
+  /** The next value in a direction; replaces `step` for a setting with uneven rungs. */
+  next?: (value: number, direction: 1 | -1) => number
+  step?: number
   hint?: string
   testid?: string
   /** Names the strip when a SettingsRow supplies the visible label instead. */
@@ -22,7 +24,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: number] }>()
 // Clamps rather than refusing, so a value off-step lands on the bound instead
 // of stopping a step short of it — the arithmetic useTerminalFont does.
 function nudge(delta: 1 | -1): void {
-  const next = Math.min(props.max, Math.max(props.min, props.modelValue + delta * props.step))
+  const stepped = props.next ? props.next(props.modelValue, delta) : props.modelValue + delta * (props.step ?? 1)
+  const next = Math.min(props.max, Math.max(props.min, stepped))
   if (next !== props.modelValue) emit('update:modelValue', next)
 }
 </script>

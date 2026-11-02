@@ -16,10 +16,12 @@ import { hiveUiPlatform } from './lib/hiveUiPlatform'
 import { captureVueErrors, installErrorCapture } from './lib/log'
 import { startPerfMonitor } from './lib/perfMonitor'
 import { router } from './router'
+import { useSurfaceScale } from './stores/useSurfaceScale'
 
 installErrorCapture()
 initializeTheme()
 initializeAppFont()
+useSurfaceScale()
 if (new URLSearchParams(window.location.search).has('diagnostics')) {
   const app = createApp(DiagnosticsWindow as Component)
   installHiveUi(app, hiveUiPlatform)

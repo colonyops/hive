@@ -293,6 +293,7 @@ onBeforeUnmount(teardown)
           ref="host"
           class="absolute inset-0 p-1.5"
           data-terminal-input-scope
+          data-scale-surface="terminal"
           data-testid="popup-terminal-pane"
           @click="term?.focus()"
         />
@@ -302,7 +303,7 @@ onBeforeUnmount(teardown)
             <p class="font-mono text-xs text-text-4">Checking…</p>
           </template>
           <template v-else-if="!available">
-            <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="popup-terminal-unavailable">
+            <p class="max-w-105 text-xs leading-relaxed text-text-3" data-testid="popup-terminal-unavailable">
               {{ reason }}
             </p>
           </template>
@@ -314,7 +315,7 @@ onBeforeUnmount(teardown)
               v-if="error"
               testid="popup-terminal-error"
               variant="line"
-              class="max-w-[420px] leading-relaxed"
+              class="max-w-105 leading-relaxed"
               :message="error"
             />
             <button
