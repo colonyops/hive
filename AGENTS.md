@@ -121,6 +121,11 @@ lefthook runs the relevant gates as git hooks; `mise install` wires them up
 
 **`mise run ci` runs every gate CI runs.** Prefer it over pushing to find out.
 
+`mise run test` and the pre-push hook skip the tests that drive a real tmux
+server on a machine with a running tmux server, and the output says only `ok`.
+After a change to terminal or tmux code, run `mise run test:tmux`, which runs
+them in Docker. `mise run ci` includes it.
+
 Wails TS bindings are deliberately not hooked: they need a full app build. Run
 `mise run desktop:bindings` when a service surface changes; CI checks them.
 

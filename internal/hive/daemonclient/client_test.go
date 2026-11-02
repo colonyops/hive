@@ -318,6 +318,16 @@ func TestClientStopsAChangeWhenTheDaemonIsStuck(t *testing.T) {
 	assert.Zero(t, sessions.deleteCalls.Load())
 }
 
+func TestClientDoesNotStartATerminalWhenTheDaemonIsStuck(t *testing.T) {
+	path := socketPath(t)
+	serveWithControl(t, path, &countingServer{}, stuckHelloServer{}, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop(), ReadTimeout: 50 * time.Millisecond})
+
+	_, err := client.StartTmuxSession(t.Context(), "s1")
+
+	require.ErrorContains(t, err, "nothing changed")
+}
+
 func TestExplain(t *testing.T) {
 	timedOut := connect.NewError(connect.CodeDeadlineExceeded, context.DeadlineExceeded)
 	refused := connect.NewError(connect.CodeUnavailable, errors.New("dial: EOF"))

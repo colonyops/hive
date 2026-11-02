@@ -271,13 +271,22 @@ func TestServerTerminals_RefusesAfterStop(t *testing.T) {
 	assert.Equal(t, KindUnavailable, KindOf(err))
 }
 
-func TestTerminals_RefuseToStartAServersSession(t *testing.T) {
+func TestTerminals_StartAServersSessionThroughTheStarter(t *testing.T) {
+	terminals, _, _ := newRoutedTerminals(t)
+	starter := &spawningStarter{tmux: func(...string) error { return nil }}
+	terminals.starter = starter
+
+	result, err := terminals.Start(t.Context(), "box:hive-there")
+
+	require.NoError(t, err)
+	assert.True(t, result.Created)
+	assert.Equal(t, []string{"box:hive-there"}, starter.calls, "the starter keeps the server of the target")
+}
+
+func TestTerminals_RefuseAnAttachToABadServerTarget(t *testing.T) {
 	terminals, _, _ := newRoutedTerminals(t)
 
-	_, err := terminals.Start(t.Context(), "box:hive-there")
-	assert.Equal(t, KindUnavailable, KindOf(err))
-
-	_, err = terminals.Attach(t.Context(), "elsewhere:hive-there", 100, 30)
+	_, err := terminals.Attach(t.Context(), "elsewhere:hive-there", 100, 30)
 	assert.Equal(t, KindNotFound, KindOf(err))
 
 	_, err = terminals.Attach(t.Context(), "box:", 100, 30)

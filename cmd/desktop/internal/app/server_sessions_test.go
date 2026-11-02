@@ -17,6 +17,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/server"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemon"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
@@ -120,6 +121,11 @@ func TestServerSessions_ActOnTheServerOfAQualifiedID(t *testing.T) {
 	assert.True(t, git.Resolved, "the server reads its own checkout")
 	assert.Equal(t, "site", git.Repo)
 
+	_, err = f.svc.StartTmuxSession(t.Context(), "box:renamed")
+	require.NoError(t, err, "the server starts the terminal by its own rules")
+	_, err = f.svc.StartTmuxSession(t.Context(), "box:no-such-slug")
+	assert.Equal(t, KindNotFound, KindOf(err))
+
 	risk, err := f.svc.SessionRisk(t.Context(), ref)
 	require.NoError(t, err)
 	assert.False(t, risk.UncommittedChanges)
@@ -132,16 +138,29 @@ func TestServerSessions_ActOnTheServerOfAQualifiedID(t *testing.T) {
 	assert.Empty(t, remaining)
 }
 
+func TestSessionOfTmuxNamePrefersTheActiveSession(t *testing.T) {
+	recycled := session.Session{ID: "old", Slug: "review", State: session.StateRecycled}
+	active := session.Session{ID: "new", Slug: "review", State: session.StateActive}
+
+	got, ok := sessionOfTmuxName([]session.Session{recycled, active}, "review")
+	require.True(t, ok)
+	assert.Equal(t, "new", got.ID)
+
+	got, ok = sessionOfTmuxName([]session.Session{recycled}, "review")
+	require.True(t, ok)
+	assert.Equal(t, "old", got.ID, "a recycled session still gets its own refusal")
+
+	_, ok = sessionOfTmuxName([]session.Session{active}, "other")
+	assert.False(t, ok)
+}
+
 func TestServerSessions_RefuseWhatNeedsTheLocalCheckout(t *testing.T) {
 	f := newServerFixture(t)
 	ref := "box:" + f.create(t, "review")
 
 	assert.Equal(t, KindUnavailable, KindOf(f.svc.OpenSessionInEditor(t.Context(), ref)))
 	assert.Equal(t, KindUnavailable, KindOf(f.svc.RevealSession(t.Context(), ref)))
-	_, err := f.svc.StartTmuxSession(t.Context(), "box:review")
-	assert.Equal(t, KindUnavailable, KindOf(err))
-
-	_, err = f.svc.SessionDetail(t.Context(), "gone:"+ref)
+	_, err := f.svc.SessionDetail(t.Context(), "gone:"+ref)
 	assert.Equal(t, KindNotFound, KindOf(err))
 }
 

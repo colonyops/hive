@@ -175,7 +175,8 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
     const row = sessionRow(page)
     await row.hover()
     await row.getByTestId('terminal-session-menu-toggle').click()
-    await expect(page.getByTestId('session-menu-start')).toHaveCount(0)
+    // The server starts its own terminal, so a stopped one offers Start.
+    await expect(page.getByTestId('session-menu-start')).toHaveCount(1)
     await page.getByTestId('session-menu-delete').click()
     await page.getByTestId('session-confirmation-confirm').click()
 
