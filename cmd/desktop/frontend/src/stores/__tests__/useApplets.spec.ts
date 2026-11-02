@@ -29,6 +29,10 @@ const applet = (id: string, extra: object = {}) => ({
   ...extra,
 })
 
+function hostOf(slug = '') {
+  return { open: vi.fn(), sessionSlug: () => slug }
+}
+
 async function storeWith(placed: Record<string, string[]>) {
   settings.AppletSurface.mockImplementation((surface: string) => Promise.resolve(placed[surface] ?? []))
   const applets = useApplets()
@@ -110,14 +114,14 @@ describe('useApplets commands', () => {
 
   it('holds a command for a tab that comes forward to take it', async () => {
     const applets = await storeWith({ tab: ['radio'] })
-    const host = vi.fn()
+    const host = hostOf()
     applets.setTabHost(host, true)
     let onScreen = false
     const tab = { ...frame('tab'), onScreen: () => onScreen }
     applets.connectFrame('radio', tab)
 
-    applets.openForCommand('radio', 'next', 'review')
-    expect(host).toHaveBeenCalledWith('radio')
+    applets.openForCommand('radio', 'next')
+    expect(host.open).toHaveBeenCalledWith('radio')
     expect(tab.deliverCommand).not.toHaveBeenCalled()
 
     onScreen = true
@@ -125,11 +129,14 @@ describe('useApplets commands', () => {
     expect(tab.deliverCommand).toHaveBeenCalledWith('next')
   })
 
-  it('runs a palette row in the frame on screen when several offer it', async () => {
+  it('offers a palette row only from a frame on screen', async () => {
     const applets = await storeWith({})
     const hidden = frame('tab', false)
+    applets.setFrameRows(hidden, 'radio', [{ id: 'next', title: 'Next' }])
+    expect(applets.pageRows.value).toEqual([])
+
     const shown = frame('page')
-    for (const handle of [shown, hidden]) applets.setFrameRows(handle, 'radio', [{ id: 'next', title: 'Next' }])
+    applets.setFrameRows(shown, 'radio', [{ id: 'next', title: 'Next' }])
     void applets.pageRows.value[0]?.run()
     expect(shown.deliverCommand).toHaveBeenCalledWith('next')
     expect(hidden.deliverCommand).not.toHaveBeenCalled()
@@ -161,42 +168,67 @@ describe('useApplets placements', () => {
 
   it('opens a placed applet as a tab where a session area can show one', async () => {
     const applets = await storeWith({ tab: ['radio'] })
-    const host = vi.fn()
+    const host = hostOf()
     applets.setTabHost(host, true)
-    applets.toggle('radio', 'review')
-    expect(host).toHaveBeenCalledWith('radio')
+    applets.toggle('radio')
+    expect(host.open).toHaveBeenCalledWith('radio')
     expect(applets.open.value).toBeNull()
   })
 
-  it('opens a pop-up with no session area on screen, or for an applet not placed as a tab', async () => {
+  it('opens a pop-up with no session area on screen', async () => {
     const applets = await storeWith({ tab: ['radio'] })
-    applets.toggle('radio', 'review')
-    expect(applets.open.value?.id).toBe('radio')
-    applets.close()
-
-    const host = vi.fn()
+    const host = hostOf()
     applets.setTabHost(host, true)
     applets.setTabHost(host, false)
-    applets.toggle('radio', 'review')
-    expect(host).not.toHaveBeenCalled()
-    expect(applets.sessionSlug.value).toBe('review')
+    applets.toggle('radio')
+    expect(host.open).not.toHaveBeenCalled()
+    expect(applets.open.value?.id).toBe('radio')
+  })
+
+  it('gives a pop-up the session of the area on screen, in Chats as in Code', async () => {
+    const applets = await storeWith({})
+    applets.setTabHost(hostOf('chat-slug'), true)
+    expect(applets.liveSessionSlug.value).toBe('chat-slug')
+    applets.toggle('radio')
+    expect(applets.sessionSlug.value).toBe('chat-slug')
   })
 
   it('keeps the area on screen as the host when another one lets go', async () => {
     const applets = await storeWith({ tab: ['radio'] })
-    const code = vi.fn()
+    const code = hostOf()
     applets.setTabHost(code, true)
-    applets.setTabHost(vi.fn(), false)
-    applets.toggle('radio', '')
-    expect(code).toHaveBeenCalledWith('radio')
+    applets.setTabHost(hostOf(), false)
+    applets.toggle('radio')
+    expect(code.open).toHaveBeenCalledWith('radio')
   })
 
   it('opens the pop-up the + menu asks for even when the applet is also a tab', async () => {
     const applets = await storeWith({ tab: ['radio'], page: ['radio'] })
-    const host = vi.fn()
+    const host = hostOf()
     applets.setTabHost(host, true)
     applets.openPopup('radio', 'review')
-    expect(host).not.toHaveBeenCalled()
+    expect(host.open).not.toHaveBeenCalled()
     expect(applets.open.value?.id).toBe('radio')
+  })
+
+  it('closes another pop-up that would cover the tab it opens', async () => {
+    service.List.mockResolvedValue([applet('radio'), applet('other')])
+    const applets = await storeWith({ tab: ['radio'] })
+    applets.setTabHost(hostOf(), true)
+    applets.openPopup('other', '')
+    applets.toggle('radio')
+    expect(applets.open.value).toBeNull()
+  })
+
+  it('closes a dropdown when an edit replaces the frame it hangs from', async () => {
+    service.List.mockResolvedValue([applet('radio', { revision: 1 })])
+    const applets = await storeWith({})
+    const opened = applets.applets.value[0] as never
+    applets.toggleDropdown({ applet: opened, entry: 'm.html', width: 1, height: 1, anchor: document.body })
+    expect(applets.dropdown.value).not.toBeNull()
+
+    service.List.mockResolvedValue([applet('radio', { revision: 2 })])
+    await applets.reload()
+    expect(applets.dropdown.value).toBeNull()
   })
 })

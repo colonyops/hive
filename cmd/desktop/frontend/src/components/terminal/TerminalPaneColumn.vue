@@ -390,10 +390,11 @@ useSessionLayout('terminal', toRef(props, 'drive'), () => props.active && pool.a
   turn: (tab) => panels.apply((current) => turnRule(current, tab)),
 })
 
-useAppletTabHost(
-  () => props.active && !!panels.row,
-  (id) => panels.apply((current) => openTab(current, appletTab(id))),
-)
+useAppletTabHost({
+  active: () => props.active && !!panels.row,
+  apply: (rule) => panels.apply(rule),
+  sessionSlug: () => panels.row?.slug ?? '',
+})
 
 const panelLayouts = usePanelLayouts()
 watch([() => props.active, () => panels.key], ([active, key]) => panelLayouts.markOnScreen(active ? key : ''), {

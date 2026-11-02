@@ -180,6 +180,8 @@ function fail(why: string): void {
   status.value = 'ended'
   endedReason.value = why
   pane.closeStream()
+  // Coming back must not run a launched command a second time.
+  launchEnded()
 }
 
 // Ends the terminal on purpose, the deliberate counterpart to typing `exit`:

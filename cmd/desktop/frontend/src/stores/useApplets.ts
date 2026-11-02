@@ -28,6 +28,12 @@ export interface AppletMenuRow {
   opensAs: 'tab' | 'page'
 }
 
+/** The session area the user is in, which can show an applet as a tab. */
+export interface AppletTabHost {
+  open: (id: string) => void
+  sessionSlug: () => string
+}
+
 export interface AppletDropdown {
   applet: Applet
   entry: string
@@ -113,17 +119,23 @@ export const useApplets = defineStore('applets', () => {
 
   // The session area on screen, which can show an applet as a tab. Both areas stay
   // mounted, so only the one the user is in holds this.
-  let tabHost: ((id: string) => void) | null = null
+  const tabHost = shallowRef<AppletTabHost | null>(null)
 
-  function setTabHost(host: (id: string) => void, active: boolean): void {
-    if (active) tabHost = host
-    else if (tabHost === host) tabHost = null
+  function setTabHost(host: AppletTabHost, active: boolean): void {
+    if (active) tabHost.value = host
+    else if (tabHost.value === host) tabHost.value = null
   }
+
+  // The session on screen, in Code or Chats. A title bar page outlives any one session, so it
+  // follows this where a pop-up stays on the session it opened over.
+  const liveSessionSlug = computed(() => tabHost.value?.sessionSlug() ?? '')
 
   // What the user chose for an applet wins over the pop-up wherever it opens from.
   function openPlacedTab(id: string): boolean {
-    if (!tabHost || !placed.tab?.value.some((applet) => applet.id === id)) return false
-    tabHost(id)
+    if (!tabHost.value || !placed.tab?.value.some((applet) => applet.id === id)) return false
+    // A pop-up left open would cover the tab the user just asked for.
+    openID.value = null
+    tabHost.value.open(id)
     return true
   }
 
@@ -178,14 +190,6 @@ export const useApplets = defineStore('applets', () => {
     dropdown.value = null
   }
 
-  // The session on screen now. A title bar page outlives any one session, so it follows
-  // this where a panel stays on the session it opened over.
-  const liveSessionSlug = ref('')
-
-  function setLiveSession(slug: string): void {
-    liveSessionSlug.value = slug
-  }
-
   let commandRunner: (id: string) => void = () => {}
 
   function setCommandRunner(run: (id: string) => void): void {
@@ -238,9 +242,9 @@ export const useApplets = defineStore('applets', () => {
     return target !== undefined
   }
 
-  function openForCommand(id: string, command: string, session: string): void {
+  function openForCommand(id: string, command: string): void {
     commandsForPanel.set(id, [...(commandsForPanel.get(id) ?? []), command])
-    if (!openPlacedTab(id)) openPopup(id, session)
+    if (!openPlacedTab(id)) openPopup(id, liveSessionSlug.value)
   }
 
   const frameRows = shallowRef(new Map<AppletFrameHandle, { applet: string; rows: AppletPageRow[] }>())
@@ -255,14 +259,12 @@ export const useApplets = defineStore('applets', () => {
   // Data rather than commands, so nothing binds to them: they exist while the page does.
   const pageRows = computed<Command[]>(() => {
     const byID = new Map<string, Command>()
-    const handlesByRow = new Map<string, AppletFrameHandle[]>()
     for (const [handle, { applet, rows }] of frameRows.value) {
+      // A row acts on its page, so a page the user cannot see offers none.
+      if (!handle.onScreen()) continue
       const title = catalog.data.value.find((candidate) => candidate.id === applet)?.title ?? applet
       for (const row of rows) {
         const id = `applet:${applet}:${row.id}`
-        // Several frames can offer one row. The one on screen is what the user means.
-        const handles = [...(handlesByRow.get(id) ?? []), handle]
-        handlesByRow.set(id, handles)
         byID.set(id, {
           id,
           title: row.title,
@@ -272,7 +274,7 @@ export const useApplets = defineStore('applets', () => {
           hint: row.hint,
           kind: row.kind,
           scope: row.scope,
-          run: () => (handles.find((candidate) => candidate.onScreen()) ?? handle).deliverCommand(row.id),
+          run: () => handle.deliverCommand(row.id),
         })
       }
     }
@@ -285,7 +287,9 @@ export const useApplets = defineStore('applets', () => {
       if (openID.value !== null && !applets.some((applet) => applet.id === openID.value && applet.enabled)) {
         openID.value = null
       }
-      if (dropdown.value && !applets.some((applet) => applet.id === dropdown.value?.applet.id && applet.enabled)) {
+      // An edit replaces the title bar frame the dropdown is anchored to and serves new pages.
+      const open = dropdown.value?.applet
+      if (open && !applets.some((a) => a.id === open.id && a.enabled && a.revision === open.revision)) {
         dropdown.value = null
       }
       // Unbound until the user says otherwise: a file an agent wrote must not claim a
@@ -325,12 +329,12 @@ export const useApplets = defineStore('applets', () => {
   })
   void catalog.reload()
 
-  function toggle(id: string, session: string): void {
+  function toggle(id: string): void {
     if (openID.value === id) {
       openID.value = null
       return
     }
-    if (!openPlacedTab(id)) openPopup(id, session)
+    if (!openPlacedTab(id)) openPopup(id, liveSessionSlug.value)
   }
 
   function openPopup(id: string, session: string): void {
@@ -366,8 +370,7 @@ export const useApplets = defineStore('applets', () => {
     dropdown: shallowReadonly(dropdown),
     toggleDropdown,
     closeDropdown,
-    liveSessionSlug: readonly(liveSessionSlug),
-    setLiveSession,
+    liveSessionSlug,
     setCommandRunner,
     runCommand,
     connectFrame,

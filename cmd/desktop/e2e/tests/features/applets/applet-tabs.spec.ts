@@ -106,6 +106,12 @@ test.describe('applet tabs', { tag: [tag.applets] }, () => {
     await page.keyboard.press('Escape')
     await expect(frame).toBeVisible()
 
+    // A press in a frame never reaches the app's document, so a menu has to notice it another way.
+    await panels.nth(1).locator('[data-testid^="panel-tab-add-"]').click()
+    await expect(page.getByTestId('new-window-menu')).toBeVisible()
+    await frame.click()
+    await expect(page.getByTestId('new-window-menu')).toHaveCount(0)
+
     // A tab that comes forward from behind another takes the keyboard.
     const activeTestId = () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid)
     await panels.nth(1).locator('[data-testid^="panel-tab-add-"]').click()

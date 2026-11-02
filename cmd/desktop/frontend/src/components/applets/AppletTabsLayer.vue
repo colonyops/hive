@@ -57,7 +57,7 @@ const tabs = computed(() =>
       :applet="tab.applet"
       :session-slug="sessionSlug"
       :wants-focus="active && keysActive && openModals === 0 && !applets.open.value && tab.focused"
-      :on-screen="active && tab.shown"
+      :on-screen="active && tab.shown && !applets.open.value"
       surface="tab"
       @close="emit('closeTab', tab.panel, tab.id)"
       @focused="emit('focusPanel', tab.panel)"

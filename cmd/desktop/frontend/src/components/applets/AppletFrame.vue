@@ -53,11 +53,15 @@ useAppletBridge({
 // A surface with nothing to close must not take Escape from whatever has focus.
 useEscapeToClose(() => emit('close'), { enabled: () => rules.value.escapeCloses && !popupTerminal.visible.value })
 
-// A page that loads with the app and on every edit must not take focus from what the
-// user is typing in.
+let loaded = false
+
+// Opening an applet is asking for it, whatever had focus. A page that loads with the app or
+// on an edit must not take focus from what the user is typing in.
 function focusFrame(): void {
-  const wanted = props.wantsFocus && !isEditableTarget(document.activeElement)
-  if (rules.value.takesFocus || wanted) frame.value?.focus()
+  const opening = rules.value.takesFocus && !loaded
+  loaded = true
+  const wanted = rules.value.takesFocus || props.wantsFocus
+  if (opening || (wanted && !isEditableTarget(document.activeElement))) frame.value?.focus()
 }
 
 // The layout just gave this panel the keyboard, so nothing else has a claim on it. Waits for

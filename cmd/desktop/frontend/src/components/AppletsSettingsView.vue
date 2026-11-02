@@ -126,7 +126,7 @@ const detailsProcesses = computed(() => processes.value.filter((process) => proc
 
 function openFromDetails(id: string): void {
   detailsID.value = null
-  applets.toggle(id, '')
+  applets.toggle(id)
 }
 
 async function setEnabled(id: string, enabled: boolean): Promise<void> {
@@ -191,7 +191,7 @@ onMounted(() => {
           size="sm"
           :disabled="!builderOn"
           data-testid="settings-applets-builder"
-          @click="applets.toggle(BUILDER_ID, '')"
+          @click="applets.toggle(BUILDER_ID)"
           >Build an applet</BaseButton
         >
       </template>

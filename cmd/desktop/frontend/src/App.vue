@@ -30,6 +30,7 @@ import { useGitHubConnection } from './composables/useGitHubConnection'
 import { useWailsEvent } from './composables/useWailsEvent'
 import { useFlowsSession } from './pipeline/composables/useFlowsSession'
 import { useActivity } from './stores/useActivity'
+import { useApplets } from './stores/useApplets'
 import { useJobs } from './stores/useJobs'
 import { kind } from './lib/itemPresentation'
 import { AGENTS_SIDEBAR, TERMINAL_SIDEBAR, type ModeSidebar } from './lib/modeSidebars'
@@ -115,6 +116,8 @@ useWailsEvent('inbox:updated', () => {
 useWailsEvent('flows:updated', () => {
   void session.reloadFlows()
 })
+
+const applets = useApplets()
 </script>
 
 <template>
@@ -170,7 +173,7 @@ useWailsEvent('flows:updated', () => {
           :active="terminalActive"
           :sidebar-collapsed="terminalSidebarCollapsed"
           :drive="appMode.codeDrive.value"
-          :overlay-open="tasksOpen || activityOpen || actionRunsOpen"
+          :overlay-open="tasksOpen || activityOpen || actionRunsOpen || !!applets.open.value"
           @session-repo-key="terminalSessionRepoKey = $event"
         />
         <AgentsMode

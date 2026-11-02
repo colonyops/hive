@@ -221,8 +221,8 @@ export function useAppCommands(deps: AppCommandDeps) {
       overlays.tasksOpen.value = false
       overlays.activityOpen.value = false
       overlays.actionRunsOpen.value = false
-      if (declared !== null) applets.openForCommand(applet, declared, onScreenSessionSlug.value)
-      else applets.toggle(applet, onScreenSessionSlug.value)
+      if (declared !== null) applets.openForCommand(applet, declared)
+      else applets.toggle(applet)
       return
     }
     const window = terminalWindowPosition(id)
@@ -267,7 +267,6 @@ export function useAppCommands(deps: AppCommandDeps) {
   useAppPaletteRows(deps, runCommand, contextActive)
   useCommands(applets.pageRows)
   applets.setCommandRunner(runCommand)
-  watch(onScreenSessionSlug, applets.setLiveSession, { immediate: true })
 
   return { runCommand, contextActive, popupTerminalMounted }
 }

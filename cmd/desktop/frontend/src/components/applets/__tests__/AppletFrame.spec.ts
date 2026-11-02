@@ -180,6 +180,21 @@ describe('AppletFrame', () => {
     expect(service.Exec).not.toHaveBeenCalled()
   })
 
+  it('takes focus when it opens, and not when an edit reloads it under what the user types in', async () => {
+    const input = document.body.appendChild(document.createElement('input'))
+    input.focus()
+    const { wrapper } = setup()
+    const frame = wrapper.get('iframe')
+    await frame.trigger('load')
+    expect(document.activeElement).toBe(frame.element)
+
+    input.focus()
+    await frame.trigger('load')
+    expect(document.activeElement).toBe(input)
+    wrapper.unmount()
+    input.remove()
+  })
+
   it('closes on Escape from the page, except as a tab, whatever page the frame has reached', async () => {
     const popup = setup()
     await popup.send('escape')
@@ -418,7 +433,7 @@ describe('AppletFrame', () => {
     })
 
     it('waits for the panel it opens to load', async () => {
-      useApplets().openForCommand('pong', 'next', 'sess')
+      useApplets().openForCommand('pong', 'next')
       const { wrapper, send, replies } = setup()
       expect(replies).toEqual([])
       await send('ready')

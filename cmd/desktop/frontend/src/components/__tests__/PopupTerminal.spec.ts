@@ -500,6 +500,23 @@ describe('PopupTerminal', () => {
     expect(el('popup-terminal-pane').style.display).not.toBe('none')
   })
 
+  it('does not run a launched command again after its connection drops', async () => {
+    const { client } = await mountPanel()
+    const popup = usePopupTerminal()
+    popup.launch({ command: 'deploy', dir: '/w' })
+    await flushPromises()
+
+    FakeSocket.instances[0].onerror?.()
+    await flushPromises()
+    popup.toggle()
+    await flushPromises()
+    popup.toggle()
+    await flushPromises()
+
+    const runs = client.open.mock.calls.filter(([request]) => request.command === 'deploy')
+    expect(runs).toHaveLength(1)
+  })
+
   // A stream that dropped for a reason other than the process exiting would
   // otherwise leave a shell running with nothing able to reach it again.
   it('closes the terminal it replaces rather than abandoning it', async () => {

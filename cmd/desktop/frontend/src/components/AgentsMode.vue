@@ -204,10 +204,11 @@ function openAppletIn(id: string, opensAs: AppletMenuRow['opensAs'], panelId: st
   else panels.apply((current) => openTab(current, appletTab(id), panelId))
 }
 
-useAppletTabHost(
-  () => props.active && !!panels.key.value,
-  (id) => panels.apply((current) => openTab(current, appletTab(id))),
-)
+useAppletTabHost({
+  active: () => props.active && !!panels.key.value,
+  apply: (rule) => panels.apply(rule),
+  sessionSlug: () => chatSlug.value,
+})
 
 function tabAttention(tab: PanelTab): boolean {
   return tab.kind === 'docs' && driveActivity.isUnseen(openSessionId.value)
@@ -1076,7 +1077,10 @@ onBeforeUnmount(() => {
               />
             </template>
             <template #floating="{ region }">
+              <!-- Live only: the layout key changes twice while a saved chat resumes, which
+                   would load each page, and run what it starts, twice over. -->
               <AppletTabsLayer
+                v-if="paneStatus === 'live'"
                 :layout="layout"
                 :region="region"
                 :session-slug="chatSlug"
