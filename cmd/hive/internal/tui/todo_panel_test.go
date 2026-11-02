@@ -17,9 +17,7 @@ import (
 
 func newTodoPanelService(t *testing.T) *todosvc.Service {
 	t.Helper()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 
 	store := store.NewTodoStore(zerolog.Nop(), database)
 	bus := events.New(16)

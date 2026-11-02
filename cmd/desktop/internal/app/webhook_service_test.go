@@ -35,9 +35,7 @@ func TestWebhookServiceInfoWithoutListener(t *testing.T) {
 
 func TestWebhookServiceCapture(t *testing.T) {
 	t.Parallel()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 	captures := stores.New(db, stores.Options{}).WebhookCaptures
 	service := newWebhookService(WebhookDeps{Settings: testSettingsStore(t), Captures: captures, Listener: nil, Host: "127.0.0.1", Port: 24483})
 

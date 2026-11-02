@@ -52,9 +52,7 @@ func TestFixtureFlow_LoadsAndMatchesSeedConstants(t *testing.T) {
 }
 
 func TestSeedMockInboxItems_WritesExpectedRows(t *testing.T) {
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 
 	st := stores.New(db, stores.Options{})
 	require.NoError(t, seedMockInboxItems(t.Context(), db, st.EventLog))

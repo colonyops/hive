@@ -9,6 +9,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 )
 
 func inputAction(id, actionType string, cfg actions.ActionConfig, inputs ...actions.InputSpec) actions.Action {
@@ -66,7 +67,7 @@ func TestRenderClipboardText_UndeclaredInputIsARenderError(t *testing.T) {
 // command picks up the declared defaults.
 func TestWorker_AutomaticRunResolvesDeclaredDefaults(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	enqueueTestCommand(t, db, "notify-oncall", "item-1", `{"title":"Fix bug"}`)
 
 	action := inputAction("notify-oncall", "publish-message",
@@ -85,7 +86,7 @@ func TestWorker_AutomaticRunResolvesDeclaredDefaults(t *testing.T) {
 
 func TestWorker_ConfirmThreadsCollectedInputsToTheExecutor(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 
 	action := inputAction("ignore", "shell",
 		&actions.ShellConfig{CommandTemplate: "true"},
@@ -108,7 +109,7 @@ func TestWorker_ConfirmThreadsCollectedInputsToTheExecutor(t *testing.T) {
 
 func TestWorker_MissingRequiredInputFailsWithoutDispatching(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 
 	action := inputAction("ignore", "shell",
 		&actions.ShellConfig{CommandTemplate: "true"},

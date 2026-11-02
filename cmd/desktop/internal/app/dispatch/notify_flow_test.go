@@ -30,9 +30,7 @@ func (r *notifyActivityRecorder) Record(_ context.Context, event activity.Event)
 func TestNotifyTerminal_DeliversThroughTheWorker(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 
 	item, err := stores.NewSeed(db).InboxItem(ctx, stores.InboxItem{
 		ProfileID: "triage", SourceKind: "github", SourceScope: "src", ExternalID: "acme/api#12",
@@ -109,9 +107,7 @@ func TestNotifyTerminal_DeliversThroughTheWorker(t *testing.T) {
 func TestNotifyTerminal_DeletedNodeFailsItsQueuedCommand(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 
 	notifier := &notifierTest{}
 	dispatcher := NewDispatcher(map[string]Executor{

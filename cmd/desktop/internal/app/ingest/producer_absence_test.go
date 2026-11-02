@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/feed"
@@ -90,7 +91,7 @@ func (activeAbsenceClassifier) Classify(_ *models.Observation, current models.Ob
 
 func TestProducerAbsenceIsScopedToExactSourceTopic(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	classifier := genericClassifier{}
 	_, err := stores.New(db, stores.Options{}).InboxItems.IngestObservation(t.Context(), classifier, stores.IngestObservationParams{ProfileID: "profile", Topic: "source:profile/second", Current: models.Observation{ExternalID: "only-second", SourceKind: "github", Payload: []byte(`{"v":1}`), ObservedAt: 1}})
 	require.NoError(t, err)
@@ -104,7 +105,7 @@ func TestProducerAbsenceIsScopedToExactSourceTopic(t *testing.T) {
 
 func TestProducerAbsenceHydrationPreservesInboxMetadata(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	item := feed.Item{ID: "acme/repo#1", Title: "Keep this title", URL: "https://example.test/acme/repo/issues/1", UpdatedAt: 100}
 	payload, err := json.Marshal(item)
 	require.NoError(t, err)
@@ -133,7 +134,7 @@ func TestProducerAbsenceHydrationPreservesInboxMetadata(t *testing.T) {
 
 func TestProducerIngestsNonTerminalAbsenceConfirmation(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	item := feed.Item{ID: "acme/repo#1", Title: "Still active", URL: "https://example.test/acme/repo/issues/1", State: "open", UpdatedAt: 100}
 	payload, err := json.Marshal(item)
 	require.NoError(t, err)
@@ -160,7 +161,7 @@ func TestProducerIngestsNonTerminalAbsenceConfirmation(t *testing.T) {
 
 func TestProducerConfirmsAbsentItemsInOneCall(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	const absentCount = 250
 	batch := make([]Msg, absentCount)
 	for i := range absentCount {
@@ -192,7 +193,7 @@ func (p partialAbsence) ConfirmAbsence(context.Context, []models.Observation) (m
 
 func TestProducerIngestsPartialAbsenceBatch(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	itemA := feed.Item{ID: "acme/repo#1", Title: "A", UpdatedAt: 100}
 	payloadA, err := json.Marshal(itemA)
 	require.NoError(t, err)
@@ -230,7 +231,7 @@ func (emptyAbsence) ConfirmAbsence(context.Context, []models.Observation) (map[s
 
 func TestProducerKeepsNotFoundItems(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	item := feed.Item{ID: "acme/repo#1", Title: "A", UpdatedAt: 100}
 	payload, err := json.Marshal(item)
 	require.NoError(t, err)
@@ -285,7 +286,7 @@ func (r *recordingAbsence) ConfirmAbsence(_ context.Context, previous []models.O
 
 func TestProducerConfirmsActiveAbsentItem(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	item := feed.Item{ID: "acme/repo#1", Title: "A", UpdatedAt: 100}
 	payload, err := json.Marshal(item)
 	require.NoError(t, err)
@@ -307,7 +308,7 @@ func TestProducerConfirmsActiveAbsentItem(t *testing.T) {
 
 func TestProducerSkipsArchivedItemsInAbsence(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	item := feed.Item{ID: "acme/repo#1", Title: "A", UpdatedAt: 100}
 	payload, err := json.Marshal(item)
 	require.NoError(t, err)
@@ -331,7 +332,7 @@ func TestProducerSkipsArchivedItemsInAbsence(t *testing.T) {
 
 func TestProducerStopsConfirmingTerminalItems(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	payload := []byte(`{"id":"acme/repo#1","title":"A"}`)
 	_, err := stores.New(db, stores.Options{}).InboxItems.IngestObservation(t.Context(), genericClassifier{}, stores.IngestObservationParams{
 		ProfileID: "profile", Topic: "source:profile/source",

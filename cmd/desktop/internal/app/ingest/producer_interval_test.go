@@ -9,13 +9,14 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 )
 
 func TestProducer_SetInterval(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		db := openTestPipelineDB(t)
+		db := queries.OpenForTest(t)
 		var mu sync.Mutex
 		wakes := 0
 		producer := newTestProducer(db, sourcesOf(map[string]connector.PullSource{"flow/s1": &fakeSource{}}), time.Hour, func(int64) {

@@ -158,9 +158,7 @@ func TestEditSessionEnterSavesAndUnchangedEnterOnlyCloses(t *testing.T) {
 
 func TestExecuteEditSessionSkipsTagsWhenTheRenameFails(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 	sessionStore := store.NewSessionStore(database)
 	now := time.Now()
 	for _, sess := range []session.Session{

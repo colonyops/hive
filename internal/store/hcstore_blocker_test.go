@@ -55,9 +55,7 @@ func TestAddBlocker_RefusesACycleAndKeepsTheEdges(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			ctx := context.Background()
-			database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-			require.NoError(t, err)
-			defer func() { _ = database.Close() }()
+			database := db.OpenForTest(t)
 			store := NewHCStore(database)
 			now := time.Now()
 			require.NoError(t, store.CreateItems(ctx, []hc.Item{
@@ -70,7 +68,7 @@ func TestAddBlocker_RefusesACycleAndKeepsTheEdges(t *testing.T) {
 				require.NoError(t, store.AddBlocker(ctx, edge[0], edge[1]))
 			}
 
-			err = store.AddBlocker(ctx, tt.blocker, tt.blocked)
+			err := store.AddBlocker(ctx, tt.blocker, tt.blocked)
 
 			edges, listErr := store.ListBlockerEdges(ctx)
 			require.NoError(t, listErr)
@@ -88,9 +86,7 @@ func TestAddBlocker_RefusesACycleAndKeepsTheEdges(t *testing.T) {
 func TestFetchBlockedSet_ExplicitBlocker(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -119,9 +115,7 @@ func TestFetchBlockedSet_ExplicitBlocker(t *testing.T) {
 func TestFetchBlockedSet_ClosedBlocker(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -146,9 +140,7 @@ func TestFetchBlockedSet_ClosedBlocker(t *testing.T) {
 func TestListBlockers_EmptyWhenBlockersDone(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -179,9 +171,7 @@ func TestListBlockers_EmptyWhenBlockersDone(t *testing.T) {
 func TestFetchHCItem_BlockerIDs(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()

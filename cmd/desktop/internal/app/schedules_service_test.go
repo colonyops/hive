@@ -74,9 +74,7 @@ func newTestSchedulesService(t *testing.T) scheduleFixture {
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", "claude"+agentws.PromptTail, ""))
 
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 
 	workspaces := agentws.NewStore(root)

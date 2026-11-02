@@ -42,9 +42,7 @@ func newTestAgentWorkspacesService(t *testing.T, root string, commands map[strin
 func newTestAgentWorkspacesServiceOn(t *testing.T, server *tmuxtest.Server, root string, commands map[string]string) *AgentWorkspacesService {
 	t.Helper()
 
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	manager := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{Logger: zerolog.Nop(), Runner: server})
 	t.Cleanup(func() { _ = manager.Stop(context.WithoutCancel(t.Context())) })
@@ -118,9 +116,7 @@ func writeSharedSkill(t *testing.T, root, slug, body string) {
 func newManifestOnlyService(t *testing.T, root string, profileCommands map[string]string) *AgentWorkspacesService {
 	t.Helper()
 
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	awStore := agentws.NewStore(root)
 	require.NoError(t, awStore.Reload())

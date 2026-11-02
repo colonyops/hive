@@ -46,9 +46,7 @@ func (f notifierFunc) PublishLogAppended(offset int64) { f(offset) }
 
 func newWebhookTestListener(t *testing.T, instances Instances) (*Listener, *queries.DB, *int64) {
 	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 
 	st := stores.New(db, stores.Options{})
 

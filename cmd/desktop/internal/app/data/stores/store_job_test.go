@@ -11,9 +11,7 @@ import (
 
 func TestJobs_LifecyclePagingAndActiveWindow(t *testing.T) {
 	t.Parallel()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 	clock := newTestClock()
 	st := New(db, Options{Now: clock.Now})
 	ctx := t.Context()

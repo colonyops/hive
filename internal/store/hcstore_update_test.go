@@ -85,9 +85,7 @@ func TestHCStore_UpdateItem_TitleDesc(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-			require.NoError(t, err)
-			defer func() { _ = database.Close() }()
+			database := db.OpenForTest(t)
 
 			store := NewHCStore(database)
 
@@ -119,9 +117,7 @@ func TestHCStore_UpdateItem_TitleDesc(t *testing.T) {
 func TestHCStore_BulkUpdateStatus(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()

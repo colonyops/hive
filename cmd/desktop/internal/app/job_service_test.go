@@ -19,9 +19,7 @@ import (
 
 func newTestJobService(t *testing.T) (*JobService, <-chan events.JobsUpdated) {
 	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 	bus := newTestBus(t)
 	ch := subscribeEvents[events.JobsUpdated](t, bus)
 	return newJobService(stores.New(db, stores.Options{}).Jobs, bus, zerolog.Nop()), ch
@@ -29,9 +27,7 @@ func newTestJobService(t *testing.T) (*JobService, <-chan events.JobsUpdated) {
 
 func TestJobService_ListAndListActive(t *testing.T) {
 	t.Parallel()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
 	st := stores.New(db, stores.Options{Now: func() time.Time { return now }})
@@ -72,9 +68,7 @@ func TestJobService_ListAndListActive(t *testing.T) {
 
 func TestJobService_RecordsLifecycleLabelsAndPublishes(t *testing.T) {
 	t.Parallel()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 	ctx := t.Context()
 	now := time.UnixMilli(1_000)
 	st := stores.New(db, stores.Options{Now: func() time.Time { return now }})
@@ -189,15 +183,13 @@ func TestJobService_TrackPublishesTerminalTransitionAfterFnReturns(t *testing.T)
 
 func TestJobService_ListActiveUsesBackendClockWindow(t *testing.T) {
 	t.Parallel()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 	ctx := t.Context()
 	now := time.UnixMilli(10_000)
 	st := stores.New(db, stores.Options{Now: func() time.Time { return now }})
 	service := newJobService(st.Jobs, newTestBus(t), zerolog.Nop())
 
-	_, err = db.InsertJob(ctx, queries.InsertJobParams{
+	_, err := db.InsertJob(ctx, queries.InsertJobParams{
 		CreatedAt: 1, UpdatedAt: now.Add(-jobs.DefaultLingerWindow).UnixMilli(), Status: "done", Label: "Boundary",
 	})
 	require.NoError(t, err)
@@ -221,8 +213,7 @@ func TestJobService_ListActiveUsesBackendClockWindow(t *testing.T) {
 // a row changed, and neither changed one.
 func TestJobService_FailedWritesAndZeroTransitionsPublishNothing(t *testing.T) {
 	t.Parallel()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
+	db := queries.OpenForTest(t)
 	require.NoError(t, db.Close())
 	st := stores.New(db, stores.Options{})
 	bus := newTestBus(t)

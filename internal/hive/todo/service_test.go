@@ -32,9 +32,7 @@ func newTestBus(t *testing.T) *events.EventBus {
 
 func newTestTodoService(t *testing.T) (*Service, todo.Store) {
 	t.Helper()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 
 	store := store.NewTodoStore(zerolog.Nop(), database)
 	bus := newTestBus(t)
@@ -49,9 +47,7 @@ func TestTodoLimiter(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("allows when under limits", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := store.NewTodoStore(zerolog.Nop(), database)
 		limiter := NewLimiter(store, config.TodosLimiterConfig{
@@ -70,9 +66,7 @@ func TestTodoLimiter(t *testing.T) {
 	})
 
 	t.Run("rejects when max pending reached", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := store.NewTodoStore(zerolog.Nop(), database)
 		limiter := NewLimiter(store, config.TodosLimiterConfig{
@@ -96,15 +90,13 @@ func TestTodoLimiter(t *testing.T) {
 		}
 
 		td := todo.Todo{ID: "t3", SessionID: "sess-1"}
-		err = limiter.Check(ctx, td)
+		err := limiter.Check(ctx, td)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "max pending")
 	})
 
 	t.Run("rejects when rate limited", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := store.NewTodoStore(zerolog.Nop(), database)
 		limiter := NewLimiter(store, config.TodosLimiterConfig{
@@ -113,7 +105,7 @@ func TestTodoLimiter(t *testing.T) {
 		})
 
 		now := time.Now()
-		err = store.Create(ctx, todo.Todo{
+		err := store.Create(ctx, todo.Todo{
 			ID:        "t1",
 			SessionID: "sess-1",
 			Source:    todo.SourceAgent,
@@ -132,9 +124,7 @@ func TestTodoLimiter(t *testing.T) {
 	})
 
 	t.Run("rate limit allows different sessions", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := store.NewTodoStore(zerolog.Nop(), database)
 		limiter := NewLimiter(store, config.TodosLimiterConfig{
@@ -143,7 +133,7 @@ func TestTodoLimiter(t *testing.T) {
 		})
 
 		now := time.Now()
-		err = store.Create(ctx, todo.Todo{
+		err := store.Create(ctx, todo.Todo{
 			ID:        "t1",
 			SessionID: "sess-1",
 			Source:    todo.SourceAgent,
@@ -187,9 +177,7 @@ func TestTodoService(t *testing.T) {
 	})
 
 	t.Run("add rejects when limited", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := store.NewTodoStore(zerolog.Nop(), database)
 		bus := newTestBus(t)

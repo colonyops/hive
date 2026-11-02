@@ -26,9 +26,7 @@ func TestActionUsageCheckerBlocksLoadedFlowsAndNonterminalQueueOnly(t *testing.T
 	}, Wires: []flow.Wire{{From: "source", To: "action"}}}
 	require.NoError(t, flows.Save(f))
 
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 	for _, status := range []string{"pending", "running", "done", "failed"} {
 		_, err := db.Conn().ExecContext(t.Context(), `INSERT INTO output_command (action_id, key, payload, status, created_at) VALUES (?, ?, ?, ?, 1)`, "used", status, []byte("{}"), status)
 		require.NoError(t, err)
