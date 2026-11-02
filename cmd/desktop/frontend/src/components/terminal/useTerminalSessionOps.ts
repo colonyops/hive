@@ -213,8 +213,9 @@ export function useTerminalSessionOps(options: {
 
   // A configured action renders over the session it was invoked on, and the
   // scratch terminal has none to template from, so its tabs offer no actions.
+  // An action runs on this machine, and a server's checkout is not here.
   function rowHasWindowActions(row: TerminalSessionRow): boolean {
-    return actions.hasWindowActions.value && !tree.isScratch(row)
+    return actions.hasWindowActions.value && !tree.isScratch(row) && !row.server
   }
 
   function runSessionAction(row: TerminalSessionRow, entryID: string): void {

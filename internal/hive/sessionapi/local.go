@@ -104,6 +104,24 @@ func (l *Local) SessionBranches(ctx context.Context, id string) ([]string, error
 	return l.engine.GitStatus().ReadBranches(ctx, sess)
 }
 
+func (l *Local) GitStatuses(ctx context.Context, ids []string) (map[string]gitstatus.Status, error) {
+	all, err := l.engine.Sessions().ListSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	wanted := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		wanted[id] = true
+	}
+	sessions := make([]session.Session, 0, len(ids))
+	for _, sess := range all {
+		if wanted[sess.ID] {
+			sessions = append(sessions, sess)
+		}
+	}
+	return l.engine.GitStatus().ReadSessions(ctx, sessions), nil
+}
+
 func (l *Local) StatusAvailable() bool {
 	return l.engine.Status().Available()
 }

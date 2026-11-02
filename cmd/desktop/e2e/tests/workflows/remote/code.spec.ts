@@ -91,6 +91,28 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
     await expect(page.getByTestId('terminal-server-offline-server-a')).toHaveCount(0)
   })
 
+  test('refuses a prompt too long for a server before submit', async ({ page }) => {
+    await stubTerminals(page)
+    await page.goto('/#/terminal')
+    await expect(page.getByTestId('terminal-server-offline-gone')).toBeVisible({ timeout: 30_000 })
+    await page.getByTestId('terminal-new-session').click()
+    await expect(page.getByTestId('new-session-dialog')).toBeVisible()
+    await page.getByTestId('new-session-name').fill(`${SESSION}-long`)
+    await page.getByTestId('new-session-prompt').fill('x'.repeat(33 * 1024))
+    await expect(page.getByTestId('new-session-prompt-file-warning')).toBeVisible()
+
+    await page.getByTestId('new-session-server').click()
+    await page.getByTestId('new-session-server-option-server-a').click()
+    await page.getByTestId('new-session-repository').click()
+    await page.getByTestId('new-session-repository-search').fill('/home/hive/repo.git')
+    await page.getByTestId('new-session-repository-custom').click()
+
+    await expect(page.getByTestId('new-session-prompt-server-limit')).toContainText('at most 32 KiB')
+    await expect(page.getByTestId('new-session-prompt-file-warning')).toHaveCount(0)
+    await expect(page.getByTestId('new-session-submit')).toBeDisabled()
+    expect(onServer(`hive session list --json`)).not.toContain(`"name":"${SESSION}-long"`)
+  })
+
   test('creates a session on the server chosen in the form', async ({ page }) => {
     await stubTerminals(page)
     await page.goto('/#/terminal')
@@ -121,6 +143,14 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
 
     await expect(page).toHaveURL(new RegExp(`/terminal/${SLUG}$`))
     await expect.poll(() => attached).toContain(SLUG)
+
+    // The status bar reads the checkout on the server, and offers nothing
+    // that would act on this machine.
+    await expect(page.getByTestId('session-status-branch')).toHaveText('main', { timeout: 30_000 })
+    await expect(page.getByTestId('terminal-pane-statusbar-reveal')).toHaveCount(0)
+    await expect(page.getByTestId('terminal-pane-statusbar-open-editor')).toHaveCount(0)
+    await expect(page.getByTestId('terminal-statusbar-changes')).toHaveCount(0)
+    await expect(page.getByTestId('session-status-host')).toHaveText('server-a')
   })
 
   test('gives a server session tabs and a split, without the views that need a checkout', async ({ page, browserName }) => {

@@ -81,6 +81,25 @@ describe('SessionLaunchDialog: new session', () => {
     expect(wrapper.find('[data-testid="new-session-prompt-file-warning"]').exists()).toBe(false)
   })
 
+  it('refuses a prompt above the limit before submit when the target is a server', async () => {
+    const wrapper = mountNew({
+      options: { ...options, promptFileThresholdBytes: 2048 },
+      initial: { ...blank, name: 'remote', prompt: 'x'.repeat(2049) },
+      server: 'box',
+    })
+
+    expect(wrapper.find('[data-testid="new-session-prompt-file-warning"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="new-session-prompt-server-limit"]').text()).toContain('at most 2 KiB')
+    expect(wrapper.get('[data-testid="new-session-submit"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('submit')).toBeUndefined()
+
+    await wrapper.get('[data-testid="new-session-prompt"]').setValue(`${'x'.repeat(2048)}\n`)
+    expect(wrapper.find('[data-testid="new-session-prompt-server-limit"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="new-session-submit"]').attributes('disabled')).toBeUndefined()
+  })
+
   it('picks a repository through the shared selector', async () => {
     const wrapper = mountNew({
       options: {

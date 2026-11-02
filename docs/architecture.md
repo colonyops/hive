@@ -1511,7 +1511,10 @@ The Code view lists a server's sessions with their id and slug in the same
 so the local list never waits on ssh. Status follows the same rule:
 `ServerSessionStatuses` is a call and a poll loop apart from `SessionStatuses`.
 `SessionsService` routes an id of that form to the server's session API from
-the server fleet. A failed list marks a server's rows offline, which is not the
+the server fleet. Data that lives in the checkout, such as git status, is read
+on the server through that API (`sessionapi.API.GitStatuses`), never through a
+local path. The daemon shares one git read between the clients that ask within
+a few seconds. A failed list marks a server's rows offline, which is not the
 same as gone: an attached terminal stays until the server answers without the
 session.
 

@@ -82,6 +82,13 @@ func TestClientDrivesTheSessionAPIThroughTheDaemon(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "spawned", windowed.Name)
 
+	statuses, err := client.GitStatuses(ctx, []string{created.ID, "no-such-session"})
+	require.NoError(t, err)
+	require.Len(t, statuses, 1, "an id with no session is absent")
+	assert.True(t, statuses[created.ID].Resolved)
+	assert.Equal(t, created.Path, statuses[created.ID].Path)
+	assert.Equal(t, "acme", statuses[created.ID].Owner)
+
 	require.NoError(t, client.DeleteSession(ctx, created.ID))
 	_, err = client.GetSession(ctx, created.ID)
 	require.ErrorIs(t, err, session.ErrNotFound)

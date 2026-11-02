@@ -5,6 +5,7 @@ package remote
 import (
 	"fmt"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -158,4 +159,17 @@ func TestSessionAPI_ReadsACommitAndTheBranchesFromTheServer(t *testing.T) {
 	refs, err := serverA.API(t).SessionBranches(t.Context(), created.ID)
 	require.NoError(t, err)
 	assert.NotEmpty(t, refs)
+}
+
+func TestSessionAPI_PreviewsThePaneOnTheServer(t *testing.T) {
+	created := serverA.CreateSession(t, "preview")
+	api := serverA.API(t)
+	sess, err := api.GetSession(t.Context(), created.ID)
+	require.NoError(t, err)
+	require.Eventually(t, api.StatusAvailable, 10*time.Second, 200*time.Millisecond)
+
+	assert.Eventually(t, func() bool {
+		st := api.FetchBatch(t.Context(), []*session.Session{&sess}, nil)[sess.ID]
+		return strings.Contains(st.PaneContent, "Completed the requested change")
+	}, 20*time.Second, 500*time.Millisecond, "the preview carries the fake agent's screen")
 }
