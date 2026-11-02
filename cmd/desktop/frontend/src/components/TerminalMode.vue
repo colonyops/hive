@@ -11,6 +11,7 @@ import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
 import TerminalPaneColumn from './terminal/TerminalPaneColumn.vue'
 import TerminalSidebar from './terminal/TerminalSidebar.vue'
 import { provideTerminalMode } from './terminal/terminalModeContext'
+import { useServerConnectionNotices } from './terminal/useServerConnectionNotices'
 import { useCodePanels } from './terminal/useCodePanels'
 import { useSessionTreeView } from './terminal/useSessionTreeView'
 import { useSessionViewMenus } from './terminal/useSessionViewMenus'
@@ -66,6 +67,10 @@ const pool = useTerminalPool({ size: poolSize, onEvicted: () => tree.sweepListin
 // eslint-disable-next-line vue/no-setup-props-reactivity-loss -- how this mount began, read once
 const preparing = ref(!props.active)
 const tree = useTerminalTree({ pool, active: () => paintedActive() || preparing.value })
+useServerConnectionNotices(
+  () => tree.offlineServers.value,
+  () => tree.serversError.value,
+)
 const codeViews = useCodeViews()
 const view = useSessionTreeView(tree, {
   filter: () => codeViews.draft.value,
