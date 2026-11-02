@@ -69,8 +69,8 @@ const (
 type AgentWorkspacesService struct {
 	store     *agentws.Store
 	terminals *tmuxcc.Manager
-	// earlyExitWindow is a field so a test that does not exercise the exit path
-	// need not wait it out on every launch.
+	// earlyExitWindow is a field so a test that expects an early exit can allow
+	// for a loaded machine.
 	earlyExitWindow time.Duration
 	// tx spans the session and schedule aggregates a workspace delete clears.
 	tx        transactionRunner

@@ -164,7 +164,7 @@ start_server() {
   local mode="$1" port="$2" name="$3"
   local data_dir="${E2E_DATA_ROOT}/${name}"
   local config_home="${data_dir}/config"
-  # A server's sessions land on its own tmux server, so two groups cannot collide
+  # A server's sessions land on its own tmux server, so two servers cannot collide
   # on a session name. tmux falls back to /tmp when this directory is missing.
   local tmux_dir="${data_dir}/tmux"
   mkdir -p "${data_dir}" "${config_home}" "${tmux_dir}"
@@ -227,28 +227,30 @@ wait_ready() {
   exit 1
 }
 
-# Ports must match fixtures/servers.ts. A worker owns one group of servers, so
-# each group sits GROUP_PORT_STEP above the last. The chromium feed server of
-# group 0 starts last because playwright.config.ts polls it as the readiness
-# sentinel.
+# Ports must match fixtures/servers.ts. A worker owns a feed server per browser,
+# so those repeat GROUP_PORT_STEP apart. Every other server has one spec file and
+# needs no copy. The chromium feed server of group 0 starts last because
+# playwright.config.ts polls it as the readiness sentinel.
 GROUP_PORT_STEP=100
 groups="${HIVE_E2E_WORKERS:-1}"
+for port in 8932 8933 8935 8936 8937 8938; do check_port_free "${port}"; done
+start_server onboarding 8932 onboarding-chromium
+start_server onboarding 8933 onboarding-webkit
+start_server pipeline 8935 pipeline-smoke
+start_server action-smoke 8936 action-smoke
+# This server starts with the private actions.yml absent. It proves exact
+# first-run seeding without ever copying an action fixture.
+start_server action-seed 8937 action-seed
+# Only the remote lane can reach the ssh fixture. Its spec finds the ssh config
+# under this server's name.
+if [[ -n "${HIVE_DESKTOP_E2E_REMOTE:-}" ]]; then
+  start_server feed 8938 remote
+fi
 for ((group = 0; group < groups; group++)); do
   offset=$((group * GROUP_PORT_STEP))
-  for port in 8931 8932 8933 8934 8935 8936 8937 8938; do check_port_free "$((port + offset))"; done
-  start_server onboarding "$((8932 + offset))" "onboarding-chromium-${group}"
-  start_server onboarding "$((8933 + offset))" "onboarding-webkit-${group}"
+  check_port_free "$((8931 + offset))"
+  check_port_free "$((8934 + offset))"
   start_server feed "$((8934 + offset))" "feed-webkit-${group}"
-  start_server pipeline "$((8935 + offset))" "pipeline-smoke-${group}"
-  start_server action-smoke "$((8936 + offset))" "action-smoke-${group}"
-  # This server starts with the private actions.yml absent. It proves exact
-  # first-run seeding without ever copying an action fixture.
-  start_server action-seed "$((8937 + offset))" "action-seed-${group}"
-  # Only the remote lane can reach the ssh fixture, and it runs one worker. Its
-  # spec finds the ssh config under this server's name.
-  if [[ -n "${HIVE_DESKTOP_E2E_REMOTE:-}" && "${group}" == 0 ]]; then
-    start_server feed "$((8938 + offset))" remote
-  fi
   if ((group > 0)); then
     start_server feed "$((8931 + offset))" "feed-chromium-${group}"
   fi

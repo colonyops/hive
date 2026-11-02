@@ -8,7 +8,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const chromium = { browserName: 'chromium' as const }
 const webkit = { browserName: 'webkit' as const }
 
-// Each worker adds a browser and a group of Go servers, and past this the
+// Each worker adds a browser and two Go servers, and past this the
 // container spends its time on timing jitter rather than on tests.
 const MAX_DEFAULT_WORKERS = 6
 
@@ -19,8 +19,8 @@ const workers =
 
 export default defineConfig({
   timeout: 30_000,
-  // A worker has its own group of servers (fixtures/servers.ts), so tests that
-  // mutate a flow through a watcher cannot race another worker's state.
+  // A worker has its own feed servers (fixtures/servers.ts), so tests that mutate
+  // a flow through a watcher cannot race another worker's state.
   workers,
   // Browsers and seven Go servers in one container leave some timing jitter;
   // a real regression still fails every attempt. The image sets CI=1.
@@ -38,7 +38,8 @@ export default defineConfig({
     viewport: { width: 1360, height: 864 },
     actionTimeout: 10_000,
     // run-docker.sh mounts test-results/ out of the container.
-    trace: 'retain-on-failure',
+    // Recording every first attempt costs a CI runner too much CPU.
+    trace: 'on-first-retry',
   },
   webServer: {
     command: './scripts/serve.sh',
