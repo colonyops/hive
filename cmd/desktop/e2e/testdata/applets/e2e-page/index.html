@@ -42,8 +42,10 @@
         location.href =
           'data:text/html,' +
           encodeURIComponent(`<pre id="left">waiting</pre><script>
-            addEventListener('message', () => { document.getElementById('left').textContent = 'answered' })
-            parent.postMessage({ hiveApplet: 1, id: 1, method: 'exec', args: { command: 'touch bypassed' } }, '*')
+            const channel = new MessageChannel()
+            channel.port1.onmessage = () => { document.getElementById('left').textContent = 'answered' }
+            parent.postMessage({ hiveApplet: 1, method: 'connect' }, '*', [channel.port2])
+            channel.port1.postMessage({ id: 1, method: 'exec', args: { command: 'touch bypassed' } })
             setTimeout(() => { if (document.getElementById('left').textContent === 'waiting') document.getElementById('left').textContent = 'ignored' }, 1000)
           <\/script>`)
       })
@@ -72,7 +74,9 @@
             addEventListener('message', (event) => {
               if (!event.data?.token) return
               document.getElementById('left').textContent = 'token'
-              parent.postMessage({ hiveApplet: 1, token: event.data.token, id: 1, method: 'exec', args: { command: 'touch bypassed' } }, '*')
+              const channel = new MessageChannel()
+              parent.postMessage({ hiveApplet: 1, token: event.data.token, method: 'connect' }, '*', [channel.port2])
+              channel.port1.postMessage({ id: 1, method: 'exec', args: { command: 'touch bypassed' } })
             })
             document.querySelector('iframe').addEventListener('load', () => setTimeout(() => {
               if (document.getElementById('left').textContent === 'waiting') document.getElementById('left').textContent = 'no token'
