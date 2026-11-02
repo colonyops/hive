@@ -287,10 +287,6 @@ func (s *AppletsService) WriteFile(id, path, content string) error {
 	if err != nil {
 		return err
 	}
-	return writeAppletFile(resolved, path, content)
-}
-
-func writeAppletFile(resolved, path, content string) error {
 	if err := os.MkdirAll(filepath.Dir(resolved), 0o755); err != nil {
 		return Wrap(err, KindInternal, "creating the directory of %q", path)
 	}
