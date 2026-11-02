@@ -80,7 +80,7 @@ describe('AppletFrame', () => {
       'pong',
       expect.objectContaining({ command: 'echo hi', sessionSlug: 'sess', timeoutMillis: 50 }),
     )
-    expect(replies).toEqual([{ hiveApplet: 1, id: 1, result: { stdout: 'hi', stderr: '', code: 0 } }])
+    expect(replies).toEqual([{ id: 1, result: { stdout: 'hi', stderr: '', code: 0 } }])
     wrapper.unmount()
   })
 
@@ -107,8 +107,8 @@ describe('AppletFrame', () => {
     await send('nope')
     await send('readFile', { path: 'x' })
     expect(replies).toEqual([
-      { hiveApplet: 1, id: 1, error: 'hive has no method "nope"' },
-      { hiveApplet: 1, id: 1, error: 'no such file' },
+      { id: 1, error: 'hive has no method "nope"' },
+      { id: 1, error: 'no such file' },
     ])
     wrapper.unmount()
   })
@@ -271,7 +271,7 @@ describe('AppletFrame', () => {
     it('refuses a dropdown from any other surface', async () => {
       const { wrapper, replies, send } = setup()
       await send('dropdown')
-      expect(replies).toEqual([{ hiveApplet: 1, id: 1, error: 'Only a title bar page can open a dropdown.' }])
+      expect(replies).toEqual([{ id: 1, error: 'Only a title bar page can open a dropdown.' }])
       expect(useApplets().dropdown.value).toBeNull()
       wrapper.unmount()
     })
@@ -303,7 +303,7 @@ describe('AppletFrame', () => {
       useApplets().setCommandRunner(run)
       await send('command', { id: 'settings.nope' })
       expect(run).not.toHaveBeenCalled()
-      expect(replies).toEqual([{ hiveApplet: 1, id: 1, error: 'hive has no command "settings.nope"' }])
+      expect(replies).toEqual([{ id: 1, error: 'hive has no command "settings.nope"' }])
       wrapper.unmount()
     })
 
@@ -326,7 +326,7 @@ describe('AppletFrame', () => {
       await send('key', { key: 'j', continuing: true })
       window.removeEventListener('keydown', listener)
       expect(seen).toEqual([])
-      expect(replies).toEqual([{ hiveApplet: 1, id: 1, result: false }])
+      expect(replies).toEqual([{ id: 1, result: false }])
       wrapper.unmount()
     })
 
@@ -334,7 +334,7 @@ describe('AppletFrame', () => {
       const { wrapper, replies, connect } = titlebar()
       await connect()
       await wrapper.setProps({ sessionSlug: 'other' })
-      expect(replies).toEqual([{ hiveApplet: 1, event: 'session', data: 'other' }])
+      expect(replies).toEqual([{ event: 'session', data: 'other' }])
       wrapper.unmount()
     })
   })
@@ -356,7 +356,7 @@ describe('AppletFrame', () => {
 
       replies.length = 0
       void row.run()
-      expect(replies).toEqual([{ hiveApplet: 1, event: 'command', data: 'jazz' }])
+      expect(replies).toEqual([{ event: 'command', data: 'jazz' }])
 
       wrapper.unmount()
       expect(applets.pageRows.value).toEqual([])
@@ -375,7 +375,7 @@ describe('AppletFrame', () => {
     it('falls back on a scope this Hive does not know, and leaves out a field of the wrong type', async () => {
       const { wrapper, send, replies } = setup()
       await send('setCommands', { rows: [{ id: 'a', title: 'A', scope: 'nowhere', keywords: 5, hint: 7 }] })
-      expect(replies).toEqual([{ hiveApplet: 1, id: 1, result: undefined }])
+      expect(replies).toEqual([{ id: 1, result: undefined }])
       const [row] = useApplets().pageRows.value
       expect(row).toMatchObject({ id: 'applet:pong:a', title: 'A', scope: undefined, hint: undefined })
       wrapper.unmount()
@@ -387,7 +387,7 @@ describe('AppletFrame', () => {
     ])('refuses %s', async (_name, rows, error) => {
       const { wrapper, send, replies } = setup()
       await send('setCommands', { rows })
-      expect(replies).toEqual([{ hiveApplet: 1, id: 1, error }])
+      expect(replies).toEqual([{ id: 1, error }])
       expect(useApplets().pageRows.value).toEqual([])
       wrapper.unmount()
     })
@@ -402,7 +402,7 @@ describe('AppletFrame', () => {
       panel.replies.length = 0
       bar.replies.length = 0
       expect(useApplets().deliverCommand('pong', 'next')).toBe(true)
-      expect(bar.replies).toEqual([{ hiveApplet: 1, event: 'command', data: 'next' }])
+      expect(bar.replies).toEqual([{ event: 'command', data: 'next' }])
       expect(panel.replies).toEqual([])
       panel.wrapper.unmount()
       bar.wrapper.unmount()
@@ -417,7 +417,7 @@ describe('AppletFrame', () => {
       const { wrapper, send, replies } = setup()
       expect(replies).toEqual([])
       await send('ready')
-      expect(replies).toContainEqual({ hiveApplet: 1, event: 'command', data: 'next' })
+      expect(replies).toContainEqual({ event: 'command', data: 'next' })
       wrapper.unmount()
     })
   })
@@ -433,8 +433,8 @@ describe('AppletFrame', () => {
       const { first, second } = pair()
       await second.connect()
       await first.send('broadcast', { data: { playing: true } })
-      expect(second.replies).toEqual([{ hiveApplet: 1, event: 'message', data: { playing: true } }])
-      expect(first.replies).toEqual([{ hiveApplet: 1, id: 1 }])
+      expect(second.replies).toEqual([{ event: 'message', data: { playing: true } }])
+      expect(first.replies).toEqual([{ id: 1 }])
       first.wrapper.unmount()
       second.wrapper.unmount()
     })
@@ -443,7 +443,7 @@ describe('AppletFrame', () => {
       const { first, second } = pair()
       await second.connect()
       await first.send('storageChanged', { key: 'k', value: 'v' })
-      expect(second.replies).toEqual([{ hiveApplet: 1, storage: { key: 'k', value: 'v' } }])
+      expect(second.replies).toEqual([{ storage: { key: 'k', value: 'v' } }])
       first.wrapper.unmount()
       second.wrapper.unmount()
     })

@@ -137,7 +137,7 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
   let port: MessagePort | null = null
 
   function post(message: object): void {
-    port?.postMessage({ hiveApplet: 1, ...message })
+    port?.postMessage(message)
   }
 
   useMutationObserver(document.documentElement, () => post({ theme: readTheme() }), {
@@ -307,10 +307,10 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     if (closed && message.method !== 'saveStorage') return
     const reply = (body: { result?: unknown; error?: string }) => {
       try {
-        from.postMessage({ hiveApplet: 1, id: message.id, ...body })
+        from.postMessage({ id: message.id, ...body })
       } catch (cause) {
         // What a method returned cannot cross. The page must not wait forever for it.
-        from.postMessage({ hiveApplet: 1, id: message.id, error: `hive could not send its reply: ${String(cause)}` })
+        from.postMessage({ id: message.id, error: `hive could not send its reply: ${String(cause)}` })
       }
     }
     const method = methods[message.method ?? '']
