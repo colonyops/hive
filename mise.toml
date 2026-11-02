@@ -244,14 +244,10 @@ run = [
   # must not overlap.
   { tasks = ["lint", "lint:workflows", "test", "check:deadcode", "check:vuln", "cli:check:goreleaser"] },
   { tasks = ["docs:build", "desktop:frontend:install"] },
-  { tasks = ["desktop:frontend:build", "desktop:frontend:test", "desktop:frontend:format:check", "desktop:frontend:lint"] },
-  { tasks = ["ui:test", "ui:format:check", "ui:lint"] },
-  { tasks = ["drive-server:frontend:build", "drive-server:frontend:test", "drive-server:frontend:format:check", "drive-server:frontend:lint"] },
-  { tasks = ["cli:integration"] },
-  { tasks = ["cli:remote:test"] },
-  { tasks = ["cli:smoke:test"] },
-  { tasks = ["desktop:e2e"] },
-  { tasks = ["desktop:e2e:remote"] },
+  { tasks = ["desktop:frontend:build", "desktop:frontend:test", "desktop:frontend:format:check", "desktop:frontend:lint", "ui:test", "ui:format:check", "ui:lint", "drive-server:frontend:build", "drive-server:frontend:test", "drive-server:frontend:format:check", "drive-server:frontend:lint"] },
+  # Each lane has its own containers, ports, and state. One batch, so their shared
+  # cli:build:container runs one time: its --clean would delete another lane's binary.
+  { tasks = ["cli:integration", "cli:remote:test", "cli:smoke:test", "desktop:e2e", "desktop:e2e:remote"] },
 ]
 
 # ── Repository tooling ───────────────────────────────────────────────────────

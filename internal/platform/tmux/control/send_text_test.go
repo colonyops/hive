@@ -106,6 +106,11 @@ func TestManagerSendTextRealTmux(t *testing.T) {
 
 	tmux("new-session", "-d", "-s", "send", "-x", "120", "-y", "20", `stty -echo; printf '\033[?2004h'; exec cat -v`)
 	pane := tmux("display-message", "-p", "-t", "=send:", "#{pane_id}")
+	// A paste before the printf has run arrives without brackets, and nothing
+	// sends it again.
+	require.Eventually(t, func() bool {
+		return tmux("display-message", "-p", "-t", pane, "#{pane_current_command}") == "cat"
+	}, 15*time.Second, 25*time.Millisecond)
 
 	m := NewManager(t.Context(), ManagerOptions{Logger: zerolog.Nop()})
 	t.Cleanup(func() { _ = m.Stop(context.WithoutCancel(t.Context())) })

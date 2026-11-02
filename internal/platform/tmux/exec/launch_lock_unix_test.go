@@ -47,7 +47,14 @@ func TestLaunchLockAcrossProcesses(t *testing.T) {
 	defer cancel()
 	_, err = (execRunner{}).lockLaunch(ctx, "cross-process-launch-test")
 	require.ErrorIs(t, err, context.DeadlineExceeded)
-	release, err := (execRunner{}).lockLaunch(t.Context(), "another-session")
+	// Names share a lock when they hash to one bucket, and the socket path is
+	// random here, so a fixed second name deadlocks on 1 run in 64.
+	socket := (execRunner{}).socketIdentity(t.Context())
+	other := "another-session"
+	for i := 0; launchLockName(socket, other) == launchLockName(socket, "cross-process-launch-test"); i++ {
+		other = fmt.Sprintf("another-session-%d", i)
+	}
+	release, err := (execRunner{}).lockLaunch(t.Context(), other)
 	require.NoError(t, err)
 	require.NoError(t, release())
 	require.NoError(t, stdin.Close())

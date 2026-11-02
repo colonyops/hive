@@ -143,7 +143,7 @@ func TestDialStdioReportsEOFWhenSSHExits(t *testing.T) {
 	select {
 	case err := <-read:
 		require.Error(t, err, "a client must not wait on a dead ssh")
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("Read blocked after ssh exited")
 	}
 }

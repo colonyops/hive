@@ -152,6 +152,8 @@ run = "./cmd/desktop/e2e/scripts/run-docker.sh"
 ["desktop:e2e:remote"]
 description = "Run the desktop e2e tests that use the test/remote ssh fixture as a server"
 depends = ["desktop:frontend:install", "cli:build:container"]
+# Both e2e tasks build the same server binary and image and share test-results/.
+wait_for = ["desktop:e2e"]
 run = "./cmd/desktop/e2e/scripts/run-remote.sh"
 
 ["desktop:frontend:build"]

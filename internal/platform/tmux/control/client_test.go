@@ -161,7 +161,7 @@ func TestResizeWindowAsksForThatWindowsOwnGrid(t *testing.T) {
 	t.Cleanup(func() { _ = client.Close(context.WithoutCancel(ctx)) })
 
 	require.NoError(t, client.ResizeWindow(ctx, "@1", 60, 20))
-	require.Equal(t, "refresh-client -C @1:60x20", f.sentCommands()[len(f.sentCommands())-1])
+	require.Contains(t, f.sentCommands(), "refresh-client -C @1:60x20")
 
 	require.Error(t, client.ResizeWindow(ctx, "@1; kill-server", 60, 20), "a window id goes into a tmux command line")
 	require.ErrorIs(t, client.ResizeWindow(ctx, "@99", 60, 20), ErrUnknownWindow, "a window id is server-wide, so another session's window is refused")

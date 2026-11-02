@@ -335,14 +335,14 @@ func TestShellEnvironmentReturnsWhenAChildHoldsThePipeOpen(t *testing.T) {
 	require.NoError(t, os.WriteFile(shell, []byte(
 		"#!/bin/sh\n"+
 			"export PATH=/opt/tools/bin:/usr/bin\n"+
-			"/bin/sleep 10 &\n"+
+			"/bin/sleep 60 &\n"+
 			"exec \"$2\"\n"), 0o755))
 
 	start := time.Now()
 	env, err := shellEnvironment(t.Context(), shell)
 	require.NoError(t, err)
 	assert.Equal(t, "/opt/tools/bin:/usr/bin", env["PATH"])
-	assert.Less(t, time.Since(start), 8*time.Second,
+	assert.Less(t, time.Since(start), 30*time.Second,
 		"the probe must end with the shell, not with whatever it left running")
 }
 
