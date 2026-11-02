@@ -175,28 +175,6 @@ The slot is 28px tall, and a page with a transparent background sits directly on
 
 A dropdown loads again each time it opens, so put anything that has to keep going, such as audio, in the title bar page and talk to it with `hive.broadcast`. `localStorage` is shared between an applet's frames. Closing a panel or dropdown stops only the `hive.spawn` processes it started. A `hive.exec` already running finishes or times out.
 
-A small title bar page looks like this:
-
-```html
-<!doctype html>
-<style>
-  html, body { margin: 0; height: 100%; background: transparent; }
-  button { width: 100%; height: 28px; border: 0; border-radius: 8px; background: none; color: var(--hv-text-2, #aaa); }
-  button:hover { background: var(--hv-chip, #333); }
-</style>
-<button id="count">0</button>
-<script>
-  const button = document.querySelector('#count')
-  const refresh = async () => {
-    const { stdout } = await hive.exec('docker ps -q | wc -l')
-    button.textContent = stdout.trim()
-  }
-  button.onclick = () => hive.open()
-  refresh()
-  setInterval(refresh, 10000)
-</script>
-```
-
 ### Palette commands
 
 List commands in `applet.yaml` to give the palette rows that a user can bind to a key. `id` is a slug and becomes part of the binding, `applet.<applet id>.<id>`, so keep it once people use it. `icon` and `keywords` are optional. The palette shows `title` without the applet's name in some views, so make it make sense alone.
