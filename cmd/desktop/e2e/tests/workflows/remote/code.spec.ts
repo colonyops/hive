@@ -80,14 +80,19 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
 
     await expect(page.getByTestId('terminal-mode')).toBeVisible()
     await expect(page.getByTestId('terminal-sessions-loading')).toBeHidden()
-    await expect(page.getByTestId('terminal-server-offline-gone')).toContainText('gone offline', { timeout: 30_000 })
-    await expect(page.getByTestId('terminal-server-offline-server-a')).toHaveCount(0)
+    const status = page.getByTestId('terminal-server-status')
+    await expect(status).toHaveAttribute('aria-label', /gone offline/, { timeout: 30_000 })
+    await expect(status).not.toHaveAttribute('aria-label', /server-a offline/)
+    await expect(page.getByTestId('toast').filter({ hasText: 'gone is offline' })).toHaveCount(1)
+
+    await status.hover()
+    await expect(page.getByTestId('app-tooltip')).toContainText('gone offline')
   })
 
   test('refuses a prompt too long for a server before submit', async ({ page }) => {
     await stubTerminals(page)
     await page.goto('/#/terminal')
-    await expect(page.getByTestId('terminal-server-offline-gone')).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('terminal-server-status')).toBeVisible({ timeout: 30_000 })
     await page.getByTestId('terminal-new-session').click()
     await expect(page.getByTestId('new-session-dialog')).toBeVisible()
     await page.getByTestId('new-session-name').fill(`${SESSION}-long`)
@@ -109,7 +114,7 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
   test('creates a session on the server chosen in the form', async ({ page }) => {
     await stubTerminals(page)
     await page.goto('/#/terminal')
-    await expect(page.getByTestId('terminal-server-offline-gone')).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('terminal-server-status')).toBeVisible({ timeout: 30_000 })
     await page.getByTestId('terminal-new-session').click()
 
     await expect(page.getByTestId('new-session-dialog')).toBeVisible()
