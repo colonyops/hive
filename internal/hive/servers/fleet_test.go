@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -58,4 +59,16 @@ func TestCheckDropsTheSSHErrorOfAnEarlierDial(t *testing.T) {
 
 	assert.Equal(t, server.StateOffline, status.State)
 	assert.NotContains(t, status.Error, "first failure")
+}
+
+func TestClientLimitsKeepTheDefaultsUnlessConfigured(t *testing.T) {
+	defaults := clientLimits(config.ServerConfig{})
+	assert.Equal(t, 10*time.Second, defaults.ReadTimeout)
+	assert.Equal(t, 30*time.Second, defaults.ConnectTimeout)
+	assert.Equal(t, time.Minute, defaults.RiskTimeout)
+	assert.Equal(t, 2*time.Minute, defaults.DeleteTimeout)
+
+	configured := clientLimits(config.ServerConfig{ReadTimeout: time.Second, ConnectTimeout: 2 * time.Second})
+	assert.Equal(t, time.Second, configured.ReadTimeout)
+	assert.Equal(t, 2*time.Second, configured.ConnectTimeout)
 }
