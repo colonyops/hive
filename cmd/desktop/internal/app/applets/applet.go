@@ -1,5 +1,5 @@
 // Package applets holds the on-disk catalog of applets: web pages an agent or a user
-// writes, which Hive opens over the app with full access to the machine through
+// writes, which Hive opens with full access to the machine through
 // window.hive (ADR applets-are-web-pages-with-full-access-to-the-machine).
 //
 // This package parses and validates. It never executes a command.
@@ -50,7 +50,7 @@ type Applet struct {
 	Cwd string `yaml:"cwd,omitempty"`
 	// Entry is the page the applet opens on, relative to its directory.
 	Entry string `yaml:"entry,omitempty"`
-	// Width and Height size the applet's panel in pixels. Zero fills the window.
+	// Width and Height size the applet's pop-up in pixels. Zero fills the window.
 	Width  int `yaml:"width,omitempty"`
 	Height int `yaml:"height,omitempty"`
 	// Titlebar offers a page for the title bar. It shows once the user turns it on, so a

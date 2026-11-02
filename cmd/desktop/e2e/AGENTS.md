@@ -81,7 +81,7 @@ Only the onboarding server has a webkit instance, so only
 `workflows/onboarding/` runs on webkit. A new workflow runs on chromium alone
 unless its server gets a webkit port too.
 
-`features-webkit` runs only `terminal/`, `drive/` and `flows/`, where WebKit's
+`features-webkit` runs only `terminal/`, `drive/`, `flows/` and `applets/`, where WebKit's
 pointer, selection and rendering behavior differs. To add a surface, add it to
 `testMatch` in `playwright.config.ts`. A test in those surfaces that does not
 touch pointer, selection, or rendering differences takes `tag.chromiumOnly`, so

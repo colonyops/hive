@@ -170,8 +170,8 @@
   // Keys in a frame never reach the app, so this hands on what a chord would be: without
   // it one click into a page would leave every shortcut dead until the user clicked
   // elsewhere. Escape goes to the host, which decides whether it closes the applet. A
-  // page that wants either for itself
-  // calls preventDefault, which is only settled once its own listeners have run.
+  // page that wants either for itself calls preventDefault, which is only settled once its
+  // own listeners have run.
   //
   // The rest of a chord sequence is a bare key, so it crosses only while the app says one
   // is waiting.

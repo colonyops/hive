@@ -10,7 +10,7 @@ import AppletFrame from './AppletFrame.vue'
 const applets = useApplets()
 const applet = applets.open
 
-// A panel can ask to be any size, and the window's edges still win.
+// A pop-up can ask to be any size, and the window's edges still win.
 const pageSize = computed(() => ({
   ...(applet.value?.width ? { width: `min(${applet.value.width}px, 96vw)` } : {}),
   ...(applet.value?.height ? { height: `min(${applet.value.height}px, 88vh)` } : {}),

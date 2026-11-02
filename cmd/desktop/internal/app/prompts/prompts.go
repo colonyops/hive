@@ -166,7 +166,7 @@ var definitions = []definition{
 	{
 		id:          "applets",
 		title:       "Applets",
-		description: "Build an applet: a web page that opens over Hive and can run any command and read or write any file on this machine.",
+		description: "Build an applet: a web page that opens in Hive and can run any command and read or write any file on this machine.",
 		target:      func(env Env) string { return env.AppletsDir + "/<id>/" + applets.FileName },
 		listed:      true,
 		data:        appletsData,
