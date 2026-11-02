@@ -31,7 +31,6 @@ const status = computed<{ tone: 'danger' | 'accent' | 'neutral'; label: string }
 
 const warningCount = computed(() => props.applet.warnings?.length ?? 0)
 
-const offersAPlace = computed(() => PLACEABLE_SURFACES.some(({ placement }) => placement.offeredPage(props.applet)))
 const placed = computed(() =>
   PLACEABLE_SURFACES.filter(({ surface }) => applets.isPlaced(surface, props.applet.id)).map(
     ({ placement }) => placement,
@@ -122,8 +121,7 @@ function togglePlace(surface: string): void {
     </button>
     <div class="flex shrink-0 items-center gap-2">
       <div class="flex justify-end @[600px]/pane:w-40">
-        <span v-if="!offersAPlace" class="whitespace-nowrap text-small text-text-3">Panel only</span>
-        <div v-else ref="menuToggle">
+        <div ref="menuToggle">
           <button
             type="button"
             class="flex h-6 cursor-pointer items-center gap-1 rounded-md border px-1.5 text-small whitespace-nowrap text-text-2 outline-none hover:border-strong hover:bg-chip focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-transparent"

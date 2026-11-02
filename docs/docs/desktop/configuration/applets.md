@@ -1,6 +1,6 @@
 ---
 icon: lucide/layout-panel-top
-description: Ask an agent for a web page that opens over Hive Desktop or sits in its title bar and can do anything on your machine, with the Applet Builder to get you started.
+description: Ask an agent for a web page that opens as a session tab, pops up over Hive Desktop, or sits in its title bar and can do anything on your machine, with the Applet Builder to get you started.
 ---
 
 # Applets
@@ -23,7 +23,24 @@ The applet appears as soon as its file is valid. If you dislike it, ask for chan
 - Press <kbd>⌘K</kbd> and type <kbd>+</kbd>, or press <kbd>⇥</kbd> to reach the **Applets** tab, to see only applets.
 - Bind one to a key in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>`. The same key closes it again.
 
-<kbd>esc</kbd> closes an applet, unless the page uses the key itself first.
+<kbd>esc</kbd> closes a pop-up, unless the page uses the key itself first. A tab stays open; close it from its tab.
+
+## Add one to a session's + menu
+
+In **Settings ▸ Applets**, open the places menu on an applet's row, or its details, and turn on one or both:
+
+- **Session tab**: choosing it opens the applet as a tab, beside the session's terminals and Drive. Drag it between panels like any other tab. Its page keeps running behind other tabs and through a move, and stops when you close the tab or switch to another session.
+- **Session pop-up**: choosing it opens the applet over the app, working on that session.
+
+The applet then shows in the **+** on a tab row and on a session in the sidebar, for chats as well as Code sessions. Hive never adds one for you. An applet you turned on as a session tab also opens as a tab from the palette and its shortcut when a session is on screen, and there the shortcut brings the tab forward instead of closing it. Anywhere else it opens as a pop-up.
+
+```yaml
+applets:
+  tabs: [build-status]
+  popups: [music]
+```
+
+A session keeps its applet tabs across restarts. If you turn an applet off or delete it, its tab stays and says so until you close it.
 
 ## Palette and keys
 
@@ -120,8 +137,8 @@ The page gets `window.hive`:
 | `hive.toast(message, options)` | Shows a toast |
 | `hive.copy(text)` | Puts text on the clipboard |
 | `hive.context()` | Returns the applet's directory, working directory, and session |
-| `hive.close()` | Closes the applet. In a title bar page, closes its dropdown |
-| `hive.open()` | Opens the applet's panel |
+| `hive.close()` | Closes the applet's pop-up or tab. In a title bar page, closes its dropdown |
+| `hive.open()` | Opens the applet: as a tab if you put it in the + menu as one and a session is on screen, otherwise as a pop-up |
 | `hive.commands()`, `hive.command(id)` | Lists Hive's commands with `{id, title, group, keys}`, and runs one. An unknown id rejects |
 | `hive.setCommands(rows)` | Replaces the palette rows this page added |
 | `hive.on('command', fn)` | Reports the id of the applet's command or row that was run |
@@ -129,7 +146,7 @@ The page gets `window.hive`:
 | `hive.navigate(path)` | Goes to a route of the app, such as `/settings/applets` |
 | `hive.broadcast(data)`, `hive.on('message', fn)` | Talks to the applet's other open frames |
 | `hive.on('session', fn)` | Reports the session on screen when it changes |
-| `hive.surface` | `page`, `titlebar`, or `dropdown` |
+| `hive.surface` | `tab`, `page` (a pop-up), `titlebar`, or `dropdown` |
 
 The page also receives Hive's theme as CSS variables such as `--hv-app`, `--hv-text` and `--hv-accent`, which change when you change theme. `localStorage` works and is kept per applet. Cookies and IndexedDB do not work.
 

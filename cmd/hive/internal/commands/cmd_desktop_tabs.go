@@ -98,8 +98,9 @@ func (cmd *DesktopCmd) tabCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "tab",
 		Usage: "Open, close, move and focus tabs",
-		Description: `A <tab> is drive, diff, tasks, terminal, or a tmux window of a Code session
-by id (@3) or exact name.`,
+		Description: `A <tab> is drive, diff, tasks, terminal, applet:<id>, or a tmux window of a
+Code session by id (@3) or exact name. An applet's tab can be moved and focused
+but not opened or closed from here.`,
 		Commands: []*cli.Command{
 			cmd.tabOpenCmd(),
 			cmd.tabCloseCmd(),

@@ -1433,12 +1433,22 @@ opened in `AppletFrame`
 - **A spawned process belongs to the frame that started it.** Closing that frame, editing
   the applet, or closing the app ends the process. Settings › Applets lists what is running.
 - **A page can appear on more than one surface.** `AppletFrame` with `useAppletBridge` is
-  the whole of a surface: the panel (`AppletHost`), the title bar slot
-  (`AppletTitlebarSlot`), and the dropdown under it (`AppletDropdown`). What differs between
+  the whole of a surface: a session tab (`AppletTabsLayer`), the pop-up (`AppletHost`), the
+  title bar slot (`AppletTitlebarSlot`), and the dropdown under it (`AppletDropdown`). What differs between
   them is one row of `SURFACES` (`stores/appletSurfaces.ts`). A new extension point is that
   row, a row of `applets.Surfaces`, a list in `settings.AppletsSettings`, and a host, not
   another bridge. The user turns the title bar on per applet (`applets.titlebar` in
   `settings.yaml`), because that page runs without being opened.
+- **A session tab is a layout tab, and its frame floats.** `lib/appletTabs` names it
+  `applet:<id>`, one per session, and the layout places it like any view. Its iframe sits in
+  the panel host's floating layer in an order no drag changes, because moving an iframe in
+  the DOM reloads the page. `contentKey` re-keys the layer, so only the session on screen runs
+  its tabs. The user adds an applet to a session's + menu as a tab, a pop-up, or both
+  (`applets.tabs`, `applets.popups`), and the file cannot add itself. A tab host registers with
+  `setTabHost`, so the palette and a chord open a placed applet as a tab where one can show.
+  Agents can place and focus an open `applet:<id>` tab through the layout verbs, and
+  `open_tab` refuses one: the MCP server runs nothing on a caller's say (ADR
+  mcp-replaces-the-agent-facing-http-api).
 - **`applet.yaml` reads forward.** A key or icon this Hive does not know is a warning on the
   entry (`applets/compat.go`). A wrong shape under a known key is an error, and a later
   `version` or an unmet `hive:` refuses with "update Hive".

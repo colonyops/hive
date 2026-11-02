@@ -139,6 +139,14 @@ pages, refuses the bridge calls that reach the machine, and stops what it has ru
 a `hive.exec`. The switch also closes its frames. `settings.yaml` has no watcher, so a hand edit
 stops new calls at once and closes its frames at the next launch.
 
+An applet opens where the user asked. A session's panel layout is the main place: any applet
+can be a tab there, added to the session's + menu by the user and never by its file, because a
+tab loads whenever that session is on screen. The pop-up over the app stays for what should
+not take a panel. A tab's page runs only while its session is on screen, as Drive and Diff do,
+so a session the user is not in costs nothing and its processes stop. Agents can move and focus
+an open tab, but `open_tab` refuses an applet, because that MCP server runs nothing on a
+caller's say (ADR mcp-replaces-the-agent-facing-http-api).
+
 ## Consequences
 
 - An applet has the user's full access, and so does any remote script its page loads.

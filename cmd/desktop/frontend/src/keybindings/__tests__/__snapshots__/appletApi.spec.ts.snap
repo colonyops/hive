@@ -21,6 +21,7 @@ exports[`what a page can name > keeps every command id 1`] = `
   "feed.toggle-unread",
   "history.back",
   "history.forward",
+  "palette.drive",
   "palette.keys",
   "palette.toggle",
   "report.bundle",

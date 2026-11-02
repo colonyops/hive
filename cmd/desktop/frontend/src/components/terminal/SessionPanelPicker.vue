@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import IconPlus from '~icons/lucide/plus'
 import IconTerminal from '~icons/lucide/terminal'
+import { launcherIconComponent } from '../../lib/launcherIcons'
+import { useApplets } from '../../stores/useApplets'
 import { sessionView, type SessionViewKind } from './panelViews'
 
 defineProps<{
@@ -14,8 +16,11 @@ const emit = defineEmits<{
   terminal: []
   agent: [agent: string]
   view: [kind: SessionViewKind]
+  applet: [id: string]
   cancel: []
 }>()
+
+const applets = useApplets()
 
 const heading = 'mb-1 mt-3 font-mono text-micro font-semibold uppercase tracking-wider text-text-3'
 const row =
@@ -71,6 +76,22 @@ const row =
       >
         <component :is="sessionView(view).icon" class="size-3.5 shrink-0" aria-hidden="true" />{{
           sessionView(view).label
+        }}
+      </button>
+    </template>
+
+    <template v-if="applets.placed.tab?.value.length">
+      <div :class="heading">Applets</div>
+      <button
+        v-for="applet in applets.placed.tab.value"
+        :key="applet.id"
+        type="button"
+        :class="row"
+        :data-testid="`panel-picker-applet-${applet.id}`"
+        @click="emit('applet', applet.id)"
+      >
+        <component :is="launcherIconComponent(applet.icon)" class="size-3.5 shrink-0" aria-hidden="true" />{{
+          applet.title
         }}
       </button>
     </template>

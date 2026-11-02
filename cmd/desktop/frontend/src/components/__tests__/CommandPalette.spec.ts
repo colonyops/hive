@@ -388,7 +388,14 @@ describe('CommandPalette', () => {
   it('renders a tab per visible scope with All active by default', async () => {
     await openPalette()
 
-    expect(tabs().map((tab) => tab.attributes('data-scope'))).toEqual(['all', 'goto', 'actions', 'drive', 'applets', 'shell'])
+    expect(tabs().map((tab) => tab.attributes('data-scope'))).toEqual([
+      'all',
+      'goto',
+      'actions',
+      'drive',
+      'applets',
+      'shell',
+    ])
     expect(
       tabs()
         .filter((tab) => tab.classes().includes('palette-tab-active'))

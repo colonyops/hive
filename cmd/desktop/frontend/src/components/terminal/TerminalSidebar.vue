@@ -47,6 +47,9 @@ import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { sessionAgeDays, useTerminalSessionAge } from '../../stores/useTerminalSessionAge'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { MenuEntry } from '@hive/ui/types/menu'
+import { appletIdOf } from '../../lib/appletTabs'
+import { useApplets } from '../../stores/useApplets'
+import type { PanelTab } from '../../lib/panelLayout'
 import { viewOfTab } from './panelViews'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
@@ -56,6 +59,12 @@ import { viewKey } from './useTreeKeyboardNav'
 const props = defineProps<{ active: boolean }>()
 const { monochrome: monochromeAgentIcons } = useTerminalAgentIcons()
 const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panels } = useTerminalModeContext()
+const applets = useApplets()
+
+function viewRowLabel(tab: PanelTab): string {
+  const applet = appletIdOf(tab)
+  return applet ? applets.titleOf(applet) : (viewOfTab(tab)?.label ?? tab.id)
+}
 const { openBlank: openNewSession } = useNewSession()
 const panelLayouts = usePanelLayouts()
 
@@ -738,13 +747,15 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                             @keydown.enter.self.prevent="nav.clickView(row, item.view.panel, item.view.tab.id)"
                             @keydown.space.self.prevent="nav.clickView(row, item.view.panel, item.view.tab.id)"
                           >
-                            <SessionTabIcon :kind="item.view.tab.kind" class="text-text-4" />
-                            <span class="min-w-0 flex-1 truncate text-small">{{
-                              viewOfTab(item.view.tab)?.label
-                            }}</span>
+                            <SessionTabIcon
+                              :kind="item.view.tab.kind"
+                              :applet="appletIdOf(item.view.tab)"
+                              class="text-text-4"
+                            />
+                            <span class="min-w-0 flex-1 truncate text-small">{{ viewRowLabel(item.view.tab) }}</span>
                             <div class="window-trailing" @click.stop>
                               <IconButton
-                                :label="`Close ${viewOfTab(item.view.tab)?.label}`"
+                                :label="`Close ${viewRowLabel(item.view.tab)}`"
                                 :icon="IconX"
                                 size="sm"
                                 class="row-action row-swap"

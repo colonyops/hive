@@ -14,6 +14,7 @@ import {
   type PanelTab,
   type SplitAxis,
 } from '../../lib/panelLayout'
+import { isAppletTabId } from '../../lib/appletTabs'
 import { windowTabId } from '../../lib/windowTabs'
 import { viewTab } from '../terminal/panelViews'
 import type { SessionTabPlacement, TabRef } from './useSessionLayout'
@@ -23,6 +24,7 @@ import type { SessionTabPlacement, TabRef } from './useSessionLayout'
  * own window, which only Chats has, so `ownWindowId` is how it says so.
  */
 export function tabIdOf(ref: TabRef, ownWindowId?: string): string | undefined {
+  if (isAppletTabId(ref.view)) return ref.view
   if (ref.view !== 'terminal') return viewTab(ref.view).id
   const windowId = ref.window || ownWindowId
   return windowId ? windowTabId(windowId) : undefined

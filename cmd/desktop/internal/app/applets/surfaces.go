@@ -11,8 +11,13 @@ type Surface struct {
 	Page func(Applet) (string, bool)
 }
 
-// Surfaces is every place an applet.yaml can ask to appear.
+func ownEntry(a Applet) (string, bool) { return a.Entry, true }
+
+// Surfaces is every place the user can put an applet. Every applet offers its own entry for
+// the + menu; only the title bar asks applet.yaml for a page.
 var Surfaces = []Surface{
+	{Name: "tab", Label: "a session's + menu", Page: ownEntry},
+	{Name: "page", Label: "a session's + menu", Page: ownEntry},
 	{
 		Name:  "titlebar",
 		Label: "the title bar",

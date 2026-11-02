@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import NewWindowMenu from '../NewWindowMenu.vue'
+import { useApplets } from '../../stores/useApplets'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import { sessionView } from './panelViews'
 import { useTerminalModeContext } from './terminalModeContext'
@@ -20,6 +21,7 @@ const props = withDefaults(
 const emit = defineEmits<{ close: [] }>()
 
 const { tree, ops, panels } = useTerminalModeContext()
+const applets = useApplets()
 
 const views = computed(() =>
   panels.viewsFor(props.row).map((kind) => {
@@ -40,10 +42,12 @@ const views = computed(() =>
     :loading="!row.server && ops.agentProfilesLoading"
     :failed="!row.server && ops.agentProfilesFailed"
     :views="views"
+    :applets="applets.sessionMenu.value"
     @close="emit('close')"
     @terminal="panels.newWindow(row, panel)"
     @agent="panels.newAgentWindow(row, $event, panel)"
     @view="panels.openViewIn(row, $event, panel)"
+    @applet="(id, opensAs) => panels.openAppletIn(row, id, opensAs, panel)"
     @retry="ops.loadAgentProfiles"
   />
 </template>

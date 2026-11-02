@@ -20,6 +20,12 @@ import { useResource } from './useResource'
 
 export const BUILDER_ID = 'applet-builder'
 
+// One row of a session's + menu. An applet the user put there both ways has two.
+export interface AppletMenuRow {
+  applet: Applet
+  opensAs: 'tab' | 'page'
+}
+
 export interface AppletDropdown {
   applet: Applet
   entry: string
@@ -96,6 +102,27 @@ export const useApplets = defineStore('applets', () => {
     ]),
   ) as Partial<Record<AppletSurface, ComputedRef<Applet[]>>>
 
+  const sessionMenu = computed<AppletMenuRow[]>(() => [
+    ...(placed.tab?.value ?? []).map((applet) => ({ applet, opensAs: 'tab' as const })),
+    ...(placed.page?.value ?? []).map((applet) => ({ applet, opensAs: 'page' as const })),
+  ])
+
+  // The session area on screen, which can show an applet as a tab. Both areas stay
+  // mounted, so only the one the user is in holds this.
+  let tabHost: ((id: string) => void) | null = null
+
+  function setTabHost(host: (id: string) => void, active: boolean): void {
+    if (active) tabHost = host
+    else if (tabHost === host) tabHost = null
+  }
+
+  // What the user chose for an applet wins over the pop-up wherever it opens from.
+  function openPlacedTab(id: string): boolean {
+    if (!tabHost || !placed.tab?.value.some((applet) => applet.id === id)) return false
+    tabHost(id)
+    return true
+  }
+
   function isPlaced(surface: AppletSurface, id: string): boolean {
     return placedIDs(surface).includes(id)
   }
@@ -118,6 +145,14 @@ export const useApplets = defineStore('applets', () => {
   async function remove(id: string): Promise<void> {
     await Delete(id)
     await Promise.all([catalog.reload(), reloadPlacements()])
+  }
+
+  function byID(id: string): Applet | undefined {
+    return catalog.data.value.find((applet) => applet.id === id)
+  }
+
+  function titleOf(id: string): string {
+    return byID(id)?.title ?? id
   }
 
   const dropdown = shallowRef<AppletDropdown | null>(null)
@@ -186,8 +221,7 @@ export const useApplets = defineStore('applets', () => {
 
   function openForCommand(id: string, command: string, session: string): void {
     commandsForPanel.set(id, [...(commandsForPanel.get(id) ?? []), command])
-    sessionSlug.value = session
-    openID.value = id
+    if (!openPlacedTab(id)) openPopup(id, session)
   }
 
   const frameRows = shallowRef(new Map<AppletFrameHandle, { applet: string; rows: AppletPageRow[] }>())
@@ -273,6 +307,10 @@ export const useApplets = defineStore('applets', () => {
       openID.value = null
       return
     }
+    if (!openPlacedTab(id)) openPopup(id, session)
+  }
+
+  function openPopup(id: string, session: string): void {
     sessionSlug.value = session
     openID.value = id
   }
@@ -283,11 +321,17 @@ export const useApplets = defineStore('applets', () => {
 
   return {
     applets: readonly(catalog.data),
+    loaded: catalog.loaded,
     open,
     sessionSlug: readonly(sessionSlug),
     reload: catalog.reload,
     toggle,
+    openPopup,
     close,
+    sessionMenu,
+    byID,
+    titleOf,
+    setTabHost,
     placed,
     isPlaced,
     setPlaced,

@@ -48,8 +48,8 @@ close button over the top right corner of the page, so leave about 52px clear th
 - `hive.toast(message, {severity, body})` shows a Hive toast. `severity` is `info`, `success`, `warning`, or `error`.
 - `hive.copy(text)` puts text on the clipboard.
 - `hive.context()` resolves to `{id, title, dir, cwd, sessionSlug}`.
-- `hive.close()` closes the applet. In a title bar page it closes the page's dropdown.
-- `hive.surface` is `page`, `titlebar` or `dropdown`, for one file that serves several.
+- `hive.close()` closes the applet's pop-up or tab. In a title bar page it closes the page's dropdown.
+- `hive.surface` is `tab`, `page` (a pop-up), `titlebar` or `dropdown`, for one file that serves several.
 - `hive.open()` opens the applet's panel from any of them.
 - `hive.broadcast(data)` sends to the applet's other open frames, which listen with `hive.on('message', fn)`.
 - `hive.on('session', fn)` reports the slug of the session on screen when it changes. `hive.on` returns a function that stops listening, and does nothing for an event this Hive does not have.
@@ -79,6 +79,10 @@ panel is open that only runs the palette, the key that closes the panel, and thi
 commands. So call `preventDefault()` on any chord the page uses for itself, such as Command-K
 for its own search. Other keys stay in the page. Audio needs a user gesture first, as on any
 page.
+
+## In a session
+
+Any applet can open as a tab beside a session's terminals, or as a pop-up over the app. The user adds it to a session's + menu in Settings > Applets, or you add its id to `applets.tabs` or `applets.popups` in `settings.yaml` when they ask you to. `applet.yaml` has no key for this. A tab fills its panel, so make the page fit any size down to a narrow split. `width` and `height` apply only to a pop-up. Escape does not close a tab. A tab's page reloads when the user comes back from another session, so keep what matters in `localStorage`.
 
 ## In the title bar
 
@@ -113,7 +117,7 @@ The user shares an applet from Settings > Applets, as one `.hiveapplet` file. An
 
 1. Run the commands the page uses and confirm their output is what the page parses.
 2. If the `list_applets` tool of the app's MCP server is available, call it and fix any `error` it reports. Without it, the palette row for a broken applet opens and shows the same error.
-3. Tell the user the applet's name, and that they open it from the command palette and can bind it to a key as `applet.<id>`, and name any `commands` it has. For a title bar page, also tell them to turn it on in Settings > Applets.
+3. Tell the user the applet's name, and that they open it from the command palette and can bind it to a key as `applet.<id>`, that they can add it to a session's + menu in Settings > Applets, and name any `commands` it has. For a title bar page, also tell them to turn it on in Settings > Applets.
 {{with .Brief}}
 {{if eq .Style "hive"}}{{template "applet-style-hive"}}{{end -}}
 {{if eq .Style "website"}}

@@ -261,9 +261,6 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(slot).toHaveCount(0);
 
     await page.goto("/#/settings/applets");
-    await expect(
-      page.getByTestId("settings-applet-e2e-page-places"),
-    ).toHaveCount(0);
     await toggleTitlebar(page);
     await expect(slot).toBeVisible();
 
@@ -272,8 +269,9 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(slot).toHaveCSS("width", "60px");
     const header = await page.getByTestId("titlebar").boundingBox();
     const box = await slot.boundingBox();
+    // The bar's bottom border takes a pixel, and the controls center in what is left.
     expect(box!.y - header!.y).toBe(
-      header!.y + header!.height - (box!.y + box!.height),
+      header!.y + header!.height - 1 - (box!.y + box!.height),
     );
 
     await bar.locator("#grow").click();

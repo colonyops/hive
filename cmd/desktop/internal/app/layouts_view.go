@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 )
 
 // LayoutView is a session's panel layout as the frontend last reported it.
@@ -22,7 +23,7 @@ type LayoutPanel struct {
 }
 
 // LayoutTab names its tab the way the tab tools take it: a window id, or the
-// view name. Kind is drive, diff, tasks or terminal.
+// view name, or applet:<id>. Kind is drive, diff, tasks, terminal or applet.
 type LayoutTab struct {
 	Tab   string
 	Kind  string
@@ -99,6 +100,9 @@ func layoutPanelOf(n PanelNodeReport, chat bool, names map[string]string) Layout
 			tab.Name = names[t.WindowID]
 		case "docs":
 			tab.Kind, tab.Tab = string(TabViewDrive), string(TabViewDrive)
+		case "applet":
+			tab.Kind, tab.Tab = "applet", t.ID
+			tab.Name = strings.TrimPrefix(t.ID, appletTabPrefix)
 		default:
 			tab.Kind, tab.Tab = t.Kind, t.Kind
 		}

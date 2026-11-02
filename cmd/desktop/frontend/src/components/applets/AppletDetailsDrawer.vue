@@ -170,7 +170,7 @@ function startedAt(process: AppletProcess): string {
           <div class="flex items-center gap-2.5 py-2">
             <IconAppWindow class="size-3.5 shrink-0 text-text-3" aria-hidden="true" />
             <div class="min-w-0 flex-1">
-              <div class="text-small font-medium text-text">Panel</div>
+              <div class="text-small font-medium text-text">Pop-up</div>
               <p class="mt-0.5 text-caption leading-relaxed text-text-3">
                 Every applet has one. Opens over the app from the palette or its shortcut.
               </p>

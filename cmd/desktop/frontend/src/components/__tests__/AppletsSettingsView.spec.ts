@@ -252,10 +252,19 @@ describe('AppletsSettingsView', () => {
   describe('places', () => {
     const titlebar = { entry: 'bar.html', width: 28 }
 
-    it('says panel only when an applet offers no place', async () => {
+    it('offers any applet for the + menu, and the title bar only with a page for it', async () => {
+      settingsService.AppletSurface.mockResolvedValue([])
+      settingsService.SetAppletSurface.mockResolvedValue(undefined)
       const wrapper = await render()
-      expect(wrapper.find('[data-testid="settings-applet-docker-places"]').exists()).toBe(false)
-      expect(wrapper.get('[data-testid="settings-applet-docker"]').text()).toContain('Panel only')
+      await wrapper.get('[data-testid="settings-applet-docker-places"]').trigger('click')
+
+      expect(inBody('settings-applet-docker-places-titlebar')?.hasAttribute('disabled')).toBe(true)
+      inBody('settings-applet-docker-places-tab')?.click()
+      await flushPromises()
+      expect(settingsService.SetAppletSurface).toHaveBeenCalledWith('tab', ['docker'])
+      inBody('settings-applet-docker-places-page')?.click()
+      await flushPromises()
+      expect(settingsService.SetAppletSurface).toHaveBeenCalledWith('page', ['docker'])
       wrapper.unmount()
     })
 

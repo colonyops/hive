@@ -24,12 +24,16 @@ import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
 import ChatTabAdd from './agents/ChatTabAdd.vue'
 import DrivePage from './drive/DrivePage.vue'
 import PanelLayoutHost from './panels/PanelLayoutHost.vue'
+import AppletTabsLayer from './applets/AppletTabsLayer.vue'
+import { useAppletTabHost } from './applets/useAppletTabHost'
 import SessionPanelPicker from './terminal/SessionPanelPicker.vue'
 import SessionTabIcon from './terminal/SessionTabIcon.vue'
 import ModeSkeleton from './ModeSkeleton.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
+import { appletIdOf, appletTab } from '../lib/appletTabs'
+import { useApplets, type AppletMenuRow } from '../stores/useApplets'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveRoute } from '../composables/useDriveRoute'
@@ -188,8 +192,22 @@ const paneRegionPanel = computed(() => panels.windowPanel.value ?? panels.status
 
 function tabLabel(tab: PanelTab): string {
   if (windowIdOf(tab)) return openChat.value?.name || 'Chat'
-  return viewOfTab(tab)?.label ?? tab.id
+  const applet = appletIdOf(tab)
+  return applet ? applets.titleOf(applet) : (viewOfTab(tab)?.label ?? tab.id)
 }
+
+const applets = useApplets()
+const chatSlug = computed(() => openChat.value?.slug ?? '')
+
+function openAppletIn(id: string, opensAs: AppletMenuRow['opensAs'], panelId: string): void {
+  if (opensAs === 'page') applets.openPopup(id, chatSlug.value)
+  else panels.apply((current) => openTab(current, appletTab(id), panelId))
+}
+
+useAppletTabHost(
+  () => props.active && !!panels.key.value,
+  (id) => panels.apply((current) => openTab(current, appletTab(id))),
+)
 
 function tabAttention(tab: PanelTab): boolean {
   return tab.kind === 'docs' && driveActivity.isUnseen(openSessionId.value)
@@ -1022,13 +1040,18 @@ onBeforeUnmount(() => {
             @close-tab="closePanelTab"
           >
             <template #icon="{ tab }">
-              <SessionTabIcon :kind="tab.kind" :agent="tab.kind === WINDOW_TAB_KIND ? chatAgent : undefined" />
+              <SessionTabIcon
+                :kind="tab.kind"
+                :agent="tab.kind === WINDOW_TAB_KIND ? chatAgent : undefined"
+                :applet="appletIdOf(tab)"
+              />
             </template>
             <template #add="{ panel }">
               <ChatTabAdd
                 :panel="panel.id"
                 :views="chatViews"
                 @view="(kind) => panels.apply((current) => openTab(current, viewTab(kind), panel.id))"
+                @applet="(id, opensAs) => openAppletIn(id, opensAs, panel.id)"
               />
             </template>
             <template #picker="{ panel }">
@@ -1038,6 +1061,7 @@ onBeforeUnmount(() => {
                 :views="chatViews"
                 :can-add-terminal="false"
                 @view="(kind) => panels.apply((current) => placeTab(current, viewTab(kind), panel.id))"
+                @applet="(id) => panels.apply((current) => placeTab(current, appletTab(id), panel.id))"
                 @cancel="panels.apply((current) => closePanel(current, panel.id))"
               />
             </template>
@@ -1052,6 +1076,15 @@ onBeforeUnmount(() => {
               />
             </template>
             <template #floating="{ region }">
+              <AppletTabsLayer
+                :layout="layout"
+                :region="region"
+                :session-slug="chatSlug"
+                :content-key="panels.key.value"
+                :keys-active="active"
+                @focus-panel="(panelId) => panels.apply((current) => focusPanel(current, panelId))"
+                @close-tab="closePanelTab"
+              />
               <!-- TerminalTab.vue's shape, for the same reasons: xterm opens in the
                    unpadded inner host so the fit measurement reads the content box
                    — measuring the padded wrapper over-proposes the grid by a row

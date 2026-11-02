@@ -360,7 +360,14 @@ describe('useCommands', () => {
     expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive', 'applets'])
 
     scope.run(() => useShellEscape(() => []))
-    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive', 'applets', 'shell'])
+    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual([
+      'all',
+      'goto',
+      'actions',
+      'drive',
+      'applets',
+      'shell',
+    ])
 
     scope.stop()
     expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive', 'applets'])

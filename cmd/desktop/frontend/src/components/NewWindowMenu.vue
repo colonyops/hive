@@ -5,6 +5,8 @@ import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import { agentBrandIcon } from './terminal/agentBrandIcon'
 import type { SessionViewKind } from './terminal/panelViews'
 import type { MenuEntry } from '@hive/ui/types/menu'
+import { appletMenuChoice, appletMenuEntries } from './applets/appletMenu'
+import type { AppletMenuRow } from '../stores/useApplets'
 
 const props = defineProps<{
   running: boolean
@@ -16,12 +18,14 @@ const props = defineProps<{
   loading: boolean
   failed: boolean
   views?: { kind: SessionViewKind; label: string; icon: Component }[]
+  applets?: readonly AppletMenuRow[]
 }>()
 const emit = defineEmits<{
   close: []
   terminal: []
   agent: [profile: string]
   view: [kind: SessionViewKind]
+  applet: [id: string, opensAs: AppletMenuRow['opensAs']]
   retry: []
 }>()
 
@@ -57,6 +61,8 @@ const entries = computed<MenuEntry[]>(() => [
     icon: view.icon,
     testid: `new-window-view-${view.kind}`,
   })),
+  ...(props.applets?.length ? [{ kind: 'separator' as const }] : []),
+  ...appletMenuEntries(props.applets ?? []),
 ])
 
 function select(id: string): void {
@@ -68,6 +74,10 @@ function select(id: string): void {
   if (id === 'terminal') emit('terminal')
   else if (id.startsWith('agent:')) emit('agent', id.slice(6))
   else if (id.startsWith('view:')) emit('view', id.slice(5) as SessionViewKind)
+  else {
+    const choice = appletMenuChoice(id)
+    if (choice) emit('applet', choice.applet, choice.opensAs)
+  }
 }
 </script>
 

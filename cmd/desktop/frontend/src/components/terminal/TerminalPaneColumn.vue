@@ -22,6 +22,7 @@ import ChangesLoading from '../git/ChangesLoading.vue'
 import DrivePage from '../drive/DrivePage.vue'
 import TasksView from '../tasks/TasksView.vue'
 import PanelLayoutHost from '../panels/PanelLayoutHost.vue'
+import AppletTabsLayer from '../applets/AppletTabsLayer.vue'
 import SessionPanelPicker from './SessionPanelPicker.vue'
 import SessionTabAdd from './SessionTabAdd.vue'
 import SessionTabIcon from './SessionTabIcon.vue'
@@ -59,6 +60,9 @@ import {
   OpenSessionInEditor,
   RevealSession,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
+import { appletIdOf, appletTab } from '../../lib/appletTabs'
+import { useApplets } from '../../stores/useApplets'
+import { useAppletTabHost } from '../applets/useAppletTabHost'
 import { docsScopeOf, viewOfTab, viewTab, withDocsScope } from './panelViews'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useSessionLayout, type SessionDriveTarget } from '../panels/useSessionLayout'
@@ -237,10 +241,13 @@ function windowName(windowId: string): string {
 
 function tabLabel(tab: PanelTab): string {
   const windowId = windowIdOf(tab)
-  return windowId ? windowName(windowId) : (viewOfTab(tab)?.label ?? tab.id)
+  if (windowId) return windowName(windowId)
+  const applet = appletIdOf(tab)
+  return applet ? applets.titleOf(applet) : (viewOfTab(tab)?.label ?? tab.id)
 }
 
 const driveActivity = useDriveActivity()
+const applets = useApplets()
 
 function needsApproval(windowId: string): boolean {
   const row = panels.row
@@ -383,6 +390,11 @@ useSessionLayout('terminal', toRef(props, 'drive'), () => props.active && pool.a
   turn: (tab) => panels.apply((current) => turnRule(current, tab)),
 })
 
+useAppletTabHost(
+  () => props.active && !!panels.row,
+  (id) => panels.apply((current) => openTab(current, appletTab(id))),
+)
+
 const panelLayouts = usePanelLayouts()
 watch([() => props.active, () => panels.key], ([active, key]) => panelLayouts.markOnScreen(active ? key : ''), {
   immediate: true,
@@ -488,7 +500,7 @@ onBeforeUnmount(() => {
       @close-tab="closePanelTab"
     >
       <template #icon="{ tab }">
-        <SessionTabIcon :kind="tab.kind" :agent="tabAgent(tab)" />
+        <SessionTabIcon :kind="tab.kind" :agent="tabAgent(tab)" :applet="appletIdOf(tab)" />
       </template>
       <template #add="{ panel }">
         <SessionTabAdd :row="panels.row" :panel="panel.id" />
@@ -537,6 +549,7 @@ onBeforeUnmount(() => {
           @terminal="panels.newWindow(panels.row!, panel.id)"
           @agent="(agent) => panels.newAgentWindow(panels.row!, agent, panel.id)"
           @view="(view) => panels.apply((current) => placeTab(current, viewTab(view), panel.id))"
+          @applet="(id) => panels.apply((current) => placeTab(current, appletTab(id), panel.id))"
           @cancel="panels.apply((current) => closePanel(current, panel.id))"
         />
       </template>
@@ -557,6 +570,15 @@ onBeforeUnmount(() => {
         <TasksView v-else-if="tab.kind === 'tasks'" embedded :keys-active="viewHasKeys(focused, shown)" />
       </template>
       <template #floating="{ region }">
+        <AppletTabsLayer
+          :layout="layout"
+          :region="region"
+          :session-slug="panels.row?.slug ?? ''"
+          :content-key="panels.key"
+          :keys-active="active && !overlayOpen && !terminalTreeFocused"
+          @focus-panel="(panelId) => panels.apply((current) => focusPanel(current, panelId))"
+          @close-tab="closePanelTab"
+        />
         <template v-for="session in pool.paneSessions" :key="session.slug">
           <div
             v-for="tab in session.tabs"

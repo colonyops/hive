@@ -142,7 +142,7 @@ async function confirm(): Promise<void> {
                 <code class="font-mono">{{ preview.entry }}</code> runs when you open the applet.
               </li>
               <template v-for="{ surface, placement } in PLACEABLE_SURFACES" :key="surface">
-                <li v-if="placement.offeredPage(preview)">
+                <li v-if="placement.loadsWithApp && placement.offeredPage(preview)">
                   It offers <code class="font-mono">{{ placement.offeredPage(preview) }}</code> for
                   {{ placement.where }}. That stays off until you turn it on, and then runs whenever Hive is open.
                 </li>
