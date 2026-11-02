@@ -1,6 +1,6 @@
 Build a Hive Desktop applet.
 {{template "app" .}}
-An applet is a web page that opens over the app, from the command palette or a key
+An applet is a web page that opens as a pop-up or a session tab, from the command palette or a key
 the user binds. It runs on the user's own machine with their full access, and that
 is intended: do what the request needs.
 
@@ -36,13 +36,15 @@ A key Hive does not know is a warning in `list_applets`, and the applet still op
 It is a normal web page, served from the applet's directory: relative scripts, ES
 modules, stylesheets, images, audio and network requests all work. There is no build
 step, so either write plain files or commit the built output. Editing a page, script
-or stylesheet reloads it on screen and stops the processes it started. Hive draws a
-close button over the top right corner of the page, so leave about 52px clear there.
+or stylesheet reloads it on screen and stops the processes it started. On a pop-up, Hive
+draws a close button over the top right corner of the page, so leave about 52px clear there.
 
-`window.hive` exists before your scripts run. Every call returns a promise.
+A foreign page in the frame can load any of your pages with a query or hash it chooses, and that page has the full bridge. So do not run commands built from the URL.
+
+`window.hive` exists before your scripts run. Every call except `hive.on` returns a promise.
 
 - `hive.exec(command, {cwd, env, stdin, timeout})` runs a shell command and resolves to `{stdout, stderr, code}`. A non-zero `code` does not reject. `timeout` is in milliseconds and defaults to 5 minutes.
-- `hive.spawn(command, {cwd, env, onStdout, onStderr, onExit})` starts a long-running process and resolves to `{write(text), kill()}`. Output arrives as text in arbitrary chunks. Closing the applet stops it.
+- `hive.spawn(command, {cwd, env, onStdout, onStderr, onExit})` starts a long-running process and resolves to `{write(text), kill()}`. Output arrives as text in arbitrary chunks. Closing the frame that started it stops it.
 - `hive.readFile(path)` and `hive.writeFile(path, text)` handle text files. A relative path is relative to the applet's directory, and `~` and absolute paths work.
 - `hive.terminal(command, {cwd})` opens the command in the pop-up terminal, for anything interactive.
 - `hive.toast(message, {severity, body})` shows a Hive toast. `severity` is `info`, `success`, `warning`, or `error`.
@@ -50,7 +52,7 @@ close button over the top right corner of the page, so leave about 52px clear th
 - `hive.context()` resolves to `{id, title, dir, cwd, sessionSlug}`.
 - `hive.close()` closes the applet's pop-up or tab. In a title bar page it closes the page's dropdown.
 - `hive.surface` is `tab`, `page` (a pop-up), `titlebar` or `dropdown`, for one file that serves several.
-- `hive.open()` opens the applet from any of them: as a tab if the user added it as one and a session is on screen, otherwise as a pop-up.
+- `hive.open()` opens the applet from any of them: as a tab if the user added it as one and a session is on screen, otherwise as a pop-up. It closes the pop-up if that is already open.
 - `hive.broadcast(data)` sends to the applet's other open frames, which listen with `hive.on('message', fn)`.
 - `hive.on('session', fn)` reports the slug of the session on screen when it changes. `hive.on` returns a function that stops listening, and does nothing for an event this Hive does not have.
 - `hive.commands()` resolves to Hive's commands as `{id, title, group, keys}`, and `hive.command(id)` runs one and rejects an id that does not exist, so a page can do what the command palette can.
@@ -72,17 +74,17 @@ Hive sets its theme on the page's root element as CSS variables, and updates the
 the user changes theme. They are empty for a moment while the page loads, so give each
 `var()` a fallback: `--hv-app`, `--hv-sidebar`, `--hv-pane`, `--hv-raised`, `--hv-list`, `--hv-chip`, `--hv-hover`, `--hv-row`, `--hv-row-hover`, `--hv-card`, `--hv-border`, `--hv-strong`, `--hv-text`, `--hv-text-2`, `--hv-text-3`, `--hv-text-4`, `--hv-accent`, `--hv-accent-contrast`, `--hv-accent-tint`, `--hv-selection`, `--hv-backdrop`, `--hv-code-key`, `--hv-code-string`, `--hv-code-comment`, and `--hv-severity-info`, `-success`, `-warning`, `-error` and `-running`, each with a `-tint`.
 
-Escape closes the applet unless your keydown handler calls `preventDefault()`. Use
+Escape closes a pop-up or dropdown unless your keydown handler calls `preventDefault()`. Use
 that to let Escape back out of a dialog or a filter first. Command, Control and Option
 chords reach Hive's shortcuts unless your handler calls `preventDefault()`, and while a
-panel is open that only runs the palette, the key that closes the panel, and this applet's
+pop-up is open that only runs the palette, the key that closes it, and this applet's
 commands. So call `preventDefault()` on any chord the page uses for itself, such as Command-K
 for its own search. Other keys stay in the page. Audio needs a user gesture first, as on any
 page.
 
 ## In a session
 
-Any applet can open as a tab beside a session's terminals, or as a pop-up over the app. The user adds it to a session's + menu in Settings > Applets, or you add its id to `applets.tabs` or `applets.popups` in `settings.yaml` when they ask you to. `applet.yaml` has no key for this. A tab fills its panel, so make the page fit any size down to a narrow split. `width` and `height` apply only to a pop-up. Escape does not close a tab. A tab's page reloads when the user comes back from another session, so keep what matters in `localStorage`.
+Any applet can open as a tab beside a session's terminals, or as a pop-up over the app. The user adds it to a session's + menu in Settings > Applets, or you add its id to `applets.tabs` or `applets.popups` in `settings.yaml` when they ask you to. `applet.yaml` has no key for this. A tab fills its panel, so make the page fit any size down to a narrow split.  A tab's page reloads when the user comes back from another session, so keep what matters in `localStorage`.
 
 ## In the title bar
 
@@ -94,9 +96,8 @@ keeps running until they turn it off, so keep what it polls cheap.
 
 - The slot is 28px tall. Set `html, body { margin: 0; height: 100%; background: transparent; }` so the page sits on the bar, and match Hive's 28px controls with a 8px radius and a `--hv-chip` hover fill. Use `--hv-*` colours.
 - `hive.resize({width})` changes the slot's width. Width `0` hides the slot and keeps the page running, for an indicator that only shows when there is something to say.
-- `hive.dropdown({entry, width, height})` opens a panel under the bar and a second call closes it, so call it from a click. It closes when the user clicks elsewhere or presses Escape. `hive.resize({width, height})` from its page resizes it. It loads fresh on each open, so anything that must keep going, such as audio or a long-running process, belongs in the title bar page. Keep the two in step with `hive.broadcast`.
+- `hive.dropdown({entry, width, height})` opens a dropdown under the bar and a second call closes it, so call it from a click. It closes when the user clicks elsewhere or presses Escape. `hive.resize({width, height})` from its page resizes it. It loads fresh on each open, so anything that must keep going, such as audio or a long-running process, belongs in the title bar page. Keep the two in step with `hive.broadcast`.
 - `localStorage` is shared between an applet's frames, and the `storage` event fires as it does in a browser.
-- Closing a pop-up, tab or dropdown stops only what that frame spawned.
 
 If the applet is only for the title bar, the palette still opens its `entry` as a pop-up, so
 make that page useful too: settings or a larger view.
@@ -147,7 +148,7 @@ the generic look of a default dashboard template.
 Do not write anything yet. First ask me to describe the applet: what it should do, what
 it should show, and what I should be able to do in it. Ask follow-up questions only if
 the answer leaves something you cannot reasonably decide. Then build it, using the
-style above. Decide from my answer where it runs and what panel size suits it.
+style above. Decide from my answer where it runs and what pop-up size suits it.
 {{else}}
 {{template "task" .}}
 {{end}}

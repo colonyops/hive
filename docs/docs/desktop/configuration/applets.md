@@ -5,7 +5,7 @@ description: Ask an agent for a web page that opens as a session tab, pops up ov
 
 # Applets
 
-An applet is a web page that opens over the app. It can be a Docker viewer, a Git graph, a dashboard, a game, or whatever else you want, and it can run any command on your machine.
+An applet is a web page that opens as a session tab or a pop-up. It can be a Docker viewer, a Git graph, a dashboard, a game, or whatever else you want, and it can run any command on your machine.
 
 ## Make one
 
@@ -21,7 +21,7 @@ The applet appears as soon as its file is valid. If you dislike it, ask for chan
 
 - Press <kbd>⌘K</kbd> and type its name. An applet whose name matches comes first, under **Applets**.
 - Press <kbd>⌘K</kbd> and type <kbd>+</kbd>, or press <kbd>⇥</kbd> to reach the **Applets** tab, to see only applets.
-- Bind one to a key in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>`. The same key closes it again.
+- Bind one to a key in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>`. The same key closes a pop-up again.
 
 <kbd>esc</kbd> closes a pop-up, unless the page uses the key itself first. A tab stays open; close it from its tab.
 
@@ -47,9 +47,9 @@ A session keeps its applet tabs across restarts. If you turn an applet off, its 
 An applet can add its own rows to the command palette at <kbd>⌘K</kbd>:
 
 - Commands its `applet.yaml` lists are always there. You can bind each one in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>.<command>`. They have no shortcut until you give them one.
-- Rows a page adds while it runs, such as a list of stations, last as long as that page and cannot be bound.
+- Rows a page adds while it runs, such as a list of stations, show while that page is on screen, last as long as it does, and cannot be bound.
 
-Shortcuts keep working with focus inside a page, as long as they use <kbd>⌘</kbd>, <kbd>Ctrl</kbd> or <kbd>⌥</kbd>. While a panel is open, only <kbd>⌘K</kbd>, that applet's own key, and that applet's commands run. A page can keep a shortcut for itself. See [Keyboard shortcuts](keybindings.md#applets).
+Shortcuts keep working with focus inside a page. See [Keyboard shortcuts](keybindings.md#applets).
 
 ## Turn one off
 
@@ -125,7 +125,7 @@ width: 1200
 height: 760
 ```
 
-Put an `index.html` beside it. Scripts, modules, images, audio, and network requests all work, and editing a file reloads the page.
+Put an `index.html` beside it. Scripts, modules, images, audio, and network requests all work, and editing a page, script or stylesheet reloads the page.
 
 The page gets `window.hive`:
 
@@ -139,7 +139,7 @@ The page gets `window.hive`:
 | `hive.copy(text)` | Puts text on the clipboard |
 | `hive.context()` | Returns the applet's directory, working directory, and session |
 | `hive.close()` | Closes the applet's pop-up or tab. In a title bar page, closes its dropdown |
-| `hive.open()` | Opens the applet: as a tab if you put it in the + menu as one and a session is on screen, otherwise as a pop-up |
+| `hive.open()` | Opens the applet: as a tab if you put it in the + menu as one and a session is on screen, otherwise as a pop-up. Closes its pop-up if that is already open |
 | `hive.commands()`, `hive.command(id)` | Lists Hive's commands with `{id, title, group, keys}`, and runs one. An unknown id rejects |
 | `hive.setCommands(rows)` | Replaces the palette rows this page added |
 | `hive.on('command', fn)` | Reports the id of the applet's command or row that was run |
@@ -152,7 +152,7 @@ The page gets `window.hive`:
 The page also receives Hive's theme as CSS variables such as `--hv-app`, `--hv-text` and `--hv-accent`, which change when you change theme. `localStorage` works and is kept per applet. Cookies and IndexedDB do not work.
 
 !!! warning "An applet can do anything you can"
-    Applets have no permissions and no allowlist. A page can run any command and change any file, and so can any remote script it loads. Nothing runs when a file loads, only when you open an applet. Only [import applets](#share-one) from people you trust.
+    Applets have no permissions and no allowlist. A page can run any command and change any file, and so can any remote script it loads. Nothing runs when a file loads, only when you open an applet or turn on its title bar page.
 
 ### Title bar pages
 
@@ -171,9 +171,9 @@ The slot is 28px tall, and a page with a transparent background sits directly on
 | Call | What it does |
 | --- | --- |
 | `hive.resize({width, height})` | Resizes the slot or dropdown. Width `0` hides the slot and keeps the page running |
-| `hive.dropdown({entry, width, height})` | Opens a panel under the bar, or closes it if it is open |
+| `hive.dropdown({entry, width, height})` | Opens a dropdown under the bar, or closes it if it is open |
 
-A dropdown loads again each time it opens, so put anything that has to keep going, such as audio, in the title bar page and talk to it with `hive.broadcast`. `localStorage` is shared between an applet's frames. Closing a panel or dropdown stops only the `hive.spawn` processes it started. A `hive.exec` already running finishes or times out.
+A dropdown loads again each time it opens, so put anything that has to keep going, such as audio, in the title bar page and talk to it with `hive.broadcast`. `localStorage` is shared between an applet's frames. Closing a pop-up, tab or dropdown stops only the `hive.spawn` processes it started. A `hive.exec` already running finishes or times out.
 
 ### Palette commands
 
@@ -195,7 +195,7 @@ hive.on('command', (id) => {
 })
 ```
 
-A command goes to the applet's running persistent page, which today means the title bar page if it is on. Otherwise the applet opens, as a tab if you added it as one and a session is on screen, and as a pop-up if not. The page there gets the command, even if it starts listening after it loads. To have a command open a dropdown, call `hive.dropdown()` from the listener in the title bar page.
+A command goes to the applet's running persistent page, which today means the title bar page if it is on. Otherwise it goes to the applet's page on screen, or the applet opens, as a tab if you added it as one and a session is on screen, and as a pop-up if not. The page there gets the command, even if it starts listening after it loads. To have a command open a dropdown, call `hive.dropdown()` from the listener in the title bar page.
 
 For rows that change, such as things only a running page knows about, call `hive.setCommands`. Each call replaces the rows that page added before, and they disappear when the page closes or reloads. They arrive through the same `hive.on('command')`. Only `id` and `title` are required.
 
@@ -233,7 +233,7 @@ If a file is invalid, the palette marks the applet **(invalid)** and opening it 
 
 ### Keep an applet working across releases
 
-`version` in `applet.yaml` is the format of the file, and stays `1`. It is not a release number for your applet, and a future `release:` key would hold that.
+`version` in `applet.yaml` is the format of the file, and stays `1`. It is not a release number for your applet.
 
 A key this Hive does not know, or an icon it does not have, is a warning: the applet opens without it, and **Settings ▸ Applets** and the palette say so. A wrong value under a key Hive knows is an error. A file with a later `version` asks you to update Hive.
 

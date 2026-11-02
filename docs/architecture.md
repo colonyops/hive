@@ -1418,7 +1418,7 @@ opened in `AppletFrame`
 - **The file is the registration.** `applets.Store` hot-reloads per directory. A
   broken file keeps its last good version and reports the error on its entry.
 - **A page is deliberately unrestricted.** `window.hive` (`applets/bridge.js`) reaches
-  `AppletsService` through `postMessage` and `AppletFrame`, and runs what it is asked.
+  `AppletsService` through `useAppletBridge`, and runs what it is asked.
   The opaque-origin frame protects the app from a page's mistakes. Do not add
   permission checks here without revisiting the ADR.
 - **The bridge answers only the applet's own pages.** A page hands `useAppletBridge` a
@@ -1436,7 +1436,7 @@ opened in `AppletFrame`
   the whole of a surface: a session tab (`AppletTabsLayer`), the pop-up (`AppletHost`), the
   title bar slot (`AppletTitlebarSlot`), and the dropdown under it (`AppletDropdown`). What differs between
   them is one row of `SURFACES` (`stores/appletSurfaces.ts`). A new extension point is that
-  row, a row of `applets.Surfaces`, a list in `settings.AppletsSettings`, and a host, not
+  row, a list in `settings.AppletsSettings`, and a host, not
   another bridge. The user turns the title bar on per applet (`applets.titlebar` in
   `settings.yaml`), because that page runs without being opened.
 - **A session tab is a layout tab, and its frame floats.** `lib/appletTabs` names it
@@ -1445,13 +1445,13 @@ opened in `AppletFrame`
   the DOM reloads the page. `contentKey` re-keys the layer, so an area runs the tabs of its
   selected session only, and they keep running through a trip to another area, as its
   terminals do. A command goes to a frame on screen (`AppletFrameHandle.onScreen`), never to a
-  tab the user cannot see. The user adds an applet to a session's + menu as a tab, a pop-up, or both
+  tab the user cannot see, and a palette row shows only while its frame is. The user adds an applet to a session's + menu as a tab, a pop-up, or both
   (`applets.tabs`, `applets.popups`), and the file cannot add itself. A tab host registers with
   `setTabHost`, so the palette and a chord open a placed applet as a tab where one can show.
   Delete and import close saved tabs for the id, and import does it before `ConfirmImport`,
   because its catalog reload would mount the imported page in a leftover tab.
   Agents can place and focus an open `applet:<id>` tab through the layout verbs, and
-  `open_tab` refuses one: the MCP server runs nothing on a caller's say (ADR
+  `open_tab` and `close_tab` refuse one: the MCP server runs nothing on a caller's say (ADR
   mcp-replaces-the-agent-facing-http-api).
 - **`applet.yaml` reads forward.** A key or icon this Hive does not know is a warning on the
   entry (`applets/compat.go`). A wrong shape under a known key is an error, and a later
@@ -1480,7 +1480,7 @@ opened in `AppletFrame`
   covers its commands too.
 - **A frame hands chords to the keymap.** `bridge.js` forwards what a page did not
   `preventDefault` as a synthetic keydown on `window`, so the keymap has one path. It does
-  not special-case frames: the overlay gate in `useGlobalKeymap` is what keeps a panel modal.
+  not special-case frames: the overlay gate in `useGlobalKeymap` is what keeps a pop-up modal.
 
 ### App modes
 

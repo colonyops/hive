@@ -8,9 +8,7 @@
 A user should be able to ask an agent for a UI, from a Docker viewer to something with
 no place in Hive's design, such as a game, and open it from the app. These applets are
 written by or for the person whose machine they run on, so restricting what they can do
-protects nobody and costs most of the value. A schema of tables and pickers was tried
-first and removed: it could not express the applets people wanted, and a page does what
-it did in a few lines.
+protects nobody and costs most of the value.
 
 ## Decision
 
@@ -57,6 +55,10 @@ bridge. A frame can reach a remote page through one link, so these rules hold th
   app's own.
 - **The native build serves pages through the asset handler**, not the loopback server,
   so nothing outside the webview can read an applet's files or reach the bridge.
+- **A foreign frame can still reach the native window handler.** Wails does not filter
+  `webkit.messageHandlers.external` by frame, so a page reached by a link can zoom, drag or
+  resize the window. It cannot run a command or read data: Hive sets no raw message handler and
+  no simple event emit. Closing this needs a frame check in Wails.
 - **The headless server build (`-tags server`) has no applets.** There the asset handler
   and the Wails runtime are an unauthenticated TCP listener, and any local process or
   website could use them. The one exception is the e2e harness, identified by its per-run
@@ -66,12 +68,10 @@ bridge. A frame can reach a remote page through one link, so these rules hold th
 Nothing runs when a file loads. Commands start when the user opens an applet, or puts it
 in the title bar, and its page runs them.
 
-A page is not limited to the panel. An applet with `titlebar:` offers a second page, a
+A page is not limited to the pop-up or a tab. An applet with `titlebar:` offers a second page, a
 frame in a slot of the title bar with its own width, and that page can open a dropdown
 frame under the bar. The surfaces share one bridge and differ only in what hosts them and in
-one row of a table of rules, so the next place an applet can appear is that row, another host
-of `AppletFrame`, and a key in `applet.yaml`. Settings, the import dialog and import cleanup
-read the list of surfaces, so a new one needs no change there.
+one row of a table of rules.
 
 **The user turns a title bar page on, in Settings or as `applets.titlebar` in
 `settings.yaml`.** It loads with the app and runs until it is turned off, so a file on disk
@@ -79,8 +79,8 @@ must not be enough to start it, for the rule above and because a page in the bar
 room the user did not offer. This is the same reason an applet gets no default chord. It
 is one switch and not a permission: once on, the page has what any applet has.
 
-**Whatever a frame starts, that frame stops.** One applet can now have several frames, so
-closing its panel must not end a process its title bar page runs. Frames of one applet
+**Whatever a frame starts, that frame stops.** One applet can have several frames, so
+closing its pop-up or tab must not end a process its title bar page runs. Frames of one applet
 reach each other through `hive.broadcast`, and share `localStorage` by passing each change
 along, because an opaque origin has no `BroadcastChannel` or `storage` event of its own and
 each frame's save writes the whole store.
@@ -92,7 +92,7 @@ list of stations, and its life is the page's. This is the split the rest of the 
 between commands and object rows. A declared command carries no default chord, for the same
 reason as `applet.<id>`. It goes to one frame, the running persistent surface, because
 that frame is the one that keeps running and two frames acting on it would run it twice.
-Today that is the title bar page. With no page to take it, the panel opens, and the bridge holds the command until the page
+Today that is the title bar page. With no page to take it, the applet opens, as a tab or a pop-up, and the bridge holds the command until the page
 listens.
 
 **Sharing is where the first rule stops holding.** This ADR's case for no restrictions is
@@ -127,8 +127,7 @@ dialog lists the skipped keys, up to 20, and says a limit among them would not a
 
 **Hive's command ids and routes are part of the applet API.** A shared page names them through
 `hive.command`, `hive.commands` and `hive.navigate`, so a rename keeps the old name as an alias. A
-snapshot test of the set makes a rename a visible diff. The other option was a curated list that
-refuses the rest: it would cost less to keep, and take away most of what those calls are for.
+snapshot test of the set makes a rename a visible diff.
 
 **Verbs follow one rule.** `close` and `resize` act on the frame that calls them, and mean what
 fits its surface. `open` and `dropdown` act on another surface.
@@ -145,7 +144,7 @@ tab loads whenever that session is on screen. The pop-up over the app stays for 
 not take a panel. A tab's page runs only while its session is the one selected in its area,
 as Drive and Diff do, so another session costs nothing and its processes stop. A trip to
 another area keeps it running, as a terminal keeps running. Agents can move and focus
-an open tab, but `open_tab` refuses an applet, because that MCP server runs nothing on a
+an open tab, but `open_tab` and `close_tab` refuse an applet, because that MCP server runs nothing on a
 caller's say (ADR mcp-replaces-the-agent-facing-http-api).
 
 ## Consequences
@@ -158,7 +157,7 @@ caller's say (ADR mcp-replaces-the-agent-facing-http-api).
   out hidden files and logs and shows the user the list.
 - Watching stops at 1024 files and folders below each applet, because a watch on macOS holds a
   descriptor per file. An edit in a folder past that does not reload the page.
-- A `hive.exec` a closed panel started finishes or times out. A page has no handle for it, and
+- A `hive.exec` a closed frame started finishes or times out. A page has no handle for it, and
   only turning the applet off stops it.
 - A page cannot `fetch` another HTML file of its own, because that response has no CORS
   header. It can navigate to one.
@@ -169,7 +168,7 @@ caller's say (ADR mcp-replaces-the-agent-facing-http-api).
 - Keys in a frame do not reach the app's keymap, so the injected script forwards Escape
   and any command, control or option chord, and a page keeps one by calling `preventDefault`.
   One click into a page would otherwise leave every shortcut dead, and the chord that opened
-  a panel could not close it. A panel stays modal: the keymap already refuses all but the
+  a pop-up could not close it. A pop-up stays modal: the keymap already refuses all but the
   palette and that applet's own commands while one is open. A page that uses a chord and
   does not call `preventDefault` gets both.
 - Bare keys stay in the page, so typing never runs a shortcut, except the rest of a chord
