@@ -19,6 +19,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	datastores "github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dirwatch"
@@ -57,6 +58,7 @@ import (
 	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
 	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
+	"github.com/colonyops/hive/pkg/logutils"
 )
 
 // Config is everything App needs that it cannot resolve itself.
@@ -135,6 +137,7 @@ type App struct {
 	Sources *SourcesService
 
 	PopupTerminals  *PopupTerminalsService
+	Applets         *AppletsService
 	AgentWorkspaces *AgentWorkspacesService
 	Tasks           *TasksService
 	Drive           *DriveService
@@ -282,6 +285,8 @@ type App struct {
 	paths                  settings.Paths
 	flowsWatcher           *dirwatch.Watcher
 	actionsWatcher         *dirwatch.Watcher
+	appletStore            *applets.Store
+	appletsWatcher         *dirwatch.Watcher
 	agentWorkspacesWatcher *dirwatch.Watcher
 	hiveWatcher            *hivewatch.Watcher
 }
@@ -375,6 +380,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.popupTerminals = ptyterm.NewManager(ptyterm.ManagerOptions{Environ: a.execEnv.Environ})
 
 	a.openActions(cfg.Paths.ActionsPath, cfg.Logger)
+	a.openApplets(cfg.Paths.AppletsDir, cfg.Build.Version, cfg.Logger)
 	a.openFlows(cfg.Paths.FlowsDir, cfg.Logger)
 	a.openAgentWorkspaces(cfg.Paths.AgentWorkspacesDir, cfg.Logger)
 	a.actionStore.SetUsageChecker(newActionUsage(a.flowStore, a.Stores.OutputCommands))
@@ -492,8 +498,10 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.Layouts = newLayoutsService(LayoutsDeps{
 		Callers:   a.Drive,
 		Terminals: newTmuxWindows(a.terminals),
-		Events:    a.Events,
-		Logger:    cfg.Logger,
+		// Late-bound: the applets service is built after this one.
+		CheckAppletTab: func(id string) error { return a.Applets.CheckTab(id) },
+		Events:         a.Events,
+		Logger:         cfg.Logger,
 	})
 	a.AgentWorkspaces = newAgentWorkspacesService(AgentWorkspacesDeps{
 		Store:           a.agentWorkspaceStore,
@@ -539,6 +547,15 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	})
 	a.Terminals = newTerminalsService(TerminalsDeps{Manager: a.terminals, Servers: a.serverTerminals, Starter: a.Sessions, Home: os.UserHomeDir, Logger: cfg.Logger})
 	a.PopupTerminals = newPopupTerminalsService(PopupTerminalsDeps{Manager: a.popupTerminals, Terminals: a.Terminals, Directory: a.Sessions, Catalog: a.actionStore})
+	a.Applets = newAppletsService(AppletsDeps{
+		Catalog:     a.appletStore,
+		Environ:     a.execEnv.Environ,
+		SessionDir:  a.PopupTerminals.terminalDir,
+		HiveVersion: cfg.Build.Version,
+		Preferences: a.Settings,
+		Updated:     func() { a.Events.Publish(a.ctx, events.AppletsUpdated{}) },
+		Logger:      logutils.Component(cfg.Logger, "applets"),
+	})
 	a.Diagnostics = &DiagnosticsService{paths: cfg.Paths, jobs: a.Jobs, build: cfg.Build, environ: a.execEnv.Environ, hive: a.HiveConfig, commands: a.profileCommands, webhooks: a.Webhooks, reveal: a.System.revealPath}
 	a.Tasks = newTasksService(a.hive)
 	a.Review = newReviewService(ReviewDeps{
@@ -635,6 +652,9 @@ func compactPipelineStoreAtStartup(ctx context.Context, db pipelineCompactor, pa
 func (a *App) Start(ctx context.Context) error {
 	if a.actionsWatcher != nil {
 		a.actionsWatcher.Start()
+	}
+	if a.appletsWatcher != nil {
+		a.appletsWatcher.Start()
 	}
 	if a.flowsWatcher != nil {
 		a.flowsWatcher.Start()
@@ -744,6 +764,10 @@ func (a *App) HiveConn() *sql.DB {
 func (a *App) Close() error {
 	a.cancel()
 
+	if a.Applets != nil {
+		a.Applets.Stop()
+	}
+
 	if a.Observability != nil {
 		if err := a.Observability.close(); err != nil {
 			a.logger.Warn().Err(err).Msg("unregister process metrics")
@@ -812,6 +836,9 @@ func (a *App) Close() error {
 	}
 	if a.actionsWatcher != nil {
 		a.actionsWatcher.Close()
+	}
+	if a.appletsWatcher != nil {
+		a.appletsWatcher.Close()
 	}
 	if a.agentWorkspacesWatcher != nil {
 		a.agentWorkspacesWatcher.Close()
@@ -900,6 +927,28 @@ func (a *App) openActions(path string, logger zerolog.Logger) {
 		return
 	}
 	a.actionsWatcher = watcher
+}
+
+// openApplets loads the applet catalog and watches the applets folder, so an
+// agent's write appears without a restart. A watcher that fails to start costs
+// hot-reload and nothing else, as for actions.yml.
+func (a *App) openApplets(dir, hiveVersion string, logger zerolog.Logger) {
+	a.appletStore = applets.NewStore(dir, hiveVersion)
+	reload := func() {
+		if err := a.appletStore.Reload(); err != nil {
+			logger.Warn().Err(err).Msg("applets reload failed")
+		}
+	}
+	reload()
+	watcher, err := dirwatch.New(dir, applets.IsWatchedFile, func() {
+		reload()
+		a.Events.Publish(a.ctx, events.AppletsUpdated{})
+	}, logger, dirwatch.WithAllSubdirectories(applets.SkipsWatch), dirwatch.WithComponent("applets-watcher"))
+	if err != nil {
+		logger.Warn().Err(err).Msg("applets hot-reload unavailable")
+		return
+	}
+	a.appletsWatcher = watcher
 }
 
 // openFlows constructs the flow store over settings.FlowsDir() and a watcher

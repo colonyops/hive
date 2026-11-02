@@ -196,7 +196,15 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 		Sessions: fakeCanvasSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
 		Events:   bus,
 	})
-	layouts := newLayoutsService(LayoutsDeps{Callers: svc, Terminals: terminals, Events: bus})
+	layouts := newLayoutsService(LayoutsDeps{
+		Callers: svc, Terminals: terminals, Events: bus,
+		CheckAppletTab: func(id string) error {
+			if id != "radio" {
+				return Errorf(KindInvalid, "%s has no tab", id)
+			}
+			return nil
+		},
+	})
 	return driveFixture{svc: svc, signals: signals, harness: h, terminals: terminals, layouts: layouts}
 }
 
@@ -523,6 +531,32 @@ func TestOpenTabResolvesAndPublishes(t *testing.T) {
 		{Session: "1", Space: space, Verb: "close", View: "drive"},
 	}, f.signals.waitTabs(t, 5))
 	f.signals.waitUpdates(t, 2)
+}
+
+func TestAgentsOpenAndCloseAnAppletTab(t *testing.T) {
+	f := newDriveFixture(t, siteSession)
+	ctx := t.Context()
+
+	_, err := f.openTab(ctx, "1", "applet:radio", "", "beside")
+	require.NoError(t, err)
+	require.NoError(t, f.layouts.CloseTab(ctx, "1", "applet:radio", ""))
+	_, err = f.openTab(ctx, siteSession.Path, "applet:radio", "", "")
+	require.NoError(t, err, "a chat and a Code session can both hold one")
+
+	tabs := f.signals.waitTabs(t, 3)
+	assert.Equal(t, "open", tabs[0].Verb)
+	assert.Equal(t, "applet:radio", tabs[0].View)
+	assert.Equal(t, "beside", tabs[0].Placement)
+	assert.Equal(t, "close", tabs[1].Verb)
+	assert.Equal(t, "applet:radio", tabs[1].View)
+	assert.Equal(t, "open", tabs[2].Verb)
+
+	_, err = f.openTab(ctx, "1", "applet:clock", "", "")
+	assert.Equal(t, KindInvalid, KindOf(err), "the applet's file decides whether it has a tab")
+	_, err = f.openTab(ctx, "1", "applet:radio", "plans/a.md", "")
+	assert.Equal(t, KindInvalid, KindOf(err), "a path is only for drive")
+	_, err = f.openTab(ctx, "global", "applet:radio", "", "")
+	assert.Equal(t, KindInvalid, KindOf(err), "the shared space has no tabs")
 }
 
 func TestOpenTabRejectsWhatAnAgentCannotAct(t *testing.T) {

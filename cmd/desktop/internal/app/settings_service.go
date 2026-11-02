@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -307,6 +308,40 @@ func (s *SettingsService) SetTerminalShowStatusBar(_ context.Context, show bool)
 		return nil
 	})
 	return Wrap(err, KindInternal, "saving settings")
+}
+
+// AppletDisabled reports whether the user turned an applet off.
+func (s *SettingsService) AppletDisabled(id string) (bool, error) {
+	cfg, err := s.store.Effective()
+	if err != nil {
+		return false, err
+	}
+	return slices.Contains(cfg.Applets.Disabled, id), nil
+}
+
+// SetAppletDisabled turns an applet off or back on.
+func (s *SettingsService) SetAppletDisabled(id string, disabled bool) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		others := slices.DeleteFunc(slices.Clone(current.Applets.Disabled), func(other string) bool { return other == id })
+		if disabled {
+			others = append(others, id)
+		}
+		current.Applets.Disabled = others
+		return nil
+	})
+	return err
+}
+
+// ForgetApplet removes every choice made about an id: whether it was off, and its chords, including those of commands the new applet does not declare.
+func (s *SettingsService) ForgetApplet(id string) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Applets.Forget(id)
+		maps.DeleteFunc(current.Keybindings, func(command string, _ []string) bool {
+			return command == "applet."+id || strings.HasPrefix(command, "applet."+id+".")
+		})
+		return nil
+	})
+	return err
 }
 
 func (s *SettingsService) SetTerminalPoolSize(_ context.Context, size int) error {

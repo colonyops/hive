@@ -6,11 +6,13 @@ import codexMark from '../../assets/agents/codex.svg'
 import piMark from '../../assets/agents/pi.svg'
 import AgentIcon from '../AgentIcon.vue'
 import type { AgentIconID } from '../../lib/agentIcon'
+import { launcherIconComponent } from '../../lib/launcherIcons'
+import { useApplets } from '../../stores/useApplets'
 import { useTerminalAgentIcons } from '../../stores/useTerminalAgentIcons'
 import { isSessionViewKind, sessionView } from './panelViews'
 
 // One mark for a tab and for its tree row, so the two read as the same thing.
-const props = defineProps<{ kind: string; agent?: AgentIconID }>()
+const props = defineProps<{ kind: string; agent?: AgentIconID; applet?: string }>()
 
 const MARKS: Partial<Record<AgentIconID, string>> = { claude: claudeCodeMark, codex: codexMark, pi: piMark }
 // The full-color marks' shapes, so turning the setting on changes only the color. Pi's
@@ -28,7 +30,11 @@ const MONOCHROME_MARKS: Partial<Record<AgentIconID, { viewBox: string; path: str
 }
 const { monochrome } = useTerminalAgentIcons()
 const monochromeMark = computed(() => (monochrome.value && props.agent ? MONOCHROME_MARKS[props.agent] : undefined))
-const icon = computed(() => (isSessionViewKind(props.kind) ? sessionView(props.kind).icon : IconTerminal))
+const applets = useApplets()
+const icon = computed(() => {
+  if (props.applet) return launcherIconComponent(applets.byID(props.applet)?.icon ?? '')
+  return isSessionViewKind(props.kind) ? sessionView(props.kind).icon : IconTerminal
+})
 </script>
 
 <template>

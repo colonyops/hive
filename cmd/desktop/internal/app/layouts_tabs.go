@@ -20,12 +20,24 @@ const (
 	TabViewTerminal TabView = "terminal"
 )
 
+// appletTabPrefix starts the name of an applet's tab, which is its layout tab id.
+const appletTabPrefix = "applet:"
+
+func appletTabID(view TabView) (string, bool) {
+	id, ok := strings.CutPrefix(string(view), appletTabPrefix)
+	return id, ok && id != ""
+}
+
 func parseTabView(s string) (TabView, error) {
-	switch v := TabView(s); v {
+	v := TabView(s)
+	if _, applet := appletTabID(v); applet {
+		return v, nil
+	}
+	switch v {
 	case TabViewDrive, TabViewDiff, TabViewTasks, TabViewTerminal:
 		return v, nil
 	}
-	return "", Errorf(KindInvalid, "view %q is not one of drive, diff, tasks, terminal", s)
+	return "", Errorf(KindInvalid, "view %q is not one of drive, diff, tasks, terminal, applet:<id>", s)
 }
 
 // TabPlacement says where a tab goes: behind a tab in a panel, or in a new
@@ -78,12 +90,16 @@ type TabRef struct {
 
 // parseTabRef reads drive, diff and tasks as those views, terminal as the
 // terminal view with no window (a chat's one terminal), and anything else as
-// a tmux window of a Code session, by id or exact name.
+// a tmux window of a Code session, by id or exact name. applet:<id> is that
+// applet's tab.
 func parseTabRef(s string) (TabRef, error) {
 	s = strings.TrimSpace(s)
+	if _, applet := appletTabID(TabView(s)); applet {
+		return TabRef{View: TabView(s)}, nil
+	}
 	switch v := TabView(s); v {
 	case "":
-		return TabRef{}, Errorf(KindInvalid, "a tab reference is empty; say drive, diff, tasks, terminal, or a window by id (@3) or name")
+		return TabRef{}, Errorf(KindInvalid, "a tab reference is empty; say drive, diff, tasks, terminal, applet:<id>, or a window by id (@3) or name")
 	case TabViewDrive, TabViewDiff, TabViewTasks, TabViewTerminal:
 		return TabRef{View: v}, nil
 	}
@@ -123,6 +139,8 @@ type OpenTabResult struct {
 // tmux window of the Code session, a login shell in its checkout, or places
 // one that exists. It takes no command: this surface runs nothing an agent
 // writes (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows).
+// An applet's view opens a tab its file lists, which runs that applet's page
+// (ADR applets-are-web-pages-with-full-access-to-the-machine).
 func (s *LayoutsService) OpenTab(ctx context.Context, req OpenTabRequest) (OpenTabResult, error) {
 	v, err := parseTabView(req.View)
 	if err != nil {
@@ -152,6 +170,14 @@ func (s *LayoutsService) OpenTab(ctx context.Context, req OpenTabRequest) (OpenT
 		}
 	}
 	var res OpenTabResult
+	if id, applet := appletTabID(v); applet {
+		if s.checkAppletTab == nil {
+			return OpenTabResult{}, Errorf(KindUnavailable, "applets are not available here")
+		}
+		if err := s.checkAppletTab(id); err != nil {
+			return OpenTabResult{}, err
+		}
+	}
 	switch v {
 	case TabViewDrive:
 		if req.Path != "" {
@@ -236,7 +262,7 @@ func (s *LayoutsService) requireRunning(ctx context.Context, caller driveCaller)
 // ask the UI to close the tab wherever it sits, and documents and canvases are
 // untouched. A terminal is a tmux window of a Code session: closing it kills
 // the window and everything running in it, and the UI's reconcile removes the
-// tab, so no event is published.
+// tab, so no event is published. Closing an applet's tab ends its page.
 func (s *LayoutsService) CloseTab(ctx context.Context, session, view, window string) error {
 	v, err := parseTabView(view)
 	if err != nil {
@@ -390,13 +416,17 @@ func (s *LayoutsService) publishTab(ctx context.Context, caller driveCaller, ver
 }
 
 // resolveTab applies the caller's rules to a tab reference and turns a window
-// name into its id. A chat has its Drive tab and its one terminal, which
-// carries no window; a Code session names every terminal by its window.
+// name into its id. A chat has its Drive tab, its applet tabs and its one
+// terminal, which carries no window; a Code session names every terminal by its
+// window.
 func (s *LayoutsService) resolveTab(ctx context.Context, caller driveCaller, ref TabRef) (TabRef, error) {
 	if err := checkTabSpace(caller); err != nil {
 		return TabRef{}, err
 	}
 	chat := caller.author.Session != ""
+	if _, applet := appletTabID(ref.View); applet {
+		return ref, nil
+	}
 	switch {
 	case chat && ref.View != TabViewDrive && ref.View != TabViewTerminal:
 		return TabRef{}, Errorf(KindInvalid, "a chat has only a Drive tab and its terminal; Diff and Tasks belong to a Code session")
@@ -428,6 +458,9 @@ func checkTabSpace(caller driveCaller) error {
 func checkTabCaller(caller driveCaller, view TabView) error {
 	if err := checkTabSpace(caller); err != nil {
 		return err
+	}
+	if _, applet := appletTabID(view); applet {
+		return nil
 	}
 	if caller.author.Session != "" && view == TabViewTerminal {
 		return Errorf(KindInvalid, "a chat has one terminal; new terminals belong to a Code session")

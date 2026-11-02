@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import IconKeyboard from '~icons/lucide/keyboard'
+import IconLayoutPanelTop from '~icons/lucide/layout-panel-top'
 import IconPalette from '~icons/lucide/palette'
 import IconFolderTree from '~icons/lucide/folder-tree'
 import IconPlug from '~icons/lucide/plug'
@@ -29,6 +30,7 @@ export const applicationSettingsSectionMeta: Record<
   appearance: { label: 'Appearance', title: 'Appearance', icon: IconPalette },
   drive: { label: 'Drive', title: 'Drive', icon: IconFolderTree },
   keybindings: { label: 'Keyboard', title: 'Keyboard shortcuts', icon: IconKeyboard },
+  applets: { label: 'Applets', title: 'Applets', icon: IconLayoutPanelTop },
   terminal: { label: 'Terminal', title: 'Terminal', icon: IconSquareTerminal },
   agents: { label: 'Chats', title: 'Chats', icon: IconMessagesSquare },
   integrations: { label: 'Integrations', title: 'Integrations', icon: IconPlug },

@@ -215,6 +215,8 @@ appearance:
   terminal_pool_size: 3 # sessions kept attached for instant switching (1-6, ADR terminal-attach-pool)
   terminal_show_session_age: true # show an age badge on old sessions in the Code sidebar
   terminal_session_age_threshold_days: 5 # whole days since creation before the badge appears (1-365)
+applets:
+  disabled: [] # applet ids the user turned off; they stay listed and nothing of them runs
 profiles:
   order: [] # flow ids, top of the rail first; ids left out sort alphabetically
             # behind them. Written by dragging a tile in the rail.

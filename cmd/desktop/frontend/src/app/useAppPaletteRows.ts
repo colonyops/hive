@@ -42,6 +42,7 @@ const sigilMeanings: Partial<Record<PaletteScopeId, string>> = {
   goto: 'Jump to a place, session, or setting',
   actions: 'Run a command',
   drive: 'Search Drive documents',
+  applets: 'Open an applet',
   shell: 'Run a line in a new terminal window',
   keys: 'Search and rebind shortcuts',
 }

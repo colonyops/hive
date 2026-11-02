@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -98,8 +99,8 @@ func (cmd *DesktopCmd) tabCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "tab",
 		Usage: "Open, close, move and focus tabs",
-		Description: `A <tab> is drive, diff, tasks, terminal, or a tmux window of a Code session
-by id (@3) or exact name.`,
+		Description: `A <tab> is drive, diff, tasks, terminal, applet:<id>, or a tmux window of a
+Code session by id (@3) or exact name.`,
 		Commands: []*cli.Command{
 			cmd.tabOpenCmd(),
 			cmd.tabCloseCmd(),
@@ -113,7 +114,7 @@ func (cmd *DesktopCmd) tabOpenCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "open",
 		Usage:     "Open a tab, or start a terminal window",
-		ArgsUsage: "<drive|diff|tasks|terminal>",
+		ArgsUsage: "<drive|diff|tasks|terminal|applet:id>",
 		Description: `--path applies to drive. --window places an existing terminal window; without
 it, terminal starts a new window, a shell in the session's checkout, that
 --name names.`,
@@ -150,8 +151,8 @@ func (cmd *DesktopCmd) tabCloseCmd() *cli.Command {
 		Name:      "close",
 		Usage:     "Close a tab",
 		ArgsUsage: "<tab>",
-		Description: `drive, diff and tasks close that view. Anything else is a terminal window of
-the session, which is killed.`,
+		Description: `drive, diff, tasks and applet:<id> close that view. Anything else is a terminal
+window of the session, which is killed.`,
 		Flags: desktopCallFlags(),
 		Action: func(ctx context.Context, c *cli.Command) error {
 			tab, err := oneArg(c, "close", "<tab>")
@@ -159,8 +160,7 @@ the session, which is killed.`,
 				return err
 			}
 			args := map[string]any{"view": "terminal", "window": tab}
-			switch tab {
-			case "drive", "diff", "tasks":
+			if slices.Contains([]string{"drive", "diff", "tasks"}, tab) || strings.HasPrefix(tab, "applet:") {
 				args = map[string]any{"view": tab}
 			}
 			return cmd.callTool(ctx, c, "close_tab", args)

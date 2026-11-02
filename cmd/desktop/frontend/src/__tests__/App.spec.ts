@@ -1821,7 +1821,13 @@ describe('App', () => {
       // row — whose run would strand the palette in a scope with no tab and
       // no possible rows — is hidden along with its tab.
       const legendIds = palette.results.value.filter((cmd) => cmd.group === 'Sigils').map((cmd) => cmd.id)
-      expect(legendIds).toEqual(['keys:sigil:goto', 'keys:sigil:actions', 'keys:sigil:drive', 'keys:sigil:keys'])
+      expect(legendIds).toEqual([
+        'keys:sigil:goto',
+        'keys:sigil:actions',
+        'keys:sigil:drive',
+        'keys:sigil:applets',
+        'keys:sigil:keys',
+      ])
 
       palette.scope.value = 'all'
       wrapper.unmount()

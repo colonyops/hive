@@ -70,6 +70,19 @@ type NotificationSettings struct {
 	Sound    bool   `yaml:"sound"    env:"HIVE_DESKTOP_NOTIFICATIONS_SOUND"`
 }
 
+// AppletsSettings holds what the user has chosen to do with their applets. Where an applet
+// shows is not here: its applet.yaml says.
+type AppletsSettings struct {
+	// Disabled lists the applets the user turned off. An id with no such applet stays
+	// listed, so an applet being rewritten stays off.
+	Disabled []string `yaml:"disabled,omitempty"`
+}
+
+// Forget removes every choice made about an id, for a new applet taking that id.
+func (a *AppletsSettings) Forget(id string) {
+	a.Disabled = slices.DeleteFunc(slices.Clone(a.Disabled), func(other string) bool { return other == id })
+}
+
 type Appearance struct {
 	Theme string `yaml:"theme,omitempty" env:"HIVE_DESKTOP_APPEARANCE_THEME"`
 	// FontFamily names the family the app's chrome draws with and
@@ -488,6 +501,7 @@ type Settings struct {
 	// No omitempty: with terminal_show_windows off and nothing else set the
 	// struct is all-zero, and an omitted section would read back as defaults.
 	Appearance      Appearance              `yaml:"appearance"`
+	Applets         AppletsSettings         `yaml:"applets,omitempty"`
 	Profiles        ProfileSettings         `yaml:"profiles,omitempty"`
 	MenuBar         MenuBarSettings         `yaml:"menu_bar,omitempty"`
 	HTTP            HTTPSettings            `yaml:"http"`

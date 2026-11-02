@@ -34,6 +34,8 @@ async function mountAt(
   open: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
   openWindow: ReturnType<typeof vi.fn>
+  openApplet: ReturnType<typeof vi.fn>
+  closeApplet: ReturnType<typeof vi.fn>
   move: ReturnType<typeof vi.fn>
   focus: ReturnType<typeof vi.fn>
   closePanel: ReturnType<typeof vi.fn>
@@ -50,6 +52,8 @@ async function mountAt(
   const open = vi.fn()
   const close = vi.fn()
   const openWindow = vi.fn()
+  const openApplet = vi.fn()
+  const closeApplet = vi.fn()
   const move = vi.fn()
   const focus = vi.fn()
   const closePanel = vi.fn()
@@ -63,6 +67,8 @@ async function mountAt(
         open,
         close,
         openWindow: withOpenWindow ? openWindow : undefined,
+        openApplet,
+        closeApplet,
         move,
         focus,
         closePanel,
@@ -74,7 +80,22 @@ async function mountAt(
   })
   mount(Host, { global: { plugins: [router] } })
   await flushPromises()
-  return { router, target, active, reveal, open, close, openWindow, move, focus, closePanel, resize, turn }
+  return {
+    router,
+    target,
+    active,
+    reveal,
+    open,
+    close,
+    openWindow,
+    openApplet,
+    closeApplet,
+    move,
+    focus,
+    closePanel,
+    resize,
+    turn,
+  }
 }
 
 function fireTab(payload: Record<string, unknown>) {
@@ -160,6 +181,18 @@ describe('useSessionLayout', () => {
     expect(openWindow).toHaveBeenNthCalledWith(1, '@12', 'beside', null)
     expect(openWindow).toHaveBeenNthCalledWith(2, '@13', 'behind', null)
     expect(open).not.toHaveBeenCalled()
+  })
+
+  it('hands an applet tab to the host for an agent to open and close', async () => {
+    const { open, close, openApplet, closeApplet } = await mountAt('/terminal/fix-login')
+
+    fireTab({ view: 'applet:radio', placement: 'beside' })
+    fireTab({ verb: 'close', view: 'applet:radio' })
+
+    expect(openApplet).toHaveBeenCalledWith('applet:radio', 'beside', null)
+    expect(closeApplet).toHaveBeenCalledWith('applet:radio')
+    expect(open).not.toHaveBeenCalled()
+    expect(close).not.toHaveBeenCalled()
   })
 
   it('opens a tab below the current one', async () => {

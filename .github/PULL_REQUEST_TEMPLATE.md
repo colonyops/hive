@@ -13,6 +13,7 @@ Append ! before the colon for a breaking change.
   scopes  cli tui sessions msg hc config workspaces plugins sources storage
           tmux doctor
           chats canvas terminal code feed flows tasks settings actions mcp drive
+          applets
           release skills telemetry tray web frontend
           docs deps repo ci
 

@@ -4,8 +4,10 @@
 package settings
 
 import (
+	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -49,6 +51,7 @@ type Paths struct {
 	ConfigDir   string
 	FlowsDir    string
 	ActionsPath string
+	AppletsDir  string
 	// AgentWorkspacesDir is the agent-workspace root: agent_workspaces.dir,
 	// resolved and `~`-expanded, or <ConfigDir>/workspaces when unset.
 	AgentWorkspacesDir   string
@@ -147,6 +150,7 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 		ConfigDir:            configDir,
 		FlowsDir:             flowsDir,
 		ActionsPath:          actionsPath,
+		AppletsDir:           filepath.Join(configDir, "applets"),
 		AgentWorkspacesDir:   agentWorkspacesDir,
 		SettingsPath:         filepath.Join(configDir, settingsFileName),
 		CredentialsIndexPath: filepath.Join(stateDir, "credentials.json"),
@@ -212,3 +216,15 @@ var onboardingFlowsDir = sync.OnceValue(func() string {
 	}
 	return dir
 })
+
+// E2EHarnessMarkerValid reports whether HIVE_DESKTOP_E2E_HARNESS carries the 256-bit
+// hex marker cmd/desktop/e2e/scripts/run-docker.sh mints. It keeps mock mode alone
+// from enabling what only the e2e harness may use.
+func E2EHarnessMarkerValid() bool {
+	marker := strings.TrimSpace(os.Getenv(EnvE2EHarness))
+	if len(marker) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(marker)
+	return err == nil
+}

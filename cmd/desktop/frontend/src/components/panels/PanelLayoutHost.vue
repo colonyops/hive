@@ -179,7 +179,10 @@ function contentTabs(tabs: readonly PanelTab[]): PanelTab[] {
       :data-testid="`panel-${panel.id}`"
       @pointerdown.capture="apply((current) => focusPanel(current, panel.id))"
     >
+      <!-- Panel ids repeat between sessions, so without the key a session switch reads as
+           its tabs arriving and animates them. -->
       <PanelTabRow
+        :key="contentKey"
         :panel="panel"
         :focused="layout.focusedPanel === panel.id"
         :label="tabLabel"

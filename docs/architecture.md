@@ -445,6 +445,7 @@ cmd/desktop/internal/
                                   #   declared — consumer-defined, no notify/ package
     actions/                      # actions.yml catalog, editable model
       docs/                       # per-action-type markdown
+    applets/                      # applet.yaml, catalog, built-ins, the window.hive script
     dirwatch/                     # the debounced directory watcher behind actions,
                                   #   flows, and agentws hot-reload
     configmigrate/                # versioned migrations for settings.yaml, flows, actions.yml
@@ -1408,6 +1409,83 @@ and the login shell's answers otherwise, so the New Session form preselects the
 agent hive would run rather than the one a launcher environment resolved
 (`SessionsService.SessionLaunchOptions`).
 
+### Applets
+
+An applet is a web page in `<ConfigDir>/applets/<id>/`, usually written by an agent, and
+opened in `AppletFrame`
+([ADR applets-are-web-pages-with-full-access-to-the-machine](decisions/2026-10-31-applets-are-web-pages-with-full-access-to-the-machine.md)).
+
+- **The file is the registration.** `applets.Store` hot-reloads per directory. A
+  broken file keeps its last good version and reports the error on its entry.
+- **A page is deliberately unrestricted.** `window.hive` (`applets/bridge.js`) reaches
+  `AppletsService` through `useAppletBridge`, and runs what it is asked.
+  The opaque-origin frame protects the app from a page's mistakes. Do not add
+  permission checks here without revisiting the ADR.
+- **The bridge answers only the applet's own pages.** A page hands `useAppletBridge` a
+  `MessagePort` with a token only pages served by `Asset` hold, and everything after that
+  crosses the port, because a navigated frame keeps its window. The page sends the token
+  only when its parent is the top window, and `guardWailsRuntime` refuses a bound-method
+  call that is not the app's own.
+- **A page's files are served by `appletAssets` on the Wails asset handler**, so in the
+  native build nothing outside the webview can reach them. The server build's asset
+  handler is a TCP listener, so it refuses applets outside the e2e harness
+  (`buildServesAppletPages`).
+- **A spawned process belongs to the frame that started it.** Closing that frame, editing
+  the applet, or closing the app ends the process. Settings › Applets lists what is running.
+- **A page can appear on more than one surface, and its file says which.** `AppletFrame` with
+  `useAppletBridge` is the whole of a surface: a session tab (`AppletTabsLayer`), the pop-up
+  (`AppletHost`), the title bar slot (`AppletTitlebarSlot`), and the dropdown under it
+  (`AppletDropdown`). What differs between them is one row of `SURFACES`
+  (`stores/appletSurfaces.ts`). `surfaces:` in `applet.yaml` is the only registration, with a
+  map per surface so a later release can add a setting without moving a key. A new extension
+  point is that row, a key under `surfaces:`, and a host, not another bridge. A file that names
+  no surface is a pop-up. A title bar page runs as soon as its file is valid. The switches in
+  Settings write `enabled:` back to the file (`applets.SetSurface`), so there is no second list.
+  A built-in has no file, so its surfaces are fixed.
+- **A session tab is a layout tab, and its frame floats.** `lib/appletTabs` names it
+  `applet:<id>`, one per session, and the layout places it like any view. Its iframe sits in
+  the panel host's floating layer in an order no drag changes, because moving an iframe in
+  the DOM reloads the page. `contentKey` re-keys the layer, so an area runs the tabs of its
+  selected session only, and they keep running through a trip to another area, as its
+  terminals do. A command goes to a frame on screen (`AppletFrameHandle.onScreen`), never to a
+  tab the user cannot see, and a palette row shows only while its frame is. An applet that lists
+  `surfaces.tab` is in a session's + menu. The menu has no row for a pop-up, which
+  opens from the palette or a chord. A tab host registers with
+  `setTabHost`, so the palette and a chord open an applet as a tab where one can show.
+  Delete and import close saved tabs for the id, and import does it before `ConfirmImport`,
+  because its catalog reload would mount the imported page in a leftover tab.
+  Agents use every layout verb on `applet:<id>`, including `open_tab` and `close_tab`.
+  `LayoutsService` asks `AppletsService.CheckTab` whether the file lists a tab first. This is
+  the one verb on that server that runs a page, and the ADR says why that is acceptable.
+- **`applet.yaml` reads forward.** A key or icon this Hive does not know is a warning on the
+  entry (`applets/compat.go`). A wrong shape under a known key is an error, and a later
+  `version` or an unmet `hive:` refuses with "update Hive".
+- **A user can turn an applet off** (`applets.disabled`). `AppletsService.page` refuses it, so
+  it serves nothing, `SetEnabled` stops what it has running, and the store closes its frames and
+  drops its palette rows.
+- **A data file crosses to a frame only for its own applet.** `appletAssets` reads `Referer`,
+  because a foreign page in the frame has the same `null` origin as the applet's page.
+- **Sharing goes through `applets/archive.go`.** `Unpack` treats a `.hiveapplet` as hostile
+  and writes nothing. `AppletsService` holds the checked file in memory under a token until
+  the user confirms in `AppletImportDialog`, and `Install` renames a finished directory into
+  place. It never replaces an applet. `ConfirmImport` clears what `settings.yaml` holds for the
+  id just before that rename, and a failed clear imports nothing. A title bar page starts when the catalog reloads after that. An export is read whole by `ExportPreview` and held under a token, so what
+  `Export` writes is what the user reviewed.
+- **A built-in lives in the binary** (`applets/builtin/`). The Applet Builder is one. Its
+  page sends answers, and the prompt's words stay in `prompts/templates/applets.tmpl`.
+- **Applets are a palette scope.** They have their own tab, and while filtering All, one
+  whose title has the query comes first under its own header, because their names
+  collide with documents, which outnumber them.
+- **An applet adds to the palette as a command or as data.** `commands:` in `applet.yaml`
+  becomes a catalog entry through `setAppletCommands`, bindable as
+  `applet.<id>.<command>` with no default chord. `hive.setCommands` adds rows through
+  `useApplets.pageRows`, which last as long as the frame. Both reach the page as
+  `hive.on('command')`. `appletID` reads both id forms, so a keymap rule about an applet
+  covers its commands too.
+- **A frame hands chords to the keymap.** `bridge.js` forwards what a page did not
+  `preventDefault` as a synthetic keydown on `window`, so the keymap has one path. It does
+  not special-case frames: the overlay gate in `useGlobalKeymap` is what keeps a pop-up modal.
+
 ### App modes
 
 The desktop shell has a fixed set of top-level modes — today Hub, Terminal,
@@ -2292,6 +2370,7 @@ a window, a settings section) is titled with the object's own name and grouped u
 its real container — rendering draws the nesting (the group header, or a
 `Container ›` prefix once a query narrows past it) rather than the title
 encoding a path or a verb (ADR palette-rows-name-objects-and-rendering-draws-the-path).
+Applets are the exception to the prefix: see "Applets".
 
 ### Agent workspaces
 

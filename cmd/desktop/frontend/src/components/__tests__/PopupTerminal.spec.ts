@@ -500,6 +500,38 @@ describe('PopupTerminal', () => {
     expect(el('popup-terminal-pane').style.display).not.toBe('none')
   })
 
+  it('does not run a launched command again after its connection drops', async () => {
+    const { client } = await mountPanel()
+    const popup = usePopupTerminal()
+    popup.launch({ command: 'deploy', dir: '/w' })
+    await flushPromises()
+
+    FakeSocket.instances[0].onerror?.()
+    await flushPromises()
+    popup.toggle()
+    await flushPromises()
+    expect(popup.visible.value).toBe(false)
+    popup.toggle()
+    await flushPromises()
+    expect(popup.visible.value).toBe(true)
+    expect(el('popup-terminal-ended').textContent).toContain('connection dropped')
+    expect(client.open).toHaveBeenCalledTimes(1)
+    expect(client.close).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(el('popup-terminal-new'))
+
+    el('popup-terminal-new').click()
+    await flushPromises()
+    expect(client.open).toHaveBeenCalledTimes(2)
+    expect(client.open.mock.lastCall?.[0].command).toBeUndefined()
+    expect(client.open.mock.lastCall?.[0].dir).toBe('/w')
+
+    // The shell it opens keeps the launch's toggle, so hiding it does not end it.
+    popup.toggle()
+    await flushPromises()
+    expect(popup.visible.value).toBe(false)
+    expect(client.close).toHaveBeenCalledTimes(1)
+  })
+
   // A stream that dropped for a reason other than the process exiting would
   // otherwise leave a shell running with nothing able to reach it again.
   it('closes the terminal it replaces rather than abandoning it', async () => {

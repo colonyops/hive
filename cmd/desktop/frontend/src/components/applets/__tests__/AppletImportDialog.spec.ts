@@ -1,0 +1,212 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useKeybindings } from '../../../composables/useKeybindings'
+import { resetStores } from '../../../stores/defineStore'
+import { appletTab } from '../../../lib/appletTabs'
+import { openTab, panelWithTab } from '../../../lib/panelLayout'
+import { useApplets } from '../../../stores/useApplets'
+import { useChatPanelLayouts, usePanelLayouts } from '../../../stores/usePanelLayouts'
+import AppletImportDialog from '../AppletImportDialog.vue'
+
+const service = vi.hoisted(() => ({
+  CancelImport: vi.fn(),
+  ConfirmImport: vi.fn(),
+  List: vi.fn(),
+}))
+
+vi.mock(
+  '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice',
+  () => service,
+)
+
+const preview = {
+  token: 'token',
+  id: 'radio',
+  suggestedId: 'radio',
+  title: 'Radio',
+  entry: 'index.html',
+  cwd: '',
+  surfaces: { tab: false, popup: {}, titlebar: { entry: 'bar.html', width: 28 } },
+  commands: [{ id: 'next', title: 'Next station', icon: '', keywords: null }],
+  files: [{ path: 'applet.yaml', bytes: 20 }],
+  totalBytes: 20,
+}
+
+function open(overrides: object = {}) {
+  return mount(AppletImportDialog, {
+    props: { preview: { ...preview, ...overrides } as never },
+    attachTo: document.body,
+  })
+}
+
+const byID = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`)
+
+async function tickTrust() {
+  const box = byID('applet-import-trust') as HTMLInputElement
+  box.checked = true
+  box.dispatchEvent(new Event('change'))
+  await flushPromises()
+}
+
+describe('AppletImportDialog', () => {
+  beforeEach(() => {
+    resetStores()
+    for (const mock of Object.values(service)) mock.mockReset()
+    service.List.mockResolvedValue([])
+    service.ConfirmImport.mockResolvedValue(undefined)
+  })
+
+  it('says what an applet can do, and what this one would run', async () => {
+    const wrapper = open()
+    await flushPromises()
+    const warning = byID('applet-import-warning')?.textContent
+    expect(warning).toContain('run any command or program')
+    expect(warning).toContain('read, change and delete any of your files')
+    expect(warning).toContain('reach the network')
+    const runs = byID('applet-import-runs')?.textContent
+    expect(runs).toContain('bar.html')
+    expect(runs).toContain('Next station')
+    expect(byID('applet-import-files')?.textContent).toContain('applet.yaml')
+    wrapper.unmount()
+  })
+
+  it('starts on cancel, and importing takes the tick', async () => {
+    const wrapper = open()
+    await flushPromises()
+    expect(document.activeElement).toBe(byID('applet-import-cancel'))
+    const confirm = byID('applet-import-confirm') as HTMLButtonElement
+    expect(confirm.disabled).toBe(true)
+    confirm.click()
+    await flushPromises()
+    expect(service.ConfirmImport).not.toHaveBeenCalled()
+    await tickTrust()
+    expect(confirm.disabled).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('drops the waiting file on cancel', async () => {
+    const wrapper = open()
+    await flushPromises()
+    byID('applet-import-cancel')?.click()
+    await flushPromises()
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    wrapper.unmount()
+    expect(service.CancelImport).toHaveBeenCalledWith('token')
+    expect(service.ConfirmImport).not.toHaveBeenCalled()
+  })
+
+  it('imports under the id offered when the one asked for is taken', async () => {
+    const wrapper = open({ suggestedId: 'radio-2' })
+    await flushPromises()
+    expect(byID('applet-import-conflict')?.textContent).toContain('will not be replaced')
+    await tickTrust()
+    byID('applet-import-confirm')?.click()
+    await flushPromises()
+    expect(service.ConfirmImport).toHaveBeenCalledWith('token', 'radio-2')
+    wrapper.unmount()
+  })
+
+  it('refuses an id in the catalog and takes nothing from the applet there', async () => {
+    service.List.mockResolvedValue([
+      {
+        id: 'radio',
+        title: 'Mine',
+        runnable: true,
+        enabled: true,
+        surfaces: { tab: true, popup: null, titlebar: { entry: 'b', width: 1 } },
+      },
+    ])
+    const applets = useApplets()
+    await applets.reload()
+    const layouts = usePanelLayouts()
+    layouts.apply('session', (current) => openTab(current, appletTab('radio')))
+    const wrapper = open()
+    await flushPromises()
+    await tickTrust()
+    byID('applet-import-confirm')?.click()
+    await flushPromises()
+    expect(service.ConfirmImport).not.toHaveBeenCalled()
+    expect(byID('applet-import-error')?.textContent).toContain('already exists')
+    expect(panelWithTab(layouts.layoutOf('session'), 'applet:radio')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it('leaves clearing the id to Go', async () => {
+    const keybindings = useKeybindings()
+    keybindings.removeBinding('applet.radio', 'mod+r')
+    const wrapper = open()
+    await flushPromises()
+    await tickTrust()
+    byID('applet-import-confirm')?.click()
+    await flushPromises()
+    expect(service.ConfirmImport).toHaveBeenCalledWith('token', 'radio')
+    expect(service.CancelImport).not.toHaveBeenCalled()
+    keybindings.clearAll()
+    wrapper.unmount()
+  })
+
+  it('closes a saved tab for the id before the imported page can land in it', async () => {
+    const layouts = usePanelLayouts()
+    const chats = useChatPanelLayouts()
+    layouts.apply('session', (current) => openTab(current, appletTab('radio')))
+    chats.apply('chat', (current) => openTab(current, appletTab('radio')))
+    service.ConfirmImport.mockImplementation(() => {
+      expect(panelWithTab(layouts.layoutOf('session'), 'applet:radio')).toBeUndefined()
+      expect(panelWithTab(chats.layoutOf('chat'), 'applet:radio')).toBeUndefined()
+      return Promise.resolve()
+    })
+    const wrapper = open()
+    await flushPromises()
+    await tickTrust()
+    byID('applet-import-confirm')?.click()
+    await flushPromises()
+    expect(service.ConfirmImport).toHaveBeenCalledWith('token', 'radio')
+    expect(byID('applet-import-error')).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('takes nothing from the id when the import fails, and offers another id', async () => {
+    service.ConfirmImport.mockRejectedValue(new Error('an applet called "radio" already exists. Choose another id'))
+    const wrapper = open()
+    await flushPromises()
+    expect(byID('applet-import-id')).toBeNull()
+    await tickTrust()
+    byID('applet-import-confirm')?.click()
+    await flushPromises()
+    expect(byID('applet-import-error')?.textContent).toContain('already exists')
+    expect(byID('applet-import-id')).not.toBeNull()
+    expect(wrapper.emitted('close')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('says a title bar page starts on import, and that nothing else does', async () => {
+    const withBar = open()
+    await flushPromises()
+    expect(byID('applet-import-runs')?.textContent).toContain('bar.html starts in the title bar')
+    expect(byID('applet-import-warning')?.textContent).toContain('As soon as you import it')
+    withBar.unmount()
+
+    const without = open({ surfaces: { tab: true, popup: null, titlebar: null } })
+    await flushPromises()
+    expect(byID('applet-import-runs')?.textContent).toContain('Nothing runs on import')
+    expect(byID('applet-import-runs')?.textContent).toContain('as a session tab')
+    expect(byID('applet-import-warning')?.textContent).toContain('Once you open it')
+    without.unmount()
+  })
+
+  it('drops the waiting file when it goes away without an answer', async () => {
+    const wrapper = open()
+    await flushPromises()
+    wrapper.unmount()
+    expect(service.CancelImport).toHaveBeenCalledWith('token')
+  })
+
+  it('says which keys this Hive ignores, and what that means', async () => {
+    const wrapper = open({ warnings: ['this version of Hive ignores "permissions"'] })
+    await flushPromises()
+    const ignored = byID('applet-import-ignored')?.textContent
+    expect(ignored).toContain('"permissions"')
+    expect(ignored).toContain('meant to limit the applet')
+    wrapper.unmount()
+  })
+})

@@ -1,0 +1,356 @@
+package app
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/rs/zerolog"
+
+	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
+	"github.com/colonyops/hive/pkg/atomicfile"
+	"github.com/colonyops/hive/pkg/pathutil"
+)
+
+const (
+	appletActionTimeout = 5 * time.Minute
+	maxAppletStdout     = 32 << 20
+
+	appletPagesUnavailable = "applets do not run in the headless server build"
+)
+
+// Applet is one catalog entry. Error names what is wrong with its file. An applet
+// that once loaded still runs its last good file; Runnable is false when none ever did.
+type Applet struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Icon     string `json:"icon"`
+	Path     string `json:"path"`
+	Builtin  bool   `json:"builtin"`
+	Entry    string `json:"entry"`
+	Revision int64  `json:"revision"`
+	Runnable bool   `json:"runnable"`
+	Error    string `json:"error"`
+	// Enabled is false for an applet the user turned off. It stays listed, and nothing
+	// of it runs.
+	Enabled bool `json:"enabled"`
+	// Warnings names what this Hive skipped in the file, such as a key from a later
+	// release. The applet runs without it.
+	Warnings []string        `json:"warnings"`
+	Surfaces AppletSurfaces  `json:"surfaces"`
+	Commands []AppletCommand `json:"commands"`
+}
+
+// AppletSurfaces is where an applet's file says it shows. Popup and Titlebar are nil for an
+// applet that does not show there. TitlebarPage names the page its file has for the title
+// bar, whether that is on or off, because a switch can only turn on what has a page.
+type AppletSurfaces struct {
+	Tab          bool            `json:"tab"`
+	Popup        *AppletPopup    `json:"popup"`
+	Titlebar     *AppletTitlebar `json:"titlebar"`
+	TitlebarPage string          `json:"titlebarPage"`
+}
+
+// AppletPopup sizes the pop-up in pixels. Zero fills the window.
+type AppletPopup struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+// AppletCommand is a palette row an applet declares, bindable as applet.<id>.<command>.
+type AppletCommand struct {
+	ID       string   `json:"id"`
+	Title    string   `json:"title"`
+	Icon     string   `json:"icon"`
+	Keywords []string `json:"keywords"`
+}
+
+// AppletTitlebar is the page an applet shows in the title bar.
+type AppletTitlebar struct {
+	Entry string `json:"entry"`
+	Width int    `json:"width"`
+}
+
+// AppletsService serves applets their files and answers window.hive (ADR
+// applets-are-web-pages-with-full-access-to-the-machine). A title bar page runs as soon
+// as its file is valid, and any other page once it is opened.
+type AppletsService struct {
+	catalog *applets.Store
+	environ func(context.Context) []string
+	spawns  spawnTable
+	// pages reports whether this process may serve applets and answer their
+	// bridge, which the headless server build may not.
+	pages bool
+
+	tokensMu sync.Mutex
+	tokens   map[string]string
+	// sessionDir answers where the session on screen is, the same answer a launcher
+	// gets, including the refusal for a session on a server.
+	sessionDir func(context.Context, string) (string, error)
+
+	// hiveVersion is this build's, which a file can say is too old and an export records.
+	hiveVersion string
+	preferences appletPreferences
+	updated     func()
+	logger      zerolog.Logger
+
+	shareMu       sync.Mutex
+	pendingImport *pendingAppletImport
+	pendingExport *pendingAppletExport
+}
+
+// appletPreferences is what the user chose about applets, kept in settings.yaml.
+type appletPreferences interface {
+	AppletDisabled(id string) (bool, error)
+	SetAppletDisabled(id string, disabled bool) error
+	ForgetApplet(id string) error
+}
+
+type pendingAppletExport struct {
+	token string
+	data  []byte
+}
+
+type pendingAppletImport struct {
+	token   string
+	archive applets.Archive
+}
+
+// AppletsDeps is what AppletsService needs from the rest of the app.
+type AppletsDeps struct {
+	Catalog     *applets.Store
+	Environ     func(context.Context) []string
+	SessionDir  func(context.Context, string) (string, error)
+	HiveVersion string
+	Preferences appletPreferences
+	// Updated tells every window the catalog changed.
+	Updated func()
+	Logger  zerolog.Logger
+}
+
+func newAppletsService(deps AppletsDeps) *AppletsService {
+	return &AppletsService{
+		catalog:     deps.Catalog,
+		environ:     deps.Environ,
+		sessionDir:  deps.SessionDir,
+		hiveVersion: deps.HiveVersion,
+		preferences: deps.Preferences,
+		updated:     deps.Updated,
+		logger:      deps.Logger,
+		pages:       buildServesAppletPages || settings.E2EHarnessMarkerValid(),
+		tokens:      map[string]string{},
+		spawns:      spawnTable{live: map[string]*appletSpawn{}, execs: map[int]runningExec{}},
+	}
+}
+
+// isDisabled reads settings.yaml. A file that cannot be read leaves applets running, as it
+// leaves the rest of the app, rather than stopping every applet over one bad edit.
+func (s *AppletsService) isDisabled(id string) bool {
+	disabled, err := s.preferences.AppletDisabled(id)
+	if err != nil {
+		s.logger.Warn().Err(err).Str("applet", id).Msg("could not read whether an applet is turned off")
+		return false
+	}
+	return disabled
+}
+
+// SetEnabled turns an applet on or off. Its frames close when the frontend hears the
+// catalog changed. What it has running stops here, because a page has no handle for a
+// running hive.exec, and a frontend that reloaded has lost the ones it had.
+func (s *AppletsService) SetEnabled(id string, enabled bool) error {
+	if !slices.ContainsFunc(s.catalog.List(), func(entry applets.Entry) bool { return entry.Applet.ID == id }) {
+		return Errorf(KindNotFound, "unknown applet %q", id)
+	}
+	if err := s.preferences.SetAppletDisabled(id, !enabled); err != nil {
+		return Wrap(err, KindInternal, "saving settings")
+	}
+	if !enabled {
+		s.spawns.stopApplet(id)
+	}
+	s.updated()
+	return nil
+}
+
+// Delete removes an applet's folder, saved data included, and every choice settings.yaml
+// holds for it. A broken applet can go too, so this reads the list rather than s.applet.
+// Settings go first: a failure there leaves the applet whole, and a failure after it can
+// be retried. Deleting a folder that replaced a built-in brings the built-in back.
+func (s *AppletsService) Delete(id string) error {
+	if !s.pages {
+		return Errorf(KindUnavailable, "%s", appletPagesUnavailable)
+	}
+	entries := s.catalog.List()
+	index := slices.IndexFunc(entries, func(entry applets.Entry) bool { return entry.Applet.ID == id })
+	if index < 0 {
+		return Errorf(KindNotFound, "unknown applet %q", id)
+	}
+	applet := entries[index].Applet
+	if applet.Builtin {
+		return Errorf(KindInvalid, "%s ships with Hive and cannot be deleted. Turn it off instead", applet.Title)
+	}
+	if err := s.preferences.ForgetApplet(id); err != nil {
+		return Wrap(err, KindInternal, "nothing was deleted, because settings.yaml could not be cleared for %s", id)
+	}
+	s.spawns.stopApplet(id)
+	removeErr := os.RemoveAll(applet.Dir)
+	reloadErr := s.catalog.Reload()
+	// A page on screen can start something until the reload above makes its id unknown.
+	s.spawns.stopApplet(id)
+	s.tokensMu.Lock()
+	delete(s.tokens, id)
+	s.tokensMu.Unlock()
+	s.updated()
+	if removeErr != nil {
+		return Wrap(removeErr, KindInternal, "deleting %s", applet.Dir)
+	}
+	return Wrap(reloadErr, KindInternal, "reloading the applets")
+}
+
+// SetSurface turns one surface of an applet on or off by editing its applet.yaml, which
+// stays the only record of where it shows. A built-in has no file to edit. What it writes
+// must parse, so a switch cannot break a file that works.
+func (s *AppletsService) SetSurface(id, surface string, on bool) error {
+	if !s.pages {
+		return Errorf(KindUnavailable, "%s", appletPagesUnavailable)
+	}
+	applet, err := s.applet(id)
+	if err != nil {
+		return err
+	}
+	if applet.Builtin {
+		return Errorf(KindInvalid, "%s ships with Hive, so where it shows is fixed", applet.Title)
+	}
+	path := filepath.Join(applet.Dir, applets.FileName)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return Wrap(err, KindInternal, "reading %s", path)
+	}
+	edited, err := applets.SetSurface(raw, surface, on)
+	if err != nil {
+		return Errorf(KindInvalid, "%s", err.Error())
+	}
+	if _, err := applets.Parse(id, edited, s.hiveVersion); err != nil {
+		return Errorf(KindInvalid, "%s", err.Error())
+	}
+	if err := atomicfile.Write(path, edited, 0o644); err != nil {
+		return Wrap(err, KindInternal, "writing %s", path)
+	}
+	reloadErr := s.catalog.Reload()
+	s.updated()
+	return Wrap(reloadErr, KindInternal, "reloading the applets")
+}
+
+// List returns the catalog, broken files included.
+func (s *AppletsService) List(context.Context) []Applet {
+	entries := s.catalog.List()
+	out := make([]Applet, 0, len(entries))
+	for _, entry := range entries {
+		// The server build cannot open a built-in, and nobody asked it to list one.
+		if entry.Applet.Builtin && !s.pages {
+			continue
+		}
+		applet := appletOf(entry)
+		applet.Enabled = !s.isDisabled(entry.Applet.ID)
+		if !s.pages {
+			applet.Runnable = false
+			applet.Error = appletPagesUnavailable
+		}
+		out = append(out, applet)
+	}
+	return out
+}
+
+// Dir is the root new applets are written under.
+func (s *AppletsService) Dir() string { return s.catalog.Root() }
+
+func appletOf(entry applets.Entry) Applet {
+	a := entry.Applet
+	out := Applet{
+		ID:       a.ID,
+		Title:    a.Title,
+		Icon:     a.Icon,
+		Path:     filepath.Join(a.Dir, applets.FileName),
+		Builtin:  a.Builtin,
+		Revision: entry.Revision,
+		Runnable: entry.Usable(),
+		Entry:    a.Entry,
+		Warnings: a.Warnings,
+		Commands: appletCommandsOf(a),
+		Surfaces: appletSurfacesOf(a),
+	}
+	if entry.Err != nil {
+		out.Error = entry.Err.Error()
+	}
+	return out
+}
+
+// appletCommandsOf is never nil, so an applet with no commands crosses as an empty list.
+func appletCommandsOf(a applets.Applet) []AppletCommand {
+	out := make([]AppletCommand, 0, len(a.Commands))
+	for _, command := range a.Commands {
+		out = append(out, AppletCommand{ID: command.ID, Title: command.Title, Icon: command.Icon, Keywords: command.Keywords})
+	}
+	return out
+}
+
+func appletSurfacesOf(a applets.Applet) AppletSurfaces {
+	out := AppletSurfaces{Tab: a.Surfaces.ShowsTab()}
+	if a.Surfaces.ShowsPopup() {
+		out.Popup = &AppletPopup{Width: a.Surfaces.Popup.Width, Height: a.Surfaces.Popup.Height}
+	}
+	if bar := a.Surfaces.Titlebar; bar != nil {
+		out.TitlebarPage = bar.Entry
+	}
+	if a.Surfaces.ShowsTitlebar() {
+		out.Titlebar = &AppletTitlebar{Entry: a.Surfaces.Titlebar.Entry, Width: a.Surfaces.Titlebar.Width}
+	}
+	return out
+}
+
+// CheckTab refuses a tab the applet cannot show, so an agent hears why instead of the
+// request landing on a tab that says the applet is off.
+func (s *AppletsService) CheckTab(id string) error {
+	applet, err := s.page(id)
+	if err != nil {
+		return err
+	}
+	if !applet.Surfaces.ShowsTab() {
+		return Errorf(KindInvalid, "%s does not list surfaces.tab in its %s, so it has no tab", applet.Title, applets.FileName)
+	}
+	return nil
+}
+
+func (s *AppletsService) applet(id string) (applets.Applet, error) {
+	applet, ok := s.catalog.Get(id)
+	if !ok {
+		return applets.Applet{}, Errorf(KindNotFound, "unknown applet %q", id)
+	}
+	return applet, nil
+}
+
+func (s *AppletsService) dir(ctx context.Context, applet applets.Applet, sessionSlug string) (string, error) {
+	if applet.Cwd == "" {
+		// A session on a server has no directory here, so the page falls back to its own.
+		if strings.TrimSpace(sessionSlug) != "" {
+			dir, err := s.sessionDir(ctx, sessionSlug)
+			if err == nil {
+				return dir, nil
+			}
+			s.logger.Debug().Err(err).Str("session", sessionSlug).Msg("running the applet in its own folder")
+		}
+		return applet.Dir, nil
+	}
+	expanded, err := pathutil.ExpandHomeE(applet.Cwd)
+	if err != nil {
+		return "", Wrap(err, KindInternal, "expanding %q", applet.Cwd)
+	}
+	if !filepath.IsAbs(expanded) {
+		expanded = filepath.Join(applet.Dir, expanded)
+	}
+	return expanded, nil
+}

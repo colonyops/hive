@@ -3,17 +3,17 @@
 // the tab strip.
 
 /** Which tab the palette is on. */
-export type PaletteScopeId = 'all' | 'goto' | 'actions' | 'drive' | 'shell' | 'keys'
+export type PaletteScopeId = 'all' | 'goto' | 'actions' | 'drive' | 'applets' | 'shell' | 'keys'
 
 /** The scopes a Command row can belong to. Rows default to 'actions'. */
-export type CommandScope = 'goto' | 'actions' | 'drive'
+export type CommandScope = 'goto' | 'actions' | 'drive' | 'applets'
 
 export interface PaletteScopeSpec {
   id: PaletteScopeId
   /** Tab label, e.g. "Go to". */
   label: string
   /** First-character sigil that enters the scope; null for All. */
-  sigil: '@' | '>' | '#' | '!' | '?' | null
+  sigil: '@' | '>' | '#' | '+' | '!' | '?' | null
   /** Input placeholder while the scope is active. */
   placeholder: string
 }
@@ -24,6 +24,7 @@ export const paletteScopes: readonly PaletteScopeSpec[] = [
   { id: 'goto', label: 'Go to', sigil: '@', placeholder: 'Go to…' },
   { id: 'actions', label: 'Actions', sigil: '>', placeholder: 'Run a command…' },
   { id: 'drive', label: 'Drive', sigil: '#', placeholder: 'Search Drive documents…' },
+  { id: 'applets', label: 'Applets', sigil: '+', placeholder: 'Open an applet…' },
   { id: 'shell', label: 'Shell', sigil: '!', placeholder: 'Run in a new window…' },
   { id: 'keys', label: 'Keys', sigil: '?', placeholder: 'Search shortcuts…' },
 ]

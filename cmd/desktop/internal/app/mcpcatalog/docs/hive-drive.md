@@ -119,13 +119,16 @@ A tab reference names one tab, in a `tab` or `anchor` input:
 
 - `drive`, `diff` or `tasks` name that view. A chat has only `drive`.
 - `terminal` names a chat's one terminal.
+- `applet:<id>` names an applet's tab. `open_tab` opens it if the applet's
+  `applet.yaml` lists `surfaces.tab`, which runs its page, and `close_tab` ends
+  it.
 - Anything else is a tmux window of a Code session, by id (`@3`) or exact
   name. A Code session must name its window; `terminal` alone is refused.
 
 The tools:
 
-- `open_tab`: open the tab for a `view` (`drive`, `diff`, `tasks` or
-  `terminal`). `path`, for `drive`, is a document by its path in the space or a
+- `open_tab`: open the tab for a `view` (`drive`, `diff`, `tasks`, `terminal`
+  or `applet:<id>`). `path`, for `drive`, is a document by its path in the space or a
   canvas by name or path (`perf` is `canvases/perf.canvas.json`); it must
   exist, and a folder is refused. `placement` is `behind` (the default; behind
   a tab, with an unseen dot, never takes the screen), `beside` (a split to the

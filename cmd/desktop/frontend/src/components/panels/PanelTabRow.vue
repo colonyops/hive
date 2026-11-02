@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import IconX from '~icons/lucide/x'
 import { useElementSize } from '@vueuse/core'
 import type { Panel, PanelTab } from '../../lib/panelLayout'
@@ -45,12 +45,21 @@ const TAB_MIN_WIDTH_PX = 110
 const rowEl = ref<HTMLElement | null>(null)
 const { width: rowWidth } = useElementSize(rowEl)
 const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.panel.tabs.length + 1) < TAB_MIN_WIDTH_PX)
+
+// Neighbours glide for a reorder or a close. A tab that arrives must not set them moving:
+// a session's windows arrive just after it attaches, and the row would shift for nothing.
+const tabIds = computed(() => props.panel.tabs.map((tab) => tab.id))
+const moveClass = ref('panel-tab-move')
+watch(tabIds, (ids, before) => {
+  moveClass.value = ids.some((id) => !before.includes(id)) ? 'panel-tab-arrival' : 'panel-tab-move'
+})
 </script>
 
 <template>
+  <!-- bg-app is what xterm paints (lib/terminalTheme.ts), so the row and the terminal read as one surface. -->
   <div
     ref="rowEl"
-    class="flex shrink-0 items-stretch border-b border-border bg-sidebar pr-1"
+    class="flex shrink-0 items-stretch border-b border-border bg-app pr-1"
     :class="resizable ? 'cursor-row-resize' : ''"
     :style="{ height: `${TAB_ROW_PX}px` }"
     :data-testid="`panel-tab-row-${panel.id}`"
@@ -58,6 +67,7 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
   >
     <TransitionGroup
       name="panel-tab"
+      :move-class="moveClass"
       tag="div"
       class="panel-tabs flex min-w-0 shrink items-stretch overflow-x-auto"
       role="tablist"
@@ -167,26 +177,18 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
   cursor: grabbing;
 }
 
-/* The tree's timing: fast enough to read as instant. A leaving tab has to drop
-   out of flow for its neighbours to glide over through .panel-tab-move (FLIP).
-   It is hidden rather than absolute: in this flex row an absolute tab jumps to
-   the start of the row. */
-.panel-tab-enter-active,
+/* The tree's timing: fast enough to read as instant. A leaving tab has to drop out
+   of flow for its neighbours to glide over through .panel-tab-move (FLIP). It is
+   hidden rather than absolute: in this flex row an absolute tab jumps to the start
+   of the row. */
 .panel-tab-move {
-  transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
-}
-.panel-tab-enter-from {
-  opacity: 0;
-  transform: translateY(-4px);
+  transition: transform 0.15s ease;
 }
 .panel-tab-leave-active {
   display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .panel-tab-enter-active,
   .panel-tab-move {
     transition: none;
   }

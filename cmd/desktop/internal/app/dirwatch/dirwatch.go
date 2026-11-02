@@ -20,12 +20,17 @@ import (
 const (
 	relevantOps   = fsnotify.Create | fsnotify.Write | fsnotify.Rename | fsnotify.Remove
 	structuralOps = fsnotify.Create | fsnotify.Rename | fsnotify.Remove
+	// maxDeepEntries is how many files and folders each folder directly under the root may
+	// have watched below it, which keeps one large tree from using up file descriptors.
+	maxDeepEntries = 1024
 )
 
 type options struct {
 	debounce  time.Duration
 	component string
 	subdirs   bool
+	deep      bool
+	skip      func(dir string) bool
 }
 
 type Option func(*options)
@@ -47,6 +52,15 @@ func WithSubdirectories() Option {
 	return func(o *options) { o.subdirs = true }
 }
 
+// WithAllSubdirectories watches subdirectories at every depth, apart from any skip names.
+func WithAllSubdirectories(skip func(dir string) bool) Option {
+	return func(o *options) {
+		o.subdirs = true
+		o.deep = true
+		o.skip = skip
+	}
+}
+
 type Watcher struct {
 	root     string
 	match    func(path string) bool
@@ -56,10 +70,11 @@ type Watcher struct {
 	watcher  *fsnotify.Watcher
 	watched  map[string]bool
 
-	started  atomic.Bool
-	stopOnce sync.Once
-	stop     chan struct{}
-	done     chan struct{}
+	warnedDeep atomic.Bool
+	started    atomic.Bool
+	stopOnce   sync.Once
+	stop       chan struct{}
+	done       chan struct{}
 }
 
 // New creates root if it is missing and watches it. Nothing is delivered
@@ -153,7 +168,7 @@ func (w *Watcher) handle(event fsnotify.Event) bool {
 		return false
 	}
 	changed := w.match(event.Name)
-	if w.opts.subdirs && event.Op&structuralOps != 0 && filepath.Dir(event.Name) == w.root && w.resync() {
+	if w.opts.subdirs && event.Op&structuralOps != 0 && (w.opts.deep || filepath.Dir(event.Name) == w.root) && w.resync() {
 		changed = true
 	}
 	return changed
@@ -161,7 +176,7 @@ func (w *Watcher) handle(event fsnotify.Event) bool {
 
 // resync reports whether the subdirectory watch set changed.
 func (w *Watcher) resync() bool {
-	entries, err := os.ReadDir(w.root)
+	current, err := w.subdirectories()
 	if err != nil {
 		if !os.IsNotExist(err) {
 			w.logger.Warn().Err(err).Msg("root read failed")
@@ -172,13 +187,6 @@ func (w *Watcher) resync() bool {
 		}
 		clear(w.watched)
 		return changed
-	}
-
-	current := make(map[string]bool, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			current[filepath.Join(w.root, entry.Name())] = true
-		}
 	}
 
 	changed := false
@@ -202,4 +210,55 @@ func (w *Watcher) resync() bool {
 		changed = true
 	}
 	return changed
+}
+
+func (w *Watcher) subdirectories() (map[string]bool, error) {
+	current := map[string]bool{}
+	entries, err := os.ReadDir(w.root)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || (w.opts.skip != nil && w.opts.skip(entry.Name())) {
+			continue
+		}
+		top := filepath.Join(w.root, entry.Name())
+		current[top] = true
+		if w.opts.deep {
+			budget := maxDeepEntries
+			w.addSubdirectories(top, &budget, current)
+		}
+	}
+	return current, nil
+}
+
+// addSubdirectories spends budget on entries before watching the folder that holds them,
+// because a kqueue watch on a folder opens a descriptor for each file in it. One folder too
+// large to watch costs its own edits and leaves the rest of the tree watched.
+func (w *Watcher) addSubdirectories(dir string, budget *int, current map[string]bool) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		w.logger.Debug().Err(err).Str("subdir", dir).Msg("subdirectory read failed")
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || (w.opts.skip != nil && w.opts.skip(entry.Name())) {
+			continue
+		}
+		sub := filepath.Join(dir, entry.Name())
+		held, err := os.ReadDir(sub)
+		if err != nil {
+			w.logger.Debug().Err(err).Str("subdir", sub).Msg("subdirectory read failed")
+			continue
+		}
+		if len(held) > *budget {
+			if !w.warnedDeep.Swap(true) {
+				w.logger.Warn().Int("limit", maxDeepEntries).Str("subdir", sub).Msg("too many files to watch, so edits there will not reload")
+			}
+			continue
+		}
+		*budget -= len(held)
+		current[sub] = true
+		w.addSubdirectories(sub, budget, current)
+	}
 }

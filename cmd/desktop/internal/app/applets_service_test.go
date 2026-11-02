@@ -1,0 +1,489 @@
+package app
+
+import (
+	"context"
+	"encoding/base64"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
+)
+
+type fakeAppletPreferences struct {
+	mu        sync.Mutex
+	disabled  map[string]bool
+	forgotten []string
+	forgetErr error
+}
+
+func (f *fakeAppletPreferences) AppletDisabled(id string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.disabled[id], nil
+}
+
+func (f *fakeAppletPreferences) SetAppletDisabled(id string, disabled bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.disabled[id] = disabled
+	return nil
+}
+
+func (f *fakeAppletPreferences) ForgetApplet(id string) error {
+	f.forgotten = append(f.forgotten, id)
+	return f.forgetErr
+}
+
+func testAppletDeps(store *applets.Store, sessionDir func(context.Context, string) (string, error)) AppletsDeps {
+	return AppletsDeps{
+		Catalog:     store,
+		Environ:     func(context.Context) []string { return os.Environ() },
+		SessionDir:  sessionDir,
+		Preferences: &fakeAppletPreferences{disabled: map[string]bool{}},
+		Updated:     func() {},
+	}
+}
+
+func appletHarness(t *testing.T, id, body string) *AppletsService {
+	t.Helper()
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, id), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, id, applets.FileName), []byte(body), 0o600))
+	store := applets.NewStore(root, "")
+	require.NoError(t, store.Reload())
+	sessionDir := t.TempDir()
+	service := newAppletsService(testAppletDeps(store, func(_ context.Context, slug string) (string, error) {
+		if slug == "gone" {
+			return "", Errorf(KindNotFound, "no session")
+		}
+		return sessionDir, nil
+	}))
+	service.pages = true
+	return service
+}
+
+func appletOnDisk(t *testing.T, service *AppletsService, id string) Applet {
+	t.Helper()
+	for _, applet := range service.List(t.Context()) {
+		if applet.ID == id {
+			return applet
+		}
+	}
+	require.Failf(t, "no applet", "%q is not listed", id)
+	return Applet{}
+}
+
+func TestAppletCarriesItsDirectoryAndRunsRelativeCwdInIt(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\ncwd: data\n")
+	dir := filepath.Dir(appletOnDisk(t, service, "thing").Path)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "data"), 0o755))
+
+	out, err := service.Exec(t.Context(), "thing", AppletExec{Command: `pwd -P; printf %s "$HIVE_APPLET_DIR"`})
+	require.NoError(t, err)
+	resolved, err := filepath.EvalSymlinks(filepath.Join(dir, "data"))
+	require.NoError(t, err)
+	assert.Equal(t, resolved+"\n"+dir, out.Stdout)
+}
+
+func TestAPageFollowsTheSessionAndFallsBackToItsOwnDirectory(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	dir := filepath.Dir(appletOnDisk(t, service, "thing").Path)
+	ctx := t.Context()
+
+	context, err := service.Context(ctx, "thing", "")
+	require.NoError(t, err)
+	assert.Equal(t, dir, context.Cwd)
+
+	context, err = service.Context(ctx, "thing", "gone")
+	require.NoError(t, err)
+	assert.Equal(t, dir, context.Cwd, "a session with no directory here")
+
+	context, err = service.Context(ctx, "thing", "some-session")
+	require.NoError(t, err)
+	assert.NotEqual(t, dir, context.Cwd)
+}
+
+func TestCheckTabFollowsTheFile(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\nsurfaces: {tab: {}}\n")
+	require.NoError(t, service.CheckTab("thing"))
+	assert.Equal(t, KindNotFound, KindOf(service.CheckTab("ghost")))
+
+	require.NoError(t, service.SetEnabled("thing", false))
+	assert.Equal(t, KindUnavailable, KindOf(service.CheckTab("thing")), "an applet that is off opens nothing")
+
+	popup := appletHarness(t, "pop", "version: 1\ntitle: Pop\n")
+	assert.Equal(t, KindInvalid, KindOf(popup.CheckTab("pop")))
+}
+
+func TestSetSurfaceEditsTheFileAndTheCatalogFollows(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	path := appletOnDisk(t, service, "thing").Path
+
+	require.NoError(t, service.SetSurface("thing", "tab", true))
+	applet := appletOnDisk(t, service, "thing")
+	assert.True(t, applet.Surfaces.Tab)
+	assert.NotNil(t, applet.Surfaces.Popup, "the pop-up it had stays")
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "tab: {}")
+
+	require.NoError(t, service.SetSurface("thing", "popup", false))
+	assert.Nil(t, appletOnDisk(t, service, "thing").Surfaces.Popup)
+
+	assert.Equal(t, KindInvalid, KindOf(service.SetSurface("thing", "titlebar", true)), "it has no page for the bar")
+	assert.Equal(t, KindNotFound, KindOf(service.SetSurface("ghost", "tab", true)))
+	assert.Equal(t, KindInvalid, KindOf(service.SetSurface("applet-builder", "tab", true)), "a built-in has no file")
+}
+
+func TestBrokenAppletIsListedAndNotRunnable(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\nsurfaces: {titlebar: nope}\n")
+	applet := appletOnDisk(t, service, "thing")
+	assert.False(t, applet.Runnable)
+	assert.Contains(t, applet.Error, "TitlebarSurface")
+}
+
+func TestUnknownKeyListsAWarningAndStillRuns(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\nsidebar: {entry: side.html}\n")
+	applet := appletOnDisk(t, service, "thing")
+	assert.True(t, applet.Runnable)
+	assert.Empty(t, applet.Error)
+	assert.Equal(t, []string{`this version of Hive ignores "sidebar"`}, applet.Warnings)
+}
+
+func TestDisabledAppletIsListedAndServesNothing(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	require.NoError(t, os.WriteFile(filepath.Join(service.catalog.Root(), "thing", "index.html"), []byte("<p>hi"), 0o600))
+	updates := 0
+	service.updated = func() { updates++ }
+	assert.True(t, appletOnDisk(t, service, "thing").Enabled)
+
+	require.NoError(t, service.SetEnabled("thing", false))
+	assert.Equal(t, 1, updates)
+	assert.False(t, appletOnDisk(t, service, "thing").Enabled)
+	_, err := service.Asset("thing", "index.html")
+	require.ErrorContains(t, err, "turned off")
+	_, err = service.BridgeToken("thing")
+	require.ErrorContains(t, err, "turned off")
+	_, err = service.Exec(t.Context(), "thing", AppletExec{Command: "true"})
+	require.ErrorContains(t, err, "turned off")
+
+	require.NoError(t, service.SetEnabled("thing", true))
+	_, err = service.Asset("thing", "index.html")
+	require.NoError(t, err)
+	require.Error(t, service.SetEnabled("absent", true))
+}
+
+func TestDeleteRemovesTheFolderAndWhatSettingsHold(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	dir := filepath.Dir(appletOnDisk(t, service, "thing").Path)
+	preferences := &fakeAppletPreferences{disabled: map[string]bool{}}
+	service.preferences = preferences
+	updates := 0
+	service.updated = func() { updates++ }
+	_, err := service.BridgeToken("thing")
+	require.NoError(t, err)
+	handle, err := service.Spawn(t.Context(), "thing", AppletExec{Command: "sleep 60"})
+	require.NoError(t, err)
+
+	require.NoError(t, service.Delete("thing"))
+
+	assert.NoDirExists(t, dir)
+	assert.Equal(t, []string{"thing"}, preferences.forgotten)
+	assert.Equal(t, 1, updates)
+	assert.NotContains(t, service.tokens, "thing")
+	assert.Eventually(t, func() bool {
+		output, err := service.SpawnRead(t.Context(), handle)
+		return err != nil || output.Done
+	}, 5*time.Second, 10*time.Millisecond, "what it had running stops")
+	_, err = service.Exec(t.Context(), "thing", AppletExec{Command: "true"})
+	require.Error(t, err)
+	require.Error(t, service.Delete("thing"))
+}
+
+func TestDeleteTakesABrokenApplet(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\nsurfaces: {titlebar: nope}\n")
+	dir := filepath.Dir(appletOnDisk(t, service, "thing").Path)
+	require.False(t, appletOnDisk(t, service, "thing").Runnable)
+
+	require.NoError(t, service.Delete("thing"))
+	assert.NoDirExists(t, dir)
+}
+
+func TestDeleteRefusesABuiltinAndOnlyRevealsOneAFolderReplaced(t *testing.T) {
+	service := appletHarness(t, applets.BuilderID, "version: 1\ntitle: My builder\n")
+	replaced := appletOnDisk(t, service, applets.BuilderID)
+	require.False(t, replaced.Builtin)
+
+	require.NoError(t, service.Delete(applets.BuilderID))
+	assert.NoDirExists(t, filepath.Dir(replaced.Path))
+	assert.True(t, appletOnDisk(t, service, applets.BuilderID).Builtin)
+
+	require.ErrorContains(t, service.Delete(applets.BuilderID), "ships with Hive")
+	assert.True(t, appletOnDisk(t, service, applets.BuilderID).Builtin)
+}
+
+func TestDeleteLeavesTheAppletWholeWhenSettingsCannotBeCleared(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	dir := filepath.Dir(appletOnDisk(t, service, "thing").Path)
+	service.preferences = &fakeAppletPreferences{disabled: map[string]bool{}, forgetErr: errors.New("read-only")}
+
+	require.ErrorContains(t, service.Delete("thing"), "nothing was deleted")
+	assert.DirExists(t, dir)
+	assert.True(t, appletOnDisk(t, service, "thing").Runnable)
+}
+
+func TestDeleteIsRefusedWithoutPages(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	dir := filepath.Dir(appletOnDisk(t, service, "thing").Path)
+	service.pages = false
+
+	require.Error(t, service.Delete("thing"))
+	assert.DirExists(t, dir)
+}
+
+func TestBuiltinIsListed(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	builder := appletOnDisk(t, service, applets.BuilderID)
+	assert.True(t, builder.Builtin)
+	assert.True(t, builder.Runnable)
+	assert.Empty(t, builder.Error)
+	assert.False(t, appletOnDisk(t, service, "thing").Builtin)
+}
+
+func packedApplet(t *testing.T, id, yaml string) string {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, applets.FileName), []byte(yaml), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html>"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "bar.html"), []byte("<!doctype html>"), 0o600))
+	packed, err := applets.Pack(applets.Applet{ID: id, Dir: dir}, "")
+	require.NoError(t, err)
+	return base64.StdEncoding.EncodeToString(packed.Data)
+}
+
+func TestImportWritesNothingUntilConfirmed(t *testing.T) {
+	service := appletHarness(t, "existing", "version: 1\ntitle: Existing\n")
+	root := service.catalog.Root()
+	preview, err := service.PrepareImport(packedApplet(t, "radio", "version: 1\ntitle: Radio\nsurfaces:\n  titlebar:\n    entry: bar.html\ncommands:\n  - {id: next, title: Next}\n"))
+	require.NoError(t, err)
+	assert.Equal(t, "radio", preview.ID)
+	assert.Equal(t, "radio", preview.SuggestedID)
+	assert.Equal(t, "bar.html", preview.Surfaces.Titlebar.Entry)
+	assert.Equal(t, "Next", preview.Commands[0].Title)
+	assert.Len(t, preview.Files, 3)
+	assert.NoDirExists(t, filepath.Join(root, "radio"))
+
+	service.CancelImport(preview.Token)
+	assert.NoDirExists(t, filepath.Join(root, "radio"))
+	require.Error(t, service.ConfirmImport(preview.Token, "radio"), "a cancelled import cannot be confirmed")
+	assert.NoDirExists(t, filepath.Join(root, "radio"))
+}
+
+func TestImportNeedsTheFileThatWasShown(t *testing.T) {
+	service := appletHarness(t, "existing", "version: 1\ntitle: Existing\n")
+	first, err := service.PrepareImport(packedApplet(t, "first", "version: 1\ntitle: First\n"))
+	require.NoError(t, err)
+	second, err := service.PrepareImport(packedApplet(t, "second", "version: 1\ntitle: Second\n"))
+	require.NoError(t, err)
+	require.Error(t, service.ConfirmImport(first.Token, "first"))
+	require.NoError(t, service.ConfirmImport(second.Token, "second"))
+	_, ok := service.catalog.Get("second")
+	assert.True(t, ok)
+	require.Error(t, service.ConfirmImport(second.Token, "again"), "a token installs once")
+}
+
+func TestImportAsksForAnotherIDAndKeepsWhatIsThere(t *testing.T) {
+	service := appletHarness(t, "radio", "version: 1\ntitle: Mine\n")
+	preview, err := service.PrepareImport(packedApplet(t, "radio", "version: 1\ntitle: Theirs\n"))
+	require.NoError(t, err)
+	assert.Equal(t, "radio", preview.ID)
+	assert.Equal(t, "radio-2", preview.SuggestedID)
+
+	err = service.ConfirmImport(preview.Token, "radio")
+	require.ErrorContains(t, err, "already exists")
+	mine, ok := service.catalog.Get("radio")
+	require.True(t, ok)
+	assert.Equal(t, "Mine", mine.Title)
+
+	require.NoError(t, service.ConfirmImport(preview.Token, preview.SuggestedID))
+	theirs, ok := service.catalog.Get("radio-2")
+	require.True(t, ok)
+	assert.Equal(t, "Theirs", theirs.Title)
+}
+
+func TestImportRefusesAHostileFileWithoutWriting(t *testing.T) {
+	service := appletHarness(t, "existing", "version: 1\ntitle: Existing\n")
+	_, err := service.PrepareImport("not base64!")
+	require.Error(t, err)
+	_, err = service.PrepareImport(base64.StdEncoding.EncodeToString([]byte("not a zip")))
+	require.ErrorContains(t, err, "not a Hive applet file")
+	_, err = service.PrepareImport(strings.Repeat("A", applets.MaxArchiveBytes*2))
+	require.ErrorContains(t, err, "limit")
+}
+
+func TestExportRefusesABuiltinAndAFailureLeavesNoFile(t *testing.T) {
+	service := appletHarness(t, "radio", "version: 1\ntitle: Radio\n")
+	_, err := service.ExportPreview(applets.BuilderID)
+	require.ErrorContains(t, err, "ships with Hive")
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "out.hiveapplet")
+	require.Error(t, service.Export("not-a-token", dest))
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+func TestSharingIsRefusedWhereAppletsDoNotRun(t *testing.T) {
+	service := appletHarness(t, "radio", "version: 1\ntitle: Radio\n")
+	service.pages = false
+	_, err := service.PrepareImport("")
+	require.ErrorContains(t, err, "headless")
+	_, err = service.ExportPreview("radio")
+	require.ErrorContains(t, err, "headless")
+}
+
+func TestExportWritesWhatThePreviewListedAndNothingAddedAfter(t *testing.T) {
+	service := appletHarness(t, "radio", "version: 1\ntitle: Radio\n")
+	dir := filepath.Join(service.catalog.Root(), "radio")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<p>hi"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".localstorage.json"), []byte("{}"), 0o600))
+	preview, err := service.ExportPreview("radio")
+	require.NoError(t, err)
+	assert.Equal(t, "radio.hiveapplet", preview.FileName)
+	assert.Equal(t, []string{".localstorage.json"}, preview.LeftOut)
+
+	// A running page writes while the save dialog is open.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "session-dump.json"), []byte("secret"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("changed"), 0o600))
+
+	dest := filepath.Join(t.TempDir(), "radio.hiveapplet")
+	require.NoError(t, service.Export(preview.Token, dest))
+	raw, err := os.ReadFile(dest)
+	require.NoError(t, err)
+	archive, err := applets.Unpack(raw, "")
+	require.NoError(t, err)
+	assert.Equal(t, "radio", archive.Applet.ID)
+	paths := make([]string, 0, len(archive.Files))
+	for _, file := range archive.Files {
+		paths = append(paths, file.Path)
+		assert.NotEqual(t, "changed", string(file.Data))
+	}
+	assert.ElementsMatch(t, []string{"applet.yaml", "index.html"}, paths)
+
+	require.ErrorContains(t, service.Export(preview.Token, dest), "no longer waiting", "a token works once")
+
+	require.NoError(t, os.Remove(filepath.Join(dir, ".localstorage.json")))
+	preview, err = service.ExportPreview("radio")
+	require.NoError(t, err)
+	assert.NotNil(t, preview.LeftOut, "the frontend reads its length")
+	service.CancelExport(preview.Token)
+	require.ErrorContains(t, service.Export(preview.Token, dest), "no longer waiting")
+}
+
+func TestImportForgetsTheIDOnlyOnceInstalled(t *testing.T) {
+	service := appletHarness(t, "existing", "version: 1\ntitle: Existing\n")
+	preferences := &fakeAppletPreferences{disabled: map[string]bool{}}
+	service.preferences = preferences
+	preview, err := service.PrepareImport(packedApplet(t, "radio", "version: 1\ntitle: Radio\n"))
+	require.NoError(t, err)
+
+	require.Error(t, service.ConfirmImport("wrong-token", "radio"))
+	require.Error(t, service.ConfirmImport(preview.Token, "existing"))
+	assert.Empty(t, preferences.forgotten, "an import that failed takes nothing from the id")
+
+	require.NoError(t, service.ConfirmImport(preview.Token, "radio"))
+	assert.Equal(t, []string{"radio"}, preferences.forgotten)
+}
+
+func TestImportPreviewCarriesOnlyPlainWarnings(t *testing.T) {
+	service := appletHarness(t, "existing", "version: 1\ntitle: Existing\n")
+	preview, err := service.PrepareImport(packedApplet(t, "radio", "version: 1\ntitle: Radio\nsidebar: {}\nicon: laser\n\"a\\u202Eb\": 1\n"))
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		`this version of Hive ignores "a key with an unusual name"`,
+		`this version of Hive ignores "sidebar"`,
+		`this version of Hive has no icon "laser", so it shows the default`,
+	}, preview.Warnings)
+}
+
+func TestImportLeavesNothingWhenTheIDCannotBeCleared(t *testing.T) {
+	service := appletHarness(t, "existing", "version: 1\ntitle: Existing\n")
+	preferences := &fakeAppletPreferences{disabled: map[string]bool{}, forgetErr: errors.New("read-only settings.yaml")}
+	service.preferences = preferences
+	preview, err := service.PrepareImport(packedApplet(t, "radio", "version: 1\ntitle: Radio\n"))
+	require.NoError(t, err)
+
+	require.ErrorContains(t, service.ConfirmImport(preview.Token, "radio"), "nothing was imported")
+	assert.NoDirExists(t, filepath.Join(service.catalog.Root(), "radio"))
+
+	preferences.forgetErr = nil
+	require.NoError(t, service.ConfirmImport(preview.Token, "radio"), "the file is still waiting")
+	assert.DirExists(t, filepath.Join(service.catalog.Root(), "radio"))
+}
+
+func TestTurningAnAppletOffStopsWhatItHasRunning(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	other := filepath.Join(service.catalog.Root(), "other")
+	require.NoError(t, os.MkdirAll(other, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(other, applets.FileName), []byte("version: 1\ntitle: Other\n"), 0o600))
+	require.NoError(t, service.catalog.Reload())
+
+	handle, err := service.Spawn(t.Context(), "thing", AppletExec{Command: "sleep 30"})
+	require.NoError(t, err)
+	kept, err := service.Spawn(t.Context(), "other", AppletExec{Command: "sleep 30"})
+	require.NoError(t, err)
+	defer func() { require.NoError(t, service.SpawnKill(kept)) }()
+
+	started := make(chan struct{})
+	finished := make(chan error, 1)
+	go func() {
+		close(started)
+		_, err := service.Exec(t.Context(), "thing", AppletExec{Command: "sleep 30"})
+		finished <- err
+	}()
+	<-started
+	require.Eventually(t, func() bool {
+		service.spawns.mu.Lock()
+		defer service.spawns.mu.Unlock()
+		return len(service.spawns.execs) == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	require.NoError(t, service.SetEnabled("thing", false))
+
+	select {
+	case <-finished:
+	case <-time.After(15 * time.Second):
+		t.Fatal("a running hive.exec outlived the switch")
+	}
+	spawn, err := service.spawn(handle)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		spawn.mu.Lock()
+		defer spawn.mu.Unlock()
+		return spawn.done
+	}, 15*time.Second, 10*time.Millisecond, "a spawned process outlived the switch")
+
+	other2, err := service.spawn(kept)
+	require.NoError(t, err)
+	other2.mu.Lock()
+	defer other2.mu.Unlock()
+	assert.False(t, other2.done, "another applet's process keeps running")
+}
+
+func TestAPageCanStillSaveAsItIsTurnedOff(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\n")
+	require.NoError(t, service.SetEnabled("thing", false))
+	require.NoError(t, service.SaveStorage("thing", `{"last":"word"}`))
+	saved, err := os.ReadFile(filepath.Join(service.catalog.Root(), "thing", appletStorageFile))
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"last":"word"}`, string(saved))
+}

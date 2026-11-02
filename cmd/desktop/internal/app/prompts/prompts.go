@@ -27,8 +27,10 @@ package prompts
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"text/template"
@@ -37,6 +39,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/mcpcatalog"
 )
@@ -54,6 +57,7 @@ type Env struct {
 	FlowsDir string
 	// ActionsPath is the actions.yml location.
 	ActionsPath string
+	AppletsDir  string
 	// SettingsPath is the settings.yaml location.
 	SettingsPath string
 	// WebhookBaseURL is the local listener's base URL, already including the
@@ -79,6 +83,37 @@ type Input struct {
 	// sources.webhook node: its configured path and its last captured delivery.
 	WebhookPath   string `json:"webhookPath"`
 	WebhookSample string `json:"webhookSample"`
+	// AppletBrief is what the user told the Applet Builder. It adds a style and a
+	// first question to the applets prompt.
+	AppletBrief *AppletBrief `json:"appletBrief,omitempty"`
+}
+
+// AppletBrief is the Applet Builder's answer.
+type AppletBrief struct {
+	// Style is hive, website, reference, named or free.
+	Style string `json:"style"`
+	// Reference is what a reference style should feel like, or which named style.
+	Reference string `json:"reference"`
+}
+
+var (
+	appletStyles      = []string{"hive", "website", "reference", "named", "free"}
+	appletNamedStyles = []string{"terminal", "editorial", "swiss", "brutalist", "arcade"}
+)
+
+// validate refuses an answer the template has no words for, which would otherwise
+// render as a prompt quietly missing its style.
+func (b AppletBrief) validate() error {
+	if !slices.Contains(appletStyles, b.Style) {
+		return fmt.Errorf("prompts: unknown applet style %q", b.Style)
+	}
+	if b.Style == "named" && !slices.Contains(appletNamedStyles, b.Reference) {
+		return fmt.Errorf("prompts: unknown applet style %q", b.Reference)
+	}
+	if b.Style == "reference" && strings.TrimSpace(b.Reference) == "" {
+		return errors.New("prompts: an applet style to feel like needs a reference")
+	}
+	return nil
 }
 
 // Prompt is one rendered, copyable prompt.
@@ -127,6 +162,14 @@ var definitions = []definition{
 		target:      func(env Env) string { return env.ActionsPath },
 		listed:      true,
 		data:        actionsData,
+	},
+	{
+		id:          "applets",
+		title:       "Applets",
+		description: "Build an applet: a web page that opens in Hive and can run any command and read or write any file on this machine.",
+		target:      func(env Env) string { return env.AppletsDir + "/<id>/" + applets.FileName },
+		listed:      true,
+		data:        appletsData,
 	},
 	{
 		id:          "webhook-sources",
@@ -347,6 +390,15 @@ func actionsData(Env, Input) (map[string]any, error) {
 		"LauncherDoc": strings.TrimSpace(actions.LauncherDoc()),
 		"Example":     strings.TrimSpace(actions.ExampleYAML()),
 	}, nil
+}
+
+func appletsData(_ Env, in Input) (map[string]any, error) {
+	if in.AppletBrief != nil {
+		if err := in.AppletBrief.validate(); err != nil {
+			return nil, err
+		}
+	}
+	return map[string]any{"Brief": in.AppletBrief}, nil
 }
 
 // agentWorkspacesData assembles the agent-workspaces prompt from the shipped

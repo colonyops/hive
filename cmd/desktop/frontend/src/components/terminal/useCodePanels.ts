@@ -1,4 +1,5 @@
 import { computed, watch } from 'vue'
+import { appletTab } from '../../lib/appletTabs'
 import { openTab } from '../../lib/panelLayout'
 import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
@@ -75,6 +76,11 @@ export function useCodePanels(options: { pool: TerminalPool; tree: TerminalTree;
     if (target.slug !== pool.visibleSlug.value) ops.selectRow(target.slug)
   }
 
+  function openAppletIn(target: TerminalSessionRow, id: string, panel?: string): void {
+    layouts.apply(target.id, (current) => openTab(current, appletTab(id), panel))
+    if (target.slug !== pool.visibleSlug.value) ops.selectRow(target.slug)
+  }
+
   // A session deleted or recycled while not on screen says nothing to the watcher
   // in useSessionPanels. A server that has not answered says nothing about its
   // sessions, so layouts wait until every server has, and a pinned chat's row
@@ -97,6 +103,7 @@ export function useCodePanels(options: { pool: TerminalPool; tree: TerminalTree;
     newWindow,
     newAgentWindow,
     openViewIn,
+    openAppletIn,
     viewsFor: (target: TerminalSessionRow): SessionViewKind[] => viewsFor(codeViewHost(target, tree)),
   }
 }

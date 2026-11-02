@@ -137,7 +137,7 @@ On Linux, <kbd>Ctrl+Shift+D</kbd> splits right, <kbd>Ctrl+Shift+O</kbd> splits d
 
 ## Tabs and splits
 
-A session's windows show as tabs above the terminal, in the order the sidebar lists them. The `+` on the tab row, like the one on the session's row, adds a terminal, an agent, or one of the session's views: **Drive**, **Diff**, and **Tasks**. A view opens once per session, so asking for it again brings its tab forward.
+A session's windows show as tabs above the terminal, in the order the sidebar lists them. The `+` on the tab row, like the one on the session's row, adds a terminal, an agent, or one of the session's views: **Drive**, **Diff**, and **Tasks**. A view opens once per session, so asking for it again brings its tab forward. It also lists any [applets that list a tab](../configuration/applets.md#where-it-shows).
 
 The two buttons at the right of the tab row split the panel to the right or downward. The new panel asks what goes in it: a window that is behind another tab, a new terminal or agent, or a view. Splits nest, and each one can go either way.
 

@@ -1,0 +1,193 @@
+Build a Hive Desktop applet.
+{{template "app" .}}
+An applet is a web page that opens as a pop-up or a session tab, from the command palette or a key
+the user binds. It runs on the user's own machine with their full access, and that
+is intended: do what the request needs.
+
+## Files
+
+Write the applet to {{.Env.AppletsDir}}/<id>/. The directory name is the applet's id:
+a slug of lowercase letters, digits and hyphens. It holds an `applet.yaml` and the
+page. The app watches these files, so the applet appears as soon as the file is
+valid. Nothing runs until the user opens it, unless it lists a title bar page, which starts as soon as the file is valid.
+
+```yaml
+version: 1
+title: Containers
+icon: container
+surfaces:
+  tab: {}
+  popup:
+    width: 1200
+    height: 760
+```
+
+A key Hive does not know is a warning in `list_applets`, and the applet still opens, so check it for a misspelled key. A wrong value under a key Hive knows is an error.
+
+- `version`: must be `1`. It is the format of this file, not a release of the applet.
+- `hive`: optional oldest Hive that can run the applet, as `">=0.60"`. Set it when the applet needs a key added in that release, and always when a key limits what the applet can do, because an older Hive would otherwise ignore the limit.
+- `title`: the name in the palette.
+- `icon`: optional glyph: `terminal`, `git-branch`, `git-compare`, `folder`, `file-text`, `search`, `database`, `gauge`, `activity`, `flask-conical`, `hammer`, `container`, `cloud`, `bug`, `zap`, `package`, `globe`, `external-link`, `git-pull-request`, or `play`.
+- `cwd`: where commands run. Omit it when the applet is about the code in front of the user: commands then run in the on-screen session's checkout, and in the applet's directory when no session is on screen. Set `"~"` or an absolute path when the applet works anywhere. A relative path is relative to the applet's directory.
+- `entry`: the page, default `index.html`.
+- `surfaces`: where the applet shows. List each one it belongs on, and it shows only there. With none listed it is a pop-up. Ask the user if the request does not make it clear.
+  - `tab`: in a session's + menu, as a tab beside its terminals. Takes no settings: `tab: {}`.
+  - `popup`: over the app, from the command palette or a key, with `width` and `height` in pixels. The default fills the window.
+  - `titlebar`: a page in the title bar, with `entry` (default: the applet's own `entry`) and `width` in pixels (default 28, one icon button). See "In the title bar".
+  - Each takes `enabled: false`, which turns it off and keeps its settings. The switches in Settings > Applets write this, so leave it alone unless the user asks.
+- `commands`: palette rows the user can bind to a key, each with `id` (a slug), `title`, and optional `icon` and `keywords`. See "In the command palette".
+
+## The page
+
+It is a normal web page, served from the applet's directory: relative scripts, ES
+modules, stylesheets, images, audio and network requests all work. There is no build
+step, so either write plain files or commit the built output. Editing a page, script
+or stylesheet reloads it on screen and stops the processes it started. On a pop-up, Hive
+draws a close button over the top right corner of the page, so leave about 52px clear there.
+
+A foreign page in the frame can load any of your pages with a query or hash it chooses, and that page has the full bridge. So do not run commands built from the URL.
+
+`window.hive` exists before your scripts run. Every call except `hive.on` returns a promise.
+
+- `hive.exec(command, {cwd, env, stdin, timeout})` runs a shell command and resolves to `{stdout, stderr, code}`. A non-zero `code` does not reject. `timeout` is in milliseconds and defaults to 5 minutes.
+- `hive.spawn(command, {cwd, env, onStdout, onStderr, onExit})` starts a long-running process and resolves to `{write(text), kill()}`. Output arrives as text in arbitrary chunks. Closing the frame that started it stops it.
+- `hive.readFile(path)` and `hive.writeFile(path, text)` handle text files. A relative path is relative to the applet's directory, and `~` and absolute paths work.
+- `hive.terminal(command, {cwd})` opens the command in the pop-up terminal, for anything interactive.
+- `hive.toast(message, {severity, body})` shows a Hive toast. `severity` is `info`, `success`, `warning`, or `error`.
+- `hive.copy(text)` puts text on the clipboard.
+- `hive.context()` resolves to `{id, title, dir, cwd, sessionSlug}`.
+- `hive.close()` closes the applet's pop-up or tab. In a title bar page it closes the page's dropdown.
+- `hive.surface` is `tab`, `popup`, `titlebar` or `dropdown`, for one file that serves several.
+- `hive.open()` opens the applet from any of them: as a tab if the user added it as one and a session is on screen, otherwise as a pop-up. It closes the pop-up if that is already open.
+- `hive.broadcast(data)` sends to the applet's other open frames, which listen with `hive.on('message', fn)`.
+- `hive.on('session', fn)` reports the slug of the session on screen when it changes. `hive.on` returns a function that stops listening, and does nothing for an event this Hive does not have.
+- `hive.commands()` resolves to Hive's commands as `{id, title, group, keys}`, and `hive.command(id)` runs one and rejects an id that does not exist, so a page can do what the command palette can.
+- `hive.openPalette(query)` opens the command palette on a query. A first character of `+`, `@` or `>` picks its tab.
+- `hive.setCommands(rows)` and `hive.on('command', fn)` add to the palette. See "In the command palette".
+- `hive.navigate(path)` goes to a route of the app: `/feed`, `/terminal/<session-slug>`, `/settings/<section>`.
+
+Commands run through `sh -c` in the directory `cwd` describes, with `$HIVE_APPLET_DIR`
+set. Pass values to a command through `env` and quote them in the command
+(`hive.exec('docker restart "$ID"', {env: {ID: id}})`), because a value built into the
+command text is shell injection by accident.
+
+`localStorage` works and persists per applet. Cookies and IndexedDB do not, because
+the frame has an opaque origin. Read and write files for anything larger. A page can
+navigate to another HTML file of its own, but cannot `fetch` one. If the frame
+navigates to any other site, that page gets no `window.hive`.
+
+Hive sets its theme on the page's root element as CSS variables, and updates them when
+the user changes theme. They are empty for a moment while the page loads, so give each
+`var()` a fallback: `--hv-app`, `--hv-sidebar`, `--hv-pane`, `--hv-raised`, `--hv-list`, `--hv-chip`, `--hv-hover`, `--hv-row`, `--hv-row-hover`, `--hv-card`, `--hv-border`, `--hv-strong`, `--hv-text`, `--hv-text-2`, `--hv-text-3`, `--hv-text-4`, `--hv-accent`, `--hv-accent-contrast`, `--hv-accent-tint`, `--hv-selection`, `--hv-backdrop`, `--hv-code-key`, `--hv-code-string`, `--hv-code-comment`, and `--hv-severity-info`, `-success`, `-warning`, `-error` and `-running`, each with a `-tint`.
+
+Escape closes a pop-up or dropdown unless your keydown handler calls `preventDefault()`. Use
+that to let Escape back out of a dialog or a filter first. Command, Control and Option
+chords reach Hive's shortcuts unless your handler calls `preventDefault()`, and while a
+pop-up is open that only runs the palette, the key that closes it, and this applet's
+commands. So call `preventDefault()` on any chord the page uses for itself, such as Command-K
+for its own search. Other keys stay in the page. Audio needs a user gesture first, as on any
+page.
+
+## In a session
+
+An applet with `surfaces.tab` is in a session's + menu and opens as a tab beside its terminals. From the palette or a key it opens as that tab when a session is on screen. You can open and close it yourself with the `open_tab` and `close_tab` tools, as `applet:<id>`. A tab fills its panel, so make the page fit any size down to a narrow split.  A tab's page reloads when the user comes back from another session, so keep what matters in `localStorage`.
+
+## In the title bar
+
+Use this for something that is always there: an indicator, media controls, a shortcut to
+another part of the app. With `surfaces.titlebar` in `applet.yaml`, the applet shows a page in
+Hive's title bar. It starts as soon as the file is valid, loads with the app, and keeps running
+until the applet is turned off, so keep what it polls cheap.
+
+- The slot is 28px tall. Set `html, body { margin: 0; height: 100%; background: transparent; }` so the page sits on the bar, and match Hive's 28px controls with a 8px radius and a `--hv-chip` hover fill. Use `--hv-*` colours.
+- `hive.resize({width})` changes the slot's width. Width `0` hides the slot and keeps the page running, for an indicator that only shows when there is something to say.
+- `hive.dropdown({entry, width, height})` opens a dropdown under the bar and a second call closes it, so call it from a click. It closes when the user clicks elsewhere or presses Escape. `hive.resize({width, height})` from its page resizes it. It loads fresh on each open, so anything that must keep going, such as audio or a long-running process, belongs in the title bar page. Keep the two in step with `hive.broadcast`.
+- `localStorage` is shared between an applet's frames, and the `storage` event fires as it does in a browser.
+
+If the applet is only for the title bar, the palette still opens its `entry` as a pop-up, so
+make that page useful too: settings or a larger view.
+
+## In the command palette
+
+Use `commands:` in `applet.yaml` for what a user would want to do from anywhere, or bind to a key. The row is always there, and the user binds it as `applet.<id>.<command>`. Do not suggest a chord or write one to `settings.yaml` unless they ask. The palette can show the title without the applet's name, so write "Next radio station" and not "Next".
+
+`hive.on('command', (id) => ...)` receives it. It goes to the applet's running persistent page, which today means the title bar page if that is on. Otherwise the applet opens, as a tab or a pop-up, and its page receives it, so the applet's `entry` must handle every command too, or be the same page as the title bar's. From the title bar page, a command can call `hive.dropdown()` to open the dropdown.
+
+Use `hive.setCommands(rows)` for rows only a running page knows about, such as stations, containers or recent files. Each call replaces the rows that page set before, and they go when the page closes or reloads. They cannot be bound. A row needs `id` and `title`, and can have `group` (default: the applet's title), `scope` (`actions`, the default, or `goto` for a row that names a thing), `kind` (the small word at the right of such a row), `hint`, `keywords` and `icon`. Selecting one calls the same `hive.on('command')` with its id.
+
+## Sharing
+
+The user shares an applet from Settings > Applets, as one `.hiveapplet` file. An export leaves out hidden files, `.log` files and links, along with `localStorage`, and takes everything else in the directory. So keep what a page saves for this machine in `localStorage`, a hidden file or a `.log` file, never in a plain file, and never put a token or a personal path in a file that would ship. Prefer `~` or the session's checkout to a path from this machine in `cwd`. Import does not keep the executable bit, so run a script with `sh script.sh`. Refer the user to Import in Settings when they want an applet someone sent them, and do not unpack one into the applets directory yourself: Import shows them what they are about to trust.
+
+## Check your work
+
+1. Run the commands the page uses and confirm their output is what the page parses.
+2. If the `list_applets` tool of the app's MCP server is available, call it and fix any `error` it reports. Without it, the palette row for a broken applet opens and shows the same error.
+3. Tell the user the applet's name and where it shows. For a tab or a pop-up, say they open it from the command palette and can bind it to a key as `applet.<id>`, and for a tab, from a session's + menu. Name any `commands` it has.
+{{with .Brief}}
+{{if eq .Style "hive"}}{{template "applet-style-hive"}}{{end -}}
+{{if eq .Style "website"}}
+## Style: a website
+
+Design this like a well-made website rather than an app panel: a confident layout with
+real hierarchy, generous space, and type and colour of its own. Scrolling is fine. Do
+not imitate Hive's chrome, and do not use the `--hv-*` variables unless they help.
+{{end -}}
+{{if eq .Style "reference"}}
+## Style: make it feel like this
+
+The user wants it to feel like: {{.Reference}}
+
+Work out what gives that its character (layout, density, type, colour, motion, tone of
+the words) and build on those decisions. Evoke it rather than copy its logo or branding.
+{{end -}}
+{{if eq .Style "named"}}{{template "applet-style-named" .}}{{end -}}
+{{if eq .Style "free"}}
+## Style: your choice
+
+Pick one clear visual direction that suits what the applet does, and commit to it. Avoid
+the generic look of a default dashboard template.
+{{end}}
+## Start by asking
+
+Do not write anything yet. First ask me to describe the applet: what it should do, what
+it should show, and what I should be able to do in it. Ask follow-up questions only if
+the answer leaves something you cannot reasonably decide. Then build it, using the
+style above. Decide from my answer where it runs and what pop-up size suits it.
+{{else}}
+{{template "task" .}}
+{{end}}
+{{define "applet-style-hive"}}
+## Style: match Hive
+
+Make this look like part of Hive Desktop. The page cannot import Hive's components or
+Tailwind, so write plain CSS against these rules.
+
+- **Colour:** use only the `--hv-*` variables, so every theme works, light ones included. Cool neutrals, with amber (`--hv-accent`) as the only warm hue. Accent marks what is selected or primary, never decoration. Severity colours carry meaning only.
+- **Surfaces:** `--hv-app` for the page, `--hv-sidebar` or `--hv-pane` for sidebars and side panes, `--hv-raised` for dialogs, `--hv-chip` for chips and badges. Separate regions with a 1px `--hv-border` line rather than a shadow or a gap.
+- **Text:** `--hv-text` for primary, `--hv-text-2` for secondary, `--hv-text-3` for labels and hints, `--hv-text-4` for the faintest.
+- **Type:** sans for prose and mono for ids, paths, keys and numbers: `'Inter Variable', Inter, -apple-system, system-ui, sans-serif` and `'JetBrains Mono', ui-monospace, Menlo, monospace`. Sizes in px: 10.5, 11.5, 12.5, 13.5, 15, 17, and 28 only for a large figure. Body is 13 to 13.5. Weights stay at 400, 500 and 600.
+- **Section headers:** mono, 10.5px, weight 600, `0.12em` tracking, uppercase, `--hv-text-3`.
+- **Shape:** radii of 4, 6 and 8px, and 11px for a large panel. Dialogs may have a soft shadow. Nothing else does. No gradients.
+- **Density:** one-line rows of 26 to 32px, with secondary detail in a tooltip or a detail pane rather than a second line. Header bars around 44 to 48px, footers around 30px.
+- **Sidebars:** a fixed width around 240px on `--hv-sidebar`, with a 1px border on the inner edge. Rows are one line with a bare leading glyph in a fixed 16px cell. Trailing controls appear on hover in a reserved column, so hovering never moves a name. Children are not indented and have no connector lines. Mark the open item with accent text and medium weight, or `--hv-selection` with a 2px accent rail on its left edge, never both. Only one item is marked at a time.
+- **Lists:** the selected row gets `--hv-selection` or `--hv-accent-tint`, the hovered row `--hv-row-hover`.
+- **Controls:** buttons at 24 to 28px tall. Icons are Lucide, as inline SVG at 14px with stroke width 2. Icon-only buttons need a `title`.
+- **States:** every list has an empty state, and failures show their real message inline, in `--hv-severity-error`. A long action shows that it is busy.
+- **Keyboard:** everything can be done from the keyboard, and the keys are shown in a footer hint bar using small `<kbd>` chips. Escape backs out of one thing at a time.
+- **Words:** sentence case, short and plain. No marketing copy, no emoji.
+{{end}}
+{{define "applet-style-named"}}
+## Style: {{.Reference}}
+{{if eq .Reference "terminal"}}
+A terminal: monospace everywhere, a dark background with one or two phosphor colours, box-drawing borders, a block cursor, no rounded corners and no images. Everything works from the keyboard.
+{{else if eq .Reference "editorial"}}
+Editorial: like a well-set magazine. A serif display face, a strong type hierarchy, an off-white page, thin rules instead of boxes, and one restrained accent colour.
+{{else if eq .Reference "swiss"}}
+Swiss: a strict grid, one grotesque sans in a few sizes, flush-left text, black and white with a single saturated accent, and no decoration of any kind.
+{{else if eq .Reference "brutalist"}}
+Brutalist: raw and loud. Thick black borders, hard offset shadows, system fonts at big sizes, clashing flat colours, and visible structure.
+{{else if eq .Reference "arcade"}}
+Arcade: a retro game cabinet. Neon on near-black, a pixel font, scanlines, chunky buttons, and bouncy motion and sound.
+{{end}}
+{{end}}

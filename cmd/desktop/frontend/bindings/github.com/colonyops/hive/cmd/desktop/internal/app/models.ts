@@ -104,6 +104,170 @@ export interface AgentTargetRef {
 }
 
 /**
+ * Applet is one catalog entry. Error names what is wrong with its file. An applet
+ * that once loaded still runs its last good file; Runnable is false when none ever did.
+ */
+export interface Applet {
+    "id": string;
+    "title": string;
+    "icon": string;
+    "path": string;
+    "builtin": boolean;
+    "entry": string;
+    "revision": number;
+    "runnable": boolean;
+    "error": string;
+
+    /**
+     * Enabled is false for an applet the user turned off. It stays listed, and nothing
+     * of it runs.
+     */
+    "enabled": boolean;
+
+    /**
+     * Warnings names what this Hive skipped in the file, such as a key from a later
+     * release. The applet runs without it.
+     */
+    "warnings": string[] | null;
+    "surfaces": AppletSurfaces;
+    "commands": AppletCommand[] | null;
+}
+
+/**
+ * AppletCommand is a palette row an applet declares, bindable as applet.<id>.<command>.
+ */
+export interface AppletCommand {
+    "id": string;
+    "title": string;
+    "icon": string;
+    "keywords": string[] | null;
+}
+
+export interface AppletContext {
+    "id": string;
+    "title": string;
+    "dir": string;
+    "cwd": string;
+    "sessionSlug": string;
+}
+
+/**
+ * AppletExec is one command a page asks for. Cwd is relative to the applet's own
+ * default directory. TimeoutMillis zero means appletActionTimeout.
+ */
+export interface AppletExec {
+    "command": string;
+    "sessionSlug": string;
+    "cwd": string;
+    "env": { [_ in string]?: string } | null;
+    "stdin": string;
+    "timeoutMillis": number;
+}
+
+/**
+ * AppletExecResult reports the command's outcome. A non-zero exit is a result the
+ * page reads, not an error, as it would be in a script.
+ */
+export interface AppletExecResult {
+    "stdout": string;
+    "stderr": string;
+    "code": number;
+}
+
+/**
+ * AppletExportPreview is what an export would contain, for the user to read first.
+ */
+export interface AppletExportPreview {
+    /**
+     * Token names the export the list describes, so what the user saves is what they read.
+     */
+    "token": string;
+    "title": string;
+    "fileName": string;
+    "files": AppletFile[] | null;
+    "leftOut": string[] | null;
+}
+
+export interface AppletFile {
+    "path": string;
+    "bytes": number;
+}
+
+/**
+ * AppletImportPreview is a checked file waiting for the user. Nothing is on disk yet.
+ */
+export interface AppletImportPreview {
+    /**
+     * Token names the checked file, so what the user confirms is what they read.
+     */
+    "token": string;
+
+    /**
+     * ID is what the file asks for, and SuggestedID the nearest id that is free.
+     */
+    "id": string;
+    "suggestedId": string;
+    "title": string;
+    "entry": string;
+    "cwd": string;
+    "surfaces": AppletSurfaces;
+    "commands": AppletCommand[] | null;
+    "files": AppletFile[] | null;
+    "totalBytes": number;
+
+    /**
+     * Warnings names what this Hive would skip in the file. Each is plain text.
+     */
+    "warnings": string[] | null;
+}
+
+/**
+ * AppletOutput is what a spawned process has done since the last read. Done is set
+ * once, on the read that drains the end of its output.
+ */
+export interface AppletOutput {
+    "stdout": string;
+    "stderr": string;
+    "done": boolean;
+    "code": number;
+}
+
+/**
+ * AppletPopup sizes the pop-up in pixels. Zero fills the window.
+ */
+export interface AppletPopup {
+    "width": number;
+    "height": number;
+}
+
+export interface AppletProcess {
+    "handle": string;
+    "applet": string;
+    "command": string;
+    "startedMillis": number;
+}
+
+/**
+ * AppletSurfaces is where an applet's file says it shows. Popup and Titlebar are nil for an
+ * applet that does not show there. TitlebarPage names the page its file has for the title
+ * bar, whether that is on or off, because a switch can only turn on what has a page.
+ */
+export interface AppletSurfaces {
+    "tab": boolean;
+    "popup": AppletPopup | null;
+    "titlebar": AppletTitlebar | null;
+    "titlebarPage": string;
+}
+
+/**
+ * AppletTitlebar is the page an applet shows in the title bar.
+ */
+export interface AppletTitlebar {
+    "entry": string;
+    "width": number;
+}
+
+/**
  * CommentInput is a new comment on a source line range.
  */
 export interface CommentInput {

@@ -43,7 +43,7 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [id: string]; close: [] }>()
 
 const root = ref<HTMLElement | null>(null)
-onClickOutside(root, () => emit('close'), { ignore: () => props.ignore ?? [] })
+onClickOutside(root, () => emit('close'), { ignore: () => props.ignore ?? [], detectIframe: true })
 useEscapeToClose(() => emit('close'))
 
 const query = ref('')

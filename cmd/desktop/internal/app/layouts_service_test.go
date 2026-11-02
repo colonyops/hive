@@ -9,6 +9,17 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 )
 
+func TestLayoutTabsNameAppletsApart(t *testing.T) {
+	panel := layoutPanelOf(PanelNodeReport{
+		ID: "p0", ActiveTab: "applet:x",
+		Tabs: []PanelTabReport{{ID: "applet:x", Kind: "applet"}, {ID: "applet:y", Kind: "applet"}},
+	}, false, nil)
+	assert.Equal(t, []LayoutTab{
+		{Tab: "applet:x", Kind: "applet", Name: "x", Shown: true},
+		{Tab: "applet:y", Kind: "applet", Name: "y"},
+	}, panel.Tabs, "two applets stay two tabs an agent can tell apart")
+}
+
 func TestParseTabRef(t *testing.T) {
 	for in, want := range map[string]TabRef{
 		"drive":    {View: TabViewDrive},
@@ -18,6 +29,8 @@ func TestParseTabRef(t *testing.T) {
 		"@3":       {View: TabViewTerminal, Window: "@3"},
 		"logs":     {View: TabViewTerminal, Window: "logs"},
 		"Drive":    {View: TabViewTerminal, Window: "Drive"},
+		"applet:x": {View: TabView("applet:x")},
+		"applet:":  {View: TabViewTerminal, Window: "applet:"},
 	} {
 		got, err := parseTabRef(in)
 		require.NoError(t, err, in)

@@ -1,12 +1,14 @@
 import { Open as openDiagnostics } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/diagnosticsservice'
-import { nextTick, onMounted, ref, type Ref } from 'vue'
-import { useCommandPalette } from '../composables/useCommands'
+import { nextTick, onMounted, ref, watch, type Ref } from 'vue'
+import { useCommandPalette, useCommands } from '../composables/useCommands'
 import { useLaunchers } from '../composables/useLaunchers'
 import { useNewSession } from '../composables/useNewSession'
 import { useReportDialog } from '../composables/useReportDialog'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import {
   commandById,
+  appletDeclaredCommand,
+  appletID,
   launcherActionID,
   launcherCommandID,
   terminalWindowPosition,
@@ -28,6 +30,7 @@ import {
   stepTerminalWindow,
   zoomTerminalPane,
 } from '../lib/terminalTree'
+import { useApplets } from '../stores/useApplets'
 import { useDriveReview } from '../stores/useDriveReview'
 import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { useScaleTarget } from '../composables/useScaleTarget'
@@ -75,7 +78,6 @@ export function useAppCommands(deps: AppCommandDeps) {
   const popupTerminalMounted = ref(false)
 
   function togglePopupTerminal(): void {
-    popupTerminalMounted.value = true
     popupTerminal.toggle({ sessionSlug: onScreenSessionSlug.value || undefined })
   }
 
@@ -86,9 +88,15 @@ export function useAppCommands(deps: AppCommandDeps) {
   function toggleLauncher(actionID: string): void {
     const command = commandById.value.get(launcherCommandID(actionID))
     if (command && !contextActive(command.context)) return
-    popupTerminalMounted.value = true
     popupTerminal.toggle({ launcher: actionID, sessionSlug: onScreenSessionSlug.value || undefined })
   }
+
+  // On the store, because an applet's hive.terminal asks it directly.
+  watch(popupTerminal.visible, (visible) => {
+    if (visible) popupTerminalMounted.value = true
+  })
+
+  const applets = useApplets()
 
   // Launchers are palette and keymap commands before any pop-up has opened.
   const launchers = useLaunchers()
@@ -197,6 +205,22 @@ export function useAppCommands(deps: AppCommandDeps) {
       toggleLauncher(launcher)
       return
     }
+    const applet = appletID(id)
+    if (applet !== null) {
+      const command = commandById.value.get(id)
+      if (!command || !contextActive(command.context)) return
+      const declared = appletDeclaredCommand(id)
+      // A page on screen takes it. Otherwise it needs a page to run in, so the applet opens.
+      if (declared !== null && applets.deliverCommand(applet, declared)) return
+      // The palette can open an applet over a hub view, whose own keys would keep
+      // acting on rows under it.
+      overlays.tasksOpen.value = false
+      overlays.activityOpen.value = false
+      overlays.actionRunsOpen.value = false
+      if (declared !== null) applets.openForCommand(applet, declared)
+      else applets.toggle(applet)
+      return
+    }
     const window = terminalWindowPosition(id)
     if (window !== null) {
       selectTerminalWindow(window)
@@ -237,6 +261,9 @@ export function useAppCommands(deps: AppCommandDeps) {
   }
 
   useAppPaletteRows(deps, runCommand, contextActive)
+  useCommands(applets.pageRows)
+  applets.setCommandRunner(runCommand)
+  watch(onScreenSessionSlug, applets.setRouteSession, { immediate: true })
 
   return { runCommand, contextActive, popupTerminalMounted }
 }

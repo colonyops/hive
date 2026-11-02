@@ -44,6 +44,7 @@ export interface PopupTerminalRequest {
   sessionSlug?: string
   dir?: string
   command?: string
+  env?: readonly string[]
   cols?: number
   rows?: number
 }

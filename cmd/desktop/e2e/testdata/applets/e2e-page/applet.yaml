@@ -1,0 +1,7 @@
+version: 1
+title: E2E page
+surfaces:
+  tab: {}
+  popup:
+    width: 700
+    height: 500

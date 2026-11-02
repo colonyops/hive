@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Report } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/layoutservice'
 import { toLayoutReport } from '../lib/layoutReport'
 import { createLogger } from '../lib/log'
-import { isPanelLayout, newPanelLayout, type PanelLayout } from '../lib/panelLayout'
+import { closeTab, isPanelLayout, newPanelLayout, panelWithTab, type PanelLayout } from '../lib/panelLayout'
 import { defineStore } from './defineStore'
 
 const log = createLogger('panel-layouts')
@@ -57,6 +57,20 @@ function definePanelLayouts(name: string, storageKey: string, kind: 'code' | 'ch
       if (kept.length !== Object.keys(layouts.value).length) layouts.value = Object.fromEntries(kept)
     }
 
+    /** Closes a tab in every session's layout, on screen or not. */
+    function closeTabEverywhere(tabId: string): void {
+      let changed = false
+      const next = Object.fromEntries(
+        Object.entries(layouts.value).map(([key, layout]) => {
+          const panel = isPanelLayout(layout) ? panelWithTab(layout, tabId) : undefined
+          if (!panel) return [key, layout]
+          changed = true
+          return [key, closeTab(layout, panel.id, tabId)]
+        }),
+      )
+      if (changed) layouts.value = next
+    }
+
     function markOnScreen(key: string): void {
       onScreen.value = key
     }
@@ -66,6 +80,7 @@ function definePanelLayouts(name: string, storageKey: string, kind: 'code' | 'ch
       apply,
       forget,
       retain,
+      closeTabEverywhere,
       onScreen,
       markOnScreen,
       /** The stored record as it is, for a reader that reports every layout. */

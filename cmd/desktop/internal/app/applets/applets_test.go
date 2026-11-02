@@ -1,0 +1,254 @@
+package applets
+
+import (
+	"os"
+	"path/filepath"
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const minimal = `
+version: 1
+title: Thing
+`
+
+func TestBuiltinsParse(t *testing.T) {
+	entries := loadBuiltins(t.TempDir())
+	require.Contains(t, entries, BuilderID)
+	body, err := ReadBuiltin(BuilderID, entries[BuilderID].Applet.Entry)
+	require.NoError(t, err)
+	assert.NotEmpty(t, body)
+}
+
+func TestParseDefaults(t *testing.T) {
+	applet, err := Parse("thing", []byte(minimal), "")
+	require.NoError(t, err)
+	assert.Equal(t, "thing", applet.ID)
+	assert.Equal(t, DefaultEntry, applet.Entry)
+}
+
+func TestParseRefuses(t *testing.T) {
+	for name, body := range map[string]string{
+		"wrong version": "version: 0\ntitle: T\n",
+		"no title":      "version: 1\n",
+		"wrong shape":   "version: 1\ntitle: T\nsurfaces: {titlebar: nope}\n",
+		"entry outside": "version: 1\ntitle: T\nentry: ../outside.html\n",
+		"command id":    "version: 1\ntitle: T\ncommands:\n  - {id: not.a.slug, title: C}\n",
+		"command twice": "version: 1\ntitle: T\ncommands:\n  - {id: c, title: C}\n  - {id: c, title: D}\n",
+		"command title": "version: 1\ntitle: T\ncommands:\n  - {id: c}\n",
+		"negative size": "version: 1\ntitle: T\nsurfaces: {popup: {width: -1}}\n",
+		"empty file":    "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Parse("thing", []byte(body), "")
+			require.Error(t, err)
+		})
+	}
+	_, err := Parse("Bad Name", []byte(minimal), "")
+	require.Error(t, err)
+}
+
+func TestWatchedFilesReloadPagesButNotTheirData(t *testing.T) {
+	assert.True(t, IsWatchedFile("/x/applet.yaml"))
+	assert.True(t, IsWatchedFile("/x/game.js"))
+	assert.False(t, IsWatchedFile("/x/matches.log"))
+	assert.False(t, IsWatchedFile("/x/.localstorage.json"))
+	assert.False(t, IsWatchedFile("/x/run.sh"))
+}
+
+func write(t *testing.T, root, id, body string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, id), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, id, FileName), []byte(body), 0o600))
+}
+
+func TestStoreKeepsLastGoodAndReportsTheError(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root, "")
+	write(t, root, "thing", minimal)
+	require.NoError(t, store.Reload())
+	applet, ok := store.Get("thing")
+	require.True(t, ok)
+	assert.Equal(t, filepath.Join(root, "thing"), applet.Dir)
+	revision := onDisk(store)[0].Revision
+	require.NotZero(t, revision)
+
+	write(t, root, "thing", "version: [")
+	require.NoError(t, store.Reload())
+	entries := onDisk(store)
+	require.Len(t, entries, 1)
+	require.Error(t, entries[0].Err)
+	assert.Equal(t, "Thing", entries[0].Applet.Title)
+	_, ok = store.Get("thing")
+	assert.True(t, ok, "the last good file keeps running")
+	assert.Equal(t, revision, entries[0].Revision, "a running page stays up")
+}
+
+func TestRevisionFollowsPagesButNotData(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root, "")
+	write(t, root, "thing", minimal)
+	write(t, root, "other", minimal)
+	require.NoError(t, store.Reload())
+	revisions := func() map[string]int64 {
+		out := map[string]int64{}
+		for _, entry := range store.List() {
+			out[entry.Applet.ID] = entry.Revision
+		}
+		return out
+	}
+	before := revisions()
+
+	stamp := func(name string, offset time.Duration) {
+		t.Helper()
+		path := filepath.Join(root, "thing", name)
+		require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))
+		at := time.UnixMilli(before["thing"]).Add(offset)
+		require.NoError(t, os.Chtimes(path, at, at))
+	}
+	stamp("scores.log", time.Hour)
+	require.NoError(t, store.Reload())
+	assert.Equal(t, before["thing"], revisions()["thing"], "a data file does not restart the page")
+
+	stamp("game.js", time.Hour)
+	require.NoError(t, store.Reload())
+	assert.Greater(t, revisions()["thing"], before["thing"])
+	assert.Equal(t, before["other"], revisions()["other"], "another applet is left alone")
+}
+
+func TestStoreListsAFileThatNeverLoaded(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root, "")
+	write(t, root, "broken", "version: 2")
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "unfinished"), 0o755))
+	require.NoError(t, store.Reload())
+
+	entries := onDisk(store)
+	require.Len(t, entries, 1, "a directory with no applet.yaml is not listed")
+	assert.Equal(t, "broken", entries[0].Applet.ID)
+	require.Error(t, entries[0].Err)
+	_, ok := store.Get("broken")
+	assert.False(t, ok, "nothing to run")
+}
+
+func TestStoreMissingRootHasOnlyBuiltins(t *testing.T) {
+	store := NewStore(filepath.Join(t.TempDir(), "absent"), "")
+	require.NoError(t, store.Reload())
+	assert.Empty(t, onDisk(store))
+	_, ok := store.Get(BuilderID)
+	assert.True(t, ok)
+}
+
+func TestADirectoryReplacesTheBuiltinOfItsName(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root, "")
+	write(t, root, BuilderID, minimal)
+	require.NoError(t, store.Reload())
+	applet, ok := store.Get(BuilderID)
+	require.True(t, ok)
+	assert.False(t, applet.Builtin)
+	assert.Equal(t, "Thing", applet.Title)
+}
+
+func TestABrokenFolderOverABuiltinReadsTheSameWithoutARestart(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root, "")
+	require.NoError(t, store.Reload())
+	write(t, root, BuilderID, "version: [")
+	require.NoError(t, store.Reload())
+
+	var entry Entry
+	for _, candidate := range store.List() {
+		if candidate.Applet.ID == BuilderID {
+			entry = candidate
+		}
+	}
+	require.Error(t, entry.Err)
+	assert.False(t, entry.Applet.Builtin, "the folder can be deleted")
+	assert.False(t, entry.Usable())
+}
+
+func TestSavedStorageDoesNotHideABuiltin(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root, "")
+	require.NoError(t, os.MkdirAll(filepath.Join(root, BuilderID), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, BuilderID, ".localstorage.json"), []byte("{}"), 0o600))
+	require.NoError(t, store.Reload())
+	applet, ok := store.Get(BuilderID)
+	require.True(t, ok)
+	assert.True(t, applet.Builtin)
+}
+
+func onDisk(store *Store) []Entry {
+	return slices.DeleteFunc(store.List(), func(entry Entry) bool { return entry.Applet.Builtin })
+}
+
+func TestParseSurfaces(t *testing.T) {
+	parse := func(t *testing.T, surfaces string) Surfaces {
+		t.Helper()
+		a, err := Parse("thing", []byte(minimal+"\nentry: app.html\nsurfaces:\n"+surfaces), "")
+		require.NoError(t, err)
+		return a.Surfaces
+	}
+	t.Run("a file that names none is a pop-up that fills the window", func(t *testing.T) {
+		a, err := Parse("thing", []byte(minimal), "")
+		require.NoError(t, err)
+		assert.Equal(t, Surfaces{Popup: &PopupSurface{}}, a.Surfaces)
+	})
+	t.Run("a file that names one is only there", func(t *testing.T) {
+		assert.Equal(t, Surfaces{Tab: &TabSurface{}}, parse(t, "  tab: {}\n"))
+	})
+	t.Run("a bare key asks for the surface", func(t *testing.T) {
+		assert.Equal(t, Surfaces{Tab: &TabSurface{}, Popup: &PopupSurface{}}, parse(t, "  tab:\n  popup:\n"))
+	})
+	t.Run("the pop-up keeps its size", func(t *testing.T) {
+		assert.Equal(t, &PopupSurface{Width: 640, Height: 400}, parse(t, "  popup: {width: 640, height: 400}\n").Popup)
+	})
+	t.Run("the title bar defaults to the applet's page and one icon button", func(t *testing.T) {
+		assert.Equal(t, &TitlebarSurface{Entry: "app.html", Width: DefaultTitlebarWidth}, parse(t, "  titlebar:\n").Titlebar)
+	})
+	t.Run("the title bar keeps its own page and width", func(t *testing.T) {
+		assert.Equal(t, &TitlebarSurface{Entry: "bar.html", Width: 120}, parse(t, "  titlebar: {entry: bar.html, width: 120}\n").Titlebar)
+	})
+	for name, tc := range map[string]struct{ surfaces, want string }{
+		"a page outside the directory": {"  titlebar: {entry: ../bar.html}\n", "surfaces.titlebar.entry"},
+		"a negative title bar width":   {"  titlebar: {width: -1}\n", "surfaces.titlebar.width"},
+		"a negative pop-up size":       {"  popup: {height: -1}\n", "surfaces.popup.width and height"},
+	} {
+		t.Run("refuses "+name, func(t *testing.T) {
+			_, err := Parse("thing", []byte(minimal+"\nsurfaces:\n"+tc.surfaces), "")
+			assert.ErrorContains(t, err, tc.want)
+		})
+	}
+	t.Run("the old top-level keys are only warnings", func(t *testing.T) {
+		a, err := Parse("thing", []byte(minimal+"\nwidth: 640\ntitlebar: {}\n"), "")
+		require.NoError(t, err)
+		assert.Equal(t, Surfaces{Popup: &PopupSurface{}}, a.Surfaces)
+		assert.Len(t, a.Warnings, 2)
+	})
+}
+
+func TestParseCommands(t *testing.T) {
+	applet, err := Parse("radio", []byte(minimal+"commands:\n  - id: next\n    title: Next station\n    icon: play\n    keywords: [skip]\n"), "")
+	require.NoError(t, err)
+	assert.Equal(t, []Command{{ID: "next", Title: "Next station", Icon: "play", Keywords: []string{"skip"}}}, applet.Commands)
+}
+
+func TestRevisionSeesAnEditInASubfolder(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "pages"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "node_modules"), 0o755))
+	page := filepath.Join(dir, "pages", "index.html")
+	require.NoError(t, os.WriteFile(page, []byte("x"), 0o600))
+	then := time.Now().Add(-time.Hour)
+	require.NoError(t, os.Chtimes(page, then, then))
+	assert.Equal(t, then.UnixMilli(), newestChange(dir))
+
+	skipped := filepath.Join(dir, "node_modules", "dep.js")
+	require.NoError(t, os.WriteFile(skipped, []byte("x"), 0o600))
+	assert.Equal(t, then.UnixMilli(), newestChange(dir), "a skipped folder does not reload the page")
+}

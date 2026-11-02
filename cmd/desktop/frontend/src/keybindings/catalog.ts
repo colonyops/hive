@@ -892,23 +892,52 @@ export function launcherActionID(commandID: string): string | null {
   return commandID.startsWith(LAUNCHER_PREFIX) ? commandID.slice(LAUNCHER_PREFIX.length) : null
 }
 
-const launcherCommands = ref<BindableCommand[]>([])
+const configuredCommands = ref<{ launchers: BindableCommand[]; applets: BindableCommand[] }>({
+  launchers: [],
+  applets: [],
+})
+
+// The namespace an applet's bindable command ids live in: `applet.docker` opens it
+// and `applet.radio.next` is a command its applet.yaml declares. In `settings.yaml`, so
+// permanent. Neither half can hold a dot, because both are slugs.
+const APPLET_PREFIX = 'applet.'
+
+export function appletCommandID(id: string, command?: string): string {
+  return APPLET_PREFIX + id + (command ? `.${command}` : '')
+}
+
+export function appletID(commandID: string): string | null {
+  return commandID.startsWith(APPLET_PREFIX) ? commandID.slice(APPLET_PREFIX.length).split('.')[0] : null
+}
+
+export function appletDeclaredCommand(commandID: string): string | null {
+  if (!commandID.startsWith(APPLET_PREFIX)) return null
+  return commandID.slice(APPLET_PREFIX.length).split('.')[1] ?? null
+}
+
+export function setAppletCommands(next: BindableCommand[]): void {
+  configuredCommands.value = { ...configuredCommands.value, applets: next }
+}
 
 /**
  * Replaces the launcher commands, which change whenever actions.yml does.
  * Called by useLaunchers; everything else reads `commands`.
  */
 export function setLauncherCommands(next: BindableCommand[]): void {
-  launcherCommands.value = next
+  configuredCommands.value = { ...configuredCommands.value, launchers: next }
 }
 
 /**
  * Every bindable command: the static catalog above followed by the configured
- * launchers. Launchers come last so a combo they share with a built-in resolves
+ * launchers and applets. They come last so a combo they share with a built-in resolves
  * to the built-in — a config file must not be able to take `mod+k` away from
  * the palette.
  */
-export const commands: ComputedRef<BindableCommand[]> = computed(() => [...commandCatalog, ...launcherCommands.value])
+export const commands: ComputedRef<BindableCommand[]> = computed(() => [
+  ...commandCatalog,
+  ...configuredCommands.value.launchers,
+  ...configuredCommands.value.applets,
+])
 
 /**
  * Every bindable command by id, built from `commands` (not `commandCatalog`)

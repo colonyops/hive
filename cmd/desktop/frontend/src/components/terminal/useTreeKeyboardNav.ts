@@ -10,11 +10,14 @@ export const sessionKey = (row: TerminalSessionRow): string => `s:${row.id}`
 export const windowKey = (row: TerminalSessionRow, windowId: string): string => `w:${row.id}:${windowId}`
 export const viewKey = (row: TerminalSessionRow, tabId: string): string => `v:${row.id}:${tabId}`
 
-// A row's id can hold a colon (a server's rows do), so the last one splits the key.
+// A row's id can hold a colon (a server's rows do), so the last one splits the key. An
+// applet's tab id holds one of its own, and an applet id never does.
 function parseKey(key: string): { kind: string; rowID: string; id: string } {
   const kind = key.slice(0, key.indexOf(':'))
   const rest = key.slice(kind.length + 1)
   if (kind === 's') return { kind, rowID: rest, id: '' }
+  const applet = kind === 'v' ? /:(applet:[^:]+)$/.exec(rest) : null
+  if (applet) return { kind, rowID: rest.slice(0, applet.index), id: applet[1] }
   const at = rest.lastIndexOf(':')
   return { kind, rowID: rest.slice(0, at), id: rest.slice(at + 1) }
 }

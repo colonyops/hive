@@ -3,6 +3,7 @@ import { useRoute } from 'vue-router'
 import { useDriveRoute } from '../../composables/useDriveRoute'
 import { useWailsEvent } from '../../composables/useWailsEvent'
 import { driveEventAuthor, type DriveAuthor } from '../../lib/drive'
+import { isAppletTabId, type AppletTabId } from '../../lib/appletTabs'
 import { viewKindOfWire, type SessionViewKind } from '../terminal/panelViews'
 
 /** The space the open session reads, and who it is as an author. */
@@ -15,10 +16,11 @@ export type SessionTabPlacement = 'behind' | 'beside' | 'below'
 
 /**
  * A tab an agent named, with the view already resolved from the wire's name to
- * the layout's kind. A terminal with no window is the chat's own, in Chats.
+ * the layout's kind. A terminal with no window is the chat's own, in Chats. An
+ * applet's tab goes by its tab id, because a session can hold several.
  */
 export interface TabRef {
-  view: SessionViewKind | 'terminal'
+  view: SessionViewKind | 'terminal' | AppletTabId
   window: string
 }
 
@@ -34,7 +36,7 @@ interface SessionLayoutPayload {
 }
 
 function tabRefOf(view: string | undefined, window: string | undefined): TabRef | null {
-  if (view === 'terminal') return { view, window: window ?? '' }
+  if (view === 'terminal' || isAppletTabId(view)) return { view, window: window ?? '' }
   const kind = viewKindOfWire(view)
   return kind ? { view: kind, window: window ?? '' } : null
 }
@@ -63,6 +65,9 @@ export function useSessionLayout(
     /** An agent's terminal. The window tab itself arrives with tmux's window list; this says where it goes. */
     openWindow?: (windowId: string, placement: SessionTabPlacement, anchor: TabRef | null) => void
     close: (view: SessionViewKind) => void
+    /** An agent's ask for an applet's tab. Go checked that the applet's file lists one. */
+    openApplet: (tab: AppletTabId, placement: SessionTabPlacement, anchor: TabRef | null) => void
+    closeApplet: (tab: AppletTabId) => void
     move: (tab: TabRef, placement: SessionTabPlacement, anchor: TabRef | null) => void
     focus: (tab: TabRef) => void
     closePanel: (tab: TabRef) => void
@@ -99,12 +104,17 @@ export function useSessionLayout(
           if (tab.window) handlers.openWindow?.(tab.window, placement, anchor)
           return
         }
+        if (isAppletTabId(tab.view)) {
+          handlers.openApplet(tab.view, placement, anchor)
+          return
+        }
         handlers.open(tab.view, payload.path || null, placement, anchor)
         return
       }
       case 'close':
+        if (isAppletTabId(tab.view)) handlers.closeApplet(tab.view)
         // Go kills the window itself, and its tab leaves with the window.
-        if (tab.view !== 'terminal') handlers.close(tab.view)
+        else if (tab.view !== 'terminal') handlers.close(tab.view)
         return
       case 'move':
         handlers.move(tab, placement, anchor)

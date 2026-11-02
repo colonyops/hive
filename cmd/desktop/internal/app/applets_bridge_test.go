@@ -1,0 +1,357 @@
+package app
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
+)
+
+const pageApplet = "version: 1\ntitle: Page\n"
+
+const (
+	reasonableWait = 5 * time.Second
+	pollEvery      = 20 * time.Millisecond
+)
+
+func pageHarness(t *testing.T) (*AppletsService, string) {
+	t.Helper()
+	service := appletHarness(t, "page", pageApplet)
+	dir := filepath.Dir(appletOnDisk(t, service, "page").Path)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte(`<!doctype html><html><HEAD lang="en"><title>x</title></HEAD></html>`), 0o600))
+	return service, dir
+}
+
+func TestStopEndsARunningExecThatIgnoresSIGTERMBeforeItReturns(t *testing.T) {
+	service, dir := pageHarness(t)
+	started := filepath.Join(dir, "started")
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		_, _ = service.Exec(t.Context(), "page", AppletExec{Command: `trap '' TERM; touch "` + started + `"; while :; do sleep 0.1; done`, TimeoutMillis: 60_000})
+	}()
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(started)
+		return err == nil
+	}, 5*time.Second, 10*time.Millisecond)
+
+	service.Stop()
+
+	select {
+	case <-finished:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Stop returned with the process still running, and the app exits right after it")
+	}
+}
+
+func TestStopWaitsForAProcessAClosedFrameIsStillEnding(t *testing.T) {
+	service, dir := pageHarness(t)
+	started := filepath.Join(dir, "started")
+	handle, err := service.Spawn(t.Context(), "page", AppletExec{Command: `trap '' TERM; touch "` + started + `"; while :; do sleep 0.1; done`})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(started)
+		return err == nil
+	}, reasonableWait, pollEvery)
+	spawn, err := service.spawn(handle)
+	require.NoError(t, err)
+
+	service.KillSpawns([]string{handle})
+	assert.Len(t, service.Processes(), 1, "it runs until the SIGKILL after the grace, so Settings still lists it")
+
+	service.Stop()
+
+	select {
+	case <-spawn.finished:
+	default:
+		t.Fatal("Stop returned before the SIGKILL, and the app exits right after it")
+	}
+}
+
+func TestAPageLoadingDuringASaveNeverReadsAnEmptyStore(t *testing.T) {
+	service, dir := pageHarness(t)
+	saved := `{"k":"` + strings.Repeat("x", 256*1024) + `"}`
+	require.NoError(t, service.SaveStorage("page", saved))
+
+	stop := make(chan struct{})
+	saving := make(chan struct{})
+	go func() {
+		defer close(saving)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				assert.NoError(t, service.SaveStorage("page", saved))
+			}
+		}
+	}()
+	for range 300 {
+		assert.JSONEq(t, `"`+strings.Repeat("x", 256*1024)+`"`, storageValue(t, service, dir))
+	}
+	close(stop)
+	<-saving
+}
+
+func storageValue(t *testing.T, service *AppletsService, dir string) string {
+	t.Helper()
+	var stored map[string]any
+	require.NoError(t, json.Unmarshal(service.readAppletStorage(dir), &stored))
+	raw, err := json.Marshal(stored["k"])
+	require.NoError(t, err)
+	return string(raw)
+}
+
+func TestAssetInjectsTheBridgeFirstAndCarriesStorage(t *testing.T) {
+	service, dir := pageHarness(t)
+	require.NoError(t, service.SaveStorage("page", `{"k":"</script><b>"}`))
+	asset, err := service.Asset("page", "")
+	require.NoError(t, err)
+	body := string(asset.Body)
+	assert.Contains(t, asset.ContentType, "text/html")
+	assert.Less(t, strings.Index(body, "window.hive"), strings.Index(body, "<title>"))
+	assert.NotContains(t, body, `"</script><b>"`, "stored text cannot end the script")
+	assert.Contains(t, body, `{"k":"`, "storage is carried")
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "game.js"), []byte("1"), 0o600))
+	asset, err = service.Asset("page", "game.js")
+	require.NoError(t, err)
+	assert.Equal(t, "1", string(asset.Body))
+
+	_, err = service.Asset("page", "../../etc/passwd")
+	assert.Equal(t, KindNotFound, KindOf(err))
+}
+
+func TestExecReportsExitCodeAsAResult(t *testing.T) {
+	service, dir := pageHarness(t)
+	result, err := service.Exec(t.Context(), "page", AppletExec{Command: `cat; echo "$WHO $HIVE_APPLET_DIR" >&2; exit 7`, Stdin: "in", Env: map[string]string{"WHO": "me"}})
+	require.NoError(t, err)
+	assert.Equal(t, 7, result.Code)
+	assert.Equal(t, "in", result.Stdout)
+	assert.Equal(t, "me "+dir, strings.TrimSpace(result.Stderr))
+}
+
+func readSpawnToEnd(t *testing.T, service *AppletsService, handle string) (out AppletOutput, stdout, stderr string) {
+	t.Helper()
+	for !out.Done {
+		var err error
+		out, err = service.SpawnRead(t.Context(), handle)
+		require.NoError(t, err)
+		stdout += out.Stdout
+		stderr += out.Stderr
+	}
+	return out, stdout, stderr
+}
+
+func TestSpawnStreamsTakesInputAndExits(t *testing.T) {
+	service, _ := pageHarness(t)
+	ctx := t.Context()
+	handle, err := service.Spawn(ctx, "page", AppletExec{Command: `read line; echo "got $line"; exit 3`})
+	require.NoError(t, err)
+	require.NoError(t, service.SpawnWrite(handle, "hello\n"))
+
+	out, stdout, _ := readSpawnToEnd(t, service, handle)
+	assert.Equal(t, "got hello\n", stdout)
+	assert.Equal(t, 3, out.Code)
+
+	_, err = service.SpawnRead(ctx, handle)
+	assert.Equal(t, KindNotFound, KindOf(err), "a finished process is forgotten")
+}
+
+func TestClosingAnAppletStopsItsProcesses(t *testing.T) {
+	service, dir := pageHarness(t)
+	ctx := t.Context()
+	marker := filepath.Join(dir, "started")
+	handle, err := service.Spawn(ctx, "page", AppletExec{Command: "touch " + marker + "; sleep 60"})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { _, err := os.Stat(marker); return err == nil }, reasonableWait, pollEvery)
+
+	service.KillSpawns([]string{handle})
+	require.Eventually(t, func() bool {
+		_, err := service.spawn(handle)
+		return KindOf(err) == KindNotFound
+	}, reasonableWait, pollEvery)
+}
+
+func TestFilesResolveAgainstTheAppletAndAnywhereElse(t *testing.T) {
+	service, dir := pageHarness(t)
+	require.NoError(t, service.WriteFile("page", "sub/notes.txt", "hi"))
+	got, err := service.ReadFile("page", "sub/notes.txt")
+	require.NoError(t, err)
+	assert.Equal(t, "hi", got)
+	assert.FileExists(t, filepath.Join(dir, "sub", "notes.txt"))
+
+	outside := filepath.Join(t.TempDir(), "out.txt")
+	require.NoError(t, service.WriteFile("page", outside, "free"))
+	got, err = service.ReadFile("page", outside)
+	require.NoError(t, err)
+	assert.Equal(t, "free", got)
+}
+
+func TestServerBuildServesNoPages(t *testing.T) {
+	service, _ := pageHarness(t)
+	service.pages = false
+	ctx := t.Context()
+
+	_, err := service.Asset("page", "")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = service.Exec(ctx, "page", AppletExec{Command: "true"})
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = service.Spawn(ctx, "page", AppletExec{Command: "true"})
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = service.BridgeToken("page")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = service.ReadFile("page", "index.html")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	assert.Equal(t, KindUnavailable, KindOf(service.WriteFile("page", "x", "y")))
+	_, err = service.Context(ctx, "page", "")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+
+	list := service.List(ctx)
+	require.Len(t, list, 1, "a built-in is not listed where it cannot open")
+	assert.False(t, list[0].Runnable)
+	assert.Equal(t, appletPagesUnavailable, list[0].Error)
+}
+
+func TestAPageCarriesTheBridgeTokenAndOtherFilesDoNot(t *testing.T) {
+	service, dir := pageHarness(t)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "game.js"), []byte("1"), 0o600))
+	token, err := service.BridgeToken("page")
+	require.NoError(t, err)
+	assert.NotEmpty(t, token)
+	again, err := service.BridgeToken("page")
+	require.NoError(t, err)
+	assert.Equal(t, token, again, "a second page of the applet holds the same token")
+
+	page, err := service.Asset("page", "")
+	require.NoError(t, err)
+	assert.True(t, page.HoldsToken)
+	assert.Contains(t, string(page.Body), token)
+
+	script, err := service.Asset("page", "game.js")
+	require.NoError(t, err)
+	assert.False(t, script.HoldsToken)
+}
+
+func TestAssetRefusesDotfiles(t *testing.T) {
+	service, _ := pageHarness(t)
+	require.NoError(t, service.SaveStorage("page", `{"secret":"1"}`))
+	_, err := service.Asset("page", ".localstorage.json")
+	assert.Equal(t, KindNotFound, KindOf(err))
+	_, err = service.Asset("page", "sub/.hidden/file.js")
+	assert.Equal(t, KindNotFound, KindOf(err))
+}
+
+func TestKillingASpawnLetsItsTrapRunAndReportsNoError(t *testing.T) {
+	service, dir := pageHarness(t)
+	ctx := t.Context()
+	ready := filepath.Join(dir, "ready")
+	cleaned := filepath.Join(dir, "cleaned")
+	handle, err := service.Spawn(ctx, "page", AppletExec{
+		Command: `trap 'touch ` + cleaned + `; exit 0' TERM; touch ` + ready + `; while :; do sleep 0.05; done`,
+	})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { _, err := os.Stat(ready); return err == nil }, reasonableWait, pollEvery)
+
+	require.NoError(t, service.SpawnKill(handle))
+
+	_, _, stderr := readSpawnToEnd(t, service, handle)
+	assert.FileExists(t, cleaned, "the shell got SIGTERM and a chance to clean up")
+	assert.NotContains(t, stderr, context.Canceled.Error(), "being stopped is not an error to report")
+}
+
+func TestASpawnOutlivesTheCallThatStartedIt(t *testing.T) {
+	service, _ := pageHarness(t)
+	callCtx, finish := context.WithCancel(t.Context())
+	handle, err := service.Spawn(callCtx, "page", AppletExec{Command: `read line; echo "got $line"`})
+	require.NoError(t, err)
+	finish()
+
+	require.NoError(t, service.SpawnWrite(handle, "still here\n"))
+	_, stdout, _ := readSpawnToEnd(t, service, handle)
+	assert.Equal(t, "got still here\n", stdout)
+}
+
+func TestDrainHoldsBackAHalfWrittenCharacter(t *testing.T) {
+	spawn := &appletSpawn{}
+	check := "\u2713"
+	spawn.stdout.WriteString("ok " + check[:2])
+	out, ready := spawn.drain()
+	assert.True(t, ready)
+	assert.Equal(t, "ok ", out.Stdout)
+
+	spawn.stdout.WriteString(check[2:])
+	out, _ = spawn.drain()
+	assert.Equal(t, check, out.Stdout)
+
+	spawn.stdout.WriteString(check[:1])
+	spawn.done = true
+	out, _ = spawn.drain()
+	assert.Equal(t, check[:1], out.Stdout, "a process that ended will not finish the character")
+}
+
+func TestBuiltinServesFromTheBinaryAndKeepsStorageOnDisk(t *testing.T) {
+	store := applets.NewStore(t.TempDir(), "")
+	require.NoError(t, store.Reload())
+	service := newAppletsService(testAppletDeps(store, func(context.Context, string) (string, error) { return "", nil }))
+	service.pages = true
+
+	asset, err := service.Asset(applets.BuilderID, "")
+	require.NoError(t, err)
+	assert.Contains(t, string(asset.Body), "window.__hiveToken", "a built-in page gets the bridge like any other")
+
+	require.NoError(t, service.SaveStorage(applets.BuilderID, `{"k":"v"}`))
+	asset, err = service.Asset(applets.BuilderID, "")
+	require.NoError(t, err)
+	assert.Contains(t, string(asset.Body), `"k":"v"`)
+}
+
+func TestProcessesListsWhatIsRunning(t *testing.T) {
+	service, _ := pageHarness(t)
+	handle, err := service.Spawn(t.Context(), "page", AppletExec{Command: "sleep 30"})
+	require.NoError(t, err)
+
+	running := service.Processes()
+	require.Len(t, running, 1)
+	assert.Equal(t, handle, running[0].Handle)
+	assert.Equal(t, "page", running[0].Applet)
+	assert.Equal(t, "sleep 30", running[0].Command)
+
+	service.KillSpawns([]string{handle})
+	require.Eventually(t, func() bool { return len(service.Processes()) == 0 }, reasonableWait, pollEvery)
+}
+
+func TestInjectBridgePlacement(t *testing.T) {
+	script := "<script>window.__hiveToken="
+	for name, tc := range map[string]struct{ page, before, after string }{
+		"a head":                 {"<!doctype html><html><head><title>t</title></head>", "<head>", "<title>"},
+		"no head keeps doctype":  {"<!doctype html><div>bar</div>", "<!doctype html>", "<div>"},
+		"a header is not a head": {"<!doctype html><script>hive.exec()</script><header class=x>", "<!doctype html>", "<script>hive.exec"},
+		"a head in a comment":    {"<!doctype html><!-- <head> --><p>hi", "<!-- <head> -->", "<p>"},
+		"a real head after one":  {"<!-- <head> --><!DOCTYPE html><HTML lang=en><HEAD id='a>b'><meta>", "<HEAD id='a>b'>", "<meta>"},
+		"nothing but text":       {"hello", "", "hello"},
+		"an unclosed comment":    {"<!-- never ends", "", "<!-- never"},
+		"a byte order mark":      {"\xef\xbb\xbf<!doctype html><p>", "<!doctype html>", "<p>"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out := string(injectBridge([]byte(tc.page), "tok", []byte("{}")))
+			at := strings.Index(out, script)
+			require.GreaterOrEqual(t, at, 0)
+			assert.True(t, strings.HasSuffix(out[:at], tc.before), "%q comes before the script in %q", tc.before, out[:at])
+			end := strings.LastIndex(out, "</script>")
+			if tc.after != "" {
+				assert.Contains(t, out[at:], tc.after)
+				assert.Less(t, at, strings.Index(out, tc.after), "the page's %q comes after the bridge", tc.after)
+			}
+			assert.Positive(t, end)
+		})
+	}
+}

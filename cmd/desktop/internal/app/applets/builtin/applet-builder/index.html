@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Applet Builder</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header><h1>Applet Builder</h1></header>
+    <main>
+      <section>
+        <h2>What should it look like?</h2>
+        <div id="styles" class="choices"></div>
+        <input id="reference" type="text" placeholder="Linear, an old Mac, a Teenage Engineering manual" spellcheck="false" autocomplete="off" hidden data-testid="builder-reference" />
+      </section>
+    </main>
+    <footer>
+      <p id="status">Copy this to an agent. It asks what the applet should do, then builds it.</p>
+      <button id="copy" type="button" data-testid="builder-copy">Copy prompt</button>
+    </footer>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

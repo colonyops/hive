@@ -44,8 +44,10 @@ type OpenPopupTerminal struct {
 	SessionSlug string
 	Dir         string
 	Command     string
-	Cols        int
-	Rows        int
+	// Env is added to what the terminal would otherwise get, as "NAME=value".
+	Env  []string
+	Cols int
+	Rows int
 }
 
 // PopupLauncher is one configured launcher, as much of it as a menu needs.
@@ -110,6 +112,7 @@ func (s *PopupTerminalsService) Open(ctx context.Context, req OpenPopupTerminal)
 	term, err := s.manager.Open(ctx, ptyterm.Spec{
 		Dir:     dir,
 		Command: req.Command,
+		Env:     req.Env,
 		Cols:    req.Cols,
 		Rows:    req.Rows,
 	})

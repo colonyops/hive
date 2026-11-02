@@ -81,7 +81,7 @@ Only the onboarding server has a webkit instance, so only
 `workflows/onboarding/` runs on webkit. A new workflow runs on chromium alone
 unless its server gets a webkit port too.
 
-`features-webkit` runs only `terminal/`, `drive/` and `flows/`, where WebKit's
+`features-webkit` runs only `terminal/`, `drive/`, `flows/` and `applets/`, where WebKit's
 pointer, selection and rendering behavior differs. To add a surface, add it to
 `testMatch` in `playwright.config.ts`. A test in those surfaces that does not
 touch pointer, selection, or rendering differences takes `tag.chromiumOnly`, so
@@ -100,7 +100,7 @@ files.
 
 | `server`       | Mock mode      | Browsers         | For                                                                |
 | -------------- | -------------- | ---------------- | ------------------------------------------------------------------ |
-| `feed`         | `feed`         | chromium, webkit | The default. Six seeded feed items, the fixture flow, a Drive space. |
+| `feed`         | `feed`         | chromium, webkit | The default. Six seeded feed items, the fixture flow, a Drive space, the applets in `testdata/applets`. |
 | `onboarding`   | `onboarding`   | chromium, webkit | First run: nothing connected, a fake device flow that grants once. |
 | `pipeline`     | `pipeline`     | chromium         | The source-to-commit flow and its `/_e2e/source-to-commit` probe.  |
 | `action-smoke` | `action-smoke` | chromium         | The actions journey, with a local bare Git remote.                 |
@@ -185,7 +185,7 @@ Import `test`, `expect` and `tag` from `fixtures/test.ts`. The other helpers:
 | `fixtures/servers.ts` | `serverURL(server, browserName)`                                                 |
 | `fixtures/paths.ts`   | `screenshotPath(name)` and `testdataPath(...parts)`, independent of spec depth   |
 | `fixtures/wails.ts`   | `bindingID(service, method)`, the numeric ID a mocked binding call must answer   |
-| `fixtures/terminal.ts` | `mockTerminalAPI(page, answers)` and `noAgents`, a mocked terminal HTTP API by path |
+| `fixtures/terminal.ts` | `mockTerminalAPI(page, answers)` and `noAgents`, a mocked terminal HTTP API by path. `mockTerminal(page, options)` adds sessions, windows and bindings on top |
 
 Name screenshots with `browserName`, not the project name.
 
