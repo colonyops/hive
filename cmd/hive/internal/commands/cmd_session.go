@@ -461,8 +461,10 @@ type lsSessionInfo struct {
 }
 
 // serverListTimeout bounds one server's session list, so an offline server
-// costs the list a few seconds instead of ssh's own timeout.
-const serverListTimeout = 5 * time.Second
+// costs the list a few seconds instead of ssh's own timeout. Each CLI run opens
+// a new ssh connection, about 14 round trips, so a shorter limit reports a
+// healthy server on a slow link as down.
+const serverListTimeout = 10 * time.Second
 
 // serverSessions is the sessions of one server, or why they could not be read.
 type serverSessions struct {
