@@ -30,6 +30,7 @@ func driveWorkDir(t *testing.T, h *Harness, name string) string {
 }
 
 func TestDriveLs(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	workDir := driveWorkDir(t, h, "drive-ls-repo")
 
@@ -50,6 +51,7 @@ func TestDriveLs(t *testing.T) {
 }
 
 func TestDriveLsAll(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	workDir := driveWorkDir(t, h, "drive-ls-all-repo")
 	target, err := os.Readlink(filepath.Join(workDir, ".hive"))
@@ -77,6 +79,7 @@ func TestDriveLsAll(t *testing.T) {
 }
 
 func TestDriveSpaces(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	workDir := driveWorkDir(t, h, "drive-spaces-repo")
 
@@ -94,6 +97,7 @@ func TestDriveSpaces(t *testing.T) {
 }
 
 func TestCtxAliasStillWorks(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	workDir := driveWorkDir(t, h, "drive-alias-repo")
 

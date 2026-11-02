@@ -10,6 +10,7 @@ import (
 )
 
 func TestPickHelp(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	out, err := h.Run("x", "pick", "--help")
 	require.NoError(t, err, "hive x pick --help should exit 0: %s", out)
@@ -21,6 +22,7 @@ func TestPickHelp(t *testing.T) {
 }
 
 func TestPickInvalidStatusFlag(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	out, err := h.Run("x", "pick", "--status", "bogus", "--print")
 	require.Error(t, err, "invalid --status should fail")
@@ -29,6 +31,7 @@ func TestPickInvalidStatusFlag(t *testing.T) {
 }
 
 func TestPickInvalidFormatFlag(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	out, err := h.Run("x", "pick", "--format", "bogus", "--print")
 	require.Error(t, err, "invalid --format should fail")

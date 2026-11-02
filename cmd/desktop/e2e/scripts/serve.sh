@@ -164,7 +164,10 @@ start_server() {
   local mode="$1" port="$2" name="$3"
   local data_dir="${E2E_DATA_ROOT}/${name}"
   local config_home="${data_dir}/config"
-  mkdir -p "${data_dir}" "${config_home}"
+  # A server's sessions land on its own tmux server, so two groups cannot collide
+  # on a session name. tmux falls back to /tmp when this directory is missing.
+  local tmux_dir="${data_dir}/tmux"
+  mkdir -p "${data_dir}" "${config_home}" "${tmux_dir}"
   prepare_server_files "${data_dir}" "${mode}" "${name}"
   if [[ ! -f "${data_dir}/hive-e2e.yaml" ]]; then
     cat >"${data_dir}/hive-e2e.yaml" <<EOF
@@ -176,7 +179,7 @@ EOF
   if [[ "${mode}" == "onboarding" ]]; then
     env -u HIVE_DESKTOP_FLOWS_DIR -u HIVE_DESKTOP_ACTIONS_PATH \
       HIVE_DESKTOP_DATA_DIR="${data_dir}" HIVE_DESKTOP_HIVE_DATA_DIR="${data_dir}" \
-      XDG_CONFIG_HOME="${config_home}" \
+      XDG_CONFIG_HOME="${config_home}" TMUX_TMPDIR="${tmux_dir}" \
       HIVE_DESKTOP_DEVELOPMENT_MOCKS_MODE="${mode}" WAILS_SERVER_PORT="${port}" \
       cmd/desktop/bin/hive-desktop-server &
   else
@@ -196,7 +199,7 @@ EOF
       HIVE_DESKTOP_HIVE_DATA_DIR="${data_dir}" \
       HIVE_DESKTOP_HTTP_PORT=0 \
       HIVE_CONFIG="${data_dir}/hive-e2e.yaml" \
-      XDG_CONFIG_HOME="${config_home}" \
+      XDG_CONFIG_HOME="${config_home}" TMUX_TMPDIR="${tmux_dir}" \
       HIVE_DESKTOP_DEVELOPMENT_MOCKS_MODE="$([[ "${mode}" == "action-seed" ]] && echo action-smoke || echo "${mode}")" \
       HIVE_DESKTOP_FLOWS_DIR="${data_dir}/fixtures/flows" \
       HIVE_DESKTOP_ACTIONS_PATH="${action_path}" \
@@ -224,23 +227,34 @@ wait_ready() {
   exit 1
 }
 
-# Ports must match fixtures/servers.ts. The chromium feed server starts last
-# because playwright.config.ts polls it as the readiness sentinel.
-for port in 8931 8932 8933 8934 8935 8936 8937 8938; do check_port_free "${port}"; done
-start_server onboarding 8932 onboarding-chromium
-start_server onboarding 8933 onboarding-webkit
-start_server feed 8934 feed-webkit
-start_server pipeline 8935 pipeline-smoke
-start_server action-smoke 8936 action-smoke
-# This server starts with the private actions.yml absent. It proves exact
-# first-run seeding without ever copying an action fixture.
-start_server action-seed 8937 action-seed
-# Only the remote lane can reach the ssh fixture.
-if [[ -n "${HIVE_DESKTOP_E2E_REMOTE:-}" ]]; then
-  start_server feed 8938 remote
-fi
+# Ports must match fixtures/servers.ts. A worker owns one group of servers, so
+# each group sits GROUP_PORT_STEP above the last. The chromium feed server of
+# group 0 starts last because playwright.config.ts polls it as the readiness
+# sentinel.
+GROUP_PORT_STEP=100
+groups="${HIVE_E2E_WORKERS:-1}"
+for ((group = 0; group < groups; group++)); do
+  offset=$((group * GROUP_PORT_STEP))
+  for port in 8931 8932 8933 8934 8935 8936 8937 8938; do check_port_free "$((port + offset))"; done
+  start_server onboarding "$((8932 + offset))" "onboarding-chromium-${group}"
+  start_server onboarding "$((8933 + offset))" "onboarding-webkit-${group}"
+  start_server feed "$((8934 + offset))" "feed-webkit-${group}"
+  start_server pipeline "$((8935 + offset))" "pipeline-smoke-${group}"
+  start_server action-smoke "$((8936 + offset))" "action-smoke-${group}"
+  # This server starts with the private actions.yml absent. It proves exact
+  # first-run seeding without ever copying an action fixture.
+  start_server action-seed "$((8937 + offset))" "action-seed-${group}"
+  # Only the remote lane can reach the ssh fixture, and it runs one worker. Its
+  # spec finds the ssh config under this server's name.
+  if [[ -n "${HIVE_DESKTOP_E2E_REMOTE:-}" && "${group}" == 0 ]]; then
+    start_server feed "$((8938 + offset))" remote
+  fi
+  if ((group > 0)); then
+    start_server feed "$((8931 + offset))" "feed-chromium-${group}"
+  fi
+done
 for i in "${!pids[@]}"; do wait_ready "${pids[$i]}" "${pid_names[$i]}" "${pid_ports[$i]}"; done
-start_server feed 8931 feed-chromium
+start_server feed 8931 feed-chromium-0
 last_index=$((${#pids[@]} - 1))
 wait_ready "${pids[$last_index]}" "${pid_names[$last_index]}" "${pid_ports[$last_index]}"
 

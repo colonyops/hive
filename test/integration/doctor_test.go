@@ -10,6 +10,7 @@ import (
 )
 
 func TestDoctorJSON(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	// Doctor may exit non-zero when checks fail, so use RunStdout + manual parse
@@ -27,6 +28,7 @@ func TestDoctorJSON(t *testing.T) {
 }
 
 func TestDoctorText(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	out, err := h.Run("doctor")

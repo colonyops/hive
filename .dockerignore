@@ -4,14 +4,11 @@
 *
 !dist/hive_linux_*/hive
 !dist/hive-drive-server_linux_*/hive-drive-server
+!dist/integration.test
 !cmd/hive/dev/config.dev.yaml
 !cmd/hive/dev/docker-entrypoint.sh
-!go.mod
-!go.sum
 !internal/
 !internal/**
-!pkg/
-!pkg/**
 !test/integration/
 !test/remote/
 !test/remote/**

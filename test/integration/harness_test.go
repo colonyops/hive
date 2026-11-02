@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -209,11 +208,13 @@ func (h *Harness) command(args ...string) *exec.Cmd {
 	return cmd
 }
 
-// testdataConfig resolves the path to the test config fixture relative to this source file.
+// testdataConfig resolves the test config fixture from the working directory.
+// The test binary compiles on the host and runs in a container, so a path from
+// runtime.Caller would name a file on the host.
 func testdataConfig() string {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("cannot resolve test source file path")
+	path, err := filepath.Abs(filepath.Join("testdata", "config.yaml"))
+	if err != nil {
+		panic(fmt.Sprintf("resolving test config: %v", err))
 	}
-	return filepath.Join(filepath.Dir(file), "testdata", "config.yaml")
+	return path
 }
