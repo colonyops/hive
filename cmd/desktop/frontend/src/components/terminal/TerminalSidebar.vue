@@ -17,7 +17,6 @@ import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
-import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import BaseIconBadge from '@hive/ui/components/ui/BaseIconBadge.vue'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
@@ -349,29 +348,6 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
     </SidebarToolbar>
     <SessionViewBar />
     <SessionViewDialogs />
-    <InlineError v-if="tree.serversError" class="mx-3 mt-2 shrink-0" testid="terminal-servers-error">{{
-      tree.serversError
-    }}</InlineError>
-    <InlineError
-      v-for="server in tree.offlineServers"
-      :key="server.name"
-      class="mx-3 mt-2 flex shrink-0 items-center gap-2"
-      :testid="`terminal-server-offline-${server.name}`"
-    >
-      <IconCircleAlert class="size-3.5 shrink-0" aria-hidden="true" />
-      <span class="min-w-0 flex-1 truncate text-text-2" :title="server.error">
-        <span class="font-medium text-text">{{ server.name }}</span> {{ server.state }} · {{ server.sessions }}
-        {{ server.sessions === 1 ? 'session' : 'sessions' }}
-      </span>
-      <BaseButton
-        variant="ghost"
-        size="xs"
-        class="shrink-0"
-        :data-testid="`terminal-server-retry-${server.name}`"
-        @click="tree.reloadServers"
-        >Retry</BaseButton
-      >
-    </InlineError>
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-4">
       <InlineError
         v-if="tree.sessionsError"

@@ -146,6 +146,7 @@ vi.mock('../../lib/terminalClient', () => ({
 vi.mock('../../composables/useTerminalWindows', () => ({
   useTerminalWindows: mocks.useTerminalWindows,
 }))
+vi.mock('../../composables/useNotify', () => ({ useNotify: () => ({ notify: vi.fn().mockResolvedValue(undefined) }) }))
 vi.mock('../../composables/useNewSession', () => ({
   useNewSession: () => ({ openBlank: mocks.openBlank, prefetch: vi.fn() }),
 }))
@@ -684,6 +685,7 @@ describe('TerminalMode', () => {
       },
       { server: 'down', ssh: 'down', state: 'offline', error: 'ssh: connect refused', sessions: [] },
     ])
+    useTerminalStatusBar().setShowStatusBar(true)
     const { wrapper } = await mountAvailable()
 
     const group = wrapper.get('[data-testid="terminal-repo-group"][data-repo="/home/hive/repo.git"]')
@@ -695,11 +697,12 @@ describe('TerminalMode', () => {
     expect(host.attributes('data-server')).toBe('box')
     expect(host.attributes('title')).toBe('box · ada@box')
 
-    const banner = wrapper.get('[data-testid="terminal-server-offline-down"]')
-    expect(banner.text()).toContain('down offline · 0 sessions')
-    expect(wrapper.find('[data-testid="terminal-server-offline-box"]').exists()).toBe(false)
+    const status = wrapper.get('[data-testid="terminal-server-status"]')
+    expect(status.attributes('aria-label')).toContain('down offline · 0 sessions')
+    expect(status.attributes('aria-label')).toContain('ssh: connect refused')
+    expect(status.attributes('aria-label')).not.toContain('box offline')
     const calls = mocks.ListServerSessions.mock.calls.length
-    await wrapper.get('[data-testid="terminal-server-retry-down"]').trigger('click')
+    await status.trigger('click')
     expect(mocks.ListServerSessions.mock.calls.length).toBe(calls + 1)
   })
 
@@ -725,6 +728,7 @@ describe('TerminalMode', () => {
       ],
     }
     mocks.ListServerSessions.mockResolvedValue([connected])
+    useTerminalStatusBar().setShowStatusBar(true)
     const { wrapper, router } = await mountAvailable()
     mocks.ListServerSessions.mockResolvedValue([{ ...connected, state: 'offline', error: 'refused', sessions: [] }])
     await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
@@ -736,7 +740,9 @@ describe('TerminalMode', () => {
     const row = wrapper.get('[data-slug="box:remote-work"]')
     expect(row.attributes('aria-disabled')).toBe('true')
     expect(row.find('[data-testid="terminal-session-trailing"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="terminal-server-offline-box"]').text()).toContain('box offline · 1 session')
+    expect(wrapper.get('[data-testid="terminal-server-status"]').attributes('aria-label')).toContain(
+      'box offline · 1 session',
+    )
 
     await row.trigger('click')
     await flushPromises()
@@ -808,16 +814,26 @@ describe('TerminalMode', () => {
       expect(storedRestore()?.slug).toBe('')
     })
 
-    it('names the state of an incompatible server in its banner', async () => {
+    it('names the state of an incompatible server in its status', async () => {
       mocks.ListServerSessions.mockResolvedValue([{ ...offline, state: 'incompatible' }])
+      useTerminalStatusBar().setShowStatusBar(true)
       const { wrapper } = await mountAvailable()
-      expect(wrapper.get('[data-testid="terminal-server-offline-box"]').text()).toContain('box incompatible')
+      expect(wrapper.get('[data-testid="terminal-server-status"]').attributes('aria-label')).toContain(
+        'box incompatible',
+      )
+    })
+
+    it('hides the dot when the status bar setting is off', async () => {
+      mocks.ListServerSessions.mockResolvedValue([{ ...offline }])
+      const { wrapper } = await mountAvailable()
+      expect(wrapper.find('[data-testid="terminal-server-status"]').exists()).toBe(false)
     })
 
     it('reports a server list that fails outright', async () => {
       mocks.ListServerSessions.mockRejectedValue(new Error('no fleet'))
+      useTerminalStatusBar().setShowStatusBar(true)
       const { wrapper } = await mountAvailable()
-      expect(wrapper.get('[data-testid="terminal-servers-error"]').text()).toContain('no fleet')
+      expect(wrapper.get('[data-testid="terminal-server-status"]').attributes('aria-label')).toContain('no fleet')
     })
   })
 
