@@ -24,14 +24,6 @@ import (
 // touches the commit protocol. Its whole job is what happens between a read
 // and a commit, and a fake store would only assert that the calls were made.
 
-func openTestStore(t *testing.T) *queries.DB {
-	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db
-}
-
 func testStores(db *queries.DB) *stores.Stores {
 	return stores.New(db, stores.Options{})
 }
@@ -231,7 +223,7 @@ func startEngine(t *testing.T, db *queries.DB, flows *flowSet, onCommit func()) 
 func TestEngineRoutesAnAppendIntoAFeed(t *testing.T) {
 	t.Parallel()
 
-	db := openTestStore(t)
+	db := queries.OpenForTest(t)
 	flows := &flowSet{}
 	flows.set(triageFlow("triage", true))
 
@@ -257,7 +249,7 @@ func TestEngineRoutesAnAppendIntoAFeed(t *testing.T) {
 func TestEngineWakeIsLevelTriggered(t *testing.T) {
 	t.Parallel()
 
-	db := openTestStore(t)
+	db := queries.OpenForTest(t)
 	flows := &flowSet{}
 	flows.set(triageFlow("triage", true))
 
@@ -280,7 +272,7 @@ func TestEngineWakeIsLevelTriggered(t *testing.T) {
 func TestEngineDropsARunnerWhenItsFlowIsDisabled(t *testing.T) {
 	t.Parallel()
 
-	db := openTestStore(t)
+	db := queries.OpenForTest(t)
 	flows := &flowSet{}
 	flows.set(triageFlow("triage", true))
 
@@ -309,7 +301,7 @@ func TestEngineDropsARunnerWhenItsFlowIsDisabled(t *testing.T) {
 func TestEngineReplayReconcilesMembershipOnReload(t *testing.T) {
 	t.Parallel()
 
-	db := openTestStore(t)
+	db := queries.OpenForTest(t)
 	flows := &flowSet{}
 	flows.set(triageFlow("triage", true))
 
@@ -350,7 +342,7 @@ func TestEngineReplayReconcilesMembershipOnReload(t *testing.T) {
 func TestEngineKeepsTheLastGoodRunnerWhenAReloadFails(t *testing.T) {
 	t.Parallel()
 
-	db := openTestStore(t)
+	db := queries.OpenForTest(t)
 	flows := &flowSet{}
 	flows.set(triageFlow("triage", true))
 
@@ -405,7 +397,7 @@ func TestEngineKeepsTheLastGoodRunnerWhenAReloadFails(t *testing.T) {
 func TestEngineSplitsOneMessageIntoPerEntityFeedItemsWithLifecycle(t *testing.T) {
 	t.Parallel()
 
-	db := openTestStore(t)
+	db := queries.OpenForTest(t)
 	flows := &flowSet{}
 	// The source payload carries a list of "series"; the function mints one item
 	// per series, keyed by name, preserving Topic so the feed reconciles them
@@ -447,7 +439,7 @@ return msg.Payload.result.map(function (s) {
 func TestEngineStopWithoutStart(t *testing.T) {
 	t.Parallel()
 
-	db := openTestStore(t)
+	db := queries.OpenForTest(t)
 	st := testStores(db)
 	engine := runtime.NewEngine(runtime.EngineOptions{
 		Log: st.EventLog, Items: st.InboxItems, Commits: st.EventLog, KV: st.NodeKV,
@@ -462,7 +454,7 @@ func TestEngineStopWithoutStart(t *testing.T) {
 // the flow is cleared.
 func TestEngineInstallReconcilesNodeKV(t *testing.T) {
 	t.Parallel()
-	db := openTestStore(t)
+	db := queries.OpenForTest(t)
 	ctx := t.Context()
 
 	require.NoError(t, testStores(db).NodeKV.Set(ctx, "triage", "fn", "seen", `1`, 0))

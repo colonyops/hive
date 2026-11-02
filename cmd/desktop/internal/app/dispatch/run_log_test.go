@@ -14,6 +14,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 )
 
@@ -90,7 +91,7 @@ func shellAction(id, command string) actions.Action {
 
 func TestWorker_RecordsShellOutputAndOutcomeInTheRunLog(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 	worker := NewWorker(st.OutputCommands, fakeActionLister{"build": shellAction("build", "echo out; echo err >&2; exit 3")},
 		NewDispatcher(map[string]Executor{"shell": NewShellExecutor(zerolog.Nop(), hostEnvironment{})}, nil), 0, zerolog.Nop())
@@ -117,7 +118,7 @@ func TestWorker_RecordsShellOutputAndOutcomeInTheRunLog(t *testing.T) {
 
 func TestWorker_RunLogIsReadableWhileTheCommandRuns(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 	worker := NewWorker(st.OutputCommands, fakeActionLister{"wait": shellAction("wait", "echo started; sleep 5")},
 		NewDispatcher(map[string]Executor{"shell": NewShellExecutor(zerolog.Nop(), hostEnvironment{})}, nil), 0, zerolog.Nop())
@@ -145,7 +146,7 @@ func TestWorker_RunLogIsReadableWhileTheCommandRuns(t *testing.T) {
 
 func TestWorker_RetryAttemptsLogUnderTheirOwnAttempt(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 	enqueueTestCommand(t, db, "flaky", "item-1", `{}`)
 	exec := &fakeExecutor{err: fmt.Errorf("not yet")}
@@ -181,7 +182,7 @@ func waitForWorkerWithin(t *testing.T, worker *Worker, d time.Duration) {
 
 func TestWorker_NodeCommandsWriteNoRunLogAndAreNotListed(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 	nodeID := models.NotifyActionID("flow/notify")
 	enqueueTestCommand(t, db, nodeID, "item-1", `{}`)

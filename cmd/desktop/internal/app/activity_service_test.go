@@ -16,9 +16,7 @@ import (
 
 func newTestActivityService(t *testing.T) (*ActivityService, <-chan events.ActivityAppended) {
 	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 	bus := newTestBus(t)
 	ch := subscribeEvents[events.ActivityAppended](t, bus)
 	return newActivityService(stores.New(db, stores.Options{}).ActivityEvents, bus, zerolog.Nop()), ch
@@ -47,9 +45,7 @@ func TestActivityService_AppendRoundTrip(t *testing.T) {
 
 func TestActivityService_ListNewestFirstAndCursor(t *testing.T) {
 	t.Parallel()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 	// A fixed, monotonically advancing clock keeps created_at deterministic;
 	// ordering itself is by the autoincrement id, not the timestamp.
 	now := time.Unix(0, 0)

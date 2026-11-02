@@ -49,7 +49,7 @@ func execSourceKeys(t *testing.T, db *queries.DB) []string {
 func TestExecSource_IngestsItsSnapshot(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	sources := stubSources{instances: []connector.Instance{
 		execInstance(t, `echo '[{"id":"a","title":"Alpha"},{"id":"b","title":"Beta"}]'`),
 	}}
@@ -65,7 +65,7 @@ func TestExecSource_IngestsItsSnapshot(t *testing.T) {
 func TestExecSource_BrokenCommandKeepsThePreviousSnapshot(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	good := stubSources{instances: []connector.Instance{execInstance(t, `echo '[{"id":"a","title":"Alpha"}]'`)}}
 	newTestProducer(db, good, time.Hour, nil, zerolog.Nop()).Tick(t.Context())
 	require.Equal(t, []string{"a"}, execSourceKeys(t, db))
@@ -88,7 +88,7 @@ func TestExecSource_BrokenCommandKeepsThePreviousSnapshot(t *testing.T) {
 func TestExecSource_EmptyArrayResolvesEveryItem(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	good := stubSources{instances: []connector.Instance{execInstance(t, `echo '[{"id":"a","title":"Alpha"}]'`)}}
 	newTestProducer(db, good, time.Hour, nil, zerolog.Nop()).Tick(t.Context())
 	require.Equal(t, []string{"a"}, execSourceKeys(t, db))

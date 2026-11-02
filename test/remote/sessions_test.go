@@ -280,8 +280,12 @@ func TestClientCLI_ADeleteFailsOnAStuckDaemonWithoutAChange(t *testing.T) {
 	serverA.Shell(t, "pkill -STOP -f '[h]ive daemon run'").Ok(t)
 	t.Cleanup(func() { serverA.Shell(t, "pkill -CONT -f '[h]ive daemon run'").Ok(t) })
 
-	failed := NewClient(t).Hive("session", "delete", "--force", serverA.Name+":"+created.ID).Fails(t)
+	client := NewClientWithServerSettings(t, "connect_timeout: 2s")
+	failed := client.Hive("session", "delete", "--force", serverA.Name+":"+created.ID).Fails(t)
 
+	// The message rounds the elapsed time, and a loaded machine runs late. Any
+	// of these is well under the 30s default.
+	assert.Regexp(t, `did not answer in [2-9]s`, failed.Stderr)
 	assert.Contains(t, failed.Stderr, "nothing changed")
 	serverA.Shell(t, "pkill -CONT -f '[h]ive daemon run'").Ok(t)
 	assert.Equal(t, "stuck-daemon", serverA.Show(t, created.ID).Name)
@@ -300,22 +304,28 @@ func TestClientCLI_NamesAStoppedServerInTheError(t *testing.T) {
 func TestClientCLI_TheRiskCheckOutlastsASlowGit(t *testing.T) {
 	created := serverA.CreateSession(t, "slow-git")
 	serverA.Shell(t, "touch "+shellQuote(created.Path+"/uncommitted")).Ok(t)
-	// The risk check runs git at least twice, so this passes the 10s read limit.
-	serverA.Root(t, `printf '#!/bin/sh\nsleep 6\nexec /usr/bin/git "$@"\n' >/usr/local/bin/git; chmod 755 /usr/local/bin/git`).Ok(t)
+	// The risk check runs git at least twice, so this passes the read limit.
+	serverA.Root(t, `printf '#!/bin/sh\nsleep 1\nexec /usr/bin/git "$@"\n' >/usr/local/bin/git; chmod 755 /usr/local/bin/git`).Ok(t)
 	t.Cleanup(func() { serverA.Root(t, "rm -f /usr/local/bin/git").Ok(t) })
 
-	refused := NewClient(t).Hive("session", "delete", serverA.Name+":"+created.ID).Fails(t)
+	client := NewClientWithServerSettings(t, "read_timeout: 1s")
+	refused := client.Hive("session", "delete", serverA.Name+":"+created.ID).Fails(t)
 
 	assert.Contains(t, refused.Stderr, "uncommitted changes")
 }
 
 func TestClientCLI_NamesTheServerWhenItsDaemonDiesDuringACreate(t *testing.T) {
-	serverA.Root(t, `printf '#!/bin/sh\nsleep 6\nexec /usr/bin/git "$@"\n' >/usr/local/bin/git; chmod 755 /usr/local/bin/git`).Ok(t)
-	t.Cleanup(func() { serverA.Root(t, "rm -f /usr/local/bin/git").Ok(t) })
-	time.AfterFunc(3*time.Second, func() {
-		// The bracket keeps pkill from matching the shell that runs it.
-		serverA.Shell(t, "pkill -KILL -f '[h]ive daemon run'")
-	})
+	// The marker shows the create reached git, so the kill lands during the create.
+	serverA.Root(t, `rm -f /tmp/git-clone-started; printf '#!/bin/sh\ncase " $* " in *" clone "*) touch /tmp/git-clone-started;; esac\nsleep 6\nexec /usr/bin/git "$@"\n' >/usr/local/bin/git; chmod 755 /usr/local/bin/git`).Ok(t)
+	t.Cleanup(func() { serverA.Root(t, "rm -f /usr/local/bin/git /tmp/git-clone-started").Ok(t) })
+	killed := make(chan struct{})
+	t.Cleanup(func() { <-killed })
+	go func() {
+		defer close(killed)
+		// The bracket keeps pkill from matching the shell that runs it. With no
+		// clone there is no kill, so a late one cannot hit the next test.
+		serverA.Shell(t, `for i in $(seq 300); do if [ -e /tmp/git-clone-started ]; then exec pkill -KILL -f '[h]ive daemon run'; fi; sleep 0.1; done`)
+	}()
 
 	failed := NewClient(t).HiveOn(serverA, "session", "create", "--background", "--remote", tFixtureRepo, "daemon-dies").Fails(t)
 

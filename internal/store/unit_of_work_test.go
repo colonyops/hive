@@ -18,16 +18,14 @@ import (
 func TestStores_JoinAnAmbientUnitOfWork(t *testing.T) {
 	t.Parallel()
 
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 
 	sessions := NewSessionStore(database)
 	items := NewHCStore(database)
 	now := time.Now()
 	sentinel := errors.New("unit failed")
 
-	err = database.WithinTx(t.Context(), func(ctx context.Context, _ *db.DB) error {
+	err := database.WithinTx(t.Context(), func(ctx context.Context, _ *db.DB) error {
 		require.NoError(t, sessions.Save(ctx, session.Session{
 			ID: "sess-1", Name: "s", Path: "/tmp/s", State: session.StateActive, CreatedAt: now, UpdatedAt: now,
 		}))

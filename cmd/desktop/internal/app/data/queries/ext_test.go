@@ -12,14 +12,6 @@ import (
 	hivedb "github.com/colonyops/hive/internal/store/db"
 )
 
-func extTestDB(t *testing.T) *DB {
-	t.Helper()
-	db, err := Open(t.Context(), t.TempDir(), DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db
-}
-
 func countInboxItems(t *testing.T, db *DB) int {
 	t.Helper()
 	var n int
@@ -38,14 +30,14 @@ func insertItem(ctx context.Context, db *DB, externalID string) error {
 func TestCtx_BareContextReturnsTheReceiver(t *testing.T) {
 	t.Parallel()
 
-	db := extTestDB(t)
+	db := OpenForTest(t)
 	assert.Same(t, db, db.Ctx(t.Context()), "a context with no ambient transaction must not allocate a bound DB")
 }
 
 func TestCtx_AmbientTransactionReturnsABoundDB(t *testing.T) {
 	t.Parallel()
 
-	db := extTestDB(t)
+	db := OpenForTest(t)
 	require.NoError(t, db.WithinTx(t.Context(), func(ctx context.Context, tx *DB) error {
 		bound := db.Ctx(ctx)
 		require.NotSame(t, db, bound)
@@ -62,10 +54,8 @@ func TestCtx_AmbientTransactionReturnsABoundDB(t *testing.T) {
 func TestCtx_IgnoresAnotherDatabasesTransaction(t *testing.T) {
 	t.Parallel()
 
-	pipeline := extTestDB(t)
-	hive, err := hivedb.Open(t.TempDir(), hivedb.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = hive.Close() })
+	pipeline := OpenForTest(t)
+	hive := hivedb.OpenForTest(t)
 
 	require.NoError(t, hive.WithinTx(t.Context(), func(ctx context.Context, _ *hivedb.DB) error {
 		assert.Same(t, pipeline, pipeline.Ctx(ctx), "a hive.db transaction bound a desktop-pipeline.db query")
@@ -87,7 +77,7 @@ func TestCtx_IgnoresAnotherDatabasesTransaction(t *testing.T) {
 func TestWithinTx_JoinsRatherThanNesting(t *testing.T) {
 	t.Parallel()
 
-	db := extTestDB(t)
+	db := OpenForTest(t)
 	var inner int
 
 	err := db.WithinTx(t.Context(), func(ctx context.Context, outerDB *DB) error {
@@ -108,7 +98,7 @@ func TestWithinTx_JoinsRatherThanNesting(t *testing.T) {
 func TestWithinTx_NestedCommitsExactlyOnce(t *testing.T) {
 	t.Parallel()
 
-	db := extTestDB(t)
+	db := OpenForTest(t)
 	sentinel := errors.New("outer failed after the inner write")
 
 	err := db.WithinTx(t.Context(), func(ctx context.Context, outerDB *DB) error {
@@ -127,7 +117,7 @@ func TestWithinTx_NestedCommitsExactlyOnce(t *testing.T) {
 func TestWithinTx_ErrorRollsBackWithNoPartialWrite(t *testing.T) {
 	t.Parallel()
 
-	db := extTestDB(t)
+	db := OpenForTest(t)
 	sentinel := errors.New("half way through")
 
 	err := db.WithinTx(t.Context(), func(ctx context.Context, tx *DB) error {
@@ -142,7 +132,7 @@ func TestWithinTx_ErrorRollsBackWithNoPartialWrite(t *testing.T) {
 func TestWithinTx_SuccessCommits(t *testing.T) {
 	t.Parallel()
 
-	db := extTestDB(t)
+	db := OpenForTest(t)
 	require.NoError(t, db.WithinTx(t.Context(), func(ctx context.Context, tx *DB) error {
 		return insertItem(ctx, tx, "item-1")
 	}))
@@ -154,7 +144,7 @@ func TestWithinTx_SuccessCommits(t *testing.T) {
 func TestWithinTx_EntityMethodsUseOneConnection(t *testing.T) {
 	t.Parallel()
 
-	db := extTestDB(t)
+	db := OpenForTest(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	t.Cleanup(cancel)
 
@@ -172,7 +162,7 @@ func TestWithinTx_EntityMethodsUseOneConnection(t *testing.T) {
 func TestWithinTx_ReadSeesEarlierWrite(t *testing.T) {
 	t.Parallel()
 
-	db := extTestDB(t)
+	db := OpenForTest(t)
 	require.NoError(t, db.WithinTx(t.Context(), func(ctx context.Context, tx *DB) error {
 		require.NoError(t, insertItem(ctx, tx, "item-1"))
 		items, err := tx.ListUnarchivedInboxItemsByProfile(ctx, "flow-1")
@@ -189,7 +179,7 @@ func TestWithinTx_ReadSeesEarlierWrite(t *testing.T) {
 func TestWithinTx_ReleasesTheConnection(t *testing.T) {
 	t.Parallel()
 
-	db := extTestDB(t)
+	db := OpenForTest(t)
 	require.NoError(t, db.WithinTx(t.Context(), func(ctx context.Context, tx *DB) error {
 		return insertItem(ctx, tx, "item-1")
 	}))
@@ -198,4 +188,13 @@ func TestWithinTx_ReleasesTheConnection(t *testing.T) {
 	})
 
 	assert.Zero(t, db.Conn().Stats().InUse, "a committed and a rolled-back transaction must both release their connection")
+}
+
+func TestOpenForTest_GivesEachCallerAMigratedStoreOfItsOwn(t *testing.T) {
+	first, second := OpenForTest(t), OpenForTest(t)
+
+	require.NoError(t, insertItem(t.Context(), first, "only-in-first"))
+
+	assert.Equal(t, 1, countInboxItems(t, first))
+	assert.Zero(t, countInboxItems(t, second))
 }

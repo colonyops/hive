@@ -134,9 +134,7 @@ func TestStateResetRestoresFreshlySeededBaseline(t *testing.T) {
 
 	// The pipeline database now equals a freshly seeded instance — including
 	// restarted AUTOINCREMENT ids and event offsets.
-	fresh, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, fresh.Close()) })
+	fresh := queries.OpenForTest(t)
 	require.NoError(t, seedMockInboxItems(t.Context(), fresh, appstores.New(fresh, appstores.Options{}).EventLog))
 	assert.Equal(t, dumpStableState(t, fresh), dumpStableState(t, db))
 

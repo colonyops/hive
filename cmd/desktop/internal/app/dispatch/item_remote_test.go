@@ -13,6 +13,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
 )
@@ -123,7 +124,7 @@ func TestLaunchSessionExecutor_PostHookAndLogReportTheStoredRemote(t *testing.T)
 func TestNotifyTerminal_ItemRemoteUsesTheGenerator(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	flows := flowListerTest{flows: []flow.Flow{{
 		ID: "triage", Enabled: true,
 		Nodes: []flow.Node{{ID: "tell-me", Type: "notify", Name: "Tell me", Config: &flow.NotifyConfig{

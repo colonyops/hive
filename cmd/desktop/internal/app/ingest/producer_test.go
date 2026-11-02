@@ -158,14 +158,6 @@ func (r *activityRecorder) Record(_ context.Context, event activity.Event) {
 	r.events = append(r.events, event)
 }
 
-func openTestPipelineDB(t *testing.T) *queries.DB {
-	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db
-}
-
 type notifierFunc func(offset int64)
 
 func (f notifierFunc) PublishLogAppended(offset int64) { f(offset) }
@@ -194,7 +186,7 @@ func readFrom(db *queries.DB, ctx context.Context, offset int64, limit int) ([]m
 func TestProducer_Tick_AppendsMonotonicOffsets(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	src := &fakeSource{batches: [][]Msg{
 		{
 			{Topic: "source:flow/s1", Key: "a", Payload: []byte(`{"v":1}`)},
@@ -236,7 +228,7 @@ func TestProducer_Tick_AppendsMonotonicOffsets(t *testing.T) {
 func TestProducer_Tick_SummaryReportsSourcesAppendedFailed(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	ok := &fakeSource{batches: [][]Msg{{{Topic: "source:flow/s1", Key: "a", Payload: []byte(`{"v":1}`)}}}}
 	bad := &fakeSource{err: fmt.Errorf("fetch failed")}
 
@@ -253,7 +245,7 @@ func TestProducer_Tick_SummaryReportsSourcesAppendedFailed(t *testing.T) {
 func TestProducer_Tick_EmptySnapshot_WakesConsumer(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	src := &fakeSource{} // no batches configured: Produce emits nothing
 
 	woke := false
@@ -273,7 +265,7 @@ func TestProducer_Tick_EmptySnapshot_WakesConsumer(t *testing.T) {
 func TestProducer_Tick_SourceErrorDoesNotBlockOthers(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	failing := &fakeSource{err: fmt.Errorf("boom")}
 	ok := &fakeSource{batches: [][]Msg{{{Topic: "source:flow/ok", Key: "x", Payload: []byte(`{}`)}}}}
 
@@ -320,7 +312,7 @@ func (g gatedSource) Produce(ctx context.Context, _ func(Msg) error) error {
 func TestProducer_Tick_DrainsSourcesConcurrentlyUpToTheCap(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		db := openTestPipelineDB(t)
+		db := queries.OpenForTest(t)
 		var inFlight atomic.Int32
 		gate := make(chan struct{})
 		byID := map[string]connector.PullSource{}
@@ -406,7 +398,7 @@ func TestProducer_Tick_ConcurrentDrainsWriteOneAtATime(t *testing.T) {
 func TestProducer_DedupesUnchangedPayload(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	src := &fakeSource{batches: [][]Msg{
 		{{Topic: "source:flow/s1", Key: "a", Payload: []byte(`{"v":1}`)}}, // tick 1: new
 		{{Topic: "source:flow/s1", Key: "a", Payload: []byte(`{"v":1}`)}}, // tick 2: unchanged
@@ -439,7 +431,7 @@ func TestProducer_DedupesUnchangedPayload(t *testing.T) {
 func TestProducer_EmptyKeyNeverDeduped(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	src := &fakeSource{batches: [][]Msg{
 		{{Topic: "source:flow/s1", Key: "", Payload: []byte(`{"v":1}`)}},
 		{{Topic: "source:flow/s1", Key: "", Payload: []byte(`{"v":1}`)}},
@@ -511,7 +503,7 @@ func TestProducer_NoSourcesAppendsNothingAndDoesNotWake(t *testing.T) {
 func TestProducer_PrefetchFailureStillDrains(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	src := &fakeSource{batches: [][]Msg{{{Topic: "source:flow/s1", Key: "a", Payload: []byte(`{"v":1}`)}}}}
 	sources := sourcesOf(map[string]connector.PullSource{"flow/s1": src})
 	sources.prefetch = func(context.Context, []connector.Instance) error {
@@ -535,7 +527,7 @@ func TestProducer_StartStop(t *testing.T) {
 	// fake clock, so advancing time is deterministic: the ticker fires exactly
 	// as scheduled and the lifecycle assertion never races the scheduler.
 	synctest.Test(t, func(t *testing.T) {
-		db := openTestPipelineDB(t)
+		db := queries.OpenForTest(t)
 		src := &fakeSource{batches: [][]Msg{
 			{{Topic: "source:flow/s1", Key: "a", Payload: []byte(`{"v":1}`)}},
 		}}
@@ -571,7 +563,7 @@ func pullInstanceEvery(flowID, nodeID string, interval time.Duration, pull conne
 func TestProducer_MinInterval_SkipsUntilDue(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	hourly := &fakeSource{}
 	everyTick := &fakeSource{}
 	sources := stubSources{instances: []connector.Instance{
@@ -598,7 +590,7 @@ func TestProducer_MinInterval_SkipsUntilDue(t *testing.T) {
 func TestProducer_MinInterval_SkippingAppendsNoSnapshot(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	src := &fakeSource{batches: [][]Msg{{{Topic: "source:flow/s1", Key: "a", Payload: []byte(`{"v":1}`)}}}}
 	sources := stubSources{instances: []connector.Instance{pullInstanceEvery("flow", "s1", time.Hour, src)}}
 
@@ -621,7 +613,7 @@ func TestProducer_MinInterval_SkippingAppendsNoSnapshot(t *testing.T) {
 func TestProducer_Refresh_IgnoresTheCadenceFloor(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	src := &fakeSource{}
 	sources := stubSources{instances: []connector.Instance{pullInstanceEvery("flow", "hourly", time.Hour, src)}}
 
@@ -642,7 +634,7 @@ func TestProducer_Refresh_IgnoresTheCadenceFloor(t *testing.T) {
 func TestProducer_RepeatedFailureIsAnnouncedOnceAnHour(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	broken := &fakeSource{err: fmt.Errorf("exit status 1: gcx: not logged in")}
 
 	now := time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC)
@@ -668,7 +660,7 @@ func TestProducer_RepeatedFailureIsAnnouncedOnceAnHour(t *testing.T) {
 func TestProducer_FailureAfterRecoveryIsAnnouncedImmediately(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	flaky := &failingOnceSource{}
 
 	now := time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC)
@@ -708,7 +700,7 @@ func (f *failingOnceSource) Produce(context.Context, func(Msg) error) error {
 func TestProducer_ForgetsSourcesThatAreNoLongerConfigured(t *testing.T) {
 	t.Parallel()
 
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	broken := &fakeSource{err: fmt.Errorf("boom")}
 	sources := stubSources{instances: []connector.Instance{pullInstanceEvery("flow", "s1", time.Hour, broken)}}
 

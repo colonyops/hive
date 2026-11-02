@@ -19,9 +19,7 @@ func TestStore(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("save and get", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewSessionStore(database)
 
@@ -44,20 +42,16 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("get not found", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewSessionStore(database)
 
-		_, err = store.Get(ctx, "nonexistent")
+		_, err := store.Get(ctx, "nonexistent")
 		assert.ErrorIs(t, err, session.ErrNotFound, "got %v, want ErrNotFound", err)
 	})
 
 	t.Run("list", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewSessionStore(database)
 
@@ -79,9 +73,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("save updates existing", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewSessionStore(database)
 
@@ -104,9 +96,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("delete", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewSessionStore(database)
 
@@ -117,18 +107,16 @@ func TestStore(t *testing.T) {
 
 		require.NoError(t, store.Delete(ctx, "delete-me"), "Delete")
 
-		_, err = store.Get(ctx, "delete-me")
+		_, err := store.Get(ctx, "delete-me")
 		require.ErrorIs(t, err, session.ErrNotFound, "got %v, want ErrNotFound", err)
 	})
 
 	t.Run("delete not found", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewSessionStore(database)
 
-		err = store.Delete(ctx, "nonexistent")
+		err := store.Delete(ctx, "nonexistent")
 		require.ErrorIs(t, err, session.ErrNotFound, "got %v, want ErrNotFound", err)
 	})
 
@@ -137,9 +125,7 @@ func TestStore(t *testing.T) {
 	// corrupted candidates. There is no FindRecyclable on the store.
 
 	t.Run("metadata serialization", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewSessionStore(database)
 
@@ -161,9 +147,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("nil vs empty metadata", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewSessionStore(database)
 
@@ -211,9 +195,7 @@ func TestStore(t *testing.T) {
 
 func TestSessionStoreReplaceRecycled(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 	store := NewSessionStore(database)
 	now := time.Now()
 	row := func(id string, state session.State) session.Session {
@@ -223,7 +205,7 @@ func TestSessionStoreReplaceRecycled(t *testing.T) {
 	require.NoError(t, store.Save(t.Context(), row("active", session.StateActive)))
 
 	require.NoError(t, store.ReplaceRecycled(t.Context(), "recycled", row("next", session.StateActive)))
-	_, err = store.Get(t.Context(), "recycled")
+	_, err := store.Get(t.Context(), "recycled")
 	require.ErrorIs(t, err, session.ErrNotFound)
 	_, err = store.Get(t.Context(), "next")
 	require.NoError(t, err)
@@ -278,12 +260,10 @@ func TestSessionStoreUpdate_SerializesWritersOnSeparateConnections(t *testing.T)
 
 func TestSessionStoreUpdate_LeavesTheSessionAloneWhenTheEditFails(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 	store := NewSessionStore(database)
 
-	_, err = store.Update(t.Context(), "missing", func(*session.Session) error { return nil })
+	_, err := store.Update(t.Context(), "missing", func(*session.Session) error { return nil })
 	require.ErrorIs(t, err, session.ErrNotFound)
 
 	now := time.Now()

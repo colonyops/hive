@@ -119,12 +119,22 @@ type Client struct {
 
 func NewClient(t *testing.T) *Client {
 	t.Helper()
+	return NewClientWithServerSettings(t)
+}
+
+// NewClientWithServerSettings adds YAML lines to each server's config entry,
+// such as "connect_timeout: 2s".
+func NewClientWithServerSettings(t *testing.T, settings ...string) *Client {
+	t.Helper()
 	dir := t.TempDir()
 	config := filepath.Join(dir, "config.yaml")
 	var servers strings.Builder
 	servers.WriteString("servers:\n")
 	for _, s := range []Server{serverA, serverB} {
 		fmt.Fprintf(&servers, "  - name: %s\n    ssh: %s\n    ssh_config: %s\n", s.Name, s.Name, sshConfig)
+		for _, setting := range settings {
+			fmt.Fprintf(&servers, "    %s\n", setting)
+		}
 	}
 	require.NoError(t, os.WriteFile(config, []byte(servers.String()), 0o600))
 	return &Client{t: t, dataDir: filepath.Join(dir, "data"), config: config}

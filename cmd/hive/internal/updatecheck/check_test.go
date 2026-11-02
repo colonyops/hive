@@ -17,9 +17,7 @@ import (
 
 func newTestKVStore(t *testing.T) kv.KV {
 	t.Helper()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 	return store.NewKVStore(database)
 }
 

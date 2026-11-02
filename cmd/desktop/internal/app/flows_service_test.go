@@ -220,9 +220,7 @@ func TestFlowsServiceStoreMarkImageRejectsBadInput(t *testing.T) {
 
 func TestFlowsServiceDeleteFlowPurgesPipelineStateAndRetriesMissingFiles(t *testing.T) {
 	t.Parallel()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	st := stores.New(db, stores.Options{})
 	service := testFlowsService(t, FlowsDeps{Flows: flows, Stores: st, Creds: seededCreds(t), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
@@ -251,9 +249,7 @@ func TestFlowsServiceDeleteFlowPurgesPipelineStateAndRetriesMissingFiles(t *test
 // retry has to be accepted even though nothing on disk backs it any more.
 func TestFlowsServiceDeleteRetriesAPurgeThatLeftRowsBehind(t *testing.T) {
 	t.Parallel()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	st := stores.New(db, stores.Options{})
 	service := testFlowsService(t, FlowsDeps{Flows: flows, Stores: st, Creds: seededCreds(t), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
@@ -329,9 +325,7 @@ func assertPurgeProfileRowCounts(t *testing.T, db *queries.DB, profileID string,
 
 func TestFlowsServicePurgeProfile_DeletesEveryOwnedRowAndLeavesOtherProfilesIntact(t *testing.T) {
 	t.Parallel()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 	service := testFlowsService(t, FlowsDeps{Flows: flow.NewFlowStore(t.TempDir(), nil), Stores: st, Creds: seededCreds(t), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
 
@@ -352,15 +346,13 @@ func TestFlowsServicePurgeProfile_DeletesEveryOwnedRowAndLeavesOtherProfilesInta
 // being half-purged.
 func TestFlowsServicePurgeProfile_RollsBackTheWholeTransactionOnFailure(t *testing.T) {
 	t.Parallel()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 	service := testFlowsService(t, FlowsDeps{Flows: flow.NewFlowStore(t.TempDir(), nil), Stores: st, Creds: seededCreds(t), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
 
 	target := seedPurgeProfileRows(t, db, "p")
 
-	_, err = db.Conn().ExecContext(t.Context(), `DROP TABLE node_kv`)
+	_, err := db.Conn().ExecContext(t.Context(), `DROP TABLE node_kv`)
 	require.NoError(t, err)
 
 	require.Error(t, service.purgeProfile(t.Context(), "p"))
@@ -379,9 +371,7 @@ func TestFlowsServiceDeleteRemovesAProfileThatDoesNotParse(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "broken.yaml"), []byte("version: 1\nnodes: [\n"), 0o600))
 	flows := flow.NewFlowStore(dir, nil)
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 	service := testFlowsService(t, FlowsDeps{Flows: flows, Stores: st, Creds: seededCreds(t), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
 
@@ -392,9 +382,7 @@ func TestFlowsServiceDeleteRemovesAProfileThatDoesNotParse(t *testing.T) {
 func TestFlowsServiceDeleteReportsAnUnknownProfileAsNotFound(t *testing.T) {
 	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 	service := testFlowsService(t, FlowsDeps{Flows: flows, Stores: st, Creds: seededCreds(t), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
 
@@ -436,9 +424,7 @@ func TestFlowsServiceEnsureProfileMakesADefaultOnlyWhenThereAreNone(t *testing.T
 func TestFlowsServiceDeleteOfTheLastProfileLeavesADefaultBehind(t *testing.T) {
 	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 	service := testFlowsService(t, FlowsDeps{Flows: flows, Stores: st, Creds: credentials.NewMemoryStore(), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
 	created, err := service.Create(t.Context(), "Only one")

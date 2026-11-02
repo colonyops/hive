@@ -14,9 +14,7 @@ import (
 
 func TestMsgStore_PublishAndSubscribe(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -27,7 +25,7 @@ func TestMsgStore_PublishAndSubscribe(t *testing.T) {
 		Sender:  "test-sender",
 	}
 
-	_, err = store.Publish(ctx, msg, []string{"test.topic"})
+	_, err := store.Publish(ctx, msg, []string{"test.topic"})
 	require.NoError(t, err, "Publish failed")
 
 	messages, err := store.Subscribe(ctx, "test.topic", time.Time{})
@@ -41,22 +39,18 @@ func TestMsgStore_PublishAndSubscribe(t *testing.T) {
 
 func TestMsgStore_SubscribeNotFound(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
-	_, err = store.Subscribe(ctx, "nonexistent", time.Time{})
+	_, err := store.Subscribe(ctx, "nonexistent", time.Time{})
 	assert.ErrorIs(t, err, messaging.ErrTopicNotFound, "Subscribe error = %v, want ErrTopicNotFound", err)
 }
 
 func TestMsgStore_SubscribeSince(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -81,9 +75,7 @@ func TestMsgStore_SubscribeSince(t *testing.T) {
 
 func TestMsgStore_SubscribeWildcard(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -108,9 +100,7 @@ func TestMsgStore_SubscribeWildcard(t *testing.T) {
 
 func TestMsgStore_SubscribeAll(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -132,9 +122,7 @@ func TestMsgStore_SubscribeAll(t *testing.T) {
 
 func TestMsgStore_List(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -152,9 +140,7 @@ func TestMsgStore_List(t *testing.T) {
 
 func TestMsgStore_ListEmpty(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -166,9 +152,7 @@ func TestMsgStore_ListEmpty(t *testing.T) {
 
 func TestMsgStore_Retention(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 3)
 	ctx := context.Background()
@@ -194,9 +178,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("exact limit", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewMessageStore(database, 3)
 
@@ -215,9 +197,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 	})
 
 	t.Run("single message limit", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewMessageStore(database, 1)
 
@@ -237,9 +217,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 	})
 
 	t.Run("unlimited retention", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewMessageStore(database, 0)
 
@@ -260,9 +238,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 
 func TestMsgStore_Prune(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -284,9 +260,7 @@ func TestMsgStore_Prune(t *testing.T) {
 
 func TestMsgStore_MessageOrdering(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -310,9 +284,7 @@ func TestMsgStore_MessageOrdering(t *testing.T) {
 
 func TestMsgStore_WildcardOrdering(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -337,9 +309,7 @@ func TestMsgStore_WildcardOrdering(t *testing.T) {
 
 func TestMsgStore_Acknowledge(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -355,7 +325,7 @@ func TestMsgStore_Acknowledge(t *testing.T) {
 	require.Len(t, messages, 2, "Expected 2 messages, got %d", len(messages))
 
 	// Acknowledge first message
-	err = store.Acknowledge(ctx, "consumer-1", []string{messages[0].ID})
+	err := store.Acknowledge(ctx, "consumer-1", []string{messages[0].ID})
 	require.NoError(t, err, "Acknowledge failed")
 
 	// Consumer-1 should have 1 unread
@@ -372,35 +342,29 @@ func TestMsgStore_Acknowledge(t *testing.T) {
 
 func TestMsgStore_Acknowledge_EmptyConsumer(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
-	err = store.Acknowledge(ctx, "", []string{"msg-id"})
+	err := store.Acknowledge(ctx, "", []string{"msg-id"})
 	assert.Error(t, err, "Expected error for empty consumer_id")
 }
 
 func TestMsgStore_GetUnread_EmptyConsumer(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
-	_, err = store.GetUnread(ctx, "", "test.topic")
+	_, err := store.GetUnread(ctx, "", "test.topic")
 	assert.Error(t, err, "Expected error for empty consumer_id")
 }
 
 func TestMsgStore_GetUnread_Wildcard(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -426,9 +390,7 @@ func TestMsgStore_GetUnread_Wildcard(t *testing.T) {
 
 func TestMsgStore_GetUnread_NoMessages(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -441,16 +403,14 @@ func TestMsgStore_GetUnread_NoMessages(t *testing.T) {
 
 func TestMsgStore_PublishMultipleTopics(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	// Publish to multiple topics at once
 	msg := messaging.Message{Payload: "broadcast"}
-	_, err = store.Publish(ctx, msg, []string{"topic.a", "topic.b", "topic.c"})
+	_, err := store.Publish(ctx, msg, []string{"topic.a", "topic.b", "topic.c"})
 	require.NoError(t, err, "Publish failed")
 
 	// Verify message exists in all topics
@@ -467,9 +427,7 @@ func TestMsgStore_PublishMultipleTopics(t *testing.T) {
 
 func TestMsgStore_PublishWildcardExpansion(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -481,7 +439,7 @@ func TestMsgStore_PublishWildcardExpansion(t *testing.T) {
 
 	// Publish with wildcard pattern
 	msg := messaging.Message{Payload: "broadcast to inboxes"}
-	_, err = store.Publish(ctx, msg, []string{"agent.*.inbox"})
+	_, err := store.Publish(ctx, msg, []string{"agent.*.inbox"})
 	require.NoError(t, err, "Publish with wildcard failed")
 
 	// Verify broadcast reached both inboxes
@@ -508,9 +466,7 @@ func TestMsgStore_PublishWildcardExpansion(t *testing.T) {
 
 func TestMsgStore_AcknowledgeIdempotent(t *testing.T) {
 	t.Parallel()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
@@ -520,7 +476,7 @@ func TestMsgStore_AcknowledgeIdempotent(t *testing.T) {
 	messages, _ := store.Subscribe(ctx, "test.topic", time.Time{})
 
 	// Acknowledge same message twice
-	err = store.Acknowledge(ctx, "consumer-1", []string{messages[0].ID})
+	err := store.Acknowledge(ctx, "consumer-1", []string{messages[0].ID})
 	require.NoError(t, err, "First Acknowledge failed")
 
 	err = store.Acknowledge(ctx, "consumer-1", []string{messages[0].ID})

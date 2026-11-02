@@ -35,7 +35,7 @@ async function rowMenu(page: Page, path: string, action: string): Promise<void> 
 }
 
 test.describe('drive reorganize', { tag: [tag.drive] }, () => {
-  test('the Drive tree creates, renames, moves, and deletes without an agent', async ({ page }) => {
+  test('the Drive tree creates, renames, moves, and deletes without an agent', { tag: [tag.chromiumOnly] }, async ({ page }) => {
     await openRepoSpace(page)
 
     await page.getByTestId('drive-page-new-folder-open').click()

@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test'
 import { screenshotPath } from '../../../fixtures/paths.js'
 import { expect, tag, test } from '../../../fixtures/test.js'
 import { bindingID } from '../../../fixtures/wails.js'
+import { mockTerminalAPI, noAgents } from '../../../fixtures/terminal.js'
 
 // Server builds cannot run terminals, so the terminal control plane is mocked and
 // the tabs, the split and the drags are real. perf/session-tabs-scrollback.perf.ts
@@ -41,22 +42,10 @@ async function fixture(page: Page) {
     if (id !== undefined && id in answers) return route.fulfill({ json: answers[id] })
     return route.fallback()
   })
-  await page.route('**/api/terminal/**', async (route) => {
-    const path = new URL(route.request().url()).pathname.replace('/api/terminal/', '')
-    const headers = {
-      'Access-Control-Allow-Origin': route.request().headers().origin ?? '*',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    }
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
-    let answer: unknown = {}
-    if (path === 'attach') answer = { windows: WINDOWS }
-    else if (path === 'windows/list') answer = { sessions: { review: WINDOWS, other: WINDOWS } }
-    else if (path === 'agents/sessions' || path === 'agents/sessions/all') answer = { sessions: [] }
-    else if (path === 'agents/sessions/activity') answer = { items: [] }
-    else if (path === 'agents/workspaces') answer = { root: '/w', available: true, workspaces: [], presets: [], editor: { command: '', title: '' } }
-    else return route.fulfill({ status: 204, headers })
-    await route.fulfill({ json: answer, headers })
+  await mockTerminalAPI(page, {
+    ...noAgents,
+    attach: { windows: WINDOWS },
+    'windows/list': { sessions: { review: WINDOWS, other: WINDOWS } },
   })
   await page.routeWebSocket('**/api/terminal/stream?*', () => {})
   await page.goto('/#/terminal/review')
@@ -113,7 +102,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
   // tab lands in the wrong gap.
   test.use({ contextOptions: { reducedMotion: 'reduce' } })
 
-  test('opens each tab once, and restores a session after another', async ({ page, browserName }) => {
+  test('opens each tab once, and restores a session after another', { tag: [tag.chromiumOnly] }, async ({ page, browserName }) => {
     await fixture(page)
     await addTab(page, 'p0', 'Drive')
     await addTab(page, 'p0', 'Diff')
@@ -165,7 +154,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     })
   })
 
-  test('opens Diff from the counts in the status bar', async ({ page }) => {
+  test('opens Diff from the counts in the status bar', { tag: [tag.chromiumOnly] }, async ({ page }) => {
     await fixture(page)
     await page.getByTestId('session-status-diff').click()
     await expect(page.getByTestId('changes-view')).toBeVisible()
@@ -173,7 +162,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await expect(page.getByTestId('session-status-host')).toHaveCount(0)
   })
 
-  test('splits through the picker, and puts Terminal beside Diff', async ({ page, browserName }) => {
+  test('splits through the picker, and puts Terminal beside Diff', { tag: [tag.chromiumOnly] }, async ({ page, browserName }) => {
     await fixture(page)
     await page.getByTestId('panel-split-row-p0').click()
     const picker = page.getByTestId('panel-picker')
@@ -191,7 +180,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await expect(page.getByTestId('panel-p1')).toHaveCount(0)
   })
 
-  test('shows a second window beside the first, and a window keeps one tab', async ({ page }) => {
+  test('shows a second window beside the first, and a window keeps one tab', { tag: [tag.chromiumOnly] }, async ({ page }) => {
     await fixture(page)
     await page.getByTestId('panel-split-row-p0').click()
     await page.getByTestId('panel-picker-window-@2').click()
@@ -238,7 +227,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await expect(page.getByTestId('panel-tab-window:@1')).toHaveAttribute('data-shown', 'true')
   })
 
-  test('offers the same + menu on a session row and on a tab row', async ({ page }) => {
+  test('offers the same + menu on a session row and on a tab row', { tag: [tag.chromiumOnly] }, async ({ page }) => {
     await fixture(page)
     const items = () =>
       page
@@ -292,7 +281,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     expect(await tabIds(page, 'p1')).toEqual(['diff'])
   })
 
-  test('lists Drive, Diff and Tasks in the tree', async ({ page, browserName }) => {
+  test('lists Drive, Diff and Tasks in the tree', { tag: [tag.chromiumOnly] }, async ({ page, browserName }) => {
     await fixture(page)
     const rows = page.getByTestId('terminal-view-row')
     await expect(rows).toHaveCount(0)
@@ -391,7 +380,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await expect(page.locator('[data-testid="terminal-window-row"][data-window-id="@1"]')).toHaveAttribute('data-active', 'true')
   })
 
-  test('embeds the global Drive view in the tab', async ({ page, browserName }) => {
+  test('embeds the global Drive view in the tab', { tag: [tag.chromiumOnly] }, async ({ page, browserName }) => {
     await fixture(page)
     await addTab(page, 'p0', 'Drive')
     await expect(page.getByTestId('drive-page')).toBeVisible()
@@ -406,7 +395,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await expect(page.getByTestId('drive-page-sidebar')).toBeHidden()
   })
 
-  test('brings tabs back after a restart', async ({ page }) => {
+  test('brings tabs back after a restart', { tag: [tag.chromiumOnly] }, async ({ page }) => {
     await fixture(page)
     await addTab(page, 'p0', 'Drive')
     await addTab(page, 'p0', 'Diff')

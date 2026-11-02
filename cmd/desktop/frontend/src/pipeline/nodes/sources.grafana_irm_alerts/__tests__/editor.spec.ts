@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import Editor from '../editor.vue'
 import { defaults, validate, type Config } from '../config'
-import { chooseOption } from '@hive/ui/test-utils/select'
+import { connectAccounts, describeCredentialPicker } from '../../../__tests__/credentialPicker'
 
-const mocks = vi.hoisted(() => ({ List: vi.fn(), On: vi.fn() }))
+const mocks = vi.hoisted(() => ({ List: vi.fn() }))
 
 vi.mock(
   '../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice',
@@ -12,55 +12,33 @@ vi.mock(
     List: mocks.List,
   }),
 )
-vi.mock('@wailsio/runtime', () => ({
-  Events: { On: mocks.On },
-}))
-
-function connectedStacks(...accounts: string[]) {
-  mocks.List.mockResolvedValue([
-    {
-      key: 'grafana',
-      title: 'Grafana',
-      stability: 'stable',
-      provider: 'grafana',
-      types: ['sources.grafana_alerts', 'sources.grafana_irm_alerts', 'sources.grafana_metrics'],
-      accounts,
-      envOverride: false,
-    },
-  ])
-}
 
 function config(overrides: Partial<Config> = {}): Config {
   return { ...defaults, ...overrides }
 }
 
-beforeEach(() => {
-  vi.clearAllMocks()
-  mocks.On.mockReturnValue(() => {})
-  connectedStacks()
+const connect = connectAccounts(mocks.List, {
+  key: 'grafana',
+  title: 'Grafana',
+  stability: 'stable',
+  provider: 'grafana',
+  types: ['sources.grafana_alerts', 'sources.grafana_irm_alerts', 'sources.grafana_metrics'],
+  envOverride: false,
+})
+
+beforeEach(() => connect())
+
+describeCredentialPicker({
+  node: 'sources.grafana_irm_alerts',
+  Editor,
+  connect,
+  provider: 'grafana',
+  accounts: ['host-1', 'host-2'],
+  config: (credential) => ({ ...defaults, credential }),
+  emptyMessage: 'No Grafana stack is connected',
 })
 
 describe('sources.grafana_irm_alerts editor', () => {
-  it('offers the connected stacks and emits the choice', async () => {
-    connectedStacks('host-1', 'host-2')
-    const wrapper = mount(Editor, { props: { config: config({ credential: 'grafana/host-1' }) } })
-    await flushPromises()
-
-    await chooseOption(wrapper, 'sources.grafana_irm_alerts-editor-credential', 'grafana/host-2')
-    expect(wrapper.emitted('update:config')).toEqual([[{ credential: 'grafana/host-2', integration: '', team: '' }]])
-    wrapper.unmount()
-  })
-
-  it('falls back to a text input when no stack is connected', async () => {
-    const wrapper = mount(Editor, { props: { config: config() } })
-    await flushPromises()
-
-    const field = wrapper.get('[data-testid="sources.grafana_irm_alerts-editor-credential"]')
-    expect(field.element.tagName).toBe('INPUT')
-    expect(wrapper.text()).toContain('No Grafana stack is connected')
-    wrapper.unmount()
-  })
-
   it('emits the integration scope without disturbing the other fields', async () => {
     const wrapper = mount(Editor, { props: { config: config({ credential: 'grafana/host-1', team: 'T1' }) } })
     await flushPromises()

@@ -145,9 +145,7 @@ func TestSettingsServiceSetGithubSettingsPersistsAndApplies(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		t.Setenv(settings.EnvConfigDir, filepath.Join(t.TempDir(), "config"))
 		fetchers := ghsource.NewFetchers(ghclient.NewClient(), credentials.NewMemoryStore(), zerolog.Nop())
-		db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = db.Close() })
+		db := queries.OpenForTest(t)
 		source := &settingsServiceSource{}
 		st := stores.New(db, stores.Options{})
 		producer := ingest.NewProducer(ingest.ProducerDeps{

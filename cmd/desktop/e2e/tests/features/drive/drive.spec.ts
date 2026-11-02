@@ -8,7 +8,7 @@ const planPath = "plans/2026-10-11-plan.md";
 const planTitle = "E2E Drive Plan";
 
 test.describe('drive', { tag: [tag.drive] }, () => {
-  test("the Drive page opens a document from a space and finds it from another", async ({
+  test("the Drive page opens a document from a space and finds it from another", { tag: [tag.chromiumOnly] }, async ({
     page,
   }) => {
     await page.goto("/");

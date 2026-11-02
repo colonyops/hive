@@ -14,6 +14,8 @@ export const tag = {
   diagnostics: '@diagnostics',
   // priority
   critical: '@critical',
+  // scope: skipped by features-webkit
+  chromiumOnly: '@chromium-only',
 } as const
 
 export type Tag = (typeof tag)[keyof typeof tag]

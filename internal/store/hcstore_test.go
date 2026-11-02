@@ -14,9 +14,7 @@ import (
 func TestHCStore_ListItemsBySessionFilter(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -50,9 +48,7 @@ func TestHCStore_ListItemsBySessionFilter(t *testing.T) {
 func TestHCStore_AddComment_and_ListComments(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -82,9 +78,7 @@ func TestHCStore_AddComment_and_ListComments(t *testing.T) {
 func TestHCStore_UpdateItem_noAutoComment(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -98,7 +92,7 @@ func TestHCStore_UpdateItem_noAutoComment(t *testing.T) {
 	}}))
 
 	status := hc.StatusInProgress
-	_, err = store.UpdateItem(ctx, "item-1", hc.ItemUpdate{Status: &status})
+	_, err := store.UpdateItem(ctx, "item-1", hc.ItemUpdate{Status: &status})
 	require.NoError(t, err)
 
 	// UpdateItem must not auto-create comments.
@@ -110,9 +104,7 @@ func TestHCStore_UpdateItem_noAutoComment(t *testing.T) {
 func TestHCStore_PruneRemovesDescendantsOfPrunedRoot(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -198,9 +190,7 @@ func TestHCStore_PruneRemovesDescendantsOfPrunedRoot(t *testing.T) {
 func TestHCStore_PruneDryRunIncludesDescendants(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	old := time.Now().Add(-2 * time.Hour)
@@ -245,9 +235,7 @@ func TestHCStore_PruneDryRunIncludesDescendants(t *testing.T) {
 func TestHCStore_NextItem_returnsLeafTask(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -286,9 +274,7 @@ func TestHCStore_NextItem_returnsLeafTask(t *testing.T) {
 func TestHCStore_NextItem_returnsNotFoundWhenEmpty(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 
@@ -300,9 +286,7 @@ func TestHCStore_NextItem_returnsNotFoundWhenEmpty(t *testing.T) {
 func TestHCStore_NextItem_withEpicFilter(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -360,13 +344,11 @@ func TestHCStore_NextItem_withEpicFilter(t *testing.T) {
 func TestHCStore_GetItem_notFound(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 
-	_, err = store.GetItem(ctx, "nonexistent-id")
+	_, err := store.GetItem(ctx, "nonexistent-id")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, hc.ErrNotFound)
 }
@@ -374,9 +356,7 @@ func TestHCStore_GetItem_notFound(t *testing.T) {
 func TestHCStore_ListItems_EpicAndStatusFilter(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -436,9 +416,7 @@ func TestHCStore_ListItems_EpicAndStatusFilter(t *testing.T) {
 func TestHCStore_NextItem_ResumeInProgress(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -488,9 +466,7 @@ func TestHCStore_NextItem_ResumeInProgress(t *testing.T) {
 func TestHCStore_Blocked_ParentWithOpenChild(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -548,9 +524,7 @@ func TestHCStore_ListRepoKeys(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns distinct sorted repo keys", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewHCStore(database)
 		now := time.Now()
@@ -590,9 +564,7 @@ func TestHCStore_ListRepoKeys(t *testing.T) {
 	})
 
 	t.Run("returns empty slice when no items exist", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewHCStore(database)
 
@@ -602,9 +574,7 @@ func TestHCStore_ListRepoKeys(t *testing.T) {
 	})
 
 	t.Run("excludes items with empty repo_key", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewHCStore(database)
 		now := time.Now()
@@ -638,9 +608,7 @@ func TestHCStore_ListRepoKeys(t *testing.T) {
 func TestHCStore_PruneScopesCommentsToStatusesAndItemUpdatedAt(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -731,9 +699,7 @@ func TestHCStore_PruneScopesCommentsToStatusesAndItemUpdatedAt(t *testing.T) {
 func TestHCStore_DeleteItemCascadesToDescendants(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -747,7 +713,7 @@ func TestHCStore_DeleteItemCascadesToDescendants(t *testing.T) {
 	}
 	require.NoError(t, store.CreateItems(ctx, items))
 
-	err = store.DeleteItem(ctx, "epic-1")
+	err := store.DeleteItem(ctx, "epic-1")
 	require.NoError(t, err)
 
 	remaining, err := store.ListItems(ctx, hc.ListFilter{})
@@ -759,9 +725,7 @@ func TestHCStore_DeleteItemCascadesToDescendants(t *testing.T) {
 func TestHCStore_DeleteItemCascadesComments(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() { _ = database.Close() }()
+	database := db.OpenForTest(t)
 
 	store := NewHCStore(database)
 	now := time.Now()
@@ -775,7 +739,7 @@ func TestHCStore_DeleteItemCascadesComments(t *testing.T) {
 	require.NoError(t, store.AddComment(ctx, hc.Comment{ID: "c1", ItemID: "epic-1", Message: "epic comment", CreatedAt: now}))
 	require.NoError(t, store.AddComment(ctx, hc.Comment{ID: "c2", ItemID: "task-1", Message: "task comment", CreatedAt: now}))
 
-	err = store.DeleteItem(ctx, "epic-1")
+	err := store.DeleteItem(ctx, "epic-1")
 	require.NoError(t, err)
 
 	epicComments, err := store.ListComments(ctx, "epic-1")

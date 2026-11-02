@@ -304,7 +304,7 @@ Use `mise run cli:container` for interactive manual testing in the same isolated
 
 What belongs in integration tests vs unit tests:
 - **Integration**: end-to-end CLI flag wiring, stdin/stdout behavior, multi-command workflows, session detection
-- **Unit**: business logic, validation rules, store behavior (using real SQLite via `db.Open(t.TempDir(), ...)`), service orchestration
+- **Unit**: business logic, validation rules, store behavior (using real SQLite via `db.OpenForTest(t)`), service orchestration
 
 #### Real-tmux Unit Tests
 

@@ -15,9 +15,7 @@ import (
 
 func newTestScheduleStore(t *testing.T) scheduleStore {
 	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 	return scheduleStore{schedules: stores.New(db, stores.Options{}).Schedules}
 }
 

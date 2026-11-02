@@ -83,7 +83,9 @@ unless its server gets a webkit port too.
 
 `features-webkit` runs only `terminal/`, `drive/` and `flows/`, where WebKit's
 pointer, selection and rendering behavior differs. To add a surface, add it to
-`testMatch` in `playwright.config.ts`.
+`testMatch` in `playwright.config.ts`. A test in those surfaces that does not
+touch pointer, selection, or rendering differences takes `tag.chromiumOnly`, so
+`features-webkit` skips it. If a WebKit bug slips past one, remove the tag.
 
 Keep edge cases at the lowest level that can see them. Component and store
 logic belongs in Vitest (`mise run desktop:test`), engine behaviour in Go tests
@@ -158,6 +160,7 @@ Tags live in `fixtures/tags.ts`. Use `tag.*` from there, never string literals.
   `@chats`, `@integrations`, `@notifications`, `@onboarding`, `@settings`,
   `@diagnostics`
 - Priority: `@critical`
+- Scope: `@chromium-only`, on a single test
 
 Put the tags on the file's `test.describe`; add a surface tag to a single test
 when that test covers a second surface (the palette tests in
@@ -182,6 +185,7 @@ Import `test`, `expect` and `tag` from `fixtures/test.ts`. The other helpers:
 | `fixtures/servers.ts` | `serverURL(server, browserName)`                                                 |
 | `fixtures/paths.ts`   | `screenshotPath(name)` and `testdataPath(...parts)`, independent of spec depth   |
 | `fixtures/wails.ts`   | `bindingID(service, method)`, the numeric ID a mocked binding call must answer   |
+| `fixtures/terminal.ts` | `mockTerminalAPI(page, answers)` and `noAgents`, a mocked terminal HTTP API by path |
 
 Name screenshots with `browserName`, not the project name.
 
