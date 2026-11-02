@@ -167,28 +167,26 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
   cursor: grabbing;
 }
 
-/* The tree's timing: fast enough to read as instant. A leaving tab drops out of
-   flow so its neighbours glide over through .panel-tab-move (FLIP) instead of
-   snapping. */
+/* The tree's timing: fast enough to read as instant. A leaving tab has to drop
+   out of flow for its neighbours to glide over through .panel-tab-move (FLIP).
+   It is hidden rather than absolute: in this flex row an absolute tab jumps to
+   the start of the row. */
 .panel-tab-enter-active,
-.panel-tab-leave-active,
 .panel-tab-move {
   transition:
     opacity 0.15s ease,
     transform 0.15s ease;
 }
-.panel-tab-enter-from,
-.panel-tab-leave-to {
+.panel-tab-enter-from {
   opacity: 0;
   transform: translateY(-4px);
 }
 .panel-tab-leave-active {
-  position: absolute;
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .panel-tab-enter-active,
-  .panel-tab-leave-active,
   .panel-tab-move {
     transition: none;
   }

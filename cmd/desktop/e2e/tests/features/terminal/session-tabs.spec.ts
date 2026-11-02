@@ -134,6 +134,37 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     expect(await tabIds(page, 'p0')).toEqual(['window:@1', 'window:@2', 'docs', 'diff', 'tasks'])
   })
 
+  test.describe('with animations on', () => {
+    test.use({ contextOptions: { reducedMotion: 'no-preference' } })
+
+    test('closes a tab where it sits', async ({ page }) => {
+      await fixture(page)
+      await addTab(page, 'p0', 'Drive')
+      await addTab(page, 'p0', 'Diff')
+      const tab = page.getByTestId('panel-tab-diff')
+      await expect(tab).toHaveAttribute('data-shown', 'true')
+      await page.waitForTimeout(200)
+      const start = (await tab.boundingBox())!.x
+
+      const positions = tab.evaluate(
+        (element) =>
+          new Promise<number[]>((resolve) => {
+            const seen: number[] = []
+            const sample = () => {
+              if (!element.isConnected) return resolve(seen)
+              const box = element.getBoundingClientRect()
+              if (box.width > 0) seen.push(box.x)
+              requestAnimationFrame(sample)
+            }
+            sample()
+          }),
+      )
+      await page.getByTestId('panel-tab-close-diff').click()
+      const drift = (await positions).map((x) => Math.abs(x - start))
+      expect(Math.max(...drift)).toBeLessThan(1)
+    })
+  })
+
   test('opens Diff from the counts in the status bar', async ({ page }) => {
     await fixture(page)
     await page.getByTestId('session-status-diff').click()
