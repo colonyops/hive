@@ -11,6 +11,7 @@ import (
 )
 
 func TestBatchCreate(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "batch-repo")
 
@@ -54,6 +55,7 @@ func TestBatchCreate(t *testing.T) {
 }
 
 func TestBatchWorktreeStrategy(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t).WithConfig(worktreeConfig("worktree"))
 	repo := createBareRepo(t, "batch-wt-repo")
 

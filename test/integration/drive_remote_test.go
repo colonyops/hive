@@ -32,6 +32,7 @@ func byPath(lines []map[string]any) map[string]map[string]any {
 }
 
 func TestDriveRemotePushPullShare(t *testing.T) {
+	t.Parallel()
 	server := NewHarness(t).StartDriveServer(t)
 
 	pusher := NewHarness(t).UseDriveServer(server)

@@ -13,6 +13,7 @@ import (
 )
 
 func TestWorkspaceListEmpty(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	out, err := h.Run("workspace", "list")
 	require.NoError(t, err, "workspace list should succeed: %s", out)
@@ -20,6 +21,7 @@ func TestWorkspaceListEmpty(t *testing.T) {
 }
 
 func TestWorkspaceListJSON(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	wsDir, repoDir := createWorkspaceRepo(t, "test-repo", "git@github.com:test/repo.git")
@@ -34,6 +36,7 @@ func TestWorkspaceListJSON(t *testing.T) {
 }
 
 func TestWorkspaceListTable(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	wsDir, _ := createWorkspaceRepo(t, "test-repo", "git@github.com:test/repo.git")

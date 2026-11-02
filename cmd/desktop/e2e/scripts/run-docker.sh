@@ -64,6 +64,7 @@ docker run --rm --init "${network[@]}" --ipc=host \
   --env PW_FAIL_ON_FLAKY \
   --env GITHUB_ACTIONS \
   --env HIVE_PERF_SCALE \
+  --env HIVE_E2E_WORKERS \
   ${remote[@]+"${remote[@]}"} \
   --volume "$(pwd)/cmd/desktop/e2e/test-results:/workspace/cmd/desktop/e2e/test-results" \
   --volume "$(pwd)/cmd/desktop/e2e/screenshots:/workspace/cmd/desktop/e2e/screenshots" \

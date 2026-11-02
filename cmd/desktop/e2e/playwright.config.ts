@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test'
+import { availableParallelism } from 'node:os'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serverURL } from './fixtures/servers.js'
@@ -7,11 +8,20 @@ const here = dirname(fileURLToPath(import.meta.url))
 const chromium = { browserName: 'chromium' as const }
 const webkit = { browserName: 'webkit' as const }
 
+// Each worker adds a browser and a group of Go servers, and past this the
+// container spends its time on timing jitter rather than on tests.
+const MAX_DEFAULT_WORKERS = 6
+
+// The remote lane has one spec, and its fixture holds one set of sessions.
+const workers =
+  Number(process.env.HIVE_E2E_WORKERS) ||
+  (process.env.HIVE_DESKTOP_E2E_REMOTE ? 1 : Math.min(MAX_DEFAULT_WORKERS, Math.max(1, availableParallelism() - 1)))
+
 export default defineConfig({
   timeout: 30_000,
-  // Tests share the servers, and some mutate a flow through a watcher, so a
-  // second worker could race another test's state.
-  workers: 1,
+  // A worker has its own group of servers (fixtures/servers.ts), so tests that
+  // mutate a flow through a watcher cannot race another worker's state.
+  workers,
   // Browsers and seven Go servers in one container leave some timing jitter;
   // a real regression still fails every attempt. The image sets CI=1.
   retries: process.env.CI ? 1 : 0,
@@ -33,6 +43,7 @@ export default defineConfig({
   webServer: {
     command: './scripts/serve.sh',
     cwd: here,
+    env: { HIVE_E2E_WORKERS: String(workers) },
     // serve.sh starts the chromium feed server last, so it doubles as the
     // readiness sentinel for every server.
     url: serverURL('feed', 'chromium'),

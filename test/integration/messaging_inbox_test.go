@@ -23,6 +23,7 @@ func sessionDir(t *testing.T, h *Harness) string {
 }
 
 func TestSubDefaultDoesNotAcknowledge(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("msg", "pub", "--topic", "test.noack", "--sender", "test", "noack msg")
@@ -42,6 +43,7 @@ func TestSubDefaultDoesNotAcknowledge(t *testing.T) {
 }
 
 func TestSubTail(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	for i, msg := range []string{"first", "second", "third", "fourth"} {
@@ -57,6 +59,7 @@ func TestSubTail(t *testing.T) {
 }
 
 func TestSubDeprecatedLastFlag(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	for _, msg := range []string{"a", "b", "c"} {
@@ -72,6 +75,7 @@ func TestSubDeprecatedLastFlag(t *testing.T) {
 }
 
 func TestSubSenderField(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("msg", "pub", "--topic", "test.sender", "--sender", "agent-foo", "hello")
@@ -84,6 +88,7 @@ func TestSubSenderField(t *testing.T) {
 }
 
 func TestSubWildcard(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("msg", "pub", "--topic", "wild.alpha", "--sender", "test", "msg-alpha")
@@ -104,6 +109,7 @@ func TestSubWildcard(t *testing.T) {
 }
 
 func TestSubAllTopics(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("msg", "pub", "--topic", "all.one", "--sender", "test", "one")
@@ -125,6 +131,7 @@ func TestSubAllTopics(t *testing.T) {
 }
 
 func TestWildcardPublish(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "wpub-repo")
 
@@ -176,6 +183,7 @@ func TestWildcardPublish(t *testing.T) {
 }
 
 func TestInboxUnreadTracking(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "unread-repo")
 
@@ -206,6 +214,7 @@ func TestInboxUnreadTracking(t *testing.T) {
 }
 
 func TestInboxAllShowsAcknowledged(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "inboxall-repo")
 
@@ -235,6 +244,7 @@ func TestInboxAllShowsAcknowledged(t *testing.T) {
 }
 
 func TestInboxDefaultDoesNotAcknowledge(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "inboxdflt-repo")
 
@@ -265,6 +275,7 @@ func TestInboxDefaultDoesNotAcknowledge(t *testing.T) {
 }
 
 func TestInboxWithSessionFlag(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "sessfl-repo")
 
@@ -296,6 +307,7 @@ func TestInboxWithSessionFlag(t *testing.T) {
 }
 
 func TestInboxTail(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "inboxtail-repo")
 
@@ -322,6 +334,7 @@ func TestInboxTail(t *testing.T) {
 }
 
 func TestPubFromStdin(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	out, err := h.RunWithStdin("stdin payload", "msg", "pub", "--topic", "test.stdin", "--sender", "test")
@@ -334,6 +347,7 @@ func TestPubFromStdin(t *testing.T) {
 }
 
 func TestPubWithMessageFlag(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("msg", "pub", "--topic", "test.mflag", "--sender", "test", "-m", "inline msg")
@@ -346,6 +360,7 @@ func TestPubWithMessageFlag(t *testing.T) {
 }
 
 func TestMessageFieldCompleteness(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("msg", "pub", "--topic", "test.fields", "--sender", "field-check", "field payload")
@@ -364,6 +379,7 @@ func TestMessageFieldCompleteness(t *testing.T) {
 }
 
 func TestMsgTopicCustomPrefix(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	out, err := h.RunStdout("msg", "topic", "--prefix", "custom")
@@ -374,6 +390,7 @@ func TestMsgTopicCustomPrefix(t *testing.T) {
 }
 
 func TestMsgTopicEmptyPrefix(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	out, err := h.RunStdout("msg", "topic", "--prefix", "")
@@ -384,6 +401,7 @@ func TestMsgTopicEmptyPrefix(t *testing.T) {
 }
 
 func TestPubToMultipleTopics(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("msg", "pub", "--topic", "multi.a", "--topic", "multi.b", "--sender", "test", "multi msg")

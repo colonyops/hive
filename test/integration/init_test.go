@@ -12,6 +12,7 @@ import (
 // TestInitHelp verifies that init is registered and its help text is reachable.
 // Mirrors TestDoctorText in doctor_test.go.
 func TestInitHelp(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	out, err := h.RunStdout("init", "--help")
 	// --help exits with code 0; RunStdout should succeed

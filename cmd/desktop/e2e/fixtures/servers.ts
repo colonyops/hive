@@ -1,4 +1,8 @@
-// Ports must match scripts/serve.sh.
+// Ports must match scripts/serve.sh. Each Playwright worker owns one group of
+// servers, so its tests cannot see another worker's state: a group's ports are
+// the ports below plus GROUP_PORT_STEP per group.
+export const GROUP_PORT_STEP = 100
+
 export type ServerName = 'feed' | 'onboarding' | 'pipeline' | 'action-smoke' | 'action-seed' | 'remote'
 
 type BrowserName = 'chromium' | 'webkit'
@@ -17,5 +21,8 @@ const ports: Record<ServerName, Partial<Record<BrowserName, number>>> = {
 export function serverURL(server: ServerName, browserName: string): string {
   const port = ports[server][browserName as BrowserName]
   if (!port) throw new Error(`scripts/serve.sh starts no ${server} server for ${browserName}`)
-  return `http://127.0.0.1:${port}`
+  // Playwright sets this in each worker. It stays below the worker count, which
+  // serve.sh starts one group per, and a replacement worker reuses it.
+  const group = Number(process.env.TEST_PARALLEL_INDEX ?? 0)
+  return `http://127.0.0.1:${port + group * GROUP_PORT_STEP}`
 }

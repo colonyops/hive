@@ -13,6 +13,7 @@ import (
 )
 
 func TestCtxInit(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "ctx-repo")
 
@@ -32,6 +33,7 @@ func TestCtxInit(t *testing.T) {
 }
 
 func TestCtxInitIdempotent(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "ctx-idem-repo")
 
@@ -50,6 +52,7 @@ func TestCtxInitIdempotent(t *testing.T) {
 }
 
 func TestCtxPrune(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "ctx-prune-repo")
 
@@ -66,6 +69,7 @@ func TestCtxPrune(t *testing.T) {
 }
 
 func TestCtxInitWithBaseDir(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	baseDir := filepath.Join(h.DataDir(), "custom-context")
 	require.NoError(t, os.MkdirAll(baseDir, 0o755))

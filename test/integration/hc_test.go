@@ -11,6 +11,7 @@ import (
 )
 
 func TestHCCreateSingle(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Auth Epic", "--type", "epic")
@@ -29,6 +30,7 @@ func TestHCCreateSingle(t *testing.T) {
 }
 
 func TestHCCreateEpic(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	lines, err := h.RunJSONLines("hc", "create", "My Epic", "--type", "epic")
@@ -42,6 +44,7 @@ func TestHCCreateEpic(t *testing.T) {
 }
 
 func TestHCCreateTaskWithParent(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Parent Epic", "--type", "epic")
@@ -60,6 +63,7 @@ func TestHCCreateTaskWithParent(t *testing.T) {
 }
 
 func TestHCCreateBulkFromStdin(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	input := `{"title":"Big Epic","type":"epic","children":[{"title":"Task A","type":"task"},{"title":"Task B","type":"task"}]}`
@@ -78,6 +82,7 @@ func TestHCCreateBulkFromStdin(t *testing.T) {
 }
 
 func TestHCCreateInvalidType(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("hc", "create", "My Item", "--type", "bogus")
@@ -85,6 +90,7 @@ func TestHCCreateInvalidType(t *testing.T) {
 }
 
 func TestHCList(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "List Epic", "--type", "epic")
@@ -102,6 +108,7 @@ func TestHCList(t *testing.T) {
 }
 
 func TestHCListWarnsAboutAServerPrefix(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	out, err := h.Run("hc", "list", "--session", "box:abc123")
@@ -118,6 +125,7 @@ func TestHCListWarnsAboutAServerPrefix(t *testing.T) {
 }
 
 func TestHCListStatusFilter(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Filter Epic", "--type", "epic")
@@ -153,6 +161,7 @@ func TestHCListStatusFilter(t *testing.T) {
 }
 
 func TestHCShow(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Show Epic", "--type", "epic")
@@ -180,6 +189,7 @@ func TestHCShow(t *testing.T) {
 }
 
 func TestHCUpdate(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Update Epic", "--type", "epic")
@@ -198,6 +208,7 @@ func TestHCUpdate(t *testing.T) {
 }
 
 func TestHCUpdateInvalidStatus(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Invalid Status Epic", "--type", "epic")
@@ -213,6 +224,7 @@ func TestHCUpdateInvalidStatus(t *testing.T) {
 }
 
 func TestHCNextRequiresEpicID(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("hc", "next")
@@ -220,6 +232,7 @@ func TestHCNextRequiresEpicID(t *testing.T) {
 }
 
 func TestHCNext(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	bulkInput := `{"title":"Next Epic","type":"epic","children":[{"title":"Next Task","type":"task"}]}`
@@ -242,6 +255,7 @@ func TestHCNext(t *testing.T) {
 }
 
 func TestHCNextNoActionableTasks(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Empty Epic", "--type", "epic")
@@ -253,6 +267,7 @@ func TestHCNextNoActionableTasks(t *testing.T) {
 }
 
 func TestHCComment(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Comment Epic", "--type", "epic")
@@ -274,6 +289,7 @@ func TestHCComment(t *testing.T) {
 }
 
 func TestHCContext(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	bulkInput := `{"title":"Context Epic","type":"epic","children":[{"title":"Open Task","type":"task"}]}`
@@ -304,6 +320,7 @@ func TestHCContext(t *testing.T) {
 }
 
 func TestHCContextMarkdown(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	bulkInput := `{"title":"Markdown Epic","type":"epic","children":[{"title":"Task A","type":"task"}]}`
@@ -329,6 +346,7 @@ func TestHCContextMarkdown(t *testing.T) {
 }
 
 func TestHCPruneDryRun(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Prune Epic", "--type", "epic")
@@ -352,6 +370,7 @@ func TestHCPruneDryRun(t *testing.T) {
 }
 
 func TestHCPrune(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Old Epic", "--type", "epic")
@@ -374,6 +393,7 @@ func TestHCPrune(t *testing.T) {
 }
 
 func TestHCNext_Assign(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	bulkInput := `{"title":"Assign Epic","type":"epic","children":[{"title":"Assign Task","type":"task"}]}`
@@ -395,6 +415,7 @@ func TestHCNext_Assign(t *testing.T) {
 }
 
 func TestHCUpdate_Assign(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Assign Epic", "--type", "epic")
@@ -411,6 +432,7 @@ func TestHCUpdate_Assign(t *testing.T) {
 }
 
 func TestHCUpdate_Unassign(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Unassign Epic", "--type", "epic")
@@ -428,6 +450,7 @@ func TestHCUpdate_Unassign(t *testing.T) {
 }
 
 func TestHCUpdate_MutuallyExclusive(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Mutex Epic", "--type", "epic")
@@ -443,6 +466,7 @@ func TestHCUpdate_MutuallyExclusive(t *testing.T) {
 }
 
 func TestHCUpdate_NoOp(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "NoOp Epic", "--type", "epic")
@@ -458,6 +482,7 @@ func TestHCUpdate_NoOp(t *testing.T) {
 }
 
 func TestHCCreate_TaskWithoutParent(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("hc", "create", "Orphan Task", "--type", "task")
@@ -465,6 +490,7 @@ func TestHCCreate_TaskWithoutParent(t *testing.T) {
 }
 
 func TestHCShow_NotFound(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("hc", "show", "hc-doesnotexist")
@@ -472,6 +498,7 @@ func TestHCShow_NotFound(t *testing.T) {
 }
 
 func TestHCCRUD(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "CRUD Epic", "--type", "epic")
@@ -519,6 +546,7 @@ func TestHCCRUD(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHCUpdate_TitleRoundTrip(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Original Title", "--type", "epic")
@@ -532,6 +560,7 @@ func TestHCUpdate_TitleRoundTrip(t *testing.T) {
 }
 
 func TestHCUpdate_DescRoundTrip(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "My Epic", "--type", "epic")
@@ -545,6 +574,7 @@ func TestHCUpdate_DescRoundTrip(t *testing.T) {
 }
 
 func TestHCUpdate_EmptyTitleRejected(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "My Epic", "--type", "epic")
@@ -557,6 +587,7 @@ func TestHCUpdate_EmptyTitleRejected(t *testing.T) {
 }
 
 func TestHCUpdate_TitleAndStatusCombined(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Old Title", "--type", "epic")
@@ -580,6 +611,7 @@ func TestHCUpdate_TitleAndStatusCombined(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHCUpdate_CascadeOnEpicDone(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Cascade Epic", "--type", "epic")
@@ -605,6 +637,7 @@ func TestHCUpdate_CascadeOnEpicDone(t *testing.T) {
 }
 
 func TestHCUpdate_CascadeRespectsTerminalGuard(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Guard Epic", "--type", "epic")
@@ -637,6 +670,7 @@ func TestHCUpdate_CascadeRespectsTerminalGuard(t *testing.T) {
 }
 
 func TestHCUpdate_NoCascadeOnNonTerminalEpic(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Non-Terminal Epic", "--type", "epic")
@@ -656,6 +690,7 @@ func TestHCUpdate_NoCascadeOnNonTerminalEpic(t *testing.T) {
 }
 
 func TestHCUpdate_NoCascadeOnTaskUpdate(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	epicLines, err := h.RunJSONLines("hc", "create", "Task Update Epic", "--type", "epic")
