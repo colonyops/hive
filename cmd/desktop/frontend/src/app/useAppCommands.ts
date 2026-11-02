@@ -177,6 +177,7 @@ export function useAppCommands(deps: AppCommandDeps) {
     'history.back': () => nav.router.back(),
     'history.forward': () => nav.router.forward(),
     'palette.keys': () => palette.openWithScope('keys'),
+    'palette.drive': () => palette.openWithScope('drive'),
   }
 
   // Launchers and the numbered window jumps are one implementation each,

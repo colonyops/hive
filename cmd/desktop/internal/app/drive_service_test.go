@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -958,6 +959,8 @@ func TestDriveDocumentByKind(t *testing.T) {
 	f.writeDoc(t, "workspaces/ws", "plans/p.md", "---\ntitle: P\n---\n# Hi <b>raw</b>\n")
 	f.writeDoc(t, "workspaces/ws", "page.html", "<p>x</p>")
 	f.writeDoc(t, "workspaces/ws", "data.bin", "\x00\x01")
+	f.writeDoc(t, "workspaces/ws", "shots/Login.PNG", "png-bytes")
+	f.writeDoc(t, "workspaces/ws", "huge.png", strings.Repeat("x", maxImageBytes+1))
 	_, err := f.harness.engine.Drive().UpsertBlocks(ctx, wsSpace, "canvases/plan.canvas.json", drive.Author{Session: "1"}, "", "", drive.Block{
 		ID: "a", Kind: drive.BlockKindHTML, Body: `<p>ok</p><script>alert(1)</script>`,
 	})
@@ -991,6 +994,16 @@ func TestDriveDocumentByKind(t *testing.T) {
 	assert.Empty(t, file.Markdown)
 	assert.Empty(t, file.HTML)
 	assert.Nil(t, file.Canvas)
+	assert.Empty(t, file.Image)
+
+	img, err := f.svc.Document(ctx, "workspaces/ws", "shots/Login.PNG")
+	require.NoError(t, err)
+	assert.Equal(t, drive.KindFile, img.Entry.Kind)
+	assert.Equal(t, "data:image/png;base64,"+base64.StdEncoding.EncodeToString([]byte("png-bytes")), img.Image)
+
+	huge, err := f.svc.Document(ctx, "workspaces/ws", "huge.png")
+	require.NoError(t, err)
+	assert.Empty(t, huge.Image, "an image over the cap stays a plain file")
 
 	for _, tc := range []struct {
 		path string

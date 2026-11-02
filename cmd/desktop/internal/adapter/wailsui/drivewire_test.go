@@ -22,7 +22,7 @@ func TestDriveWireTypesKeepTheirFieldNames(t *testing.T) {
 		{"SpaceWire", SpaceWire{}, sorted("kind", "key", "name")},
 		{"EntryWire", EntryWire{}, sorted("path", "name", "kind", "size", "modified", "created", "title", "front", "children")},
 		{"HitWire", HitWire{}, sorted("space", "entry")},
-		{"DocumentWire", DocumentWire{}, sorted("space", "entry", "markdown", "html", "canvas")},
+		{"DocumentWire", DocumentWire{}, sorted("space", "entry", "markdown", "html", "canvas", "image")},
 		{"CanvasWire", CanvasWire{}, sorted("space", "path", "title", "session", "hiveSession", "createdAt", "updatedAt", "frontmatter", "blocks")},
 		{"BlockWire", BlockWire{}, sorted("id", "kind", "title", "body", "url", "createdAt", "updatedAt")},
 	} {

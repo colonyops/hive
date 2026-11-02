@@ -297,7 +297,7 @@ func (u *UI) buildWindow() {
 				HideToolbarSeparator: true,
 				ToolbarStyle:         application.MacToolbarStyleUnifiedCompact,
 			},
-			InvisibleTitleBarHeight: 42,
+			InvisibleTitleBarHeight: 43,
 		},
 	})
 

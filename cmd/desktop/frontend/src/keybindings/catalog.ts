@@ -2,6 +2,7 @@ import { computed, ref, type Component, type ComputedRef } from 'vue'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
+import IconFileSearch from '~icons/lucide/file-search'
 import IconArrowUp from '~icons/lucide/arrow-up'
 import IconFolderTree from '~icons/lucide/folder-tree'
 import IconMessageSquare from '~icons/lucide/message-square'
@@ -393,6 +394,19 @@ export const commandCatalog: BindableCommand[] = [
     keywords: ['keys', 'shortcuts', 'keymap', 'help', 'cheatsheet'],
     icon: IconKeyboard,
     defaultCombos: ['?'],
+    context: 'global',
+    scope: 'goto',
+  },
+  // Where `mod` is Ctrl a focused pane keeps Ctrl+P for readline, and its escape
+  // form Ctrl+Shift+P is already canvas.toggle's, so this chord does not fire
+  // from a pane there.
+  {
+    id: 'palette.drive',
+    title: 'Search Drive…',
+    group: 'General',
+    keywords: ['documents', 'docs', 'find', 'open', 'plan', 'report', 'wiki'],
+    icon: IconFileSearch,
+    defaultCombos: ['mod+p'],
     context: 'global',
     scope: 'goto',
   },

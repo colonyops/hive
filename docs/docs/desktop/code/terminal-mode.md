@@ -233,7 +233,7 @@ Open a session's **Drive** tab with the `+` button on its tab row or its row in 
 
 The tab, the Drive page, search, reorganizing, and the document tools work as they do in [Chats](../chats/agent-workspaces.md#drive). In a narrow tab the file tree starts hidden; the button in the header brings it back. A scratch terminal has no Drive tab.
 
-An agent outside any chat or Code session, such as one you start in a plain terminal, can still write documents: it passes `global` as its session, and every such agent shares the Shared space. It has no tab. Read it on the Drive page under **Shared**, or find a document by name in the command palette.
+An agent outside any chat or Code session, such as one you start in a plain terminal, can still write documents: it passes `global` as its session, and every such agent shares the Shared space. It has no tab. Read it on the Drive page under **Shared**, or find a document by name in the command palette's **Drive** tab.
 
 ## Appearance
 

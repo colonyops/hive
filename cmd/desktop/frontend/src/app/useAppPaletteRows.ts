@@ -41,6 +41,7 @@ import type { AppCommandDeps } from './useAppCommands'
 const sigilMeanings: Partial<Record<PaletteScopeId, string>> = {
   goto: 'Jump to a place, session, or setting',
   actions: 'Run a command',
+  drive: 'Search Drive documents',
   shell: 'Run a line in a new terminal window',
   keys: 'Search and rebind shortcuts',
 }
@@ -59,9 +60,9 @@ function contextLabel(context: CommandContext): string {
 /**
  * Registers every App-level palette row source for the app's lifetime:
  * catalog commands, mode switches, and the hub's own objects (profiles, feeds,
- * themes), plus the Go-to rows for sessions, windows, settings sections,
- * chats, and drive documents that are global rather than tied to a lazily mounted
- * mode.
+ * themes), the Go-to rows for sessions, windows, settings sections, and chats
+ * that are global rather than tied to a lazily mounted mode, and the Drive tab's
+ * documents.
  */
 export function useAppPaletteRows(
   deps: AppCommandDeps,
@@ -444,32 +445,33 @@ export function useAppPaletteRows(
         })
       }
 
-      // Document rows open full page, so one is reachable with no chat open.
-      // A workspace's documents sit in its chat rows' group.
-      for (const space of drive.spaces.value) {
-        const dir = space.key.startsWith('workspaces/') ? space.key.slice('workspaces/'.length) : ''
-        const group = (dir && workspaceNameByDir.value.get(dir)) || space.name || space.key
-        for (const entry of documentsOf(drive.trees.value.get(space.key))) {
-          cmds.push({
-            id: `document:${space.key}:${entry.path}`,
-            title: entryLabel(entry),
-            group,
-            order: -2,
-            scope: 'goto',
-            kind: 'document',
-            keywords: [entry.path],
-            icon: IconFileText,
-            run: () => appMode.openDrive({ space: space.key, path: entry.path, session: null }),
-          })
-        }
-      }
-
       return cmds
     }),
   )
 
+  // Apart from the rows above so a session status poll does not rebuild every
+  // document. Rows open full page, so one is reachable with no chat open.
+  useCommands(
+    computed(() =>
+      drive.spaces.value.flatMap((space) => {
+        const dir = space.key.startsWith('workspaces/') ? space.key.slice('workspaces/'.length) : ''
+        const group = (dir && workspaceNameByDir.value.get(dir)) || space.name || space.key
+        return documentsOf(drive.trees.value.get(space.key)).map((entry): Command => ({
+          id: `document:${space.key}:${entry.path}`,
+          title: entryLabel(entry),
+          group,
+          scope: 'drive',
+          kind: 'document',
+          keywords: [entry.path],
+          icon: IconFileText,
+          run: () => appMode.openDrive({ space: space.key, path: entry.path, session: null }),
+        }))
+      }),
+    ),
+  )
+
   const palette = useCommandPalette()
-  const { open: paletteOpen, visibleScopes } = palette
+  const { open: paletteOpen, scope: paletteScope, visibleScopes } = palette
 
   // The ? scope: every bindable command (launchers included), rows whose
   // context is live right now promoted ahead of the rest under their own
@@ -516,7 +518,7 @@ export function useAppPaletteRows(
     return rows
   })
 
-  // Session, chat, workspace, and document rows are read from module singletons
+  // Session, chat, and workspace rows are read from module singletons
   // the sidebar trees keep warm elsewhere; a palette open is the moment they
   // are about to be shown, so that is when staleness is worth paying to fix.
   // Every reload keeps last-good rows on failure. Workspaces in particular can
@@ -527,8 +529,16 @@ export function useAppPaletteRows(
     void reloadTerminalSessions()
     void reloadRecents()
     void reloadWorkspaces()
-    // Every space's tree, not only the ones a pane has opened: a document is
-    // worth finding before anything showed it.
-    void drive.reload().then(() => Promise.all(drive.spaces.value.map((space) => drive.ensureTree(space.key))))
   })
+
+  // Every space's tree, not only the ones a pane has opened: a document is
+  // worth finding before anything showed it. Reading them all waits for the tab
+  // that shows them.
+  watch(
+    () => paletteOpen.value && paletteScope.value === 'drive',
+    (searching) => {
+      if (!searching) return
+      void drive.reload().then(() => Promise.all(drive.spaces.value.map((space) => drive.ensureTree(space.key))))
+    },
+  )
 }

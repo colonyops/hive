@@ -358,6 +358,12 @@ function onKeydown(e: KeyboardEvent): void {
             <EmptyState v-if="results.length === 0 && query" class="px-4 font-mono" data-testid="command-palette-empty"
               >No results for "{{ query }}"</EmptyState
             >
+            <EmptyState
+              v-else-if="results.length === 0 && scope === 'drive'"
+              class="px-4 font-mono"
+              data-testid="command-palette-drive-empty"
+              >No documents yet</EmptyState
+            >
           </div>
 
           <!-- Footer key hints -->

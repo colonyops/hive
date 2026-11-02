@@ -213,7 +213,7 @@ Row shape:
   (ADR quick-terminal-launchers-are-session-scoped).
 
 Adding a scope tab is one entry in `cmd/desktop/frontend/src/palette/scopes.ts`.
-A sigil (`@`, `>`, `!`, `?`) is grammar: `setQuery` absorbs it only as the
+A sigil (`@`, `>`, `#`, `!`, `?`) is grammar: `setQuery` absorbs it only as the
 first character of an empty query.
 
 ## 7. Verify
