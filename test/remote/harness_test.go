@@ -132,16 +132,22 @@ func NewClient(t *testing.T) *Client {
 
 func (c *Client) Hive(args ...string) Result {
 	c.t.Helper()
-	r := run(c.t, []string{"HIVE_CONFIG=" + c.config, "HIVE_DATA_DIR=" + c.dataDir}, hiveBin, args...)
-	r.Args[0] = "hive"
-	return r
+	return c.hive(nil, args...)
 }
 
-// HiveOn runs the client hive with --target-server, so session commands act
-// on the server's sessions as they would for a user.
+// HiveOn runs the client hive with HIVE_SERVER set, so session commands act
+// on the server's sessions as --server makes them.
 func (c *Client) HiveOn(s Server, args ...string) Result {
 	c.t.Helper()
-	return c.Hive(append([]string{"--target-server", s.Name}, args...)...)
+	return c.hive([]string{"HIVE_SERVER=" + s.Name}, args...)
+}
+
+func (c *Client) hive(env []string, args ...string) Result {
+	c.t.Helper()
+	env = append([]string{"HIVE_CONFIG=" + c.config, "HIVE_DATA_DIR=" + c.dataDir}, env...)
+	r := run(c.t, env, hiveBin, args...)
+	r.Args[0] = "hive"
+	return r
 }
 
 // Server is one fixture container, reached by its name in the ssh_config
