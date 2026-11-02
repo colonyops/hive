@@ -25,7 +25,7 @@ On the client, `/home/hive/repo.git` is a bare repository and `/home/hive/work` 
 
 ```bash
 run=test/smoke/run.sh
-$run exec client hive --target-server server-a session create --json --background --remote /home/hive/repo.git demo
+$run exec client hive session create --server server-a --json --background --remote /home/hive/repo.git demo
 $run exec client hive session show --json server-a:<id>
 $run exec server-a hive session show --json <id>
 ```

@@ -8,6 +8,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -24,6 +25,7 @@ type SessionCmd struct {
 	app   *app.App
 
 	// per-subcommand flags
+	server   string
 	infoJSON bool
 	lsJSON   bool
 	lsTags   []string
@@ -79,9 +81,10 @@ Use 'hive session info' to get details about the current session.`,
 		&cli.Command{
 			Name:      "ls",
 			Usage:     "List all sessions (alias for 'session list')",
-			UsageText: "hive ls [--json]",
+			UsageText: "hive ls [--server <name>] [--json]",
 			Hidden:    true,
 			Flags:     lsCommand.Flags,
+			Before:    lsCommand.Before,
 			Action:    lsCommand.Action,
 		},
 	)
@@ -94,11 +97,17 @@ func (cmd *SessionCmd) lsCmd() *cli.Command {
 		Name:      "list",
 		Aliases:   []string{"ls"},
 		Usage:     "List all sessions",
-		UsageText: "hive session list [--json]",
+		UsageText: "hive session list [--server <name>] [--json]",
 		Description: `Displays a table of all sessions with their repo, name, state, and path.
+
+With servers under servers: in config.yaml, the list also shows the sessions of
+every server, with a SERVER column. A server that does not answer prints a
+warning and the rest of the list still shows. --server lists one server only;
+--server local lists the sessions on this machine.
 
 Use --json for LLM-friendly output with additional fields like inbox topic and unread count.`,
 		Flags: []cli.Flag{
+			serverFlag(&cmd.server),
 			&cli.BoolFlag{
 				Name:        "json",
 				Usage:       "output as JSON lines with inbox info",
@@ -111,6 +120,7 @@ Use --json for LLM-friendly output with additional fields like inbox topic and u
 				Destination: &cmd.lsTags,
 			},
 		},
+		Before: targetServer(cmd.app, &cmd.server),
 		Action: cmd.runLs,
 	}
 }
@@ -193,13 +203,6 @@ func printSessionHuman(out io.Writer, server string, sess session.Session) {
 }
 
 func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
-	// The working directory finds a session on this machine. Its id can name
-	// a different session on the server, so a lookup there could answer with
-	// the wrong session.
-	if cmd.app.TargetsServer() {
-		return errors.New("session info reads the session of this directory on this machine; use 'hive session show <server>:<id>' for a session on a server")
-	}
-
 	// Detect session from current working directory
 	sessionID, err := cmd.app.Sessions().DetectSession(ctx)
 	if err != nil {
@@ -241,12 +244,14 @@ func (cmd *SessionCmd) showCmd() *cli.Command {
 Unlike 'hive session info', which detects the session from the current
 working directory, this command looks up a session by its ID.`,
 		Flags: []cli.Flag{
+			serverFlag(&cmd.server),
 			&cli.BoolFlag{
 				Name:        "json",
 				Usage:       "output as JSON (recommended for LLMs)",
 				Destination: &cmd.showJSON,
 			},
 		},
+		Before: targetServer(cmd.app, &cmd.server),
 		Action: cmd.runShow,
 	}
 }
@@ -291,6 +296,7 @@ Example:
 				Destination: &cmd.createJSON,
 			},
 		),
+		Before: targetServer(cmd.app, &cmd.createFlags.server),
 		Action: cmd.runCreate,
 	}
 }
@@ -334,6 +340,7 @@ Examples:
   hive session update abc123 --add-tag auto --add-tag backend
   hive session update abc123 --remove-tag auto --add-tag orchestrated`,
 		Flags: []cli.Flag{
+			serverFlag(&cmd.server),
 			&cli.StringFlag{
 				Name:        "name",
 				Usage:       "new session name (also updates slug)",
@@ -370,6 +377,7 @@ Examples:
 				Destination: &cmd.updateJSON,
 			},
 		},
+		Before: targetServer(cmd.app, &cmd.server),
 		Action: cmd.runUpdate,
 	}
 }
@@ -440,53 +448,106 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 
 // lsSessionInfo is the JSON output format for hive session ls --json.
 type lsSessionInfo struct {
-	Server string   `json:"server"`
-	ID     string   `json:"id"`
-	Name   string   `json:"name"`
-	Repo   string   `json:"repo"`
-	Inbox  string   `json:"inbox"`
+	Server string `json:"server"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Repo   string `json:"repo"`
+	// Inbox and Unread are for a local session only: a server's inbox is in
+	// that server's hive.db, which messages sent from this machine never reach.
+	Inbox  string   `json:"inbox,omitempty"`
 	State  string   `json:"state"`
-	Unread int      `json:"unread"`
+	Unread *int     `json:"unread,omitempty"`
 	Tags   []string `json:"tags"`
 }
 
+// serverListTimeout bounds one server's session list, so an offline server
+// costs the list a few seconds instead of ssh's own timeout.
+const serverListTimeout = 5 * time.Second
+
+// serverSessions is the sessions of one server, or why they could not be read.
+type serverSessions struct {
+	server   string
+	sessions []session.Session
+	err      error
+}
+
+// listEachServer reads the sessions of every server the list shows: the one
+// --server names, or this machine and every server under servers:, read at
+// once.
+func (cmd *SessionCmd) listEachServer(ctx context.Context) []serverSessions {
+	remotes := cmd.app.Servers.Servers()
+	if cmd.server != "" || len(remotes) == 0 {
+		sessions, err := cmd.app.SessionAPI().ListSessions(ctx)
+		return []serverSessions{{server: cmd.app.DefaultServer(), sessions: sessions, err: err}}
+	}
+	out := make([]serverSessions, len(remotes)+1)
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		sessions, err := cmd.app.SessionAPI().ListSessions(ctx)
+		out[0] = serverSessions{server: session.LocalServer, sessions: sessions, err: err}
+	})
+	for i, srv := range remotes {
+		wg.Go(func() {
+			ctx, cancel := context.WithTimeout(ctx, serverListTimeout)
+			defer cancel()
+			sessions, err := srv.Client().ListSessions(ctx)
+			out[i+1] = serverSessions{server: srv.Config().Name, sessions: sessions, err: err}
+		})
+	}
+	wg.Wait()
+	return out
+}
+
+type listedSession struct {
+	server string
+	session.Session
+}
+
 func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
-	sessions, err := cmd.app.SessionAPI().ListSessions(ctx)
-	if err != nil {
-		return fmt.Errorf("list sessions: %w", err)
+	listings := cmd.listEachServer(ctx)
+	showServer := len(listings) > 1
+
+	// A server that does not answer must not hide the sessions that did, so
+	// only a failure of this machine, or of the one server --server names,
+	// fails the command.
+	var normal, corrupted []listedSession
+	for _, listing := range listings {
+		if listing.err != nil {
+			if !showServer || listing.server == session.LocalServer {
+				return fmt.Errorf("list sessions: %w", listing.err)
+			}
+			fmt.Fprintf(os.Stderr, "warning: server %s: %v\n", listing.server, listing.err)
+			continue
+		}
+		var mine []listedSession
+		for _, s := range listing.sessions {
+			if s.State == session.StateCorrupted {
+				corrupted = append(corrupted, listedSession{listing.server, s})
+				continue
+			}
+			if !s.HasAllTags(cmd.lsTags) {
+				continue
+			}
+			mine = append(mine, listedSession{listing.server, s})
+		}
+		slices.SortFunc(mine, func(a, b listedSession) int {
+			return strings.Compare(git.ExtractRepoName(a.Remote), git.ExtractRepoName(b.Remote))
+		})
+		normal = append(normal, mine...)
 	}
 
-	if len(sessions) == 0 {
+	if len(normal) == 0 && len(corrupted) == 0 {
 		if !cmd.lsJSON {
 			fmt.Fprintf(os.Stderr, "No sessions found\n")
 		}
 		return nil
 	}
 
-	// Separate normal and corrupted sessions, applying tag filter if specified
-	var normal, corrupted []session.Session
-	for _, s := range sessions {
-		if s.State == session.StateCorrupted {
-			corrupted = append(corrupted, s)
-			continue
-		}
-		if !s.HasAllTags(cmd.lsTags) {
-			continue
-		}
-		normal = append(normal, s)
-	}
-
-	// Sort by repository name
-	slices.SortFunc(normal, func(a, b session.Session) int {
-		return strings.Compare(git.ExtractRepoName(a.Remote), git.ExtractRepoName(b.Remote))
-	})
-
 	out := c.Root().Writer
 
-	// JSON output mode
 	if cmd.lsJSON {
 		for _, s := range normal {
-			info := cmd.buildLsSessionInfo(ctx, s)
+			info := cmd.buildLsSessionInfo(ctx, s.server, s.Session)
 			if err := iojson.WriteLine(out, info); err != nil {
 				return fmt.Errorf("encode session: %w", err)
 			}
@@ -494,13 +555,19 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 		return nil
 	}
 
-	// Table output mode
 	if len(normal) > 0 {
 		w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-		_, _ = fmt.Fprintln(w, "REPO\tNAME\tSTATE\tPATH")
+		if showServer {
+			_, _ = fmt.Fprintln(w, "SERVER\tREPO\tNAME\tSTATE\tPATH")
+		} else {
+			_, _ = fmt.Fprintln(w, "REPO\tNAME\tSTATE\tPATH")
+		}
 
 		for _, s := range normal {
 			repo := git.ExtractRepoName(s.Remote)
+			if showServer {
+				_, _ = fmt.Fprintf(w, "%s\t", s.server)
+			}
 			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", repo, s.Name, s.State, s.Path)
 		}
 
@@ -512,10 +579,18 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 		fmt.Fprintf(os.Stderr, "Found %d corrupted session(s) with invalid git repositories:\n", len(corrupted))
 		for _, s := range corrupted {
 			repo := git.ExtractRepoName(s.Remote)
-			fmt.Fprintf(os.Stderr, "  %s (%s)\n", repo, s.Path)
+			if showServer {
+				fmt.Fprintf(os.Stderr, "  %s: %s (%s)\n", s.server, repo, s.Path)
+			} else {
+				fmt.Fprintf(os.Stderr, "  %s (%s)\n", repo, s.Path)
+			}
 		}
 		_, _ = fmt.Fprintln(out)
-		fmt.Fprintf(os.Stderr, "Run 'hive prune' to clean up\n")
+		if showServer || cmd.app.TargetsServer() {
+			fmt.Fprintf(os.Stderr, "Run 'hive prune' on the machine that has them to clean up\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "Run 'hive prune' to clean up\n")
+		}
 	}
 
 	return nil
@@ -536,6 +611,7 @@ feature branch that was pushed but not merged still counts as unpushed. Use
 
 This action cannot be undone. Use 'hive session recycle' to preserve the directory for reuse.`,
 		Flags: []cli.Flag{
+			serverFlag(&cmd.server),
 			&cli.BoolFlag{
 				Name:        "force",
 				Aliases:     []string{"f"},
@@ -548,6 +624,7 @@ This action cannot be undone. Use 'hive session recycle' to preserve the directo
 				Destination: &cmd.deleteJSON,
 			},
 		},
+		Before: targetServer(cmd.app, &cmd.server),
 		Action: cmd.runDelete,
 	}
 }
@@ -591,6 +668,7 @@ false positives: the shared bare clone has no remote-tracking refs, so a
 feature branch that was pushed but not merged still counts as unpushed. Use
 --force after verifying the push.`,
 		Flags: []cli.Flag{
+			serverFlag(&cmd.server),
 			&cli.BoolFlag{
 				Name:        "force",
 				Aliases:     []string{"f"},
@@ -603,6 +681,7 @@ feature branch that was pushed but not merged still counts as unpushed. Use
 				Destination: &cmd.recycleJSON,
 			},
 		},
+		Before: targetServer(cmd.app, &cmd.server),
 		Action: cmd.runRecycle,
 	}
 }
@@ -639,23 +718,28 @@ func (cmd *SessionCmd) runRecycle(ctx context.Context, c *cli.Command) error {
 	return nil
 }
 
-func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session) lsSessionInfo {
+func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, server string, s session.Session) lsSessionInfo {
 	info := lsSessionInfo{
-		Server: cmd.app.DefaultServer(),
+		Server: server,
 		ID:     s.ID,
 		Name:   s.Name,
 		Repo:   git.ExtractRepoName(s.Remote),
-		Inbox:  s.InboxTopic(),
 		State:  string(s.State),
-		Unread: 0,
 		Tags:   nonNilTags(s.Tags),
 	}
-
-	// Count unread inbox messages
-	if msgs, err := cmd.app.Messages().GetUnread(ctx, s.ID, s.InboxTopic()); err == nil {
-		info.Unread = len(msgs)
+	if server != session.LocalServer {
+		return info
 	}
 
+	info.Inbox = s.InboxTopic()
+	unread := 0
+	msgs, err := cmd.app.Messages().GetUnread(ctx, s.ID, s.InboxTopic())
+	if err != nil {
+		cmd.app.Logger.Warn().Err(err).Str("session", s.ID).Msg("read unread messages")
+	} else {
+		unread = len(msgs)
+	}
+	info.Unread = &unread
 	return info
 }
 
