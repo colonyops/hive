@@ -16,7 +16,6 @@ export function appletMenuEntries(rows: readonly AppletMenuRow[]): MenuEntry[] {
   }))
 }
 
-/** The row a menu id names, or nothing for an id of another entry. */
 export function appletMenuChoice(id: string): { applet: string; opensAs: AppletMenuRow['opensAs'] } | undefined {
   if (!id.startsWith(MENU_ID_PREFIX)) return undefined
   const rest = id.slice(MENU_ID_PREFIX.length)

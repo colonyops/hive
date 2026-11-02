@@ -62,8 +62,7 @@ const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panels 
 const applets = useApplets()
 
 function viewRowLabel(tab: PanelTab): string {
-  const applet = appletIdOf(tab)
-  return applet ? applets.titleOf(applet) : (viewOfTab(tab)?.label ?? tab.id)
+  return applets.tabTitle(tab) ?? viewOfTab(tab)?.label ?? tab.id
 }
 const { openBlank: openNewSession } = useNewSession()
 const panelLayouts = usePanelLayouts()

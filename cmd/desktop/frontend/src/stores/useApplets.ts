@@ -12,8 +12,9 @@ import type { Applet } from '../../bindings/github.com/colonyops/hive/cmd/deskto
 import type { Command } from '../composables/useCommands'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { appletCommandID, setAppletCommands } from '../keybindings/catalog'
-import { appletTabId } from '../lib/appletTabs'
+import { appletIdOf, appletTabId } from '../lib/appletTabs'
 import { launcherIconComponent } from '../lib/launcherIcons'
+import type { PanelTab } from '../lib/panelLayout'
 import { PLACEABLE_SURFACES, SURFACES, type AppletSurface } from './appletSurfaces'
 import { defineStore } from './defineStore'
 import { usePersistedSetting } from './usePersistedSetting'
@@ -63,14 +64,14 @@ export interface AppletPageRow {
   scope?: 'goto' | 'actions'
 }
 
-// The applets on disk and the one on screen. Each is a bindable command, so this
-// is what turns a file an agent wrote into a palette row and a chord (ADR
-// applets-are-web-pages-with-full-access-to-the-machine).
 function appletPaletteTitle(applet: Applet): string {
   if (!applet.runnable) return `${applet.title} (invalid)`
   return applet.warnings?.length ? `${applet.title} (warnings)` : applet.title
 }
 
+// The applets on disk and the one on screen. Each is a bindable command, so this
+// is what turns a file an agent wrote into a palette row and a chord (ADR
+// applets-are-web-pages-with-full-access-to-the-machine).
 export const useApplets = defineStore('applets', () => {
   const catalog = useResource(async () => (await List()) ?? [], {
     initial: [] as Applet[],
@@ -81,7 +82,10 @@ export const useApplets = defineStore('applets', () => {
   // cannot switch sessions behind the overlay.
   const sessionSlug = ref('')
 
-  const open = computed(() => catalog.data.value.find((applet) => applet.id === openID.value && applet.enabled) ?? null)
+  const open = computed(() => {
+    const applet = openID.value === null ? undefined : byID(openID.value)
+    return applet?.enabled ? applet : null
+  })
 
   const placements = new Map(
     PLACEABLE_SURFACES.map(({ surface, placement }) => [
@@ -179,6 +183,12 @@ export const useApplets = defineStore('applets', () => {
     return byID(id)?.title ?? id
   }
 
+  /** What an applet's tab is called, or nothing for any other tab. */
+  function tabTitle(tab: PanelTab): string | undefined {
+    const id = appletIdOf(tab)
+    return id ? titleOf(id) : undefined
+  }
+
   const dropdown = shallowRef<AppletDropdown | null>(null)
 
   function toggleDropdown(next: AppletDropdown): void {
@@ -258,14 +268,14 @@ export const useApplets = defineStore('applets', () => {
 
   // Data rather than commands, so nothing binds to them: they exist while the page does.
   const pageRows = computed<Command[]>(() => {
-    const byID = new Map<string, Command>()
+    const rowsByID = new Map<string, Command>()
     for (const [handle, { applet, rows }] of frameRows.value) {
       // A row acts on its page, so a page the user cannot see offers none.
       if (!handle.onScreen()) continue
-      const title = catalog.data.value.find((candidate) => candidate.id === applet)?.title ?? applet
+      const title = titleOf(applet)
       for (const row of rows) {
         const id = `applet:${applet}:${row.id}`
-        byID.set(id, {
+        rowsByID.set(id, {
           id,
           title: row.title,
           group: row.group ?? title,
@@ -278,7 +288,7 @@ export const useApplets = defineStore('applets', () => {
         })
       }
     }
-    return [...byID.values()]
+    return [...rowsByID.values()]
   })
 
   watch(
@@ -357,7 +367,7 @@ export const useApplets = defineStore('applets', () => {
     close,
     sessionMenu,
     byID,
-    titleOf,
+    tabTitle,
     setTabHost,
     placed,
     isPlaced,

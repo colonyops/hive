@@ -242,8 +242,7 @@ function windowName(windowId: string): string {
 function tabLabel(tab: PanelTab): string {
   const windowId = windowIdOf(tab)
   if (windowId) return windowName(windowId)
-  const applet = appletIdOf(tab)
-  return applet ? applets.titleOf(applet) : (viewOfTab(tab)?.label ?? tab.id)
+  return applets.tabTitle(tab) ?? viewOfTab(tab)?.label ?? tab.id
 }
 
 const driveActivity = useDriveActivity()

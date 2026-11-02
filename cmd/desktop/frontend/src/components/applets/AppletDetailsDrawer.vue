@@ -91,10 +91,6 @@ function openShortcuts(): void {
   requestedEditorFilter.value = props.applet.title
   void router.push({ name: 'application-settings', params: { section: 'keybindings' } })
 }
-
-function startedAt(process: AppletProcess): string {
-  return new Date(process.startedMillis).toLocaleTimeString()
-}
 </script>
 
 <template>
@@ -217,7 +213,9 @@ function startedAt(process: AppletProcess): string {
           <div v-for="process in processes" :key="process.handle" class="flex items-center gap-2.5 py-2">
             <div class="min-w-0 flex-1">
               <div class="font-mono text-caption break-all text-text">{{ process.command }}</div>
-              <p class="mt-0.5 text-caption text-text-3">Since {{ startedAt(process) }}</p>
+              <p class="mt-0.5 text-caption text-text-3">
+                Since {{ new Date(process.startedMillis).toLocaleTimeString() }}
+              </p>
             </div>
             <BaseButton
               variant="secondary"

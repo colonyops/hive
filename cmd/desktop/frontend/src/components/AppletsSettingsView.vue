@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // Which applets Hive found, whether each loaded, and what they have running. The files
-// under the applets directory are the registration, so this page only reads them, apart
-// from importing a new one and deleting one.
+// under the applets directory are the registration.
 import { useIntervalFn } from '@vueuse/core'
 import { computed, onMounted, ref } from 'vue'
 import SettingsPage from './settings/SettingsPage.vue'
@@ -154,10 +153,6 @@ function requestDelete(id: string, title: string): void {
   })
 }
 
-function startedAt(process: AppletProcess): string {
-  return new Date(process.startedMillis).toLocaleTimeString()
-}
-
 useIntervalFn(() => void pollProcesses(), PROCESS_POLL_MS)
 
 onMounted(() => {
@@ -229,7 +224,7 @@ onMounted(() => {
         v-for="process in processes"
         :key="process.handle"
         :label="process.applet"
-        :hint="`Since ${startedAt(process)}: ${process.command}`"
+        :hint="`Since ${new Date(process.startedMillis).toLocaleTimeString()}: ${process.command}`"
         :testid="`settings-applet-process-${process.handle}`"
       >
         <BaseButton

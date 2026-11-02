@@ -2,12 +2,13 @@
 // The last stop before a stranger's code lands on this machine, so the warning leads, the
 // default is to cancel, and importing takes a deliberate tick and a click. Nothing is on
 // disk until then (ADR applets-are-web-pages-with-full-access-to-the-machine).
-import { nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import AppCheckbox from '@hive/ui/components/ui/AppCheckbox.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import BaseModal from '@hive/ui/components/ui/BaseModal.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
+import { useAutofocus } from '@hive/ui/composables/useAutofocus'
 import {
   CancelImport,
   ConfirmImport,
@@ -16,7 +17,7 @@ import type { AppletImportPreview } from '../../../bindings/github.com/colonyops
 import { useKeybindings } from '../../composables/useKeybindings'
 import { useToasts } from '../../composables/useToasts'
 import { formatBytes } from '../../lib/bytes'
-import { PLACEABLE_SURFACES } from '../../stores/appletSurfaces'
+import { PLACEABLE_SURFACES, SURFACES } from '../../stores/appletSurfaces'
 import { useApplets } from '../../stores/useApplets'
 
 const props = defineProps<{ preview: AppletImportPreview }>()
@@ -28,40 +29,23 @@ const applets = useApplets()
 const keybindings = useKeybindings()
 const { showToast } = useToasts()
 const trusted = ref(false)
-const id = ref('')
+// The parent keys this dialog by the preview's token, so one preview is all it ever sees.
+// eslint-disable-next-line vue/no-setup-props-reactivity-loss
+const id = ref(props.preview.suggestedId)
 const busy = ref(false)
 const error = ref('')
-const cancelButton = ref<ComponentPublicInstance | null>(null)
+const cancelButton = ref<{ focus: () => void } | null>(null)
+useAutofocus(cancelButton)
 // The id can be taken while this dialog is open, so a refused import also shows the field.
-const conflict = ref(false)
+// eslint-disable-next-line vue/no-setup-props-reactivity-loss
+const conflict = ref(props.preview.suggestedId !== props.preview.id)
 let settled = false
 
-watch(
-  () => props.preview.suggestedId,
-  (suggested) => {
-    id.value = suggested
-    conflict.value = suggested !== props.preview.id
-  },
-  { immediate: true },
-)
-
-onMounted(() => {
-  void nextTick(() => (cancelButton.value?.$el as HTMLElement | undefined)?.focus())
+// However this goes away, the file must not stay in memory. A page can also navigate away
+// from Settings with this open.
+onBeforeUnmount(() => {
+  if (!settled) void CancelImport(props.preview.token)
 })
-
-function dropWaitingFile(): void {
-  if (settled) return
-  settled = true
-  void CancelImport(props.preview.token)
-}
-
-function cancel(): void {
-  dropWaitingFile()
-  emit('close')
-}
-
-// A page can navigate away from Settings with this open, and the file must not stay in memory.
-onBeforeUnmount(dropWaitingFile)
 
 async function confirm(): Promise<void> {
   const target = id.value.trim()
@@ -102,7 +86,7 @@ async function confirm(): Promise<void> {
     :width="WIDTH"
     :busy="busy"
     testid="applet-import"
-    @close="cancel"
+    @close="emit('close')"
   >
     <div class="space-y-4 p-5 text-body">
       <div class="rounded-lg bg-severity-error-tint p-3.5" data-testid="applet-import-warning">
@@ -146,7 +130,7 @@ async function confirm(): Promise<void> {
                 <code class="font-mono">{{ preview.entry }}</code> runs when you open the applet.
               </li>
               <template v-for="{ surface, placement } in PLACEABLE_SURFACES" :key="surface">
-                <li v-if="placement.loadsWithApp && placement.offeredPage(preview)">
+                <li v-if="SURFACES[surface].persistent && placement.offeredPage(preview)">
                   It offers <code class="font-mono">{{ placement.offeredPage(preview) }}</code> for
                   {{ placement.where }}. That stays off until you turn it on, and then runs whenever Hive is open.
                 </li>
@@ -197,7 +181,7 @@ async function confirm(): Promise<void> {
     </div>
     <template #footer>
       <div class="flex-1" />
-      <BaseButton ref="cancelButton" variant="secondary" data-testid="applet-import-cancel" @click="cancel"
+      <BaseButton ref="cancelButton" variant="secondary" data-testid="applet-import-cancel" @click="emit('close')"
         >Cancel</BaseButton
       >
       <BaseButton

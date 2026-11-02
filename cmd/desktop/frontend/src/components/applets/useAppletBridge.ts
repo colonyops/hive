@@ -25,8 +25,8 @@ import { SURFACES, type AppletSurface } from '../../stores/appletSurfaces'
 import { BUILDER_ID, useApplets, type AppletFrameHandle, type AppletPageRow } from '../../stores/useApplets'
 import { usePopupTerminal } from '../../stores/usePopupTerminal'
 
-export const DEFAULT_DROPDOWN_WIDTH = 320
-export const DEFAULT_DROPDOWN_HEIGHT = 360
+const DEFAULT_DROPDOWN_WIDTH = 320
+const DEFAULT_DROPDOWN_HEIGHT = 360
 const PORT_LINGER_MS = 1000
 
 type AppletBrief = NonNullable<Parameters<typeof Render>[1]['appletBrief']>
@@ -251,7 +251,7 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     },
     open: () => applets.runCommand(appletCommandID(id)),
     dropdown(args) {
-      if (!SURFACES[options.surface()].canOpenDropdown || !frame.value)
+      if (options.surface() !== 'titlebar' || !frame.value)
         throw new Error('Only a title bar page can open a dropdown.')
       const applet = options.applet()
       applets.toggleDropdown({
@@ -263,7 +263,9 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
       })
     },
     resize(args) {
-      if (!SURFACES[options.surface()].resizable) throw new Error('A panel takes its size from applet.yaml.')
+      if (SURFACES[options.surface()].panel) {
+        throw new Error('A pop-up takes its size from applet.yaml, and a tab from its panel.')
+      }
       options.resize({ width: args.width as number | undefined, height: args.height as number | undefined })
     },
     ready() {

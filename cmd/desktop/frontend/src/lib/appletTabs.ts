@@ -1,6 +1,6 @@
 import { orderedTabs, type PanelLayout, type PanelTab } from './panelLayout'
 
-export const APPLET_TAB_KIND = 'applet'
+const APPLET_TAB_KIND = 'applet'
 const APPLET_TAB_PREFIX = `${APPLET_TAB_KIND}:`
 
 export type AppletTabId = `applet:${string}`
@@ -18,7 +18,6 @@ export function appletTab(id: string): PanelTab {
   return { id: appletTabId(id), kind: APPLET_TAB_KIND, params: { applet: id } }
 }
 
-/** The applet a tab shows, or nothing for any other tab. */
 export function appletIdOf(tab: PanelTab | undefined): string | undefined {
   if (tab?.kind !== APPLET_TAB_KIND) return undefined
   const id = tab.params?.applet

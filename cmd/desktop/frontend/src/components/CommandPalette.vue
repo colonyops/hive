@@ -79,13 +79,14 @@ function titleSegments(title: string, query: string): TitleSegment[] {
   return segments
 }
 
+function isAppletHit(cmd: Command, q: string): boolean {
+  return cmd.scope === 'applets' && cmd.title.toLowerCase().includes(q.toLowerCase())
+}
+
 // `index` on each CmdEntry is its position in DISPLAY order (this list, cmd
 // entries only) — not its position in `results` — since Recent reorders rows
 // relative to their group. navList below derives from this without reading
 // selection, so assigning index here can't cycle back through selectedIndex.
-function isAppletHit(cmd: Command, q: string): boolean {
-  return cmd.scope === 'applets' && cmd.title.toLowerCase().includes(q.toLowerCase())
-}
 
 const displayList = computed<DisplayEntry[]>(() => {
   const q = query.value.trim()

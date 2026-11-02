@@ -192,8 +192,7 @@ const paneRegionPanel = computed(() => panels.windowPanel.value ?? panels.status
 
 function tabLabel(tab: PanelTab): string {
   if (windowIdOf(tab)) return openChat.value?.name || 'Chat'
-  const applet = appletIdOf(tab)
-  return applet ? applets.titleOf(applet) : (viewOfTab(tab)?.label ?? tab.id)
+  return applets.tabTitle(tab) ?? viewOfTab(tab)?.label ?? tab.id
 }
 
 const applets = useApplets()

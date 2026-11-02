@@ -91,10 +91,10 @@ describe('AppletImportDialog', () => {
     await flushPromises()
     byID('applet-import-cancel')?.click()
     await flushPromises()
-    expect(service.CancelImport).toHaveBeenCalledWith('token')
-    expect(service.ConfirmImport).not.toHaveBeenCalled()
     expect(wrapper.emitted('close')).toHaveLength(1)
     wrapper.unmount()
+    expect(service.CancelImport).toHaveBeenCalledWith('token')
+    expect(service.ConfirmImport).not.toHaveBeenCalled()
   })
 
   it('imports under the id offered when the one asked for is taken', async () => {

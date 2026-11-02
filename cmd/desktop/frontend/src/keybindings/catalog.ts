@@ -897,7 +897,7 @@ const configuredCommands = ref<{ launchers: BindableCommand[]; applets: Bindable
   applets: [],
 })
 
-// The namespace an applet's bindable command ids live in: `applet.docker` opens its panel
+// The namespace an applet's bindable command ids live in: `applet.docker` opens it
 // and `applet.radio.next` is a command its applet.yaml declares. In `settings.yaml`, so
 // permanent. Neither half can hold a dot, because both are slugs.
 const APPLET_PREFIX = 'applet.'
@@ -906,19 +906,15 @@ export function appletCommandID(id: string, command?: string): string {
   return APPLET_PREFIX + id + (command ? `.${command}` : '')
 }
 
-/** The applet behind a command, or null for any other command. */
 export function appletID(commandID: string): string | null {
   return commandID.startsWith(APPLET_PREFIX) ? commandID.slice(APPLET_PREFIX.length).split('.')[0] : null
 }
 
-/** The command an applet declared, or null for anything else, its panel included. */
 export function appletDeclaredCommand(commandID: string): string | null {
   if (!commandID.startsWith(APPLET_PREFIX)) return null
-  const [, ...command] = commandID.slice(APPLET_PREFIX.length).split('.')
-  return command.length > 0 ? command.join('.') : null
+  return commandID.slice(APPLET_PREFIX.length).split('.')[1] ?? null
 }
 
-/** Replaces the applet commands, which change whenever an applet's file does. */
 export function setAppletCommands(next: BindableCommand[]): void {
   configuredCommands.value = { ...configuredCommands.value, applets: next }
 }

@@ -78,7 +78,6 @@ export function useAppCommands(deps: AppCommandDeps) {
   const popupTerminalMounted = ref(false)
 
   function togglePopupTerminal(): void {
-    popupTerminalMounted.value = true
     popupTerminal.toggle({ sessionSlug: onScreenSessionSlug.value || undefined })
   }
 
@@ -89,12 +88,10 @@ export function useAppCommands(deps: AppCommandDeps) {
   function toggleLauncher(actionID: string): void {
     const command = commandById.value.get(launcherCommandID(actionID))
     if (command && !contextActive(command.context)) return
-    popupTerminalMounted.value = true
     popupTerminal.toggle({ launcher: actionID, sessionSlug: onScreenSessionSlug.value || undefined })
   }
 
-  // An applet's hive.terminal asks the store directly, so the panel has to come
-  // up on that as well as on the toggles above.
+  // On the store, because an applet's hive.terminal asks it directly.
   watch(popupTerminal.visible, (visible) => {
     if (visible) popupTerminalMounted.value = true
   })
@@ -213,8 +210,7 @@ export function useAppCommands(deps: AppCommandDeps) {
       const command = commandById.value.get(id)
       if (!command || !contextActive(command.context)) return
       const declared = appletDeclaredCommand(id)
-      // A page that is already running takes it where the user is. Otherwise it needs
-      // a page to run in, so the panel opens to take it.
+      // A page on screen takes it. Otherwise it needs a page to run in, so the applet opens.
       if (declared !== null && applets.deliverCommand(applet, declared)) return
       // The palette can open an applet over a hub view, whose own keys would keep
       // acting on rows under it.

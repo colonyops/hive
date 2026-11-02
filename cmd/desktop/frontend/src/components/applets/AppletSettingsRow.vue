@@ -1,6 +1,4 @@
 <script setup lang="ts">
-// One applet in Settings. A row keeps one menu for its places and one on/off switch however
-// many surfaces there are; everything else is in AppletDetailsDrawer.
 import { computed, ref, type DeepReadonly } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
