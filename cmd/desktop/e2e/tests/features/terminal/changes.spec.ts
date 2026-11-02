@@ -307,7 +307,8 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     const resized = (await review.boundingBox())!.width
 
     await page.reload()
-    await page.locator('[data-file-drop-target]:visible').first().waitFor()
+    // The saved layout brings the Diff tab back in front, so no terminal is on screen to wait for.
+    await expect(page.getByTestId('panel-tab-diff')).toBeVisible()
     await addDiffTab(page)
     await expect(page.getByTestId('changes-stream')).toContainText('return err')
     await expect(page.getByTestId('command-palette-input')).toBeHidden()

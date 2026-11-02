@@ -73,9 +73,12 @@ async function dismissSizeBanner(page: Page) {
   await expect(page.getByTestId('terminal-size-constraint')).toHaveCount(0)
 }
 
+// The menu's test ids carry the view kind, and Drive's kind is docs.
+const VIEW_KIND: Record<string, string> = { Drive: 'docs', Diff: 'diff', Tasks: 'tasks' }
+
 async function addTab(page: Page, pane: string, label: string) {
   await page.getByTestId(`panel-tab-add-${pane}`).click()
-  await page.getByTestId(`new-window-view-${label.toLowerCase()}`).click()
+  await page.getByTestId(`new-window-view-${VIEW_KIND[label]}`).click()
 }
 
 function tabIds(page: Page, pane: string): Promise<string[]> {
@@ -106,6 +109,10 @@ async function dragTabBefore(page: Page, tab: string, before: string) {
 const paneBox = async (page: Page, pane: string) => (await page.getByTestId(`panel-${pane}`).boundingBox())!
 
 test.describe('session tabs', { tag: [tag.terminal] }, () => {
+  // The tab row's FLIP slides a moved tab for 150ms, and a drag aimed at a sliding
+  // tab lands in the wrong gap.
+  test.use({ contextOptions: { reducedMotion: 'reduce' } })
+
   test('opens each tab once, and restores a session after another', async ({ page, browserName }) => {
     await fixture(page)
     await addTab(page, 'p0', 'Drive')
@@ -120,7 +127,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
 
     await page.locator('[data-testid="terminal-session-row"][data-slug="other"]').click()
     await expect(page.getByTestId('panel-tab-window:@1')).toHaveAttribute('data-shown', 'true')
-    expect(await tabIds(page, 'p0')).toEqual(['window:@1', 'window:@2'])
+    await expect.poll(() => tabIds(page, 'p0')).toEqual(['window:@1', 'window:@2'])
 
     await page.locator('[data-testid="terminal-session-row"][data-slug="review"]').click()
     await expect(page.getByTestId('panel-tab-diff')).toHaveAttribute('data-shown', 'true')
@@ -159,7 +166,8 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     await page.getByTestId('panel-picker-window-@2').click()
     await expect(page.locator('[data-testid="terminal-pane"][data-window-id="@1"]')).toBeVisible()
     await expect(page.locator('[data-testid="terminal-pane"][data-window-id="@2"]')).toBeVisible()
-    expect(await tabIds(page, 'p0')).toEqual(['window:@1'])
+    // A tab that moved away stays in its old row until its leave transition ends.
+    await expect.poll(() => tabIds(page, 'p0')).toEqual(['window:@1'])
     expect(await tabIds(page, 'p1')).toEqual(['window:@2'])
 
     await page.getByTestId('panel-close-p1').click()
@@ -238,7 +246,7 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     const row = (await page.getByTestId('panel-tab-row-p1').boundingBox())!
     await dragTo(page, await center(page.getByTestId('panel-tab-diff')), { x: row.x + row.width / 2, y: row.y + row.height / 2 })
     await expect.poll(() => tabIds(page, 'p1')).toEqual(['window:@2', 'diff'])
-    expect(await tabIds(page, 'p0')).toEqual(['window:@1', 'tasks', 'docs'])
+    await expect.poll(() => tabIds(page, 'p0')).toEqual(['window:@1', 'tasks', 'docs'])
     await expect(page.getByTestId('changes-view')).toBeVisible()
     await page.screenshot({ path: screenshotPath(`session-tabs-drag-${browserName}.png`) })
 
