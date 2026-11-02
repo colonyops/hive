@@ -357,13 +357,13 @@ describe('useCommands', () => {
   it('hides the Shell tab until an escape claims it as available', () => {
     const palette = useCommandPalette()
 
-    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions'])
+    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive'])
 
     scope.run(() => useShellEscape(() => []))
-    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'shell'])
+    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive', 'shell'])
 
     scope.stop()
-    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions'])
+    expect(palette.visibleScopes.value.map((s) => s.id)).toEqual(['all', 'goto', 'actions', 'drive'])
   })
 
   it('cycles forward and backward through only the visible scopes, wrapping at both ends', () => {
@@ -376,10 +376,12 @@ describe('useCommands', () => {
     palette.cycleScope(1)
     expect(palette.scope.value).toBe('actions')
     palette.cycleScope(1)
+    expect(palette.scope.value).toBe('drive')
+    palette.cycleScope(1)
     expect(palette.scope.value).toBe('all')
 
     palette.cycleScope(-1)
-    expect(palette.scope.value).toBe('actions')
+    expect(palette.scope.value).toBe('drive')
   })
 
   it('pops to All only on an empty query, and never when already on All', () => {
@@ -395,6 +397,27 @@ describe('useCommands', () => {
     expect(palette.scope.value).toBe('all')
 
     expect(palette.popScope()).toBe(false)
+  })
+
+  it('keeps drive rows out of every tab but Drive, and routes #-queries to it', () => {
+    scope.run(() =>
+      useCommands([
+        command({ id: 'doc', title: 'Perf report', scope: 'drive' }),
+        command({ id: 'go', title: 'Perf session', scope: 'goto' }),
+        command({ id: 'act', title: 'Perf command' }),
+      ]),
+    )
+    const palette = useCommandPalette()
+
+    palette.setQuery('perf')
+    expect(palette.results.value.map((cmd) => cmd.id).sort()).toEqual(['act', 'go'])
+    palette.setScope('goto')
+    expect(palette.results.value.map((cmd) => cmd.id)).toEqual(['go'])
+
+    palette.query.value = ''
+    palette.setQuery('#perf')
+    expect(palette.scope.value).toBe('drive')
+    expect(palette.results.value.map((cmd) => cmd.id)).toEqual(['doc'])
   })
 
   it('hides the Keys tab until a provider registers, and routes ?-queries to it', () => {

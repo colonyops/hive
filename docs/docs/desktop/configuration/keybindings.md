@@ -15,6 +15,7 @@ The command palette at <kbd>⌘K</kbd> can run commands with or without a shortc
 | --- | --- |
 | Open command palette | <kbd>⌘K</kbd> |
 | Open shortcut list | <kbd>?</kbd> |
+| Search Drive documents | <kbd>⌘P</kbd> (Windows/Linux: <kbd>Ctrl+P</kbd>, outside a terminal) |
 | Search the current view | <kbd>/</kbd> or <kbd>⌘F</kbd> |
 | Find in a Code terminal | <kbd>⌘F</kbd> (Linux: <kbd>Ctrl+Shift+F</kbd>) |
 | Open Settings | <kbd>⌘,</kbd> or <kbd>g</kbd> then <kbd>s</kbd> |

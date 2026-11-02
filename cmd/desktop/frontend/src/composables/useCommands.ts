@@ -46,7 +46,10 @@ export interface Command {
    * 'feed', 'chat'). Object rows only; a verb row's title already says.
    */
   kind?: string
-  /** Palette scope: 'goto' rows browse, 'actions' rows act. Default 'actions'. */
+  /**
+   * Palette scope: 'goto' rows browse, 'actions' rows act, 'drive' rows are
+   * documents and show only in the Drive tab. Default 'actions'.
+   */
   scope?: CommandScope
   /** Running the row keeps the palette open (sigil-legend rows). */
   keepOpen?: boolean
@@ -453,7 +456,8 @@ export function useCommandPalette(): {
           keysScopes.value.flatMap((r) => r.source()),
         )
       case 'goto':
-      case 'actions': {
+      case 'actions':
+      case 'drive': {
         const wanted = _scope.value
         return filterAndScore(
           query,
@@ -461,7 +465,11 @@ export function useCommandPalette(): {
         )
       }
       default:
-        return filterAndScore(query, allCommands())
+        // A drive holds enough documents to bury every command.
+        return filterAndScore(
+          query,
+          allCommands().filter((cmd) => cmd.scope !== 'drive'),
+        )
     }
   })
 
@@ -521,8 +529,9 @@ export function useCommandPalette(): {
     // the very navigation the row exists to offer. It is chrome, not a
     // repeatable entry, so it is never recorded either.
     if (cmd.keepOpen) return cmd.run()
-    // Shell lines aren't repeatable entries and Keys rows are reference, so
-    // only All/Go to/Actions rows earn a place in Recent.
+    // Shell lines aren't repeatable entries, Keys rows are reference, and
+    // Recent only draws in All, where a Drive row never shows. So only All/Go
+    // to/Actions rows earn a place in it.
     if (_scope.value === 'all' || _scope.value === 'goto' || _scope.value === 'actions') recordRun(cmd.id)
     _open.value = false
     _query.value = ''

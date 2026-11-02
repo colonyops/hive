@@ -220,7 +220,7 @@ Open the Drive pane beside a session with the right-panel button in the title ba
 
 The pane, the Drive page, search, reorganizing, and the document tools work as they do in [Chats](../chats/agent-workspaces.md#drive). A scratch terminal has no Drive pane.
 
-An agent outside any chat or Code session, such as one you start in a plain terminal, can still write documents: it passes `global` as its session, and every such agent shares the Shared space. It has no pane. Read it on the Drive page under **Shared**, or find a document by name in the command palette.
+An agent outside any chat or Code session, such as one you start in a plain terminal, can still write documents: it passes `global` as its session, and every such agent shares the Shared space. It has no pane. Read it on the Drive page under **Shared**, or find a document by name in the command palette's **Drive** tab.
 
 ## Appearance
 
