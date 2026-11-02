@@ -220,7 +220,7 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await expect(page.getByTestId('changes-view')).toBeVisible()
   })
 
-  test('steps through hunks in the rendered diff (mock terminal)', async ({ page }) => {
+  test('steps through hunks in the rendered diff (mock terminal)', { tag: [tag.chromiumOnly] }, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 420 })
     await changesFixture(page)
     await openChanges(page)
@@ -254,7 +254,7 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     else expect(selection).not.toBe('Range')
   })
 
-  test('searches every diff and steps through the matches (mock terminal)', async ({ page, browserName }) => {
+  test('searches every diff and steps through the matches (mock terminal)', { tag: [tag.chromiumOnly] }, async ({ page, browserName }) => {
     await changesFixture(page)
     await openChanges(page)
 
