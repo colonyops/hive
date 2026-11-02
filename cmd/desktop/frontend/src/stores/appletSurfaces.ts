@@ -1,5 +1,4 @@
 import type { Component } from 'vue'
-import IconAppWindow from '~icons/lucide/app-window'
 import IconPanelTop from '~icons/lucide/panel-top'
 import IconSquareStack from '~icons/lucide/square-stack'
 
@@ -55,13 +54,6 @@ export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
     persistent: false,
     takesFocus: true,
     escapeCloses: true,
-    placement: {
-      label: 'Session pop-up',
-      icon: IconAppWindow,
-      description: "Adds it to a session's + menu. Opens over the app, on that session.",
-      where: "a session's + menu",
-      offeredPage: (applet) => applet.entry,
-    },
   },
   titlebar: {
     panel: false,

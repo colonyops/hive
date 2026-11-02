@@ -4,7 +4,7 @@ import IconPlus from '~icons/lucide/plus'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import type { MenuEntry } from '@hive/ui/types/menu'
-import { useApplets, type AppletMenuRow } from '../../stores/useApplets'
+import { useApplets } from '../../stores/useApplets'
 import { appletMenuChoice, appletMenuEntries } from '../applets/appletMenu'
 import { sessionView, type SessionViewKind } from '../terminal/panelViews'
 
@@ -12,7 +12,7 @@ const props = defineProps<{
   panel: string
   views: readonly SessionViewKind[]
 }>()
-const emit = defineEmits<{ view: [kind: SessionViewKind]; applet: [id: string, opensAs: AppletMenuRow['opensAs']] }>()
+const emit = defineEmits<{ view: [kind: SessionViewKind]; applet: [id: string] }>()
 
 const applets = useApplets()
 
@@ -31,7 +31,7 @@ const entries = computed<MenuEntry[]>(() => [
 function select(id: string): void {
   menuOpen.value = false
   const choice = appletMenuChoice(id)
-  if (choice) emit('applet', choice.applet, choice.opensAs)
+  if (choice) emit('applet', choice)
   else emit('view', id as SessionViewKind)
 }
 </script>

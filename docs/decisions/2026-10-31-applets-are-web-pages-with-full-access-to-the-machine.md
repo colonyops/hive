@@ -141,7 +141,7 @@ stops new calls at once and closes its frames at the next launch.
 An applet opens where the user asked. A session's panel layout is the main place: any applet
 can be a tab there, added to the session's + menu by the user and never by its file, because a
 tab loads whenever that session is on screen. The pop-up over the app stays for what should
-not take a panel. A tab's page runs only while its session is the one selected in its area,
+not take a panel, and opens from the palette or a key rather than the + menu. A tab's page runs only while its session is the one selected in its area,
 as Drive and Diff do, so another session costs nothing and its processes stop. A trip to
 another area keeps it running, as a terminal keeps running. Agents can move and focus
 an open tab, but `open_tab` and `close_tab` refuse an applet, because that MCP server runs nothing on a

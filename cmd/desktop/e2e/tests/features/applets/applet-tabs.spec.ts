@@ -14,24 +14,18 @@ async function openSession(page: Page) {
 }
 
 test.describe('applet tabs', { tag: [tag.applets] }, () => {
-  test('the + menu has only what the user added, and opens it as a tab or a pop-up', async ({ page }) => {
+  test('the + menu has only what the user added, and opens it as a tab', async ({ page }) => {
     await page.goto('/')
     await openSession(page)
     await page.getByTestId('panel-tab-add-p0').click()
-    await expect(page.getByTestId('session-add-applet-tab-e2e-page')).toHaveCount(0)
+    await expect(page.getByTestId('session-add-applet-e2e-page')).toHaveCount(0)
     await page.keyboard.press('Escape')
 
     await togglePlace(page, 'e2e-page', 'tab')
-    await togglePlace(page, 'e2e-page', 'page')
     await openSession(page)
 
     await page.getByTestId('panel-tab-add-p0').click()
-    await page.getByTestId('session-add-applet-page-e2e-page').click()
-    await expect(page.getByTestId('applet-frame')).toBeVisible()
-    await page.getByTestId('applet-page-close').click()
-
-    await page.getByTestId('panel-tab-add-p0').click()
-    await page.getByTestId('session-add-applet-tab-e2e-page').click()
+    await page.getByTestId('session-add-applet-e2e-page').click()
     const frame = page.getByTestId('applet-tab-frame')
     await expect(frame).toBeVisible()
     await expect(page.getByTestId('panel-tab-applet:e2e-page')).toHaveText(/E2E page/)
@@ -88,6 +82,5 @@ test.describe('applet tabs', { tag: [tag.applets] }, () => {
     await expect(frame).toHaveCount(0)
 
     await togglePlace(page, 'e2e-page', 'tab')
-    await togglePlace(page, 'e2e-page', 'page')
   })
 })

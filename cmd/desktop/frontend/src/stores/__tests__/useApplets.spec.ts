@@ -144,12 +144,9 @@ describe('useApplets placements', () => {
     ])
   })
 
-  it('lists what the user put in the + menu, one row per way it opens', async () => {
-    const applets = await storeWith({ tab: ['radio', 'off', 'bad', 'gone'], page: ['radio'] })
-    expect(applets.sessionMenu.value.map((row) => [row.applet.id, row.opensAs])).toEqual([
-      ['radio', 'tab'],
-      ['radio', 'page'],
-    ])
+  it('lists what the user put in the + menu, among those that can run', async () => {
+    const applets = await storeWith({ tab: ['radio', 'off', 'bad', 'gone'] })
+    expect(applets.sessionMenu.value.map((row) => row.id)).toEqual(['radio'])
   })
 
   it('leaves an applet out of the + menu until the user adds it', async () => {
@@ -202,20 +199,11 @@ describe('useApplets placements', () => {
     expect(code.open).toHaveBeenCalledWith('radio')
   })
 
-  it('opens the pop-up the + menu asks for even when the applet is also a tab', async () => {
-    const applets = await storeWith({ tab: ['radio'], page: ['radio'] })
-    const host = hostOf()
-    applets.setTabHost(host, true)
-    applets.openPopup('radio', 'review')
-    expect(host.open).not.toHaveBeenCalled()
-    expect(applets.open.value?.id).toBe('radio')
-  })
-
   it('closes another pop-up that would cover the tab it opens', async () => {
     service.List.mockResolvedValue([applet('radio'), applet('other')])
     const applets = await storeWith({ tab: ['radio'] })
     applets.setTabHost(hostOf(), true)
-    applets.openPopup('other', '')
+    applets.toggle('other')
     applets.toggle('radio')
     expect(applets.open.value).toBeNull()
   })

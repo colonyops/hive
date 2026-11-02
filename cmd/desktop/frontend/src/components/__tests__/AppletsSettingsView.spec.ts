@@ -248,9 +248,7 @@ describe('AppletsSettingsView', () => {
       inBody('settings-applet-docker-places-tab')?.click()
       await flushPromises()
       expect(settingsService.SetAppletSurface).toHaveBeenCalledWith('tab', ['docker'])
-      inBody('settings-applet-docker-places-page')?.click()
-      await flushPromises()
-      expect(settingsService.SetAppletSurface).toHaveBeenCalledWith('page', ['docker'])
+      expect(inBody('settings-applet-docker-places-page')).toBeFalsy()
       wrapper.unmount()
     })
 

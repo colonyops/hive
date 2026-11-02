@@ -47,7 +47,7 @@ const views = computed(() =>
     @terminal="panels.newWindow(row, panel)"
     @agent="panels.newAgentWindow(row, $event, panel)"
     @view="panels.openViewIn(row, $event, panel)"
-    @applet="(id, opensAs) => panels.openAppletIn(row, id, opensAs, panel)"
+    @applet="panels.openAppletIn(row, $event, panel)"
     @retry="ops.loadAgentProfiles"
   />
 </template>

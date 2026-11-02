@@ -1,7 +1,6 @@
 import { computed, watch } from 'vue'
 import { appletTab } from '../../lib/appletTabs'
 import { openTab } from '../../lib/panelLayout'
-import { useApplets, type AppletMenuRow } from '../../stores/useApplets'
 import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import { viewTab, viewsFor, type SessionViewHost, type SessionViewKind } from './panelViews'
@@ -34,7 +33,6 @@ export function codeViewHost(
 export function useCodePanels(options: { pool: TerminalPool; tree: TerminalTree; ops: TerminalSessionOps }) {
   const { pool, tree, ops } = options
   const layouts = usePanelLayouts()
-  const applets = useApplets()
 
   const row = computed(
     () => tree.attachable.value.find((candidate) => candidate.slug === pool.visibleSlug.value) ?? null,
@@ -78,16 +76,7 @@ export function useCodePanels(options: { pool: TerminalPool; tree: TerminalTree;
     if (target.slug !== pool.visibleSlug.value) ops.selectRow(target.slug)
   }
 
-  function openAppletIn(
-    target: TerminalSessionRow,
-    id: string,
-    opensAs: AppletMenuRow['opensAs'],
-    panel?: string,
-  ): void {
-    if (opensAs === 'page') {
-      applets.openPopup(id, target.slug)
-      return
-    }
+  function openAppletIn(target: TerminalSessionRow, id: string, panel?: string): void {
     layouts.apply(target.id, (current) => openTab(current, appletTab(id), panel))
     if (target.slug !== pool.visibleSlug.value) ops.selectRow(target.slug)
   }

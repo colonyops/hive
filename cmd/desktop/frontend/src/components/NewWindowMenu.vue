@@ -6,7 +6,7 @@ import { agentBrandIcon } from './terminal/agentBrandIcon'
 import type { SessionViewKind } from './terminal/panelViews'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import { appletMenuChoice, appletMenuEntries } from './applets/appletMenu'
-import type { AppletMenuRow } from '../stores/useApplets'
+import type { Applet } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const props = defineProps<{
   running: boolean
@@ -18,14 +18,14 @@ const props = defineProps<{
   loading: boolean
   failed: boolean
   views?: { kind: SessionViewKind; label: string; icon: Component }[]
-  applets?: readonly AppletMenuRow[]
+  applets?: readonly Applet[]
 }>()
 const emit = defineEmits<{
   close: []
   terminal: []
   agent: [profile: string]
   view: [kind: SessionViewKind]
-  applet: [id: string, opensAs: AppletMenuRow['opensAs']]
+  applet: [id: string]
   retry: []
 }>()
 
@@ -76,7 +76,7 @@ function select(id: string): void {
   else if (id.startsWith('view:')) emit('view', id.slice(5) as SessionViewKind)
   else {
     const choice = appletMenuChoice(id)
-    if (choice) emit('applet', choice.applet, choice.opensAs)
+    if (choice) emit('applet', choice)
   }
 }
 </script>

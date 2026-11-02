@@ -23,12 +23,6 @@ import { useResource } from './useResource'
 
 export const BUILDER_ID = 'applet-builder'
 
-// One row of a session's + menu. An applet the user put there both ways has two.
-export interface AppletMenuRow {
-  applet: Applet
-  opensAs: 'tab' | 'page'
-}
-
 /** The session area the user is in, which can show an applet as a tab. */
 export interface AppletTabHost {
   open: (id: string) => void
@@ -116,10 +110,7 @@ export const useApplets = defineStore('applets', () => {
     ]),
   ) as Partial<Record<AppletSurface, ComputedRef<Applet[]>>>
 
-  const sessionMenu = computed<AppletMenuRow[]>(() => [
-    ...(placed.tab?.value ?? []).map((applet) => ({ applet, opensAs: 'tab' as const })),
-    ...(placed.page?.value ?? []).map((applet) => ({ applet, opensAs: 'page' as const })),
-  ])
+  const sessionMenu = computed(() => placed.tab?.value ?? [])
 
   // The session area on screen, which can show an applet as a tab. Both areas stay
   // mounted, so only the one the user is in holds this.
@@ -260,7 +251,7 @@ export const useApplets = defineStore('applets', () => {
 
   function openForCommand(id: string, command: string): void {
     commandsForPanel.set(id, [...(commandsForPanel.get(id) ?? []), command])
-    if (!openPlacedTab(id)) openPopup(id, liveSessionSlug.value)
+    if (!openPlacedTab(id)) openPopup(id)
   }
 
   const frameRows = shallowRef(new Map<AppletFrameHandle, { applet: string; rows: AppletPageRow[] }>())
@@ -350,11 +341,11 @@ export const useApplets = defineStore('applets', () => {
       openID.value = null
       return
     }
-    if (!openPlacedTab(id)) openPopup(id, liveSessionSlug.value)
+    if (!openPlacedTab(id)) openPopup(id)
   }
 
-  function openPopup(id: string, session: string): void {
-    sessionSlug.value = session
+  function openPopup(id: string): void {
+    sessionSlug.value = liveSessionSlug.value
     openID.value = id
   }
 
@@ -369,7 +360,6 @@ export const useApplets = defineStore('applets', () => {
     sessionSlug: readonly(sessionSlug),
     reload: catalog.reload,
     toggle,
-    openPopup,
     close,
     sessionMenu,
     byID,

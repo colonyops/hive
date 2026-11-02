@@ -33,7 +33,7 @@ import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
 import { appletIdOf, appletTab } from '../lib/appletTabs'
-import { useApplets, type AppletMenuRow } from '../stores/useApplets'
+import { useApplets } from '../stores/useApplets'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveRoute } from '../composables/useDriveRoute'
@@ -198,9 +198,8 @@ function tabLabel(tab: PanelTab): string {
 const applets = useApplets()
 const chatSlug = computed(() => openChat.value?.slug ?? '')
 
-function openAppletIn(id: string, opensAs: AppletMenuRow['opensAs'], panelId: string): void {
-  if (opensAs === 'page') applets.openPopup(id, chatSlug.value)
-  else panels.apply((current) => openTab(current, appletTab(id), panelId))
+function openAppletIn(id: string, panelId: string): void {
+  panels.apply((current) => openTab(current, appletTab(id), panelId))
 }
 
 useAppletTabHost({
@@ -1051,7 +1050,7 @@ onBeforeUnmount(() => {
                 :panel="panel.id"
                 :views="chatViews"
                 @view="(kind) => panels.apply((current) => openTab(current, viewTab(kind), panel.id))"
-                @applet="(id, opensAs) => openAppletIn(id, opensAs, panel.id)"
+                @applet="openAppletIn($event, panel.id)"
               />
             </template>
             <template #picker="{ panel }">

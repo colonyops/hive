@@ -75,10 +75,8 @@ type AppletsSettings struct {
 	// Titlebar lists the applets shown in the title bar, in order. An id with no such
 	// applet stays listed, so an applet being rewritten keeps its place.
 	Titlebar []string `yaml:"titlebar,omitempty"`
-	// Tabs and Popups list the applets in a session's + menu, in order, by what choosing
-	// one opens. The same applet can be on both.
-	Tabs   []string `yaml:"tabs,omitempty"`
-	Popups []string `yaml:"popups,omitempty"`
+	// Tabs lists the applets in a session's + menu, in order.
+	Tabs []string `yaml:"tabs,omitempty"`
 	// Disabled lists the applets the user turned off. An id with no such applet stays
 	// listed, for the same reason.
 	Disabled []string `yaml:"disabled,omitempty"`
@@ -88,7 +86,6 @@ type AppletsSettings struct {
 var appletSurfaceLists = map[string]func(*AppletsSettings) *[]string{
 	"titlebar": func(a *AppletsSettings) *[]string { return &a.Titlebar },
 	"tab":      func(a *AppletsSettings) *[]string { return &a.Tabs },
-	"page":     func(a *AppletsSettings) *[]string { return &a.Popups },
 }
 
 // Surface returns the list of applets the user put on a surface.

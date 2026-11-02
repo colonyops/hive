@@ -23,21 +23,21 @@ The applet appears as soon as its file is valid. If you dislike it, ask for chan
 - Press <kbd>⌘K</kbd> and type <kbd>+</kbd>, or press <kbd>⇥</kbd> to reach the **Applets** tab, to see only applets.
 - Bind one to a key in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>`. The same key closes a pop-up again.
 
+It opens as a pop-up over the app, on the session on screen, unless you [added it as a session tab](#add-one-to-a-sessions-menu).
+
 <kbd>esc</kbd> closes a pop-up, unless the page uses the key itself first. A tab stays open; close it from its tab.
 
 ## Add one to a session's + menu
 
-In **Settings ▸ Applets**, open the places menu on an applet's row, or its details, and turn on one or both:
+In **Settings ▸ Applets**, open the places menu on an applet's row, or its details, and turn on **Session tab**.
 
-- **Session tab**: choosing it opens the applet as a tab, beside the session's terminals and Drive. Drag it between panels like any other tab. Its page keeps running behind other tabs, through a move, and while you are in another part of the app. It stops when you close the tab or switch to another session.
-- **Session pop-up**: choosing it opens the applet over the app, working on that session.
+The applet then shows in the **+** on a tab row and on a session in the sidebar, for chats as well as Code sessions. Choosing it opens the applet as a tab, beside the session's terminals and Drive. Drag it between panels like any other tab. Its page keeps running behind other tabs, through a move, and while you are in another part of the app. It stops when you close the tab or switch to another session.
 
-The applet then shows in the **+** on a tab row and on a session in the sidebar, for chats as well as Code sessions. Hive never adds one for you. An applet you turned on as a session tab also opens as a tab from the palette and its shortcut when a session is on screen, and there the shortcut brings the tab forward instead of closing it. Anywhere else it opens as a pop-up.
+The **+** only opens tabs. For a pop-up, use the palette or bind a key. Hive never adds one for you. An applet you turned on as a session tab also opens as a tab from the palette and its shortcut when a session is on screen, and there the shortcut brings the tab forward instead of closing it. Anywhere else it opens as a pop-up.
 
 ```yaml
 applets:
   tabs: [build-status]
-  popups: [music]
 ```
 
 A session keeps its applet tabs across restarts. If you turn an applet off, its tab stays and says so until you close it. Deleting an applet closes its tabs.

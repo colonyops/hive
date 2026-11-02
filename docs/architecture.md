@@ -1445,8 +1445,9 @@ opened in `AppletFrame`
   the DOM reloads the page. `contentKey` re-keys the layer, so an area runs the tabs of its
   selected session only, and they keep running through a trip to another area, as its
   terminals do. A command goes to a frame on screen (`AppletFrameHandle.onScreen`), never to a
-  tab the user cannot see, and a palette row shows only while its frame is. The user adds an applet to a session's + menu as a tab, a pop-up, or both
-  (`applets.tabs`, `applets.popups`), and the file cannot add itself. A tab host registers with
+  tab the user cannot see, and a palette row shows only while its frame is. The user adds an applet to a session's + menu as a tab
+  (`applets.tabs`), and the file cannot add itself. The menu has no row for a pop-up, which
+  opens from the palette or a chord. A tab host registers with
   `setTabHost`, so the palette and a chord open a placed applet as a tab where one can show.
   Delete and import close saved tabs for the id, and import does it before `ConfirmImport`,
   because its catalog reload would mount the imported page in a leftover tab.
