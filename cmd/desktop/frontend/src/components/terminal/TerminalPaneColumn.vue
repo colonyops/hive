@@ -837,10 +837,11 @@ onBeforeUnmount(() => {
       </template>
     </PanelLayoutHost>
 
-    <!-- pb-0.5: the fonts sit lowercase letters about 1.4px below the middle of their box. -->
+    <!-- bg-app is what xterm paints (lib/terminalTheme.ts), so the bar and the terminal read as one surface.
+         pb-0.5: the fonts sit lowercase letters about 1.4px below the middle of their box. -->
     <footer
       v-if="footerRow"
-      class="flex h-7 shrink-0 items-center gap-1 overflow-hidden border-t border-border bg-raised px-1.5 pb-0.5"
+      class="flex h-7 shrink-0 items-center gap-1 overflow-hidden border-t border-border bg-app px-1.5 pb-0.5"
       aria-label="Session status"
       data-testid="terminal-pane-statusbar"
     >

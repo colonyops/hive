@@ -56,9 +56,10 @@ watch(tabIds, (ids, before) => {
 </script>
 
 <template>
+  <!-- bg-app is what xterm paints (lib/terminalTheme.ts), so the row and the terminal read as one surface. -->
   <div
     ref="rowEl"
-    class="flex shrink-0 items-stretch border-b border-border bg-sidebar pr-1"
+    class="flex shrink-0 items-stretch border-b border-border bg-app pr-1"
     :class="resizable ? 'cursor-row-resize' : ''"
     :style="{ height: `${TAB_ROW_PX}px` }"
     :data-testid="`panel-tab-row-${panel.id}`"
