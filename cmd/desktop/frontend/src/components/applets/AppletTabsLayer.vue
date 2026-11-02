@@ -53,7 +53,7 @@ const tabs = computed(() =>
     @pointerdown.capture="emit('focusPanel', tab.panel)"
   >
     <AppletFrame
-      v-if="tab.applet?.runnable && tab.applet.enabled"
+      v-if="tab.applet?.runnable && tab.applet.enabled && tab.applet.surfaces.tab"
       :applet="tab.applet"
       :session-slug="sessionSlug"
       :wants-focus="active && keysActive && openModals === 0 && !applets.open.value && tab.focused"
@@ -64,7 +64,10 @@ const tabs = computed(() =>
     />
     <div v-else class="flex flex-1 items-center justify-center p-6" data-testid="applet-tab-unavailable">
       <InlineError v-if="tab.applet && !tab.applet.runnable" :message="tab.applet.error" />
-      <p v-else-if="tab.applet" class="text-small text-text-3">{{ tab.applet.title }} is turned off.</p>
+      <p v-else-if="tab.applet && !tab.applet.enabled" class="text-small text-text-3">
+        {{ tab.applet.title }} is turned off.
+      </p>
+      <p v-else-if="tab.applet" class="text-small text-text-3">{{ tab.applet.title }} no longer opens as a tab.</p>
       <p v-else-if="applets.loaded.value" class="text-small text-text-3">
         There is no applet named <span class="font-mono">{{ tab.appletId }}</span> any more.
       </p>

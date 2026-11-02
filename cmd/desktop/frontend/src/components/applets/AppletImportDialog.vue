@@ -2,7 +2,7 @@
 // The last stop before a stranger's code lands on this machine, so the warning leads, the
 // default is to cancel, and importing takes a deliberate tick and a click. Nothing is on
 // disk until then (ADR applets-are-web-pages-with-full-access-to-the-machine).
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import AppCheckbox from '@hive/ui/components/ui/AppCheckbox.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
@@ -17,13 +17,20 @@ import type { AppletImportPreview } from '../../../bindings/github.com/colonyops
 import { useKeybindings } from '../../composables/useKeybindings'
 import { useToasts } from '../../composables/useToasts'
 import { formatBytes } from '../../lib/bytes'
-import { PLACEABLE_SURFACES, SURFACES } from '../../stores/appletSurfaces'
 import { useApplets } from '../../stores/useApplets'
 
 const props = defineProps<{ preview: AppletImportPreview }>()
 const emit = defineEmits<{ close: [] }>()
 
 const WIDTH = 560
+
+// A title bar page runs from the moment the file lands, so the warning has to say so.
+const titlebarPage = computed(() => props.preview.surfaces.titlebar?.entry)
+const opensAs = computed(() =>
+  [props.preview.surfaces.tab && 'a session tab', props.preview.surfaces.popup && 'a pop-up']
+    .filter(Boolean)
+    .join(' or '),
+)
 
 const applets = useApplets()
 const keybindings = useKeybindings()
@@ -63,10 +70,12 @@ async function confirm(): Promise<void> {
   try {
     await ConfirmImport(props.preview.token, target)
     settled = true
-    // Places first: the catalog is what would mount a title bar page for a stale one.
-    await Promise.all([applets.reloadPlacements(), keybindings.reload()])
+    await keybindings.reload()
     await applets.reload()
-    showToast(`Imported ${props.preview.title}`, { severity: 'success', body: 'Nothing is running until you open it.' })
+    showToast(`Imported ${props.preview.title}`, {
+      severity: 'success',
+      body: titlebarPage.value ? 'Its title bar page is running.' : 'Nothing is running until you open it.',
+    })
     emit('close')
   } catch (e) {
     conflict.value = true
@@ -91,7 +100,10 @@ async function confirm(): Promise<void> {
     <div class="space-y-4 p-5 text-body">
       <div class="rounded-lg bg-severity-error-tint p-3.5" data-testid="applet-import-warning">
         <p class="font-semibold text-severity-error">An applet has full access to this machine, as you.</p>
-        <p class="mt-1.5 text-text-2">Hive does not review or limit it. Once you open it, it can:</p>
+        <p class="mt-1.5 text-text-2">
+          Hive does not review or limit it. {{ titlebarPage ? 'As soon as you import it' : 'Once you open it' }}, it
+          can:
+        </p>
         <ul class="mt-1.5 list-disc space-y-0.5 pl-5 text-text-2">
           <li>run any command or program, and keep processes running</li>
           <li>read, change and delete any of your files, including keys and passwords stored in them</li>
@@ -125,16 +137,14 @@ async function confirm(): Promise<void> {
           <dt class="text-meta text-text-3">What runs</dt>
           <dd>
             <ul class="space-y-0.5 text-text-2" data-testid="applet-import-runs">
-              <li>Nothing runs on import, and nothing starts by itself.</li>
-              <li>
-                <code class="font-mono">{{ preview.entry }}</code> runs when you open the applet.
+              <li v-if="titlebarPage">
+                <code class="font-mono">{{ titlebarPage }}</code> starts in the title bar as soon as you import this,
+                and runs whenever Hive is open.
               </li>
-              <template v-for="{ surface, placement } in PLACEABLE_SURFACES" :key="surface">
-                <li v-if="SURFACES[surface].persistent && placement.offeredPage(preview)">
-                  It offers <code class="font-mono">{{ placement.offeredPage(preview) }}</code> for
-                  {{ placement.where }}. That stays off until you turn it on, and then runs whenever Hive is open.
-                </li>
-              </template>
+              <li v-else>Nothing runs on import.</li>
+              <li v-if="opensAs">
+                <code class="font-mono">{{ preview.entry }}</code> runs when you open the applet, as {{ opensAs }}.
+              </li>
               <li v-if="preview.commands?.length">
                 It adds to the command palette, and running one opens its page:
                 {{ preview.commands.map((command) => command.title).join(', ') }}.

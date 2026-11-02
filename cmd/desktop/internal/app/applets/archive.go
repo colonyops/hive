@@ -428,11 +428,12 @@ func parseArchiveApplet(id string, files []ArchiveFile, hiveVersion string) (App
 	if err := checkArchiveText(applet); err != nil {
 		return Applet{}, err
 	}
-	if !has(filepath.ToSlash(applet.Entry)) {
+	opens := applet.Surfaces.Tab != nil || applet.Surfaces.Popup != nil
+	if opens && !has(filepath.ToSlash(applet.Entry)) {
 		return Applet{}, fmt.Errorf("this file has no page %q, which its %s opens", applet.Entry, FileName)
 	}
-	if applet.Titlebar != nil && !has(filepath.ToSlash(applet.Titlebar.Entry)) {
-		return Applet{}, fmt.Errorf("this file has no page %q, which its %s shows in the title bar", applet.Titlebar.Entry, FileName)
+	if bar := applet.Surfaces.Titlebar; bar != nil && !has(filepath.ToSlash(bar.Entry)) {
+		return Applet{}, fmt.Errorf("this file has no page %q, which its %s shows in the title bar", bar.Entry, FileName)
 	}
 	return applet, nil
 }

@@ -3,7 +3,7 @@
   delete window.__hiveToken
   let nextID = 0
   const pending = new Map()
-  const surface = new URLSearchParams(location.search).get('surface') ?? 'page'
+  const surface = new URLSearchParams(location.search).get('surface') ?? 'popup'
   const listeners = { message: new Set(), session: new Set(), command: new Set() }
   // A command can be why this page opened, and arrive before its scripts have listened.
   const heldCommands = []

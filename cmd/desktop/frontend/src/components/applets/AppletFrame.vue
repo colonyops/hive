@@ -24,12 +24,12 @@ const props = withDefaults(
     wantsFocus?: boolean
     onScreen?: boolean
   }>(),
-  { surface: 'page', entry: undefined, wantsFocus: false, onScreen: true },
+  { surface: 'popup', entry: undefined, wantsFocus: false, onScreen: true },
 )
 const emit = defineEmits<{ close: []; resize: [size: { width?: number; height?: number }]; focused: [] }>()
 
 const rules = computed(() => SURFACES[props.surface])
-const isPopup = computed(() => props.surface === 'page')
+const isPopup = computed(() => props.surface === 'popup')
 const popupTerminal = usePopupTerminal()
 const frame = ref<HTMLIFrameElement | null>(null)
 

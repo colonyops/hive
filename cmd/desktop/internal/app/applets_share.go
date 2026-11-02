@@ -34,7 +34,7 @@ type AppletImportPreview struct {
 	Title       string          `json:"title"`
 	Entry       string          `json:"entry"`
 	Cwd         string          `json:"cwd"`
-	Titlebar    *AppletTitlebar `json:"titlebar"`
+	Surfaces    AppletSurfaces  `json:"surfaces"`
 	Commands    []AppletCommand `json:"commands"`
 	Files       []AppletFile    `json:"files"`
 	TotalBytes  int64           `json:"totalBytes"`
@@ -140,7 +140,7 @@ func (s *AppletsService) PrepareImport(encoded string) (AppletImportPreview, err
 		Entry:       applet.Entry,
 		Cwd:         applet.Cwd,
 		Commands:    appletCommandsOf(applet),
-		Titlebar:    appletTitlebarOf(applet),
+		Surfaces:    appletSurfacesOf(applet),
 		Files:       make([]AppletFile, 0, len(archive.Files)),
 		Warnings:    applet.Warnings,
 	}
@@ -159,15 +159,15 @@ func (s *AppletsService) PrepareImport(encoded string) (AppletImportPreview, err
 // ConfirmImport installs the file PrepareImport checked, as a new applet called id. It
 // never replaces one. An id that is taken leaves the file waiting, so the user can pick
 // another. The id first forgets what settings.yaml still holds for it, so a file cannot
-// inherit a place or a chord the user gave another applet of that name.
+// inherit an off switch or a chord the user gave another applet of that name.
 func (s *AppletsService) ConfirmImport(token, id string) error {
 	s.shareMu.Lock()
 	defer s.shareMu.Unlock()
 	if s.pendingImport == nil || s.pendingImport.token != token {
 		return Errorf(KindNotFound, "that import is no longer waiting. Choose the file again")
 	}
-	// Cleared before the applet lands: a title bar place still listed for this id would
-	// otherwise run the imported page with nobody having turned it on.
+	// Cleared before the applet lands: the catalog reload that follows starts its title bar
+	// page, which must not come up already bound to someone else's chord.
 	var forgetErr error
 	forget := func() error {
 		forgetErr = s.preferences.ForgetApplet(id)

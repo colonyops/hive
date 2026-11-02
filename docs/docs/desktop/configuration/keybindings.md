@@ -61,7 +61,7 @@ keybindings:
   applet.radio.next: [alt+n]
 ```
 
-`applet.<id>` opens and closes the applet's pop-up. If you [added the applet to the + menu as a tab](applets.md#add-one-to-a-sessions-menu) and a session is on screen, it opens that tab or brings it forward instead. `applet.<id>.<command>` runs a [command the applet lists](applets.md#palette-commands). Both also work from a focused terminal, whatever keys they use, so the terminal stops receiving that key. Avoid one your shell needs. With focus inside an applet page, a shortcut needs <kbd>⌘</kbd>, <kbd>Ctrl</kbd> or <kbd>⌥</kbd>, because the page keeps other keys.
+`applet.<id>` opens the applet where its file says. If it [lists a tab](applets.md#where-it-shows) and a session is on screen, that opens the tab or brings it forward. Otherwise it opens and closes the pop-up. `applet.<id>.<command>` runs a [command the applet lists](applets.md#palette-commands). Both also work from a focused terminal, whatever keys they use, so the terminal stops receiving that key. Avoid one your shell needs. With focus inside an applet page, a shortcut needs <kbd>⌘</kbd>, <kbd>Ctrl</kbd> or <kbd>⌥</kbd>, because the page keeps other keys.
 
 While an applet's pop-up is open, only <kbd>⌘K</kbd>, the key that closes it, and that applet's commands run. A page can keep a shortcut for itself, so one it uses may not reach Hive.
 

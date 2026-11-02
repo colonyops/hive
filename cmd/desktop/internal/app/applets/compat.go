@@ -98,12 +98,18 @@ func releaseNumbers(parts []string) ([]int, bool) {
 // hasRootKey finds a key the gate read as empty, such as a null or a list, which must
 // refuse rather than count as no requirement.
 func hasRootKey(doc *yaml.Node, key string) bool {
-	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 {
 		return false
 	}
-	root := doc.Content[0]
-	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value == key {
+	return hasKey(doc.Content[0], key)
+}
+
+func hasKey(mapping *yaml.Node, key string) bool {
+	if mapping.Kind != yaml.MappingNode {
+		return false
+	}
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
 			return true
 		}
 	}

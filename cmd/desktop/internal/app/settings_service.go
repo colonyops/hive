@@ -310,31 +310,6 @@ func (s *SettingsService) SetTerminalShowStatusBar(_ context.Context, show bool)
 	return Wrap(err, KindInternal, "saving settings")
 }
 
-// AppletSurface lists the applets the user put on a surface, in order.
-func (s *SettingsService) AppletSurface(_ context.Context, surface string) ([]string, error) {
-	cfg, err := s.store.Effective()
-	if err != nil {
-		return nil, Wrap(err, KindInternal, "reading settings")
-	}
-	list, ok := cfg.Applets.Surface(surface)
-	if !ok {
-		return nil, Errorf(KindInvalid, "no applet surface %q", surface)
-	}
-	return *list, nil
-}
-
-func (s *SettingsService) SetAppletSurface(_ context.Context, surface string, ids []string) error {
-	if _, ok := new(settings.AppletsSettings).Surface(surface); !ok {
-		return Errorf(KindInvalid, "no applet surface %q", surface)
-	}
-	_, err := s.store.Update(func(current *settings.Settings) error {
-		list, _ := current.Applets.Surface(surface)
-		*list = ids
-		return nil
-	})
-	return Wrap(err, KindInternal, "saving settings")
-}
-
 // AppletDisabled reports whether the user turned an applet off.
 func (s *SettingsService) AppletDisabled(id string) (bool, error) {
 	cfg, err := s.store.Effective()
@@ -357,8 +332,7 @@ func (s *SettingsService) SetAppletDisabled(id string, disabled bool) error {
 	return err
 }
 
-// ForgetApplet removes every choice made about an id: its place on each surface, whether
-// it was off, and its chords, including those of commands the new applet does not declare.
+// ForgetApplet removes every choice made about an id: whether it was off, and its chords, including those of commands the new applet does not declare.
 func (s *SettingsService) ForgetApplet(id string) error {
 	_, err := s.store.Update(func(current *settings.Settings) error {
 		current.Applets.Forget(id)

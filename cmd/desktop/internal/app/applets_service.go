@@ -32,8 +32,6 @@ type Applet struct {
 	Path     string `json:"path"`
 	Builtin  bool   `json:"builtin"`
 	Entry    string `json:"entry"`
-	Width    int    `json:"width"`
-	Height   int    `json:"height"`
 	Revision int64  `json:"revision"`
 	Runnable bool   `json:"runnable"`
 	Error    string `json:"error"`
@@ -42,10 +40,23 @@ type Applet struct {
 	Enabled bool `json:"enabled"`
 	// Warnings names what this Hive skipped in the file, such as a key from a later
 	// release. The applet runs without it.
-	Warnings []string `json:"warnings"`
-	// Titlebar is nil for an applet that offers no title bar page.
-	Titlebar *AppletTitlebar `json:"titlebar"`
+	Warnings []string        `json:"warnings"`
+	Surfaces AppletSurfaces  `json:"surfaces"`
 	Commands []AppletCommand `json:"commands"`
+}
+
+// AppletSurfaces is where an applet's file says it shows. Popup and Titlebar are nil for an
+// applet that does not show there.
+type AppletSurfaces struct {
+	Tab      bool            `json:"tab"`
+	Popup    *AppletPopup    `json:"popup"`
+	Titlebar *AppletTitlebar `json:"titlebar"`
+}
+
+// AppletPopup sizes the pop-up in pixels. Zero fills the window.
+type AppletPopup struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
 }
 
 // AppletCommand is a palette row an applet declares, bindable as applet.<id>.<command>.
@@ -56,15 +67,15 @@ type AppletCommand struct {
 	Keywords []string `json:"keywords"`
 }
 
-// AppletTitlebar is the page an applet offers for the title bar.
+// AppletTitlebar is the page an applet shows in the title bar.
 type AppletTitlebar struct {
 	Entry string `json:"entry"`
 	Width int    `json:"width"`
 }
 
 // AppletsService serves applets their files and answers window.hive (ADR
-// applets-are-web-pages-with-full-access-to-the-machine). Nothing runs when a file
-// loads: a page runs what it likes once the user opens it.
+// applets-are-web-pages-with-full-access-to-the-machine). A title bar page runs as soon
+// as its file is valid, and any other page once it is opened.
 type AppletsService struct {
 	catalog *applets.Store
 	environ func(context.Context) []string
@@ -231,11 +242,9 @@ func appletOf(entry applets.Entry) Applet {
 		Revision: entry.Revision,
 		Runnable: entry.Usable(),
 		Entry:    a.Entry,
-		Width:    a.Width,
-		Height:   a.Height,
 		Warnings: a.Warnings,
 		Commands: appletCommandsOf(a),
-		Titlebar: appletTitlebarOf(a),
+		Surfaces: appletSurfacesOf(a),
 	}
 	if entry.Err != nil {
 		out.Error = entry.Err.Error()
@@ -252,11 +261,28 @@ func appletCommandsOf(a applets.Applet) []AppletCommand {
 	return out
 }
 
-func appletTitlebarOf(a applets.Applet) *AppletTitlebar {
-	if a.Titlebar == nil {
-		return nil
+func appletSurfacesOf(a applets.Applet) AppletSurfaces {
+	out := AppletSurfaces{Tab: a.Surfaces.Tab != nil}
+	if popup := a.Surfaces.Popup; popup != nil {
+		out.Popup = &AppletPopup{Width: popup.Width, Height: popup.Height}
 	}
-	return &AppletTitlebar{Entry: a.Titlebar.Entry, Width: a.Titlebar.Width}
+	if bar := a.Surfaces.Titlebar; bar != nil {
+		out.Titlebar = &AppletTitlebar{Entry: bar.Entry, Width: bar.Width}
+	}
+	return out
+}
+
+// CheckTab refuses a tab the applet cannot show, so an agent hears why instead of the
+// request landing on a tab that says the applet is off.
+func (s *AppletsService) CheckTab(id string) error {
+	applet, err := s.page(id)
+	if err != nil {
+		return err
+	}
+	if applet.Surfaces.Tab == nil {
+		return Errorf(KindInvalid, "%s does not list surfaces.tab in its %s, so it has no tab", applet.Title, applets.FileName)
+	}
+	return nil
 }
 
 func (s *AppletsService) applet(id string) (applets.Applet, error) {

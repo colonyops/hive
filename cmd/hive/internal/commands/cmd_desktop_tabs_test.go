@@ -137,6 +137,12 @@ func TestDesktopToolArguments(t *testing.T) {
 			want:     map[string]any{"session": "s1", "view": "diff"},
 		},
 		{
+			name:     "close an applet's tab",
+			args:     []string{"tab", "close", "applet:radio"},
+			wantTool: "close_tab",
+			want:     map[string]any{"session": "s1", "view": "applet:radio"},
+		},
+		{
 			name:     "close anything else as a terminal window",
 			args:     []string{"tab", "close", "@3"},
 			wantTool: "close_tab",

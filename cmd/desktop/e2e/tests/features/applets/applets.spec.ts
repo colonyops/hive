@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { togglePlace } from "../../../fixtures/applets.js";
+import { toggleApplet } from "../../../fixtures/applets.js";
 import { screenshotPath, testdataPath } from "../../../fixtures/paths.js";
 import { expect, tag, test } from "../../../fixtures/test.js";
 
@@ -229,14 +229,11 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(frame.locator("#result")).toContainText('"bypassed":false');
   });
 
-  test("a title bar page runs once turned on, opens a dropdown, and talks to it", async ({
+  test("a title bar page runs from its file, opens a dropdown, and talks to it", async ({
     page,
     browserName,
   }) => {
     const slot = page.getByTestId("titlebar-applet-e2e-bar");
-    await expect(slot).toHaveCount(0);
-
-    await togglePlace(page, "e2e-bar", "titlebar");
     await expect(slot).toBeVisible();
 
     const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]');
@@ -277,14 +274,15 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await bar.locator("#command").click();
     await expect(page).toHaveURL(/#\/settings\/keybindings/);
 
-    await togglePlace(page, "e2e-bar", "titlebar");
+    await toggleApplet(page, "e2e-bar", false);
     await expect(slot).toHaveCount(0);
+    await toggleApplet(page, "e2e-bar", true);
+    await expect(slot).toBeVisible();
   });
 
   test("a page adds to the palette, and a declared command reaches the page that is running", async ({
     page,
   }) => {
-    await togglePlace(page, "e2e-bar", "titlebar");
     const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]');
     await expect(bar.locator("#surface")).toHaveText("titlebar");
 
@@ -295,7 +293,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await openApplet(page, "E2E bar live row");
     await expect(bar.locator("#command-run")).toHaveText("live");
 
-    await togglePlace(page, "e2e-bar", "titlebar");
+    await toggleApplet(page, "e2e-bar", false);
     await expect(page.getByTestId("titlebar-applet-e2e-bar")).toHaveCount(0);
 
     await page.keyboard.press("Meta+k");
@@ -307,11 +305,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     ).toHaveCount(0);
     await page.keyboard.press("Escape");
 
-    await openApplet(page, "E2E bar ping");
-    await expect(
-      page.frameLocator('[data-testid="applet-frame"]').locator("#command"),
-    ).toHaveText("ping");
-    await page.getByTestId("applet-page-close").click();
+    await toggleApplet(page, "e2e-bar", true);
   });
 
   test("a bound chord works from inside the page, and only there for what a panel allows", async ({
@@ -343,7 +337,6 @@ test.describe("applets", { tag: [tag.applets] }, () => {
 
     await bind("E2E page", "Meta+Shift+y");
     await bind("E2E bar ping", "Meta+Shift+u");
-    await togglePlace(page, "e2e-bar", "titlebar");
     const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]');
     await expect(bar.locator("#surface")).toHaveText("titlebar");
 
@@ -367,7 +360,6 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await page.keyboard.press("Meta+Shift+y");
     await expect(overlay).toHaveCount(0);
 
-    await togglePlace(page, "e2e-bar", "titlebar");
     await unbind("E2E page");
     await unbind("E2E bar ping");
   });
@@ -394,9 +386,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     for (const file of ["applet.yaml", "index.html", "bar.html"])
       await expect(files).toContainText(file);
     const runs = page.getByTestId("applet-import-runs");
-    await expect(runs).toContainText("Nothing runs on import");
-    await expect(runs).toContainText("bar.html");
-    await expect(runs).toContainText("stays off");
+    await expect(runs).toContainText("bar.html starts in the title bar");
     await expect(runs).toContainText("E2E imported go");
 
     // Enter on arrival is a cancel.

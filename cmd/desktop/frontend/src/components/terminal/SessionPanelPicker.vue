@@ -80,10 +80,10 @@ const row =
       </button>
     </template>
 
-    <template v-if="applets.placed.tab?.value.length">
+    <template v-if="applets.sessionMenu.value.length">
       <div :class="heading">Applets</div>
       <button
-        v-for="applet in applets.placed.tab.value"
+        v-for="applet in applets.sessionMenu.value"
         :key="applet.id"
         type="button"
         :class="row"

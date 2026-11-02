@@ -8,7 +8,7 @@ const props = defineProps<{ applet: Applet }>()
 
 const applets = useApplets()
 const requestedWidth = ref<number | null>(null)
-const width = computed(() => Math.max(0, requestedWidth.value ?? props.applet.titlebar?.width ?? 0))
+const width = computed(() => Math.max(0, requestedWidth.value ?? props.applet.surfaces.titlebar?.width ?? 0))
 
 // The bar has nothing of its own to close, so hive.close() and Escape in its page mean
 // the dropdown it opened.
@@ -33,7 +33,7 @@ function onResize(size: { width?: number }): void {
     <AppletFrame
       :applet="applet"
       :session-slug="applets.liveSessionSlug.value"
-      :entry="applet.titlebar?.entry"
+      :entry="applet.surfaces.titlebar?.entry"
       surface="titlebar"
       @close="closeOwnDropdown"
       @resize="onResize"

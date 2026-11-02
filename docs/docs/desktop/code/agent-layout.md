@@ -15,15 +15,15 @@ A tab is named by what it shows:
 
 - `drive`, `diff`, or `tasks` for a view;
 - `terminal` for a chat's terminal;
-- `applet:<id>` for an applet's tab, which can be moved and focused but not opened or closed from here;
+- `applet:<id>` for an applet's tab;
 - a tmux window of a Code session by id (`@3`) or exact name.
 
 ## What an agent can do
 
 | Tool | CLI | What it does |
 | --- | --- | --- |
-| `open_tab` | `hive dt tab open <view>` | Opens Drive, Diff, Tasks, or a terminal. `--path` picks a Drive document or canvas. `--placement behind` adds the tab behind the one in front with a dot; `beside` and `below` split the panel. `--anchor` names the tab to place next to. |
-| `close_tab` | `hive dt tab close <tab>` | Closes a Drive, Diff, or Tasks tab. On a Code window it kills that tmux window. |
+| `open_tab` | `hive dt tab open <view>` | Opens Drive, Diff, Tasks, a terminal, or `applet:<id>` for an [applet](../configuration/applets.md) that lists a tab. `--path` picks a Drive document or canvas. `--placement behind` adds the tab behind the one in front with a dot; `beside` and `below` split the panel. `--anchor` names the tab to place next to. |
+| `close_tab` | `hive dt tab close <tab>` | Closes a Drive, Diff, Tasks, or `applet:<id>` tab. On a Code window it kills that tmux window. |
 | `move_tab` | `hive dt tab move <tab> --placement P` | Moves an open tab behind, beside, or below the anchor, or the panel in front. |
 | `focus_tab` | `hive dt tab focus <tab>` | Brings a tab forward and focuses its panel. This one takes the screen. |
 | `close_panel` | `hive dt panel close <tab>` | Closes the panel holding the tab; its tabs join the neighbour. |

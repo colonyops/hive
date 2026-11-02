@@ -65,6 +65,9 @@ export function useSessionLayout(
     /** An agent's terminal. The window tab itself arrives with tmux's window list; this says where it goes. */
     openWindow?: (windowId: string, placement: SessionTabPlacement, anchor: TabRef | null) => void
     close: (view: SessionViewKind) => void
+    /** An agent's ask for an applet's tab. Go checked that the applet's file lists one. */
+    openApplet: (tab: AppletTabId, placement: SessionTabPlacement, anchor: TabRef | null) => void
+    closeApplet: (tab: AppletTabId) => void
     move: (tab: TabRef, placement: SessionTabPlacement, anchor: TabRef | null) => void
     focus: (tab: TabRef) => void
     closePanel: (tab: TabRef) => void
@@ -101,13 +104,17 @@ export function useSessionLayout(
           if (tab.window) handlers.openWindow?.(tab.window, placement, anchor)
           return
         }
-        if (isAppletTabId(tab.view)) return
+        if (isAppletTabId(tab.view)) {
+          handlers.openApplet(tab.view, placement, anchor)
+          return
+        }
         handlers.open(tab.view, payload.path || null, placement, anchor)
         return
       }
       case 'close':
+        if (isAppletTabId(tab.view)) handlers.closeApplet(tab.view)
         // Go kills the window itself, and its tab leaves with the window.
-        if (tab.view !== 'terminal' && !isAppletTabId(tab.view)) handlers.close(tab.view)
+        else if (tab.view !== 'terminal') handlers.close(tab.view)
         return
       case 'move':
         handlers.move(tab, placement, anchor)

@@ -13,9 +13,9 @@ func (ctrl *DriveController) registerTabs(srv *mcp.Server) {
 		Name:  "open_tab",
 		Title: "Open a tab or terminal beside the session",
 		Description: "Ask Hive to open a tab beside this chat or Code session. view is drive (the session's documents and " +
-			"canvases), diff (the Code session's changes), tasks (its task board) or terminal (a tmux window of the Code " +
-			"session). The tab applies only while the user is viewing this chat or session, and there is no " +
-			"acknowledgment; a terminal's tmux window is started whether or not they are. A chat has only drive; diff, " +
+			"canvases), diff (the Code session's changes), tasks (its task board), terminal (a tmux window of the Code " +
+			"session) or applet:<id> (an applet whose applet.yaml lists surfaces.tab; opening it runs its page). The tab applies only while the user is viewing this chat or session, and there is no " +
+			"acknowledgment; a terminal's tmux window is started whether or not they are. A chat has drive and applets; diff, " +
 			"tasks and terminal belong to a Code session. The shared space (global) sits beside no session, so it has no " +
 			"tabs; the user reads it in the Drive page. path, for drive only, shows one document by its path in the space, " +
 			"or a canvas by name or path (perf is canvases/perf.canvas.json); it must exist. Omit it to leave the tab on " +
@@ -38,8 +38,8 @@ func (ctrl *DriveController) registerTabs(srv *mcp.Server) {
 	addTool(srv, &mcp.Tool{
 		Name:  "close_tab",
 		Title: "Close a tab",
-		Description: "Ask Hive to close this chat or Code session's tab for a view (drive, diff or tasks), wherever it " +
-			"sits. Like open_tab, the tab closes only while the user is viewing this chat or session. Documents and " +
+		Description: "Ask Hive to close this chat or Code session's tab for a view (drive, diff, tasks or applet:<id>), wherever it " +
+			"sits. Closing an applet's tab ends its page. Like open_tab, the tab closes only while the user is viewing this chat or session. Documents and " +
 			"canvases are untouched; this closes the tab, not the content. view terminal needs window (a tmux window of " +
 			"the Code session, by id or exact name) and kills that window through tmux whether or not the session is on " +
 			"screen: it ends what runs in it, and the tab goes with it. Only close a window you started. A chat's " +
@@ -98,7 +98,7 @@ func (ctrl *DriveController) registerTabs(srv *mcp.Server) {
 
 type openTabInput struct {
 	Session   string `json:"session"             jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
-	View      string `json:"view"                jsonschema:"drive, diff, tasks or terminal. Drive is the session's documents and canvases; Diff is the Code session's changes; Tasks is its task board; Terminal is a tmux window of the Code session."`
+	View      string `json:"view"                jsonschema:"drive, diff, tasks, terminal or applet:<id>. Drive is the session's documents and canvases; Diff is the Code session's changes; Tasks is its task board; Terminal is a tmux window of the Code session; applet:<id> is an applet that lists surfaces.tab."`
 	Path      string `json:"path,omitempty"      jsonschema:"Drive only: the document to show, by its path in the space, or a canvas by name or path (perf is canvases/perf.canvas.json). It must exist. Omit to leave the tab on its own pick."`
 	Placement string `json:"placement,omitempty" jsonschema:"behind (default) adds the tab behind the tab in front, with an unseen dot, and never takes the screen. beside splits the panel in front and opens the tab next to it; below splits it downward. A tab that is already open stays where it is."`
 	Anchor    string `json:"anchor,omitempty"    jsonschema:"The tab to place relative to: drive, diff, tasks, terminal (a chat's one terminal), applet:<id>, or a window of the Code session by id (@3) or exact name. Omit for the tab in front of the focused panel."`
@@ -108,7 +108,7 @@ type openTabInput struct {
 
 type closeTabInput struct {
 	Session string `json:"session"          jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
-	View    string `json:"view"             jsonschema:"drive, diff, tasks or terminal. The tab for drive, diff or tasks closes wherever it sits. terminal kills the tmux window named by window."`
+	View    string `json:"view"             jsonschema:"drive, diff, tasks, terminal or applet:<id>. The tab for drive, diff, tasks or an applet closes wherever it sits. terminal kills the tmux window named by window."`
 	Window  string `json:"window,omitempty" jsonschema:"Terminal only, and required for it: the window of the Code session to kill, by tmux id (@3) or exact name. It ends what runs in it. A chat's terminal is refused."`
 }
 
@@ -170,14 +170,14 @@ type layoutSplit struct {
 
 type openTabResult struct {
 	Requested string `json:"requested" jsonschema:"The request handed to the UI: open. Delivery is best-effort - it applies only while the user is viewing this chat or session, and there is no acknowledgment either way."`
-	View      string `json:"view"      jsonschema:"The view asked for: drive, diff, tasks or terminal."`
+	View      string `json:"view"      jsonschema:"The view asked for: drive, diff, tasks, terminal or applet:<id>."`
 	Path      string `json:"path"      jsonschema:"The document or canvas path the tab was asked to show, resolved from path; empty when none was given."`
 	Window    string `json:"window"    jsonschema:"The tmux window id (@3) the terminal tab was asked to show, new or existing; empty for the other views."`
 }
 
 type closeTabResult struct {
 	Requested string `json:"requested" jsonschema:"The request handed to the UI: close (a terminal is killed in tmux instead, with no UI request). Delivery is best-effort - it applies only while the user is viewing this chat or session, and there is no acknowledgment either way."`
-	View      string `json:"view"      jsonschema:"The view asked to close: drive, diff, tasks or terminal."`
+	View      string `json:"view"      jsonschema:"The view asked to close: drive, diff, tasks, terminal or applet:<id>."`
 }
 
 func (ctrl *DriveController) OpenTab(ctx context.Context, _ *mcp.CallToolRequest, in openTabInput) (*mcp.CallToolResult, openTabResult, error) {

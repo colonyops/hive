@@ -111,11 +111,23 @@ func TestAPageFollowsTheSessionAndFallsBackToItsOwnDirectory(t *testing.T) {
 	assert.NotEqual(t, dir, context.Cwd)
 }
 
+func TestCheckTabFollowsTheFile(t *testing.T) {
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\nsurfaces: {tab: {}}\n")
+	require.NoError(t, service.CheckTab("thing"))
+	assert.Equal(t, KindNotFound, KindOf(service.CheckTab("ghost")))
+
+	require.NoError(t, service.SetEnabled("thing", false))
+	assert.Equal(t, KindUnavailable, KindOf(service.CheckTab("thing")), "an applet that is off opens nothing")
+
+	popup := appletHarness(t, "pop", "version: 1\ntitle: Pop\n")
+	assert.Equal(t, KindInvalid, KindOf(popup.CheckTab("pop")))
+}
+
 func TestBrokenAppletIsListedAndNotRunnable(t *testing.T) {
-	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\ntitlebar: nope\n")
+	service := appletHarness(t, "thing", "version: 1\ntitle: Thing\nsurfaces: {titlebar: nope}\n")
 	applet := appletOnDisk(t, service, "thing")
 	assert.False(t, applet.Runnable)
-	assert.Contains(t, applet.Error, "Titlebar")
+	assert.Contains(t, applet.Error, "TitlebarSurface")
 }
 
 func TestUnknownKeyListsAWarningAndStillRuns(t *testing.T) {
@@ -177,7 +189,7 @@ func TestDeleteRemovesTheFolderAndWhatSettingsHold(t *testing.T) {
 }
 
 func TestDeleteTakesABrokenApplet(t *testing.T) {
-	service := appletHarness(t, "thing", "version: 1\ntitlebar: nope\n")
+	service := appletHarness(t, "thing", "version: 1\nsurfaces: {titlebar: nope}\n")
 	dir := filepath.Dir(appletOnDisk(t, service, "thing").Path)
 	require.False(t, appletOnDisk(t, service, "thing").Runnable)
 
@@ -240,11 +252,11 @@ func packedApplet(t *testing.T, id, yaml string) string {
 func TestImportWritesNothingUntilConfirmed(t *testing.T) {
 	service := appletHarness(t, "existing", "version: 1\ntitle: Existing\n")
 	root := service.catalog.Root()
-	preview, err := service.PrepareImport(packedApplet(t, "radio", "version: 1\ntitle: Radio\ntitlebar:\n  entry: bar.html\ncommands:\n  - {id: next, title: Next}\n"))
+	preview, err := service.PrepareImport(packedApplet(t, "radio", "version: 1\ntitle: Radio\nsurfaces:\n  titlebar:\n    entry: bar.html\ncommands:\n  - {id: next, title: Next}\n"))
 	require.NoError(t, err)
 	assert.Equal(t, "radio", preview.ID)
 	assert.Equal(t, "radio", preview.SuggestedID)
-	assert.Equal(t, "bar.html", preview.Titlebar.Entry)
+	assert.Equal(t, "bar.html", preview.Surfaces.Titlebar.Entry)
 	assert.Equal(t, "Next", preview.Commands[0].Title)
 	assert.Len(t, preview.Files, 3)
 	assert.NoDirExists(t, filepath.Join(root, "radio"))

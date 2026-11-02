@@ -15,12 +15,12 @@ import (
 
 func TestParseReadsForward(t *testing.T) {
 	t.Run("an unknown key warns at any depth and the rest loads", func(t *testing.T) {
-		a, err := Parse("x", []byte("version: 1\ntitle: T\nsidebar: {entry: s.html}\ntitlebar: {side: left}\ncommands:\n  - {id: a, title: A, chord: x}\n  - {id: b, title: B, chord: y}\n"), "")
+		a, err := Parse("x", []byte("version: 1\ntitle: T\nsidebar: {entry: s.html}\nsurfaces: {titlebar: {side: left}}\ncommands:\n  - {id: a, title: A, chord: x}\n  - {id: b, title: B, chord: y}\n"), "")
 		require.NoError(t, err)
 		assert.Equal(t, []string{
 			`this version of Hive ignores "commands.chord"`,
 			`this version of Hive ignores "sidebar"`,
-			`this version of Hive ignores "titlebar.side"`,
+			`this version of Hive ignores "surfaces.titlebar.side"`,
 		}, a.Warnings)
 		assert.Equal(t, "index.html", a.Entry)
 	})
@@ -53,7 +53,7 @@ func TestParseReadsForward(t *testing.T) {
 	})
 	t.Run("the wrong shape under a known key stays an error", func(t *testing.T) {
 		for _, body := range []string{
-			"version: 1\ntitle: T\nwidth: wide\n",
+			"version: 1\ntitle: T\nsurfaces: {popup: {width: wide}}\n",
 			"version: 1\ntitle: a\ntitle: b\n",
 		} {
 			_, err := Parse("x", []byte(body), "")
@@ -72,12 +72,12 @@ func TestParseSaysWhenHiveIsTooOld(t *testing.T) {
 	}
 	t.Run("a later format", func(t *testing.T) {
 		tooOld(t, "version: 2\ntitle: T\n", "0.59.0", "Update Hive")
-		tooOld(t, "version: 2\nwidth: [a, new, shape]\n", "", "file format 2")
+		tooOld(t, "version: 2\nsurfaces: [a, new, shape]\n", "", "file format 2")
 	})
 	t.Run("a later Hive", func(t *testing.T) {
 		tooOld(t, "version: 1\nhive: \">=0.60\"\ntitle: T\n", "0.59.9", "needs Hive 0.60 or later, and this is Hive 0.59.9")
 		tooOld(t, "version: 1\nhive: \">=0.60.1\"\ntitle: T\n", "v0.60.0", "needs Hive 0.60.1")
-		tooOld(t, "version: 1\nhive: \">=1.0\"\nwidth: wide\n", "0.60.0", "needs Hive 1.0")
+		tooOld(t, "version: 1\nhive: \">=1.0\"\nsurfaces: wide\n", "0.60.0", "needs Hive 1.0")
 	})
 	t.Run("this Hive or a later one runs it", func(t *testing.T) {
 		for _, host := range []string{"0.60.0", "0.60.1", "1.0.0", "v0.61.0-rc1", "dev", ""} {
@@ -224,7 +224,7 @@ func TestAnAliasToTheMergeKeyDoesNotRecurseForever(t *testing.T) {
 
 func TestSurfacesAreCheckedOnImport(t *testing.T) {
 	_, err := Unpack(buildZip(t, manifestEntry("radio"),
-		zipEntry{name: "files/applet.yaml", body: "version: 1\ntitle: T\ntitlebar: {entry: bar.html}\n"},
+		zipEntry{name: "files/applet.yaml", body: "version: 1\ntitle: T\nsurfaces: {titlebar: {entry: bar.html}}\n"},
 		zipEntry{name: "files/index.html", body: "x"}), "")
 	assert.ErrorContains(t, err, "the title bar")
 }
@@ -268,7 +268,7 @@ func TestIgnoredKeysAreSeenThroughAnySpelling(t *testing.T) {
 	ignores := func(key string) string { return fmt.Sprintf("this version of Hive ignores %q", key) }
 
 	assert.Contains(t, warned(t, "<<: {limit-network: true}\n"), ignores("limit-network"))
-	assert.Contains(t, warned(t, "titlebar: {<<: {sandbox: true}}\n"), ignores("titlebar.sandbox"))
+	assert.Contains(t, warned(t, "surfaces: {titlebar: {<<: {sandbox: true}}}\n"), ignores("surfaces.titlebar.sandbox"))
 	assert.Contains(t, warned(t, "x-a: &a {sandbox: true}\n<<: [*a]\n"), ignores("sandbox"))
 	assert.Contains(t, warned(t, "x-k: &k real-name\n*k : 1\n"), ignores("real-name"))
 	assert.Contains(t, warned(t, "\"<<\": {limit-network: true}\n"), ignores("a key with an unusual name"), "quoted, this is a key and not a merge")

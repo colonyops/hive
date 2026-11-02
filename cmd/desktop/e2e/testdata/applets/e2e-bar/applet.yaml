@@ -1,8 +1,10 @@
 version: 1
 title: E2E bar
-titlebar:
-  entry: bar.html
-  width: 60
+surfaces:
+  popup: {}
+  titlebar:
+    entry: bar.html
+    width: 60
 commands:
   - id: ping
     title: E2E bar ping

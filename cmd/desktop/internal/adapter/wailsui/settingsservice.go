@@ -304,14 +304,6 @@ func (s *SettingsService) SetTerminalShowWindows(ctx context.Context, show bool)
 	return s.settings.SetTerminalShowWindows(ctx, show)
 }
 
-func (s *SettingsService) AppletSurface(ctx context.Context, surface string) ([]string, error) {
-	return s.settings.AppletSurface(ctx, surface)
-}
-
-func (s *SettingsService) SetAppletSurface(ctx context.Context, surface string, ids []string) error {
-	return s.settings.SetAppletSurface(ctx, surface, ids)
-}
-
 func (s *SettingsService) SetTerminalShowStatusBar(ctx context.Context, show bool) error {
 	return s.settings.SetTerminalShowStatusBar(ctx, show)
 }

@@ -4,7 +4,7 @@ import type { Applet } from '../../../bindings/github.com/colonyops/hive/cmd/des
 
 const MENU_ID_PREFIX = 'applet-menu:'
 
-/** A "+" menu's rows for the applets the user put there. */
+/** A "+" menu's rows for the applets whose file lists a tab. */
 export function appletMenuEntries(applets: readonly Applet[]): MenuEntry[] {
   return applets.map((applet) => ({
     kind: 'action' as const,

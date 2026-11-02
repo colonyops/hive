@@ -195,7 +195,7 @@ func TestUnpackRefusesHostileFiles(t *testing.T) {
 		"no format":              {[]zipEntry{{name: ArchiveManifestName, body: `{"id":"radio"}`}}, "no valid format"},
 		"id with a path":         {[]zipEntry{{name: ArchiveManifestName, body: `{"format":1,"id":"../evil"}`}, {name: "files/applet.yaml", body: archiveYAML}}, "invalid applet id"},
 		"no applet.yaml":         {[]zipEntry{manifestEntry("radio"), {name: "files/index.html", body: "x"}}, "no applet.yaml"},
-		"yaml wrong shape":       {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: archiveYAML + "titlebar: nope\n"}}, "not valid"},
+		"yaml wrong shape":       {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: archiveYAML + "surfaces: {titlebar: nope}\n"}}, "not valid"},
 		"missing entry page":     {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: archiveYAML}}, "no page"},
 		"long title":             {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: "version: 1\ntitle: " + strings.Repeat("t", maxArchiveTitleRunes+1) + "\n"}, {name: "files/index.html"}}, "title is longer"},
 	} {
@@ -264,11 +264,19 @@ func TestUnpackEnforcesItsLimits(t *testing.T) {
 
 func TestUnpackNeedsATitlebarOnlyToOffer(t *testing.T) {
 	archive, err := Unpack(buildZip(t, manifestEntry("radio"),
-		zipEntry{name: "files/applet.yaml", body: archiveYAML + "titlebar:\n  entry: bar.html\n"},
+		zipEntry{name: "files/applet.yaml", body: archiveYAML + "surfaces:\n  titlebar:\n    entry: bar.html\n"},
 		zipEntry{name: "files/index.html"},
 		zipEntry{name: "files/bar.html"}), "")
 	require.NoError(t, err)
-	assert.Equal(t, "bar.html", archive.Applet.Titlebar.Entry)
+	assert.Equal(t, "bar.html", archive.Applet.Surfaces.Titlebar.Entry)
+}
+
+func TestUnpackNeedsNoEntryForATitlebarOnlyApplet(t *testing.T) {
+	archive, err := Unpack(buildZip(t, manifestEntry("radio"),
+		zipEntry{name: "files/applet.yaml", body: archiveYAML + "surfaces:\n  titlebar:\n    entry: bar.html\n"},
+		zipEntry{name: "files/bar.html"}), "")
+	require.NoError(t, err)
+	assert.Nil(t, archive.Applet.Surfaces.Popup)
 }
 
 func TestInstallNeverReplacesAndLeavesNothingBehind(t *testing.T) {

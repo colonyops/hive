@@ -70,42 +70,17 @@ type NotificationSettings struct {
 	Sound    bool   `yaml:"sound"    env:"HIVE_DESKTOP_NOTIFICATIONS_SOUND"`
 }
 
-// AppletsSettings holds what the user has chosen to do with their applets.
+// AppletsSettings holds what the user has chosen to do with their applets. Where an applet
+// shows is not here: its applet.yaml says.
 type AppletsSettings struct {
-	// Titlebar lists the applets shown in the title bar, in order. An id with no such
-	// applet stays listed, so an applet being rewritten keeps its place.
-	Titlebar []string `yaml:"titlebar,omitempty"`
-	// Tabs lists the applets in a session's + menu, in order.
-	Tabs []string `yaml:"tabs,omitempty"`
 	// Disabled lists the applets the user turned off. An id with no such applet stays
-	// listed, for the same reason.
+	// listed, so an applet being rewritten stays off.
 	Disabled []string `yaml:"disabled,omitempty"`
-}
-
-// appletSurfaceLists holds one row per surface the user can place an applet on.
-var appletSurfaceLists = map[string]func(*AppletsSettings) *[]string{
-	"titlebar": func(a *AppletsSettings) *[]string { return &a.Titlebar },
-	"tab":      func(a *AppletsSettings) *[]string { return &a.Tabs },
-}
-
-// Surface returns the list of applets the user put on a surface.
-func (a *AppletsSettings) Surface(name string) (*[]string, bool) {
-	list, ok := appletSurfaceLists[name]
-	if !ok {
-		return nil, false
-	}
-	return list(a), true
 }
 
 // Forget removes every choice made about an id, for a new applet taking that id.
 func (a *AppletsSettings) Forget(id string) {
-	lists := []*[]string{&a.Disabled}
-	for _, list := range appletSurfaceLists {
-		lists = append(lists, list(a))
-	}
-	for _, list := range lists {
-		*list = slices.DeleteFunc(slices.Clone(*list), func(other string) bool { return other == id })
-	}
+	a.Disabled = slices.DeleteFunc(slices.Clone(a.Disabled), func(other string) bool { return other == id })
 }
 
 type Appearance struct {

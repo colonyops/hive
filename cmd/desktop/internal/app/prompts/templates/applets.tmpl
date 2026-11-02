@@ -9,14 +9,17 @@ is intended: do what the request needs.
 Write the applet to {{.Env.AppletsDir}}/<id>/. The directory name is the applet's id:
 a slug of lowercase letters, digits and hyphens. It holds an `applet.yaml` and the
 page. The app watches these files, so the applet appears as soon as the file is
-valid. Nothing runs until the user opens it or puts it in the title bar.
+valid. Nothing runs until the user opens it, unless it lists a title bar page, which starts as soon as the file is valid.
 
 ```yaml
 version: 1
 title: Containers
 icon: container
-width: 1200
-height: 760
+surfaces:
+  tab: {}
+  popup:
+    width: 1200
+    height: 760
 ```
 
 A key Hive does not know is a warning in `list_applets`, and the applet still opens, so check it for a misspelled key. A wrong value under a key Hive knows is an error.
@@ -27,8 +30,10 @@ A key Hive does not know is a warning in `list_applets`, and the applet still op
 - `icon`: optional glyph: `terminal`, `git-branch`, `git-compare`, `folder`, `file-text`, `search`, `database`, `gauge`, `activity`, `flask-conical`, `hammer`, `container`, `cloud`, `bug`, `zap`, `package`, `globe`, `external-link`, `git-pull-request`, or `play`.
 - `cwd`: where commands run. Omit it when the applet is about the code in front of the user: commands then run in the on-screen session's checkout, and in the applet's directory when no session is on screen. Set `"~"` or an absolute path when the applet works anywhere. A relative path is relative to the applet's directory.
 - `entry`: the page, default `index.html`.
-- `width` and `height`: the pop-up in pixels. The default fills the window. A tab fills its panel and ignores them.
-- `titlebar`: offers a page for the title bar, with `entry` (default: the applet's own `entry`) and `width` in pixels (default 28, one icon button). See "In the title bar".
+- `surfaces`: where the applet shows. List each one it belongs on, and it shows only there. With none listed it is a pop-up. Ask the user if the request does not make it clear.
+  - `tab`: in a session's + menu, as a tab beside its terminals. Takes no settings: `tab: {}`.
+  - `popup`: over the app, from the command palette or a key, with `width` and `height` in pixels. The default fills the window.
+  - `titlebar`: a page in the title bar, with `entry` (default: the applet's own `entry`) and `width` in pixels (default 28, one icon button). See "In the title bar".
 - `commands`: palette rows the user can bind to a key, each with `id` (a slug), `title`, and optional `icon` and `keywords`. See "In the command palette".
 
 ## The page
@@ -51,7 +56,7 @@ A foreign page in the frame can load any of your pages with a query or hash it c
 - `hive.copy(text)` puts text on the clipboard.
 - `hive.context()` resolves to `{id, title, dir, cwd, sessionSlug}`.
 - `hive.close()` closes the applet's pop-up or tab. In a title bar page it closes the page's dropdown.
-- `hive.surface` is `tab`, `page` (a pop-up), `titlebar` or `dropdown`, for one file that serves several.
+- `hive.surface` is `tab`, `popup`, `titlebar` or `dropdown`, for one file that serves several.
 - `hive.open()` opens the applet from any of them: as a tab if the user added it as one and a session is on screen, otherwise as a pop-up. It closes the pop-up if that is already open.
 - `hive.broadcast(data)` sends to the applet's other open frames, which listen with `hive.on('message', fn)`.
 - `hive.on('session', fn)` reports the slug of the session on screen when it changes. `hive.on` returns a function that stops listening, and does nothing for an event this Hive does not have.
@@ -84,15 +89,14 @@ page.
 
 ## In a session
 
-Any applet can open as a tab beside a session's terminals, or as a pop-up over the app. An applet opens as a pop-up from the command palette or a key. For a tab, the user adds it to a session's + menu in Settings > Applets, or you add its id to `applets.tabs` in `settings.yaml` when they ask you to. `applet.yaml` has no key for this. A tab fills its panel, so make the page fit any size down to a narrow split.  A tab's page reloads when the user comes back from another session, so keep what matters in `localStorage`.
+An applet with `surfaces.tab` is in a session's + menu and opens as a tab beside its terminals. From the palette or a key it opens as that tab when a session is on screen. You can open and close it yourself with the `open_tab` and `close_tab` tools, as `applet:<id>`. A tab fills its panel, so make the page fit any size down to a narrow split.  A tab's page reloads when the user comes back from another session, so keep what matters in `localStorage`.
 
 ## In the title bar
 
 Use this for something that is always there: an indicator, media controls, a shortcut to
-another part of the app. With `titlebar:` in `applet.yaml`, the applet can show a page in
-Hive's title bar once the user turns it on in Settings > Applets, or adds its id to
-`applets.titlebar` in `settings.yaml` when they ask you to. It then loads with the app and
-keeps running until they turn it off, so keep what it polls cheap.
+another part of the app. With `surfaces.titlebar` in `applet.yaml`, the applet shows a page in
+Hive's title bar. It starts as soon as the file is valid, loads with the app, and keeps running
+until the applet is turned off, so keep what it polls cheap.
 
 - The slot is 28px tall. Set `html, body { margin: 0; height: 100%; background: transparent; }` so the page sits on the bar, and match Hive's 28px controls with a 8px radius and a `--hv-chip` hover fill. Use `--hv-*` colours.
 - `hive.resize({width})` changes the slot's width. Width `0` hides the slot and keeps the page running, for an indicator that only shows when there is something to say.
@@ -118,7 +122,7 @@ The user shares an applet from Settings > Applets, as one `.hiveapplet` file. An
 
 1. Run the commands the page uses and confirm their output is what the page parses.
 2. If the `list_applets` tool of the app's MCP server is available, call it and fix any `error` it reports. Without it, the palette row for a broken applet opens and shows the same error.
-3. Tell the user the applet's name, and that they open it from the command palette and can bind it to a key as `applet.<id>`, that they can add it to a session's + menu in Settings > Applets, and name any `commands` it has. For a title bar page, also tell them to turn it on in Settings > Applets.
+3. Tell the user the applet's name and where it shows. For a tab or a pop-up, say they open it from the command palette and can bind it to a key as `applet.<id>`, and for a tab, from a session's + menu. Name any `commands` it has.
 {{with .Brief}}
 {{if eq .Style "hive"}}{{template "applet-style-hive"}}{{end -}}
 {{if eq .Style "website"}}

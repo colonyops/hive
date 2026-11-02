@@ -11,10 +11,13 @@ const applets = useApplets()
 const applet = applets.open
 
 // A pop-up can ask to be any size, and the window's edges still win.
-const pageSize = computed(() => ({
-  ...(applet.value?.width ? { width: `min(${applet.value.width}px, 96vw)` } : {}),
-  ...(applet.value?.height ? { height: `min(${applet.value.height}px, 88vh)` } : {}),
-}))
+const pageSize = computed(() => {
+  const popup = applet.value?.surfaces.popup
+  return {
+    ...(popup?.width ? { width: `min(${popup.width}px, 96vw)` } : {}),
+    ...(popup?.height ? { height: `min(${popup.height}px, 88vh)` } : {}),
+  }
+})
 
 const INVALID_WIDTH = 720
 </script>

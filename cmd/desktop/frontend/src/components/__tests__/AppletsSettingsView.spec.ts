@@ -23,16 +23,6 @@ vi.mock(
   () => service,
 )
 
-const settingsService = vi.hoisted(() => ({
-  AppletSurface: vi.fn(),
-  SetAppletSurface: vi.fn(),
-}))
-
-vi.mock(
-  '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice',
-  async (importOriginal) => ({ ...(await importOriginal<object>()), ...settingsService }),
-)
-
 const applet = {
   id: 'docker',
   title: 'Docker',
@@ -40,8 +30,7 @@ const applet = {
   path: '/applets/docker/applet.yaml',
   builtin: false,
   entry: 'index.html',
-  width: 0,
-  height: 0,
+  surfaces: { tab: false, popup: { width: 0, height: 0 }, titlebar: null },
   revision: 1,
   runnable: true,
   enabled: true,
@@ -235,45 +224,34 @@ describe('AppletsSettingsView', () => {
     wrapper.unmount()
   })
 
-  describe('places', () => {
-    const titlebar = { entry: 'bar.html', width: 28 }
+  describe('surfaces', () => {
+    const everywhere = { tab: true, popup: { width: 0, height: 0 }, titlebar: { entry: 'bar.html', width: 28 } }
 
-    it('offers any applet for the + menu, and the title bar only with a page for it', async () => {
-      settingsService.AppletSurface.mockResolvedValue([])
-      settingsService.SetAppletSurface.mockResolvedValue(undefined)
+    it('shows on the row where the file says the applet goes', async () => {
+      service.List.mockResolvedValue([{ ...applet, surfaces: everywhere }])
       const wrapper = await render()
-      await wrapper.get('[data-testid="settings-applet-docker-places"]').trigger('click')
-
-      expect(inBody('settings-applet-docker-places-titlebar')?.hasAttribute('disabled')).toBe(true)
-      inBody('settings-applet-docker-places-tab')?.click()
-      await flushPromises()
-      expect(settingsService.SetAppletSurface).toHaveBeenCalledWith('tab', ['docker'])
-      expect(inBody('settings-applet-docker-places-page')).toBeFalsy()
+      expect(wrapper.get('[data-testid="settings-applet-docker-surfaces"]').text()).toBe(
+        'Session tab, Pop-up, Title bar',
+      )
       wrapper.unmount()
     })
 
-    it('puts an applet in a place from the row menu, and the menu stays open', async () => {
-      settingsService.AppletSurface.mockResolvedValue([])
-      settingsService.SetAppletSurface.mockResolvedValue(undefined)
-      service.List.mockResolvedValue([{ ...applet, titlebar }])
+    it('lists only the surfaces the file names in the details', async () => {
       const wrapper = await render()
-      const toggle = wrapper.get('[data-testid="settings-applet-docker-places"]')
-      expect(toggle.text()).toContain('Add to a place')
-
-      await toggle.trigger('click')
-      inBody('settings-applet-docker-places-titlebar')?.click()
-      await flushPromises()
-      expect(settingsService.SetAppletSurface).toHaveBeenCalledWith('titlebar', ['docker'])
-      expect(toggle.text()).toContain('Title bar')
-      expect(inBody('settings-applet-docker-places-menu')).not.toBeNull()
+      await openDetails(wrapper, 'docker')
+      expect(inBody('settings-applet-docker-surface-popup')).not.toBeNull()
+      expect(inBody('settings-applet-docker-surface-tab')).toBeNull()
+      expect(inBody('settings-applet-docker-surface-titlebar')).toBeNull()
       wrapper.unmount()
     })
 
-    it('locks the places of an applet that is off', async () => {
-      service.List.mockResolvedValue([{ ...applet, titlebar, enabled: false }])
+    it('offers no Open for an applet only in the title bar', async () => {
+      service.List.mockResolvedValue([
+        { ...applet, surfaces: { tab: false, popup: null, titlebar: { entry: 'bar.html', width: 28 } } },
+      ])
       const wrapper = await render()
-      const toggle = wrapper.get('[data-testid="settings-applet-docker-places"]').element as HTMLButtonElement
-      expect(toggle.disabled).toBe(true)
+      await openDetails(wrapper, 'docker')
+      expect(inBody('settings-applet-docker-open')).toBeNull()
       wrapper.unmount()
     })
   })
@@ -337,6 +315,7 @@ describe('AppletsSettingsView', () => {
         suggestedId: 'b',
         title: 'Second',
         entry: 'index.html',
+        surfaces: { tab: false, popup: {}, titlebar: null },
         files: [],
         totalBytes: 0,
       })
@@ -359,6 +338,7 @@ describe('AppletsSettingsView', () => {
         suggestedId: 'a',
         title: 'First',
         entry: 'index.html',
+        surfaces: { tab: false, popup: {}, titlebar: null },
         files: [],
         totalBytes: 0,
       })

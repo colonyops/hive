@@ -59,8 +59,10 @@ type LayoutsService struct {
 	// terminals is nil when tmux windows are not wired in; a terminal tab then
 	// answers KindUnavailable.
 	terminals sessionTerminals
-	events    *events.Bus
-	logger    zerolog.Logger
+	// checkAppletTab refuses an applet that has no tab to open; nil answers KindUnavailable.
+	checkAppletTab func(id string) error
+	events         *events.Bus
+	logger         zerolog.Logger
 }
 
 // tabCallers is what the tab verbs need of the Drive service: who a session
@@ -74,12 +76,14 @@ type LayoutsDeps struct {
 	Callers tabCallers
 	// Terminals starts, finds and kills the tmux windows of Code sessions.
 	Terminals sessionTerminals
-	Events    *events.Bus
-	Logger    zerolog.Logger
+	// CheckAppletTab refuses an applet that has no tab to open.
+	CheckAppletTab func(id string) error
+	Events         *events.Bus
+	Logger         zerolog.Logger
 }
 
 func newLayoutsService(d LayoutsDeps) *LayoutsService {
-	return &LayoutsService{callers: d.Callers, terminals: d.Terminals, events: d.Events, logger: logutils.Component(d.Logger, "desktop.layouts")}
+	return &LayoutsService{callers: d.Callers, terminals: d.Terminals, checkAppletTab: d.CheckAppletTab, events: d.Events, logger: logutils.Component(d.Logger, "desktop.layouts")}
 }
 
 type layoutKind struct {

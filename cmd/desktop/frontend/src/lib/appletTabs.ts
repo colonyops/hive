@@ -18,6 +18,11 @@ export function appletTab(id: string): PanelTab {
   return { id: appletTabId(id), kind: APPLET_TAB_KIND, params: { applet: id } }
 }
 
+/** The tab an agent named, with the applet it belongs to. */
+export function appletTabOfId(tabId: AppletTabId): PanelTab {
+  return appletTab(tabId.slice(APPLET_TAB_PREFIX.length))
+}
+
 export function appletIdOf(tab: PanelTab | undefined): string | undefined {
   if (tab?.kind !== APPLET_TAB_KIND) return undefined
   const id = tab.params?.applet

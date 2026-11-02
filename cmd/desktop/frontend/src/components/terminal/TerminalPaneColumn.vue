@@ -60,13 +60,14 @@ import {
   OpenSessionInEditor,
   RevealSession,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
-import { appletIdOf, appletTab } from '../../lib/appletTabs'
+import { appletIdOf, appletTab, appletTabOfId } from '../../lib/appletTabs'
 import { useApplets } from '../../stores/useApplets'
 import { useAppletTabHost } from '../applets/useAppletTabHost'
 import { docsScopeOf, viewOfTab, viewTab, withDocsScope } from './panelViews'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useSessionLayout, type SessionDriveTarget } from '../panels/useSessionLayout'
 import {
+  closeTabByIdRule,
   anchorPanelOf,
   closePanelRule,
   focusRule,
@@ -374,6 +375,10 @@ useSessionLayout('terminal', toRef(props, 'drive'), () => props.active && pool.a
       const panel = panelWithTab(current, tab.id)
       return panel ? closeTab(current, panel.id, tab.id) : current
     }),
+  openApplet: (tab, placement, anchor) => {
+    if (panels.row) panels.apply((current) => openViewRule(current, appletTabOfId(tab), placement, anchor))
+  },
+  closeApplet: (tab) => panels.apply((current) => closeTabByIdRule(current, tab)),
   openWindow: (windowId, placement, anchor) => {
     if (panels.row && !tree.isChat(panels.row)) {
       panels.placeArrivingWindow(windowId, placement, anchorPanelOf(layout.value, anchor))

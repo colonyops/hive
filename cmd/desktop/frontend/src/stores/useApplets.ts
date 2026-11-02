@@ -1,23 +1,19 @@
-import { computed, readonly, ref, shallowReadonly, shallowRef, watch, type ComputedRef } from 'vue'
+import { computed, readonly, ref, shallowReadonly, shallowRef, watch } from 'vue'
 import {
   Delete,
   List,
   SetEnabled,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
-import {
-  AppletSurface as ReadAppletSurface,
-  SetAppletSurface,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
 import type { Applet } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import type { Command } from '../composables/useCommands'
+import { useToasts } from '../composables/useToasts'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { appletCommandID, setAppletCommands } from '../keybindings/catalog'
 import { appletIdOf, appletTabId } from '../lib/appletTabs'
 import { launcherIconComponent } from '../lib/launcherIcons'
 import type { PanelTab } from '../lib/panelLayout'
-import { PLACEABLE_SURFACES, SURFACES, type AppletSurface } from './appletSurfaces'
+import { SURFACES, type AppletSurface } from './appletSurfaces'
 import { defineStore } from './defineStore'
-import { usePersistedSetting } from './usePersistedSetting'
 import { useChatPanelLayouts, usePanelLayouts } from './usePanelLayouts'
 import { useResource } from './useResource'
 
@@ -58,6 +54,11 @@ export interface AppletPageRow {
   scope?: 'goto' | 'actions'
 }
 
+/** A broken file still opens, to show its error. An applet only in the title bar has nothing to open. */
+function opens(applet: Applet): boolean {
+  return !applet.runnable || applet.surfaces.tab || applet.surfaces.popup !== null
+}
+
 function appletPaletteTitle(applet: Applet): string {
   if (!applet.runnable) return `${applet.title} (invalid)`
   return applet.warnings?.length ? `${applet.title} (warnings)` : applet.title
@@ -81,36 +82,9 @@ export const useApplets = defineStore('applets', () => {
     return applet?.enabled ? applet : null
   })
 
-  const placements = new Map(
-    PLACEABLE_SURFACES.map(({ surface, placement }) => [
-      surface,
-      usePersistedSetting<string[]>({
-        initial: [],
-        read: async () => (await ReadAppletSurface(surface)) ?? [],
-        write: (ids) => SetAppletSurface(surface, ids),
-        label: `the applets in ${placement.where}`,
-      }),
-    ]),
-  )
-
-  function placedIDs(surface: AppletSurface): readonly string[] {
-    return placements.get(surface)?.value.value ?? []
-  }
-
-  // Each surface's applets, in the user's order, among those that can run.
-  const placed = Object.fromEntries(
-    PLACEABLE_SURFACES.map(({ surface, placement }) => [
-      surface,
-      computed(() =>
-        placedIDs(surface).flatMap((id) => {
-          const applet = catalog.data.value.find((candidate) => candidate.id === id)
-          return applet?.runnable && applet.enabled && placement.offeredPage(applet) ? [applet] : []
-        }),
-      ),
-    ]),
-  ) as Partial<Record<AppletSurface, ComputedRef<Applet[]>>>
-
-  const sessionMenu = computed(() => placed.tab?.value ?? [])
+  const usable = computed(() => catalog.data.value.filter((applet) => applet.runnable && applet.enabled))
+  const sessionMenu = computed(() => usable.value.filter((applet) => applet.surfaces.tab))
+  const titlebarApplets = computed(() => usable.value.filter((applet) => applet.surfaces.titlebar))
 
   // The session area on screen, which can show an applet as a tab. Both areas stay
   // mounted, so only the one the user is in holds this.
@@ -131,27 +105,30 @@ export const useApplets = defineStore('applets', () => {
     routeSessionSlug.value = slug
   }
 
-  // What the user chose for an applet wins over the pop-up wherever it opens from.
-  function openPlacedTab(id: string): boolean {
-    if (!tabHost.value || !placed.tab?.value.some((applet) => applet.id === id)) return false
+  function openTabFor(id: string): boolean {
+    if (!tabHost.value || !sessionMenu.value.some((applet) => applet.id === id)) return false
     // A pop-up left open would cover the tab the user just asked for.
     openID.value = null
     tabHost.value.open(id)
     return true
   }
 
-  function isPlaced(surface: AppletSurface, id: string): boolean {
-    return placedIDs(surface).includes(id)
-  }
-
-  function setPlaced(surface: AppletSurface, id: string, shown: boolean): void {
-    const others = placedIDs(surface).filter((other) => other !== id)
-    placements.get(surface)?.set(shown ? [...others, id] : others)
-  }
-
-  // Go owns what an import clears, so what it changed is read back from settings.yaml.
-  async function reloadPlacements(): Promise<void> {
-    await Promise.all([...placements.values()].map((placement) => placement.reload()))
+  // A tab comes first where one can show, and an applet shows only where its file says.
+  function openApplet(id: string): boolean {
+    const applet = byID(id)
+    if (!applet) return false
+    if (openTabFor(id)) return true
+    if (!applet.runnable || applet.surfaces.popup) {
+      openPopup(id)
+      return true
+    }
+    useToasts().showToast(
+      applet.surfaces.tab
+        ? `${applet.title} opens as a session tab. Open a session first.`
+        : `${applet.title} has nothing to open.`,
+      { severity: 'info' },
+    )
+    return false
   }
 
   async function setEnabled(id: string, enabled: boolean): Promise<void> {
@@ -169,7 +146,7 @@ export const useApplets = defineStore('applets', () => {
   async function remove(id: string): Promise<void> {
     await Delete(id)
     closeSavedTabs(id)
-    await Promise.all([catalog.reload(), reloadPlacements()])
+    await catalog.reload()
   }
 
   function byID(id: string): Applet | undefined {
@@ -251,7 +228,7 @@ export const useApplets = defineStore('applets', () => {
 
   function openForCommand(id: string, command: string): void {
     commandsForPanel.set(id, [...(commandsForPanel.get(id) ?? []), command])
-    if (!openPlacedTab(id)) openPopup(id)
+    if (!openApplet(id)) commandsForPanel.delete(id)
   }
 
   const frameRows = shallowRef(new Map<AppletFrameHandle, { applet: string; rows: AppletPageRow[] }>())
@@ -291,9 +268,8 @@ export const useApplets = defineStore('applets', () => {
   watch(
     catalog.data,
     (applets) => {
-      if (openID.value !== null && !applets.some((applet) => applet.id === openID.value && applet.enabled)) {
-        openID.value = null
-      }
+      const shown = applets.find((applet) => applet.id === openID.value)
+      if (!shown?.enabled || !(shown.surfaces.popup || !shown.runnable)) openID.value = null
       // An edit replaces the title bar frame the dropdown is anchored to and serves new pages.
       const open = dropdown.value?.applet
       if (open && !applets.some((a) => a.id === open.id && a.enabled && a.revision === open.revision)) {
@@ -305,16 +281,20 @@ export const useApplets = defineStore('applets', () => {
         applets
           .filter((applet) => applet.enabled)
           .flatMap((applet) => [
-            {
-              id: appletCommandID(applet.id),
-              title: appletPaletteTitle(applet),
-              group: 'Applets',
-              keywords: ['applet', applet.id],
-              icon: launcherIconComponent(applet.icon),
-              defaultCombos: [],
-              context: 'global' as const,
-              scope: 'applets' as const,
-            },
+            ...(opens(applet)
+              ? [
+                  {
+                    id: appletCommandID(applet.id),
+                    title: appletPaletteTitle(applet),
+                    group: 'Applets',
+                    keywords: ['applet', applet.id],
+                    icon: launcherIconComponent(applet.icon),
+                    defaultCombos: [],
+                    context: 'global' as const,
+                    scope: 'applets' as const,
+                  },
+                ]
+              : []),
             ...(applet.runnable ? (applet.commands ?? []) : []).map((command) => ({
               id: appletCommandID(applet.id, command.id),
               title: command.title,
@@ -341,7 +321,7 @@ export const useApplets = defineStore('applets', () => {
       openID.value = null
       return
     }
-    if (!openPlacedTab(id)) openPopup(id)
+    openApplet(id)
   }
 
   function openPopup(id: string): void {
@@ -366,10 +346,7 @@ export const useApplets = defineStore('applets', () => {
     tabTitle,
     setTabHost,
     setRouteSession,
-    placed,
-    isPlaced,
-    setPlaced,
-    reloadPlacements,
+    titlebarApplets,
     closeSavedTabs,
     setEnabled,
     remove,

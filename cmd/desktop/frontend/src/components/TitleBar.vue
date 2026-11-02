@@ -32,7 +32,7 @@ import { useApplets } from '../stores/useApplets'
 //            switch. The cluster owns all of the bar's slack, so the empty
 //            middle stays a drag surface. Below the labels breakpoint
 //            (min-[860px]) the mode segments drop their labels to icons.
-//   right  — status chips, then the pages of the applets the user put here, then
+//   right  — status chips, then the pages of the applets that list the title bar, then
 //            the command-palette launcher (compact, width
 //            clamped to the window so it gives way before the tabs do), then
 //            app-level utilities (Activity, Views) as one icon run, then the
@@ -268,7 +268,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
         />
       </div>
       <template v-if="profileName">
-        <AppletTitlebarSlot v-for="applet in applets.placed.titlebar?.value" :key="applet.id" :applet="applet" />
+        <AppletTitlebarSlot v-for="applet in applets.titlebarApplets.value" :key="applet.id" :applet="applet" />
       </template>
       <button
         v-if="profileName"

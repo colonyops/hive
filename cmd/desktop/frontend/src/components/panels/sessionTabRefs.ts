@@ -2,6 +2,7 @@ import {
   addTabBeside,
   addTabQuietly,
   closePanel,
+  closeTab,
   focusTab,
   moveTabBehind,
   moveTabToSplit,
@@ -64,6 +65,12 @@ export function openViewRule(
   const placed = addTabQuietly(layout, tab)
   const anchorId = anchor && panelOfRef(layout, anchor, ownWindowId) ? tabIdOf(anchor, ownWindowId) : undefined
   return anchorId ? moveTabBehind(placed, tab.id, anchorId) : placed
+}
+
+/** Closes the tab with this id wherever it sits. A tab that is not open leaves the layout as it is. */
+export function closeTabByIdRule(layout: PanelLayout, tabId: string): PanelLayout {
+  const panel = panelWithTab(layout, tabId)
+  return panel ? closeTab(layout, panel.id, tabId) : layout
 }
 
 /** A tab or an anchor that is not open leaves the layout as it is. */

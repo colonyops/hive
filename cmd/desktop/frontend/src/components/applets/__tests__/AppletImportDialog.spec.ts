@@ -26,7 +26,7 @@ const preview = {
   title: 'Radio',
   entry: 'index.html',
   cwd: '',
-  titlebar: { entry: 'bar.html', width: 28 },
+  surfaces: { tab: false, popup: {}, titlebar: { entry: 'bar.html', width: 28 } },
   commands: [{ id: 'next', title: 'Next station', icon: '', keywords: null }],
   files: [{ path: 'applet.yaml', bytes: 20 }],
   totalBytes: 20,
@@ -64,9 +64,7 @@ describe('AppletImportDialog', () => {
     expect(warning).toContain('read, change and delete any of your files')
     expect(warning).toContain('reach the network')
     const runs = byID('applet-import-runs')?.textContent
-    expect(runs).toContain('Nothing runs on import')
     expect(runs).toContain('bar.html')
-    expect(runs).toContain('stays off')
     expect(runs).toContain('Next station')
     expect(byID('applet-import-files')?.textContent).toContain('applet.yaml')
     wrapper.unmount()
@@ -110,11 +108,16 @@ describe('AppletImportDialog', () => {
 
   it('refuses an id in the catalog and takes nothing from the applet there', async () => {
     service.List.mockResolvedValue([
-      { id: 'radio', title: 'Mine', runnable: true, enabled: true, titlebar: { entry: 'b', width: 1 } },
+      {
+        id: 'radio',
+        title: 'Mine',
+        runnable: true,
+        enabled: true,
+        surfaces: { tab: true, popup: null, titlebar: { entry: 'b', width: 1 } },
+      },
     ])
     const applets = useApplets()
     await applets.reload()
-    applets.setPlaced('titlebar', 'radio', true)
     const layouts = usePanelLayouts()
     layouts.apply('session', (current) => openTab(current, appletTab('radio')))
     const wrapper = open()
@@ -124,16 +127,12 @@ describe('AppletImportDialog', () => {
     await flushPromises()
     expect(service.ConfirmImport).not.toHaveBeenCalled()
     expect(byID('applet-import-error')?.textContent).toContain('already exists')
-    expect(applets.isPlaced('titlebar', 'radio')).toBe(true)
     expect(panelWithTab(layouts.layoutOf('session'), 'applet:radio')).toBeDefined()
     wrapper.unmount()
   })
 
-  it('leaves clearing the id to Go, and reads back what it changed', async () => {
-    const applets = useApplets()
+  it('leaves clearing the id to Go', async () => {
     const keybindings = useKeybindings()
-    const placements = vi.spyOn(applets, 'reloadPlacements')
-    applets.setPlaced('titlebar', 'radio', true)
     keybindings.removeBinding('applet.radio', 'mod+r')
     const wrapper = open()
     await flushPromises()
@@ -142,9 +141,7 @@ describe('AppletImportDialog', () => {
     await flushPromises()
     expect(service.ConfirmImport).toHaveBeenCalledWith('token', 'radio')
     expect(service.CancelImport).not.toHaveBeenCalled()
-    expect(placements).toHaveBeenCalled()
     keybindings.clearAll()
-    placements.mockRestore()
     wrapper.unmount()
   })
 
@@ -170,19 +167,31 @@ describe('AppletImportDialog', () => {
 
   it('takes nothing from the id when the import fails, and offers another id', async () => {
     service.ConfirmImport.mockRejectedValue(new Error('an applet called "radio" already exists. Choose another id'))
-    const applets = useApplets()
-    applets.setPlaced('titlebar', 'radio', true)
     const wrapper = open()
     await flushPromises()
     expect(byID('applet-import-id')).toBeNull()
     await tickTrust()
     byID('applet-import-confirm')?.click()
     await flushPromises()
-    expect(applets.isPlaced('titlebar', 'radio')).toBe(true)
     expect(byID('applet-import-error')?.textContent).toContain('already exists')
     expect(byID('applet-import-id')).not.toBeNull()
     expect(wrapper.emitted('close')).toBeUndefined()
     wrapper.unmount()
+  })
+
+  it('says a title bar page starts on import, and that nothing else does', async () => {
+    const withBar = open()
+    await flushPromises()
+    expect(byID('applet-import-runs')?.textContent).toContain('bar.html starts in the title bar')
+    expect(byID('applet-import-warning')?.textContent).toContain('As soon as you import it')
+    withBar.unmount()
+
+    const without = open({ surfaces: { tab: true, popup: null, titlebar: null } })
+    await flushPromises()
+    expect(byID('applet-import-runs')?.textContent).toContain('Nothing runs on import')
+    expect(byID('applet-import-runs')?.textContent).toContain('as a session tab')
+    expect(byID('applet-import-warning')?.textContent).toContain('Once you open it')
+    without.unmount()
   })
 
   it('drops the waiting file when it goes away without an answer', async () => {

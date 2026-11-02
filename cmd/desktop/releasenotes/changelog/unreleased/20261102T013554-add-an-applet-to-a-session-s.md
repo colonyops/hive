@@ -2,4 +2,4 @@
 kind: added
 ---
 
-Add an applet to a session's + menu in Settings > Applets, and it opens as a tab beside your terminals.
+An applet can list a tab in its `applet.yaml`, which puts it in a session's + menu beside your terminals. Agents can open and close that tab too.

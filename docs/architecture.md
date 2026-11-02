@@ -1432,28 +1432,29 @@ opened in `AppletFrame`
   (`buildServesAppletPages`).
 - **A spawned process belongs to the frame that started it.** Closing that frame, editing
   the applet, or closing the app ends the process. Settings › Applets lists what is running.
-- **A page can appear on more than one surface.** `AppletFrame` with `useAppletBridge` is
-  the whole of a surface: a session tab (`AppletTabsLayer`), the pop-up (`AppletHost`), the
-  title bar slot (`AppletTitlebarSlot`), and the dropdown under it (`AppletDropdown`). What differs between
-  them is one row of `SURFACES` (`stores/appletSurfaces.ts`). A new extension point is that
-  row, a list in `settings.AppletsSettings`, and a host, not
-  another bridge. The user turns the title bar on per applet (`applets.titlebar` in
-  `settings.yaml`), because that page runs without being opened.
+- **A page can appear on more than one surface, and its file says which.** `AppletFrame` with
+  `useAppletBridge` is the whole of a surface: a session tab (`AppletTabsLayer`), the pop-up
+  (`AppletHost`), the title bar slot (`AppletTitlebarSlot`), and the dropdown under it
+  (`AppletDropdown`). What differs between them is one row of `SURFACES`
+  (`stores/appletSurfaces.ts`). `surfaces:` in `applet.yaml` is the only registration, with a
+  map per surface so a later release can add a setting without moving a key. A new extension
+  point is that row, a key under `surfaces:`, and a host, not another bridge. A file that names
+  no surface is a pop-up. A title bar page runs as soon as its file is valid.
 - **A session tab is a layout tab, and its frame floats.** `lib/appletTabs` names it
   `applet:<id>`, one per session, and the layout places it like any view. Its iframe sits in
   the panel host's floating layer in an order no drag changes, because moving an iframe in
   the DOM reloads the page. `contentKey` re-keys the layer, so an area runs the tabs of its
   selected session only, and they keep running through a trip to another area, as its
   terminals do. A command goes to a frame on screen (`AppletFrameHandle.onScreen`), never to a
-  tab the user cannot see, and a palette row shows only while its frame is. The user adds an applet to a session's + menu as a tab
-  (`applets.tabs`), and the file cannot add itself. The menu has no row for a pop-up, which
+  tab the user cannot see, and a palette row shows only while its frame is. An applet that lists
+  `surfaces.tab` is in a session's + menu. The menu has no row for a pop-up, which
   opens from the palette or a chord. A tab host registers with
-  `setTabHost`, so the palette and a chord open a placed applet as a tab where one can show.
+  `setTabHost`, so the palette and a chord open an applet as a tab where one can show.
   Delete and import close saved tabs for the id, and import does it before `ConfirmImport`,
   because its catalog reload would mount the imported page in a leftover tab.
-  Agents can place and focus an open `applet:<id>` tab through the layout verbs, and
-  `open_tab` and `close_tab` refuse one: the MCP server runs nothing on a caller's say (ADR
-  mcp-replaces-the-agent-facing-http-api).
+  Agents use every layout verb on `applet:<id>`, including `open_tab` and `close_tab`.
+  `LayoutsService` asks `AppletsService.CheckTab` whether the file lists a tab first. This is
+  the one verb on that server that runs a page, and the ADR says why that is acceptable.
 - **`applet.yaml` reads forward.** A key or icon this Hive does not know is a warning on the
   entry (`applets/compat.go`). A wrong shape under a known key is an error, and a later
   `version` or an unmet `hive:` refuses with "update Hive".
@@ -1466,7 +1467,7 @@ opened in `AppletFrame`
   and writes nothing. `AppletsService` holds the checked file in memory under a token until
   the user confirms in `AppletImportDialog`, and `Install` renames a finished directory into
   place. It never replaces an applet. `ConfirmImport` clears what `settings.yaml` holds for the
-  id just before that rename, and a failed clear imports nothing. An export is read whole by `ExportPreview` and held under a token, so what
+  id just before that rename, and a failed clear imports nothing. A title bar page starts when the catalog reloads after that. An export is read whole by `ExportPreview` and held under a token, so what
   `Export` writes is what the user reviewed.
 - **A built-in lives in the binary** (`applets/builtin/`). The Applet Builder is one. Its
   page sends answers, and the prompt's words stay in `prompts/templates/applets.tmpl`.

@@ -9,10 +9,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 )
 
-func TestAgentsPlaceAnAppletTabButCannotOpenOne(t *testing.T) {
-	_, err := parseTabView("applet:x")
-	assert.Equal(t, KindInvalid, KindOf(err), "open_tab and close_tab read a view, so neither can start or end an applet")
-
+func TestLayoutTabsNameAppletsApart(t *testing.T) {
 	panel := layoutPanelOf(PanelNodeReport{
 		ID: "p0", ActiveTab: "applet:x",
 		Tabs: []PanelTabReport{{ID: "applet:x", Kind: "applet"}, {ID: "applet:y", Kind: "applet"}},

@@ -35,12 +35,12 @@ func TestParseRefuses(t *testing.T) {
 	for name, body := range map[string]string{
 		"wrong version": "version: 0\ntitle: T\n",
 		"no title":      "version: 1\n",
-		"wrong shape":   "version: 1\ntitle: T\ntitlebar: nope\n",
+		"wrong shape":   "version: 1\ntitle: T\nsurfaces: {titlebar: nope}\n",
 		"entry outside": "version: 1\ntitle: T\nentry: ../outside.html\n",
 		"command id":    "version: 1\ntitle: T\ncommands:\n  - {id: not.a.slug, title: C}\n",
 		"command twice": "version: 1\ntitle: T\ncommands:\n  - {id: c, title: C}\n  - {id: c, title: D}\n",
 		"command title": "version: 1\ntitle: T\ncommands:\n  - {id: c}\n",
-		"negative size": "version: 1\ntitle: T\nwidth: -1\n",
+		"negative size": "version: 1\ntitle: T\nsurfaces: {popup: {width: -1}}\n",
 		"empty file":    "",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -187,29 +187,48 @@ func onDisk(store *Store) []Entry {
 	return slices.DeleteFunc(store.List(), func(entry Entry) bool { return entry.Applet.Builtin })
 }
 
-func TestParseTitlebar(t *testing.T) {
-	t.Run("an applet without it has none", func(t *testing.T) {
+func TestParseSurfaces(t *testing.T) {
+	parse := func(t *testing.T, surfaces string) Surfaces {
+		t.Helper()
+		a, err := Parse("thing", []byte(minimal+"\nentry: app.html\nsurfaces:\n"+surfaces), "")
+		require.NoError(t, err)
+		return a.Surfaces
+	}
+	t.Run("a file that names none is a pop-up that fills the window", func(t *testing.T) {
 		a, err := Parse("thing", []byte(minimal), "")
 		require.NoError(t, err)
-		assert.Nil(t, a.Titlebar)
+		assert.Equal(t, Surfaces{Popup: &PopupSurface{}}, a.Surfaces)
 	})
-	t.Run("defaults to the applet's page and one icon button", func(t *testing.T) {
-		a, err := Parse("thing", []byte(minimal+"\nentry: app.html\ntitlebar: {}\n"), "")
+	t.Run("a file that names one is only there", func(t *testing.T) {
+		assert.Equal(t, Surfaces{Tab: &TabSurface{}}, parse(t, "  tab: {}\n"))
+	})
+	t.Run("a bare key asks for the surface", func(t *testing.T) {
+		assert.Equal(t, Surfaces{Tab: &TabSurface{}, Popup: &PopupSurface{}}, parse(t, "  tab:\n  popup:\n"))
+	})
+	t.Run("the pop-up keeps its size", func(t *testing.T) {
+		assert.Equal(t, &PopupSurface{Width: 640, Height: 400}, parse(t, "  popup: {width: 640, height: 400}\n").Popup)
+	})
+	t.Run("the title bar defaults to the applet's page and one icon button", func(t *testing.T) {
+		assert.Equal(t, &TitlebarSurface{Entry: "app.html", Width: DefaultTitlebarWidth}, parse(t, "  titlebar:\n").Titlebar)
+	})
+	t.Run("the title bar keeps its own page and width", func(t *testing.T) {
+		assert.Equal(t, &TitlebarSurface{Entry: "bar.html", Width: 120}, parse(t, "  titlebar: {entry: bar.html, width: 120}\n").Titlebar)
+	})
+	for name, tc := range map[string]struct{ surfaces, want string }{
+		"a page outside the directory": {"  titlebar: {entry: ../bar.html}\n", "surfaces.titlebar.entry"},
+		"a negative title bar width":   {"  titlebar: {width: -1}\n", "surfaces.titlebar.width"},
+		"a negative pop-up size":       {"  popup: {height: -1}\n", "surfaces.popup.width and height"},
+	} {
+		t.Run("refuses "+name, func(t *testing.T) {
+			_, err := Parse("thing", []byte(minimal+"\nsurfaces:\n"+tc.surfaces), "")
+			assert.ErrorContains(t, err, tc.want)
+		})
+	}
+	t.Run("the old top-level keys are only warnings", func(t *testing.T) {
+		a, err := Parse("thing", []byte(minimal+"\nwidth: 640\ntitlebar: {}\n"), "")
 		require.NoError(t, err)
-		assert.Equal(t, &Titlebar{Entry: "app.html", Width: DefaultTitlebarWidth}, a.Titlebar)
-	})
-	t.Run("keeps its own page and width", func(t *testing.T) {
-		a, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  entry: bar.html\n  width: 120\n"), "")
-		require.NoError(t, err)
-		assert.Equal(t, &Titlebar{Entry: "bar.html", Width: 120}, a.Titlebar)
-	})
-	t.Run("refuses a page outside the directory", func(t *testing.T) {
-		_, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  entry: ../bar.html\n"), "")
-		assert.ErrorContains(t, err, "titlebar.entry")
-	})
-	t.Run("refuses a negative width", func(t *testing.T) {
-		_, err := Parse("thing", []byte(minimal+"\ntitlebar:\n  width: -1\n"), "")
-		assert.ErrorContains(t, err, "titlebar.width")
+		assert.Equal(t, Surfaces{Popup: &PopupSurface{}}, a.Surfaces)
+		assert.Len(t, a.Warnings, 2)
 	})
 }
 

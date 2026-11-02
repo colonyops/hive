@@ -498,8 +498,10 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.Layouts = newLayoutsService(LayoutsDeps{
 		Callers:   a.Drive,
 		Terminals: newTmuxWindows(a.terminals),
-		Events:    a.Events,
-		Logger:    cfg.Logger,
+		// Late-bound: the applets service is built after this one.
+		CheckAppletTab: func(id string) error { return a.Applets.CheckTab(id) },
+		Events:         a.Events,
+		Logger:         cfg.Logger,
 	})
 	a.AgentWorkspaces = newAgentWorkspacesService(AgentWorkspacesDeps{
 		Store:           a.agentWorkspaceStore,

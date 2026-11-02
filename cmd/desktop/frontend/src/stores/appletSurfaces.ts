@@ -1,20 +1,25 @@
 import type { Component } from 'vue'
+import IconAppWindow from '~icons/lucide/app-window'
 import IconPanelTop from '~icons/lucide/panel-top'
 import IconSquareStack from '~icons/lucide/square-stack'
 
-export type AppletSurface = 'tab' | 'page' | 'titlebar' | 'dropdown'
+export type AppletSurface = 'tab' | 'popup' | 'titlebar' | 'dropdown'
 
-// A surface the user chooses per applet, kept in settings.yaml under this surface's name.
-interface AppletPlacement {
+/** What applet.yaml says about where an applet shows, read from an Applet or an import preview. */
+interface DeclaresSurfaces {
+  entry: string
+  surfaces: { tab: boolean; popup: object | null; titlebar: { entry: string } | null }
+}
+
+// A surface an applet's file can name under surfaces:.
+interface AppletDeclaredSurface {
   /** The name in Settings. */
   label: string
   icon: Component
-  /** What being placed here means, under the switch in Settings. */
+  /** What listing it means. */
   description: string
-  /** Finishes a sentence, as in "It offers bar.html for the title bar." */
-  where: string
-  /** The page an applet offers here, read from an Applet or an import preview. */
-  offeredPage: (applet: { entry: string; titlebar?: { entry: string } | null }) => string | undefined
+  /** The page the applet shows here, or nothing if its file does not name this surface. */
+  page: (applet: DeclaresSurfaces) => string | undefined
 }
 
 interface AppletSurfaceRules {
@@ -26,11 +31,11 @@ interface AppletSurfaceRules {
   takesFocus: boolean
   /** Escape closes it while focus is outside the frame. Escape in a page goes through the bridge's own rule. */
   escapeCloses: boolean
-  placement?: AppletPlacement
+  declared?: AppletDeclaredSurface
 }
 
-// What differs between the places a page can appear. A new surface is a row here, a list in
-// settings.AppletsSettings, and the host that mounts AppletFrame
+// What differs between the places a page can appear. A new surface is a row here, a key under
+// surfaces: in applet.yaml, and the host that mounts AppletFrame
 // (ADR applets-are-web-pages-with-full-access-to-the-machine).
 export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
   // Takes focus only when the layout gives its panel the keyboard, because a restored tab
@@ -41,31 +46,35 @@ export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
     persistent: false,
     takesFocus: false,
     escapeCloses: false,
-    placement: {
+    declared: {
       label: 'Session tab',
       icon: IconSquareStack,
-      description: "Adds it to a session's + menu. Opens as a tab beside the session's terminals.",
-      where: "a session's + menu",
-      offeredPage: (applet) => applet.entry,
+      description: "In a session's + menu. Opens as a tab beside the session's terminals.",
+      page: (applet) => (applet.surfaces.tab ? applet.entry : undefined),
     },
   },
-  page: {
+  popup: {
     panel: true,
     persistent: false,
     takesFocus: true,
     escapeCloses: true,
+    declared: {
+      label: 'Pop-up',
+      icon: IconAppWindow,
+      description: 'Opens over the app from the palette or its shortcut.',
+      page: (applet) => (applet.surfaces.popup ? applet.entry : undefined),
+    },
   },
   titlebar: {
     panel: false,
     persistent: true,
     takesFocus: false,
     escapeCloses: false,
-    placement: {
+    declared: {
       label: 'Title bar',
       icon: IconPanelTop,
-      description: 'Loads with the app and keeps running until you turn it off.',
-      where: 'the title bar',
-      offeredPage: (applet) => applet.titlebar?.entry,
+      description: 'Loads with the app and keeps running until you turn the applet off.',
+      page: (applet) => applet.surfaces.titlebar?.entry,
     },
   },
   dropdown: {
@@ -76,7 +85,7 @@ export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
   },
 }
 
-export const PLACEABLE_SURFACES = (Object.keys(SURFACES) as AppletSurface[]).flatMap((surface) => {
-  const placement = SURFACES[surface].placement
-  return placement ? [{ surface, placement }] : []
+export const DECLARED_SURFACES = (Object.keys(SURFACES) as AppletSurface[]).flatMap((surface) => {
+  const declared = SURFACES[surface].declared
+  return declared ? [{ surface, declared }] : []
 })

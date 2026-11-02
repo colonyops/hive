@@ -65,19 +65,16 @@ bridge. A frame can reach a remote page through one link, so these rules hold th
   marker, which runs in a Docker container with no network, or with only the test
   fixture's network in the remote lane.
 
-Nothing runs when a file loads. Commands start when the user opens an applet, or puts it
-in the title bar, and its page runs them.
+**An applet's file says where it shows.** `surfaces:` in `applet.yaml` lists `tab`, `popup` and
+`titlebar`, each a map, so a later release can add a setting to one without moving a key. A file
+that lists none is a pop-up. The file is the one registration: the applet is written by or for
+the person running it, so a second list in `settings.yaml` only makes them say it twice. They can
+edit the file, or turn the applet off.
 
-A page is not limited to the pop-up or a tab. An applet with `titlebar:` offers a second page, a
-frame in a slot of the title bar with its own width, and that page can open a dropdown
-frame under the bar. The surfaces share one bridge and differ only in what hosts them and in
-one row of a table of rules.
-
-**The user turns a title bar page on, in Settings or as `applets.titlebar` in
-`settings.yaml`.** It loads with the app and runs until it is turned off, so a file on disk
-must not be enough to start it, for the rule above and because a page in the bar takes
-room the user did not offer. This is the same reason an applet gets no default chord. It
-is one switch and not a permission: once on, the page has what any applet has.
+So a title bar page runs as soon as its file is valid, with nobody opening it. Everything else
+runs when the user or an agent opens it. The surfaces share one bridge and differ only in what
+hosts them and in one row of a table of rules. A title bar page can open a dropdown frame under
+the bar.
 
 **Whatever a frame starts, that frame stops.** One applet can have several frames, so
 closing its pop-up or tab must not end a process its title bar page runs. Frames of one applet
@@ -89,8 +86,8 @@ each frame's save writes the whole store.
 `commands:` is a command: it exists from the file, and a user can write its id in
 `settings.yaml`. A row from `hive.setCommands` is data a running page knows about, such as a
 list of stations, and its life is the page's. This is the split the rest of the palette has
-between commands and object rows. A declared command carries no default chord, for the same
-reason as `applet.<id>`. It goes to one frame, the running persistent surface, because
+between commands and object rows. Neither a declared command nor `applet.<id>` carries a default
+chord, because a chord an applet claims takes a key from Hive. A command goes to one frame, the running persistent surface, because
 that frame is the one that keeps running and two frames acting on it would run it twice.
 Today that is the title bar page. With no page to take it, the applet opens, as a tab or a pop-up, and the bridge holds the command until the page
 listens.
@@ -104,8 +101,9 @@ under `files/`. The file
 is hostile until the user confirms: it is checked whole in memory and installed by renaming
 a finished directory in, so nothing lands early or partly. Import never replaces an applet,
 because a replace is how someone else's update overwrites what a user trusted, and just
-before it lands it clears any place, off switch or chord the id still has in `settings.yaml`, in Go,
-so a file cannot inherit what the user gave another applet of that name.
+before it lands it clears any off switch or chord the id still has in `settings.yaml`, in Go,
+so a file cannot inherit what the user gave another applet of that name. An imported title bar
+page starts on import, and the dialog says so before the user confirms.
 
 **Shared files have to keep working, so both formats read forward.** A file outlives the Hive
 that wrote it, and hosts in the wild keep whatever parser they shipped with. `hive-applet.json`
@@ -138,14 +136,18 @@ pages, refuses the bridge calls that reach the machine, and stops what it has ru
 a `hive.exec`. The switch also closes its frames. `settings.yaml` has no watcher, so a hand edit
 stops new calls at once and closes its frames at the next launch.
 
-An applet opens where the user asked. A session's panel layout is the main place: any applet
-can be a tab there, added to the session's + menu by the user and never by its file, because a
-tab loads whenever that session is on screen. The pop-up over the app stays for what should
-not take a panel, and opens from the palette or a key rather than the + menu. A tab's page runs only while its session is the one selected in its area,
+A session's panel layout is the main place an applet opens: one that lists `tab` is in the
+session's + menu. The pop-up over the app stays for what should not take a panel, and opens from
+the palette or a key rather than the + menu. A tab's page runs only while its session is the one selected in its area,
 as Drive and Diff do, so another session costs nothing and its processes stop. A trip to
-another area keeps it running, as a terminal keeps running. Agents can move and focus
-an open tab, but `open_tab` and `close_tab` refuse an applet, because that MCP server runs nothing on a
-caller's say (ADR mcp-replaces-the-agent-facing-http-api).
+another area keeps it running, as a terminal keeps running.
+
+**Agents can open and close an applet's tab.** `open_tab` takes `applet:<id>` when the file lists
+a tab. This is a deliberate exception to the rule that the MCP server runs nothing on a caller's
+say (ADR mcp-replaces-the-agent-facing-http-api): it runs an applet that is already on this
+machine, and the server has no authentication. A process that can reach that loopback port on a
+machine it has not already compromised is not the threat this design defends against, and one on a
+compromised machine can write to the applets folder anyway.
 
 ## Consequences
 

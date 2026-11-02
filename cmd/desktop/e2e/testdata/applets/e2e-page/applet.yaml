@@ -1,4 +1,7 @@
 version: 1
 title: E2E page
-width: 700
-height: 500
+surfaces:
+  tab: {}
+  popup:
+    width: 700
+    height: 500

@@ -8,16 +8,13 @@ import { useApplets } from '../useApplets'
 import { useChatPanelLayouts, usePanelLayouts } from '../usePanelLayouts'
 
 const service = vi.hoisted(() => ({ List: vi.fn(), SetEnabled: vi.fn(), Delete: vi.fn() }))
-const settings = vi.hoisted(() => ({ AppletSurface: vi.fn(), SetAppletSurface: vi.fn() }))
+const toasts = vi.hoisted(() => ({ showToast: vi.fn() }))
 
 vi.mock(
   '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice',
   () => service,
 )
-vi.mock(
-  '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice',
-  () => settings,
-)
+vi.mock('../../composables/useToasts', () => ({ useToasts: () => toasts }))
 
 const applet = (id: string, extra: object = {}) => ({
   id,
@@ -26,15 +23,18 @@ const applet = (id: string, extra: object = {}) => ({
   icon: '',
   runnable: true,
   enabled: true,
+  surfaces: { tab: false, popup: {}, titlebar: null },
   ...extra,
 })
+const tabOnly = { surfaces: { tab: true, popup: null, titlebar: null } }
+const tabAndPopup = { surfaces: { tab: true, popup: {}, titlebar: null } }
+const titlebarOnly = { surfaces: { tab: false, popup: null, titlebar: { entry: 'bar.html', width: 28 } } }
 
 function hostOf(slug = '') {
   return { open: vi.fn(), sessionSlug: () => slug }
 }
 
-async function storeWith(placed: Record<string, string[]>) {
-  settings.AppletSurface.mockImplementation((surface: string) => Promise.resolve(placed[surface] ?? []))
+async function loadedStore() {
   const applets = useApplets()
   await flushPromises()
   return applets
@@ -48,7 +48,7 @@ describe('useApplets delete', () => {
   })
 
   it('closes the applet tab in every saved layout, and only that tab', async () => {
-    const applets = await storeWith({})
+    const applets = await loadedStore()
     const code = usePanelLayouts()
     const chats = useChatPanelLayouts()
     code.apply('off-screen', (current) => openTab(openTab(current, appletTab('radio')), appletTab('other')))
@@ -63,7 +63,7 @@ describe('useApplets delete', () => {
 
   it('keeps the tab when the delete fails', async () => {
     service.Delete.mockRejectedValue(new Error('no'))
-    const applets = await storeWith({})
+    const applets = await loadedStore()
     const code = usePanelLayouts()
     code.apply('s', (current) => openTab(current, appletTab('radio')))
     await expect(applets.remove('radio')).rejects.toThrow('no')
@@ -85,9 +85,9 @@ describe('useApplets commands', () => {
   })
 
   it('gives a command to the frame on screen, not to a tab the user cannot see', async () => {
-    const applets = await storeWith({})
+    const applets = await loadedStore()
     const hidden = frame('tab', false)
-    const shown = frame('page')
+    const shown = frame('popup')
     applets.connectFrame('radio', hidden)
     applets.connectFrame('radio', shown)
     expect(applets.deliverCommand('radio', 'next')).toBe(true)
@@ -96,7 +96,7 @@ describe('useApplets commands', () => {
   })
 
   it('says no frame took a command when the only tab is out of sight', async () => {
-    const applets = await storeWith({})
+    const applets = await loadedStore()
     const hidden = frame('tab', false)
     applets.connectFrame('radio', hidden)
     expect(applets.deliverCommand('radio', 'next')).toBe(false)
@@ -104,7 +104,8 @@ describe('useApplets commands', () => {
   })
 
   it('holds a command for a tab that comes forward to take it', async () => {
-    const applets = await storeWith({ tab: ['radio'] })
+    service.List.mockResolvedValue([applet('radio', tabOnly)])
+    const applets = await loadedStore()
     const host = hostOf()
     applets.setTabHost(host, true)
     let onScreen = false
@@ -121,12 +122,12 @@ describe('useApplets commands', () => {
   })
 
   it('offers a palette row only from a frame on screen', async () => {
-    const applets = await storeWith({})
+    const applets = await loadedStore()
     const hidden = frame('tab', false)
     applets.setFrameRows(hidden, 'radio', [{ id: 'next', title: 'Next' }])
     expect(applets.pageRows.value).toEqual([])
 
-    const shown = frame('page')
+    const shown = frame('popup')
     applets.setFrameRows(shown, 'radio', [{ id: 'next', title: 'Next' }])
     void applets.pageRows.value[0]?.run()
     expect(shown.deliverCommand).toHaveBeenCalledWith('next')
@@ -134,28 +135,29 @@ describe('useApplets commands', () => {
   })
 })
 
-describe('useApplets placements', () => {
+describe('useApplets surfaces', () => {
   beforeEach(() => {
     resetStores()
+    toasts.showToast.mockClear()
+    service.List.mockResolvedValue([applet('radio', tabAndPopup)])
+  })
+
+  it('lists what its file puts in the + menu and the title bar, among those that can run', async () => {
     service.List.mockResolvedValue([
-      applet('radio'),
-      applet('off', { enabled: false }),
-      applet('bad', { runnable: false }),
+      applet('radio', tabOnly),
+      applet('pop'),
+      applet('off', { ...tabOnly, enabled: false }),
+      applet('bad', { ...tabOnly, runnable: false }),
+      applet('bar', titlebarOnly),
+      applet('off-bar', { ...titlebarOnly, enabled: false }),
     ])
-  })
-
-  it('lists what the user put in the + menu, among those that can run', async () => {
-    const applets = await storeWith({ tab: ['radio', 'off', 'bad', 'gone'] })
+    const applets = await loadedStore()
     expect(applets.sessionMenu.value.map((row) => row.id)).toEqual(['radio'])
+    expect(applets.titlebarApplets.value.map((row) => row.id)).toEqual(['bar'])
   })
 
-  it('leaves an applet out of the + menu until the user adds it', async () => {
-    const applets = await storeWith({})
-    expect(applets.sessionMenu.value).toEqual([])
-  })
-
-  it('opens a placed applet as a tab where a session area can show one', async () => {
-    const applets = await storeWith({ tab: ['radio'] })
+  it('opens an applet with a tab as a tab where a session area can show one', async () => {
+    const applets = await loadedStore()
     const host = hostOf()
     applets.setTabHost(host, true)
     applets.toggle('radio')
@@ -163,8 +165,8 @@ describe('useApplets placements', () => {
     expect(applets.open.value).toBeNull()
   })
 
-  it('opens a pop-up with no session area on screen', async () => {
-    const applets = await storeWith({ tab: ['radio'] })
+  it('opens the pop-up the file also lists with no session area on screen', async () => {
+    const applets = await loadedStore()
     const host = hostOf()
     applets.setTabHost(host, true)
     applets.setTabHost(host, false)
@@ -173,8 +175,46 @@ describe('useApplets placements', () => {
     expect(applets.open.value?.id).toBe('radio')
   })
 
+  it('never opens a pop-up the file does not list, and says why', async () => {
+    service.List.mockResolvedValue([applet('radio', tabOnly)])
+    const applets = await loadedStore()
+    applets.toggle('radio')
+    expect(applets.open.value).toBeNull()
+    expect(toasts.showToast).toHaveBeenCalledWith(expect.stringContaining('Open a session'), expect.anything())
+  })
+
+  it('still opens a broken file, to show its error', async () => {
+    service.List.mockResolvedValue([
+      applet('bad', { runnable: false, surfaces: { tab: false, popup: null, titlebar: null } }),
+    ])
+    const applets = await loadedStore()
+    applets.toggle('bad')
+    expect(applets.open.value?.id).toBe('bad')
+  })
+
+  it('drops a command when the applet has nowhere to open', async () => {
+    service.List.mockResolvedValue([applet('radio', tabOnly)])
+    const applets = await loadedStore()
+    applets.openForCommand('radio', 'next')
+    const host = hostOf()
+    applets.setTabHost(host, true)
+    const tab = { surface: 'tab' as const, post: vi.fn(), deliverCommand: vi.fn(), onScreen: () => true }
+    applets.connectFrame('radio', tab)
+    expect(tab.deliverCommand).not.toHaveBeenCalled()
+  })
+
+  it('closes the pop-up when an edit stops listing it', async () => {
+    const applets = await loadedStore()
+    applets.toggle('radio')
+    expect(applets.open.value?.id).toBe('radio')
+    service.List.mockResolvedValue([applet('radio', tabOnly)])
+    await applets.reload()
+    expect(applets.open.value).toBeNull()
+  })
+
   it('gives a pop-up the session of the area on screen, in Chats as in Code', async () => {
-    const applets = await storeWith({})
+    service.List.mockResolvedValue([applet('radio')])
+    const applets = await loadedStore()
     applets.setTabHost(hostOf('chat-slug'), true)
     expect(applets.liveSessionSlug.value).toBe('chat-slug')
     applets.toggle('radio')
@@ -182,7 +222,8 @@ describe('useApplets placements', () => {
   })
 
   it('uses the session the route names until an area can answer, as during a cold attach', async () => {
-    const applets = await storeWith({})
+    service.List.mockResolvedValue([applet('radio')])
+    const applets = await loadedStore()
     applets.setRouteSession('from-route')
     applets.toggle('radio')
     expect(applets.sessionSlug.value).toBe('from-route')
@@ -191,7 +232,7 @@ describe('useApplets placements', () => {
   })
 
   it('keeps the area on screen as the host when another one lets go', async () => {
-    const applets = await storeWith({ tab: ['radio'] })
+    const applets = await loadedStore()
     const code = hostOf()
     applets.setTabHost(code, true)
     applets.setTabHost(hostOf(), false)
@@ -200,8 +241,8 @@ describe('useApplets placements', () => {
   })
 
   it('closes another pop-up that would cover the tab it opens', async () => {
-    service.List.mockResolvedValue([applet('radio'), applet('other')])
-    const applets = await storeWith({ tab: ['radio'] })
+    service.List.mockResolvedValue([applet('radio', tabAndPopup), applet('other')])
+    const applets = await loadedStore()
     applets.setTabHost(hostOf(), true)
     applets.toggle('other')
     applets.toggle('radio')
@@ -210,7 +251,7 @@ describe('useApplets placements', () => {
 
   it('closes a dropdown when an edit replaces the frame it hangs from', async () => {
     service.List.mockResolvedValue([applet('radio', { revision: 1 })])
-    const applets = await storeWith({})
+    const applets = await loadedStore()
     const opened = applets.applets.value[0] as never
     applets.toggleDropdown({ applet: opened, entry: 'm.html', width: 1, height: 1, anchor: document.body })
     expect(applets.dropdown.value).not.toBeNull()

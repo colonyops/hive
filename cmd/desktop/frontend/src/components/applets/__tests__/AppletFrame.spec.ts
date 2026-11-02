@@ -7,6 +7,7 @@ import { usePopupTerminal } from '../../../stores/usePopupTerminal'
 import AppletFrame from '../AppletFrame.vue'
 
 const service = vi.hoisted(() => ({
+  List: vi.fn(),
   BridgeToken: vi.fn(),
   Context: vi.fn(),
   Exec: vi.fn(),
@@ -413,7 +414,12 @@ describe('AppletFrame', () => {
     })
 
     it('waits for the panel it opens to load', async () => {
-      useApplets().openForCommand('pong', 'next')
+      service.List.mockResolvedValue([
+        { ...applet, runnable: true, enabled: true, surfaces: { tab: false, popup: {}, titlebar: null } },
+      ])
+      const applets = useApplets()
+      await applets.reload()
+      applets.openForCommand('pong', 'next')
       const { wrapper, send, replies } = setup()
       expect(replies).toEqual([])
       await send('ready')

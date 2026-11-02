@@ -29,7 +29,15 @@ vi.mock(
   () => service,
 )
 
-const radio = { id: 'radio', title: 'Radio', entry: 'index.html', revision: 1, runnable: true, enabled: true }
+const radio = {
+  id: 'radio',
+  title: 'Radio',
+  entry: 'index.html',
+  revision: 1,
+  runnable: true,
+  enabled: true,
+  surfaces: { tab: true, popup: {}, titlebar: null },
+}
 
 async function render(layout: PanelLayout, extra: object = {}) {
   const wrapper = mount(AppletTabsLayer, {
@@ -52,6 +60,14 @@ describe('AppletTabsLayer', () => {
   beforeEach(() => {
     resetStores()
     service.List.mockResolvedValue([radio])
+  })
+
+  it('runs nothing in a saved tab once the file stops listing a tab', async () => {
+    service.List.mockResolvedValue([{ ...radio, surfaces: { tab: false, popup: {}, titlebar: null } }])
+    const wrapper = await render(openTab(newPanelLayout(), appletTab('radio')))
+    expect(wrapper.find('[data-testid="applet-tab-frame"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="applet-tab-unavailable"]').text()).toContain('no longer opens as a tab')
+    wrapper.unmount()
   })
 
   it('runs a tab as its own surface, with no close button of its own', async () => {

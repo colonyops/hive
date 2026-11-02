@@ -1,6 +1,6 @@
 ---
 icon: lucide/layout-panel-top
-description: Ask an agent for a web page that opens as a session tab, pops up over Hive Desktop, or sits in its title bar and can do anything on your machine, with the Applet Builder to get you started.
+description: Ask an agent for a web page that says where it belongs, as a session tab, a pop-up over Hive Desktop, or a page in its title bar, and can do anything on your machine, with the Applet Builder to get you started.
 ---
 
 # Applets
@@ -23,24 +23,41 @@ The applet appears as soon as its file is valid. If you dislike it, ask for chan
 - Press <kbd>⌘K</kbd> and type <kbd>+</kbd>, or press <kbd>⇥</kbd> to reach the **Applets** tab, to see only applets.
 - Bind one to a key in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>`. The same key closes a pop-up again.
 
-It opens as a pop-up over the app, on the session on screen, unless you [added it as a session tab](#add-one-to-a-sessions-menu).
+It opens where [its file says](#where-it-shows). An applet with a tab opens as that tab when a session is on screen. Otherwise it opens as a pop-up, on the session on screen. An applet with only a tab asks you to open a session first.
 
 <kbd>esc</kbd> closes a pop-up, unless the page uses the key itself first. A tab stays open; close it from its tab.
 
-## Add one to a session's + menu
+## Where it shows
 
-In **Settings ▸ Applets**, open the places menu on an applet's row, or its details, and turn on **Session tab**.
-
-The applet then shows in the **+** on a tab row and on a session in the sidebar, for chats as well as Code sessions. Choosing it opens the applet as a tab, beside the session's terminals and Drive. Drag it between panels like any other tab. Its page keeps running behind other tabs, through a move, and while you are in another part of the app. It stops when you close the tab or switch to another session.
-
-The **+** only opens tabs. For a pop-up, use the palette or bind a key. Hive never adds one for you. An applet you turned on as a session tab also opens as a tab from the palette and its shortcut when a session is on screen, and there the shortcut brings the tab forward instead of closing it. Anywhere else it opens as a pop-up.
+An applet's `applet.yaml` says where it belongs, under `surfaces`. It shows in each one listed and nowhere else. With none listed, it is a pop-up.
 
 ```yaml
-applets:
-  tabs: [build-status]
+version: 1
+title: Containers
+icon: container
+surfaces:
+  tab: {}
+  popup:
+    width: 1200
+    height: 760
+  titlebar:
+    entry: bar.html
+    width: 64
 ```
 
-A session keeps its applet tabs across restarts. If you turn an applet off, its tab stays and says so until you close it. Deleting an applet closes its tabs.
+| Surface | Where | Settings | Runs |
+| --- | --- | --- | --- |
+| `tab` | In a session's **+** menu, on a tab row and on a session in the sidebar, for chats as well as Code sessions | None | From opening the tab until you close it or switch to another session |
+| `popup` | Over the app, from the palette or a key | `width` and `height` in pixels. Unset fills the window | While it is open |
+| `titlebar` | In the title bar | `entry`, default the applet's own page, and `width` in pixels, default 28 | From the moment the file is valid, whenever Hive is open |
+
+A tab sits beside the session's terminals and Drive, and you can drag it between panels. Its page keeps running behind other tabs, through a move, and while you are in another part of the app. A session keeps its applet tabs across restarts. If you turn an applet off, or its file stops listing a tab, the tab stays and says so until you close it. Deleting an applet closes its tabs.
+
+The same shortcut brings a tab forward, and closes a pop-up.
+
+To change where an applet shows, edit its file or ask the agent to. **Settings ▸ Applets** shows what the file says.
+
+Agents can open and close a tab too, with [`open_tab` and `close_tab`](../code/agent-layout.md).
 
 ## Palette and keys
 
@@ -53,7 +70,7 @@ Shortcuts keep working with focus inside a page. See [Keyboard shortcuts](keybin
 
 ## Turn one off
 
-Each applet has a switch in **Settings ▸ Applets**. An applet that is off stays listed and keeps its files, saved data, title bar place and shortcuts, but it does not run, serve its pages or appear in the palette. Turning it off closes what it has open and stops everything it has running. In `settings.yaml`, where a change to the list closes open pages at the next launch:
+Each applet has a switch in **Settings ▸ Applets**. An applet that is off stays listed and keeps its files, saved data and shortcuts, but it does not run, serve its pages or appear in the palette. Turning it off closes what it has open and stops everything it has running. In `settings.yaml`, where a change to the list closes open pages at the next launch:
 
 ```yaml
 applets:
@@ -62,22 +79,9 @@ applets:
 
 ## Delete one
 
-In **Settings ▸ Applets**, select the applet, press **⋯ ▸ Delete**, and confirm. This stops everything it has running and removes its folder, saved data, session tabs, places and shortcuts. It cannot be undone, so [export it](#share-one) first if you might want it back.
+In **Settings ▸ Applets**, select the applet, press **⋯ ▸ Delete**, and confirm. This stops everything it has running and removes its folder, saved data, session tabs and shortcuts. It cannot be undone, so [export it](#share-one) first if you might want it back.
 
 A built-in applet has no delete, so turn it off instead. Deleting a folder that [replaced the Applet Builder](#keep-an-applet-working-across-releases) brings the built-in back.
-
-## Put one in the title bar
-
-An applet can offer a page for the title bar, such as an indicator, music controls, or a shortcut to another part of the app. Ask for one when you ask the agent for the applet.
-
-Turn it on in **Settings ▸ Applets**, from the places menu on its row or the **Title bar** switch in its details. The page then loads with the app and keeps running until you turn it off.
-
-Hive never adds one for you: a new applet stays out of the bar until you turn it on. To set the order, list the ids in `settings.yaml`:
-
-```yaml
-applets:
-  titlebar: [music, build-status]
-```
 
 ## Share one
 
@@ -97,14 +101,13 @@ Export and import are in **Settings ▸ Applets**.
 
 The file holds no settings, shortcuts or other data from your machine. Hive cannot tell every file a page wrote from one you wrote, so read the list, and anyone you send the file to can read all of it. Built-in applets have no **Export**.
 
-**To import**, press **Import** and choose the file. Hive shows the warning, the applet's name, its files, and what would run. Nothing is on disk until you tick **I trust who this came from** and press **Import applet**. Cancel is the default and leaves nothing behind.
+**To import**, press **Import** and choose the file. Hive shows the warning, the applet's name, its files, and what would run, including a title bar page, which starts as soon as you import. Nothing is on disk until you tick **I trust who this came from** and press **Import applet**. Cancel is the default and leaves nothing behind.
 
-An import never replaces an applet. If the id is taken, Hive offers a new one. To update an applet, [delete it](#delete-one) first, which also deletes its saved data. An imported applet starts with nothing:
+An import never replaces an applet. If the id is taken, Hive offers a new one. To update an applet, [delete it](#delete-one) first, which also deletes its saved data. An imported applet shows where its file says, and inherits nothing from an earlier applet with that id:
 
-- Nothing runs until you open it.
-- A title bar page stays off until you turn it on, even if that id was in your title bar before.
-- It is not in a session's **+** menu and has no tabs, even if that id did before.
-- It has no shortcuts, even if that id had some before.
+- A title bar page starts right away. Anything else runs when you open it.
+- It has no open tabs, even if that id did before.
+- It has no shortcuts, and is not off, even if that id was before.
 - Files are not marked executable, so a page has to run a script with `sh script.sh`.
 
 Hive refuses a file that is over 32 MB, unpacks past 64 MB, or has more than 500 files. It also refuses one with paths outside the applet, links, hidden files, or an invalid `applet.yaml`, and installs none of it.
@@ -115,14 +118,11 @@ Hive refuses a file that is over 32 MB, unpacks past 64 MB, or has more than 500
 
 ## The files
 
-An applet is one directory under `~/.config/hive/desktop/applets/`, named for its id, holding an `applet.yaml` and its page.
+An applet is one directory under `~/.config/hive/desktop/applets/`, named for its id, holding an `applet.yaml` and its page. Two lines are enough for a pop-up that fills the window, and [`surfaces`](#where-it-shows) says where else it goes.
 
 ```yaml
 version: 1
 title: Containers
-icon: container
-width: 1200
-height: 760
 ```
 
 Put an `index.html` beside it. Scripts, modules, images, audio, and network requests all work, and editing a page, script or stylesheet reloads the page.
@@ -139,7 +139,7 @@ The page gets `window.hive`:
 | `hive.copy(text)` | Puts text on the clipboard |
 | `hive.context()` | Returns the applet's directory, working directory, and session |
 | `hive.close()` | Closes the applet's pop-up or tab. In a title bar page, closes its dropdown |
-| `hive.open()` | Opens the applet: as a tab if you put it in the + menu as one and a session is on screen, otherwise as a pop-up. Closes its pop-up if that is already open |
+| `hive.open()` | Opens the applet: as a tab if its file lists one and a session is on screen, otherwise as a pop-up if it lists one. Closes its pop-up if that is already open |
 | `hive.commands()`, `hive.command(id)` | Lists Hive's commands with `{id, title, group, keys}`, and runs one. An unknown id rejects |
 | `hive.setCommands(rows)` | Replaces the palette rows this page added |
 | `hive.on('command', fn)` | Reports the id of the applet's command or row that was run |
@@ -147,24 +147,27 @@ The page gets `window.hive`:
 | `hive.navigate(path)` | Goes to a route of the app, such as `/settings/applets` |
 | `hive.broadcast(data)`, `hive.on('message', fn)` | Talks to the applet's other open frames |
 | `hive.on('session', fn)` | Reports the session on screen when it changes |
-| `hive.surface` | `tab`, `page` (a pop-up), `titlebar`, or `dropdown` |
+| `hive.surface` | `tab`, `popup`, `titlebar`, or `dropdown` |
 
 The page also receives Hive's theme as CSS variables such as `--hv-app`, `--hv-text` and `--hv-accent`, which change when you change theme. `localStorage` works and is kept per applet. Cookies and IndexedDB do not work.
 
 !!! warning "An applet can do anything you can"
-    Applets have no permissions and no allowlist. A page can run any command and change any file, and so can any remote script it loads. Nothing runs when a file loads, only when you open an applet or turn on its title bar page.
+    Applets have no permissions and no allowlist. A page can run any command and change any file, and so can any remote script it loads. A title bar page runs as soon as its file is valid. Anything else runs when you or an agent open it.
 
 ### Title bar pages
 
-Add `titlebar` to `applet.yaml`. `entry` defaults to the applet's own page, and `width` to 28, one icon button.
+Use this for an indicator, music controls, or a shortcut to another part of the app. Add `titlebar` under `surfaces`. `entry` defaults to the applet's own page, and `width` to 28, one icon button. Title bar pages sit in order of applet id.
 
 ```yaml
 version: 1
 title: Music
-titlebar:
-  entry: bar.html
-  width: 120
+surfaces:
+  titlebar:
+    entry: bar.html
+    width: 120
 ```
+
+An applet with only `titlebar` has no row to open it in the palette, and a page it has running takes its commands.
 
 The slot is 28px tall, and a page with a transparent background sits directly on the bar. Two more calls apply:
 
@@ -195,7 +198,7 @@ hive.on('command', (id) => {
 })
 ```
 
-A command goes to the applet's running persistent page, which today means the title bar page if it is on. Otherwise it goes to the applet's page on screen, or the applet opens, as a tab if you added it as one and a session is on screen, and as a pop-up if not. The page there gets the command, even if it starts listening after it loads. To have a command open a dropdown, call `hive.dropdown()` from the listener in the title bar page.
+A command goes to the applet's running persistent page, which today means the title bar page. Otherwise it goes to the applet's page on screen, or the applet opens where its file says. The page there gets the command, even if it starts listening after it loads. To have a command open a dropdown, call `hive.dropdown()` from the listener in the title bar page.
 
 For rows that change, such as things only a running page knows about, call `hive.setCommands`. Each call replaces the rows that page added before, and they disappear when the page closes or reloads. They arrive through the same `hive.on('command')`. Only `id` and `title` are required.
 

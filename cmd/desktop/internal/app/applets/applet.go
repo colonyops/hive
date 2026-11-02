@@ -50,12 +50,8 @@ type Applet struct {
 	Cwd string `yaml:"cwd,omitempty"`
 	// Entry is the page the applet opens on, relative to its directory.
 	Entry string `yaml:"entry,omitempty"`
-	// Width and Height size the applet's pop-up in pixels. Zero fills the window.
-	Width  int `yaml:"width,omitempty"`
-	Height int `yaml:"height,omitempty"`
-	// Titlebar offers a page for the title bar. It shows once the user turns it on, so a
-	// file on disk neither starts running nor claims room in the bar by itself.
-	Titlebar *Titlebar `yaml:"titlebar,omitempty"`
+	// Surfaces says where the applet shows. A file that names none is a pop-up.
+	Surfaces Surfaces `yaml:"surfaces,omitempty"`
 	// Commands are the applet's palette rows that a user can bind to a key, as
 	// applet.<id>.<command>. They carry no default chord, so a file cannot claim a key.
 	Commands []Command `yaml:"commands,omitempty"`
@@ -71,8 +67,49 @@ type Command struct {
 	Keywords []string `yaml:"keywords,omitempty"`
 }
 
-// Titlebar is the page an applet can show in the title bar.
-type Titlebar struct {
+// Surfaces is the registration: an applet shows where its file says, and nowhere else. A
+// surface takes a map so a later release can add to it without moving a key.
+type Surfaces struct {
+	// Tab puts the applet in a session's + menu.
+	Tab *TabSurface `yaml:"tab,omitempty"`
+	// Popup opens the applet over the app, from the palette or a chord.
+	Popup *PopupSurface `yaml:"popup,omitempty"`
+	// Titlebar runs a page in the title bar from the moment the file loads.
+	Titlebar *TitlebarSurface `yaml:"titlebar,omitempty"`
+}
+
+// UnmarshalYAML reads a bare "tab:" as asking for the surface. The decoder leaves a pointer
+// nil for a null value, which would drop the surface with no warning.
+func (s *Surfaces) UnmarshalYAML(node *yaml.Node) error {
+	type plain Surfaces
+	if err := node.Decode((*plain)(s)); err != nil {
+		return err
+	}
+	if s.Tab == nil && hasKey(node, "tab") {
+		s.Tab = &TabSurface{}
+	}
+	if s.Popup == nil && hasKey(node, "popup") {
+		s.Popup = &PopupSurface{}
+	}
+	if s.Titlebar == nil && hasKey(node, "titlebar") {
+		s.Titlebar = &TitlebarSurface{}
+	}
+	return nil
+}
+
+func (s Surfaces) none() bool { return s.Tab == nil && s.Popup == nil && s.Titlebar == nil }
+
+// TabSurface has no settings yet: a tab takes its size from its panel.
+type TabSurface struct{}
+
+// PopupSurface sizes the pop-up in pixels. Zero fills the window.
+type PopupSurface struct {
+	Width  int `yaml:"width,omitempty"`
+	Height int `yaml:"height,omitempty"`
+}
+
+// TitlebarSurface is the page an applet shows in the title bar.
+type TitlebarSurface struct {
 	// Entry is relative to the applet's directory. Empty uses the applet's Entry, and
 	// the page tells the two apart with hive.surface.
 	Entry string `yaml:"entry,omitempty"`
@@ -111,12 +148,15 @@ func Parse(id string, raw []byte, hostVersion string) (Applet, error) {
 	if a.Entry == "" {
 		a.Entry = DefaultEntry
 	}
-	if a.Titlebar != nil {
-		if a.Titlebar.Entry == "" {
-			a.Titlebar.Entry = a.Entry
+	if a.Surfaces.none() {
+		a.Surfaces.Popup = &PopupSurface{}
+	}
+	if bar := a.Surfaces.Titlebar; bar != nil {
+		if bar.Entry == "" {
+			bar.Entry = a.Entry
 		}
-		if a.Titlebar.Width == 0 {
-			a.Titlebar.Width = DefaultTitlebarWidth
+		if bar.Width == 0 {
+			bar.Width = DefaultTitlebarWidth
 		}
 	}
 	return a, a.Validate()
@@ -133,12 +173,12 @@ func (a Applet) Validate() error {
 		return errors.New("title is required")
 	case !filepath.IsLocal(a.Entry):
 		return fmt.Errorf("entry must be a path inside the applet's directory, got %q", a.Entry)
-	case a.Width < 0 || a.Height < 0:
-		return errors.New("width and height must not be negative")
-	case a.Titlebar != nil && !filepath.IsLocal(a.Titlebar.Entry):
-		return fmt.Errorf("titlebar.entry must be a path inside the applet's directory, got %q", a.Titlebar.Entry)
-	case a.Titlebar != nil && a.Titlebar.Width < 0:
-		return errors.New("titlebar.width must not be negative")
+	case a.Surfaces.Popup != nil && (a.Surfaces.Popup.Width < 0 || a.Surfaces.Popup.Height < 0):
+		return errors.New("surfaces.popup.width and height must not be negative")
+	case a.Surfaces.Titlebar != nil && !filepath.IsLocal(a.Surfaces.Titlebar.Entry):
+		return fmt.Errorf("surfaces.titlebar.entry must be a path inside the applet's directory, got %q", a.Surfaces.Titlebar.Entry)
+	case a.Surfaces.Titlebar != nil && a.Surfaces.Titlebar.Width < 0:
+		return errors.New("surfaces.titlebar.width must not be negative")
 	}
 	return a.validateCommands()
 }

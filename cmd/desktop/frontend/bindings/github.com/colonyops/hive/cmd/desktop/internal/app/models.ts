@@ -114,8 +114,6 @@ export interface Applet {
     "path": string;
     "builtin": boolean;
     "entry": string;
-    "width": number;
-    "height": number;
     "revision": number;
     "runnable": boolean;
     "error": string;
@@ -131,11 +129,7 @@ export interface Applet {
      * release. The applet runs without it.
      */
     "warnings": string[] | null;
-
-    /**
-     * Titlebar is nil for an applet that offers no title bar page.
-     */
-    "titlebar": AppletTitlebar | null;
+    "surfaces": AppletSurfaces;
     "commands": AppletCommand[] | null;
 }
 
@@ -216,7 +210,7 @@ export interface AppletImportPreview {
     "title": string;
     "entry": string;
     "cwd": string;
-    "titlebar": AppletTitlebar | null;
+    "surfaces": AppletSurfaces;
     "commands": AppletCommand[] | null;
     "files": AppletFile[] | null;
     "totalBytes": number;
@@ -238,6 +232,14 @@ export interface AppletOutput {
     "code": number;
 }
 
+/**
+ * AppletPopup sizes the pop-up in pixels. Zero fills the window.
+ */
+export interface AppletPopup {
+    "width": number;
+    "height": number;
+}
+
 export interface AppletProcess {
     "handle": string;
     "applet": string;
@@ -246,7 +248,17 @@ export interface AppletProcess {
 }
 
 /**
- * AppletTitlebar is the page an applet offers for the title bar.
+ * AppletSurfaces is where an applet's file says it shows. Popup and Titlebar are nil for an
+ * applet that does not show there.
+ */
+export interface AppletSurfaces {
+    "tab": boolean;
+    "popup": AppletPopup | null;
+    "titlebar": AppletTitlebar | null;
+}
+
+/**
+ * AppletTitlebar is the page an applet shows in the title bar.
  */
 export interface AppletTitlebar {
     "entry": string;

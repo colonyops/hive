@@ -143,7 +143,7 @@ const deletion = useConfirmation()
 function requestDelete(id: string, title: string): void {
   deletion.request({
     title: 'Delete applet',
-    description: `Delete ${title}? This removes its folder and saved data from this machine, along with its title bar place and shortcuts. It cannot be undone.`,
+    description: `Delete ${title}? This removes its folder and saved data from this machine, along with its session tabs and shortcuts. It cannot be undone.`,
     confirmLabel: 'Delete applet',
     testid: 'settings-applet-delete',
     onConfirm: async () => {
@@ -209,7 +209,7 @@ onMounted(() => {
 
     <SettingsSection
       title="Running processes"
-      description="Long-running commands started by applets. Closing a panel or dropdown stops what it started, and a title bar page's keep running while it is in the title bar."
+      description="Long-running commands started by applets. Closing a panel or dropdown stops what it started, and a title bar page's keep running while the applet is on."
       boxed
     >
       <InlineError v-if="processError" variant="line" class="px-4 py-3.5" :message="processError" />

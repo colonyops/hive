@@ -32,7 +32,7 @@ import ModeSkeleton from './ModeSkeleton.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
-import { appletIdOf, appletTab } from '../lib/appletTabs'
+import { appletIdOf, appletTab, appletTabOfId } from '../lib/appletTabs'
 import { useApplets } from '../stores/useApplets'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
@@ -40,7 +40,15 @@ import { useDriveRoute } from '../composables/useDriveRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { useChatPanels } from './agents/useChatPanels'
 import { useSessionLayout } from './panels/useSessionLayout'
-import { closePanelRule, focusRule, moveRule, openViewRule, resizeRule, turnRule } from './panels/sessionTabRefs'
+import {
+  closePanelRule,
+  closeTabByIdRule,
+  focusRule,
+  moveRule,
+  openViewRule,
+  resizeRule,
+  turnRule,
+} from './panels/sessionTabRefs'
 import { docsScopeOf, viewOfTab, viewTab, viewsFor, withDocsScope } from './terminal/panelViews'
 import { useDriveActivity } from '../stores/useDriveActivity'
 import { useChatPanelLayouts } from '../stores/usePanelLayouts'
@@ -253,6 +261,9 @@ useSessionLayout('agents', driveTarget, () => props.active, {
       withDocsScope(openViewRule(current, viewTab('docs'), placement, anchor, paneWindowId.value), scopeAt(path)),
     )
   },
+  openApplet: (tab, placement, anchor) =>
+    panels.apply((current) => openViewRule(current, appletTabOfId(tab), placement, anchor, paneWindowId.value)),
+  closeApplet: (tab) => panels.apply((current) => closeTabByIdRule(current, tab)),
   close: (view) =>
     panels.apply((current) => {
       const tab = viewTab(view)

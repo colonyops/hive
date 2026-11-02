@@ -1,6 +1,5 @@
 import type { Page } from '@playwright/test'
 import { expect, tag, test } from '../../../fixtures/test.js'
-import { togglePlace } from '../../../fixtures/applets.js'
 import { dismissSizeBanner, mockTerminal, windowState } from '../../../fixtures/terminal.js'
 
 async function openSession(page: Page) {
@@ -14,17 +13,11 @@ async function openSession(page: Page) {
 }
 
 test.describe('applet tabs', { tag: [tag.applets] }, () => {
-  test('the + menu has only what the user added, and opens it as a tab', async ({ page }) => {
+  test('the + menu has only what its file lists, and opens it as a tab', async ({ page }) => {
     await page.goto('/')
     await openSession(page)
     await page.getByTestId('panel-tab-add-p0').click()
-    await expect(page.getByTestId('session-add-applet-e2e-page')).toHaveCount(0)
-    await page.keyboard.press('Escape')
-
-    await togglePlace(page, 'e2e-page', 'tab')
-    await openSession(page)
-
-    await page.getByTestId('panel-tab-add-p0').click()
+    await expect(page.getByTestId('session-add-applet-e2e-bar')).toHaveCount(0)
     await page.getByTestId('session-add-applet-e2e-page').click()
     const frame = page.getByTestId('applet-tab-frame')
     await expect(frame).toBeVisible()
@@ -80,7 +73,5 @@ test.describe('applet tabs', { tag: [tag.applets] }, () => {
 
     await page.getByTestId('panel-tab-close-applet:e2e-page').click({ force: true })
     await expect(frame).toHaveCount(0)
-
-    await togglePlace(page, 'e2e-page', 'tab')
   })
 })
