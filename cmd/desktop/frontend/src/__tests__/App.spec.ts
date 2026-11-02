@@ -13,7 +13,8 @@ import { resetNotificationSettingsForTests } from '../composables/useNotificatio
 import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { resetLaunchersForTests } from '../composables/useLaunchers'
 import { formatCombo, SEQUENCE_TIMEOUT_MS, useKeybindings } from '../composables/useKeybindings'
-import { defaultTerminalFontSizePx, useTerminalFont } from '../stores/useTerminalFont'
+import { useSurfaceScale } from '../stores/useSurfaceScale'
+import { useTerminalFont } from '../stores/useTerminalFont'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import {
   resetAttachedTerminalWindowsForTests,
@@ -206,7 +207,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   SetOnboardingCompleted: mocks.SetOnboardingCompleted,
   AppearanceSettings: vi.fn().mockResolvedValue({
     theme: '',
-    terminalFontSizePx: 13,
+    terminalScale: 100,
     terminalFontFamily: '',
     terminalFontWeight: 0,
     terminalFontWeightBold: 0,
@@ -217,7 +218,10 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   }),
   Fonts: vi.fn().mockResolvedValue({ all: [], monospace: [] }),
   SetTheme: vi.fn(),
-  SetTerminalFontSize: vi.fn(),
+  SetInterfaceScale: vi.fn(),
+  SetDocumentScale: vi.fn(),
+  SetCodeScale: vi.fn(),
+  SetTerminalScale: vi.fn(),
   SetTerminalFontFamily: vi.fn(),
   SetTerminalFontWeights: vi.fn(),
   SetTerminalShowWindows: vi.fn(),
@@ -411,6 +415,9 @@ function stubTerminalTree(overrides: Partial<TerminalTreeHandles> = {}): Termina
 function focusedPane(): HTMLElement {
   const pane = document.createElement('div')
   pane.setAttribute('data-terminal-input-scope', '')
+  pane.setAttribute('data-scale-surface', 'terminal')
+  // happy-dom lays nothing out, and the scale target only counts what is shown.
+  pane.getClientRects = () => [{}] as unknown as DOMRectList
   document.body.append(pane)
   return pane
 }
@@ -1561,7 +1568,7 @@ describe('App', () => {
       wrapper.unmount()
     })
 
-    it('steps the terminal text size from a focused pane, and resets it', async () => {
+    it('steps the terminal scale from a focused pane, and resets it', async () => {
       const { wrapper, router } = await mountAppWithRouter()
       await router.push('/terminal/hive-fix-parser')
       await flushPromises()
@@ -1574,18 +1581,18 @@ describe('App', () => {
       }
 
       await press({ key: '=' })
-      expect(px.value).toBe(defaultTerminalFontSizePx + 2)
+      expect(px.value).toBe(14)
 
       // The bare plus of a layout with its own plus key. The shifted spelling
       // ⌘+ produces is macOS-only, so catalog.spec pins that one.
       await press({ key: '+' })
-      expect(px.value).toBe(defaultTerminalFontSizePx + 4)
+      expect(px.value).toBe(16)
 
       await press({ key: '-' })
-      expect(px.value).toBe(defaultTerminalFontSizePx + 2)
+      expect(px.value).toBe(14)
 
       await press({ key: '0' })
-      expect(px.value).toBe(defaultTerminalFontSizePx)
+      expect(px.value).toBe(13)
 
       pane.remove()
       wrapper.unmount()
@@ -1601,7 +1608,7 @@ describe('App', () => {
       pane.dispatchEvent(new KeyboardEvent('keydown', { key: '=', metaKey: true, bubbles: true }))
       await flushPromises()
 
-      expect(px.value).toBe(defaultTerminalFontSizePx + 2)
+      expect(px.value).toBe(14)
       pane.remove()
       wrapper.unmount()
     })
@@ -1609,16 +1616,17 @@ describe('App', () => {
     it.each([
       ['the feed', '/'],
       ['the session picker', '/terminal'],
-    ])('leaves the text size alone on %s, where no terminal is drawn', async (_where, path) => {
+    ])('steps the interface scale on %s, where no terminal is drawn', async (_where, path) => {
       const { wrapper, router } = await mountAppWithRouter()
       await router.push(path)
       await flushPromises()
 
-      const { px } = useTerminalFont()
+      const { scales } = useSurfaceScale()
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '=', metaKey: true }))
       await flushPromises()
 
-      expect(px.value).toBe(defaultTerminalFontSizePx)
+      expect(scales.interface.value).toBe(110)
+      expect(scales.terminal.value).toBe(100)
       wrapper.unmount()
     })
 

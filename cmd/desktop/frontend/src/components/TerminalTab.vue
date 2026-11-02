@@ -112,6 +112,7 @@ function startDividerDrag(divider: PaneDivider, event: PointerEvent): void {
     class="min-h-0 min-w-0 flex-1 overflow-auto bg-app px-2 py-1.5"
     data-terminal-input-scope
     data-code-pane
+    data-scale-surface="terminal"
     data-testid="terminal-pane"
     :data-window-id="tab.windowId"
   >

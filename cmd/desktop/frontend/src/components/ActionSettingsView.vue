@@ -143,13 +143,11 @@ const { dragging, target: dropTarget } = drag
             class="-mx-1.5 flex w-3 flex-none cursor-grab items-center justify-center text-text-4 opacity-0 transition-opacity group-hover/item:opacity-100 group-[.dragging]/item:opacity-100"
             aria-hidden="true"
             :data-testid="`action-grip-${action.id}`"
-            ><IconGripVertical class="size-[15px]"
+            ><IconGripVertical class="size-3.75"
           /></span>
         </template>
         <template #badges>
-          <BaseBadge class="border border-row !bg-app px-[7px] py-0.5 font-mono text-caption">{{
-            action.id
-          }}</BaseBadge>
+          <BaseBadge class="border border-row !bg-app px-1.75 py-0.5 font-mono text-caption">{{ action.id }}</BaseBadge>
           <BaseBadge class="px-2 py-0.5 text-caption !text-text-2">{{ actionTypeMeta(action.type).label }}</BaseBadge>
           <BaseBadge class="px-2 py-0.5 text-caption">
             <span class="size-1.5 rounded-full" :class="action.showInDetail ? 'bg-severity-success' : 'bg-text-4'" />{{

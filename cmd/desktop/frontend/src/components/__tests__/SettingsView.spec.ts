@@ -14,7 +14,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   SetNotificationSettings: vi.fn(),
   AppearanceSettings: vi.fn().mockResolvedValue({
     theme: '',
-    terminalFontSizePx: 13,
+    terminalScale: 100,
     terminalFontFamily: '',
     terminalFontWeight: 0,
     terminalFontWeightBold: 0,

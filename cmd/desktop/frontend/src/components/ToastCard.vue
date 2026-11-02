@@ -90,16 +90,16 @@ function runAction(action: ToastActionDef) {
     data-testid="toast"
     :data-toast-severity="toast.severity"
   >
-    <div class="flex gap-3 px-3.5 pb-[13px] pt-3.5">
-      <span class="flex size-[26px] shrink-0 items-center justify-center rounded-lg" :class="style.iconBg">
-        <component :is="icon" class="size-[15px]" :class="style.iconColor" />
+    <div class="flex gap-3 px-3.5 pb-3.25 pt-3.5">
+      <span class="flex size-6.5 shrink-0 items-center justify-center rounded-lg" :class="style.iconBg">
+        <component :is="icon" class="size-3.75" :class="style.iconColor" />
       </span>
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
           <span class="text-body font-semibold text-text" data-testid="toast-title">{{ toast.message }}</span>
           <span
             v-if="toast.severity === 'auto-action'"
-            class="rounded-sm border border-accent/30 bg-accent/13 px-[5px] py-px font-mono text-micro tracking-[.06em] text-accent"
+            class="rounded-sm border border-accent/30 bg-accent/13 px-1.25 py-px font-mono text-micro tracking-[.06em] text-accent"
             data-testid="toast-auto-badge"
             >AUTO</span
           >
@@ -107,7 +107,7 @@ function runAction(action: ToastActionDef) {
         <p v-if="toast.body" class="mt-0.5 text-small leading-[1.45] text-text-2" data-testid="toast-body">
           {{ toast.body }}
         </p>
-        <div v-if="toast.actions.length" class="mt-[9px] flex gap-3.5">
+        <div v-if="toast.actions.length" class="mt-2.25 flex gap-3.5">
           <button
             v-for="(action, i) in toast.actions"
             :key="action.label"

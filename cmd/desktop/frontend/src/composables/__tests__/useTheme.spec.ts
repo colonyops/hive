@@ -19,7 +19,7 @@ beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
   // Default: nothing persisted durably yet.
-  mocks.AppearanceSettings.mockResolvedValue({ theme: '', terminalFontSizePx: 13 })
+  mocks.AppearanceSettings.mockResolvedValue({ theme: '', terminalScale: 100 })
   mocks.SetTheme.mockResolvedValue(undefined)
 })
 

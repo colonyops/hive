@@ -268,7 +268,7 @@ function contentTabs(tabs: readonly PanelTab[]): PanelTab[] {
         data-testid="panel-drag-ghost"
       >
         <slot name="icon" :tab="draggedTab" />
-        <span class="max-w-[168px] truncate" :class="tabMono(draggedTab) ? 'font-mono' : ''">{{
+        <span class="max-w-42 truncate" :class="tabMono(draggedTab) ? 'font-mono' : ''">{{
           tabLabel(draggedTab)
         }}</span>
       </div>

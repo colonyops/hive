@@ -23,7 +23,7 @@ useEscapeToClose(close)
       `pane`     — the content column. Rows read @[…]/pane: to stack below ~600px.
   -->
   <div class="@container/settings flex h-full min-h-0 flex-1">
-    <aside class="hive-scroll w-14 shrink-0 overflow-y-auto border-r border-row bg-sidebar @[700px]/settings:w-[200px]">
+    <aside class="hive-scroll w-14 shrink-0 overflow-y-auto border-r border-row bg-sidebar @[700px]/settings:w-50">
       <div class="hidden border-b border-border px-4 pb-3 pt-4 @[700px]/settings:block">
         <slot name="sidebar-title" />
       </div>

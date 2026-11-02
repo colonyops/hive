@@ -66,10 +66,10 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
         v-for="(tab, at) in panel.tabs"
         :key="tab.id"
         data-panel-tab
-        class="panel-tab group relative flex min-w-0 max-w-[168px] shrink touch-none select-none items-center text-small"
+        class="panel-tab group relative flex min-w-0 max-w-42 shrink touch-none select-none items-center text-small"
         :class="[
           shown(tab) ? (focused ? 'panel-tab-focused' : 'panel-tab-shown') : 'text-text-2',
-          compact && !shown(tab) ? 'shrink-0' : 'min-w-[56px]',
+          compact && !shown(tab) ? 'shrink-0' : 'min-w-14',
           dragging === tab.id ? 'panel-tab-dragging opacity-40' : '',
         ]"
         :data-testid="`panel-tab-${tab.id}`"
@@ -156,7 +156,7 @@ const compact = computed(() => rowWidth.value > 0 && rowWidth.value / (props.pan
   content: '';
   position: absolute;
   inset: auto 0 -1px;
-  height: 2px;
+  height: 0.125rem;
   background: var(--color-accent);
 }
 .panel-tab-shown::after {

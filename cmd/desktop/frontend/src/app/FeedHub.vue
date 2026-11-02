@@ -89,7 +89,7 @@ defineExpose({ focusSearch: () => feedList.value?.focusSearch() })
     data-testid="workspace-empty"
   >
     <div class="text-body font-semibold">No sources yet</div>
-    <p class="max-w-[400px] text-xs leading-relaxed text-text-3">
+    <p class="max-w-100 text-xs leading-relaxed text-text-3">
       {{
         githubConnected
           ? 'This profile has no feeds. Open the flow editor to wire a source into one.'

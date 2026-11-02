@@ -428,8 +428,8 @@ defineExpose({ onKeydown, startRename, reveal })
 
 <style scoped>
 .drive-row {
-  height: 26px;
-  padding-left: calc(8px + var(--depth) * 14px);
+  height: 1.625rem;
+  padding-left: calc(0.5rem + var(--depth) * 0.875rem);
 }
 .drive-row-active {
   box-shadow: inset 2px 0 0 var(--color-accent);

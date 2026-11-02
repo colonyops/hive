@@ -31,9 +31,9 @@ where a size change nobody can see is a surprise later.
 
 ## Consequences
 
-- Nothing scales the app chrome on macOS, and the View menu has no zoom. If
-  that becomes a complaint, the answer is a UI scale setting that reflows,
-  not magnification.
+- The View menu has no zoom. What the chords step and the interface scale that
+  reflows are now ADR text-sizes-are-per-surface-percentages; the menu decision
+  here still stands.
 - A relative step needs the persisted size as its base, so the step waits
   for the font settings to hydrate.
 - Text size is no longer Settings-only, which amends the fourth point of

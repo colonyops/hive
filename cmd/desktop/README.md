@@ -197,10 +197,12 @@ notifications:
   sound: true
 appearance:
   theme: ""
-  canvas_font_size: "" # small, medium, large, or xl; empty means medium
   canvas_line_spacing: "" # compact, standard, or relaxed; empty means standard
   canvas_page_width: "" # narrow, wide, or full; empty means narrow
-  terminal_font_size: 0 # text size in pixels, 8-64; 0 means 13
+  interface_scale: 0 # chrome, menus, and the feed, percent, 75-150; 0 means 100
+  document_scale: 0 # Drive documents, percent, 75-200; 0 means 100
+  code_scale: 0 # diffs and code fields, percent, 75-200; 0 means 100
+  terminal_scale: 0 # terminals and chats, percent, 60-500; 0 means 100 (13px)
   terminal_font_family: "" # any installed monospace family; empty is the bundled JetBrains Mono (ADR bundled-faces-are-jetbrains-mono-inter-and-a-symbol-font)
   terminal_font_weight: 0 # 300, 350, 400, 600, or 700; 0 means the default, 350
   terminal_font_weight_bold: 0 # the weight bold cells draw at; 0 means the default, 700

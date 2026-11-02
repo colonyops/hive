@@ -30,7 +30,8 @@ import {
 } from '../lib/terminalTree'
 import { useDriveReview } from '../stores/useDriveReview'
 import { usePopupTerminal } from '../stores/usePopupTerminal'
-import { useTerminalFont } from '../stores/useTerminalFont'
+import { useScaleTarget } from '../composables/useScaleTarget'
+import { surfaces, useSurfaceScale } from '../stores/useSurfaceScale'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 import type { useAppMode } from './useAppMode'
@@ -62,7 +63,8 @@ export function useAppCommands(deps: AppCommandDeps) {
   const palette = useCommandPalette()
   const report = useReportDialog()
   const newSession = useNewSession()
-  const terminalFont = useTerminalFont()
+  const surfaceScale = useSurfaceScale()
+  const { scaleTarget } = useScaleTarget()
   const { sessionRepository, sessionServer } = useTerminalSessions()
 
   // Mounted on first use and then only hidden, because hiding it must not end
@@ -152,9 +154,16 @@ export function useAppCommands(deps: AppCommandDeps) {
     'terminal.close-pane': closeTerminalPane,
     'terminal.zoom-pane': zoomTerminalPane,
     'terminal.find': findInTerminal,
-    'terminal.text-size-increase': () => terminalFont.stepFontSize(1),
-    'terminal.text-size-decrease': () => terminalFont.stepFontSize(-1),
-    'terminal.text-size-reset': terminalFont.resetFontSize,
+    'view.text-size-increase': () => surfaceScale.stepScale(scaleTarget(), 1),
+    'view.text-size-decrease': () => surfaceScale.stepScale(scaleTarget(), -1),
+    'view.text-size-reset': () => surfaceScale.resetScale(scaleTarget()),
+    ...Object.fromEntries(
+      surfaces.flatMap((surface) => [
+        [`${surface}.text-size-increase`, () => surfaceScale.stepScale(surface, 1)],
+        [`${surface}.text-size-decrease`, () => surfaceScale.stepScale(surface, -1)],
+        [`${surface}.text-size-reset`, () => surfaceScale.resetScale(surface)],
+      ]),
+    ),
     'terminal.focus-pane-left': () => focusTerminalPaneDirection('left'),
     'terminal.focus-pane-right': () => focusTerminalPaneDirection('right'),
     'terminal.focus-pane-up': () => focusTerminalPaneDirection('up'),

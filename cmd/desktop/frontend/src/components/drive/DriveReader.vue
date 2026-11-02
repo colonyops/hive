@@ -247,6 +247,7 @@ function commentOnBlock(): void {
 <template>
   <DocumentReader
     v-if="readerDocument"
+    data-scale-surface="document"
     ref="reader"
     :document="readerDocument"
     :font-size-px="fontSizePx"
@@ -319,7 +320,13 @@ function commentOnBlock(): void {
       @cancel="endComment"
     />
   </DocumentReader>
-  <div v-else class="flex min-h-0 flex-col" :style="bareStyle" :data-testid="`${testid}-document`">
+  <div
+    v-else
+    class="flex min-h-0 flex-col"
+    data-scale-surface="document"
+    :style="bareStyle"
+    :data-testid="`${testid}-document`"
+  >
     <InlineError v-if="error" :testid="`${testid}-error`" variant="line" class="leading-relaxed" :message="error" />
     <img
       v-else-if="document?.image"
@@ -344,8 +351,8 @@ function commentOnBlock(): void {
    tint stays light enough to read through. */
 .review-highlight {
   position: absolute;
-  margin-left: -2px;
-  padding: 0 2px;
+  margin-left: -0.125rem;
+  padding: 0 0.125rem;
   box-sizing: content-box;
   border-radius: 2px;
   background: color-mix(in oklab, var(--color-accent) 16%, transparent);
@@ -365,8 +372,8 @@ function commentOnBlock(): void {
 }
 .review-block-preview {
   position: absolute;
-  margin: -3px 0 0 -4px;
-  padding: 3px 4px;
+  margin: -0.1875rem 0 0 -0.25rem;
+  padding: 0.1875rem 0.25rem;
   box-sizing: content-box;
   border-radius: 4px;
   outline: 1px dashed color-mix(in oklab, var(--color-accent) 70%, transparent);
@@ -375,8 +382,8 @@ function commentOnBlock(): void {
   position: absolute;
   z-index: 20;
   display: inline-flex;
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -390,7 +397,7 @@ function commentOnBlock(): void {
 .review-block-handle::after {
   content: '';
   position: absolute;
-  inset: -6px -10px -6px -6px;
+  inset: -0.375rem -0.625rem -0.375rem -0.375rem;
 }
 .review-block-handle:hover {
   background: var(--color-accent);

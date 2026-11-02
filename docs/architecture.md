@@ -1600,15 +1600,14 @@ mounts it hidden shortly after startup, and the tree alone reads statuses and
 windows once, so a first entry is a reveal too (ADR
 code-and-chats-preload-after-the-hub-is-up). The attach still waits for `active`.
 
-**Terminal style is a setting, not pane chrome.** Text size, family, weights,
-line height and tracking are all `appearance.terminal_*` settings written from
-Settings ▸ Terminal, and the pane carries no duplicate control for
-any of them (ADR the-sidebar-tree-is-the-only-window-list). A new style option takes the same route. Text size
-also has a keyboard ladder, and it writes that same setting rather than a second
-piece of state (ADR the-zoom-chords-step-the-terminal-text-size-instead-of-magnifying-the-webview).
-Text size is the one typography setting the app holds as a free value rather
-than a preset list, because a chord steps it
-(ADR the-terminal-text-size-is-a-pixel-count). The chrome's own
+**Terminal style is a setting, not pane chrome.** Family, weights, line height
+and tracking are `appearance.terminal_*` settings written from Settings ▸
+Terminal, and the pane carries no duplicate control for any of them (ADR
+the-sidebar-tree-is-the-only-window-list). A new style option takes the same
+route. Text size is one of four per-surface percent scales, on Settings ▸
+Appearance and repeated on the surface's own pane, with the keyboard chords writing the same settings (ADR
+text-sizes-are-per-surface-percentages). A new surface with its own text marks
+its root with `data-scale-surface`. The chrome's own
 faces are a separate pair of settings on a separate pane — `appearance.
 font_family` and `mono_font_family`, written from Settings ▸ Appearance — and a
 terminal takes nothing from them (ADR the-app-s-faces-are-picked-from-installed-fonts-not-from-a-bundled-set).

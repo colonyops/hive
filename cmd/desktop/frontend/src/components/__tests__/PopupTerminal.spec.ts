@@ -119,7 +119,7 @@ vi.mock(
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   AppearanceSettings: vi.fn().mockResolvedValue({
     theme: '',
-    terminalFontSizePx: 13,
+    terminalScale: 100,
     terminalFontFamily: '',
     terminalFontWeight: 0,
     terminalFontWeightBold: 0,
@@ -128,7 +128,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   }),
   Fonts: vi.fn().mockResolvedValue({ all: [], monospace: [] }),
   SetTheme: vi.fn(),
-  SetTerminalFontSize: vi.fn(),
+  SetTerminalScale: vi.fn(),
   SetTerminalFontFamily: vi.fn(),
   SetTerminalFontWeights: vi.fn(),
 }))

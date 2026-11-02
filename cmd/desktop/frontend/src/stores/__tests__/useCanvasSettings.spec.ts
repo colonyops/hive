@@ -4,7 +4,6 @@ import { useCanvasSettings } from '../useCanvasSettings'
 
 const mocks = vi.hoisted(() => ({
   AppearanceSettings: vi.fn(),
-  SetCanvasFontSize: vi.fn(),
   SetCanvasLineSpacing: vi.fn(),
   SetCanvasPageWidth: vi.fn(),
 }))
@@ -14,21 +13,18 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 describe('useCanvasSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.AppearanceSettings.mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' })
-    mocks.SetCanvasFontSize.mockResolvedValue(undefined)
+    mocks.AppearanceSettings.mockResolvedValue({ canvasLineSpacing: '' })
     mocks.SetCanvasLineSpacing.mockResolvedValue(undefined)
     mocks.SetCanvasPageWidth.mockResolvedValue(undefined)
   })
 
-  it('hydrates both presets from one read and exposes their CSS values', async () => {
-    mocks.AppearanceSettings.mockResolvedValue({ canvasFontSize: 'xl', canvasLineSpacing: 'relaxed' })
+  it('hydrates the reading settings and exposes their CSS values', async () => {
+    mocks.AppearanceSettings.mockResolvedValue({ documentScale: 200, canvasLineSpacing: 'relaxed' })
 
     const typography = useCanvasSettings()
     await flushPromises()
 
-    expect(mocks.AppearanceSettings).toHaveBeenCalledTimes(1)
-    expect(typography.fontSize.value).toBe('xl')
-    expect(typography.fontSizePx.value).toBe(18)
+    expect(typography.fontSizePx.value).toBe(27)
     expect(typography.lineSpacing.value).toBe('relaxed')
     expect(typography.lineHeight.value).toBe(1.85)
   })
@@ -37,18 +33,15 @@ describe('useCanvasSettings', () => {
     const typography = useCanvasSettings()
     await flushPromises()
 
-    typography.setFontSize('large')
     typography.setLineSpacing('compact')
-    expect(typography.fontSizePx.value).toBe(15.5)
     expect(typography.lineHeight.value).toBe(1.45)
     await flushPromises()
 
-    expect(mocks.SetCanvasFontSize).toHaveBeenCalledWith('large')
     expect(mocks.SetCanvasLineSpacing).toHaveBeenCalledWith('compact')
   })
 
   it('maps the page width preset to a measure and persists a change', async () => {
-    mocks.AppearanceSettings.mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '', canvasPageWidth: 'wide' })
+    mocks.AppearanceSettings.mockResolvedValue({ canvasLineSpacing: '', canvasPageWidth: 'wide' })
 
     const settings = useCanvasSettings()
     await flushPromises()
@@ -62,7 +55,6 @@ describe('useCanvasSettings', () => {
 
   it('falls back from unknown stored values', async () => {
     mocks.AppearanceSettings.mockResolvedValue({
-      canvasFontSize: 'giant',
       canvasLineSpacing: 'wide',
       canvasPageWidth: 'huge',
     })
@@ -70,13 +62,12 @@ describe('useCanvasSettings', () => {
     const typography = useCanvasSettings()
     await flushPromises()
 
-    expect(typography.fontSize.value).toBe('medium')
     expect(typography.lineSpacing.value).toBe('standard')
     expect(typography.pageWidth.value).toBe('narrow')
   })
 
   it('keeps a selection made while hydration is in flight', async () => {
-    let resolveRead: (value: { canvasFontSize: string; canvasLineSpacing: string }) => void = () => {}
+    let resolveRead: (value: { canvasLineSpacing: string }) => void = () => {}
     mocks.AppearanceSettings.mockReturnValue(
       new Promise((resolve) => {
         resolveRead = resolve
@@ -84,11 +75,10 @@ describe('useCanvasSettings', () => {
     )
     const typography = useCanvasSettings()
 
-    typography.setFontSize('large')
-    resolveRead({ canvasFontSize: 'small', canvasLineSpacing: 'compact' })
+    typography.setLineSpacing('relaxed')
+    resolveRead({ canvasLineSpacing: 'compact' })
     await flushPromises()
 
-    expect(typography.fontSize.value).toBe('large')
-    expect(typography.lineSpacing.value).toBe('compact')
+    expect(typography.lineSpacing.value).toBe('relaxed')
   })
 })

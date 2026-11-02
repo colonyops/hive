@@ -177,9 +177,9 @@ onMounted(async () => {
     <section v-if="build" class="overflow-hidden rounded-xl border border-card bg-raised" data-testid="about-identity">
       <div class="flex flex-col gap-3.5 p-4 @[560px]/pane:flex-row @[560px]/pane:items-center @[560px]/pane:gap-4">
         <span
-          class="flex size-[34px] shrink-0 items-center justify-center rounded-lg border border-card bg-chip text-accent"
+          class="flex size-8.5 shrink-0 items-center justify-center rounded-lg border border-card bg-chip text-accent"
         >
-          <HiveMark class="size-[18px]" />
+          <HiveMark class="size-4.5" />
         </span>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1">

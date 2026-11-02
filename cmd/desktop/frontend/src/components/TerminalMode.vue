@@ -163,7 +163,7 @@ const knownTags = computed(() => {
     >
       <IconTerminal class="size-6 text-text-4" />
       <div class="text-body font-semibold">Terminal unavailable</div>
-      <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="terminal-unavailable-reason">
+      <p class="max-w-105 text-xs leading-relaxed text-text-3" data-testid="terminal-unavailable-reason">
         {{ reason || 'The terminal is not available in this build.' }}
       </p>
       <button

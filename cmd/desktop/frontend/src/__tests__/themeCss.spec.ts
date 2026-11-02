@@ -97,3 +97,13 @@ describe('theme CSS', () => {
     }
   })
 })
+
+describe('text tokens', () => {
+  // A px token would stay put when the interface scale moves the root font size
+  // (ADR text-sizes-are-per-surface-percentages).
+  it('are all in rem', () => {
+    const tokens = [...css.matchAll(/--text-[a-z-]+:\s*([^;]+);/g)].map((match) => match[1])
+    expect(tokens.length).toBeGreaterThan(0)
+    for (const value of tokens) expect(value).toMatch(/^[\d.]+rem$/)
+  })
+})

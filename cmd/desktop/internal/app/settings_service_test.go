@@ -185,8 +185,10 @@ func TestSettingsServiceAppearanceSettingsDefaultsToUnset(t *testing.T) {
 	got, err := service.Appearance(t.Context())
 	require.NoError(t, err)
 	require.Empty(t, got.Theme)
-	require.Equal(t, settings.DefaultTerminalFontSizePx, got.TerminalFontSizePx)
-	require.Empty(t, got.CanvasFontSize)
+	require.Equal(t, settings.DefaultScale, got.InterfaceScale)
+	require.Equal(t, settings.DefaultScale, got.DocumentScale)
+	require.Equal(t, settings.DefaultScale, got.CodeScale)
+	require.Equal(t, settings.DefaultScale, got.TerminalScale)
 	require.Empty(t, got.CanvasLineSpacing)
 	require.Empty(t, got.CanvasPageWidth)
 	require.False(t, got.TerminalShowScrollbars, "terminal scrollbars ship hidden")
@@ -206,8 +208,10 @@ func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing
 
 	service := newSettingsService(SettingsDeps{Store: settings.NewStore(settings.SettingsPath())})
 	require.NoError(t, service.SetTheme(t.Context(), "midnight"))
-	require.NoError(t, service.SetTerminalFontSize(t.Context(), 14))
-	require.NoError(t, service.SetCanvasFontSize(t.Context(), "xl"))
+	require.NoError(t, service.SetInterfaceScale(t.Context(), 110))
+	require.NoError(t, service.SetDocumentScale(t.Context(), 130))
+	require.NoError(t, service.SetCodeScale(t.Context(), 90))
+	require.NoError(t, service.SetTerminalScale(t.Context(), 120))
 	require.NoError(t, service.SetCanvasLineSpacing(t.Context(), "relaxed"))
 	require.NoError(t, service.SetCanvasPageWidth(t.Context(), "full"))
 	require.NoError(t, service.SetTerminalShowWindows(t.Context(), false))
@@ -217,8 +221,10 @@ func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing
 	got, err := settings.LoadSettings()
 	require.NoError(t, err)
 	require.Equal(t, "midnight", got.Appearance.Theme)
-	require.Equal(t, 14, got.Appearance.TerminalFontSize)
-	require.Equal(t, "xl", got.Appearance.CanvasFontSize)
+	require.Equal(t, 110, got.Appearance.InterfaceScale)
+	require.Equal(t, 130, got.Appearance.DocumentScale)
+	require.Equal(t, 90, got.Appearance.CodeScale)
+	require.Equal(t, 120, got.Appearance.TerminalScale)
 	require.Equal(t, "relaxed", got.Appearance.CanvasLineSpacing)
 	require.Equal(t, "full", got.Appearance.CanvasPageWidth)
 	require.False(t, got.Appearance.TerminalShowWindows)
@@ -231,8 +237,10 @@ func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing
 	roundTripped, err := service.Appearance(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "midnight", roundTripped.Theme)
-	require.Equal(t, 14, roundTripped.TerminalFontSizePx, "one appearance setter must not clobber the other field")
-	require.Equal(t, "xl", roundTripped.CanvasFontSize)
+	require.Equal(t, 110, roundTripped.InterfaceScale, "one appearance setter must not clobber the other field")
+	require.Equal(t, 130, roundTripped.DocumentScale)
+	require.Equal(t, 90, roundTripped.CodeScale)
+	require.Equal(t, 120, roundTripped.TerminalScale)
 	require.Equal(t, "relaxed", roundTripped.CanvasLineSpacing)
 	require.Equal(t, "full", roundTripped.CanvasPageWidth)
 	require.False(t, roundTripped.TerminalShowWindows)
@@ -241,21 +249,31 @@ func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing
 	require.Equal(t, 7, roundTripped.TerminalSessionAgeThresholdDays)
 }
 
-func TestSettingsServiceTerminalFontSizeReadsALegacyName(t *testing.T) {
+func TestSettingsServiceReadsOldTextSizesAsScales(t *testing.T) {
 	t.Setenv(settings.EnvConfigDir, filepath.Join(t.TempDir(), "config"))
 	path := settings.SettingsPath()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte("version: 5\nappearance:\n  terminal_font_size: large\n"), 0o600))
+	raw := "version: 5\nappearance:\n  terminal_font_size: large\n  canvas_font_size: xl\n"
+	require.NoError(t, os.WriteFile(path, []byte(raw), 0o600))
 	service := newSettingsService(SettingsDeps{Store: settings.NewStore(path)})
 
 	got, err := service.Appearance(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, 14, got.TerminalFontSizePx)
+	require.Equal(t, 108, got.TerminalScale)
+	require.Equal(t, 133, got.DocumentScale)
+}
 
-	require.NoError(t, service.SetTerminalFontSize(t.Context(), 16))
-	stored, err := settings.LoadSettings()
+func TestSettingsServiceClampsScalesPerSurface(t *testing.T) {
+	t.Setenv(settings.EnvConfigDir, filepath.Join(t.TempDir(), "config"))
+	service := newSettingsService(SettingsDeps{Store: settings.NewStore(settings.SettingsPath())})
+
+	require.NoError(t, service.SetInterfaceScale(t.Context(), 300))
+	require.NoError(t, service.SetTerminalScale(t.Context(), 30))
+
+	got, err := service.Appearance(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, 16, stored.Appearance.TerminalFontSize)
+	require.Equal(t, settings.MaxInterfaceScale, got.InterfaceScale)
+	require.Equal(t, settings.MinTerminalScale, got.TerminalScale)
 }
 
 func TestSettingsServiceTerminalShowWindowsOffSurvivesUnrelatedSaves(t *testing.T) {

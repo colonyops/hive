@@ -131,7 +131,7 @@ defineExpose({ body: bodyRef })
         :start="startResize"
         :step="stepResize"
       />
-      <header v-if="!bare" class="shrink-0 border-b border-row bg-pane px-[18px] py-[15px]">
+      <header v-if="!bare" class="shrink-0 border-b border-row bg-pane px-4.5 py-3.75">
         <div :class="['flex items-center', large ? 'gap-3' : 'gap-2.5']">
           <slot name="icon">
             <BaseIconBadge
@@ -140,7 +140,7 @@ defineExpose({ body: bodyRef })
               :rounded="large ? 'rounded-xl' : 'rounded-lg'"
               :class="large ? 'bg-accent text-accent-contrast' : 'bg-chip text-text-2'"
             >
-              <component :is="icon" :class="large ? 'size-[18px]' : 'size-3.5'" />
+              <component :is="icon" :class="large ? 'size-4.5' : 'size-3.5'" />
             </BaseIconBadge>
           </slot>
           <div class="min-w-0 flex-1">
@@ -173,13 +173,13 @@ defineExpose({ body: bodyRef })
       <div
         ref="bodyRef"
         :class="[
-          bare ? 'flex min-h-0 flex-1 flex-col' : 'hive-scroll min-h-0 flex-1 overflow-y-auto px-[18px] py-[15px]',
+          bare ? 'flex min-h-0 flex-1 flex-col' : 'hive-scroll min-h-0 flex-1 overflow-y-auto px-4.5 py-3.75',
           bodyClass,
         ]"
       >
         <slot />
       </div>
-      <footer v-if="$slots.footer" class="shrink-0 border-t border-row bg-raised px-[18px] py-[13px]">
+      <footer v-if="$slots.footer" class="shrink-0 border-t border-row bg-raised px-4.5 py-3.25">
         <slot name="footer" />
       </footer>
     </aside>

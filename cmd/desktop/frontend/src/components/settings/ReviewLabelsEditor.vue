@@ -90,7 +90,7 @@ function setIcon(index: number, icon: string): void {
     >
       <Kbd class="w-5 text-center text-small text-text-3">{{ index + 1 }}</Kbd>
       <AppSelect
-        class="w-[150px]"
+        class="w-37.5"
         size="sm"
         :model-value="row.icon"
         :options="iconOptions"

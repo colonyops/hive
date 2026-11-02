@@ -603,7 +603,7 @@ onBeforeUnmount(() => {
               @keydown.esc.prevent="visible?.closeSearch()"
             />
             <span
-              class="min-w-[54px] shrink-0 text-right font-mono text-micro text-text-4"
+              class="min-w-13.5 shrink-0 text-right font-mono text-micro text-text-4"
               data-testid="terminal-search-count"
               >{{ searchLabel() }}</span
             >
@@ -675,13 +675,13 @@ onBeforeUnmount(() => {
                       : 'Session failed to start'
                 }}
               </div>
-              <p class="max-w-[560px] text-xs leading-relaxed text-text-3">
+              <p class="max-w-140 text-xs leading-relaxed text-text-3">
                 Hive could not start the configured terminal for
                 <span class="font-mono text-text-2">{{ pool.activeSlug }}</span
                 >.
               </p>
               <div
-                class="w-full max-w-[680px] overflow-hidden rounded-xl border border-severity-error-border bg-sunken text-left shadow-lg"
+                class="w-full max-w-170 overflow-hidden rounded-xl border border-severity-error-border bg-sunken text-left shadow-lg"
                 data-testid="terminal-start-error"
               >
                 <div class="flex h-9 items-center border-b border-severity-error-border bg-severity-error-tint px-3">
@@ -704,7 +704,7 @@ onBeforeUnmount(() => {
                   />
                 </div>
                 <pre
-                  class="hive-scroll max-h-[280px] min-h-24 select-text overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-small leading-6 text-text-2"
+                  class="hive-scroll max-h-70 min-h-24 select-text overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-small leading-6 text-text-2"
                   data-testid="terminal-start-error-output"
                   >{{ attach.startError }}</pre>
               </div>
@@ -716,15 +716,15 @@ onBeforeUnmount(() => {
                   chatAttached ? 'Chat not running' : scratchAttached ? 'Terminal not started' : 'Session not started'
                 }}
               </div>
-              <p v-if="chatAttached" class="max-w-[420px] text-xs leading-relaxed text-text-3">
+              <p v-if="chatAttached" class="max-w-105 text-xs leading-relaxed text-text-3">
                 This chat is stopped. Resuming it launches the agent again in its workspace, picking the conversation
                 back up where the agent itself can.
               </p>
-              <p v-else-if="scratchAttached" class="max-w-[420px] text-xs leading-relaxed text-text-3">
+              <p v-else-if="scratchAttached" class="max-w-105 text-xs leading-relaxed text-text-3">
                 The scratch terminal is not running. Starting it opens a shell in your home directory, and every tab you
                 add opens there too.
               </p>
-              <p v-else class="max-w-[420px] text-xs leading-relaxed text-text-3">
+              <p v-else class="max-w-105 text-xs leading-relaxed text-text-3">
                 No terminal is running for <span class="font-mono text-text-2">{{ pool.activeSlug }}</span> yet.
                 Starting it opens this session's configured windows and runs its agent command.
               </p>
@@ -770,7 +770,7 @@ onBeforeUnmount(() => {
             data-testid="terminal-session-ended"
           >
             <div class="text-body font-semibold" data-testid="terminal-session-ended-title">{{ endedTitle }}</div>
-            <div class="w-full max-w-[680px] overflow-hidden rounded-xl border border-strong bg-sunken text-left">
+            <div class="w-full max-w-170 overflow-hidden rounded-xl border border-strong bg-sunken text-left">
               <div class="flex items-center justify-between border-b border-strong px-3 py-2">
                 <span class="font-mono text-micro text-text-3">Terminal report</span>
                 <IconButton
@@ -782,7 +782,7 @@ onBeforeUnmount(() => {
                 />
               </div>
               <pre
-                class="hive-scroll max-h-[280px] select-text overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-small text-text-2"
+                class="hive-scroll max-h-70 select-text overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-small text-text-2"
                 data-testid="terminal-session-ended-reason"
                 >{{ sessionError }}</pre>
             </div>
@@ -824,7 +824,7 @@ onBeforeUnmount(() => {
       <div class="flex min-w-0 flex-1 items-center overflow-hidden">
         <BaseBadge
           v-if="statusBarHost"
-          class="mx-1 h-[18px] shrink-0 px-1.5 font-mono text-micro font-medium"
+          class="mx-1 h-4.5 shrink-0 px-1.5 font-mono text-micro font-medium"
           :class="statusBarHost.hue.badge"
           :title="statusBarHost.ssh ? `${statusBarHost.name} · ${statusBarHost.ssh}` : statusBarHost.name"
           data-testid="session-status-host"

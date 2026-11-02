@@ -161,12 +161,12 @@ useAutofocus(nameRef)
     :subtitle="subtitle"
     testid="node-editor"
     :close-on-escape="false"
-    body-class="flex flex-col gap-[14px]"
+    body-class="flex flex-col gap-3.5"
     @close="emit('close')"
   >
     <template #icon>
       <span
-        class="flex size-[26px] shrink-0 items-center justify-center rounded-lg"
+        class="flex size-6.5 shrink-0 items-center justify-center rounded-lg"
         :style="{
           background: def.tint ?? 'var(--color-accent-tint)',
           color: def.accentToken ?? 'var(--color-accent)',

@@ -44,7 +44,10 @@ export interface AppearanceSettings {
      */
     "fontFamily": string;
     "monoFontFamily": string;
-    "terminalFontSizePx": number;
+    "interfaceScale": number;
+    "documentScale": number;
+    "codeScale": number;
+    "terminalScale": number;
 
     /**
      * TerminalFontFamily is an installed monospace family for the terminal
@@ -98,7 +101,6 @@ export interface AppearanceSettings {
      * Canvas typography is stored as preset names. The frontend owns the maps
      * from those names to CSS values and heals unknown values.
      */
-    "canvasFontSize": string;
     "canvasLineSpacing": string;
     "canvasPageWidth": string;
 }

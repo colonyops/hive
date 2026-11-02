@@ -182,7 +182,7 @@ defineExpose({ flush: () => add(), focus: () => input.value?.focus() })
         :data-testid="testid"
         :placeholder="placeholder"
         :aria-label="ariaLabel"
-        class="min-w-[80px] flex-1 bg-transparent text-small text-text outline-none"
+        class="min-w-20 flex-1 bg-transparent text-small text-text outline-none"
         :class="monospace ? 'font-mono' : ''"
         role="combobox"
         :aria-expanded="open"
@@ -196,7 +196,7 @@ defineExpose({ flush: () => add(), focus: () => input.value?.focus() })
       <ul
         v-if="showList"
         ref="list"
-        class="fixed z-50 flex flex-col gap-0.5 overflow-y-auto rounded-lg border border-card bg-raised p-[5px] shadow-popover"
+        class="fixed z-50 flex flex-col gap-0.5 overflow-y-auto rounded-lg border border-card bg-raised p-1.25 shadow-popover"
         :style="listStyle"
         role="listbox"
         :data-testid="`${testid}-suggestions`"
@@ -204,7 +204,7 @@ defineExpose({ flush: () => add(), focus: () => input.value?.focus() })
         <li v-for="(option, index) in options" :key="option" role="option" :aria-selected="picking && index === active">
           <button
             type="button"
-            class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left"
+            class="flex w-full items-center gap-2 rounded-md px-2.25 py-1.75 text-left"
             :class="picking && index === active ? 'bg-hover' : ''"
             :data-testid="`${testid}-option-${option}`"
             @mousedown.prevent="add(option)"

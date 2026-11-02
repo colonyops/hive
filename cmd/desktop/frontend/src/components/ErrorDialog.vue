@@ -82,7 +82,7 @@ function reportProblem(): void {
       >
         <span class="flex h-5 shrink-0 items-center"><IconCircleAlert class="size-4 text-severity-error" /></span>
         <pre
-          class="hive-scroll max-h-[240px] min-w-0 flex-1 select-text overflow-auto whitespace-pre-wrap break-words font-mono text-small leading-5 text-severity-error"
+          class="hive-scroll max-h-60 min-w-0 flex-1 select-text overflow-auto whitespace-pre-wrap break-words font-mono text-small leading-5 text-severity-error"
           data-testid="error-dialog-detail"
           >{{ detail }}</pre>
         <IconButton

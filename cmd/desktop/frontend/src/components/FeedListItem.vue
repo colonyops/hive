@@ -147,7 +147,7 @@ function activateRow(): void {
             <span class="font-mono text-caption text-text-4">{{ relativeAge(item.lastEventAt) }}</span>
           </div>
         </div>
-        <div class="mt-[5px] flex min-w-0 items-center gap-2">
+        <div class="mt-1.25 flex min-w-0 items-center gap-2">
           <FeedKindPill v-if="archived && item.archivedReason" data-testid="archive-reason">{{
             item.archivedReason
           }}</FeedKindPill
@@ -161,7 +161,7 @@ function activateRow(): void {
         </div>
         <div
           v-if="itemByline || hasPullRequestSummary"
-          class="mt-[5px] flex items-center gap-1.5 truncate text-left text-small leading-[1.4] text-text-3"
+          class="mt-1.25 flex items-center gap-1.5 truncate text-left text-small leading-[1.4] text-text-3"
           data-testid="item-byline"
         >
           <span v-if="itemByline" class="truncate text-text-2">{{ itemByline }}</span
@@ -239,7 +239,7 @@ function activateRow(): void {
 .feed-item {
   position: relative;
   width: 100%;
-  padding: 13px 16px 13px 18px;
+  padding: 0.8125rem 1rem 0.8125rem 1.125rem;
   border-bottom: 1px solid var(--color-row);
   cursor: pointer;
   text-align: left;
@@ -266,14 +266,14 @@ function activateRow(): void {
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 1.875rem;
+  height: 1.875rem;
   margin-top: 1px;
 }
 .selection-box {
   display: inline-flex;
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--color-strong);
@@ -290,12 +290,12 @@ function activateRow(): void {
 }
 .hover-actions {
   position: absolute;
-  top: 8px;
-  right: 12px;
+  top: 0.5rem;
+  right: 0.75rem;
   z-index: 10;
   display: flex;
-  gap: 2px;
-  padding: 3px;
+  gap: 0.125rem;
+  padding: 0.1875rem;
   border: 1px solid var(--color-strong);
   border-radius: var(--radius-lg);
   background: var(--color-pane);

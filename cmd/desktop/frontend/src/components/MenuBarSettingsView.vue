@@ -137,7 +137,7 @@ onMounted(() => {
       >
         <div class="flex items-center gap-1.5">
           <AppSelect
-            class="w-[110px]"
+            class="w-27.5"
             size="sm"
             :model-value="String(pin.limit)"
             :options="limitOptions"
@@ -173,7 +173,7 @@ onMounted(() => {
         hint="Items open in the browser or in Hive, and run any action that needs no further input."
       >
         <AppSelect
-          class="w-[260px]"
+          class="w-65"
           model-value=""
           :options="addOptions"
           placeholder="Choose a feed…"

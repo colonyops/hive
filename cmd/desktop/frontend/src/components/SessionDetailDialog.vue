@@ -47,7 +47,7 @@ const rows = computed(() => {
   >
     <dl class="flex flex-col gap-2.5 px-5 py-4">
       <div v-for="row in rows" :key="row.testid" class="flex items-baseline gap-3">
-        <dt class="w-[124px] shrink-0 text-xs text-text-3">{{ row.label }}</dt>
+        <dt class="w-31 shrink-0 text-xs text-text-3">{{ row.label }}</dt>
         <dd
           class="min-w-0 flex-1 break-all text-body text-text-2"
           :class="row.mono && 'font-mono text-small'"

@@ -5,13 +5,13 @@ import { nextTick } from 'vue'
 import type { ISearchOptions } from '@xterm/addon-search'
 import { resetTerminalFacesForTests, useTerminalWindows } from '../useTerminalWindows'
 import {
-  defaultTerminalFontSizePx,
   defaultTerminalFontWeight,
   defaultTerminalFontWeightBold,
   defaultTerminalLetterSpacing,
   defaultTerminalLineHeight,
   useTerminalFont,
 } from '../../stores/useTerminalFont'
+import { useSurfaceScale } from '../../stores/useSurfaceScale'
 import { SYMBOL_FONT, TERMINAL_FONT, terminalFontStack } from '../../lib/terminalFaces'
 import { TerminalRequestError, type PaneLayout, type TerminalClient } from '../../lib/terminalClient'
 import { installTerminalImages } from '../../lib/terminalImages'
@@ -268,7 +268,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   AppearanceSettings: vi.fn(() => Promise.resolve({})),
   SetTerminalShowScrollbars: vi.fn(() => Promise.resolve()),
   SetTerminalFontFamily: vi.fn(() => Promise.resolve()),
-  SetTerminalFontSize: vi.fn(() => Promise.resolve()),
+  SetTerminalScale: vi.fn(() => Promise.resolve()),
   SetTerminalFontWeights: vi.fn(() => Promise.resolve()),
   SetTerminalLetterSpacing: vi.fn(() => Promise.resolve()),
   SetTerminalLineHeight: vi.fn(() => Promise.resolve()),
@@ -895,7 +895,7 @@ describe('useTerminalWindows', () => {
     const { client } = await attached()
 
     const stack = terminalFontStack('')
-    const px = defaultTerminalFontSizePx
+    const px = 13
     expect(loadedFaces).toEqual([
       `${defaultTerminalFontWeight} ${px}px ${stack}`,
       `italic ${defaultTerminalFontWeight} ${px}px ${stack}`,
@@ -1189,7 +1189,7 @@ describe('useTerminalWindows', () => {
 
   // A size preset changes cell metrics, not the host box, so the observer never
   // fires: the composable itself must re-vote. The grid still belongs to tmux.
-  it('applies a font size preset to every open terminal and re-votes', async () => {
+  it('applies a terminal scale to every open terminal and re-votes', async () => {
     vi.useFakeTimers()
     const client = fakeClient()
     const session = open(client)
@@ -1200,7 +1200,7 @@ describe('useTerminalWindows', () => {
     client.resize.mockClear()
     resizeHost(host, 100, 30)
 
-    useTerminalFont().setFontSize(16)
+    useSurfaceScale().setScale('terminal', 120)
     await flushPromises()
     await vi.advanceTimersByTimeAsync(100)
 
@@ -1246,7 +1246,7 @@ describe('useTerminalWindows', () => {
     for (const term of xterm.FakeTerminal.instances) {
       expect(term.options.fontWeight).toBe(700)
     }
-    expect(loadedFaces).toContain(`700 ${defaultTerminalFontSizePx}px ${terminalFontStack('')}`)
+    expect(loadedFaces).toContain(`700 13px ${terminalFontStack('')}`)
     expect(client.resize).toHaveBeenCalledWith('hive-abc', 100, 30)
   })
 

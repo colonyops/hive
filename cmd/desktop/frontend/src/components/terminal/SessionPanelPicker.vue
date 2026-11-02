@@ -19,7 +19,7 @@ const emit = defineEmits<{
 
 const heading = 'mb-1 mt-3 font-mono text-micro font-semibold uppercase tracking-wider text-text-3'
 const row =
-  'flex h-[27px] w-full max-w-[280px] cursor-pointer items-center gap-2 rounded px-2 text-left text-small text-text-2 hover:bg-chip hover:text-text'
+  'flex h-6.75 w-full max-w-70 cursor-pointer items-center gap-2 rounded px-2 text-left text-small text-text-2 hover:bg-chip hover:text-text'
 </script>
 
 <template>

@@ -158,7 +158,7 @@ defineExpose({ contains: (node: Node | null) => !!node && !!popover.value?.conta
         v-model="text"
         rows="3"
         placeholder="Type to comment, or pick a label…"
-        class="w-full resize-none rounded-lg border border-strong bg-app px-[11px] py-[9px] text-body text-text outline-none placeholder:text-text-4 focus:border-accent/60 focus:ring-3 focus:ring-accent/12"
+        class="w-full resize-none rounded-lg border border-strong bg-app px-2.75 py-2.25 text-body text-text outline-none placeholder:text-text-4 focus:border-accent/60 focus:ring-3 focus:ring-accent/12"
         :data-testid="`${testid}-comment-text`"
         @keydown="onKeydown"
       />

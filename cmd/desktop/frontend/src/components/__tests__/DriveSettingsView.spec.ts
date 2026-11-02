@@ -4,7 +4,7 @@ import DriveSettingsView from '../DriveSettingsView.vue'
 
 const settingsBindings = vi.hoisted(() => ({
   AppearanceSettings: vi.fn(),
-  SetCanvasFontSize: vi.fn(),
+  SetDocumentScale: vi.fn(),
   SetCanvasLineSpacing: vi.fn(),
   SetCanvasPageWidth: vi.fn(),
   ReviewLabels: vi.fn(),
@@ -18,11 +18,11 @@ vi.mock(
 beforeEach(() => {
   vi.clearAllMocks()
   settingsBindings.AppearanceSettings.mockResolvedValue({
-    canvasFontSize: 'small',
+    documentScale: 133,
     canvasLineSpacing: 'compact',
     canvasPageWidth: '',
   })
-  settingsBindings.SetCanvasFontSize.mockResolvedValue(undefined)
+  settingsBindings.SetDocumentScale.mockResolvedValue(undefined)
   settingsBindings.SetCanvasLineSpacing.mockResolvedValue(undefined)
   settingsBindings.SetCanvasPageWidth.mockResolvedValue(undefined)
   let stored = [{ title: 'Nit', icon: 'scissors' }]
@@ -34,22 +34,32 @@ beforeEach(() => {
 })
 
 describe('DriveSettingsView', () => {
-  it('changes the document text size and line spacing', async () => {
+  it('previews the document scale and changes the line spacing', async () => {
     const wrapper = mount(DriveSettingsView)
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="settings-drive-font-size-small"]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.get('[data-testid="settings-drive-line-spacing-compact"]').attributes('aria-pressed')).toBe('true')
 
-    await wrapper.get('[data-testid="settings-drive-font-size-xl"]').trigger('click')
     await wrapper.get('[data-testid="settings-drive-line-spacing-relaxed"]').trigger('click')
     await flushPromises()
 
-    expect(settingsBindings.SetCanvasFontSize).toHaveBeenCalledWith('xl')
     expect(settingsBindings.SetCanvasLineSpacing).toHaveBeenCalledWith('relaxed')
     const previewStyle = (wrapper.get('[data-testid="settings-canvas-preview-content"]').element as HTMLElement).style
-    expect(previewStyle.getPropertyValue('--hv-font-size')).toBe('18px')
+    expect(previewStyle.getPropertyValue('--hv-font-size')).toBe('17.96px')
     expect(previewStyle.getPropertyValue('--hv-line-height')).toBe('1.85')
+  })
+
+  it('edits the same document scale Settings ▸ Appearance does', async () => {
+    const wrapper = mount(DriveSettingsView)
+    await flushPromises()
+
+    const value = wrapper.get('[data-testid="settings-drive-scale-stepper-value"]')
+    expect(value.text()).toBe('133%')
+    await wrapper.get('[data-testid="settings-drive-scale-stepper-increase"]').trigger('click')
+    await flushPromises()
+
+    expect(value.text()).toBe('150%')
+    expect(settingsBindings.SetDocumentScale).toHaveBeenCalledWith(150)
   })
 
   it('defaults the full-page width to narrow and saves a new choice', async () => {

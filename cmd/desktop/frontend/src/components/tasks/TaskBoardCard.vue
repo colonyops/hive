@@ -45,7 +45,7 @@ const emit = defineEmits<{ select: [id: string]; dragstart: [event: DragEvent]; 
     </div>
 
     <div class="flex items-start gap-2">
-      <TaskStatusIcon :status="item.status" class="mt-[3px]" />
+      <TaskStatusIcon :status="item.status" class="mt-0.75" />
       <span
         class="line-clamp-2 min-w-0 flex-1 leading-[1.4]"
         :class="item.type === 'epic' ? 'font-medium text-text' : 'text-text-2'"

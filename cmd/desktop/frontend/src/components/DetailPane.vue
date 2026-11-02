@@ -150,8 +150,8 @@ const {
   >
     <PanelResizeHandle edge="left" name="detailpane" :start="startPaneResize" :step="stepPane" />
     <template v-if="item">
-      <div class="relative border-b border-border px-5 pb-4 pt-[18px]">
-        <div class="mb-[11px] flex items-center gap-[9px]">
+      <div class="relative border-b border-border px-5 pb-4 pt-4.5">
+        <div class="mb-2.75 flex items-center gap-2.25">
           <FeedSourceBadge
             size="sm"
             :icon="sourceMark"
@@ -160,7 +160,7 @@ const {
             data-testid="source-badge"
           />
           <FeedKindPill size="md" :tone="itemKindStyle" data-testid="kind-pill">
-            <component :is="itemKindIcon" v-if="itemKindIcon" class="size-[13px]" />
+            <component :is="itemKindIcon" v-if="itemKindIcon" class="size-3.25" />
             {{ itemKindLabel }}
           </FeedKindPill>
           <span v-if="itemContainer" class="min-w-0 truncate font-mono text-xs text-text-3">{{
@@ -197,7 +197,7 @@ const {
           </div>
         </div>
         <h1 class="text-heading font-semibold leading-[1.3] tracking-[-.01em]">{{ item.title }}</h1>
-        <p class="mt-[9px] text-xs text-text-3">
+        <p class="mt-2.25 text-xs text-text-3">
           <template v-if="itemByline"
             ><span class="text-text-2">{{ itemByline }}</span> · </template
           >{{ relativeAgo(item.lastEventAt) }}
@@ -224,7 +224,7 @@ const {
              (ActionApplicability — applies_to + payload capability), so it
              never renders an empty header for an item with zero matches. -->
         <template v-if="actions.length">
-          <div class="mb-[13px] flex items-center gap-2">
+          <div class="mb-3.25 flex items-center gap-2">
             <span class="font-mono text-micro tracking-[.12em] text-accent">ACTIONS</span>
             <span class="font-mono text-micro text-text-4">· for {{ itemKind }}</span>
             <span class="flex-1" />
@@ -314,11 +314,11 @@ const {
 .edit-button {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   cursor: pointer;
   border: 1px solid var(--color-card);
   border-radius: var(--radius-md);
-  padding: 3px 8px;
+  padding: 0.1875rem 0.5rem;
   color: var(--color-text-2);
   font-size: var(--text-caption);
 }
@@ -335,13 +335,13 @@ const {
 .session-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0.625rem;
 }
 .session-row {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   text-align: left;
 }
 .session-row-linked {
@@ -355,8 +355,8 @@ const {
 }
 .session-dot {
   flex: none;
-  width: 7px;
-  height: 7px;
+  width: 0.4375rem;
+  height: 0.4375rem;
   border-radius: 50%;
 }
 .session-dot-live {
@@ -367,8 +367,8 @@ const {
 }
 .session-meta {
   display: flex;
-  gap: 5px;
-  padding-left: 15px;
+  gap: 0.3125rem;
+  padding-left: 0.9375rem;
   color: var(--color-text-4);
   font-family: var(--font-mono);
   font-size: var(--text-micro);

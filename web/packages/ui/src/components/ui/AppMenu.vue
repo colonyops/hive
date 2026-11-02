@@ -225,30 +225,30 @@ useEventListener(anchoredWindow, 'resize', measure)
 .app-menu {
   position: absolute;
   right: 0;
-  top: calc(100% + 5px);
+  top: calc(100% + 0.3125rem);
   z-index: 30;
-  width: 230px;
+  width: 14.375rem;
   border: 1px solid var(--color-strong);
   border-radius: var(--radius-lg);
   background: var(--color-pane);
-  padding: 5px;
+  padding: 0.3125rem;
   box-shadow: var(--shadow-popover);
 }
 .app-menu.flip {
   top: auto;
-  bottom: calc(100% + 5px);
+  bottom: calc(100% + 0.3125rem);
 }
 .app-menu-start {
   right: auto;
   left: 0;
 }
 .app-menu-nested {
-  top: -5px;
-  right: calc(100% + 7px);
+  top: -0.3125rem;
+  right: calc(100% + 0.4375rem);
 }
 .app-menu-start.app-menu-nested {
   right: auto;
-  left: calc(100% + 7px);
+  left: calc(100% + 0.4375rem);
 }
 .app-menu-searchable {
   display: flex;
@@ -260,16 +260,16 @@ useEventListener(anchoredWindow, 'resize', measure)
 .app-menu-scroll {
   min-height: 0;
   overflow-y: auto;
-  padding: 5px;
+  padding: 0.3125rem;
 }
 .app-menu-entry {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   cursor: pointer;
   border-radius: var(--radius-md);
-  padding: 7px 9px;
+  padding: 0.4375rem 0.5625rem;
   color: var(--color-text-2);
   font-size: var(--text-small);
   text-align: left;
@@ -284,11 +284,11 @@ useEventListener(anchoredWindow, 'resize', measure)
 }
 .app-menu-sep {
   height: 1px;
-  margin: 5px 4px;
+  margin: 0.3125rem 0.25rem;
   background: var(--color-row);
 }
 .app-menu-label {
-  padding: 6px 9px 3px;
+  padding: 0.375rem 0.5625rem 0.1875rem;
   font-family: var(--font-mono);
   font-size: var(--text-micro);
   font-weight: 600;

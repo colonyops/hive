@@ -29,10 +29,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
-const LINE_HEIGHT_PX = 20
-const PADDING_BLOCK_PX = 24 // 12px top + 12px bottom, matched in the scoped CSS below
-
-const shellHeight = computed(() => (props.rows ?? 8) * LINE_HEIGHT_PX + PADDING_BLOCK_PX)
+// 24px is the 12px top and bottom padding in the scoped CSS below.
+const shellHeight = computed(() => `calc(${props.rows ?? 8} * var(--code-line-height) + 24px)`)
 const lineNumbers = computed(() => Array.from({ length: codeLineCount(props.modelValue) }, (_, i) => i + 1))
 const highlightedHtml = computed(() => highlightCode(props.modelValue))
 
@@ -78,7 +76,7 @@ function onKeydown(e: KeyboardEvent) {
   <FormField v-slot="{ id }" :label="label" :hint="hint" :error="error" :testid="testid">
     <div
       class="hv-code-shell flex overflow-hidden rounded-lg border border-row bg-app"
-      :style="{ height: `${shellHeight}px` }"
+      :style="{ height: shellHeight }"
     >
       <div
         ref="gutterRef"
@@ -113,11 +111,16 @@ function onKeydown(e: KeyboardEvent) {
 </template>
 
 <style scoped>
+/* Scales with Code, not the interface, so these stay independent of the root font size. */
+.hv-code-shell {
+  --code-line-height: calc(20px * var(--code-scale, 1));
+}
+
 .hv-code-layer {
   padding: 12px 14px;
   font-family: var(--font-mono);
-  font-size: var(--text-small);
-  line-height: 20px;
+  font-size: calc(12.5px * var(--code-scale, 1));
+  line-height: var(--code-line-height);
   white-space: pre;
   top: 0;
   left: 0;
@@ -156,8 +159,8 @@ function onKeydown(e: KeyboardEvent) {
 .hv-code-gutter {
   padding: 12px 10px;
   font-family: var(--font-mono);
-  font-size: var(--text-small);
-  line-height: 20px;
+  font-size: calc(12.5px * var(--code-scale, 1));
+  line-height: var(--code-line-height);
   background: var(--color-raised);
   border-right: 1px solid var(--color-row);
 }

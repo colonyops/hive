@@ -30,7 +30,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: Theme] }>()
       :data-testid="`settings-theme-${theme}`"
       @click="emit('update:modelValue', theme)"
     >
-      <span :data-theme="theme" class="flex h-[52px] w-full overflow-hidden rounded-md border border-border">
+      <span :data-theme="theme" class="flex h-13 w-full overflow-hidden rounded-md border border-border">
         <span class="flex w-1/4 flex-col gap-1 border-r border-border bg-sidebar p-1.5">
           <span class="h-1 w-full rounded-full bg-text-4" />
           <span class="h-1 w-2/3 rounded-full bg-text-4" />

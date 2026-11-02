@@ -395,7 +395,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
             <span class="min-w-0 truncate text-body text-text">{{ group.name }}</span>
             <span
               v-if="group.servers?.length"
-              class="flex shrink-0 items-center gap-[3px]"
+              class="flex shrink-0 items-center gap-0.75"
               data-testid="terminal-repo-hosts"
             >
               <span
@@ -816,12 +816,12 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
 .tree-hints {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
   flex-shrink: 0;
   /* The status bar's height, so the two bars' top lines meet across the handle. */
-  height: 28px;
+  height: 1.75rem;
   /* The fonts sit lowercase letters about 1.4px below the middle of their box. */
-  padding: 0 12px 2px;
+  padding: 0 0.75rem 0.125rem;
   border-top: 1px solid var(--color-border);
   font-family: var(--font-mono);
   font-size: var(--text-caption);
@@ -838,8 +838,8 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
   text-align: left;
   cursor: pointer;
 }
@@ -850,16 +850,16 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
 }
 .repo-group,
 .group-row {
-  height: 36px;
+  height: 2.25rem;
 }
 .session-row {
-  height: 30px;
-  padding-left: 16px;
+  height: 1.875rem;
+  padding-left: 1rem;
   color: var(--color-text);
 }
 .window-row {
-  height: 28px;
-  padding-left: 34px;
+  height: 1.75rem;
+  padding-left: 2.125rem;
   color: var(--color-text-2);
 }
 :is(.repo-group, .group-row, .session-row, .window-row):is(:hover, .menu-open) {
@@ -897,8 +897,8 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
 .group-trailing {
   display: grid;
   margin-left: auto;
-  min-width: 18px;
-  height: 18px;
+  min-width: 1.125rem;
+  height: 1.125rem;
   flex: none;
   align-self: center;
 }
@@ -927,7 +927,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
 .window-row::before {
   content: '';
   position: absolute;
-  left: 21px;
+  left: 1.3125rem;
   top: 0;
   bottom: 0;
   border-left: 1px solid var(--color-strong);
@@ -935,9 +935,9 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
 .window-row::after {
   content: '';
   position: absolute;
-  left: 21px;
+  left: 1.3125rem;
   top: 50%;
-  width: 8px;
+  width: 0.5rem;
   border-top: 1px solid var(--color-strong);
 }
 .window-row-last::before {
@@ -946,8 +946,8 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
 /* The scratch section lists its tabs where a repository lists its sessions, so
    they take that row's box and drop the connector. */
 .window-row-flush {
-  height: 30px;
-  padding-left: 16px;
+  height: 1.875rem;
+  padding-left: 1rem;
 }
 .window-row-flush::before,
 .window-row-flush::after {
@@ -1001,7 +1001,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
    so its right edge lines up with the dots on other rows; a running row keeps
    its dot and the badge stops 6px short of it. */
 .session-age {
-  margin-right: -40px;
+  margin-right: -2.5rem;
   position: relative;
   z-index: 1;
   transition: opacity 0.15s ease;
@@ -1030,8 +1030,8 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
 .window-trailing {
   display: grid;
   grid-template-columns: 18px 18px;
-  width: 36px;
-  height: 18px;
+  width: 2.25rem;
+  height: 1.125rem;
   flex: none;
   align-self: center;
 }
@@ -1044,8 +1044,8 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
 }
 .window-status {
   display: flex;
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
   flex: none;
   align-items: center;
   justify-content: center;

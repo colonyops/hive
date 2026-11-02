@@ -270,7 +270,7 @@ function statusIconClass(status: string): string {
         placeholder="Filter runs…"
         aria-label="Filter action runs"
         testid="action-runs-search"
-        class="w-[230px]"
+        class="w-57.5"
       />
       <div class="flex-1" />
       <IconButton
@@ -294,7 +294,7 @@ function statusIconClass(status: string): string {
     <div class="flex min-h-0 flex-1">
       <!-- runs -->
       <div
-        class="hive-scroll w-[360px] shrink-0 overflow-y-auto border-r border-row bg-sidebar"
+        class="hive-scroll w-90 shrink-0 overflow-y-auto border-r border-row bg-sidebar"
         tabindex="0"
         role="listbox"
         aria-label="Action runs"
@@ -478,10 +478,10 @@ function statusIconClass(status: string): string {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: 10px;
-  row-gap: 2px;
+  column-gap: 0.625rem;
+  row-gap: 0.125rem;
   width: 100%;
-  padding: 8px 16px 8px 14px;
+  padding: 0.5rem 1rem 0.5rem 0.875rem;
   border-bottom: 1px solid var(--color-row);
   border-left: 2px solid transparent;
   text-align: left;
@@ -497,13 +497,13 @@ function statusIconClass(status: string): string {
 .log-line {
   display: grid;
   grid-template-columns: 4.5em 6.5em minmax(0, 1fr);
-  padding: 0 20px 0 0;
+  padding: 0 1.25rem 0 0;
 }
 .log-line:hover {
   background: var(--color-row-hover);
 }
 .log-n {
-  padding-right: 12px;
+  padding-right: 0.75rem;
   text-align: right;
   color: var(--color-text-4);
   user-select: none;

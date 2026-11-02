@@ -139,7 +139,7 @@ function onMenuSelect(id: string): void {
     />
     <span v-else class="size-4.5 shrink-0" aria-hidden="true" />
 
-    <span class="w-[92px] shrink-0 truncate font-mono text-caption text-text-4" data-testid="task-row-id">{{
+    <span class="w-23 shrink-0 truncate font-mono text-caption text-text-4" data-testid="task-row-id">{{
       item.id
     }}</span>
 
@@ -184,7 +184,7 @@ function onMenuSelect(id: string): void {
 
     <!-- The age and the actions share one fixed cell, so hovering a row never
          reflows its title. -->
-    <div class="relative h-6 w-[52px] shrink-0">
+    <div class="relative h-6 w-13 shrink-0">
       <span
         class="absolute inset-0 text-right font-mono text-caption leading-6 text-text-4"
         :class="selected || openMenu ? 'invisible' : 'group-hover:invisible group-focus-within:invisible'"

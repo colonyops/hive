@@ -232,7 +232,7 @@ watch(
   <section class="feed-list flex min-w-0 flex-[1.25] flex-col border-r border-border">
     <!-- Top row: search + list-level All/Unread filter. No restated title —
          the sidebar already shows the active source. -->
-    <header class="flex h-[46px] shrink-0 items-center gap-2.5 border-b border-border bg-pane px-3.5">
+    <header class="flex h-11.5 shrink-0 items-center gap-2.5 border-b border-border bg-pane px-3.5">
       <SearchField
         ref="searchInput"
         :model-value="search"
@@ -365,7 +365,7 @@ watch(
         <div v-if="loadError" class="state-frame" data-testid="feed-error">
           <div class="state-icon text-accent"><IconTriangleAlert class="size-5" /></div>
           <div class="text-body font-semibold">GitHub unreachable</div>
-          <div class="max-w-[240px] text-xs leading-relaxed text-text-3">{{ loadError }}</div>
+          <div class="max-w-60 text-xs leading-relaxed text-text-3">{{ loadError }}</div>
           <button class="state-action" :disabled="refreshing" @click="emit('refresh')">
             {{ refreshing ? 'Refreshing…' : 'Retry now' }}
           </button>
@@ -449,17 +449,17 @@ watch(
             <template v-if="search.trim() || authorFilter">
               <div class="state-icon text-text-3"><IconSearch class="size-5" /></div>
               <div class="text-body font-semibold">No matches</div>
-              <div v-if="authorFilter" class="max-w-[240px] text-xs leading-relaxed text-text-3">
+              <div v-if="authorFilter" class="max-w-60 text-xs leading-relaxed text-text-3">
                 No items by {{ authorFilter }} match the current filters.
               </div>
-              <div v-else class="max-w-[240px] text-xs leading-relaxed text-text-3">
+              <div v-else class="max-w-60 text-xs leading-relaxed text-text-3">
                 Nothing here matches "{{ search.trim() }}". Try a different search.
               </div>
             </template>
             <template v-else-if="unreadOnly">
               <div class="state-icon text-kind-pr"><IconCheck class="size-5" /></div>
               <div class="text-body font-semibold">You're all caught up</div>
-              <div class="max-w-[240px] text-xs leading-relaxed text-text-3">
+              <div class="max-w-60 text-xs leading-relaxed text-text-3">
                 No unread items in {{ title === 'Unread' ? 'this profile' : title }}. New items will show up here as
                 they arrive.
               </div>
@@ -467,7 +467,7 @@ watch(
             <template v-else>
               <div class="state-icon text-text-3"><IconGitBranch class="size-5" /></div>
               <div class="text-body font-semibold">No items yet</div>
-              <div class="max-w-[240px] text-xs leading-relaxed text-text-3">
+              <div class="max-w-60 text-xs leading-relaxed text-text-3">
                 New items will show up here as they arrive.
               </div>
             </template>
@@ -494,17 +494,17 @@ watch(
   display: flex;
   flex: none;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-pane);
-  padding: 6px 14px;
+  padding: 0.375rem 0.875rem;
   color: var(--color-text-2);
   font-size: var(--text-small);
 }
 .selection-count {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   color: var(--color-text-2);
   font-family: var(--font-mono);
 }
@@ -516,10 +516,10 @@ watch(
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-pane);
-  padding: 7px 14px;
+  padding: 0.4375rem 0.875rem;
   color: var(--color-text-3);
   font-size: var(--text-small);
   pointer-events: none;
@@ -532,10 +532,10 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 0.625rem;
   border-bottom: 1px solid var(--color-row);
   background: var(--color-pane);
-  padding: 7px 16px 7px 18px;
+  padding: 0.4375rem 1rem 0.4375rem 1.125rem;
   color: var(--color-text-3);
   font-family: var(--font-mono);
   font-size: var(--text-micro);
@@ -549,8 +549,8 @@ watch(
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 7px;
-  padding: 8px 14px 6px;
+  gap: 0.4375rem;
+  padding: 0.5rem 0.875rem 0.375rem;
   color: var(--color-text-3);
   font-family: var(--font-mono);
   font-size: var(--text-micro);
@@ -558,7 +558,7 @@ watch(
   text-transform: uppercase;
   cursor: pointer;
   border-top: 1px solid var(--color-row);
-  margin-top: 6px;
+  margin-top: 0.375rem;
 }
 .archived-divider:hover {
   color: var(--color-text);
@@ -568,25 +568,25 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 0.5rem;
   height: 100%;
-  padding: 24px;
+  padding: 1.5rem;
   text-align: center;
 }
 .state-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 2.75rem;
+  height: 2.75rem;
   border: 1px solid var(--color-strong);
   border-radius: var(--radius-xl);
   background: var(--color-chip);
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 .state-action {
-  margin-top: 8px;
-  padding: 6px 14px;
+  margin-top: 0.5rem;
+  padding: 0.375rem 0.875rem;
   border: 1px solid var(--color-strong);
   border-radius: var(--radius-lg);
   color: var(--color-text-2);

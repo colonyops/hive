@@ -95,7 +95,7 @@ describe('DrivePage', () => {
     wailsEvents.handlers = []
     localStorage.clear()
     document.body.innerHTML = ''
-    settingsBindings.AppearanceSettings.mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' })
+    settingsBindings.AppearanceSettings.mockResolvedValue({ canvasLineSpacing: '' })
     drive.Spaces.mockResolvedValue([
       space('shared', 'Shared'),
       space('workspaces/demo', 'demo'),
@@ -157,7 +157,6 @@ describe('DrivePage', () => {
 
   it('lets the full-page width setting widen the measure', async () => {
     settingsBindings.AppearanceSettings.mockResolvedValue({
-      canvasFontSize: '',
       canvasLineSpacing: '',
       canvasPageWidth: 'full',
     })

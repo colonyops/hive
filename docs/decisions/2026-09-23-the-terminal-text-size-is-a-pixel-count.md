@@ -1,6 +1,6 @@
 # The terminal text size is a pixel count
 
-- **Status:** accepted
+- **Status:** superseded by [text-sizes-are-per-surface-percentages](2026-11-01-text-sizes-are-per-surface-percentages.md)
 - **Date:** 2026-09-23
 
 ## Context

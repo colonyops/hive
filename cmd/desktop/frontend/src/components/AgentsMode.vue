@@ -934,7 +934,7 @@ onBeforeUnmount(() => {
     >
       <IconMessagesSquare class="size-6 text-text-4" />
       <div class="text-body font-semibold">Chats area unavailable</div>
-      <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="agents-unavailable-reason">
+      <p class="max-w-105 text-xs leading-relaxed text-text-3" data-testid="agents-unavailable-reason">
         {{ reason || 'The Chats area is not available in this build.' }}
       </p>
       <button
@@ -1064,6 +1064,7 @@ onBeforeUnmount(() => {
                 class="absolute overflow-auto px-2 py-1.5"
                 :style="region(paneRegionPanel)"
                 data-terminal-input-scope
+                data-scale-surface="terminal"
                 data-testid="agents-session-pane"
                 @mousedown="term?.focus()"
                 @pointerdown.capture="
@@ -1113,7 +1114,7 @@ onBeforeUnmount(() => {
             data-testid="agents-pane-empty"
           >
             <div class="flex min-h-full items-center justify-center px-8 py-10">
-              <div class="flex w-full max-w-[380px] flex-col items-center gap-3 text-center">
+              <div class="flex w-full max-w-95 flex-col items-center gap-3 text-center">
                 <IconMessagesSquare class="size-6 text-text-4" />
                 <h2 class="text-body font-semibold text-text">No chat open</h2>
                 <p class="text-xs leading-relaxed text-text-3">

@@ -44,12 +44,12 @@ useEventListener(window, 'resize', () => emit('dismiss'))
 .app-tooltip {
   position: fixed;
   z-index: 60;
-  max-width: 280px;
+  max-width: 17.5rem;
   pointer-events: none;
   border: 1px solid var(--color-strong);
   border-radius: var(--radius-md);
   background: var(--color-pane);
-  padding: 4px 7px;
+  padding: 0.25rem 0.4375rem;
   color: var(--color-text-2);
   font-size: var(--text-caption);
   line-height: 1.35;

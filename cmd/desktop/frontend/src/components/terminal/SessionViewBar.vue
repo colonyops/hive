@@ -106,20 +106,20 @@ function clear(): void {
 .chip {
   display: inline-flex;
   max-width: 100%;
-  height: 20px;
+  height: 1.25rem;
   align-items: center;
-  gap: 3px;
+  gap: 0.1875rem;
   border-radius: var(--radius-sm);
   background: var(--color-chip);
-  padding: 0 4px 0 6px;
-  font-size: 11px;
+  padding: 0 0.25rem 0 0.375rem;
+  font-size: 0.6875rem;
   line-height: 1;
   color: var(--color-text-2);
 }
 .joiner {
   cursor: pointer;
   padding: 0 1px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--color-text-4);
 }
 .joiner:hover {

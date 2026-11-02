@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DIFF_METRICS, diffHasText, emptyFileDiff, hunkOffsets, parseFileDiff, readOrder } from '../diffItems'
+import { diffHasText, diffMetrics, emptyFileDiff, hunkOffsets, parseFileDiff, readOrder } from '../diffItems'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const file = (extra: Partial<ChangedFile> = {}): ChangedFile => ({
@@ -52,14 +52,30 @@ describe('diffHasText', () => {
   })
 })
 
+describe('diffMetrics', () => {
+  it('scales rows with code in whole pixels and the header with the interface', () => {
+    expect(diffMetrics()).toEqual({ fontPx: 13, headerPx: 32, rowPx: 20, separatorPx: 20 })
+    const scaled = diffMetrics(115, 110)
+    expect(scaled.rowPx).toBe(23)
+    expect(scaled.fontPx).toBeCloseTo(14.95)
+    expect(scaled.headerPx).toBeCloseTo(35.2)
+  })
+})
+
 describe('hunkOffsets', () => {
-  const { headerPx, rowPx, separatorPx } = DIFF_METRICS
+  const { headerPx, rowPx, separatorPx } = diffMetrics()
   it('counts rendered rows and separators, not the file lines the patch leaves out', () => {
     const { hunks } = parseFileDiff(file(), TWO_HUNKS, 'k')
     const unifiedRows = hunks[0].unifiedLineCount
     const splitRows = hunks[0].splitLineCount
     expect(hunkOffsets(hunks, 'unified')).toEqual([headerPx, headerPx + separatorPx + unifiedRows * rowPx])
     expect(hunkOffsets(hunks, 'split')).toEqual([headerPx, headerPx + separatorPx + splitRows * rowPx])
+  })
+
+  it('lays out from the metrics it is given', () => {
+    const { hunks } = parseFileDiff(file(), '@@ -1,2 +1,2 @@\n-a\n+b\n c\n@@ -40 +40 @@\n-d\n+e\n', 'k')
+    const metrics = diffMetrics(150, 100)
+    expect(hunkOffsets(hunks, 'unified', metrics)).toEqual([32, 32 + 3 * metrics.rowPx])
   })
 
   it('gives a first hunk at the top of the file no separator', () => {

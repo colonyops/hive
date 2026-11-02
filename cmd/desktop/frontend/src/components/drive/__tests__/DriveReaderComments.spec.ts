@@ -5,7 +5,7 @@ import { doc, documentFor } from '../../../test-utils/drive'
 
 vi.mock('../../../composables/useWailsEvent', () => ({ useWailsEvent: vi.fn() }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
-  AppearanceSettings: vi.fn().mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' }),
+  AppearanceSettings: vi.fn().mockResolvedValue({ canvasLineSpacing: '' }),
   ReviewLabels: vi.fn().mockResolvedValue(null),
 }))
 const reviews = vi.hoisted(() => ({

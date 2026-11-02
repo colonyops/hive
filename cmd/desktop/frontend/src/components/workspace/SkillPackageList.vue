@@ -144,7 +144,7 @@ async function reveal(open: () => Promise<void>, fallback: string): Promise<void
         </div>
         <ul
           v-if="expanded.has(row.name) && row.members.length"
-          class="flex flex-col gap-1 border-t border-row pb-3 pl-[58px] pr-4 pt-2.5"
+          class="flex flex-col gap-1 border-t border-row pb-3 pl-14.5 pr-4 pt-2.5"
         >
           <li v-for="member in row.members" :key="member.slug" class="flex items-center gap-2">
             <span class="truncate font-mono text-caption text-text-3">{{ member.slug }}</span>

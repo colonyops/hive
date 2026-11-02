@@ -22,16 +22,16 @@ describe('commandCatalog defaults', () => {
     ['+', true],
     ['+', false],
   ])('binds the %s spelling (shift: %s) of the increase chord on macOS', (key, shiftKey) => {
-    const increase = commandCatalog.find((c) => c.id === 'terminal.text-size-increase')!
+    const increase = commandCatalog.find((c) => c.id === 'view.text-size-increase')!
     const press = new KeyboardEvent('keydown', { key, shiftKey, metaKey: true })
 
     expect(defaultCombosFor(increase, true)).toContain(comboFromEvent(press))
   })
 
   it.each([
-    ['terminal.text-size-increase', '+'],
-    ['terminal.text-size-decrease', '_'],
-    ['terminal.text-size-reset', ')'],
+    ['view.text-size-increase', '+'],
+    ['view.text-size-decrease', '_'],
+    ['view.text-size-reset', ')'],
   ])('reaches %s from a pane where mod is Ctrl', (id, key) => {
     const command = commandCatalog.find((c) => c.id === id)!
     const press = new KeyboardEvent('keydown', { key, ctrlKey: true, shiftKey: true })

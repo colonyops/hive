@@ -78,7 +78,10 @@ type AppearanceSettings struct {
 	Theme                           string
 	FontFamily                      string
 	MonoFontFamily                  string
-	TerminalFontSizePx              int
+	InterfaceScale                  int
+	DocumentScale                   int
+	CodeScale                       int
+	TerminalScale                   int
 	TerminalFontFamily              string
 	TerminalFontWeight              int
 	TerminalFontWeightBold          int
@@ -91,7 +94,6 @@ type AppearanceSettings struct {
 	TerminalPoolSize                int
 	TerminalShowSessionAge          bool
 	TerminalSessionAgeThresholdDays int
-	CanvasFontSize                  string
 	CanvasLineSpacing               string
 	CanvasPageWidth                 string
 }
@@ -162,7 +164,10 @@ func (s *SettingsService) Appearance(context.Context) (AppearanceSettings, error
 		Theme:                           cfg.Appearance.Theme,
 		FontFamily:                      cfg.Appearance.FontFamily,
 		MonoFontFamily:                  cfg.Appearance.MonoFontFamily,
-		TerminalFontSizePx:              settings.TerminalFontSizePx(cfg.Appearance.TerminalFontSize),
+		InterfaceScale:                  settings.ClampScale(cfg.Appearance.InterfaceScale, settings.MinInterfaceScale, settings.MaxInterfaceScale),
+		DocumentScale:                   settings.ClampScale(cfg.Appearance.DocumentScale, settings.MinDocumentScale, settings.MaxDocumentScale),
+		CodeScale:                       settings.ClampScale(cfg.Appearance.CodeScale, settings.MinCodeScale, settings.MaxCodeScale),
+		TerminalScale:                   settings.ClampScale(cfg.Appearance.TerminalScale, settings.MinTerminalScale, settings.MaxTerminalScale),
 		TerminalFontFamily:              cfg.Appearance.TerminalFontFamily,
 		TerminalFontWeight:              cfg.Appearance.TerminalFontWeight,
 		TerminalFontWeightBold:          cfg.Appearance.TerminalFontWeightBold,
@@ -175,7 +180,6 @@ func (s *SettingsService) Appearance(context.Context) (AppearanceSettings, error
 		TerminalPoolSize:                cfg.Appearance.TerminalPoolSize,
 		TerminalShowSessionAge:          cfg.Appearance.TerminalShowSessionAge,
 		TerminalSessionAgeThresholdDays: cfg.Appearance.TerminalSessionAgeThresholdDays,
-		CanvasFontSize:                  cfg.Appearance.CanvasFontSize,
 		CanvasLineSpacing:               cfg.Appearance.CanvasLineSpacing,
 		CanvasPageWidth:                 cfg.Appearance.CanvasPageWidth,
 	}, nil
@@ -205,9 +209,33 @@ func (s *SettingsService) SetMonoFontFamily(_ context.Context, family string) er
 	return Wrap(err, KindInternal, "saving settings")
 }
 
-func (s *SettingsService) SetTerminalFontSize(_ context.Context, px int) error {
+func (s *SettingsService) SetInterfaceScale(_ context.Context, percent int) error {
 	_, err := s.store.Update(func(current *settings.Settings) error {
-		current.Appearance.TerminalFontSize = settings.TerminalFontSizePx(px)
+		current.Appearance.InterfaceScale = settings.ClampScale(percent, settings.MinInterfaceScale, settings.MaxInterfaceScale)
+		return nil
+	})
+	return Wrap(err, KindInternal, "saving settings")
+}
+
+func (s *SettingsService) SetDocumentScale(_ context.Context, percent int) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Appearance.DocumentScale = settings.ClampScale(percent, settings.MinDocumentScale, settings.MaxDocumentScale)
+		return nil
+	})
+	return Wrap(err, KindInternal, "saving settings")
+}
+
+func (s *SettingsService) SetCodeScale(_ context.Context, percent int) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Appearance.CodeScale = settings.ClampScale(percent, settings.MinCodeScale, settings.MaxCodeScale)
+		return nil
+	})
+	return Wrap(err, KindInternal, "saving settings")
+}
+
+func (s *SettingsService) SetTerminalScale(_ context.Context, percent int) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Appearance.TerminalScale = settings.ClampScale(percent, settings.MinTerminalScale, settings.MaxTerminalScale)
 		return nil
 	})
 	return Wrap(err, KindInternal, "saving settings")
@@ -293,14 +321,6 @@ func (s *SettingsService) SetTerminalSessionAge(_ context.Context, enabled bool,
 	_, err := s.store.Update(func(current *settings.Settings) error {
 		current.Appearance.TerminalShowSessionAge = enabled
 		current.Appearance.TerminalSessionAgeThresholdDays = thresholdDays
-		return nil
-	})
-	return Wrap(err, KindInternal, "saving settings")
-}
-
-func (s *SettingsService) SetCanvasFontSize(_ context.Context, size string) error {
-	_, err := s.store.Update(func(current *settings.Settings) error {
-		current.Appearance.CanvasFontSize = size
 		return nil
 	})
 	return Wrap(err, KindInternal, "saving settings")

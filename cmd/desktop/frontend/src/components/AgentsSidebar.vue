@@ -834,10 +834,10 @@ defineExpose({
 
 .ws-row {
   display: flex;
-  height: 40px;
+  height: 2.5rem;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
   color: var(--color-text);
   font-size: var(--text-body);
   font-weight: 500;
@@ -859,7 +859,7 @@ defineExpose({
 .ws-well {
   border-top: 1px solid var(--color-border);
   background: var(--color-app);
-  padding: 6px 0;
+  padding: 0.375rem 0;
 }
 
 /* A chat row: SidebarFeedRow's .sidebar-entry stripped of its inset and its
@@ -869,10 +869,10 @@ defineExpose({
 .sidebar-entry {
   position: relative;
   display: flex;
-  height: 34px;
+  height: 2.125rem;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
   color: var(--color-text-2);
   font-size: var(--text-body);
   cursor: pointer;
@@ -913,8 +913,8 @@ defineExpose({
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
   color: var(--color-text-4);
 }
 .nav-icon-notice {
@@ -982,8 +982,8 @@ defineExpose({
 .entry-slot {
   display: grid;
   flex: none;
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
 }
 .entry-status,
 .entry-menu {
@@ -1020,7 +1020,7 @@ defineExpose({
 /* Lined up with a chat name: the row's 12px inset, its 18px glyph cell, and the
    8px between them. */
 .chat-empty {
-  padding: 7px 12px 7px 38px;
+  padding: 0.4375rem 0.75rem 0.4375rem 2.375rem;
   font-size: var(--text-caption);
   font-style: italic;
   color: var(--color-text-4);

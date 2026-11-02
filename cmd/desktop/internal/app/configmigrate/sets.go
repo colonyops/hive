@@ -2,6 +2,7 @@ package configmigrate
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -23,13 +24,16 @@ var (
 	// status bar on in every existing file, once; version 5 drops the development
 	// instance id after service.instance.id becomes a per-launch UUID; version 6
 	// turns a named terminal text size into its pixel count
-	// (ADR the-terminal-text-size-is-a-pixel-count).
-	SettingsSet = Set{Name: "settings", Baseline: 1, Current: 6, AllowMissingVersion: true, Migrations: []Migration{
+	// (superseded by ADR text-sizes-are-per-surface-percentages); version 7 turns
+	// the terminal and document text sizes into percent scales (ADR
+	// text-sizes-are-per-surface-percentages).
+	SettingsSet = Set{Name: "settings", Baseline: 1, Current: 7, AllowMissingVersion: true, Migrations: []Migration{
 		{To: 2, Migrate: dropExperimentalSection},
 		{To: 3, Migrate: dropSkillsSection},
 		{To: 4, Migrate: showTerminalStatusBar},
 		{To: 5, Migrate: dropDevelopmentInstance},
 		{To: 6, Migrate: terminalFontSizeToPixels},
+		{To: 7, Migrate: textSizesToScales},
 	}}
 	FlowSet    = Set{Name: "flow", Baseline: 1, Current: 1}
 	ActionsSet = Set{Name: "actions", Baseline: 1, Current: 1}
@@ -188,6 +192,27 @@ func terminalFontSizeToPixels(doc map[string]any) error {
 		return nil
 	}
 	delete(appearance, "terminal_font_size")
+	return nil
+}
+
+// The px base and preset table are frozen here on purpose. A value of the wrong
+// type or an unknown preset falls back to 100 by being dropped.
+func textSizesToScales(doc map[string]any) error {
+	appearance, ok := doc["appearance"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	if px, ok := appearance["terminal_font_size"].(int); ok && px > 0 {
+		appearance["terminal_scale"] = int(math.Round(float64(px) * 100 / 13))
+	}
+	delete(appearance, "terminal_font_size")
+	presets := map[string]int{"small": 89, "large": 115, "xl": 133}
+	if name, ok := appearance["canvas_font_size"].(string); ok {
+		if percent, known := presets[name]; known {
+			appearance["document_scale"] = percent
+		}
+	}
+	delete(appearance, "canvas_font_size")
 	return nil
 }
 

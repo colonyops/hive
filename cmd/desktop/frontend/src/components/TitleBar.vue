@@ -265,7 +265,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <button
         v-if="profileName"
         type="button"
-        class="flex h-7 w-[clamp(150px,22vw,260px)] cursor-pointer items-center gap-2 rounded-md border border-border bg-app px-2.5 text-text-3 hover:border-strong hover:text-text-2"
+        class="flex h-7 w-[clamp(9.375rem,22vw,16.25rem)] cursor-pointer items-center gap-2 rounded-md border border-border bg-app px-2.5 text-text-3 hover:border-strong hover:text-text-2"
         style="--wails-draggable: no-drag"
         aria-label="Open command palette"
         data-testid="titlebar-command-palette"
@@ -295,7 +295,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       >
         <span
           v-if="unseenActivity && unseenActivity > 0 && !activityActive"
-          class="absolute right-1 top-1 size-[6px] rounded-full bg-accent ring-2 ring-raised [animation:hivePulse_2.4s_ease-in-out_infinite]"
+          class="absolute right-1 top-1 size-1.5 rounded-full bg-accent ring-2 ring-raised [animation:hivePulse_2.4s_ease-in-out_infinite]"
           data-testid="titlebar-activity-unseen"
         />
       </IconButton>

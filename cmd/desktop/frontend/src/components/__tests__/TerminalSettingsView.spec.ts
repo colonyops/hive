@@ -1,17 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import TerminalSettingsView from '../TerminalSettingsView.vue'
-import {
-  defaultTerminalFontSizePx,
-  defaultTerminalFontWeight,
-  defaultTerminalFontWeightBold,
-} from '../../stores/useTerminalFont'
+import { defaultTerminalFontWeight, defaultTerminalFontWeightBold } from '../../stores/useTerminalFont'
 import { TERMINAL_FONT } from '../../lib/terminalFaces'
 import { resetInstalledFontsForTests } from '../../composables/useInstalledFonts'
 
 const mocks = vi.hoisted(() => ({
   SetTerminalShowScrollbars: vi.fn().mockResolvedValue(undefined),
   SetTerminalMonochromeAgentIcons: vi.fn().mockResolvedValue(undefined),
+  SetTerminalScale: vi.fn(),
   SetTerminalShowWindows: vi.fn(),
   SetTerminalPoolSize: vi.fn(),
   SetTerminalSessionAge: vi.fn(),
@@ -22,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   AppearanceSettings: vi.fn().mockResolvedValue({
     theme: '',
-    terminalFontSizePx: 13,
+    terminalScale: 100,
     terminalFontFamily: '',
     terminalFontWeight: 0,
     terminalFontWeightBold: 0,
@@ -33,7 +30,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   }),
   Fonts: mocks.Fonts,
   SetTheme: vi.fn(),
-  SetTerminalFontSize: vi.fn(),
+  SetTerminalScale: mocks.SetTerminalScale,
   SetTerminalFontFamily: mocks.SetTerminalFontFamily,
   SetTerminalFontWeights: mocks.SetTerminalFontWeights,
   SetTerminalShowScrollbars: mocks.SetTerminalShowScrollbars,
@@ -81,17 +78,15 @@ describe('TerminalSettingsView', () => {
     wrapper.unmount()
   })
 
-  it('nudges the terminal font size by the ladder step', async () => {
+  it('edits the same terminal scale Settings ▸ Appearance does', async () => {
     const wrapper = mount(TerminalSettingsView)
-    const value = (): string => wrapper.find('[data-testid="settings-terminal-font-size-value"]').text()
+    const value = (): string => wrapper.get('[data-testid="settings-terminal-scale-stepper-value"]').text()
+    expect(value()).toBe('100%')
 
-    expect(value()).toBe(`${defaultTerminalFontSizePx}px`)
+    await wrapper.get('[data-testid="settings-terminal-scale-stepper-increase"]').trigger('click')
 
-    await wrapper.find('[data-testid="settings-terminal-font-size-increase"]').trigger('click')
-    expect(value()).toBe(`${defaultTerminalFontSizePx + 2}px`)
-
-    await wrapper.find('[data-testid="settings-terminal-font-size-decrease"]').trigger('click')
-    expect(value()).toBe(`${defaultTerminalFontSizePx}px`)
+    expect(value()).toBe('110%')
+    expect(mocks.SetTerminalScale).toHaveBeenLastCalledWith(110)
   })
 
   // #181: the terminal shipped with no weight control at all, so normal cells

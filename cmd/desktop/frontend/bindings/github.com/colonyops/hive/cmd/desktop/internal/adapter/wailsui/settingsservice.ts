@@ -60,10 +60,6 @@ export function ReviewLabels(): $CancellablePromise<$models.ReviewLabel[] | null
     return $Call.ByID(2130138097);
 }
 
-export function SetCanvasFontSize(size: string): $CancellablePromise<void> {
-    return $Call.ByID(1474669462, size);
-}
-
 export function SetCanvasLineSpacing(spacing: string): $CancellablePromise<void> {
     return $Call.ByID(3911754413, spacing);
 }
@@ -72,8 +68,16 @@ export function SetCanvasPageWidth(width: string): $CancellablePromise<void> {
     return $Call.ByID(2718406111, width);
 }
 
+export function SetCodeScale(percent: number): $CancellablePromise<void> {
+    return $Call.ByID(2077665751, percent);
+}
+
 export function SetCodeViews(views: $models.SessionView[] | null): $CancellablePromise<void> {
     return $Call.ByID(3413203059, views);
+}
+
+export function SetDocumentScale(percent: number): $CancellablePromise<void> {
+    return $Call.ByID(3049072647, percent);
 }
 
 /**
@@ -94,6 +98,10 @@ export function SetFontFamily(family: string): $CancellablePromise<void> {
  */
 export function SetGithubSettings($in: $models.GithubSettings): $CancellablePromise<void> {
     return $Call.ByID(2566575980, $in);
+}
+
+export function SetInterfaceScale(percent: number): $CancellablePromise<void> {
+    return $Call.ByID(1671151989, percent);
 }
 
 export function SetKeybindingSettings($in: $models.KeybindingSettings): $CancellablePromise<void> {
@@ -120,10 +128,6 @@ export function SetTerminalFontFamily(family: string): $CancellablePromise<void>
     return $Call.ByID(2172269859, family);
 }
 
-export function SetTerminalFontSize(px: number): $CancellablePromise<void> {
-    return $Call.ByID(4272872546, px);
-}
-
 export function SetTerminalFontWeights(weight: number, weightBold: number): $CancellablePromise<void> {
     return $Call.ByID(2641607236, weight, weightBold);
 }
@@ -142,6 +146,10 @@ export function SetTerminalMonochromeAgentIcons(monochrome: boolean): $Cancellab
 
 export function SetTerminalPoolSize(size: number): $CancellablePromise<void> {
     return $Call.ByID(3334784753, size);
+}
+
+export function SetTerminalScale(percent: number): $CancellablePromise<void> {
+    return $Call.ByID(1383395208, percent);
 }
 
 export function SetTerminalSessionAge(enabled: boolean, thresholdDays: number): $CancellablePromise<void> {

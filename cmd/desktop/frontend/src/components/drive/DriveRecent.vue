@@ -49,7 +49,7 @@ const isSelected = (hit: HitWire) => hit.space.key === props.space && hit.entry.
       v-for="hit in recent"
       :key="hitKey(hit)"
       type="button"
-      class="flex h-[26px] w-full shrink-0 cursor-pointer items-center gap-1.5 pl-[26px] pr-2 text-left text-small"
+      class="flex h-6.5 w-full shrink-0 cursor-pointer items-center gap-1.5 pl-6.5 pr-2 text-left text-small"
       :class="isSelected(hit) ? 'bg-selection text-text' : 'text-text-2 hover:bg-chip'"
       :title="`${hit.space.name} · ${hit.entry.path}`"
       :aria-current="isSelected(hit) ? 'true' : undefined"

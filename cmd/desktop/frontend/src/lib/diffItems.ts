@@ -11,11 +11,22 @@ export type DiffMode = 'unified' | 'split'
  * from these, and DiffStream's CSS must produce the same sizes, or the scrollbar
  * drifts as files mount.
  */
-export const DIFF_METRICS = {
-  headerPx: 32,
-  rowPx: 20,
-  separatorPx: 20,
-} as const
+export interface DiffMetrics {
+  fontPx: number
+  headerPx: number
+  rowPx: number
+  separatorPx: number
+}
+
+/**
+ * The header is app chrome (DiffFileHeader's h-8), so it follows the interface
+ * scale and may be fractional. Rows follow the code scale in whole pixels, or a
+ * long file's estimated heights would add up to a visible error.
+ */
+export function diffMetrics(codeScale = 100, interfaceScale = 100): DiffMetrics {
+  const rowPx = Math.round((20 * codeScale) / 100)
+  return { fontPx: (13 * codeScale) / 100, headerPx: (32 * interfaceScale) / 100, rowPx, separatorPx: rowPx }
+}
 
 export function diffHasText(diff: SessionFileDiff | undefined): boolean {
   return diff?.state === 'text' && !!diff.text
@@ -65,8 +76,8 @@ export function parseFileDiff(file: ChangedFile, text: string, cacheKey: string)
  * holds only its hunks, so the rows above one are the hunks before it, plus one
  * separator each; the first hunk has a separator only when it starts mid-file.
  */
-export function hunkOffsets(hunks: readonly Hunk[], mode: DiffMode): number[] {
-  const { headerPx, rowPx, separatorPx } = DIFF_METRICS
+export function hunkOffsets(hunks: readonly Hunk[], mode: DiffMode, metrics: DiffMetrics = diffMetrics()): number[] {
+  const { headerPx, rowPx, separatorPx } = metrics
   let top = headerPx
   return hunks.map((hunk, index) => {
     const at = top

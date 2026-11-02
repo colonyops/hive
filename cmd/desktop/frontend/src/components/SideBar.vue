@@ -197,7 +197,7 @@ function deleteFolder(folder: FeedFolder): void {
     <!-- The height matches the feed list's search bar beside it, so the two
          panes divide on the same line. -->
     <div
-      class="flex h-[46px] shrink-0 items-center gap-2 border-b border-border px-4"
+      class="flex h-11.5 shrink-0 items-center gap-2 border-b border-border px-4"
       data-testid="sidebar-profile-header"
     >
       <div
@@ -346,7 +346,7 @@ function deleteFolder(folder: FeedFolder): void {
       @click="emit('open-flows')"
     >
       <span
-        class="flex size-[22px] shrink-0 items-center justify-center rounded-md border border-dashed border-card bg-app text-accent"
+        class="flex size-5.5 shrink-0 items-center justify-center rounded-md border border-dashed border-card bg-app text-accent"
         ><IconWorkflow class="size-3"
       /></span>
       <span class="min-w-0 flex-1">
@@ -409,9 +409,9 @@ function deleteFolder(folder: FeedFolder): void {
 .footer-entry {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
   width: 100%;
-  padding: 10px;
+  padding: 0.625rem;
   border-top: 1px solid var(--color-border);
   color: var(--color-text-2);
   font-size: var(--text-small);
@@ -435,8 +435,8 @@ function deleteFolder(folder: FeedFolder): void {
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 1.375rem;
+  height: 1.375rem;
   border: 1px solid var(--color-card);
   border-radius: var(--radius-md);
   background: var(--color-app);
@@ -447,8 +447,8 @@ function deleteFolder(folder: FeedFolder): void {
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
   border: 1px solid var(--color-strong);
   border-radius: var(--radius-md);
   background: var(--color-app);
@@ -457,8 +457,8 @@ function deleteFolder(folder: FeedFolder): void {
 .section-label {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 6px 8px;
+  gap: 0.4375rem;
+  padding: 0 0.375rem 0.5rem;
   color: var(--color-text-4);
   font-family: var(--font-mono);
   font-size: var(--text-micro);
@@ -478,7 +478,7 @@ function deleteFolder(folder: FeedFolder): void {
   border-radius: var(--radius-lg);
 }
 .sb-item.indented {
-  padding-left: 12px;
+  padding-left: 0.75rem;
 }
 .drop-before {
   box-shadow: inset 0 2px 0 0 var(--color-accent);
@@ -490,9 +490,9 @@ function deleteFolder(folder: FeedFolder): void {
 .folder-header {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 0.5625rem;
   width: 100%;
-  padding: 7px 8px;
+  padding: 0.4375rem 0.5rem;
   border-radius: var(--radius-lg);
   color: var(--color-text-2);
   font-size: var(--text-body);
@@ -528,7 +528,7 @@ function deleteFolder(folder: FeedFolder): void {
   margin-top: 1px;
 }
 .folder-empty {
-  padding: 6px 8px 6px 20px;
+  padding: 0.375rem 0.5rem 0.375rem 1.25rem;
   font-size: var(--text-caption);
   color: var(--color-text-4);
   font-style: italic;
@@ -545,7 +545,7 @@ function deleteFolder(folder: FeedFolder): void {
 }
 
 .sb-end {
-  height: 14px;
+  height: 0.875rem;
   border-radius: var(--radius-md);
 }
 .sb-end.drop-end {

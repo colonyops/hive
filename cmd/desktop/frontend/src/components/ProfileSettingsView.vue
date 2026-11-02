@@ -132,7 +132,7 @@ async function onImageChange(event: Event): Promise<void> {
           </p>
           <div class="mt-3 flex items-center gap-4">
             <div
-              class="flex size-[52px] shrink-0 items-center justify-center overflow-hidden rounded-xl border border-card bg-chip font-mono text-lg font-semibold text-text-2"
+              class="flex size-13 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-card bg-chip font-mono text-lg font-semibold text-text-2"
               data-testid="profile-settings-image-preview"
             >
               <img v-if="props.profile.image" :src="props.profile.image" alt="" class="size-full object-cover" />

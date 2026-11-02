@@ -140,7 +140,7 @@ Use a standalone `mermaid` fence inside a Markdown block for a diagram. Mermaid 
 
 A Markdown document or a canvas can include front matter such as tags, status, or an owner. Hive displays it above the document. A canvas also shows automatic creation and update times. Collapse **Properties** to hide it; Hive uses that choice for every document. Agents replace a canvas's editable front matter with the `set_frontmatter` tool; `created_at` and `updated_at` are reserved and updated by Hive. Values can be text, numbers, booleans, empty values, or lists of those values. Copy and save include the metadata as YAML front matter and preserve Mermaid source in a fenced `mermaid` block.
 
-**Settings ▸ Drive** changes text size, line spacing, and text width for every document, in Chats and in Code. The text runs at a narrow reading width by default. **Wide** fits HTML laid out in columns, and **Full** runs to the edges of the view.
+**Settings ▸ Drive** changes text size, line spacing, and text width for every document, in Chats and in Code. **Settings ▸ Appearance** shows the same text size beside the other areas. The text runs at a narrow reading width by default. **Wide** fits HTML laid out in columns, and **Full** runs to the edges of the view.
 
 ### Comment on a document
 
