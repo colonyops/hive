@@ -15,6 +15,7 @@ A tab is named by what it shows:
 
 - `drive`, `diff`, or `tasks` for a view;
 - `terminal` for a chat's terminal;
+- `applet:<id>` for an applet's tab, which can be moved and focused but not opened or closed from here;
 - a tmux window of a Code session by id (`@3`) or exact name.
 
 ## What an agent can do

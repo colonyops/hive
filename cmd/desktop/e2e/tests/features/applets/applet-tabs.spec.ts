@@ -106,6 +106,15 @@ test.describe('applet tabs', { tag: [tag.applets] }, () => {
     await page.keyboard.press('Escape')
     await expect(frame).toBeVisible()
 
+    // A tab that comes forward from behind another takes the keyboard.
+    const activeTestId = () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid)
+    await panels.nth(1).locator('[data-testid^="panel-tab-add-"]').click()
+    await page.getByTestId('new-window-view-tasks').click()
+    await expect(frame).toBeHidden()
+    await page.getByTestId('panel-tab-applet:e2e-page').click()
+    await expect(frame).toBeVisible()
+    await expect.poll(activeTestId).toBe('applet-tab-frame')
+
     await page.getByTestId('panel-tab-close-applet:e2e-page').click({ force: true })
     await expect(frame).toHaveCount(0)
 

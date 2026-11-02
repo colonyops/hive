@@ -575,6 +575,7 @@ onBeforeUnmount(() => {
           :region="region"
           :session-slug="panels.row?.slug ?? ''"
           :content-key="panels.key"
+          :active="active"
           :keys-active="active && !overlayOpen && !terminalTreeFocused"
           @focus-panel="(panelId) => panels.apply((current) => focusPanel(current, panelId))"
           @close-tab="closePanelTab"

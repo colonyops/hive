@@ -106,6 +106,21 @@ describe('useTreeKeyboardNav', () => {
     expect(options.openView).toHaveBeenLastCalledWith(idle, 'p0', 'tasks')
   })
 
+  it('opens an applet row, whose tab id carries a colon', async () => {
+    const item: TreeItem = {
+      key: 'view:applet:radio',
+      tabId: 'applet:radio',
+      win: null,
+      view: { panel: 'p1', tab: { id: 'applet:radio', kind: 'applet' } },
+    }
+    const { nav, options } = setup({ '1': [item] })
+    nav.onKeydown(key('ArrowDown'))
+    await Promise.resolve()
+    nav.onKeydown(key('ArrowDown'))
+    await Promise.resolve()
+    expect(options.openView).toHaveBeenLastCalledWith(running, 'p1', 'applet:radio')
+  })
+
   it("reaches a server's rows, whose ids carry a colon", async () => {
     const remote = { ...running, id: 'box:9', slug: 'box:remote', server: 'box' }
     const windows = [win('@4', true)]

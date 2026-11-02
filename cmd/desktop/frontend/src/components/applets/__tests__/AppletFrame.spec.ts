@@ -180,6 +180,20 @@ describe('AppletFrame', () => {
     expect(service.Exec).not.toHaveBeenCalled()
   })
 
+  it('closes on Escape from the page, except as a tab, whatever page the frame has reached', async () => {
+    const popup = setup()
+    await popup.send('escape')
+    expect(popup.wrapper.emitted('close')).toHaveLength(1)
+    popup.wrapper.unmount()
+
+    const tab = setup({ surface: 'tab' })
+    await tab.send('escape')
+    expect(tab.wrapper.emitted('close')).toBeUndefined()
+    await tab.send('close')
+    expect(tab.wrapper.emitted('close')).toHaveLength(1)
+    tab.wrapper.unmount()
+  })
+
   it('closes on request and stops only the processes this frame started', async () => {
     service.Spawn.mockResolvedValue('p1')
     const { wrapper, send } = setup()

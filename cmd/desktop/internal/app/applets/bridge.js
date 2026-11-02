@@ -169,8 +169,8 @@
 
   // Keys in a frame never reach the app, so this hands on what a chord would be: without
   // it one click into a page would leave every shortcut dead until the user clicked
-  // elsewhere. Escape closes the applet from here, except in a tab, which sits beside
-  // terminals and has its own close button. A page that wants either for itself
+  // elsewhere. Escape goes to the host, which decides whether it closes the applet. A
+  // page that wants either for itself
   // calls preventDefault, which is only settled once its own listeners have run.
   //
   // The rest of a chord sequence is a bare key, so it crosses only while the app says one
@@ -180,14 +180,13 @@
     if (['Meta', 'Control', 'Alt', 'Shift'].includes(event.key)) return
     const chord = event.metaKey || event.ctrlKey || event.altKey
     const continuing = sequencePending
-    const escapeCloses = event.key === 'Escape' && surface !== 'tab'
-    if (!escapeCloses && !chord && !continuing) return
+    if (event.key !== 'Escape' && !chord && !continuing) return
     sequencePending = false
     setTimeout(() => {
       if (event.defaultPrevented) return
-      if (escapeCloses && !continuing) {
+      if (event.key === 'Escape' && !continuing) {
         saveNow()
-        notify('close')
+        notify('escape')
         return
       }
       const { key, code, metaKey, ctrlKey, altKey, shiftKey } = event

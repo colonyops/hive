@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
+import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
 import { appletTabsOf } from '../../lib/appletTabs'
 import { panelById, type PanelLayout } from '../../lib/panelLayout'
 import { useApplets } from '../../stores/useApplets'
@@ -14,12 +15,15 @@ const props = defineProps<{
   sessionSlug: string
   /** Re-keys the frames, so a session's tabs run only while it is on screen. */
   contentKey: string
+  /** The user is in this area, so a tab in front is on screen. */
+  active: boolean
   /** The host holds the keyboard, so the tab in front of the focused panel can have it. */
   keysActive: boolean
 }>()
 const emit = defineEmits<{ focusPanel: [panelId: string]; closeTab: [panelId: string, tabId: string] }>()
 
 const applets = useApplets()
+const openModals = useOpenModalCount()
 
 const tabs = computed(() =>
   appletTabsOf(props.layout).map(({ panel, tab, applet }) => {
@@ -52,7 +56,8 @@ const tabs = computed(() =>
       v-if="tab.applet?.runnable && tab.applet.enabled"
       :applet="tab.applet"
       :session-slug="sessionSlug"
-      :wants-focus="keysActive && tab.focused"
+      :wants-focus="active && keysActive && openModals === 0 && !applets.open.value && tab.focused"
+      :on-screen="active && tab.shown"
       surface="tab"
       @close="emit('closeTab', tab.panel, tab.id)"
       @focused="emit('focusPanel', tab.panel)"

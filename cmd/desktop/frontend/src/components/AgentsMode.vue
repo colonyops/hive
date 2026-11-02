@@ -1081,6 +1081,7 @@ onBeforeUnmount(() => {
                 :region="region"
                 :session-slug="chatSlug"
                 :content-key="panels.key.value"
+                :active="active"
                 :keys-active="active"
                 @focus-panel="(panelId) => panels.apply((current) => focusPanel(current, panelId))"
                 @close-tab="closePanelTab"

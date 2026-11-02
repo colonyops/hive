@@ -217,6 +217,8 @@ appearance:
   terminal_session_age_threshold_days: 5 # whole days since creation before the badge appears (1-365)
 applets:
   titlebar: [] # applet ids shown in the title bar, in order; each must declare `titlebar:` in its applet.yaml (ADR applets-are-web-pages-with-full-access-to-the-machine)
+  tabs: [] # applet ids in a session's + menu that open as a tab
+  popups: [] # applet ids in a session's + menu that open as a pop-up
   disabled: [] # applet ids the user turned off; they stay listed and nothing of them runs
 profiles:
   order: [] # flow ids, top of the rail first; ids left out sort alphabetically

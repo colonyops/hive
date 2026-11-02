@@ -29,7 +29,7 @@ The applet appears as soon as its file is valid. If you dislike it, ask for chan
 
 In **Settings ▸ Applets**, open the places menu on an applet's row, or its details, and turn on one or both:
 
-- **Session tab**: choosing it opens the applet as a tab, beside the session's terminals and Drive. Drag it between panels like any other tab. Its page keeps running behind other tabs and through a move, and stops when you close the tab or switch to another session.
+- **Session tab**: choosing it opens the applet as a tab, beside the session's terminals and Drive. Drag it between panels like any other tab. Its page keeps running behind other tabs, through a move, and while you are in another part of the app. It stops when you close the tab or switch to another session.
 - **Session pop-up**: choosing it opens the applet over the app, working on that session.
 
 The applet then shows in the **+** on a tab row and on a session in the sidebar, for chats as well as Code sessions. Hive never adds one for you. An applet you turned on as a session tab also opens as a tab from the palette and its shortcut when a session is on screen, and there the shortcut brings the tab forward instead of closing it. Anywhere else it opens as a pop-up.
@@ -40,7 +40,7 @@ applets:
   popups: [music]
 ```
 
-A session keeps its applet tabs across restarts. If you turn an applet off or delete it, its tab stays and says so until you close it.
+A session keeps its applet tabs across restarts. If you turn an applet off, its tab stays and says so until you close it. Deleting an applet closes its tabs.
 
 ## Palette and keys
 
@@ -62,7 +62,7 @@ applets:
 
 ## Delete one
 
-In **Settings ▸ Applets**, select the applet, press **⋯ ▸ Delete**, and confirm. This stops everything it has running and removes its folder, saved data, title bar place and shortcuts. It cannot be undone, so [export it](#share-one) first if you might want it back.
+In **Settings ▸ Applets**, select the applet, press **⋯ ▸ Delete**, and confirm. This stops everything it has running and removes its folder, saved data, session tabs, places and shortcuts. It cannot be undone, so [export it](#share-one) first if you might want it back.
 
 A built-in applet has no delete, so turn it off instead. Deleting a folder that [replaced the Applet Builder](#keep-an-applet-working-across-releases) brings the built-in back.
 
@@ -103,6 +103,7 @@ An import never replaces an applet. If the id is taken, Hive offers a new one. T
 
 - Nothing runs until you open it.
 - A title bar page stays off until you turn it on, even if that id was in your title bar before.
+- It is not in a session's **+** menu and has no tabs, even if that id did before.
 - It has no shortcuts, even if that id had some before.
 - Files are not marked executable, so a page has to run a script with `sh script.sh`.
 
@@ -216,7 +217,7 @@ hive.on('command', (id) => {
 })
 ```
 
-A command goes to the applet's running persistent page, which today means the title bar page if it is on. Otherwise the panel opens and the page there gets it, even if it starts listening after it loads. To have a command open a dropdown, call `hive.dropdown()` from the listener in the title bar page.
+A command goes to the applet's running persistent page, which today means the title bar page if it is on. Otherwise the applet opens, as a tab if you added it as one and a session is on screen, and as a pop-up if not. The page there gets the command, even if it starts listening after it loads. To have a command open a dropdown, call `hive.dropdown()` from the listener in the title bar page.
 
 For rows that change, such as things only a running page knows about, call `hive.setCommands`. Each call replaces the rows that page added before, and they disappear when the page closes or reloads. They arrive through the same `hive.on('command')`. Only `id` and `title` are required.
 

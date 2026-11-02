@@ -2,7 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useKeybindings } from '../../../composables/useKeybindings'
 import { resetStores } from '../../../stores/defineStore'
+import { appletTab } from '../../../lib/appletTabs'
+import { openTab, panelWithTab } from '../../../lib/panelLayout'
 import { useApplets } from '../../../stores/useApplets'
+import { useChatPanelLayouts, usePanelLayouts } from '../../../stores/usePanelLayouts'
 import AppletImportDialog from '../AppletImportDialog.vue'
 
 const service = vi.hoisted(() => ({
@@ -138,6 +141,42 @@ describe('AppletImportDialog', () => {
     expect(service.CancelImport).not.toHaveBeenCalled()
     keybindings.clearAll()
     placements.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('closes a saved tab for the id before the imported page can land in it', async () => {
+    const layouts = usePanelLayouts()
+    const chats = useChatPanelLayouts()
+    layouts.apply('session', (current) => openTab(current, appletTab('radio')))
+    chats.apply('chat', (current) => openTab(current, appletTab('radio')))
+    service.ConfirmImport.mockImplementation(() => {
+      expect(panelWithTab(layouts.layoutOf('session'), 'applet:radio')).toBeUndefined()
+      expect(panelWithTab(chats.layoutOf('chat'), 'applet:radio')).toBeUndefined()
+      return Promise.resolve()
+    })
+    const wrapper = open()
+    await flushPromises()
+    await tickTrust()
+    byID('applet-import-confirm')?.click()
+    await flushPromises()
+    expect(service.ConfirmImport).toHaveBeenCalledWith('token', 'radio')
+    expect(byID('applet-import-error')).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('keeps the tabs of an applet that holds the id when it refuses the import', async () => {
+    service.List.mockResolvedValue([{ id: 'radio', title: 'Mine', runnable: true, enabled: true }])
+    const layouts = usePanelLayouts()
+    layouts.apply('session', (current) => openTab(current, appletTab('radio')))
+    const applets = useApplets()
+    await applets.reload()
+    const wrapper = open()
+    await flushPromises()
+    await tickTrust()
+    byID('applet-import-confirm')?.click()
+    await flushPromises()
+    expect(service.ConfirmImport).not.toHaveBeenCalled()
+    expect(panelWithTab(layouts.layoutOf('session'), 'applet:radio')).toBeDefined()
     wrapper.unmount()
   })
 

@@ -72,6 +72,10 @@ async function confirm(): Promise<void> {
   }
   busy.value = true
   error.value = ''
+  // Before the import, not after it: Go reloads the catalog as the applet lands, and that
+  // would mount the imported page in a tab left over from an earlier applet with this id.
+  // No applet holds the id here, so a refused import costs only a tab that shows nothing.
+  applets.closeSavedTabs(target)
   try {
     await ConfirmImport(props.preview.token, target)
     settled = true

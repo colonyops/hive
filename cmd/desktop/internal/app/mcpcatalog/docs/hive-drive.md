@@ -119,6 +119,9 @@ A tab reference names one tab, in a `tab` or `anchor` input:
 
 - `drive`, `diff` or `tasks` name that view. A chat has only `drive`.
 - `terminal` names a chat's one terminal.
+- `applet:<id>` names an applet's tab, which the user opened. `move_tab`,
+  `focus_tab` and the panel and split tools take it; `open_tab` and `close_tab`
+  do not, because opening one runs a page with full access to the machine.
 - Anything else is a tmux window of a Code session, by id (`@3`) or exact
   name. A Code session must name its window; `terminal` alone is refused.
 

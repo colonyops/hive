@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useEventListener } from '@vueuse/core'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
@@ -16,8 +16,15 @@ import { useAppletBridge } from './useAppletBridge'
 // (ADR applets-are-web-pages-with-full-access-to-the-machine).
 
 const props = withDefaults(
-  defineProps<{ applet: Applet; sessionSlug: string; surface?: AppletSurface; entry?: string; wantsFocus?: boolean }>(),
-  { surface: 'page', entry: undefined, wantsFocus: false },
+  defineProps<{
+    applet: Applet
+    sessionSlug: string
+    surface?: AppletSurface
+    entry?: string
+    wantsFocus?: boolean
+    onScreen?: boolean
+  }>(),
+  { surface: 'page', entry: undefined, wantsFocus: false, onScreen: true },
 )
 const emit = defineEmits<{ close: []; resize: [size: { width?: number; height?: number }]; focused: [] }>()
 
@@ -37,6 +44,7 @@ useAppletBridge({
   frame,
   surface: () => props.surface,
   sessionSlug: () => props.sessionSlug,
+  onScreen: () => props.onScreen,
   close: () => emit('close'),
   resize: (size) => emit('resize', size),
 })
@@ -52,10 +60,14 @@ function focusFrame(): void {
   if (rules.value.takesFocus || wanted) frame.value?.focus()
 }
 
+// The layout just gave this panel the keyboard, so nothing else has a claim on it. Waits for
+// the DOM because the tab becomes visible in the same update, and a hidden frame takes no focus.
 watch(
   () => props.wantsFocus,
-  (wants) => {
-    if (wants) focusFrame()
+  async (wants) => {
+    if (!wants) return
+    await nextTick()
+    if (props.wantsFocus) frame.value?.focus()
   },
 )
 

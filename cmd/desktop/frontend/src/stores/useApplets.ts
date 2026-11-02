@@ -12,10 +12,12 @@ import type { Applet } from '../../bindings/github.com/colonyops/hive/cmd/deskto
 import type { Command } from '../composables/useCommands'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { appletCommandID, setAppletCommands } from '../keybindings/catalog'
+import { appletTabId } from '../lib/appletTabs'
 import { launcherIconComponent } from '../lib/launcherIcons'
 import { PLACEABLE_SURFACES, SURFACES, type AppletSurface } from './appletSurfaces'
 import { defineStore } from './defineStore'
 import { usePersistedSetting } from './usePersistedSetting'
+import { useChatPanelLayouts, usePanelLayouts } from './usePanelLayouts'
 import { useResource } from './useResource'
 
 export const BUILDER_ID = 'applet-builder'
@@ -39,6 +41,8 @@ export interface AppletFrameHandle {
   surface: AppletSurface
   post: (message: object) => void
   deliverCommand: (id: string) => void
+  /** A tab behind another, or in the area the user left, is running but not on screen. */
+  onScreen: () => boolean
 }
 
 // A row a running page asked for through hive.setCommands.
@@ -142,8 +146,16 @@ export const useApplets = defineStore('applets', () => {
     await catalog.reload()
   }
 
+  // A saved tab opens its page with the session and nobody asking. A later applet that
+  // takes this id is someone else's code, so it must not inherit one.
+  function closeSavedTabs(id: string): void {
+    usePanelLayouts().closeTabEverywhere(appletTabId(id))
+    useChatPanelLayouts().closeTabEverywhere(appletTabId(id))
+  }
+
   async function remove(id: string): Promise<void> {
     await Delete(id)
+    closeSavedTabs(id)
     await Promise.all([catalog.reload(), reloadPlacements()])
   }
 
@@ -194,14 +206,19 @@ export const useApplets = defineStore('applets', () => {
     const connected = frames.get(id) ?? new Set()
     frames.set(id, connected)
     connected.add(handle)
-    if (SURFACES[handle.surface].panel) {
-      commandsForPanel.get(id)?.forEach((command) => handle.deliverCommand(command))
-      commandsForPanel.delete(id)
-    }
+    frameShown(id, handle)
     return () => {
       connected.delete(handle)
       setFrameRows(handle, id, [])
     }
+  }
+
+  // A frame that comes on screen takes what was waiting for the applet to open. A saved tab
+  // that connects behind another has not opened for anyone yet.
+  function frameShown(id: string, handle: AppletFrameHandle): void {
+    if (!SURFACES[handle.surface].panel || !handle.onScreen()) return
+    commandsForPanel.get(id)?.forEach((command) => handle.deliverCommand(command))
+    commandsForPanel.delete(id)
   }
 
   function otherFrames(id: string, self: AppletFrameHandle): AppletFrameHandle[] {
@@ -209,12 +226,14 @@ export const useApplets = defineStore('applets', () => {
   }
 
   // The running persistent surface first, because it is the one that keeps running: a panel
-  // over it may come and go, and two frames acting on one command would run it twice.
+  // over it may come and go, and two frames acting on one command would run it twice. A
+  // tab that is not on screen does not count: it can belong to another session or area, so
+  // the command would act on what the user is not looking at.
   function deliverCommand(id: string, command: string): boolean {
     const connected = [...(frames.get(id) ?? [])]
     const target =
       connected.find((handle) => SURFACES[handle.surface].persistent) ??
-      connected.find((handle) => SURFACES[handle.surface].panel)
+      connected.find((handle) => SURFACES[handle.surface].panel && handle.onScreen())
     target?.deliverCommand(command)
     return target !== undefined
   }
@@ -236,10 +255,14 @@ export const useApplets = defineStore('applets', () => {
   // Data rather than commands, so nothing binds to them: they exist while the page does.
   const pageRows = computed<Command[]>(() => {
     const byID = new Map<string, Command>()
+    const handlesByRow = new Map<string, AppletFrameHandle[]>()
     for (const [handle, { applet, rows }] of frameRows.value) {
       const title = catalog.data.value.find((candidate) => candidate.id === applet)?.title ?? applet
       for (const row of rows) {
         const id = `applet:${applet}:${row.id}`
+        // Several frames can offer one row. The one on screen is what the user means.
+        const handles = [...(handlesByRow.get(id) ?? []), handle]
+        handlesByRow.set(id, handles)
         byID.set(id, {
           id,
           title: row.title,
@@ -249,7 +272,7 @@ export const useApplets = defineStore('applets', () => {
           hint: row.hint,
           kind: row.kind,
           scope: row.scope,
-          run: () => handle.deliverCommand(row.id),
+          run: () => (handles.find((candidate) => candidate.onScreen()) ?? handle).deliverCommand(row.id),
         })
       }
     }
@@ -336,6 +359,7 @@ export const useApplets = defineStore('applets', () => {
     isPlaced,
     setPlaced,
     reloadPlacements,
+    closeSavedTabs,
     setEnabled,
     remove,
     // Shallow: the anchor is a DOM node, whose methods refuse a readonly proxy.
@@ -347,6 +371,7 @@ export const useApplets = defineStore('applets', () => {
     setCommandRunner,
     runCommand,
     connectFrame,
+    frameShown,
     otherFrames,
     deliverCommand,
     openForCommand,

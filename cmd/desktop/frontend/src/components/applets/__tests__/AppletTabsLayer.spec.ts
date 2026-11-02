@@ -1,8 +1,10 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { appletTab } from '../../../lib/appletTabs'
-import { newPanelLayout, openTab, type PanelLayout } from '../../../lib/panelLayout'
+import { newPanelLayout, openTab, selectTab, type PanelLayout } from '../../../lib/panelLayout'
 import { resetStores } from '../../../stores/defineStore'
+import { useApplets } from '../../../stores/useApplets'
 import AppletTabsLayer from '../AppletTabsLayer.vue'
 
 const service = vi.hoisted(() => ({
@@ -36,6 +38,7 @@ async function render(layout: PanelLayout, extra: object = {}) {
       region: () => ({}),
       sessionSlug: 'review',
       contentKey: 's1',
+      active: true,
       keysActive: true,
       ...extra,
     },
@@ -73,7 +76,31 @@ describe('AppletTabsLayer', () => {
     const frame = wrapper.get('iframe').element
     expect(document.activeElement).not.toBe(frame)
     await wrapper.setProps({ keysActive: true })
+    await nextTick()
     expect(document.activeElement).toBe(frame)
+    wrapper.unmount()
+  })
+
+  it('takes the keyboard when the tab comes forward in the focused panel', async () => {
+    const front = openTab(openTab(newPanelLayout(), appletTab('radio')), { id: 'docs', kind: 'docs' })
+    const wrapper = await render(front)
+    const frame = wrapper.get('iframe').element
+    expect(document.activeElement).not.toBe(frame)
+    await wrapper.setProps({ layout: selectTab(front, 'p0', 'applet:radio') })
+    await nextTick()
+    expect(document.activeElement).toBe(frame)
+    wrapper.unmount()
+  })
+
+  it('leaves the keyboard alone while a pop-up is open', async () => {
+    const applets = useApplets()
+    await flushPromises()
+    const layout = openTab(newPanelLayout(), appletTab('radio'))
+    const wrapper = await render(layout, { keysActive: false })
+    applets.openPopup('radio', 'review')
+    await wrapper.setProps({ keysActive: true })
+    await nextTick()
+    expect(document.activeElement).not.toBe(wrapper.get('iframe').element)
     wrapper.unmount()
   })
 

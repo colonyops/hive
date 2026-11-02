@@ -115,6 +115,7 @@ export interface AppletBridgeOptions {
   frame: Ref<HTMLIFrameElement | null>
   surface: () => AppletSurface
   sessionSlug: () => string
+  onScreen: () => boolean
   close: () => void
   resize: (size: { width?: number; height?: number }) => void
 }
@@ -157,12 +158,16 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
   const handle: AppletFrameHandle = {
     surface: options.surface(),
     post,
+    onScreen: options.onScreen,
     deliverCommand(command) {
       if (pageReady) postCommand(command)
       else queuedCommands.push(command)
     },
   }
   const disconnect = applets.connectFrame(id, handle)
+  watch(options.onScreen, (shown) => {
+    if (shown) applets.frameShown(id, handle)
+  })
 
   watch(options.sessionSlug, (slug) => {
     post({ event: 'session', data: slug })
@@ -239,6 +244,11 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
       return prompt.text
     },
     close: () => options.close(),
+    // Asked of the host because a page reached by a link in the frame cannot read its
+    // surface. A tab leaves the key alone: it sits beside terminals and has a close button.
+    escape() {
+      if (options.surface() !== 'tab') options.close()
+    },
     open: () => applets.runCommand(appletCommandID(id)),
     dropdown(args) {
       if (!SURFACES[options.surface()].canOpenDropdown || !frame.value)

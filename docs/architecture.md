@@ -1442,10 +1442,14 @@ opened in `AppletFrame`
 - **A session tab is a layout tab, and its frame floats.** `lib/appletTabs` names it
   `applet:<id>`, one per session, and the layout places it like any view. Its iframe sits in
   the panel host's floating layer in an order no drag changes, because moving an iframe in
-  the DOM reloads the page. `contentKey` re-keys the layer, so only the session on screen runs
-  its tabs. The user adds an applet to a session's + menu as a tab, a pop-up, or both
+  the DOM reloads the page. `contentKey` re-keys the layer, so an area runs the tabs of its
+  selected session only, and they keep running through a trip to another area, as its
+  terminals do. A command goes to a frame on screen (`AppletFrameHandle.onScreen`), never to a
+  tab the user cannot see. The user adds an applet to a session's + menu as a tab, a pop-up, or both
   (`applets.tabs`, `applets.popups`), and the file cannot add itself. A tab host registers with
   `setTabHost`, so the palette and a chord open a placed applet as a tab where one can show.
+  Delete and import close saved tabs for the id, and import does it before `ConfirmImport`,
+  because its catalog reload would mount the imported page in a leftover tab.
   Agents can place and focus an open `applet:<id>` tab through the layout verbs, and
   `open_tab` refuses one: the MCP server runs nothing on a caller's say (ADR
   mcp-replaces-the-agent-facing-http-api).

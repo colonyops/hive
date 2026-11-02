@@ -27,7 +27,7 @@ A key Hive does not know is a warning in `list_applets`, and the applet still op
 - `icon`: optional glyph: `terminal`, `git-branch`, `git-compare`, `folder`, `file-text`, `search`, `database`, `gauge`, `activity`, `flask-conical`, `hammer`, `container`, `cloud`, `bug`, `zap`, `package`, `globe`, `external-link`, `git-pull-request`, or `play`.
 - `cwd`: where commands run. Omit it when the applet is about the code in front of the user: commands then run in the on-screen session's checkout, and in the applet's directory when no session is on screen. Set `"~"` or an absolute path when the applet works anywhere. A relative path is relative to the applet's directory.
 - `entry`: the page, default `index.html`.
-- `width` and `height`: the panel in pixels. The default fills the window.
+- `width` and `height`: the pop-up in pixels. The default fills the window. A tab fills its panel and ignores them.
 - `titlebar`: offers a page for the title bar, with `entry` (default: the applet's own `entry`) and `width` in pixels (default 28, one icon button). See "In the title bar".
 - `commands`: palette rows the user can bind to a key, each with `id` (a slug), `title`, and optional `icon` and `keywords`. See "In the command palette".
 
@@ -50,7 +50,7 @@ close button over the top right corner of the page, so leave about 52px clear th
 - `hive.context()` resolves to `{id, title, dir, cwd, sessionSlug}`.
 - `hive.close()` closes the applet's pop-up or tab. In a title bar page it closes the page's dropdown.
 - `hive.surface` is `tab`, `page` (a pop-up), `titlebar` or `dropdown`, for one file that serves several.
-- `hive.open()` opens the applet's panel from any of them.
+- `hive.open()` opens the applet from any of them: as a tab if the user added it as one and a session is on screen, otherwise as a pop-up.
 - `hive.broadcast(data)` sends to the applet's other open frames, which listen with `hive.on('message', fn)`.
 - `hive.on('session', fn)` reports the slug of the session on screen when it changes. `hive.on` returns a function that stops listening, and does nothing for an event this Hive does not have.
 - `hive.commands()` resolves to Hive's commands as `{id, title, group, keys}`, and `hive.command(id)` runs one and rejects an id that does not exist, so a page can do what the command palette can.
@@ -96,16 +96,16 @@ keeps running until they turn it off, so keep what it polls cheap.
 - `hive.resize({width})` changes the slot's width. Width `0` hides the slot and keeps the page running, for an indicator that only shows when there is something to say.
 - `hive.dropdown({entry, width, height})` opens a panel under the bar and a second call closes it, so call it from a click. It closes when the user clicks elsewhere or presses Escape. `hive.resize({width, height})` from its page resizes it. It loads fresh on each open, so anything that must keep going, such as audio or a long-running process, belongs in the title bar page. Keep the two in step with `hive.broadcast`.
 - `localStorage` is shared between an applet's frames, and the `storage` event fires as it does in a browser.
-- Closing a panel or dropdown stops only what that frame spawned.
+- Closing a pop-up, tab or dropdown stops only what that frame spawned.
 
-If the applet is only for the title bar, the palette still opens its `entry` as a panel, so
+If the applet is only for the title bar, the palette still opens its `entry` as a pop-up, so
 make that page useful too: settings or a larger view.
 
 ## In the command palette
 
 Use `commands:` in `applet.yaml` for what a user would want to do from anywhere, or bind to a key. The row is always there, and the user binds it as `applet.<id>.<command>`. Do not suggest a chord or write one to `settings.yaml` unless they ask. The palette can show the title without the applet's name, so write "Next radio station" and not "Next".
 
-`hive.on('command', (id) => ...)` receives it. It goes to the applet's running persistent page, which today means the title bar page if that is on. Otherwise the panel opens and its page receives it, so the applet's `entry` must handle every command too, or be the same page as the title bar's. From the title bar page, a command can call `hive.dropdown()` to open the dropdown.
+`hive.on('command', (id) => ...)` receives it. It goes to the applet's running persistent page, which today means the title bar page if that is on. Otherwise the applet opens, as a tab or a pop-up, and its page receives it, so the applet's `entry` must handle every command too, or be the same page as the title bar's. From the title bar page, a command can call `hive.dropdown()` to open the dropdown.
 
 Use `hive.setCommands(rows)` for rows only a running page knows about, such as stations, containers or recent files. Each call replaces the rows that page set before, and they go when the page closes or reloads. They cannot be bound. A row needs `id` and `title`, and can have `group` (default: the applet's title), `scope` (`actions`, the default, or `goto` for a row that names a thing), `kind` (the small word at the right of such a row), `hint`, `keywords` and `icon`. Selecting one calls the same `hive.on('command')` with its id.
 
