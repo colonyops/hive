@@ -45,6 +45,7 @@ const DEFAULT_SIZE_FRACTION = 0.85
 
 const panel = ref<HTMLElement | null>(null)
 const host = ref<HTMLElement | null>(null)
+const newTerminalButton = ref<HTMLElement | null>(null)
 const pane = useXtermPane(host, () => pane.fitToHost())
 const { term } = pane
 const terminal = ref<PopupTerminalState | null>(null)
@@ -218,7 +219,10 @@ async function reveal(): Promise<void> {
   await nextTick()
   // A launched command that lost its connection stays on its ended strip. Opening here would
   // close a terminal that may still be running, and "New terminal" is there to say otherwise.
-  if (launched.value && status.value === 'ended' && renderedSeq === launchSeq.value) return
+  if (launched.value && status.value === 'ended' && renderedSeq === launchSeq.value) {
+    newTerminalButton.value?.focus()
+    return
+  }
   // Asking for the pop-up is asking for a terminal, so a panel with none live
   // opens one rather than showing an empty box with a button in it. A live one
   // that belongs to an earlier launch is replaced: the caller asked for a
@@ -356,6 +360,7 @@ onBeforeUnmount(teardown)
           <span class="truncate font-mono text-caption text-text-4">{{ endedReason }}</span>
           <button
             class="ml-auto shrink-0 cursor-pointer rounded-md bg-chip px-2 py-0.5 font-mono text-caption text-text hover:bg-strong"
+            ref="newTerminalButton"
             data-testid="popup-terminal-new"
             @click="openTerminal"
           >

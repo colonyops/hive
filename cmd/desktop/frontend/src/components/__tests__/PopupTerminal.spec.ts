@@ -517,12 +517,19 @@ describe('PopupTerminal', () => {
     expect(el('popup-terminal-ended').textContent).toContain('connection dropped')
     expect(client.open).toHaveBeenCalledTimes(1)
     expect(client.close).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(el('popup-terminal-new'))
 
     el('popup-terminal-new').click()
     await flushPromises()
     expect(client.open).toHaveBeenCalledTimes(2)
     expect(client.open.mock.lastCall?.[0].command).toBeUndefined()
     expect(client.open.mock.lastCall?.[0].dir).toBe('/w')
+
+    // The shell it opens keeps the launch's toggle, so hiding it does not end it.
+    popup.toggle()
+    await flushPromises()
+    expect(popup.visible.value).toBe(false)
+    expect(client.close).toHaveBeenCalledTimes(1)
   })
 
   // A stream that dropped for a reason other than the process exiting would
