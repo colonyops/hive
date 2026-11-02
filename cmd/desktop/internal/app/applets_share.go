@@ -139,15 +139,10 @@ func (s *AppletsService) PrepareImport(encoded string) (AppletImportPreview, err
 		Title:       applet.Title,
 		Entry:       applet.Entry,
 		Cwd:         applet.Cwd,
-		Commands:    make([]AppletCommand, 0, len(applet.Commands)),
+		Commands:    appletCommandsOf(applet),
+		Titlebar:    appletTitlebarOf(applet),
 		Files:       make([]AppletFile, 0, len(archive.Files)),
 		Warnings:    applet.Warnings,
-	}
-	if applet.Titlebar != nil {
-		preview.Titlebar = &AppletTitlebar{Entry: applet.Titlebar.Entry, Width: applet.Titlebar.Width}
-	}
-	for _, command := range applet.Commands {
-		preview.Commands = append(preview.Commands, AppletCommand{ID: command.ID, Title: command.Title, Icon: command.Icon, Keywords: command.Keywords})
 	}
 	for _, file := range archive.Files {
 		size := int64(len(file.Data))

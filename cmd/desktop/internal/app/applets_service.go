@@ -234,18 +234,29 @@ func appletOf(entry applets.Entry) Applet {
 		Width:    a.Width,
 		Height:   a.Height,
 		Warnings: a.Warnings,
-		Commands: make([]AppletCommand, 0, len(a.Commands)),
-	}
-	for _, command := range a.Commands {
-		out.Commands = append(out.Commands, AppletCommand{ID: command.ID, Title: command.Title, Icon: command.Icon, Keywords: command.Keywords})
-	}
-	if a.Titlebar != nil {
-		out.Titlebar = &AppletTitlebar{Entry: a.Titlebar.Entry, Width: a.Titlebar.Width}
+		Commands: appletCommandsOf(a),
+		Titlebar: appletTitlebarOf(a),
 	}
 	if entry.Err != nil {
 		out.Error = entry.Err.Error()
 	}
 	return out
+}
+
+// appletCommandsOf is never nil, so an applet with no commands crosses as an empty list.
+func appletCommandsOf(a applets.Applet) []AppletCommand {
+	out := make([]AppletCommand, 0, len(a.Commands))
+	for _, command := range a.Commands {
+		out = append(out, AppletCommand{ID: command.ID, Title: command.Title, Icon: command.Icon, Keywords: command.Keywords})
+	}
+	return out
+}
+
+func appletTitlebarOf(a applets.Applet) *AppletTitlebar {
+	if a.Titlebar == nil {
+		return nil
+	}
+	return &AppletTitlebar{Entry: a.Titlebar.Entry, Width: a.Titlebar.Width}
 }
 
 func (s *AppletsService) applet(id string) (applets.Applet, error) {
