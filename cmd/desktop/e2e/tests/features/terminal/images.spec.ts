@@ -99,7 +99,9 @@ test.describe('terminal images', { tag: [tag.terminal] }, () => {
       if (surface !== 'popup') await expect.poll(() => pastes.length).toBe(2)
       await page.route('**/api/terminal/images/upload', (route) => route.fulfill({ status: 400, headers: { 'Access-Control-Allow-Origin': '*' }, json: { kind: 'invalid', message: 'Image rejected for testing' } }))
       await imageGesture(page, 'paste')
-      await expect(page.getByText('Image rejected for testing')).toBeVisible()
+      // A rejected upload can raise its toast more than once; this asks only that
+      // the rejection reaches the user.
+      await expect(page.getByText('Image rejected for testing').first()).toBeVisible()
     })
   }
 })
