@@ -1,9 +1,12 @@
 package sessions
 
 import (
+	"errors"
 	"testing"
 
+	"github.com/colonyops/hive/internal/domain/server"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/hive/servers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -330,4 +333,45 @@ func TestExtractGroupName(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestGroupSessionsByRepo_GivesEachServerOneGroupAfterTheLocalOnes(t *testing.T) {
+	remote := "git@github.com:acme/site.git"
+	groups := GroupSessionsByRepo([]session.Session{
+		{ID: "box:2", Name: "b", Remote: remote, State: session.StateActive},
+		{ID: "1", Name: "local", Remote: remote, State: session.StateActive},
+		{ID: "box:1", Name: "a", Remote: "git@github.com:acme/other.git", State: session.StateActive},
+	}, remote)
+
+	groups = WithServerStates(groups, []servers.ListState{
+		{Name: "box", State: server.StateConnected},
+		{Name: "down", State: server.StateOffline, Err: errors.New("ssh: connect refused")},
+	})
+
+	require.Len(t, groups, 3)
+	assert.Empty(t, groups[0].Server)
+	assert.Len(t, groups[0].Sessions, 1)
+	assert.Equal(t, "box", groups[1].Server)
+	assert.Equal(t, []string{"a", "b"}, []string{groups[1].Sessions[0].Name, groups[1].Sessions[1].Name})
+	assert.Equal(t, "down", groups[2].Server)
+	assert.Equal(t, server.StateOffline, groups[2].ServerState)
+	assert.Equal(t, "ssh: connect refused", groups[2].ServerError)
+
+	items := BuildTreeItems(groups, remote, nil)
+	var headers []TreeItem
+	for _, it := range items {
+		if ti := it.(TreeItem); ti.IsHeader {
+			headers = append(headers, ti)
+		}
+	}
+	require.Len(t, headers, 3, "an offline server with no sessions keeps its header")
+	assert.Equal(t, "down", headers[2].Server)
+	assert.Empty(t, headers[1].RootPath)
+}
+
+func TestLocalSessions_LeavesOutServerSessions(t *testing.T) {
+	local := localSessions([]session.Session{{ID: "abc"}, {ID: "box:abc"}})
+
+	require.Len(t, local, 1)
+	assert.Equal(t, "abc", local[0].ID)
 }

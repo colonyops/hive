@@ -27,6 +27,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
+	"github.com/colonyops/hive/internal/hive/servers"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	statussvc "github.com/colonyops/hive/internal/hive/status"
@@ -60,6 +61,8 @@ type ViewOpts struct {
 	Workspaces  []string
 	Renderer    *tmpl.Renderer
 	Bus         *events.EventBus
+	// ServerStates gives each server under servers: a group, with its state.
+	ServerStates func() []servers.ListState
 }
 
 // View is the Bubble Tea sub-model for the sessions tab.
@@ -88,6 +91,7 @@ type View struct {
 
 	// Terminal integration
 	sessions           sessionapi.API
+	serverStates       func() []servers.ListState
 	terminalStatuses   *kvcache.Store[string, statussvc.TerminalStatus]
 	previewEnabled     bool
 	previewTemplates   *PreviewTemplates
@@ -214,6 +218,7 @@ func New(opts ViewOpts) *View {
 		gitStatus:   opts.GitStatus,
 
 		sessions:           opts.Sessions,
+		serverStates:       opts.ServerStates,
 		terminalStatuses:   terminalStatuses,
 		previewEnabled:     cfg.Views.Sessions.PreviewEnabled,
 		previewTemplates:   previewTemplates,
@@ -306,10 +311,9 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 	v.allSessions = msg.sessions
 	cmds := []tea.Cmd{v.applyFilter()}
 	if len(v.pluginStatuses) > 0 {
-		sessions := make([]*session.Session, len(v.allSessions))
-		for i := range v.allSessions {
-			sessions[i] = &v.allSessions[i]
-		}
+		// Plugins read the session's path on this machine, and a server's
+		// session has its path on the server.
+		sessions := localSessions(v.allSessions)
 		v.pluginManager.UpdateSessions(sessions)
 		v.logger.Debug().Int("sessionCount", len(sessions)).Msg("updated plugin manager sessions")
 	}
@@ -578,7 +582,7 @@ func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 		return v, func() tea.Msg { return CommandPaletteRequestMsg{Session: sess} }
 	}
 
-	if v.handler.IsAction(keyStr, act.TypeNewSession) && len(v.discoveredRepos) > 0 {
+	if v.handler.IsAction(keyStr, act.TypeNewSession) && (len(v.discoveredRepos) > 0 || v.selectedServer() != "") {
 		return v, func() tea.Msg { return NewSessionRequestMsg{} }
 	}
 
@@ -808,6 +812,9 @@ func (v *View) applyFilter() tea.Cmd {
 		groups = GroupSessionsByTag(filteredSess)
 	} else {
 		groups = GroupSessionsByRepo(filteredSess, localRemote)
+		if v.serverStates != nil {
+			groups = WithServerStates(groups, v.serverStates())
+		}
 	}
 	items := BuildTreeItems(groups, localRemote, v.discoveredRepos)
 	items = v.expandWindowItems(items)
@@ -816,10 +823,15 @@ func (v *View) applyFilter() tea.Cmd {
 	// Collect paths for git status fetching (use filtered sessions)
 	// During background refresh, keep existing statuses to avoid flashing
 	paths := make([]string, 0, len(filteredSess))
+	var serverIDs []string
 	for _, s := range filteredSess {
-		paths = append(paths, s.Path)
+		if ServerOf(s) == session.LocalServer {
+			paths = append(paths, s.Path)
+		} else {
+			serverIDs = append(serverIDs, s.ID)
+		}
 		if !v.refreshing {
-			v.gitStatuses.Set(s.Path, GitStatus{IsLoading: true})
+			v.gitStatuses.Set(gitKey(s), GitStatus{IsLoading: true})
 		}
 	}
 	for _, ti := range TreeItemsAll(items) {
@@ -834,12 +846,12 @@ func (v *View) applyFilter() tea.Cmd {
 	v.list.SetItems(items)
 	v.restoreSelection(sel)
 
-	if len(paths) == 0 {
+	if len(paths) == 0 && len(serverIDs) == 0 {
 		v.refreshing = false
 		return nil
 	}
 	// refreshing is cleared when GitStatusBatchCompleteMsg is received
-	return FetchGitStatusBatch(v.gitStatus, paths)
+	return tea.Batch(FetchGitStatusBatch(v.gitStatus, paths), FetchServerGitStatusBatch(v.sessions, serverIDs))
 }
 
 // rebuildWindowItems strips existing window sub-items from the list and re-expands
@@ -1101,6 +1113,9 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 		}
 	} else if previewContent == "" {
 		previewContent = "No session selected"
+		if ti := v.SelectedTreeItem(); ti != nil && ti.IsHeader && ti.ServerError != "" {
+			previewContent = lipgloss.NewStyle().Width(max(previewWidth-4, 1)).Render(ti.Server + " is " + string(ti.ServerState) + "\n\n" + ti.ServerError)
+		}
 	}
 
 	listView := v.list.View()
@@ -1164,7 +1179,7 @@ func (v *View) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	var statusParts []string
 
 	// Git status
-	if gitPart := v.previewGitStatusPart(sess.Path, iconsEnabled); gitPart != "" {
+	if gitPart := v.previewGitStatusPart(gitKey(*sess), iconsEnabled); gitPart != "" {
 		statusParts = append(statusParts, gitPart)
 	}
 
@@ -1458,8 +1473,12 @@ func (v *View) RefreshGitStatuses() tea.Cmd {
 	items := v.list.Items()
 	paths := make([]string, 0, len(items))
 
+	var serverIDs []string
 	for _, ti := range TreeItemsAll(items) {
 		switch {
+		case ti.IsSession() && ServerOf(ti.Session) != session.LocalServer:
+			serverIDs = append(serverIDs, ti.Session.ID)
+			v.gitStatuses.Set(ti.Session.ID, GitStatus{IsLoading: true})
 		case ti.IsSession():
 			paths = append(paths, ti.Session.Path)
 			v.gitStatuses.Set(ti.Session.Path, GitStatus{IsLoading: true})
@@ -1469,11 +1488,11 @@ func (v *View) RefreshGitStatuses() tea.Cmd {
 		}
 	}
 
-	if len(paths) == 0 {
+	if len(paths) == 0 && len(serverIDs) == 0 {
 		return nil
 	}
 
-	return FetchGitStatusBatch(v.gitStatus, paths)
+	return tea.Batch(FetchGitStatusBatch(v.gitStatus, paths), FetchServerGitStatusBatch(v.sessions, serverIDs))
 }
 
 // scheduleSessionRefresh returns a command that schedules the next session refresh.
@@ -1810,6 +1829,13 @@ func MaybeOverrideWindowDelete(action act.Action, treeItem *TreeItem) act.Action
 		return action
 	}
 
+	// The kill runs on this machine's tmux, where a session with the same name
+	// can exist.
+	if name := ServerOf(treeItem.ParentSession); name != session.LocalServer {
+		action.Err = fmt.Errorf("window %s of session %s is on server %s; killing a window runs on this machine", treeItem.WindowName, treeItem.ParentSession.Name, name)
+		return action
+	}
+
 	target := sessionsvc.Target(treeItem.ParentSession)
 	target.Window = treeItem.WindowIndex
 	if err := target.ValidateWindow(); err != nil {
@@ -1932,3 +1958,33 @@ func ensureExactHeight(content string, n int) string {
 
 	return strings.Join(lines, "\n")
 }
+
+func localSessions(all []session.Session) []*session.Session {
+	local := make([]*session.Session, 0, len(all))
+	for i := range all {
+		if ServerOf(all[i]) == session.LocalServer {
+			local = append(local, &all[i])
+		}
+	}
+	return local
+}
+
+// selectedServer names the server of the selected row: a server's group
+// header or one of its sessions. It is empty for this machine.
+func (v *View) selectedServer() string {
+	ti := v.SelectedTreeItem()
+	switch {
+	case ti == nil:
+		return ""
+	case ti.IsHeader:
+		return ti.Server
+	case ti.IsSession():
+		if name := ServerOf(ti.Session); name != session.LocalServer {
+			return name
+		}
+	}
+	return ""
+}
+
+// SelectedServer is selectedServer for the model.
+func (v *View) SelectedServer() string { return v.selectedServer() }
