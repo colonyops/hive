@@ -168,6 +168,32 @@ func (s *Service) ReadBatch(ctx context.Context, paths []string, opts Options) m
 	return results
 }
 
+// ReadSessions reads every session as ReadSession does, keyed by id, each
+// under its own timeout, with at most the service's worker count running at
+// once.
+func (s *Service) ReadSessions(ctx context.Context, sessions []session.Session) map[string]Status {
+	results := make(map[string]Status, len(sessions))
+	var mu sync.Mutex
+	sem := make(chan struct{}, s.workers)
+	var wg sync.WaitGroup
+	for _, sess := range sessions {
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			readCtx, cancel := context.WithTimeout(ctx, readTimeout)
+			defer cancel()
+			status := s.ReadSession(readCtx, sess)
+
+			mu.Lock()
+			results[sess.ID] = status
+			mu.Unlock()
+		})
+	}
+	wg.Wait()
+	return results
+}
+
 // RemoteCoordinates reads the host, owner and repo off a remote. The host is
 // lowered so a forge match and a cache key are canonical however the remote
 // spells it.

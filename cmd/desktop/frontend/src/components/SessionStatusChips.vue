@@ -22,6 +22,8 @@ const props = defineProps<{
   pullRequest: SessionPullRequest | null
   /** Why the pull-request lookup failed; shown instead of a PR chip. */
   pullRequestError: string
+  /** Changes reads a session on this machine only, so a server's line counts open nothing. */
+  canOpenChanges?: boolean
 }>()
 
 const emit = defineEmits<{ 'refresh-pull-request': []; 'open-changes': [] }>()
@@ -107,7 +109,13 @@ async function copyLink(): Promise<void> {
         <span class="truncate font-mono">{{ git.branch }}</span>
       </span>
 
-      <AppTooltip v-if="showDiff" text="Lines changed against the default branch. Click to see the changes.">
+      <AppTooltip v-if="showDiff && !canOpenChanges" text="Lines changed against the default branch.">
+        <span class="flex h-6 shrink-0 items-center gap-1 px-1.5 font-mono" data-testid="session-status-diff">
+          <span class="text-severity-success">+{{ git.additions }}</span>
+          <span class="text-severity-error">−{{ git.deletions }}</span>
+        </span>
+      </AppTooltip>
+      <AppTooltip v-else-if="showDiff" text="Lines changed against the default branch. Click to see the changes.">
         <button
           type="button"
           class="flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded px-1.5 font-mono hover:bg-chip"

@@ -291,3 +291,19 @@ func TestReadBatchKeepsAFailedPathsError(t *testing.T) {
 	require.EqualError(t, got["/gone"].Err, "not a repository")
 	assert.False(t, got["/gone"].Resolved)
 }
+
+func TestReadSessionsKeysEachSessionByID(t *testing.T) {
+	t.Parallel()
+
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", clean: false}, 2)
+	recycled := activeSession()
+	recycled.ID, recycled.State = "s2", session.StateRecycled
+
+	got := svc.ReadSessions(t.Context(), []session.Session{activeSession(), recycled})
+
+	require.Len(t, got, 2)
+	assert.Equal(t, "main", got["s1"].Branch)
+	assert.True(t, got["s1"].Dirty)
+	assert.Equal(t, "github.com", got["s1"].Host)
+	assert.Equal(t, gitstatus.Status{}, got["s2"], "a session with no checkout reads as nothing to read")
+}

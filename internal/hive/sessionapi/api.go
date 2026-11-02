@@ -43,6 +43,9 @@ type API interface {
 	SessionChanges(ctx context.Context, id string, target gitstatus.DiffTarget) (gitstatus.Changes, error)
 	SessionFileDiffs(ctx context.Context, id string, target gitstatus.DiffTarget, paths []string) ([]gitstatus.FileDiff, error)
 	SessionBranches(ctx context.Context, id string) ([]string, error)
+	// GitStatuses reads the checkouts of the sessions ids name on the machine
+	// that holds them, keyed by id. An id with no session is absent.
+	GitStatuses(ctx context.Context, ids []string) (map[string]gitstatus.Status, error)
 
 	// StatusAvailable must not block: the TUI calls it inside Update. A false
 	// answer can turn true later (the daemon client answers false until its

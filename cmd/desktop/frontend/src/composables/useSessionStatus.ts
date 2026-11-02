@@ -5,9 +5,11 @@ import {
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type { SessionGitStatus } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import type { SessionPullRequest } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import { errorText } from '../lib/appError'
 import { useWindowFocus } from '../stores/useWindowFocus'
 
-// Git is four local subprocesses, so it can be polled. The pull request rides
+// Git is four local subprocesses, or for a session on a server one ssh call
+// that its daemon answers from a 5s cache, so it can be polled. The pull request rides
 // along on each poll and is answered from the Go-side cache, so this interval
 // does not set how often the forge is asked.
 const POLL_INTERVAL_MS = 15_000
@@ -37,7 +39,7 @@ export function useSessionStatus(
   let timer: ReturnType<typeof setTimeout> | undefined
 
   // The last answer per session, so switching back paints from memory instead
-  // of blanking for the ~100ms a git read takes. Bounded by the sessions
+  // of blanking while a git read runs. Bounded by the sessions
   // visited in one run, which is small enough not to warrant eviction.
   const lastGit = new Map<string, SessionGitStatus>()
   const lastPullRequest = new Map<string, SessionPullRequest>()
@@ -55,8 +57,11 @@ export function useSessionStatus(
     let status: SessionGitStatus
     try {
       status = await ReadGitStatus(id)
-    } catch {
-      // A transient failure must not blank a bar that had an answer.
+    } catch (e) {
+      // A failure must not blank a bar that had an answer, but the answer is
+      // now old, and a server can keep failing for a long time.
+      if (current === sequence && git.value)
+        git.value = { ...git.value, error: errorText(e, 'Could not read git status.') }
       return
     }
     if (current !== sequence) return

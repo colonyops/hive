@@ -115,6 +115,11 @@ func TestServerSessions_ActOnTheServerOfAQualifiedID(t *testing.T) {
 	assert.Equal(t, [][2]string{{"review", "renamed"}}, f.boxTmux.renames, "the server's tmux session follows the rename")
 	assert.Empty(t, f.localTmux.renames, "the local tmux is not touched")
 
+	git, err := f.svc.SessionGitStatus(t.Context(), ref)
+	require.NoError(t, err)
+	assert.True(t, git.Resolved, "the server reads its own checkout")
+	assert.Equal(t, "site", git.Repo)
+
 	risk, err := f.svc.SessionRisk(t.Context(), ref)
 	require.NoError(t, err)
 	assert.False(t, risk.UncommittedChanges)
@@ -135,10 +140,6 @@ func TestServerSessions_RefuseWhatNeedsTheLocalCheckout(t *testing.T) {
 	assert.Equal(t, KindUnavailable, KindOf(f.svc.RevealSession(t.Context(), ref)))
 	_, err := f.svc.StartTmuxSession(t.Context(), "box:review")
 	assert.Equal(t, KindUnavailable, KindOf(err))
-
-	status, err := f.svc.SessionGitStatus(t.Context(), ref)
-	require.NoError(t, err)
-	assert.False(t, status.Resolved, "a server's checkout is not read from here")
 
 	_, err = f.svc.SessionDetail(t.Context(), "gone:"+ref)
 	assert.Equal(t, KindNotFound, KindOf(err))
@@ -269,4 +270,15 @@ func TestServerStateOf(t *testing.T) {
 	incompatible := fmt.Errorf("hello: %w", &wire.IncompatibleError{DaemonVersion: "old"})
 	assert.Equal(t, server.StateIncompatible, serverStateOf(incompatible))
 	assert.Equal(t, server.StateOffline, serverStateOf(errors.New("exit status 255")))
+}
+
+func TestServerSessions_GitStatusFailures(t *testing.T) {
+	f := newServerFixture(t)
+
+	_, err := f.svc.SessionGitStatus(t.Context(), "down:s1")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	require.ErrorContains(t, err, "Connection refused")
+
+	_, err = f.svc.SessionGitStatus(t.Context(), "box:missing")
+	assert.Equal(t, KindNotFound, KindOf(err))
 }

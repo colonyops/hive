@@ -3207,6 +3207,42 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
+    // A configured action runs on this machine, and a server's checkout is not here.
+    it('grows no window menu on a server session', async () => {
+      offer([], [interrupt])
+      mocks.ListServerSessions.mockResolvedValue([
+        {
+          server: 'box',
+          ssh: 'box',
+          state: 'connected',
+          error: '',
+          sessions: [
+            {
+              server: 'box',
+              id: 'box:9',
+              name: 'remote work',
+              slug: 'box:remote-work',
+              repo: '/home/hive/repo.git',
+              repoIdentity: '/home/hive/repo.git',
+              state: 'active',
+              canvasOwner: '',
+              tags: [],
+              createdAt: '',
+            },
+          ],
+        },
+      ])
+      const { wrapper } = await mountAvailable()
+      const group = wrapper.get('[data-testid="terminal-repo-group"][data-repo="/home/hive/repo.git"]')
+      if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
+      await wrapper.get('[data-slug="box:remote-work"]').trigger('click')
+      await flushPromises()
+
+      const remote = wrapper.get('[data-testid="terminal-window-row"][data-window-id="@2"]')
+      expect(remote.find('[data-testid="terminal-window-menu-toggle"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
     it('collects declared inputs before running', async () => {
       offer([
         {
@@ -4585,6 +4621,91 @@ describe('TerminalMode', () => {
       await flushPromises()
 
       expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith('open-ci', { slug: 'hive-fix-parser', windowId: '' }, {})
+
+      wrapper.unmount()
+    })
+
+    it('reports a server session’s git status without the buttons that act on this machine', async () => {
+      mocks.TerminalActionViews.mockImplementation((target: string) =>
+        Promise.resolve(
+          target === 'statusbar'
+            ? [
+                {
+                  id: 'open-ci',
+                  label: 'Open CI',
+                  type: 'shell',
+                  icon: 'globe',
+                  showInDetail: false,
+                  requiresSessionInput: false,
+                },
+              ]
+            : [],
+        ),
+      )
+      mocks.ListServerSessions.mockResolvedValue([
+        {
+          server: 'box',
+          ssh: 'box',
+          state: 'connected',
+          error: '',
+          sessions: [
+            {
+              server: 'box',
+              id: 'box:9',
+              name: 'remote work',
+              slug: 'box:remote-work',
+              repo: '/home/hive/repo.git',
+              repoIdentity: '/home/hive/repo.git',
+              state: 'active',
+              canvasOwner: '',
+              tags: [],
+              createdAt: '',
+            },
+          ],
+        },
+      ])
+      mocks.SessionGitStatus.mockResolvedValue({
+        path: '/home/hive/.local/share/hive/repos/repo-abc',
+        branch: 'remote-branch',
+        dirty: true,
+        unpushed: false,
+        additions: 3,
+        deletions: 1,
+        host: '',
+        owner: 'acme',
+        repo: 'site',
+        resolved: true,
+        error: '',
+      })
+      useTerminalStatusBar().setShowStatusBar(true)
+      const { wrapper } = await mountAvailable()
+      const group = wrapper.get('[data-testid="terminal-repo-group"][data-repo="/home/hive/repo.git"]')
+      if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
+      await wrapper.get('[data-slug="box:remote-work"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="terminal-pane-host"]').text()).toBe('box')
+      expect(mocks.SessionGitStatus).toHaveBeenCalledWith('box:9')
+      expect(wrapper.get('[data-testid="session-status-branch"]').text()).toBe('remote-branch')
+      expect(wrapper.find('[data-testid="session-status-dirty"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="terminal-pane-statusbar-open-editor"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="terminal-pane-statusbar-reveal"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="terminal-statusbar-action-open-ci"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="terminal-statusbar-tasks"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="terminal-statusbar-changes"]').exists()).toBe(false)
+      const diff = wrapper.get('[data-testid="session-status-diff"]')
+      expect(diff.text()).toBe('+3−1')
+      expect(diff.element.tagName).toBe('SPAN')
+
+      const calls = mocks.SessionGitStatus.mock.calls.length
+      mocks.ListServerSessions.mockResolvedValue([
+        { server: 'box', ssh: 'box', state: 'offline', error: 'refused', sessions: [] },
+      ])
+      await wrapper.get('[data-testid="terminal-sessions-menu-toggle"]').trigger('click')
+      await wrapper.get('[data-testid="terminal-sessions-refresh"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[data-testid="terminal-pane-host"]').text()).toBe('box')
+      expect(mocks.SessionGitStatus.mock.calls.length).toBe(calls)
 
       wrapper.unmount()
     })

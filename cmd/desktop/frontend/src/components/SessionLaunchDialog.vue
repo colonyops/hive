@@ -146,15 +146,25 @@ watch(
 const nameInput = ref<{ focus: () => void } | null>(null)
 
 const needsPrompt = computed(() => !!props.action || prompt.value.trim() !== '')
-const promptUsesTempFile = computed(() => {
-  const threshold = props.options.promptFileThresholdBytes ?? 0
-  return threshold > 0 && new TextEncoder().encode(prompt.value).byteLength > threshold
-})
+const promptThreshold = computed(() => props.options.promptFileThresholdBytes ?? 0)
+function promptOverThreshold(text: string): boolean {
+  return promptThreshold.value > 0 && new TextEncoder().encode(text).byteLength > promptThreshold.value
+}
+const promptUsesTempFile = computed(() => !props.server && promptOverThreshold(prompt.value))
+// The temporary file is on this machine, where a server cannot read it. A
+// create sends the trimmed prompt, so the limit applies to that.
+const promptTooLongForServer = computed(
+  () => !!props.server && props.withPrompt && promptOverThreshold(prompt.value.trim()),
+)
+const serverPromptLimit = computed(
+  () => `A prompt for a session on a server can be at most ${Math.floor(promptThreshold.value / 1024)} KiB.`,
+)
 const selectedWorkspace = computed(() => props.options.workspaces?.find((item) => item.dir === workspace.value))
 const canSubmit = computed(() => {
   const selectedTarget = target.value === 'repository' ? repository.value : workspace.value
   if (selectedTarget.trim() === '') return false
   if (name.value.trim() === '') return false
+  if (promptTooLongForServer.value) return false
   return target.value === 'repository' || !needsPrompt.value || !!selectedWorkspace.value?.supportsPrompt
 })
 const agentOptions = computed(() => [
@@ -178,6 +188,7 @@ function validate(sessionName: string): string {
   if (target.value === 'workspace' && needsPrompt.value && !selectedWorkspace.value?.supportsPrompt) {
     return 'This agent workspace does not accept an opening prompt.'
   }
+  if (promptTooLongForServer.value) return serverPromptLimit.value
   if (!sessionName) return 'Session name is required.'
   if (!/^[a-zA-Z0-9][a-zA-Z0-9 _.:/-]*$/.test(sessionName)) return 'Use letters, numbers, spaces, and - _ : . /.'
   return validateActionInputs(inputs.value, inputValues.value) ?? ''
@@ -343,6 +354,14 @@ useSubmitShortcut(submit)
           This prompt is too large to pass directly. Hive will write it to a temporary file and ask the agent to read
           and delete it.
         </span>
+      </p>
+      <p
+        v-else-if="promptTooLongForServer"
+        class="flex items-start gap-1.5 text-caption leading-relaxed text-severity-warning"
+        :data-testid="`${fieldId}-prompt-server-limit`"
+      >
+        <IconTriangleAlert class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        <span>{{ serverPromptLimit }} Shorten this prompt to create the session.</span>
       </p>
       <FormField v-if="target === 'repository'">
         <template #label>Agent <span class="text-text-4">(optional)</span></template>
