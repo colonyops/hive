@@ -185,7 +185,7 @@ Import `test`, `expect` and `tag` from `fixtures/test.ts`. The other helpers:
 | `fixtures/servers.ts` | `serverURL(server, browserName)`                                                 |
 | `fixtures/paths.ts`   | `screenshotPath(name)` and `testdataPath(...parts)`, independent of spec depth   |
 | `fixtures/wails.ts`   | `bindingID(service, method)`, the numeric ID a mocked binding call must answer   |
-| `fixtures/terminal.ts` | `mockTerminalAPI(page, answers)` and `noAgents`, a mocked terminal HTTP API by path |
+| `fixtures/terminal.ts` | `mockTerminalAPI(page, answers)` and `noAgents`, a mocked terminal HTTP API by path. `mockTerminal(page, options)` adds sessions, windows and bindings on top |
 
 Name screenshots with `browserName`, not the project name.
 
