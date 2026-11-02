@@ -31,7 +31,7 @@ Open in editor, Show in Finder, agent windows, and configured actions run on you
 | State | Meaning | Fix |
 | --- | --- | --- |
 | Connected | The server answered | |
-| Offline | ssh or the daemon did not answer | Read the ssh error on the server's row, or on its banner in Code. Check that `ssh <host>` logs in without a prompt. |
+| Offline | ssh or the daemon did not answer | Read the ssh error on the server's row, or hover the red dot in Code's status bar. Check that `ssh <host>` logs in without a prompt. |
 | Incompatible | The server's hive speaks another protocol version | Install the same hive version on both machines |
 
-An offline or incompatible server shows as a banner above the list, with **Retry**. Hover the banner's text for the error. Sessions that Code already listed stay in place, struck through and without a menu, until the server answers again. After a restart of Hive Desktop, Code lists them only when the server answers. Your local sessions do not wait for it, but a server that hangs can hold back other servers' sessions for up to 5 seconds.
+When a server goes offline or becomes incompatible, Hive Desktop sends one notification and shows a red dot on the right of Code's status bar. Hover the dot for each server's state and error, and click it to try again. Turning off the status bar hides the dot too. Sessions that Code already listed stay in place, struck through and without a menu, until the server answers again. After a restart of Hive Desktop, Code lists them only when the server answers. Your local sessions do not wait for it, but a server that hangs can hold back other servers' sessions for up to 5 seconds.
