@@ -9,6 +9,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/git"
 )
 
@@ -44,9 +45,11 @@ func sessionSummaryOf(canonical func(drive.Space) drive.Space, s session.Session
 
 // serverSummaryOf is s as a row of server. Its repository owns no canvas
 // here: the drive is on this machine.
+// serverSummaryOf takes Slug from the tmux target, not s.Slug: a session renamed
+// while stopped keeps its old tmux name, and the row attaches with this value.
 func serverSummaryOf(server string, s session.Session) SessionSummary {
 	return SessionSummary{
-		Server: server, ID: session.Ref{Server: server, ID: s.ID}.String(), Name: s.Name, Slug: session.Ref{Server: server, ID: s.Slug}.String(),
+		Server: server, ID: session.Ref{Server: server, ID: s.ID}.String(), Name: s.Name, Slug: session.Ref{Server: server, ID: sessionsvc.Target(s).Session}.String(),
 		Repo: s.Remote, RepoIdentity: git.RemoteIdentity(s.Remote), State: string(s.State),
 		Tags: tagsOf(s), CreatedAt: s.ActivatedAt(),
 	}

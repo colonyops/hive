@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/internal/platform/promptfile"
 
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/server"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
@@ -193,6 +195,44 @@ func (s *SessionsService) fleet() *servers.Fleet {
 		return nil
 	}
 	return s.servers()
+}
+
+// startServerTmuxSession starts a server session's terminal on the server,
+// by the server's rules, detached as StartTmuxSession starts a local one.
+func (s *SessionsService) startServerTmuxSession(ctx context.Context, server, slug string) (multiplexer.LaunchResult, error) {
+	api, err := s.serverAPI(server)
+	if err != nil {
+		return multiplexer.LaunchResult{}, err
+	}
+	sessions, err := api.ListSessions(ctx)
+	if err != nil {
+		return multiplexer.LaunchResult{}, serverError(err, KindUnavailable, "reading the sessions of server %q", server)
+	}
+	sess, ok := sessionOfTmuxName(sessions, slug)
+	if !ok {
+		return multiplexer.LaunchResult{}, Errorf(KindNotFound, "no session with slug %q on server %q", slug, server)
+	}
+	result, err := api.StartTmuxSession(ctx, sess.ID)
+	switch {
+	case errors.Is(err, session.ErrNotActive):
+		return multiplexer.LaunchResult{}, serverError(err, KindConflict, "session %q on server %q", sess.Name, server)
+	case err != nil:
+		return multiplexer.LaunchResult{}, serverError(err, KindUnavailable, "starting session %q on server %q", sess.Name, server)
+	}
+	return result, nil
+}
+
+// sessionOfTmuxName prefers an active session, because a recycled one can keep
+// the name of an active one.
+func sessionOfTmuxName(sessions []session.Session, name string) (session.Session, bool) {
+	named := slices.DeleteFunc(slices.Clone(sessions), func(s session.Session) bool { return sessionsvc.Target(s).Session != name })
+	if len(named) == 0 {
+		return session.Session{}, false
+	}
+	if i := slices.IndexFunc(named, func(s session.Session) bool { return s.State == session.StateActive }); i >= 0 {
+		return named[i], true
+	}
+	return named[0], true
 }
 
 // serverError classifies a server's failure and keeps its cause in the

@@ -2494,6 +2494,102 @@ func (x *StatusesResponse) GetStatuses() map[string]*TerminalStatus {
 	return nil
 }
 
+type StartTmuxRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartTmuxRequest) Reset() {
+	*x = StartTmuxRequest{}
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartTmuxRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartTmuxRequest) ProtoMessage() {}
+
+func (x *StartTmuxRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartTmuxRequest.ProtoReflect.Descriptor instead.
+func (*StartTmuxRequest) Descriptor() ([]byte, []int) {
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *StartTmuxRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type StartTmuxResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Created       bool                   `protobuf:"varint,1,opt,name=created,proto3" json:"created,omitempty"`
+	Completed     bool                   `protobuf:"varint,2,opt,name=completed,proto3" json:"completed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartTmuxResponse) Reset() {
+	*x = StartTmuxResponse{}
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartTmuxResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartTmuxResponse) ProtoMessage() {}
+
+func (x *StartTmuxResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartTmuxResponse.ProtoReflect.Descriptor instead.
+func (*StartTmuxResponse) Descriptor() ([]byte, []int) {
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *StartTmuxResponse) GetCreated() bool {
+	if x != nil {
+		return x.Created
+	}
+	return false
+}
+
+func (x *StartTmuxResponse) GetCompleted() bool {
+	if x != nil {
+		return x.Completed
+	}
+	return false
+}
+
 type GitStatusesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionIds    []string               `protobuf:"bytes,1,rep,name=session_ids,json=sessionIds,proto3" json:"session_ids,omitempty"`
@@ -2503,7 +2599,7 @@ type GitStatusesRequest struct {
 
 func (x *GitStatusesRequest) Reset() {
 	*x = GitStatusesRequest{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[45]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2515,7 +2611,7 @@ func (x *GitStatusesRequest) String() string {
 func (*GitStatusesRequest) ProtoMessage() {}
 
 func (x *GitStatusesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[45]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2528,7 +2624,7 @@ func (x *GitStatusesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitStatusesRequest.ProtoReflect.Descriptor instead.
 func (*GitStatusesRequest) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{45}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *GitStatusesRequest) GetSessionIds() []string {
@@ -2548,7 +2644,7 @@ type GitStatusesResponse struct {
 
 func (x *GitStatusesResponse) Reset() {
 	*x = GitStatusesResponse{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[46]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2560,7 +2656,7 @@ func (x *GitStatusesResponse) String() string {
 func (*GitStatusesResponse) ProtoMessage() {}
 
 func (x *GitStatusesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[46]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2573,7 +2669,7 @@ func (x *GitStatusesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitStatusesResponse.ProtoReflect.Descriptor instead.
 func (*GitStatusesResponse) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{46}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *GitStatusesResponse) GetStatuses() map[string]*GitStatus {
@@ -2605,7 +2701,7 @@ type GitStatus struct {
 
 func (x *GitStatus) Reset() {
 	*x = GitStatus{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[47]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2617,7 +2713,7 @@ func (x *GitStatus) String() string {
 func (*GitStatus) ProtoMessage() {}
 
 func (x *GitStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[47]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2630,7 +2726,7 @@ func (x *GitStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitStatus.ProtoReflect.Descriptor instead.
 func (*GitStatus) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{47}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *GitStatus) GetPath() string {
@@ -2730,7 +2826,7 @@ type PaneStatus struct {
 
 func (x *PaneStatus) Reset() {
 	*x = PaneStatus{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[48]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2742,7 +2838,7 @@ func (x *PaneStatus) String() string {
 func (*PaneStatus) ProtoMessage() {}
 
 func (x *PaneStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[48]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2755,7 +2851,7 @@ func (x *PaneStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PaneStatus.ProtoReflect.Descriptor instead.
 func (*PaneStatus) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{48}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *PaneStatus) GetPaneId() string {
@@ -2807,7 +2903,7 @@ type WindowStatus struct {
 
 func (x *WindowStatus) Reset() {
 	*x = WindowStatus{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[49]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2819,7 +2915,7 @@ func (x *WindowStatus) String() string {
 func (*WindowStatus) ProtoMessage() {}
 
 func (x *WindowStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[49]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2832,7 +2928,7 @@ func (x *WindowStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WindowStatus.ProtoReflect.Descriptor instead.
 func (*WindowStatus) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{49}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *WindowStatus) GetWindowIndex() string {
@@ -2894,7 +2990,7 @@ type TerminalStatus struct {
 
 func (x *TerminalStatus) Reset() {
 	*x = TerminalStatus{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[50]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2906,7 +3002,7 @@ func (x *TerminalStatus) String() string {
 func (*TerminalStatus) ProtoMessage() {}
 
 func (x *TerminalStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[50]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2919,7 +3015,7 @@ func (x *TerminalStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TerminalStatus.ProtoReflect.Descriptor instead.
 func (*TerminalStatus) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{50}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *TerminalStatus) GetSessionPresent() bool {
@@ -3003,7 +3099,7 @@ type LaunchErrorDetail struct {
 
 func (x *LaunchErrorDetail) Reset() {
 	*x = LaunchErrorDetail{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[51]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3015,7 +3111,7 @@ func (x *LaunchErrorDetail) String() string {
 func (*LaunchErrorDetail) ProtoMessage() {}
 
 func (x *LaunchErrorDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[51]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3028,7 +3124,7 @@ func (x *LaunchErrorDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LaunchErrorDetail.ProtoReflect.Descriptor instead.
 func (*LaunchErrorDetail) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{51}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *LaunchErrorDetail) GetName() string {
@@ -3100,7 +3196,7 @@ type CreateSessionErrorDetail struct {
 
 func (x *CreateSessionErrorDetail) Reset() {
 	*x = CreateSessionErrorDetail{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[52]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3112,7 +3208,7 @@ func (x *CreateSessionErrorDetail) String() string {
 func (*CreateSessionErrorDetail) ProtoMessage() {}
 
 func (x *CreateSessionErrorDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[52]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3125,7 +3221,7 @@ func (x *CreateSessionErrorDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSessionErrorDetail.ProtoReflect.Descriptor instead.
 func (*CreateSessionErrorDetail) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{52}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *CreateSessionErrorDetail) GetOperation() string {
@@ -3166,7 +3262,7 @@ type InvalidTagDetail struct {
 
 func (x *InvalidTagDetail) Reset() {
 	*x = InvalidTagDetail{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[53]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3178,7 +3274,7 @@ func (x *InvalidTagDetail) String() string {
 func (*InvalidTagDetail) ProtoMessage() {}
 
 func (x *InvalidTagDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[53]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3191,7 +3287,7 @@ func (x *InvalidTagDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvalidTagDetail.ProtoReflect.Descriptor instead.
 func (*InvalidTagDetail) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{53}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{55}
 }
 
 type ChangedFile struct {
@@ -3209,7 +3305,7 @@ type ChangedFile struct {
 
 func (x *ChangedFile) Reset() {
 	*x = ChangedFile{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[54]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3221,7 +3317,7 @@ func (x *ChangedFile) String() string {
 func (*ChangedFile) ProtoMessage() {}
 
 func (x *ChangedFile) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[54]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3234,7 +3330,7 @@ func (x *ChangedFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangedFile.ProtoReflect.Descriptor instead.
 func (*ChangedFile) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{54}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *ChangedFile) GetPath() string {
@@ -3297,7 +3393,7 @@ type DiffTarget struct {
 
 func (x *DiffTarget) Reset() {
 	*x = DiffTarget{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[55]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3309,7 +3405,7 @@ func (x *DiffTarget) String() string {
 func (*DiffTarget) ProtoMessage() {}
 
 func (x *DiffTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[55]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3322,7 +3418,7 @@ func (x *DiffTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiffTarget.ProtoReflect.Descriptor instead.
 func (*DiffTarget) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{55}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *DiffTarget) GetBase() string {
@@ -3356,7 +3452,7 @@ type ChangesRequest struct {
 
 func (x *ChangesRequest) Reset() {
 	*x = ChangesRequest{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[56]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3368,7 +3464,7 @@ func (x *ChangesRequest) String() string {
 func (*ChangesRequest) ProtoMessage() {}
 
 func (x *ChangesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[56]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3381,7 +3477,7 @@ func (x *ChangesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangesRequest.ProtoReflect.Descriptor instead.
 func (*ChangesRequest) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{56}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ChangesRequest) GetId() string {
@@ -3410,7 +3506,7 @@ type CommitInfo struct {
 
 func (x *CommitInfo) Reset() {
 	*x = CommitInfo{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[57]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3422,7 +3518,7 @@ func (x *CommitInfo) String() string {
 func (*CommitInfo) ProtoMessage() {}
 
 func (x *CommitInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[57]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3435,7 +3531,7 @@ func (x *CommitInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommitInfo.ProtoReflect.Descriptor instead.
 func (*CommitInfo) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{57}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *CommitInfo) GetId() string {
@@ -3484,7 +3580,7 @@ type ChangesResponse struct {
 
 func (x *ChangesResponse) Reset() {
 	*x = ChangesResponse{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[58]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3496,7 +3592,7 @@ func (x *ChangesResponse) String() string {
 func (*ChangesResponse) ProtoMessage() {}
 
 func (x *ChangesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[58]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3509,7 +3605,7 @@ func (x *ChangesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangesResponse.ProtoReflect.Descriptor instead.
 func (*ChangesResponse) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{58}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ChangesResponse) GetResolved() bool {
@@ -3594,7 +3690,7 @@ type FileDiff struct {
 
 func (x *FileDiff) Reset() {
 	*x = FileDiff{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[59]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3606,7 +3702,7 @@ func (x *FileDiff) String() string {
 func (*FileDiff) ProtoMessage() {}
 
 func (x *FileDiff) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[59]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3619,7 +3715,7 @@ func (x *FileDiff) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileDiff.ProtoReflect.Descriptor instead.
 func (*FileDiff) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{59}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *FileDiff) GetPath() string {
@@ -3661,7 +3757,7 @@ type FileDiffsRequest struct {
 
 func (x *FileDiffsRequest) Reset() {
 	*x = FileDiffsRequest{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[60]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3673,7 +3769,7 @@ func (x *FileDiffsRequest) String() string {
 func (*FileDiffsRequest) ProtoMessage() {}
 
 func (x *FileDiffsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[60]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3686,7 +3782,7 @@ func (x *FileDiffsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileDiffsRequest.ProtoReflect.Descriptor instead.
 func (*FileDiffsRequest) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{60}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *FileDiffsRequest) GetId() string {
@@ -3719,7 +3815,7 @@ type FileDiffsResponse struct {
 
 func (x *FileDiffsResponse) Reset() {
 	*x = FileDiffsResponse{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[61]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3731,7 +3827,7 @@ func (x *FileDiffsResponse) String() string {
 func (*FileDiffsResponse) ProtoMessage() {}
 
 func (x *FileDiffsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[61]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3744,7 +3840,7 @@ func (x *FileDiffsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileDiffsResponse.ProtoReflect.Descriptor instead.
 func (*FileDiffsResponse) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{61}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *FileDiffsResponse) GetDiffs() []*FileDiff {
@@ -3763,7 +3859,7 @@ type BranchesRequest struct {
 
 func (x *BranchesRequest) Reset() {
 	*x = BranchesRequest{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[62]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3775,7 +3871,7 @@ func (x *BranchesRequest) String() string {
 func (*BranchesRequest) ProtoMessage() {}
 
 func (x *BranchesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[62]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3788,7 +3884,7 @@ func (x *BranchesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BranchesRequest.ProtoReflect.Descriptor instead.
 func (*BranchesRequest) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{62}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *BranchesRequest) GetId() string {
@@ -3807,7 +3903,7 @@ type BranchesResponse struct {
 
 func (x *BranchesResponse) Reset() {
 	*x = BranchesResponse{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[63]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3819,7 +3915,7 @@ func (x *BranchesResponse) String() string {
 func (*BranchesResponse) ProtoMessage() {}
 
 func (x *BranchesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[63]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3832,7 +3928,7 @@ func (x *BranchesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BranchesResponse.ProtoReflect.Descriptor instead.
 func (*BranchesResponse) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{63}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *BranchesResponse) GetRefs() []string {
@@ -4016,7 +4112,12 @@ const file_hive_daemon_v1_daemon_proto_rawDesc = "" +
 	"\bstatuses\x18\x01 \x03(\v2..hive.daemon.v1.StatusesResponse.StatusesEntryR\bstatuses\x1a[\n" +
 	"\rStatusesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x124\n" +
-	"\x05value\x18\x02 \x01(\v2\x1e.hive.daemon.v1.TerminalStatusR\x05value:\x028\x01\"5\n" +
+	"\x05value\x18\x02 \x01(\v2\x1e.hive.daemon.v1.TerminalStatusR\x05value:\x028\x01\"\"\n" +
+	"\x10StartTmuxRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"K\n" +
+	"\x11StartTmuxResponse\x12\x18\n" +
+	"\acreated\x18\x01 \x01(\bR\acreated\x12\x1c\n" +
+	"\tcompleted\x18\x02 \x01(\bR\tcompleted\"5\n" +
 	"\x12GitStatusesRequest\x12\x1f\n" +
 	"\vsession_ids\x18\x01 \x03(\tR\n" +
 	"sessionIds\"\xbc\x01\n" +
@@ -4134,7 +4235,7 @@ const file_hive_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x05Hello\x12\x1c.hive.daemon.v1.HelloRequest\x1a\x1d.hive.daemon.v1.HelloResponse\x12G\n" +
 	"\x06Health\x12\x1d.hive.daemon.v1.HealthRequest\x1a\x1e.hive.daemon.v1.HealthResponse\x12A\n" +
 	"\x04Stop\x12\x1b.hive.daemon.v1.StopRequest\x1a\x1c.hive.daemon.v1.StopResponse\x12G\n" +
-	"\x06Reload\x12\x1d.hive.daemon.v1.ReloadRequest\x1a\x1e.hive.daemon.v1.ReloadResponse2\xf7\v\n" +
+	"\x06Reload\x12\x1d.hive.daemon.v1.ReloadRequest\x1a\x1e.hive.daemon.v1.ReloadResponse2\xc9\f\n" +
 	"\x0eSessionService\x12A\n" +
 	"\x04List\x12\x1b.hive.daemon.v1.ListRequest\x1a\x1c.hive.daemon.v1.ListResponse\x12>\n" +
 	"\x03Get\x12\x1a.hive.daemon.v1.GetRequest\x1a\x1b.hive.daemon.v1.GetResponse\x12I\n" +
@@ -4154,7 +4255,8 @@ const file_hive_daemon_v1_daemon_proto_rawDesc = "" +
 	"\aChanges\x12\x1e.hive.daemon.v1.ChangesRequest\x1a\x1f.hive.daemon.v1.ChangesResponse\x12P\n" +
 	"\tFileDiffs\x12 .hive.daemon.v1.FileDiffsRequest\x1a!.hive.daemon.v1.FileDiffsResponse\x12M\n" +
 	"\bBranches\x12\x1f.hive.daemon.v1.BranchesRequest\x1a .hive.daemon.v1.BranchesResponse\x12V\n" +
-	"\vGitStatuses\x12\".hive.daemon.v1.GitStatusesRequest\x1a#.hive.daemon.v1.GitStatusesResponseB\xc7\x01\n" +
+	"\vGitStatuses\x12\".hive.daemon.v1.GitStatusesRequest\x1a#.hive.daemon.v1.GitStatusesResponse\x12P\n" +
+	"\tStartTmux\x12 .hive.daemon.v1.StartTmuxRequest\x1a!.hive.daemon.v1.StartTmuxResponseB\xc7\x01\n" +
 	"\x12com.hive.daemon.v1B\vDaemonProtoP\x01ZJgithub.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1;daemonv1\xa2\x02\x03HDX\xaa\x02\x0eHive.Daemon.V1\xca\x02\x0eHive\\Daemon\\V1\xe2\x02\x1aHive\\Daemon\\V1\\GPBMetadata\xea\x02\x10Hive::Daemon::V1b\x06proto3"
 
 var (
@@ -4169,7 +4271,7 @@ func file_hive_daemon_v1_daemon_proto_rawDescGZIP() []byte {
 	return file_hive_daemon_v1_daemon_proto_rawDescData
 }
 
-var file_hive_daemon_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 68)
+var file_hive_daemon_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 70)
 var file_hive_daemon_v1_daemon_proto_goTypes = []any{
 	(*HelloRequest)(nil),              // 0: hive.daemon.v1.HelloRequest
 	(*HelloResponse)(nil),             // 1: hive.daemon.v1.HelloResponse
@@ -4216,42 +4318,44 @@ var file_hive_daemon_v1_daemon_proto_goTypes = []any{
 	(*RootRepoTarget)(nil),            // 42: hive.daemon.v1.RootRepoTarget
 	(*StatusesRequest)(nil),           // 43: hive.daemon.v1.StatusesRequest
 	(*StatusesResponse)(nil),          // 44: hive.daemon.v1.StatusesResponse
-	(*GitStatusesRequest)(nil),        // 45: hive.daemon.v1.GitStatusesRequest
-	(*GitStatusesResponse)(nil),       // 46: hive.daemon.v1.GitStatusesResponse
-	(*GitStatus)(nil),                 // 47: hive.daemon.v1.GitStatus
-	(*PaneStatus)(nil),                // 48: hive.daemon.v1.PaneStatus
-	(*WindowStatus)(nil),              // 49: hive.daemon.v1.WindowStatus
-	(*TerminalStatus)(nil),            // 50: hive.daemon.v1.TerminalStatus
-	(*LaunchErrorDetail)(nil),         // 51: hive.daemon.v1.LaunchErrorDetail
-	(*CreateSessionErrorDetail)(nil),  // 52: hive.daemon.v1.CreateSessionErrorDetail
-	(*InvalidTagDetail)(nil),          // 53: hive.daemon.v1.InvalidTagDetail
-	(*ChangedFile)(nil),               // 54: hive.daemon.v1.ChangedFile
-	(*DiffTarget)(nil),                // 55: hive.daemon.v1.DiffTarget
-	(*ChangesRequest)(nil),            // 56: hive.daemon.v1.ChangesRequest
-	(*CommitInfo)(nil),                // 57: hive.daemon.v1.CommitInfo
-	(*ChangesResponse)(nil),           // 58: hive.daemon.v1.ChangesResponse
-	(*FileDiff)(nil),                  // 59: hive.daemon.v1.FileDiff
-	(*FileDiffsRequest)(nil),          // 60: hive.daemon.v1.FileDiffsRequest
-	(*FileDiffsResponse)(nil),         // 61: hive.daemon.v1.FileDiffsResponse
-	(*BranchesRequest)(nil),           // 62: hive.daemon.v1.BranchesRequest
-	(*BranchesResponse)(nil),          // 63: hive.daemon.v1.BranchesResponse
-	nil,                               // 64: hive.daemon.v1.HealthResponse.SessionsByStateEntry
-	nil,                               // 65: hive.daemon.v1.Session.MetadataEntry
-	nil,                               // 66: hive.daemon.v1.StatusesResponse.StatusesEntry
-	nil,                               // 67: hive.daemon.v1.GitStatusesResponse.StatusesEntry
-	(*timestamppb.Timestamp)(nil),     // 68: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),       // 69: google.protobuf.Duration
+	(*StartTmuxRequest)(nil),          // 45: hive.daemon.v1.StartTmuxRequest
+	(*StartTmuxResponse)(nil),         // 46: hive.daemon.v1.StartTmuxResponse
+	(*GitStatusesRequest)(nil),        // 47: hive.daemon.v1.GitStatusesRequest
+	(*GitStatusesResponse)(nil),       // 48: hive.daemon.v1.GitStatusesResponse
+	(*GitStatus)(nil),                 // 49: hive.daemon.v1.GitStatus
+	(*PaneStatus)(nil),                // 50: hive.daemon.v1.PaneStatus
+	(*WindowStatus)(nil),              // 51: hive.daemon.v1.WindowStatus
+	(*TerminalStatus)(nil),            // 52: hive.daemon.v1.TerminalStatus
+	(*LaunchErrorDetail)(nil),         // 53: hive.daemon.v1.LaunchErrorDetail
+	(*CreateSessionErrorDetail)(nil),  // 54: hive.daemon.v1.CreateSessionErrorDetail
+	(*InvalidTagDetail)(nil),          // 55: hive.daemon.v1.InvalidTagDetail
+	(*ChangedFile)(nil),               // 56: hive.daemon.v1.ChangedFile
+	(*DiffTarget)(nil),                // 57: hive.daemon.v1.DiffTarget
+	(*ChangesRequest)(nil),            // 58: hive.daemon.v1.ChangesRequest
+	(*CommitInfo)(nil),                // 59: hive.daemon.v1.CommitInfo
+	(*ChangesResponse)(nil),           // 60: hive.daemon.v1.ChangesResponse
+	(*FileDiff)(nil),                  // 61: hive.daemon.v1.FileDiff
+	(*FileDiffsRequest)(nil),          // 62: hive.daemon.v1.FileDiffsRequest
+	(*FileDiffsResponse)(nil),         // 63: hive.daemon.v1.FileDiffsResponse
+	(*BranchesRequest)(nil),           // 64: hive.daemon.v1.BranchesRequest
+	(*BranchesResponse)(nil),          // 65: hive.daemon.v1.BranchesResponse
+	nil,                               // 66: hive.daemon.v1.HealthResponse.SessionsByStateEntry
+	nil,                               // 67: hive.daemon.v1.Session.MetadataEntry
+	nil,                               // 68: hive.daemon.v1.StatusesResponse.StatusesEntry
+	nil,                               // 69: hive.daemon.v1.GitStatusesResponse.StatusesEntry
+	(*timestamppb.Timestamp)(nil),     // 70: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),       // 71: google.protobuf.Duration
 }
 var file_hive_daemon_v1_daemon_proto_depIdxs = []int32{
-	68, // 0: hive.daemon.v1.HelloResponse.started_at:type_name -> google.protobuf.Timestamp
+	70, // 0: hive.daemon.v1.HelloResponse.started_at:type_name -> google.protobuf.Timestamp
 	5,  // 1: hive.daemon.v1.HealthResponse.status_loop:type_name -> hive.daemon.v1.StatusLoopHealth
-	64, // 2: hive.daemon.v1.HealthResponse.sessions_by_state:type_name -> hive.daemon.v1.HealthResponse.SessionsByStateEntry
-	69, // 3: hive.daemon.v1.HealthResponse.uptime:type_name -> google.protobuf.Duration
+	66, // 2: hive.daemon.v1.HealthResponse.sessions_by_state:type_name -> hive.daemon.v1.HealthResponse.SessionsByStateEntry
+	71, // 3: hive.daemon.v1.HealthResponse.uptime:type_name -> google.protobuf.Duration
 	4,  // 4: hive.daemon.v1.HealthResponse.agents:type_name -> hive.daemon.v1.AgentCheck
-	68, // 5: hive.daemon.v1.StatusLoopHealth.last_tick:type_name -> google.protobuf.Timestamp
-	65, // 6: hive.daemon.v1.Session.metadata:type_name -> hive.daemon.v1.Session.MetadataEntry
-	68, // 7: hive.daemon.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	68, // 8: hive.daemon.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
+	70, // 5: hive.daemon.v1.StatusLoopHealth.last_tick:type_name -> google.protobuf.Timestamp
+	67, // 6: hive.daemon.v1.Session.metadata:type_name -> hive.daemon.v1.Session.MetadataEntry
+	70, // 7: hive.daemon.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	70, // 8: hive.daemon.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
 	10, // 9: hive.daemon.v1.ListResponse.sessions:type_name -> hive.daemon.v1.Session
 	10, // 10: hive.daemon.v1.GetResponse.session:type_name -> hive.daemon.v1.Session
 	10, // 11: hive.daemon.v1.CreateResponse.session:type_name -> hive.daemon.v1.Session
@@ -4263,17 +4367,17 @@ var file_hive_daemon_v1_daemon_proto_depIdxs = []int32{
 	10, // 17: hive.daemon.v1.EditTagsResponse.session:type_name -> hive.daemon.v1.Session
 	40, // 18: hive.daemon.v1.LaunchOptionsResponse.repositories:type_name -> hive.daemon.v1.LaunchRepository
 	42, // 19: hive.daemon.v1.StatusesRequest.roots:type_name -> hive.daemon.v1.RootRepoTarget
-	66, // 20: hive.daemon.v1.StatusesResponse.statuses:type_name -> hive.daemon.v1.StatusesResponse.StatusesEntry
-	67, // 21: hive.daemon.v1.GitStatusesResponse.statuses:type_name -> hive.daemon.v1.GitStatusesResponse.StatusesEntry
-	48, // 22: hive.daemon.v1.WindowStatus.panes:type_name -> hive.daemon.v1.PaneStatus
-	49, // 23: hive.daemon.v1.TerminalStatus.windows:type_name -> hive.daemon.v1.WindowStatus
-	55, // 24: hive.daemon.v1.ChangesRequest.target:type_name -> hive.daemon.v1.DiffTarget
-	54, // 25: hive.daemon.v1.ChangesResponse.files:type_name -> hive.daemon.v1.ChangedFile
-	57, // 26: hive.daemon.v1.ChangesResponse.commits:type_name -> hive.daemon.v1.CommitInfo
-	55, // 27: hive.daemon.v1.FileDiffsRequest.target:type_name -> hive.daemon.v1.DiffTarget
-	59, // 28: hive.daemon.v1.FileDiffsResponse.diffs:type_name -> hive.daemon.v1.FileDiff
-	50, // 29: hive.daemon.v1.StatusesResponse.StatusesEntry.value:type_name -> hive.daemon.v1.TerminalStatus
-	47, // 30: hive.daemon.v1.GitStatusesResponse.StatusesEntry.value:type_name -> hive.daemon.v1.GitStatus
+	68, // 20: hive.daemon.v1.StatusesResponse.statuses:type_name -> hive.daemon.v1.StatusesResponse.StatusesEntry
+	69, // 21: hive.daemon.v1.GitStatusesResponse.statuses:type_name -> hive.daemon.v1.GitStatusesResponse.StatusesEntry
+	50, // 22: hive.daemon.v1.WindowStatus.panes:type_name -> hive.daemon.v1.PaneStatus
+	51, // 23: hive.daemon.v1.TerminalStatus.windows:type_name -> hive.daemon.v1.WindowStatus
+	57, // 24: hive.daemon.v1.ChangesRequest.target:type_name -> hive.daemon.v1.DiffTarget
+	56, // 25: hive.daemon.v1.ChangesResponse.files:type_name -> hive.daemon.v1.ChangedFile
+	59, // 26: hive.daemon.v1.ChangesResponse.commits:type_name -> hive.daemon.v1.CommitInfo
+	57, // 27: hive.daemon.v1.FileDiffsRequest.target:type_name -> hive.daemon.v1.DiffTarget
+	61, // 28: hive.daemon.v1.FileDiffsResponse.diffs:type_name -> hive.daemon.v1.FileDiff
+	52, // 29: hive.daemon.v1.StatusesResponse.StatusesEntry.value:type_name -> hive.daemon.v1.TerminalStatus
+	49, // 30: hive.daemon.v1.GitStatusesResponse.StatusesEntry.value:type_name -> hive.daemon.v1.GitStatus
 	0,  // 31: hive.daemon.v1.DaemonService.Hello:input_type -> hive.daemon.v1.HelloRequest
 	2,  // 32: hive.daemon.v1.DaemonService.Health:input_type -> hive.daemon.v1.HealthRequest
 	6,  // 33: hive.daemon.v1.DaemonService.Stop:input_type -> hive.daemon.v1.StopRequest
@@ -4293,35 +4397,37 @@ var file_hive_daemon_v1_daemon_proto_depIdxs = []int32{
 	37, // 47: hive.daemon.v1.SessionService.Risk:input_type -> hive.daemon.v1.RiskRequest
 	39, // 48: hive.daemon.v1.SessionService.LaunchOptions:input_type -> hive.daemon.v1.LaunchOptionsRequest
 	43, // 49: hive.daemon.v1.SessionService.Statuses:input_type -> hive.daemon.v1.StatusesRequest
-	56, // 50: hive.daemon.v1.SessionService.Changes:input_type -> hive.daemon.v1.ChangesRequest
-	60, // 51: hive.daemon.v1.SessionService.FileDiffs:input_type -> hive.daemon.v1.FileDiffsRequest
-	62, // 52: hive.daemon.v1.SessionService.Branches:input_type -> hive.daemon.v1.BranchesRequest
-	45, // 53: hive.daemon.v1.SessionService.GitStatuses:input_type -> hive.daemon.v1.GitStatusesRequest
-	1,  // 54: hive.daemon.v1.DaemonService.Hello:output_type -> hive.daemon.v1.HelloResponse
-	3,  // 55: hive.daemon.v1.DaemonService.Health:output_type -> hive.daemon.v1.HealthResponse
-	7,  // 56: hive.daemon.v1.DaemonService.Stop:output_type -> hive.daemon.v1.StopResponse
-	9,  // 57: hive.daemon.v1.DaemonService.Reload:output_type -> hive.daemon.v1.ReloadResponse
-	12, // 58: hive.daemon.v1.SessionService.List:output_type -> hive.daemon.v1.ListResponse
-	14, // 59: hive.daemon.v1.SessionService.Get:output_type -> hive.daemon.v1.GetResponse
-	16, // 60: hive.daemon.v1.SessionService.Create:output_type -> hive.daemon.v1.CreateResponse
-	18, // 61: hive.daemon.v1.SessionService.CreateFromRequest:output_type -> hive.daemon.v1.CreateFromRequestResponse
-	22, // 62: hive.daemon.v1.SessionService.CreateWithWindows:output_type -> hive.daemon.v1.CreateWithWindowsResponse
-	24, // 63: hive.daemon.v1.SessionService.Rename:output_type -> hive.daemon.v1.RenameResponse
-	26, // 64: hive.daemon.v1.SessionService.SetGroup:output_type -> hive.daemon.v1.SetGroupResponse
-	28, // 65: hive.daemon.v1.SessionService.SetTags:output_type -> hive.daemon.v1.SetTagsResponse
-	30, // 66: hive.daemon.v1.SessionService.EditTags:output_type -> hive.daemon.v1.EditTagsResponse
-	32, // 67: hive.daemon.v1.SessionService.Delete:output_type -> hive.daemon.v1.DeleteResponse
-	34, // 68: hive.daemon.v1.SessionService.Recycle:output_type -> hive.daemon.v1.RecycleResponse
-	36, // 69: hive.daemon.v1.SessionService.Prune:output_type -> hive.daemon.v1.PruneResponse
-	38, // 70: hive.daemon.v1.SessionService.Risk:output_type -> hive.daemon.v1.RiskResponse
-	41, // 71: hive.daemon.v1.SessionService.LaunchOptions:output_type -> hive.daemon.v1.LaunchOptionsResponse
-	44, // 72: hive.daemon.v1.SessionService.Statuses:output_type -> hive.daemon.v1.StatusesResponse
-	58, // 73: hive.daemon.v1.SessionService.Changes:output_type -> hive.daemon.v1.ChangesResponse
-	61, // 74: hive.daemon.v1.SessionService.FileDiffs:output_type -> hive.daemon.v1.FileDiffsResponse
-	63, // 75: hive.daemon.v1.SessionService.Branches:output_type -> hive.daemon.v1.BranchesResponse
-	46, // 76: hive.daemon.v1.SessionService.GitStatuses:output_type -> hive.daemon.v1.GitStatusesResponse
-	54, // [54:77] is the sub-list for method output_type
-	31, // [31:54] is the sub-list for method input_type
+	58, // 50: hive.daemon.v1.SessionService.Changes:input_type -> hive.daemon.v1.ChangesRequest
+	62, // 51: hive.daemon.v1.SessionService.FileDiffs:input_type -> hive.daemon.v1.FileDiffsRequest
+	64, // 52: hive.daemon.v1.SessionService.Branches:input_type -> hive.daemon.v1.BranchesRequest
+	47, // 53: hive.daemon.v1.SessionService.GitStatuses:input_type -> hive.daemon.v1.GitStatusesRequest
+	45, // 54: hive.daemon.v1.SessionService.StartTmux:input_type -> hive.daemon.v1.StartTmuxRequest
+	1,  // 55: hive.daemon.v1.DaemonService.Hello:output_type -> hive.daemon.v1.HelloResponse
+	3,  // 56: hive.daemon.v1.DaemonService.Health:output_type -> hive.daemon.v1.HealthResponse
+	7,  // 57: hive.daemon.v1.DaemonService.Stop:output_type -> hive.daemon.v1.StopResponse
+	9,  // 58: hive.daemon.v1.DaemonService.Reload:output_type -> hive.daemon.v1.ReloadResponse
+	12, // 59: hive.daemon.v1.SessionService.List:output_type -> hive.daemon.v1.ListResponse
+	14, // 60: hive.daemon.v1.SessionService.Get:output_type -> hive.daemon.v1.GetResponse
+	16, // 61: hive.daemon.v1.SessionService.Create:output_type -> hive.daemon.v1.CreateResponse
+	18, // 62: hive.daemon.v1.SessionService.CreateFromRequest:output_type -> hive.daemon.v1.CreateFromRequestResponse
+	22, // 63: hive.daemon.v1.SessionService.CreateWithWindows:output_type -> hive.daemon.v1.CreateWithWindowsResponse
+	24, // 64: hive.daemon.v1.SessionService.Rename:output_type -> hive.daemon.v1.RenameResponse
+	26, // 65: hive.daemon.v1.SessionService.SetGroup:output_type -> hive.daemon.v1.SetGroupResponse
+	28, // 66: hive.daemon.v1.SessionService.SetTags:output_type -> hive.daemon.v1.SetTagsResponse
+	30, // 67: hive.daemon.v1.SessionService.EditTags:output_type -> hive.daemon.v1.EditTagsResponse
+	32, // 68: hive.daemon.v1.SessionService.Delete:output_type -> hive.daemon.v1.DeleteResponse
+	34, // 69: hive.daemon.v1.SessionService.Recycle:output_type -> hive.daemon.v1.RecycleResponse
+	36, // 70: hive.daemon.v1.SessionService.Prune:output_type -> hive.daemon.v1.PruneResponse
+	38, // 71: hive.daemon.v1.SessionService.Risk:output_type -> hive.daemon.v1.RiskResponse
+	41, // 72: hive.daemon.v1.SessionService.LaunchOptions:output_type -> hive.daemon.v1.LaunchOptionsResponse
+	44, // 73: hive.daemon.v1.SessionService.Statuses:output_type -> hive.daemon.v1.StatusesResponse
+	60, // 74: hive.daemon.v1.SessionService.Changes:output_type -> hive.daemon.v1.ChangesResponse
+	63, // 75: hive.daemon.v1.SessionService.FileDiffs:output_type -> hive.daemon.v1.FileDiffsResponse
+	65, // 76: hive.daemon.v1.SessionService.Branches:output_type -> hive.daemon.v1.BranchesResponse
+	48, // 77: hive.daemon.v1.SessionService.GitStatuses:output_type -> hive.daemon.v1.GitStatusesResponse
+	46, // 78: hive.daemon.v1.SessionService.StartTmux:output_type -> hive.daemon.v1.StartTmuxResponse
+	55, // [55:79] is the sub-list for method output_type
+	31, // [31:55] is the sub-list for method input_type
 	31, // [31:31] is the sub-list for extension type_name
 	31, // [31:31] is the sub-list for extension extendee
 	0,  // [0:31] is the sub-list for field type_name
@@ -4342,7 +4448,7 @@ func file_hive_daemon_v1_daemon_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_hive_daemon_v1_daemon_proto_rawDesc), len(file_hive_daemon_v1_daemon_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   68,
+			NumMessages:   70,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

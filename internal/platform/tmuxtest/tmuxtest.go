@@ -46,7 +46,7 @@ func Require(t *testing.T) {
 	}
 
 	if os.Getenv("CI") == "" && serverIsRunning(t) {
-		t.Skip("a tmux server is already running on this machine; the real-tmux tests run in CI or Docker so they cannot reach it")
+		t.Skip("a tmux server is already running on this machine; run the real-tmux tests with `mise run test:tmux` so they cannot reach it")
 	}
 }
 

@@ -27,11 +27,6 @@ const props = defineProps<{
    * known, when both Start and Kill are offered rather than guessing one.
    */
   terminal?: 'running' | 'stopped'
-  /**
-   * A session on a server. Its terminal is started on the server, so Start
-   * is not offered.
-   */
-  remote?: boolean
   /** Host-contributed entries, appended under `extraLabel`. */
   extra?: MenuEntry[]
   extraLabel?: string
@@ -52,7 +47,7 @@ const emit = defineEmits<{
 
 function lifecycleEntries(noun: 'session' | 'terminal'): MenuEntry[] {
   const list: MenuEntry[] = []
-  if (props.terminal !== 'running' && !props.remote) {
+  if (props.terminal !== 'running') {
     list.push({ kind: 'action', id: 'start', label: `Start ${noun}`, icon: IconPlay, testid: 'session-menu-start' })
   }
   if (props.terminal !== 'stopped') {
