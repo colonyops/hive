@@ -297,26 +297,6 @@ func TestImportRefusesAHostileFileWithoutWriting(t *testing.T) {
 	require.ErrorContains(t, err, "limit")
 }
 
-func TestExportWritesAFileThatImports(t *testing.T) {
-	service := appletHarness(t, "radio", "version: 1\ntitle: Radio\n")
-	root := service.catalog.Root()
-	require.NoError(t, os.WriteFile(filepath.Join(root, "radio", "index.html"), []byte("page"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "radio", ".localstorage.json"), []byte("{}"), 0o600))
-
-	preview, err := service.ExportPreview("radio")
-	require.NoError(t, err)
-	assert.Equal(t, "radio.hiveapplet", preview.FileName)
-	assert.Equal(t, []string{".localstorage.json"}, preview.LeftOut)
-
-	dest := filepath.Join(t.TempDir(), preview.FileName)
-	require.NoError(t, service.Export(preview.Token, dest))
-	raw, err := os.ReadFile(dest)
-	require.NoError(t, err)
-	archive, err := applets.Unpack(raw, "")
-	require.NoError(t, err)
-	assert.Equal(t, "radio", archive.Applet.ID)
-}
-
 func TestExportRefusesABuiltinAndAFailureLeavesNoFile(t *testing.T) {
 	service := appletHarness(t, "radio", "version: 1\ntitle: Radio\n")
 	_, err := service.ExportPreview(applets.BuilderID)
@@ -343,8 +323,11 @@ func TestExportWritesWhatThePreviewListedAndNothingAddedAfter(t *testing.T) {
 	service := appletHarness(t, "radio", "version: 1\ntitle: Radio\n")
 	dir := filepath.Join(service.catalog.Root(), "radio")
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte("<p>hi"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".localstorage.json"), []byte("{}"), 0o600))
 	preview, err := service.ExportPreview("radio")
 	require.NoError(t, err)
+	assert.Equal(t, "radio.hiveapplet", preview.FileName)
+	assert.Equal(t, []string{".localstorage.json"}, preview.LeftOut)
 
 	// A running page writes while the save dialog is open.
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "session-dump.json"), []byte("secret"), 0o600))
@@ -356,6 +339,7 @@ func TestExportWritesWhatThePreviewListedAndNothingAddedAfter(t *testing.T) {
 	require.NoError(t, err)
 	archive, err := applets.Unpack(raw, "")
 	require.NoError(t, err)
+	assert.Equal(t, "radio", archive.Applet.ID)
 	paths := make([]string, 0, len(archive.Files))
 	for _, file := range archive.Files {
 		paths = append(paths, file.Path)
@@ -365,8 +349,10 @@ func TestExportWritesWhatThePreviewListedAndNothingAddedAfter(t *testing.T) {
 
 	require.ErrorContains(t, service.Export(preview.Token, dest), "no longer waiting", "a token works once")
 
+	require.NoError(t, os.Remove(filepath.Join(dir, ".localstorage.json")))
 	preview, err = service.ExportPreview("radio")
 	require.NoError(t, err)
+	assert.NotNil(t, preview.LeftOut, "the frontend reads its length")
 	service.CancelExport(preview.Token)
 	require.ErrorContains(t, service.Export(preview.Token, dest), "no longer waiting")
 }

@@ -56,12 +56,6 @@ func TestAppletAssetsGiveAPageNoCORS(t *testing.T) {
 	assert.Equal(t, "no-store", response.Header().Get("Cache-Control"))
 }
 
-func TestAppletAssetsLetTheOpaqueFrameLoadItsModules(t *testing.T) {
-	response := serveApplet(t, "/__applet/pong/game.js")
-	require.Equal(t, http.StatusOK, response.Code)
-	assert.Equal(t, "null", response.Header().Get("Access-Control-Allow-Origin"))
-}
-
 func TestAppletAssetsDecodeThePathOnce(t *testing.T) {
 	response := serveApplet(t, "/__applet/pong/a%2520b.js")
 	require.Equal(t, http.StatusOK, response.Code)
@@ -78,6 +72,7 @@ func TestAppletDataCrossesOnlyToThatAppletsOwnPages(t *testing.T) {
 	source := fakeAppletAssets{
 		"pong/config.json": {Name: "config.json", ContentType: "application/json", Body: []byte("{}")},
 		"pong/game.MJS":    {Name: "game.MJS", ContentType: "text/javascript", Body: []byte("code")},
+		"pong/game.js":     {Name: "game.js", ContentType: "text/javascript", Body: []byte("code")},
 	}
 	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 	tests := []struct {
@@ -87,7 +82,6 @@ func TestAppletDataCrossesOnlyToThatAppletsOwnPages(t *testing.T) {
 		want    string
 	}{
 		{"its own page", "/__applet/pong/config.json", "wails://example.com/__applet/pong/index.html", "null"},
-		{"only the origin", "/__applet/pong/config.json", "http://example.com/", ""},
 		{"a foreign page", "/__applet/pong/config.json", "http://127.0.0.1:50399/evil.html", ""},
 		{"a foreign page with a matching path", "/__applet/pong/config.json", "https://evil.example/__applet/pong/x.html", ""},
 		{"another applet", "/__applet/pong/config.json", "wails://example.com/__applet/other/index.html", ""},
@@ -95,6 +89,7 @@ func TestAppletDataCrossesOnlyToThatAppletsOwnPages(t *testing.T) {
 		{"the app itself by a path", "/__applet/pong/config.json", "wails://example.com/settings", ""},
 		{"no referer", "/__applet/pong/config.json", "", ""},
 		{"a module, which sends no referer", "/__applet/pong/game.MJS", "", "null"},
+		{"a script the opaque frame loads", "/__applet/pong/game.js", "", "null"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

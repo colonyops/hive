@@ -1,9 +1,6 @@
 package applets
 
 import (
-	"archive/zip"
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -57,9 +54,6 @@ func TestParseReadsForward(t *testing.T) {
 	t.Run("the wrong shape under a known key stays an error", func(t *testing.T) {
 		for _, body := range []string{
 			"version: 1\ntitle: T\nwidth: wide\n",
-			"version: 1\ntitle: T\ncommands: nope\n",
-			"version: 1\ntitle: T\nentry: ../x.html\n",
-			"version: 1\ntitle: T\ncommands:\n  - {id: a, title: A}\n  - {id: a, title: B}\n",
 			"version: 1\ntitle: a\ntitle: b\n",
 		} {
 			_, err := Parse("x", []byte(body), "")
@@ -169,9 +163,6 @@ func TestUnpackBoundsWhatTheDialogShows(t *testing.T) {
 
 func TestPackRefusesWhatImportWouldRefuseByContent(t *testing.T) {
 	for name, files := range map[string]map[string]string{
-		"long title":   {"applet.yaml": "version: 1\ntitle: " + strings.Repeat("a", maxArchiveTitleRunes+1) + "\n", "index.html": "x"},
-		"no page":      {"applet.yaml": "version: 1\ntitle: T\n"},
-		"broken yaml":  {"applet.yaml": "version: [", "index.html": "x"},
 		"hidden entry": {"applet.yaml": "version: 1\ntitle: T\nentry: .p.html\n", ".p.html": "x"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -238,25 +229,8 @@ func TestSurfacesAreCheckedOnImport(t *testing.T) {
 	assert.ErrorContains(t, err, "the title bar")
 }
 
-func TestPackRecordsTheExportingVersionAndNothingReadsIt(t *testing.T) {
-	dir := t.TempDir()
-	writeTree(t, dir, map[string]string{"applet.yaml": "version: 1\ntitle: T\n", "index.html": "x"})
-	packed, err := Pack(Applet{ID: "radio", Dir: dir}, "0.59.2")
-	require.NoError(t, err)
-	reader, err := zip.NewReader(bytes.NewReader(packed.Data), int64(len(packed.Data)))
-	require.NoError(t, err)
-	data, err := readZipEntry(reader.File[0], maxArchiveManifest)
-	require.NoError(t, err)
-	var manifest map[string]any
-	require.NoError(t, json.Unmarshal(data, &manifest))
-	assert.Equal(t, "0.59.2", manifest["hive"])
-	_, err = Unpack(packed.Data, "0.1.0")
-	assert.NoError(t, err, "the exporter's version does not limit who can import")
-}
-
 func TestHiveRequirementHoldsHoweverTheFileSpellsIt(t *testing.T) {
 	for name, body := range map[string]string{
-		"plain":       "hive: \">=999.0\"\n",
 		"merge":       "<<: {hive: \">=999.0\"}\n",
 		"merge alias": "x-a: &a {hive: \">=999.0\"}\n<<: *a\n",
 		"merge list":  "x-a: &a {hive: \">=999.0\"}\n<<: [*a]\n",

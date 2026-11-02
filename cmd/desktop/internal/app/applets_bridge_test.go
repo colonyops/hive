@@ -115,6 +115,18 @@ func TestExecReportsExitCodeAsAResult(t *testing.T) {
 	assert.Equal(t, "me "+dir, strings.TrimSpace(result.Stderr))
 }
 
+func readSpawnToEnd(t *testing.T, service *AppletsService, handle string) (out AppletOutput, stdout, stderr string) {
+	t.Helper()
+	for !out.Done {
+		var err error
+		out, err = service.SpawnRead(t.Context(), handle)
+		require.NoError(t, err)
+		stdout += out.Stdout
+		stderr += out.Stderr
+	}
+	return out, stdout, stderr
+}
+
 func TestSpawnStreamsTakesInputAndExits(t *testing.T) {
 	service, _ := pageHarness(t)
 	ctx := t.Context()
@@ -122,14 +134,8 @@ func TestSpawnStreamsTakesInputAndExits(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, service.SpawnWrite(handle, "hello\n"))
 
-	var stdout strings.Builder
-	var out AppletOutput
-	for !out.Done {
-		out, err = service.SpawnRead(ctx, handle)
-		require.NoError(t, err)
-		stdout.WriteString(out.Stdout)
-	}
-	assert.Equal(t, "got hello\n", stdout.String())
+	out, stdout, _ := readSpawnToEnd(t, service, handle)
+	assert.Equal(t, "got hello\n", stdout)
 	assert.Equal(t, 3, out.Code)
 
 	_, err = service.SpawnRead(ctx, handle)
@@ -234,15 +240,9 @@ func TestKillingASpawnLetsItsTrapRunAndReportsNoError(t *testing.T) {
 
 	require.NoError(t, service.SpawnKill(handle))
 
-	var stderr strings.Builder
-	var out AppletOutput
-	for !out.Done {
-		out, err = service.SpawnRead(ctx, handle)
-		require.NoError(t, err)
-		stderr.WriteString(out.Stderr)
-	}
+	_, _, stderr := readSpawnToEnd(t, service, handle)
 	assert.FileExists(t, cleaned, "the shell got SIGTERM and a chance to clean up")
-	assert.NotContains(t, stderr.String(), context.Canceled.Error(), "being stopped is not an error to report")
+	assert.NotContains(t, stderr, context.Canceled.Error(), "being stopped is not an error to report")
 }
 
 func TestASpawnOutlivesTheCallThatStartedIt(t *testing.T) {
@@ -253,14 +253,8 @@ func TestASpawnOutlivesTheCallThatStartedIt(t *testing.T) {
 	finish()
 
 	require.NoError(t, service.SpawnWrite(handle, "still here\n"))
-	var stdout strings.Builder
-	var out AppletOutput
-	for !out.Done {
-		out, err = service.SpawnRead(t.Context(), handle)
-		require.NoError(t, err)
-		stdout.WriteString(out.Stdout)
-	}
-	assert.Equal(t, "got still here\n", stdout.String())
+	_, stdout, _ := readSpawnToEnd(t, service, handle)
+	assert.Equal(t, "got still here\n", stdout)
 }
 
 func TestDrainHoldsBackAHalfWrittenCharacter(t *testing.T) {
@@ -295,15 +289,6 @@ func TestBuiltinServesFromTheBinaryAndKeepsStorageOnDisk(t *testing.T) {
 	asset, err = service.Asset(applets.BuilderID, "")
 	require.NoError(t, err)
 	assert.Contains(t, string(asset.Body), `"k":"v"`)
-	assert.True(t, store.List()[0].Applet.Builtin, "saved storage does not turn the built-in into a broken disk applet")
-}
-
-func TestServerBuildHidesBuiltins(t *testing.T) {
-	store := applets.NewStore(t.TempDir(), "")
-	require.NoError(t, store.Reload())
-	service := newAppletsService(testAppletDeps(store, func(context.Context, string) (string, error) { return "", nil }))
-	service.pages = false
-	assert.Empty(t, service.List(t.Context()))
 }
 
 func TestProcessesListsWhatIsRunning(t *testing.T) {

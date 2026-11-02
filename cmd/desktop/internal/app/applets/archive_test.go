@@ -149,6 +149,8 @@ func TestPackWritesTheFormatVersion(t *testing.T) {
 	var manifest archiveManifest
 	require.NoError(t, json.Unmarshal(data, &manifest))
 	assert.Equal(t, archiveManifest{Format: ArchiveFormat, ID: "radio", Hive: "1.2.3"}, manifest)
+	_, err = Unpack(packed.Data, "0.1.0")
+	assert.NoError(t, err, "the exporter's version does not limit who can import")
 }
 
 func TestPackRefusesWhatImportWouldRefuse(t *testing.T) {
@@ -194,7 +196,6 @@ func TestUnpackRefusesHostileFiles(t *testing.T) {
 		"id with a path":         {[]zipEntry{{name: ArchiveManifestName, body: `{"format":1,"id":"../evil"}`}, {name: "files/applet.yaml", body: archiveYAML}}, "invalid applet id"},
 		"no applet.yaml":         {[]zipEntry{manifestEntry("radio"), {name: "files/index.html", body: "x"}}, "no applet.yaml"},
 		"yaml wrong shape":       {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: archiveYAML + "titlebar: nope\n"}}, "not valid"},
-		"yaml not yaml":          {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: "{{{"}}, "not valid"},
 		"missing entry page":     {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: archiveYAML}}, "no page"},
 		"long title":             {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: "version: 1\ntitle: " + strings.Repeat("t", maxArchiveTitleRunes+1) + "\n"}, {name: "files/index.html"}}, "title is longer"},
 	} {
@@ -203,12 +204,6 @@ func TestUnpackRefusesHostileFiles(t *testing.T) {
 			require.ErrorContains(t, err, tc.want)
 		})
 	}
-	t.Run("title bar page missing", func(t *testing.T) {
-		_, err := Unpack(buildZip(t, manifestEntry("radio"),
-			zipEntry{name: "files/applet.yaml", body: archiveYAML + "titlebar:\n  entry: bar.html\n"},
-			zipEntry{name: "files/index.html"}), "")
-		require.ErrorContains(t, err, "no page")
-	})
 	t.Run("not a zip", func(t *testing.T) {
 		_, err := Unpack([]byte("just some text"), "")
 		require.ErrorContains(t, err, "not a Hive applet file")

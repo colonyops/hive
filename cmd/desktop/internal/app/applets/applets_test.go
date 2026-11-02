@@ -33,7 +33,7 @@ func TestParseDefaults(t *testing.T) {
 
 func TestParseRefuses(t *testing.T) {
 	for name, body := range map[string]string{
-		"wrong version": "version: 2\ntitle: T\n",
+		"wrong version": "version: 0\ntitle: T\n",
 		"no title":      "version: 1\n",
 		"wrong shape":   "version: 1\ntitle: T\ntitlebar: nope\n",
 		"entry outside": "version: 1\ntitle: T\nentry: ../outside.html\n",
@@ -74,6 +74,8 @@ func TestStoreKeepsLastGoodAndReportsTheError(t *testing.T) {
 	applet, ok := store.Get("thing")
 	require.True(t, ok)
 	assert.Equal(t, filepath.Join(root, "thing"), applet.Dir)
+	revision := onDisk(store)[0].Revision
+	require.NotZero(t, revision)
 
 	write(t, root, "thing", "version: [")
 	require.NoError(t, store.Reload())
@@ -83,19 +85,7 @@ func TestStoreKeepsLastGoodAndReportsTheError(t *testing.T) {
 	assert.Equal(t, "Thing", entries[0].Applet.Title)
 	_, ok = store.Get("thing")
 	assert.True(t, ok, "the last good file keeps running")
-}
-
-func TestABrokenFileKeepsTheRevisionSoARunningPageStaysUp(t *testing.T) {
-	root := t.TempDir()
-	store := NewStore(root, "")
-	write(t, root, "thing", minimal)
-	require.NoError(t, store.Reload())
-	before := onDisk(store)[0].Revision
-	require.NotZero(t, before)
-
-	write(t, root, "thing", "version: [")
-	require.NoError(t, store.Reload())
-	assert.Equal(t, before, onDisk(store)[0].Revision)
+	assert.Equal(t, revision, entries[0].Revision, "a running page stays up")
 }
 
 func TestRevisionFollowsPagesButNotData(t *testing.T) {

@@ -364,10 +364,6 @@ func TestAppletsPromptWithoutABriefLeavesTheTaskOpen(t *testing.T) {
 func TestAppletsPromptSchemaParses(t *testing.T) {
 	prompt, err := newTestService(t).Render("applets", Input{})
 	require.NoError(t, err)
-	_, rest, found := strings.Cut(prompt.Text, "```yaml\n")
-	require.True(t, found)
-	body, _, found := strings.Cut(rest, "```")
-	require.True(t, found)
-	_, err = applets.Parse("containers", []byte(body), "")
+	_, err = applets.Parse("containers", []byte(fencedBlock(t, prompt.Text, "yaml")), "")
 	require.NoError(t, err)
 }
