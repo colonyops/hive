@@ -6,6 +6,7 @@ package servers
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"io"
 	"net"
@@ -24,11 +25,12 @@ import (
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
-// ReadTimeout bounds each read-only call on a connection to a server, so a
-// slow server cannot block a list of local sessions.
+// ReadTimeout is the default bound on each read-only call on a connection to a
+// server, so a slow server cannot block a list of local sessions.
 const ReadTimeout = 10 * time.Second
 
-// ConnectTimeout bounds a read-only call that must first connect. ssh gives up
+// ConnectTimeout is the default bound on a read-only call that must first
+// connect. ssh gives up
 // on a dead server in 10s by itself (ConnectTimeout in sshdial), so this limit
 // matters for a healthy server on a slow link and for a stuck daemon.
 const ConnectTimeout = 30 * time.Second
@@ -146,6 +148,15 @@ type Server struct {
 	status Status
 }
 
+func clientLimits(cfg config.ServerConfig) daemonclient.Options {
+	return daemonclient.Options{
+		ReadTimeout:    cmp.Or(cfg.ReadTimeout, ReadTimeout),
+		ConnectTimeout: cmp.Or(cfg.ConnectTimeout, ConnectTimeout),
+		RiskTimeout:    RiskTimeout,
+		DeleteTimeout:  DeleteTimeout,
+	}
+}
+
 func newServer(logger zerolog.Logger, cfg config.ServerConfig, clientVersion string, dial Dialer) *Server {
 	s := &Server{
 		config:        cfg,
@@ -153,24 +164,20 @@ func newServer(logger zerolog.Logger, cfg config.ServerConfig, clientVersion str
 		stderr:        &tailBuffer{},
 		status:        Status{Name: cfg.Name, SSH: cfg.SSH, State: server.StateConnecting},
 	}
-	s.client = daemonclient.New(daemonclient.Options{
-		Logger: logger.With().Str("server", cfg.Name).Logger(),
-		// No AutoStart: dial-stdio on the server starts its daemon.
-		Dialer: func(ctx context.Context) (net.Conn, error) {
-			// An error from this connection must not show a line from the last
-			// one.
-			s.stderr.reset()
-			return dial(ctx, cfg, s.stderr)
-		},
-		Name:           cfg.Name,
-		FailureDetail:  s.stderr.lastLine,
-		ReadTimeout:    ReadTimeout,
-		ConnectTimeout: ConnectTimeout,
-		RiskTimeout:    RiskTimeout,
-		DeleteTimeout:  DeleteTimeout,
-		CheckProtocol:  true,
-		ClientVersion:  clientVersion,
-	})
+	options := clientLimits(cfg)
+	options.Logger = logger.With().Str("server", cfg.Name).Logger()
+	// No AutoStart: dial-stdio on the server starts its daemon.
+	options.Dialer = func(ctx context.Context) (net.Conn, error) {
+		// An error from this connection must not show a line from the last
+		// one.
+		s.stderr.reset()
+		return dial(ctx, cfg, s.stderr)
+	}
+	options.Name = cfg.Name
+	options.FailureDetail = s.stderr.lastLine
+	options.CheckProtocol = true
+	options.ClientVersion = clientVersion
+	s.client = daemonclient.New(options)
 	return s
 }
 

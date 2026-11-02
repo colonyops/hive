@@ -10,6 +10,7 @@ import (
 )
 
 func TestRetentionPolicyAppliesActionRunsOverTheDefaults(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, int64(queries.DefaultActionRunLimit), retentionPolicy(settings.RetentionSettings{}).ActionRunLimit)
 	assert.Equal(t, int64(7), retentionPolicy(settings.RetentionSettings{ActionRuns: 7}).ActionRunLimit)
 	assert.Equal(t, queries.DefaultRetentionPolicy().JobLimit, retentionPolicy(settings.RetentionSettings{ActionRuns: 7}).JobLimit)

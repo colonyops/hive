@@ -45,6 +45,14 @@ class FakeContext {
 const sizes = new Map<string, { width: number; height: number }>()
 const decoded: string[] = []
 
+class FakeImageData {
+  constructor(
+    readonly data: Uint8ClampedArray,
+    readonly width: number,
+    readonly height: number,
+  ) {}
+}
+
 async function fakeCreateImageBitmap(source: Blob | ImageData): Promise<FakeBitmap> {
   const label = source instanceof Blob ? await source.text() : `raw:${Array.from(source.data.slice(0, 8)).join(',')}`
   decoded.push(label)
@@ -125,6 +133,9 @@ describe('installKittyGraphics', () => {
     sizes.clear()
     decoded.length = 0
     vi.stubGlobal('createImageBitmap', fakeCreateImageBitmap)
+    // happy-dom's ImageData checks instanceof against the Uint8ClampedArray of the
+    // outer realm, which the array kittyDecode builds under the vmThreads pool is not.
+    vi.stubGlobal('ImageData', FakeImageData)
   })
 
   afterEach(() => {

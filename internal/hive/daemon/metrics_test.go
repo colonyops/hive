@@ -14,6 +14,7 @@ import (
 )
 
 func TestMetricsCountsRPCs(t *testing.T) {
+	t.Parallel()
 	r := runDaemon(t, t.TempDir(), false)
 	client := httpClient(r.socket)
 

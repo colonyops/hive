@@ -21,6 +21,7 @@ import (
 // same renderer the executors use (missingkey=error) over the two payload
 // shapes a pr/issue action can be invoked against.
 func TestDefaultActionsYAMLParsesValidatesAndRenders(t *testing.T) {
+	t.Parallel()
 	parsed, err := parseCatalog([]byte(defaultActionsYAML))
 	require.NoError(t, err)
 	require.NotEmpty(t, parsed.Actions)
@@ -83,6 +84,7 @@ func TestDefaultActionsYAMLParsesValidatesAndRenders(t *testing.T) {
 }
 
 func TestSeedDefaultsIfMissingInstallsExactBytesOnce(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "nested", "actions.yml")
 	seeded, err := SeedDefaultsIfMissing(path)
 	require.NoError(t, err)
@@ -104,6 +106,7 @@ func TestSeedDefaultsIfMissingInstallsExactBytesOnce(t *testing.T) {
 }
 
 func TestSeedDefaultsIfMissingNeverTouchesPresentFiles(t *testing.T) {
+	t.Parallel()
 	for _, original := range []string{"", "version: nope\nactions: ["} {
 		t.Run("present", func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "actions.yml")
@@ -119,6 +122,7 @@ func TestSeedDefaultsIfMissingNeverTouchesPresentFiles(t *testing.T) {
 }
 
 func TestSeedDefaultsIfMissingExclusiveConcurrentInstallAndCleansTemps(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "actions.yml")
 	var wg sync.WaitGroup
@@ -156,6 +160,7 @@ func TestSeedDefaultsIfMissingExclusiveConcurrentInstallAndCleansTemps(t *testin
 }
 
 func TestSeedDefaultsIfMissingReportsDirectoryFailure(t *testing.T) {
+	t.Parallel()
 	parent := filepath.Join(t.TempDir(), "not-a-directory")
 	require.NoError(t, os.WriteFile(parent, []byte("x"), 0o600))
 	seeded, err := SeedDefaultsIfMissing(filepath.Join(parent, "actions.yml"))

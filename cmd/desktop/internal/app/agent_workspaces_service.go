@@ -69,6 +69,9 @@ const (
 type AgentWorkspacesService struct {
 	store     *agentws.Store
 	terminals *tmuxcc.Manager
+	// earlyExitWindow is a field so a test that expects an early exit can allow
+	// for a loaded machine.
+	earlyExitWindow time.Duration
 	// tx spans the session and schedule aggregates a workspace delete clears.
 	tx        transactionRunner
 	sessions  *stores.AgentSessionStore
@@ -169,6 +172,7 @@ func newAgentWorkspacesService(d AgentWorkspacesDeps) *AgentWorkspacesService {
 	return &AgentWorkspacesService{
 		store:           d.Store,
 		terminals:       d.Terminals,
+		earlyExitWindow: earlyExitWindow,
 		tx:              d.Stores,
 		sessions:        d.Stores.AgentSessions,
 		schedules:       d.Stores.Schedules,
@@ -1681,7 +1685,7 @@ func firstActiveWindow(windows []tmuxcc.Window) tmuxcc.Window {
 // its own. Unlike ptyterm's Exited event this carries no reason: tmux simply
 // stops answering has-session once its initial pane's command has ended.
 func (s *AgentWorkspacesService) awaitEarlyExit(ctx context.Context, name string) bool {
-	deadline := time.Now().Add(earlyExitWindow)
+	deadline := time.Now().Add(s.earlyExitWindow)
 	for {
 		exists, err := s.terminals.HasSession(ctx, name)
 		if err != nil || !exists {

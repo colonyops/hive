@@ -54,7 +54,8 @@ func startDaemon(t *testing.T, dataDir string, opts daemonOpts) (running, error)
 	r := running{done: make(chan error, 1), cancel: cancel}
 	go func() {
 		r.done <- daemon.Run(ctx, daemon.Options{
-			Config: cfg,
+			Config:                 cfg,
+			OwnershipCheckInterval: 20 * time.Millisecond,
 			Ports: hive.Ports{
 				Executor:   opts.exec,
 				Mux:        hivetest.Mux{},
@@ -111,6 +112,7 @@ func httpClient(socket string) *http.Client {
 }
 
 func TestRunServesHelloOnAPrivateSocket(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	d := runDaemon(t, dataDir, false)
 
@@ -132,6 +134,7 @@ func TestRunServesHelloOnAPrivateSocket(t *testing.T) {
 }
 
 func TestRunRefusesASecondInstance(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	runDaemon(t, dataDir, false)
 
@@ -143,6 +146,7 @@ func TestRunRefusesASecondInstance(t *testing.T) {
 }
 
 func TestRunWithWaitLockStartsWhenTheFirstExits(t *testing.T) {
+	t.Parallel()
 	dataDir := t.TempDir()
 	first := runDaemon(t, dataDir, false)
 
@@ -178,6 +182,7 @@ func TestRunWithWaitLockStartsWhenTheFirstExits(t *testing.T) {
 }
 
 func TestRunRemovesTheSocketOnExit(t *testing.T) {
+	t.Parallel()
 	d := runDaemon(t, t.TempDir(), false)
 	d.cancel()
 	require.NoError(t, <-d.done)
@@ -198,7 +203,7 @@ func waitForExit(t *testing.T, d running) {
 }
 
 func TestRunStopsWhenItsDataDirIsDeleted(t *testing.T) {
-	daemon.SetOwnershipCheckInterval(t, 20*time.Millisecond)
+	t.Parallel()
 	dataDir := t.TempDir()
 	d := runDaemon(t, dataDir, false)
 
@@ -208,7 +213,7 @@ func TestRunStopsWhenItsDataDirIsDeleted(t *testing.T) {
 }
 
 func TestRunLeavesASocketThatReplacedItsOwn(t *testing.T) {
-	daemon.SetOwnershipCheckInterval(t, 20*time.Millisecond)
+	t.Parallel()
 	d := runDaemon(t, t.TempDir(), false)
 
 	require.NoError(t, os.Remove(d.socket))

@@ -54,6 +54,7 @@ func freeAddr(t *testing.T) string {
 
 // An hour-long poll proves the free-port path never reaches the wait.
 func TestAwaitListenerBindsAFreePortImmediately(t *testing.T) {
+	t.Parallel()
 	addr := freeAddr(t)
 
 	listener, err := awaitListener(t.Context(), addr, time.Hour, zerolog.Nop())
@@ -67,6 +68,7 @@ func TestAwaitListenerBindsAFreePortImmediately(t *testing.T) {
 // it is the proxy that takes over when the live one stops, so the worktrees
 // pointed at the port keep working without anyone restarting anything.
 func TestAwaitListenerTakesOverWhenThePortIsReleased(t *testing.T) {
+	t.Parallel()
 	addr, release := occupant(t, true)
 	defer release()
 
@@ -86,6 +88,7 @@ func TestAwaitListenerTakesOverWhenThePortIsReleased(t *testing.T) {
 // something that is not a proxy is the failure the singleton exists to prevent,
 // and no amount of waiting fixes it.
 func TestAwaitListenerRejectsAForeignOccupant(t *testing.T) {
+	t.Parallel()
 	addr, release := occupant(t, false)
 	defer release()
 
@@ -96,6 +99,7 @@ func TestAwaitListenerRejectsAForeignOccupant(t *testing.T) {
 
 // Ctrl-C while standing by has to exit, not wait for a port that may never free.
 func TestAwaitListenerStopsWhenInterrupted(t *testing.T) {
+	t.Parallel()
 	addr, release := occupant(t, true)
 	defer release()
 

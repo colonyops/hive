@@ -12,6 +12,7 @@ import (
 )
 
 func TestAssessFileCmd_EmitsExpectedJSONShape(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	flags := &Flags{}
@@ -47,6 +48,7 @@ func TestAssessFileCmd_EmitsExpectedJSONShape(t *testing.T) {
 }
 
 func TestAssessFileCmd_MissingArgErrors(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	flags := &Flags{}

@@ -25,6 +25,7 @@ func testSettingsStore(t *testing.T) *settings.Store {
 }
 
 func TestWebhookServiceInfoWithoutListener(t *testing.T) {
+	t.Parallel()
 	service := newWebhookService(WebhookDeps{Settings: testSettingsStore(t), Captures: nil, Listener: nil, Host: "127.0.0.1", Port: 24483})
 	running, port := service.Endpoint(t.Context())
 	assert.False(t, running)
@@ -33,9 +34,8 @@ func TestWebhookServiceInfoWithoutListener(t *testing.T) {
 }
 
 func TestWebhookServiceCapture(t *testing.T) {
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	captures := stores.New(db, stores.Options{}).WebhookCaptures
 	service := newWebhookService(WebhookDeps{Settings: testSettingsStore(t), Captures: captures, Listener: nil, Host: "127.0.0.1", Port: 24483})
 

@@ -13,6 +13,7 @@ import (
 // ── DecodeActionItem ─────────────────────────────────────────────────────────
 
 func TestDecodeActionItem_IDIsAStringOrNumber(t *testing.T) {
+	t.Parallel()
 	payload := []byte(`{"id":"pr-1","kind":"PR","title":"Fix it"}`)
 	item, err := DecodeActionItem(payload, "ext-1")
 	require.NoError(t, err)
@@ -29,6 +30,7 @@ func TestDecodeActionItem_IDIsAStringOrNumber(t *testing.T) {
 }
 
 func TestDecodeActionItem_MissingOrBlankIDFillsFromExternalID(t *testing.T) {
+	t.Parallel()
 	payload := []byte(`{"kind":"PR","title":"Fix it"}`)
 	item, err := DecodeActionItem(payload, "ext-42")
 	require.NoError(t, err)
@@ -51,6 +53,7 @@ func TestDecodeActionItem_MissingOrBlankIDFillsFromExternalID(t *testing.T) {
 }
 
 func TestDecodeActionItem_KindAbsentFallsBackToDefault(t *testing.T) {
+	t.Parallel()
 	payload := []byte(`{"id":"pr-1","title":"Fix it"}`)
 	item, err := DecodeActionItem(payload, "ext-1")
 	require.NoError(t, err)
@@ -63,6 +66,7 @@ func TestDecodeActionItem_KindAbsentFallsBackToDefault(t *testing.T) {
 }
 
 func TestDecodeActionItem_NonObjectPayloadPassesThroughUntouched(t *testing.T) {
+	t.Parallel()
 	for _, payload := range [][]byte{
 		[]byte(`[1,2,3]`),
 		[]byte(`"just a string"`),
@@ -78,6 +82,7 @@ func TestDecodeActionItem_NonObjectPayloadPassesThroughUntouched(t *testing.T) {
 }
 
 func TestDecodeActionItem_GrabBagFieldsPassThroughUnmodified(t *testing.T) {
+	t.Parallel()
 	payload := []byte(`{"id":"pr-1","kind":"PR","branch":"feat/x","prompt":"do it","reason":"flaky"}`)
 	item, err := DecodeActionItem(payload, "ext-1")
 	require.NoError(t, err)
@@ -97,6 +102,7 @@ func probeLaunchSessionAction(id, repoTemplate string, appliesTo ...string) acti
 }
 
 func TestActionApplicability_LaunchSessionWithRepoTemplateSatisfied(t *testing.T) {
+	t.Parallel()
 	action := probeLaunchSessionAction("deploy", "{{ .Payload.repo }}", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{"repo":"acme/site"}`)}
 
@@ -106,6 +112,7 @@ func TestActionApplicability_LaunchSessionWithRepoTemplateSatisfied(t *testing.T
 }
 
 func TestActionApplicability_PayloadMissingRepoIsRenderErrorAndInapplicable(t *testing.T) {
+	t.Parallel()
 	action := probeLaunchSessionAction("deploy", "{{ .Payload.repo }}", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{"title":"no repo key"}`)}
 
@@ -115,6 +122,7 @@ func TestActionApplicability_PayloadMissingRepoIsRenderErrorAndInapplicable(t *t
 }
 
 func TestActionApplicability_BareTemplateOverBlankRepoIsInapplicable(t *testing.T) {
+	t.Parallel()
 	action := probeLaunchSessionAction("deploy", "{{ .Payload.repo }}", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{"repo":""}`)}
 
@@ -129,6 +137,7 @@ func TestActionApplicability_BareTemplateOverBlankRepoIsInapplicable(t *testing.
 // clone target is broken. The broken target fails visibly at run time
 // instead of silently hiding the action.
 func TestActionApplicability_LiteralWrappedEmptyRepoStaysApplicableByDesign(t *testing.T) {
+	t.Parallel()
 	action := probeLaunchSessionAction("deploy", "https://github.com/{{ .Payload.repo }}.git", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{"repo":""}`)}
 
@@ -138,6 +147,7 @@ func TestActionApplicability_LiteralWrappedEmptyRepoStaysApplicableByDesign(t *t
 }
 
 func TestActionApplicability_WhitespaceOnlyRenderIsInapplicable(t *testing.T) {
+	t.Parallel()
 	action := probeLaunchSessionAction("deploy", "   {{ .Payload.repo }}   ", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{"repo":""}`)}
 
@@ -147,6 +157,7 @@ func TestActionApplicability_WhitespaceOnlyRenderIsInapplicable(t *testing.T) {
 }
 
 func TestActionApplicability_InteractiveLaunchSessionImposesNoRequirement(t *testing.T) {
+	t.Parallel()
 	action := probeLaunchSessionAction("launch", "", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{}`)}
 
@@ -156,6 +167,7 @@ func TestActionApplicability_InteractiveLaunchSessionImposesNoRequirement(t *tes
 }
 
 func TestActionApplicability_ShellAndPublishMessageImposeNoRequirement(t *testing.T) {
+	t.Parallel()
 	shell := actions.Action{ID: "notify", Type: "shell", AppliesTo: []string{"pr"}, ShowInDetail: true, Config: &actions.ShellConfig{CommandTemplate: "{{ .Payload.repo }}"}}
 	publish := actions.Action{ID: "publish", Type: "publish-message", AppliesTo: []string{"pr"}, ShowInDetail: true, Config: &actions.PublishMessageConfig{MessageTemplate: "{{ .Payload.repo }}", Topic: "topic"}}
 	// Payload deliberately lacks "repo" — a bare template referencing it
@@ -173,6 +185,7 @@ func TestActionApplicability_ShellAndPublishMessageImposeNoRequirement(t *testin
 }
 
 func TestActionApplicability_AppliesToMatchingIsCaseInsensitive(t *testing.T) {
+	t.Parallel()
 	action := probeLaunchSessionAction("deploy", "", "pr")
 	item := DecodedActionItem{ID: "1", Kind: "PR", Payload: []byte(`{}`)}
 
@@ -186,6 +199,7 @@ func TestActionApplicability_AppliesToMatchingIsCaseInsensitive(t *testing.T) {
 }
 
 func TestActionApplicability_EmptyAppliesToMatchesAnyKind(t *testing.T) {
+	t.Parallel()
 	action := probeLaunchSessionAction("deploy", "", "pr")
 	action.AppliesTo = nil
 	item := DecodedActionItem{ID: "1", Kind: "anything", Payload: []byte(`{}`)}
@@ -200,6 +214,7 @@ func TestActionApplicability_EmptyAppliesToMatchesAnyKind(t *testing.T) {
 // one scoped to the default kind (case-insensitively, so a hand-written
 // "item" works), while staying out of scope for unrelated kinds.
 func TestActionApplicability_UntypedItemIsTargetableByDefaultKind(t *testing.T) {
+	t.Parallel()
 	item, err := DecodeActionItem([]byte(`{"id":"x","title":"no kind here"}`), "ext-1")
 	require.NoError(t, err)
 

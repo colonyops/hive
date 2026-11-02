@@ -11,6 +11,7 @@ import (
 )
 
 func TestNodeKV_SetGetRoundTrip(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -30,6 +31,7 @@ func TestNodeKV_SetGetRoundTrip(t *testing.T) {
 }
 
 func TestNodeKV_MissingKeyReadsAbsent(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -40,6 +42,7 @@ func TestNodeKV_MissingKeyReadsAbsent(t *testing.T) {
 }
 
 func TestNodeKV_Delete(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -58,6 +61,7 @@ func TestNodeKV_Delete(t *testing.T) {
 // composite primary key, so the same key name under different nodes holds
 // independent rows.
 func TestNodeKV_CrossNodeKeyIsolation(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -77,6 +81,7 @@ func TestNodeKV_CrossNodeKeyIsolation(t *testing.T) {
 // expiring exactly at `now` reads absent (the comparison is strictly >), one
 // expiring a millisecond later reads present. No wall clock involved.
 func TestNodeKV_ExpiryBoundary(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	const now = int64(5000)
@@ -100,6 +105,7 @@ func TestNodeKV_ExpiryBoundary(t *testing.T) {
 }
 
 func TestNodeKV_KeysByPrefix(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	const now = int64(1000)
@@ -125,6 +131,7 @@ func TestNodeKV_KeysByPrefix(t *testing.T) {
 // strings.HasPrefix — the default LIKE would be ASCII case-insensitive and
 // silently disagree with the runtime overlay on a mixed-case prefix.
 func TestNodeKV_KeysPrefixIsCaseSensitive(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -139,6 +146,7 @@ func TestNodeKV_KeysPrefixIsCaseSensitive(t *testing.T) {
 // GLOB metacharacters in a prefix are literals to the caller: a stored key
 // containing *, ? or [ is matched by its own prefix and by nothing else.
 func TestNodeKV_KeysEscapesGlobMetacharacters(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -158,6 +166,7 @@ func TestNodeKV_KeysEscapesGlobMetacharacters(t *testing.T) {
 }
 
 func TestNodeKV_DeleteExpiredSweep(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	const now = int64(5000)
@@ -175,6 +184,7 @@ func TestNodeKV_DeleteExpiredSweep(t *testing.T) {
 }
 
 func TestNodeKV_DeleteByFlow(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 

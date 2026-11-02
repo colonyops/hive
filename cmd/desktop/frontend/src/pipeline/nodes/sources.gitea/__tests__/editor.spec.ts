@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import Editor from '../editor.vue'
 import { defaults, validate, type Config } from '../config'
 import { chooseOption } from '@hive/ui/test-utils/select'
+import { connectAccounts, describeCredentialPicker } from '../../../__tests__/credentialPicker'
 
-const mocks = vi.hoisted(() => ({ List: vi.fn(), On: vi.fn() }))
+const mocks = vi.hoisted(() => ({ List: vi.fn() }))
 
 vi.mock(
   '../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice',
@@ -12,30 +13,28 @@ vi.mock(
     List: mocks.List,
   }),
 )
-vi.mock('@wailsio/runtime', () => ({
-  Events: { On: mocks.On },
-}))
-
-function connectedAccounts(...accounts: string[]) {
-  mocks.List.mockResolvedValue([
-    {
-      type: 'sources.gitea',
-      title: 'Gitea source',
-      stability: 'stable',
-      mode: 'pull',
-      provider: 'gitea',
-      accounts,
-      envOverride: false,
-    },
-  ])
-}
 
 const CREDENTIAL = 'gitea/git.example.com-octocat'
 
-beforeEach(() => {
-  vi.clearAllMocks()
-  mocks.On.mockReturnValue(() => {})
-  connectedAccounts()
+const connect = connectAccounts(mocks.List, {
+  type: 'sources.gitea',
+  title: 'Gitea source',
+  stability: 'stable',
+  mode: 'pull',
+  provider: 'gitea',
+  envOverride: false,
+})
+
+beforeEach(() => connect())
+
+describeCredentialPicker({
+  node: 'sources.gitea',
+  Editor,
+  connect,
+  provider: 'gitea',
+  accounts: ['git.example.com-octocat', 'git.example.com-hubot'],
+  config: (credential) => ({ credential, kind: 'notifications' }),
+  emptyMessage: 'No Gitea instance is connected',
 })
 
 describe('sources.gitea editor', () => {
@@ -147,42 +146,6 @@ describe('sources.gitea editor', () => {
     const wrapper = mount(Editor, { props: { config } })
 
     expect(wrapper.get('[data-testid="sources.gitea-editor-involving-hint"]').text()).toContain('2 requests per poll')
-  })
-
-  it('offers the connected accounts as options', async () => {
-    connectedAccounts('git.example.com-octocat', 'git.example.com-hubot')
-    const config: Config = { credential: CREDENTIAL, kind: 'notifications' }
-    const wrapper = mount(Editor, { props: { config } })
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="sources.gitea-editor-credential"]').text()).toContain(CREDENTIAL)
-    await chooseOption(wrapper, 'sources.gitea-editor-credential', 'gitea/git.example.com-hubot')
-    expect(wrapper.emitted('update:config')).toEqual([
-      [{ credential: 'gitea/git.example.com-hubot', kind: 'notifications' }],
-    ])
-    wrapper.unmount()
-  })
-
-  // Dropping a disconnected account from the list would silently rewrite the
-  // node's config on the next edit of any other field.
-  it('keeps an account that is no longer connected selectable, and says so', async () => {
-    connectedAccounts('git.example.com-hubot')
-    const config: Config = { credential: CREDENTIAL, kind: 'notifications' }
-    const wrapper = mount(Editor, { props: { config } })
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="sources.gitea-editor-credential"]').text()).toContain('not connected')
-    wrapper.unmount()
-  })
-
-  it('falls back to a text input when no instance is connected', async () => {
-    const config: Config = { credential: '', kind: 'notifications' }
-    const wrapper = mount(Editor, { props: { config } })
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="sources.gitea-editor-credential"]').element.tagName).toBe('INPUT')
-    expect(wrapper.text()).toContain('No Gitea instance is connected')
-    wrapper.unmount()
   })
 })
 

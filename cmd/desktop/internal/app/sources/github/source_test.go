@@ -61,16 +61,6 @@ func newResolver(fetchers *ghsource.Fetchers, flows fakeFlows) *ingest.Resolver 
 	}, zerolog.Nop())
 }
 
-// openTestPipelineDB opens a throwaway store on a temp dir, migrated and
-// closed with the test.
-func openTestPipelineDB(t *testing.T) *queries.DB {
-	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db
-}
-
 type notifierFunc func(offset int64)
 
 func (f notifierFunc) PublishLogAppended(offset int64) { f(offset) }
@@ -274,7 +264,7 @@ func TestProducer_PrefetchesSearchSourcesInOneBatch(t *testing.T) {
 
 	api := &singleSearchAPI{}
 	fetchers := newFetchersFixture(t, api)
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	flows := fakeFlows{
 		{
 			ID:      "triage",
@@ -315,7 +305,7 @@ func TestProducer_WithGithubSource_IngestsAsGithubNotGeneric(t *testing.T) {
 
 	api := &singleSearchAPI{}
 	fetchers := newFetchersFixture(t, api)
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 
 	flows := fakeFlows{{
 		ID:      "triage",
@@ -358,7 +348,7 @@ func TestProducer_WithGithubSource_AppendsAcrossTicks(t *testing.T) {
 
 	api := &singleSearchAPI{}
 	fetchers := newFetchersFixture(t, api)
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 
 	flows := fakeFlows{{
 		ID:      "triage",

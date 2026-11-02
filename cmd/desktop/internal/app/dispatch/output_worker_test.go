@@ -17,16 +17,6 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 )
 
-// openTestPipelineDB opens a throwaway store on a temp dir, migrated and
-// closed with the test.
-func openTestPipelineDB(t *testing.T) *queries.DB {
-	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db
-}
-
 func testOutputCommands(db *queries.DB) *stores.OutputCommandStore {
 	return stores.New(db, stores.Options{}).OutputCommands
 }
@@ -169,7 +159,7 @@ func launchSessionAction(id string, autoApply bool) actions.Action {
 
 func TestWorker_AutoApplyAction_ExecutesAndMarksDone(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	enqueueTestCommand(t, db, "spawn-review", "item-1", `{"title":"Fix bug"}`)
 
 	exec := &fakeExecutor{}
@@ -190,7 +180,7 @@ func TestWorker_AutoApplyAction_ExecutesAndMarksDone(t *testing.T) {
 
 func TestWorker_HeadlessActionExecutesAndConsumesQueue(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	enqueueTestCommand(t, db, "headless-action", "item-1", `{"title":"Fix bug"}`)
 
 	exec := &fakeExecutor{}
@@ -210,7 +200,7 @@ func TestWorker_HeadlessActionExecutesAndConsumesQueue(t *testing.T) {
 
 func TestWorker_ConfirmRequiresApprovalBeforeRerunningCompletedCommand(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	enqueueTestCommand(t, db, "review-action", "item-1", `{"title":"Fix bug"}`)
 
 	exec := &fakeExecutor{}
@@ -245,7 +235,7 @@ func TestWorker_ConfirmRequiresApprovalBeforeRerunningCompletedCommand(t *testin
 
 func TestWorker_ConfirmRecordsJobLifecycleWithoutReplay(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	exec := &fakeExecutor{}
 	recorder := &fakeJobRecorder{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"review-action": launchSessionAction("review-action", false)},
@@ -270,7 +260,7 @@ func TestWorker_ConfirmRecordsJobLifecycleWithoutReplay(t *testing.T) {
 
 func TestWorker_ConfirmUnknownActionCreatesNoJob(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	recorder := &fakeJobRecorder{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{}, NewDispatcher(nil, nil), 0, zerolog.Nop())
 	worker.SetJobRecorder(recorder)
@@ -282,7 +272,7 @@ func TestWorker_ConfirmUnknownActionCreatesNoJob(t *testing.T) {
 
 func TestWorker_ConfirmCreatesCommandWhenNoActionNodeProducedOne(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	exec := &fakeExecutor{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"review-action": launchSessionAction("review-action", false)},
 		NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
@@ -302,7 +292,7 @@ func TestWorker_ConfirmCreatesCommandWhenNoActionNodeProducedOne(t *testing.T) {
 
 func TestWorker_RespectsBatchBoundAndResumesQueue(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	for i := range DefaultOutputWorkerBatch {
 		enqueueTestCommand(t, db, "headless-action", fmt.Sprintf("item-%d", i), `{}`)
 	}
@@ -330,7 +320,7 @@ func TestWorker_RespectsBatchBoundAndResumesQueue(t *testing.T) {
 
 func TestWorker_ActionCatalogChangeStillExecutesHeadlessCommand(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	enqueueTestCommand(t, db, "review-action", "item-1", `{}`)
 
 	actionsByID := fakeActionLister{"review-action": launchSessionAction("review-action", true)}
@@ -344,7 +334,7 @@ func TestWorker_ActionCatalogChangeStillExecutesHeadlessCommand(t *testing.T) {
 
 func TestWorker_UnknownActionRecordsRetryableError(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	enqueueTestCommand(t, db, "does-not-exist", "item-1", `{}`)
 
 	exec := &fakeExecutor{}
@@ -371,7 +361,7 @@ func TestWorker_UnknownActionRecordsRetryableError(t *testing.T) {
 
 func TestWorker_FailingExecutor_KeepsOneRunningJobUntilTerminalFailure(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	enqueueTestCommand(t, db, "spawn-review", "item-1", `{"title":"Fix bug"}`)
 
 	exec := &fakeExecutor{err: fmt.Errorf("boom")}
@@ -400,7 +390,7 @@ func TestWorker_FailingExecutor_KeepsOneRunningJobUntilTerminalFailure(t *testin
 
 func TestWorker_FailingExecutor_RetriesThenMarksFailed(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	enqueueTestCommand(t, db, "spawn-review", "item-1", `{"title":"Fix bug"}`)
 
 	exec := &fakeExecutor{err: fmt.Errorf("boom")}
@@ -437,7 +427,8 @@ func TestWorker_FailingExecutor_RetriesThenMarksFailed(t *testing.T) {
 }
 
 func TestWorker_ConfirmFailureReturnsPersistedDiagnostics(t *testing.T) {
-	db := openTestPipelineDB(t)
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	exec := &fakeExecutor{err: fmt.Errorf("boom"), result: ExecutionResult{Attempted: true, Log: ExecutionLog{Stdout: "partial output", Stderr: "failure output"}}}
 	recorder := &fakeJobRecorder{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"review-action": launchSessionAction("review-action", false)}, NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
@@ -454,6 +445,7 @@ func TestWorker_ConfirmFailureReturnsPersistedDiagnostics(t *testing.T) {
 }
 
 func TestWorker_DoesNotRetryInterruptedInteractiveCommandAfterReopen(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	db, err := queries.Open(t.Context(), dir, queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -479,7 +471,7 @@ func TestWorker_DoesNotRetryInterruptedInteractiveCommandAfterReopen(t *testing.
 
 func TestWorker_BadPayload_FailsWithoutCallingExecutor(t *testing.T) {
 	t.Parallel()
-	db := openTestPipelineDB(t)
+	db := queries.OpenForTest(t)
 	enqueueTestCommand(t, db, "spawn-review", "item-1", `not-json`)
 
 	exec := &fakeExecutor{}
@@ -497,7 +489,8 @@ func TestWorker_BadPayload_FailsWithoutCallingExecutor(t *testing.T) {
 }
 
 func TestWorker_LongManualActionDoesNotBlockAutomaticDispatch(t *testing.T) {
-	db := openTestPipelineDB(t)
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	blocker := &blockingExecutor{started: make(chan OutputData, 1), release: make(chan struct{})}
 	quick := &fakeExecutor{result: ExecutionResult{Attempted: true}}
 	catalog := fakeActionLister{
@@ -533,7 +526,8 @@ func TestWorker_LongManualActionDoesNotBlockAutomaticDispatch(t *testing.T) {
 }
 
 func TestWorker_CancelStopsRunningActionWithoutRetry(t *testing.T) {
-	db := openTestPipelineDB(t)
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	blocker := &blockingExecutor{started: make(chan OutputData, 1), release: make(chan struct{})}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"manual": launchSessionAction("manual", false)},
 		NewDispatcher(map[string]Executor{"launch-session": blocker}, nil), 0, zerolog.Nop())

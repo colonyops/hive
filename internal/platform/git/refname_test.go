@@ -8,6 +8,7 @@ import (
 )
 
 func TestValidateBranchName(t *testing.T) {
+	t.Parallel()
 	valid := []string{
 		"main",
 		"feat/my-feature",

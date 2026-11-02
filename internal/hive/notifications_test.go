@@ -31,6 +31,7 @@ func latestNotificationPayload(tb *testbus.Bus, t *testing.T) events.Notificatio
 }
 
 func TestNotificationRouter_SessionCorrupted(t *testing.T) {
+	t.Parallel()
 	tb := testbus.New(t)
 	NewNotificationRouter(tb.EventBus).Register()
 
@@ -42,6 +43,7 @@ func TestNotificationRouter_SessionCorrupted(t *testing.T) {
 }
 
 func TestNotificationRouter_SessionDeleted(t *testing.T) {
+	t.Parallel()
 	tb := testbus.New(t)
 	NewNotificationRouter(tb.EventBus).Register()
 
@@ -53,6 +55,7 @@ func TestNotificationRouter_SessionDeleted(t *testing.T) {
 }
 
 func TestNotificationRouter_SessionRecycled(t *testing.T) {
+	t.Parallel()
 	tb := testbus.New(t)
 	NewNotificationRouter(tb.EventBus).Register()
 
@@ -64,6 +67,7 @@ func TestNotificationRouter_SessionRecycled(t *testing.T) {
 }
 
 func TestNotificationRouter_MessageReceived(t *testing.T) {
+	t.Parallel()
 	tb := testbus.New(t)
 	NewNotificationRouter(tb.EventBus).Register()
 
@@ -75,6 +79,7 @@ func TestNotificationRouter_MessageReceived(t *testing.T) {
 }
 
 func TestNotificationRouter_AgentStatusMissing_publishesWarning(t *testing.T) {
+	t.Parallel()
 	tb := testbus.New(t)
 	NewNotificationRouter(tb.EventBus).Register()
 
@@ -90,6 +95,7 @@ func TestNotificationRouter_AgentStatusMissing_publishesWarning(t *testing.T) {
 }
 
 func TestNotificationRouter_AgentStatusReady_doesNotPublish(t *testing.T) {
+	t.Parallel()
 	tb := testbus.New(t)
 	NewNotificationRouter(tb.EventBus).Register()
 
@@ -103,6 +109,7 @@ func TestNotificationRouter_AgentStatusReady_doesNotPublish(t *testing.T) {
 }
 
 func TestNotificationRouter_SessionCreated_doesNotPublish(t *testing.T) {
+	t.Parallel()
 	tb := testbus.New(t)
 	NewNotificationRouter(tb.EventBus).Register()
 
@@ -111,6 +118,7 @@ func TestNotificationRouter_SessionCreated_doesNotPublish(t *testing.T) {
 }
 
 func TestNotificationRouter_SessionRenamed_doesNotPublish(t *testing.T) {
+	t.Parallel()
 	tb := testbus.New(t)
 	NewNotificationRouter(tb.EventBus).Register()
 

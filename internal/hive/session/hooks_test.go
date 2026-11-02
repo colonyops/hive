@@ -13,6 +13,7 @@ import (
 )
 
 func TestRunHooks_RendersTemplateVariables(t *testing.T) {
+	t.Parallel()
 	var stdout, stderr bytes.Buffer
 	renderer := testRenderer()
 	log := zerolog.Nop()
@@ -39,6 +40,7 @@ func TestRunHooks_RendersTemplateVariables(t *testing.T) {
 }
 
 func TestRunHooks_RendersOwnerAndRepo(t *testing.T) {
+	t.Parallel()
 	var stdout, stderr bytes.Buffer
 	renderer := testRenderer()
 	log := zerolog.Nop()
@@ -61,6 +63,7 @@ func TestRunHooks_RendersOwnerAndRepo(t *testing.T) {
 }
 
 func TestRunHooks_InvalidTemplateFails(t *testing.T) {
+	t.Parallel()
 	var stdout, stderr bytes.Buffer
 	renderer := testRenderer()
 	log := zerolog.Nop()
@@ -78,6 +81,7 @@ func TestRunHooks_InvalidTemplateFails(t *testing.T) {
 }
 
 func TestRunHooks_EmptyCommandsIsNoop(t *testing.T) {
+	t.Parallel()
 	var stdout, stderr bytes.Buffer
 	renderer := testRenderer()
 	log := zerolog.Nop()

@@ -38,6 +38,7 @@ func get(t *testing.T, handler http.Handler, path string) *httptest.ResponseReco
 // GitHub passthrough, so before this it was forwarded to api.github.com and
 // counted as an upstream call on every page refresh.
 func TestBrowserChromePathsNeverReachUpstream(t *testing.T) {
+	t.Parallel()
 	var calls atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -61,6 +62,7 @@ func TestBrowserChromePathsNeverReachUpstream(t *testing.T) {
 // TestDashboardLoadCostsNothingUpstream covers the whole page load the way a
 // browser performs it: the document, its favicon, and the state poll.
 func TestDashboardLoadCostsNothingUpstream(t *testing.T) {
+	t.Parallel()
 	var calls atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -86,6 +88,7 @@ func TestDashboardLoadCostsNothingUpstream(t *testing.T) {
 // TestDashboardDeclaresInlineFavicon keeps the browser from asking for
 // /favicon.ico in the first place; the route above is the backstop.
 func TestDashboardDeclaresInlineFavicon(t *testing.T) {
+	t.Parallel()
 	html := string(dashboardHTML)
 	require.Contains(t, html, `rel="icon"`)
 	assert.Contains(t, html, "data:image/svg+xml", "the icon must be inline, not a fetched URL")
@@ -98,6 +101,7 @@ func TestDashboardDeclaresInlineFavicon(t *testing.T) {
 // is intercepted, and real API paths — including ones devserver does not model
 // — still reach GitHub.
 func TestGitHubPathsStillProxy(t *testing.T) {
+	t.Parallel()
 	var seen []string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = append(seen, r.URL.Path)
@@ -118,6 +122,7 @@ func TestGitHubPathsStillProxy(t *testing.T) {
 }
 
 func TestControlRoutesAreNotProxied(t *testing.T) {
+	t.Parallel()
 	var calls atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -135,6 +140,7 @@ func TestControlRoutesAreNotProxied(t *testing.T) {
 }
 
 func TestRootServesDashboardAndOnlyExactly(t *testing.T) {
+	t.Parallel()
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"proxied":true}`)) //nolint:errcheck // test server
@@ -155,6 +161,7 @@ func TestRootServesDashboardAndOnlyExactly(t *testing.T) {
 // The JS behaviour itself has no automated coverage — this asserts the hooks
 // it depends on exist, so a refactor cannot quietly drop them.
 func TestDashboardItemsPanelScales(t *testing.T) {
+	t.Parallel()
 	html := string(dashboardHTML)
 
 	// Filter and toggle live outside the polled region; re-creating them every

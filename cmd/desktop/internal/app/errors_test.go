@@ -75,11 +75,9 @@ func TestError_MessageAndJSON(t *testing.T) {
 func TestRerunOutputCommand_NoPriorRunUnwraps(t *testing.T) {
 	t.Parallel()
 
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 
-	_, err = stores.New(db, stores.Options{}).OutputCommands.Rerun(t.Context(), "review-pr", "item-1", nil, models.ItemRef{}, "claim")
+	_, err := stores.New(db, stores.Options{}).OutputCommands.Rerun(t.Context(), "review-pr", "item-1", nil, models.ItemRef{}, "claim")
 	require.Error(t, err)
 	require.ErrorIs(t, err, sql.ErrNoRows)
 	assert.True(t, stores.IsNotFound(err))

@@ -17,6 +17,7 @@ import (
 )
 
 func TestAssessDriveCmd_MissingArgErrors(t *testing.T) {
+	t.Parallel()
 	flags := &Flags{}
 	cmd := NewExperimentalCmd(flags, &app.App{})
 
@@ -33,6 +34,7 @@ func TestAssessDriveCmd_MissingArgErrors(t *testing.T) {
 // tmux call ever made (the resolver itself is the only tmux touch-point,
 // and it is faked here).
 func TestRunAssessDriveCmd_RefusesWithoutAllowHost(t *testing.T) {
+	t.Parallel()
 	resolve := func(_ context.Context, _ string) (string, error) {
 		return "/tmp/tmux-501/default", nil
 	}
@@ -50,6 +52,7 @@ func TestRunAssessDriveCmd_RefusesWithoutAllowHost(t *testing.T) {
 // the run fail harmlessly at the frames-file stage instead of ever reaching
 // real tmux.
 func TestRunAssessDriveCmd_AllowHostNeverCallsResolver(t *testing.T) {
+	t.Parallel()
 	resolve := func(_ context.Context, _ string) (string, error) {
 		t.Fatal("resolve must not be called when --allow-host is set")
 		return "", nil
@@ -62,6 +65,7 @@ func TestRunAssessDriveCmd_AllowHostNeverCallsResolver(t *testing.T) {
 }
 
 func TestRunAssessDriveCmd_EmptyFramesFileErrors(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "empty.jsonl")
 	require.NoError(t, os.WriteFile(path, nil, 0o600))
 
@@ -77,6 +81,7 @@ func TestRunAssessDriveCmd_EmptyFramesFileErrors(t *testing.T) {
 }
 
 func TestTmuxPaneDriverClearsEmptyTitle(t *testing.T) {
+	t.Parallel()
 	type invocation struct {
 		name string
 		args []string
@@ -113,6 +118,7 @@ func (d *fakePaneDriver) DriveFrame(_ context.Context, _ string, frame assessFra
 }
 
 func TestDriveFrames_DrivesInOrderWithRecordedTiming(t *testing.T) {
+	t.Parallel()
 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	frames := []assessFrame{
 		{Timestamp: base, Content: "frame0", Title: "t0"},
@@ -142,6 +148,7 @@ func TestDriveFrames_DrivesInOrderWithRecordedTiming(t *testing.T) {
 }
 
 func TestDriveFrames_ClampsNonPositiveDelta(t *testing.T) {
+	t.Parallel()
 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	frames := []assessFrame{
 		{Timestamp: base, Content: "frame0"},
@@ -159,6 +166,7 @@ func TestDriveFrames_ClampsNonPositiveDelta(t *testing.T) {
 }
 
 func TestDriveFrames_PropagatesDriverError(t *testing.T) {
+	t.Parallel()
 	frames := []assessFrame{{Content: "frame0"}, {Content: "frame1"}}
 	driver := &fakePaneDriver{failAt: 1}
 	fakeSleep := func(_ context.Context, _ time.Duration) {}
@@ -170,6 +178,7 @@ func TestDriveFrames_PropagatesDriverError(t *testing.T) {
 }
 
 func TestDriveFrames_StopsOnCanceledContext(t *testing.T) {
+	t.Parallel()
 	frames := []assessFrame{{Content: "frame0"}, {Content: "frame1"}}
 	driver := &fakePaneDriver{failAt: -1}
 	fakeSleep := func(_ context.Context, _ time.Duration) {}

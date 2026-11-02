@@ -18,6 +18,7 @@ import (
 // needs tmux, which this harness has no use for otherwise, so the DTO mappers
 // are what get pinned.
 func TestAgentViewsCarryTheScheduleFields(t *testing.T) {
+	t.Parallel()
 	session, err := json.Marshal(toAgentSessionView(app.SessionView{ID: "0199bd8f-e6a8-74e2-a10b-3d717cf6abf5", ScheduleID: "weekly"}))
 	require.NoError(t, err)
 	assert.Contains(t, string(session), `"scheduleId":"weekly"`)
@@ -37,6 +38,7 @@ func TestAgentViewsCarryTheScheduleFields(t *testing.T) {
 // no mcps and its open misses nothing, which is exactly the shape that carried
 // null before the DTO mappers normalized it.
 func TestAgentWireArraysAreNeverNull(t *testing.T) {
+	t.Parallel()
 	h := newAgentHarness(t)
 
 	assertNoNullArrays := func(t *testing.T, resp *http.Response, fields ...string) {
@@ -70,6 +72,7 @@ func TestAgentWireArraysAreNeverNull(t *testing.T) {
 // the seeded hive package, and its members are the skills this build ships —
 // resolved through the glob, not enumerated anywhere.
 func TestAgentSkillPackagesServeTheSeededHivePackage(t *testing.T) {
+	t.Parallel()
 	h := newAgentHarness(t)
 
 	resp := h.post(t, AgentWorkspacesPathPrefix+"skills", testToken, struct{}{})

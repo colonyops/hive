@@ -7,6 +7,7 @@ import (
 )
 
 func TestCanvasOwnerNamesTheLegacyOwnerKey(t *testing.T) {
+	t.Parallel()
 	for key, owner := range map[string]string{
 		"shared":          "@global",
 		"workspaces/demo": "demo",

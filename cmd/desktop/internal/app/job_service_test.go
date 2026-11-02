@@ -19,18 +19,15 @@ import (
 
 func newTestJobService(t *testing.T) (*JobService, <-chan events.JobsUpdated) {
 	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 	bus := newTestBus(t)
 	ch := subscribeEvents[events.JobsUpdated](t, bus)
 	return newJobService(stores.New(db, stores.Options{}).Jobs, bus, zerolog.Nop()), ch
 }
 
 func TestJobService_ListAndListActive(t *testing.T) {
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	t.Parallel()
+	db := queries.OpenForTest(t)
 
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
 	st := stores.New(db, stores.Options{Now: func() time.Time { return now }})
@@ -70,9 +67,8 @@ func TestJobService_ListAndListActive(t *testing.T) {
 }
 
 func TestJobService_RecordsLifecycleLabelsAndPublishes(t *testing.T) {
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	ctx := t.Context()
 	now := time.UnixMilli(1_000)
 	st := stores.New(db, stores.Options{Now: func() time.Time { return now }})
@@ -118,6 +114,7 @@ func TestJobService_RecordsLifecycleLabelsAndPublishes(t *testing.T) {
 }
 
 func TestJobService_TrackRunsToCompletionUnlinkedToACommand(t *testing.T) {
+	t.Parallel()
 	service, _ := newTestJobService(t)
 
 	ran := make(chan struct{})
@@ -140,6 +137,7 @@ func TestJobService_TrackRunsToCompletionUnlinkedToACommand(t *testing.T) {
 }
 
 func TestJobService_TrackRecordsFailure(t *testing.T) {
+	t.Parallel()
 	service, _ := newTestJobService(t)
 
 	id := service.Track(t.Context(), "Create session", "new-session", "sess-2", func(context.Context) error {
@@ -156,6 +154,7 @@ func TestJobService_TrackRecordsFailure(t *testing.T) {
 // Begin runs before Track forks, while Done or Fail runs on the background
 // goroutine after fn returns. Assert ordering, not only eventual delivery.
 func TestJobService_TrackPublishesTerminalTransitionAfterFnReturns(t *testing.T) {
+	t.Parallel()
 	service, ch := newTestJobService(t)
 
 	release := make(chan struct{})
@@ -183,15 +182,14 @@ func TestJobService_TrackPublishesTerminalTransitionAfterFnReturns(t *testing.T)
 }
 
 func TestJobService_ListActiveUsesBackendClockWindow(t *testing.T) {
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	ctx := t.Context()
 	now := time.UnixMilli(10_000)
 	st := stores.New(db, stores.Options{Now: func() time.Time { return now }})
 	service := newJobService(st.Jobs, newTestBus(t), zerolog.Nop())
 
-	_, err = db.InsertJob(ctx, queries.InsertJobParams{
+	_, err := db.InsertJob(ctx, queries.InsertJobParams{
 		CreatedAt: 1, UpdatedAt: now.Add(-jobs.DefaultLingerWindow).UnixMilli(), Status: "done", Label: "Boundary",
 	})
 	require.NoError(t, err)
@@ -214,8 +212,8 @@ func TestJobService_ListActiveUsesBackendClockWindow(t *testing.T) {
 // A failed write and a zero id both leave the bus quiet: JobsUpdated promises
 // a row changed, and neither changed one.
 func TestJobService_FailedWritesAndZeroTransitionsPublishNothing(t *testing.T) {
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	require.NoError(t, db.Close())
 	st := stores.New(db, stores.Options{})
 	bus := newTestBus(t)

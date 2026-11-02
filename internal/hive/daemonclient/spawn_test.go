@@ -17,6 +17,7 @@ import (
 )
 
 func TestSpawnEnvPinsTheDaemonToTheCallersDataDirAndConfig(t *testing.T) {
+	t.Parallel()
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 
@@ -31,6 +32,7 @@ func TestSpawnEnvPinsTheDaemonToTheCallersDataDirAndConfig(t *testing.T) {
 }
 
 func TestSpawnEnvKeepsAnEmptyConfig(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, []string{"HIVE_CONFIG=", "HIVE_DATA_DIR=/d"}, spawnEnv([]string{"HIVE_CONFIG="}, "/d"))
 }
 
@@ -81,11 +83,7 @@ func serveHealthz(t *testing.T, socket string) error {
 }
 
 func TestSpawnGivesWayToADaemonAnotherClientStarted(t *testing.T) {
-	original := spawnReadyTimeout
-	t.Cleanup(func() { spawnReadyTimeout = original })
-	// Spawn returns as soon as the rival answers, so a long limit costs
-	// nothing when the test passes.
-	spawnReadyTimeout = 30 * time.Second
+	t.Parallel()
 	dataDir := shortDataDir(t)
 	marker := filepath.Join(t.TempDir(), "exited")
 	binary := fakeDaemon(t, 1, marker)
@@ -103,18 +101,18 @@ func TestSpawnGivesWayToADaemonAnotherClientStarted(t *testing.T) {
 		served <- serveHealthz(t, daemonpath.SocketPath(dataDir))
 	}()
 
-	require.NoError(t, Spawn(t.Context(), binary, dataDir, nil))
+	// spawn returns as soon as the rival answers, so a long limit costs nothing
+	// when the test passes.
+	require.NoError(t, spawn(t.Context(), binary, dataDir, nil, 30*time.Second))
 	require.NoError(t, <-served)
 }
 
 func TestSpawnReportsTheExitWhenNoDaemonAnswers(t *testing.T) {
-	original := spawnReadyTimeout
-	t.Cleanup(func() { spawnReadyTimeout = original })
-	// Long enough for the fake binary to start and exit on a loaded machine.
-	spawnReadyTimeout = 3 * time.Second
+	t.Parallel()
 	dataDir := shortDataDir(t)
 
-	err := Spawn(t.Context(), fakeDaemon(t, 3, ""), dataDir, nil)
+	// Long enough for the fake binary to start and exit on a loaded machine.
+	err := spawn(t.Context(), fakeDaemon(t, 3, ""), dataDir, nil, 3*time.Second)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "exit status 3")

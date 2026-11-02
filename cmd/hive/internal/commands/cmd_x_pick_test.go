@@ -14,6 +14,7 @@ import (
 )
 
 func TestPickItem_DisplayName(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		item pickItem
@@ -58,6 +59,7 @@ func TestPickItem_DisplayName(t *testing.T) {
 }
 
 func TestPickItem_StatusKey(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		item pickItem
@@ -94,6 +96,7 @@ func TestPickItem_StatusKey(t *testing.T) {
 }
 
 func TestSortItemsInitial(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 
 	items := []pickItem{
@@ -120,6 +123,7 @@ func TestSortItemsInitial(t *testing.T) {
 }
 
 func TestSortItemsInitial_CapsRecentsToMax(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	items := make([]pickItem, 5)
 	recents := make(map[string]time.Time)
@@ -145,6 +149,7 @@ func TestSortItemsInitial_CapsRecentsToMax(t *testing.T) {
 }
 
 func TestApplyFilter_SubstringMatch(t *testing.T) {
+	t.Parallel()
 	m := pickModel{
 		items: []pickItem{
 			{Session: session.Session{ID: "1", Name: "auth-service", Remote: "git@github.com:org/auth.git"}},
@@ -202,6 +207,7 @@ func TestApplyFilter_SubstringMatch(t *testing.T) {
 }
 
 func TestApplyFilter_StatusFilter(t *testing.T) {
+	t.Parallel()
 	m := pickModel{
 		items: []pickItem{
 			{Session: session.Session{ID: "1", Name: "active-session"}},
@@ -265,6 +271,7 @@ func TestApplyFilter_StatusFilter(t *testing.T) {
 }
 
 func TestApplyFilter_DefaultShowsAllBeforeStatusLoaded(t *testing.T) {
+	t.Parallel()
 	m := pickModel{
 		items: []pickItem{
 			{Session: session.Session{ID: "1", Name: "session-a"}},
@@ -281,6 +288,7 @@ func TestApplyFilter_DefaultShowsAllBeforeStatusLoaded(t *testing.T) {
 }
 
 func TestApplyFilter_CursorClamp(t *testing.T) {
+	t.Parallel()
 	m := pickModel{
 		items: []pickItem{
 			{Session: session.Session{ID: "1", Name: "aaa"}},
@@ -300,6 +308,7 @@ func TestApplyFilter_CursorClamp(t *testing.T) {
 }
 
 func TestApplyFilter_CombinedTextAndStatus(t *testing.T) {
+	t.Parallel()
 	m := pickModel{
 		items: []pickItem{
 			{Session: session.Session{ID: "1", Name: "auth-active"}},
@@ -325,6 +334,7 @@ func TestApplyFilter_CombinedTextAndStatus(t *testing.T) {
 }
 
 func TestSortItemsInitial_NoRecents(t *testing.T) {
+	t.Parallel()
 	items := []pickItem{
 		{Session: session.Session{ID: "z", Name: "zebra"}},
 		{Session: session.Session{ID: "a", Name: "alpha"}},
@@ -341,6 +351,7 @@ func TestSortItemsInitial_NoRecents(t *testing.T) {
 }
 
 func TestSortItemsInitial_Stable(t *testing.T) {
+	t.Parallel()
 	// Items with same sort key should maintain relative order
 	items := []pickItem{
 		{Session: session.Session{ID: "1", Name: "alpha"}},
@@ -354,6 +365,7 @@ func TestSortItemsInitial_Stable(t *testing.T) {
 }
 
 func TestStatusMatchesFilter(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		status terminal.Status
@@ -374,6 +386,7 @@ func TestStatusMatchesFilter(t *testing.T) {
 
 // TestStatusCycle verifies the tab cycling order matches the defined cycle.
 func TestStatusCycle(t *testing.T) {
+	t.Parallel()
 	cycle := []string{"", "all", "active", "approval", "ready", "missing"}
 
 	for i, current := range cycle {
@@ -398,6 +411,7 @@ func TestStatusCycle(t *testing.T) {
 }
 
 func TestApplyFilter_WindowItemStatusKey(t *testing.T) {
+	t.Parallel()
 	// Window items use "sessionID/windowIndex" as status key
 	m := pickModel{
 		items: []pickItem{
@@ -427,6 +441,7 @@ func TestApplyFilter_WindowItemStatusKey(t *testing.T) {
 }
 
 func TestApplyFilter_SearchIncludesRepoName(t *testing.T) {
+	t.Parallel()
 	m := pickModel{
 		items: []pickItem{
 			{Session: session.Session{
@@ -453,6 +468,7 @@ func TestApplyFilter_SearchIncludesRepoName(t *testing.T) {
 
 // Verify the filter uses strings.Contains not exact match
 func TestApplyFilter_PartialMatch(t *testing.T) {
+	t.Parallel()
 	m := pickModel{
 		items: []pickItem{
 			{Session: session.Session{ID: "1", Name: "authentication-service"}},
@@ -472,6 +488,7 @@ func TestApplyFilter_PartialMatch(t *testing.T) {
 // at the approval tier, so "approval" already surfaces it — see
 // TestApplyFilter_StatusFilter's "filter approval also matches question").
 func TestPickCmd_RejectsQuestionStatusFilter(t *testing.T) {
+	t.Parallel()
 	flags := &Flags{}
 	cmd := NewExperimentalCmd(flags, &app.App{})
 

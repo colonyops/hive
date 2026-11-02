@@ -8,6 +8,7 @@ import (
 )
 
 func TestScheduleStoreCursors(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -38,6 +39,7 @@ func TestScheduleStoreCursors(t *testing.T) {
 // parse contributed no schedules to keep, and pruning it would delete the
 // state that says how far its schedules got.
 func TestScheduleStorePrunesCursorsOutsideKeepWithinScope(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -62,6 +64,7 @@ func TestScheduleStorePrunesCursorsOutsideKeepWithinScope(t *testing.T) {
 }
 
 func TestScheduleStoreInsertRunRoundTripsWithTheAssignedID(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name      string
 		status    string
@@ -101,6 +104,7 @@ func TestScheduleStoreInsertRunRoundTripsWithTheAssignedID(t *testing.T) {
 }
 
 func TestScheduleStoreListRunsIsScopedToOneScheduleNewestFirst(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -121,6 +125,7 @@ func TestScheduleStoreListRunsIsScopedToOneScheduleNewestFirst(t *testing.T) {
 }
 
 func TestScheduleStoreLastLaunchedRunIgnoresFailedAndSkipped(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -144,6 +149,7 @@ func TestScheduleStoreLastLaunchedRunIgnoresFailedAndSkipped(t *testing.T) {
 }
 
 func TestScheduleStoreInsertRunPrunesToTheLimitPerSchedule(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -172,6 +178,7 @@ func TestScheduleStoreInsertRunPrunesToTheLimitPerSchedule(t *testing.T) {
 }
 
 func TestScheduleStoreDeleteByWorkspaceLeavesOtherWorkspacesAlone(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 

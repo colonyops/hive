@@ -10,6 +10,7 @@ import (
 )
 
 func TestActivityEventStore_AppendAndList(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -42,6 +43,7 @@ func TestActivityEventStore_AppendAndList(t *testing.T) {
 // failed page: List skips it and logs, rather than failing every other event
 // on the page because of one bad row.
 func TestActivityEventStore_ListSkipsUndecodableMetadata(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 

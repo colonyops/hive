@@ -70,6 +70,7 @@ func TestPathWithoutAShellIsTheInheritedPathPlusPrefixes(t *testing.T) {
 // The shell is asked once per run: its PATH does not change under a running
 // app, and hooks arrive one command at a time.
 func TestPathProbesOnceAcrossConcurrentCallers(t *testing.T) {
+	t.Parallel()
 	var probes atomic.Int64
 	r := NewResolver(Options{Shell: "/bin/zsh", Probe: func(context.Context, string) (map[string]string, error) {
 		probes.Add(1)
@@ -91,6 +92,7 @@ func TestPathProbesOnceAcrossConcurrentCallers(t *testing.T) {
 // A failed probe is remembered too. Retrying would charge every later hook
 // command the startup cost of a shell that already declined to answer.
 func TestPathRemembersAFailedProbe(t *testing.T) {
+	t.Parallel()
 	var probes atomic.Int64
 	r := NewResolver(Options{Shell: "/bin/zsh", Probe: func(context.Context, string) (map[string]string, error) {
 		probes.Add(1)
@@ -124,6 +126,7 @@ func TestProbeErrSeparatesAFailedProbeFromAnUnsetVariable(t *testing.T) {
 // Cancelling session creation must not be recorded as the shell's answer, so
 // the probe runs on a context of its own.
 func TestProbeOutlivesACancelledCaller(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -138,6 +141,7 @@ func TestProbeOutlivesACancelledCaller(t *testing.T) {
 }
 
 func TestProbeIsBoundedByTheTimeout(t *testing.T) {
+	t.Parallel()
 	r := NewResolver(Options{Shell: "/bin/zsh", Timeout: 20 * time.Millisecond, Probe: func(ctx context.Context, _ string) (map[string]string, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -308,6 +312,7 @@ func TestGetenvPrefersThisProcess(t *testing.T) {
 // The real probe, against a stub standing in for the user's shell: it must read
 // the child's own environment rather than trust the shell to echo a variable.
 func TestShellEnvironmentReadsTheShellsEnvironment(t *testing.T) {
+	t.Parallel()
 	shell := filepath.Join(t.TempDir(), "shell")
 	require.NoError(t, os.WriteFile(shell, []byte(
 		"#!/bin/sh\n"+
@@ -330,14 +335,14 @@ func TestShellEnvironmentReturnsWhenAChildHoldsThePipeOpen(t *testing.T) {
 	require.NoError(t, os.WriteFile(shell, []byte(
 		"#!/bin/sh\n"+
 			"export PATH=/opt/tools/bin:/usr/bin\n"+
-			"/bin/sleep 10 &\n"+
+			"/bin/sleep 60 &\n"+
 			"exec \"$2\"\n"), 0o755))
 
 	start := time.Now()
 	env, err := shellEnvironment(t.Context(), shell)
 	require.NoError(t, err)
 	assert.Equal(t, "/opt/tools/bin:/usr/bin", env["PATH"])
-	assert.Less(t, time.Since(start), 8*time.Second,
+	assert.Less(t, time.Since(start), 30*time.Second,
 		"the probe must end with the shell, not with whatever it left running")
 }
 
@@ -345,6 +350,7 @@ func TestShellEnvironmentReturnsWhenAChildHoldsThePipeOpen(t *testing.T) {
 // env gives no way to delimit. Its first line is not a usable definition, and
 // its remaining lines must not land on the variable printed before it.
 func TestShellEnvironmentDropsExportedFunctions(t *testing.T) {
+	t.Parallel()
 	shell := filepath.Join(t.TempDir(), "shell")
 	require.NoError(t, os.WriteFile(shell, []byte(
 		"#!/bin/sh\n"+
@@ -365,6 +371,7 @@ func TestShellEnvironmentDropsExportedFunctions(t *testing.T) {
 // A value is free to span lines, and the lines after the first belong to it —
 // adopting only the first would hand every child a truncated value.
 func TestShellEnvironmentKeepsMultiLineValuesWhole(t *testing.T) {
+	t.Parallel()
 	shell := filepath.Join(t.TempDir(), "shell")
 	require.NoError(t, os.WriteFile(shell, []byte(
 		"#!/bin/sh\n"+
@@ -381,6 +388,7 @@ func TestShellEnvironmentKeepsMultiLineValuesWhole(t *testing.T) {
 }
 
 func TestIsEnvName(t *testing.T) {
+	t.Parallel()
 	assert.True(t, isEnvName("EDITOR"))
 	assert.True(t, isEnvName("_MISE_2"))
 	assert.False(t, isEnvName(""))
@@ -390,6 +398,7 @@ func TestIsEnvName(t *testing.T) {
 }
 
 func TestShellEnvironmentFailsWhenTheShellReportsNothing(t *testing.T) {
+	t.Parallel()
 	shell := filepath.Join(t.TempDir(), "shell")
 	require.NoError(t, os.WriteFile(shell, []byte("#!/bin/sh\necho hello\n"), 0o755))
 

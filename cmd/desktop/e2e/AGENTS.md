@@ -2,7 +2,11 @@
 
 Playwright tests that drive the headless server build (`-tags server`) of Hive
 Desktop in real browsers. Every server runs in mock mode inside one Docker
-container, and tests run one at a time against those shared servers.
+container. Spec files run in parallel, and a file's tests stay in order on one
+worker. Each Playwright worker owns a `feed` server per browser (`serve.sh`,
+`fixtures/servers.ts`), so a test sees only its own worker's state. Every other
+server has one spec file. A second spec file on one of those servers must use
+`feed`, or get a server of its own.
 
 ## Running Tests
 
@@ -37,6 +41,7 @@ directory, so a broken import fails there rather than mid-suite.
 | -------------------- | -------------------------------------------------------------------- |
 | `PW_FAIL_ON_FLAKY`   | A test that passes only on retry fails the run. Use it to hunt flakes. |
 | `HIVE_E2E_IMAGE_TAG` | Image tag, so two checkouts on one host do not overwrite each other's image. |
+| `HIVE_E2E_WORKERS`   | Workers, and `feed` servers per browser. Defaults to one less than the container's CPUs, at most 6. Use it, not `--workers`: Playwright's flag does not start more servers. |
 
 CI sets `CI=1` in the image, which gives every test one retry. Local runs use
 the same image, so they retry too. An action times out after 10s, and a run
@@ -58,7 +63,8 @@ beside `mise run cli:remote:test`. The container then joins the fixture's
 Docker network instead of `--network none`, and `serve.sh` starts the `remote`
 server with `server-a` and an unreachable `gone` under `servers:`. Without the
 lane, the `workflows-remote-chromium` project and the `remote` server do not
-exist. `mise run ci` and the `desktop-e2e` job run both lanes.
+exist. `mise run ci` runs both lanes, and GitHub CI runs this one in the
+`desktop-e2e-remote` job.
 
 ## Three Kinds of Test
 
@@ -77,7 +83,9 @@ unless its server gets a webkit port too.
 
 `features-webkit` runs only `terminal/`, `drive/` and `flows/`, where WebKit's
 pointer, selection and rendering behavior differs. To add a surface, add it to
-`testMatch` in `playwright.config.ts`.
+`testMatch` in `playwright.config.ts`. A test in those surfaces that does not
+touch pointer, selection, or rendering differences takes `tag.chromiumOnly`, so
+`features-webkit` skips it. If a WebKit bug slips past one, remove the tag.
 
 Keep edge cases at the lowest level that can see them. Component and store
 logic belongs in Vitest (`mise run desktop:test`), engine behaviour in Go tests
@@ -152,6 +160,7 @@ Tags live in `fixtures/tags.ts`. Use `tag.*` from there, never string literals.
   `@chats`, `@integrations`, `@notifications`, `@onboarding`, `@settings`,
   `@diagnostics`
 - Priority: `@critical`
+- Scope: `@chromium-only`, on a single test
 
 Put the tags on the file's `test.describe`; add a surface tag to a single test
 when that test covers a second surface (the palette tests in
@@ -176,6 +185,7 @@ Import `test`, `expect` and `tag` from `fixtures/test.ts`. The other helpers:
 | `fixtures/servers.ts` | `serverURL(server, browserName)`                                                 |
 | `fixtures/paths.ts`   | `screenshotPath(name)` and `testdataPath(...parts)`, independent of spec depth   |
 | `fixtures/wails.ts`   | `bindingID(service, method)`, the numeric ID a mocked binding call must answer   |
+| `fixtures/terminal.ts` | `mockTerminalAPI(page, answers)` and `noAgents`, a mocked terminal HTTP API by path |
 
 Name screenshots with `browserName`, not the project name.
 

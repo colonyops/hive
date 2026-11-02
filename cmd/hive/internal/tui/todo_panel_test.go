@@ -17,9 +17,7 @@ import (
 
 func newTodoPanelService(t *testing.T) *todosvc.Service {
 	t.Helper()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 
 	store := store.NewTodoStore(zerolog.Nop(), database)
 	bus := events.New(16)
@@ -49,6 +47,7 @@ func newTestTodoPanel(t *testing.T, svc *todosvc.Service) *TodoPanel {
 // --- ReopenCurrent ---
 
 func TestTodoPanel_ReopenCurrent_FromCompleted(t *testing.T) {
+	t.Parallel()
 	svc := newTodoPanelService(t)
 	addHumanTodo(t, svc, "t1", "Write tests")
 
@@ -71,6 +70,7 @@ func TestTodoPanel_ReopenCurrent_FromCompleted(t *testing.T) {
 }
 
 func TestTodoPanel_ReopenCurrent_FromDismissed(t *testing.T) {
+	t.Parallel()
 	svc := newTodoPanelService(t)
 	addHumanTodo(t, svc, "t1", "Write tests")
 
@@ -90,6 +90,7 @@ func TestTodoPanel_ReopenCurrent_FromDismissed(t *testing.T) {
 }
 
 func TestTodoPanel_ReopenCurrent_NoOpOnOpen(t *testing.T) {
+	t.Parallel()
 	svc := newTodoPanelService(t)
 	addHumanTodo(t, svc, "t1", "Write tests")
 
@@ -106,6 +107,7 @@ func TestTodoPanel_ReopenCurrent_NoOpOnOpen(t *testing.T) {
 }
 
 func TestTodoPanel_ReopenCurrent_EmptyList(t *testing.T) {
+	t.Parallel()
 	svc := newTodoPanelService(t)
 	p := newTestTodoPanel(t, svc)
 

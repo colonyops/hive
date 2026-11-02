@@ -64,6 +64,7 @@ func (r *fakeRunner) next() ([]byte, []byte, error) {
 }
 
 func TestRenderTargets(t *testing.T) {
+	t.Parallel()
 	session, err := renderSessionTarget(multiplexer.Target{Session: "work"})
 	require.NoError(t, err)
 	assert.Equal(t, "=work", session)
@@ -78,6 +79,7 @@ func TestRenderTargets(t *testing.T) {
 }
 
 func TestListPanesParsesEscapedFreeFormFields(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{results: []runnerResult{{stdout: `sess|||2|||1|||win\|\|\|name|||/tmp/a\|\|\|b|||42|||%7|||123|||title\|\|\|text|||hive-slug|||1
 `}}}
 	client := New(zerolog.Nop(), runner)
@@ -94,6 +96,7 @@ func TestListPanesParsesEscapedFreeFormFields(t *testing.T) {
 }
 
 func TestListPanesRejectsMalformedRow(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{results: []runnerResult{{stdout: "bad|||row\n"}}}
 	_, err := New(zerolog.Nop(), runner).ListPanes(context.Background())
 	require.Error(t, err)
@@ -123,6 +126,7 @@ func TestListPanesSkipsOnlyTheRowThatDoesNotParse(t *testing.T) {
 }
 
 func TestSendLiteralAndNamedKeyUseSingleArgvTokens(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{}
 	client := New(zerolog.Nop(), runner)
 	target := multiplexer.Target{Session: "s", Window: "0", Pane: "1"}
@@ -137,6 +141,7 @@ func TestSendLiteralAndNamedKeyUseSingleArgvTokens(t *testing.T) {
 }
 
 func TestPasteSuccessUsesBytePreservingFlagsAndReliesOnDeleteAfterPaste(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{}
 	client := New(zerolog.Nop(), runner)
 	target := multiplexer.Target{Session: "s", Window: "0", Pane: "1"}
@@ -151,6 +156,7 @@ func TestPasteSuccessUsesBytePreservingFlagsAndReliesOnDeleteAfterPaste(t *testi
 }
 
 func TestPasteRetriesWithoutSanitizationFlagForPreSanitizationTmux(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{results: []runnerResult{{}, {stderr: "command paste-buffer: unknown flag -S", err: assert.AnError}, {}}}
 	client := New(zerolog.Nop(), runner)
 	target := multiplexer.Target{Session: "s", Window: "0", Pane: "1"}
@@ -163,6 +169,7 @@ func TestPasteRetriesWithoutSanitizationFlagForPreSanitizationTmux(t *testing.T)
 }
 
 func TestPasteLoadFailureDoesNotAttemptCleanup(t *testing.T) {
+	t.Parallel()
 	loadErr := errors.New("load failed")
 	runner := &fakeRunner{results: []runnerResult{{err: loadErr}}}
 	client := New(zerolog.Nop(), runner)
@@ -175,6 +182,7 @@ func TestPasteLoadFailureDoesNotAttemptCleanup(t *testing.T) {
 }
 
 func TestPasteCallerCancellationStillAttemptsCleanup(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	runner := &fakeRunner{results: []runnerResult{{}, {err: context.Canceled}, {}}}
@@ -188,6 +196,7 @@ func TestPasteCallerCancellationStillAttemptsCleanup(t *testing.T) {
 }
 
 func TestPasteCleansBufferAndPreservesPrimaryError(t *testing.T) {
+	t.Parallel()
 	primary := errors.New("paste failed")
 	cleanup := errors.New("cleanup failed")
 	runner := &fakeRunner{results: []runnerResult{{}, {err: primary}, {err: cleanup}}}
@@ -209,6 +218,7 @@ func TestPasteCleansBufferAndPreservesPrimaryError(t *testing.T) {
 }
 
 func TestCapturePaneOptions(t *testing.T) {
+	t.Parallel()
 	start, end := -20, 4
 	runner := &fakeRunner{results: []runnerResult{{stdout: "captured"}}}
 	client := New(zerolog.Nop(), runner)
@@ -224,6 +234,7 @@ func TestCapturePaneOptions(t *testing.T) {
 }
 
 func TestCapturePaneUsesStableNativeTarget(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{results: []runnerResult{{stdout: "captured"}}}
 	client := New(zerolog.Nop(), runner)
 
@@ -233,6 +244,7 @@ func TestCapturePaneUsesStableNativeTarget(t *testing.T) {
 }
 
 func TestResolveTargetReturnsQualifiedPane(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{results: []runnerResult{{stdout: "work|||3|||2|||agent|||/repo|||42|||%7|||123|||title|||work|||0\n"}}}
 	client := New(zerolog.Nop(), runner)
 
@@ -244,6 +256,7 @@ func TestResolveTargetReturnsQualifiedPane(t *testing.T) {
 }
 
 func TestLifecycleCommandsUseRenderedTargets(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{}
 	client := New(zerolog.Nop(), runner)
 	ctx := context.Background()
@@ -258,6 +271,7 @@ func TestLifecycleCommandsUseRenderedTargets(t *testing.T) {
 }
 
 func TestCurrentSessionOutsideTmuxDoesNotRunCommand(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{}
 	client := New(zerolog.Nop(), runner)
 	client.getenv = func(string) string { return "" }
@@ -269,6 +283,7 @@ func TestCurrentSessionOutsideTmuxDoesNotRunCommand(t *testing.T) {
 }
 
 func TestCurrentSessionInsideTmux(t *testing.T) {
+	t.Parallel()
 	runner := &fakeRunner{results: []runnerResult{{stdout: "work\n"}}}
 	client := New(zerolog.Nop(), runner)
 	client.getenv = func(string) string { return "/tmp/tmux" }

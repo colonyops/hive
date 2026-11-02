@@ -28,12 +28,11 @@ func newTestTodo(id string) todo.Todo {
 }
 
 func TestTodoStore(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("create and get", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 		td := newTestTodo("t1")
@@ -52,23 +51,19 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("create rejects invalid source", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 		td := newTestTodo("t1")
 		td.Source = "custom"
 
-		err = store.Create(ctx, td)
+		err := store.Create(ctx, td)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid source")
 	})
 
 	t.Run("update status to completed", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 		td := newTestTodo("t1")
@@ -83,9 +78,7 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("update status to acknowledged keeps CompletedAt zero", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 		td := newTestTodo("t1")
@@ -100,9 +93,7 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("list all", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 
@@ -124,9 +115,7 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("list by status", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 
@@ -147,9 +136,7 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("list by session", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 
@@ -167,9 +154,7 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("list by scheme", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 
@@ -187,9 +172,7 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("list combines status query with session and scheme filters", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 
@@ -220,12 +203,10 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("decode falls back for invalid stored source status and uri", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		now := time.Now().UnixNano()
-		err = database.Ctx(ctx).CreateTodoItem(ctx, db.CreateTodoItemParams{
+		err := database.Ctx(ctx).CreateTodoItem(ctx, db.CreateTodoItemParams{
 			ID:        "t-invalid",
 			SessionID: "",
 			Source:    "invalid-source",
@@ -246,9 +227,7 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("count pending", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 
@@ -271,9 +250,7 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("count open returns pending plus acknowledged", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 
@@ -292,9 +269,7 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("count recent by session", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 
@@ -318,9 +293,7 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("delete", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 		require.NoError(t, store.Create(ctx, newTestTodo("t1")))
@@ -333,9 +306,7 @@ func TestTodoStore(t *testing.T) {
 	})
 
 	t.Run("empty list returns empty slice", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewTodoStore(zerolog.Nop(), database)
 

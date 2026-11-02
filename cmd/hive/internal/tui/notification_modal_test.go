@@ -60,6 +60,7 @@ func saveNotification(store *stubStore, level notify.Level, message string) {
 }
 
 func TestNotificationModal_empty_history(t *testing.T) {
+	t.Parallel()
 	store := &stubStore{}
 	m := NewNotificationModal(zerolog.Nop(), store, 100, 40)
 
@@ -68,6 +69,7 @@ func TestNotificationModal_empty_history(t *testing.T) {
 }
 
 func TestNotificationModal_populated_history(t *testing.T) {
+	t.Parallel()
 	store := &stubStore{}
 
 	saveNotification(store, notify.LevelInfo, "first message")
@@ -83,6 +85,7 @@ func TestNotificationModal_populated_history(t *testing.T) {
 }
 
 func TestNotificationModal_history_error(t *testing.T) {
+	t.Parallel()
 	store := &stubStore{
 		listErr: errors.New("db connection failed"),
 	}
@@ -95,6 +98,7 @@ func TestNotificationModal_history_error(t *testing.T) {
 }
 
 func TestNotificationModal_Clear_removes_notifications(t *testing.T) {
+	t.Parallel()
 	store := &stubStore{}
 
 	saveNotification(store, notify.LevelInfo, "will be cleared")
@@ -109,6 +113,7 @@ func TestNotificationModal_Clear_removes_notifications(t *testing.T) {
 }
 
 func TestNotificationModal_Clear_returns_store_error(t *testing.T) {
+	t.Parallel()
 	store := &stubStore{
 		clearErr: errors.New("clear failed"),
 	}
@@ -121,12 +126,14 @@ func TestNotificationModal_Clear_returns_store_error(t *testing.T) {
 }
 
 func TestNotificationModal_nil_store_panics(t *testing.T) {
+	t.Parallel()
 	assert.Panics(t, func() {
 		_ = NewNotificationModal(zerolog.Nop(), nil, 100, 40)
 	})
 }
 
 func TestNotificationModal_formatNotification_levels(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 1, 15, 14, 30, 45, 0, time.UTC)
 
 	tests := []struct {

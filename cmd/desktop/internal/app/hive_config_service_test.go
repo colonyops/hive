@@ -205,6 +205,7 @@ func TestSaveRefusesToDropAProfileARuleUses(t *testing.T) {
 // A reload that fails after the file landed is the one outcome Save cannot
 // undo, so it is reported as what it is: saved, not applied.
 func TestSaveReportsAWriteWhoseReloadFailed(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	workspace := t.TempDir()
 	service := newHiveConfigService(hiveConfigOptions{

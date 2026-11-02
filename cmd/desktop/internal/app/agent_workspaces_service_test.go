@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/colonyops/hive/internal/platform/tmuxtest"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -24,11 +25,10 @@ import (
 	"github.com/colonyops/hive/internal/platform/execenv"
 	"github.com/colonyops/hive/internal/platform/promptfile"
 	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
-	"github.com/colonyops/hive/pkg/executil"
 )
 
 // newTestAgentWorkspacesService builds a service over root with a real
-// tmuxcc.Manager pointed at a private tmux server (requireTmux/privateTmux,
+// tmuxcc.Manager pointed at a private tmux server (tmuxtest.New,
 // terminals_service_test.go — a session's liveness is a real tmux fact, and a
 // faked one would only prove the fake), a real sqlite-backed queries.DB, and a
 // real SkillsService (newTestSkillsService). commands stands in for
@@ -36,13 +36,15 @@ import (
 // and what they run.
 func newTestAgentWorkspacesService(t *testing.T, root string, commands map[string]string) *AgentWorkspacesService {
 	t.Helper()
-	privateTmux(t)
+	return newTestAgentWorkspacesServiceOn(t, tmuxtest.New(t), root, commands)
+}
 
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+func newTestAgentWorkspacesServiceOn(t *testing.T, server *tmuxtest.Server, root string, commands map[string]string) *AgentWorkspacesService {
+	t.Helper()
 
-	manager := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{Logger: zerolog.Nop()})
+	db := queries.OpenForTest(t)
+
+	manager := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{Logger: zerolog.Nop(), Runner: server})
 	t.Cleanup(func() { _ = manager.Stop(context.WithoutCancel(t.Context())) })
 
 	awStore := agentws.NewStore(root)
@@ -58,6 +60,10 @@ func newTestAgentWorkspacesService(t *testing.T, root string, commands map[strin
 		Events:          events.New(zerolog.Nop()),
 	})
 }
+
+// testExitWindow is for a test that expects a session to exit early: the wait
+// ends at the exit, and the exit must land inside it on a loaded machine.
+const testExitWindow = 10 * time.Second
 
 // testMCPBaseURL stands in for this run's loopback base URL, which the
 // catalogue joins with each app-hosted entry's RuntimePath.
@@ -110,9 +116,7 @@ func writeSharedSkill(t *testing.T, root, slug, body string) {
 func newManifestOnlyService(t *testing.T, root string, profileCommands map[string]string) *AgentWorkspacesService {
 	t.Helper()
 
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	awStore := agentws.NewStore(root)
 	require.NoError(t, awStore.Reload())
@@ -164,7 +168,7 @@ func fakeAgentBinary(t *testing.T, agent, body string) string {
 }
 
 func TestOpenResolvesMCPsAndSkills(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeMCPLibrary(t, root, "version: 1\nservers:\n  my-user-mcp:\n    command: \"true\"\n")
 	writeSkillPackages(t, root, "version: 1\npackages:\n  hive:\n    include: [\"hive-mcp\"]\n")
@@ -197,7 +201,7 @@ func TestOpenResolvesMCPsAndSkills(t *testing.T) {
 }
 
 func TestOpenOmitsAndReportsAnUnknownMCP(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "demo", "version: 2\nname: Demo\nagent: claude\ncommand: true\nmcps:\n  - playwright\n  - ghost\n")
 
@@ -214,7 +218,7 @@ func TestOpenOmitsAndReportsAnUnknownMCP(t *testing.T) {
 }
 
 func TestOpenRejectsAWorkspaceOutsideTheRoot(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": "true"})
 
@@ -230,7 +234,7 @@ func TestOpenRejectsAWorkspaceOutsideTheRoot(t *testing.T) {
 }
 
 func TestLaunchWorkspaceSessionCarriesPromptIntoDetachedChat(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	capture := filepath.Join(t.TempDir(), "prompt")
 	agent := filepath.Join(t.TempDir(), "codex")
@@ -254,13 +258,13 @@ func TestLaunchWorkspaceSessionCarriesPromptIntoDetachedChat(t *testing.T) {
 	require.Eventually(t, func() bool {
 		got, readErr := os.ReadFile(capture)
 		return readErr == nil && string(got) == "cluster prod is down"
-	}, time.Second, 10*time.Millisecond)
+	}, 10*time.Second, 10*time.Millisecond)
 	_, err = os.Stat(filepath.Join(root, "demo", ".mcp.json"))
 	require.NoError(t, err, "a launch refreshes generated workspace files")
 }
 
 func TestLaunchWorkspaceSessionPassesOversizedPromptThroughTempFile(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	capture := filepath.Join(t.TempDir(), "prompt")
 	agent := filepath.Join(t.TempDir(), "codex")
@@ -279,7 +283,7 @@ func TestLaunchWorkspaceSessionPassesOversizedPromptThroughTempFile(t *testing.T
 		got, readErr := os.ReadFile(capture)
 		instruction = string(got)
 		return readErr == nil && instruction != ""
-	}, time.Second, 10*time.Millisecond)
+	}, 10*time.Second, 10*time.Millisecond)
 	_, rest, ok := strings.Cut(instruction, "`")
 	require.True(t, ok, instruction)
 	path, _, ok := strings.Cut(rest, "`")
@@ -291,7 +295,7 @@ func TestLaunchWorkspaceSessionPassesOversizedPromptThroughTempFile(t *testing.T
 }
 
 func TestStartSessionUsesTheResolvedWorkspaceSnapshot(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	capture := filepath.Join(t.TempDir(), "prompt")
 	agent := filepath.Join(t.TempDir(), "codex")
@@ -313,15 +317,16 @@ func TestStartSessionUsesTheResolvedWorkspaceSnapshot(t *testing.T) {
 	require.Eventually(t, func() bool {
 		got, readErr := os.ReadFile(capture)
 		return readErr == nil && string(got) == "keep this prompt"
-	}, time.Second, 10*time.Millisecond)
+	}, 10*time.Second, 10*time.Millisecond)
 }
 
 func TestLaunchWorkspaceSessionReportsAnImmediateExit(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agent := fakeAgentBinary(t, "codex", "exit 1")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agent+agentws.PromptTail, ""))
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"codex": agent})
+	svc.earlyExitWindow = testExitWindow
 
 	_, err := svc.LaunchWorkspaceSession(t.Context(), dispatch.LaunchWorkspaceSessionRequest{
 		Workspace: "demo", Name: "alert", Prompt: "triage this",
@@ -334,7 +339,7 @@ func TestLaunchWorkspaceSessionReportsAnImmediateExit(t *testing.T) {
 }
 
 func TestLaunchWorkspaceSessionRefusesPromptlessCommand(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agent := fakeAgentBinary(t, "codex", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agent, ""))
@@ -351,6 +356,7 @@ func TestLaunchWorkspaceSessionRefusesPromptlessCommand(t *testing.T) {
 }
 
 func TestSessionLaunchWorkspacesReportsPromptSupport(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "plain", agentWorkspaceYAML("Plain", "codex", ""))
 	writeAgentWorkspaceManifest(t, root, "prompted", agentWorkspaceYAML("Prompted", "codex"+agentws.PromptTail, ""))
@@ -363,7 +369,7 @@ func TestSessionLaunchWorkspacesReportsPromptSupport(t *testing.T) {
 }
 
 func TestResumeFallsBackToFreshLaunch(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "codex", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
@@ -387,7 +393,7 @@ func TestResumeFallsBackToFreshLaunch(t *testing.T) {
 }
 
 func TestResumeReattachesTheSameTerminal(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "claude", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
@@ -413,7 +419,6 @@ func TestResumeReattachesTheSameTerminal(t *testing.T) {
 // ID". The relaunch must go fresh instead — and silently, because a fresh
 // launch IS the continuation of an empty conversation.
 func TestResumeOfANeverMessagedClaudeSessionRelaunchesFresh(t *testing.T) {
-	isolateConfig(t)
 	claudeCfg := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeCfg)
 	require.NoError(t, os.MkdirAll(filepath.Join(claudeCfg, "projects", "-elsewhere"), 0o700))
@@ -447,7 +452,6 @@ func TestResumeOfANeverMessagedClaudeSessionRelaunchesFresh(t *testing.T) {
 // The counterpart: once the conversation file exists, a relaunch resumes it
 // under the same id.
 func TestResumeOfAMessagedClaudeSessionResumesById(t *testing.T) {
-	isolateConfig(t)
 	claudeCfg := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", claudeCfg)
 
@@ -480,7 +484,7 @@ func TestResumeOfAMessagedClaudeSessionResumesById(t *testing.T) {
 }
 
 func TestCloseSessionEndsTheTerminalAndKeepsTheRecord(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "claude", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
@@ -502,7 +506,7 @@ func TestCloseSessionEndsTheTerminalAndKeepsTheRecord(t *testing.T) {
 }
 
 func TestDeleteEndsLiveTerminals(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "claude", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
@@ -526,11 +530,12 @@ func TestDeleteEndsLiveTerminals(t *testing.T) {
 }
 
 func TestStartSessionReportsAnImmediateExit(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := "this-binary-does-not-exist-anywhere-12345"
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": agentCmd})
+	svc.earlyExitWindow = testExitWindow
 
 	started, err := svc.StartSession(t.Context(), StartSession{Workspace: "demo", Name: "s1", Cols: 80, Rows: 24})
 	require.NoError(t, err, "a command not on PATH is a live shell that exits 127, not an exec error")
@@ -543,9 +548,11 @@ func TestStartSessionReportsAnImmediateExit(t *testing.T) {
 // wiring. The missing agent binary makes the session exit without leaving a
 // tmux server behind.
 func TestStartFirstRunChatOpensTheHiveWorkspaceOnTheInterview(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
-	agentCmd := "this-binary-does-not-exist-anywhere-12345"
+	// An agent that stays up: a session that dies at once takes its tmux server
+	// with it, and the second launch would race that exit.
+	agentCmd := fakeAgentBinary(t, "claude", "sleep 300")
 	writeAgentWorkspaceManifest(t, root, agentws.HiveWorkspaceDir, agentWorkspaceYAML("Hive", agentCmd+agentws.PromptTail, ""))
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": agentCmd})
 
@@ -564,7 +571,7 @@ func TestStartFirstRunChatOpensTheHiveWorkspaceOnTheInterview(t *testing.T) {
 // something else made first has no Hive workspace. The hand-off puts it back
 // rather than telling the user the workspace the card promised is missing.
 func TestStartFirstRunChatSeedsAMissingHiveWorkspace(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": "this-binary-does-not-exist-anywhere-12345"})
 	_, ok := svc.store.Status(agentws.HiveWorkspaceDir)
@@ -588,11 +595,12 @@ func TestStartFirstRunChatSeedsAMissingHiveWorkspace(t *testing.T) {
 // firing every minute against a reached cap or a tmux that is down would add
 // one dead row a minute to the sidebar, with nobody watching.
 func TestDetachedLaunchThatNeverStartedLeavesNoRecord(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "claude", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
-	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": agentCmd})
+	server := tmuxtest.New(t)
+	svc := newTestAgentWorkspacesServiceOn(t, server, root, map[string]string{"claude": agentCmd})
 
 	// tmux refuses a session name it already holds, which is how a launch is
 	// made to fail after its record exists.
@@ -601,9 +609,7 @@ func TestDetachedLaunchThatNeverStartedLeavesNoRecord(t *testing.T) {
 			Workspace: "demo", Name: name, Agent: "claude", TerminalID: terminalID,
 		})
 		require.NoError(t, err)
-		blocker := exec.CommandContext(t.Context(), "tmux", "new-session", "-d", "-s", sessionName(rec))
-		blocker.Env = executil.WithoutEnv(nil, "TMUX", "TMUX_PANE")
-		require.NoError(t, blocker.Run())
+		require.NoError(t, server.Run("new-session", "-d", "-s", sessionName(rec)))
 
 		_, err = svc.launchTerminal(t.Context(), rec, terminalLaunch{dir: root, line: agentCmd, detached: detached})
 		require.Error(t, err)
@@ -625,7 +631,7 @@ func TestDetachedLaunchThatNeverStartedLeavesNoRecord(t *testing.T) {
 // from hive's config, and one present there but absent from agentws's launch
 // table ("pi"). Neither is a gate now — the command template is.
 func TestLaunchAcceptsAnAgentNoConfigNames(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 
 	for _, tc := range []struct{ dir, agent string }{
@@ -649,7 +655,7 @@ func TestLaunchAcceptsAnAgentNoConfigNames(t *testing.T) {
 // refusals: the only launch-time refusal left is the workspace's own template,
 // and it names the workspace rather than an agent key.
 func TestLaunchRefusesABrokenCommandTemplate(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "broken",
 		agentWorkspaceYAML("Broken", "claude {{ .Nope }}", ""))
@@ -663,7 +669,7 @@ func TestLaunchRefusesABrokenCommandTemplate(t *testing.T) {
 }
 
 func TestTwoSessionsMayShareAName(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "claude", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
@@ -682,7 +688,7 @@ func TestTwoSessionsMayShareAName(t *testing.T) {
 }
 
 func TestSessionsListsWithoutRegeneratingArtifacts(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "claude", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
@@ -706,7 +712,7 @@ func TestSessionsListsWithoutRegeneratingArtifacts(t *testing.T) {
 }
 
 func TestDeleteWorkspaceRemovesTheDirectoryAndTheRecords(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "demo", "version: 2\nname: Demo\nagent: claude\ncommand: true\n")
 	require.NoError(t, os.WriteFile(filepath.Join(root, "demo", "AGENTS.md"), []byte("# Demo\n"), 0o600))
@@ -747,7 +753,7 @@ func TestDeleteWorkspaceRemovesTheDirectoryAndTheRecords(t *testing.T) {
 }
 
 func TestDeleteWorkspaceRefusesAPathTheRootDoesNotList(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "demo", "version: 2\nname: Demo\nagent: claude\ncommand: true\n")
 	require.NoError(t, os.MkdirAll(filepath.Join(root, ".shared", "skills"), 0o700))
@@ -772,7 +778,7 @@ func TestDeleteWorkspaceRefusesAPathTheRootDoesNotList(t *testing.T) {
 }
 
 func TestAllSessionsSpansEveryWorkspaceInStableCreationOrder(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "claude", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo-a", agentWorkspaceYAML("Demo A", agentCmd, ""))
@@ -799,7 +805,7 @@ func TestAllSessionsSpansEveryWorkspaceInStableCreationOrder(t *testing.T) {
 }
 
 func TestRunningChatsListsOnlyLiveChatsWithTheirPane(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "claude", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
@@ -821,7 +827,7 @@ func TestRunningChatsListsOnlyLiveChatsWithTheirPane(t *testing.T) {
 }
 
 func TestRenameSession(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "claude", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
@@ -847,7 +853,7 @@ func TestRenameSession(t *testing.T) {
 }
 
 func TestCreateAndUpdateWorkspace(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	svc := newManifestOnlyService(t, root, map[string]string{"claude": "true", "codex": "true"})
 
@@ -882,7 +888,7 @@ func TestCreateAndUpdateWorkspace(t *testing.T) {
 }
 
 func TestWorkspaceEditOwnsTheMCPList(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	svc := newManifestOnlyService(t, root, map[string]string{"claude": "true"})
 
@@ -901,7 +907,7 @@ func TestWorkspaceEditOwnsTheMCPList(t *testing.T) {
 }
 
 func TestWorkspaceEditOwnsTheSkillPackageList(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	svc := newManifestOnlyService(t, root, map[string]string{"claude": "true"})
 
@@ -925,7 +931,7 @@ func TestWorkspaceEditOwnsTheSkillPackageList(t *testing.T) {
 // Schedules are a manifest key like mcps: and skills:, so they are saved with
 // the rest of the manifest and reconciled to exactly what the editor sends.
 func TestWorkspaceEditOwnsTheScheduleList(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": "true"})
 
@@ -963,7 +969,7 @@ func TestWorkspaceEditOwnsTheScheduleList(t *testing.T) {
 }
 
 func TestWorkspaceEditRejectsAnInvalidSchedule(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": "true"})
 
@@ -1003,7 +1009,7 @@ func TestWorkspaceEditRejectsAnInvalidSchedule(t *testing.T) {
 // there is no last-good snapshot behind the break, so a save would reconcile
 // every list in the file to nothing.
 func TestUpdateWorkspaceRefusesABrokenManifest(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "demo", brokenScheduleManifest)
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": "true"})
@@ -1030,7 +1036,7 @@ func TestUpdateWorkspaceRefusesABrokenManifest(t *testing.T) {
 // call that made the request returns first, and the record goes with the tmux
 // session: a schedule must not leave a row per run in the sidebar.
 func TestEndOwnSessionDeletesTheChatAfterTheDelay(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "claude", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
@@ -1078,7 +1084,7 @@ func TestEndOwnSessionDeletesTheChatAfterTheDelay(t *testing.T) {
 // itself: the frame names the schedule and carries the curl, and the process
 // environment carries the token and the URL the curl reads.
 func TestStartScheduledSessionFramesThePromptAndHandsOutTheToken(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	captured := filepath.Join(t.TempDir(), "launch")
 	agentCmd := fakeAgentBinary(t, "claude", `sh -c 'printf "%s\n" "$@" > "$0.args"; env > "$0.env"; exec cat' `+captured+` "$@"`)
@@ -1100,8 +1106,9 @@ func TestStartScheduledSessionFramesThePromptAndHandsOutTheToken(t *testing.T) {
 		a, errA := os.ReadFile(captured + ".args")
 		e, errE := os.ReadFile(captured + ".env")
 		args, env = string(a), string(e)
-		return errA == nil && errE == nil
-	}, 5*time.Second, 25*time.Millisecond, "the fake agent records what it was launched with")
+		// The files exist before the agent has finished writing them.
+		return errA == nil && errE == nil && strings.Contains(args, "you MUST end this session") && strings.Contains(env, AgentSessionEndPath)
+	}, 10*time.Second, 25*time.Millisecond, "the fake agent records what it was launched with")
 
 	assert.Contains(t, args, `scheduled task "Weekly summary" in the "Demo" workspace`)
 	assert.Contains(t, args, "Summarize the week.")
@@ -1115,7 +1122,7 @@ func TestStartScheduledSessionFramesThePromptAndHandsOutTheToken(t *testing.T) {
 // time, in place, with the rest of the manifest and its comments untouched,
 // and the same refusal of a broken manifest the editor's write has.
 func TestPutAndRemoveScheduleEditOneEntryInPlace(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "demo", "# keep me\n"+agentWorkspaceYAML("Demo", "claude"+agentws.PromptTail, "mcps: [playwright]\n"))
 	writeAgentWorkspaceManifest(t, root, "broken", brokenScheduleManifest)
@@ -1188,7 +1195,7 @@ func TestPutAndRemoveScheduleEditOneEntryInPlace(t *testing.T) {
 // skills.yml, each carrying the skills its patterns currently select across
 // both sources.
 func TestSkillPackagesResolveMembers(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeSharedSkill(t, root, "terraform-plan", "# terraform plan\n")
 	writeSharedSkill(t, root, "runbook", "# runbook\n")
@@ -1238,7 +1245,7 @@ func TestSkillPackagesResolveMembers(t *testing.T) {
 // workspace carries a skill because a package it enabled selects it, and a
 // package skills.yml does not define is reported rather than failing the open.
 func TestOpenInstallsWhatThePackagesSelect(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeSharedSkill(t, root, "terraform-plan", "# Terraform plan\n\nRun it.\n")
 	writeSharedSkill(t, root, "release-notes", "# Release notes\n")
@@ -1270,7 +1277,7 @@ func TestOpenInstallsWhatThePackagesSelect(t *testing.T) {
 // skills one by one: a new file matching a package's pattern reaches every
 // workspace that enabled it, with no manifest edited.
 func TestOpenAddsASkillToEveryWorkspaceThatMatched(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeSharedSkill(t, root, "terraform-plan", "# plan\n")
 	writeSkillPackages(t, root, "version: 1\npackages:\n  infra:\n    include: [\"terraform-*\"]\n")
@@ -1289,7 +1296,7 @@ func TestOpenAddsASkillToEveryWorkspaceThatMatched(t *testing.T) {
 }
 
 func TestImportAndRemoveMCPServers(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": "true"})
 
@@ -1327,7 +1334,7 @@ func TestImportAndRemoveMCPServers(t *testing.T) {
 // joined with each entry's RuntimePath. A workspace generated against a
 // static placeholder would point its agent at an address nothing answers.
 func TestCatalogueResolvesTheDesktopsOwnEndpoint(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": "true"})
 
@@ -1355,7 +1362,7 @@ func TestCatalogueResolvesTheDesktopsOwnEndpoint(t *testing.T) {
 // With the loopback server down there is no endpoint to resolve, and the entry
 // has to say so rather than render an empty URL that looks configured.
 func TestCatalogueReportsAProblemWhenTheServerIsDown(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": "true"})
 	svc.mcpBase = mcpBaseFunc(func(context.Context) string { return "" })
@@ -1386,7 +1393,7 @@ func mcpCatalogueItem(t *testing.T, svc *AgentWorkspacesService, id string) MCPC
 // /usr/bin:/bin:/usr/sbin:/sbin, so validating against it warned on every
 // stdio entry — the shipped npx ones included — on a stock install (hay-kot/hive-desktop#266).
 func TestMCPCatalogueValidatesAgainstTheResolvedPATH(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	binDir := t.TempDir()
 	const command = "hive-test-mcp-command"
@@ -1407,7 +1414,7 @@ func TestMCPCatalogueValidatesAgainstTheResolvedPATH(t *testing.T) {
 // A workspace declaring the desktop gets the live endpoint written into its
 // generated .mcp.json, which is the whole point of the entry.
 func TestGeneratedMCPConfigCarriesTheLiveEndpoint(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "demo",
 		"version: 2\nname: Demo\nagent: claude\ncommand: true\nmcps:\n  - hive-desktop\n")
@@ -1423,7 +1430,7 @@ func TestGeneratedMCPConfigCarriesTheLiveEndpoint(t *testing.T) {
 }
 
 func TestOpenWorkspaceInEditor(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "demo", "version: 2\nname: Demo\nagent: claude\ncommand: true\n")
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"claude": "true"})
@@ -1448,7 +1455,7 @@ func TestOpenWorkspaceInEditor(t *testing.T) {
 }
 
 func TestResizeSessionResizesTheLiveTerminal(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	agentCmd := fakeAgentBinary(t, "claude", "cat")
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agentCmd, ""))
@@ -1480,7 +1487,7 @@ func TestResizeSessionResizesTheLiveTerminal(t *testing.T) {
 // The report has to say the name is a skill and which package already
 // carries it, because that toggle is the whole fix.
 func TestOpenNamesTheFixWhenAnEnabledNameIsASkill(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	writeSkillPackages(t, root, "version: 1\npackages:\n  hive:\n    include: [\"hive-*\"]\n")
 	writeAgentWorkspaceManifest(t, root, "legacy", "version: 3\nname: Legacy\nagent: claude\ncommand: true\n"+
@@ -1502,7 +1509,7 @@ func TestOpenNamesTheFixWhenAnEnabledNameIsASkill(t *testing.T) {
 // a profile running a CLI this build knows gets that CLI's wiring appended so
 // the preset is launchable rather than merely present.
 func TestPresetsSeedFromHiveProfiles(t *testing.T) {
-	isolateConfig(t)
+	t.Parallel()
 	root := t.TempDir()
 	svc := newManifestOnlyService(t, root, map[string]string{
 		"claude": "claude --dangerously-skip-permissions",

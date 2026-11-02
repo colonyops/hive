@@ -267,8 +267,4 @@ test.describe('feed', { tag: [tag.feed] }, () => {
     await expect(page.getByTestId('feed-search')).toHaveValue('j')
     await expect(detail).toContainText('batch_spawn: fix detached tmux env & PATH propagation')
   })
-
-  test('captures a full-window screenshot', async ({ page, browserName }) => {
-    await page.screenshot({ path: screenshotPath(`full-window-${browserName}.png`), fullPage: true })
-  })
 })

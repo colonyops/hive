@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process'
-import { type Page } from '@playwright/test'
+import { type Page, type Route } from '@playwright/test'
 import { screenshotPath } from '../../../fixtures/paths.js'
 import { serverURL } from '../../../fixtures/servers.js'
 import { expect, resetServerState, tag, test } from '../../../fixtures/test.js'
 import { bindingID } from '../../../fixtures/wails.js'
+import { mockTerminalAPI } from '../../../fixtures/terminal.js'
 
 // The Code view against a real server: server-a from test/remote, reached over
 // ssh the way the app reaches it. scripts/serve.sh writes the ssh config the
@@ -39,20 +40,12 @@ async function stubTerminals(page: Page): Promise<string[]> {
     if (id === scratch) return route.fulfill({ json: { slug: '', name: '' } })
     return route.fallback()
   })
-  await page.route('**/api/terminal/**', async (route) => {
-    const path = new URL(route.request().url()).pathname.replace('/api/terminal/', '')
-    const headers = {
-      'Access-Control-Allow-Origin': route.request().headers().origin ?? '*',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    }
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
-    if (path === 'attach') {
+  await mockTerminalAPI(page, {
+    attach: (route: Route) => {
       attached.push(route.request().postDataJSON().slug)
-      return route.fulfill({ json: { windows: [] }, headers })
-    }
-    if (path === 'windows/list') return route.fulfill({ json: { sessions: {} }, headers })
-    return route.fulfill({ status: 204, headers })
+      return { windows: [] }
+    },
+    'windows/list': { sessions: {} },
   })
   await page.routeWebSocket('**/api/terminal/stream?*', () => {})
   return attached

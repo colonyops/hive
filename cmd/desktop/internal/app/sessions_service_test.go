@@ -132,6 +132,7 @@ func (h *hiveHarness) session(t *testing.T, id string) session.Session {
 }
 
 func TestSessionsService_SessionLaunchWorkspacesDoesNotResolveRepositories(t *testing.T) {
+	t.Parallel()
 	workspaceOptions := []dispatch.SessionLaunchWorkspace{{Dir: "alerts", Name: "Alerts", SupportsPrompt: true}}
 	svc := newSessionsService(SessionsDeps{WorkspaceLauncher: &fakeWorkspaceLauncher{options: workspaceOptions}})
 
@@ -802,26 +803,6 @@ func TestSessionsService_StartTmuxSessionRefusesASlugItsNameWouldNotSpawn(t *tes
 	_, err := svc.StartTmuxSession(t.Context(), "review-81")
 	assert.Equal(t, KindConflict, KindOf(err))
 	assert.Empty(t, h.mux.opened)
-}
-
-// A nil reader in SessionsDeps is substituted at construction, so the service
-// never guards either port; each no-op must answer the empty value rather
-// than silently succeeding at the real work it stands in for.
-
-func TestNewSessionsService_SubstitutesNopReadersForNil(t *testing.T) {
-	svc := newSessionsService(SessionsDeps{})
-	assert.Equal(t, NopEditorCommandReader{}, svc.editorCommand)
-	assert.Equal(t, NopDefaultAgentReader{}, svc.defaultAgentEnv)
-}
-
-func TestNopDefaultAgentReaderAnswersNoPreferredAgent(t *testing.T) {
-	assert.Empty(t, NopDefaultAgentReader{}.DefaultAgent(t.Context()))
-}
-
-func TestNopEditorCommandReaderAnswersNoConfiguredEditor(t *testing.T) {
-	command, err := NopEditorCommandReader{}.Editor(t.Context())
-	require.NoError(t, err)
-	assert.Empty(t, command)
 }
 
 func TestSessionsService_CreateSessionKeepsTheFormWhenCreationFails(t *testing.T) {

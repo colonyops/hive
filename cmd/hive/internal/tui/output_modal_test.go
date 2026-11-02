@@ -14,6 +14,7 @@ import (
 )
 
 func TestOutputModal_NewOutputModal(t *testing.T) {
+	t.Parallel()
 	m := NewOutputModal("Test Title")
 
 	assert.Equal(t, "Test Title", m.title)
@@ -23,6 +24,7 @@ func TestOutputModal_NewOutputModal(t *testing.T) {
 }
 
 func TestOutputModal_AddLine(t *testing.T) {
+	t.Parallel()
 	t.Run("adds single line", func(t *testing.T) {
 		m := NewOutputModal("Test")
 		m.AddLine("line 1")
@@ -57,6 +59,7 @@ func TestOutputModal_AddLine(t *testing.T) {
 }
 
 func TestOutputModal_SetComplete(t *testing.T) {
+	t.Parallel()
 	t.Run("marks as complete without error", func(t *testing.T) {
 		m := NewOutputModal("Test")
 		assert.True(t, m.IsRunning())
@@ -79,6 +82,7 @@ func TestOutputModal_SetComplete(t *testing.T) {
 }
 
 func TestOutputModal_Overlay(t *testing.T) {
+	t.Parallel()
 	t.Run("renders with running state", func(t *testing.T) {
 		m := NewOutputModal("Running Task")
 		m.AddLine("output line")

@@ -28,6 +28,7 @@ func (h *terminalHarness) popupStreamURL(id, token, version string) string {
 // bearer-token gate rather than declaring a second one. A regression here would
 // leave arbitrary command execution unauthenticated (ADR terminal-transport).
 func TestPopupTerminalControlPlaneRequiresTheBearerToken(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 	body := map[string]any{"id": "nothing-here"}
 
@@ -45,6 +46,7 @@ func TestPopupTerminalControlPlaneRequiresTheBearerToken(t *testing.T) {
 }
 
 func TestPopupTerminalControlPlaneAnswersPreflight(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodOptions, h.server.URL+PopupTerminalPathPrefix+"open", nil)
@@ -63,6 +65,7 @@ func TestPopupTerminalControlPlaneAnswersPreflight(t *testing.T) {
 // terminal is dropped, so a caller closing one it already saw exit is not an
 // error.
 func TestPopupTerminalCloseIsIdempotent(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 
 	resp := h.post(t, PopupTerminalPathPrefix+"close", testToken, map[string]any{"id": "t99"})
@@ -75,6 +78,7 @@ func TestPopupTerminalCloseIsIdempotent(t *testing.T) {
 }
 
 func TestPopupTerminalListsNothingBeforeAnyOpen(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 
 	resp := h.post(t, PopupTerminalPathPrefix+"list", testToken, struct{}{})
@@ -87,6 +91,7 @@ func TestPopupTerminalListsNothingBeforeAnyOpen(t *testing.T) {
 }
 
 func TestPopupTerminalResizeAlwaysCarriesASize(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 
 	resp := h.post(t, PopupTerminalPathPrefix+"resize", testToken, map[string]any{"id": "t1", "cols": 0, "rows": 0})
@@ -95,6 +100,7 @@ func TestPopupTerminalResizeAlwaysCarriesASize(t *testing.T) {
 }
 
 func TestPTYStreamRejectsBadHandshakes(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 
 	dial := func(t *testing.T, target string) int {
@@ -122,6 +128,7 @@ func TestPTYStreamRejectsBadHandshakes(t *testing.T) {
 // socket, and type into a shell this process owns. Everything below it is
 // tested without a transport, so this is the one place the two meet.
 func TestPTYStreamOpensAndEchoesOverTheWire(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 	dir := t.TempDir()
 
@@ -168,6 +175,7 @@ func TestPTYStreamOpensAndEchoesOverTheWire(t *testing.T) {
 // caller-supplied command beside the id, or an id the catalog does not hold,
 // is a refusal. The session-scoping gate has its own test below.
 func TestPopupTerminalLauncherOpenRefusesCallerOverrides(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 
 	conflict := h.post(t, PopupTerminalPathPrefix+"open", testToken, map[string]any{"launcher": "lazygit", "command": "rm -rf /"})
@@ -183,6 +191,7 @@ func TestPopupTerminalLauncherOpenRefusesCallerOverrides(t *testing.T) {
 // takes a live session, and neither omitting the slug nor sending a directory
 // beside it opens a terminal (ADR quick-terminal-launchers-are-session-scoped).
 func TestPopupTerminalRefusesASessionScopedLauncherWithoutASession(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 
 	sessionless := h.post(t, PopupTerminalPathPrefix+"open", testToken, map[string]any{"launcher": "lazygit"})
@@ -207,6 +216,7 @@ func TestPopupTerminalRefusesASessionScopedLauncherWithoutASession(t *testing.T)
 // One socket carries one terminal, so an output frame is a tag and the bytes —
 // no ids to parse and nothing for the renderer to decode before writing.
 func TestPopupFramesCarryNoIDs(t *testing.T) {
+	t.Parallel()
 	output, ok := encodePopupEvent(ptyterm.Output{Data: []byte("hello")})
 	require.True(t, ok)
 	require.Equal(t, popupFrameOutput, output[0])

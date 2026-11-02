@@ -22,6 +22,7 @@ func newModelWithBuffer(ctrl *ToastController) Model {
 // loop by sending toastTickMsg messages and verifying the toast is removed after
 // the expected number of ticks.
 func TestToastUpdateLoop_tick_chain_expires_at_TTL(t *testing.T) {
+	t.Parallel()
 	ctrl, now := newTestController()
 
 	ctrl.Push(notify.Notification{Level: notify.LevelInfo, Message: "test"})
@@ -52,6 +53,7 @@ func TestToastUpdateLoop_tick_chain_expires_at_TTL(t *testing.T) {
 // TestToastUpdateLoop_drainNotifications_starts_tick starts from a drain signal
 // and verifies the full chain through Update.
 func TestToastUpdateLoop_drainNotifications_starts_tick(t *testing.T) {
+	t.Parallel()
 	ctrl := NewToastController()
 	m := newModelWithBuffer(ctrl)
 
@@ -66,6 +68,7 @@ func TestToastUpdateLoop_drainNotifications_starts_tick(t *testing.T) {
 // TestToastUpdateLoop_full_lifecycle runs notification → tick chain → expiry
 // end-to-end through the Model Update loop.
 func TestToastUpdateLoop_full_lifecycle(t *testing.T) {
+	t.Parallel()
 	ctrl, now := newTestController()
 	m := newModelWithBuffer(ctrl)
 
@@ -99,6 +102,7 @@ func TestToastUpdateLoop_full_lifecycle(t *testing.T) {
 // notification pushed while the tick chain is running gets its own tick cmd,
 // ensuring the chain continues even if the original chain's cmd is in-flight.
 func TestToastUpdateLoop_second_notification_during_chain(t *testing.T) {
+	t.Parallel()
 	ctrl, now := newTestController()
 
 	m := newModelWithBuffer(ctrl)
@@ -150,6 +154,7 @@ func TestToastUpdateLoop_second_notification_during_chain(t *testing.T) {
 // TestToastUpdateLoop_new_toast_after_chain_stops verifies that draining a
 // newly buffered notification restarts the chain after all toasts expire.
 func TestToastUpdateLoop_new_toast_after_chain_stops(t *testing.T) {
+	t.Parallel()
 	ctrl, now := newTestController()
 	m := newModelWithBuffer(ctrl)
 

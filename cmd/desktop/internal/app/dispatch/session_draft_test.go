@@ -9,6 +9,7 @@ import (
 )
 
 func TestRenderSessionDraft_DerivesCloneableRepository(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		url     string
@@ -31,6 +32,7 @@ func TestRenderSessionDraft_DerivesCloneableRepository(t *testing.T) {
 }
 
 func TestRenderSessionDraft_NameAndPrompt(t *testing.T) {
+	t.Parallel()
 	draft, err := RenderSessionDraft("Fix the crash", "https://github.com/acme/site/issues/1",
 		[]byte(`{"repo":"acme/site","body":"Steps to repro"}`), nil)
 	require.NoError(t, err)
@@ -41,6 +43,7 @@ func TestRenderSessionDraft_NameAndPrompt(t *testing.T) {
 }
 
 func TestRenderSessionDraftItemsCombinesOnePromptInOrder(t *testing.T) {
+	t.Parallel()
 	draft, err := RenderSessionDraftItems([]SessionDraftItem{
 		{Title: "Fix first", URL: "https://github.com/acme/site/issues/1", Payload: []byte(`{"repo":"acme/site","body":"First body"}`)},
 		{Title: "Fix second", URL: "https://github.com/acme/site/issues/2", Payload: []byte(`{"repo":"acme/site","body":"Second body"}`)},
@@ -61,6 +64,7 @@ func TestRenderSessionDraftItemsCombinesOnePromptInOrder(t *testing.T) {
 }
 
 func TestSessionDraftMetadataRoundTrip(t *testing.T) {
+	t.Parallel()
 	draft := SessionDraft{
 		Server:     "box",
 		Repository: "https://github.com/acme/site.git",
@@ -95,6 +99,7 @@ func TestSessionDraftMetadataRoundTrip(t *testing.T) {
 
 // A blank form was never submitted, so a row that claims one prefills nothing.
 func TestSessionDraftFromMetadataRejectsWhatItDidNotWrite(t *testing.T) {
+	t.Parallel()
 	for name, meta := range map[string]map[string]string{
 		"nil":           nil,
 		"empty":         {},
@@ -112,6 +117,7 @@ func TestSessionDraftFromMetadataRejectsWhatItDidNotWrite(t *testing.T) {
 // "Default agent" round-trips as empty rather than as the configured default,
 // which would change what the user picked.
 func TestSessionDraftMetadataDecodesLegacyItemID(t *testing.T) {
+	t.Parallel()
 	got, ok := SessionDraftFromMetadata(map[string]string{
 		RetryMetadataKey: RetryKindSessionCreate,
 		"repository":     "r",
@@ -123,6 +129,7 @@ func TestSessionDraftMetadataDecodesLegacyItemID(t *testing.T) {
 }
 
 func TestSessionDraftMetadataKeepsAnEmptyAgentEmpty(t *testing.T) {
+	t.Parallel()
 	got, ok := SessionDraftFromMetadata(SessionDraftMetadata(SessionDraft{Repository: "r", Name: "n"}))
 	require.True(t, ok)
 	assert.Empty(t, got.Agent)
@@ -131,6 +138,7 @@ func TestSessionDraftMetadataKeepsAnEmptyAgentEmpty(t *testing.T) {
 }
 
 func TestSessionDraftMetadataRoundTripsAWorkspaceTarget(t *testing.T) {
+	t.Parallel()
 	draft := SessionDraft{Workspace: "alerts", Name: "incident", Prompt: "triage", ItemIDs: []int64{42}}
 	got, ok := SessionDraftFromMetadata(SessionDraftMetadata(draft))
 	require.True(t, ok)

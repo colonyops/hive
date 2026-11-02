@@ -35,6 +35,7 @@ func enqueueTestCommand(t *testing.T, st *Stores, actionID, key string) {
 }
 
 func TestCommit_RecordsTheItemAnActionCommandCameFrom(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	routed := models.ItemRef{ProfileID: "p", SourceKind: "github", SourceScope: "acct", ExternalID: "acme/repo#1"}
@@ -55,6 +56,7 @@ func TestCommit_RecordsTheItemAnActionCommandCameFrom(t *testing.T) {
 }
 
 func TestConfirm_KeepsTheRoutedOriginAndFillsAMissingOne(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	routed := models.ItemRef{ProfileID: "p", SourceKind: "github", SourceScope: "acct", ExternalID: "acme/repo#1"}
@@ -81,6 +83,7 @@ func TestConfirm_KeepsTheRoutedOriginAndFillsAMissingOne(t *testing.T) {
 }
 
 func TestRecoverInterruptedOutputCommands_JoinsTransaction(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -107,6 +110,7 @@ func TestRecoverInterruptedOutputCommands_JoinsTransaction(t *testing.T) {
 }
 
 func TestListRunnableOutputCommands_ReturnsOldestIDFirst(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -124,6 +128,7 @@ func TestListRunnableOutputCommands_ReturnsOldestIDFirst(t *testing.T) {
 }
 
 func TestListRunnableOutputCommands_RespectsLimit(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -139,6 +144,7 @@ func TestListRunnableOutputCommands_RespectsLimit(t *testing.T) {
 // A guarded conflict returns the existing command with created=false, so an
 // already-running or completed action cannot fire again.
 func TestConfirmOutputCommandDeduplicatesExistingCommand(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -164,6 +170,7 @@ func TestConfirmOutputCommandDeduplicatesExistingCommand(t *testing.T) {
 // No completed prior run is a not-found result: IsNotFound must stay true and
 // the error must continue to unwrap to sql.ErrNoRows.
 func TestRerunOutputCommandRequiresPriorRun(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 
 	_, err := st.OutputCommands.Rerun(t.Context(), "action-a", "missing", []byte(`{}`), models.ItemRef{}, "claim")
@@ -172,6 +179,7 @@ func TestRerunOutputCommandRequiresPriorRun(t *testing.T) {
 }
 
 func TestRerunOutputCommandRejectsActivePriorRun(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	enqueueTestCommand(t, st, "action-a", "active")
 
@@ -181,6 +189,7 @@ func TestRerunOutputCommandRejectsActivePriorRun(t *testing.T) {
 }
 
 func TestMarkOutputCommandDone_ExcludesFromRunnable(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -194,6 +203,7 @@ func TestMarkOutputCommandDone_ExcludesFromRunnable(t *testing.T) {
 }
 
 func TestRequeueOutputCommandStaysRunnableAndCountsClaims(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -216,6 +226,7 @@ func TestRequeueOutputCommandStaysRunnableAndCountsClaims(t *testing.T) {
 }
 
 func TestMarkOutputCommandDoneClearsPreviousFailure(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	enqueueTestCommand(t, st, "action-a", "k1")
 	claimed := claimNextTestCommand(t, st)
@@ -232,6 +243,7 @@ func TestMarkOutputCommandDoneClearsPreviousFailure(t *testing.T) {
 }
 
 func TestExecutionResultAndLogsPersistAcrossReopenBeforeDone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	db, err := queries.Open(t.Context(), dir, queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -257,6 +269,7 @@ func TestExecutionResultAndLogsPersistAcrossReopenBeforeDone(t *testing.T) {
 }
 
 func TestMarkOutputCommandFailed_ExcludesFromRunnable(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -280,6 +293,7 @@ func TestMarkOutputCommandFailed_ExcludesFromRunnable(t *testing.T) {
 }
 
 func TestOutputCommandClaimsAreAtomic(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	enqueueTestCommand(t, st, "action-a", "k1")
 	enqueueTestCommand(t, st, "action-a", "k2")
@@ -309,6 +323,7 @@ func TestOutputCommandClaimsAreAtomic(t *testing.T) {
 }
 
 func TestOutputCommandTerminalTransitionRejectsStaleClaim(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	enqueueTestCommand(t, st, "action-a", "k1")
 	claimed := claimNextTestCommand(t, st)
@@ -320,6 +335,7 @@ func TestOutputCommandTerminalTransitionRejectsStaleClaim(t *testing.T) {
 }
 
 func TestOutputCommandStore_CountNonterminalForAction(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 

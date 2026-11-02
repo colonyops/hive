@@ -12,6 +12,7 @@ import (
 )
 
 func TestServiceUnits(t *testing.T) {
+	t.Parallel()
 	const (
 		home   = "/home/ada"
 		binary = "/opt/hive/bin/hive"
@@ -43,6 +44,7 @@ func TestServiceUnits(t *testing.T) {
 }
 
 func TestSystemdUnitKillsOnlyTheDaemon(t *testing.T) {
+	t.Parallel()
 	unit := daemon.SystemdUnit("/h", "/bin/hive", "/d", "/c.yaml")
 	assert.Contains(t, unit.Contents, "KillMode=process")
 	assert.Contains(t, unit.Contents, "Restart=always")

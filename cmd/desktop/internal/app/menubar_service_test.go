@@ -45,9 +45,7 @@ wires:
   - { from: src, to: other }
 `), 0o644))
 
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	bus := events.New(zerolog.Nop())
 	service := newMenuBarService(MenuBarDeps{

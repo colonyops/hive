@@ -18,6 +18,7 @@ func webhookNode(id string) flow.Node {
 // A topic the log read leaves out must be one no entry would have accepted,
 // or the flow would silently lose messages.
 func TestRoutedTopicsMatchesEntryAcceptance(t *testing.T) {
+	t.Parallel()
 	runner, err := NewRunner(flow.Flow{
 		ID:    "f",
 		Nodes: []flow.Node{webhookNode("a"), webhookNode("b"), {ID: "inbox", Type: "feed", Config: &flow.FeedConfig{}}},
@@ -37,6 +38,7 @@ func TestRoutedTopicsMatchesEntryAcceptance(t *testing.T) {
 }
 
 func TestRoutedTopicsCoversEverythingForANonSourceEntry(t *testing.T) {
+	t.Parallel()
 	runner, err := NewRunner(flow.Flow{
 		ID:    "f",
 		Nodes: []flow.Node{webhookNode("a"), {ID: "inbox", Type: "feed", Config: &flow.FeedConfig{}}},

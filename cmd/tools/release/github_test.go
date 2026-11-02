@@ -93,6 +93,7 @@ func mustVersion(t *testing.T, value string) releaseVersion {
 }
 
 func TestReleaseNotesHeader(t *testing.T) {
+	t.Parallel()
 	header := releaseNotesHeader(mustVersion(t, "0.60.0"), "https://dl.hivedesktop.com")
 	for _, want := range []string{
 		"https://dl.hivedesktop.com/desktop/releases/0.60.0/",
@@ -107,6 +108,7 @@ func TestReleaseNotesHeader(t *testing.T) {
 // gh lists recent runs: other tags, and earlier runs for this one. The run to
 // watch is the newest one for the tag created after the previous one.
 func TestNewestRunFor(t *testing.T) {
+	t.Parallel()
 	at := func(hour, minute int) time.Time { return time.Date(2026, 10, 1, hour, minute, 0, 0, time.UTC) }
 	runs := []workflowRun{
 		{ID: 1, Title: "Publish v0.60.0", CreatedAt: at(11, 0)},
@@ -131,6 +133,7 @@ func TestNewestRunFor(t *testing.T) {
 // so an existing release does not mean the run finished, and a run that
 // failed after creating it cannot be dispatched again.
 func TestDecidePublishStep(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		run           workflowRun

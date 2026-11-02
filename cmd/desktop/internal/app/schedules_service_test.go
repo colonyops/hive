@@ -74,9 +74,7 @@ func newTestSchedulesService(t *testing.T) scheduleFixture {
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", "claude"+agentws.PromptTail, ""))
 
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 
 	workspaces := agentws.NewStore(root)
@@ -119,6 +117,7 @@ func (f scheduleFixture) declare(t *testing.T, specs ...schedule.Spec) {
 // one whose manifest does not parse is refused with the reason rather than
 // answered with rows the file no longer says.
 func TestSchedulesServiceListJoinsTheSpecsWithTheirRunState(t *testing.T) {
+	t.Parallel()
 	f := newTestSchedulesService(t)
 	f.declare(t, schedule.Spec{
 		ID: "weekly", Name: "Weekly summary", Cron: "0 9 * * 5", Prompt: "Summarize the week.",
@@ -162,6 +161,7 @@ func TestSchedulesServiceListJoinsTheSpecsWithTheirRunState(t *testing.T) {
 // describes, so a database that cannot answer for it costs the row its
 // lastRun, not the caller its listing.
 func TestScheduleRowsSurviveAnUnreadableRunHistory(t *testing.T) {
+	t.Parallel()
 	f := newTestSchedulesService(t)
 
 	f.declare(t, schedule.Spec{ID: "weekly", Name: "Weekly summary", Cron: "@daily", Prompt: "go"})
@@ -176,6 +176,7 @@ func TestScheduleRowsSurviveAnUnreadableRunHistory(t *testing.T) {
 }
 
 func TestSchedulesServiceRunNowRecordsAManualRun(t *testing.T) {
+	t.Parallel()
 	f := newTestSchedulesService(t)
 
 	f.declare(t, schedule.Spec{
@@ -210,6 +211,7 @@ func TestSchedulesServiceRunNowRecordsAManualRun(t *testing.T) {
 // History is per schedule, and a schedule that no longer exists still answers
 // with what it did.
 func TestSchedulesServiceRunsAnswerForARemovedSchedule(t *testing.T) {
+	t.Parallel()
 	f := newTestSchedulesService(t)
 
 	for i, id := range []string{"alpha", "beta"} {
@@ -243,6 +245,7 @@ func TestSchedulesServiceRunsAnswerForARemovedSchedule(t *testing.T) {
 // the wrong workspace or id: those are not_found, the way the rest of the
 // surface answers for a thing that does not exist.
 func TestSchedulesServiceRunsTellAMissingScheduleFromOneThatNeverRan(t *testing.T) {
+	t.Parallel()
 	f := newTestSchedulesService(t)
 	f.declare(t, schedule.Spec{ID: "alpha", Cron: "@daily", Prompt: "go"})
 
@@ -267,6 +270,7 @@ func TestSchedulesServiceRunsTellAMissingScheduleFromOneThatNeverRan(t *testing.
 // scheduled chat deletes itself when its task is done, and a history entry
 // must not offer to open a chat nobody can.
 func TestSchedulesServiceRunsDropAChatThatWasDeleted(t *testing.T) {
+	t.Parallel()
 	f := newTestSchedulesService(t)
 	f.declare(t, schedule.Spec{ID: "alpha", Cron: "@daily", Prompt: "go"})
 
@@ -297,6 +301,7 @@ func TestSchedulesServiceRunsDropAChatThatWasDeleted(t *testing.T) {
 }
 
 func TestSchedulesServicePreviewReportsErrorsAsFields(t *testing.T) {
+	t.Parallel()
 	f := newTestSchedulesService(t)
 
 	preview, err := f.svc.Preview(t.Context(), PreviewRequest{

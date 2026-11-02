@@ -10,6 +10,7 @@ import (
 )
 
 func TestSmokeHelp(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	out, err := h.Run("help")
 	require.NoError(t, err, "hive help should succeed: %s", out)

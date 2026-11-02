@@ -31,6 +31,7 @@ func testDraft() releasenotes.Entry {
 // A fresh install has no version it upgraded *from*, so it adopts the running
 // version silently rather than announcing a release the user never crossed.
 func TestPendingIsSilentOnAFreshInstall(t *testing.T) {
+	t.Parallel()
 	service := newTestReleaseNotes(t, testEntries("1.2.0"))
 
 	assert.Equal(t, PendingNotes{}, service.Pending(t.Context(), "1.2.0"))
@@ -39,6 +40,7 @@ func TestPendingIsSilentOnAFreshInstall(t *testing.T) {
 }
 
 func TestPendingShowsNotesAfterAnUpgrade(t *testing.T) {
+	t.Parallel()
 	service := newTestReleaseNotes(t, testEntries("1.3.0", "1.2.0"))
 	require.NoError(t, service.Acknowledge(t.Context(), "1.2.0"))
 
@@ -52,6 +54,7 @@ func TestPendingShowsNotesAfterAnUpgrade(t *testing.T) {
 
 // The acceptance criterion: shown once, then not again for that version.
 func TestPendingStopsAfterAcknowledgement(t *testing.T) {
+	t.Parallel()
 	service := newTestReleaseNotes(t, testEntries("1.3.0", "1.2.0"))
 	require.NoError(t, service.Acknowledge(t.Context(), "1.2.0"))
 
@@ -64,6 +67,7 @@ func TestPendingStopsAfterAcknowledgement(t *testing.T) {
 }
 
 func TestPendingIsSilentOnSourceBuilds(t *testing.T) {
+	t.Parallel()
 	service := newTestReleaseNotes(t, testEntries("1.3.0"))
 	require.NoError(t, service.Acknowledge(t.Context(), "1.2.0"))
 
@@ -72,6 +76,7 @@ func TestPendingIsSilentOnSourceBuilds(t *testing.T) {
 }
 
 func TestPendingIsSilentOnADowngrade(t *testing.T) {
+	t.Parallel()
 	service := newTestReleaseNotes(t, testEntries("1.3.0", "1.2.0"))
 	require.NoError(t, service.Acknowledge(t.Context(), "1.3.0"))
 
@@ -83,6 +88,7 @@ func TestPendingIsSilentOnADowngrade(t *testing.T) {
 // previous build showed, so it reports the bump in a toast rather than
 // reopening a modal over it.
 func TestPendingUsesAToastWhenOnlyTheDraftIsNew(t *testing.T) {
+	t.Parallel()
 	service := newTestReleaseNotes(t, releasenotes.Entries{testDraft()})
 	require.NoError(t, service.Acknowledge(t.Context(), "1.2.0-dev.3"))
 
@@ -97,6 +103,7 @@ func TestPendingUsesAToastWhenOnlyTheDraftIsNew(t *testing.T) {
 // build itself follows — an install still on a prerelease from before the
 // shared version has arrived at the release it was testing.
 func TestPendingUsesAModalWhenAReleaseIsCrossed(t *testing.T) {
+	t.Parallel()
 	service := newTestReleaseNotes(t, releasenotes.Entries{testDraft(), releasenotes.Entry{Version: "1.2.0", Body: "notes"}})
 	require.NoError(t, service.Acknowledge(t.Context(), "1.2.0-dev.9"))
 
@@ -108,6 +115,7 @@ func TestPendingUsesAModalWhenAReleaseIsCrossed(t *testing.T) {
 // An upgrade with nothing in range still reports the version bump — a modal
 // with an empty body would say less than the one-line toast does.
 func TestPendingDegradesToAToastWhenNoEntriesExist(t *testing.T) {
+	t.Parallel()
 	service := newTestReleaseNotes(t, testEntries("1.2.0"))
 	require.NoError(t, service.Acknowledge(t.Context(), "1.2.0"))
 
@@ -119,6 +127,7 @@ func TestPendingDegradesToAToastWhenNoEntriesExist(t *testing.T) {
 }
 
 func TestPendingCollectsEverySkippedRelease(t *testing.T) {
+	t.Parallel()
 	service := newTestReleaseNotes(t, testEntries("1.4.0", "1.3.0", "1.2.0"))
 	require.NoError(t, service.Acknowledge(t.Context(), "1.2.0"))
 
@@ -131,6 +140,7 @@ func TestPendingCollectsEverySkippedRelease(t *testing.T) {
 // History is not scoped to a channel: every entry is either a release, which
 // every channel manifest received, or this build's own draft.
 func TestHistoryIsEverythingTheBuildCarries(t *testing.T) {
+	t.Parallel()
 	entries := releasenotes.Entries{testDraft(), releasenotes.Entry{Version: "1.2.0", Body: "notes"}}
 	service := newTestReleaseNotes(t, entries)
 
@@ -140,6 +150,7 @@ func TestHistoryIsEverythingTheBuildCarries(t *testing.T) {
 // The constructor degrades rather than failing when the changelog cannot be
 // parsed, because release notes are not worth refusing to launch over.
 func TestNewReleaseNotesServiceLoadsTheEmbeddedChangelog(t *testing.T) {
+	t.Parallel()
 	service := NewReleaseNotesService(settings.Paths{StateDir: t.TempDir()}, zerolog.Nop())
 
 	assert.NotEmpty(t, service.History(t.Context()))

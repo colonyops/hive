@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   SaveFlow: vi.fn(),
   SaveLayout: vi.fn(),
   NodeRuns: vi.fn(),
-  On: vi.fn(),
 }))
 
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/flowsservice', () => ({
@@ -29,10 +28,6 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
 
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice', () => ({
   NodeRuns: mocks.NodeRuns,
-}))
-
-vi.mock('@wailsio/runtime', () => ({
-  Events: { On: mocks.On },
 }))
 
 const flowSummaries = [
@@ -61,7 +56,6 @@ describe('FlowsView flow selector', () => {
     mocks.GetFlow.mockImplementation(async (id: string) => wireFlow(id, id === 'flow-2' ? 'Flow two' : 'Flow one'))
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
     mocks.NodeRuns.mockResolvedValue([])
-    mocks.On.mockReturnValue(() => {})
   })
 
   it('does not expose the in-canvas new-flow input or Add button', async () => {
@@ -104,7 +98,6 @@ describe('FlowsView deploy button', () => {
     mocks.GetFlow.mockImplementation(async (id: string) => wireFlow(id, id === 'flow-2' ? 'Flow two' : 'Flow one'))
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
     mocks.NodeRuns.mockResolvedValue([])
-    mocks.On.mockReturnValue(() => {})
   })
 
   it('is a plain button — no split menu carrying Copy prompt or a debug panel', async () => {

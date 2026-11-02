@@ -14,6 +14,7 @@ import (
 )
 
 func TestActionRunToolsReadTheRunAndItsLog(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	itemID := seedItem(t, core, "p", "item-1", `{"id":"item-1","title":"Ship it"}`)
 	ref := models.ItemRef{ProfileID: "p", SourceKind: "github", SourceScope: "s", ExternalID: "item-1"}

@@ -59,7 +59,7 @@ run = "podman run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CL
 ["cli:integration"]
 description = "Run the CLI integration tests inside Docker (never on the host)"
 depends = ["cli:build:container"]
-run = "docker build -f cmd/hive/Dockerfile.test -t hive-integration-test . && docker run --rm hive-integration-test"
+run = "test/integration/run.sh"
 
 # The ssh fixture for remote hive servers: two containers, server-a and
 # server-b, and the Go tests in test/remote that drive them.

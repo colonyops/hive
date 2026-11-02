@@ -12,9 +12,8 @@ import (
 )
 
 func TestDriveUploadStore(t *testing.T) {
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	t.Parallel()
+	database := db.OpenForTest(t)
 	s := NewDriveUploadStore(database)
 
 	repo, err := drive.RepositorySpace("colonyops", "hive")

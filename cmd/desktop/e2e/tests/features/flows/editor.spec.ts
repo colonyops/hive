@@ -17,7 +17,7 @@ test.describe('flows editor', { tag: [tag.flows] }, () => {
     await expect(page.getByTestId('feed-item')).toHaveCount(6)
   })
 
-  test('opens the flows editor from the command palette and shows the fixture flow', async ({ page }) => {
+  test('opens the flows editor from the command palette and shows the fixture flow', { tag: [tag.chromiumOnly] }, async ({ page }) => {
     await page.keyboard.press('Meta+k')
     const input = page.getByTestId('command-palette-input')
     await input.fill('edit flow')

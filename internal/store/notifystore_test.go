@@ -12,12 +12,11 @@ import (
 )
 
 func TestNotifyStore(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("save and list", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewNotifyStore(database)
 
@@ -39,9 +38,7 @@ func TestNotifyStore(t *testing.T) {
 	})
 
 	t.Run("list returns newest first", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewNotifyStore(database)
 
@@ -64,13 +61,11 @@ func TestNotifyStore(t *testing.T) {
 	})
 
 	t.Run("clear deletes all", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewNotifyStore(database)
 
-		_, err = store.Save(ctx, notify.Notification{
+		_, err := store.Save(ctx, notify.Notification{
 			Level:     notify.LevelWarning,
 			Message:   "warn",
 			CreatedAt: time.Now(),
@@ -85,9 +80,7 @@ func TestNotifyStore(t *testing.T) {
 	})
 
 	t.Run("count", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewNotifyStore(database)
 
@@ -110,9 +103,7 @@ func TestNotifyStore(t *testing.T) {
 	})
 
 	t.Run("empty list returns empty slice", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewNotifyStore(database)
 

@@ -15,6 +15,7 @@ func keyPress(code rune) tea.KeyPressMsg {
 }
 
 func TestNewNewSessionForm(t *testing.T) {
+	t.Parallel()
 	repos := []workspace.DiscoveredRepo{
 		{Path: "/code/alpha", Name: "alpha", Remote: "git@github.com:user/alpha.git"},
 		{Path: "/code/beta", Name: "beta", Remote: "git@github.com:user/beta.git"},

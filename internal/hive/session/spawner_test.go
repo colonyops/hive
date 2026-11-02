@@ -15,6 +15,7 @@ func testRenderer() *tmpl.Renderer {
 }
 
 func TestRenderWindowCommon(t *testing.T) {
+	t.Parallel()
 	r := testRenderer()
 	w := config.WindowConfig{
 		Name:    "agent",
@@ -30,6 +31,7 @@ func TestRenderWindowCommon(t *testing.T) {
 }
 
 func TestRenderWindowCommon_Panes(t *testing.T) {
+	t.Parallel()
 	r := testRenderer()
 	w := config.WindowConfig{
 		Name: "agent",
@@ -52,6 +54,7 @@ func TestRenderWindowCommon_Panes(t *testing.T) {
 }
 
 func TestRenderUserCommandWindows(t *testing.T) {
+	t.Parallel()
 	r := testRenderer()
 	windows := []config.WindowConfig{
 		{Name: "leader", Command: "claude 'Lead the review for {{ .Form.pr }}'"},

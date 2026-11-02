@@ -55,6 +55,7 @@ func TestEnvExecutorRunsCommandsWithTheResolvedPath(t *testing.T) {
 }
 
 func TestEnvExecutorRunsInTheGivenDirectory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	exec := newEnvExecutor(resolverFor(toolDir(t, "unused")))
 
@@ -66,6 +67,7 @@ func TestEnvExecutorRunsInTheGivenDirectory(t *testing.T) {
 // Hive streams hook output to io.Discard, so without this a missing command
 // reaches the jobs list as a bare exit status naming nothing.
 func TestEnvExecutorErrorNamesWhatTheShellCouldNotFind(t *testing.T) {
+	t.Parallel()
 	exec := newEnvExecutor(resolverFor(t.TempDir()))
 
 	err := exec.RunDirStream(t.Context(), t.TempDir(), io.Discard, io.Discard, "sh", "-c", "definitely-not-installed")
@@ -75,6 +77,7 @@ func TestEnvExecutorErrorNamesWhatTheShellCouldNotFind(t *testing.T) {
 }
 
 func TestEnvExecutorStillStreamsToItsCaller(t *testing.T) {
+	t.Parallel()
 	exec := newEnvExecutor(resolverFor(t.TempDir()))
 
 	var stderr strings.Builder
@@ -86,6 +89,7 @@ func TestEnvExecutorStillStreamsToItsCaller(t *testing.T) {
 // hive clones with `_, err := e.exec.Run(...)`, so git's own reason sat in a
 // return value nobody read.
 func TestEnvExecutorCarriesAFailedCommandsOutputInTheError(t *testing.T) {
+	t.Parallel()
 	exec := newEnvExecutor(resolverFor(t.TempDir()))
 
 	_, err := exec.Run(t.Context(), "sh", "-c", "echo 'Repository not found' >&2; exit 128")
@@ -99,6 +103,7 @@ func TestEnvExecutorCarriesAFailedCommandsOutputInTheError(t *testing.T) {
 }
 
 func TestEnvExecutorLeavesTheErrorAloneWhenACommandSaidNothing(t *testing.T) {
+	t.Parallel()
 	exec := newEnvExecutor(resolverFor(t.TempDir()))
 
 	_, err := exec.Run(t.Context(), "sh", "-c", "exit 1")
@@ -107,6 +112,7 @@ func TestEnvExecutorLeavesTheErrorAloneWhenACommandSaidNothing(t *testing.T) {
 }
 
 func TestEnvExecutorBoundsTheOutputItCarries(t *testing.T) {
+	t.Parallel()
 	exec := newEnvExecutor(resolverFor(t.TempDir()))
 
 	_, err := exec.Run(t.Context(), "sh", "-c", "head -c 100000 /dev/zero | tr '\\0' 'x'; exit 1")
@@ -117,6 +123,7 @@ func TestEnvExecutorBoundsTheOutputItCarries(t *testing.T) {
 // The incident's actual command, against real git. A local path keeps the test
 // off the network.
 func TestEnvExecutorCarriesGitsOwnReasonForARefusedClone(t *testing.T) {
+	t.Parallel()
 	exec := newEnvExecutor(resolverFor(t.TempDir()))
 	missing := filepath.Join(t.TempDir(), "no-such-repo")
 

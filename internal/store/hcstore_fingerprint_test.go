@@ -10,10 +10,9 @@ import (
 )
 
 func TestHCStoreFingerprint_ChangesOnEveryWrite(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 	store := NewHCStore(database)
 
 	empty, err := store.Fingerprint(ctx)

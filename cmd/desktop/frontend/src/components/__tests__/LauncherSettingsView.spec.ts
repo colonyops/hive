@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   DeleteLauncher: vi.fn(),
   KeybindingSettings: vi.fn(),
   SetKeybindingSettings: vi.fn(),
-  On: vi.fn(),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/actionsservice', () => ({
   ListActions: mocks.ListActions,
@@ -30,13 +29,11 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   KeybindingSettings: mocks.KeybindingSettings,
   SetKeybindingSettings: mocks.SetKeybindingSettings,
 }))
-vi.mock('@wailsio/runtime', () => ({ Events: { On: mocks.On } }))
 
 const lazygit: Launcher = { id: 'lazygit', label: 'lazygit', command: 'lazygit', cwd: '', icon: 'git-branch' }
 
 function mountSettings(launchers: Launcher[] = [lazygit]) {
   mocks.ListActions.mockResolvedValue({ actions: [], launchers, error: '' })
-  mocks.On.mockReturnValue(() => {})
   return mount(LauncherSettingsView, { attachTo: document.body })
 }
 function el<T extends HTMLElement>(id: string): T {

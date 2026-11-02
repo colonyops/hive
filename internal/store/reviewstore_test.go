@@ -13,12 +13,11 @@ import (
 )
 
 func TestReviewStore(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("create and get session", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewReviewStore(database)
 
@@ -37,25 +36,21 @@ func TestReviewStore(t *testing.T) {
 	})
 
 	t.Run("get session not found", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewReviewStore(database)
 
-		_, err = store.GetSession(ctx, "/nonexistent.md")
+		_, err := store.GetSession(ctx, "/nonexistent.md")
 		assert.ErrorIs(t, err, review.ErrSessionNotFound, "got %v, want ErrSessionNotFound", err)
 	})
 
 	t.Run("unique document path constraint", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewReviewStore(database)
 
 		docPath := "/tmp/unique.md"
-		_, err = store.CreateSession(ctx, docPath, "test-hash")
+		_, err := store.CreateSession(ctx, docPath, "test-hash")
 		require.NoError(t, err, "CreateSession")
 
 		// Attempt to create another session for the same document
@@ -64,9 +59,7 @@ func TestReviewStore(t *testing.T) {
 	})
 
 	t.Run("finalize session", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewReviewStore(database)
 
@@ -85,9 +78,7 @@ func TestReviewStore(t *testing.T) {
 	})
 
 	t.Run("delete session", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewReviewStore(database)
 
@@ -103,9 +94,7 @@ func TestReviewStore(t *testing.T) {
 	})
 
 	t.Run("save and list comments", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewReviewStore(database)
 
@@ -158,9 +147,7 @@ func TestReviewStore(t *testing.T) {
 	})
 
 	t.Run("delete comment", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewReviewStore(database)
 
@@ -189,9 +176,7 @@ func TestReviewStore(t *testing.T) {
 	})
 
 	t.Run("delete session cascades to comments", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewReviewStore(database)
 
@@ -228,9 +213,7 @@ func TestReviewStore(t *testing.T) {
 	})
 
 	t.Run("comments isolated by session", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
+		database := db.OpenForTest(t)
 
 		store := NewReviewStore(database)
 

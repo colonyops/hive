@@ -15,6 +15,7 @@ func itemRef() models.ItemRef {
 }
 
 func TestItemSessions_LinksAndListsNewestFirst(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	ref := itemRef()
@@ -36,6 +37,7 @@ func TestItemSessions_LinksAndListsNewestFirst(t *testing.T) {
 }
 
 func TestItemSessions_ScopedToTheItem(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	ref := itemRef()
@@ -52,6 +54,7 @@ func TestItemSessions_ScopedToTheItem(t *testing.T) {
 }
 
 func TestLinkItemSession_IsIdempotent(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	ref := itemRef()
@@ -67,6 +70,7 @@ func TestLinkItemSession_IsIdempotent(t *testing.T) {
 // An action invoked from a surface with no inbox item behind it carries a zero
 // ref, which must not become a link every such action shares.
 func TestItemSessions_OneSessionLinksToMultipleItems(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	first := itemRef()
@@ -87,6 +91,7 @@ func TestItemSessions_OneSessionLinksToMultipleItems(t *testing.T) {
 }
 
 func TestLinkItemSession_IgnoresAnUnknownRef(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -99,6 +104,7 @@ func TestLinkItemSession_IgnoresAnUnknownRef(t *testing.T) {
 }
 
 func TestUnlinkItemSessions_DropsOnlyTheNamedSessions(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	ref := itemRef()
@@ -116,6 +122,7 @@ func TestUnlinkItemSessions_DropsOnlyTheNamedSessions(t *testing.T) {
 // The row id is deliberately not what a link is keyed on: a replay deletes and
 // rebuilds every row a profile owns, and an association must outlive that.
 func TestItemSessions_SurviveAnItemRowBeingRebuilt(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	current := models.Observation{ExternalID: "acme/repo#1", Title: "one", SourceKind: "github", SourceScope: "acct", ObservedAt: 100, Payload: []byte(`{"v":1}`)}
@@ -148,6 +155,7 @@ func TestItemSessions_SurviveAnItemRowBeingRebuilt(t *testing.T) {
 // place, and the links are keyed on that scope -- so they have to move with
 // it.
 func TestItemSessions_FollowALegacyRowOntoItsHealedScope(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	legacy, err := db.InsertInboxItem(ctx, queries.InsertInboxItemParams{
@@ -171,6 +179,7 @@ func TestItemSessions_FollowALegacyRowOntoItsHealedScope(t *testing.T) {
 }
 
 func TestItemSessions_RescopeMergesAnExistingTargetLink(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	legacy := itemRef()
@@ -192,6 +201,7 @@ func TestItemSessions_RescopeMergesAnExistingTargetLink(t *testing.T) {
 }
 
 func TestItemSessionStore_DeleteByProfile(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	ref := itemRef()
@@ -219,6 +229,7 @@ func createChat(t *testing.T, st *Stores, name string) AgentSession {
 }
 
 func TestItemChats_LinksListsAndFollowsTheChat(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	ref := itemRef()
@@ -240,6 +251,7 @@ func TestItemChats_LinksListsAndFollowsTheChat(t *testing.T) {
 }
 
 func TestItemChats_IgnoresAnUnknownItem(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	chat := createChat(t, st, "orphan")
@@ -251,6 +263,7 @@ func TestItemChats_IgnoresAnUnknownItem(t *testing.T) {
 }
 
 func TestItemChats_RescopeAndDeleteByProfile(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	scoped := itemRef()

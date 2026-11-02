@@ -17,6 +17,7 @@ import (
 // frontend's terminal token are both refused, and a session's token answers
 // with when that session will be ended.
 func TestAgentSessionEndTakesTheSessionsOwnToken(t *testing.T) {
+	t.Parallel()
 	h := newAgentHarness(t)
 
 	anonymous := h.post(t, app.AgentSessionEndPath, "", nil)

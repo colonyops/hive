@@ -204,6 +204,7 @@ func newTestServiceWithBus(t *testing.T, store session.Store, cfg *config.Config
 }
 
 func TestRenameSession(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 
@@ -229,6 +230,7 @@ func TestRenameSession(t *testing.T) {
 }
 
 func TestRenameSession_Slugify(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 
@@ -263,6 +265,7 @@ func (m *renameMultiplexer) RenameSession(_ context.Context, from multiplexer.Ta
 }
 
 func TestRenameSessionPersistsActualTmuxTarget(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name      string
 		renameErr error
@@ -291,6 +294,7 @@ func TestRenameSessionPersistsActualTmuxTarget(t *testing.T) {
 }
 
 func TestRenameSession_NotFound(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 
@@ -299,6 +303,7 @@ func TestRenameSession_NotFound(t *testing.T) {
 }
 
 func TestRenameSession_EmptyName(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 
@@ -308,6 +313,7 @@ func TestRenameSession_EmptyName(t *testing.T) {
 }
 
 func TestRenameSession_InvalidChars(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 
@@ -321,6 +327,7 @@ func TestRenameSession_InvalidChars(t *testing.T) {
 // that tmux session detection always works via slug-based lookup, even when the display name
 // contains spaces or uppercase letters (e.g. "My Feature" → tmux session "my-feature").
 func TestCreateSession_SlugUsedAsTmuxName(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 
 	var capturedTmuxName string
@@ -394,6 +401,7 @@ func (c *capturingExec) RunDirStream(_ context.Context, _ string, _ io.Writer, _
 }
 
 func TestCreateSession_AgentKeyOverridesSpawnRenderer(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	mux := &capturingMux{}
 	cfg := &config.Config{
@@ -425,6 +433,7 @@ func TestCreateSession_AgentKeyOverridesSpawnRenderer(t *testing.T) {
 }
 
 func TestCreateSession_RuleAgentOverridesSpawnRenderer(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	mux := &capturingMux{}
 	cfg := &config.Config{
@@ -455,6 +464,7 @@ func TestCreateSession_RuleAgentOverridesSpawnRenderer(t *testing.T) {
 }
 
 func TestCreateSession_AgentKeyOverridesRuleAgent(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	mux := &capturingMux{}
 	cfg := &config.Config{
@@ -487,6 +497,7 @@ func TestCreateSession_AgentKeyOverridesRuleAgent(t *testing.T) {
 }
 
 func TestCreateSession_UnknownAgentKey(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	cfg := &config.Config{
 		DataDir: t.TempDir(),
@@ -520,6 +531,7 @@ func (c *capturingMux) CreateSession(_ context.Context, spec multiplexer.Session
 }
 
 func TestEnforceMaxRecycled(t *testing.T) {
+	t.Parallel()
 	intPtr := func(n int) *int { return &n }
 
 	t.Run("unlimited (0) does nothing", func(t *testing.T) {
@@ -637,6 +649,7 @@ func TestEnforceMaxRecycled(t *testing.T) {
 }
 
 func TestPrune(t *testing.T) {
+	t.Parallel()
 	intPtr := func(n int) *int { return &n }
 
 	t.Run("all=true deletes all recycled", func(t *testing.T) {
@@ -860,6 +873,7 @@ func TestPrune(t *testing.T) {
 }
 
 func TestSessionService_Events(t *testing.T) {
+	t.Parallel()
 	t.Run("create emits session.created", func(t *testing.T) {
 		store := newMockStore()
 		tb := testbus.New(t)
@@ -954,6 +968,7 @@ func TestSessionService_Events(t *testing.T) {
 }
 
 func TestCreateSession_PathFormat(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	cfg := &config.Config{
 		DataDir: t.TempDir(),
@@ -978,6 +993,7 @@ func TestCreateSession_PathFormat(t *testing.T) {
 }
 
 func TestRecycleSession_PathUnchanged(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	cfg := &config.Config{
 		DataDir: t.TempDir(),
@@ -1018,6 +1034,7 @@ func (m *killMultiplexer) KillSession(_ context.Context, target multiplexer.Targ
 }
 
 func TestRecycleSession_KillsPersistedTargetAndClearsIt(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
 	svc := newTestService(t, store, cfg)
@@ -1039,6 +1056,7 @@ func TestRecycleSession_KillsPersistedTargetAndClearsIt(t *testing.T) {
 }
 
 func TestCreateSession_RecycledSessionKeepsPathAndResetsAge(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	cfg := &config.Config{
 		DataDir: t.TempDir(),
@@ -1085,6 +1103,7 @@ func TestCreateSession_RecycledSessionKeepsPathAndResetsAge(t *testing.T) {
 }
 
 func TestCreateSession_RecycledCloneTakesTheRequestedID(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
 	svc := newTestService(t, store, cfg)
@@ -1107,6 +1126,7 @@ func (takenCloneStore) ReplaceRecycled(context.Context, string, session.Session)
 }
 
 func TestCreateSession_FailsWhenAnotherCreateTookTheRecycledClone(t *testing.T) {
+	t.Parallel()
 	store := takenCloneStore{newMockStore()}
 	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
 	svc := newTestService(t, store, cfg)
@@ -1118,6 +1138,7 @@ func TestCreateSession_FailsWhenAnotherCreateTookTheRecycledClone(t *testing.T) 
 }
 
 func TestCreateSession_DuplicateNameRejected(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	cfg := &config.Config{
 		DataDir: t.TempDir(),
@@ -1158,6 +1179,7 @@ func TestCreateSession_DuplicateNameRejected(t *testing.T) {
 }
 
 func TestCreateSession_CollisionSuffixOnTakenName(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, &config.Config{DataDir: t.TempDir(), GitPath: "git"})
 	require.NoError(t, store.Save(context.Background(), session.Session{ID: "a", Name: "review-repo", Slug: "review-repo", State: session.StateActive, Remote: testRemote}))
@@ -1169,6 +1191,7 @@ func TestCreateSession_CollisionSuffixOnTakenName(t *testing.T) {
 }
 
 func TestCreateSession_RetryCollidesWithItsSavedAttempt(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, &config.Config{DataDir: t.TempDir(), GitPath: "git"})
 	require.NoError(t, store.Save(context.Background(), session.Session{ID: "a", Name: "review-repo", Slug: "review-repo", State: session.StateActive, Remote: testRemote}))
@@ -1184,6 +1207,7 @@ func TestCreateSession_RetryCollidesWithItsSavedAttempt(t *testing.T) {
 }
 
 func TestRenameSession_RejectsAnotherSessionsSlug(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 	require.NoError(t, store.Save(context.Background(), session.Session{ID: "a", Name: "Fix Bug", Slug: "fix-bug", State: session.StateActive}))
@@ -1196,6 +1220,7 @@ func TestRenameSession_RejectsAnotherSessionsSlug(t *testing.T) {
 }
 
 func TestCreateSessionWithWindows_RollbackOnRunShFailure(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	cfg := &config.Config{
 		DataDir: t.TempDir(),
@@ -1219,6 +1244,7 @@ func TestCreateSessionWithWindows_RollbackOnRunShFailure(t *testing.T) {
 }
 
 func TestSetSessionGroup(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 
@@ -1242,6 +1268,7 @@ func TestSetSessionGroup(t *testing.T) {
 }
 
 func TestSetSessionGroup_NotFound(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 
@@ -1250,6 +1277,7 @@ func TestSetSessionGroup_NotFound(t *testing.T) {
 }
 
 func TestSetSessionGroup_ClearGroup(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 
@@ -1270,6 +1298,7 @@ func TestSetSessionGroup_ClearGroup(t *testing.T) {
 }
 
 func TestSetSessionGroup_TrimWhitespace(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 
@@ -1289,6 +1318,7 @@ func TestSetSessionGroup_TrimWhitespace(t *testing.T) {
 }
 
 func TestSetSessionTags(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 	past := time.Now().Add(-1 * time.Hour)
@@ -1311,6 +1341,7 @@ func TestSetSessionTags(t *testing.T) {
 }
 
 func TestRecycleWorktreeSession_DeletesSession(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		metadata map[string]string
@@ -1363,6 +1394,7 @@ func TestRecycleWorktreeSession_DeletesSession(t *testing.T) {
 }
 
 func TestDeleteWorktreeSession(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	cfg := &config.Config{
 		DataDir: t.TempDir(),
@@ -1412,6 +1444,7 @@ func (s *cancelAfterGetStore) Delete(ctx context.Context, id string) error {
 }
 
 func TestDeleteSessionFinishesAfterTheCallerGivesUp(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	store := &cancelAfterGetStore{mockStore: newMockStore(), cancel: cancel}
@@ -1429,6 +1462,7 @@ func TestDeleteSessionFinishesAfterTheCallerGivesUp(t *testing.T) {
 }
 
 func TestEnforceMaxRecycled_SeparateByStrategy(t *testing.T) {
+	t.Parallel()
 	intPtr := func(n int) *int { return &n }
 
 	store := newMockStore()
@@ -1491,6 +1525,7 @@ func TestEnforceMaxRecycled_SeparateByStrategy(t *testing.T) {
 }
 
 func TestCreateSession_BranchTemplate(t *testing.T) {
+	t.Parallel()
 	makeService := func(t *testing.T, gitImpl git.Git, rules []config.Rule) *Service {
 		t.Helper()
 		store := newMockStore()
@@ -1569,6 +1604,7 @@ func TestCreateSession_BranchTemplate(t *testing.T) {
 }
 
 func TestCreateSession_ErrorIncludesDestinationAndStrategy(t *testing.T) {
+	t.Parallel()
 	newService := func(t *testing.T, gitImpl git.Git, rules []config.Rule) *Service {
 		t.Helper()
 		cfg := &config.Config{
@@ -1674,6 +1710,7 @@ func TestCreateSession_ErrorIncludesDestinationAndStrategy(t *testing.T) {
 }
 
 func TestCreateSession_DoesNotReuseRecycledWorktree(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	remote := "https://github.com/example/repo.git"
 	store.sessions["wt-1"] = session.Session{
@@ -1756,6 +1793,7 @@ func saveRecycled(t *testing.T, store *mockStore, id, path, remote string, updat
 }
 
 func TestCreateSession_RecycledSessionReusedAcrossRemoteSpellings(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	g := &mockGit{}
 	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
@@ -1777,6 +1815,7 @@ func TestCreateSession_RecycledSessionReusedAcrossRemoteSpellings(t *testing.T) 
 }
 
 func TestCreateSession_RecycledSessionSameSpellingSkipsSetURL(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	g := &mockGit{}
 	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
@@ -1789,6 +1828,7 @@ func TestCreateSession_RecycledSessionSameSpellingSkipsSetURL(t *testing.T) {
 }
 
 func TestCreateSession_RecycledSessionRewriteFailureClonesFresh(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		git  func() *mockGit
@@ -1821,6 +1861,7 @@ func TestCreateSession_RecycledSessionRewriteFailureClonesFresh(t *testing.T) {
 }
 
 func TestCreateSession_RecycledSessionPullFailureWithSameRemoteMarksCorrupted(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	g := &mockGit{pullErr: errors.New("boom")}
 	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
@@ -1838,6 +1879,7 @@ func TestCreateSession_RecycledSessionPullFailureWithSameRemoteMarksCorrupted(t 
 }
 
 func TestEnforceMaxRecycled_PoolsRemoteSpellings(t *testing.T) {
+	t.Parallel()
 	one := 1
 	store := newMockStore()
 	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git", Rules: []config.Rule{{Pattern: "", MaxRecycled: &one}}}
@@ -1855,6 +1897,7 @@ func TestEnforceMaxRecycled_PoolsRemoteSpellings(t *testing.T) {
 }
 
 func TestPruneExcessRecycled_PoolsRemoteSpellings(t *testing.T) {
+	t.Parallel()
 	one := 1
 	store := newMockStore()
 	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git", Rules: []config.Rule{{Pattern: "", MaxRecycled: &one}}}
@@ -1872,6 +1915,7 @@ func TestPruneExcessRecycled_PoolsRemoteSpellings(t *testing.T) {
 }
 
 func TestBareDirForRemote(t *testing.T) {
+	t.Parallel()
 	newSvc := func(t *testing.T, g *mockGit) (*Service, string) {
 		cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
 		return newTestServiceWithGit(t, newMockStore(), cfg, g), filepath.Join(cfg.ReposDir(), ".bare")
@@ -1921,6 +1965,7 @@ func TestBareDirForRemote(t *testing.T) {
 }
 
 func TestGetBareCloneLock_SpellingsShareOneLock(t *testing.T) {
+	t.Parallel()
 	svc := newTestService(t, newMockStore(), nil)
 	ctx := context.Background()
 	https := svc.getBareCloneLock(svc.bareDirForRemote(ctx, httpsSiteRemote))
@@ -1929,6 +1974,7 @@ func TestGetBareCloneLock_SpellingsShareOneLock(t *testing.T) {
 }
 
 func TestEnsureBareClone_ExistingCloneFollowsRequestedOrigin(t *testing.T) {
+	t.Parallel()
 	g := &mockGit{}
 	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
 	svc := newTestServiceWithGit(t, newMockStore(), cfg, g)
@@ -1944,6 +1990,7 @@ func TestEnsureBareClone_ExistingCloneFollowsRequestedOrigin(t *testing.T) {
 }
 
 func TestEnsureBareClone_FetchFailureRestoresOrigin(t *testing.T) {
+	t.Parallel()
 	g := &mockGit{fetchErr: errors.New("permission denied")}
 	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
 	svc := newTestServiceWithGit(t, newMockStore(), cfg, g)
@@ -1958,5 +2005,6 @@ func TestEnsureBareClone_FetchFailureRestoresOrigin(t *testing.T) {
 }
 
 func TestRemoteIdentity_NonDefaultPortIsDistinct(t *testing.T) {
+	t.Parallel()
 	assert.False(t, git.EquivalentRemote("https://host:8443/o/r", "git@host:o/r"))
 }

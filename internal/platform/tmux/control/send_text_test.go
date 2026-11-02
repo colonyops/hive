@@ -106,6 +106,11 @@ func TestManagerSendTextRealTmux(t *testing.T) {
 
 	tmux("new-session", "-d", "-s", "send", "-x", "120", "-y", "20", `stty -echo; printf '\033[?2004h'; exec cat -v`)
 	pane := tmux("display-message", "-p", "-t", "=send:", "#{pane_id}")
+	// A paste before the printf has run arrives without brackets, and nothing
+	// sends it again.
+	require.Eventually(t, func() bool {
+		return tmux("display-message", "-p", "-t", pane, "#{pane_current_command}") == "cat"
+	}, 15*time.Second, 25*time.Millisecond)
 
 	m := NewManager(t.Context(), ManagerOptions{Logger: zerolog.Nop()})
 	t.Cleanup(func() { _ = m.Stop(context.WithoutCancel(t.Context())) })
@@ -117,7 +122,7 @@ func TestManagerSendTextRealTmux(t *testing.T) {
 	require.Eventually(t, func() bool {
 		screen := tmux("capture-pane", "-p", "-t", pane)
 		return strings.Contains(screen, "^[[200~line1") && strings.Contains(screen, "line2^[[201~")
-	}, 5*time.Second, 100*time.Millisecond)
+	}, 15*time.Second, 100*time.Millisecond)
 	require.Empty(t, sendBuffers(tmux("list-buffers", "-F", "#{buffer_name}")))
 
 	require.Error(t, m.SendText(t.Context(), "%999", []byte("lost"), 0))

@@ -12,6 +12,7 @@ import (
 )
 
 func TestWatcherDetectsRepositoryCreation(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	watcher, err := NewWatcher(zerolog.Nop(), []string{root})
 	require.NoError(t, err)
@@ -33,6 +34,7 @@ func TestWatcherDetectsRepositoryCreation(t *testing.T) {
 }
 
 func TestWatcherDetectsGitMetadataCreationInExistingDirectory(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	repo := filepath.Join(root, "existing-directory")
 	require.NoError(t, os.Mkdir(repo, 0o755))
@@ -54,6 +56,7 @@ func TestWatcherDetectsGitMetadataCreationInExistingDirectory(t *testing.T) {
 }
 
 func TestWatcherDetectsWorkspaceRootRecreation(t *testing.T) {
+	t.Parallel()
 	parent := t.TempDir()
 	root := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(root, 0o755))
@@ -83,6 +86,7 @@ func TestWatcherDetectsWorkspaceRootRecreation(t *testing.T) {
 }
 
 func TestWatcherDetectsInitiallyMissingWorkspaceRoot(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "workspace")
 	watcher, err := NewWatcher(zerolog.Nop(), []string{root})
 	require.NoError(t, err)
@@ -101,6 +105,7 @@ func TestWatcherDetectsInitiallyMissingWorkspaceRoot(t *testing.T) {
 }
 
 func TestWatcherDetectsWorkspaceRootWhenParentIsMissing(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "missing-parent", "workspace")
 	watcher, err := NewWatcher(zerolog.Nop(), []string{root})
 	require.NoError(t, err)
@@ -119,6 +124,7 @@ func TestWatcherDetectsWorkspaceRootWhenParentIsMissing(t *testing.T) {
 }
 
 func TestWatcherCloseUnblocksWait(t *testing.T) {
+	t.Parallel()
 	watcher, err := NewWatcher(zerolog.Nop(), []string{t.TempDir()})
 	require.NoError(t, err)
 
@@ -135,6 +141,7 @@ func TestWatcherCloseUnblocksWait(t *testing.T) {
 }
 
 func TestWatcherIgnoresWorkingTreeChanges(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	repo := filepath.Join(root, "repo")
 	require.NoError(t, os.MkdirAll(filepath.Join(repo, ".git"), 0o755))

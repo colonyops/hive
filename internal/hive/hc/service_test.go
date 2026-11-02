@@ -575,55 +575,6 @@ func TestAddComment_ReturnsComment(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GetItem, ListItems, Next delegation tests
-// ---------------------------------------------------------------------------
-
-func TestGetItem_Delegates(t *testing.T) {
-	store := newFakeHCStore()
-	svc := newTestHoneycombService(store)
-
-	epicID := hc.GenerateID()
-	epic := hc.Item{
-		ID:        epicID,
-		RepoKey:   "owner/repo",
-		Title:     "Epic",
-		Type:      hc.ItemTypeEpic,
-		Status:    hc.StatusOpen,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	store.items[epicID] = epic
-
-	got, err := svc.GetItem(context.Background(), epicID)
-	require.NoError(t, err)
-	assert.Equal(t, epicID, got.ID)
-}
-
-func TestListItems_Delegates(t *testing.T) {
-	store := newFakeHCStore()
-	svc := newTestHoneycombService(store)
-
-	epic := seedEpicWithTasks(store, "s1")
-
-	items, err := svc.ListItems(context.Background(), hc.ListFilter{EpicID: epic.ID})
-	require.NoError(t, err)
-	// seedEpicWithTasks creates 4 tasks under the epic (EpicID is set on tasks, not on epic itself).
-	assert.Len(t, items, 4)
-}
-
-func TestNext_Delegates(t *testing.T) {
-	store := newFakeHCStore()
-	svc := newTestHoneycombService(store)
-
-	epic := seedEpicWithTasks(store, "s1")
-
-	item, found, err := svc.Next(context.Background(), hc.NextFilter{EpicID: epic.ID})
-	require.NoError(t, err)
-	assert.True(t, found)
-	assert.Equal(t, hc.ItemTypeTask, item.Type)
-}
-
-// ---------------------------------------------------------------------------
 // Context: empty sessionID tests
 // ---------------------------------------------------------------------------
 

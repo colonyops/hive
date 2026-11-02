@@ -839,6 +839,7 @@ func TestOpenTabNamesTheHiveSession(t *testing.T) {
 }
 
 func TestDriveIsUnavailableBeforeTheEngineStarts(t *testing.T) {
+	t.Parallel()
 	svc := newDriveService(DriveDeps{
 		Engine:   func() *hive.Engine { return nil },
 		Sessions: fakeCanvasSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
@@ -872,6 +873,7 @@ func TestDriveIsUnavailableBeforeTheEngineStarts(t *testing.T) {
 }
 
 func TestLegacyCanvasImportsNameTheRootsOnlyTheDesktopKnows(t *testing.T) {
+	t.Parallel()
 	data := t.TempDir()
 	workspaces := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(workspaces, "demo"), 0o755))

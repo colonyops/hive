@@ -16,6 +16,7 @@ func newTestController() (*ToastController, *time.Time) {
 }
 
 func TestToastController_Push(t *testing.T) {
+	t.Parallel()
 	c, now := newTestController()
 
 	c.Push(notify.Notification{Level: notify.LevelInfo, Message: "hello"})
@@ -27,6 +28,7 @@ func TestToastController_Push(t *testing.T) {
 }
 
 func TestToastController_Push_evicts_oldest_at_max(t *testing.T) {
+	t.Parallel()
 	c, _ := newTestController()
 
 	for i := range defaultMaxToasts + 2 {
@@ -42,6 +44,7 @@ func TestToastController_Push_evicts_oldest_at_max(t *testing.T) {
 }
 
 func TestToastController_Tick_removes_expired(t *testing.T) {
+	t.Parallel()
 	c, now := newTestController()
 	c.Push(notify.Notification{Level: notify.LevelInfo, Message: "expires"})
 	c.Push(notify.Notification{Level: notify.LevelInfo, Message: "survives"})
@@ -58,6 +61,7 @@ func TestToastController_Tick_removes_expired(t *testing.T) {
 }
 
 func TestToastController_Tick_keeps_unexpired(t *testing.T) {
+	t.Parallel()
 	c, now := newTestController()
 	c.Push(notify.Notification{Level: notify.LevelInfo, Message: "stays"})
 
@@ -69,6 +73,7 @@ func TestToastController_Tick_keeps_unexpired(t *testing.T) {
 }
 
 func TestToastController_Tick_expires_at_ttl(t *testing.T) {
+	t.Parallel()
 	c, now := newTestController()
 	c.Push(notify.Notification{Level: notify.LevelInfo, Message: "gone"})
 
@@ -80,6 +85,7 @@ func TestToastController_Tick_expires_at_ttl(t *testing.T) {
 }
 
 func TestToastController_Dismiss(t *testing.T) {
+	t.Parallel()
 	c, _ := newTestController()
 	c.Push(notify.Notification{Level: notify.LevelInfo, Message: "first"})
 	c.Push(notify.Notification{Level: notify.LevelInfo, Message: "second"})
@@ -91,12 +97,14 @@ func TestToastController_Dismiss(t *testing.T) {
 }
 
 func TestToastController_Dismiss_empty(t *testing.T) {
+	t.Parallel()
 	c := NewToastController()
 	c.Dismiss() // should not panic
 	assert.False(t, c.HasToasts())
 }
 
 func TestToastController_DismissAll(t *testing.T) {
+	t.Parallel()
 	c, _ := newTestController()
 	c.Push(notify.Notification{Level: notify.LevelInfo, Message: "a"})
 	c.Push(notify.Notification{Level: notify.LevelInfo, Message: "b"})

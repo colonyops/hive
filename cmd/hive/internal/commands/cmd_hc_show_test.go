@@ -14,6 +14,7 @@ import (
 )
 
 func TestRenderItem(t *testing.T) {
+	t.Parallel()
 	// Fixed reference time for deterministic "ago" output.
 	// timeutil.Ago uses time.Since, so we use real recent times
 	// and strip the timestamps in the golden file comparison.

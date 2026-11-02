@@ -70,6 +70,9 @@ type Config struct {
 	// shared so the shell is probed once. nil builds one.
 	ExecEnv *execenv.Resolver
 
+	// TerminalRunner is how terminals reach tmux. nil is the local tmux.
+	TerminalRunner tmuxcc.Runner
+
 	// CredentialKeyringService isolates development credentials from the installed app.
 	CredentialKeyringService string
 
@@ -357,6 +360,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Logger:  cfg.Logger,
 		Binary:  func() (string, error) { return a.resolveTmuxBinary(runCtx) },
 		Environ: a.execEnv.Environ,
+		Runner:  cfg.TerminalRunner,
 	})
 	if err := a.openHiveRuntime(runCtx, cfg); err != nil {
 		_ = a.db.Close()

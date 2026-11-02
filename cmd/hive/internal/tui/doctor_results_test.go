@@ -9,6 +9,7 @@ import (
 )
 
 func TestBuildDoctorDialogContent_StatusMappingAndSummary(t *testing.T) {
+	t.Parallel()
 	results := []doctor.Result{
 		{
 			Name: "tools",

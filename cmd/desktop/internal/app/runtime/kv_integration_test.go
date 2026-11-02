@@ -40,14 +40,6 @@ func kvTestRunner(t *testing.T, db *queries.DB, script string) *runtime.Runner {
 	return runner
 }
 
-func openKVTestDB(t *testing.T) *queries.DB {
-	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	return db
-}
-
 func notifyOutputs(batch models.CommitBatch) int {
 	count := 0
 	for _, out := range batch.Outputs {
@@ -66,7 +58,8 @@ func kvMsg(id string) models.Msg {
 }
 
 func TestRun_DedupFunctionNotifiesExactlyOnce(t *testing.T) {
-	db := openKVTestDB(t)
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	ctx := t.Context()
 	runner := kvTestRunner(t, db, dedupScript)
 
@@ -82,7 +75,8 @@ func TestRun_DedupFunctionNotifiesExactlyOnce(t *testing.T) {
 }
 
 func TestRun_KVSetThenThrowPersistsNothing(t *testing.T) {
-	db := openKVTestDB(t)
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	ctx := t.Context()
 	runner := kvTestRunner(t, db, `
 		const k = JSON.stringify([msg.SourceKind, msg.SourceScope, msg.Key])
@@ -107,7 +101,8 @@ func TestRun_KVSetThenThrowPersistsNothing(t *testing.T) {
 }
 
 func TestRun_DedupMemoryIsDurableAcrossRunners(t *testing.T) {
-	db := openKVTestDB(t)
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	ctx := t.Context()
 
 	first, err := kvTestRunner(t, db, dedupScript).Run(ctx, []models.Msg{kvMsg("1")})
@@ -121,7 +116,8 @@ func TestRun_DedupMemoryIsDurableAcrossRunners(t *testing.T) {
 }
 
 func TestRunReplay_IsFullyInert(t *testing.T) {
-	db := openKVTestDB(t)
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	ctx := t.Context()
 
 	// Every item is already marked seen; a live run would suppress them all.

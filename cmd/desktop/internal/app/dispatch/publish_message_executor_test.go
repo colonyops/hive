@@ -45,6 +45,7 @@ func publishMessageAction() actions.Action {
 }
 
 func TestPublishMessageExecutor_RendersPayloadToConfiguredLiteralTopic(t *testing.T) {
+	t.Parallel()
 	service := &messageServiceTest{}
 	result, err := NewPublishMessageExecutor(messagesOf(service)).Execute(t.Context(), publishMessageAction(), OutputData{Payload: map[string]any{"name": "Ada"}}, ActionInvocationInput{})
 	require.NoError(t, err)
@@ -55,12 +56,14 @@ func TestPublishMessageExecutor_RendersPayloadToConfiguredLiteralTopic(t *testin
 }
 
 func TestPublishMessageExecutor_PropagatesPublisherFailure(t *testing.T) {
+	t.Parallel()
 	service := &messageServiceTest{err: errors.New("store unavailable")}
 	_, err := NewPublishMessageExecutor(messagesOf(service)).Execute(t.Context(), publishMessageAction(), OutputData{Payload: map[string]any{"name": "Ada"}}, ActionInvocationInput{})
 	require.ErrorIs(t, err, service.err)
 }
 
 func TestPublishMessageExecutor_RejectsWrongConfigOrMissingPublisher(t *testing.T) {
+	t.Parallel()
 	_, err := NewPublishMessageExecutor(messagesOf(&messageServiceTest{})).Execute(t.Context(), actions.Action{ID: "x", Type: "publish-message", Config: &actions.ShellConfig{}}, OutputData{}, ActionInvocationInput{})
 	require.Error(t, err)
 	_, err = NewPublishMessageExecutor(nil).Execute(t.Context(), publishMessageAction(), OutputData{Payload: map[string]any{"name": "Ada"}}, ActionInvocationInput{})
@@ -68,6 +71,7 @@ func TestPublishMessageExecutor_RejectsWrongConfigOrMissingPublisher(t *testing.
 }
 
 func TestPublishMessageExecutor_RejectsTopicMismatch(t *testing.T) {
+	t.Parallel()
 	service := &messageServiceTest{actual: []string{"expanded.topic"}}
 	_, err := NewPublishMessageExecutor(messagesOf(service)).Execute(t.Context(), publishMessageAction(), OutputData{Payload: map[string]any{"name": "Ada"}}, ActionInvocationInput{})
 	require.Error(t, err)
@@ -75,6 +79,7 @@ func TestPublishMessageExecutor_RejectsTopicMismatch(t *testing.T) {
 }
 
 func TestPublishMessageExecutor_PersistsThroughCoreSQLiteReopen(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	first, err := coredb.Open(dir, coredb.DefaultOpenOptions())
 	require.NoError(t, err)

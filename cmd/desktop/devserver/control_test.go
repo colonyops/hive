@@ -38,6 +38,7 @@ func ctl(t *testing.T, handler http.Handler, method, target, body string) *httpt
 }
 
 func TestControlActionAppliesOverlay(t *testing.T) {
+	t.Parallel()
 	handler, store, _ := testControl(t, Config{})
 
 	rec := ctl(t, handler, http.MethodPost, "/_ctl/action",
@@ -52,6 +53,7 @@ func TestControlActionAppliesOverlay(t *testing.T) {
 }
 
 func TestControlMergeActionSetsStateAndAbsence(t *testing.T) {
+	t.Parallel()
 	handler, store, _ := testControl(t, Config{})
 
 	rec := ctl(t, handler, http.MethodPost, "/_ctl/action",
@@ -67,6 +69,7 @@ func TestControlMergeActionSetsStateAndAbsence(t *testing.T) {
 }
 
 func TestControlRejectsUnknownAction(t *testing.T) {
+	t.Parallel()
 	handler, _, _ := testControl(t, Config{})
 	rec := ctl(t, handler, http.MethodPost, "/_ctl/action",
 		`{"repo":"o/r","num":1,"action":"approve"}`)
@@ -77,6 +80,7 @@ func TestControlRejectsUnknownAction(t *testing.T) {
 }
 
 func TestControlRejectsInvalidMatcher(t *testing.T) {
+	t.Parallel()
 	handler, _, _ := testControl(t, Config{})
 	for _, body := range []string{
 		`{"repo":"noslash","num":1,"action":"comment"}`,
@@ -89,6 +93,7 @@ func TestControlRejectsInvalidMatcher(t *testing.T) {
 }
 
 func TestControlRejectsUnknownFields(t *testing.T) {
+	t.Parallel()
 	handler, _, _ := testControl(t, Config{})
 	rec := ctl(t, handler, http.MethodPost, "/_ctl/action",
 		`{"repo":"o/r","num":1,"action":"comment","typo":true}`)
@@ -98,6 +103,7 @@ func TestControlRejectsUnknownFields(t *testing.T) {
 }
 
 func TestControlOverlaySetAndClear(t *testing.T) {
+	t.Parallel()
 	handler, store, _ := testControl(t, Config{})
 
 	rec := ctl(t, handler, http.MethodPost, "/_ctl/overlay",
@@ -115,6 +121,7 @@ func TestControlOverlaySetAndClear(t *testing.T) {
 }
 
 func TestControlOverlayRejectsInvalidState(t *testing.T) {
+	t.Parallel()
 	handler, _, _ := testControl(t, Config{})
 	rec := ctl(t, handler, http.MethodPost, "/_ctl/overlay",
 		`{"repo":"o/r","num":1,"set":{"state":"squashed"}}`)
@@ -123,6 +130,7 @@ func TestControlOverlayRejectsInvalidState(t *testing.T) {
 }
 
 func TestControlClearAll(t *testing.T) {
+	t.Parallel()
 	handler, store, _ := testControl(t, Config{})
 	store.Apply("o/r#1", Mutations{State: new("closed")})
 	store.Apply("o/r#2", Mutations{State: new("closed")})
@@ -135,6 +143,7 @@ func TestControlClearAll(t *testing.T) {
 // health with readiness fields must not stop devproxy.Probe decoding the
 // Devserver marker, or a standby launch would treat the live server as foreign.
 func TestControlHealthStillSatisfiesTheProbe(t *testing.T) {
+	t.Parallel()
 	handler, _, _ := testControl(t, Config{})
 
 	rec := ctl(t, handler, http.MethodGet, devproxy.HealthPath, "")
@@ -146,6 +155,7 @@ func TestControlHealthStillSatisfiesTheProbe(t *testing.T) {
 }
 
 func TestControlStateReportsEverythingTheDashboardNeeds(t *testing.T) {
+	t.Parallel()
 	handler, store, _ := testControl(t, Config{
 		Webhooks: WebhookConfig{
 			Targets:  []WebhookTarget{{Name: "local", URL: "http://127.0.0.1:1/hooks/x", Secret: "s"}},
@@ -172,6 +182,7 @@ func TestControlStateReportsEverythingTheDashboardNeeds(t *testing.T) {
 // names are, so it cannot catch a missing json tag — which is exactly how the
 // target list first shipped rendering "undefined".
 func TestControlStateJSONKeysMatchDashboard(t *testing.T) {
+	t.Parallel()
 	handler, store, _ := testControl(t, Config{
 		Webhooks: WebhookConfig{
 			Targets:  []WebhookTarget{{Name: "local", URL: "http://127.0.0.1:1/hooks/x"}},
@@ -221,6 +232,7 @@ func TestControlStateNeverLeaksWebhookSecrets(t *testing.T) {
 }
 
 func TestControlScenarioAppliesStepsInOrder(t *testing.T) {
+	t.Parallel()
 	handler, store, _ := testControl(t, Config{})
 
 	rec := ctl(t, handler, http.MethodPost, "/_ctl/scenario", `{"steps":[
@@ -248,6 +260,7 @@ func TestControlScenarioAppliesStepsInOrder(t *testing.T) {
 }
 
 func TestControlScenarioSupportsActionAndSetSteps(t *testing.T) {
+	t.Parallel()
 	handler, store, _ := testControl(t, Config{})
 
 	rec := ctl(t, handler, http.MethodPost, "/_ctl/scenario",
@@ -266,6 +279,7 @@ func TestControlScenarioSupportsActionAndSetSteps(t *testing.T) {
 // visible in /_ctl/state — the only way a caller learns its run is still going
 // — and disappears once done. The wait step keeps it in flight across the read.
 func TestControlScenarioReportsRunningInState(t *testing.T) {
+	t.Parallel()
 	handler, _, _ := testControl(t, Config{})
 
 	rec := ctl(t, handler, http.MethodPost, "/_ctl/scenario",
@@ -286,6 +300,7 @@ func TestControlScenarioReportsRunningInState(t *testing.T) {
 }
 
 func TestControlScenarioRejectsBadSteps(t *testing.T) {
+	t.Parallel()
 	handler, _, _ := testControl(t, Config{})
 	for name, body := range map[string]string{
 		"no steps":       `{"steps":[]}`,
@@ -309,6 +324,7 @@ func TestControlScenarioRejectsBadSteps(t *testing.T) {
 // ── Pusher ───────────────────────────────────────────────────────────────────
 
 func TestPusherDeliversPayloadWithSecret(t *testing.T) {
+	t.Parallel()
 	var (
 		mu        sync.Mutex
 		secret    string
@@ -348,6 +364,7 @@ func TestPusherDeliversPayloadWithSecret(t *testing.T) {
 }
 
 func TestPusherOverridesDoNotMutateStoredPayload(t *testing.T) {
+	t.Parallel()
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 	}))
@@ -368,6 +385,7 @@ func TestPusherOverridesDoNotMutateStoredPayload(t *testing.T) {
 }
 
 func TestPusherInlineBody(t *testing.T) {
+	t.Parallel()
 	var (
 		body      map[string]any
 		decodeErr error
@@ -393,6 +411,7 @@ func TestPusherInlineBody(t *testing.T) {
 // name — the only way to reach a desktop instance, whose webhook port is random
 // per install so no target can be committed to config.
 func TestPushInlineTargetDelivers(t *testing.T) {
+	t.Parallel()
 	var (
 		mu     sync.Mutex
 		secret string
@@ -419,6 +438,7 @@ func TestPushInlineTargetDelivers(t *testing.T) {
 }
 
 func TestPushRejectsNonLoopbackInlineTarget(t *testing.T) {
+	t.Parallel()
 	handler, _, _ := testControl(t, Config{})
 	rec := ctl(t, handler, http.MethodPost, "/_ctl/webhooks/push",
 		`{"target":{"url":"http://example.com/hooks/x"},"body":{"id":"x"}}`)
@@ -427,6 +447,7 @@ func TestPushRejectsNonLoopbackInlineTarget(t *testing.T) {
 }
 
 func TestPushRequiresExactlyOneTargetForm(t *testing.T) {
+	t.Parallel()
 	handler, _, _ := testControl(t, Config{Webhooks: WebhookConfig{
 		Payloads: map[string]map[string]any{"p": {"id": "1"}},
 	}})
@@ -437,6 +458,7 @@ func TestPushRequiresExactlyOneTargetForm(t *testing.T) {
 }
 
 func TestPusherRequiresExactlyOnePayloadSource(t *testing.T) {
+	t.Parallel()
 	handler, _, _ := testControl(t, Config{Webhooks: WebhookConfig{
 		Targets:  []WebhookTarget{{Name: "local", URL: "http://127.0.0.1:1/hooks/x"}},
 		Payloads: map[string]map[string]any{"p": {"id": "1"}},
@@ -452,6 +474,7 @@ func TestPusherRequiresExactlyOnePayloadSource(t *testing.T) {
 }
 
 func TestPusherReportsTargetFailure(t *testing.T) {
+	t.Parallel()
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no webhook endpoint at this path", http.StatusNotFound)
 	}))
@@ -472,6 +495,7 @@ func TestPusherReportsTargetFailure(t *testing.T) {
 }
 
 func TestPusherRejectsUnknownTargetAndPayload(t *testing.T) {
+	t.Parallel()
 	handler, _, _ := testControl(t, Config{Webhooks: WebhookConfig{
 		Targets:  []WebhookTarget{{Name: "local", URL: "http://127.0.0.1:1/hooks/x"}},
 		Payloads: map[string]map[string]any{"p": {"id": "1"}},
@@ -518,6 +542,7 @@ func TestDefaultCachePathIsIsolatedFromAppState(t *testing.T) {
 }
 
 func TestResolveConfigPath(t *testing.T) {
+	t.Parallel()
 	existing := writeConfig(t, "listen: 127.0.0.1:1\n")
 
 	got, err := ResolveConfigPath(existing)
@@ -542,6 +567,7 @@ func TestResolveConfigPath(t *testing.T) {
 // a config that rewrote data the moment devserver started would make every
 // subsequent bug suspect.
 func TestRepoConfigIsValidAndInert(t *testing.T) {
+	t.Parallel()
 	cfg, err := LoadConfig(filepath.Join("..", "..", "..", devproxy.RepoConfigPath))
 	require.NoError(t, err, "the shipped config must parse")
 
@@ -553,6 +579,7 @@ func TestRepoConfigIsValidAndInert(t *testing.T) {
 }
 
 func TestLoadConfigMissingFileYieldsWorkingDefaults(t *testing.T) {
+	t.Parallel()
 	cfg, err := LoadConfig(filepath.Join(t.TempDir(), "absent.yaml"))
 	require.NoError(t, err)
 	// No config at all still has to give the "just stop burning my rate
@@ -564,6 +591,7 @@ func TestLoadConfigMissingFileYieldsWorkingDefaults(t *testing.T) {
 }
 
 func TestBuildStepsAllowsWaitOnly(t *testing.T) {
+	t.Parallel()
 	steps, err := buildSteps([]stepInput{{Wait: "1s"}})
 	require.NoError(t, err)
 	require.Len(t, steps, 1)
@@ -572,6 +600,7 @@ func TestBuildStepsAllowsWaitOnly(t *testing.T) {
 }
 
 func TestLoadConfigParsesFullFile(t *testing.T) {
+	t.Parallel()
 	cfg, err := LoadConfig(writeConfig(t, `
 listen: 127.0.0.1:9999
 upstream: https://api.github.com/
@@ -610,6 +639,7 @@ webhooks:
 }
 
 func TestLoadConfigRejectsBadInput(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"bad overlay repo":    "overlays:\n  - match: {repo: nope, num: 1}\n    set: {state: open}\n",
 		"zero overlay num":    "overlays:\n  - match: {repo: o/r, num: 0}\n    set: {state: open}\n",

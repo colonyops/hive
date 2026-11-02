@@ -10,6 +10,7 @@ import (
 )
 
 func TestPprofHandlerUsesCompatibleCPUHandler(t *testing.T) {
+	t.Parallel()
 	cpu := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Test-CPU-Handler", "compatible")
 		w.WriteHeader(http.StatusAccepted)
@@ -24,6 +25,7 @@ func TestPprofHandlerUsesCompatibleCPUHandler(t *testing.T) {
 }
 
 func TestPprofHandlerRetainsStandardIndex(t *testing.T) {
+	t.Parallel()
 	handler := PprofHandler(nil)
 
 	rec := httptest.NewRecorder()

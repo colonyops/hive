@@ -36,6 +36,7 @@ func diagnosticsFixture(t *testing.T) *DiagnosticsService {
 }
 
 func TestDiagnosticsCombinesJobFailuresWithoutAgent(t *testing.T) {
+	t.Parallel()
 	svc := diagnosticsFixture(t)
 	out, err := svc.Read(t.Context(), DiagnosticsQuery{OmitRoutine: true})
 	require.NoError(t, err)
@@ -68,6 +69,7 @@ func TestDiagnosticsCombinesJobFailuresWithoutAgent(t *testing.T) {
 }
 
 func TestDiagnosticsBoundsAndReferences(t *testing.T) {
+	t.Parallel()
 	svc := diagnosticsFixture(t)
 	out, err := svc.Read(t.Context(), DiagnosticsQuery{Limit: 1})
 	require.NoError(t, err)
@@ -97,6 +99,7 @@ func TestDiagnosticsBoundsAndReferences(t *testing.T) {
 }
 
 func TestDiagnosticsReferenceResponseStaysWithinByteBudget(t *testing.T) {
+	t.Parallel()
 	fields := make(map[string]string, 64)
 	for i := range 64 {
 		fields[fmt.Sprintf("field_%d", i)] = strings.Repeat("x", 4<<10)
@@ -143,6 +146,7 @@ func TestDiagnosticsPreparationUsesDefaultAndOverrideWithoutSpawning(t *testing.
 }
 
 func TestDiagnosticsSharedLogIsReadOnceAndFilteredByService(t *testing.T) {
+	t.Parallel()
 	svc := diagnosticsFixture(t)
 	svc.paths.LogFile = filepath.Join(svc.paths.HiveDataDir, "hive.log")
 	content := "2026-10-07T00:17:17Z INF desktop event service_name=hive-desktop\n" +

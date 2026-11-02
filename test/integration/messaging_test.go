@@ -11,6 +11,7 @@ import (
 )
 
 func TestMsgPubSub(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("msg", "pub", "--topic", "test.pubsub", "--sender", "test", "hello world")
@@ -23,6 +24,7 @@ func TestMsgPubSub(t *testing.T) {
 }
 
 func TestMsgPubConfirmation(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	// pub now returns JSON confirmation on stdout
@@ -38,6 +40,7 @@ func TestMsgPubConfirmation(t *testing.T) {
 }
 
 func TestMsgList(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("msg", "pub", "--topic", "test.list-a", "--sender", "test", "msg-a")
@@ -60,6 +63,7 @@ func TestMsgList(t *testing.T) {
 }
 
 func TestMsgListEnriched(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	_, err := h.Run("msg", "pub", "--topic", "test.enriched", "--sender", "enricher", "payload")
@@ -85,6 +89,7 @@ func TestMsgListEnriched(t *testing.T) {
 }
 
 func TestMsgTopic(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	out, err := h.RunStdout("msg", "topic")
@@ -95,6 +100,7 @@ func TestMsgTopic(t *testing.T) {
 }
 
 func TestMsgSubEmpty(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	lines, err := h.RunJSONLines("msg", "sub", "--topic", "nonexistent.topic.xyz")
@@ -103,6 +109,7 @@ func TestMsgSubEmpty(t *testing.T) {
 }
 
 func TestMsgInbox(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "inbox-repo")
 

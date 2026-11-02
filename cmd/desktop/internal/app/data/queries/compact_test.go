@@ -9,6 +9,7 @@ import (
 )
 
 func TestCompactionPolicyRequiresRatioAndAbsoluteSpace(t *testing.T) {
+	t.Parallel()
 	policy := DefaultCompactionPolicy()
 	require.InDelta(t, 0.20, policy.MinimumReclaimableRatio, 0.0001)
 	require.Equal(t, int64(16<<20), policy.MinimumReclaimableBytes)
@@ -67,6 +68,7 @@ func TestCompactionPolicyRequiresRatioAndAbsoluteSpace(t *testing.T) {
 }
 
 func TestCompactSkipsBelowAbsoluteFloor(t *testing.T) {
+	t.Parallel()
 	dir, database := prepareCompactionDatabase(t, 3, 2, DefaultOpenOptions())
 	before, err := os.Stat(DatabasePath(dir))
 	require.NoError(t, err)
@@ -86,6 +88,7 @@ func TestCompactSkipsBelowAbsoluteFloor(t *testing.T) {
 }
 
 func TestCompactRunsAndShrinksDatabase(t *testing.T) {
+	t.Parallel()
 	dir, database := prepareCompactionDatabase(t, 12, 11, DefaultOpenOptions())
 	before, err := os.Stat(DatabasePath(dir))
 	require.NoError(t, err)
@@ -108,6 +111,7 @@ func TestCompactRunsAndShrinksDatabase(t *testing.T) {
 }
 
 func TestCompactReturnsVacuumFailure(t *testing.T) {
+	t.Parallel()
 	opts := DefaultOpenOptions()
 	opts.BusyTimeout = 10
 	_, database := prepareCompactionDatabase(t, 8, 7, opts)

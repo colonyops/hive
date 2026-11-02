@@ -41,6 +41,7 @@ type scheduleRow struct {
 // rest of the file, its comments included, survives; a bad edit is refused
 // with a kind the agent can branch on.
 func TestScheduleToolsEditOneWorkspaceEntryInPlace(t *testing.T) {
+	t.Parallel()
 	var demoManifest string
 	_, session := testSession(t,
 		seedWorkspace("demo", "# keep me\nversion: 5\nname: Demo\ncommand: claude"+agentws.PromptTail+"\n", &demoManifest),

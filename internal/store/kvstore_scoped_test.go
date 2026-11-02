@@ -14,13 +14,12 @@ import (
 
 func newTestKV(t *testing.T) kv.KV {
 	t.Helper()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 	return store.NewKVStore(database)
 }
 
 func TestTypedKV_SetAndGet(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKV(t)
 	typed := kv.Scoped[string](store, "test")
@@ -33,6 +32,7 @@ func TestTypedKV_SetAndGet(t *testing.T) {
 }
 
 func TestTypedKV_ScopedPrefix(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKV(t)
 
@@ -60,6 +60,7 @@ func TestTypedKV_ScopedPrefix(t *testing.T) {
 }
 
 func TestTypedKV_Delete(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKV(t)
 	typed := kv.Scoped[string](store, "ns")
@@ -73,6 +74,7 @@ func TestTypedKV_Delete(t *testing.T) {
 }
 
 func TestTypedKV_Has(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKV(t)
 	typed := kv.Scoped[int](store, "ns")
@@ -88,6 +90,7 @@ func TestTypedKV_Has(t *testing.T) {
 }
 
 func TestTypedKV_TTL(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKV(t)
 	typed := kv.Scoped[string](store, "ttl")
@@ -100,6 +103,7 @@ func TestTypedKV_TTL(t *testing.T) {
 }
 
 func TestTypedKV_StructValue(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKV(t)
 

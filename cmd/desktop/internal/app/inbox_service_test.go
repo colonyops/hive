@@ -132,10 +132,9 @@ actions:
 }
 
 func TestPipelineService_ActionViewsAndInvocationUseActionStore(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	executor := &recordingActionExecutor{}
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{
@@ -194,10 +193,9 @@ func TestPipelineService_ActionViewsAndInvocationUseActionStore(t *testing.T) {
 // again with no rerun prompt, and InvokeAction refuses a clipboard action so it
 // can never enqueue a durable command.
 func TestPipelineService_RenderClipboardActionIsRenderOnlyAndRepeatable(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	// A dispatcher with no clipboard executor: the render path must never route
 	// a clipboard action through the worker.
@@ -228,10 +226,9 @@ func TestPipelineService_RenderClipboardActionIsRenderOnlyAndRepeatable(t *testi
 }
 
 func TestPipelineService_RenderClipboardActionAppliesToWholeSelection(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{}, nil), 0, zerolog.Nop())
 	service := newTestInboxService(db, actionStore, worker)
@@ -259,10 +256,9 @@ func TestPipelineService_RenderClipboardActionAppliesToWholeSelection(t *testing
 // webhook item regardless of payload shape. (d) an unknown itemID errors
 // (no panic) from both ActionViews and InvokeAction.
 func TestPipelineService_ActionViewsAndInvokeAreCapabilityGatedNotSourceGated(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	executor := &recordingActionExecutor{}
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{
@@ -327,10 +323,9 @@ func TestPipelineService_ActionViewsAndInvokeAreCapabilityGatedNotSourceGated(t 
 }
 
 func TestPipelineService_AttemptedFailureReturnsPersistedActionRun(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	// Use a dispatcher executor that records a dispatched side effect failure.
 	failed := &attemptedFailureExecutor{}
@@ -359,6 +354,7 @@ func (attemptedFailureExecutor) Execute(context.Context, actions.Action, dispatc
 }
 
 func TestPipelineService_ActionRunSurvivesDatabaseReopen(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
 	dir := t.TempDir()
 	db, err := queries.Open(t.Context(), dir, queries.DefaultOpenOptions())
@@ -382,10 +378,9 @@ func TestPipelineService_ActionRunSurvivesDatabaseReopen(t *testing.T) {
 }
 
 func TestPipelineService_ActionRunLocationResolvesTheOriginatingItem(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{
 		"shell": &recordingActionExecutor{},
@@ -406,10 +401,9 @@ func TestPipelineService_ActionRunLocationResolvesTheOriginatingItem(t *testing.
 }
 
 func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	launcher := &recordingSessionLauncher{}
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{
@@ -418,7 +412,7 @@ func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing
 	service := newTestInboxService(db, actionStore, worker)
 	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 
-	_, err = service.InvokeAction(t.Context(), InvokeActionRequest{ActionID: "review-pr", ItemID: prID, Input: dispatch.ActionInvocationInput{}})
+	_, err := service.InvokeAction(t.Context(), InvokeActionRequest{ActionID: "review-pr", ItemID: prID, Input: dispatch.ActionInvocationInput{}})
 	require.NoError(t, err)
 	waitForTestWorker(t, worker)
 	require.Equal(t, []dispatch.LaunchSessionRequest{{
@@ -433,9 +427,8 @@ func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing
 }
 
 func TestInboxService_NewSessionDraftUsesTheInjectedRemoteGenerator(t *testing.T) {
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	st := stores.New(db, stores.Options{})
 	service := newInboxService(InboxDeps{
 		Items: st.InboxItems, Commands: st.OutputCommands, NodeRuns: st.NodeRuns, Catalog: configuredActionStore(t),
@@ -450,9 +443,8 @@ func TestInboxService_NewSessionDraftUsesTheInjectedRemoteGenerator(t *testing.T
 }
 
 func TestInboxService_NewSessionDraft(t *testing.T) {
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	service := newTestInboxService(db, configuredActionStore(t), nil)
 
 	itemID := insertActionItemSource(t, db, "github", "pr-1", "PR", "Fix the crash",
@@ -494,6 +486,7 @@ func TestInboxService_NewSessionDraft(t *testing.T) {
 // so an incomplete or stale form is refused before it becomes a durable
 // command.
 func TestInboxService_DeclaredInputsAreViewedAndPreflighted(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte(`version: 1
 actions:
@@ -515,9 +508,7 @@ actions:
 	actionStore := actions.NewActionStore(path)
 	require.NoError(t, actionStore.Reload())
 
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 
 	executor := &recordingActionExecutor{}
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{"shell": executor}, nil), 0, zerolog.Nop())
@@ -551,14 +542,13 @@ actions:
 // A stale revision must map to KindConflict, not KindNotFound. The generic
 // not-found transform would still match sql.ErrNoRows and misreport deletion.
 func TestInboxService_ToggleArchivedStaleRevisionIsConflict(t *testing.T) {
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	service := newTestInboxService(db, configuredActionStore(t), nil)
 
 	itemID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 
-	_, err = service.ToggleArchived(t.Context(), itemID, 1)
+	_, err := service.ToggleArchived(t.Context(), itemID, 1)
 	require.NoError(t, err)
 
 	_, err = service.ToggleArchived(t.Context(), itemID, 1)
@@ -568,17 +558,16 @@ func TestInboxService_ToggleArchivedStaleRevisionIsConflict(t *testing.T) {
 }
 
 func TestInboxService_MissingRowsMapOntoKinds(t *testing.T) {
+	t.Parallel()
 	actionStore := configuredActionStore(t)
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{
 		"launch-session": &recordingActionExecutor{},
 	}, nil), 0, zerolog.Nop())
 	service := newTestInboxService(db, actionStore, worker)
 	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 
-	_, err = service.Events(t.Context(), 999999, 10)
+	_, err := service.Events(t.Context(), 999999, 10)
 	assert.Equal(t, KindNotFound, KindOf(err))
 	_, err = service.ActionRun(t.Context(), 999999)
 	assert.Equal(t, KindNotFound, KindOf(err))

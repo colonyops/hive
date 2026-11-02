@@ -24,6 +24,7 @@ func seedLookupItem(t *testing.T, database *queries.DB, ctx context.Context, ext
 }
 
 func TestInboxItemStore_IDByExternalID(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	want := seedLookupItem(t, db, ctx, "item-1")
@@ -49,6 +50,7 @@ func TestInboxItemStore_IDByExternalID(t *testing.T) {
 // The commit path resolves ids only, and an unscoped row from before hay-kot/hive-desktop#63 has to heal
 // onto its scope there exactly as it does through ResolveScoped.
 func TestInboxItemStore_ResolveScopedID(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	want := seedLookupItem(t, db, ctx, "item-1")
@@ -75,6 +77,7 @@ func TestInboxItemStore_ResolveScopedID(t *testing.T) {
 }
 
 func TestInboxItemStore_FindByExternalID(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	insert := func(profile, scope, ext string) {
@@ -106,6 +109,7 @@ func TestInboxItemStore_FindByExternalID(t *testing.T) {
 }
 
 func TestInboxItemStore_ListAll(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	insert := func(profile, ext string) {
@@ -133,6 +137,7 @@ func TestInboxItemStore_ListAll(t *testing.T) {
 }
 
 func TestInboxItemStore_FeedIDForItem(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	itemID := seedLookupItem(t, db, ctx, "item-1")
@@ -159,6 +164,7 @@ func TestInboxItemStore_FeedIDForItem(t *testing.T) {
 // InboxItem must keep: camelCase JSON tags, and a payload that marshals as
 // the JSON it holds rather than a base64 byte string.
 func TestInboxItemStore_ListUnarchivedIsWailsSafe(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	item, err := db.InsertInboxItem(t.Context(), queries.InsertInboxItemParams{
 		ProfileID: "flow", SourceKind: "github", SourceScope: "scope", ExternalID: "item",
@@ -179,6 +185,7 @@ func TestInboxItemStore_ListUnarchivedIsWailsSafe(t *testing.T) {
 }
 
 func TestInboxItemStore_FeedIDsForItems(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	a := seedLookupItem(t, db, ctx, "item-a")

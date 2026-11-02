@@ -11,6 +11,7 @@ import (
 // TestHCListFilterWiring verifies that status and session flags are correctly
 // wired into hc.ListFilter values.
 func TestHCListFilterWiring(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		statusFlag    string

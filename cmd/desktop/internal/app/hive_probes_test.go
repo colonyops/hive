@@ -61,6 +61,7 @@ func watcherFor(probes ...hivewatch.Probe) *hivewatch.Watcher {
 }
 
 func TestSessionsProbe_OrderIsNotAChange(t *testing.T) {
+	t.Parallel()
 	bus := newTestBus(t)
 	updates := subscribeEvents[events.SessionsUpdated](t, bus)
 	lister := &fakeSessionLister{sessions: []session.Session{summary("a", "one"), summary("b", "two")}}
@@ -73,6 +74,7 @@ func TestSessionsProbe_OrderIsNotAChange(t *testing.T) {
 }
 
 func TestSessionsProbe_PublishesTheDelta(t *testing.T) {
+	t.Parallel()
 	bus := newTestBus(t)
 	updates := subscribeEvents[events.SessionsUpdated](t, bus)
 	lister := &fakeSessionLister{sessions: []session.Session{summary("a", "one"), summary("b", "two"), summary("c", "three")}}
@@ -89,6 +91,7 @@ func TestSessionsProbe_PublishesTheDelta(t *testing.T) {
 }
 
 func TestTasksProbe_PublishesOnlyWhenTheFingerprintChanges(t *testing.T) {
+	t.Parallel()
 	bus := newTestBus(t)
 	updates := subscribeEvents[events.TasksUpdated](t, bus)
 	tasks := &fakeTasksFingerprinter{fp: hc.Fingerprint{Items: 3}}

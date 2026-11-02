@@ -121,11 +121,6 @@ lefthook runs the relevant gates as git hooks; `mise install` wires them up
 
 **`mise run ci` runs every gate CI runs.** Prefer it over pushing to find out.
 
-`mise run test` and the pre-push hook skip the tests that drive a real tmux
-server on a machine with a running tmux server, and the output says only `ok`.
-After a change to terminal or tmux code, run `mise run test:tmux`, which runs
-them in Docker. `mise run ci` includes it.
-
 Wails TS bindings are deliberately not hooked: they need a full app build. Run
 `mise run desktop:bindings` when a service surface changes; CI checks them.
 
@@ -309,7 +304,16 @@ Use `mise run cli:container` for interactive manual testing in the same isolated
 
 What belongs in integration tests vs unit tests:
 - **Integration**: end-to-end CLI flag wiring, stdin/stdout behavior, multi-command workflows, session detection
-- **Unit**: business logic, validation rules, store behavior (using real SQLite via `db.Open(t.TempDir(), ...)`), service orchestration
+- **Unit**: business logic, validation rules, store behavior (using real SQLite via `db.OpenForTest(t)`), service orchestration
+
+#### Real-tmux Unit Tests
+
+Unit tests may drive a real tmux on the host, because each one owns a private server:
+
+- **`tmuxtest.New(t)`**: a server reached only through its socket. It changes no process state, so the test can call `t.Parallel()`, and it satisfies `tmuxcc.Runner`, so a `tmuxcc.Manager` stays on it. Use this one.
+- **`tmuxtest.Private(t)`**: for code that resolves its server from the environment and takes no Runner. It rewrites the environment, so the test stays serial.
+
+Never run a bare `tmux` command in a test. `mise run test` also runs with `TMUX` unset and `TMUX_TMPDIR` pointing at a scratch directory, so a test that forgets cannot reach a developer's server. Integration tests stay in Docker.
 
 #### Remote Server Tests
 

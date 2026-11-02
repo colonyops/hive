@@ -15,9 +15,7 @@ import (
 
 func newTestScheduleStore(t *testing.T) scheduleStore {
 	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	db := queries.OpenForTest(t)
 	return scheduleStore{schedules: stores.New(db, stores.Options{}).Schedules}
 }
 
@@ -25,6 +23,7 @@ func newTestScheduleStore(t *testing.T) scheduleStore {
 // so a round trip is what proves neither direction silently truncates or
 // shifts.
 func TestScheduleStoreAdapterRoundTripsTimes(t *testing.T) {
+	t.Parallel()
 	adapter := newTestScheduleStore(t)
 	at := time.UnixMilli(1_764_500_100_000)
 
@@ -70,6 +69,7 @@ func TestScheduleStoreAdapterRoundTripsTimes(t *testing.T) {
 // The scheduler hands over whole cursors; only their identity reaches the
 // store's prune.
 func TestScheduleStoreAdapterPrunesByCursorIdentity(t *testing.T) {
+	t.Parallel()
 	adapter := newTestScheduleStore(t)
 	now := time.UnixMilli(1_764_500_100_000)
 
@@ -97,6 +97,7 @@ func TestScheduleStoreAdapterPrunesByCursorIdentity(t *testing.T) {
 // from them -- and absent from the same read that skipped its schedules, so
 // the two can never disagree about which workspaces exist.
 func TestScheduleSnapshotListsOnlyTheValidWorkspaces(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", "claude", ""))
 	writeAgentWorkspaceManifest(t, root, "broken", brokenScheduleManifest)
@@ -118,6 +119,7 @@ func TestScheduleLauncherFailsOnAnImmediateExit(t *testing.T) {
 	root := t.TempDir()
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", "this-binary-does-not-exist-anywhere-12345"+agentws.PromptTail, ""))
 	svc := newTestAgentWorkspacesService(t, root, nil)
+	svc.earlyExitWindow = testExitWindow
 
 	launcher := scheduleLauncher{workspaces: svc}
 	_, err := launcher.Launch(t.Context(), schedule.LaunchRequest{Workspace: "demo", Name: "weekly", Prompt: "go"})

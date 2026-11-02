@@ -23,6 +23,7 @@ func ingestActiveSourceHead(t *testing.T, st *Stores, topic, profileID, sourceSc
 }
 
 func TestSourceHeadStore_ListActiveKeys(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	const topic = "source:profile/source"
@@ -47,6 +48,7 @@ func TestSourceHeadStore_ListActiveKeys(t *testing.T) {
 }
 
 func TestSourceHeadStore_UpsertPayloadDelete(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -66,6 +68,7 @@ func TestSourceHeadStore_UpsertPayloadDelete(t *testing.T) {
 }
 
 func TestSourceHeadStore_DeleteByTopicPrefix(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -88,6 +91,7 @@ func TestSourceHeadStore_DeleteByTopicPrefix(t *testing.T) {
 // escaping: a profile id containing LIKE metacharacters must not widen the
 // delete past that profile's own rows.
 func TestSourceHeadStore_DeleteByTopicPrefixTakesThePrefixLiterally(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 

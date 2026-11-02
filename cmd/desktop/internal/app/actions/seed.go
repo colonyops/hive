@@ -164,38 +164,39 @@ func SeedDefaultsIfMissing(path string) (bool, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return false, fmt.Errorf("stat actions seed target: %w", err)
 	}
+	fs := defaultActionFileOps()
 	dir := filepath.Dir(path)
-	if err := actionFS.mkdirAll(dir, 0o700); err != nil {
+	if err := fs.mkdirAll(dir, 0o700); err != nil {
 		return false, fmt.Errorf("create actions seed directory: %w", err)
 	}
-	f, err := actionFS.createTemp(dir, ".actions-seed-*")
+	f, err := fs.createTemp(dir, ".actions-seed-*")
 	if err != nil {
 		return false, fmt.Errorf("create actions seed temp: %w", err)
 	}
 	tmp := f.Name()
-	defer func() { _ = actionFS.remove(tmp) }()
-	if err = actionFS.chmod(f, 0o600); err == nil {
-		_, err = actionFS.write(f, []byte(defaultActionsYAML))
+	defer func() { _ = fs.remove(tmp) }()
+	if err = fs.chmod(f, 0o600); err == nil {
+		_, err = fs.write(f, []byte(defaultActionsYAML))
 	}
 	if err == nil {
-		err = actionFS.sync(f)
+		err = fs.sync(f)
 	}
-	if closeErr := actionFS.close(f); err == nil {
+	if closeErr := fs.close(f); err == nil {
 		err = closeErr
 	}
 	if err != nil {
 		return false, fmt.Errorf("write actions seed: %w", err)
 	}
-	if err := actionFS.link(tmp, path); err != nil {
+	if err := fs.link(tmp, path); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return false, nil
 		}
 		return false, fmt.Errorf("install actions seed: %w", err)
 	}
-	d, err := actionFS.open(dir)
+	d, err := fs.open(dir)
 	if err == nil {
-		err = actionFS.sync(d)
-		closeErr := actionFS.close(d)
+		err = fs.sync(d)
+		closeErr := fs.close(d)
 		if err == nil {
 			err = closeErr
 		}

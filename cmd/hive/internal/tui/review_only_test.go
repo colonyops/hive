@@ -6,22 +6,18 @@ import (
 	"github.com/rs/zerolog"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/store"
 	"github.com/colonyops/hive/internal/store/db"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestReviewOnly_QKeyWithActiveEditor verifies that pressing "q" doesn't quit
 // when the tree search input is active.
 func TestReviewOnly_QKeyWithActiveEditor(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbConn, err := db.Open(tmpDir, db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() {
-		assert.NoError(t, dbConn.Close())
-	}()
+	t.Parallel()
+	dbConn := db.OpenForTest(t)
 
 	doc := review.Document{
 		Path:    "/test/doc.md",
@@ -66,12 +62,8 @@ func TestReviewOnly_QKeyWithActiveEditor(t *testing.T) {
 
 // TestReviewOnly_CtrlCAlwaysQuits verifies that Ctrl+C quits.
 func TestReviewOnly_CtrlCAlwaysQuits(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbConn, err := db.Open(tmpDir, db.DefaultOpenOptions())
-	require.NoError(t, err)
-	defer func() {
-		assert.NoError(t, dbConn.Close())
-	}()
+	t.Parallel()
+	dbConn := db.OpenForTest(t)
 
 	doc := review.Document{
 		Path:    "/test/doc.md",
@@ -100,6 +92,7 @@ func TestReviewOnly_CtrlCAlwaysQuits(t *testing.T) {
 
 // TestReviewView_HasActiveEditor verifies the HasActiveEditor method.
 func TestReviewView_HasActiveEditor(t *testing.T) {
+	t.Parallel()
 	v := review.New(zerolog.Nop(), nil, nil, []review.Document{}, review.Scope{}, nil, nil, 0)
 
 	assert.False(t, v.HasActiveEditor(), "Should have no active editor initially")

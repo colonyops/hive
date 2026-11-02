@@ -14,13 +14,12 @@ import (
 
 func newTestKVStore(t *testing.T) *KVStore {
 	t.Helper()
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 	return NewKVStore(database)
 }
 
 func TestKVStore_SetAndGet(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -40,6 +39,7 @@ func TestKVStore_SetAndGet(t *testing.T) {
 }
 
 func TestKVStore_GetNotFound(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -53,6 +53,7 @@ func TestKVStore_GetNotFound(t *testing.T) {
 }
 
 func TestKVStore_SetOverwrite(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -65,6 +66,7 @@ func TestKVStore_SetOverwrite(t *testing.T) {
 }
 
 func TestKVStore_Delete(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -77,6 +79,7 @@ func TestKVStore_Delete(t *testing.T) {
 }
 
 func TestKVStore_Has(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -91,6 +94,7 @@ func TestKVStore_Has(t *testing.T) {
 }
 
 func TestKVStore_ListKeys(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -104,6 +108,7 @@ func TestKVStore_ListKeys(t *testing.T) {
 }
 
 func TestKVStore_GetRaw(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -118,6 +123,7 @@ func TestKVStore_GetRaw(t *testing.T) {
 }
 
 func TestKVStore_TTLExpiry(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -139,6 +145,7 @@ func TestKVStore_TTLExpiry(t *testing.T) {
 }
 
 func TestKVStore_TTLNotExpired(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -154,6 +161,7 @@ func TestKVStore_TTLNotExpired(t *testing.T) {
 }
 
 func TestKVStore_SweepExpired(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -171,6 +179,7 @@ func TestKVStore_SweepExpired(t *testing.T) {
 }
 
 func TestKVStore_GetRawExpired(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	store := newTestKVStore(t)
 
@@ -179,4 +188,16 @@ func TestKVStore_GetRawExpired(t *testing.T) {
 
 	_, err := store.GetRaw(ctx, "temp")
 	assert.ErrorIs(t, err, kv.ErrNotFound)
+}
+
+func TestOpenForTest_GivesEachCallerAMigratedDatabaseOfItsOwn(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	first := NewKVStore(db.OpenForTest(t))
+	second := NewKVStore(db.OpenForTest(t))
+
+	require.NoError(t, first.Set(ctx, "key", "value"))
+
+	var got string
+	assert.ErrorIs(t, second.Get(ctx, "key", &got), kv.ErrNotFound)
 }

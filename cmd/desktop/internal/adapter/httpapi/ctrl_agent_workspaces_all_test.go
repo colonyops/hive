@@ -13,6 +13,7 @@ import (
 // other agent-workspace route (ADR a-workspace-declares-its-own-authority) — it sits in the same operations
 // table, but this proves the wiring rather than assuming it.
 func TestAgentSessionsAllRequiresTheBearerToken(t *testing.T) {
+	t.Parallel()
 	h := newAgentHarness(t)
 
 	resp := h.post(t, AgentWorkspacesPathPrefix+"sessions/all", "", struct{}{})
@@ -32,6 +33,7 @@ func TestAgentSessionsAllRequiresTheBearerToken(t *testing.T) {
 // frontend calls .length on it unconditionally, the same rule
 // TestAgentWireArraysAreNeverNull proves for the other list responses.
 func TestAgentSessionsAllListsOverTheWireAsAnEmptyArray(t *testing.T) {
+	t.Parallel()
 	h := newAgentHarness(t)
 
 	resp := h.post(t, AgentWorkspacesPathPrefix+"sessions/all", testToken, struct{}{})

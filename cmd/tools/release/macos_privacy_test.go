@@ -56,6 +56,7 @@ func readPlistValues(t *testing.T, path string) map[string]plistValue {
 }
 
 func TestDarwinBundlesDescribeChildProcessPrivacyUsage(t *testing.T) {
+	t.Parallel()
 	expected := map[string]string{
 		"NSAppleEventsUsageDescription":          "A command running within Hive may control another application using AppleScript.",
 		"NSDesktopFolderUsageDescription":        "A command running within Hive may access files in your Desktop folder.",
@@ -78,6 +79,7 @@ func TestDarwinBundlesDescribeChildProcessPrivacyUsage(t *testing.T) {
 }
 
 func TestDarwinEntitlementsAllowChildProcessAppleEvents(t *testing.T) {
+	t.Parallel()
 	values := readPlistValues(t, filepath.Join("..", "..", "desktop", "build", "darwin", "entitlements.plist"))
 	assert.Equal(t, plistValue{kind: "true"}, values["com.apple.security.automation.apple-events"])
 }

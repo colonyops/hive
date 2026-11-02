@@ -1,7 +1,8 @@
-import type { Locator, Page, WebSocketRoute } from '@playwright/test'
+import type { Locator, Page, Route, WebSocketRoute } from '@playwright/test'
 import { screenshotPath } from '../../../fixtures/paths.js'
 import { expect, tag, test } from '../../../fixtures/test.js'
 import { bindingID } from '../../../fixtures/wails.js'
+import { mockTerminalAPI } from '../../../fixtures/terminal.js'
 
 async function terminalFixture(page: Page) {
   const available = bindingID('terminalservice', 'Available')
@@ -32,23 +33,15 @@ async function terminalFixture(page: Page) {
     else return route.fallback()
     await route.fulfill({ json: answer })
   })
-  await page.route('**/api/terminal/**', async (route) => {
-    const path = new URL(route.request().url()).pathname.replace('/api/terminal/', '')
-    const headers = {
-      'Access-Control-Allow-Origin': route.request().headers().origin ?? '*',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    }
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
-    if (path === 'attach') return route.fulfill({ json: { windows: [state()] }, headers })
-    if (path === 'windows/list') return route.fulfill({ json: { sessions: { scrollbars: [state()] } }, headers })
-    if (path === 'resize') {
+  await mockTerminalAPI(page, {
+    attach: () => ({ windows: [state()] }),
+    'windows/list': () => ({ sessions: { scrollbars: [state()] } }),
+    resize: (route: Route) => {
       const size = route.request().postDataJSON()
       cols = size.cols
       rows = size.rows
       sendLayout()
-    }
-    await route.fulfill({ status: 204, headers })
+    },
   })
   await page.routeWebSocket('**/api/terminal/stream?*', (stream) => {
     socket = stream

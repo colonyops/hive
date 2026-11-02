@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import CredentialField from '../CredentialField.vue'
 import { chooseOption } from '@hive/ui/test-utils/select'
 
-const mocks = vi.hoisted(() => ({ List: vi.fn(), On: vi.fn() }))
+const mocks = vi.hoisted(() => ({ List: vi.fn() }))
 
 vi.mock(
   '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice',
@@ -11,7 +11,6 @@ vi.mock(
     List: mocks.List,
   }),
 )
-vi.mock('@wailsio/runtime', () => ({ Events: { On: mocks.On } }))
 
 function connected(...accounts: string[]) {
   mocks.List.mockResolvedValue([
@@ -35,7 +34,6 @@ async function mountField(modelValue?: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.On.mockReturnValue(() => {})
   connected()
 })
 

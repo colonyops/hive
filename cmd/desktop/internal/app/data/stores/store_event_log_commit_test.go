@@ -15,6 +15,7 @@ import (
 )
 
 func TestCommit_FeedOutput_ClaimsResolvedInboxItem(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	item, err := db.InsertInboxItem(ctx, queries.InsertInboxItemParams{
@@ -42,6 +43,7 @@ func TestCommit_FeedOutput_ClaimsResolvedInboxItem(t *testing.T) {
 // onto that scope, claim membership, and leave exactly one row — not wedge and
 // not fork a duplicate. See issue hay-kot/hive-desktop#95.
 func TestCommit_FeedOutput_HealsLegacyEmptyScopeItem(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	legacy, err := db.InsertInboxItem(ctx, queries.InsertInboxItemParams{
@@ -75,6 +77,7 @@ func TestCommit_FeedOutput_HealsLegacyEmptyScopeItem(t *testing.T) {
 // row from the payload it carried and claims membership, so the item appears in
 // the feed rather than being dropped.
 func TestCommit_FeedOutput_MintsSynthesizedItem(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -109,6 +112,7 @@ func TestCommit_FeedOutput_MintsSynthesizedItem(t *testing.T) {
 }
 
 func TestCommit_FeedOutput_MintedItemFallsBackToKeyForTitle(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -133,6 +137,7 @@ func TestCommit_FeedOutput_MintedItemFallsBackToKeyForTitle(t *testing.T) {
 // it, and a payload built from a source that carries no time of its own (a
 // Grafana metrics result) produced a row stamped at the epoch.
 func TestCommit_FeedOutput_MintedItemTakesItsTimeFromThePayload(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -157,6 +162,7 @@ func TestCommit_FeedOutput_MintedItemTakesItsTimeFromThePayload(t *testing.T) {
 // A payload with no time of its own is stamped now. The alternative is a zero
 // last_event_at, which renders as an item from 1970 rather than a new one.
 func TestCommit_FeedOutput_MintedItemWithoutATimeIsStampedNow(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -180,6 +186,7 @@ func TestCommit_FeedOutput_MintedItemWithoutATimeIsStampedNow(t *testing.T) {
 // snapshot-boundary row of issue hay-kot/hive-desktop#95). It is skipped, not fatal: the offset has
 // to advance so the consumer cannot be wedged at one such row forever.
 func TestCommit_FeedOutput_SkipsKeylessItem(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -206,6 +213,7 @@ func TestCommit_FeedOutput_SkipsKeylessItem(t *testing.T) {
 }
 
 func TestCommit_ActionOutput_EnqueuesOnce(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -252,6 +260,7 @@ func TestCommit_ActionOutput_EnqueuesOnce(t *testing.T) {
 }
 
 func TestCommit_NotifyOutput_EnqueuesTheItemIdentityOnce(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -309,6 +318,7 @@ func TestCommit_NotifyOutput_EnqueuesTheItemIdentityOnce(t *testing.T) {
 // so an identical message still collapses while a changed one gets through —
 // rather than the node notifying once and then going silent forever.
 func TestCommit_NotifyOutput_DedupesOnPayloadWithoutAnOccurrenceKey(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -335,6 +345,7 @@ func TestCommit_NotifyOutput_DedupesOnPayloadWithoutAnOccurrenceKey(t *testing.T
 }
 
 func TestCommit_NotifyOutput_IsPerNode(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -349,6 +360,7 @@ func TestCommit_NotifyOutput_IsPerNode(t *testing.T) {
 }
 
 func TestCommit_EmptySourceSnapshotClearsOnlyThatSourceClaims(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	item := seedReplayItem(t, db, "flow", "item")
@@ -383,6 +395,7 @@ func countOutputCommands(t *testing.T, db *queries.DB, ctx context.Context) int 
 }
 
 func TestCommit_InsertsNodeRuns(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -449,6 +462,7 @@ func TestCommit_InsertsNodeRuns(t *testing.T) {
 }
 
 func TestCommit_AdvancesOffset_AndIsIdempotentOnReplay(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -503,6 +517,7 @@ func TestCommit_AdvancesOffset_AndIsIdempotentOnReplay(t *testing.T) {
 }
 
 func TestCommit_UnknownSinkKind_Errors(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -523,6 +538,7 @@ func TestCommit_UnknownSinkKind_Errors(t *testing.T) {
 }
 
 func TestCommit_KVMutations_FlushInTheSameTransaction(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -550,6 +566,7 @@ func TestCommit_KVMutations_FlushInTheSameTransaction(t *testing.T) {
 }
 
 func TestCommit_KVMutations_RollBackWithOutputsAndOffset(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -572,6 +589,7 @@ func TestCommit_KVMutations_RollBackWithOutputsAndOffset(t *testing.T) {
 }
 
 func TestCommit_KVMutations_SkippedByTheIdempotencyGuard(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -593,6 +611,7 @@ func TestCommit_KVMutations_SkippedByTheIdempotencyGuard(t *testing.T) {
 // A pull request that keeps changing reaches a launch node with a new
 // occurrence each time; it must still launch once.
 func TestCommit_LaunchOutput_DedupsOnTheItemAndCarriesItsRef(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 

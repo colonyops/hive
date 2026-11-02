@@ -31,6 +31,7 @@ func editableShell(id string) EditableAction {
 }
 
 func TestActionStoreCRUDPreservesUnrelatedNodesCommentsOrderAndValidatesFullCatalog(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	original := `# catalog header
 version: 1
@@ -96,6 +97,7 @@ actions:
 }
 
 func TestActionStoreExternalEditsKeepLastGoodAndRepairRecovers(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte("version: 1\nactions:\n  - id: good\n    label: Good\n    type: shell\n    command_template: true\n"), 0o600))
 	s := NewActionStore(path)
@@ -115,6 +117,7 @@ func TestActionStoreExternalEditsKeepLastGoodAndRepairRecovers(t *testing.T) {
 }
 
 func TestActionStoreMutatesMissingAndEmptyFilesAndDeleteLeavesEmptyCatalog(t *testing.T) {
+	t.Parallel()
 	for _, initial := range [][]byte{nil, []byte(" \n")} {
 		t.Run("initial", func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "actions.yml")
@@ -134,6 +137,7 @@ func TestActionStoreMutatesMissingAndEmptyFilesAndDeleteLeavesEmptyCatalog(t *te
 }
 
 func TestActionStoreCRUDNormalizesEmptyAcceptedCatalogShapes(t *testing.T) {
+	t.Parallel()
 	for name, initial := range map[string]string{
 		"omitted-actions": "# catalog header\nversion: 1 # keep version comment\n",
 		"null-actions":    "# catalog header\nversion: 1\nactions: null\n",
@@ -161,6 +165,7 @@ func TestActionStoreCRUDNormalizesEmptyAcceptedCatalogShapes(t *testing.T) {
 }
 
 func TestActionStoreReorderRewritesSequenceAndRejectsStaleOrders(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	original := `# catalog header
 version: 1
@@ -209,6 +214,7 @@ actions:
 }
 
 func TestActionStoreUpdateBlocksHeadlessActionBecomingInteractiveForLoadedFlows(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	s := NewActionStore(path)
 	headless := launchEditable("used")
@@ -244,6 +250,7 @@ func TestActionStoreUpdateBlocksHeadlessActionBecomingInteractiveForLoadedFlows(
 }
 
 func TestActionStoreDeleteReportsUsageBlockers(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte("version: 1\nactions:\n  - id: used\n    label: Used\n    type: shell\n    command_template: true\n"), 0o600))
 	s := NewActionStore(path)
@@ -290,6 +297,7 @@ func (c flowUsageChecker) Usage(context.Context, string) (ActionUsage, error) {
 }
 
 func TestActionStoreDeleteDoesNotInvertActionAndFlowLocks(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte("version: 1\nactions:\n  - id: used\n    label: Used\n    type: shell\n    command_template: true\n"), 0o600))
 	actions := NewActionStore(path)
@@ -333,16 +341,8 @@ func TestActionStoreDeleteDoesNotInvertActionAndFlowLocks(t *testing.T) {
 	}
 }
 
-func withActionFileOps(t *testing.T, update func(*actionFileOps)) {
-	t.Helper()
-	original := actionFS
-	patched := original
-	update(&patched)
-	actionFS = patched
-	t.Cleanup(func() { actionFS = original })
-}
-
 func TestAtomicWriteFailureCleansTemporaryFileAndDoesNotInstallTarget(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		patch func(*actionFileOps)
@@ -364,8 +364,9 @@ func TestAtomicWriteFailureCleansTemporaryFileAndDoesNotInstallTarget(t *testing
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, "actions.yml")
-			withActionFileOps(t, tc.patch)
-			err := atomicWrite(path, []byte("version: 1\nactions: []\n"))
+			ops := defaultActionFileOps()
+			tc.patch(&ops)
+			err := atomicWrite(ops, path, []byte("version: 1\nactions: []\n"))
 			require.Error(t, err)
 			assert.NoFileExists(t, path)
 			temps, globErr := filepath.Glob(filepath.Join(dir, ".actions-*"))
@@ -376,21 +377,20 @@ func TestAtomicWriteFailureCleansTemporaryFileAndDoesNotInstallTarget(t *testing
 }
 
 func TestActionStoreReloadsInstalledFileAfterDirectorySyncFailure(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte("version: 1\nactions:\n  - id: run\n    label: Old\n    type: shell\n    command_template: true\n"), 0o600))
 	s := NewActionStore(path)
 	require.Equal(t, "Old", s.ListEditable().Actions[0].Label)
 
 	dir := filepath.Dir(path)
-	withActionFileOps(t, func(ops *actionFileOps) {
-		sync := ops.sync
-		ops.sync = func(f *os.File) error {
-			if f.Name() == dir {
-				return errors.New("directory sync failed")
-			}
-			return sync(f)
+	sync := s.fs.sync
+	s.fs.sync = func(f *os.File) error {
+		if f.Name() == dir {
+			return errors.New("directory sync failed")
 		}
-	})
+		return sync(f)
+	}
 	updated := editableShell("run")
 	updated.Label = "New"
 	_, err := s.Update(t.Context(), "run", updated)

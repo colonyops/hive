@@ -15,6 +15,7 @@ func clipboardAction(template string) actions.Action {
 }
 
 func TestClipboardExecutor_RendersTextAsOutcome(t *testing.T) {
+	t.Parallel()
 	out, err := NewClipboardExecutor().Execute(
 		t.Context(),
 		clipboardAction("gh pr checkout {{ .Payload.num }} -R {{ .Payload.repo }}"),
@@ -31,6 +32,7 @@ func TestClipboardExecutor_RendersTextAsOutcome(t *testing.T) {
 // render over whatever context the caller assembled rather than one it rebuilds
 // from the item's raw bytes.
 func TestClipboardExecutor_RendersTerminalTargetData(t *testing.T) {
+	t.Parallel()
 	out, err := NewClipboardExecutor().Execute(
 		t.Context(),
 		clipboardAction("cd {{ .Session.Path | shq }}"),
@@ -44,17 +46,20 @@ func TestClipboardExecutor_RendersTerminalTargetData(t *testing.T) {
 }
 
 func TestRenderClipboardText_ShqIsAvailable(t *testing.T) {
+	t.Parallel()
 	text, err := RenderClipboardText(clipboardAction("{{ .Payload.title | shq }}"), "k", []byte(`{"title":"a b"}`), nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "'a b'", text)
 }
 
 func TestRenderClipboardText_BlankRenderIsError(t *testing.T) {
+	t.Parallel()
 	_, err := RenderClipboardText(clipboardAction("{{ .Payload.empty }}"), "k", []byte(`{"empty":""}`), nil, nil)
 	require.Error(t, err)
 }
 
 func TestClipboardExecutor_WrongConfigType_IsError(t *testing.T) {
+	t.Parallel()
 	_, err := NewClipboardExecutor().Execute(t.Context(), actions.Action{ID: "x", Type: "clipboard", Config: &actions.ShellConfig{}}, OutputData{}, ActionInvocationInput{})
 	require.Error(t, err)
 }

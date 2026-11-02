@@ -84,6 +84,7 @@ func seedCtxFixture(t *testing.T, st *Stores, db *queries.DB) ctxFixture {
 // Cap the pool at one connection so a store method that escapes the ambient
 // transaction blocks until its deadline instead of using another connection.
 func TestEveryStoreMethodJoinsTheAmbientTransaction(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.OpenOptions{MaxOpenConns: 1, MaxIdleConns: 1, BusyTimeout: 5000})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })

@@ -9,30 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeBlockerStore extends fakeHCStore with controllable blocker edge state.
-type fakeBlockerStore struct {
+type failingBlockerStore struct {
 	*fakeHCStore
-	edges [][2]string
+	err error
 }
 
-func newFakeBlockerStore() *fakeBlockerStore {
-	return &fakeBlockerStore{
-		fakeHCStore: newFakeHCStore(),
-	}
-}
-
-// AddBlocker simulates the real store: enforces cycle detection so service-layer
-// tests remain meaningful even though Service.AddBlocker now delegates entirely.
-func (f *fakeBlockerStore) AddBlocker(_ context.Context, blockerID, blockedID string) error {
-	if hc.WouldCycle(f.edges, blockerID, blockedID) {
-		return hc.ErrCyclicDependency
-	}
-	f.edges = append(f.edges, [2]string{blockerID, blockedID})
-	return nil
-}
-
-func (f *fakeBlockerStore) ListBlockerEdges(_ context.Context) ([][2]string, error) {
-	return f.edges, nil
+func (f *failingBlockerStore) AddBlocker(context.Context, string, string) error {
+	return f.err
 }
 
 // ---------------------------------------------------------------------------
@@ -72,59 +55,10 @@ func TestWouldCycle_DiamondNoCycle(t *testing.T) {
 // Service.AddBlocker tests
 // ---------------------------------------------------------------------------
 
-func TestAddBlocker_SelfBlock(t *testing.T) {
-	store := newFakeBlockerStore()
-	svc := newTestHoneycombService(store)
+func TestAddBlocker_ReturnsTheStoreError(t *testing.T) {
+	svc := newTestHoneycombService(&failingBlockerStore{fakeHCStore: newFakeHCStore(), err: hc.ErrCyclicDependency})
 
-	err := svc.AddBlocker(context.Background(), "A", "A")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, hc.ErrCyclicDependency)
-}
-
-func TestAddBlocker_DirectCycle(t *testing.T) {
-	store := newFakeBlockerStore()
-	svc := newTestHoneycombService(store)
-
-	// Add A→B
-	store.edges = append(store.edges, [2]string{"A", "B"})
-
-	// Adding B→A should fail
-	err := svc.AddBlocker(context.Background(), "B", "A")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, hc.ErrCyclicDependency)
-}
-
-func TestAddBlocker_IndirectCycle(t *testing.T) {
-	store := newFakeBlockerStore()
-	svc := newTestHoneycombService(store)
-
-	store.edges = [][2]string{{"A", "B"}, {"B", "C"}}
-
-	// Adding C→A creates A→B→C→A
-	err := svc.AddBlocker(context.Background(), "C", "A")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, hc.ErrCyclicDependency)
-}
-
-func TestAddBlocker_NoCycle(t *testing.T) {
-	store := newFakeBlockerStore()
-	svc := newTestHoneycombService(store)
-
-	store.edges = [][2]string{{"A", "B"}}
-
-	// Adding B→C is fine
-	err := svc.AddBlocker(context.Background(), "B", "C")
-	require.NoError(t, err)
-}
-
-func TestAddBlocker_DiamondNoCycle(t *testing.T) {
-	store := newFakeBlockerStore()
-	svc := newTestHoneycombService(store)
-
-	// A→C, B→C
-	store.edges = [][2]string{{"A", "C"}, {"B", "C"}}
-
-	// Adding A→B to form diamond shape should succeed
 	err := svc.AddBlocker(context.Background(), "A", "B")
-	require.NoError(t, err)
+
+	require.ErrorIs(t, err, hc.ErrCyclicDependency)
 }

@@ -10,6 +10,7 @@ import (
 )
 
 func TestTodoCRUD(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	// Add a todo

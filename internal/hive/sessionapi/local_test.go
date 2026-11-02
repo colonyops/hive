@@ -17,6 +17,7 @@ import (
 const remote = "https://github.com/acme/site"
 
 func TestLocalListAndGetRoundTrip(t *testing.T) {
+	t.Parallel()
 	api := sessionapi.NewLocal(hivetest.NewEngine(t, hivetest.Options{}).Engine)
 
 	created, err := api.CreateSession(t.Context(), sessionsvc.CreateOptions{Name: "review", Remote: remote, SkipSpawn: true})
@@ -36,6 +37,7 @@ func TestLocalListAndGetRoundTrip(t *testing.T) {
 }
 
 func TestLocalStatusAvailableNeedsAPaneSource(t *testing.T) {
+	t.Parallel()
 	without := sessionapi.NewLocal(hivetest.NewEngine(t, hivetest.Options{}).Engine)
 	assert.False(t, without.StatusAvailable())
 	assert.Empty(t, without.FetchBatch(t.Context(), []*session.Session{{ID: "a", State: session.StateActive}}, nil))
@@ -45,6 +47,7 @@ func TestLocalStatusAvailableNeedsAPaneSource(t *testing.T) {
 }
 
 func TestLocalCreateSessionWithWindowsReturnsTheSession(t *testing.T) {
+	t.Parallel()
 	api := sessionapi.NewLocal(hivetest.NewEngine(t, hivetest.Options{}).Engine)
 
 	sess, err := api.CreateSessionWithWindows(t.Context(), sessionsvc.NewSessionRequest{Name: "spawned", Remote: remote}, nil)
@@ -75,6 +78,7 @@ func (m *recordingMux) AttachOrSwitch(context.Context, multiplexer.Target, multi
 }
 
 func TestLocalCreatesInTheBackgroundWhateverTheCallerAsks(t *testing.T) {
+	t.Parallel()
 	mux := &recordingMux{}
 	api := sessionapi.NewLocal(hivetest.NewEngine(t, hivetest.Options{Mux: mux}).Engine)
 

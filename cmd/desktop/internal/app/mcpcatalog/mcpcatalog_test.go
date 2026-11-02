@@ -6,28 +6,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/colonyops/hive/cmd/desktop/internal/app/docstest"
 )
 
 // TestRegistryDocsBijection is the coupling that lets the catalogue document
 // itself: every registered type must carry a docs/<type>.md, and no orphan
-// doc may linger for a type that was removed. Mirrors
-// cmd/desktop/internal/app/actions/docs_test.go's TestActionDocsCoverEveryRegisteredType.
+// doc may linger for a type that was removed.
 func TestRegistryDocsBijection(t *testing.T) {
-	for _, mcpType := range Types() {
-		doc, err := Doc(mcpType)
-		require.NoErrorf(t, err, "MCP type %q has no docs/%s.md", mcpType, mcpType)
-		assert.NotEmptyf(t, strings.TrimSpace(doc), "docs/%s.md is empty", mcpType)
-		assert.Truef(t, strings.HasPrefix(strings.TrimSpace(doc), "# "),
-			"docs/%s.md must open with an H1 naming the MCP type", mcpType)
-	}
-
-	entries, err := docsFS.ReadDir("docs")
-	require.NoError(t, err)
-	for _, entry := range entries {
-		mcpType := strings.TrimSuffix(entry.Name(), ".md")
-		assert.Containsf(t, registry, mcpType,
-			"docs/%s documents %q, which is not a registered MCP type", entry.Name(), mcpType)
-	}
+	docstest.AssertCoverTypes(t, "MCP", Types(), Doc, docsFS)
 }
 
 func TestTypesIsSorted(t *testing.T) {

@@ -34,6 +34,7 @@ func activateReplay(t *testing.T, st *Stores, profile string, claims []models.Fe
 }
 
 func TestActivateReplay_OnlyWritesClaimsAndOffset(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	item := seedReplayItem(t, db, "flow", "item")
 	activateReplay(t, st, "flow", []models.FeedClaim{{FeedID: "flow/feed", ItemID: item.ID, SourceID: "source:flow/a"}})
@@ -47,6 +48,7 @@ func TestActivateReplay_OnlyWritesClaimsAndOffset(t *testing.T) {
 }
 
 func TestActivateReplay_RollsBackOffsetAndClaimsOnFailure(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	item := seedReplayItem(t, db, "flow", "item")
 	require.NoError(t, st.FeedClaims.Upsert(t.Context(), models.FeedClaim{ProfileID: "flow", FeedID: "flow/old", ItemID: item.ID, SourceID: "source:flow/old"}))
@@ -65,6 +67,7 @@ func TestActivateReplay_RollsBackOffsetAndClaimsOnFailure(t *testing.T) {
 }
 
 func TestActivateReplay_ReplacesOnlyUnarchivedClaims(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	open := seedReplayItem(t, db, "flow", "open")
 	archived := seedReplayItem(t, db, "flow", "archived")
@@ -91,6 +94,7 @@ func TestActivateReplay_ReplacesOnlyUnarchivedClaims(t *testing.T) {
 }
 
 func TestActivateReplay_DoesNotMutateInboxTriage(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	item := seedReplayItem(t, db, "flow", "item")
 	_, err := db.Conn().ExecContext(t.Context(), `UPDATE inbox_item SET unread = 1, lifecycle = 'terminal', archived_reason = 'manual' WHERE id = ?`, item.ID)
@@ -112,6 +116,7 @@ func TestActivateReplay_DoesNotMutateInboxTriage(t *testing.T) {
 }
 
 func TestActivateReplay_NoFeedsDeletesAllClaims(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	open := seedReplayItem(t, db, "flow", "open")
 	archived := seedReplayItem(t, db, "flow", "archived")
@@ -128,6 +133,7 @@ func TestActivateReplay_NoFeedsDeletesAllClaims(t *testing.T) {
 }
 
 func TestActivateReplay_UsesRetentionSafeHighWaterMark(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	for _, key := range []string{"one", "two"} {
 		_, err := st.EventLog.Append(t.Context(), "source:flow/a", key, []byte(`{}`))
@@ -153,6 +159,7 @@ func TestActivateReplay_UsesRetentionSafeHighWaterMark(t *testing.T) {
 }
 
 func TestActivateReplay_ProtectsArchivedClaims(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	open := seedReplayItem(t, db, "flow", "open")
 	archived := seedReplayItem(t, db, "flow", "archived")
@@ -176,6 +183,7 @@ func TestActivateReplay_ProtectsArchivedClaims(t *testing.T) {
 }
 
 func TestActivateReplay_ReconcilesNodeKV(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
@@ -204,6 +212,7 @@ func TestActivateReplay_ReconcilesNodeKV(t *testing.T) {
 }
 
 func TestActivateReplay_FailureLeavesNodeKVIntact(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	item := seedReplayItem(t, db, "flow", "item")

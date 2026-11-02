@@ -40,6 +40,7 @@ func sessionIDs(a sessionsAnswer) []string {
 }
 
 func TestListSessionsFiltersByTagsAndState(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	seedHiveSession(t, core, "s1", "active", `["auto","backend"]`, 1)
 	seedHiveSession(t, core, "s2", "active", `["Auto"]`, 2)
@@ -63,6 +64,7 @@ func TestListSessionsFiltersByTagsAndState(t *testing.T) {
 }
 
 func TestEditSessionTagsSwapsATag(t *testing.T) {
+	t.Parallel()
 	core, session := testSession(t)
 	seedHiveSession(t, core, "s1", "active", `["auto","backend"]`, 1)
 

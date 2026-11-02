@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import Editor from '../editor.vue'
 import { defaults, validate, type Config } from '../config'
 import { chooseOption } from '@hive/ui/test-utils/select'
+import { connectAccounts, describeCredentialPicker } from '../../../__tests__/credentialPicker'
 
-const mocks = vi.hoisted(() => ({ List: vi.fn(), On: vi.fn() }))
+const mocks = vi.hoisted(() => ({ List: vi.fn() }))
 
 vi.mock(
   '../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice',
@@ -12,28 +13,26 @@ vi.mock(
     List: mocks.List,
   }),
 )
-vi.mock('@wailsio/runtime', () => ({
-  Events: { On: mocks.On },
-}))
 
-function connectedAccounts(...accounts: string[]) {
-  mocks.List.mockResolvedValue([
-    {
-      type: 'sources.github',
-      title: 'GitHub source',
-      stability: 'stable',
-      mode: 'pull',
-      provider: 'github',
-      accounts,
-      envOverride: false,
-    },
-  ])
-}
+const connect = connectAccounts(mocks.List, {
+  type: 'sources.github',
+  title: 'GitHub source',
+  stability: 'stable',
+  mode: 'pull',
+  provider: 'github',
+  envOverride: false,
+})
 
-beforeEach(() => {
-  vi.clearAllMocks()
-  mocks.On.mockReturnValue(() => {})
-  connectedAccounts()
+beforeEach(() => connect())
+
+describeCredentialPicker({
+  node: 'sources.github',
+  Editor,
+  connect,
+  provider: 'github',
+  accounts: ['octocat', 'hubot'],
+  config: (credential) => ({ credential, kind: 'notifications' }),
+  emptyMessage: 'No GitHub account is connected',
 })
 
 describe('sources.github editor', () => {
@@ -59,49 +58,6 @@ describe('sources.github editor', () => {
     expect(wrapper.emitted('update:config')).toEqual([
       [{ credential: 'github/octocat', kind: 'search', query: 'is:open' }],
     ])
-  })
-
-  // The field used to be a free-text box the user had to type a ref into.
-  // It offers the accounts the credential store actually holds instead, which
-  // is what makes a typo'd ref unrepresentable rather than merely invalid.
-  it('offers the connected accounts as options', async () => {
-    connectedAccounts('octocat', 'hubot')
-    const config: Config = { credential: 'github/octocat', kind: 'notifications' }
-    const wrapper = mount(Editor, { props: { config } })
-    await flushPromises()
-
-    const field = wrapper.get('[data-testid="sources.github-editor-credential"]')
-    expect(field.text()).toContain('github/octocat')
-    await chooseOption(wrapper, 'sources.github-editor-credential', 'github/hubot')
-    expect(wrapper.emitted('update:config')).toEqual([[{ credential: 'github/hubot', kind: 'notifications' }]])
-    wrapper.unmount()
-  })
-
-  // Dropping a disconnected account from the list would silently rewrite the
-  // node's config on the next edit of any other field.
-  it('keeps an account that is no longer connected selectable, and says so', async () => {
-    connectedAccounts('hubot')
-    const config: Config = { credential: 'github/octocat', kind: 'notifications' }
-    const wrapper = mount(Editor, { props: { config } })
-    await flushPromises()
-
-    const field = wrapper.get('[data-testid="sources.github-editor-credential"]')
-    expect(field.text()).toContain('not connected')
-    wrapper.unmount()
-  })
-
-  // An empty dropdown is a dead end: with nothing connected and nothing set,
-  // the field stays typeable so a flow can still be authored ahead of the
-  // account existing.
-  it('falls back to a text input when no account is connected', async () => {
-    const config: Config = { credential: '', kind: 'notifications' }
-    const wrapper = mount(Editor, { props: { config } })
-    await flushPromises()
-
-    const field = wrapper.get('[data-testid="sources.github-editor-credential"]')
-    expect(field.element.tagName).toBe('INPUT')
-    expect(wrapper.text()).toContain('No GitHub account is connected')
-    wrapper.unmount()
   })
 
   it('hides the query field and clears it when switching to notifications', async () => {

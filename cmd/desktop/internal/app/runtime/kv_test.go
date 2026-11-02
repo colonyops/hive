@@ -46,6 +46,7 @@ func hasPrefix(s, prefix string) bool {
 }
 
 func TestNodeStaging_ReadYourWrites(t *testing.T) {
+	t.Parallel()
 	buf := newKVBuffer(fakeKVReader{}, "f", 1000)
 	stg := buf.node("n")
 	ctx := t.Context()
@@ -58,6 +59,7 @@ func TestNodeStaging_ReadYourWrites(t *testing.T) {
 }
 
 func TestNodeStaging_TombstoneAndSetPrecedence(t *testing.T) {
+	t.Parallel()
 	buf := newKVBuffer(fakeKVReader{rows: map[string]string{"n/durable": `1`}}, "f", 1000)
 	stg := buf.node("n")
 	ctx := t.Context()
@@ -77,6 +79,7 @@ func TestNodeStaging_TombstoneAndSetPrecedence(t *testing.T) {
 }
 
 func TestNodeStaging_FallsThroughToTheReader(t *testing.T) {
+	t.Parallel()
 	buf := newKVBuffer(fakeKVReader{rows: map[string]string{"n/k": `"durable"`}}, "f", 1000)
 	stg := buf.node("n")
 
@@ -87,6 +90,7 @@ func TestNodeStaging_FallsThroughToTheReader(t *testing.T) {
 }
 
 func TestNodeStaging_OverlayHonorsExpiry(t *testing.T) {
+	t.Parallel()
 	buf := newKVBuffer(fakeKVReader{}, "f", 1000)
 	stg := buf.node("n")
 	ctx := t.Context()
@@ -103,6 +107,7 @@ func TestNodeStaging_OverlayHonorsExpiry(t *testing.T) {
 }
 
 func TestNodeStaging_HonorsContextCancellation(t *testing.T) {
+	t.Parallel()
 	buf := newKVBuffer(fakeKVReader{}, "f", 1000)
 	stg := buf.node("n")
 	ctx, cancel := context.WithCancel(t.Context())
@@ -117,6 +122,7 @@ func TestNodeStaging_HonorsContextCancellation(t *testing.T) {
 }
 
 func TestNodeStaging_KeysUnionMinusTombstones(t *testing.T) {
+	t.Parallel()
 	buf := newKVBuffer(fakeKVReader{rows: map[string]string{"n/a": `1`, "n/b": `1`, "n/x": `1`}}, "f", 1000)
 	ctx := t.Context()
 
@@ -139,6 +145,7 @@ func TestNodeStaging_KeysUnionMinusTombstones(t *testing.T) {
 }
 
 func TestNodeStaging_UncommittedWritesInvisibleToLaterMessages(t *testing.T) {
+	t.Parallel()
 	buf := newKVBuffer(fakeKVReader{}, "f", 1000)
 	ctx := t.Context()
 
@@ -153,6 +160,7 @@ func TestNodeStaging_UncommittedWritesInvisibleToLaterMessages(t *testing.T) {
 }
 
 func TestKVBuffer_MutationsAreDeterministicallyOrdered(t *testing.T) {
+	t.Parallel()
 	buf := newKVBuffer(fakeKVReader{}, "f", 1000)
 	ctx := t.Context()
 
@@ -176,6 +184,7 @@ func TestKVBuffer_MutationsAreDeterministicallyOrdered(t *testing.T) {
 }
 
 func TestInertKVBuffer_DisabledInBothDirections(t *testing.T) {
+	t.Parallel()
 	buf := newInertKVBuffer("f", 1000)
 	stg := buf.node("n")
 	ctx := t.Context()
@@ -218,6 +227,7 @@ func (f *fakeScriptInstance) Close() {}
 // message in the same batch does not see the discarded write; a succeeding
 // message's write reaches the batch.
 func TestRun_StagedWritesFollowTheMessageOutcome(t *testing.T) {
+	t.Parallel()
 	rt := &fakeScriptRuntime{onMessage: func(ctx context.Context, msg models.Msg, kv NodeKV) ([][]models.Msg, error) {
 		require.NoError(t, kv.Set(ctx, "seen:"+msg.Key, `true`, 0))
 		if msg.Key == "poison" {
@@ -253,6 +263,7 @@ func TestRun_StagedWritesFollowTheMessageOutcome(t *testing.T) {
 // A script that writes KV and then intentionally drops the message (returns
 // nothing) still merges: only an error discards staging.
 func TestRun_IntentionalDropStillCommitsStaging(t *testing.T) {
+	t.Parallel()
 	rt := &fakeScriptRuntime{onMessage: func(ctx context.Context, msg models.Msg, kv NodeKV) ([][]models.Msg, error) {
 		require.NoError(t, kv.Set(ctx, "seen", `true`, 0))
 		return nil, nil
@@ -275,6 +286,7 @@ func TestRun_IntentionalDropStillCommitsStaging(t *testing.T) {
 
 // Within one Run, message 2 sees message 1's write once message 1 succeeded.
 func TestRun_LaterMessageSeesEarlierCommittedWrite(t *testing.T) {
+	t.Parallel()
 	secondSawWrite := false
 	rt := &fakeScriptRuntime{onMessage: func(ctx context.Context, msg models.Msg, kv NodeKV) ([][]models.Msg, error) {
 		found, err := kv.Has(ctx, "seen")
@@ -307,6 +319,7 @@ func TestRun_LaterMessageSeesEarlierCommittedWrite(t *testing.T) {
 }
 
 func TestResetProcessorsDropsInstances(t *testing.T) {
+	t.Parallel()
 	instances := 0
 	rt := &fakeScriptRuntime{onMessage: func(context.Context, models.Msg, NodeKV) ([][]models.Msg, error) {
 		return nil, nil

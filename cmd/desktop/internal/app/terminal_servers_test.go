@@ -5,13 +5,13 @@ package app
 import (
 	"context"
 	"errors"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/colonyops/hive/internal/platform/tmuxtest"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -21,18 +21,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/server"
 	"github.com/colonyops/hive/internal/hive/servers"
 	"github.com/colonyops/hive/internal/platform/tmux/control"
-	"github.com/colonyops/hive/pkg/executil"
 )
-
-// socketRunner stands a second tmux server on this machine in for a remote
-// one, so routing is tested without ssh. test/remote covers the ssh runner.
-type socketRunner struct{ socket string }
-
-func (r socketRunner) Command(ctx context.Context, _ string, _ []string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, "tmux", append([]string{"-S", r.socket}, args...)...)
-	cmd.Env = executil.WithoutEnv(nil, "TMUX", "TMUX_PANE")
-	return cmd
-}
 
 type fakeTerminalServers map[string]*tmuxcc.Manager
 
@@ -45,27 +34,20 @@ func (f fakeTerminalServers) Manager(_ context.Context, name string) (*tmuxcc.Ma
 
 func newRoutedTerminals(t *testing.T) (*TerminalsService, func(args ...string) error, func(args ...string) error) {
 	t.Helper()
-	local := privateTmux(t)
-	// Not t.TempDir: the test name in that path overflows a unix socket path.
-	dir, err := os.MkdirTemp("", "hvbox") //nolint:usetesting // socket path length
-	require.NoError(t, err)
-	socket := filepath.Join(dir, "box")
-	t.Cleanup(func() {
-		kill := exec.Command("tmux", "-S", socket, "kill-server") //nolint:noctx // cleanup runs past the test context
-		kill.Env = executil.WithoutEnv(nil, "TMUX", "TMUX_PANE")
-		_ = kill.Run()
-		_ = os.RemoveAll(dir)
-	})
-	remote := func(args ...string) error { return socketRunner{socket}.Command(t.Context(), "", nil, args...).Run() }
+	local := tmuxtest.New(t)
+	// A second tmux server on this machine stands in for a remote one, so routing
+	// is tested without ssh. test/remote covers the ssh runner.
+	remote := tmuxtest.New(t)
 
-	box := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{Logger: zerolog.Nop(), Runner: socketRunner{socket}})
+	box := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{Logger: zerolog.Nop(), Runner: remote})
 	t.Cleanup(func() { _ = box.Stop(context.WithoutCancel(t.Context())) })
-	terminals := newTestTerminals(t, &spawningStarter{tmux: local})
+	terminals := newTestTerminals(t, local, &spawningStarter{tmux: local.Run})
 	terminals.servers = fakeTerminalServers{"box": box}
-	return terminals, local, remote
+	return terminals, local.Run, remote.Run
 }
 
 func TestTerminals_RouteAServerSlugToThatServersTmux(t *testing.T) {
+	t.Parallel()
 	terminals, local, remote := newRoutedTerminals(t)
 	require.NoError(t, local("-f", "/dev/null", "new-session", "-d", "-s", "hive-here", "-n", "local", "sh"))
 	require.NoError(t, remote("-f", "/dev/null", "new-session", "-d", "-s", "hive-there", "-n", "remote", "sh"))
@@ -107,6 +89,7 @@ func (offlineRunner) Command(ctx context.Context, _ string, _ []string, args ...
 // The frontend stops attaching again on not_found, so the two answers must not
 // blur: only the first means the session is gone.
 func TestTerminals_AttachTellsAGoneSessionFromAnOfflineServer(t *testing.T) {
+	t.Parallel()
 	terminals, _, remote := newRoutedTerminals(t)
 	require.NoError(t, remote("-f", "/dev/null", "new-session", "-d", "-s", "hive-there", "sh"))
 	offline := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{Logger: zerolog.Nop(), Runner: offlineRunner{}})
@@ -123,6 +106,7 @@ func TestTerminals_AttachTellsAGoneSessionFromAnOfflineServer(t *testing.T) {
 }
 
 func TestTerminals_SweepKeysServerWindowsByTarget(t *testing.T) {
+	t.Parallel()
 	terminals, local, remote := newRoutedTerminals(t)
 	require.NoError(t, local("-f", "/dev/null", "new-session", "-d", "-s", "hive-here", "-n", "local", "sh"))
 	require.NoError(t, remote("-f", "/dev/null", "new-session", "-d", "-s", "hive-there", "-n", "remote", "sh"))
@@ -141,6 +125,7 @@ func (hungRunner) Command(ctx context.Context, _ string, _ []string, _ ...string
 }
 
 func TestTerminals_SweepIsNotHeldByAHungServer(t *testing.T) {
+	t.Parallel()
 	terminals, local, remote := newRoutedTerminals(t)
 	require.NoError(t, local("new-session", "-d", "-s", "here"))
 	require.NoError(t, remote("new-session", "-d", "-s", "there"))
@@ -181,6 +166,7 @@ func (b *barrierServers) Manager(ctx context.Context, name string) (*tmuxcc.Mana
 }
 
 func TestTerminals_SweepAsksServersInParallel(t *testing.T) {
+	t.Parallel()
 	terminals, _, remote := newRoutedTerminals(t)
 	require.NoError(t, remote("new-session", "-d", "-s", "there"))
 	box, err := terminals.servers.Manager(t.Context(), "box")
@@ -209,7 +195,7 @@ func newRecordedServerTerminals(t *testing.T) (*serverTerminals, func(...config.
 	set()
 	terminals := newServerTerminals(t.Context(), zerolog.Nop(), fleet.Load, nil, "")
 	terminals.newManager = func(string, server.Host) *tmuxcc.Manager {
-		return tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{Logger: zerolog.Nop(), Runner: socketRunner{"/nonexistent/hive-test"}})
+		return tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{Logger: zerolog.Nop(), Runner: &tmuxtest.Server{Socket: "/nonexistent/hive-test"}})
 	}
 	return terminals, set
 }
@@ -223,6 +209,7 @@ func requireStopped(t *testing.T, m *tmuxcc.Manager) {
 }
 
 func TestServerTerminals_RebuildsAManagerWhenItsHostChanges(t *testing.T) {
+	t.Parallel()
 	terminals, set := newRecordedServerTerminals(t)
 	set(config.ServerConfig{Name: "box", SSH: "box-1"})
 
@@ -240,6 +227,7 @@ func TestServerTerminals_RebuildsAManagerWhenItsHostChanges(t *testing.T) {
 }
 
 func TestServerTerminals_PruneStopsARemovedServerAndKeepsTheRest(t *testing.T) {
+	t.Parallel()
 	terminals, set := newRecordedServerTerminals(t)
 	set(config.ServerConfig{Name: "gone", SSH: "gone"}, config.ServerConfig{Name: "kept", SSH: "kept"})
 	gone, err := terminals.Manager(t.Context(), "gone")
@@ -259,6 +247,7 @@ func TestServerTerminals_PruneStopsARemovedServerAndKeepsTheRest(t *testing.T) {
 }
 
 func TestServerTerminals_RefusesAfterStop(t *testing.T) {
+	t.Parallel()
 	terminals, set := newRecordedServerTerminals(t)
 	set(config.ServerConfig{Name: "box", SSH: "box"})
 	manager, err := terminals.Manager(t.Context(), "box")
@@ -272,6 +261,7 @@ func TestServerTerminals_RefusesAfterStop(t *testing.T) {
 }
 
 func TestTerminals_StartAServersSessionThroughTheStarter(t *testing.T) {
+	t.Parallel()
 	terminals, _, _ := newRoutedTerminals(t)
 	starter := &spawningStarter{tmux: func(...string) error { return nil }}
 	terminals.starter = starter
@@ -284,6 +274,7 @@ func TestTerminals_StartAServersSessionThroughTheStarter(t *testing.T) {
 }
 
 func TestTerminals_RefuseAnAttachToABadServerTarget(t *testing.T) {
+	t.Parallel()
 	terminals, _, _ := newRoutedTerminals(t)
 
 	_, err := terminals.Attach(t.Context(), "elsewhere:hive-there", 100, 30)
@@ -302,7 +293,8 @@ func (unreachableRunner) Command(ctx context.Context, _ string, _ []string, _ ..
 }
 
 func TestTerminals_AttachToAnUnreachableServerSaysWhy(t *testing.T) {
-	terminals := newTestTerminals(t, nil)
+	t.Parallel()
+	terminals := newTestTerminals(t, nil, nil)
 	down := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{
 		Logger: zerolog.Nop(),
 		Binary: func() (string, error) { return "tmux", nil },

@@ -54,6 +54,7 @@ func waitBackground(t *testing.T, rt *hive.Runtime) {
 }
 
 func TestRuntimeStartsTheEngineOnAnOpenDatabaseAndBus(t *testing.T) {
+	t.Parallel()
 	cfg := hivetest.LoadConfig(t, t.TempDir())
 	rt := startRuntime(t, t.Context(), cfg)
 
@@ -76,6 +77,7 @@ func TestRuntimeStartsTheEngineOnAnOpenDatabaseAndBus(t *testing.T) {
 }
 
 func TestRuntimeRejectsAProgramSuppliedDatabaseOrBus(t *testing.T) {
+	t.Parallel()
 	cfg := hivetest.LoadConfig(t, t.TempDir())
 	ports := runtimePorts(cfg.DataDir)
 	ports.Bus = events.New(1)
@@ -85,6 +87,7 @@ func TestRuntimeRejectsAProgramSuppliedDatabaseOrBus(t *testing.T) {
 }
 
 func TestRuntimeDatabaseFailureReportsTheDatabaseStep(t *testing.T) {
+	t.Parallel()
 	blocker := filepath.Join(t.TempDir(), "file")
 	require.NoError(t, os.WriteFile(blocker, nil, 0o600))
 	cfg := hivetest.LoadConfig(t, filepath.Join(blocker, "data"))
@@ -97,6 +100,7 @@ func TestRuntimeDatabaseFailureReportsTheDatabaseStep(t *testing.T) {
 }
 
 func TestRuntimeEngineFailureClosesTheDatabase(t *testing.T) {
+	t.Parallel()
 	cfg := hivetest.LoadConfig(t, t.TempDir())
 	ports := runtimePorts(cfg.DataDir)
 	ports.Mux = nil
@@ -112,6 +116,7 @@ func TestRuntimeEngineFailureClosesTheDatabase(t *testing.T) {
 }
 
 func TestRuntimeCloseIsIdempotent(t *testing.T) {
+	t.Parallel()
 	cfg := hivetest.LoadConfig(t, t.TempDir())
 	rt := startRuntime(t, t.Context(), cfg)
 
@@ -124,6 +129,7 @@ func TestRuntimeCloseIsIdempotent(t *testing.T) {
 }
 
 func TestRuntimeDoesNotStartOnACanceledContext(t *testing.T) {
+	t.Parallel()
 	cfg := hivetest.LoadConfig(t, t.TempDir())
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -135,6 +141,7 @@ func TestRuntimeDoesNotStartOnACanceledContext(t *testing.T) {
 }
 
 func TestRuntimeBackgroundWorkStopsWithItsContext(t *testing.T) {
+	t.Parallel()
 	cfg := hivetest.LoadConfig(t, t.TempDir())
 	ctx, cancel := context.WithCancel(t.Context())
 	rt := startRuntime(t, ctx, cfg)
@@ -146,6 +153,7 @@ func TestRuntimeBackgroundWorkStopsWithItsContext(t *testing.T) {
 }
 
 func TestRuntimeReloadKeepsTheDatabaseAndBus(t *testing.T) {
+	t.Parallel()
 	cfg := hivetest.LoadConfig(t, t.TempDir())
 	rt := startRuntime(t, t.Context(), cfg)
 	bus, sessions := rt.Bus(), rt.Engine().Sessions()

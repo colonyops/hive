@@ -163,9 +163,7 @@ func newFixture(t *testing.T) *fixture {
 	root := t.TempDir()
 	cfg := &config.Config{Context: config.ContextConfig{BaseDir: root, SymlinkName: ".hive"}}
 	files := drivesvc.NewService(zerolog.Nop(), cfg, nil, testbus.New(t).EventBus)
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = database.Close() })
+	database := db.OpenForTest(t)
 
 	space, err := drive.RepositorySpace("acme", "site")
 	require.NoError(t, err)

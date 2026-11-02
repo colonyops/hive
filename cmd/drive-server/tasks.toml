@@ -7,7 +7,7 @@ run = "go run ./cmd/drive-server serve --dev-log-mail"
 
 ["drive-server:test"]
 description = "Run the drive server's Go tests"
-run = "go test ./cmd/drive-server/..."
+run = "scripts/gotest.sh ./cmd/drive-server/..."
 
 ["drive-server:build"]
 description = "Build the hive-drive-server binary (web UI embedded) into cmd/drive-server/bin/"

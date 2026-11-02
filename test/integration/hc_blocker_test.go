@@ -31,6 +31,7 @@ func createBlockerFixture(t *testing.T, h *Harness) (epicID, task1ID, task2ID st
 }
 
 func TestHCUpdateAddBlocker(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	_, blockerID, blockedID := createBlockerFixture(t, h)
 
@@ -51,6 +52,7 @@ func TestHCUpdateAddBlocker(t *testing.T) {
 }
 
 func TestHCUpdateRemoveBlocker(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	_, blockerID, blockedID := createBlockerFixture(t, h)
 
@@ -71,6 +73,7 @@ func TestHCUpdateRemoveBlocker(t *testing.T) {
 }
 
 func TestHCUpdateAddBlocker_Cycle(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	_, task1ID, task2ID := createBlockerFixture(t, h)
 
@@ -85,6 +88,7 @@ func TestHCUpdateAddBlocker_Cycle(t *testing.T) {
 }
 
 func TestHCUpdateAddBlocker_MutuallyExclusive(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	_, task1ID, task2ID := createBlockerFixture(t, h)
 
@@ -94,6 +98,7 @@ func TestHCUpdateAddBlocker_MutuallyExclusive(t *testing.T) {
 }
 
 func TestHCShowBlockers(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	_, blockerID, blockedID := createBlockerFixture(t, h)
 
@@ -109,6 +114,7 @@ func TestHCShowBlockers(t *testing.T) {
 }
 
 func TestHCCreateBulk_Blockers(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 
 	input := `{
@@ -152,6 +158,7 @@ func TestHCCreateBulk_Blockers(t *testing.T) {
 }
 
 func TestHCBlocker_ClearsWhenBlockerDone(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	_, blockerID, blockedID := createBlockerFixture(t, h)
 
@@ -179,6 +186,7 @@ func TestHCBlocker_ClearsWhenBlockerDone(t *testing.T) {
 }
 
 func TestHCUpdateCombined_StatusAndBlocker(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	_, blockerID, blockedID := createBlockerFixture(t, h)
 
@@ -200,6 +208,7 @@ func TestHCUpdateCombined_StatusAndBlocker(t *testing.T) {
 }
 
 func TestHCNext_ExplicitBlockerExcluded(t *testing.T) {
+	t.Parallel()
 	h := NewHarness(t)
 	epicID, blockerID, blockedID := createBlockerFixture(t, h)
 

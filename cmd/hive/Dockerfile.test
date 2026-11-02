@@ -1,5 +1,3 @@
-FROM golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132 AS gobase
-
 FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -7,12 +5,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-
-# Copy Go toolchain
-COPY --from=gobase /usr/local/go /usr/local/go
-ENV PATH="/usr/local/go/bin:${PATH}"
-ENV GOPATH="/go"
-ENV PATH="${GOPATH}/bin:${PATH}"
 
 # Copy built binaries (supports multiple TARGETARCH values). The remote-drive
 # tests run hive-drive-server.
@@ -23,15 +15,10 @@ COPY --chmod=755 dist/hive-drive-server_linux_${TARGETARCH}_*/hive-drive-server 
 # Signal to tests that they're running inside the integration container
 ENV HIVE_INTEGRATION=1
 
-WORKDIR /app
+# The tests compile on the host, like the binaries above, so they reuse the host's
+# Go build cache instead of recompiling from nothing inside the image.
+WORKDIR /app/test/integration
+COPY test/integration/testdata/ ./testdata/
+COPY --chmod=755 dist/integration.test ./integration.test
 
-# Copy Go module files and download dependencies
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy integration tests and the internal packages they exercise directly.
-COPY internal/ ./internal/
-COPY pkg/ ./pkg/
-COPY test/integration/ ./test/integration/
-
-CMD ["go", "test", "-v", "-tags", "integration", "-count=1", "./test/integration/..."]
+CMD ["./integration.test", "-test.v", "-test.count=1"]

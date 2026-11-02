@@ -16,15 +16,14 @@ import (
 
 func newTestActivityService(t *testing.T) (*ActivityService, <-chan events.ActivityAppended) {
 	t.Helper()
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	db := queries.OpenForTest(t)
 	bus := newTestBus(t)
 	ch := subscribeEvents[events.ActivityAppended](t, bus)
 	return newActivityService(stores.New(db, stores.Options{}).ActivityEvents, bus, zerolog.Nop()), ch
 }
 
 func TestActivityService_AppendRoundTrip(t *testing.T) {
+	t.Parallel()
 	service, ch := newTestActivityService(t)
 	ctx := t.Context()
 
@@ -45,9 +44,8 @@ func TestActivityService_AppendRoundTrip(t *testing.T) {
 }
 
 func TestActivityService_ListNewestFirstAndCursor(t *testing.T) {
-	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
+	t.Parallel()
+	db := queries.OpenForTest(t)
 	// A fixed, monotonically advancing clock keeps created_at deterministic;
 	// ordering itself is by the autoincrement id, not the timestamp.
 	now := time.Unix(0, 0)
@@ -73,6 +71,7 @@ func TestActivityService_ListNewestFirstAndCursor(t *testing.T) {
 }
 
 func TestActivityService_AppendRejectsBadInput(t *testing.T) {
+	t.Parallel()
 	service, ch := newTestActivityService(t)
 	ctx := t.Context()
 
@@ -87,6 +86,7 @@ func TestActivityService_AppendRejectsBadInput(t *testing.T) {
 }
 
 func TestActivityService_AppendDefaultsCategoryAndSeverity(t *testing.T) {
+	t.Parallel()
 	service, _ := newTestActivityService(t)
 	stored, err := service.Append(t.Context(), activity.Event{Title: "something happened"})
 	require.NoError(t, err)
@@ -96,6 +96,7 @@ func TestActivityService_AppendDefaultsCategoryAndSeverity(t *testing.T) {
 
 // Record is fire-and-forget, so persistence failures must not reach callers.
 func TestActivityService_RecordSwallowsErrors(t *testing.T) {
+	t.Parallel()
 	service, _ := newTestActivityService(t)
 	require.NotPanics(t, func() {
 		service.Record(t.Context(), activity.Event{}) // missing title would error from Append

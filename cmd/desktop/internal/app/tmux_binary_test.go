@@ -25,6 +25,7 @@ func TestTmuxRunnerUsesResolvedBinaryForEveryCommand(t *testing.T) {
 }
 
 func TestTmuxRunnerRetriesResolutionAfterFailure(t *testing.T) {
+	t.Parallel()
 	available := false
 	runner := newTmuxRunner(func(context.Context) (string, error) {
 		if !available {
@@ -55,6 +56,7 @@ func TestTmuxRunnerUsesDetachedEnvironmentAndInheritedSocket(t *testing.T) {
 }
 
 func TestResolveTmuxBinaryFallsBackToTheLoginShellPath(t *testing.T) {
+	t.Parallel()
 	fallbackCalls := 0
 	path, err := resolveTmuxBinary(
 		t.Context(),
@@ -72,6 +74,7 @@ func TestResolveTmuxBinaryFallsBackToTheLoginShellPath(t *testing.T) {
 }
 
 func TestResolveTmuxBinaryDoesNotBypassAConfiguredPathError(t *testing.T) {
+	t.Parallel()
 	configuredErr := errors.New("paths.tmux: permission denied")
 	fallbackCalls := 0
 	_, err := resolveTmuxBinary(

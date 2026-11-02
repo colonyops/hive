@@ -14,6 +14,7 @@ import (
 )
 
 func TestTerminalImageUploadAuthenticationAndValidation(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 	var raw bytes.Buffer
 	require.NoError(t, png.Encode(&raw, image.NewRGBA(image.Rect(0, 0, 2, 2))))
@@ -55,6 +56,7 @@ func TestTerminalImageUploadAuthenticationAndValidation(t *testing.T) {
 }
 
 func TestTerminalImageControlRequiresAuthBeforeParsing(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 	for _, path := range []string{"images/paths", "images/upload", "panes/paste"} {
 		resp := h.post(t, "/api/terminal/"+path, "", "invalid")
