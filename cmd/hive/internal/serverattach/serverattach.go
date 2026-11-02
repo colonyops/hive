@@ -26,7 +26,15 @@ func Command(h server.Host, tmuxSession string) []string {
 		tmux = sshdial.RemotePath(h.Tmux)
 	}
 	args := append([]string{"ssh"}, sshdial.TerminalOptions(h)...)
-	return append(args, h.Name, "--", tmux, "attach-session", "-t", sshdial.Quote("="+tmuxSession))
+	return append(args, h.Name, "--", "sh", "-c", sshdial.Quote(attachScript(tmux, tmuxSession)))
+}
+
+// attachScript falls back to a common TERM because ssh forwards the local one,
+// and tmux refuses to attach when the server has no terminfo entry for it, as
+// with xterm-ghostty or xterm-kitty on a stock server.
+func attachScript(tmux, tmuxSession string) string {
+	return `infocmp "$TERM" >/dev/null 2>&1 || TERM=xterm-256color; export TERM; exec ` +
+		tmux + " attach-session -t " + sshdial.Quote("="+tmuxSession)
 }
 
 // Run attaches this process's terminal and returns when the user detaches.
