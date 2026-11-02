@@ -10,6 +10,7 @@ import (
 )
 
 func TestRowWidthsMatchSelectedVsUnselected(t *testing.T) {
+	t.Parallel()
 	p := newTestPicker(newFakeTUISource(fakeManifest(), nil), fakeManifest(), "test-repo", 90, 24)
 	item := sources.Item{ID: "1", Title: "First reference item", Fields: map[string]any{"number": 1278, "author": "alice"}}
 	for _, marked := range []bool{false, true} {

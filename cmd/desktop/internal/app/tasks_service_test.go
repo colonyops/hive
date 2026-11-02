@@ -201,6 +201,7 @@ func TestTasksService_StoreFailuresAreInternal(t *testing.T) {
 }
 
 func TestReadBlockersKeepsTheIDOfAVanishedBlocker(t *testing.T) {
+	t.Parallel()
 	items := map[string]hc.Item{"hc-1": {ID: "hc-1", Title: "JWT middleware", Status: hc.StatusOpen}}
 	get := func(_ context.Context, id string) (hc.Item, error) {
 		item, ok := items[id]
@@ -216,6 +217,7 @@ func TestReadBlockersKeepsTheIDOfAVanishedBlocker(t *testing.T) {
 }
 
 func TestReadBlockersFailsOnAStoreError(t *testing.T) {
+	t.Parallel()
 	get := func(context.Context, string) (hc.Item, error) { return hc.Item{}, errors.New("database is locked") }
 
 	_, err := readBlockers(t.Context(), "hc-9", []string{"hc-1"}, get)

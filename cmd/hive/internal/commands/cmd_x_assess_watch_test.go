@@ -38,6 +38,7 @@ func (f *fakeAssessCapture) CapturePane(_ context.Context, _ string) (string, er
 }
 
 func TestAssessWatchCmdRejectsNonPositiveIntervalBeforeCapture(t *testing.T) {
+	t.Parallel()
 	cmd := NewExperimentalCmd(&Flags{}, &app.App{})
 	app := &cli.Command{Name: "hive", Writer: io.Discard}
 	cmd.Register(app)
@@ -48,6 +49,7 @@ func TestAssessWatchCmdRejectsNonPositiveIntervalBeforeCapture(t *testing.T) {
 }
 
 func TestWatchTrackerOptionsRejectsNonPositiveIntervals(t *testing.T) {
+	t.Parallel()
 	for _, interval := range []time.Duration{0, -time.Second} {
 		_, _, err := watchTrackerOptions(nil, true, interval)
 		require.Error(t, err)
@@ -56,6 +58,7 @@ func TestWatchTrackerOptionsRejectsNonPositiveIntervals(t *testing.T) {
 }
 
 func TestTrackerOptionsUseApplicationConfig(t *testing.T) {
+	t.Parallel()
 	stable := false
 	app := &app.App{Config: &config.Config{
 		Tmux: hiveconfig.TmuxConfig{PollInterval: 275 * time.Millisecond},
@@ -77,6 +80,7 @@ func TestTrackerOptionsUseApplicationConfig(t *testing.T) {
 }
 
 func TestOpenPrivateRecordFileCreatesAndHardensRegularFile(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "frames.jsonl")
 	f, err := openPrivateRecordFile(path)
 	require.NoError(t, err)
@@ -96,6 +100,7 @@ func TestOpenPrivateRecordFileCreatesAndHardensRegularFile(t *testing.T) {
 }
 
 func TestOpenPrivateRecordFileRejectsSymlinkAndNonRegularFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	_, err := openPrivateRecordFile(dir)
 	require.Error(t, err)
@@ -114,6 +119,7 @@ func TestOpenPrivateRecordFileRejectsSymlinkAndNonRegularFile(t *testing.T) {
 }
 
 func TestRunAssessWatchPollRecordsResolvedToolAndObservation(t *testing.T) {
+	t.Parallel()
 	capture := &fakeAssessCapture{contents: []string{"codex\n› ready"}}
 	getExtra := func(_ context.Context, _ string) (string, bool, error) {
 		return "codex pane", false, nil
@@ -140,6 +146,7 @@ func TestRunAssessWatchPollRecordsResolvedToolAndObservation(t *testing.T) {
 }
 
 func TestRunAssessWatchPollPropagatesCaptureAndRecordErrors(t *testing.T) {
+	t.Parallel()
 	sentinel := errors.New("capture failed")
 	tracker := status.NewTracker(assess.NewEngine(), status.DefaultOptions())
 	getExtra := func(_ context.Context, _ string) (string, bool, error) { return "", false, nil }

@@ -16,9 +16,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/daemon/daemonpath"
 )
 
-// spawnReadyTimeout is a variable so a test of a daemon that never answers
-// need not wait for it.
-var spawnReadyTimeout = 5 * time.Second
+const spawnReadyTimeout = 5 * time.Second
 
 const spawnPollInterval = 50 * time.Millisecond
 
@@ -28,6 +26,10 @@ const spawnPollInterval = 50 * time.Millisecond
 // absolute, since the daemon outlives the caller's working directory. A
 // daemon another client started first also counts as ready.
 func Spawn(ctx context.Context, binary, dataDir string, env []string) error {
+	return spawn(ctx, binary, dataDir, env, spawnReadyTimeout)
+}
+
+func spawn(ctx context.Context, binary, dataDir string, env []string, readyTimeout time.Duration) error {
 	dataDir, err := filepath.Abs(dataDir)
 	if err != nil {
 		return fmt.Errorf("resolve data directory: %w", err)
@@ -57,7 +59,7 @@ func Spawn(ctx context.Context, binary, dataDir string, env []string) error {
 
 	client := New(Options{Dialer: LocalDialer(dataDir)})
 	defer client.HTTPClient().CloseIdleConnections()
-	deadline := time.NewTimer(spawnReadyTimeout)
+	deadline := time.NewTimer(readyTimeout)
 	defer deadline.Stop()
 	ticker := time.NewTicker(spawnPollInterval)
 	defer ticker.Stop()
@@ -78,7 +80,7 @@ func Spawn(ctx context.Context, binary, dataDir string, env []string) error {
 			if exitErr != nil {
 				return fmt.Errorf("the daemon exited (%w); see %s", exitErr, logPath)
 			}
-			return fmt.Errorf("the daemon did not answer within %s; see %s", spawnReadyTimeout, logPath)
+			return fmt.Errorf("the daemon did not answer within %s; see %s", readyTimeout, logPath)
 		case err := <-exited:
 			// Exiting is not yet a failure: a daemon another client started
 			// holds the lock, and this one gives way to it.

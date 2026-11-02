@@ -8,6 +8,7 @@ import (
 )
 
 func TestSeed_WritesExactFieldsNoStoreMethodAllows(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 	seed := NewSeed(db)

@@ -20,6 +20,7 @@ type launchOptionsGit struct {
 func (g *launchOptionsGit) RemoteURL(context.Context, string) (string, error) { return g.remote, nil }
 
 func TestSessionLaunchOptions_PrefersConfiguredCheckoutForEquivalentGitHubRemote(t *testing.T) {
+	t.Parallel()
 	workspaceDir := filepath.Join(t.TempDir(), "workspaces")
 	checkout := filepath.Join(workspaceDir, "hive")
 	require.NoError(t, mkdirGitDir(checkout))
@@ -50,6 +51,7 @@ func TestSessionLaunchOptions_PrefersConfiguredCheckoutForEquivalentGitHubRemote
 }
 
 func TestSessionLaunchOptions_PreservesExplicitLocalRemote(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	service := newTestService(t, store, &config.Config{DataDir: t.TempDir()})
 	resolved, err := service.ResolveSessionLaunchRepository(t.Context(), "/Users/me/src/hive")
@@ -58,6 +60,7 @@ func TestSessionLaunchOptions_PreservesExplicitLocalRemote(t *testing.T) {
 }
 
 func TestResolveSessionLaunchRepository_PreferenceDecidesSpelling(t *testing.T) {
+	t.Parallel()
 	workspaceDir := filepath.Join(t.TempDir(), "workspaces")
 	checkout := filepath.Join(workspaceDir, "hive")
 	require.NoError(t, mkdirGitDir(checkout))
@@ -77,6 +80,7 @@ func TestResolveSessionLaunchRepository_PreferenceDecidesSpelling(t *testing.T) 
 }
 
 func TestResolveSessionLaunchRepository_RuleForTheCheckoutSpellingApplies(t *testing.T) {
+	t.Parallel()
 	workspaceDir := filepath.Join(t.TempDir(), "workspaces")
 	checkout := filepath.Join(workspaceDir, "site")
 	require.NoError(t, mkdirGitDir(checkout))
@@ -95,6 +99,7 @@ func TestResolveSessionLaunchRepository_RuleForTheCheckoutSpellingApplies(t *tes
 }
 
 func TestPreferredRemote(t *testing.T) {
+	t.Parallel()
 	const itemURL = "https://github.com/acme/site/issues/1"
 	ssh := config.Config{Git: config.GitConfig{CloneProtocol: session.CloneProtocolSsh}}
 
@@ -117,6 +122,7 @@ func TestPreferredRemote(t *testing.T) {
 }
 
 func TestGeneratedRemote(t *testing.T) {
+	t.Parallel()
 	const itemURL = "https://github.com/acme/site/issues/1"
 	const giteaURL = "https://gitea.example.com/acme/site/issues/1"
 

@@ -34,6 +34,7 @@ func notificationMessages(m Model) []string {
 }
 
 func TestActionCompleteAnnouncesResultMessage(t *testing.T) {
+	t.Parallel()
 	result, _ := newActionTestModel().handleActionComplete(actionCompleteMsg{message: "Session completed successfully."})
 	m := result.(Model)
 	assert.Equal(t, stateNormal, m.state)
@@ -41,6 +42,7 @@ func TestActionCompleteAnnouncesResultMessage(t *testing.T) {
 }
 
 func TestActionCompleteShowsMultilineReportInOutputModal(t *testing.T) {
+	t.Parallel()
 	report := &tmuxexec.LaunchError{Session: "work", Err: &tmuxexec.CommandExitedError{Window: "agent", Command: "agent", Status: 1, Output: "boom"}}
 	result, _ := newActionTestModel().handleActionComplete(actionCompleteMsg{err: report})
 	m := result.(Model)
@@ -53,6 +55,7 @@ func TestActionCompleteShowsMultilineReportInOutputModal(t *testing.T) {
 }
 
 func TestActionCompleteKeepsSingleLineErrorsInToast(t *testing.T) {
+	t.Parallel()
 	result, _ := newActionTestModel().handleActionComplete(actionCompleteMsg{err: assert.AnError})
 	m := result.(Model)
 	assert.Equal(t, stateNormal, m.state)
@@ -60,6 +63,7 @@ func TestActionCompleteKeepsSingleLineErrorsInToast(t *testing.T) {
 }
 
 func TestTerminalEndAfterUserActionIsNotAnnounced(t *testing.T) {
+	t.Parallel()
 	result, _ := newActionTestModel().handleActionComplete(actionCompleteMsg{sessionID: "killed"})
 	m := result.(Model)
 	notificationMessages(m)
@@ -72,6 +76,7 @@ func TestTerminalEndAfterUserActionIsNotAnnounced(t *testing.T) {
 }
 
 func TestTerminalEndLongAfterUserActionIsAnnounced(t *testing.T) {
+	t.Parallel()
 	m := newActionTestModel()
 	m.actionedSessions["old"] = time.Now().Add(-time.Minute)
 	result, _ := m.handleTerminalEnded(sessions.TerminalEndedMsg{Sessions: []sessions.EndedSession{{ID: "old", Name: "old"}}})

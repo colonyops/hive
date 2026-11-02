@@ -8,6 +8,7 @@ import (
 )
 
 func TestNoTmuxServer(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		text string
 		want bool

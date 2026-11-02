@@ -99,6 +99,7 @@ func markableSourceFlow() flow.Flow {
 }
 
 func TestFlowsServiceSetOrderPersistsAndApplies(t *testing.T) {
+	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	for _, id := range []string{"hive", "personal", "recipinned"} {
 		require.NoError(t, flows.Save(flow.Flow{ID: id, Name: id, Enabled: true}))
@@ -126,6 +127,7 @@ func TestFlowsServiceSetOrderPersistsAndApplies(t *testing.T) {
 // An id naming no flow is written as given: refusing it would make deleting a
 // profile able to fail an unrelated reorder, and the reader already ignores it.
 func TestFlowsServiceSetOrderKeepsUnknownIDs(t *testing.T) {
+	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	require.NoError(t, flows.Save(flow.Flow{ID: "personal", Name: "Personal", Enabled: true}))
 	settingsStore := settings.NewStore(filepath.Join(t.TempDir(), "settings.yaml"))
@@ -140,6 +142,7 @@ func TestFlowsServiceSetOrderKeepsUnknownIDs(t *testing.T) {
 }
 
 func TestFlowsServiceNodeImageLifecycle(t *testing.T) {
+	t.Parallel()
 	for _, nodeID := range []string{"hook", "run"} {
 		t.Run(nodeID, func(t *testing.T) {
 			flows := flow.NewFlowStore(t.TempDir(), nil)
@@ -166,6 +169,7 @@ func TestFlowsServiceNodeImageLifecycle(t *testing.T) {
 }
 
 func TestFlowsServiceNodeImageErrorKinds(t *testing.T) {
+	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	require.NoError(t, flows.Save(markableSourceFlow()))
 	service := testFlowsService(t, FlowsDeps{Flows: flows, Creds: seededCreds(t), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
@@ -186,6 +190,7 @@ func TestFlowsServiceNodeImageErrorKinds(t *testing.T) {
 // The editor's two-step path: the bytes are stored before the graph save that
 // records the hash, so the store must round-trip without a flow.
 func TestFlowsServiceMarkImageRoundTrip(t *testing.T) {
+	t.Parallel()
 	service := testFlowsService(t, FlowsDeps{Flows: flow.NewFlowStore(t.TempDir(), nil), Creds: seededCreds(t), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
 
 	hash, err := service.StoreMarkImage(t.Context(), pngBytes(t))
@@ -205,6 +210,7 @@ func TestFlowsServiceMarkImageRoundTrip(t *testing.T) {
 }
 
 func TestFlowsServiceStoreMarkImageRejectsBadInput(t *testing.T) {
+	t.Parallel()
 	service := testFlowsService(t, FlowsDeps{Flows: flow.NewFlowStore(t.TempDir(), nil), Creds: seededCreds(t), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
 
 	_, err := service.StoreMarkImage(t.Context(), []byte("not an image"))
@@ -213,6 +219,7 @@ func TestFlowsServiceStoreMarkImageRejectsBadInput(t *testing.T) {
 }
 
 func TestFlowsServiceDeleteFlowPurgesPipelineStateAndRetriesMissingFiles(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -243,6 +250,7 @@ func TestFlowsServiceDeleteFlowPurgesPipelineStateAndRetriesMissingFiles(t *test
 // gone and the rows behind, and the id is the only handle left on them — so the
 // retry has to be accepted even though nothing on disk backs it any more.
 func TestFlowsServiceDeleteRetriesAPurgeThatLeftRowsBehind(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -320,6 +328,7 @@ func assertPurgeProfileRowCounts(t *testing.T, db *queries.DB, profileID string,
 }
 
 func TestFlowsServicePurgeProfile_DeletesEveryOwnedRowAndLeavesOtherProfilesIntact(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -342,6 +351,7 @@ func TestFlowsServicePurgeProfile_DeletesEveryOwnedRowAndLeavesOtherProfilesInta
 // transaction, and only a rollback keeps this profile's inbox_item row from
 // being half-purged.
 func TestFlowsServicePurgeProfile_RollsBackTheWholeTransactionOnFailure(t *testing.T) {
+	t.Parallel()
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -365,6 +375,7 @@ func TestFlowsServicePurgeProfile_RollsBackTheWholeTransactionOnFailure(t *testi
 // A profile whose flow file does not parse still exists — deleting it is how
 // that gets resolved, so the delete must not be gated on the file loading.
 func TestFlowsServiceDeleteRemovesAProfileThatDoesNotParse(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "broken.yaml"), []byte("version: 1\nnodes: [\n"), 0o600))
 	flows := flow.NewFlowStore(dir, nil)
@@ -379,6 +390,7 @@ func TestFlowsServiceDeleteRemovesAProfileThatDoesNotParse(t *testing.T) {
 }
 
 func TestFlowsServiceDeleteReportsAnUnknownProfileAsNotFound(t *testing.T) {
+	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -393,6 +405,7 @@ func TestFlowsServiceDeleteReportsAnUnknownProfileAsNotFound(t *testing.T) {
 // renders empty. A broken file is a profile too - it is listed with its error,
 // and a Default written beside it would hide that.
 func TestFlowsServiceEnsureProfileMakesADefaultOnlyWhenThereAreNone(t *testing.T) {
+	t.Parallel()
 	t.Run("empty directory", func(t *testing.T) {
 		flows := flow.NewFlowStore(t.TempDir(), nil)
 		service := testFlowsService(t, FlowsDeps{Flows: flows, Creds: credentials.NewMemoryStore(), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
@@ -421,6 +434,7 @@ func TestFlowsServiceEnsureProfileMakesADefaultOnlyWhenThereAreNone(t *testing.T
 }
 
 func TestFlowsServiceDeleteOfTheLastProfileLeavesADefaultBehind(t *testing.T) {
+	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
 	require.NoError(t, err)
@@ -439,6 +453,7 @@ func TestFlowsServiceDeleteOfTheLastProfileLeavesADefaultBehind(t *testing.T) {
 }
 
 func TestFlowsServiceCreateSeedsWithTheOneConnectedAccount(t *testing.T) {
+	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	service := testFlowsService(t, FlowsDeps{Flows: flows, Creds: seededCreds(t), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts()})
 
@@ -452,6 +467,7 @@ func TestFlowsServiceCreateSeedsWithTheOneConnectedAccount(t *testing.T) {
 // creates it before it offers to connect anything, so an unseeded create is
 // the expected path there rather than a failure.
 func TestFlowsServiceCreateWithoutAnUnambiguousAccountMakesAnEmptyWorkspace(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		refs []string
@@ -476,6 +492,7 @@ func TestFlowsServiceCreateWithoutAnUnambiguousAccountMakesAnEmptyWorkspace(t *t
 }
 
 func TestFlowsServiceSeedStarterFillsAnEmptyWorkspace(t *testing.T) {
+	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	creds := credentials.NewMemoryStore()
 	bus := newTestBus(t)
@@ -511,6 +528,7 @@ func TestFlowsServiceSeedStarterFillsAnEmptyWorkspace(t *testing.T) {
 }
 
 func TestFlowsServiceSetFlowEnabled(t *testing.T) {
+	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	created, err := flows.Create("Triage", starterSeed(seedRef))
 	require.NoError(t, err)
@@ -530,6 +548,7 @@ func TestFlowsServiceSetFlowEnabled(t *testing.T) {
 }
 
 func TestFlowsServiceSetFlowEnabledDoesNotEmitOnFailure(t *testing.T) {
+	t.Parallel()
 	bus := newTestBus(t)
 	ch := subscribeEvents[events.FlowsUpdated](t, bus)
 	service := testFlowsService(t, FlowsDeps{Flows: flow.NewFlowStore(t.TempDir(), nil), Creds: seededCreds(t), Images: testImages(t), Marks: testMarks(t), Scripts: testScripts(), Events: bus})
@@ -540,6 +559,7 @@ func TestFlowsServiceSetFlowEnabledDoesNotEmitOnFailure(t *testing.T) {
 }
 
 func TestFlowsServiceProfileImageLifecycle(t *testing.T) {
+	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	created, err := flows.Create("Triage", starterSeed(seedRef))
 	require.NoError(t, err)
@@ -582,6 +602,7 @@ func TestFlowsServiceProfileImageLifecycle(t *testing.T) {
 }
 
 func TestFlowsServiceSetProfileImageRejectsBadInput(t *testing.T) {
+	t.Parallel()
 	flows := flow.NewFlowStore(t.TempDir(), nil)
 	created, err := flows.Create("Triage", starterSeed(seedRef))
 	require.NoError(t, err)

@@ -185,6 +185,7 @@ func TestResolveHiveConfigLocation(t *testing.T) {
 }
 
 func TestResolveHiveDefaultAgent(t *testing.T) {
+	t.Parallel()
 	t.Run("configured profile", func(t *testing.T) {
 		got := resolveHiveDefaultAgent(t.Context(), hiveConfigEnvFunc(func(_ context.Context, name string) string {
 			if name == "HIVE_DEFAULT_AGENT" {
@@ -212,6 +213,7 @@ func TestResolveHiveDefaultAgent(t *testing.T) {
 }
 
 func TestSystemServiceOpenHiveConfig(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "nested", "config.yaml")
 	var opened string
 	s := newSystemService(systemOptions{

@@ -15,6 +15,7 @@ import (
 )
 
 func TestShellEnvironmentStartsASeparateSession(t *testing.T) {
+	t.Parallel()
 	shell := filepath.Join(t.TempDir(), "shell")
 	require.NoError(t, os.WriteFile(shell, []byte(
 		"#!/bin/sh\n"+

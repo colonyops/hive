@@ -113,6 +113,7 @@ func paths(entries []drive.Entry) []string {
 // Canvas operations, by document path.
 
 func TestLoadCanvasAbsentIsNotAnError(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	_, ok, err := f.svc.LoadCanvas(t.Context(), ws, plan)
 	require.NoError(t, err)
@@ -120,6 +121,7 @@ func TestLoadCanvasAbsentIsNotAnError(t *testing.T) {
 }
 
 func TestUpsertBlocksAppendsThenUpdatesInPlace(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 
@@ -157,6 +159,7 @@ func TestUpsertBlocksAppendsThenUpdatesInPlace(t *testing.T) {
 }
 
 func TestUpsertBlocksBeforeAnchorInsertsAndMoves(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	author := drive.Author{Session: "chat-1"}
@@ -187,6 +190,7 @@ func TestUpsertBlocksBeforeAnchorInsertsAndMoves(t *testing.T) {
 }
 
 func TestUpsertBlocksBatchIsOneWrite(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	c, err := f.svc.UpsertBlocks(t.Context(), ws, plan, drive.Author{Session: "chat-1"}, "The Plan", "",
 		drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "a"},
@@ -200,6 +204,7 @@ func TestUpsertBlocksBatchIsOneWrite(t *testing.T) {
 }
 
 func TestRemoveBlock(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	_, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
@@ -220,6 +225,7 @@ func TestRemoveBlock(t *testing.T) {
 }
 
 func TestSetCanvasFrontmatterReplacesEditableFields(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	first, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "The Plan", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
@@ -245,6 +251,7 @@ func TestSetCanvasFrontmatterReplacesEditableFields(t *testing.T) {
 }
 
 func TestClearCanvasKeepsTheCanvas(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	first, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "The Plan", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
@@ -266,6 +273,7 @@ func TestClearCanvasKeepsTheCanvas(t *testing.T) {
 }
 
 func TestListCanvasesOrdersByUpdatedAtDesc(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	_, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "The Plan", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
@@ -291,6 +299,7 @@ func TestListCanvasesOrdersByUpdatedAtDesc(t *testing.T) {
 }
 
 func TestCanvasPathMustBeACanvas(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	for _, path := range []string{"plan.md", "canvases/plan.json", "../plan.canvas.json"} {
@@ -302,6 +311,7 @@ func TestCanvasPathMustBeACanvas(t *testing.T) {
 }
 
 func TestCorruptCanvasIsAnErrorNotABlankCanvas(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	_, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
@@ -315,6 +325,7 @@ func TestCorruptCanvasIsAnErrorNotABlankCanvas(t *testing.T) {
 }
 
 func TestCanvasWritesLeaveNoTempFiles(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	_, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
@@ -329,6 +340,7 @@ func TestCanvasWritesLeaveNoTempFiles(t *testing.T) {
 }
 
 func TestCanvasFileCarriesSpaceAndPath(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	_, err := f.svc.UpsertBlocks(t.Context(), acme, plan, drive.Author{HiveSession: "abc123"}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
 	require.NoError(t, err)
@@ -347,6 +359,7 @@ func TestCanvasFileCarriesSpaceAndPath(t *testing.T) {
 // The tree.
 
 func TestTreeListsEveryKindAndSkipsDotEntries(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	f.write(t, acme, "plans/2026-10-11-plan.md", "---\ntitle: The Plan\ntype: plan\n---\n# hi\n")
 	f.write(t, acme, "plans/notes.md", "no front matter\n")
@@ -409,6 +422,7 @@ func TestTreeListsEveryKindAndSkipsDotEntries(t *testing.T) {
 }
 
 func TestTreeOfAMissingSpaceIsEmpty(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	root, err := f.svc.Tree(t.Context(), drive.Shared)
 	require.NoError(t, err)
@@ -419,6 +433,7 @@ func TestTreeOfAMissingSpaceIsEmpty(t *testing.T) {
 }
 
 func TestTreeIsACopy(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	f.write(t, acme, "plans/a.md", "---\ntags: [x]\n---\n")
 
@@ -437,6 +452,7 @@ func TestTreeIsACopy(t *testing.T) {
 }
 
 func TestEntryAnswersOneEntryFromTheSnapshot(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	f.write(t, acme, "plans/sub/a.md", "---\ntitle: A\n---\n")
@@ -465,6 +481,7 @@ func TestEntryAnswersOneEntryFromTheSnapshot(t *testing.T) {
 }
 
 func TestLocateIsTheFileOnDisk(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	got, err := f.svc.Locate(acme, "plans/a.md")
 	require.NoError(t, err)
@@ -479,6 +496,7 @@ func TestLocateIsTheFileOnDisk(t *testing.T) {
 }
 
 func TestFirstScanRenamesLegacyCanvasesOnce(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	f.write(t, acme, "canvases/plan.json", `{"workspace":"acme/site","name":"plan","title":"Legacy","blocks":[]}`)
 	f.write(t, acme, "canvases/taken.json", `{"blocks":[]}`)
@@ -540,6 +558,7 @@ func TestFirstScanRenamesLegacyCanvasesOnce(t *testing.T) {
 // Documents.
 
 func TestWriteCreatesFoldersAndIndexesTheDocument(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	_, err := f.svc.Tree(ctx, acme)
@@ -576,6 +595,7 @@ func TestWriteCreatesFoldersAndIndexesTheDocument(t *testing.T) {
 }
 
 func TestWriteRefusesWhatIsNotMarkdownOrHTML(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	for _, path := range []string{"canvases/plan.canvas.json", "notes.txt", "data.json", "plans"} {
@@ -594,6 +614,7 @@ func TestWriteRefusesWhatIsNotMarkdownOrHTML(t *testing.T) {
 }
 
 func TestReadMissingAndFolders(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	f.write(t, acme, "plans/a.md", "x")
@@ -608,6 +629,7 @@ func TestReadMissingAndFolders(t *testing.T) {
 }
 
 func TestCreateFolder(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	_, err := f.svc.Tree(ctx, acme)
@@ -633,6 +655,7 @@ func TestCreateFolder(t *testing.T) {
 }
 
 func TestMoveRekeysAFolderAndRefusesConflicts(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	f.write(t, acme, "plans/a.md", "---\ntitle: A\n---\n")
@@ -679,6 +702,7 @@ func TestMoveRekeysAFolderAndRefusesConflicts(t *testing.T) {
 }
 
 func TestMoveRefusesAKindChange(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	f.write(t, acme, "plans/a.md", "a")
@@ -697,6 +721,7 @@ func TestMoveRefusesAKindChange(t *testing.T) {
 }
 
 func TestMoveKeepsACanvasAddressable(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	_, err := f.svc.UpsertBlocks(ctx, acme, plan, drive.Author{}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
@@ -717,6 +742,7 @@ func TestMoveKeepsACanvasAddressable(t *testing.T) {
 }
 
 func TestMoveRenamesCaseOnlyOnACaseInsensitiveFileSystem(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	skipIfCaseSensitive(t, f.root)
@@ -741,6 +767,7 @@ func TestMoveRenamesCaseOnlyOnACaseInsensitiveFileSystem(t *testing.T) {
 }
 
 func TestMoveOfAnUnscannedSpaceIndexesFromDisk(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	f.write(t, acme, "plans/sub/b.md", "b")
@@ -756,6 +783,7 @@ func TestMoveOfAnUnscannedSpaceIndexesFromDisk(t *testing.T) {
 }
 
 func TestDeleteRefusesANonEmptyFolder(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	f.write(t, acme, "plans/a.md", "a")
@@ -779,6 +807,7 @@ func TestDeleteRefusesANonEmptyFolder(t *testing.T) {
 }
 
 func TestDeleteRemovesAFolderHoldingOnlyFinderMetadata(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	f.write(t, acme, "opened/.DS_Store", "x")
@@ -797,6 +826,7 @@ func TestDeleteRemovesAFolderHoldingOnlyFinderMetadata(t *testing.T) {
 // Symbolic links.
 
 func TestADirectoryLinkInsideASpaceIsRefused(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	outside := t.TempDir()
@@ -841,6 +871,7 @@ func TestAFileLinkInsideASpaceIsRefused(t *testing.T) {
 }
 
 func TestASpaceWhoseDirectoryIsALinkWorks(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	elsewhere := t.TempDir()
@@ -858,6 +889,7 @@ func TestASpaceWhoseDirectoryIsALinkWorks(t *testing.T) {
 // Spaces.
 
 func TestSpacesListsRepositoriesWorkspacesAndShared(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	for _, dir := range []string{"zed/editor", "acme/site", "acme/docs", "workspaces/hive", "workspaces/.hidden", "shared/plans", ".git", "loose-file-owner", "Shared/x"} {
 		require.NoError(t, os.MkdirAll(filepath.Join(f.root, filepath.FromSlash(dir)), 0o755))
@@ -882,6 +914,7 @@ func TestSpacesListsRepositoriesWorkspacesAndShared(t *testing.T) {
 }
 
 func TestSpaceDirConfinesKeysToTheRoot(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	dir, err := f.svc.SpaceDir(acme)
 	require.NoError(t, err)
@@ -901,6 +934,7 @@ func TestSpaceDirConfinesKeysToTheRoot(t *testing.T) {
 }
 
 func TestSpaceForRemote(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	space, ok := f.svc.SpaceForRemote("git@github.com:acme/site.git")
 	require.True(t, ok)
@@ -918,6 +952,7 @@ func TestSpaceForRemote(t *testing.T) {
 }
 
 func TestSpaceForRemoteTakesTheOnDiskSpelling(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, stubGit{remote: "git@github.com:ACME/Site.git"})
 	skipIfCaseSensitive(t, f.root)
 	require.NoError(t, os.MkdirAll(filepath.Join(f.root, "acme", "site"), 0o755))
@@ -938,6 +973,7 @@ func TestSpaceForRemoteTakesTheOnDiskSpelling(t *testing.T) {
 }
 
 func TestWriteInAnotherCaseKeepsTheNameOnDisk(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	skipIfCaseSensitive(t, f.root)
@@ -956,6 +992,7 @@ func TestWriteInAnotherCaseKeepsTheNameOnDisk(t *testing.T) {
 }
 
 func TestResolveSpaceAndDir(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	f := newFixture(t, stubGit{remote: "git@github.com:acme/site.git"})
 
@@ -991,6 +1028,7 @@ func TestResolveSpaceAndDir(t *testing.T) {
 // Search.
 
 func TestSearchMatchesPathAndTitleAcrossSpaces(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	f.write(t, acme, "plans/2026-10-11-drive.md", "---\ntitle: Hive Drive\n---\n")
@@ -1028,6 +1066,7 @@ func TestSearchMatchesPathAndTitleAcrossSpaces(t *testing.T) {
 }
 
 func TestSearchMatchesEveryWordAndTreatsHyphensAsSpaces(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	f.write(t, acme, "design-docs/2026-06-12-session-lifecycle.md", "x")
@@ -1053,6 +1092,7 @@ func TestSearchMatchesEveryWordAndTreatsHyphensAsSpaces(t *testing.T) {
 // Recent.
 
 func TestRecentListsDocumentsNewestCreatedFirstAcrossSpaces(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	// Birth time is the file system's own on darwin, which is write order; on
@@ -1096,6 +1136,7 @@ func TestRecentListsDocumentsNewestCreatedFirstAcrossSpaces(t *testing.T) {
 // Reconfigure.
 
 func TestReconfigureDropsTheSnapshotOnlyWhenTheRootMoves(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	f.write(t, acme, "plans/a.md", "x")
@@ -1119,6 +1160,7 @@ func TestReconfigureDropsTheSnapshotOnlyWhenTheRootMoves(t *testing.T) {
 }
 
 func TestReconfigureToANewRootPublishesEveryScannedSpace(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	for _, space := range []drive.Space{acme, ws} {
@@ -1135,6 +1177,7 @@ func TestReconfigureToANewRootPublishesEveryScannedSpace(t *testing.T) {
 // Legacy import.
 
 func TestImportLegacyCanvasesMovesRewritesAndRemovesTheEmptySource(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	from := filepath.Join(t.TempDir(), "canvases")
@@ -1178,6 +1221,7 @@ func TestImportLegacyCanvasesMovesRewritesAndRemovesTheEmptySource(t *testing.T)
 }
 
 func TestImportLegacyCanvasesRemovesAnEmptiedSourceAndLeavesTheRest(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	from := filepath.Join(t.TempDir(), "canvases")
@@ -1212,6 +1256,7 @@ func TestImportLegacyCanvasesRemovesAnEmptiedSourceAndLeavesTheRest(t *testing.T
 // Context directory operations.
 
 func TestInitCreatesTheStandardFoldersOnce(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	dir, err := f.svc.SpaceDir(acme)
 	require.NoError(t, err)
@@ -1257,6 +1302,7 @@ func TestCreateSymlink(t *testing.T) {
 }
 
 func TestPruneRemovesOldEntriesAndKeepsCanvases(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	dir, err := f.svc.SpaceDir(acme)
 	require.NoError(t, err)
@@ -1295,6 +1341,7 @@ func TestPruneRemovesOldEntriesAndKeepsCanvases(t *testing.T) {
 }
 
 func TestPruneKeepsAFolderHoldingACanvasAtAnyDepth(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	dir, err := f.svc.SpaceDir(acme)
 	require.NoError(t, err)
@@ -1317,6 +1364,7 @@ func TestPruneKeepsAFolderHoldingACanvasAtAnyDepth(t *testing.T) {
 }
 
 func TestEveryMutationPublishesOnceWithItsAuthor(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	author := drive.Author{Session: "chat-1", HiveSession: "hive-1"}

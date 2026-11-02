@@ -7,9 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/colonyops/hive/cmd/desktop/internal/app/apptest"
 
 	"github.com/coder/websocket"
 	"github.com/rs/zerolog"
@@ -17,7 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
@@ -35,17 +35,15 @@ type terminalHarness struct {
 
 func newTerminalHarness(t *testing.T) *terminalHarness {
 	t.Helper()
-	root := t.TempDir()
-	t.Setenv(settings.EnvDataDir, filepath.Join(root, "data"))
-	t.Setenv("HIVE_CONFIG", filepath.Join(root, "hive.yaml"))
-	t.Setenv(settings.EnvConfigDir, filepath.Join(root, "config"))
-	t.Setenv(settings.EnvMockMode, "feed")
+	return newTerminalHarnessOn(t, nil)
+}
 
-	core, err := app.New(t.Context(), app.Config{
-		Settings: settings.DefaultSettings(),
-		MockMode: settings.MockMode(),
-		Logger:   zerolog.Nop(),
-	})
+// newTerminalHarnessOn is newTerminalHarness with the tmux its terminals reach.
+func newTerminalHarnessOn(t *testing.T, runner tmuxcc.Runner) *terminalHarness {
+	t.Helper()
+	cfg := apptest.Config(t)
+	cfg.TerminalRunner = runner
+	core, err := app.New(t.Context(), cfg)
 	require.NoError(t, err)
 
 	origins := []string{testOrigin}
@@ -93,6 +91,7 @@ func (h *terminalHarness) streamURL(slug, token, version string) string {
 }
 
 func TestTerminalControlPlaneRequiresTheBearerToken(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 
 	// Detaching a slug nothing is attached to succeeds, so this exercises the
@@ -113,6 +112,7 @@ func TestTerminalControlPlaneRequiresTheBearerToken(t *testing.T) {
 }
 
 func TestAgentWindowRequiresAuthenticationAndAProfile(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 	path := "/api/terminal/windows/agent"
 	body := map[string]any{"slug": "review-81", "agent": "codex"}
@@ -133,6 +133,7 @@ func TestAgentWindowRequiresAuthenticationAndAProfile(t *testing.T) {
 // 0x0 is the whole unsized case — "nothing measured yet". One measured
 // dimension without the other is a caller bug, and a resize is never unsized.
 func TestTerminalSizeValidationSeparatesAttachFromResize(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 
 	half := h.post(t, "/api/terminal/attach", testToken, map[string]any{"slug": "hive-x", "cols": 0, "rows": 24})
@@ -145,6 +146,7 @@ func TestTerminalSizeValidationSeparatesAttachFromResize(t *testing.T) {
 }
 
 func TestTerminalControlPlaneAnswersPreflight(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 
 	preflight := func(t *testing.T, origin string) *http.Response {
@@ -182,6 +184,7 @@ func TestTerminalControlPlaneAnswersPreflight(t *testing.T) {
 // The stream rejects before upgrading, so every failure is a plain HTTP status
 // the frontend can read rather than a close code it cannot.
 func TestTerminalStreamRejectsBadHandshakes(t *testing.T) {
+	t.Parallel()
 	h := newTerminalHarness(t)
 
 	dial := func(t *testing.T, target string, header http.Header) int {
@@ -307,6 +310,7 @@ func TestTerminalControlFramesCarryStringKinds(t *testing.T) {
 // A 0x0 cell never comes from a real tmux, but the converter must not be what
 // panics the write pump on one.
 func TestWindowEventEncodesAZeroSizedCell(t *testing.T) {
+	t.Parallel()
 	frame, ok := encodeEvent(tmuxcc.WindowChanged{
 		Kind: tmuxcc.WindowLayoutChanged,
 		Window: tmuxcc.Window{ID: "@1", Width: 80, Height: 24, Layout: tmuxcc.Layout{

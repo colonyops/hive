@@ -15,6 +15,7 @@ const promotedStatus = `?? cmd/desktop/releasenotes/changelog/0.5.0.md
 `
 
 func TestParsePromotedStatus(t *testing.T) {
+	t.Parallel()
 	found, err := parsePromotedStatus(promotedStatus)
 	if err != nil {
 		t.Fatalf("parsePromotedStatus: %v", err)
@@ -42,6 +43,7 @@ func TestParsePromotedStatus(t *testing.T) {
 // The whole point of reading the worktree is that the release-notes commit
 // holds the entry and nothing else. Unrelated work has to stop it.
 func TestParsePromotedStatusRefusesUnrelatedChanges(t *testing.T) {
+	t.Parallel()
 	_, err := parsePromotedStatus(promotedStatus + " M desktop/frontend/src/App.vue\n")
 	if err == nil {
 		t.Fatal("expected an unrelated change to be refused")
@@ -52,6 +54,7 @@ func TestParsePromotedStatusRefusesUnrelatedChanges(t *testing.T) {
 }
 
 func TestParsePromotedStatusRequiresAPromotion(t *testing.T) {
+	t.Parallel()
 	for name, status := range map[string]string{
 		"nothing at all": "",
 		"only deletions": " D cmd/desktop/releasenotes/changelog/unreleased/20260912T135002-a-thing.md\n",
@@ -68,6 +71,7 @@ func TestParsePromotedStatusRequiresAPromotion(t *testing.T) {
 }
 
 func TestParsePromotedStatusRefusesTwoVersions(t *testing.T) {
+	t.Parallel()
 	_, err := parsePromotedStatus(promotedStatus + "?? cmd/desktop/releasenotes/changelog/0.6.0.md\n")
 	if err == nil || !strings.Contains(err.Error(), "two versions") {
 		t.Fatalf("expected two versions to be refused, got %v", err)
@@ -76,6 +80,7 @@ func TestParsePromotedStatusRefusesTwoVersions(t *testing.T) {
 
 // A product with no fragments still gets an entry, and its body stays empty.
 func TestValidatePromotedEntryAcceptsAnEmptyBody(t *testing.T) {
+	t.Parallel()
 	entry := releasenotes.Entry{Version: "0.5.0", Summary: "No changes to the hive CLI."}
 	if err := validatePromotedEntry(entry, "0.5.0.md"); err != nil {
 		t.Fatalf("an entry with a summary and no body should pass, got %v", err)
@@ -85,6 +90,7 @@ func TestValidatePromotedEntryAcceptsAnEmptyBody(t *testing.T) {
 // Promotion writes an empty summary on purpose. Nothing downstream fails on
 // one, so this is the only place that can catch it before it ships.
 func TestValidatePromotedEntryRequiresASummary(t *testing.T) {
+	t.Parallel()
 	err := validatePromotedEntry(releasenotes.Entry{Version: "0.5.0", Body: "## Added\n\n- a thing"}, "0.5.0.md")
 	if err == nil || !strings.Contains(err.Error(), "no summary") {
 		t.Fatalf("expected an empty summary to be refused, got %v", err)

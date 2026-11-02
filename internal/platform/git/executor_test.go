@@ -14,6 +14,7 @@ import (
 )
 
 func TestParseDiffStats(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		output  string
@@ -114,6 +115,7 @@ func (m *mockExecutor) RunDirStream(ctx context.Context, dir string, stdout, std
 }
 
 func TestExecutor_CloneErrorIncludesRemoteAndOutput(t *testing.T) {
+	t.Parallel()
 	remote := "https://github.com/example/missing.git"
 	dest := "/tmp/missing"
 	childErr := errors.New("exit status 128")
@@ -139,6 +141,7 @@ func TestExecutor_CloneErrorIncludesRemoteAndOutput(t *testing.T) {
 }
 
 func TestExecutor_Branch(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		branchOut   string
@@ -193,6 +196,7 @@ func TestExecutor_Branch(t *testing.T) {
 }
 
 func TestExecutor_DefaultBranch(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		output  string
@@ -233,6 +237,7 @@ func TestExecutor_DefaultBranch(t *testing.T) {
 }
 
 func TestExecutor_WorktreeRemove(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		branch     string
@@ -269,6 +274,7 @@ func TestExecutor_WorktreeRemove(t *testing.T) {
 }
 
 func TestExecutor_Fetch(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		bareOut    string
@@ -343,6 +349,7 @@ func TestExecutor_Fetch(t *testing.T) {
 }
 
 func TestExecutor_SetRemoteURL(t *testing.T) {
+	t.Parallel()
 	mock := &mockExecutor{
 		runDirFunc: func(_ context.Context, dir, cmd string, args ...string) ([]byte, error) {
 			assert.Equal(t, "/repo", dir)

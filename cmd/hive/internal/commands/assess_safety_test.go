@@ -13,6 +13,7 @@ func notIsolated() bool { return false }
 func isolated() bool    { return true }
 
 func TestSupportedIsolationMarkersRequiresDockerAndMiseMarker(t *testing.T) {
+	t.Parallel()
 	assert.True(t, supportedIsolationMarkers(true, "1"))
 	assert.False(t, supportedIsolationMarkers(false, "1"))
 	assert.False(t, supportedIsolationMarkers(true, ""))
@@ -20,6 +21,7 @@ func TestSupportedIsolationMarkersRequiresDockerAndMiseMarker(t *testing.T) {
 }
 
 func TestEnsureContainerSafe_AllowHostSkipsChecks(t *testing.T) {
+	t.Parallel()
 	resolveCalled := false
 	isolationCalled := false
 	resolve := func(_ context.Context, _ string) (string, error) {
@@ -37,6 +39,7 @@ func TestEnsureContainerSafe_AllowHostSkipsChecks(t *testing.T) {
 }
 
 func TestEnsureContainerSafe_AllowsKnownContainerWithoutSocketHeuristic(t *testing.T) {
+	t.Parallel()
 	resolve := func(_ context.Context, _ string) (string, error) {
 		t.Fatal("isolated execution must not need a socket-name heuristic")
 		return "", nil
@@ -46,6 +49,7 @@ func TestEnsureContainerSafe_AllowsKnownContainerWithoutSocketHeuristic(t *testi
 }
 
 func TestEnsureContainerSafe_RefusesAllHostSockets(t *testing.T) {
+	t.Parallel()
 	for _, path := range []string{
 		"/tmp/tmux-501/default",
 		"/tmp/tmux-501/named-host-socket",
@@ -64,6 +68,7 @@ func TestEnsureContainerSafe_RefusesAllHostSockets(t *testing.T) {
 }
 
 func TestEnsureContainerSafe_FailsClosedOnResolveError(t *testing.T) {
+	t.Parallel()
 	sentinel := errors.New("no tmux server running")
 	resolve := func(_ context.Context, _ string) (string, error) {
 		return "", sentinel

@@ -34,6 +34,7 @@ func (s *retentionStore) Prune(_ context.Context, _ queries.RetentionPolicy) err
 }
 
 func TestMaintenanceTick_Prunes(t *testing.T) {
+	t.Parallel()
 	pruner := &retentionStore{}
 	maintenance := NewMaintenance(
 		pruner,
@@ -50,6 +51,7 @@ func TestMaintenanceTick_Prunes(t *testing.T) {
 }
 
 func TestMaintenanceStop_WaitsForScheduledLoop(t *testing.T) {
+	t.Parallel()
 	pruner := &retentionStore{pruned: make(chan struct{}, 1)}
 	maintenance := NewMaintenance(
 		pruner,

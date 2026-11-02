@@ -28,6 +28,7 @@ func sshRemotes(repo, _ string) string {
 const itemRemotePayload = `{"repo":"acme/site","title":"Fix it","url":"https://github.com/acme/site/pull/7"}`
 
 func TestOutputData_ItemRemote(t *testing.T) {
+	t.Parallel()
 	payload := map[string]any{"repo": "acme/site", "url": "https://github.com/acme/site/pull/7"}
 
 	t.Run("a nil generator builds HTTPS", func(t *testing.T) {
@@ -46,6 +47,7 @@ func TestOutputData_ItemRemote(t *testing.T) {
 }
 
 func TestRenderRepoTarget_UsesTheGenerator(t *testing.T) {
+	t.Parallel()
 	action := probeLaunchSessionAction("review", "{{ .ItemRemote }}", "pr")
 
 	repo, err := RenderRepoTarget(action, "pr-7", []byte(itemRemotePayload), nil, sshRemotes)
@@ -54,6 +56,7 @@ func TestRenderRepoTarget_UsesTheGenerator(t *testing.T) {
 }
 
 func TestActionApplicability_ItemRemoteFollowsTheGenerator(t *testing.T) {
+	t.Parallel()
 	action := probeLaunchSessionAction("review", "{{ .ItemRemote }}", "pr")
 	item := DecodedActionItem{ID: "pr-7", Kind: "PR", Payload: []byte(itemRemotePayload)}
 
@@ -66,18 +69,21 @@ func TestActionApplicability_ItemRemoteFollowsTheGenerator(t *testing.T) {
 }
 
 func TestRenderClipboardText_ItemRemoteUsesTheGenerator(t *testing.T) {
+	t.Parallel()
 	text, err := RenderClipboardText(clipboardAction("git clone {{ .ItemRemote }}"), "pr-7", []byte(itemRemotePayload), nil, sshRemotes)
 	require.NoError(t, err)
 	assert.Equal(t, "git clone git@github.com:acme/site.git", text)
 }
 
 func TestRenderSessionDraft_UsesTheGenerator(t *testing.T) {
+	t.Parallel()
 	draft, err := RenderSessionDraft("Fix it", "https://github.com/acme/site/pull/7", []byte(itemRemotePayload), sshRemotes)
 	require.NoError(t, err)
 	assert.Equal(t, "git@github.com:acme/site.git", draft.Repository)
 }
 
 func TestDispatcher_GivesExecutorsTheGenerator(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	dispatcher := NewDispatcher(map[string]Executor{
 		"launch-session": NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{}),
@@ -95,6 +101,7 @@ func TestDispatcher_GivesExecutorsTheGenerator(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_PostHookAndLogReportTheStoredRemote(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	launcher := &fakeSessionLauncher{path: dir, remote: "https://github.com/acme/site.git"}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
@@ -114,6 +121,7 @@ func TestLaunchSessionExecutor_PostHookAndLogReportTheStoredRemote(t *testing.T)
 }
 
 func TestNotifyTerminal_ItemRemoteUsesTheGenerator(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	db := openTestPipelineDB(t)
 	flows := flowListerTest{flows: []flow.Flow{{

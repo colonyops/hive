@@ -118,22 +118,18 @@ run = "go generate ./..."
 description = "Run every Go test in the module: the CLI, the desktop, and the shared packages"
 # A caller's agent override can name a profile absent from test fixtures.
 env = { HIVE_DEFAULT_AGENT = "" }
-run = "go test ./..."
-
-[tasks."test:tmux"]
-description = "Run the tests that drive a real tmux server inside Docker; `test` skips them on a machine with a running tmux server"
-run = "scripts/test-real-tmux.sh"
+run = "scripts/gotest.sh ./..."
 
 [tasks."test:race"]
 description = "Run all go tests with the race detector; CI runs this on main"
 env = { HIVE_DEFAULT_AGENT = "" }
-run = "go test -race ./..."
+run = "scripts/gotest.sh -race ./..."
 
 [tasks.coverage]
 description = "Run tests with race detection and coverage"
 quiet = true
 env = { HIVE_DEFAULT_AGENT = "" }
-run = "go test -race -coverprofile=coverage.out -covermode=atomic ./... -v -cover"
+run = "scripts/gotest.sh -race -coverprofile=coverage.out -covermode=atomic ./... -v -cover"
 
 [tasks.lint]
 description = "Run golangci-lint and buf lint"
@@ -251,7 +247,6 @@ run = [
   { tasks = ["desktop:frontend:build", "desktop:frontend:test", "desktop:frontend:format:check", "desktop:frontend:lint"] },
   { tasks = ["ui:test", "ui:format:check", "ui:lint"] },
   { tasks = ["drive-server:frontend:build", "drive-server:frontend:test", "drive-server:frontend:format:check", "drive-server:frontend:lint"] },
-  { tasks = ["test:tmux"] },
   { tasks = ["cli:integration"] },
   { tasks = ["cli:remote:test"] },
   { tasks = ["cli:smoke:test"] },

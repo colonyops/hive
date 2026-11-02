@@ -18,6 +18,7 @@ import (
 )
 
 func TestAssessWatchCmd_MissingArgErrors(t *testing.T) {
+	t.Parallel()
 	flags := &Flags{}
 	cmd := NewExperimentalCmd(flags, &app.App{})
 
@@ -29,6 +30,7 @@ func TestAssessWatchCmd_MissingArgErrors(t *testing.T) {
 }
 
 func TestAssessReplayCmd_MissingArgErrors(t *testing.T) {
+	t.Parallel()
 	flags := &Flags{}
 	cmd := NewExperimentalCmd(flags, &app.App{})
 
@@ -44,6 +46,7 @@ func TestAssessReplayCmd_MissingArgErrors(t *testing.T) {
 // the frames' own timestamps (never wall time), produce byte-identical
 // output every run.
 func TestAssessReplayCmd_Deterministic(t *testing.T) {
+	t.Parallel()
 	framesPath := writeAssessTestFrames(t, []assessFrame{
 		{Timestamp: assessTestBase, Content: "⠋ Thinking… (working)\n"},
 		{Timestamp: assessTestBase.Add(1500 * time.Millisecond), Content: "line one\n❯"},
@@ -74,6 +77,7 @@ func TestAssessReplayCmd_Deterministic(t *testing.T) {
 }
 
 func TestObserveFrameUsesRecordedToolUnlessOverridden(t *testing.T) {
+	t.Parallel()
 	frame := assessFrame{
 		Timestamp: assessTestBase,
 		Content:   "› Ask anything\n",

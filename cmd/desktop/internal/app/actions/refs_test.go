@@ -10,6 +10,7 @@ import (
 )
 
 func TestActionsRefs_ResolveAction_ResolvesLoadedActionID(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte(`version: 1

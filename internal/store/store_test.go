@@ -15,6 +15,7 @@ import (
 )
 
 func TestStore(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("save and get", func(t *testing.T) {
@@ -209,6 +210,7 @@ func TestStore(t *testing.T) {
 }
 
 func TestSessionStoreReplaceRecycled(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
@@ -239,6 +241,7 @@ func TestSessionStoreReplaceRecycled(t *testing.T) {
 // TestSessionStoreUpdate_SerializesWritersOnSeparateConnections stands in
 // for two hive processes: each opens its own pool on the same hive.db.
 func TestSessionStoreUpdate_SerializesWritersOnSeparateConnections(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	open := func() *SessionStore {
 		database, err := db.Open(dir, db.DefaultOpenOptions())
@@ -274,6 +277,7 @@ func TestSessionStoreUpdate_SerializesWritersOnSeparateConnections(t *testing.T)
 }
 
 func TestSessionStoreUpdate_LeavesTheSessionAloneWhenTheEditFails(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })

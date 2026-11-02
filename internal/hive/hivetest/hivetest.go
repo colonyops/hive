@@ -59,8 +59,7 @@ var _ terminal.PaneSource = PaneSource{}
 // leaking in from the environment.
 func LoadConfig(t *testing.T, dataDir string) *config.Config {
 	t.Helper()
-	t.Setenv("HIVE_DEFAULT_AGENT", "")
-	cfg, err := config.Load("", dataDir)
+	cfg, err := config.LoadFromEnv("", dataDir, func(string) string { return "" })
 	require.NoError(t, err)
 	return cfg
 }

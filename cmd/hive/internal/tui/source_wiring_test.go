@@ -53,6 +53,7 @@ func registryWith(t *testing.T, ids ...string) *sources.Registry {
 }
 
 func TestResolveSourceID(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		reg     *sources.Registry
@@ -83,6 +84,7 @@ func TestResolveSourceID(t *testing.T) {
 }
 
 func TestFetchSourceDetail(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	body := sources.Detail{Markdown: &sources.MarkdownDetail{Content: "issue body"}}
 	capable := sources.Manifest{Capabilities: sources.Capabilities{FetchDetail: true}}
@@ -174,6 +176,7 @@ func multiResult(id, nameTemplate string) sourcepicker.Result {
 }
 
 func TestCreateSourceSessions_FanOut(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	m := newCreateModel(creator, &fakeLaunchResolver{})
 	out := make(chan string, 100)
@@ -196,6 +199,7 @@ func TestCreateSourceSessions_FanOut(t *testing.T) {
 }
 
 func TestCreateSourceSessions_PartialFailureContinues(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	m := newCreateModel(creator, &fakeLaunchResolver{})
 	out := make(chan string, 100)
@@ -226,6 +230,7 @@ func TestCreateSourceSessions_PartialFailureContinues(t *testing.T) {
 }
 
 func TestCreateSourceSessions_SingleItemErrorPassesThrough(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	m := newCreateModel(creator, &fakeLaunchResolver{})
 	out := make(chan string, 100)
@@ -241,6 +246,7 @@ func TestCreateSourceSessions_SingleItemErrorPassesThrough(t *testing.T) {
 }
 
 func TestCreateSourceSession_ResolvesThePreferredRemote(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	resolver := &fakeLaunchResolver{
 		preferred: map[string]string{"acme/site|https://github.com/acme/site/issues/7": "git@github.com:acme/site.git"},
@@ -261,6 +267,7 @@ func TestCreateSourceSession_ResolvesThePreferredRemote(t *testing.T) {
 }
 
 func TestCreateSourceSession_NoPreferenceKeepsTheScopeRemote(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	resolver := &fakeLaunchResolver{
 		generated:      map[string]string{"acme/site|https://github.com/acme/site/issues/7": "https://github.com/acme/site.git"},
@@ -281,6 +288,7 @@ func TestCreateSourceSession_NoPreferenceKeepsTheScopeRemote(t *testing.T) {
 }
 
 func TestCreateSourceSession_PreferenceKeepsAScopeRemoteOfThatProtocol(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	resolver := &fakeLaunchResolver{
 		preferred: map[string]string{"acme/site|https://github.com/acme/site/issues/7": "git@github.com:acme/site.git"},
@@ -298,6 +306,7 @@ func TestCreateSourceSession_PreferenceKeepsAScopeRemoteOfThatProtocol(t *testin
 }
 
 func TestCreateSourceSession_GeneratesWithoutAScopeRemote(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	resolver := &fakeLaunchResolver{
 		generated: map[string]string{"acme/site|https://github.com/acme/site/issues/7": "https://github.com/acme/site.git"},
@@ -313,6 +322,7 @@ func TestCreateSourceSession_GeneratesWithoutAScopeRemote(t *testing.T) {
 }
 
 func TestCreateSourceSession_ScopeSourceWinsOverResolvedSource(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	resolver := &fakeLaunchResolver{source: "/checkouts/resolved"}
 	m := newCreateModel(creator, resolver)
@@ -326,6 +336,7 @@ func TestCreateSourceSession_ScopeSourceWinsOverResolvedSource(t *testing.T) {
 }
 
 func TestCreateSourceSession_NoRemoteIsAnErrorNotTheCwd(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	resolver := &fakeLaunchResolver{}
 	m := newCreateModel(creator, resolver)
@@ -340,6 +351,7 @@ func TestCreateSourceSession_NoRemoteIsAnErrorNotTheCwd(t *testing.T) {
 }
 
 func TestCreateSourceSession_UnscopedLeavesTheRemoteToTheCwd(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	resolver := &fakeLaunchResolver{}
 	m := newCreateModel(creator, resolver)
@@ -355,6 +367,7 @@ func TestCreateSourceSession_UnscopedLeavesTheRemoteToTheCwd(t *testing.T) {
 }
 
 func TestDetectSourceBackend(t *testing.T) {
+	t.Parallel()
 	t.Run("github remote", func(t *testing.T) {
 		m := Model{cfg: &config.Config{}}
 		assert.Equal(t, sources.BackendGithub, m.detectSourceBackend("git@github.com:o/r.git"))
@@ -379,6 +392,7 @@ func TestDetectSourceBackend(t *testing.T) {
 }
 
 func TestSourcePickerScopeForSelection(t *testing.T) {
+	t.Parallel()
 	t.Run("explicit scope arg overrides selection", func(t *testing.T) {
 		m := Model{}
 		sess := &session.Session{Remote: "git@github.com:other/repo.git"}

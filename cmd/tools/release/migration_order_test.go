@@ -12,6 +12,7 @@ import (
 )
 
 func TestMigrationOrderScript(t *testing.T) {
+	t.Parallel()
 	repoRoot := testCommandOutput(t, "", "git", "rev-parse", "--show-toplevel")
 	script, err := os.ReadFile(filepath.Join(repoRoot, "scripts", "check-migration-order.sh"))
 	require.NoError(t, err)

@@ -7,6 +7,7 @@ import (
 )
 
 func TestSourceSpanNameOmitsAnAbsentKind(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "ingest.source github", sourceSpanName("github"))
 	assert.Equal(t, "ingest.source", sourceSpanName(""))
 }

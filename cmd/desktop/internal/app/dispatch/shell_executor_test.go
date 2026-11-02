@@ -16,6 +16,7 @@ import (
 )
 
 func TestShellExecutor_SuccessfulCommand(t *testing.T) {
+	t.Parallel()
 	exec := NewShellExecutor(zerolog.Nop(), hostEnvironment{})
 	action := actions.Action{
 		ID:     "run-true",
@@ -28,6 +29,7 @@ func TestShellExecutor_SuccessfulCommand(t *testing.T) {
 }
 
 func TestShellExecutor_FailingCommand_IsError(t *testing.T) {
+	t.Parallel()
 	exec := NewShellExecutor(zerolog.Nop(), hostEnvironment{})
 	action := actions.Action{
 		ID:     "run-false",
@@ -40,6 +42,7 @@ func TestShellExecutor_FailingCommand_IsError(t *testing.T) {
 }
 
 func TestShellExecutor_RendersCommandTemplateWithShq(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	outFile := dir + "/out.txt"
 
@@ -61,6 +64,7 @@ func TestShellExecutor_RendersCommandTemplateWithShq(t *testing.T) {
 }
 
 func TestShellExecutor_RespectsCwd(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	exec := NewShellExecutor(zerolog.Nop(), hostEnvironment{})
@@ -83,6 +87,7 @@ func TestShellExecutor_RespectsCwd(t *testing.T) {
 // A terminal action runs in the session's own checkout, which is what makes
 // `mise run test` a complete action rather than one that has to say where.
 func TestShellExecutor_TerminalTargetDefaultsToTheSessionCheckout(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	exec := NewShellExecutor(zerolog.Nop(), hostEnvironment{})
@@ -100,6 +105,7 @@ func TestShellExecutor_TerminalTargetDefaultsToTheSessionCheckout(t *testing.T) 
 }
 
 func TestShellExecutor_ConfiguredCwdWinsOverTheSessionCheckout(t *testing.T) {
+	t.Parallel()
 	session, configured := t.TempDir(), t.TempDir()
 
 	exec := NewShellExecutor(zerolog.Nop(), hostEnvironment{})
@@ -119,6 +125,7 @@ func TestShellExecutor_ConfiguredCwdWinsOverTheSessionCheckout(t *testing.T) {
 }
 
 func TestShellExecutor_TimeoutKillsSlowCommand(t *testing.T) {
+	t.Parallel()
 	exec := NewShellExecutor(zerolog.Nop(), hostEnvironment{})
 	action := actions.Action{
 		ID:   "slow",
@@ -136,6 +143,7 @@ func TestShellExecutor_TimeoutKillsSlowCommand(t *testing.T) {
 }
 
 func TestShellExecutor_BoundsAndDrainsNoisyStreams(t *testing.T) {
+	t.Parallel()
 	exec := NewShellExecutor(zerolog.Nop(), hostEnvironment{})
 	action := actions.Action{
 		ID:     "noisy",
@@ -153,6 +161,7 @@ func TestShellExecutor_BoundsAndDrainsNoisyStreams(t *testing.T) {
 }
 
 func TestShellExecutor_WrongConfigType_IsError(t *testing.T) {
+	t.Parallel()
 	exec := NewShellExecutor(zerolog.Nop(), hostEnvironment{})
 	action := actions.Action{ID: "x", Type: "shell", Config: &actions.PublishMessageConfig{}}
 
@@ -174,6 +183,7 @@ func (s stubExecEnvironment) Environ(context.Context) []string {
 // session hook does: the PATH a desktop launch inherits is not the one the
 // command was written against.
 func TestShellExecutor_RunsWithTheResolvedEnvironment(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "tool"), []byte("#!/bin/sh\necho found\n"), 0o755))
 

@@ -42,6 +42,9 @@ type Options struct {
 	Reload func(ctx context.Context) (*config.Config, error)
 	// OnReady runs once the socket accepts connections.
 	OnReady func(socketPath string)
+	// OwnershipCheckInterval is how often the daemon checks it still owns its
+	// data dir and socket. Zero means every 30s.
+	OwnershipCheckInterval time.Duration
 }
 
 // Run serves until ctx ends or a client calls Stop. It holds the instance
@@ -153,7 +156,11 @@ func Run(ctx context.Context, opts Options) error {
 			_ = os.Remove(socketPath)
 		}
 	}()
-	go watchClaims(runCtx, logger, ownershipCheckInterval, stop, lock, socket)
+	checkInterval := opts.OwnershipCheckInterval
+	if checkInterval == 0 {
+		checkInterval = defaultOwnershipCheckInterval
+	}
+	go watchClaims(runCtx, logger, checkInterval, stop, lock, socket)
 
 	server := newServer(mux)
 	serveErr := make(chan error, 1)

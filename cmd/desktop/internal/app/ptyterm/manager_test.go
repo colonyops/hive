@@ -63,6 +63,7 @@ func awaitExit(t *testing.T, events <-chan Event) {
 }
 
 func TestOpenAndEcho(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 	dir := t.TempDir()
 
@@ -85,6 +86,7 @@ func TestOpenAndEcho(t *testing.T) {
 // Each open is its own terminal: nothing is keyed on the directory or the
 // command, so a second pop-up over the same checkout is a second shell.
 func TestOpenIsAlwaysANewTerminal(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 	dir := t.TempDir()
 
@@ -100,6 +102,7 @@ func TestOpenIsAlwaysANewTerminal(t *testing.T) {
 // A launcher's command is a command line, not an argv: it runs through the
 // shell so a user's aliases, functions and PATH are what resolve it.
 func TestCommandRunsThroughTheShell(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 
 	// `cat` blocks on the PTY so the terminal outlives the subscribe. Without
@@ -117,6 +120,7 @@ func TestCommandRunsThroughTheShell(t *testing.T) {
 }
 
 func TestTerminalEnvEnablesPiImages(t *testing.T) {
+	t.Parallel()
 	env := terminalEnv([]string{"TMUX=/tmp/tmux-1/default,1,0", "PI_IMAGE_PROTOCOL=none", "HOME=/h"})
 	require.Contains(t, env, "PI_IMAGE_PROTOCOL=kitty")
 	require.NotContains(t, env, "PI_IMAGE_PROTOCOL=none")
@@ -125,6 +129,7 @@ func TestTerminalEnvEnablesPiImages(t *testing.T) {
 }
 
 func TestResizeReachesTheProcess(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 
 	term, err := m.Open(t.Context(), Spec{Dir: t.TempDir()})
@@ -144,6 +149,7 @@ func TestResizeReachesTheProcess(t *testing.T) {
 // An exited terminal is gone rather than kept as a dead tab, so a pop-up whose
 // command finished cannot be written to or listed.
 func TestExitForgetsTheTerminal(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 
 	term, err := m.Open(t.Context(), Spec{Dir: t.TempDir()})
@@ -162,6 +168,7 @@ func TestExitForgetsTheTerminal(t *testing.T) {
 // Re-subscribing replays the ring, which is what lets the panel be dismissed
 // and brought back without blanking the shell behind it.
 func TestResubscribeReplaysScrollback(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 
 	term, err := m.Open(t.Context(), Spec{Dir: t.TempDir()})
@@ -180,6 +187,7 @@ func TestResubscribeReplaysScrollback(t *testing.T) {
 }
 
 func TestCloseEndsTheTerminal(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 
 	term, err := m.Open(t.Context(), Spec{Dir: t.TempDir()})
@@ -196,6 +204,7 @@ func TestCloseEndsTheTerminal(t *testing.T) {
 }
 
 func TestOpenRejectsADirectoryItCannotEnter(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 
 	_, err := m.Open(t.Context(), Spec{Dir: ""})
@@ -206,6 +215,7 @@ func TestOpenRejectsADirectoryItCannotEnter(t *testing.T) {
 }
 
 func TestSizeBounds(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 
 	_, err := m.Open(t.Context(), Spec{Dir: t.TempDir(), Cols: 80, Rows: maxDimension + 1})
@@ -223,6 +233,7 @@ func TestSizeBounds(t *testing.T) {
 // A caller that already knows the id it wants to reattach with gets exactly
 // that id back, not a minted one.
 func TestOpenHonoursACallerSuppliedID(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 
 	term, err := m.Open(t.Context(), Spec{ID: "workspace-session-1", Dir: t.TempDir()})
@@ -235,6 +246,7 @@ func TestOpenHonoursACallerSuppliedID(t *testing.T) {
 // the caller's id is what it will reattach with, so a collision must not spawn
 // a second process silently claiming it.
 func TestOpenRejectsADuplicateID(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 
 	first, err := m.Open(t.Context(), Spec{ID: "dup", Dir: t.TempDir()})
@@ -249,6 +261,7 @@ func TestOpenRejectsADuplicateID(t *testing.T) {
 // A mint must never be able to collide with an address a caller is holding, so
 // the minted shape is off-limits as a caller-supplied id.
 func TestCallerIDCannotCollideWithAMintedID(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 
 	for _, id := range []string{"t1", "t2", "t99", "t0"} {
@@ -259,6 +272,7 @@ func TestCallerIDCannotCollideWithAMintedID(t *testing.T) {
 }
 
 func TestValidateIDBounds(t *testing.T) {
+	t.Parallel()
 	require.ErrorIs(t, validateID(""), ErrInvalidID, "empty")
 	require.ErrorIs(t, validateID(strings.Repeat("a", 65)), ErrInvalidID, "65 characters")
 	require.ErrorIs(t, validateID("has/slash"), ErrInvalidID, "slash")
@@ -273,6 +287,7 @@ func TestValidateIDBounds(t *testing.T) {
 // being a fork bomb with a progress bar: the ninth terminal is refused before
 // a process is spawned, and closing one makes room for the next.
 func TestOpenCapsConcurrentTerminals(t *testing.T) {
+	t.Parallel()
 	m := testManager(t)
 	dir := t.TempDir()
 

@@ -37,6 +37,7 @@ func newTestActionsService(t *testing.T, store *actions.ActionStore) (*ActionsSe
 }
 
 func TestActionsServiceSharedStoreCRUDPublishesOnSuccessOnly(t *testing.T) {
+	t.Parallel()
 	actionStore, _ := newServiceStore(t)
 	service, ch := newTestActionsService(t, actionStore)
 
@@ -68,6 +69,7 @@ func TestActionsServiceSharedStoreCRUDPublishesOnSuccessOnly(t *testing.T) {
 }
 
 func TestActionsServiceReorderPublishesOnlyOnAcceptedOrders(t *testing.T) {
+	t.Parallel()
 	actionStore, _ := newServiceStore(t)
 	service, ch := newTestActionsService(t, actionStore)
 	for _, id := range []string{"one", "two"} {
@@ -90,6 +92,7 @@ func TestActionsServiceReorderPublishesOnlyOnAcceptedOrders(t *testing.T) {
 }
 
 func TestActionsServiceListReturnsLastGoodActionsAndMalformedLatestError(t *testing.T) {
+	t.Parallel()
 	actionStore, path := newServiceStore(t)
 	service, ch := newTestActionsService(t, actionStore)
 	_, err := service.Create(t.Context(), serviceAction("good"))
@@ -105,6 +108,7 @@ func TestActionsServiceListReturnsLastGoodActionsAndMalformedLatestError(t *test
 }
 
 func TestActionsServiceUpdateKeepsFlowReferencedActionsHeadless(t *testing.T) {
+	t.Parallel()
 	actionStore, _ := newServiceStore(t)
 	headless := actions.EditableAction{ID: "used", Label: "Used", Type: "launch-session", Launch: &actions.EditableLaunchConfig{
 		PromptTemplate: "Review", RepoTemplate: "https://github.com/owner/repo.git",
@@ -133,6 +137,7 @@ func TestActionsServiceUpdateKeepsFlowReferencedActionsHeadless(t *testing.T) {
 }
 
 func TestActionsServicePublishesOnEveryMutatingMethod(t *testing.T) {
+	t.Parallel()
 	actionStore, _ := newServiceStore(t)
 	service, ch := newTestActionsService(t, actionStore)
 	ctx := t.Context()

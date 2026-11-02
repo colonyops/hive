@@ -41,6 +41,7 @@ func (f *fakeScenarioInput) SendKey(_ context.Context, target multiplexer.Target
 }
 
 func TestScenarioResolvedSenderSeparatesLiteralAndEnter(t *testing.T) {
+	t.Parallel()
 	input := &fakeScenarioInput{}
 	target := multiplexer.Target{Session: "work", Window: "0", Pane: "1"}
 	sender := scenarioResolvedSender{input: input, target: target}
@@ -53,6 +54,7 @@ func TestScenarioResolvedSenderSeparatesLiteralAndEnter(t *testing.T) {
 }
 
 func TestAssessScenarioCmd_MissingArgErrors(t *testing.T) {
+	t.Parallel()
 	flags := &Flags{}
 	cmd := NewExperimentalCmd(flags, &app.App{})
 
@@ -68,6 +70,7 @@ func TestAssessScenarioCmd_MissingArgErrors(t *testing.T) {
 // default socket must produce the container-only refusal, with no real
 // tmux call ever made.
 func TestRunAssessScenarioCmd_RefusesWithoutAllowHost(t *testing.T) {
+	t.Parallel()
 	resolve := func(_ context.Context, _ string) (string, error) {
 		return "/tmp/tmux-501/default", nil
 	}
@@ -83,6 +86,7 @@ func TestRunAssessScenarioCmd_RefusesWithoutAllowHost(t *testing.T) {
 // skips socket resolution entirely, then lets the run fail harmlessly at the
 // scenario-file stage instead of ever reaching real tmux.
 func TestRunAssessScenarioCmd_AllowHostNeverCallsResolver(t *testing.T) {
+	t.Parallel()
 	resolve := func(_ context.Context, _ string) (string, error) {
 		t.Fatal("resolve must not be called when --allow-host is set")
 		return "", nil
@@ -99,6 +103,7 @@ func TestRunAssessScenarioCmd_AllowHostNeverCallsResolver(t *testing.T) {
 // therefore before any real tmux call), by using a resolver and a scenario
 // file that would both explode if touched past the parse step.
 func TestRunAssessScenarioCmd_MalformedScenarioErrorsBeforeAnyTmuxCall(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "bad.yaml")
 	require.NoError(t, os.WriteFile(path, []byte("scenario: bad\nsteps:\n  - frobnicate: true\n"), 0o600))
 
@@ -114,6 +119,7 @@ func TestRunAssessScenarioCmd_MalformedScenarioErrorsBeforeAnyTmuxCall(t *testin
 }
 
 func TestAssessScenarioCmdRejectsExplicitNonPositiveInterval(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "scenario.yaml")
 	require.NoError(t, os.WriteFile(path, []byte("scenario: interval validation\nsteps:\n  - send: hello\n"), 0o600))
 
@@ -131,6 +137,7 @@ func TestAssessScenarioCmdRejectsExplicitNonPositiveInterval(t *testing.T) {
 }
 
 func TestScenarioTrackerOptionsDefaultsOnlyWhenIntervalUnset(t *testing.T) {
+	t.Parallel()
 	app := &app.App{Config: &config.Config{Tmux: hiveconfig.TmuxConfig{PollInterval: 275 * time.Millisecond}}}
 
 	opts, interval, err := scenarioTrackerOptions(app, false, 0)
@@ -162,6 +169,7 @@ func (f *fakeScenarioSender) SendKey(_ context.Context, key string) error {
 }
 
 func TestRunScenarioExecutesSendKeyExpectationAndHold(t *testing.T) {
+	t.Parallel()
 	spec := &scenarioSpec{
 		Name: "happy",
 		Tool: "generic",
@@ -189,6 +197,7 @@ func TestRunScenarioExecutesSendKeyExpectationAndHold(t *testing.T) {
 }
 
 func TestRunScenarioPropagatesSendKeyCaptureAndCancellationErrors(t *testing.T) {
+	t.Parallel()
 	sentinel := errors.New("boom")
 	getExtra := func(_ context.Context, _ string) (string, bool, error) { return "", false, nil }
 	newTracker := func() *status.Tracker { return status.NewTracker(assess.NewEngine(), status.DefaultOptions()) }

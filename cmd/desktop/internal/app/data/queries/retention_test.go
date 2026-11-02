@@ -14,6 +14,7 @@ import (
 )
 
 func TestPrune_EventLogIsNotGatedByConsumerOffsets(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 
@@ -33,6 +34,7 @@ func TestPrune_EventLogIsNotGatedByConsumerOffsets(t *testing.T) {
 }
 
 func TestPrune_EventLogUsesAgeWithoutConsumers(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 	_, err := database.Append(ctx, "source:test", "old", []byte(`{}`))
@@ -53,6 +55,7 @@ func TestPrune_EventLogUsesAgeWithoutConsumers(t *testing.T) {
 }
 
 func TestPrune_EventLogUsesPerTopicCountWithoutConsumers(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 
@@ -72,6 +75,7 @@ func TestPrune_EventLogUsesPerTopicCountWithoutConsumers(t *testing.T) {
 }
 
 func TestPrune_PreservesLatestSourceSnapshotForReplay(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 	_, err := database.AppendSnapshot(ctx, "source:flow/source", "github", "", []models.SnapshotItem{{Key: "old", Payload: []byte(`{}`)}})
@@ -102,6 +106,7 @@ func TestPrune_PreservesLatestSourceSnapshotForReplay(t *testing.T) {
 }
 
 func TestPrune_KeepsNewestSnapshotsPerTopicAndSparesItemEvents(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 
@@ -140,12 +145,14 @@ func TestPrune_KeepsNewestSnapshotsPerTopicAndSparesItemEvents(t *testing.T) {
 }
 
 func TestPrune_RejectsNegativeSnapshotsPerTopicLimit(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	err := database.Prune(t.Context(), RetentionPolicy{EventLogSnapshotsPerTopicLimit: -1})
 	require.EqualError(t, err, "event log snapshots per-topic limit must not be negative")
 }
 
 func TestPrune_BoundsOnlyTerminalHistory(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 
@@ -200,6 +207,7 @@ func TestPrune_BoundsOnlyTerminalHistory(t *testing.T) {
 }
 
 func TestPrune_KeepsLaunchCommandsWhileTheirItemExists(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 	seedInboxItem(t, database, "flow", "live")
@@ -233,6 +241,7 @@ func TestPrune_KeepsLaunchCommandsWhileTheirItemExists(t *testing.T) {
 }
 
 func TestPrune_BoundsActionRunsApartFromNodeCommands(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 	insert := func(actionID string, n int) {
@@ -264,12 +273,14 @@ func TestPrune_BoundsActionRunsApartFromNodeCommands(t *testing.T) {
 }
 
 func TestPrune_RejectsNegativeJobLimit(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	err := database.Prune(t.Context(), RetentionPolicy{JobLimit: -1})
 	require.EqualError(t, err, "job retention limit must not be negative")
 }
 
 func TestPrune_PrunesExpiredArchivedInboxItemsAndCascades(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 	item := seedInboxItem(t, database, "flow", "expired")
@@ -296,6 +307,7 @@ func TestPrune_PrunesExpiredArchivedInboxItemsAndCascades(t *testing.T) {
 }
 
 func TestRunRetentionReclaimsOrphanedSourceHeads(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 
@@ -325,6 +337,7 @@ func TestRunRetentionReclaimsOrphanedSourceHeads(t *testing.T) {
 }
 
 func TestPrune_TrimsInboxEventsPerItem(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 	item := seedInboxItem(t, database, "flow", "many-events")
@@ -369,6 +382,7 @@ func TestPrune_TrimsInboxEventsPerItem(t *testing.T) {
 }
 
 func TestPrune_RejectsNegativeInboxRetentionLimits(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	err := database.Prune(t.Context(), RetentionPolicy{ArchivedItemRetention: -time.Hour})
 	require.EqualError(t, err, "archived item retention must not be negative")
@@ -377,6 +391,7 @@ func TestPrune_RejectsNegativeInboxRetentionLimits(t *testing.T) {
 }
 
 func TestOpen_FreshDB_HasRetentionIndexes(t *testing.T) {
+	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
 
@@ -425,6 +440,7 @@ func inboxEventIDs(t *testing.T, ctx context.Context, database *DB, itemID int64
 }
 
 func TestPrune_SweepsExpiredNodeKVAlways(t *testing.T) {
+	t.Parallel()
 	db := openTestDB(t)
 	ctx := t.Context()
 

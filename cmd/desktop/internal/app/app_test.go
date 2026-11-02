@@ -42,6 +42,7 @@ func (s *startupCompactorStub) Compact(context.Context, queries.CompactionPolicy
 }
 
 func TestStartupCompactionFailureDoesNotPreventStartup(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "desktop-pipeline.db")
 	require.NoError(t, os.WriteFile(path, []byte("database"), 0o600))
 	var logs bytes.Buffer
@@ -55,6 +56,7 @@ func TestStartupCompactionFailureDoesNotPreventStartup(t *testing.T) {
 }
 
 func TestStartupCompactionContinuesWhenFileSizeCannotBeMeasured(t *testing.T) {
+	t.Parallel()
 	var logs bytes.Buffer
 	compactor := &startupCompactorStub{}
 

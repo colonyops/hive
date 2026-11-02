@@ -9,6 +9,7 @@ import (
 )
 
 func TestAgentSessionStore(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 

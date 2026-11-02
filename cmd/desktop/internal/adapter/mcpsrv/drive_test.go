@@ -40,6 +40,7 @@ func childPaths(entries []documentListView) []string {
 }
 
 func TestDocumentRoundTrip(t *testing.T) {
+	t.Parallel()
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
@@ -80,6 +81,7 @@ func TestDocumentRoundTrip(t *testing.T) {
 }
 
 func TestWriteDocumentRefusals(t *testing.T) {
+	t.Parallel()
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
@@ -95,6 +97,7 @@ func TestWriteDocumentRefusals(t *testing.T) {
 }
 
 func TestListDocuments(t *testing.T) {
+	t.Parallel()
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
@@ -134,6 +137,7 @@ func TestListDocuments(t *testing.T) {
 }
 
 func TestCanvasNamesFileUnderPaths(t *testing.T) {
+	t.Parallel()
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
@@ -165,6 +169,7 @@ func TestCanvasNamesFileUnderPaths(t *testing.T) {
 }
 
 func TestTabToolsPublishTheRequest(t *testing.T) {
+	t.Parallel()
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 

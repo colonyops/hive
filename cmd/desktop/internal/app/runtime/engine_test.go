@@ -461,6 +461,7 @@ func TestEngineStopWithoutStart(t *testing.T) {
 // ids still present as function nodes keep their rows, everything else under
 // the flow is cleared.
 func TestEngineInstallReconcilesNodeKV(t *testing.T) {
+	t.Parallel()
 	db := openTestStore(t)
 	ctx := t.Context()
 

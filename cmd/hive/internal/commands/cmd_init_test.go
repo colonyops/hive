@@ -109,6 +109,7 @@ func TestDefaultRCFile(t *testing.T) {
 
 // TestAliasShellFor verifies alias syntax is chosen from the rc file path.
 func TestAliasShellFor(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "fish", aliasShellFor("/home/u/.config/fish/config.fish"))
 	assert.Equal(t, "fish", aliasShellFor("/home/u/.config/fish/conf.d/hive.fish"))
 	assert.Equal(t, "posix", aliasShellFor("/home/u/.zshrc"))
@@ -118,6 +119,7 @@ func TestAliasShellFor(t *testing.T) {
 
 // TestValidateRCFile covers accepted and rejected rc file paths.
 func TestValidateRCFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	existing := filepath.Join(dir, ".zshrc")
 	require.NoError(t, os.WriteFile(existing, []byte{}, 0o644))
@@ -148,6 +150,7 @@ func TestValidateRCFile(t *testing.T) {
 
 // TestAliasAlreadyPresent covers file-exists, alias-present, and file-missing cases.
 func TestAliasAlreadyPresent(t *testing.T) {
+	t.Parallel()
 	t.Run("file contains alias hv", func(t *testing.T) {
 		f, err := os.CreateTemp(t.TempDir(), "rc-*")
 		require.NoError(t, err)
@@ -181,6 +184,7 @@ func TestAliasAlreadyPresent(t *testing.T) {
 
 // TestAppendAlias verifies that the correct alias syntax is written for each shell.
 func TestAppendAlias(t *testing.T) {
+	t.Parallel()
 	t.Run("zsh appends alias with equals sign", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), ".zshrc")
 		require.NoError(t, appendAlias(path, "zsh"))
@@ -213,6 +217,7 @@ func TestAppendAlias(t *testing.T) {
 
 // TestDetectInstalledAgents verifies PATH look-up behaviour.
 func TestDetectInstalledAgents(t *testing.T) {
+	t.Parallel()
 	t.Run("unknown binary returns empty slice", func(t *testing.T) {
 		result := detectInstalledAgents([]string{"nonexistent-binary-xyz-abc"})
 		assert.NotNil(t, result, "result should be non-nil empty slice")
@@ -282,6 +287,7 @@ func TestDetectTmuxConfigPath(t *testing.T) {
 
 // TestTmuxBindingAlreadyPresent covers file-missing, binding-absent, and binding-present.
 func TestTmuxBindingAlreadyPresent(t *testing.T) {
+	t.Parallel()
 	t.Run("nonexistent file returns false nil", func(t *testing.T) {
 		present, err := tmuxBindingAlreadyPresent(filepath.Join(t.TempDir(), "no-such.conf"))
 		require.NoError(t, err)
@@ -315,6 +321,7 @@ func TestTmuxBindingAlreadyPresent(t *testing.T) {
 
 // TestAppendTmuxBinding verifies file creation and content.
 func TestAppendTmuxBinding(t *testing.T) {
+	t.Parallel()
 	t.Run("creates file with binding in existing dir", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), ".tmux.conf")
 		require.NoError(t, appendTmuxBinding(path))
@@ -349,6 +356,7 @@ func TestAppendTmuxBinding(t *testing.T) {
 
 // TestRenderConfigTemplate validates template rendering.
 func TestRenderConfigTemplate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		data     configTemplateData
@@ -426,6 +434,7 @@ func TestRenderConfigTemplate(t *testing.T) {
 }
 
 func TestValidateWorkspaceParent(t *testing.T) {
+	t.Parallel()
 	t.Run("accepts parent directory", func(t *testing.T) {
 		parent := t.TempDir()
 		repo := filepath.Join(parent, "repo")
@@ -507,6 +516,7 @@ func TestDirSuggestions(t *testing.T) {
 
 // TestPrintSummary verifies output content for all status types and fixHint.
 func TestPrintSummary(t *testing.T) {
+	t.Parallel()
 	t.Run("all step names and details are present", func(t *testing.T) {
 		var buf bytes.Buffer
 		printSummary(&buf, []stepResult{

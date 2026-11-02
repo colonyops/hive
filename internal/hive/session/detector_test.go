@@ -12,6 +12,7 @@ import (
 )
 
 func TestSessionDetector_DetectSessionFromPath(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	for _, s := range []session.Session{
 		{ID: "sess-1", Path: "/home/user/projects/foo", State: session.StateActive},
@@ -77,6 +78,7 @@ func TestSessionDetector_DetectSessionFromPath(t *testing.T) {
 }
 
 func TestSessionDetector_EmptyStore(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	detector := NewDetector(store)
 	ctx := context.Background()
@@ -87,6 +89,7 @@ func TestSessionDetector_EmptyStore(t *testing.T) {
 }
 
 func TestIsSubpath(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		parent   string
 		child    string
@@ -108,6 +111,7 @@ func TestIsSubpath(t *testing.T) {
 }
 
 func TestSessionDetector_SessionAtPath(t *testing.T) {
+	t.Parallel()
 	store := newMockStore()
 	store.sessions["sess-1"] = session.Session{ID: "sess-1", Name: "fix-login", Path: "/home/user/projects/foo", State: session.StateActive}
 	store.sessions["recycled"] = session.Session{ID: "recycled", Path: "/home/user/projects/old", State: session.StateRecycled}
@@ -126,6 +130,7 @@ func TestSessionDetector_SessionAtPath(t *testing.T) {
 }
 
 func TestSessionDetector_SessionAtPathThroughSymlink(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	checkout := filepath.Join(root, "repos", "foo")
 	require.NoError(t, os.MkdirAll(filepath.Join(checkout, "src"), 0o755))

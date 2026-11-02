@@ -7,14 +7,12 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/pkg/executil"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/rs/zerolog"
@@ -29,37 +27,24 @@ import (
 // is a decision about what tmux is holding, and a faked one would only prove the
 // fake. See internal/platform/tmuxtest for how they are kept away from a developer's own.
 
-// privateTmux points every tmux command in the test — the service's included —
-// at a server of its own, and returns a runner for the fixture's commands.
-func privateTmux(t *testing.T) func(args ...string) error {
+func newTestTerminals(t *testing.T, runner tmuxcc.Runner, starter terminalStarter) *TerminalsService {
 	t.Helper()
-	socket := tmuxtest.Private(t)
-
-	return func(args ...string) error {
-		cmd := exec.Command("tmux", append([]string{"-S", socket}, args...)...) //nolint:noctx // cleanup runs past the test context
-		cmd.Env = executil.WithoutEnv(nil, "TMUX", "TMUX_PANE")
-		return cmd.Run()
-	}
-}
-
-func newTestTerminals(t *testing.T, starter terminalStarter) *TerminalsService {
-	t.Helper()
-	return newTestTerminalsIn(t, starter, os.UserHomeDir)
+	return newTestTerminalsIn(t, runner, starter, os.UserHomeDir)
 }
 
 // newTestTerminalsIn is newTestTerminals with the home directory the scratch
 // terminal opens in, so a test can assert where it landed without opening one in
 // the developer's own home.
-func newTestTerminalsIn(t *testing.T, starter terminalStarter, home func() (string, error)) *TerminalsService {
+func newTestTerminalsIn(t *testing.T, runner tmuxcc.Runner, starter terminalStarter, home func() (string, error)) *TerminalsService {
 	t.Helper()
-	return newTestTerminalsWith(t, starter, home, zerolog.Nop())
+	return newTestTerminalsWith(t, runner, starter, home, zerolog.Nop())
 }
 
 // newTestTerminalsWith is newTestTerminalsIn with the logger a test wants to
 // read back, for asserting what a failure logs.
-func newTestTerminalsWith(t *testing.T, starter terminalStarter, home func() (string, error), logger zerolog.Logger) *TerminalsService {
+func newTestTerminalsWith(t *testing.T, runner tmuxcc.Runner, starter terminalStarter, home func() (string, error), logger zerolog.Logger) *TerminalsService {
 	t.Helper()
-	manager := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{Logger: zerolog.Nop()})
+	manager := tmuxcc.NewManager(t.Context(), tmuxcc.ManagerOptions{Logger: zerolog.Nop(), Runner: runner})
 	t.Cleanup(func() { _ = manager.Stop(context.WithoutCancel(t.Context())) })
 	return newTerminalsService(TerminalsDeps{Manager: manager, Starter: starter, Home: home, Logger: logger})
 }
@@ -81,9 +66,11 @@ func (s *spawningStarter) StartTmuxSession(_ context.Context, slug string) (mult
 }
 
 func TestTerminalsStartThenAttachIsTheColdPath(t *testing.T) {
-	tmux := privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
 	starter := &spawningStarter{tmux: tmux}
-	terminals := newTestTerminals(t, starter)
+	terminals := newTestTerminals(t, server, starter)
 
 	// Attaching does not spawn: a session that was never started reports itself
 	// so the caller can offer to start it, and nothing runs an agent behind the
@@ -104,10 +91,12 @@ func TestTerminalsStartThenAttachIsTheColdPath(t *testing.T) {
 }
 
 func TestTerminalsStartLeavesALiveSessionAlone(t *testing.T) {
-	tmux := privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
 	require.NoError(t, tmux("-f", "/dev/null", "new-session", "-d", "-s", "hive-live", "-n", "claude", "-x", "120", "-y", "40", "sh"))
 	starter := &spawningStarter{tmux: tmux}
-	terminals := newTestTerminals(t, starter)
+	terminals := newTestTerminals(t, server, starter)
 
 	started, err := terminals.Start(t.Context(), "hive-live")
 	require.NoError(t, err)
@@ -120,10 +109,12 @@ func TestTerminalsStartLeavesALiveSessionAlone(t *testing.T) {
 }
 
 func TestTerminalsKillEndsTheSessionAndLeavesItStartableAgain(t *testing.T) {
-	tmux := privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
 	require.NoError(t, tmux("-f", "/dev/null", "new-session", "-d", "-s", "hive-kill", "-n", "claude", "-x", "120", "-y", "40", "sh"))
 	starter := &spawningStarter{tmux: tmux}
-	terminals := newTestTerminals(t, starter)
+	terminals := newTestTerminals(t, server, starter)
 
 	_, err := terminals.Attach(t.Context(), "hive-kill", 120, 40)
 	require.NoError(t, err)
@@ -150,11 +141,13 @@ func TestTerminalsKillEndsTheSessionAndLeavesItStartableAgain(t *testing.T) {
 // Reordering is the one operation whose result is not what the caller asked
 // for: tmux owns the order, so the service answers with what tmux settled on.
 func TestTerminalsMoveWindowReordersAndKeepsTheSelection(t *testing.T) {
-	tmux := privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
 	require.NoError(t, tmux("-f", "/dev/null", "new-session", "-d", "-s", "hive-move", "-n", "alpha", "-x", "120", "-y", "40", "sh"))
 	require.NoError(t, tmux("new-window", "-t", "hive-move", "-n", "bravo", "sh"))
 	require.NoError(t, tmux("new-window", "-t", "hive-move", "-n", "charlie", "sh"))
-	terminals := newTestTerminals(t, &spawningStarter{tmux: tmux})
+	terminals := newTestTerminals(t, server, &spawningStarter{tmux: tmux})
 
 	windows, err := terminals.Attach(t.Context(), "hive-move", 120, 40)
 	require.NoError(t, err)
@@ -173,13 +166,15 @@ func TestTerminalsMoveWindowReordersAndKeepsTheSelection(t *testing.T) {
 	assert.Equal(t, windowNames(moved), windowNames(listed["hive-move"]))
 	// The fixture's server runs with no config, so the run starts at tmux's own
 	// base-index of 0.
-	assert.Equal(t, "0 1 2", tmuxFields(t, "list-windows", "-t", "hive-move", "-F", "#{window_index}"))
+	assert.Equal(t, "0 1 2", tmuxFields(t, server, "list-windows", "-t", "hive-move", "-F", "#{window_index}"))
 }
 
 func TestTerminalsMoveWindowClassifiesWhatItRefuses(t *testing.T) {
-	tmux := privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
 	require.NoError(t, tmux("-f", "/dev/null", "new-session", "-d", "-s", "hive-badmove", "-n", "alpha", "-x", "120", "-y", "40", "sh"))
-	terminals := newTestTerminals(t, &spawningStarter{tmux: tmux})
+	terminals := newTestTerminals(t, server, &spawningStarter{tmux: tmux})
 
 	_, err := terminals.MoveWindow(t.Context(), "hive-badmove", "@0", 0)
 	assert.Equal(t, KindNotFound, KindOf(err), "no client is attached for that slug")
@@ -214,20 +209,22 @@ func activeWindowID(t *testing.T, windows []tmuxcc.Window) string {
 
 // tmuxFields reads a tmux listing as one space-joined line, so a per-row format
 // reads as the sequence it describes.
-func tmuxFields(t *testing.T, args ...string) string {
+func tmuxFields(t *testing.T, server *tmuxtest.Server, args ...string) string {
 	t.Helper()
-	out, err := exec.CommandContext(t.Context(), "tmux", args...).Output()
+	out, err := server.Output(args...)
 	require.NoError(t, err)
-	return strings.Join(strings.Fields(string(out)), " ")
+	return strings.Join(strings.Fields(out), " ")
 }
 
 // The scratch terminal is the one session the desktop creates itself: hive has
 // no record to spawn from, so what it gets instead is the user's home directory.
 func TestTerminalsStartScratchOpensItInHomeWithoutAskingHive(t *testing.T) {
-	tmux := privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
 	home := t.TempDir()
 	starter := &spawningStarter{tmux: tmux}
-	terminals := newTestTerminalsIn(t, starter, func() (string, error) { return home, nil })
+	terminals := newTestTerminalsIn(t, server, starter, func() (string, error) { return home, nil })
 
 	started, err := terminals.Start(t.Context(), ScratchSlug)
 	require.NoError(t, err)
@@ -236,7 +233,7 @@ func TestTerminalsStartScratchOpensItInHomeWithoutAskingHive(t *testing.T) {
 
 	// The home directory is the *session's* working directory rather than the
 	// first window's, which is what makes every tab opened later start there too.
-	assert.Equal(t, realpath(t, home), realpath(t, tmuxFields(t, "display-message", "-p", "-t", ScratchSlug, "#{session_path}")))
+	assert.Equal(t, realpath(t, home), realpath(t, tmuxFields(t, server, "display-message", "-p", "-t", ScratchSlug, "#{session_path}")))
 
 	// Nothing else about it is special: the slug is the whole contract, so the
 	// attach and the window it opens are the ones every session uses.
@@ -246,7 +243,7 @@ func TestTerminalsStartScratchOpensItInHomeWithoutAskingHive(t *testing.T) {
 
 	tab, err := terminals.NewWindow(t.Context(), ScratchSlug)
 	require.NoError(t, err)
-	assert.Equal(t, realpath(t, home), realpath(t, tmuxFields(t, "display-message", "-p", "-t", tab, "#{pane_current_path}")))
+	assert.Equal(t, realpath(t, home), realpath(t, tmuxFields(t, server, "display-message", "-p", "-t", tab, "#{pane_current_path}")))
 
 	started, err = terminals.Start(t.Context(), ScratchSlug)
 	require.NoError(t, err)
@@ -261,11 +258,13 @@ func TestTerminalsStartScratchOpensItInHomeWithoutAskingHive(t *testing.T) {
 // half that must *not* work: Start would ask hive for a spawn configuration that
 // does not exist, which is why resuming a chat is the Agents area's own call.
 func TestTerminalsAttachAndSweepAnAgentChatSlugHiveKnowsNothingAbout(t *testing.T) {
-	tmux := privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
 	const slug = "agentws-42"
 	require.NoError(t, tmux("-f", "/dev/null", "new-session", "-d", "-s", slug, "-n", "claude", "-x", "120", "-y", "40", "sh"))
 	starter := &spawningStarter{err: errors.New("no such hive session")}
-	terminals := newTestTerminals(t, starter)
+	terminals := newTestTerminals(t, server, starter)
 
 	windows, err := terminals.Attach(t.Context(), slug, 120, 40)
 	require.NoError(t, err)
@@ -289,9 +288,11 @@ func TestTerminalsAttachAndSweepAnAgentChatSlugHiveKnowsNothingAbout(t *testing.
 // has to work before anything has attached — which is what a first click on the
 // pinned terminal is.
 func TestTerminalsNewWindowWithoutAnAttachOpensWhereTheSessionIs(t *testing.T) {
-	tmux := privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
 	home := t.TempDir()
-	terminals := newTestTerminalsIn(t, &spawningStarter{tmux: tmux}, func() (string, error) { return home, nil })
+	terminals := newTestTerminalsIn(t, server, &spawningStarter{tmux: tmux}, func() (string, error) { return home, nil })
 
 	_, err := terminals.Start(t.Context(), ScratchSlug)
 	require.NoError(t, err)
@@ -300,7 +301,7 @@ func TestTerminalsNewWindowWithoutAnAttachOpensWhereTheSessionIs(t *testing.T) {
 	// the session lives rather than in this process's working directory.
 	id, err := terminals.NewWindow(t.Context(), ScratchSlug)
 	require.NoError(t, err)
-	assert.Equal(t, realpath(t, home), realpath(t, tmuxFields(t, "display-message", "-p", "-t", id, "#{pane_current_path}")))
+	assert.Equal(t, realpath(t, home), realpath(t, tmuxFields(t, server, "display-message", "-p", "-t", id, "#{pane_current_path}")))
 
 	windows, err := terminals.ListAllWindows(t.Context(), []string{ScratchSlug})
 	require.NoError(t, err)
@@ -316,10 +317,12 @@ func TestTerminalsNewWindowWithoutAnAttachOpensWhereTheSessionIs(t *testing.T) {
 // prompt followed a keystroke, and a test that waits for a shell is a test that
 // is flaky for reasons of its own.
 func TestTerminalsNewWindowFollowsTheActivePane(t *testing.T) {
-	tmux := privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
 	home := t.TempDir()
 	elsewhere := t.TempDir()
-	terminals := newTestTerminalsIn(t, &spawningStarter{tmux: tmux}, func() (string, error) { return home, nil })
+	terminals := newTestTerminalsIn(t, server, &spawningStarter{tmux: tmux}, func() (string, error) { return home, nil })
 
 	_, err := terminals.Start(t.Context(), ScratchSlug)
 	require.NoError(t, err)
@@ -329,7 +332,7 @@ func TestTerminalsNewWindowFollowsTheActivePane(t *testing.T) {
 	// current window, which is the one it just made.
 	id, err := terminals.NewWindow(t.Context(), ScratchSlug)
 	require.NoError(t, err)
-	assert.Equal(t, realpath(t, elsewhere), realpath(t, tmuxFields(t, "display-message", "-p", "-t", id, "#{pane_current_path}")))
+	assert.Equal(t, realpath(t, elsewhere), realpath(t, tmuxFields(t, server, "display-message", "-p", "-t", id, "#{pane_current_path}")))
 
 	// Attached, over the control stream: the same answer, read from the client's
 	// own current window rather than from a target it was handed.
@@ -337,17 +340,19 @@ func TestTerminalsNewWindowFollowsTheActivePane(t *testing.T) {
 	require.NoError(t, err)
 	attached, err := terminals.NewWindow(t.Context(), ScratchSlug)
 	require.NoError(t, err)
-	assert.Equal(t, realpath(t, elsewhere), realpath(t, tmuxFields(t, "display-message", "-p", "-t", attached, "#{pane_current_path}")))
+	assert.Equal(t, realpath(t, elsewhere), realpath(t, tmuxFields(t, server, "display-message", "-p", "-t", attached, "#{pane_current_path}")))
 }
 
 // WorkingDirectory is what a launcher with no cwd opens in, and the whole point
 // of asking tmux rather than hive is that the scratch terminal has no hive
 // record to ask about.
 func TestTerminalsWorkingDirectoryIsTheActivePanes(t *testing.T) {
-	tmux := privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
 	home := t.TempDir()
 	elsewhere := t.TempDir()
-	terminals := newTestTerminalsIn(t, &spawningStarter{tmux: tmux}, func() (string, error) { return home, nil })
+	terminals := newTestTerminalsIn(t, server, &spawningStarter{tmux: tmux}, func() (string, error) { return home, nil })
 
 	_, err := terminals.Start(t.Context(), ScratchSlug)
 	require.NoError(t, err)
@@ -367,16 +372,18 @@ func TestTerminalsWorkingDirectoryIsTheActivePanes(t *testing.T) {
 // caller: a hive session still has its checkout, and a scratch terminal has
 // nothing.
 func TestTerminalsWorkingDirectoryInASessionThatIsNotRunning(t *testing.T) {
-	privateTmux(t)
-	terminals := newTestTerminals(t, &spawningStarter{})
+	t.Parallel()
+	server := tmuxtest.New(t)
+	terminals := newTestTerminals(t, server, &spawningStarter{})
 
 	_, err := terminals.WorkingDirectory(t.Context(), "hive-gone")
 	assert.Equal(t, KindNotFound, KindOf(err))
 }
 
 func TestTerminalsNewWindowInASessionThatIsNotRunning(t *testing.T) {
-	privateTmux(t)
-	terminals := newTestTerminals(t, &spawningStarter{})
+	t.Parallel()
+	server := tmuxtest.New(t)
+	terminals := newTestTerminals(t, server, &spawningStarter{})
 
 	_, err := terminals.NewWindow(t.Context(), "hive-gone")
 	// A session to add a window to is the caller's to create — a start for a
@@ -385,9 +392,10 @@ func TestTerminalsNewWindowInASessionThatIsNotRunning(t *testing.T) {
 }
 
 func TestTerminalsNewWindowInASessionThatIsNotRunningLogsTheSlug(t *testing.T) {
-	privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
 	var logs bytes.Buffer
-	terminals := newTestTerminalsWith(t, &spawningStarter{}, os.UserHomeDir, zerolog.New(&logs))
+	terminals := newTestTerminalsWith(t, server, &spawningStarter{}, os.UserHomeDir, zerolog.New(&logs))
 
 	_, err := terminals.NewWindow(t.Context(), "hive-gone")
 
@@ -396,8 +404,9 @@ func TestTerminalsNewWindowInASessionThatIsNotRunningLogsTheSlug(t *testing.T) {
 }
 
 func TestTerminalsStartScratchReportsAnUnreadableHome(t *testing.T) {
-	privateTmux(t)
-	terminals := newTestTerminalsIn(t, &spawningStarter{}, func() (string, error) { return "", errors.New("no home") })
+	t.Parallel()
+	server := tmuxtest.New(t)
+	terminals := newTestTerminalsIn(t, server, &spawningStarter{}, func() (string, error) { return "", errors.New("no home") })
 
 	_, err := terminals.Start(t.Context(), ScratchSlug)
 	assert.Equal(t, KindUnavailable, KindOf(err))
@@ -407,7 +416,8 @@ func TestTerminalsStartScratchReportsAnUnreadableHome(t *testing.T) {
 // the slug it claims has to be one hive cannot mint — otherwise a session named
 // "Scratch" would silently become the scratch terminal, or take it over.
 func TestScratchSlugIsUnreachableFromASessionName(t *testing.T) {
-	terminals := newTestTerminals(t, nil)
+	t.Parallel()
+	terminals := newTestTerminals(t, nil, nil)
 	assert.Equal(t, ScratchSlug, terminals.Scratch(t.Context()).Slug)
 
 	for _, name := range []string{"Scratch", "scratch", "SCRATCH", "  Scratch  ", "scratch/1"} {
@@ -424,9 +434,11 @@ func realpath(t *testing.T, path string) string {
 }
 
 func TestTerminalsStartReportsWhyItCouldNot(t *testing.T) {
-	tmux := privateTmux(t)
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
 	starter := &spawningStarter{tmux: tmux, err: Errorf(KindNotFound, "no session named %q", "hive-gone")}
-	terminals := newTestTerminals(t, starter)
+	terminals := newTestTerminals(t, server, starter)
 
 	_, err := terminals.Start(t.Context(), "hive-gone")
 	// The starter's classification survives: a start that failed because nothing
@@ -439,8 +451,10 @@ func TestTerminalsStartReportsWhyItCouldNot(t *testing.T) {
 // at its prompt is idle, and anything running in front of it is not — including
 // the two cases either half of the check would get wrong on its own.
 func TestTerminalsWindowForegroundTellsAPromptFromWork(t *testing.T) {
-	tmux := privateTmux(t)
-	terminals := newTestTerminals(t, &spawningStarter{tmux: tmux})
+	t.Parallel()
+	server := tmuxtest.New(t)
+	tmux := server.Run
+	terminals := newTestTerminals(t, server, &spawningStarter{tmux: tmux})
 	require.NoError(t, tmux("new-session", "-d", "-s", "hive-fg", "-n", "shell", "-x", "120", "-y", "40"))
 	// tmux runs a window's command through sh -c, which execs it in place: the
 	// pane's own process becomes the work, so nothing it started is running and
@@ -461,8 +475,9 @@ func TestTerminalsWindowForegroundTellsAPromptFromWork(t *testing.T) {
 	// The other half: a shell script runs under its interpreter's own name, so
 	// the name alone reads as a prompt. The pane's process is what says
 	// otherwise — the shell is waiting on something rather than on the user.
-	require.NoError(t, tmux("send-keys", "-t", "hive-fg:shell", "sh -c 'sleep 300; true'", "Enter"))
-	awaitForeground(t, terminals, "hive-fg", byName["shell"], WindowForeground{Running: true, Command: "sh"})
+	// bash, because macOS reports its sh under bash's name.
+	require.NoError(t, tmux("send-keys", "-t", "hive-fg:shell", "bash -c 'sleep 300; true'", "Enter"))
+	awaitForeground(t, terminals, "hive-fg", byName["shell"], WindowForeground{Running: true, Command: "bash"})
 }
 
 // awaitForeground polls until the window answers want, because the answer is
@@ -540,6 +555,7 @@ func TestTerminalsForegroundOfReadsTheWholeWindow(t *testing.T) {
 }
 
 func TestTerminals_ServerPaneNeverReadsAsAPrompt(t *testing.T) {
+	t.Parallel()
 	terminals := &TerminalsService{foreground: func(context.Context, int) (bool, error) {
 		t.Error("a server's pid must not be looked up on this machine")
 		return true, nil

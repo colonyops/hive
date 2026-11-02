@@ -24,6 +24,7 @@ import (
 )
 
 func TestEngineReloadRebuildsTheConfigDerivedServices(t *testing.T) {
+	t.Parallel()
 	before := hivetest.LoadConfig(t, t.TempDir())
 	h := hivetest.NewEngine(t, hivetest.Options{Config: before})
 
@@ -49,6 +50,7 @@ func TestEngineReloadRebuildsTheConfigDerivedServices(t *testing.T) {
 }
 
 func TestEngineReloadPublishesConfigReloadedOnce(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{})
 	next := hivetest.LoadConfig(t, t.TempDir())
 
@@ -68,6 +70,7 @@ func TestEngineReloadPublishesConfigReloadedOnce(t *testing.T) {
 // The desktop's mock mode runs with no tmux to read, and status must stay off
 // across a reload rather than come back with a nil source.
 func TestEngineWithoutAPaneSourceHasNoStatus(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{})
 	assert.Nil(t, h.Engine.Status())
 	assert.Nil(t, h.Engine.Terminal())
@@ -78,6 +81,7 @@ func TestEngineWithoutAPaneSourceHasNoStatus(t *testing.T) {
 }
 
 func TestEngineWithAPaneSourceHasStatus(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{PaneSource: hivetest.PaneSource{}})
 	require.NotNil(t, h.Engine.Status())
 	assert.True(t, h.Engine.Status().Available())
@@ -89,6 +93,7 @@ func TestEngineWithAPaneSourceHasStatus(t *testing.T) {
 
 // A save with a typo must not leave the program with no session service.
 func TestEngineFailedReloadKeepsTheOldServices(t *testing.T) {
+	t.Parallel()
 	original := hivetest.LoadConfig(t, t.TempDir())
 	h := hivetest.NewEngine(t, hivetest.Options{Config: original})
 	sessions, messages, gitExec := h.Engine.Sessions(), h.Engine.Messages(), h.Engine.Git()
@@ -105,6 +110,7 @@ func TestEngineFailedReloadKeepsTheOldServices(t *testing.T) {
 }
 
 func TestEngineCapsMessagesPerTopic(t *testing.T) {
+	t.Parallel()
 	cfg := hivetest.LoadConfig(t, t.TempDir())
 	assert.Equal(t, 100, cfg.Messaging.MaxMessages)
 
@@ -130,6 +136,7 @@ func (failingValidator) Warnings() []config.ValidationWarning { return nil }
 // A program's config can have sections the engine does not read, so doctor
 // checks with the validator the program hands it.
 func TestEngineDoctorChecksWithTheProgramsValidator(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{})
 
 	results := h.Engine.Doctor(failingValidator{}, nil).RunChecks(t.Context(), "", false)
@@ -152,6 +159,7 @@ func TestEngineDoctorChecksWithTheProgramsValidator(t *testing.T) {
 // The drive service holds the snapshot of the context root, so a reload
 // keeps it and re-roots it rather than building a blank one.
 func TestEngineDriveSurvivesAReloadAndFollowsTheContextDir(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{})
 	drive := h.Engine.Drive()
 
@@ -162,6 +170,7 @@ func TestEngineDriveSurvivesAReloadAndFollowsTheContextDir(t *testing.T) {
 }
 
 func TestEngineHoneycombSurvivesAReload(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{})
 	hc := h.Engine.HC()
 
@@ -171,6 +180,7 @@ func TestEngineHoneycombSurvivesAReload(t *testing.T) {
 
 // Run under -race: readers fetch a service per call while reloads swap the set.
 func TestEngineServesConcurrentReadersDuringReload(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{PaneSource: hivetest.PaneSource{}})
 	configs := make([]*config.Config, 20)
 	for i := range configs {
@@ -206,11 +216,13 @@ func TestEngineServesConcurrentReadersDuringReload(t *testing.T) {
 }
 
 func TestNewRejectsMissingPorts(t *testing.T) {
+	t.Parallel()
 	_, err := hive.New(hivetest.LoadConfig(t, t.TempDir()), hive.Ports{})
 	require.Error(t, err)
 }
 
 func TestEnginePersistenceSurvivesAReload(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{})
 	kvSvc, notifications, reviews := h.Engine.KV(), h.Engine.Notifications(), h.Engine.Reviews()
 
@@ -221,6 +233,7 @@ func TestEnginePersistenceSurvivesAReload(t *testing.T) {
 }
 
 func TestEngineKVPersists(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{})
 	ctx := t.Context()
 
@@ -233,6 +246,7 @@ func TestEngineKVPersists(t *testing.T) {
 
 // Reads already hide an expired entry, so only the table shows the sweep.
 func TestEngineSweepKVDeletesExpiredRows(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{})
 	ctx, cancel := context.WithCancel(t.Context())
 
@@ -260,6 +274,7 @@ func TestEngineSweepKVDeletesExpiredRows(t *testing.T) {
 }
 
 func TestEngineNotificationsPersist(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{})
 	ctx := t.Context()
 
@@ -275,6 +290,7 @@ func TestEngineNotificationsPersist(t *testing.T) {
 }
 
 func TestEngineReviewsPersist(t *testing.T) {
+	t.Parallel()
 	h := hivetest.NewEngine(t, hivetest.Options{})
 	ctx := t.Context()
 

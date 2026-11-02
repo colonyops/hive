@@ -47,6 +47,7 @@ func editSessionKey(t *testing.T, m Model, keyStr string, code rune) Model {
 }
 
 func TestEditSessionOpensFocusedOnTheFieldItsKeyNames(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		key   tea.KeyPressMsg
@@ -70,6 +71,7 @@ func TestEditSessionOpensFocusedOnTheFieldItsKeyNames(t *testing.T) {
 }
 
 func TestEditSessionTabSwitchesFields(t *testing.T) {
+	t.Parallel()
 	m := pressKey(t, newEditSessionTestModel(t), tea.KeyPressMsg{Code: 'R', Text: "R"})
 
 	m = editSessionKey(t, m, "tab", tea.KeyTab)
@@ -83,6 +85,7 @@ func TestEditSessionTabSwitchesFields(t *testing.T) {
 }
 
 func TestEditSessionRequestHoldsOnlyChangedFields(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		nameValue   string
@@ -113,6 +116,7 @@ func TestEditSessionRequestHoldsOnlyChangedFields(t *testing.T) {
 }
 
 func TestEditSessionKeepsInvalidInputOpen(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		nameValue string
@@ -136,6 +140,7 @@ func TestEditSessionKeepsInvalidInputOpen(t *testing.T) {
 }
 
 func TestEditSessionEnterSavesAndUnchangedEnterOnlyCloses(t *testing.T) {
+	t.Parallel()
 	m := pressKey(t, newEditSessionTestModel(t), tea.KeyPressMsg{Code: 'R', Text: "R"})
 	model, cmd := m.handleEditSessionKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), keyEnter)
 	m = model.(Model)
@@ -152,6 +157,7 @@ func TestEditSessionEnterSavesAndUnchangedEnterOnlyCloses(t *testing.T) {
 }
 
 func TestExecuteEditSessionSkipsTagsWhenTheRenameFails(t *testing.T) {
+	t.Parallel()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })

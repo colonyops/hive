@@ -142,7 +142,7 @@ run = "./scripts/check-migration-order.sh cmd/desktop/internal/app/data/queries/
 description = "Run the desktop slice: frontend vitest + the app's Go packages and the shared packages it runs on"
 depends = ["desktop:frontend:test"]
 env = { HIVE_DEFAULT_AGENT = "" }
-run = "go test ./cmd/desktop/... ./internal/... ./pkg/..."
+run = "scripts/gotest.sh ./cmd/desktop/... ./internal/... ./pkg/..."
 
 ["desktop:e2e"]
 description = "Run desktop e2e tests in the pinned Docker/Playwright environment"

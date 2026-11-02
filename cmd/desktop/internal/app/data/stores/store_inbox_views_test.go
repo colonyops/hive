@@ -19,6 +19,7 @@ func itemIDs(items []InboxItem) []int64 {
 }
 
 func TestInboxItemStore_MarkRead(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
@@ -100,6 +101,7 @@ func TestInboxItemStore_MarkRead(t *testing.T) {
 }
 
 func TestInboxItemStore_FeedViewsTriageAndCounts(t *testing.T) {
+	t.Parallel()
 	st, db := openTestStores(t)
 	ctx := t.Context()
 

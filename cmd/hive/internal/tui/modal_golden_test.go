@@ -25,6 +25,7 @@ const dangerMessage = "This session has work that will be permanently lost:\n\n 
 
 // TestModal_Dangerous_Empty tests the dangerous modal before any text is typed.
 func TestModal_Dangerous_Empty(t *testing.T) {
+	t.Parallel()
 	m := NewDangerousModal("Delete Session?", dangerMessage, "delete")
 	output := terminal.StripANSI(m.render())
 	golden.RequireEqual(t, []byte(output))
@@ -32,6 +33,7 @@ func TestModal_Dangerous_Empty(t *testing.T) {
 
 // TestModal_Dangerous_Partial tests the dangerous modal with partial input ("del").
 func TestModal_Dangerous_Partial(t *testing.T) {
+	t.Parallel()
 	m := NewDangerousModal("Delete Session?", dangerMessage, "delete")
 	for _, ch := range "del" {
 		m.AddChar(string(ch))
@@ -42,6 +44,7 @@ func TestModal_Dangerous_Partial(t *testing.T) {
 
 // TestModal_Dangerous_Ready tests the dangerous modal when the full word is typed.
 func TestModal_Dangerous_Ready(t *testing.T) {
+	t.Parallel()
 	m := NewDangerousModal("Delete Session?", dangerMessage, "delete")
 	for _, ch := range "delete" {
 		m.AddChar(string(ch))
@@ -52,6 +55,7 @@ func TestModal_Dangerous_Ready(t *testing.T) {
 
 // TestModal_Dangerous_OnlyUncommitted tests with only uncommitted changes risk.
 func TestModal_Dangerous_OnlyUncommitted(t *testing.T) {
+	t.Parallel()
 	m := NewDangerousModal("Delete Session?",
 		"This session has work that will be permanently lost:\n\n  • Uncommitted changes",
 		"delete",
@@ -62,6 +66,7 @@ func TestModal_Dangerous_OnlyUncommitted(t *testing.T) {
 
 // TestModal_Dangerous_Recycle tests the dangerous modal for a recycle action.
 func TestModal_Dangerous_Recycle(t *testing.T) {
+	t.Parallel()
 	m := NewDangerousModal("Recycle Session?", dangerMessage, "recycle")
 	output := terminal.StripANSI(m.render())
 	golden.RequireEqual(t, []byte(output))
@@ -69,6 +74,7 @@ func TestModal_Dangerous_Recycle(t *testing.T) {
 
 // TestModal_Normal tests the standard (non-dangerous) confirm modal.
 func TestModal_Normal(t *testing.T) {
+	t.Parallel()
 	m := NewModal("Confirm", "Permanently delete 3 recycled session(s)?")
 	output := terminal.StripANSI(m.render())
 	golden.RequireEqual(t, []byte(output))

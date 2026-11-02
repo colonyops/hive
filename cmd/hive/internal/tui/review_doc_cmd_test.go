@@ -19,6 +19,7 @@ import (
 )
 
 func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
+	t.Parallel()
 	tb := testbus.New(t)
 
 	var received atomic.Int32
@@ -46,6 +47,7 @@ func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
 }
 
 func TestHiveDocReviewCmd_Execute(t *testing.T) {
+	t.Parallel()
 	// Create a mock model with review view
 	docs := []review.Document{
 		{
@@ -83,6 +85,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 }
 
 func TestOpenDocument(t *testing.T) {
+	t.Parallel()
 	spaceDir := t.TempDir()
 	unlisted := filepath.Join(spaceDir, "notes", "new.md")
 	require.NoError(t, os.MkdirAll(filepath.Dir(unlisted), 0o755))
@@ -133,6 +136,7 @@ func TestOpenDocument(t *testing.T) {
 // TestOpenDocument_SuffixMatch covers todo URIs relative to the repo root
 // ("review://.hive/plans/doc.md") with no symlink name configured.
 func TestOpenDocument_SuffixMatch(t *testing.T) {
+	t.Parallel()
 	docs := []review.Document{
 		{
 			Path:    "/real/context/owner/repo/plans/doc1.md",
@@ -192,6 +196,7 @@ func TestOpenDocument_SuffixMatch(t *testing.T) {
 }
 
 func TestResolveReviewURI(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{DataDir: "/data"}
 	cfg.Context.SymlinkName = ".hive"
 

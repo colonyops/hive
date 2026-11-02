@@ -17,6 +17,7 @@ func requireUnixMilliNow(t *testing.T, timestamp, before, after int64) {
 }
 
 func TestEventLogWritesUseUnixMilliseconds(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	before := time.Now().UnixMilli()
@@ -39,6 +40,7 @@ func TestEventLogWritesUseUnixMilliseconds(t *testing.T) {
 }
 
 func TestCommitWritesUseUnixMilliseconds(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 	before := time.Now().UnixMilli()
@@ -65,6 +67,7 @@ func TestCommitWritesUseUnixMilliseconds(t *testing.T) {
 }
 
 func TestConfirmOutputCommandWritesUnixMilliseconds(t *testing.T) {
+	t.Parallel()
 	st, _ := openTestStores(t)
 	before := time.Now().UnixMilli()
 	command, created, err := st.OutputCommands.Confirm(t.Context(), "action-a", "item-1", []byte(`{}`), models.ItemRef{}, "claim")

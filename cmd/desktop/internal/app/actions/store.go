@@ -41,9 +41,12 @@ type ActionStore struct {
 	launchers []Launcher
 	err       error
 	usage     ActionUsageChecker
+	fs        actionFileOps
 }
 
-func NewActionStore(path string) *ActionStore { return &ActionStore{path: path} }
+func NewActionStore(path string) *ActionStore {
+	return &ActionStore{path: path, fs: defaultActionFileOps()}
+}
 
 // usageChecker returns a stable checker reference without keeping the action
 // lock while it may query FlowStore. Delete deliberately treats its result as
@@ -477,7 +480,7 @@ func (s *ActionStore) writeDocumentLocked(doc *yaml.Node) error {
 	if _, err := parseCatalog(data); err != nil {
 		return fmt.Errorf("validate action change: %w", err)
 	}
-	if err := atomicWrite(s.path, data); err != nil {
+	if err := atomicWrite(s.fs, s.path, data); err != nil {
 		if _, ok := errors.AsType[*installedWriteError](err); ok {
 			// Rename already made the valid candidate visible. Reload despite a
 			// durability-sync error so this store never keeps serving stale data.
@@ -623,7 +626,7 @@ func inputsNode(specs []InputSpec) *yaml.Node {
 
 // actionFileOps isolates filesystem failures that cannot be reliably induced
 // with permissions (especially under root or on platform-specific filesystems).
-// It is unexported and only replaced by package tests.
+// A store holds its own set, which only package tests replace.
 type actionFileOps struct {
 	mkdirAll   func(string, os.FileMode) error
 	createTemp func(string, string) (*os.File, error)
@@ -648,8 +651,6 @@ func defaultActionFileOps() actionFileOps {
 	}
 }
 
-var actionFS = defaultActionFileOps()
-
 // installedWriteError marks an error after rename installed the target. Callers
 // must reload state even though reporting the directory-sync failure.
 type installedWriteError struct{ err error }
@@ -657,36 +658,36 @@ type installedWriteError struct{ err error }
 func (e *installedWriteError) Error() string { return e.err.Error() }
 func (e *installedWriteError) Unwrap() error { return e.err }
 
-func atomicWrite(path string, data []byte) error {
+func atomicWrite(fs actionFileOps, path string, data []byte) error {
 	dir := filepath.Dir(path)
-	if err := actionFS.mkdirAll(dir, 0o700); err != nil {
+	if err := fs.mkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create actions directory: %w", err)
 	}
-	f, err := actionFS.createTemp(dir, ".actions-*")
+	f, err := fs.createTemp(dir, ".actions-*")
 	if err != nil {
 		return fmt.Errorf("create actions temp: %w", err)
 	}
 	tmp := f.Name()
-	defer func() { _ = actionFS.remove(tmp) }()
-	if err = actionFS.chmod(f, 0o600); err == nil {
-		_, err = actionFS.write(f, data)
+	defer func() { _ = fs.remove(tmp) }()
+	if err = fs.chmod(f, 0o600); err == nil {
+		_, err = fs.write(f, data)
 	}
 	if err == nil {
-		err = actionFS.sync(f)
+		err = fs.sync(f)
 	}
-	if closeErr := actionFS.close(f); err == nil {
+	if closeErr := fs.close(f); err == nil {
 		err = closeErr
 	}
 	if err != nil {
 		return fmt.Errorf("write actions temp: %w", err)
 	}
-	if err := actionFS.rename(tmp, path); err != nil {
+	if err := fs.rename(tmp, path); err != nil {
 		return fmt.Errorf("install actions: %w", err)
 	}
-	d, err := actionFS.open(dir)
+	d, err := fs.open(dir)
 	if err == nil {
-		err = actionFS.sync(d)
-		closeErr := actionFS.close(d)
+		err = fs.sync(d)
+		closeErr := fs.close(d)
 		if err == nil {
 			err = closeErr
 		}

@@ -318,6 +318,7 @@ func (g gatedSource) Produce(ctx context.Context, _ func(Msg) error) error {
 }
 
 func TestProducer_Tick_DrainsSourcesConcurrentlyUpToTheCap(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		db := openTestPipelineDB(t)
 		var inFlight atomic.Int32
@@ -367,6 +368,7 @@ func (g *gatedWrites) AppendSnapshot(ctx context.Context, topic, kind, scope str
 }
 
 func TestProducer_Tick_ConcurrentDrainsWriteOneAtATime(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		byID := map[string]connector.PullSource{}
 		for i := range drainConcurrency {
@@ -526,6 +528,7 @@ func TestProducer_PrefetchFailureStillDrains(t *testing.T) {
 }
 
 func TestProducer_StartStop(t *testing.T) {
+	t.Parallel()
 	// The poll loop is real-time timed (a ticker), so a wall-clock version of
 	// this — sleep 50ms and hope the 10ms ticker fired — flakes under CI
 	// scheduling load (wakeCount can still be 0). synctest runs the loop on a

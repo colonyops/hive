@@ -132,6 +132,7 @@ func startupSpec() multiplexer.SessionSpec {
 }
 
 func TestCreateSessionReportsCommandThatExitsDuringStartup(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{listPanes: func(int) string { return "%0|1|127|\n%1|0||\n" }, capture: "sh: missing-agent: command not found\n  detail\n\n"}
 	spec := startupSpec()
 	spec.Windows[0].Command = "missing-agent --prompt hi"
@@ -154,6 +155,7 @@ func TestCreateSessionReportsCommandThatExitsDuringStartup(t *testing.T) {
 }
 
 func TestCreateSessionReportsFailedSplitCommand(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{listPanes: func(int) string { return "%0|0||\n%1|1|1|\n" }}
 	spec := startupSpec()
 	spec.Windows[0] = multiplexer.WindowSpec{Name: "editor", Panes: []multiplexer.PaneSpec{{}, {Command: "missing-editor", Split: multiplexer.SplitHorizontal}}}
@@ -169,6 +171,7 @@ func TestCreateSessionReportsFailedSplitCommand(t *testing.T) {
 }
 
 func TestCreateSessionHealthyStartupRestoresEachPaneOption(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{options: map[string]string{"%0:remain-on-exit": "failed", "%0:remain-on-exit-format": ""}}
 	spec := startupSpec()
 	spec.Windows[0].Panes = []multiplexer.PaneSpec{{Command: "first"}, {Command: "second"}}
@@ -181,6 +184,7 @@ func TestCreateSessionHealthyStartupRestoresEachPaneOption(t *testing.T) {
 }
 
 func TestPaneThatExitsAfterRestoreDoesNotRollBack(t *testing.T) {
+	t.Parallel()
 	restored := false
 	runner := &startupRunner{
 		listPanes: func(int) string {
@@ -204,6 +208,7 @@ func TestPaneThatExitsAfterRestoreDoesNotRollBack(t *testing.T) {
 }
 
 func TestAddWindowsSelectsLastWindowWithoutFocus(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{}
 	windows := []multiplexer.WindowSpec{{Name: "one", Command: "a"}, {Name: "two", Command: "b"}}
 	require.NoError(t, newStartupClient(runner, 0).AddWindows(t.Context(), multiplexer.Target{Session: "work"}, windows))
@@ -216,6 +221,7 @@ func TestAddWindowsSelectsLastWindowWithoutFocus(t *testing.T) {
 }
 
 func TestTruncatedOutputKeepsTextAroundInvalidBytes(t *testing.T) {
+	t.Parallel()
 	tail := strings.Repeat("a", maxStartupOutput-6) + "\xff" + "tail"
 	output := "xx" + "é" + tail
 	runner := &startupRunner{listPanes: func(int) string { return "%0|1|1|\n" }, capture: output}
@@ -227,6 +233,7 @@ func TestTruncatedOutputKeepsTextAroundInvalidBytes(t *testing.T) {
 }
 
 func TestCreateSessionWaitsForExitMetadata(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		runner := &startupRunner{listPanes: func(call int) string {
 			if call == 1 {
@@ -241,6 +248,7 @@ func TestCreateSessionWaitsForExitMetadata(t *testing.T) {
 }
 
 func TestCreateSessionObservesDefaultShellWithoutRespawningIt(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{}
 	spec := startupSpec()
 	spec.Windows[0].Command = ""
@@ -250,6 +258,7 @@ func TestCreateSessionObservesDefaultShellWithoutRespawningIt(t *testing.T) {
 }
 
 func TestSuccessfulCommandDoesNotRollBackLivePanes(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{listPanes: func(int) string { return "%0|1|0|\n%1|0||\n" }}
 	spec := startupSpec()
 	spec.Windows = append(spec.Windows, multiplexer.WindowSpec{Name: "shell"})
@@ -265,6 +274,7 @@ func (absentSessionError) Error() string { return "session does not exist" }
 func (absentSessionError) ExitCode() int { return 1 }
 
 func TestEntirelyFiniteLaunchDoesNotAttach(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{listPanes: func(int) string { return "%0|1|0|\n" }, failure: func(_ context.Context, args []string) error {
 		if args[0] == "has-session" {
 			return absentSessionError{}
@@ -282,6 +292,7 @@ func TestEntirelyFiniteLaunchDoesNotAttach(t *testing.T) {
 }
 
 func TestLaunchFailureRollsBackEveryMutationBoundary(t *testing.T) {
+	t.Parallel()
 	for _, boundary := range []string{"mark-window", "show-options", "arm-format", "arm-retention", "respawn-pane", "list-panes", "restore-option", "select-window", "clear-marker"} {
 		t.Run(boundary, func(t *testing.T) {
 			runner := &startupRunner{failure: func(_ context.Context, args []string) error {
@@ -302,6 +313,7 @@ func TestLaunchFailureRollsBackEveryMutationBoundary(t *testing.T) {
 }
 
 func TestAddWindowsFailurePreservesExistingSession(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{listPanes: func(int) string { return "%0|0||\n%1|1|1|\n" }}
 	err := newStartupClient(runner, 0).AddWindows(t.Context(), multiplexer.Target{Session: "work"}, []multiplexer.WindowSpec{{Name: "healthy", Command: "agent"}, {Name: "failed", Command: "bad"}})
 	require.ErrorIs(t, err, ErrCommandExited)
@@ -311,6 +323,7 @@ func TestAddWindowsFailurePreservesExistingSession(t *testing.T) {
 }
 
 func TestCleanupFailureDoesNotReplaceCommandFailure(t *testing.T) {
+	t.Parallel()
 	cleanupErr := errors.New("cleanup failure")
 	runner := &startupRunner{listPanes: func(int) string { return "%0|1|127|\n" }, failure: func(_ context.Context, args []string) error {
 		if args[0] == "kill-session" {
@@ -328,6 +341,7 @@ func TestCleanupFailureDoesNotReplaceCommandFailure(t *testing.T) {
 }
 
 func TestCancellationUsesIndependentBoundedCleanup(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	var cleaned bool
@@ -350,6 +364,7 @@ func TestCancellationUsesIndependentBoundedCleanup(t *testing.T) {
 }
 
 func TestStartupTerminationDetails(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, row string
 		signal    string
@@ -371,6 +386,7 @@ func TestStartupTerminationDetails(t *testing.T) {
 }
 
 func TestCaptureFailurePreservesExitAndUserOutput(t *testing.T) {
+	t.Parallel()
 	runner := &startupRunner{listPanes: func(int) string { return "%0|1|1|\n" }, failure: func(_ context.Context, args []string) error {
 		if args[0] == "capture-pane" {
 			return assert.AnError

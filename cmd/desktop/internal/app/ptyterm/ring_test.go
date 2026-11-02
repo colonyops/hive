@@ -9,6 +9,7 @@ import (
 )
 
 func TestRingKeepsEverythingBelowTheCap(t *testing.T) {
+	t.Parallel()
 	r := newRing(16)
 	_, _ = r.Write([]byte("abc"))
 	_, _ = r.Write([]byte("def"))
@@ -16,6 +17,7 @@ func TestRingKeepsEverythingBelowTheCap(t *testing.T) {
 }
 
 func TestRingKeepsTheTailOnceFull(t *testing.T) {
+	t.Parallel()
 	r := newRing(8)
 	_, _ = r.Write([]byte("0123456789"))
 	require.Equal(t, "23456789", string(r.Snapshot()))
@@ -25,6 +27,7 @@ func TestRingKeepsTheTailOnceFull(t *testing.T) {
 }
 
 func TestRingWrapsAcrossTheEnd(t *testing.T) {
+	t.Parallel()
 	r := newRing(6)
 	_, _ = r.Write([]byte("abcd"))
 	_, _ = r.Write([]byte("efgh"))
@@ -34,6 +37,7 @@ func TestRingWrapsAcrossTheEnd(t *testing.T) {
 // The wrap arithmetic is where a ring goes wrong, so it is checked against the
 // definition — the last max bytes written — over random chunk sizes.
 func TestRingMatchesTheTailOfEverythingWritten(t *testing.T) {
+	t.Parallel()
 	const max = 64
 	r := newRing(max)
 	rng := rand.New(rand.NewSource(1))

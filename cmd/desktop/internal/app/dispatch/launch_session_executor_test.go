@@ -61,6 +61,7 @@ func (f *fakeSessionCreator) CreateFromRequest(_ context.Context, req sessionsvc
 }
 
 func TestLaunchSessionExecutor_RendersPromptAndRepoTemplates(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 
@@ -91,6 +92,7 @@ func TestLaunchSessionExecutor_RendersPromptAndRepoTemplates(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_ItemRemoteRendersTheItemsCloneURL(t *testing.T) {
+	t.Parallel()
 	action := actions.Action{
 		ID: "spawn-review", Type: "launch-session",
 		Config: &actions.LaunchSessionConfig{PromptTemplate: "hi", RepoTemplate: "{{ .ItemRemote }}"},
@@ -125,6 +127,7 @@ func TestLaunchSessionExecutor_ItemRemoteRendersTheItemsCloneURL(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_RerunUsesUniqueSessionName(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action := actions.Action{ID: "spawn-review", Type: "launch-session", Config: &actions.LaunchSessionConfig{
@@ -137,6 +140,7 @@ func TestLaunchSessionExecutor_RerunUsesUniqueSessionName(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_ConfiguredRepoTemplateIgnoresInteractiveOverride(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action := actions.Action{ID: "spawn-review", Type: "launch-session", Config: &actions.LaunchSessionConfig{
@@ -150,6 +154,7 @@ func TestLaunchSessionExecutor_ConfiguredRepoTemplateIgnoresInteractiveOverride(
 }
 
 func TestLaunchSessionExecutor_NoRepoTemplate_LeavesRepoEmpty(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 
@@ -167,6 +172,7 @@ func TestLaunchSessionExecutor_NoRepoTemplate_LeavesRepoEmpty(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_GeneratedName(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action := actions.Action{ID: "spawn-review", Type: "launch-session", Config: &LaunchNodeActionConfig{
@@ -182,6 +188,7 @@ func TestLaunchSessionExecutor_GeneratedName(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_LaunchesConfiguredWorkspace(t *testing.T) {
+	t.Parallel()
 	repositories := &fakeSessionLauncher{}
 	workspaces := &fakeWorkspaceSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), repositories, workspaces, hostEnvironment{})
@@ -201,6 +208,7 @@ func TestLaunchSessionExecutor_LaunchesConfiguredWorkspace(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_LaunchesInteractiveWorkspace(t *testing.T) {
+	t.Parallel()
 	workspaces := &fakeWorkspaceSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), nil, workspaces, hostEnvironment{})
 	action := actions.Action{ID: "triage", Type: "launch-session", Config: &actions.LaunchSessionConfig{PromptTemplate: "Triage"}}
@@ -213,6 +221,7 @@ func TestLaunchSessionExecutor_LaunchesInteractiveWorkspace(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_InteractiveTargetMustBeExclusive(t *testing.T) {
+	t.Parallel()
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), &fakeSessionLauncher{}, &fakeWorkspaceSessionLauncher{}, hostEnvironment{})
 	action := actions.Action{ID: "triage", Type: "launch-session", Config: &actions.LaunchSessionConfig{PromptTemplate: "Triage"}}
 	data := OutputData{Key: "alert-1", Payload: map[string]any{}}
@@ -229,6 +238,7 @@ func TestLaunchSessionExecutor_InteractiveTargetMustBeExclusive(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_PropagatesLaunchFailure(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{err: errors.New("clone failed")}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action := actions.Action{ID: "spawn-review", Type: "launch-session", Config: &actions.LaunchSessionConfig{PromptTemplate: "hi"}}
@@ -239,6 +249,7 @@ func TestLaunchSessionExecutor_PropagatesLaunchFailure(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_WrongConfigType_IsError(t *testing.T) {
+	t.Parallel()
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), &fakeSessionLauncher{}, nil, hostEnvironment{})
 	action := actions.Action{ID: "x", Type: "launch-session", Config: &actions.ShellConfig{}}
 
@@ -247,6 +258,7 @@ func TestLaunchSessionExecutor_WrongConfigType_IsError(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_NilLauncherIsError(t *testing.T) {
+	t.Parallel()
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), nil, nil, hostEnvironment{})
 	for name, cfg := range map[string]*actions.LaunchSessionConfig{
 		"repository": {RepoTemplate: "repo", PromptTemplate: "hi"},
@@ -264,6 +276,7 @@ func repositoryLauncher(creator SessionCreator, links ItemSessionLinker) *Reposi
 }
 
 func TestLaunchSessionExecutor_RendersTagTemplates(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action := actions.Action{ID: "spawn", Type: "launch-session", Config: &actions.LaunchSessionConfig{
@@ -279,6 +292,7 @@ func TestLaunchSessionExecutor_RendersTagTemplates(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_InvalidRenderedTagFailsTheLaunch(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action := actions.Action{ID: "spawn", Type: "launch-session", Config: &actions.LaunchSessionConfig{
@@ -291,6 +305,7 @@ func TestLaunchSessionExecutor_InvalidRenderedTagFailsTheLaunch(t *testing.T) {
 }
 
 func TestRepositoryLauncher_MapsRequestToSessionService(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	launcher := repositoryLauncher(creator, nil)
 
@@ -307,12 +322,14 @@ func TestRepositoryLauncher_MapsRequestToSessionService(t *testing.T) {
 }
 
 func TestRepositoryLauncher_PropagatesServiceFailure(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{err: errors.New("tmux unavailable")}
 	_, err := repositoryLauncher(creator, nil).LaunchSession(t.Context(), LaunchSessionRequest{Name: "review-pr-1"})
 	require.ErrorIs(t, err, creator.err)
 }
 
 func TestRepositoryLauncher_PassesOversizedPromptThroughTempFile(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	prompt := strings.Repeat("large prompt\n", promptfile.ThresholdBytes/13+1)
 
@@ -330,6 +347,7 @@ func TestRepositoryLauncher_PassesOversizedPromptThroughTempFile(t *testing.T) {
 }
 
 func TestRepositoryLauncher_RemovesPromptFileWhenLaunchFails(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{err: errors.New("tmux unavailable")}
 	prompt := strings.Repeat("x", promptfile.ThresholdBytes+1)
 
@@ -371,6 +389,7 @@ func (f *fakeItemSessionLinker) Link(_ context.Context, sessionID string, ref mo
 }
 
 func TestRepositoryLauncher_LinksTheCreatedSessionToItsItem(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	linker := &fakeItemSessionLinker{}
 	launcher := repositoryLauncher(creator, linker)
@@ -389,6 +408,7 @@ func TestRepositoryLauncher_LinksTheCreatedSessionToItsItem(t *testing.T) {
 // from a terminal target — must not produce a link, or every such session
 // would share one.
 func TestRepositoryLauncher_LinksOneCreatedSessionToEveryUniqueOrigin(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	linker := &fakeItemSessionLinker{}
 	launcher := repositoryLauncher(creator, linker)
@@ -402,6 +422,7 @@ func TestRepositoryLauncher_LinksOneCreatedSessionToEveryUniqueOrigin(t *testing
 }
 
 func TestRepositoryLauncher_LinksNothingWithoutAnOrigin(t *testing.T) {
+	t.Parallel()
 	creator := &fakeSessionCreator{}
 	linker := &fakeItemSessionLinker{}
 	launcher := repositoryLauncher(creator, linker)
@@ -415,6 +436,7 @@ func TestRepositoryLauncher_LinksNothingWithoutAnOrigin(t *testing.T) {
 // The session exists either way, so reporting the launch as failed would be a
 // lie — and would invite a retry that creates a second session.
 func TestRepositoryLauncher_ReportsSuccessWhenTheLinkCannotBeWritten(t *testing.T) {
+	t.Parallel()
 	linker := &fakeItemSessionLinker{err: errors.New("disk full")}
 	launcher := repositoryLauncher(&fakeSessionCreator{}, linker)
 	origins := []models.ItemRef{
@@ -431,6 +453,7 @@ func TestRepositoryLauncher_ReportsSuccessWhenTheLinkCannotBeWritten(t *testing.
 // The flow-fired path: a command the engine enqueued carries the item it was
 // routed from, and the executor hands it to the launcher.
 func TestLaunchSessionExecutor_CarriesTheCommandsOriginToTheLauncher(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action := actions.Action{ID: "spawn-review", Type: "launch-session", Config: &actions.LaunchSessionConfig{
@@ -468,6 +491,7 @@ func reviewItem() OutputData {
 }
 
 func TestLaunchSessionExecutor_PostHookRunsInTheNewCheckout(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	launcher := &fakeSessionLauncher{path: dir}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
@@ -491,6 +515,7 @@ func TestLaunchSessionExecutor_PostHookRunsInTheNewCheckout(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_FailingPostHookKeepsTheLaunchSuccessful(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{path: t.TempDir()}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 
@@ -506,6 +531,7 @@ func TestLaunchSessionExecutor_FailingPostHookKeepsTheLaunchSuccessful(t *testin
 }
 
 func TestLaunchSessionExecutor_PostHookTimeoutDoesNotFailTheLaunch(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{path: t.TempDir()}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 
@@ -518,6 +544,7 @@ func TestLaunchSessionExecutor_PostHookTimeoutDoesNotFailTheLaunch(t *testing.T)
 }
 
 func TestLaunchSessionExecutor_PostHookTemplateErrorIsReportedNotReturned(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{path: t.TempDir()}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 
@@ -530,6 +557,7 @@ func TestLaunchSessionExecutor_PostHookTemplateErrorIsReportedNotReturned(t *tes
 }
 
 func TestLaunchSessionExecutor_NoPostHookRunsNothing(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{path: t.TempDir()}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 
@@ -539,6 +567,7 @@ func TestLaunchSessionExecutor_NoPostHookRunsNothing(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_RendersTheNameTemplate(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action := actions.Action{ID: "launch:triage/review", Type: "launch-session", Config: &LaunchNodeActionConfig{
@@ -553,6 +582,7 @@ func TestLaunchSessionExecutor_RendersTheNameTemplate(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_BlankNameTemplateIsError(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action := actions.Action{ID: "launch:triage/review", Type: "launch-session", Config: &LaunchNodeActionConfig{
@@ -566,6 +596,7 @@ func TestLaunchSessionExecutor_BlankNameTemplateIsError(t *testing.T) {
 }
 
 func TestLaunchSessionExecutor_CarriesTheCommandsOriginToTheWorkspaceLauncher(t *testing.T) {
+	t.Parallel()
 	workspaces := &fakeWorkspaceSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), nil, workspaces, hostEnvironment{})
 	action := actions.Action{ID: "triage", Type: "launch-session", Config: &actions.LaunchSessionConfig{
@@ -582,6 +613,7 @@ func TestLaunchSessionExecutor_CarriesTheCommandsOriginToTheWorkspaceLauncher(t 
 }
 
 func TestLaunchSessionExecutor_RunsALaunchNodeProjection(t *testing.T) {
+	t.Parallel()
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 	action, ok := NewFlowActions(launchFlows(), nil).Get(models.LaunchActionID("triage/review"))

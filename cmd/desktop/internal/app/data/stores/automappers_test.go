@@ -9,6 +9,7 @@ import (
 )
 
 func TestMapFunc_Slice(t *testing.T) {
+	t.Parallel()
 	toString := MapFunc[int, string](func(v int) string {
 		if v == 0 {
 			return "zero"
@@ -20,12 +21,14 @@ func TestMapFunc_Slice(t *testing.T) {
 }
 
 func TestMapFunc_Slice_Empty(t *testing.T) {
+	t.Parallel()
 	identity := MapFunc[int, int](func(v int) int { return v })
 	got := identity.Slice(nil)
 	assert.Empty(t, got)
 }
 
 func TestMapFunc_Err(t *testing.T) {
+	t.Parallel()
 	double := MapFunc[int, int](func(v int) int { return v * 2 })
 
 	got, err := double.Err(3, nil)
@@ -34,6 +37,7 @@ func TestMapFunc_Err(t *testing.T) {
 }
 
 func TestMapFunc_Err_PropagatesError(t *testing.T) {
+	t.Parallel()
 	double := MapFunc[int, int](func(v int) int { return v * 2 })
 	wantErr := errors.New("row lookup failed")
 
@@ -43,6 +47,7 @@ func TestMapFunc_Err_PropagatesError(t *testing.T) {
 }
 
 func TestMapFunc_SliceErr(t *testing.T) {
+	t.Parallel()
 	double := MapFunc[int, int](func(v int) int { return v * 2 })
 
 	got, err := double.SliceErr([]int{1, 2, 3}, nil)
@@ -51,6 +56,7 @@ func TestMapFunc_SliceErr(t *testing.T) {
 }
 
 func TestMapFunc_SliceErr_PropagatesError(t *testing.T) {
+	t.Parallel()
 	double := MapFunc[int, int](func(v int) int { return v * 2 })
 	wantErr := errors.New("query failed")
 

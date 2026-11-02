@@ -15,6 +15,7 @@ import (
 )
 
 func TestActionUsageCheckerBlocksLoadedFlowsAndNonterminalQueueOnly(t *testing.T) {
+	t.Parallel()
 	actionStore := actions.NewActionStore(filepath.Join(t.TempDir(), "actions.yml"))
 	_, err := actionStore.Create(serviceAction("used"))
 	require.NoError(t, err)

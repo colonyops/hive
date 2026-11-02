@@ -82,6 +82,7 @@ func newTestLoop(clock *fakeClock, fetch *fakeFetch) *statusLoop {
 }
 
 func TestStatusLoopServesManyCallersFromOneFetchPerTick(t *testing.T) {
+	t.Parallel()
 	clock := &fakeClock{now: time.Unix(1000, 0)}
 	fetch := &fakeFetch{}
 	loop := newTestLoop(clock, fetch)
@@ -99,6 +100,7 @@ func TestStatusLoopServesManyCallersFromOneFetchPerTick(t *testing.T) {
 }
 
 func TestStatusLoopAnswersLoadingBeforeTheFirstTick(t *testing.T) {
+	t.Parallel()
 	loop := newTestLoop(&fakeClock{now: time.Unix(1000, 0)}, &fakeFetch{})
 
 	got := loop.snapshot([]*session.Session{&active, &recycled}, nil)
@@ -111,6 +113,7 @@ func TestStatusLoopAnswersLoadingBeforeTheFirstTick(t *testing.T) {
 }
 
 func TestStatusLoopAddsANewRootOnTheNextTick(t *testing.T) {
+	t.Parallel()
 	clock := &fakeClock{now: time.Unix(1000, 0)}
 	fetch := &fakeFetch{}
 	loop := newTestLoop(clock, fetch)
@@ -127,6 +130,7 @@ func TestStatusLoopAddsANewRootOnTheNextTick(t *testing.T) {
 }
 
 func TestStatusLoopExpiresRootsNoClientAsksAbout(t *testing.T) {
+	t.Parallel()
 	clock := &fakeClock{now: time.Unix(1000, 0)}
 	fetch := &fakeFetch{}
 	loop := newTestLoop(clock, fetch)
@@ -141,6 +145,7 @@ func TestStatusLoopExpiresRootsNoClientAsksAbout(t *testing.T) {
 }
 
 func TestStatusLoopPausesWhenIdleAndResumesOnARequest(t *testing.T) {
+	t.Parallel()
 	clock := &fakeClock{now: time.Unix(1000, 0)}
 	fetch := &fakeFetch{}
 	loop := newTestLoop(clock, fetch)
@@ -163,6 +168,7 @@ func TestStatusLoopPausesWhenIdleAndResumesOnARequest(t *testing.T) {
 }
 
 func TestStatusLoopRunWakesFromAPause(t *testing.T) {
+	t.Parallel()
 	clock := &fakeClock{now: time.Unix(1000, 0)}
 	fetch := &fakeFetch{}
 	loop := newTestLoop(clock, fetch)
@@ -187,12 +193,14 @@ func TestStatusLoopRunWakesFromAPause(t *testing.T) {
 }
 
 func TestStatusLoopAnswersNothingWithoutAStatusSource(t *testing.T) {
+	t.Parallel()
 	loop := newTestLoop(&fakeClock{now: time.Unix(1000, 0)}, &fakeFetch{})
 	loop.available = func() bool { return false }
 	assert.Empty(t, loop.snapshot([]*session.Session{&active}, nil))
 }
 
 func TestStatusLoopKeepsTheLastSnapshotWhenListingFails(t *testing.T) {
+	t.Parallel()
 	clock := &fakeClock{now: time.Unix(1000, 0)}
 	fetch := &fakeFetch{}
 	loop := newTestLoop(clock, fetch)

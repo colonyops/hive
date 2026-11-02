@@ -30,6 +30,7 @@ const calibrationSequencesDir = "../../../../test/calibration/sequences"
 // equals that sequence's sidecar exactly. A tuning change that breaks any
 // one of these must fail this test before it can land.
 func TestCalibrationCorpus_ReplayMatchesExpected(t *testing.T) {
+	t.Parallel()
 	entries, err := os.ReadDir(calibrationSequencesDir)
 	require.NoError(t, err)
 

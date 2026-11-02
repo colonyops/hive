@@ -16,6 +16,7 @@ import (
 )
 
 func TestProjectSessionStatusesMapsWindowsToStableIDs(t *testing.T) {
+	t.Parallel()
 	active := []*session.Session{
 		{ID: "s1", Slug: "one", State: session.StateActive, Metadata: map[string]string{session.MetaTmuxSession: "actual-one"}},
 		{ID: "s2", Slug: "two", State: session.StateActive},
@@ -47,6 +48,7 @@ func TestProjectSessionStatusesMapsWindowsToStableIDs(t *testing.T) {
 }
 
 func TestProjectSessionStatusesFallsBackToHiveLivenessWithoutWindows(t *testing.T) {
+	t.Parallel()
 	active := []*session.Session{
 		{ID: "s1", Slug: "one", State: session.StateActive},
 		{ID: "s2", Slug: "two", State: session.StateActive},

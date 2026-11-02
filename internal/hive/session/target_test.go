@@ -8,6 +8,7 @@ import (
 )
 
 func TestSessionTarget(t *testing.T) {
+	t.Parallel()
 	sess := session.Session{Name: "Display Name", Slug: "display-name"}
 	assert.Equal(t, "display-name", Target(sess).Session)
 

@@ -15,6 +15,7 @@ import (
 )
 
 func TestGithubClassifierTerminalAndReopenTransitions(t *testing.T) {
+	t.Parallel()
 	classifier := classifier{}
 	previous := models.Observation{ExternalID: "o/r#1", Payload: []byte(`{"state":"open","updatedAt":1}`)}
 	closed := models.Observation{ExternalID: "o/r#1", Payload: []byte(`{"state":"closed","updatedAt":2}`)}
@@ -39,6 +40,7 @@ func (s *stubTerminalConfirmer) ConfirmTerminal(_ context.Context, refs []feed.A
 }
 
 func TestAbsenceConfirmer_KeysVerdictsByExternalID(t *testing.T) {
+	t.Parallel()
 	mustPayload := func(item feed.Item) []byte {
 		b, err := json.Marshal(item)
 		require.NoError(t, err)
@@ -88,6 +90,7 @@ func TestAbsenceConfirmer_KeysVerdictsByExternalID(t *testing.T) {
 }
 
 func TestGithubClassifierDescribesObservedActivity(t *testing.T) {
+	t.Parallel()
 	classifier := classifier{}
 	tests := []struct {
 		name, previous, current, kind, summary string

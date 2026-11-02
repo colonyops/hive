@@ -30,6 +30,7 @@ func repoPickerNavigate(p *RepoPicker, n int) *RepoPicker {
 // TestRepoPicker_CursorVisibleInView verifies that the selection indicator (▸)
 // is always present in the rendered view regardless of list length and cursor position.
 func TestRepoPicker_CursorVisibleInView(t *testing.T) {
+	t.Parallel()
 	// height=30 → maxVisible = min(len, max(30/3,5)) = min(len, 10)
 	// With 15 repos, navigating past index 9 exposes the bug.
 	repos := makeRepos(15)
@@ -50,6 +51,7 @@ func TestRepoPicker_CursorVisibleInView(t *testing.T) {
 
 // TestRepoPicker_SelectedItemIsVisible checks that the selected item's text appears in the view.
 func TestRepoPicker_SelectedItemIsVisible(t *testing.T) {
+	t.Parallel()
 	repos := []string{
 		"alpha", "beta", "gamma", "delta", "epsilon",
 		"zeta", "eta", "theta", "iota", "kappa",
@@ -68,6 +70,7 @@ func TestRepoPicker_SelectedItemIsVisible(t *testing.T) {
 
 // TestRepoPicker_NavigationBounds ensures cursor never goes below 0 or above len-1.
 func TestRepoPicker_NavigationBounds(t *testing.T) {
+	t.Parallel()
 	repos := makeRepos(3)
 	p := NewRepoPicker(repos, "", 80, 30)
 
@@ -83,6 +86,7 @@ func TestRepoPicker_NavigationBounds(t *testing.T) {
 // TestRepoPicker_ScrollOffset_TracksWithCursor tests that scrollOffset advances when
 // cursor moves down past the visible window and retreats when cursor moves back up.
 func TestRepoPicker_ScrollOffset_TracksWithCursor(t *testing.T) {
+	t.Parallel()
 	repos := makeRepos(15)
 	p := NewRepoPicker(repos, "", 120, 30) // maxVisible=10
 

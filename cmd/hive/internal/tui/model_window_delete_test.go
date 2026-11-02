@@ -10,6 +10,7 @@ import (
 )
 
 func TestMaybeOverrideWindowDelete(t *testing.T) {
+	t.Parallel()
 	deleteAction := Action{
 		Type:      action.TypeDelete,
 		SessionID: "sess-1",

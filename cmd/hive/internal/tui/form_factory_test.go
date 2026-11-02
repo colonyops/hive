@@ -14,6 +14,7 @@ import (
 )
 
 func TestNewFormDialog(t *testing.T) {
+	t.Parallel()
 	testSessions := []session.Session{
 		{ID: "s1", Name: "alpha", State: session.StateActive},
 		{ID: "s2", Name: "beta", State: session.StateActive},

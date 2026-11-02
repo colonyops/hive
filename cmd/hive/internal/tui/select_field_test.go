@@ -8,6 +8,7 @@ import (
 )
 
 func TestSelectField(t *testing.T) {
+	t.Parallel()
 	items := []SelectItem{
 		{label: "alpha", value: 0},
 		{label: "beta", value: 1},

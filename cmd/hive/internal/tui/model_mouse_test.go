@@ -186,6 +186,7 @@ func newBaseMouseModel(t *testing.T) Model {
 // --- handleMouseClick tests ---
 
 func TestHandleMouseClick_NonLeftButton_NoOp(t *testing.T) {
+	t.Parallel()
 	m := newBaseMouseModel(t)
 	initialView := m.activeView
 
@@ -198,6 +199,7 @@ func TestHandleMouseClick_NonLeftButton_NoOp(t *testing.T) {
 }
 
 func TestHandleMouseClick_ModalActive_NoOp(t *testing.T) {
+	t.Parallel()
 	m := newBaseMouseModel(t)
 	m.state = stateConfirming // modal active
 	initialView := m.activeView
@@ -209,6 +211,7 @@ func TestHandleMouseClick_ModalActive_NoOp(t *testing.T) {
 }
 
 func TestHandleMouseClick_TopDivider_NoOp(t *testing.T) {
+	t.Parallel()
 	// Y=0 → topDivider, contentY = 0 - 3 = -3 < 0 → no-op
 	m := newBaseMouseModel(t)
 	initialView := m.activeView
@@ -220,6 +223,7 @@ func TestHandleMouseClick_TopDivider_NoOp(t *testing.T) {
 }
 
 func TestHandleMouseClick_TabBar_DelegatesTabClick(t *testing.T) {
+	t.Parallel()
 	// Y=1 is the tab bar; x=12 falls in "Messages" label → ViewMessages
 	m := newBaseMouseModel(t)
 
@@ -229,6 +233,7 @@ func TestHandleMouseClick_TabBar_DelegatesTabClick(t *testing.T) {
 }
 
 func TestHandleMouseClick_FirstClick_TracksPosition(t *testing.T) {
+	t.Parallel()
 	m := newBaseMouseModel(t)
 	require.True(t, m.lastClickTime.IsZero(), "lastClickTime should be zero initially")
 
@@ -241,6 +246,7 @@ func TestHandleMouseClick_FirstClick_TracksPosition(t *testing.T) {
 }
 
 func TestHandleMouseClick_ExpiredDoubleClick_NotDoubleClick(t *testing.T) {
+	t.Parallel()
 	// Set up a prior click more than 300ms ago at the same position.
 	m := newBaseMouseModel(t)
 	m.lastClickX = 3
@@ -259,6 +265,7 @@ func TestHandleMouseClick_ExpiredDoubleClick_NotDoubleClick(t *testing.T) {
 }
 
 func TestHandleMouseClick_DoubleClick_ResetsTracking(t *testing.T) {
+	t.Parallel()
 	// A double-click is within 300ms at the same cell.
 	// Because handleKeyMsg(Enter) on a quitting model short-circuits,
 	// we set m.quitting=true so the model exits cleanly without panicking.
@@ -288,6 +295,7 @@ func TestHandleMouseClick_DoubleClick_ResetsTracking(t *testing.T) {
 // (Store tab hidden when kvStore == nil and activeView != ViewStore)
 
 func TestHandleTabClick_Sessions(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		x    int
@@ -308,6 +316,7 @@ func TestHandleTabClick_Sessions(t *testing.T) {
 }
 
 func TestHandleTabClick_Messages(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		x    int
@@ -328,6 +337,7 @@ func TestHandleTabClick_Messages(t *testing.T) {
 }
 
 func TestHandleTabClick_Separator_NoOp(t *testing.T) {
+	t.Parallel()
 	// Separator " | " occupies x=9..11
 	for _, x := range []int{9, 10, 11} {
 		m := newBaseMouseModel(t)
@@ -340,6 +350,7 @@ func TestHandleTabClick_Separator_NoOp(t *testing.T) {
 }
 
 func TestHandleTabClick_PastAllLabels_NoOp(t *testing.T) {
+	t.Parallel()
 	// x=20 is past all labels (Sessions=8, sep=3, Messages=8 → total 19)
 	m := newBaseMouseModel(t)
 	initial := m.activeView
@@ -350,6 +361,7 @@ func TestHandleTabClick_PastAllLabels_NoOp(t *testing.T) {
 }
 
 func TestHandleTabClick_ZeroX_NoOp(t *testing.T) {
+	t.Parallel()
 	// x=0 is before the left margin (labels start at x=1)
 	m := newBaseMouseModel(t)
 	initial := m.activeView
@@ -362,6 +374,7 @@ func TestHandleTabClick_ZeroX_NoOp(t *testing.T) {
 // --- switchToView tests ---
 
 func TestSwitchToView_Sessions_NilCmd(t *testing.T) {
+	t.Parallel()
 	m := newBaseMouseModel(t)
 	m.activeView = ViewMessages
 
@@ -373,6 +386,7 @@ func TestSwitchToView_Sessions_NilCmd(t *testing.T) {
 }
 
 func TestSwitchToView_Messages_NilCmd(t *testing.T) {
+	t.Parallel()
 	m := newBaseMouseModel(t)
 
 	result, cmd := m.switchToView(ViewMessages)
@@ -383,6 +397,7 @@ func TestSwitchToView_Messages_NilCmd(t *testing.T) {
 }
 
 func TestSwitchToView_Store_NonNilCmd(t *testing.T) {
+	t.Parallel()
 	m := newBaseMouseModel(t)
 	// kvStore is nil, so loadKVKeys returns nil — but we can verify the branch fires
 	// by checking activeView and that the loadKVKeys path was taken (cmd is nil when kvStore==nil).
@@ -392,6 +407,7 @@ func TestSwitchToView_Store_NonNilCmd(t *testing.T) {
 }
 
 func TestSwitchToView_Tasks_ReturnsCmd(t *testing.T) {
+	t.Parallel()
 	m := newBaseMouseModel(t)
 	// tasksView is nil, so syncTasksRepoFromSessions returns nil and we fall
 	// through to the RefreshTasksMsg func. Verify cmd is non-nil.
@@ -407,6 +423,7 @@ func TestSwitchToView_Tasks_ReturnsCmd(t *testing.T) {
 }
 
 func TestSwitchToView_ResetsLastClickTime(t *testing.T) {
+	t.Parallel()
 	m := newBaseMouseModel(t)
 	m.lastClickTime = time.Now()
 
@@ -417,6 +434,7 @@ func TestSwitchToView_ResetsLastClickTime(t *testing.T) {
 }
 
 func TestSwitchToView_SessionsViewSetActive(t *testing.T) {
+	t.Parallel()
 	m := newBaseMouseModel(t)
 
 	// Switch to Sessions — sessionsView should become active.

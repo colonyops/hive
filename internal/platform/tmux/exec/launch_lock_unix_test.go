@@ -16,6 +16,7 @@ import (
 )
 
 func TestLaunchLockHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("HIVE_LAUNCH_LOCK_HELPER") != "1" {
 		return
 	}
@@ -57,6 +58,7 @@ func TestLaunchLockAcrossProcesses(t *testing.T) {
 }
 
 func TestLaunchLockFilesAreBoundedPerServer(t *testing.T) {
+	t.Parallel()
 	names := make(map[string]struct{})
 	for i := range 1000 {
 		names[launchLockName("/tmp/tmux-501/default", fmt.Sprintf("session-%d", i))] = struct{}{}

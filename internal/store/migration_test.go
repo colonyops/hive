@@ -16,6 +16,7 @@ import (
 )
 
 func TestMigrateFromJSON_NoFiles(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	database, err := db.Open(tempDir, db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
@@ -33,6 +34,7 @@ func TestMigrateFromJSON_NoFiles(t *testing.T) {
 }
 
 func TestMigrateFromJSON_Sessions(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	ctx := context.Background()
 
@@ -88,6 +90,7 @@ func TestMigrateFromJSON_Sessions(t *testing.T) {
 }
 
 func TestMigrateFromJSON_Messages(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	ctx := context.Background()
 
@@ -167,6 +170,7 @@ func TestMigrateFromJSON_Messages(t *testing.T) {
 }
 
 func TestMigrateFromJSON_SkipIfPopulated(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	ctx := context.Background()
 
@@ -212,6 +216,7 @@ func TestMigrateFromJSON_SkipIfPopulated(t *testing.T) {
 }
 
 func TestMigrateFromJSON_Combined(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	ctx := context.Background()
 
@@ -267,6 +272,7 @@ func TestMigrateFromJSON_Combined(t *testing.T) {
 }
 
 func TestMigrateFromJSON_InvalidJSON(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	ctx := context.Background()
 

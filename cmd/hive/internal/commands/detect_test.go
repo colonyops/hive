@@ -24,6 +24,7 @@ func (f *fakeContentCapture) CapturePane(_ context.Context, target multiplexer.T
 }
 
 func TestAssessDetectedAgentPane(t *testing.T) {
+	t.Parallel()
 	target := multiplexer.Target{Session: "work", Window: "0", Pane: "1"}
 	pane := classifier.PaneInput{Target: target, PaneID: "%1", PaneTitle: "codex", InMode: false}
 	capture := &fakeContentCapture{content: "› Ask anything\n"}
@@ -35,6 +36,7 @@ func TestAssessDetectedAgentPane(t *testing.T) {
 }
 
 func TestAssessDetectedAgentPaneCaptureFailureAndEmptyToolFallback(t *testing.T) {
+	t.Parallel()
 	pane := classifier.PaneInput{PaneID: "%1"}
 
 	state, ruleID := assessDetectedAgentPane(context.Background(), pane, "codex", &fakeContentCapture{err: errors.New("capture")}, assess.NewEngine())
@@ -47,6 +49,7 @@ func TestAssessDetectedAgentPaneCaptureFailureAndEmptyToolFallback(t *testing.T)
 }
 
 func TestDetectTmuxSessionNames(t *testing.T) {
+	t.Parallel()
 	sess := session.Session{
 		Name: "Display Name",
 		Slug: "display-name",
@@ -64,6 +67,7 @@ func TestDetectTmuxSessionNames(t *testing.T) {
 }
 
 func TestDetectTmuxSessionNames_Dedupes(t *testing.T) {
+	t.Parallel()
 	sess := session.Session{
 		Name: "same",
 		Slug: "same",

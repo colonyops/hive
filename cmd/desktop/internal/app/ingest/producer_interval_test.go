@@ -13,6 +13,7 @@ import (
 )
 
 func TestProducer_SetInterval(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		db := openTestPipelineDB(t)
 		var mu sync.Mutex
