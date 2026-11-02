@@ -115,6 +115,8 @@ describe('AppletImportDialog', () => {
     const applets = useApplets()
     await applets.reload()
     applets.setPlaced('titlebar', 'radio', true)
+    const layouts = usePanelLayouts()
+    layouts.apply('session', (current) => openTab(current, appletTab('radio')))
     const wrapper = open()
     await flushPromises()
     await tickTrust()
@@ -123,6 +125,7 @@ describe('AppletImportDialog', () => {
     expect(service.ConfirmImport).not.toHaveBeenCalled()
     expect(byID('applet-import-error')?.textContent).toContain('already exists')
     expect(applets.isPlaced('titlebar', 'radio')).toBe(true)
+    expect(panelWithTab(layouts.layoutOf('session'), 'applet:radio')).toBeDefined()
     wrapper.unmount()
   })
 
@@ -139,6 +142,7 @@ describe('AppletImportDialog', () => {
     await flushPromises()
     expect(service.ConfirmImport).toHaveBeenCalledWith('token', 'radio')
     expect(service.CancelImport).not.toHaveBeenCalled()
+    expect(placements).toHaveBeenCalled()
     keybindings.clearAll()
     placements.mockRestore()
     wrapper.unmount()
@@ -164,22 +168,6 @@ describe('AppletImportDialog', () => {
     wrapper.unmount()
   })
 
-  it('keeps the tabs of an applet that holds the id when it refuses the import', async () => {
-    service.List.mockResolvedValue([{ id: 'radio', title: 'Mine', runnable: true, enabled: true }])
-    const layouts = usePanelLayouts()
-    layouts.apply('session', (current) => openTab(current, appletTab('radio')))
-    const applets = useApplets()
-    await applets.reload()
-    const wrapper = open()
-    await flushPromises()
-    await tickTrust()
-    byID('applet-import-confirm')?.click()
-    await flushPromises()
-    expect(service.ConfirmImport).not.toHaveBeenCalled()
-    expect(panelWithTab(layouts.layoutOf('session'), 'applet:radio')).toBeDefined()
-    wrapper.unmount()
-  })
-
   it('takes nothing from the id when the import fails, and offers another id', async () => {
     service.ConfirmImport.mockRejectedValue(new Error('an applet called "radio" already exists. Choose another id'))
     const applets = useApplets()
@@ -193,6 +181,7 @@ describe('AppletImportDialog', () => {
     expect(applets.isPlaced('titlebar', 'radio')).toBe(true)
     expect(byID('applet-import-error')?.textContent).toContain('already exists')
     expect(byID('applet-import-id')).not.toBeNull()
+    expect(wrapper.emitted('close')).toBeUndefined()
     wrapper.unmount()
   })
 
@@ -209,18 +198,6 @@ describe('AppletImportDialog', () => {
     const ignored = byID('applet-import-ignored')?.textContent
     expect(ignored).toContain('"permissions"')
     expect(ignored).toContain('meant to limit the applet')
-    wrapper.unmount()
-  })
-
-  it('shows why an import failed and stays open', async () => {
-    service.ConfirmImport.mockRejectedValue(new Error('disk full'))
-    const wrapper = open()
-    await flushPromises()
-    await tickTrust()
-    byID('applet-import-confirm')?.click()
-    await flushPromises()
-    expect(byID('applet-import-error')?.textContent).toContain('disk full')
-    expect(wrapper.emitted('close')).toBeUndefined()
     wrapper.unmount()
   })
 })

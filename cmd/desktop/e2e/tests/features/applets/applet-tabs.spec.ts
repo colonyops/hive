@@ -1,60 +1,16 @@
 import type { Page } from '@playwright/test'
 import { expect, tag, test } from '../../../fixtures/test.js'
-import { bindingID } from '../../../fixtures/wails.js'
-
-// Server builds cannot run terminals, so the terminal control plane is mocked. The
-// layout, the tabs and the applet's frame are real.
-const WINDOW = {
-  windowId: '@1', name: 'agent', active: true, activePane: '%1', width: 100, height: 30,
-  layout: { paneId: '%1', x: 0, y: 0, width: 100, height: 30, cells: [] },
-}
-const SESSION = {
-  id: 'review', name: 'Review', slug: 'review', repo: 'git@github.com:acme/site.git',
-  repoIdentity: 'git@github.com:acme/site.git', server: '', state: 'active', canvasOwner: 'acme/site',
-  tags: [], createdAt: '2026-10-01T12:00:00Z',
-}
+import { togglePlace } from '../../../fixtures/applets.js'
+import { dismissSizeBanner, mockTerminal, windowState } from '../../../fixtures/terminal.js'
 
 async function openSession(page: Page) {
-  const availability = ['terminalservice', 'agentsservice', 'popupterminalservice'].map((name) => bindingID(name, 'Available'))
-  const answers: Record<number, unknown> = {
-    [bindingID('sessionservice', 'ListSessions')]: [SESSION],
-    [bindingID('terminalservice', 'Scratch')]: { slug: '', name: '' },
-  }
-  await page.route('**/wails/runtime', async (route) => {
-    const id = route.request().postDataJSON()?.args?.methodID as number | undefined
-    if (availability.includes(id as number)) return route.fulfill({ json: { available: true, reason: '' } })
-    if (id !== undefined && id in answers) return route.fulfill({ json: answers[id] })
-    return route.fallback()
+  await mockTerminal(page, {
+    sessions: [{ id: 'review', name: 'Review' }],
+    windows: [windowState('@1', '%1', 'agent', true)],
   })
-  await page.route('**/api/terminal/**', async (route) => {
-    const path = new URL(route.request().url()).pathname.replace('/api/terminal/', '')
-    const headers = {
-      'Access-Control-Allow-Origin': route.request().headers().origin ?? '*',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    }
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
-    let answer: unknown = {}
-    if (path === 'attach') answer = { windows: [WINDOW] }
-    else if (path === 'windows/list') answer = { sessions: { review: [WINDOW] } }
-    else if (path === 'agents/sessions' || path === 'agents/sessions/all') answer = { sessions: [] }
-    else if (path === 'agents/sessions/activity') answer = { items: [] }
-    else if (path === 'agents/workspaces') answer = { root: '/w', available: true, workspaces: [], presets: [], editor: { command: '', title: '' } }
-    else return route.fulfill({ status: 204, headers })
-    await route.fulfill({ json: answer, headers })
-  })
-  await page.routeWebSocket('**/api/terminal/stream?*', () => {})
   await page.goto('/#/terminal/review')
   await expect(page.getByTestId('panel-tab-window:@1')).toBeVisible()
-  await page.getByTestId('terminal-size-constraint-dismiss').click()
-}
-
-async function togglePlace(page: Page, surface: string) {
-  await page.goto('/#/settings/applets')
-  await page.getByTestId('settings-applet-e2e-page-places').click()
-  await page.getByTestId(`settings-applet-e2e-page-places-${surface}`).click()
-  await page.keyboard.press('Escape')
-  await expect(page.getByTestId('settings-applet-e2e-page-places-menu')).toHaveCount(0)
+  await dismissSizeBanner(page)
 }
 
 test.describe('applet tabs', { tag: [tag.applets] }, () => {
@@ -65,8 +21,8 @@ test.describe('applet tabs', { tag: [tag.applets] }, () => {
     await expect(page.getByTestId('session-add-applet-tab-e2e-page')).toHaveCount(0)
     await page.keyboard.press('Escape')
 
-    await togglePlace(page, 'tab')
-    await togglePlace(page, 'page')
+    await togglePlace(page, 'e2e-page', 'tab')
+    await togglePlace(page, 'e2e-page', 'page')
     await openSession(page)
 
     await page.getByTestId('panel-tab-add-p0').click()
@@ -124,7 +80,7 @@ test.describe('applet tabs', { tag: [tag.applets] }, () => {
     await page.getByTestId('panel-tab-close-applet:e2e-page').click({ force: true })
     await expect(frame).toHaveCount(0)
 
-    await togglePlace(page, 'tab')
-    await togglePlace(page, 'page')
+    await togglePlace(page, 'e2e-page', 'tab')
+    await togglePlace(page, 'e2e-page', 'page')
   })
 })

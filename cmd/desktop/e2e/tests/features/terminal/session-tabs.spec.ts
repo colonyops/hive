@@ -1,65 +1,34 @@
 import type { Locator, Page } from '@playwright/test'
 import { screenshotPath } from '../../../fixtures/paths.js'
 import { expect, tag, test } from '../../../fixtures/test.js'
+import { dismissSizeBanner, mockTerminal, windowState } from '../../../fixtures/terminal.js'
 import { bindingID } from '../../../fixtures/wails.js'
-import { mockTerminalAPI, noAgents } from '../../../fixtures/terminal.js'
 
-// Server builds cannot run terminals, so the terminal control plane is mocked and
-// the tabs, the split and the drags are real. perf/session-tabs-scrollback.perf.ts
-// checks what a drag does to a real terminal's scrollback.
-function windowState(windowId: string, paneId: string, name: string, active: boolean) {
-  return {
-    windowId, name, active, activePane: paneId, width: 100, height: 30,
-    layout: { paneId, x: 0, y: 0, width: 100, height: 30, cells: [] },
-  }
-}
+// perf/session-tabs-scrollback.perf.ts checks what a drag does to a real terminal's scrollback.
 const WINDOWS = [windowState('@1', '%1', 'agent', true), windowState('@2', '%2', 'zsh', false)]
-const session = (id: string, name: string) => ({
-  id, name, slug: id, repo: 'git@github.com:acme/site.git', repoIdentity: 'git@github.com:acme/site.git',
-  server: '', state: 'active', canvasOwner: 'acme/site', tags: [], createdAt: '2026-10-01T12:00:00Z',
-})
 
 async function fixture(page: Page) {
-  const availability = ['terminalservice', 'agentsservice', 'popupterminalservice'].map((name) => bindingID(name, 'Available'))
-  const answers: Record<number, unknown> = {
-    [bindingID('sessionservice', 'ListSessions')]: [session('review', 'Review'), session('other', 'Other')],
-    [bindingID('terminalservice', 'Scratch')]: { slug: '', name: '' },
-    [bindingID('sessionservice', 'SessionChanges')]: {
-      resolved: true, branch: 'feat/review', defaultBranch: 'main', base: 'branch', branchAvailable: true,
-      truncated: false, against: '', commit: '', commits: [], files: [],
+  await mockTerminal(page, {
+    sessions: [{ id: 'review', name: 'Review' }, { id: 'other', name: 'Other' }],
+    windows: WINDOWS,
+    answers: {
+      [bindingID('sessionservice', 'SessionChanges')]: {
+        resolved: true, branch: 'feat/review', defaultBranch: 'main', base: 'branch', branchAvailable: true,
+        truncated: false, against: '', commit: '', commits: [], files: [],
+      },
+      [bindingID('sessionservice', 'SessionBranches')]: ['refs/heads/main'],
+      [bindingID('sessionservice', 'SessionFileDiffs')]: [],
+      [bindingID('sessionservice', 'SessionGitStatus')]: {
+        path: '/w/review', branch: 'feat/review', dirty: true, unpushed: true, additions: 42, deletions: 7,
+        host: 'github.com', owner: 'acme', repo: 'site', resolved: true, error: '',
+      },
+      [bindingID('sessionservice', 'SessionPullRequest')]: { status: 'none' },
     },
-    [bindingID('sessionservice', 'SessionBranches')]: ['refs/heads/main'],
-    [bindingID('sessionservice', 'SessionFileDiffs')]: [],
-    [bindingID('sessionservice', 'SessionGitStatus')]: {
-      path: '/w/review', branch: 'feat/review', dirty: true, unpushed: true, additions: 42, deletions: 7,
-      host: 'github.com', owner: 'acme', repo: 'site', resolved: true, error: '',
-    },
-    [bindingID('sessionservice', 'SessionPullRequest')]: { status: 'none' },
-  }
-  await page.route('**/wails/runtime', async (route) => {
-    const id = route.request().postDataJSON()?.args?.methodID as number | undefined
-    if (availability.includes(id as number)) return route.fulfill({ json: { available: true, reason: '' } })
-    if (id !== undefined && id in answers) return route.fulfill({ json: answers[id] })
-    return route.fallback()
   })
-  await mockTerminalAPI(page, {
-    ...noAgents,
-    attach: { windows: WINDOWS },
-    'windows/list': { sessions: { review: WINDOWS, other: WINDOWS } },
-  })
-  await page.routeWebSocket('**/api/terminal/stream?*', () => {})
   await page.goto('/#/terminal/review')
   await expect(page.getByTestId('panel-tab-window:@1')).toBeVisible()
   await expect(page.getByTestId('terminal-window-row').first()).toBeVisible()
   await dismissSizeBanner(page)
-}
-
-// The mocked windows stay 100x30 whatever size the panes ask for, which raises the
-// tmux size banner 750ms after the last resize. It pushes the tab rows down 55px, so
-// a coordinate read before it lands misses after, and a drag can straddle the shift.
-async function dismissSizeBanner(page: Page) {
-  await page.getByTestId('terminal-size-constraint-dismiss').click()
-  await expect(page.getByTestId('terminal-size-constraint')).toHaveCount(0)
 }
 
 // The menu's test ids carry the view kind, and Drive's kind is docs.

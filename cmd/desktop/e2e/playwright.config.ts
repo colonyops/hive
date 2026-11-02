@@ -61,7 +61,7 @@ export default defineConfig({
     // differs. The app ships on WKWebView, and smoke-webkit covers the rest.
     // testMatch works per directory, so a tag leaves out the tests in these
     // surfaces that do not touch those differences.
-    { name: 'features-webkit', testDir: './tests/features', testMatch: '**/{terminal,drive,flows}/*.spec.ts', grepInvert: /@chromium-only/, use: webkit },
+    { name: 'features-webkit', testDir: './tests/features', testMatch: '**/{terminal,drive,flows,applets}/*.spec.ts', grepInvert: /@chromium-only/, use: webkit },
     { name: 'workflows-chromium', testDir: './tests/workflows', testIgnore: '**/remote/**', use: chromium },
     // Only onboarding has a webkit server (scripts/serve.sh).
     { name: 'workflows-onboarding-webkit', testDir: './tests/workflows/onboarding', use: webkit },

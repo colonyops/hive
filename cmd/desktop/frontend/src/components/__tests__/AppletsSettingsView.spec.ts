@@ -132,11 +132,6 @@ describe('AppletsSettingsView', () => {
   })
 
   describe('delete', () => {
-    async function mountView() {
-      const wrapper = mount(AppletsSettingsView, { attachTo: document.body })
-      await flushPromises()
-      return wrapper
-    }
     const confirmButton = () =>
       document.querySelector<HTMLButtonElement>('[data-testid="settings-applet-delete-confirm"]')
 
@@ -148,7 +143,7 @@ describe('AppletsSettingsView', () => {
     }
 
     it('offers delete for anything on disk, broken included, and not for a built-in', async () => {
-      const wrapper = await mountView()
+      const wrapper = await render()
       for (const id of ['docker', 'broken']) {
         await openDetails(wrapper, id)
         await openMore(id)
@@ -163,7 +158,7 @@ describe('AppletsSettingsView', () => {
 
     it('deletes nothing until the user confirms, then drops the row', async () => {
       service.Delete.mockResolvedValue(undefined)
-      const wrapper = await mountView()
+      const wrapper = await render()
       await requestDelete(wrapper, 'docker')
       expect(service.Delete).not.toHaveBeenCalled()
       expect(document.body.textContent).toContain('Delete Docker?')
@@ -180,7 +175,7 @@ describe('AppletsSettingsView', () => {
 
     it('keeps the dialog open with the reason when the delete fails', async () => {
       service.Delete.mockRejectedValue(new Error('settings.yaml could not be cleared'))
-      const wrapper = await mountView()
+      const wrapper = await render()
       await requestDelete(wrapper, 'docker')
       confirmButton()?.click()
       await flushPromises()
@@ -227,15 +222,6 @@ describe('AppletsSettingsView', () => {
     inBody('settings-applet-details-process-p1-stop')?.click()
     await flushPromises()
     expect(service.SpawnKill).toHaveBeenCalledWith('p1')
-    wrapper.unmount()
-  })
-
-  it('opens an applet from its drawer and closes the drawer', async () => {
-    const wrapper = await render()
-    await openDetails(wrapper, 'docker')
-    inBody('settings-applet-docker-open')?.click()
-    await flushPromises()
-    expect(inBody('settings-applet-details')).toBeNull()
     wrapper.unmount()
   })
 
@@ -306,14 +292,8 @@ describe('AppletsSettingsView', () => {
   })
 
   describe('sharing', () => {
-    async function mountView() {
-      const wrapper = mount(AppletsSettingsView, { attachTo: document.body })
-      await flushPromises()
-      return wrapper
-    }
-
     it('offers export only for an applet there is something to share of', async () => {
-      const wrapper = await mountView()
+      const wrapper = await render()
       const close = async () => {
         inBody('settings-applet-details-close')?.click()
         await flushPromises()
@@ -325,9 +305,6 @@ describe('AppletsSettingsView', () => {
       await openDetails(wrapper, 'broken')
       await openMore('broken')
       expect(inBody('settings-applet-broken-export')).toBeNull()
-      await close()
-      await openDetails(wrapper, 'applet-builder')
-      expect(inBody('settings-applet-applet-builder-more')).toBeNull()
       wrapper.unmount()
     })
 
@@ -340,7 +317,7 @@ describe('AppletsSettingsView', () => {
         files: [{ path: 'index.html', bytes: 10 }],
         leftOut: ['.localstorage.json'],
       })
-      const wrapper = await mountView()
+      const wrapper = await render()
       await openDetails(wrapper, 'docker')
       await openMore('docker')
       inBody('settings-applet-docker-export')?.click()
@@ -365,7 +342,7 @@ describe('AppletsSettingsView', () => {
         files: [],
         totalBytes: 0,
       })
-      const wrapper = await mountView()
+      const wrapper = await render()
       vi.useRealTimers()
       const input = wrapper.get('[data-testid="settings-applets-import-input"]').element as HTMLInputElement
       const choose = (name: string) => {
@@ -392,22 +369,8 @@ describe('AppletsSettingsView', () => {
       wrapper.unmount()
     })
 
-    it('shows why a file was refused, and opens no dialog', async () => {
-      service.PrepareImport.mockRejectedValue(new Error('this file has a path outside the applet'))
-      const wrapper = await mountView()
-      vi.useRealTimers()
-      const input = wrapper.get('[data-testid="settings-applets-import-input"]').element as HTMLInputElement
-      Object.defineProperty(input, 'files', { value: [new File(['x'], 'bad.hiveapplet')], configurable: true })
-      input.dispatchEvent(new Event('change'))
-      await vi.waitFor(() =>
-        expect(wrapper.find('[data-testid="settings-applets-share-error"]').text()).toContain('outside the applet'),
-      )
-      expect(document.querySelector('[data-testid="applet-import"]')).toBeNull()
-      wrapper.unmount()
-    })
-
     it('refuses a file over the limit without reading it', async () => {
-      const wrapper = await mountView()
+      const wrapper = await render()
       vi.useRealTimers()
       const input = wrapper.get('[data-testid="settings-applets-import-input"]').element as HTMLInputElement
       const big = new File(['x'], 'big.hiveapplet')

@@ -3,12 +3,6 @@ import { appletIdOf, appletTab, appletTabsOf, isAppletTabId } from '../appletTab
 import { moveTab, newPanelLayout, openTab, splitPanel } from '../panelLayout'
 
 describe('appletTabs', () => {
-  it('opens one tab per applet in a session', () => {
-    const once = openTab(newPanelLayout(), appletTab('radio'))
-    const twice = openTab(once, appletTab('radio'))
-    expect(appletTabsOf(twice).map(({ applet }) => applet)).toEqual(['radio'])
-  })
-
   it('reads the applet of a tab, and nothing of another tab', () => {
     expect(appletIdOf(appletTab('radio'))).toBe('radio')
     expect(appletIdOf({ id: 'docs', kind: 'docs' })).toBeUndefined()

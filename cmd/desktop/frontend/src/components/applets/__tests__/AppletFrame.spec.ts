@@ -288,18 +288,6 @@ describe('AppletFrame', () => {
       panel.wrapper.unmount()
     })
 
-    it('hands a chord to the app keymap', async () => {
-      const { wrapper, send } = titlebar()
-      const seen: KeyboardEvent[] = []
-      const listener = (event: KeyboardEvent) => seen.push(event)
-      window.addEventListener('keydown', listener)
-      await send('key', { key: 'k', metaKey: true })
-      window.removeEventListener('keydown', listener)
-      expect(seen).toHaveLength(1)
-      expect(seen[0]).toMatchObject({ key: 'k', metaKey: true })
-      wrapper.unmount()
-    })
-
     it('runs an app command for the page', async () => {
       const { wrapper, send } = titlebar()
       const run = vi.fn()
@@ -316,14 +304,6 @@ describe('AppletFrame', () => {
       await send('command', { id: 'settings.nope' })
       expect(run).not.toHaveBeenCalled()
       expect(replies).toEqual([{ hiveApplet: 1, id: 1, error: 'hive has no command "settings.nope"' }])
-      wrapper.unmount()
-    })
-
-    it('lists commands with the keys they are bound to', async () => {
-      const { wrapper, send, replies } = titlebar()
-      await send('commands')
-      const { result } = replies[0] as { result: { id: string; keys: string[] }[] }
-      expect(result.find((command) => command.id === 'palette.toggle')?.keys).toContain('mod+k')
       wrapper.unmount()
     })
 

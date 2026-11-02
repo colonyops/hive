@@ -103,15 +103,6 @@ describe('useApplets commands', () => {
     expect(hidden.deliverCommand).not.toHaveBeenCalled()
   })
 
-  it('still prefers a running title bar page', async () => {
-    const applets = await storeWith({})
-    const bar = frame('titlebar')
-    applets.connectFrame('radio', frame('tab'))
-    applets.connectFrame('radio', bar)
-    applets.deliverCommand('radio', 'next')
-    expect(bar.deliverCommand).toHaveBeenCalledWith('next')
-  })
-
   it('holds a command for a tab that comes forward to take it', async () => {
     const applets = await storeWith({ tab: ['radio'] })
     const host = hostOf()

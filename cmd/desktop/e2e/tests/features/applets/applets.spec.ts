@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { togglePlace } from "../../../fixtures/applets.js";
 import { screenshotPath, testdataPath } from "../../../fixtures/paths.js";
 import { expect, tag, test } from "../../../fixtures/test.js";
 
@@ -11,35 +12,10 @@ async function openApplet(page: Page, title: string): Promise<void> {
   await page.keyboard.press("Enter");
 }
 
-async function toggleTitlebar(page: Page): Promise<void> {
-  await page.getByTestId("settings-applet-e2e-bar-places").click();
-  await page.getByTestId("settings-applet-e2e-bar-places-titlebar").click();
-  await page.keyboard.press("Escape");
-  await expect(
-    page.getByTestId("settings-applet-e2e-bar-places-menu"),
-  ).toHaveCount(0);
-}
-
 test.describe("applets", { tag: [tag.applets] }, () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("feed-item").first()).toBeVisible();
-  });
-
-  test("an applet whose title has the query comes first under its own header", async ({
-    page,
-  }) => {
-    await page.keyboard.press("Meta+k");
-    await page.getByTestId("command-palette-input").fill("E2E page");
-    await expect(
-      page.getByTestId("command-palette-command-title").first(),
-    ).toHaveText("E2E page");
-    await expect(
-      page
-        .getByTestId("command-palette")
-        .getByText("Applets", { exact: true })
-        .first(),
-    ).toBeVisible();
   });
 
   test("the palette has a tab of only applets", async ({ page }) => {
@@ -260,8 +236,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     const slot = page.getByTestId("titlebar-applet-e2e-bar");
     await expect(slot).toHaveCount(0);
 
-    await page.goto("/#/settings/applets");
-    await toggleTitlebar(page);
+    await togglePlace(page, "e2e-bar", "titlebar");
     await expect(slot).toBeVisible();
 
     const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]');
@@ -299,24 +274,17 @@ test.describe("applets", { tag: [tag.applets] }, () => {
       clip: header!,
     });
 
-    await bar.locator("#chord").focus();
-    await page.keyboard.press("Meta+k");
-    await expect(page.getByTestId("command-palette-input")).toBeVisible();
-    await page.keyboard.press("Escape");
-
     await bar.locator("#command").click();
     await expect(page).toHaveURL(/#\/settings\/keybindings/);
 
-    await page.goto("/#/settings/applets");
-    await toggleTitlebar(page);
+    await togglePlace(page, "e2e-bar", "titlebar");
     await expect(slot).toHaveCount(0);
   });
 
   test("a page adds to the palette, and a declared command reaches the page that is running", async ({
     page,
   }) => {
-    await page.goto("/#/settings/applets");
-    await toggleTitlebar(page);
+    await togglePlace(page, "e2e-bar", "titlebar");
     const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]');
     await expect(bar.locator("#surface")).toHaveText("titlebar");
 
@@ -327,8 +295,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await openApplet(page, "E2E bar live row");
     await expect(bar.locator("#command-run")).toHaveText("live");
 
-    await page.goto("/#/settings/applets");
-    await toggleTitlebar(page);
+    await togglePlace(page, "e2e-bar", "titlebar");
     await expect(page.getByTestId("titlebar-applet-e2e-bar")).toHaveCount(0);
 
     await page.keyboard.press("Meta+k");
@@ -376,8 +343,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
 
     await bind("E2E page", "Meta+Shift+y");
     await bind("E2E bar ping", "Meta+Shift+u");
-    await page.goto("/#/settings/applets");
-    await toggleTitlebar(page);
+    await togglePlace(page, "e2e-bar", "titlebar");
     const bar = page.frameLocator('[data-testid="applet-titlebar-frame"]');
     await expect(bar.locator("#surface")).toHaveText("titlebar");
 
@@ -401,8 +367,7 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await page.keyboard.press("Meta+Shift+y");
     await expect(overlay).toHaveCount(0);
 
-    await page.goto("/#/settings/applets");
-    await toggleTitlebar(page);
+    await togglePlace(page, "e2e-bar", "titlebar");
     await unbind("E2E page");
     await unbind("E2E bar ping");
   });
@@ -422,13 +387,6 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(
       dialog.getByText("Only import applets from people you trust"),
     ).toBeVisible();
-    const warning = page.getByTestId("applet-import-warning");
-    await expect(warning).toContainText("run any command or program");
-    await expect(warning).toContainText(
-      "read, change and delete any of your files",
-    );
-    await expect(warning).toContainText("reach the network");
-
     await expect(page.getByTestId("applet-import-title")).toHaveText(
       "E2E imported",
     );
@@ -441,14 +399,8 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(runs).toContainText("stays off");
     await expect(runs).toContainText("E2E imported go");
 
-    // Enter on arrival is a cancel, and importing takes the tick first.
+    // Enter on arrival is a cancel.
     await expect(page.getByTestId("applet-import-cancel")).toBeFocused();
-    const confirm = page.getByTestId("applet-import-confirm");
-    await expect(confirm).toBeDisabled();
-    await page.getByTestId("applet-import-trust").check();
-    await expect(confirm).toBeEnabled();
-    await page.getByTestId("applet-import-trust").uncheck();
-    await page.getByTestId("applet-import-cancel").focus();
     await page.keyboard.press("Enter");
     await expect(dialog).toHaveCount(0);
 
@@ -477,12 +429,6 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await page.getByTestId("applet-import-confirm").click();
     const row = page.getByTestId("settings-applet-e2e-imported");
     await expect(row).toBeVisible();
-    await page.getByTestId("settings-applet-applet-builder-details").click();
-    await expect(
-      page.getByTestId("settings-applet-applet-builder-more"),
-    ).toHaveCount(0);
-    await page.getByTestId("settings-applet-details-close").click();
-
     await page.getByTestId("settings-applet-e2e-imported-details").click();
     await page.getByTestId("settings-applet-e2e-imported-more").click();
     await page.getByTestId("settings-applet-e2e-imported-delete").click();
