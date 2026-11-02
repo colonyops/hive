@@ -924,12 +924,13 @@ func TestTmuxPaneResizeZoomAndSelect(t *testing.T) {
 	resp = h.post(t, "/api/terminal/panes/zoom", testToken, map[string]any{"slug": tmux.slug, "paneId": top})
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 	_ = resp.Body.Close()
-	frame = readUntil(t, conn, "the zoomed window", func(f []byte) bool {
+	// tmux reports the zoom and the active pane in separate notifications, in
+	// either order, so a zoomed frame can still name the old pane.
+	frame = readUntil(t, conn, "the zoomed pane becoming active", func(f []byte) bool {
 		ev, ok := windowEventOf(f)
-		return ok && ev.Zoomed
+		return ok && ev.Zoomed && ev.ActivePane == top
 	})
 	ev, _ = windowEventOf(frame)
-	assert.Equal(t, top, ev.ActivePane, "zooming a pane makes it active")
 	assert.Len(t, leafPanes(ev.Layout), 2, "the layout still says where the zoomed pane goes back to")
 
 	resp = h.post(t, "/api/terminal/panes/zoom", testToken, map[string]any{"slug": tmux.slug, "paneId": top})
