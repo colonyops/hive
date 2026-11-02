@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +28,62 @@ func pageHarness(t *testing.T) (*AppletsService, string) {
 	dir := filepath.Dir(appletOnDisk(t, service, "page").Path)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.html"), []byte(`<!doctype html><html><HEAD lang="en"><title>x</title></HEAD></html>`), 0o600))
 	return service, dir
+}
+
+func TestStopEndsARunningExecThatIgnoresSIGTERMBeforeItReturns(t *testing.T) {
+	service, dir := pageHarness(t)
+	started := filepath.Join(dir, "started")
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		_, _ = service.Exec(context.Background(), "page", AppletExec{Command: `trap '' TERM; touch "` + started + `"; while :; do sleep 0.1; done`, TimeoutMillis: 60_000})
+	}()
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(started)
+		return err == nil
+	}, 5*time.Second, 10*time.Millisecond)
+
+	service.Stop()
+
+	select {
+	case <-finished:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Stop returned with the process still running, and the app exits right after it")
+	}
+}
+
+func TestAPageLoadingDuringASaveNeverReadsAnEmptyStore(t *testing.T) {
+	service, dir := pageHarness(t)
+	saved := `{"k":"` + strings.Repeat("x", 256*1024) + `"}`
+	require.NoError(t, service.SaveStorage("page", saved))
+
+	stop := make(chan struct{})
+	saving := make(chan struct{})
+	go func() {
+		defer close(saving)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				assert.NoError(t, service.SaveStorage("page", saved))
+			}
+		}
+	}()
+	for range 300 {
+		assert.JSONEq(t, `"`+strings.Repeat("x", 256*1024)+`"`, storageValue(t, service, dir))
+	}
+	close(stop)
+	<-saving
+}
+
+func storageValue(t *testing.T, service *AppletsService, dir string) string {
+	t.Helper()
+	var stored map[string]any
+	require.NoError(t, json.Unmarshal(service.readAppletStorage(dir), &stored))
+	raw, err := json.Marshal(stored["k"])
+	require.NoError(t, err)
+	return string(raw)
 }
 
 func TestAssetInjectsTheBridgeFirstAndCarriesStorage(t *testing.T) {

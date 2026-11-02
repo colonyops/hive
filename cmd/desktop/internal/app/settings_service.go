@@ -324,11 +324,11 @@ func (s *SettingsService) AppletSurface(_ context.Context, surface string) ([]st
 }
 
 func (s *SettingsService) SetAppletSurface(_ context.Context, surface string, ids []string) error {
+	if _, ok := new(settings.AppletsSettings).Surface(surface); !ok {
+		return Errorf(KindInvalid, "no applet surface %q", surface)
+	}
 	_, err := s.store.Update(func(current *settings.Settings) error {
-		list, ok := current.Applets.Surface(surface)
-		if !ok {
-			return Errorf(KindInvalid, "no applet surface %q", surface)
-		}
+		list, _ := current.Applets.Surface(surface)
 		*list = ids
 		return nil
 	})

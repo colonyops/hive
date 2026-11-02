@@ -318,10 +318,19 @@ func TestInstallDoesNotFollowASymlinkAtTheTarget(t *testing.T) {
 	assert.Empty(t, dirNames(t, elsewhere))
 }
 
+func TestFreeIDReportsAFolderItCannotRead(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "applets")
+	require.NoError(t, os.WriteFile(root, nil, 0o600))
+	_, err := FreeID(root, "radio")
+	require.Error(t, err, "a loop that reads every error as taken would never end")
+}
+
 func TestFreeIDStepsPastWhatIsTaken(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{"radio/applet.yaml": "x", "radio-2/applet.yaml": "x"})
-	assert.Equal(t, "new", FreeID(root, "new"))
-	assert.Equal(t, "radio-3", FreeID(root, "radio"))
-	assert.Equal(t, BuilderID+"-2", FreeID(root, BuilderID))
+	for id, want := range map[string]string{"new": "new", "radio": "radio-3", BuilderID: BuilderID + "-2"} {
+		got, err := FreeID(root, id)
+		require.NoError(t, err)
+		assert.Equal(t, want, got)
+	}
 }

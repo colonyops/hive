@@ -555,23 +555,32 @@ func writeNewFile(dest string, data []byte) error {
 }
 
 // FreeID returns id if nothing holds it, and otherwise the first free id-2, id-3 and so on.
-func FreeID(root, id string) string {
+func FreeID(root, id string) (string, error) {
 	builtins := loadBuiltins(root)
-	taken := func(candidate string) bool {
+	taken := func(candidate string) (bool, error) {
 		if _, isBuiltin := builtins[candidate]; isBuiltin {
-			return true
+			return true, nil
 		}
 		_, err := os.Lstat(filepath.Join(root, candidate))
-		return !errors.Is(err, fs.ErrNotExist)
+		switch {
+		case err == nil:
+			return true, nil
+		case errors.Is(err, fs.ErrNotExist):
+			return false, nil
+		}
+		return false, err
 	}
-	if !taken(id) {
-		return id
-	}
+	candidate := id
 	for n := 2; ; n++ {
+		held, err := taken(candidate)
+		if err != nil {
+			return "", err
+		}
+		if !held {
+			return candidate, nil
+		}
 		suffix := fmt.Sprintf("-%d", n)
 		base := id[:min(len(id), slug.MaxLen-len(suffix))]
-		if candidate := strings.TrimRight(base, "-") + suffix; !taken(candidate) {
-			return candidate
-		}
+		candidate = strings.TrimRight(base, "-") + suffix
 	}
 }

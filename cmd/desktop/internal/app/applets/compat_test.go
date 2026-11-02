@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"testing"
@@ -213,6 +214,21 @@ func TestReadPackFileHoldsAgainstAChangeAfterTheList(t *testing.T) {
 		_, err := readPackFile(root, "big.js", 10)
 		assert.ErrorContains(t, err, "larger than the limit")
 	})
+}
+
+// A stack overflow is fatal, so this would take the whole app down on a file on disk, or on
+// choosing a shared file. The low limit only makes that fail fast here.
+func TestAnAliasToTheMergeKeyDoesNotRecurseForever(t *testing.T) {
+	defer debug.SetMaxStack(debug.SetMaxStack(16 << 20))
+	const hostile = "version: 1\ntitle: x\nx-k: &k <<\n*k : &a [*a]\n"
+
+	_, err := Parse("x", []byte(hostile), "")
+	require.NoError(t, err, "the decoder reads the alias as a plain key")
+
+	_, err = Unpack(buildZip(t, manifestEntry("radio"),
+		zipEntry{name: "files/applet.yaml", body: hostile},
+		zipEntry{name: "files/index.html", body: "x"}), "")
+	require.NoError(t, err)
 }
 
 func TestSurfacesAreCheckedOnImport(t *testing.T) {

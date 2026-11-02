@@ -34,8 +34,11 @@ type Store struct {
 	// hostVersion is the Hive this catalog runs on, which a file can say is too old.
 	hostVersion string
 
-	mu      sync.RWMutex
-	entries map[string]Entry
+	// reloadMu runs one reload at a time, and is separate from mu so a page and the palette
+	// can keep reading while a large applet folder is walked.
+	reloadMu sync.Mutex
+	mu       sync.RWMutex
+	entries  map[string]Entry
 }
 
 func NewStore(root, hostVersion string) *Store {
@@ -68,6 +71,8 @@ func SkipsWatch(dir string) bool {
 // yet, which is the normal state of one an agent is halfway through writing. A
 // built-in fills in wherever the disk has no applet of its name.
 func (s *Store) Reload() error {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
 	dirs, err := os.ReadDir(s.root)
 	if errors.Is(err, fs.ErrNotExist) {
 		dirs = nil
@@ -75,8 +80,6 @@ func (s *Store) Reload() error {
 		return fmt.Errorf("applets: reading %s: %w", s.root, err)
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	next := make(map[string]Entry, len(dirs))
 	for _, dir := range dirs {
 		if !dir.IsDir() {
@@ -96,7 +99,13 @@ func (s *Store) Reload() error {
 				continue
 			}
 		}
-		next[id] = Entry{Applet: s.entries[id].Applet, Err: err, Revision: s.entries[id].Revision}
+		// A built-in is not this folder's last good version. Keeping it would hide the error
+		// until a restart and make the folder undeletable.
+		lastGood := s.entries[id]
+		if lastGood.Applet.Builtin {
+			lastGood = Entry{}
+		}
+		next[id] = Entry{Applet: lastGood.Applet, Err: err, Revision: lastGood.Revision}
 		if !next[id].Usable() {
 			next[id] = Entry{Applet: Applet{ID: id, Dir: path, Title: id}, Err: err}
 		}
@@ -106,6 +115,8 @@ func (s *Store) Reload() error {
 			next[id] = entry
 		}
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.entries = next
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,14 +18,21 @@ import (
 )
 
 type fakeAppletPreferences struct {
+	mu        sync.Mutex
 	disabled  map[string]bool
 	forgotten []string
 	forgetErr error
 }
 
-func (f *fakeAppletPreferences) AppletDisabled(id string) (bool, error) { return f.disabled[id], nil }
+func (f *fakeAppletPreferences) AppletDisabled(id string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.disabled[id], nil
+}
 
 func (f *fakeAppletPreferences) SetAppletDisabled(id string, disabled bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.disabled[id] = disabled
 	return nil
 }

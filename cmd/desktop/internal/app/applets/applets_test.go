@@ -164,6 +164,24 @@ func TestADirectoryReplacesTheBuiltinOfItsName(t *testing.T) {
 	assert.Equal(t, "Thing", applet.Title)
 }
 
+func TestABrokenFolderOverABuiltinReadsTheSameWithoutARestart(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root, "")
+	require.NoError(t, store.Reload())
+	write(t, root, BuilderID, "version: [")
+	require.NoError(t, store.Reload())
+
+	var entry Entry
+	for _, candidate := range store.List() {
+		if candidate.Applet.ID == BuilderID {
+			entry = candidate
+		}
+	}
+	require.Error(t, entry.Err)
+	assert.False(t, entry.Applet.Builtin, "the folder can be deleted")
+	assert.False(t, entry.Usable())
+}
+
 func TestSavedStorageDoesNotHideABuiltin(t *testing.T) {
 	root := t.TempDir()
 	store := NewStore(root, "")

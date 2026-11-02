@@ -262,9 +262,11 @@ func (s *AppletsService) dir(ctx context.Context, applet applets.Applet, session
 	if applet.Cwd == "" {
 		// A session on a server has no directory here, so the page falls back to its own.
 		if strings.TrimSpace(sessionSlug) != "" {
-			if dir, err := s.sessionDir(ctx, sessionSlug); err == nil {
+			dir, err := s.sessionDir(ctx, sessionSlug)
+			if err == nil {
 				return dir, nil
 			}
+			s.logger.Debug().Err(err).Str("session", sessionSlug).Msg("running the applet in its own folder")
 		}
 		return applet.Dir, nil
 	}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"mime"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/applets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
+	"github.com/colonyops/hive/pkg/atomicfile"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/pathutil"
 )
@@ -154,7 +156,7 @@ func (s *AppletsService) Asset(id, name string) (AppletAsset, error) {
 		if err != nil {
 			return AppletAsset{}, err
 		}
-		body = injectBridge(body, token, readAppletStorage(applet.Dir))
+		body = injectBridge(body, token, s.readAppletStorage(applet.Dir))
 		return AppletAsset{Name: name, ContentType: contentType, Body: body, HoldsToken: true}, nil
 	}
 	return AppletAsset{Name: name, ContentType: contentType, Body: body}, nil
@@ -232,9 +234,18 @@ func tagEnd(rest []byte) int {
 	return -1
 }
 
-func readAppletStorage(dir string) []byte {
+// readAppletStorage answers an empty store for anything it cannot read. The page's next
+// save replaces the file with what it holds, so a failure here is worth a line in the log.
+func (s *AppletsService) readAppletStorage(dir string) []byte {
 	raw, err := os.ReadFile(filepath.Join(dir, appletStorageFile))
-	if err != nil || !json.Valid(raw) {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return []byte("{}")
+	case err != nil:
+		s.logger.Warn().Err(err).Str("dir", dir).Msg("could not read saved applet storage")
+		return []byte("{}")
+	case !json.Valid(raw):
+		s.logger.Warn().Str("dir", dir).Msg("saved applet storage is not JSON")
 		return []byte("{}")
 	}
 	return raw
@@ -263,8 +274,11 @@ func (s *AppletsService) ReadFile(id, path string) (string, error) {
 		return "", err
 	}
 	raw, err := os.ReadFile(resolved)
-	if err != nil {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
 		return "", Wrap(err, KindNotFound, "reading %q", path)
+	case err != nil:
+		return "", Wrap(err, KindInternal, "reading %q", path)
 	}
 	return string(raw), nil
 }
@@ -302,7 +316,16 @@ func (s *AppletsService) SaveStorage(id, encoded string) error {
 	if !s.pages {
 		return Errorf(KindUnavailable, appletPagesUnavailable)
 	}
-	return writeAppletFile(filepath.Join(applet.Dir, appletStorageFile), appletStorageFile, encoded)
+	// A built-in has no folder until its first save.
+	if err := os.MkdirAll(applet.Dir, 0o755); err != nil {
+		return Wrap(err, KindInternal, "creating the folder of %q", id)
+	}
+	// Whole or not at all: a page that loads during a save would read an empty store, and
+	// its next save would replace what was there.
+	if err := atomicfile.Write(filepath.Join(applet.Dir, appletStorageFile), []byte(encoded), 0o644); err != nil {
+		return Wrap(err, KindInternal, "saving the storage of %q", id)
+	}
+	return nil
 }
 
 // command builds the process. Its context is detached because RunShellProcess owns
@@ -359,7 +382,9 @@ func (s *AppletsService) Exec(ctx context.Context, id string, req AppletExec) (A
 	}
 	runCtx, stop := context.WithTimeout(ctx, timeout)
 	defer stop()
-	defer s.spawns.trackExec(id, stop)()
+	finished := make(chan struct{})
+	defer close(finished)
+	defer s.spawns.trackExec(id, stop, finished)()
 	if s.isDisabled(id) {
 		return AppletExecResult{}, Errorf(KindUnavailable, "this applet was turned off")
 	}
@@ -393,12 +418,16 @@ type spawnTable struct {
 	execs map[int]runningExec
 }
 
+// appletStopWait covers the SIGTERM grace in dispatch.RunShellProcess and the SIGKILL after it.
+const appletStopWait = 3 * time.Second
+
 type runningExec struct {
-	applet string
-	cancel context.CancelFunc
+	applet   string
+	cancel   context.CancelFunc
+	finished <-chan struct{}
 }
 
-func (t *spawnTable) trackExec(applet string, cancel context.CancelFunc) (untrack func()) {
+func (t *spawnTable) trackExec(applet string, cancel context.CancelFunc, finished <-chan struct{}) (untrack func()) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.execs == nil {
@@ -406,7 +435,7 @@ func (t *spawnTable) trackExec(applet string, cancel context.CancelFunc) (untrac
 	}
 	t.next++
 	key := t.next
-	t.execs[key] = runningExec{applet, cancel}
+	t.execs[key] = runningExec{applet, cancel, finished}
 	return func() {
 		t.mu.Lock()
 		defer t.mu.Unlock()
@@ -436,6 +465,8 @@ type appletSpawn struct {
 	started time.Time
 	cancel  context.CancelFunc
 	stdin   io.WriteCloser
+	// finished closes once the process is gone, however it ended.
+	finished chan struct{}
 
 	mu     sync.Mutex
 	stdout strings.Builder
@@ -478,7 +509,7 @@ func (s *AppletsService) Spawn(ctx context.Context, id string, req AppletExec) (
 		return "", err
 	}
 	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	spawn := &appletSpawn{applet: id, command: req.Command, started: time.Now(), cancel: cancel, wake: make(chan struct{}, 1)}
+	spawn := &appletSpawn{applet: id, command: req.Command, started: time.Now(), cancel: cancel, finished: make(chan struct{}), wake: make(chan struct{}, 1)}
 	proc.Stdout = spawnStream{spawn, &spawn.stdout}
 	proc.Stderr = spawnStream{spawn, &spawn.stderr}
 	stdin, err := proc.StdinPipe()
@@ -501,6 +532,7 @@ func (s *AppletsService) Spawn(ctx context.Context, id string, req AppletExec) (
 	}
 
 	go func() {
+		defer close(spawn.finished)
 		code, err := exitResult(dispatch.RunShellProcess(runCtx, proc))
 		spawn.mu.Lock()
 		// Being stopped is what the page asked for, so it is not output to report.
@@ -645,12 +677,30 @@ func (s *AppletsService) KillSpawns(handles []string) {
 	}
 }
 
-// Stop ends every process any applet started.
+// Stop ends every process any applet started, and waits for them. The app exits when its
+// shutdown hooks return, which would otherwise skip the SIGKILL that follows a SIGTERM a
+// process ignores. A context cannot end an exec here: Wails detaches the one a call gets.
 func (s *AppletsService) Stop() {
 	s.spawns.mu.Lock()
-	defer s.spawns.mu.Unlock()
+	var finished []<-chan struct{}
 	for handle, spawn := range s.spawns.live {
 		spawn.cancel()
+		finished = append(finished, spawn.finished)
 		delete(s.spawns.live, handle)
+	}
+	for _, running := range s.spawns.execs {
+		running.cancel()
+		finished = append(finished, running.finished)
+	}
+	s.spawns.mu.Unlock()
+
+	deadline := time.After(appletStopWait)
+	for _, done := range finished {
+		select {
+		case <-done:
+		case <-deadline:
+			s.logger.Warn().Msg("an applet's process had not exited when the app closed")
+			return
+		}
 	}
 }

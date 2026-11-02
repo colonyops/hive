@@ -170,10 +170,14 @@ func (s *AppletsService) PrepareImport(encoded string) (AppletImportPreview, err
 	}
 
 	applet := archive.Applet
+	suggestedID, err := applets.FreeID(s.catalog.Root(), applet.ID)
+	if err != nil {
+		return AppletImportPreview{}, Wrap(err, KindInternal, "reading the applets folder")
+	}
 	preview := AppletImportPreview{
 		Token:       token,
 		ID:          applet.ID,
-		SuggestedID: applets.FreeID(s.catalog.Root(), applet.ID),
+		SuggestedID: suggestedID,
 		Title:       applet.Title,
 		Entry:       applet.Entry,
 		Cwd:         applet.Cwd,
@@ -223,7 +227,7 @@ func (s *AppletsService) ConfirmImport(token, id string) error {
 		case forgetErr != nil:
 			return Wrap(err, KindInternal, "nothing was imported, because settings.yaml could not be cleared for %s", id)
 		}
-		return Wrap(err, KindInvalid, "importing %s", id)
+		return Wrap(err, KindInternal, "importing %s", id)
 	}
 	s.pendingImport = nil
 	if err := s.catalog.Reload(); err != nil {

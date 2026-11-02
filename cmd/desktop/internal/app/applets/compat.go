@@ -170,7 +170,9 @@ func (w ignoredKeyWalk) visit(node *yaml.Node, t reflect.Type, path string) {
 	fields := yamlFields(t)
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		keyNode, value := node.Content[i], node.Content[i+1]
-		if keyNode.ShortTag() == "!!merge" {
+		// A scalar only: the decoder takes an alias to "<<" as a plain key and never checks
+		// its value, so following it here could recurse without end.
+		if keyNode.Kind == yaml.ScalarNode && keyNode.ShortTag() == "!!merge" {
 			w.visitMerged(value, t, path)
 			continue
 		}
@@ -191,6 +193,11 @@ func (w ignoredKeyWalk) visitMerged(value *yaml.Node, t reflect.Type, path strin
 		value = value.Alias
 	}
 	if value.Kind == yaml.SequenceNode {
+		step := ignoredKeyVisit{value, nil, path}
+		if w.visited[step] {
+			return
+		}
+		w.visited[step] = true
 		for _, item := range value.Content {
 			w.visitMerged(item, t, path)
 		}
