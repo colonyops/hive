@@ -25,7 +25,7 @@ interface AppletSurfaceRules {
   persistent: boolean
   /** Takes focus when its page loads. A page that reloads on its own must not. */
   takesFocus: boolean
-  /** Escape closes it. */
+  /** Escape closes it while focus is outside the frame. Escape in a page goes through the bridge's own rule. */
   escapeCloses: boolean
   placement?: AppletPlacement
 }
