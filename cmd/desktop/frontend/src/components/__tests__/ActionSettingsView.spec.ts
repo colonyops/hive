@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   DeleteAction: vi.fn(),
   ReorderActions: vi.fn(),
   SessionLaunchWorkspaces: vi.fn(),
-  On: vi.fn(),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/actionsservice', () => ({
   ListActions: mocks.ListActions,
@@ -22,7 +21,6 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   SessionLaunchWorkspaces: mocks.SessionLaunchWorkspaces,
 }))
-vi.mock('@wailsio/runtime', () => ({ Events: { On: mocks.On } }))
 
 const launch: EditableAction = {
   id: 'review',
@@ -35,7 +33,6 @@ const launch: EditableAction = {
 }
 function mountSettings(actions: EditableAction[] = [launch]) {
   mocks.ListActions.mockResolvedValue({ actions, error: '' })
-  mocks.On.mockReturnValue(() => {})
   return mount(ActionSettingsView, { attachTo: document.body })
 }
 function editor<T extends HTMLElement>(id: string): T {
@@ -323,7 +320,6 @@ describe('ActionSettingsView', () => {
     mocks.ReorderActions.mockImplementation(async (ids: string[]) => {
       stored = ids.map((id) => stored.find((action) => action.id === id)!)
     })
-    mocks.On.mockReturnValue(() => {})
     const wrapper = mount(ActionSettingsView, { attachTo: document.body })
     await flushPromises()
 

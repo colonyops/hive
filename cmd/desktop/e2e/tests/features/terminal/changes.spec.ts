@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 import { screenshotPath } from '../../../fixtures/paths.js'
 import { expect, tag, test } from '../../../fixtures/test.js'
 import { bindingID } from '../../../fixtures/wails.js'
+import { mockTerminalAPI, noAgents } from '../../../fixtures/terminal.js'
 
 // Server builds cannot run terminals, so the session list and both git reads are
 // mocked. The go tests and test/remote cover the reads themselves.
@@ -76,22 +77,10 @@ async function changesFixture(page: Page, sent: unknown[][] = []) {
     } else return route.fallback()
     await route.fulfill({ json: answer })
   })
-  await page.route('**/api/terminal/**', async (route) => {
-    const path = new URL(route.request().url()).pathname.replace('/api/terminal/', '')
-    const headers = {
-      'Access-Control-Allow-Origin': route.request().headers().origin ?? '*',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    }
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
-    let answer: unknown = {}
-    if (path === 'attach') answer = { windows: [windowState] }
-    else if (path === 'windows/list') answer = { sessions: { review: [windowState] } }
-    else if (path === 'agents/sessions' || path === 'agents/sessions/all') answer = { sessions: [] }
-    else if (path === 'agents/sessions/activity') answer = { items: [] }
-    else if (path === 'agents/workspaces') answer = { root: '/w', available: true, workspaces: [], presets: [], editor: { command: '', title: '' } }
-    else return route.fulfill({ status: 204, headers })
-    await route.fulfill({ json: answer, headers })
+  await mockTerminalAPI(page, {
+    ...noAgents,
+    attach: { windows: [windowState] },
+    'windows/list': { sessions: { review: [windowState] } },
   })
   await page.routeWebSocket('**/api/terminal/stream?*', (socket) => {
     socket.send(Buffer.concat([Buffer.from([0, 2]), Buffer.from('@1'), Buffer.from([2]), Buffer.from('%1agent> ')]))

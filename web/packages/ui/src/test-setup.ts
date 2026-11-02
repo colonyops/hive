@@ -2,6 +2,7 @@ import { config, enableAutoUnmount } from '@vue/test-utils'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { installHiveUi } from './platform'
 import { fakePlatform } from './test-utils/platform'
+import { installMemoryStorage } from './test-utils/memoryStorage'
 
 config.global.plugins = [[installHiveUi, fakePlatform]]
 
@@ -10,29 +11,7 @@ config.global.plugins = [[installHiveUi, fakePlatform]]
 // `id` shadows the live one.
 enableAutoUnmount(afterEach)
 
-// Node (22+) ships its own global `localStorage` that shadows happy-dom's and
-// throws without a `--localstorage-file` backing path. This in-memory stand-in
-// is installed once at load, and beforeEach clears the same instance so
-// references a module captured earlier stay valid.
-function memoryStorage(): Storage {
-  const values = new Map<string, string>()
-  return {
-    get length() {
-      return values.size
-    },
-    clear: () => values.clear(),
-    getItem: (key: string) => values.get(key) ?? null,
-    key: (index: number) => [...values.keys()][index] ?? null,
-    removeItem: (key: string) => values.delete(key),
-    setItem: (key: string, value: string) => values.set(key, value),
-  }
-}
-
-Object.defineProperty(globalThis, 'localStorage', {
-  value: memoryStorage(),
-  writable: true,
-  configurable: true,
-})
+installMemoryStorage()
 
 beforeEach(() => {
   localStorage.clear()

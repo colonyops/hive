@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import Editor from '../editor.vue'
 import { defaults, validate, type Config } from '../config'
-import { chooseOption } from '@hive/ui/test-utils/select'
+import { connectAccounts, describeCredentialPicker } from '../../../__tests__/credentialPicker'
 
-const mocks = vi.hoisted(() => ({ List: vi.fn(), On: vi.fn() }))
+const mocks = vi.hoisted(() => ({ List: vi.fn() }))
 
 vi.mock(
   '../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice',
@@ -12,28 +12,26 @@ vi.mock(
     List: mocks.List,
   }),
 )
-vi.mock('@wailsio/runtime', () => ({
-  Events: { On: mocks.On },
-}))
 
-function connectedStacks(...accounts: string[]) {
-  mocks.List.mockResolvedValue([
-    {
-      key: 'grafana',
-      title: 'Grafana',
-      stability: 'stable',
-      provider: 'grafana',
-      types: ['sources.grafana_alerts', 'sources.grafana_metrics'],
-      accounts,
-      envOverride: false,
-    },
-  ])
-}
+const connect = connectAccounts(mocks.List, {
+  key: 'grafana',
+  title: 'Grafana',
+  stability: 'stable',
+  provider: 'grafana',
+  types: ['sources.grafana_alerts', 'sources.grafana_metrics'],
+  envOverride: false,
+})
 
-beforeEach(() => {
-  vi.clearAllMocks()
-  mocks.On.mockReturnValue(() => {})
-  connectedStacks()
+beforeEach(() => connect())
+
+describeCredentialPicker({
+  node: 'sources.grafana_metrics',
+  Editor,
+  connect,
+  provider: 'grafana',
+  accounts: ['host-1', 'host-2'],
+  config: (credential) => ({ credential, datasource_uid: 'ds', expr: 'up' }),
+  emptyMessage: 'No Grafana stack is connected',
 })
 
 describe('sources.grafana_metrics editor', () => {
@@ -61,42 +59,6 @@ describe('sources.grafana_metrics editor', () => {
     expect(wrapper.emitted('update:config')).toEqual([
       [{ credential: 'grafana/host-1', datasource_uid: 'ds', expr: 'up' }],
     ])
-  })
-
-  it('offers the connected stacks as options', async () => {
-    connectedStacks('host-1', 'host-2')
-    const config: Config = { credential: 'grafana/host-1', datasource_uid: 'ds', expr: 'up' }
-    const wrapper = mount(Editor, { props: { config } })
-    await flushPromises()
-
-    const field = wrapper.get('[data-testid="sources.grafana_metrics-editor-credential"]')
-    expect(field.text()).toContain('grafana/host-1')
-    await chooseOption(wrapper, 'sources.grafana_metrics-editor-credential', 'grafana/host-2')
-    expect(wrapper.emitted('update:config')).toEqual([
-      [{ credential: 'grafana/host-2', datasource_uid: 'ds', expr: 'up' }],
-    ])
-    wrapper.unmount()
-  })
-
-  it('keeps a stack that is no longer connected selectable, and says so', async () => {
-    connectedStacks('host-2')
-    const config: Config = { credential: 'grafana/host-1', datasource_uid: 'ds', expr: 'up' }
-    const wrapper = mount(Editor, { props: { config } })
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="sources.grafana_metrics-editor-credential"]').text()).toContain('not connected')
-    wrapper.unmount()
-  })
-
-  it('falls back to a text input when no stack is connected', async () => {
-    const config: Config = { credential: '', datasource_uid: '', expr: '' }
-    const wrapper = mount(Editor, { props: { config } })
-    await flushPromises()
-
-    const field = wrapper.get('[data-testid="sources.grafana_metrics-editor-credential"]')
-    expect(field.element.tagName).toBe('INPUT')
-    expect(wrapper.text()).toContain('No Grafana stack is connected')
-    wrapper.unmount()
   })
 })
 

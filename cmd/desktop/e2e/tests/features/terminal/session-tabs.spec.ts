@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test'
 import { screenshotPath } from '../../../fixtures/paths.js'
 import { expect, tag, test } from '../../../fixtures/test.js'
 import { bindingID } from '../../../fixtures/wails.js'
+import { mockTerminalAPI, noAgents } from '../../../fixtures/terminal.js'
 
 // Server builds cannot run terminals, so the terminal control plane is mocked and
 // the tabs, the split and the drags are real. perf/session-tabs-scrollback.perf.ts
@@ -41,22 +42,10 @@ async function fixture(page: Page) {
     if (id !== undefined && id in answers) return route.fulfill({ json: answers[id] })
     return route.fallback()
   })
-  await page.route('**/api/terminal/**', async (route) => {
-    const path = new URL(route.request().url()).pathname.replace('/api/terminal/', '')
-    const headers = {
-      'Access-Control-Allow-Origin': route.request().headers().origin ?? '*',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    }
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
-    let answer: unknown = {}
-    if (path === 'attach') answer = { windows: WINDOWS }
-    else if (path === 'windows/list') answer = { sessions: { review: WINDOWS, other: WINDOWS } }
-    else if (path === 'agents/sessions' || path === 'agents/sessions/all') answer = { sessions: [] }
-    else if (path === 'agents/sessions/activity') answer = { items: [] }
-    else if (path === 'agents/workspaces') answer = { root: '/w', available: true, workspaces: [], presets: [], editor: { command: '', title: '' } }
-    else return route.fulfill({ status: 204, headers })
-    await route.fulfill({ json: answer, headers })
+  await mockTerminalAPI(page, {
+    ...noAgents,
+    attach: { windows: WINDOWS },
+    'windows/list': { sessions: { review: WINDOWS, other: WINDOWS } },
   })
   await page.routeWebSocket('**/api/terminal/stream?*', () => {})
   await page.goto('/#/terminal/review')

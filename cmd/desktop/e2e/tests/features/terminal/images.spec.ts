@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs'
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 import { testdataPath } from '../../../fixtures/paths.js'
 import { expect, tag, test } from '../../../fixtures/test.js'
 import { bindingID } from '../../../fixtures/wails.js'
+import { mockTerminalAPI } from '../../../fixtures/terminal.js'
 
 // Server builds cannot run terminals. Only the terminal control/stream is
 // mocked here; clipboard uploads exercise the actual authenticated Go endpoint.
@@ -28,30 +29,22 @@ async function terminalFixture(page: Page) {
     else return route.fallback()
     await route.fulfill({ json: answer })
   })
-  await page.route('**/api/terminal/**', async (route) => {
-    const path = new URL(route.request().url()).pathname.replace('/api/terminal/', '')
-    const headers = {
-      'Access-Control-Allow-Origin': route.request().headers().origin ?? '*',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    }
-    let answer: unknown = {}
-    if (path === 'images/upload' || path === 'images/paths') return route.fallback()
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
-    if (path === 'attach') answer = { windows: [windowState] }
-    else if (path === 'windows/list') answer = { sessions: { 'image-session': [windowState] } }
-    else if (path === 'panes/paste') {
+  await mockTerminalAPI(page, {
+    attach: { windows: [windowState] },
+    'windows/list': { sessions: { 'image-session': [windowState] } },
+    'panes/paste': (route: Route) => {
       pastes.push(route.request().postDataJSON())
-      return route.fulfill({ status: 204, headers })
-    } else if (path === 'agents/workspaces') answer = { root: '/images', available: true, workspaces: [workspace], presets: [], editor: { command: '', title: '' } }
-    else if (path === 'agents/workspaces/open') answer = { workspace, sessions: [session], missingMcps: [], missingPackages: [] }
-    else if (path === 'agents/sessions' || path === 'agents/sessions/all') answer = { sessions: [session] }
-    else if (path === 'agents/sessions/resume') answer = session
-    else if (path === 'agents/sessions/activity') answer = { items: [] }
-    else if (path === 'popup/open') answer = { id: 'popup-images', title: 'Images', dir: '/tmp', command: '', cols: 100, rows: 30 }
-    else return route.fulfill({ status: 204, headers })
-    await route.fulfill({ json: answer, headers })
+    },
+    'agents/workspaces': { root: '/images', available: true, workspaces: [workspace], presets: [], editor: { command: '', title: '' } },
+    'agents/workspaces/open': { workspace, sessions: [session], missingMcps: [], missingPackages: [] },
+    'agents/sessions': { sessions: [session] },
+    'agents/sessions/all': { sessions: [session] },
+    'agents/sessions/resume': session,
+    'agents/sessions/activity': { items: [] },
+    'popup/open': { id: 'popup-images', title: 'Images', dir: '/tmp', command: '', cols: 100, rows: 30 },
   })
+  // These reach the real server. A route added later runs first, so this one skips the mock.
+  await page.route('**/api/terminal/images/{upload,paths}', (route) => route.continue())
   await page.routeWebSocket('**/api/terminal/stream?*', (socket) => {
     socket.send(Buffer.concat([Buffer.from([0, 2]), Buffer.from('@1'), Buffer.from([2]), Buffer.from('%1Image prompt> ')]))
   })
