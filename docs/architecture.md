@@ -2182,16 +2182,17 @@ overlap in vocabulary is a coincidence of both being terminals.
 **The command palette's rules sit beside the keymap doctrine above.**
 `palette/scopes.ts` is the one place a scope's sigil, label and placeholder are declared (ADR palette-scopes-are-filters-over-one-list) —
 adding a scope is an entry there, not a change scattered across
-`useCommands`/`CommandPalette.vue`. A sigil (`@`, `>`, `!`) is grammar, not a
+`useCommands`/`CommandPalette.vue`. A sigil (`@`, `>`, `#`, `!`) is grammar, not a
 separate command: `useCommandPalette.setQuery` absorbs it only as the first
 character of an empty query, so mid-edit it is a literal character rather than
 a scope switch. A row that cannot run where you stand is hidden, never shown
 disabled, matching the launcher palette row's own choice (ADR quick-terminal-launchers-are-session-scoped).
 And Go to is global: a row meant to be reachable from anywhere registers at
 the App level (`useAppPaletteRows`) off a module-scoped source
-(`useTerminalSessions`, `useAttachedTerminalWindows`, `useAgentSessionsAll`,
-`useDrive`), never inside a lazily-mounted mode component, so it exists before that mode
-has ever mounted. A row's title and group follow one more rule: a command row
+(`useTerminalSessions`, `useAttachedTerminalWindows`, `useAgentSessionsAll`),
+never inside a lazily-mounted mode component, so it exists before that mode
+has ever mounted. Drive documents register the same way off `useDrive` but show
+only in the Drive scope, so they never crowd out a command. A row's title and group follow one more rule: a command row
 keeps its catalog verb title unchanged, since Settings › Keyboard reads the
 same string, while a dynamic object row (a feed, a chat, a document, a session,
 a window, a settings section) is titled with the object's own name and grouped under

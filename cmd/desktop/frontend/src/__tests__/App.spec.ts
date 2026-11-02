@@ -1522,6 +1522,20 @@ describe('App', () => {
       wrapper.unmount()
     })
 
+    it('opens the palette on the Drive tab from mod+p', async () => {
+      const { wrapper } = await mountAppWithRouter()
+      const palette = useCommandPalette()
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', metaKey: true }))
+      await flushPromises()
+
+      expect(palette.open.value).toBe(true)
+      expect(palette.scope.value).toBe('drive')
+
+      palette.toggle()
+      wrapper.unmount()
+    })
+
     // The accepted asymmetry (ADR keybindings-are-chord-sequences-not-a-leader-key):
     // a sequence cannot start while an overlay owns the screen, so 'g' then 't'
     // never reaches tasks.toggle once Tasks is already open — only the chord,
@@ -1797,7 +1811,7 @@ describe('App', () => {
       // row — whose run would strand the palette in a scope with no tab and
       // no possible rows — is hidden along with its tab.
       const legendIds = palette.results.value.filter((cmd) => cmd.group === 'Sigils').map((cmd) => cmd.id)
-      expect(legendIds).toEqual(['keys:sigil:goto', 'keys:sigil:actions', 'keys:sigil:keys'])
+      expect(legendIds).toEqual(['keys:sigil:goto', 'keys:sigil:actions', 'keys:sigil:drive', 'keys:sigil:keys'])
 
       palette.scope.value = 'all'
       wrapper.unmount()
@@ -3385,23 +3399,22 @@ describe('App', () => {
     const { wrapper, router } = await mountAppWithRouter()
 
     const palette = useCommandPalette()
-    palette.toggle()
+    const documentId = 'document:workspaces/my-workspace:reports/perf.canvas.json'
+    palette.openWithScope('drive')
     await flushPromises()
-    palette.query.value = ''
-    const row = palette.results.value.find(
-      (candidate) => candidate.id === 'document:workspaces/my-workspace:reports/perf.canvas.json',
-    )
+    const row = palette.results.value.find((candidate) => candidate.id === documentId)
     expect(row?.title).toBe('Perf report')
     expect(row?.group).toBe('my-workspace')
     expect(row?.kind).toBe('document')
 
-    // Only the title and the path match: a generic "drive" keyword buried the
-    // Drive commands under every document.
-    const documentId = 'document:workspaces/my-workspace:reports/perf.canvas.json'
-    palette.query.value = 'drive'
-    expect(palette.results.value.some((candidate) => candidate.id === documentId)).toBe(false)
     palette.query.value = 'reports/perf'
     expect(palette.results.value.some((candidate) => candidate.id === documentId)).toBe(true)
+
+    // Documents stay out of the tabs that hold commands, even for an exact match.
+    for (const scope of ['all', 'goto', 'actions'] as const) {
+      palette.setScope(scope)
+      expect(palette.results.value.some((candidate) => candidate.id === documentId)).toBe(false)
+    }
 
     await palette.run(row!)
     await flushPromises()

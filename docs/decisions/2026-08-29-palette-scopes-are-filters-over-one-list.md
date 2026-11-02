@@ -19,10 +19,15 @@ same filter All uses, so selecting either cannot show a row All would not. A
 user who never learns the scopes still reaches everything. A scope is chosen
 explicitly and is independent of which view is mounted: Go to lists sessions,
 windows, settings sections, and chats the same way in the feed or in Code. The
-Shell and Keys scopes are the exceptions: each answers from its own source (the
+Shell and Keys scopes are exceptions: each answers from its own source (the
 typed command line, the keymap) and shows only where one is registered.
 
-The tab strip is the primary surface; sigils (`@`, `>`, `!`, `?`, declared in
+Drive is the other exception. Its document rows sit on the one list, but only
+the Drive scope shows them: All and Go to leave them out, because a drive holds
+enough documents to bury every command. A document is reached through the tab,
+`#`, or `palette.drive`.
+
+The tab strip is the primary surface; sigils (`@`, `>`, `#`, `!`, `?`, declared in
 `palette/scopes.ts`) are a fast path into the same scopes. `setQuery` treats a
 sigil as an entry only as the first character of an empty query, so a literal
 `@` mid-edit stays text. `Tab` / `Shift+Tab` cycle the visible scopes, and
