@@ -37,6 +37,10 @@ runs:
       shell: bash
       run: |
         sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list /etc/apt/sources.list.d/azure-cli.list
+        # A runner is thrown away after the job, so skip what dpkg does for a
+        # machine that lives on: man-db indexing and fsync per package.
+        sudo rm -f /var/lib/man-db/auto-update
+        echo force-unsafe-io | sudo tee /etc/dpkg/dpkg.cfg.d/force-unsafe-io >/dev/null
         archives="$HOME/.cache/apt-archives"
         mkdir -p "$archives/partial"
         sudo apt-get update -q
