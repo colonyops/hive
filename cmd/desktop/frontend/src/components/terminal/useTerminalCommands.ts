@@ -12,6 +12,8 @@ import IconTrash from '~icons/lucide/trash-2'
 import { useCommands, useShellEscape, type Command } from '../../composables/useCommands'
 import type { TerminalWindowTab } from '../../composables/useTerminalWindows'
 import { activePaneOf } from '../../lib/terminalLayout'
+import { closeTab, focusedTab } from '../../lib/panelLayout'
+import { focusedWindow, inTabOrder, revealWindow } from '../../lib/windowTabs'
 import { paneMayAutoFocus, setTerminalTreeHandles } from '../../lib/terminalTree'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { MenuActionEntry, MenuEntry } from '@hive/ui/types/menu'
@@ -144,7 +146,7 @@ export function attachedSessionCommands(context: TerminalModeContext, attached: 
  * hub; the registrations gate on `active` instead.
  */
 export function useTerminalCommands(context: TerminalModeContext, active: () => boolean): void {
-  const { pool, tree, nav, ops } = context
+  const { pool, tree, nav, ops, panels } = context
   const { current, activeSlug } = pool
 
   useCommands(() => {
@@ -170,19 +172,24 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
   }, active)
 
   // A chord that names a window is an intent to type in it, so the tree cursor
-  // follows and the pane may take focus.
+  // follows and the terminal may take focus.
   function goToWindow(tab: TerminalWindowTab | undefined): void {
     if (!tab) return
     const row = tree.attachedRow.value
     if (row) nav.cursorRequest.value = windowKey(row, tab.windowId)
     paneMayAutoFocus.value = true
+    panels.apply((layout) => revealWindow(layout, tab.windowId))
     void current.value?.select(tab.windowId)
   }
 
   // Wrapping, where the tree's walk clamps: a session's windows are a ring in
   // every terminal emulator.
+  function windowsInTabOrder(): TerminalWindowTab[] {
+    return inTabOrder(current.value?.tabs.value ?? [], panels.layout.value)
+  }
+
   function relativeWindow(delta: number): TerminalWindowTab | undefined {
-    const tabs = current.value?.tabs.value ?? []
+    const tabs = windowsInTabOrder()
     const at = tabs.findIndex((tab) => tab.windowId === current.value?.activeWindowId.value)
     if (at < 0) return undefined
     return tabs[(at + delta + tabs.length) % tabs.length]
@@ -198,7 +205,7 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
       focusFilter: nav.focusFilter,
       focusPane: (): void => current.value?.focusActive(),
       // Counted along the strip rather than clamped: ⌘3 means the third window.
-      selectWindow: (position: number): void => goToWindow(current.value?.tabs.value[position - 1]),
+      selectWindow: (position: number): void => goToWindow(windowsInTabOrder()[position - 1]),
       stepWindow: (delta: number): void => goToWindow(relativeWindow(delta)),
       newWindow: (): void => {
         const row = tree.attachedRow.value
@@ -207,11 +214,18 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
         // tmux names the window, so there is no key to point the cursor at yet;
         // it falls back to the active window, which is the new one once it lands.
         nav.cursorRequest.value = ''
-        void ops.newWindowIn(row)
+        void panels.newWindow(row)
       },
       closeWindow: (): void => {
-        const windowId = current.value?.activeWindowId.value
-        if (windowId) void ops.requestCloseWindow(activeSlug.value, windowId, activeTab()?.name ?? '')
+        // The chord closes what is in front of the user, and a view hides the active window.
+        const layout = panels.layout.value
+        const windowId = focusedWindow(layout)
+        if (windowId) {
+          const name = current.value?.tabs.value.find((tab) => tab.windowId === windowId)?.name ?? ''
+          void ops.requestCloseWindow(activeSlug.value, windowId, name)
+        } else {
+          panels.apply((now) => closeTab(now, now.focusedPanel, focusedTab(now)))
+        }
       },
       splitPane: (direction): void => {
         paneMayAutoFocus.value = true

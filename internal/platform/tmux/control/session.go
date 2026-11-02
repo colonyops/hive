@@ -86,6 +86,57 @@ func (m *Manager) NewCommandWindow(ctx context.Context, slug, dir, name, command
 	return strings.TrimSpace(lines[0]), nil
 }
 
+// NewDetachedWindow opens a login shell in a new window of slug's session, in
+// dir, and returns the window's id. -d leaves the session's current window
+// where it is: a control client follows the current window, so a window an
+// agent asked for must not move the screen from under the user. -c is spelled
+// out because tmux resolves a missing directory against the calling process.
+// It never creates a missing session.
+func (m *Manager) NewDetachedWindow(ctx context.Context, slug, dir, name string) (string, error) {
+	exists, err := m.HasSession(ctx, slug)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", fmt.Errorf("%w: %s is not running", ErrNotAttached, slug)
+	}
+	args := []string{"new-window", "-d", "-t", "=" + slug + ":", "-c", dir}
+	if name != "" {
+		args = append(args, "-n", name)
+	}
+	args = append(args, "-P", "-F", "#{window_id}", "--")
+	args = append(args, loginShellArgv("")...)
+	lines, err := m.oneShot(ctx, args...)
+	if err != nil {
+		return "", fmt.Errorf("tmuxcc: new detached window in %s: %w", slug, err)
+	}
+	if len(lines) == 0 || !validWindowID(strings.TrimSpace(lines[0])) {
+		return "", fmt.Errorf("tmuxcc: new-window returned no window id")
+	}
+	return strings.TrimSpace(lines[0]), nil
+}
+
+// KillWindow ends one window of slug's session and everything running in it.
+// It is a one-shot rather than a control-stream command so a window closes
+// whether or not this app holds a client on the session. The target spells
+// the session's exact name and the window's id, so a name a caller supplied
+// cannot address another session.
+func (m *Manager) KillWindow(ctx context.Context, slug, windowID string) error {
+	if slug == "" {
+		return fmt.Errorf("%w: empty slug", ErrInvalidName)
+	}
+	if !validWindowID(windowID) {
+		return fmt.Errorf("%w: %q is not a window id", ErrUnknownWindow, windowID)
+	}
+	if err := m.Available(ctx); err != nil {
+		return err
+	}
+	if _, err := m.oneShot(ctx, "kill-window", "-t", "="+slug+":"+windowID); err != nil {
+		return fmt.Errorf("tmuxcc: kill window %s in %s: %w", windowID, slug, err)
+	}
+	return nil
+}
+
 // CapturePane returns the current screen of name's active pane. -p prints to
 // stdout and -J joins wrapped lines — the exact capture-pane invocation
 // hive's own status detection runs

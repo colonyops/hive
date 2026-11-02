@@ -30,6 +30,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/telemetry"
 	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/internal/platform/desktopendpoint"
 	"github.com/colonyops/hive/internal/platform/execenv"
 	"github.com/colonyops/hive/internal/platform/observe"
 	"github.com/colonyops/hive/internal/platform/secrets"
@@ -315,6 +316,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// The hive CLI finds this run's MCP server through the endpoint file in the
+	// data directory it shares with the engine (hive dt tab ...). Written after
+	// Start, which is when the loopback port exists.
+	if base := core.MCPBaseURL(ctx); base != "" {
+		endpoint := desktopendpoint.Endpoint{URL: base, PID: os.Getpid(), StartedAt: time.Now()}
+		if err := desktopendpoint.Write(core.HiveDataDir(), endpoint); err != nil {
+			logger.Warn().Err(err).Msg("the desktop endpoint file was not written; hive dt commands need --url")
+		}
+	}
 
 	// Registered as a shutdown hook and called again after Run, because which
 	// of the two fires is the platform's business: on macOS Quit is [NSApp
@@ -324,6 +334,14 @@ func main() {
 	shutdown := sync.OnceFunc(func() {
 		ui.Close()
 		cancel()
+		// Only this process's own file: a second instance on the same data
+		// directory, such as a dev build beside the installed app, may have
+		// written its endpoint since.
+		if current, err := desktopendpoint.Read(core.HiveDataDir()); err == nil && current.PID == os.Getpid() {
+			if err := desktopendpoint.Remove(core.HiveDataDir()); err != nil {
+				logger.Warn().Err(err).Msg("the desktop endpoint file was not removed")
+			}
+		}
 		if err := core.Close(); err != nil {
 			logger.Warn().Err(err).Msg("core shutdown reported an error")
 		}

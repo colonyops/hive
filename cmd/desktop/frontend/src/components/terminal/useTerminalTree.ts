@@ -4,8 +4,12 @@ import { useSessionStatuses } from '../../composables/useSessionStatuses'
 import { useTerminalWindowListings } from '../../composables/useTerminalWindowListings'
 import { useWailsEvent } from '../../composables/useWailsEvent'
 import { activityIndicator, type StatusIndicator } from '../../lib/agentActivity'
+import { agentIconID, type AgentIconID } from '../../lib/agentIcon'
+import { orderedTabs, type PanelTab } from '../../lib/panelLayout'
 import type { WindowState } from '../../lib/terminalClient'
+import { windowIdOf, windowOrder, windowTabId } from '../../lib/windowTabs'
 import { useAgentSessionsAll } from '../../stores/useAgentSessionsAll'
+import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
 import { useTerminalPinnedChats } from '../../stores/useTerminalPinnedChats'
 import {
@@ -28,6 +32,17 @@ export interface TreeWindowRow {
   active: boolean
   live: boolean
   indicator: StatusIndicator | null
+  /** Whose mark the row carries: the tool hive detected, or failing that the window's name. */
+  agent?: AgentIconID
+}
+
+/** A row under a session: a window or a view, each the mirror of one tab. */
+export interface TreeItem {
+  key: string
+  /** The tab this row mirrors, which is what a drag moves. */
+  tabId: string
+  win: TreeWindowRow | null
+  view: { panel: string; tab: PanelTab } | null
 }
 
 export type TerminalTree = ReturnType<typeof useTerminalTree>
@@ -44,6 +59,7 @@ const SERVER_POLL_MS = 30_000
  */
 export function useTerminalTree(options: { pool: TerminalPool; active: () => boolean }) {
   const { pool, activeSlug } = options.pool
+  const panelLayouts = usePanelLayouts()
   const { client } = useTerminalAvailability()
   const {
     sessions: sessionRows,
@@ -60,7 +76,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     reloadServers,
   } = useTerminalSessions()
   const { rows: chatRows, slugs: chatSlugs, unpinSlug } = useTerminalPinnedChats()
-  const { recents, reload: reloadRecents } = useAgentSessionsAll()
+  const { recents, recentsLoaded, reload: reloadRecents } = useAgentSessionsAll()
   const {
     statuses: sessionStatuses,
     loaded: statusesLoaded,
@@ -232,6 +248,10 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     return status ? activityIndicator(status.status, status.tool) : null
   }
 
+  function windowAgent(row: TerminalSessionRow, windowId: string, name: string): AgentIconID | undefined {
+    return agentIconID(windowStatus(row, windowId)?.tool ?? '') ?? agentIconID(name)
+  }
+
   // The scratch section is exempt from "always show windows": its tabs are the
   // section itself, and hiding them leaves a heading that says nothing.
   function listedWindows(row: TerminalSessionRow): WindowState[] {
@@ -244,6 +264,15 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
   // not collapse its subtree. A chat is one conversation, so its row is a leaf.
   function buildWindowRows(row: TerminalSessionRow): TreeWindowRow[] {
     if (isChat(row)) return []
+    const order = windowOrder(panelLayouts.layoutOf(row.id))
+    const rank = (windowId: string): number => {
+      const at = order.indexOf(windowId)
+      return at < 0 ? order.length : at
+    }
+    return unorderedWindowRows(row).sort((a, b) => rank(a.windowId) - rank(b.windowId))
+  }
+
+  function unorderedWindowRows(row: TerminalSessionRow): TreeWindowRow[] {
     const live = pool.get(row.slug)
     if (live?.tabs.value.length && (row.slug === activeSlug.value || showAllWindows.value || isScratch(row))) {
       return live.tabs.value.map((tab) => ({
@@ -252,6 +281,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
         active: row.slug === activeSlug.value && tab.windowId === live.activeWindowId.value,
         live: true,
         indicator: windowIndicator(row, tab.windowId),
+        agent: windowAgent(row, tab.windowId, tab.name),
       }))
     }
     return listedWindows(row).map((win) => ({
@@ -260,6 +290,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
       active: false,
       live: false,
       indicator: windowIndicator(row, win.windowId),
+      agent: windowAgent(row, win.windowId, win.name),
     }))
   }
 
@@ -276,6 +307,34 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     return windowRows.value[row.id] ?? []
   }
 
+  // The rows mirror the tabs, in the layout's order. A window no tab holds yet,
+  // as before the session's first attach, follows them: that is where the window
+  // chords count it, so the walk and the chords agree.
+  function buildTreeItems(row: TerminalSessionRow): TreeItem[] {
+    const windows = windowRowsFor(row)
+    const tabs = orderedTabs(panelLayouts.layoutOf(row.id))
+    const placed = tabs.flatMap(({ panel, tab }): TreeItem[] => {
+      const windowId = windowIdOf(tab)
+      if (!windowId) return [{ key: `view:${tab.id}`, tabId: tab.id, win: null, view: { panel, tab } }]
+      const win = windows.find((candidate) => candidate.windowId === windowId)
+      return win ? [{ key: win.windowId, tabId: tab.id, win, view: null }] : []
+    })
+    const unplaced = windows
+      .filter((win) => !tabs.some(({ tab }) => tab.id === windowTabId(win.windowId)))
+      .map((win) => ({ key: win.windowId, tabId: windowTabId(win.windowId), win, view: null }))
+    return [...placed, ...unplaced]
+  }
+
+  const treeItems = computed<Record<string, TreeItem[]>>(() => {
+    const items: Record<string, TreeItem[]> = {}
+    for (const row of attachable.value) items[row.id] = buildTreeItems(row)
+    return items
+  })
+
+  function treeItemsFor(row: TerminalSessionRow): TreeItem[] {
+    return treeItems.value[row.id] ?? []
+  }
+
   return {
     activeSessions,
     attachable,
@@ -285,6 +344,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     prunableCount,
     recents,
     reloadRecents,
+    recentsLoaded,
     chatSlugs,
     unpinSlug,
     sessionsLoading,
@@ -308,6 +368,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     isOfflineSlug,
     serverPending,
     reloadServers,
+    serversLoaded,
     hue,
     sessionServer,
     rowRunning,
@@ -315,6 +376,8 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     groupAttached,
     groupRunning,
     windowStatus,
+    windowAgent,
     windowRowsFor,
+    treeItemsFor,
   }
 }

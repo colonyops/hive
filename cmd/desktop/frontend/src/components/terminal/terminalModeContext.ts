@@ -1,5 +1,6 @@
 import { inject, provide, proxyRefs, type InjectionKey, type ShallowUnwrapRef } from 'vue'
 import type { useSessionActions } from '../../composables/useSessionActions'
+import type { SessionPanels } from './useCodePanels'
 import type { SessionTreeView } from './useSessionTreeView'
 import type { TerminalAttach } from './useTerminalAttach'
 import type { TerminalPool } from './useTerminalPool'
@@ -11,7 +12,7 @@ import type { WindowRename } from './useWindowRename'
 
 /**
  * The Code view's per-instance state, built by TerminalMode and read by its
- * sidebar and pane column. Provided rather than passed as props because both
+ * sidebar and panel column. Provided rather than passed as props because both
  * halves read most of it, and the state has to outlive a collapsed sidebar.
  */
 export interface TerminalModeContext {
@@ -24,6 +25,7 @@ export interface TerminalModeContext {
   ops: TerminalSessionOps
   rename: WindowRename
   sessions: ReturnType<typeof useSessionActions>
+  panels: SessionPanels
 }
 
 /** The context as the children see it: each part's refs unwrapped one level, as in a template. */

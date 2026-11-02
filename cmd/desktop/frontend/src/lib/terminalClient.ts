@@ -134,7 +134,8 @@ export interface TerminalClient {
    * it is absent from the result.
    */
   listWindows(slugs: string[]): Promise<Record<string, WindowState[]>>
-  resize(slug: string, cols: number, rows: number): Promise<void>
+  /** With a window id this asks for that window's own grid, instead of voting for the session. */
+  resize(slug: string, cols: number, rows: number, windowId?: string): Promise<void>
   newWindow(slug: string): Promise<{ windowId: string }>
   newAgentWindow(slug: string, agent: string): Promise<{ windowId: string }>
   closeWindow(slug: string, windowId: string): Promise<void>
@@ -225,8 +226,8 @@ export function createTerminalClient(endpoint: TerminalEndpoint): TerminalClient
       }
       return listings
     },
-    async resize(slug, cols, rows) {
-      await post('/api/terminal/resize', { slug, cols, rows })
+    async resize(slug, cols, rows, windowId) {
+      await post('/api/terminal/resize', windowId ? { slug, cols, rows, windowId } : { slug, cols, rows })
     },
     async newWindow(slug) {
       const body = await post<{ windowId: string }>('/api/terminal/windows/new', { slug })

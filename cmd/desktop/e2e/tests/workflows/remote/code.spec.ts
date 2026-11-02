@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { type Page } from '@playwright/test'
+import { screenshotPath } from '../../../fixtures/paths.js'
 import { serverURL } from '../../../fixtures/servers.js'
 import { expect, resetServerState, tag, test } from '../../../fixtures/test.js'
 import { bindingID } from '../../../fixtures/wails.js'
@@ -149,23 +150,34 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
     await expect(page.getByTestId('terminal-pane-statusbar-reveal')).toHaveCount(0)
     await expect(page.getByTestId('terminal-pane-statusbar-open-editor')).toHaveCount(0)
     await expect(page.getByTestId('terminal-statusbar-changes')).toHaveCount(0)
-    await expect(page.getByTestId('terminal-pane-host')).toHaveText('server-a')
+    await expect(page.getByTestId('session-status-host')).toHaveText('server-a')
   })
 
-  test('does not offer Changes for a server session', async ({ page }) => {
+  test('gives a server session tabs and a split, without the views that need a checkout', async ({ page, browserName }) => {
     await stubTerminals(page)
     await page.goto(`/#/terminal/${SLUG}`)
-    await expect(page.getByTestId('terminal-mode')).toBeVisible()
     await findSession(page)
     await expect(sessionRow(page)).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('panel-tab-add-p0')).toBeVisible()
+    await expect(page.getByTestId('session-status-host')).toHaveText('server-a')
 
-    await page.keyboard.press('Meta+k')
-    await page.getByTestId('command-palette-input').fill('Toggle Changes')
-    await expect(page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' })).toHaveCount(0)
+    await page.getByTestId('panel-tab-add-p0').click()
+    await expect(page.getByTestId('new-window-terminal')).toBeVisible()
+    await expect(page.getByTestId('new-window-view-diff')).toHaveCount(0)
+    await expect(page.getByTestId('new-window-view-tasks')).toHaveCount(0)
     await page.keyboard.press('Escape')
 
-    await page.keyboard.press('Meta+Alt+g')
-    await expect(page.getByTestId('changes-view')).toHaveCount(0)
+    await page.getByTestId('panel-split-row-p0').click()
+    await expect(page.getByTestId('panel-picker')).toBeVisible()
+    const before = (await page.getByTestId('panel-p0').boundingBox())!
+    const divider = (await page.getByTestId('panel-divider-s1').boundingBox())!
+    await page.mouse.move(divider.x + 3, divider.y + 100)
+    await page.mouse.down()
+    await page.mouse.move(divider.x + 103, divider.y + 100, { steps: 8 })
+    await page.mouse.up()
+    expect((await page.getByTestId('panel-p0').boundingBox())!.width).toBeCloseTo(before.width + 100, -1)
+    await page.screenshot({ path: screenshotPath(`session-tabs-server-${browserName}.png`) })
+    await page.getByTestId('panel-picker-cancel').click()
   })
 
   test('deletes the session on the server', async ({ page }) => {

@@ -66,6 +66,7 @@ export interface AppearanceSettings {
     "terminalLineHeight": number;
     "terminalLetterSpacing": number;
     "terminalShowScrollbars": boolean;
+    "terminalMonochromeAgentIcons": boolean;
 
     /**
      * TerminalShowWindows lists every active session's tmux windows in the
@@ -240,19 +241,6 @@ export interface DocumentWire {
 }
 
 /**
- * DriveToggle is the drive:toggle payload: whose pane to open or close, a
- * chat's or a hive session's, and the document to pin when opening (empty
- * leaves the pane's pick).
- */
-export interface DriveToggle {
-    "session": string;
-    "hiveSession": string;
-    "space": string;
-    "path": string;
-    "open": boolean;
-}
-
-/**
  * DriveWrite is the drive:updated payload: the space and the document paths
  * that changed, and who wrote them when an agent did through the desktop, a
  * chat (Session) or a hive session (HiveSession), never both. Both are empty
@@ -383,6 +371,17 @@ export interface KeybindingSettings {
 }
 
 /**
+ * LayoutReport is every layout of one kind. Kind is code or chats, OnScreen
+ * the key on screen in that kind's area (empty for none), and Layouts is keyed
+ * by hive session id for code and chat session id for chats.
+ */
+export interface LayoutReport {
+    "kind": string;
+    "onScreen": string;
+    "layouts": { [_ in string]?: PanelLayoutWire } | null;
+}
+
+/**
  * MarkImageView is a stored feed-mark image: the content Hash a source node
  * records in its config and the normalized PNG as a data URL for preview.
  */
@@ -469,6 +468,32 @@ export interface ObservabilitySettings {
  */
 export interface OnboardingSettings {
     "completed": boolean;
+}
+
+export interface PanelLayoutWire {
+    "root": PanelNodeWire;
+    "focusedPanel": string;
+}
+
+/**
+ * PanelNodeWire is a panel or a split, by Kind. A split's two Children are
+ * its first and second side.
+ */
+export interface PanelNodeWire {
+    "kind": string;
+    "id": string;
+    "tabs": PanelTabWire[] | null;
+    "activeTab": string;
+    "picking": boolean;
+    "axis": string;
+    "ratio": number;
+    "children": PanelNodeWire[] | null;
+}
+
+export interface PanelTabWire {
+    "id": string;
+    "kind": string;
+    "windowId": string;
 }
 
 /**
@@ -719,6 +744,28 @@ export interface SessionGitStatus {
     "repo": string;
     "resolved": boolean;
     "error": string;
+}
+
+/**
+ * SessionLayout is the session:layout payload: whose layout to change, a
+ * chat's or a hive session's, and the verb (open, close, move, focus,
+ * close_panel, resize or turn). View and Window name the tab acted on, and
+ * AnchorView and AnchorWindow the tab an open or move places relative to.
+ * Path pins a Drive document on open, Placement is behind, beside or below,
+ * and Share is the resize share (0 when unused).
+ */
+export interface SessionLayout {
+    "session": string;
+    "hiveSession": string;
+    "space": string;
+    "verb": string;
+    "view": string;
+    "window": string;
+    "anchorView": string;
+    "anchorWindow": string;
+    "path": string;
+    "placement": string;
+    "share": number;
 }
 
 /**

@@ -374,6 +374,31 @@ describe('TasksView', () => {
     wrapper.unmount()
   })
 
+  // A hidden or unfocused Tasks tab stays mounted and listens on the window, so
+  // its host says when the keys are its own.
+  it('ignores its keys while it is not the tab in front with the keyboard', async () => {
+    mocks.ListTasks.mockResolvedValue([task('t1'), task('t2')])
+    mocks.ReadTaskDetail.mockImplementation((id: string) => Promise.resolve(detailFrom(task(id))))
+    const wrapper = mount(TasksView, { props: { embedded: true, keysActive: false } })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="task-detail-title"]').text()).toBe('Task t1')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd' }))
+    await flushPromises()
+    expect(wrapper.get('[data-testid="task-detail-title"]').text()).toBe('Task t1')
+    expect(mocks.SetText).not.toHaveBeenCalled()
+    expect(mocks.SetTaskStatus).not.toHaveBeenCalled()
+
+    await wrapper.setProps({ keysActive: true })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j' }))
+    await flushPromises()
+    expect(wrapper.get('[data-testid="task-detail-title"]').text()).toBe('Task t2')
+
+    wrapper.unmount()
+  })
+
   it('copies the selected row id to the clipboard with y and confirms it with a toast', async () => {
     mocks.ListTasks.mockResolvedValue([task('t1'), task('t2')])
     mocks.ReadTaskDetail.mockImplementation((id: string) => Promise.resolve(detailFrom(task(id))))

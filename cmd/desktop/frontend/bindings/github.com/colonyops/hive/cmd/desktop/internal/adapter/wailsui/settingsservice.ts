@@ -136,6 +136,10 @@ export function SetTerminalLineHeight(lineHeight: number): $CancellablePromise<v
     return $Call.ByID(375201723, lineHeight);
 }
 
+export function SetTerminalMonochromeAgentIcons(monochrome: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2415788614, monochrome);
+}
+
 export function SetTerminalPoolSize(size: number): $CancellablePromise<void> {
     return $Call.ByID(3334784753, size);
 }

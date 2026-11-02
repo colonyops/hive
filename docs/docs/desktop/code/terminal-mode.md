@@ -117,7 +117,7 @@ redraw on a resize shows its text without the image.
 - Use <kbd>⌘B</kbd> (Windows/Linux: <kbd>Ctrl+B</kbd>) to show or hide the left sidebar, including while a terminal has focus.
 - Press <kbd>/</kbd> while the sidebar is focused to filter sessions.
 - Press <kbd>⌘F</kbd> in a terminal to search its recent scrollback.
-- Drag windows in the sidebar to reorder them.
+- Drag windows and views in the sidebar to reorder them.
 
 Press <kbd>?</kbd> for the current shortcut list. Shortcuts can be changed under **Settings ▸ Keyboard**.
 
@@ -135,9 +135,23 @@ A window shows every tmux pane where tmux lays it out, including panes split fro
 
 On Linux, <kbd>Ctrl+Shift+D</kbd> splits right, <kbd>Ctrl+Shift+O</kbd> splits down, <kbd>Ctrl+Alt</kbd> with the arrow keys moves between panes, <kbd>Ctrl+Shift+M</kbd> zooms, and <kbd>Ctrl+Shift+Q</kbd> closes the pane.
 
+## Tabs and splits
+
+A session's windows show as tabs above the terminal, in the order the sidebar lists them. The `+` on the tab row, like the one on the session's row, adds a terminal, an agent, or one of the session's views: **Drive**, **Diff**, and **Tasks**. A view opens once per session, so asking for it again brings its tab forward.
+
+The two buttons at the right of the tab row split the panel to the right or downward. The new panel asks what goes in it: a window that is behind another tab, a new terminal or agent, or a view. Splits nest, and each one can go either way.
+
+- Drag a tab to reorder it or to move it into another panel. Moving a window's tab moves the window in tmux too, so <kbd>⌘1</kbd> to <kbd>⌘9</kbd> count the windows in the order their tabs appear; a Drive, Diff, or Tasks tab is skipped.
+- Drag the divider between two panels to resize them. Double-click it to size them evenly, or press the arrow keys while it has focus. The button on the divider turns a side-by-side split into a stacked one, and back.
+- **Close this panel** merges its tabs into the panel beside it. <kbd>⌘W</kbd> closes the tab in front of you: a window's tab asks tmux first, and a view's tab closes at once.
+
+The sidebar lists every tab of a session in the same order, windows and views alike. Select a view's row to bring it forward, and drag rows to reorder them. Hive remembers each session's tabs and splits across restarts, and forgets them when you close the session.
+
+An agent in the session can arrange these tabs too, from MCP or from `hive dt`. See [Agents and the layout](agent-layout.md).
+
 ## Tasks
 
-Open **Tasks** from the Code status bar, the command palette, or its configured shortcut. It reads the same `hive hc` task tree used by coding agents and the CLI. See the hive CLI [task tracking guide](../../cli/getting-started/task-tracking.md) for the shared task model.
+Open **Tasks** from the command palette or its configured shortcut, or add a **Tasks** tab to a session with its `+` button. It reads the same `hive hc` task tree used by coding agents and the CLI. See the hive CLI [task tracking guide](../../cli/getting-started/task-tracking.md) for the shared task model.
 
 Switch between two layouts at the top of the view:
 
@@ -152,7 +166,7 @@ Use <kbd>J</kbd> and <kbd>K</kbd> (or the arrow keys) to move the selection. On 
 
 ## Changes
 
-**Changes** shows what an agent changed in the session on screen, without leaving Hive. It needs a repository session on this machine on screen, so scratch terminals, pinned chats, and sessions on a server don't offer it. Open it with <kbd>⌘⌥G</kbd> (Windows/Linux: <kbd>Ctrl+Alt+G</kbd>), **Toggle Changes** in the command palette, the file button in the status bar, or the line counts beside the branch. It opens over the session and closes with <kbd>Esc</kbd>. To [rebind](../configuration/keybindings.md#rebinding) the shortcut, use the command id `changes.toggle`.
+**Changes** shows what an agent changed in the session on screen, without leaving Hive. It needs a repository session on this machine on screen, so scratch terminals, pinned chats, and sessions on a server don't offer it. To open it, add a **Diff** tab with the session's `+` button, or select the line counts beside the branch in the status bar.
 
 Every changed file's diff sits in one scroll, with the files listed beside it. The picker in the header chooses what to review:
 
@@ -176,7 +190,6 @@ Branch changes, Uncommitted, and Unstaged include untracked files.
 | <kbd>b</kbd> | Show or hide the file list |
 | <kbd>r</kbd> | Show or hide the comments panel |
 | <kbd>⌘↵</kbd> (Windows/Linux: <kbd>Ctrl+Enter</kbd>) | Send your comments to the agent |
-| <kbd>Esc</kbd> | Close |
 
 The view refreshes every 5 seconds while it's open and the window has focus. A viewed file comes back unviewed when it changes again. Viewed marks last until you quit Hive.
 
@@ -214,19 +227,21 @@ An agent in a Code session can publish documents to Drive the same way a chat do
 claude mcp add --scope user --transport http hive-drive http://127.0.0.1:<port>/mcp/drive
 ```
 
-The address stays the same across restarts. An agent already set up with `/mcp/canvas` keeps working. The server needs the local HTTP server, which is enabled by default. An empty Drive pane in Code links to the same settings page.
+The address stays the same across restarts. An agent already set up with `/mcp/canvas` keeps working. The server needs the local HTTP server, which is enabled by default. An empty Drive tab in Code links to the same settings page.
 
-Open the Drive pane beside a session with the right-panel button in the title bar. A session's documents belong to its repository, so every session of that repository shows the same ones, and they remain after the session is deleted. They are in `<root>/<owner>/<repo>/` under the hive context directory, which `hive drive init` links into a checkout as `.hive`, so a file you write to `.hive/plans/` shows in the pane within a second.
+Open a session's **Drive** tab with the `+` button on its tab row or its row in the sidebar. A document an agent opens arrives as a Drive tab behind the one you are reading, with a dot until you look at it. A session's documents belong to its repository, so every session of that repository shows the same ones, and they remain after the session is deleted. They are in `<root>/<owner>/<repo>/` under the hive context directory, which `hive drive init` links into a checkout as `.hive`, so a file you write to `.hive/plans/` shows in the tab within a second.
 
-The pane, the Drive page, search, reorganizing, and the document tools work as they do in [Chats](../chats/agent-workspaces.md#drive). A scratch terminal has no Drive pane.
+The tab, the Drive page, search, reorganizing, and the document tools work as they do in [Chats](../chats/agent-workspaces.md#drive). In a narrow tab the file tree starts hidden; the button in the header brings it back. A scratch terminal has no Drive tab.
 
-An agent outside any chat or Code session, such as one you start in a plain terminal, can still write documents: it passes `global` as its session, and every such agent shares the Shared space. It has no pane. Read it on the Drive page under **Shared**, or find a document by name in the command palette's **Drive** tab.
+An agent outside any chat or Code session, such as one you start in a plain terminal, can still write documents: it passes `global` as its session, and every such agent shares the Shared space. It has no tab. Read it on the Drive page under **Shared**, or find a document by name in the command palette's **Drive** tab.
 
 ## Appearance
 
 **Settings ▸ Terminal** controls the terminal font, size, weight, line height, letter spacing, visible windows, status bar, and session age badges. Age badges are on by default with a five-day threshold and appear once a Hive session reaches the configured number of whole days since creation. Scratch terminals and pinned chats do not get one.
 
 <kbd>⌘+</kbd> and <kbd>⌘-</kbd> step the text size by 2px from a terminal without opening Settings, up to 64px, and <kbd>⌘0</kbd> puts it back to 13px. On Linux, use <kbd>Ctrl+Shift</kbd> with the same keys.
+
+Turn on **Monochrome agent icons** in **Settings ▸ Terminal** for a subtler look: agent icons in the session tree and tabs then take the color of the icons around them.
 
 Enable **Show scrollbars** in **Settings ▸ Terminal** to drag through scrollback
 in single-pane and zoomed Code terminals. It is off by default and applies to

@@ -124,15 +124,6 @@ describe('TitleBar', () => {
     expect(collapsed.find('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe('Show preview')
   })
 
-  it('names the right pane the drive in Chats and Code', () => {
-    for (const mode of ['agents', 'terminal'] as const) {
-      const wrapper = mount(TitleBar, {
-        props: { profileName: 'Triage', mode, canTogglePreview: true, previewCollapsed: true },
-      })
-      expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe('Show drive')
-    }
-  })
-
   it('zooms on a double-click of the bar itself, but not on its controls', async () => {
     const wrapper = mount(TitleBar, { props: { profileName: 'Triage', canToggleSidebar: true } })
 

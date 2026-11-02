@@ -549,12 +549,12 @@ func (m *Manager) ListAllWindows(ctx context.Context, slugs []string) (map[strin
 	}
 	windows := make(map[string][]Window, len(wanted))
 	// tmux answering no is a server with no sessions on it, which is no windows
-	// rather than an error — the same tolerance ListWindows extends to a slug
-	// tmux has never heard of. Any other failure degrades the same way, so one
-	// bad listing does not fail a sweep, but it is logged.
+	// rather than an error. Any other failure is returned: a caller asking
+	// whether a session ended must not read it as no windows, and a sweep keeps
+	// what it listed last time.
 	lines, err := m.oneShot(ctx, "list-windows", "-a", "-F", sessionWindowsFormat)
 	if err != nil && !tmuxAnsweredNo(err) {
-		m.log.Debug().Err(err).Msg("listing windows failed")
+		return nil, err
 	}
 	if err == nil {
 		for _, line := range lines {

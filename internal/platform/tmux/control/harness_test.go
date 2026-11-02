@@ -33,20 +33,26 @@ type fakeTmux struct {
 	// while it tears down, where Kill needs mu.
 	writeMu sync.Mutex
 
-	mu        sync.Mutex
-	num       int
-	kills     int
-	commands  []string
-	windows   []string
-	panes     map[string][]string
-	captures  map[string][]string
-	histories map[string][]string
-	cursors   map[string]string
-	options   map[string][]string
-	failures  map[string]string
-	splitPane string
-	onCommand func(cmd string)
-	closed    bool
+	mu       sync.Mutex
+	num      int
+	kills    int
+	commands []string
+	// sessionName is what tmux calls the session now; it starts as slug and a
+	// renameSession moves it, the way rename-session does on a real server.
+	sessionName string
+	windows     []string
+	panes       map[string][]string
+	captures    map[string][]string
+	histories   map[string][]string
+	cursors     map[string]string
+	options     map[string][]string
+	marks       map[string]string
+	clients     []string
+	silent      string
+	failures    map[string]string
+	splitPane   string
+	onCommand   func(cmd string)
+	closed      bool
 }
 
 func newFakeTmux(t *testing.T, slug string) *fakeTmux {
@@ -54,19 +60,21 @@ func newFakeTmux(t *testing.T, slug string) *fakeTmux {
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
 	f := &fakeTmux{
-		t:         t,
-		slug:      slug,
-		stdinR:    stdinR,
-		stdinW:    stdinW,
-		stdoutR:   stdoutR,
-		stdoutW:   stdoutW,
-		done:      make(chan struct{}),
-		panes:     map[string][]string{},
-		captures:  map[string][]string{},
-		histories: map[string][]string{},
-		cursors:   map[string]string{},
-		options:   map[string][]string{},
-		failures:  map[string]string{},
+		t:           t,
+		slug:        slug,
+		sessionName: slug,
+		stdinR:      stdinR,
+		stdinW:      stdinW,
+		stdoutR:     stdoutR,
+		stdoutW:     stdoutW,
+		done:        make(chan struct{}),
+		panes:       map[string][]string{},
+		captures:    map[string][]string{},
+		histories:   map[string][]string{},
+		cursors:     map[string]string{},
+		options:     map[string][]string{},
+		marks:       map[string]string{},
+		failures:    map[string]string{},
 	}
 	t.Cleanup(f.closeStreams)
 	return f
@@ -135,6 +143,10 @@ func (f *fakeTmux) serve() {
 
 func (f *fakeTmux) respond(cmd string) {
 	f.mu.Lock()
+	if f.silent != "" && strings.HasPrefix(cmd, f.silent) {
+		f.mu.Unlock()
+		return
+	}
 	for prefix, msg := range f.failures {
 		if strings.HasPrefix(cmd, prefix) {
 			f.mu.Unlock()
@@ -145,6 +157,45 @@ func (f *fakeTmux) respond(cmd string) {
 	f.mu.Unlock()
 
 	switch {
+	case strings.HasPrefix(cmd, "set-option") && strings.Contains(cmd, aggressiveResizeMark):
+		f.mu.Lock()
+		if strings.Contains(cmd, " -u ") {
+			delete(f.marks, argAfter(cmd, "-t"))
+		} else {
+			f.marks[argAfter(cmd, "-t")] = argAfter(cmd, aggressiveResizeMark)
+		}
+		f.mu.Unlock()
+		f.reply(nil, false)
+	case strings.HasPrefix(cmd, "show-options") && strings.Contains(cmd, aggressiveResizeMark):
+		f.mu.Lock()
+		mark, ok := f.marks[argAfter(cmd, "-t")]
+		f.mu.Unlock()
+		if ok {
+			f.reply([]string{mark}, false)
+		} else {
+			f.reply(nil, false)
+		}
+	case strings.HasPrefix(cmd, "list-windows") && strings.Contains(cmd, aggressiveResizeMark):
+		f.mu.Lock()
+		rows := make([]string, 0, len(f.marks))
+		for id, mark := range f.marks {
+			rows = append(rows, id+" "+mark)
+		}
+		f.mu.Unlock()
+		f.reply(rows, false)
+	case strings.HasPrefix(cmd, "list-clients"):
+		f.mu.Lock()
+		var clients []string
+		for _, row := range f.clients {
+			mode, session, _ := strings.Cut(row, " ")
+			if argAfter(cmd, "-t") != fakeSessionID {
+				clients = append(clients, row)
+			} else if session == f.sessionName {
+				clients = append(clients, mode)
+			}
+		}
+		f.mu.Unlock()
+		f.reply(clients, false)
 	case cmd == "detach":
 		f.reply(nil, false)
 		f.emit("%exit")
@@ -169,6 +220,8 @@ func (f *fakeTmux) respond(cmd string) {
 		}
 		f.mu.Unlock()
 		f.reply(lines, false)
+	case strings.HasPrefix(cmd, "display-message") && strings.Contains(cmd, "#{session_id}"):
+		f.reply([]string{fakeSessionID}, false)
 	case strings.HasPrefix(cmd, "display-message"):
 		f.mu.Lock()
 		reported, ok := f.cursors[argAfter(cmd, "-t")]
@@ -261,6 +314,37 @@ func (f *fakeTmux) setOption(target string, values ...string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.options[target] = values
+}
+
+// setMark sets a window's aggressive-resize mark, as an earlier client left it.
+func (f *fakeTmux) setMark(window, mark string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.marks[window] = mark
+}
+
+// fakeSessionID is the tmux id of the fake's one session, stable across a
+// renameSession as a real one is.
+const fakeSessionID = "$7"
+
+// setClients takes one row per attached client: "<client_control_mode>
+// <session_name>", the two fields a client count asks list-clients for.
+func (f *fakeTmux) setClients(rows ...string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.clients = rows
+}
+
+func (f *fakeTmux) renameSession(to string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sessionName = to
+}
+
+func (f *fakeTmux) setSilent(prefix string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.silent = prefix
 }
 
 func (f *fakeTmux) setOnCommand(hook func(cmd string)) {

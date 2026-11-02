@@ -97,6 +97,9 @@ type Appearance struct {
 	TerminalLetterSpacing int     `yaml:"terminal_letter_spacing,omitempty" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_LETTER_SPACING"`
 	// TerminalShowScrollbars shows scrollbars in single-pane and zoomed Code terminals.
 	TerminalShowScrollbars bool `yaml:"terminal_show_scrollbars,omitempty" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_SHOW_SCROLLBARS"`
+	// TerminalMonochromeAgentIcons draws Code's agent icons in the color of the
+	// icons around them rather than in full color.
+	TerminalMonochromeAgentIcons bool `yaml:"terminal_monochrome_agent_icons,omitempty" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_MONOCHROME_AGENT_ICONS"`
 	// TerminalShowWindows lists every active session's tmux windows in the
 	// terminal sidebar, not just the attached session's. On by default.
 	TerminalShowWindows bool `yaml:"terminal_show_windows" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_SHOW_WINDOWS"`

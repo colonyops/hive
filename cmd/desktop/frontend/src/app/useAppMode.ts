@@ -2,10 +2,11 @@ import { computed, ref, watch, type Ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { Window } from '@wailsio/runtime'
 import { useDriveRoute } from '../composables/useDriveRoute'
+import { docsScopeOf } from '../components/terminal/panelViews'
 import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
-import { useDriveActivity } from '../stores/useDriveActivity'
 import { useDriveReview } from '../stores/useDriveReview'
+import { useChatPanelLayouts, usePanelLayouts } from '../stores/usePanelLayouts'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 import { createLogger } from '../lib/log'
@@ -32,11 +33,12 @@ export function useAppMode(
   shellLoaded: Ref<boolean>,
 ) {
   const { route, router } = nav
-  const { routeChatId, docRequested, docPath, docUnseen, syncDocQuery } = useDriveRoute()
-  const activity = useDriveActivity()
+  const { routeChatId } = useDriveRoute()
   const review = useDriveReview()
   const { recents } = useAgentSessionsAll()
   const { sessions: codeSessions } = useTerminalSessions()
+  const codeLayouts = usePanelLayouts()
+  const chatLayouts = useChatPanelLayouts()
 
   const mode = computed<AppMode>(() => {
     if (route.name === 'terminal') return 'terminal'
@@ -176,46 +178,37 @@ export function useAppMode(
     return row?.canvasOwner ? { space: row.canvasOwner, session: row.id } : null
   })
 
-  // The session on screen in Code whose checkout Changes reads. A pinned chat has
-  // no session checkout, and neither does the scratch terminal.
-  const codeChangesSession = computed<string | null>(() => {
-    const slug = onScreenSessionSlug.value
-    if (!terminalActive.value || !slug || recents.value.some((row) => row.slug === slug)) return null
-    return codeSessions.value.find((session) => session.slug === slug)?.id ?? null
-  })
-
   // One control per frame edge: the right toggle names the detail preview in
-  // Inbox and the drive pane in Chats and Code (hay-kot/hive-desktop#432).
-  const agentsDriveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
-  const driveAvailable = computed(() => agentsDriveAvailable.value || codeDrive.value !== null)
-  const previewToggleCollapsed = computed(() => {
-    if (driveActive.value) return review.pageCommentsCollapsed.value
-    return driveAvailable.value ? !docRequested.value : previewCollapsed.value
-  })
-  const canTogglePreview = computed(
-    () => feedViewActive.value || driveAvailable.value || (driveActive.value && review.pageReviewed.value),
+  // Inbox and the comments on the Drive page. Code and Chats have no right
+  // pane: Drive is a session tab in both.
+  const previewToggleCollapsed = computed(() =>
+    driveActive.value ? review.pageCommentsCollapsed.value : previewCollapsed.value,
   )
-  const previewUnseen = computed(() =>
-    agentsDriveAvailable.value ? docUnseen.value : activity.isUnseen(codeDrive.value?.session ?? null),
-  )
+  const canTogglePreview = computed(() => feedViewActive.value || (driveActive.value && review.pageReviewed.value))
 
   function togglePreview(): void {
+    if (terminalActive.value) return
     if (driveActive.value) review.togglePageComments()
-    else if (driveAvailable.value) syncDocQuery(!docRequested.value)
     else previewCollapsed.value = !previewCollapsed.value
   }
 
-  // What the drive pane beside the open chat or Code session shows, or would
-  // show: the full-page view opens on the same document. A chat's workspace is
-  // its own and need not be the focused one, which is the fallback with no
-  // chat open.
+  // What the open chat's or Code session's Drive tab shows, or would show: the
+  // full-page view opens on the same document, which the tab carries in its
+  // layout. A chat's workspace is its own and need not be the focused one,
+  // which is the fallback with no chat open.
   const viewDriveScope = computed<DriveScope | null>(() => {
-    if (codeDrive.value) return { ...codeDrive.value, path: docPath.value }
+    if (codeDrive.value) {
+      return docsScopeOf(codeLayouts.layoutOf(codeDrive.value.session)) ?? { ...codeDrive.value, path: null }
+    }
     if (!agentsActive.value) return null
     const session = routeChatId.value
+    if (session) {
+      const own = docsScopeOf(chatLayouts.layoutOf(session))
+      if (own) return own
+    }
     const focused = typeof route.params.workspace === 'string' ? route.params.workspace : ''
     const workspace = recents.value.find((chat) => chat.id === session)?.workspace ?? focused
-    return workspace ? { space: workspaceSpaceKey(workspace), path: docPath.value, session } : null
+    return workspace ? { space: workspaceSpaceKey(workspace), path: null, session } : null
   })
 
   // The full page's scope is its query, so a document is a link and history
@@ -295,10 +288,8 @@ export function useAppMode(
     toggleSidebar,
     previewToggleCollapsed,
     canTogglePreview,
-    previewUnseen,
     togglePreview,
     codeDrive,
-    codeChangesSession,
     viewDriveScope,
     toggleMaximise,
   }

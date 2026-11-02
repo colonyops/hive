@@ -32,6 +32,7 @@ import {
 } from '../stores/useTerminalSessionAge'
 import { useTerminalStatusBar } from '../stores/useTerminalStatusBar'
 import { useTerminalScrollbars } from '../stores/useTerminalScrollbars'
+import { useTerminalAgentIcons } from '../stores/useTerminalAgentIcons'
 import { useTerminalShowWindows } from '../stores/useTerminalShowWindows'
 
 // Async so xterm and its addons stay on the terminal chunk rather than joining
@@ -54,6 +55,7 @@ const {
 } = useTerminalFont()
 const { monospace: fontFamilies } = useInstalledFonts()
 const { showScrollbars, setShowScrollbars } = useTerminalScrollbars()
+const { monochrome: monochromeAgentIcons, setMonochrome: setMonochromeAgentIcons } = useTerminalAgentIcons()
 const { showWindows, setShowWindows } = useTerminalShowWindows()
 const { showStatusBar, setShowStatusBar } = useTerminalStatusBar()
 const { poolSize, setPoolSize } = useTerminalPoolSize()
@@ -212,6 +214,17 @@ onMounted(() => {
           aria-label="Show scrollbars"
           testid="settings-terminal-show-scrollbars"
           @update:model-value="setShowScrollbars"
+        />
+      </SettingsRow>
+      <SettingsRow
+        label="Monochrome agent icons"
+        hint="Draw agent icons in the color of the other icons in the session tree and tabs, rather than in full color."
+      >
+        <AppSwitch
+          :model-value="monochromeAgentIcons"
+          aria-label="Monochrome agent icons"
+          testid="settings-terminal-monochrome-agent-icons"
+          @update:model-value="setMonochromeAgentIcons"
         />
       </SettingsRow>
     </SettingsSection>

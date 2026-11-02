@@ -8,6 +8,7 @@ import IconCode from '~icons/lucide/code'
 import IconGlobe from '~icons/lucide/globe'
 import IconMessageSquareText from '~icons/lucide/message-square-text'
 import IconMessagesSquare from '~icons/lucide/messages-square'
+import IconPanelLeft from '~icons/lucide/panel-left'
 import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
 import DriveDocumentActions from './DriveDocumentActions.vue'
@@ -36,6 +37,8 @@ import { useDriveReview } from '../../stores/useDriveReview'
 const props = defineProps<{
   scope: DriveScope
   sidebarCollapsed?: boolean
+  /** Lives in a session tab, which owns closing and may be narrow. */
+  embedded?: boolean
 }>()
 const emit = defineEmits<{ close: []; 'open-url': [url: string]; 'update:scope': [scope: DriveScope]; setup: [] }>()
 
@@ -157,8 +160,12 @@ const commentCount = computed(() =>
 watch(commentCount, (count, before) => {
   if (count > before) review.showPageComments()
 })
-watch(reviewed, (next) => review.setPageReviewed(!!next), { immediate: true })
-onBeforeUnmount(() => review.setPageReviewed(false))
+// The flag gates the review chord on the Drive page, which a copy in a hidden Code
+// tab must not change.
+if (!props.embedded) {
+  watch(reviewed, (next) => review.setPageReviewed(!!next), { immediate: true })
+  onBeforeUnmount(() => review.setPageReviewed(false))
+}
 watch(shown, () => {
   if (reader.value) reader.value.scrollTop = 0
 })
@@ -180,13 +187,24 @@ const {
 // column alone to say so.
 const browsable = computed(() => !(spacesError.value && !spaces.value.length) && !(spacesLoaded.value && !space.value))
 
-useEscapeToClose(() => emit('close'))
+useEscapeToClose(() => emit('close'), { enabled: () => !props.embedded })
+
+// A tab can be far narrower than the page, so it starts without the tree when the
+// tree would crowd the document. The button there is how to get it back.
+const EMBEDDED_SIDEBAR_MIN_WIDTH_PX = 640
+const root = ref<HTMLElement | null>(null)
+const { width: rootWidth } = useElementSize(root)
+const embeddedSidebarPick = ref<boolean | null>(null)
+const showSidebar = computed(() => {
+  if (!props.embedded) return !props.sidebarCollapsed
+  return embeddedSidebarPick.value ?? (rootWidth.value === 0 || rootWidth.value >= EMBEDDED_SIDEBAR_MIN_WIDTH_PX)
+})
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-1" data-testid="drive-page">
+  <div ref="root" class="flex h-full min-h-0 min-w-0 flex-1" data-testid="drive-page">
     <aside
-      v-if="browsable && !sidebarCollapsed"
+      v-if="browsable && showSidebar"
       class="relative flex shrink-0 flex-col border-r border-border bg-sidebar"
       :style="{ width: sidebarWidth + 'px' }"
       data-testid="drive-page-sidebar"
@@ -232,6 +250,15 @@ useEscapeToClose(() => emit('close'))
       <div class="flex shrink-0">
         <ViewHeader class="min-w-0 flex-1">
           <template #title>
+            <IconButton
+              v-if="embedded && browsable"
+              :label="showSidebar ? 'Hide files' : 'Show files'"
+              :icon="IconPanelLeft"
+              size="lg"
+              :aria-pressed="showSidebar"
+              data-testid="drive-page-sidebar-toggle"
+              @click="embeddedSidebarPick = !showSidebar"
+            />
             <span
               class="min-w-0 truncate text-body font-semibold text-text"
               :title="document?.entry.path"
@@ -265,7 +292,23 @@ useEscapeToClose(() => emit('close'))
               @deleted="documentDeleted"
               @moved="documentMoved"
             />
-            <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
+            <IconButton
+              v-if="embedded && reviewed"
+              :label="commentsShown ? 'Hide comments' : 'Show comments'"
+              :icon="IconMessagesSquare"
+              size="lg"
+              :aria-pressed="commentsShown"
+              data-testid="drive-page-comments-toggle"
+              @click="review.togglePageComments"
+            />
+            <IconButton
+              v-if="!embedded"
+              label="Close"
+              :icon="IconX"
+              size="lg"
+              data-testid="drive-page-close"
+              @click="emit('close')"
+            />
           </template>
         </ViewHeader>
         <DriveReviewHeader

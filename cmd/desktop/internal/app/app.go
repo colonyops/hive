@@ -137,6 +137,7 @@ type App struct {
 	Drive           *DriveService
 	Review          *ReviewService
 	Schedules       *SchedulesService
+	Layouts         *LayoutsService
 
 	// Events is the typed bus adapters project into transport-specific events.
 	// Stores is exposed only so the e2e harness can seed fixtures.
@@ -484,6 +485,12 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Events:   a.Events,
 		Logger:   cfg.Logger,
 	})
+	a.Layouts = newLayoutsService(LayoutsDeps{
+		Callers:   a.Drive,
+		Terminals: newTmuxWindows(a.terminals),
+		Events:    a.Events,
+		Logger:    cfg.Logger,
+	})
 	a.AgentWorkspaces = newAgentWorkspacesService(AgentWorkspacesDeps{
 		Store:           a.agentWorkspaceStore,
 		Terminals:       a.terminals,
@@ -682,6 +689,9 @@ func (a *App) Start(ctx context.Context) error {
 
 // RuntimePaths returns the immutable location snapshot used by this process.
 func (a *App) RuntimePaths() settings.Paths { return a.paths }
+
+// HiveDataDir is the engine's data directory, the one the hive CLI shares.
+func (a *App) HiveDataDir() string { return a.hiveDataDir }
 
 // MCPBaseURL returns this run's loopback base URL, or empty while the server
 // is down. App-hosted catalogue entries have no static URL because startup

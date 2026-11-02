@@ -100,6 +100,28 @@ func TestListPanesRejectsMalformedRow(t *testing.T) {
 	assert.Contains(t, err.Error(), "expected 11 fields")
 }
 
+func TestListPanesKeepsADeadPaneWithNoPID(t *testing.T) {
+	runner := &fakeRunner{results: []runnerResult{{stdout: "sess|||0|||0|||live|||/tmp|||42|||%1|||123|||t||||||0\n" +
+		"sess|||1|||0|||dead|||/tmp|||42|||%2||||||t||||||0\n"}}}
+
+	panes, err := New(zerolog.Nop(), runner).ListPanes(context.Background())
+	require.NoError(t, err)
+	require.Len(t, panes, 2)
+	assert.Equal(t, int64(123), panes[0].PID)
+	assert.Equal(t, "%2", panes[1].NativeID)
+	assert.Zero(t, panes[1].PID)
+}
+
+func TestListPanesSkipsOnlyTheRowThatDoesNotParse(t *testing.T) {
+	runner := &fakeRunner{results: []runnerResult{{stdout: "bad|||row\n" +
+		"sess|||0|||0|||live|||/tmp|||42|||%1|||123|||t||||||0\n"}}}
+
+	panes, err := New(zerolog.Nop(), runner).ListPanes(context.Background())
+	require.NoError(t, err)
+	require.Len(t, panes, 1)
+	assert.Equal(t, "%1", panes[0].NativeID)
+}
+
 func TestSendLiteralAndNamedKeyUseSingleArgvTokens(t *testing.T) {
 	runner := &fakeRunner{}
 	client := New(zerolog.Nop(), runner)

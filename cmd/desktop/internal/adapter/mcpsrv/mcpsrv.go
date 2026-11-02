@@ -12,11 +12,14 @@
 // App.Close to unwind, and the shutdown hazard ADR terminal-transport records for the
 // terminal WebSocket does not arise.
 //
-// The tool set is reads and safe mutations only. Anything that spawns a
-// process — terminal and agent-workspace session control — stays on httpapi's
-// token-guarded terminal prefix, which is why this surface can keep the
-// unauthenticated-behind-loopback posture the REST API had (ADR terminal-transport,
-// ADR a-workspace-declares-its-own-authority).
+// The tool set runs nothing a caller writes. Command execution — terminal and
+// agent-workspace session control, and any window that runs a command — stays
+// on httpapi's token-guarded terminal prefix, which is why this surface can
+// keep the unauthenticated-behind-loopback posture the REST API had (ADR
+// terminal-transport, ADR a-workspace-declares-its-own-authority). The one
+// process the drive server starts is the user's shell, with no input, in a
+// detached window of the caller's own Code session; close_tab kills a window
+// of that session (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows).
 package mcpsrv
 
 import (
