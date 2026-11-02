@@ -4,6 +4,7 @@ import { comboFromEvent, SEQUENCE_TIMEOUT_MS, terminalEscapeCombo, useKeybinding
 import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
 import { commandById, commandPiercesPane, launcherActionID, type CommandContext } from '../keybindings/catalog'
 import { isEditableTarget, isTerminalTarget } from '../lib/isEditableTarget'
+import { useViewKeys } from '../stores/useViewKeys'
 
 export interface GlobalKeymapDeps {
   runCommand: (id: string) => void
@@ -29,6 +30,7 @@ export function useGlobalKeymap({
   actionRunsOpen,
 }: GlobalKeymapDeps) {
   const kb = useKeybindings()
+  const viewKeys = useViewKeys()
 
   // Every dialog and drawer registers in openModalCount while mounted. The
   // palette and the hub overlays are not modals, so they are named here. Tasks
@@ -189,14 +191,19 @@ export function useGlobalKeymap({
     const combo = comboFromEvent(e)
     if (!combo) return
 
+    const mods = combo.split('+')
+    const hasModifier = mods.includes('mod') || mods.includes('ctrl') || mods.includes('alt')
+    // A shown Diff or Tasks tab owns its bare keys the way a focused pane does:
+    // `/` searches the diff, not the sidebar. Chords still reach the keymap, and
+    // so does the rest of a sequence a chord started.
+    if (viewKeys.owned.value && !hasModifier && !kb.pendingSequence.value) return
+
     const allowStart = !isEditableTarget(e.target) && !anyOverlayOpen.value
     if (applySequenceStep(e, combo, allowStart)) return
 
     const id = kb.resolve(combo, applies)
     if (!id) return
 
-    const mods = combo.split('+')
-    const hasModifier = mods.includes('mod') || mods.includes('ctrl') || mods.includes('alt')
     if (isEditableTarget(e.target) && !hasModifier) return
 
     if (dispatchIfActive(id)) e.preventDefault()

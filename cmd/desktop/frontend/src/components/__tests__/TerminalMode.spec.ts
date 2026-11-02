@@ -32,6 +32,7 @@ import {
 import { createAppRouter } from '../../router'
 import { resetStores } from '../../stores/defineStore'
 import { useCodeViews } from '../../stores/useCodeViews'
+import { useViewKeys } from '../../stores/useViewKeys'
 import { tooltipFor } from '../../test-utils/tooltip'
 
 const mocks = vi.hoisted(() => ({
@@ -4861,20 +4862,26 @@ describe('TerminalMode', () => {
 
       const tasks = () => wrapper.findComponent({ name: 'TasksView' })
       expect(tasks().props('keysActive')).toBe(true)
+      expect(useViewKeys().owned.value).toBe(true)
 
+      // Drive has no keys of its own, so the keymap keeps `/` and the sequences.
       await wrapper.get('[data-testid="panel-tab-docs"] [role="tab"]').trigger('click')
       await flushPromises()
       expect(tasks().props('keysActive')).toBe(false)
+      expect(useViewKeys().owned.value).toBe(false)
 
       await wrapper.get('[data-testid="panel-tab-tasks"] [role="tab"]').trigger('click')
       await flushPromises()
       expect(tasks().props('keysActive')).toBe(true)
+      expect(useViewKeys().owned.value).toBe(true)
       terminalTreeFocused.value = true
       await flushPromises()
       expect(tasks().props('keysActive')).toBe(false)
+      expect(useViewKeys().owned.value).toBe(false)
       terminalTreeFocused.value = false
 
       wrapper.unmount()
+      expect(useViewKeys().owned.value).toBe(false)
     })
 
     it("opens a view behind the tab in front on an agent's ask, without taking the screen", async () => {

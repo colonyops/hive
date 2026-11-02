@@ -24,6 +24,7 @@ const VIEWS = [
     wire: 'drive',
     label: 'Drive',
     icon: IconFolderTree,
+    ownsKeys: false,
     offeredTo: (host: SessionViewHost) => host.drive || host.chat,
   },
   {
@@ -31,6 +32,7 @@ const VIEWS = [
     wire: 'diff',
     label: 'Diff',
     icon: IconFileDiff,
+    ownsKeys: true,
     offeredTo: (host: SessionViewHost) => host.localCheckout,
   },
   {
@@ -38,6 +40,7 @@ const VIEWS = [
     wire: 'tasks',
     label: 'Tasks',
     icon: IconListTodo,
+    ownsKeys: true,
     offeredTo: (host: SessionViewHost) => host.localCheckout,
   },
 ] as const
@@ -52,6 +55,8 @@ export interface SessionViewSpec {
   wire: SessionViewWire
   label: string
   icon: Component
+  /** The view reads bare keys off the window while it is in front, so the keymap must leave them to it. */
+  ownsKeys: boolean
   offeredTo(host: SessionViewHost): boolean
 }
 

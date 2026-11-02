@@ -14,6 +14,7 @@ type Modules = {
   useKeybindings: typeof import('../../composables/useKeybindings').useKeybindings
   useRegisterOpenModal: typeof import('@hive/ui/composables/useOpenModalCount').useRegisterOpenModal
   SEQUENCE_TIMEOUT_MS: number
+  useViewKeys: typeof import('../../stores/useViewKeys').useViewKeys
 }
 let m: Modules
 let scope: EffectScope
@@ -29,11 +30,13 @@ beforeEach(async () => {
   const keymap = await import('../useGlobalKeymap')
   const keybindings = await import('../../composables/useKeybindings')
   const modals = await import('@hive/ui/composables/useOpenModalCount')
+  const viewKeys = await import('../../stores/useViewKeys')
   m = {
     useGlobalKeymap: keymap.useGlobalKeymap,
     useKeybindings: keybindings.useKeybindings,
     useRegisterOpenModal: modals.useRegisterOpenModal,
     SEQUENCE_TIMEOUT_MS: keybindings.SEQUENCE_TIMEOUT_MS,
+    useViewKeys: viewKeys.useViewKeys,
   }
   runCommand.mockReset()
   activeContexts.clear()
@@ -102,6 +105,20 @@ describe('useGlobalKeymap dispatch', () => {
     expect(runCommand).not.toHaveBeenCalled()
 
     press('k', { metaKey: true }, input)
+    expect(runCommand).toHaveBeenCalledWith('palette.toggle')
+  })
+
+  it('leaves bare keys to a view tab that owns them, but not chords', () => {
+    press('/')
+    expect(runCommand).toHaveBeenCalledWith('view.focus-search')
+    runCommand.mockReset()
+
+    m.useViewKeys().setOwned(true)
+    const slash = press('/')
+    expect(runCommand).not.toHaveBeenCalled()
+    expect(slash.defaultPrevented).toBe(false)
+
+    press('k', { metaKey: true })
     expect(runCommand).toHaveBeenCalledWith('palette.toggle')
   })
 })

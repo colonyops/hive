@@ -53,6 +53,7 @@ import { useDriveActivity } from '../../stores/useDriveActivity'
 import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { useTasks } from '../../stores/useTasks'
 import { useTerminalStatusBar } from '../../stores/useTerminalStatusBar'
+import { useViewKeys } from '../../stores/useViewKeys'
 import {
   OpenSessionInEditor,
   RevealSession,
@@ -295,6 +296,16 @@ function viewShown(panel: Panel, tabId: string): boolean {
 function viewHasKeys(focused: boolean, shown: boolean): boolean {
   return props.active && !props.overlayOpen && !terminalTreeFocused.value && focused && shown
 }
+
+// Told to the keymap, which otherwise answers `/` and the other bare keys itself.
+const viewKeys = useViewKeys()
+const frontViewHasKeys = computed(() => {
+  const panel = panelList.value.find((candidate) => candidate.id === layout.value.focusedPanel)
+  const front = panel && !panel.picking ? panel.tabs.find((tab) => tab.id === panel.activeTab) : undefined
+  return !!front && !!viewOfTab(front)?.ownsKeys && viewHasKeys(true, true)
+})
+watch(frontViewHasKeys, (owns) => viewKeys.setOwned(owns), { immediate: true })
+onBeforeUnmount(() => viewKeys.setOwned(false))
 
 const { setRepoKey } = useTasks()
 const tasksTabOpen = computed(() => panelList.value.some((panel) => panel.tabs.some((tab) => tab.kind === 'tasks')))
