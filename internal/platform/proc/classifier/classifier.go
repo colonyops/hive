@@ -17,10 +17,6 @@ const (
 	tierTitle   = 1
 	tierProcess = 2
 	tierContent = 3
-
-	// envClaudeCode is injected by the Claude Code SDK (CLAUDECODE=1). It is
-	// a reliable agent signal even when argv is obscured by macOS hardened runtime.
-	envClaudeCode = "CLAUDECODE"
 )
 
 // ContentCapture abstracts pane content retrieval for Tier 3.
@@ -173,15 +169,6 @@ func (c *Classifier) classifyProcess(panePID int64) (tool string, ok bool) {
 
 // matchProcessInfo checks a single process against the classifier's patterns.
 func (c *Classifier) matchProcessInfo(info process.ProcessInfo) string {
-	// CLAUDECODE=1 is set by the Claude Code SDK; treat it as a definitive
-	// signal before pattern matching in case argv is obscured.
-	if info.Env[envClaudeCode] == "1" {
-		if tool := c.matchName("claude"); tool != "" {
-			return tool
-		}
-		return "claude"
-	}
-
 	// Match the binary name directly.
 	if tool := c.matchName(info.Comm); tool != "" {
 		return tool
