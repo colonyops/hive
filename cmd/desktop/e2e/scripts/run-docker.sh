@@ -42,6 +42,9 @@ mkdir -p cmd/desktop/e2e/test-results cmd/desktop/e2e/screenshots
 # PW_FAIL_ON_FLAKY is set, so retried-then-passed tests fail the run —
 # use it for a strict flake hunt before landing a branch.
 #
+# --env GITHUB_ACTIONS forwards the same way and turns on the annotations
+# reporter in playwright.config.ts.
+#
 # Extra script arguments are appended after the image name; the image
 # entrypoint treats a leading flag as Playwright options, so
 # `./run-docker.sh --grep foo --repeat-each 5` runs
@@ -59,6 +62,7 @@ fi
 docker run --rm --init "${network[@]}" --ipc=host \
   --env HIVE_DESKTOP_E2E_HARNESS="${E2E_HARNESS_MARKER}" \
   --env PW_FAIL_ON_FLAKY \
+  --env GITHUB_ACTIONS \
   --env HIVE_PERF_SCALE \
   ${remote[@]+"${remote[@]}"} \
   --volume "$(pwd)/cmd/desktop/e2e/test-results:/workspace/cmd/desktop/e2e/test-results" \
