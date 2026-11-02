@@ -60,6 +60,7 @@ import {
   RevealSession,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { docsScopeOf, viewOfTab, viewTab, withDocsScope } from './panelViews'
+import ServerConnectionStatus from './ServerConnectionStatus.vue'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useSessionLayout, type SessionDriveTarget } from '../panels/useSessionLayout'
 import {
@@ -182,6 +183,10 @@ const footerRow = computed(() => {
   if (!showStatusBar.value) return null
   return statusBarRow.value ?? (panels.row?.server ? panels.row : null)
 })
+// Shown with no session open too: a connection issue is not about one session.
+const serverConnectionIssue = computed(
+  () => showStatusBar.value && (tree.offlineServers.length > 0 || !!tree.serversError),
+)
 // A server session's checkout is on the server: Changes and Tasks read this machine.
 const statusBarLocal = computed(() => !!statusBarRow.value && !tree.isServerSession(statusBarRow.value))
 // An offline server's row keeps its bar and the badge that names the server,
@@ -816,7 +821,7 @@ onBeforeUnmount(() => {
 
     <!-- pb-0.5: the fonts sit lowercase letters about 1.4px below the middle of their box. -->
     <footer
-      v-if="footerRow"
+      v-if="footerRow || serverConnectionIssue"
       class="flex h-7 shrink-0 items-center gap-1 overflow-hidden border-t border-border bg-raised px-1.5 pb-0.5"
       aria-label="Session status"
       data-testid="terminal-pane-statusbar"
@@ -845,6 +850,12 @@ onBeforeUnmount(() => {
           @edit="sessions.requestEdit(statusBarRow!, 'tags')"
         />
       </div>
+      <ServerConnectionStatus
+        v-if="serverConnectionIssue"
+        :servers="tree.offlineServers"
+        :list-error="tree.serversError"
+        @retry="tree.reloadServers"
+      />
     </footer>
   </div>
 </template>
