@@ -63,7 +63,8 @@ beside `mise run cli:remote:test`. The container then joins the fixture's
 Docker network instead of `--network none`, and `serve.sh` starts the `remote`
 server with `server-a` and an unreachable `gone` under `servers:`. Without the
 lane, the `workflows-remote-chromium` project and the `remote` server do not
-exist. `mise run ci` and the `desktop-e2e` job run both lanes.
+exist. `mise run ci` runs both lanes, and GitHub CI runs this one in the
+`desktop-e2e-remote` job.
 
 ## Three Kinds of Test
 
