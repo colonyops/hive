@@ -52,7 +52,7 @@ func newTestAgentWorkspacesServiceOn(t *testing.T, server *tmuxtest.Server, root
 	awStore := agentws.NewStore(root)
 	require.NoError(t, awStore.Reload())
 
-	svc := newAgentWorkspacesService(AgentWorkspacesDeps{
+	return newAgentWorkspacesService(AgentWorkspacesDeps{
 		Store:           awStore,
 		Terminals:       manager,
 		Stores:          stores.New(db, stores.Options{}),
@@ -61,8 +61,6 @@ func newTestAgentWorkspacesServiceOn(t *testing.T, server *tmuxtest.Server, root
 		MCPBase:         mcpBaseFunc(func(context.Context) string { return testMCPBaseURL }),
 		Events:          events.New(zerolog.Nop()),
 	})
-	svc.earlyExitWindow = 0
-	return svc
 }
 
 // testExitWindow is for a test that expects a session to exit early: the wait

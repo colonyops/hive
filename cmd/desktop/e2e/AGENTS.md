@@ -2,10 +2,11 @@
 
 Playwright tests that drive the headless server build (`-tags server`) of Hive
 Desktop in real browsers. Every server runs in mock mode inside one Docker
-container. Spec files run in parallel, one worker at a time per group of
-servers: each Playwright worker owns a full set of servers (`serve.sh`,
-`fixtures/servers.ts`), so a test sees only its own worker's state. A file's
-tests stay in order on one worker.
+container. Spec files run in parallel, and a file's tests stay in order on one
+worker. Each Playwright worker owns a `feed` server per browser (`serve.sh`,
+`fixtures/servers.ts`), so a test sees only its own worker's state. Every other
+server has one spec file. A second spec file on one of those servers must use
+`feed`, or get a server of its own.
 
 ## Running Tests
 
@@ -40,7 +41,7 @@ directory, so a broken import fails there rather than mid-suite.
 | -------------------- | -------------------------------------------------------------------- |
 | `PW_FAIL_ON_FLAKY`   | A test that passes only on retry fails the run. Use it to hunt flakes. |
 | `HIVE_E2E_IMAGE_TAG` | Image tag, so two checkouts on one host do not overwrite each other's image. |
-| `HIVE_E2E_WORKERS`   | Workers and server groups. Defaults to one less than the container's CPUs, at most 6. Use it, not `--workers`: Playwright's flag does not start more servers. |
+| `HIVE_E2E_WORKERS`   | Workers, and `feed` servers per browser. Defaults to one less than the container's CPUs, at most 6. Use it, not `--workers`: Playwright's flag does not start more servers. |
 
 CI sets `CI=1` in the image, which gives every test one retry. Local runs use
 the same image, so they retry too. An action times out after 10s, and a run
