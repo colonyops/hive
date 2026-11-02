@@ -52,6 +52,30 @@ func TestStopEndsARunningExecThatIgnoresSIGTERMBeforeItReturns(t *testing.T) {
 	}
 }
 
+func TestStopWaitsForAProcessAClosedFrameIsStillEnding(t *testing.T) {
+	service, dir := pageHarness(t)
+	started := filepath.Join(dir, "started")
+	handle, err := service.Spawn(t.Context(), "page", AppletExec{Command: `trap '' TERM; touch "` + started + `"; while :; do sleep 0.1; done`})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(started)
+		return err == nil
+	}, reasonableWait, pollEvery)
+	spawn, err := service.spawn(handle)
+	require.NoError(t, err)
+
+	service.KillSpawns([]string{handle})
+	assert.Len(t, service.Processes(), 1, "it runs until the SIGKILL after the grace, so Settings still lists it")
+
+	service.Stop()
+
+	select {
+	case <-spawn.finished:
+	default:
+		t.Fatal("Stop returned before the SIGKILL, and the app exits right after it")
+	}
+}
+
 func TestAPageLoadingDuringASaveNeverReadsAnEmptyStore(t *testing.T) {
 	service, dir := pageHarness(t)
 	saved := `{"k":"` + strings.Repeat("x", 256*1024) + `"}`
@@ -150,12 +174,11 @@ func TestClosingAnAppletStopsItsProcesses(t *testing.T) {
 	require.NoError(t, err)
 	require.Eventually(t, func() bool { _, err := os.Stat(marker); return err == nil }, reasonableWait, pollEvery)
 
-	spawn, err := service.spawn(handle)
-	require.NoError(t, err)
 	service.KillSpawns([]string{handle})
-	require.Eventually(t, func() bool { _, ready := spawn.drain(); return ready }, reasonableWait, pollEvery)
-	_, err = service.spawn(handle)
-	assert.Equal(t, KindNotFound, KindOf(err))
+	require.Eventually(t, func() bool {
+		_, err := service.spawn(handle)
+		return KindOf(err) == KindNotFound
+	}, reasonableWait, pollEvery)
 }
 
 func TestFilesResolveAgainstTheAppletAndAnywhereElse(t *testing.T) {
@@ -303,7 +326,7 @@ func TestProcessesListsWhatIsRunning(t *testing.T) {
 	assert.Equal(t, "sleep 30", running[0].Command)
 
 	service.KillSpawns([]string{handle})
-	assert.Empty(t, service.Processes())
+	require.Eventually(t, func() bool { return len(service.Processes()) == 0 }, reasonableWait, pollEvery)
 }
 
 func TestInjectBridgePlacement(t *testing.T) {

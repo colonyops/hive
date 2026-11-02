@@ -648,14 +648,22 @@ func (s *AppletsService) Processes() []AppletProcess {
 
 // KillSpawns stops the processes one frame started, and is what closing that frame
 // means. It takes handles rather than an applet id because an applet can have several
-// frames open, and closing its panel must not stop what its title bar page runs.
+// frames open, and closing one must not stop what its title bar page runs.
+//
+// A stopped process stays in the table until it is gone, since no page is left to read its
+// end. Stop has to find it, because the SIGKILL after an ignored SIGTERM dies with the app.
 func (s *AppletsService) KillSpawns(handles []string) {
 	s.spawns.mu.Lock()
 	defer s.spawns.mu.Unlock()
 	for _, handle := range handles {
 		if spawn, ok := s.spawns.live[handle]; ok {
 			spawn.cancel()
-			delete(s.spawns.live, handle)
+			go func() {
+				<-spawn.finished
+				s.spawns.mu.Lock()
+				defer s.spawns.mu.Unlock()
+				delete(s.spawns.live, handle)
+			}()
 		}
 	}
 }
