@@ -263,6 +263,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   useAppPaletteRows(deps, runCommand, contextActive)
   useCommands(applets.pageRows)
   applets.setCommandRunner(runCommand)
+  watch(onScreenSessionSlug, applets.setRouteSession, { immediate: true })
 
   return { runCommand, contextActive, popupTerminalMounted }
 }

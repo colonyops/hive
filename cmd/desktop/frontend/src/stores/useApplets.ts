@@ -132,7 +132,13 @@ export const useApplets = defineStore('applets', () => {
 
   // The session on screen, in Code or Chats. A title bar page outlives any one session, so it
   // follows this where a pop-up stays on the session it opened over.
-  const liveSessionSlug = computed(() => tabHost.value?.sessionSlug() ?? '')
+  const routeSessionSlug = ref('')
+  const liveSessionSlug = computed(() => tabHost.value?.sessionSlug() ?? routeSessionSlug.value)
+
+  /** What the route names while no area can answer yet, as during a cold attach. */
+  function setRouteSession(slug: string): void {
+    routeSessionSlug.value = slug
+  }
 
   // What the user chose for an applet wins over the pop-up wherever it opens from.
   function openPlacedTab(id: string): boolean {
@@ -369,6 +375,7 @@ export const useApplets = defineStore('applets', () => {
     byID,
     tabTitle,
     setTabHost,
+    setRouteSession,
     placed,
     isPlaced,
     setPlaced,

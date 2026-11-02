@@ -20,8 +20,20 @@ import '@xterm/xterm/css/xterm.css'
 // panel is a view of the terminal, not the terminal's lifetime — so the only
 // things that end it are the process exiting, End, and quitting Hive.
 
-const { visible, checking, available, reason, client, request, launchSeq, hide, launchEnded, ready } =
-  usePopupTerminal()
+const {
+  visible,
+  checking,
+  available,
+  reason,
+  client,
+  request,
+  launchSeq,
+  hide,
+  launched,
+  launchEnded,
+  launchDropped,
+  ready,
+} = usePopupTerminal()
 
 const MIN_WIDTH = 380
 const MIN_HEIGHT = 220
@@ -180,8 +192,7 @@ function fail(why: string): void {
   status.value = 'ended'
   endedReason.value = why
   pane.closeStream()
-  // Coming back must not run a launched command a second time.
-  launchEnded()
+  if (launched.value) launchDropped()
 }
 
 // Ends the terminal on purpose, the deliberate counterpart to typing `exit`:
@@ -205,6 +216,9 @@ async function reveal(): Promise<void> {
   await ready()
   if (!available.value || !visible.value) return
   await nextTick()
+  // A launched command that lost its connection stays on its ended strip. Opening here would
+  // close a terminal that may still be running, and "New terminal" is there to say otherwise.
+  if (launched.value && status.value === 'ended' && renderedSeq === launchSeq.value) return
   // Asking for the pop-up is asking for a terminal, so a panel with none live
   // opens one rather than showing an empty box with a button in it. A live one
   // that belongs to an earlier launch is replaced: the caller asked for a

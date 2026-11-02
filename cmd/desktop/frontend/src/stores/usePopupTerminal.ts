@@ -84,6 +84,13 @@ export const usePopupTerminal = defineStore('popupTerminal', () => {
     launched.value = false
   }
 
+  // The connection is gone but the command may still be running on the far side, so the panel
+  // keeps its ended state and the plain toggle still hides and shows it. What "New terminal"
+  // opens from here must not be the command again.
+  function launchDropped(): void {
+    request.value = { dir: request.value.dir, env: request.value.env }
+  }
+
   // The combo that opens a launcher has to close it, so invoking what is already
   // on screen dismisses it. Invoking anything else — another launcher, or a plain
   // shell for a different session — is a request for a terminal the panel is not
@@ -112,6 +119,8 @@ export const usePopupTerminal = defineStore('popupTerminal', () => {
     show,
     launch,
     launchEnded,
+    launchDropped,
+    launched: readonly(launched),
     hide,
     ready,
   }

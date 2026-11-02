@@ -36,7 +36,7 @@ func TestStopEndsARunningExecThatIgnoresSIGTERMBeforeItReturns(t *testing.T) {
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		_, _ = service.Exec(context.Background(), "page", AppletExec{Command: `trap '' TERM; touch "` + started + `"; while :; do sleep 0.1; done`, TimeoutMillis: 60_000})
+		_, _ = service.Exec(t.Context(), "page", AppletExec{Command: `trap '' TERM; touch "` + started + `"; while :; do sleep 0.1; done`, TimeoutMillis: 60_000})
 	}()
 	require.Eventually(t, func() bool {
 		_, err := os.Stat(started)

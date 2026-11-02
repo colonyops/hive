@@ -158,7 +158,7 @@ caller's say (ADR mcp-replaces-the-agent-facing-http-api).
 - Watching stops at 1024 files and folders below each applet, because a watch on macOS holds a
   descriptor per file. An edit in a folder past that does not reload the page.
 - A `hive.exec` a closed frame started finishes or times out. A page has no handle for it, and
-  only turning the applet off stops it.
+  only turning the applet off or quitting the app stops it.
 - A page cannot `fetch` another HTML file of its own, because that response has no CORS
   header. It can navigate to one.
 - Cookies and IndexedDB do not work in an opaque origin.

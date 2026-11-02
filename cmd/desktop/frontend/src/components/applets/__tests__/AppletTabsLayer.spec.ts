@@ -92,6 +92,19 @@ describe('AppletTabsLayer', () => {
     wrapper.unmount()
   })
 
+  it('does not take a command while a pop-up covers it', async () => {
+    const applets = useApplets()
+    await flushPromises()
+    const wrapper = await render(openTab(newPanelLayout(), appletTab('radio')))
+    applets.openPopup('radio', 'review')
+    await nextTick()
+    expect(applets.deliverCommand('radio', 'next')).toBe(false)
+    applets.close()
+    await nextTick()
+    expect(applets.deliverCommand('radio', 'next')).toBe(true)
+    wrapper.unmount()
+  })
+
   it('leaves the keyboard alone while a pop-up is open', async () => {
     const applets = useApplets()
     await flushPromises()

@@ -510,11 +510,19 @@ describe('PopupTerminal', () => {
     await flushPromises()
     popup.toggle()
     await flushPromises()
+    expect(popup.visible.value).toBe(false)
     popup.toggle()
     await flushPromises()
+    expect(popup.visible.value).toBe(true)
+    expect(el('popup-terminal-ended').textContent).toContain('connection dropped')
+    expect(client.open).toHaveBeenCalledTimes(1)
+    expect(client.close).not.toHaveBeenCalled()
 
-    const runs = client.open.mock.calls.filter(([request]) => request.command === 'deploy')
-    expect(runs).toHaveLength(1)
+    el('popup-terminal-new').click()
+    await flushPromises()
+    expect(client.open).toHaveBeenCalledTimes(2)
+    expect(client.open.mock.lastCall?.[0].command).toBeUndefined()
+    expect(client.open.mock.lastCall?.[0].dir).toBe('/w')
   })
 
   // A stream that dropped for a reason other than the process exiting would

@@ -184,6 +184,15 @@ describe('useApplets placements', () => {
     expect(applets.sessionSlug.value).toBe('chat-slug')
   })
 
+  it('uses the session the route names until an area can answer, as during a cold attach', async () => {
+    const applets = await storeWith({})
+    applets.setRouteSession('from-route')
+    applets.toggle('radio')
+    expect(applets.sessionSlug.value).toBe('from-route')
+    applets.setTabHost(hostOf('from-area'), true)
+    expect(applets.liveSessionSlug.value).toBe('from-area')
+  })
+
   it('keeps the area on screen as the host when another one lets go', async () => {
     const applets = await storeWith({ tab: ['radio'] })
     const code = hostOf()

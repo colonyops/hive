@@ -36,8 +36,15 @@ test.describe('applet tabs', { tag: [tag.applets] }, () => {
     await expect(frame).toBeVisible()
     await expect(page.getByTestId('panel-tab-applet:e2e-page')).toHaveText(/E2E page/)
 
-    // Moving an iframe in the DOM would reload the page and lose this.
     const content = page.frameLocator('[data-testid="applet-tab-frame"]')
+    expect(
+      await content.locator('body').evaluate(async () => {
+        const { hive } = window as unknown as { hive: { context(): Promise<{ sessionSlug: string }> } }
+        return (await hive.context()).sessionSlug
+      }),
+    ).toBe('review')
+
+    // Moving an iframe in the DOM would reload the page and lose this.
     await content.locator('body').evaluate(() => {
       ;(window as unknown as { marker: number }).marker = 1
     })
