@@ -490,3 +490,50 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
     expect((await paneBox(page, 'p0')).height).toBeCloseTo(size, -1)
   })
 })
+
+test.describe('session tab motion', { tag: [tag.terminal] }, () => {
+  test.use({ contextOptions: { reducedMotion: 'no-preference' } })
+
+  // Everything that animates on a tab, read each frame until asked for.
+  async function watchTabAnimations(page: Page) {
+    await page.evaluate(() => {
+      const seen = new Set<string>()
+      const state = window as unknown as { tabAnimations: Set<string> }
+      state.tabAnimations = seen
+      const read = () => {
+        for (const animation of document.getAnimations()) {
+          const target = (animation.effect as KeyframeEffect | null)?.target as HTMLElement | null | undefined
+          if (target?.matches('[data-panel-tab]')) seen.add(target.dataset.testid ?? '')
+        }
+        requestAnimationFrame(read)
+      }
+      requestAnimationFrame(read)
+    })
+  }
+  const tabAnimations = (page: Page) =>
+    page.evaluate(() => [...(window as unknown as { tabAnimations: Set<string> }).tabAnimations])
+  const settle = (page: Page) => page.waitForTimeout(400)
+
+  test('a session switch and a new tab move nothing, and a reorder still glides', async ({ page }) => {
+    await fixture(page)
+    await addTab(page, 'p0', 'Tasks')
+    await settle(page)
+    await watchTabAnimations(page)
+
+    for (const slug of ['other', 'review']) {
+      await page.locator(`[data-testid="terminal-session-row"][data-slug="${slug}"]`).click()
+      await expect(page.getByTestId('panel-tab-window:@1')).toBeVisible()
+      await settle(page)
+    }
+    expect(await tabAnimations(page)).toEqual([])
+
+    await addTab(page, 'p0', 'Diff')
+    await expect(page.getByTestId('panel-tab-diff')).toBeVisible()
+    await settle(page)
+    expect(await tabAnimations(page)).toEqual([])
+
+    await dragTabBefore(page, 'diff', 'tasks')
+    await expect.poll(() => tabIds(page, 'p0')).toEqual(['window:@1', 'window:@2', 'diff', 'tasks'])
+    await expect.poll(() => tabAnimations(page)).not.toEqual([])
+  })
+})
