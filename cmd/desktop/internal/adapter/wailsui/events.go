@@ -57,13 +57,12 @@ func registerEvents() struct{} {
 	// for a write an agent made through the desktop, its chat or hive
 	// session. The payload is a per-space delta with an author, so every
 	// event has to reach the frontend: the subscription buffers rather than
-	// coalesces, and a pane re-reads the named space on receipt.
+	// coalesces, and a Drive tab re-reads the named space on receipt.
 	application.RegisterEvent[DriveWrite](driveUpdatedEvent)
-	// drive:toggle carries an agent's ask to open or close the drive pane
-	// beside its chat. Pane visibility is UI intent, not state to re-read, so
-	// the payload is the whole message; coalescing keeps only the latest ask,
-	// which is the final intent anyway.
-	application.RegisterEvent[DriveToggle](driveToggleEvent)
+	// session:layout carries an agent's ask to change the panel layout beside
+	// its chat or Code session. The layout is UI intent, not state to re-read,
+	// so the payload is the whole message.
+	application.RegisterEvent[SessionLayout](sessionLayoutEvent)
 	// schedules:updated carries the workspace whose scheduled chats changed:
 	// its manifest was written, or one of its schedules ran. The Chats area
 	// re-reads its workspace and chat lists on receipt.
@@ -143,10 +142,12 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		events.Subscribe(ctx, bus, "wailsui.drive", events.Buffer(64), func(_ context.Context, e events.DriveChanged) {
 			emitDriveUpdated(DriveWrite{Space: e.Space, Paths: e.Paths, Session: e.Session, HiveSession: e.HiveSession})
 		}),
-		events.Subscribe(ctx, bus, "wailsui.drive-toggle", events.Coalesce(), func(_ context.Context, e events.DriveToggleRequested) {
-			emitDriveToggle(DriveToggle{
-				Session: e.Session, HiveSession: e.HiveSession,
-				Space: e.Space, Path: e.Path, Open: e.Open,
+		// Buffered, not coalesced: asks for two views in a row are two intents.
+		events.Subscribe(ctx, bus, "wailsui.session-layout", events.Buffer(16), func(_ context.Context, e events.SessionLayoutRequested) {
+			emitSessionLayout(SessionLayout{
+				Session: e.Session, HiveSession: e.HiveSession, Space: e.Space, Verb: e.Verb,
+				View: e.View, Window: e.Window, AnchorView: e.AnchorView, AnchorWindow: e.AnchorWindow,
+				Path: e.Path, Placement: e.Placement, Share: e.Share,
 			})
 		}),
 		events.Subscribe(ctx, bus, "wailsui.schedules", events.Coalesce(), func(_ context.Context, e events.SchedulesUpdated) {
@@ -209,8 +210,8 @@ func emitActivityAppended(id int64) {
 }
 
 const (
-	driveUpdatedEvent = "drive:updated"
-	driveToggleEvent  = "drive:toggle"
+	driveUpdatedEvent  = "drive:updated"
+	sessionLayoutEvent = "session:layout"
 )
 
 // DriveWrite is the drive:updated payload: the space and the document paths
@@ -228,19 +229,28 @@ func emitDriveUpdated(write DriveWrite) {
 	emitEvent(driveUpdatedEvent, write)
 }
 
-// DriveToggle is the drive:toggle payload: whose pane to open or close, a
-// chat's or a hive session's, and the document to pin when opening (empty
-// leaves the pane's pick).
-type DriveToggle struct {
-	Session     string `json:"session"`
-	HiveSession string `json:"hiveSession"`
-	Space       string `json:"space"`
-	Path        string `json:"path"`
-	Open        bool   `json:"open"`
+// SessionLayout is the session:layout payload: whose layout to change, a
+// chat's or a hive session's, and the verb (open, close, move, focus,
+// close_panel, resize or turn). View and Window name the tab acted on, and
+// AnchorView and AnchorWindow the tab an open or move places relative to.
+// Path pins a Drive document on open, Placement is behind, beside or below,
+// and Share is the resize share (0 when unused).
+type SessionLayout struct {
+	Session      string  `json:"session"`
+	HiveSession  string  `json:"hiveSession"`
+	Space        string  `json:"space"`
+	Verb         string  `json:"verb"`
+	View         string  `json:"view"`
+	Window       string  `json:"window"`
+	AnchorView   string  `json:"anchorView"`
+	AnchorWindow string  `json:"anchorWindow"`
+	Path         string  `json:"path"`
+	Placement    string  `json:"placement"`
+	Share        float64 `json:"share"`
 }
 
-func emitDriveToggle(toggle DriveToggle) {
-	emitEvent(driveToggleEvent, toggle)
+func emitSessionLayout(layout SessionLayout) {
+	emitEvent(sessionLayoutEvent, layout)
 }
 
 // emitEvent is the drive emitters' door to the webview. A var so a test can

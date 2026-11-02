@@ -38,8 +38,11 @@ directory, so a broken import fails there rather than mid-suite.
 | `PW_FAIL_ON_FLAKY`   | A test that passes only on retry fails the run. Use it to hunt flakes. |
 | `HIVE_E2E_IMAGE_TAG` | Image tag, so two checkouts on one host do not overwrite each other's image. |
 
-CI sets `CI=1` in the image, which gives every test two retries. Local runs use
-the same image, so they retry too. Traces of failed tests land in
+CI sets `CI=1` in the image, which gives every test one retry. Local runs use
+the same image, so they retry too. An action times out after 10s, and a run
+stops after 5 failed tests. On GitHub, a test that passed only on retry gets an
+annotation on the run, even when the job is green: treat it as a bug. Traces of
+failed tests land in
 `test-results/` and screenshots in `screenshots/`; both are mounted out of the
 container.
 
@@ -71,6 +74,10 @@ browser.
 Only the onboarding server has a webkit instance, so only
 `workflows/onboarding/` runs on webkit. A new workflow runs on chromium alone
 unless its server gets a webkit port too.
+
+`features-webkit` runs only `terminal/`, `drive/` and `flows/`, where WebKit's
+pointer, selection and rendering behavior differs. To add a surface, add it to
+`testMatch` in `playwright.config.ts`.
 
 Keep edge cases at the lowest level that can see them. Component and store
 logic belongs in Vitest (`mise run desktop:test`), engine behaviour in Go tests

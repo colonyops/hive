@@ -18,8 +18,6 @@ const imagePaneOption = "@hive-kitty-images"
 // first reads as no change at all.
 const imageRedrawPause = 150 * time.Millisecond
 
-const imageRestoreTimeout = 2 * time.Second
-
 var kittyCommandStart = []byte("\x1b_G")
 
 // imageDetector reports the first Kitty graphics command in each pane's
@@ -117,7 +115,7 @@ func (c *Client) redrawImageWindows(ctx context.Context) {
 		}
 		// Not cancelled by Close: tmux can apply the resize before a cancelled
 		// Send returns, and a window treated as never narrowed is never restored.
-		narrow, cancel := context.WithTimeout(context.WithoutCancel(ctx), imageRestoreTimeout)
+		narrow, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.stateChangeTimeout)
 		_, err = c.gw.Send(narrow, fmt.Sprintf("resize-window -t %s -x %d", id, w.Width-1))
 		cancel()
 		if err != nil {
@@ -136,7 +134,7 @@ func (c *Client) redrawImageWindows(ctx context.Context) {
 	// Restored even after cancellation: a window left on window-size manual
 	// keeps the narrow size for every client. Close waits for this before it
 	// detaches, so the gateway can still carry it.
-	restore, cancel := context.WithTimeout(context.WithoutCancel(ctx), imageRestoreTimeout)
+	restore, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.stateChangeTimeout)
 	defer cancel()
 	for _, w := range narrowed {
 		if w.manual {
@@ -157,7 +155,11 @@ func (c *Client) redrawImageWindows(ctx context.Context) {
 // windowSizeOption reads a window's window-size: its own value with -q, or the
 // value in effect, inherited included, with -A.
 func (c *Client) windowSizeOption(ctx context.Context, id, flag string) (string, error) {
-	lines, err := c.gw.Send(ctx, "show-options -w -v "+flag+" -t "+id+" window-size")
+	return c.windowOption(ctx, id, flag, "window-size")
+}
+
+func (c *Client) windowOption(ctx context.Context, id, flag, name string) (string, error) {
+	lines, err := c.gw.Send(ctx, "show-options -w -v "+flag+" -t "+id+" "+name)
 	if err != nil {
 		return "", err
 	}

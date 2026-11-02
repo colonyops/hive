@@ -33,7 +33,7 @@ A link only navigates. It never creates a session, runs a command, or changes da
     - `workspaces/<name>` for a Chats workspace, as in `hive://drive/workspaces/hive/canvases/release.canvas.json`.
     - `<owner>/<repo>` for a repository, as in `hive://drive/colonyops/hive/plans/2026-10-11-drive.md`.
 - The path after the key is the document's path inside the space. A link to a space with no path opens that space.
-- Add `canvas=<name>` to a Code or chat link to open the Drive pane beside it on that canvas.
+- Add `canvas=<name>` to a Code or chat link to open a Drive tab beside it on that canvas.
 - The older canvas link still opens the canvas. Its owner is a Chats workspace, a repository as `owner/repo`, or `@global`.
 - Escape special characters in each part, so a canvas named `release plan` is `hive://canvas/release%20plan?owner=colonyops%2Fhive`.
 

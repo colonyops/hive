@@ -2,7 +2,6 @@ import { computed, ref, type Component, type ComputedRef } from 'vue'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
-import IconFileDiff from '~icons/lucide/file-diff'
 import IconFileSearch from '~icons/lucide/file-search'
 import IconArrowUp from '~icons/lucide/arrow-up'
 import IconFolderTree from '~icons/lucide/folder-tree'
@@ -77,10 +76,6 @@ import type { CommandScope } from '../palette/scopes'
 // Any slug the Code view attaches counts, including the scratch terminal and a
 // pinned chat — what the launcher needs is a pane, not a hive record.
 //
-// `session-changes` is narrower too: the slug on screen must be a hive session,
-// because Changes reads its checkout, which a scratch terminal and a pinned chat
-// do not have.
-//
 // `terminal-pane` is narrower than `terminal-session`: one of the attached Code
 // session's panes has focus, not the session tree beside it.
 export type CommandContext =
@@ -90,7 +85,6 @@ export type CommandContext =
   | 'terminal-session'
   | 'terminal-pane'
   | 'any-terminal'
-  | 'session-changes'
   | 'agents'
   | 'sidebar'
   | 'panel'
@@ -312,28 +306,15 @@ export const commandCatalog: BindableCommand[] = [
   },
   {
     // The right-hand twin of the sidebar toggle: the title bar's right
-    // button in every view, the preview in Inbox, the drive in Chats and
-    // Code, the comments on the Drive page.
+    // button, the preview in Inbox and the comments on the Drive page.
     id: 'view.toggle-panel',
     title: 'Toggle right panel',
     group: 'View',
-    keywords: ['panel', 'right', 'preview', 'drive', 'comments', 'show', 'hide', 'collapse'],
+    keywords: ['panel', 'right', 'preview', 'comments', 'show', 'hide', 'collapse'],
     icon: IconPanelRight,
     defaultCombos: ['mod+alt+b'],
     context: 'panel',
     piercesPane: 'non-mac',
-  },
-  {
-    id: 'changes.toggle',
-    title: 'Toggle Changes',
-    group: 'View',
-    keywords: ['git', 'diff', 'changes', 'review', 'files', 'branch', 'uncommitted'],
-    icon: IconFileDiff,
-    defaultCombos: ['mod+alt+g'],
-    context: 'session-changes',
-    // Pierces on macOS too: its pane is where Changes is wanted, and
-    // terminalEscapeCombo refuses any chord that holds Option.
-    piercesPane: true,
   },
   {
     id: 'drive.toggle-comments',

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { computed, effectScope, ref } from 'vue'
 import { paneMayAutoFocus } from '../../../lib/terminalTree'
 import type { TerminalSessionGroup, TerminalSessionRow } from '../../../stores/useTerminalSessions'
-import type { TreeWindowRow } from '../useTerminalTree'
+import type { TreeItem, TreeWindowRow } from '../useTerminalTree'
 import { useTreeKeyboardNav } from '../useTreeKeyboardNav'
 
 const running = {
@@ -34,7 +34,20 @@ function win(windowId: string, active = false): TreeWindowRow {
   return { windowId, name: windowId, active, live: true, indicator: null }
 }
 
-function setup() {
+const windowItem = (window: TreeWindowRow): TreeItem => ({
+  key: window.windowId,
+  tabId: `window:${window.windowId}`,
+  win: window,
+  view: null,
+})
+const viewItem = (kind: string, panel = 'p0'): TreeItem => ({
+  key: `view:${kind}`,
+  tabId: kind,
+  win: null,
+  view: { panel, tab: { id: kind, kind } },
+})
+
+function setup(views: Record<string, TreeItem[]> = {}) {
   const windows: Record<string, TreeWindowRow[]> = { '1': [win('@1', true), win('@2')], '2': [win('@9')] }
   const rows = ref<TerminalSessionRow[]>([running, idle])
   const activeSlug = ref('running')
@@ -45,11 +58,13 @@ function setup() {
     attachedRow: computed(() => rows.value.find((row) => row.slug === activeSlug.value) ?? null),
     activeSlug,
     windowRowsFor: (row: TerminalSessionRow) => windows[row.id] ?? [],
+    treeItemsFor: (row: TerminalSessionRow) => [...(windows[row.id] ?? []).map(windowItem), ...(views[row.id] ?? [])],
     rowRunning: (row: TerminalSessionRow) => row.id === '1',
     renaming: () => false,
     selectSession: vi.fn(),
     startSession: vi.fn().mockResolvedValue(undefined),
     goToWindow: vi.fn().mockResolvedValue(undefined),
+    openView: vi.fn(),
   }
   const nav = effectScope().run(() => useTreeKeyboardNav(options))!
   return { nav, options }
@@ -74,6 +89,48 @@ describe('useTreeKeyboardNav', () => {
     expect(nav.tabStopKey.value).toBe('s:2')
     expect(options.selectSession).toHaveBeenLastCalledWith('idle')
     expect(paneMayAutoFocus.value).toBe(false)
+  })
+
+  it('walks a view row between the windows and opens it on Enter', async () => {
+    const { nav, options } = setup({ '1': [viewItem('diff', 'p1')] })
+    nav.onKeydown(key('ArrowDown'))
+    await Promise.resolve()
+    nav.onKeydown(key('ArrowDown'))
+    await Promise.resolve()
+
+    expect(nav.tabStopKey.value).toBe('v:1:diff')
+    expect(options.openView).toHaveBeenLastCalledWith(running, 'p1', 'diff')
+    expect(options.selectSession).not.toHaveBeenCalled()
+
+    nav.clickView(idle, 'p0', 'tasks')
+    expect(options.openView).toHaveBeenLastCalledWith(idle, 'p0', 'tasks')
+  })
+
+  it("reaches a server's rows, whose ids carry a colon", async () => {
+    const remote = { ...running, id: 'box:9', slug: 'box:remote', server: 'box' }
+    const windows = [win('@4', true)]
+    const options = {
+      groups: ref<TerminalSessionGroup[]>([{ key: 'r', name: 'r', kind: 'repo', sessions: [remote, idle] }]),
+      expanded: () => true,
+      rows: ref<TerminalSessionRow[]>([remote, idle]),
+      attachedRow: computed(() => null),
+      activeSlug: ref(''),
+      windowRowsFor: (row: TerminalSessionRow) => (row.id === 'box:9' ? windows : []),
+      treeItemsFor: (row: TerminalSessionRow) => (row.id === 'box:9' ? windows.map(windowItem) : []),
+      rowRunning: (row: TerminalSessionRow) => row.id === 'box:9',
+      renaming: () => false,
+      selectSession: vi.fn(),
+      startSession: vi.fn().mockResolvedValue(undefined),
+      goToWindow: vi.fn().mockResolvedValue(undefined),
+      openView: vi.fn(),
+    }
+    const nav = effectScope().run(() => useTreeKeyboardNav(options))!
+
+    nav.onKeydown(key('ArrowDown'))
+    await Promise.resolve()
+
+    expect(nav.tabStopKey.value).toBe('w:box:9:@4')
+    expect(options.goToWindow).toHaveBeenCalledWith(remote, windows[0])
   })
 
   it('clamps at either end rather than wrapping', () => {

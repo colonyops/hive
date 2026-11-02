@@ -96,7 +96,7 @@ func receiveEmitted(t *testing.T, sink <-chan emitted) emitted {
 }
 
 // The event names are the frontend's contract: it listens for drive:updated
-// and drive:toggle by string, so this pins them.
+// and session:layout by string, so this pins them.
 func TestSubscribeEmitsDriveEventsUnderTheirFrontendNames(t *testing.T) {
 	sink := make(chan emitted, 2)
 	swapEmitEvent(t, sink)
@@ -112,10 +112,62 @@ func TestSubscribeEmitsDriveEventsUnderTheirFrontendNames(t *testing.T) {
 		data: DriveWrite{Space: "acme/site", Paths: []string{"plans/a.md"}, HiveSession: "abc123"},
 	}, receiveEmitted(t, sink))
 
-	bus.Publish(t.Context(), events.DriveToggleRequested{Session: "7", Space: "workspaces/ws", Path: "canvases/plan.canvas.json", Open: true})
+	bus.Publish(t.Context(), events.SessionLayoutRequested{
+		Session: "7", Space: "workspaces/ws", Verb: "open", View: "drive", Path: "canvases/plan.canvas.json", Placement: "beside",
+	})
 	require.Equal(t, emitted{
-		name: "drive:toggle",
-		data: DriveToggle{Session: "7", Space: "workspaces/ws", Path: "canvases/plan.canvas.json", Open: true},
+		name: "session:layout",
+		data: SessionLayout{Session: "7", Space: "workspaces/ws", Verb: "open", View: "drive", Path: "canvases/plan.canvas.json", Placement: "beside"},
+	}, receiveEmitted(t, sink))
+}
+
+func TestSubscribeCarriesTheWindowsAndShareOfASessionLayout(t *testing.T) {
+	sink := make(chan emitted, 2)
+	swapEmitEvent(t, sink)
+
+	bus := events.New(zerolog.Nop())
+	t.Cleanup(bus.Close)
+	cancel := Subscribe(t.Context(), bus, nil)
+	t.Cleanup(cancel)
+
+	bus.Publish(t.Context(), events.SessionLayoutRequested{
+		HiveSession: "abc123", Space: "acme/site", Verb: "move", View: "terminal", Window: "@3",
+		AnchorView: "terminal", AnchorWindow: "@1", Placement: "below",
+	})
+	require.Equal(t, emitted{
+		name: "session:layout",
+		data: SessionLayout{
+			HiveSession: "abc123", Space: "acme/site", Verb: "move", View: "terminal", Window: "@3",
+			AnchorView: "terminal", AnchorWindow: "@1", Placement: "below",
+		},
+	}, receiveEmitted(t, sink))
+
+	bus.Publish(t.Context(), events.SessionLayoutRequested{HiveSession: "abc123", Space: "acme/site", Verb: "resize", View: "diff", Share: 0.3})
+	require.Equal(t, emitted{
+		name: "session:layout",
+		data: SessionLayout{HiveSession: "abc123", Space: "acme/site", Verb: "resize", View: "diff", Share: 0.3},
+	}, receiveEmitted(t, sink))
+}
+
+// Two asks in a row are two intents, so none may coalesce away.
+func TestSubscribeEmitsEverySessionLayoutRequestInOrder(t *testing.T) {
+	sink := make(chan emitted, 2)
+	swapEmitEvent(t, sink)
+
+	bus := events.New(zerolog.Nop())
+	t.Cleanup(bus.Close)
+	cancel := Subscribe(t.Context(), bus, nil)
+	t.Cleanup(cancel)
+
+	bus.Publish(t.Context(), events.SessionLayoutRequested{HiveSession: "abc123", Space: "acme/site", Verb: "open", View: "diff", Placement: "behind"})
+	bus.Publish(t.Context(), events.SessionLayoutRequested{HiveSession: "abc123", Space: "acme/site", Verb: "open", View: "tasks", Placement: "behind"})
+	require.Equal(t, emitted{
+		name: "session:layout",
+		data: SessionLayout{HiveSession: "abc123", Space: "acme/site", Verb: "open", View: "diff", Placement: "behind"},
+	}, receiveEmitted(t, sink))
+	require.Equal(t, emitted{
+		name: "session:layout",
+		data: SessionLayout{HiveSession: "abc123", Space: "acme/site", Verb: "open", View: "tasks", Placement: "behind"},
 	}, receiveEmitted(t, sink))
 }
 

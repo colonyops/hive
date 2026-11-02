@@ -12,8 +12,13 @@ type SmokeState = {
 }
 
 async function smoke(page: Page): Promise<SmokeState> {
-  const response = await page.request.get(new URL('/_e2e/actions', page.url()).toString())
-  expect(response.ok()).toBeTruthy()
+  const url = new URL('/_e2e/actions', page.url()).toString()
+  // The harness answers 500 when a write lands between its live and reopened reads.
+  let response = await page.request.get(url)
+  await expect.poll(async () => {
+    if (!response.ok()) response = await page.request.get(url)
+    return response.ok()
+  }).toBe(true)
   return await response.json() as SmokeState
 }
 

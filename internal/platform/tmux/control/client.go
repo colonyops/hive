@@ -30,6 +30,11 @@ const (
 
 	attachTimeout = 10 * time.Second
 	detachTimeout = 2 * time.Second
+	// stateChangeTimeout bounds a Send that changes tmux state on a context
+	// the request cannot cancel: image widths, window options, per-window
+	// sizes. Such a Send must finish even when the request is gone, and a
+	// frozen server must not hold Close behind it either.
+	stateChangeTimeout = 2 * time.Second
 
 	// sendKeysChunk keeps one send-keys command far inside tmux's command
 	// length limit once each byte is expanded to hex.
@@ -114,6 +119,9 @@ type Options struct {
 	onEmit func()
 
 	newProcess func(Options) process
+	// stateChangeTimeout replaces the package bound in tests that freeze the
+	// fake server, so they do not wait the production two seconds.
+	stateChangeTimeout time.Duration
 	// loadBuffer fills a named tmux buffer from a reader. It is a one-shot
 	// command rather than a control-stream one because the control protocol is
 	// line-oriented and pasted text is not — see Client.Paste.
@@ -141,6 +149,9 @@ func (o *Options) normalize() error {
 	}
 	if o.newProcess == nil {
 		o.newProcess = newExecProcess
+	}
+	if o.stateChangeTimeout == 0 {
+		o.stateChangeTimeout = stateChangeTimeout
 	}
 	if o.loadBuffer == nil {
 		runner, binary, environ := o.Runner, o.Binary, o.Environ
@@ -171,6 +182,9 @@ type Client struct {
 	// rather than passed because the request context is cancelled the moment
 	// Attach answers, which is precisely what deferring the paint means.
 	lifeCtx context.Context //nolint:containedctx // see above; teardown cancels it before joining the pass
+
+	sizing             windowSizing
+	stateChangeTimeout time.Duration
 
 	readerDone chan struct{}
 	workerDone chan struct{}
@@ -222,20 +236,21 @@ func Attach(ctx, lifetime context.Context, opts Options) (*Client, error) {
 	}
 
 	c := &Client{
-		slug:         opts.Slug,
-		log:          opts.Logger.With().Str("session", opts.Slug).Logger(),
-		onExit:       opts.OnExit,
-		onEmit:       opts.onEmit,
-		ctrl:         newController(),
-		loadBuffer:   opts.loadBuffer,
-		readerDone:   make(chan struct{}),
-		workerDone:   make(chan struct{}),
-		reconcileReq: make(chan struct{}, 1),
-		images:       newImageDetector(),
-		imagePanes:   make(chan string, 16),
-		handshake:    make(chan struct{}),
-		attached:     make(chan struct{}),
-		relinking:    map[string]int{},
+		slug:               opts.Slug,
+		log:                opts.Logger.With().Str("session", opts.Slug).Logger(),
+		onExit:             opts.OnExit,
+		onEmit:             opts.onEmit,
+		ctrl:               newController(),
+		loadBuffer:         opts.loadBuffer,
+		stateChangeTimeout: opts.stateChangeTimeout,
+		readerDone:         make(chan struct{}),
+		workerDone:         make(chan struct{}),
+		reconcileReq:       make(chan struct{}, 1),
+		images:             newImageDetector(),
+		imagePanes:         make(chan string, 16),
+		handshake:          make(chan struct{}),
+		attached:           make(chan struct{}),
+		relinking:          map[string]int{},
 	}
 	c.events = newBroker(backlogBounds{bytes: opts.BufferBytes}, c.resyncOverflow)
 	c.paint = newPaintGate(c.emitOutput)
@@ -342,6 +357,21 @@ func (c *Client) Resize(ctx context.Context, cols, rows int) error {
 	return err
 }
 
+// ResizeWindow asks for one window's own grid, apart from the size this client
+// votes for the session, so two windows on screen in panes of different sizes
+// can each fit their pane.
+func (c *Client) ResizeWindow(ctx context.Context, windowID string, cols, rows int) error {
+	if err := validateSize(cols, rows); err != nil {
+		return err
+	}
+	if err := c.requireWindow(windowID); err != nil {
+		return err
+	}
+	c.sizeWhileNotCurrent(ctx, windowID)
+	_, err := c.gw.Send(ctx, fmt.Sprintf("refresh-client -C %s:%dx%d", windowID, cols, rows))
+	return err
+}
+
 // Renegotiate re-votes the client size and refreshes the window set from
 // tmux's post-vote answer — the same vote-then-list order negotiate runs on a
 // fresh attach, for the same reason: a snapshot painted at a stale size tears
@@ -356,6 +386,7 @@ func (c *Client) Renegotiate(ctx context.Context, cols, rows int) (err error) {
 		trace.WithAttributes(attribute.Bool(attrUnsized, false)))
 	defer observe.End(span, &err)
 
+	c.clearWindowSizes(ctx)
 	if err := c.Resize(ctx, cols, rows); err != nil {
 		return err
 	}
@@ -686,6 +717,7 @@ func (c *Client) Close(ctx context.Context) error {
 		// out; after the detach that command would have nowhere to go.
 		c.cancel()
 		c.bgPaint.Wait()
+		c.restoreAggressiveResize(ctx)
 		detachCtx, cancel := context.WithTimeout(ctx, detachTimeout)
 		_, _ = c.gw.Send(detachCtx, "detach")
 		cancel()

@@ -45,12 +45,23 @@ the window and opens the place it names:
 
 <slug> is a tmux session name. server= names a server under servers: in
 config.yaml; without it a code link names a session on this machine. canvas=
-on a code or chats link opens the canvas pane beside it. A drive <space> is shared, workspaces/<name>, or
+on a code or chats link opens the session's Drive tab. A drive <space> is shared, workspaces/<name>, or
 <owner>/<repo>, and <path> is a document or folder inside it, such as
 hive://drive/colonyops/hive/plans/x.md; with no path the link opens the
-space. Escape each part, so "release plan" is release%20plan.`,
+space. Escape each part, so "release plan" is release%20plan.
+
+The running desktop also serves its tab and layout tools to the CLI:
+
+  layout; tab open|close|move|focus <tab>; panel close <tab>; split resize|turn <tab>
+
+They act on --session (default: $HIVE_AGENT_SESSION, else the current
+directory) and find the desktop through its endpoint file, or --url.`,
 		Commands: []*cli.Command{
 			cmd.openCmd(),
+			cmd.layoutCmd(),
+			cmd.tabCmd(),
+			cmd.panelCmd(),
+			cmd.splitCmd(),
 		},
 	})
 	return app

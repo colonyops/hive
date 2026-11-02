@@ -120,8 +120,8 @@ function changes(files: unknown[], extra: Record<string, unknown> = {}) {
 }
 const noState = { state: 'text', error: '' }
 
-async function mountView() {
-  const wrapper = mount(ChangesView, { props: { sessionId: 's1' }, attachTo: document.body })
+async function mountView(props: { keysActive?: boolean } = {}) {
+  const wrapper = mount(ChangesView, { props: { sessionId: 's1', ...props }, attachTo: document.body })
   await flushPromises()
   await flushPromises()
   return wrapper
@@ -173,6 +173,23 @@ describe('ChangesView', () => {
   })
   afterEach(() => {
     document.body.innerHTML = ''
+  })
+
+  // Every tab stays mounted behind the one in front, and the keys are read off
+  // the window, so a hidden or unfocused view has to let them pass.
+  it('ignores its keys while it is not the tab in front with the keyboard', async () => {
+    const wrapper = await mountView({ keysActive: false })
+
+    await press('j')
+    expect(mocks.scrollTo).not.toHaveBeenCalled()
+    expect(wrapper.get(testid('changes-row-b.go')).attributes('aria-selected')).not.toBe('true')
+    await press('s')
+    expect(mocks.setOptions).not.toHaveBeenCalledWith(expect.objectContaining({ diffStyle: 'split' }))
+
+    await wrapper.setProps({ keysActive: true })
+    await press('j')
+    expect(wrapper.get(testid('changes-row-b.go')).attributes('aria-selected')).toBe('true')
+    wrapper.unmount()
   })
 
   it('orders the stream as the rail does, folders first', async () => {
@@ -1054,15 +1071,6 @@ describe('ChangesView', () => {
 
     await input.trigger('keydown', { key: 'Enter', shiftKey: true })
     expect(wrapper.get(testid('changes-search-count')).text()).toBe('1 of 2')
-    wrapper.unmount()
-  })
-
-  it('closes on Escape and from its button', async () => {
-    const wrapper = await mountView()
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    expect(wrapper.emitted('close')).toHaveLength(1)
-    await wrapper.get(testid('changes-close')).trigger('click')
-    expect(wrapper.emitted('close')).toHaveLength(2)
     wrapper.unmount()
   })
 })

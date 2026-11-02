@@ -3,7 +3,7 @@
 import { computed, ref } from 'vue'
 import IconFolder from '~icons/lucide/folder'
 import IconFolderInput from '~icons/lucide/folder-input'
-import IconHardDrive from '~icons/lucide/hard-drive'
+import IconFolderTree from '~icons/lucide/folder-tree'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import BaseModal from '@hive/ui/components/ui/BaseModal.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
@@ -85,7 +85,7 @@ async function submit(): Promise<void> {
         @dblclick="submit"
       >
         <component
-          :is="folder.path ? IconFolder : IconHardDrive"
+          :is="folder.path ? IconFolder : IconFolderTree"
           class="size-3.5 shrink-0 text-text-4"
           aria-hidden="true"
         />

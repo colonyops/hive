@@ -20,6 +20,12 @@ vi.mock('../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wail
   Record: vi.fn(() => Promise.resolve()),
 }))
 
+// The panel layout stores report every change to Go, so any spec that opens a
+// tab would otherwise reach the binding.
+vi.mock('../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/layoutservice', () => ({
+  Report: vi.fn(() => Promise.resolve()),
+}))
+
 // Every `mount` is torn down between tests. Leaked wrappers stay attached to
 // the document, and each carries its own Vue app whose `useId()` counter
 // restarts at the same value — so a stale wrapper's `id` shadows the live one

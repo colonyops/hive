@@ -660,6 +660,24 @@ func TestManagerListAllWindowsAsksTmuxOnceForEverySlug(t *testing.T) {
 	require.Equal(t, []string{"/opt/homebrew/bin/tmux"}, cmds.binaries)
 }
 
+// A caller asking about one session is deciding whether it ended, so a failed
+// listing must not read as no windows, however many sessions it asked about.
+func TestManagerListAllWindowsReportsAFailedListing(t *testing.T) {
+	t.Parallel()
+
+	cmds := &fakeTmuxCommands{failure: errors.New("lost server")}
+	m := newTestManager(t, nil, ManagerOptions{
+		Binary:  func() (string, error) { return "/opt/homebrew/bin/tmux", nil },
+		runTmux: cmds.run,
+	})
+
+	_, err := m.ListAllWindows(t.Context(), []string{"hive-demo"})
+	require.Error(t, err)
+
+	_, err = m.ListAllWindows(t.Context(), []string{"hive-demo", "hive-other"})
+	require.Error(t, err)
+}
+
 func TestManagerListIndexedWindowsMapsIndicesToStableIDs(t *testing.T) {
 	t.Parallel()
 
@@ -756,7 +774,7 @@ func TestManagerListAllWindowsTreatsADeadServerAsNoWindows(t *testing.T) {
 
 	// No tmux server running at all is what this answers, and it is a normal
 	// state for a sidebar full of sessions nobody has started yet.
-	cmds := &fakeTmuxCommands{failure: errors.New("no server running")}
+	cmds := &fakeTmuxCommands{failure: absentSessionError{}}
 	m := newTestManager(t, nil, ManagerOptions{runTmux: cmds.run})
 
 	windows, err := m.ListAllWindows(t.Context(), []string{"hive-demo"})
@@ -808,6 +826,46 @@ func TestManagerNewCommandWindowSetsEnvForTheWindowOnly(t *testing.T) {
 		"new-window", "-t", "=hive-demo:", "-c", "/work", "-n", "codex", "-P", "-F", "#{window_id}",
 		"-e", "A=1", "-e", "B=two words", "--", resolveLoginShell(), "-l", "-c", "codex",
 	}, cmds.calls[1])
+}
+
+func TestManagerNewDetachedWindowStaysBehindTheCurrentWindow(t *testing.T) {
+	t.Parallel()
+	cmds := &fakeTmuxCommands{windows: []string{"@7"}}
+	m := newTestManager(t, nil, ManagerOptions{runTmux: cmds.run})
+
+	id, err := m.NewDetachedWindow(t.Context(), "hive-demo", "/work/site", "tests")
+	require.NoError(t, err)
+	require.Equal(t, "@7", id)
+	require.Equal(t, []string{
+		"new-window", "-d", "-t", "=hive-demo:", "-c", "/work/site", "-n", "tests", "-P", "-F", "#{window_id}",
+		"--", resolveLoginShell(), "-l",
+	}, cmds.calls[1], "detached, in the checkout, a login shell with no command")
+
+	_, err = m.NewDetachedWindow(t.Context(), "hive-demo", "/work/site", "")
+	require.NoError(t, err)
+	require.NotContains(t, cmds.calls[3], "-n", "no name flag without a name")
+}
+
+func TestManagerNewDetachedWindowDoesNotCreateAMissingSession(t *testing.T) {
+	t.Parallel()
+	cmds := &fakeTmuxCommands{absent: true}
+	m := newTestManager(t, nil, ManagerOptions{runTmux: cmds.run})
+	_, err := m.NewDetachedWindow(t.Context(), "hive-demo", "/work", "")
+	require.ErrorIs(t, err, ErrNotAttached)
+	require.Len(t, cmds.calls, 1)
+}
+
+func TestManagerKillWindowNamesTheSessionAndWindow(t *testing.T) {
+	t.Parallel()
+	cmds := &fakeTmuxCommands{}
+	m := newTestManager(t, nil, ManagerOptions{runTmux: cmds.run})
+
+	require.NoError(t, m.KillWindow(t.Context(), "fix-login", "@4"))
+	require.Equal(t, []string{"kill-window", "-t", "=fix-login:@4"}, cmds.calls[0])
+
+	require.ErrorIs(t, m.KillWindow(t.Context(), "fix-login", "logs"), ErrUnknownWindow, "a name is not a target")
+	require.ErrorIs(t, m.KillWindow(t.Context(), "", "@4"), ErrInvalidName)
+	require.Len(t, cmds.calls, 1, "a refused call runs nothing")
 }
 
 func TestManagerNewCommandWindowDoesNotCreateAMissingSession(t *testing.T) {

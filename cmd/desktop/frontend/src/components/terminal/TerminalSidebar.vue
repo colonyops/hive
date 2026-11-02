@@ -24,9 +24,11 @@ import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import Kbd from '@hive/ui/components/ui/Kbd.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import TreeRail from '@hive/ui/components/ui/TreeRail.vue'
-import NewWindowMenu from '../NewWindowMenu.vue'
-import SessionTagsIndicator from '../SessionTagsIndicator.vue'
+import SessionAddMenu from './SessionAddMenu.vue'
+import SessionTabIcon from './SessionTabIcon.vue'
+import { useTerminalAgentIcons } from '../../stores/useTerminalAgentIcons'
 import SessionRowMenu from '../SessionRowMenu.vue'
+import SessionTagsIndicator from '../SessionTagsIndicator.vue'
 import SidebarToolbar from '../sidebar/SidebarToolbar.vue'
 import SessionFilterButton from './SessionFilterButton.vue'
 import SessionViewBar from './SessionViewBar.vue'
@@ -37,17 +39,38 @@ import { useNewSession } from '../../composables/useNewSession'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import { TERMINAL_SIDEBAR } from '../../lib/modeSidebars'
 import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
-import { moveId, type OrderDropTarget } from '../../lib/listOrder'
+import type { OrderDropTarget } from '../../lib/listOrder'
+import { closeTab, moveTabBeside, focusedTab } from '../../lib/panelLayout'
+import { focusedWindow, windowIdOfTab, windowOrder } from '../../lib/windowTabs'
 import { terminalTreeFocused } from '../../lib/terminalTree'
+import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { sessionAgeDays, useTerminalSessionAge } from '../../stores/useTerminalSessionAge'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { MenuEntry } from '@hive/ui/types/menu'
+import { viewOfTab } from './panelViews'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
+import type { TreeItem, TreeWindowRow } from './useTerminalTree'
+import { viewKey } from './useTreeKeyboardNav'
 
 const props = defineProps<{ active: boolean }>()
-const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions } = useTerminalModeContext()
+const { monochrome: monochromeAgentIcons } = useTerminalAgentIcons()
+const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panels } = useTerminalModeContext()
 const { openBlank: openNewSession } = useNewSession()
+const panelLayouts = usePanelLayouts()
+
+function viewRowActive(row: TerminalSessionRow, tabId: string): boolean {
+  return row.slug === pool.visibleSlug && focusedTab(panelLayouts.layoutOf(row.id)) === tabId
+}
+
+// tmux's active window is not what the keyboard is in while a view has the focus.
+function windowRowActive(row: TerminalSessionRow, win: TreeWindowRow): boolean {
+  return win.active && !(row.slug === pool.visibleSlug && !focusedWindow(panelLayouts.layoutOf(row.id)))
+}
+
+function closeViewRow(row: TerminalSessionRow, panel: string, tabId: string): void {
+  panelLayouts.apply(row.id, (layout) => closeTab(layout, panel, tabId))
+}
 const menus = proxyRefs(useTreeRowMenus({ windowMenuAllowed: ops.rowHasWindowActions }))
 const sidebarEl = toRef(nav, 'root')
 const filterInput = toRef(nav, 'filterInput')
@@ -172,9 +195,17 @@ const { rails, update: settleRails } = useSelectionRail(
   treeContent,
   [
     '[data-testid="terminal-session-row"][data-attached="true"]',
-    '[data-testid="terminal-window-row"][data-active="true"]',
+    '[data-testid="terminal-window-row"][data-active="true"], [data-testid="terminal-view-row"][data-active="true"]',
   ],
-  { sources: [() => pool.activeSlug, () => pool.current?.activeWindowId.value], settle: () => treeSettled.value },
+  {
+    sources: [
+      () => pool.activeSlug,
+      () => pool.current?.activeWindowId.value,
+      () => focusedTab(panels.layout),
+      () => windowOrder(panels.layout).join(' '),
+    ],
+    settle: () => treeSettled.value,
+  },
 )
 
 // Motion stays off until the tree has been through a frame: on the first paint
@@ -238,30 +269,37 @@ const expandHooks = {
 // A window can only land back in the session it came from, and is movable only
 // while that session holds a control client, which is exactly when the tree
 // renders its live tabs.
-const windowDrag = useDragReorder<{ slug: string; windowId: string }, OrderDropTarget & { windowId: string }>({
+const windowDrag = useDragReorder<{ slug: string; tabId: string }, OrderDropTarget & { tabId: string }>({
   mime: 'application/x-hive-terminal-window',
-  payload: (dragged) => dragged.windowId,
+  payload: (dragged) => dragged.tabId,
   onDrop: (dragged, target) => {
+    const row = tree.attachable.find((candidate) => candidate.slug === dragged.slug)
+    if (!row) return
+    panelLayouts.apply(row.id, (layout) => moveTabBeside(layout, dragged.tabId, target.tabId, target.edge))
+    // tmux's order drives the window chords, so a window takes its place there too.
+    const layout = panelLayouts.layoutOf(row.id)
+    const windowId = windowIdOfTab(layout, dragged.tabId)
+    if (!windowId) return
     const session = pool.pool.get(dragged.slug)
-    const order = moveId(session?.tabs.value.map((tab) => tab.windowId) ?? [], dragged.windowId, {
-      id: target.windowId,
-      edge: target.edge,
-    })
-    if (session && order) void session.moveWindow(dragged.windowId, order.indexOf(dragged.windowId))
+    const position = windowOrder(layout).indexOf(windowId)
+    if (session && position >= 0) void session.moveWindow(windowId, position)
   },
 })
 const { target: windowDropTarget } = windowDrag
 
 // Both edges of the dragged window name the gap it already fills, so neither marks a move.
-function onWindowDragOver(event: DragEvent, row: TerminalSessionRow, windowId: string): void {
+function onWindowDragOver(event: DragEvent, row: TerminalSessionRow, item: TreeItem): void {
   const dragged = windowDrag.dragging.value
-  const movable = dragged?.slug === row.slug && dragged.windowId !== windowId
-  windowDrag.over(event, movable ? { id: windowMenuKey(row, windowId), windowId, edge: dropEdge(event) } : null)
+  const movable = dragged?.slug === row.slug && dragged.tabId !== item.tabId
+  windowDrag.over(
+    event,
+    movable ? { id: windowMenuKey(row, item.key), tabId: item.tabId, edge: dropEdge(event) } : null,
+  )
 }
 
-function draggingWindowRow(slug: string, windowId: string): boolean {
+function draggingWindowRow(slug: string, tabId: string): boolean {
   const dragged = windowDrag.dragging.value
-  return dragged?.slug === slug && dragged.windowId === windowId
+  return dragged?.slug === slug && dragged.tabId === tabId
 }
 </script>
 
@@ -419,16 +457,8 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                   size="sm"
                   class="row-action row-lead"
                   data-testid="terminal-new-window"
-                  @click="ops.newWindowIn(row)"
+                  @click="panels.newWindow(row)"
                 />
-                <span
-                  v-if="tree.rowRunning(row)"
-                  class="row-status text-severity-success"
-                  data-testid="terminal-session-liveness"
-                >
-                  <span class="size-2.5 rounded-full bg-current" aria-hidden="true" />
-                  <span class="sr-only">Terminal running</span>
-                </span>
                 <IconButton
                   :ref="(el) => menus.setRowToggle(row.id, el)"
                   label="Terminal actions"
@@ -499,8 +529,8 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     >
                       <component :is="row.offline ? IconCircleAlert : IconServer" class="size-3" aria-hidden="true" />
                     </BaseIconBadge>
-                    <span class="flex-1" />
                     <SessionTagsIndicator v-if="group.kind === 'repo'" :tags="row.tags" />
+                    <span class="flex-1" />
                     <BaseBadge
                       v-if="sessionAgeBadges[row.id]"
                       tone="accent"
@@ -526,28 +556,13 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                         data-testid="terminal-new-window"
                         @click="menus.toggleNewWindow(row, $event)"
                       />
-                      <NewWindowMenu
+                      <SessionAddMenu
                         v-if="menus.openNewWindow === row.id"
-                        :running="tree.rowRunning(row)"
+                        :row="row"
                         :flip="menus.newWindowFlip"
                         :ignore="[menus.newWindowToggle]"
-                        :agents="row.server ? [] : ops.agentProfiles"
-                        :default-agent="ops.defaultAgentProfile"
-                        :loading="!row.server && ops.agentProfilesLoading"
-                        :failed="!row.server && ops.agentProfilesFailed"
                         @close="menus.openNewWindow = ''"
-                        @terminal="ops.newWindowIn(row)"
-                        @agent="ops.newAgentWindowIn(row, $event)"
-                        @retry="ops.loadAgentProfiles"
                       />
-                      <span
-                        v-if="tree.rowRunning(row)"
-                        class="row-status text-severity-success"
-                        data-testid="terminal-session-liveness"
-                      >
-                        <span class="size-2.5 rounded-full bg-current" aria-hidden="true" />
-                        <span class="sr-only">{{ group.kind === 'chats' ? 'Agent running' : 'Terminal running' }}</span>
-                      </span>
                       <IconButton
                         :ref="(el) => menus.setRowToggle(row.id, el)"
                         :label="group.kind === 'chats' ? 'Chat actions' : 'Session actions'"
@@ -591,48 +606,56 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     </div>
                   </div>
                   <Transition name="tree-expand" v-bind="expandHooks">
-                    <div v-if="tree.windowRowsFor(row).length && view.expansion.expanded(group)">
+                    <div v-if="tree.treeItemsFor(row).length && view.expansion.expanded(group)">
                       <TransitionGroup name="tree" tag="div" class="relative flex flex-col pb-1">
                         <!-- The slot carries the drag and its marker: the row's ::before and
                              ::after draw the tree connector. -->
                         <div
-                          v-for="(win, index) in tree.windowRowsFor(row)"
-                          :key="win.windowId"
+                          v-for="(item, index) in tree.treeItemsFor(row)"
+                          :key="item.key"
                           class="window-slot"
                           :class="[
-                            dropClass(windowDropTarget, windowMenuKey(row, win.windowId)),
-                            { 'opacity-40': draggingWindowRow(row.slug, win.windowId) },
+                            dropClass(windowDropTarget, windowMenuKey(row, item.key)),
+                            { 'opacity-40': draggingWindowRow(row.slug, item.tabId) },
                           ]"
-                          :draggable="win.live && rename.windowId !== win.windowId"
+                          :draggable="(item.view !== null || !!item.win?.live) && rename.windowId !== item.key"
                           data-testid="terminal-window-slot"
-                          @dragstart="windowDrag.start($event, { slug: row.slug, windowId: win.windowId })"
-                          @dragover.prevent="onWindowDragOver($event, row, win.windowId)"
+                          @dragstart="windowDrag.start($event, { slug: row.slug, tabId: item.tabId })"
+                          @dragover.prevent="onWindowDragOver($event, row, item)"
                           @drop.prevent="windowDrag.drop"
                           @dragend="windowDrag.end"
                         >
                           <div
+                            v-if="item.win"
                             class="window-row"
                             :class="{
                               'window-row-flush': group.kind === 'scratch',
-                              'window-row-last': index === tree.windowRowsFor(row).length - 1,
-                              'window-row-active': win.active,
-                              'has-swap': win.live,
-                              'menu-open': menus.openWindow === windowMenuKey(row, win.windowId),
+                              'window-row-last': index === tree.treeItemsFor(row).length - 1,
+                              'window-row-active': windowRowActive(row, item.win),
+                              'window-row-on-screen':
+                                row.slug === pool.visibleSlug && panels.onScreen.has(item.win.windowId),
+                              'has-swap': item.win.live,
+                              'menu-open': menus.openWindow === windowMenuKey(row, item.win.windowId),
                             }"
                             role="button"
-                            :tabindex="nav.tabStopKey === `w:${row.id}:${win.windowId}` ? 0 : -1"
-                            :data-testid="win.live ? 'terminal-window-row' : 'terminal-listed-window-row'"
-                            :data-window-id="win.windowId"
-                            :data-tree-key="`w:${row.id}:${win.windowId}`"
-                            :data-active="win.live ? win.active : undefined"
-                            @click="nav.openWindow(row, win)"
-                            @keydown.enter.self.prevent="nav.openWindow(row, win)"
-                            @keydown.space.self.prevent="nav.openWindow(row, win)"
-                            @dblclick="rename.start(win)"
-                            @contextmenu.prevent="menus.toggleWindow(row, win.windowId, $event)"
+                            :tabindex="nav.tabStopKey === `w:${row.id}:${item.win.windowId}` ? 0 : -1"
+                            :data-testid="item.win.live ? 'terminal-window-row' : 'terminal-listed-window-row'"
+                            :data-window-id="item.win.windowId"
+                            :data-tree-key="`w:${row.id}:${item.win.windowId}`"
+                            :data-active="item.win.live ? windowRowActive(row, item.win) : undefined"
+                            @click="nav.openWindow(row, item.win)"
+                            @keydown.enter.self.prevent="nav.openWindow(row, item.win)"
+                            @keydown.space.self.prevent="nav.openWindow(row, item.win)"
+                            @dblclick="rename.start(item.win)"
+                            @contextmenu.prevent="menus.toggleWindow(row, item.win.windowId, $event)"
                           >
+                            <SessionTabIcon
+                              kind="window"
+                              :agent="item.win.agent"
+                              :class="item.win.agent && !monochromeAgentIcons ? '' : 'text-text-4'"
+                            />
                             <input
-                              v-if="rename.windowId === win.windowId"
+                              v-if="rename.windowId === item.win.windowId"
                               v-model="rename.draft"
                               class="min-w-0 flex-1 bg-transparent font-mono text-small text-text outline-none"
                               data-testid="terminal-rename-input"
@@ -646,55 +669,88 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                               @keydown.esc="rename.windowId = ''"
                               @blur="rename.commit"
                             />
-                            <span v-else class="min-w-0 flex-1 truncate font-mono text-small">{{ win.name }}</span>
+                            <span v-else class="min-w-0 flex-1 truncate font-mono text-small">{{ item.win.name }}</span>
                             <div class="window-trailing" data-testid="terminal-window-trailing" @click.stop>
                               <IconButton
-                                v-if="win.live"
-                                :label="`Close ${win.name}`"
+                                v-if="item.win.live"
+                                :label="`Close ${item.win.name}`"
                                 :icon="IconX"
                                 size="sm"
                                 class="row-action row-swap"
                                 data-testid="terminal-close-window"
-                                @click="ops.requestCloseWindow(row.slug, win.windowId, win.name)"
+                                @click="ops.requestCloseWindow(row.slug, item.win.windowId, item.win.name)"
                               />
                               <span
-                                v-if="win.indicator"
+                                v-if="item.win.indicator"
                                 class="window-status"
-                                :class="win.indicator.color"
-                                :title="win.indicator.label"
+                                :class="item.win.indicator.color"
+                                :title="item.win.indicator.label"
                                 data-testid="terminal-window-status"
-                                :data-status="tree.windowStatus(row, win.windowId)?.status"
+                                :data-status="tree.windowStatus(row, item.win.windowId)?.status"
                               >
                                 <component
-                                  :is="win.indicator.icon"
+                                  :is="item.win.indicator.icon"
                                   class="size-3"
-                                  :class="{ 'animate-spin': win.indicator.animated }"
+                                  :class="{ 'animate-spin': item.win.indicator.animated }"
                                   aria-hidden="true"
                                 />
-                                <span class="sr-only">{{ win.indicator.label }}</span>
+                                <span class="sr-only">{{ item.win.indicator.label }}</span>
                               </span>
                               <!-- Only once a configured action targets a window. -->
                               <IconButton
                                 v-if="ops.rowHasWindowActions(row)"
-                                :ref="(el) => menus.setWindowToggle(windowMenuKey(row, win.windowId), el)"
+                                :ref="(el) => menus.setWindowToggle(windowMenuKey(row, item.key), el)"
                                 label="Window actions"
                                 :icon="IconEllipsisVertical"
                                 size="sm"
                                 class="row-action row-lead"
                                 aria-haspopup="menu"
-                                :aria-expanded="menus.openWindow === windowMenuKey(row, win.windowId)"
+                                :aria-expanded="menus.openWindow === windowMenuKey(row, item.win.windowId)"
                                 data-testid="terminal-window-menu-toggle"
-                                @click="menus.toggleWindow(row, win.windowId)"
+                                @click="menus.toggleWindow(row, item.win.windowId)"
                               />
                               <AppMenu
-                                v-if="menus.openWindow === windowMenuKey(row, win.windowId)"
+                                v-if="menus.openWindow === windowMenuKey(row, item.win.windowId)"
                                 :entries="ops.windowActionEntries"
                                 :flip="menus.windowFlip"
                                 width="min(230px, 100%)"
-                                :ignore="[menus.windowToggle(windowMenuKey(row, win.windowId))]"
+                                :ignore="[menus.windowToggle(windowMenuKey(row, item.win.windowId))]"
                                 testid="terminal-window-menu"
-                                @select="runWindowAction(row, win.windowId, $event)"
+                                @select="runWindowAction(row, item.win.windowId, $event)"
                                 @close="menus.openWindow = ''"
+                              />
+                            </div>
+                          </div>
+                          <div
+                            v-else-if="item.view"
+                            class="window-row has-swap"
+                            :class="{
+                              'window-row-flush': group.kind === 'scratch',
+                              'window-row-last': index === tree.treeItemsFor(row).length - 1,
+                              'window-row-active': viewRowActive(row, item.view.tab.id),
+                            }"
+                            role="button"
+                            :tabindex="nav.tabStopKey === viewKey(row, item.view.tab.id) ? 0 : -1"
+                            data-testid="terminal-view-row"
+                            :data-tree-key="viewKey(row, item.view.tab.id)"
+                            :data-active="viewRowActive(row, item.view.tab.id)"
+                            :data-view-kind="item.view.tab.kind"
+                            @click="nav.clickView(row, item.view.panel, item.view.tab.id)"
+                            @keydown.enter.self.prevent="nav.clickView(row, item.view.panel, item.view.tab.id)"
+                            @keydown.space.self.prevent="nav.clickView(row, item.view.panel, item.view.tab.id)"
+                          >
+                            <SessionTabIcon :kind="item.view.tab.kind" class="text-text-4" />
+                            <span class="min-w-0 flex-1 truncate text-small">{{
+                              viewOfTab(item.view.tab)?.label
+                            }}</span>
+                            <div class="window-trailing" @click.stop>
+                              <IconButton
+                                :label="`Close ${viewOfTab(item.view.tab)?.label}`"
+                                :icon="IconX"
+                                size="sm"
+                                class="row-action row-swap"
+                                data-testid="terminal-close-view"
+                                @click="closeViewRow(row, item.view.panel, item.view.tab.id)"
                               />
                             </div>
                           </div>
@@ -762,7 +818,10 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
-  padding: 8px 12px;
+  /* The status bar's height, so the two bars' top lines meet across the handle. */
+  height: 28px;
+  /* The fonts sit lowercase letters about 1.4px below the middle of their box. */
+  padding: 0 12px 2px;
   border-top: 1px solid var(--color-border);
   font-family: var(--font-mono);
   font-size: var(--text-caption);
@@ -795,12 +854,12 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
 }
 .session-row {
   height: 30px;
-  padding-left: 20px;
+  padding-left: 16px;
   color: var(--color-text);
 }
 .window-row {
   height: 28px;
-  padding-left: 40px;
+  padding-left: 34px;
   color: var(--color-text-2);
 }
 :is(.repo-group, .group-row, .session-row, .window-row):is(:hover, .menu-open) {
@@ -827,6 +886,10 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
 .window-row-active {
   font-weight: 500;
   color: var(--color-accent);
+}
+
+.window-row-on-screen:not(.window-row-active) {
+  color: var(--color-text);
 }
 
 /* One cell, two occupants: the count is what the row says at rest, the add
@@ -864,7 +927,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
 .window-row::before {
   content: '';
   position: absolute;
-  left: 26px;
+  left: 21px;
   top: 0;
   bottom: 0;
   border-left: 1px solid var(--color-strong);
@@ -872,9 +935,9 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
 .window-row::after {
   content: '';
   position: absolute;
-  left: 26px;
+  left: 21px;
   top: 50%;
-  width: 9px;
+  width: 8px;
   border-top: 1px solid var(--color-strong);
 }
 .window-row-last::before {
@@ -884,7 +947,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
    they take that row's box and drop the connector. */
 .window-row-flush {
   height: 30px;
-  padding-left: 20px;
+  padding-left: 16px;
 }
 .window-row-flush::before,
 .window-row-flush::after {
@@ -943,9 +1006,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
   z-index: 1;
   transition: opacity 0.15s ease;
 }
-.session-row:has(.row-status) .session-age {
-  margin-right: -24px;
-}
 .session-row:is(:hover, .menu-open, :has(.row-trailing:focus-within)) .session-age {
   opacity: 0;
   pointer-events: none;
@@ -978,12 +1038,10 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
 .row-lead {
   grid-area: 1 / 1;
 }
-.row-status,
 .window-status,
 .row-swap {
   grid-area: 1 / 2;
 }
-.row-status,
 .window-status {
   display: flex;
   width: 18px;
@@ -992,7 +1050,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
   align-items: center;
   justify-content: center;
 }
-.row-status,
 .window-row.has-swap .window-status {
   pointer-events: none;
 }
@@ -1007,10 +1064,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
 :is(.session-row, .group-row, .window-row):is(:hover, .menu-open) .row-action,
 .row-action:focus-visible {
   opacity: 1;
-}
-:is(.session-row, .group-row):is(:hover, .menu-open) .row-status,
-.row-trailing:focus-within .row-status {
-  opacity: 0;
 }
 .window-row.has-swap:hover .window-status,
 .window-row.has-swap .window-trailing:focus-within .window-status {

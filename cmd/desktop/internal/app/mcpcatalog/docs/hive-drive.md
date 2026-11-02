@@ -1,8 +1,8 @@
 # Hive Drive
 
 The `hive-drive` MCP server is an agent's output surface. Its tools put
-documents in front of the user, in a pane beside the conversation, in a chat
-or in a Code session, while the session keeps running. It is the difference
+documents in front of the user, in the Drive tab of a chat or a Code
+session, while the session keeps running. It is the difference
 between describing a plan in terminal scrollback and handing the user one to
 read (ADR hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it).
 
@@ -30,9 +30,9 @@ It is one of three things:
   checkout itself.
 - Outside a chat and a hive session it is the word `global`, and the space is
   `shared`. A directory inside no hive session is `not_found`, not global:
-  pass `global` yourself. The shared space has no pane, so `open_document`,
-  `open_canvas` and `close_canvas` refuse it; the user reads it in the drive
-  view.
+  pass `global` yourself. The shared space sits beside no chat or session and has
+  no tabs, so `open_tab` and `close_tab` refuse it; the user reads it in the
+  Drive page.
 
 ## Paths and kinds
 
@@ -99,13 +99,85 @@ either key in the tool. Copy and save include all of them in a YAML header.
   Answers with the entry at its new path.
 - `delete_document`: delete a document, a canvas, or an empty folder, and
   answer with the path deleted. There is no recursive delete and no trash.
-- `open_document`: ask to open the pane beside this chat or session, showing
-  the document at `path` when you give one. It must exist.
 
-The pane does not open by itself: a write while it is closed lights an unseen
-dot on its toggle. Open it when something is finished and worth reading, not
-on every write. Opening is best-effort: it applies only while the user is
-viewing this chat or session, and there is no acknowledgment either way.
+A write while a Drive tab is open behind another tab lights a dot on that tab.
+With no Drive tab open, a write shows nothing until the user opens Drive, so
+call `open_tab` when something is finished and worth reading now, not on every
+write.
+
+## Tabs and layout
+
+Drive, Diff, Tasks and terminals open as tabs in panels beside a chat or Code
+session. A panel holds tabs, and a split joins two panels side by side or
+stacked. You can do with the layout what the user can. Every call below is a
+request to the app: the tab change applies only while the user is viewing this
+chat or session, and there is no acknowledgment. The tmux side of `terminal`
+is the exception: `open_tab` starts or finds the window and `close_tab` kills
+it whether or not the session is on screen.
+
+A tab reference names one tab, in a `tab` or `anchor` input:
+
+- `drive`, `diff` or `tasks` name that view. A chat has only `drive`.
+- `terminal` names a chat's one terminal.
+- Anything else is a tmux window of a Code session, by id (`@3`) or exact
+  name. A Code session must name its window; `terminal` alone is refused.
+
+The tools:
+
+- `open_tab`: open the tab for a `view` (`drive`, `diff`, `tasks` or
+  `terminal`). `path`, for `drive`, is a document by its path in the space or a
+  canvas by name or path (`perf` is `canvases/perf.canvas.json`); it must
+  exist, and a folder is refused. `placement` is `behind` (the default; behind
+  a tab, with an unseen dot, never takes the screen), `beside` (a split to the
+  right) or `below` (a split downward). `anchor` is the tab to place relative
+  to; omit it for the tab in front of the focused panel. A tab that is already
+  open stays where it is. The answer names the `view`, the resolved `path` and,
+  for `terminal`, the `window` id.
+- `close_tab`: close the tab for `drive`, `diff` or `tasks`. Documents and
+  canvases are untouched. `terminal` needs `window` and kills that tmux window
+  and what runs in it; only close a window you started. A chat's terminal is
+  the chat, so it is refused.
+- `move_tab`: move `tab`. `placement` `behind` puts it in the anchor's panel
+  right after the anchor, or at the end of the focused panel with no anchor.
+  `beside` and `below` split the anchor's panel (or the focused one) and move
+  the tab into the new panel.
+- `focus_tab`: bring `tab` forward and focus its panel. A window is also
+  selected in tmux, by the app and only while the session is on screen.
+- `close_panel`: close the panel that holds `tab`. Its tabs join the
+  neighbouring panel, and the last panel stays.
+- `resize_split`: give the side that holds `tab` a `share` of its nearest
+  split, from 0.2 to 0.8.
+- `turn_split`: turn the nearest split of `tab` between side by side and
+  stacked.
+- `get_layout`: read the layout the app last reported: `panels` with their
+  `tabs` (each spelled the way the tools take it, with `kind`, the window
+  `name` for a Code session, and `shown` for the panel's front tab),
+  `focusedPanel`, `splits` (`axis` `row` is side by side, `column` is
+  stacked; `first` and `second` are panel or split ids), and `onScreen`. When
+  `known` is `false` the app has not reported this layout yet, for instance
+  just after it started or when the session has never been open in Code; act
+  without it.
+
+Call `get_layout` first when you are not sure what is open. Layout changes may
+land after the call returns, so read again before you build on one.
+
+`focus_tab` and `close_tab` on a terminal are the two that take something from
+the user: the first takes the screen, the second ends a running process. Use
+`focus_tab` when the user asked to see something, not to show off a result;
+for a result use `open_tab`, which leaves the focus where it is. Close only a
+window you started.
+
+A `terminal` opens detached, so it never takes the keyboard or the screen. A
+new one is a shell in the session's checkout with nothing running in it: the
+tool takes no command, so run your own work yourself and open a terminal for
+the user to type in. The session must be running; start it in Code first. Two
+inputs apply to `open_tab` with `terminal` only, and either with another view
+is refused:
+
+- `name`: the name of the new window.
+- `window`: an existing window of the session, by tmux id (`@3`) or exact
+  window name. It is placed instead of starting one, so it excludes `name`. A
+  window the session does not have is `not_found`.
 
 ## Canvases
 
@@ -147,8 +219,6 @@ The canvas tools:
   order.
 - `list_canvases`: every canvas in the space, including ones earlier chats
   made, most recently updated first.
-- `open_canvas` / `close_canvas`: ask to show or hide the pane, optionally
-  pinned to one canvas. They follow the same rules as `open_document`.
 
 ## Writing a Mermaid diagram
 
@@ -178,7 +248,7 @@ support can render the exported diagram too.
 
 How a block looks is yours. Any class, any `style` attribute, any colour or
 size — nothing in the allowlist is second-guessed, and a block renders inside
-the pane it was written for, so it cannot paint over the rest of the app.
+the tab it was written for, so it cannot paint over the rest of the app.
 
 What a block may **reach** is not yours: no script, no event handler, no
 embedded document, and links only to `http`, `https` or `mailto`. A write that
@@ -219,7 +289,7 @@ and `alt` on `img`, `colspan`/`rowspan` and `scope` on cells, `open` on
 
 **Layout** — `hv-stack` (vertical, evenly spaced), `hv-row` (horizontal,
 wraps), `hv-grid` with one of `hv-cols-2`, `hv-cols-3`, `hv-cols-4`, `hv-cols-5`,
-`hv-cols-6` (equal columns; they collapse to one when the pane is narrow, and
+`hv-cols-6` (equal columns; they collapse to one when the panel is narrow, and
 five or six drop to three first, so pick for the content, not for a width you
 cannot see).
 
@@ -250,9 +320,9 @@ Prose and boxes cannot say which node feeds which, or which path is a return
 path. Draw that as an `svg`: you place the geometry, Hive picks the size and
 every colour, exactly as it does for the classes above.
 
-Give the `svg` a `viewBox` and it scales to whatever width the user dragged
-the pane to, which is usually what you want. State a `width` and `height`
-instead and it keeps that size, up to the width of the pane.
+Give the `svg` a `viewBox` and it scales to whatever width the user sized
+the panel to, which is usually what you want. State a `width` and `height`
+instead and it keeps that size, up to the width of the panel.
 
 The role classes below are defaults, not rules. An unclassed shape still
 follows the theme; a `fill` or `stroke` attribute, or a `style`, overrides

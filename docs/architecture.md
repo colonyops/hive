@@ -58,8 +58,10 @@ individual choices; this document describes the shape everything fits into.
 > capabilities as tools over `app.App`, on the same single loopback `http`
 > server (on by default) that hosts the webhook listener (ADR agent-http-api). It is
 > stateless, so it holds nothing between requests and joins no lifecycle, and
-> it is unauthenticated behind the loopback bind because it spawns nothing
-> (ADR mcp-replaces-the-agent-facing-http-api). It replaced the REST control surface that preceded it, whose
+> it is unauthenticated behind the loopback bind because it runs nothing a
+> caller writes: the one process it starts is the user's shell in a detached
+> window of the caller's own Code session, with no command
+> (ADR mcp-replaces-the-agent-facing-http-api, ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows). It replaced the REST control surface that preceded it, whose
 > routes and generated OpenAPI document are deleted rather than deprecated —
 > `tools/list`, inferred from the same Go types the handlers take, is what
 > makes it self-describing now.
@@ -1433,8 +1435,8 @@ place that turns a `Location` into a route or an overlay. A new area adds an
 ### Terminal sessions
 
 **Changes is read-only and reads through `sessionapi`.** The Changes view is a
-hub overlay over the session in Code, not a route or a side pane: it needs more
-width than the right slot has, and it takes key focus away from the terminal.
+session's Diff tab in Code, not a route or a side pane: it needs more width than
+the right slot has.
 Its reads (`SessionChanges`, `SessionFileDiffs`, `SessionBranches`) go through
 `sessionapi` to `gitstatus`, so they read the checkout on the machine that holds
 it. A `gitstatus.DiffTarget` says what the first two compare: the working tree
@@ -1611,9 +1613,14 @@ faces are a separate pair of settings on a separate pane — `appearance.
 font_family` and `mono_font_family`, written from Settings ▸ Appearance — and a
 terminal takes nothing from them (ADR the-app-s-faces-are-picked-from-installed-fonts-not-from-a-bundled-set).
 
-**The sidebar tree is a session's only window list.** There is no tab strip to
-keep in step with it, and a window's controls — close, rename, and the add on
-its session's row — live on the rows themselves (ADR the-sidebar-tree-is-the-only-window-list).
+**A session is a panel layout, and the tree mirrors it.** What a session shows
+in Code is a tree of splits with tabbed panels at the leaves, kept in
+`lib/panelLayout` and persisted per session id; the sidebar tree lists the same
+tabs in the same order, so a select, close or drag on either surface is one
+layout rule drawn twice (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows,
+which supersedes the one-list rule of ADR the-sidebar-tree-is-the-only-window-list).
+A window's controls — close, rename, and the add on its session's row — still
+live on the rows themselves. The layers are in [Session panels](#session-panels).
 
 The Hive session row's add menu offers a terminal or a configured agent
 profile. A peer agent window shares the session's checkout and record;
@@ -1771,7 +1778,10 @@ in place of the pane's own process. Anything unreadable answers `running`, and
 the question is asked at the moment of the close rather than swept with the
 window listing — what a pane runs changes with nothing announced.
 
-**Window order is tmux's, and a reorder is a move rather than a swap.**
+**Window order on screen is the layout's, tmux follows it, and a reorder is a
+move rather than a swap.** The tabs and the tree draw the layout's order, and a
+window tab that moves moves its window in tmux to the matching position so the
+numbered chords agree (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows).
 `POST /api/terminal/windows/move` takes a window id and the index it ends up at,
 because a reorder means a destination and not a neighbour; the core reads the
 current order and picks the tmux insertion that expresses it, anchored on a
@@ -1780,9 +1790,9 @@ from. Three rules hold it together and each answers something tmux does:
 
 - **The answer is a window set, not an acknowledgement.** The order is session
   state every attached client shares, so the move replies with what tmux settled
-  on and the strip renders that rather than the order it asked for. The tab
-  strip and the sidebar's window well are two views of that one order and either
-  can drag it, so neither holds an arrangement of its own.
+  on. A merge of two panels can leave tmux's order different from the tabs',
+  and one move cannot always repair it, so the view reads windows in tab order
+  (`inTabOrder`) rather than repairing tmux.
 - **A move is an unlink and a relink**, so tmux announces the window it moved as
   closed. `tmuxcc` suppresses that close for the window in flight — acting on it
   tears the tab and its terminal down, and the reconcile behind it can only
@@ -2022,6 +2032,85 @@ rewrites each Kitty APC into a private OSC carrying a per-terminal nonce, and
 `lib/kitty` draws its placements on a canvas layer over the screen, anchored to
 xterm markers (ADR kitty-graphics-render-from-the-pane-stream-through-a-private-osc).
 
+#### Session panels
+
+A Code session is a **panel layout**: a tree of splits with tabbed panels at the
+leaves, as in tmux, with a tmux window or a view (Drive, Diff, Tasks) behind
+each tab (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows).
+"Pane" is tmux's word and stays with tmux's panes inside a window; the app's
+tiling leaf is a panel. The layers, and what each is allowed to know:
+
+- **`lib/panelLayout`** is the tiling and knows nothing about its tabs. A tab
+  is `{ id, kind, params? }`; the layout places, splits, merges, resizes and
+  syncs tabs, and reads neither `kind` nor `params`. Every rule returns the
+  same object when nothing changed, which is what lets `usePanelLayouts` skip
+  a storage write on a poll.
+- **`lib/windowTabs`** binds tmux's window as one tab kind: a window has
+  exactly one tab, `windowIdOf(tab)` is the only reader of how its id is
+  spelled, and `reconcileWindows` makes the window tabs mirror the session's
+  windows. Which windows exist is tmux's to say; their order on screen is the
+  layout's, and a moved tab moves its window in tmux to match.
+- **`components/terminal/panelViews.ts`** declares each view once: kind,
+  label, icon, and which sessions offer it. The picker, the add menus, the tab
+  row and the tree read it. A view is open once per session, so its tab id is
+  its kind, and a view's own state (the Drive scope) rides on its tab's
+  `params` and goes with the tab. A new view is one entry here and one branch
+  in the Code host's content slot.
+- **`useSessionPanels(source)`** keeps a layout and a `PanelWindowSource` in
+  step: window ids, the active window, closed and pending flags, and select,
+  move, render and focus. It imports neither the pool, the tree nor the
+  session ops. `useCodePanels` builds the source from the attach pool and adds
+  what only Code has: new windows and agents, and the sweep that drops the
+  layout of a session that is gone.
+- **`components/panels/PanelLayoutHost`** draws a layout: panel boxes, tab
+  rows, dividers, tab drag and split resize, with the layout rules applied
+  through the `apply` it is handed. It takes content through slots and emits
+  `close-tab` alone, because closing a window tab asks tmux first. The Code
+  host, `TerminalPaneColumn`, fills the slots: the view components, the picker,
+  the session's actions, and the floating layer.
+- **Terminals render in a floating layer the host positions, not inside a
+  panel.** An xterm element is bound for its lifetime and the pool keeps every
+  session's terminals mounted, so panel content cannot own them. The host
+  computes one geometry and exposes it to the floating slot; nothing else may
+  compute where a panel's content box is.
+
+Two rules for a view: it owns no close (the host draws the control and handles
+Escape), and one mounted behind another tab takes no keys (`keysActive`).
+Neither Code nor Chats has a right Drive pane: Drive is a tab in both, and the
+title bar's right toggle names the Inbox preview and the Drive page's comments
+alone.
+
+**Chats is the second host.** `components/agents/useChatPanels.ts` builds a
+`PanelWindowSource` from the open chat's pane state: one window, the chat's
+terminal, so select, move and render are no-ops and `pending` covers a resume
+whose window is not known yet. `AgentsMode.vue` hosts `PanelLayoutHost`, places
+the chat's xterm element in the floating layer, offers one view (Drive) from
+`ChatTabAdd` and the picker, and closes the window tab the way the sidebar's
+Stop does. Layouts live in their own store, `useChatPanelLayouts`
+(`hive.chats.panel-layouts`), keyed by chat id: a chat pinned to Code shares
+its id, and Code's sweep drops keys it does not know. Closing or deleting a
+chat forgets its layout; an agent that exits keeps it. The Agents sidebar does
+not mirror a chat's tabs. `components/panels/useSessionLayout.ts` is the one
+way into a session's layout from outside it, for both hosts: `?doc` on the
+host's route opens the Drive tab and is consumed, and an agent's
+`session:layout` is dispatched by verb to the host's handlers, honored only
+for the session on screen and only for a view the host offers. The wire's tab
+reference (`view` plus `window`, and the anchor's) becomes a tab id in
+`components/panels/sessionTabRefs.ts`, the one place that maps `drive` to the
+frontend's `docs` kind and a chat's `terminal` to its pane's window; the same
+file holds the rule each verb applies (`openViewRule`, `moveRule`,
+`focusRule`, `closePanelRule`, `resizeRule`, `turnRule`) so the two hosts
+share them. `lib/panelLayout` grew the rules the verbs need: `addTabBeside`
+and `placeTabBeside` take an axis and an anchor panel, `moveTabBehind`,
+`moveTabToSplit`, `focusTab`, `parentSplitOf` with `resizeSplitFor` and
+`turnSplitFor`. A `terminal` ask names a tmux window the backend created
+detached or found; the tab itself still arrives through the reconcile, and
+`useSessionPanels.placeArrivingWindow` only decides where it lands: nowhere
+special for `behind`, a new split on the anchor for `beside` or `below`,
+whether the tab is already there or the event beat the listing. Each layout
+store reports its map and the key on screen to Go (`lib/layoutReport.ts`,
+`LayoutService.Report`), which is how `get_layout` answers.
+
 #### Pop-up terminals
 
 `cmd/desktop/internal/app/ptyterm` is the *other* terminal backend, and the rule for which
@@ -2105,8 +2194,8 @@ Three rules govern it, and each is a consequence of that:
   — in two ways, which is the distinction to get right before adding to it.
 
   A command **pierces** when the catalog marks it `piercesPane`: it is claimed
-  on the binding alone, whatever modifiers it carries. The pop-up toggle,
-  `tasks.toggle`, and `changes.toggle`, because the combo that opens an overlay
+  on the binding alone, whatever modifiers it carries. The pop-up toggle
+  and `tasks.toggle`, because the combo that opens an overlay
   has to close it, and
   `drive.toggle`, because the chat that wrote a document is a focused pane and
   the chord that opens the page from there has to work from inside it;
@@ -2353,8 +2442,8 @@ MCP flag, so its generated `.codex/config.toml` is loaded alongside whatever
 the user's own global codex config already has, and the UI states that rather
 than leaving an unbounded tool set looking identical to a bounded one.
 
-**Hive Drive** is one document tree under the context root, shown in a pane
-beside a chat or a Code session and in a full-page overlay
+**Hive Drive** is one document tree under the context root, shown in a Drive
+tab beside a chat or a Code session and in a full-page overlay
 ([ADR hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it](decisions/2026-10-11-hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it.md)).
 A canvas is one document kind in it.
 
@@ -2368,8 +2457,8 @@ service set, and `Reload` calls its `Reconfigure`. It keeps an in-memory
 snapshot per space, scanned lazily on the first `Tree` or `Search` of that
 space, with front matter read from the head of each markdown file. No index
 sits in `hive.db`. A `Reconfigure` with a new context root publishes one
-`drive.changed` per previously scanned space, with empty paths, so panes
-refresh. Documents are `.md`, `.html` and `.canvas.json`; `Write`
+`drive.changed` per previously scanned space, with empty paths, so Drive
+tabs refresh. Documents are `.md`, `.html` and `.canvas.json`; `Write`
 accepts only the first two, and a canvas changes through its block methods.
 A document is identified by `(space, path)`, so a move is a rename.
 
@@ -2394,19 +2483,46 @@ session or hive session) of a write. The desktop forwarder passes it through
 and publishes nothing of its own: one change, one event. `wailsui.drive`
 subscribes with `events.Buffer(64)`, not `Coalesce()`, because the payload is a
 per-space delta with an author and must not be dropped. It reaches the
-frontend as `drive:updated`, and a request to open or close the pane as
-`drive:toggle`. Pane visibility is UI intent, not stored state, so
-`drive:toggle` carries the whole message, and the frontend honors it only for
-the chat in view. The agent learns its own session id from
+frontend as `drive:updated`, and a layout request as `session:layout` (a
+`verb`: open, close, move, focus, close_panel, resize or turn, with the tab,
+an optional anchor, path, placement and share). Whether a tab is open is UI
+intent, not stored state, so `session:layout` carries the whole message,
+buffered rather than coalesced because two asks in a row are both intents, and
+the frontend honors it only for the chat or session in view. The agent learns
+its own session id from
 `HIVE_AGENT_SESSION`, injected at launch via `tmux new-session -e`.
 
 **Agents write through `mcpsrv`.** One app-hosted server, `hive-drive`, mounts
 at `/mcp/drive` and at `/mcp/canvas`; the old address keeps answering for
-existing agent configurations. It has sixteen tools: the ten canvas tools,
+existing agent configurations. It has twenty-one tools: the eight canvas tools,
 whose `canvas` argument is a name or a path (`reports/perf` files at
-`reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), and six document
-tools: `list_documents`, `read_document`, `write_document`, `move_document`,
-`delete_document` and `open_document`. `read_document` reads markdown, html
+`reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), five document
+tools: `list_documents`, `read_document`, `write_document`, `move_document`
+and `delete_document`, and eight layout tools: `open_tab` (`view` is `drive`,
+`diff`, `tasks` or `terminal`; `path`, for `drive`, is a document path or a
+canvas name; `window`, `name` and `command`, for `terminal`, pick an existing
+window or start a new detached one in the checkout, a shell with no command;
+`placement` is `behind`, `beside` or `below`, relative to an optional
+`anchor`), `close_tab` (a terminal needs `window` and is killed through
+`tmuxcc.Manager.KillWindow`, with no event), `move_tab`, `focus_tab`,
+`close_panel`, `resize_split`, `turn_split` and `get_layout`. The verbs are
+`app.LayoutsService` (`layouts_tabs.go`), which asks `app.DriveService` only
+who a session argument is and what document a Drive tab opens on. A tab is
+addressed by one string: a view name, `terminal` for a chat's one window, or a
+Code window by tmux id or exact name, which `parseTabRef` and `FindWindow`
+resolve before anything is published. `get_layout` answers from the same
+service's in-memory mirror, which the frontend fills through the Wails
+`LayoutService.Report` whenever a layout store changes (debounced, with the
+key on screen), joined with tmux window names; the layout itself still lives
+only in the browser, and `known: false` says the frontend has not reported
+yet. The hive CLI reaches the same tools as an MCP client: `hive dt layout`,
+`hive dt tab open|close|move|focus`, `hive dt panel close`, `hive dt split
+resize|turn`, with `--session` defaulting to `HIVE_AGENT_SESSION` or the
+working directory and `--url` to the endpoint file the desktop writes at
+`<hive data dir>/desktop/endpoint.json` after `core.Start`
+(`internal/platform/desktopendpoint`; removed on shutdown only when its PID is
+this process, because a dev build beside the installed app shares the
+directory). `read_document` reads markdown, html
 and any other UTF-8 text file, and answers `not_found` for hive state files
 (`kv.json`, `kv.json.lock`). An app-hosted catalogue entry declares
 its mount as `Descriptor.RuntimePath`, joined with the live loopback base when
@@ -2417,7 +2533,8 @@ configuration, and Settings ▸ MCP servers lists it.
 
 **A session resolves to a space.** The `session` argument is `global`, a chat's
 record id, or the caller's working directory. `global` is the `shared` space,
-which has no pane: `open_document`, `open_canvas` and `close_canvas` refuse it.
+which sits beside no session and so has no tabs: `open_tab` and `close_tab`
+refuse it, and they refuse `diff` and `tasks` for a chat, which has only Drive.
 The `@global` store is gone, but canvas tool results still name the shared
 space's owner `@global`, so agents and `hive://canvas` links that match on it
 keep working.
@@ -2445,8 +2562,8 @@ and logged; a `.json` that is not a canvas stays as a plain file.
 **The frontend** reads the drive through `stores/useDrive.ts` (spaces, trees by
 space key, search; it reloads a space on `drive:updated` and every loaded space
 when the window regains focus). `components/drive/*` holds the tree, the
-browser, the reader, the pane and the full-page view; `DrivePane` mounts in
-Chats and in Code, riding `?doc=` on the route. `lib/drive.ts` holds the scope,
+browser, the reader and the page; `DrivePage` is both the full page and, as
+`embedded`, the Drive tab in Chats and in Code. `lib/drive.ts` holds the scope,
 the space-group rule and `linkTarget`, which resolves a link in a document:
 `http`, `https` and `mailto` open outside the app, a relative or `.hive/`
 reference that names a document in the space opens it in place, and anything
@@ -2454,9 +2571,9 @@ else leads nowhere. The full page is the `drive` route, an area of its own
 like Settings, rendered in the main frame; its scope is the route's query
 (`space`, `doc`, `session`), so a document is a link and history restores it.
 `useAppMode` owns the navigation: `drive.toggle`, the views menu, a palette
-row, the pane's expand button and a `hive://drive` link open it, and closing
-returns to the page it was opened from. The reader is one renderer for both
-surfaces, so a document does not read differently in the pane and on the page.
+row and a `hive://drive` link open it, and closing returns to the page it was
+opened from. The reader is one renderer for both surfaces, so a document does
+not read differently in the tab and on the page.
 An image file is still `kind: file` in the tree; `Document` adds it as a data
 URL up to a size cap, and the reader draws that in place of the plain file note.
 Fenced code is highlighted by shiki on the oniguruma WASM engine, never
@@ -2551,7 +2668,7 @@ what the stylesheet defines and the doc page teaches, held together by
 `TestHTMLVocabularyIsStyledAndDocumented`, but it gates nothing. What keeps
 that safe is one line of CSS: `contain: layout` on `.hv-html` makes the block
 the containing block for fixed and absolute descendants, so a block that
-positions itself cannot paint outside the pane.
+positions itself cannot paint outside its panel.
 
 The agent-workspace watcher is the same `dirwatch.Watcher` that actions and
 flows use, with `WithSubdirectories`: fsnotify is not recursive and the tree

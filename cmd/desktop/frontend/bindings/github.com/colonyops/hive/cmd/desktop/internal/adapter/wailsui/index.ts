@@ -16,6 +16,7 @@ import * as GrafanaService from "./grafanaservice.js";
 import * as HiveConfigService from "./hiveconfigservice.js";
 import * as IntegrationsService from "./integrationsservice.js";
 import * as JobService from "./jobservice.js";
+import * as LayoutService from "./layoutservice.js";
 import * as LinkService from "./linkservice.js";
 import * as MenuBarService from "./menubarservice.js";
 import * as NotificationService from "./notificationservice.js";
@@ -53,6 +54,7 @@ export {
     HiveConfigService,
     IntegrationsService,
     JobService,
+    LayoutService,
     LinkService,
     MenuBarService,
     NotificationService,
@@ -90,7 +92,6 @@ export type {
     DiffTarget,
     DocumentReviewWire,
     DocumentWire,
-    DriveToggle,
     DriveWrite,
     EditorChoice,
     EditorSettings,
@@ -101,6 +102,7 @@ export type {
     HitWire,
     InstalledFonts,
     KeybindingSettings,
+    LayoutReport,
     MarkImageView,
     MenuBarLimits,
     MenuBarNavigation,
@@ -110,6 +112,9 @@ export type {
     NotifyInput,
     ObservabilitySettings,
     OnboardingSettings,
+    PanelLayoutWire,
+    PanelNodeWire,
+    PanelTabWire,
     PathInfo,
     PendingReleaseNotes,
     PerfInfo,
@@ -132,6 +137,7 @@ export type {
     SessionFileDiff,
     SessionFilter,
     SessionGitStatus,
+    SessionLayout,
     SessionSummary,
     SessionView,
     SpaceWire,

@@ -49,7 +49,7 @@ const sigilMeanings: Partial<Record<PaletteScopeId, string>> = {
 function contextLabel(context: CommandContext): string {
   // The terminal contexts belong to the area the product names Code.
   if (context === 'terminal') return 'Code'
-  if (context === 'terminal-session' || context === 'session-changes') return 'Code session'
+  if (context === 'terminal-session') return 'Code session'
   if (context === 'any-terminal') return 'Terminal'
   return context
     .split('-')

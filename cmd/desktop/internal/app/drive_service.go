@@ -24,12 +24,13 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/hive"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/colonyops/hive/pkg/osopen"
 )
 
 // maxCanvasBodyBytes caps one markdown or html block's body so a single tool
-// call cannot make the pane unrenderable.
+// call cannot make the canvas unrenderable.
 const maxCanvasBodyBytes = 256 * 1024
 
 const (
@@ -81,10 +82,14 @@ func newDriveService(d DriveDeps) *DriveService {
 type driveCaller struct {
 	space  drive.Space
 	author drive.Author
+	// checkout and tmuxSession are set for a hive session only: its working
+	// tree and the name of its tmux session.
+	checkout    string
+	tmuxSession string
 }
 
 // GetCanvas is one canvas in the calling session's space. A name nothing
-// was ever written under is not_found: unlike the pane, an agent asking by
+// was ever written under is not_found: unlike the UI, an agent asking by
 // name should learn the name is wrong, not see a blank surface.
 func (s *DriveService) GetCanvas(ctx context.Context, session, name string) (drive.Canvas, error) {
 	d, caller, err := s.open(ctx, session)
@@ -114,7 +119,7 @@ func (s *DriveService) PutBlock(ctx context.Context, session, name, title, befor
 }
 
 // PutBlocks writes a batch of blocks as one canvas write: one file write,
-// one pane render. Every block is validated before any is written, so a
+// one render. Every block is validated before any is written, so a
 // rejected batch leaves the canvas untouched.
 func (s *DriveService) PutBlocks(ctx context.Context, session, name, title string, blocks []drive.Block) (drive.Canvas, error) {
 	if len(blocks) == 0 {
@@ -245,44 +250,9 @@ func (s *DriveService) ListCanvases(ctx context.Context, session string) ([]driv
 	return s.listCanvases(ctx, d, caller.space)
 }
 
-// SetPaneOpen asks the UI to open or close the canvas pane beside the
-// calling chat or Code session. It is UI intent, applied only while the user
-// is viewing it, so an agent can surface what it made without ever dragging
-// the user away from something else. Opening with a name requires that
-// canvas to exist; empty leaves the pane's own pick.
-func (s *DriveService) SetPaneOpen(ctx context.Context, session, name string, open bool) error {
-	d, caller, err := s.open(ctx, session)
-	if err != nil {
-		return err
-	}
-	if caller.space.Kind == drive.SpaceKindShared {
-		return Errorf(KindInvalid, "the shared space has no pane to open or close; the user reads it in the Drive page")
-	}
-	pinned := ""
-	if open && name != "" {
-		path, err := canvasPath(name)
-		if err != nil {
-			return err
-		}
-		c, ok, err := d.LoadCanvas(ctx, caller.space, path)
-		if err != nil {
-			return driveError(err, name)
-		}
-		if !ok {
-			return canvasNotFound(name)
-		}
-		pinned = c.Path
-	}
-	s.events.Publish(ctx, events.DriveToggleRequested{
-		Session: caller.author.Session, HiveSession: caller.author.HiveSession,
-		Space: caller.space.Key, Path: pinned, Open: open,
-	})
-	return nil
-}
-
-// GetCanvasAt is the pane's read: by space key and canvas name or path. A
+// GetCanvasAt is the UI's read: by space key and canvas name or path. A
 // canvas nothing was written under answers empty rather than an error, so
-// the pane never flashes a failure for one deleted while it was open. html
+// the Drive tab never flashes a failure for one deleted while it was open. html
 // blocks leave here sanitized: this is the one seam between stored agent
 // source and the app's own webview, so the frontend holds no policy of its
 // own (ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).
@@ -362,7 +332,7 @@ func (s *DriveService) Markdown(ctx context.Context, space, path string) (string
 	return markdown, nil
 }
 
-// Export writes one document's Markdown to dest, the pane's save
+// Export writes one document's Markdown to dest, the Drive tab's save
 // action. dest comes from the native save dialog, which is why it must
 // already be absolute.
 func (s *DriveService) Export(ctx context.Context, space, path, dest string) error {
@@ -616,7 +586,7 @@ func (s *DriveService) move(ctx context.Context, d *drivesvc.Service, space driv
 }
 
 // Delete removes a document or an empty folder. A canvas publishes with the
-// author that wrote it, so the pane beside that chat or session wakes.
+// author that wrote it, so the Drive tab of that chat or session wakes.
 func (s *DriveService) Delete(ctx context.Context, space, path string) error {
 	d, parsed, err := s.space(space)
 	if err != nil {
@@ -816,7 +786,7 @@ func (s *DriveService) listCanvases(ctx context.Context, d *drivesvc.Service, sp
 }
 
 // canonicalAuthor maps a numeric chat id that a canvas file stored before
-// chats moved to UUIDs onto the chat's UUID, so a pane matches the canvas to
+// chats moved to UUIDs onto the chat's UUID, so the UI matches the canvas to
 // the chat that wrote it. A chat deleted since then keeps the old number.
 func (s *DriveService) canonicalAuthor(ctx context.Context, session string) (string, error) {
 	if legacyID, err := strconv.ParseInt(session, 10, 64); err != nil || legacyID <= 0 {
@@ -866,6 +836,45 @@ func (s *DriveService) open(ctx context.Context, session string) (*drivesvc.Serv
 	return d, caller, nil
 }
 
+func (s *DriveService) tabCaller(ctx context.Context, session string) (driveCaller, error) {
+	_, caller, err := s.open(ctx, session)
+	return caller, err
+}
+
+// resolveTabPath maps what an agent typed to the path the Drive tab shows: a
+// document at that path, else the canvas that name or path stands for.
+func (s *DriveService) resolveTabPath(ctx context.Context, caller driveCaller, path string) (string, error) {
+	d, err := s.engineDrive()
+	if err != nil {
+		return "", err
+	}
+	space := caller.space
+	if err := drive.ValidatePath(path); err != nil {
+		return "", documentError(err, space, path)
+	}
+	isDir, err := s.isDir(d, space, path)
+	switch {
+	case err == nil && isDir:
+		return "", Errorf(KindInvalid, "%q is a folder; open a document inside it", path)
+	case err == nil:
+		return path, nil
+	case KindOf(err) != KindNotFound:
+		return "", err
+	}
+	cp, err := canvasPath(path)
+	if err != nil {
+		return "", documentNotFound(space, path)
+	}
+	c, ok, err := d.LoadCanvas(ctx, space, cp)
+	if err != nil {
+		return "", driveError(err, path)
+	}
+	if !ok {
+		return "", documentNotFound(space, path)
+	}
+	return c.Path, nil
+}
+
 // resolve reads the tool's session argument. A UUID is a chat's record id;
 // a positive integer is a migrated chat's legacy alias. HIVE_AGENT_SESSION
 // carries one of those values. "global" is an agent outside any session.
@@ -876,7 +885,7 @@ func (s *DriveService) open(ctx context.Context, session string) (*drivesvc.Serv
 //
 // A directory inside no session stays not_found rather than falling back to
 // the shared space: until the hive engine starts, every directory is inside
-// no session, and a session's agent would file its canvases where its pane
+// no session, and a session's agent would file its canvases where its Drive tab
 // never looks (ADR agents-outside-every-session-share-one-global-canvas-owner).
 func (s *DriveService) resolve(ctx context.Context, session string) (driveCaller, error) {
 	session = strings.TrimSpace(session)
@@ -921,7 +930,10 @@ func (s *DriveService) resolve(ctx context.Context, session string) (driveCaller
 		return driveCaller{}, Errorf(KindInvalid,
 			"hive session %q has a remote with no owner and repository to file canvases under", sess.Name)
 	}
-	return driveCaller{space: space, author: drive.Author{HiveSession: sess.ID}}, nil
+	return driveCaller{
+		space: space, author: drive.Author{HiveSession: sess.ID},
+		checkout: sess.Path, tmuxSession: sessionsvc.Target(sess).Session,
+	}, nil
 }
 
 type driveTarget struct {
@@ -1053,7 +1065,7 @@ func validateBlock(b *drive.Block) error {
 	return nil
 }
 
-// validateLinkURL mirrors the frontend's link filter: only schemes the pane
+// validateLinkURL mirrors the frontend's link filter: only schemes the Drive tab
 // will open are accepted, so a block never renders a link the click handler
 // then refuses.
 func validateLinkURL(raw string) error {

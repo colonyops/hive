@@ -14,13 +14,19 @@ export default defineConfig({
   workers: 1,
   // Browsers and seven Go servers in one container leave some timing jitter;
   // a real regression still fails every attempt. The image sets CI=1.
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 1 : 0,
+  // Tests run one at a time, so a broken helper would otherwise cost every
+  // test that calls it a full timeout, on each attempt and in each browser.
+  maxFailures: 5,
+  // A green run hides a test that passed only on retry, so annotate those too.
+  reporter: process.env.GITHUB_ACTIONS ? [['dot'], ['github']] : 'dot',
   failOnFlakyTests: !!process.env.PW_FAIL_ON_FLAKY,
   expect: { timeout: 10_000 },
   outputDir: 'test-results',
   // No baseURL: fixtures/test.ts derives it from the spec's server.
   use: {
     viewport: { width: 1360, height: 864 },
+    actionTimeout: 10_000,
     // run-docker.sh mounts test-results/ out of the container.
     trace: 'retain-on-failure',
   },
@@ -39,7 +45,9 @@ export default defineConfig({
     { name: 'smoke-chromium', testDir: './tests/smoke', use: chromium },
     { name: 'smoke-webkit', testDir: './tests/smoke', use: webkit },
     { name: 'features-chromium', testDir: './tests/features', use: chromium },
-    { name: 'features-webkit', testDir: './tests/features', use: webkit },
+    // The surfaces where WebKit's pointer, selection and rendering behavior
+    // differs. The app ships on WKWebView, and smoke-webkit covers the rest.
+    { name: 'features-webkit', testDir: './tests/features', testMatch: '**/{terminal,drive,flows}/*.spec.ts', use: webkit },
     { name: 'workflows-chromium', testDir: './tests/workflows', testIgnore: '**/remote/**', use: chromium },
     // Only onboarding has a webkit server (scripts/serve.sh).
     { name: 'workflows-onboarding-webkit', testDir: './tests/workflows/onboarding', use: webkit },

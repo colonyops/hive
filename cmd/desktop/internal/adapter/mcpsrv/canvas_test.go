@@ -118,8 +118,9 @@ func TestCanvasToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 	}
 
 	assert.ElementsMatch(t, []string{
-		"put_block", "put_blocks", "remove_block", "set_frontmatter", "clear_canvas", "delete_canvas", "read_canvas", "list_canvases", "open_canvas", "close_canvas",
-		"list_documents", "read_document", "write_document", "move_document", "delete_document", "open_document",
+		"put_block", "put_blocks", "remove_block", "set_frontmatter", "clear_canvas", "delete_canvas", "read_canvas", "list_canvases",
+		"list_documents", "read_document", "write_document", "move_document", "delete_document", "open_tab", "close_tab",
+		"move_tab", "focus_tab", "close_panel", "resize_split", "turn_split", "get_layout",
 	}, names)
 }
 
@@ -215,26 +216,35 @@ func TestCanvasRoundTrip(t *testing.T) {
 	assert.Equal(t, "plan", listed.Canvases[0].Name)
 }
 
-func TestCanvasPaneToggle(t *testing.T) {
+func TestTabToolsReportTheAsk(t *testing.T) {
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
-	var pane struct {
+	var opened struct {
 		Requested string `json:"requested"`
+		View      string `json:"view"`
+		Path      string `json:"path"`
 	}
-	call(t, session, "open_canvas", map[string]any{"session": id}, &pane)
-	assert.Equal(t, "open", pane.Requested, "the result reports the ask, not a pane state nothing acknowledges")
+	call(t, session, "open_tab", map[string]any{"session": id, "view": "drive"}, &opened)
+	assert.Equal(t, "open", opened.Requested, "the result reports the ask, not a tab state nothing acknowledges")
+	assert.Equal(t, "drive", opened.View)
+	assert.Empty(t, opened.Path)
 
-	text := callErr(t, session, "open_canvas", map[string]any{"session": id, "canvas": "ghost"})
-	assert.Contains(t, text, "not_found", "pinning the pane to a canvas requires it to exist")
+	text := callErr(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "path": "ghost"})
+	assert.Contains(t, text, "not_found", "pinning the Drive tab to a canvas requires it to exist")
 
 	var wrote canvasWriteView
 	call(t, session, "put_block", map[string]any{"session": id, "canvas": "plan", "id": "a", "kind": "markdown", "body": "x"}, &wrote)
-	call(t, session, "open_canvas", map[string]any{"session": id, "canvas": "plan"}, &pane)
-	assert.Equal(t, "open", pane.Requested)
+	call(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "path": "plan", "placement": "beside"}, &opened)
+	assert.Equal(t, "canvases/plan.canvas.json", opened.Path, "a canvas name resolves to its file")
 
-	call(t, session, "close_canvas", map[string]any{"session": id}, &pane)
-	assert.Equal(t, "close", pane.Requested)
+	var closed struct {
+		Requested string `json:"requested"`
+		View      string `json:"view"`
+	}
+	call(t, session, "close_tab", map[string]any{"session": id, "view": "drive"}, &closed)
+	assert.Equal(t, "close", closed.Requested)
+	assert.Equal(t, "drive", closed.View)
 }
 
 func TestCanvasToolErrors(t *testing.T) {

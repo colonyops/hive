@@ -6,8 +6,10 @@
 // defaults to, and changing it never tears down a live pane nor hides another
 // workspace's chats. The one pane the shell itself draws is the zero
 // state: no PTY exists yet, so it says what a chat is and offers to start one,
-// which the app's New session dialog then asks for. What is borrowed from
-// TerminalMode.vue is narrower — the aside/main split, plus (since ADR agent-workspace-sessions-are-tmux-sessions)
+// which the app's New session dialog then asks for. The open chat is a panel
+// layout, the Code view's: its terminal is the one window tab and Drive is a
+// view beside it. What is borrowed from TerminalMode.vue is narrower — the
+// aside/main split, plus (since ADR agent-workspace-sessions-are-tmux-sessions)
 // the pane's xterm wiring itself: a session is a tmux session, addressed and
 // framed exactly like a hive one, just not discovered through hive.
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
@@ -19,7 +21,11 @@ import IconArrowDown from '~icons/lucide/arrow-down'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import AgentsSidebar from './AgentsSidebar.vue'
 import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
-import DrivePane from './drive/DrivePane.vue'
+import ChatTabAdd from './agents/ChatTabAdd.vue'
+import DrivePage from './drive/DrivePage.vue'
+import PanelLayoutHost from './panels/PanelLayoutHost.vue'
+import SessionPanelPicker from './terminal/SessionPanelPicker.vue'
+import SessionTabIcon from './terminal/SessionTabIcon.vue'
 import ModeSkeleton from './ModeSkeleton.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
@@ -28,11 +34,29 @@ import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
+import { useChatPanels } from './agents/useChatPanels'
+import { useSessionLayout } from './panels/useSessionLayout'
+import { closePanelRule, focusRule, moveRule, openViewRule, resizeRule, turnRule } from './panels/sessionTabRefs'
+import { docsScopeOf, viewOfTab, viewTab, viewsFor, withDocsScope } from './terminal/panelViews'
+import { useDriveActivity } from '../stores/useDriveActivity'
+import { useChatPanelLayouts } from '../stores/usePanelLayouts'
 import { useNewSession } from '../composables/useNewSession'
 import { usePaintedActive } from '../composables/usePaintedActive'
 import { usePerf } from '../composables/usePerf'
 import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXtermPane'
-import { driveEventAuthor, workspaceSpaceKey, type DriveScope } from '../lib/drive'
+import { workspaceSpaceKey, type DriveScope } from '../lib/drive'
+import { agentIconID } from '../lib/agentIcon'
+import {
+  closePanel,
+  closeTab,
+  focusPanel,
+  openTab,
+  panelWithTab,
+  panelsOf,
+  placeTab,
+  type PanelTab,
+} from '../lib/panelLayout'
+import { WINDOW_TAB_KIND, windowIdOf } from '../lib/windowTabs'
 import { decodeFrame, encodeInputFrames, encodePasteFrames } from '../lib/agentWorkspacesClient'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { isEditableTarget } from '../lib/isEditableTarget'
@@ -50,7 +74,6 @@ import '@xterm/xterm/css/xterm.css'
 const ACTIVITY_POLL_MS = 2000
 
 const props = defineProps<{ active?: boolean; sidebarCollapsed?: boolean }>()
-const emit = defineEmits<{ 'open-drive-page': [scope: DriveScope] }>()
 
 const {
   checking,
@@ -79,7 +102,7 @@ const {
   resetOpenWorkspace,
   workspacesLoaded,
 } = useAgentWorkspaces()
-const { recents, reload: reloadRecents } = useAgentSessionsAll()
+const { recents, recentsLoaded, recentsError, reload: reloadRecents } = useAgentSessionsAll()
 
 // An enabled name skills.yml does not define has two causes that produce the
 // same bare warning: a manifest written before packages were the enablement
@@ -123,7 +146,7 @@ const paneScrolledUp = ref(false)
 // The tmux wire is windowed (ADR agent-workspace-sessions-are-tmux-sessions): every frame in and out of the pane's
 // socket names the window it belongs to, so the pane has to know which one is
 // its own for the life of one attach.
-let paneWindowId = ''
+const paneWindowId = ref('')
 let panePaneId = ''
 
 const paneLaidOut = computed(() => paneStatus.value === 'opening' || term.value !== null)
@@ -135,7 +158,7 @@ const paneWorkspaceName = computed(
 // ── Route-driven workspace selection ────────────────────────────────────────
 const route = useRoute()
 const router = useRouter()
-const { routeChatId, docVisible, docPath, syncDocQuery } = useDriveRoute()
+const { routeChatId } = useDriveRoute()
 // A route naming a chat is a resume on its way. The pane says so from the first
 // frame, or re-entry would pass through the zero state and shift when the status
 // bar arrives. A resume that cannot happen clears ?chat, which ends this.
@@ -143,6 +166,125 @@ const paneResuming = computed(() => paneStatus.value === 'idle' && routeChatId.v
 const painted = usePaintedActive(() => props.active, { preloaded: workspacesLoaded.value })
 const selectedWorkspace = computed(() =>
   route.name === 'agents' && typeof route.params.workspace === 'string' ? route.params.workspace : '',
+)
+
+// ── The open chat's panels ───────────────────────────────────────────────────
+const driveActivity = useDriveActivity()
+const panels = useChatPanels({
+  status: paneStatus,
+  chatId: openSessionId,
+  resuming: paneResuming,
+  routeChatId,
+  windowId: paneWindowId,
+  focus: () => term.value?.focus(),
+})
+const layout = panels.layout
+const openChat = computed(() => recents.value.find((row) => row.id === openSessionId.value) ?? null)
+const chatAgent = computed(() => (openChat.value ? agentIconID(openChat.value.agent) : undefined))
+// A chat reads its workspace's space and has no checkout of its own.
+const chatViews = viewsFor({ chat: true, localCheckout: false, drive: true })
+const paneShown = computed(() => (paneWindowId.value ? !!panels.windowPanel.value : true))
+const paneRegionPanel = computed(() => panels.windowPanel.value ?? panels.statusPanel.value)
+
+function tabLabel(tab: PanelTab): string {
+  if (windowIdOf(tab)) return openChat.value?.name || 'Chat'
+  return viewOfTab(tab)?.label ?? tab.id
+}
+
+function tabAttention(tab: PanelTab): boolean {
+  return tab.kind === 'docs' && driveActivity.isUnseen(openSessionId.value)
+}
+
+// Stopping the chat is the one thing closing its window tab can mean.
+function closePanelTab(panelId: string, tabId: string): void {
+  const tab = panelsOf(layout.value)
+    .find((panel) => panel.id === panelId)
+    ?.tabs.find((candidate) => candidate.id === tabId)
+  if (!tab) return
+  if (windowIdOf(tab)) {
+    if (openSessionId.value !== null) void closeRow({ id: openSessionId.value })
+    return
+  }
+  panels.apply((current) => closeTab(current, panelId, tabId))
+}
+
+const driveTarget = computed(() =>
+  paneStatus.value === 'live' && openSessionId.value !== null
+    ? { space: workspaceSpaceKey(paneWorkspaceDir.value), session: openSessionId.value }
+    : null,
+)
+
+// The tab's own scope wins once the user has moved; until then it follows the chat's workspace.
+const driveScope = computed<DriveScope | null>(() => {
+  const own = docsScopeOf(layout.value)
+  if (own) return own
+  if (!panels.key.value || !paneWorkspaceDir.value) return null
+  return { space: workspaceSpaceKey(paneWorkspaceDir.value), session: panels.key.value, path: null }
+})
+
+function scopeAt(path: string | null): DriveScope | null {
+  const base = docsScopeOf(layout.value) ?? (driveTarget.value ? { ...driveTarget.value, path: null } : null)
+  return base && path ? { ...base, path } : base
+}
+
+useSessionLayout('agents', driveTarget, () => props.active, {
+  ready: () => paneStatus.value === 'live' && openSessionId.value === routeChatId.value,
+  reveal: (path) => panels.apply((current) => withDocsScope(openTab(current, viewTab('docs')), scopeAt(path))),
+  open: (view, path, placement, anchor) => {
+    if (!chatViews.includes(view)) return
+    panels.apply((current) =>
+      withDocsScope(openViewRule(current, viewTab('docs'), placement, anchor, paneWindowId.value), scopeAt(path)),
+    )
+  },
+  close: (view) =>
+    panels.apply((current) => {
+      const tab = viewTab(view)
+      const panel = panelWithTab(current, tab.id)
+      return panel ? closeTab(current, panel.id, tab.id) : current
+    }),
+  move: (tab, placement, anchor) =>
+    panels.apply((current) => moveRule(current, tab, placement, anchor, paneWindowId.value)),
+  focus: (tab) => panels.apply((current) => focusRule(current, tab, paneWindowId.value)),
+  closePanel: (tab) => panels.apply((current) => closePanelRule(current, tab, paneWindowId.value)),
+  resize: (tab, share) => panels.apply((current) => resizeRule(current, tab, share, paneWindowId.value)),
+  turn: (tab) => panels.apply((current) => turnRule(current, tab, paneWindowId.value)),
+})
+
+const chatLayouts = useChatPanelLayouts()
+watch([() => props.active, panels.key], ([active, key]) => chatLayouts.markOnScreen(active ? key : ''), {
+  immediate: true,
+})
+onBeforeUnmount(() => chatLayouts.markOnScreen(''))
+
+// A chat that ended outside this pane, or was pruned, says nothing to the
+// layout watcher, so the listing is what lets its layout go. The open chat is
+// kept while the listing that follows its launch is still on its way.
+watch(
+  [recents, recentsLoaded, recentsError],
+  ([rows, loaded, error]) => {
+    if (!loaded || error) return
+    chatLayouts.retain((key) => key === panels.key.value || rows.some((row) => row.id === key))
+  },
+  { immediate: true },
+)
+
+function setupDrive(): void {
+  const workspace = workspaces.value.find((candidate) => candidate.dir === paneWorkspaceDir.value)
+  if (workspace) openEditWorkspace(workspace)
+}
+
+// A write is seen while the Drive tab is on screen, and unseen while another tab covers it.
+const docsReader = computed(() => {
+  const shown = panelsOf(layout.value).some((panel) => !panel.picking && panel.activeTab === 'docs')
+  return shown && props.active ? (openSessionId.value ?? undefined) : undefined
+})
+watch(
+  docsReader,
+  (session, before) => {
+    if (before !== undefined) driveActivity.unregisterVisible(before)
+    if (session !== undefined) driveActivity.registerVisible(session)
+  },
+  { immediate: true },
 )
 
 function selectWorkspace(dir: string): Promise<unknown> {
@@ -331,19 +473,6 @@ watch(
   { immediate: true },
 )
 
-// ── The drive pane rides the route too (?doc[=path]) ────────────────────────
-// The query itself is owned by useDriveRoute, shared with the title bar's
-// right-panel toggle. An agent can ask to open or close the pane
-// (open_document, open_canvas, close_canvas), honored only for the chat in
-// view: an agent must never drag the user away from a different chat — its
-// write already lights the unseen dot there.
-useWailsEvent('drive:toggle', (event) => {
-  const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as
-    { path?: string; open: boolean } | undefined
-  if (!payload || driveEventAuthor(payload) !== routeChatId.value) return
-  syncDocQuery(payload.open, payload.path || undefined)
-})
-
 async function resumeChatFromRoute(id: string): Promise<void> {
   await ready()
   if (!available.value) return
@@ -490,12 +619,13 @@ async function commitSessionRename(session: AgentSession, name: string): Promise
   }
 }
 
-async function closeRow(session: AgentSession): Promise<void> {
+async function closeRow(session: Pick<AgentSession, 'id'>): Promise<void> {
   if (openSessionId.value === session.id) {
     teardownPane()
     paneStatus.value = 'idle'
     openSessionId.value = null
   }
+  panels.forget(session.id)
   await closeSession(session.id)
   void reloadRecents()
 }
@@ -506,6 +636,7 @@ async function removeRow(session: AgentSession): Promise<void> {
     paneStatus.value = 'idle'
     openSessionId.value = null
   }
+  panels.forget(session.id)
   await deleteSession(session.id)
   void reloadRecents()
 }
@@ -608,7 +739,7 @@ async function launchIntoPane(
 function attachStream(created: Terminal, terminalId: string, windowId: string, paneId: string): void {
   if (!client.value || !paneHost.value) return
 
-  paneWindowId = windowId
+  paneWindowId.value = windowId
   panePaneId = paneId
   let firstDraw: IDisposable | undefined
   pane.track(silenceDeviceReports(created))
@@ -653,12 +784,17 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
       // is explicit about why: the renderer must draw at that size or
       // cursor-addressed output lands wrong. Applying it from any kind also
       // covers a 'layout-changed' that fired before this socket subscribed.
-      if (frame.kind !== 'closed' && frame.state.windowId === paneWindowId && frame.state.width && frame.state.height) {
+      if (
+        frame.kind !== 'closed' &&
+        frame.state.windowId === paneWindowId.value &&
+        frame.state.width &&
+        frame.state.height
+      ) {
         created.resize(frame.state.width, frame.state.height)
       }
       // Full window events supply the input target when attach returned no
       // pane ID.
-      if (frame.kind !== 'closed' && frame.state.windowId === paneWindowId && frame.state.activePane) {
+      if (frame.kind !== 'closed' && frame.state.windowId === paneWindowId.value && frame.state.activePane) {
         panePaneId = frame.state.activePane
       }
       return
@@ -670,7 +806,7 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
       graphics.clear()
       return
     }
-    if (frame.windowId !== paneWindowId) return
+    if (frame.windowId !== paneWindowId.value) return
     if (frame.type === 'output') {
       created.write(graphics.filter.rewrite(frame.data))
       if (pane.holding() && !firstDraw) {
@@ -757,7 +893,7 @@ function teardownPane(): void {
 }
 
 function resetPaneState(): void {
-  paneWindowId = ''
+  paneWindowId.value = ''
   lastVote = null
   paneError.value = ''
   paneScrolledUp.value = false
@@ -779,6 +915,7 @@ onMounted(() => {
   })
 })
 onBeforeUnmount(() => {
+  if (docsReader.value !== undefined) driveActivity.unregisterVisible(docsReader.value)
   clearTimeout(retiredHoldTimer)
   setAgentsTreeHandles(null)
   teardownPane()
@@ -872,52 +1009,106 @@ onBeforeUnmount(() => {
         >
         </PaneStatusBar>
 
-        <div class="relative min-h-0 flex-1 bg-app">
-          <!-- TerminalTab.vue's shape, for the same reasons: xterm opens in the
-               unpadded inner host so the fit measurement reads the content box
-               — measuring the padded wrapper over-proposes the grid by a row
-               under border-box — and overflow-auto scrolls a grid tmux sized
-               larger than this box instead of painting over the UI below. -->
-          <div
-            v-show="paneLaidOut"
-            class="absolute inset-0 overflow-auto px-2 py-1.5"
-            data-terminal-input-scope
-            data-testid="agents-session-pane"
-            @mousedown="term?.focus()"
+        <div class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+          <PanelLayoutHost
+            :layout="layout"
+            :apply="panels.apply"
+            :move-tab="panels.moveTabTo"
+            :tab-label="tabLabel"
+            :tab-attention="tabAttention"
+            :has-content="(tab) => !!viewOfTab(tab)"
+            :content-key="panels.key.value"
+            :hidden="paneStatus === 'idle' && !paneResuming"
+            @close-tab="closePanelTab"
           >
-            <div ref="paneHost" class="relative size-full" />
-          </div>
+            <template #icon="{ tab }">
+              <SessionTabIcon :kind="tab.kind" :agent="tab.kind === WINDOW_TAB_KIND ? chatAgent : undefined" />
+            </template>
+            <template #add="{ panel }">
+              <ChatTabAdd
+                :panel="panel.id"
+                :views="chatViews"
+                @view="(kind) => panels.apply((current) => openTab(current, viewTab(kind), panel.id))"
+              />
+            </template>
+            <template #picker="{ panel }">
+              <SessionPanelPicker
+                :windows="[]"
+                :agents="[]"
+                :views="chatViews"
+                :can-add-terminal="false"
+                @view="(kind) => panels.apply((current) => placeTab(current, viewTab(kind), panel.id))"
+                @cancel="panels.apply((current) => closePanel(current, panel.id))"
+              />
+            </template>
+            <template #tab="{ tab }">
+              <DrivePage
+                v-if="tab.kind === 'docs' && driveScope"
+                embedded
+                :scope="driveScope"
+                @update:scope="(scope) => panels.apply((current) => withDocsScope(current, scope))"
+                @setup="setupDrive"
+                @open-url="openLink"
+              />
+            </template>
+            <template #floating="{ region }">
+              <!-- TerminalTab.vue's shape, for the same reasons: xterm opens in the
+                   unpadded inner host so the fit measurement reads the content box
+                   — measuring the padded wrapper over-proposes the grid by a row
+                   under border-box — and overflow-auto scrolls a grid tmux sized
+                   larger than this box instead of painting over the UI below. The
+                   element is placed by position, never moved, so a tab switch
+                   keeps xterm's screen. -->
+              <div
+                v-show="paneLaidOut && paneShown"
+                class="absolute overflow-auto px-2 py-1.5"
+                :style="region(paneRegionPanel)"
+                data-terminal-input-scope
+                data-testid="agents-session-pane"
+                @mousedown="term?.focus()"
+                @pointerdown.capture="
+                  panels.windowPanel.value && panels.apply((current) => focusPanel(current, panels.windowPanel.value!))
+                "
+              >
+                <div ref="paneHost" class="relative size-full" />
+              </div>
 
-          <!-- The Code view's pill, placed and worded identically: new output
-               keeps landing below the fold while the viewport is scrolled up,
-               and this is the way back to the live tail. -->
-          <Transition name="tail-pill">
-            <button
-              v-if="paneScrolledUp && paneStatus === 'live'"
-              type="button"
-              class="absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-caption text-text-2 shadow-lg hover:text-text"
-              data-testid="agents-scroll-to-bottom"
-              @click="scrollPaneToBottom"
-            >
-              <IconArrowDown class="size-3" />Scroll to bottom
-            </button>
-          </Transition>
+              <div v-show="paneShown" class="pointer-events-none absolute" :style="region(paneRegionPanel)">
+                <!-- The Code view's pill, placed and worded identically: new output
+                     keeps landing below the fold while the viewport is scrolled up,
+                     and this is the way back to the live tail. -->
+                <Transition name="tail-pill">
+                  <button
+                    v-if="paneScrolledUp && paneStatus === 'live'"
+                    type="button"
+                    class="pointer-events-auto absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-caption text-text-2 shadow-lg hover:text-text"
+                    data-testid="agents-scroll-to-bottom"
+                    @click="scrollPaneToBottom"
+                  >
+                    <IconArrowDown class="size-3" />Scroll to bottom
+                  </button>
+                </Transition>
+              </div>
 
-          <!-- Covers the whole launch, not just the beat before xterm exists:
-               most of a start is spent waiting on tmux after the grid is
-               built, and a bare dark pane there reads as nothing happening. -->
-          <div
-            v-if="(paneStatus === 'opening' && !paneHolding) || paneResuming"
-            class="absolute inset-0 z-10 flex items-center justify-center bg-app"
-            data-testid="agents-pane-opening"
-          >
-            <p class="flex items-center gap-2 font-mono text-xs text-text-4"><Spinner />Opening…</p>
-          </div>
+              <!-- Covers the whole launch, not just the beat before xterm exists:
+                   most of a start is spent waiting on tmux after the grid is
+                   built, and a bare dark pane there reads as nothing happening. -->
+              <div
+                v-if="(paneStatus === 'opening' && !paneHolding) || paneResuming"
+                class="absolute z-10 flex items-center justify-center bg-app"
+                :style="region(panels.statusPanel.value)"
+                data-testid="agents-pane-opening"
+              >
+                <p class="flex items-center gap-2 font-mono text-xs text-text-4"><Spinner />Opening…</p>
+              </div>
+            </template>
+          </PanelLayoutHost>
+
           <!-- The zero state: no PTY exists, so the pane says what a chat is,
                carries whatever ended the last one, and offers the same new-chat
                gesture the sidebar's + does. -->
           <div
-            v-else-if="paneStatus === 'idle'"
+            v-if="paneStatus === 'idle' && !paneResuming"
             class="hive-scroll absolute inset-0 z-10 overflow-y-auto bg-app"
             data-testid="agents-pane-empty"
           >
@@ -951,22 +1142,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-
-      <!-- A sibling of the pane column, never inside it: the terminal host must
-           not be re-keyed or unmounted by the drive pane opening, and the
-           ResizeObserver absorbs the width change with an ordinary size vote. -->
-      <DrivePane
-        v-if="docVisible && routeChatId !== null"
-        :session="routeChatId"
-        :space="workspaceSpaceKey(paneWorkspaceDir)"
-        :path="docPath"
-        @close="syncDocQuery(false)"
-        @open-url="openLink"
-        @pick="(path) => syncDocQuery(true, path)"
-        @open-page="
-          (path) => emit('open-drive-page', { space: workspaceSpaceKey(paneWorkspaceDir), path, session: routeChatId })
-        "
-      />
     </div>
 
     <AgentWorkspaceEditor

@@ -68,8 +68,8 @@ const { mode, terminalActive, agentsActive, hubActive, settingsActive, driveActi
 const { terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
 useModePreload(() => shellLoaded.value && !onboardingActive.value, appMode.prepareTerminal)
-const overlays = useHubOverlays(terminalActive, appMode.codeChangesSession)
-const { tasksOpen, activityOpen, actionRunsOpen, changesOpen, terminalSessionRepoKey } = overlays
+const overlays = useHubOverlays(terminalActive)
+const { tasksOpen, activityOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
 const reveal = useReveal(nav, session, feed.showToast, appMode.openDrive)
 const feedCommands = useFeedCommands(feed, confirmation)
@@ -94,7 +94,6 @@ useGlobalKeymap({
   paletteOpen: palette.open,
   activityOpen,
   tasksOpen,
-  changesOpen,
   actionRunsOpen,
 })
 
@@ -139,7 +138,6 @@ useWailsEvent('flows:updated', () => {
         :can-toggle-sidebar="appMode.canToggleSidebar.value"
         :preview-collapsed="appMode.previewToggleCollapsed.value"
         :can-toggle-preview="appMode.canTogglePreview.value"
-        :preview-unseen="appMode.previewUnseen.value"
         @set-mode="appMode.setMode"
         @back="router.back()"
         @forward="router.forward()"
@@ -172,9 +170,7 @@ useWailsEvent('flows:updated', () => {
           :active="terminalActive"
           :sidebar-collapsed="terminalSidebarCollapsed"
           :drive="appMode.codeDrive.value"
-          @open-drive-page="appMode.openDrive"
-          @open-tasks="overlays.toggleTasks"
-          @open-changes="overlays.toggleChanges"
+          :overlay-open="tasksOpen || activityOpen || actionRunsOpen"
           @session-repo-key="terminalSessionRepoKey = $event"
         />
         <AgentsMode
@@ -182,7 +178,6 @@ useWailsEvent('flows:updated', () => {
           v-show="agentsActive"
           :active="agentsActive"
           :sidebar-collapsed="agentsSidebarCollapsed"
-          @open-drive-page="appMode.openDrive"
         />
         <SettingsView
           v-if="settingsActive"
@@ -255,7 +250,6 @@ useWailsEvent('flows:updated', () => {
       :profile-actions="profileActions"
       :feed-commands="feedCommands"
       :open-activity-item="reveal.openActivityItem"
-      :changes-session="appMode.codeChangesSession.value"
     />
     <PopupTerminal v-if="popupTerminalMounted" />
   </main>

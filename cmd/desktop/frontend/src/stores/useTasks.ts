@@ -55,7 +55,7 @@ export const useTasks = defineStore('tasks', () => {
 
   let detailSequence = 0
   let repoKeysSequence = 0
-  let live = false
+  let live = 0
 
   async function loadRepoKeys(): Promise<void> {
     const sequence = ++repoKeysSequence
@@ -97,17 +97,19 @@ export const useTasks = defineStore('tasks', () => {
     await Promise.all([list.reload(), reloadDetailIfSelected(), loadRepoKeys()])
   }
 
+  // Counted: a session tab and the overlay can both be mounted, and a tab moving
+  // between panes mounts its new copy before the old one goes.
   function startLiveUpdates(): void {
-    live = true
+    live++
     void reload()
   }
 
   function stopLiveUpdates(): void {
-    live = false
+    live = Math.max(0, live - 1)
   }
 
   useWailsEvent('tasks:updated', () => {
-    if (live) void reload()
+    if (live > 0) void reload()
   })
 
   // A repo scope change is a server-side filter, not a client-side one (unlike

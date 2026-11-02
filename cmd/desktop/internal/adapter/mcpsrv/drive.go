@@ -52,8 +52,8 @@ func (ctrl *DriveController) Server() *mcp.Server {
 		Name:    driveServerName,
 		Title:   "Hive Drive",
 		Version: version,
-		Description: "Hive Drive: the folder of markdown, html and canvas documents beside a chat or Code session. Write and " +
-			"organize documents, put canvas blocks, and read back what the user sees in the pane.",
+		Description: "Hive Drive: the folder of markdown, html and canvas documents behind the Drive tab of a chat or Code session. Write and " +
+			"organize documents, put canvas blocks, and read back what the user sees in the Drive tab.",
 	}, nil)
 	ctrl.register(srv)
 	return srv

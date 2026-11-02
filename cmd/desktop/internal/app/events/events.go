@@ -59,7 +59,7 @@ type AgentWorkspacesUpdated struct{ Count int }
 // them, and empty means the whole space. The content is stored state a
 // reader re-reads. Session or HiveSession names the chat or hive session
 // whose agent wrote through the desktop, never both; both are empty for a
-// change the drive watcher found on disk, which wakes a pane without
+// change the drive watcher found on disk, which wakes a Drive tab without
 // marking anything unseen.
 type DriveChanged struct {
 	Space       string
@@ -68,18 +68,32 @@ type DriveChanged struct {
 	HiveSession string
 }
 
-// DriveToggleRequested reports an agent asked to open or close the drive
-// pane beside its chat. Unlike the wake-up events the payload is the whole
-// message: pane visibility is UI intent, not stored state to re-read. Path
-// pins one document of Space when opening; empty leaves the pane's own
-// pick. The asker is a chat (Session) or a hive session (HiveSession),
-// never both.
-type DriveToggleRequested struct {
-	Session     string
-	HiveSession string
-	Space       string
-	Path        string
-	Open        bool
+// SessionLayoutRequested reports an agent asked to change the panel layout
+// beside its chat or Code session. Unlike the wake-up events the payload is
+// the whole message: the layout is UI intent held by the browser, not stored
+// state to re-read. The asker is a chat (Session) or a hive session
+// (HiveSession), never both.
+//
+// Verb is open, close, move, focus, close_panel, resize or turn. View and
+// Window name the tab acted on: View is drive, diff, tasks or terminal, and
+// Window is the tmux window id (@3) of a Code session's terminal, empty for
+// the other views and for a chat's one terminal. AnchorView and AnchorWindow
+// name the tab an open or move places relative to, empty for the tab in front
+// of the focused panel. Path pins one document of Space in the Drive view on
+// open; empty leaves the tab's own pick. Placement is behind, beside or below
+// and applies to open and move. Share is the resize share, 0 when unused.
+type SessionLayoutRequested struct {
+	Session      string
+	HiveSession  string
+	Space        string
+	Verb         string
+	View         string
+	Window       string
+	AnchorView   string
+	AnchorWindow string
+	Path         string
+	Placement    string
+	Share        float64
 }
 
 // SchedulesUpdated reports that a workspace's manifest was written or one of
@@ -121,7 +135,7 @@ func (ActionsUpdated) eventName() string         { return "actions.updated" }
 func (MenuBarUpdated) eventName() string         { return "menu-bar.updated" }
 func (AgentWorkspacesUpdated) eventName() string { return "agent-workspaces.updated" }
 func (DriveChanged) eventName() string           { return "drive.changed" }
-func (DriveToggleRequested) eventName() string   { return "drive.toggle-requested" }
+func (SessionLayoutRequested) eventName() string { return "session.layout-requested" }
 func (SchedulesUpdated) eventName() string       { return "schedules.updated" }
 func (ConnectionUpdated) eventName() string      { return "connection.updated" }
 func (NotificationRaised) eventName() string     { return "notification.raised" }

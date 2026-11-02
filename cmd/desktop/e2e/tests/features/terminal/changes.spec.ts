@@ -99,29 +99,12 @@ async function changesFixture(page: Page, sent: unknown[][] = []) {
 }
 
 test.describe('session changes', { tag: [tag.terminal] }, () => {
-  test('lists Toggle Changes in the keys help and the Keyboard settings (mock terminal)', async ({ page }) => {
-    await changesFixture(page)
-    await page.goto('/#/terminal/review')
-    await expect(page.locator('[data-file-drop-target]:visible').last()).toBeVisible()
-
-    await page.keyboard.press('Meta+k')
-    await page.getByTestId('command-palette-input').pressSequentially('?toggle changes')
-    const row = page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' })
-    await expect(row).toBeVisible()
-    await expect(page.getByText('Code session · active context')).toBeVisible()
-
-    await row.click()
-    await expect(page.getByTestId('settings-keybindings')).toContainText('Toggle Changes')
-  })
-
   test('reviews every diff in one scroll from the keyboard (mock terminal)', async ({ page, browserName }) => {
     await changesFixture(page)
     await page.goto('/#/terminal/review')
     await expect(page.locator('[data-file-drop-target]:visible').last()).toBeVisible()
 
-    await page.keyboard.press('Meta+k')
-    await page.getByTestId('command-palette-input').fill('Toggle Changes')
-    await page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' }).click()
+    await addDiffTab(page)
     const view = page.getByTestId('changes-view')
     await expect(view).toBeVisible()
     await expect(page.getByTestId('changes-branch')).toHaveText('feat/review')
@@ -174,17 +157,17 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     await page.screenshot({ path: screenshotPath(`changes-no-rail-${browserName}.png`) })
     await page.keyboard.press('b')
     await expect(page.getByTestId('changes-files')).toBeVisible()
-
-    await page.keyboard.press('Escape')
-    await expect(view).toBeHidden()
   })
+
+  async function addDiffTab(page: Page) {
+    await page.getByTestId('panel-tab-add-p0').click()
+    await page.getByTestId('new-window-view-diff').click()
+  }
 
   async function openChanges(page: Page) {
     await page.goto('/#/terminal/review')
     await expect(page.locator('[data-file-drop-target]:visible').last()).toBeVisible()
-    await page.keyboard.press('Meta+k')
-    await page.getByTestId('command-palette-input').fill('Toggle Changes')
-    await page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' }).click()
+    await addDiffTab(page)
     await expect(page.getByTestId('changes-stream')).toContainText('return err')
   }
 
@@ -324,10 +307,9 @@ test.describe('session changes', { tag: [tag.terminal] }, () => {
     const resized = (await review.boundingBox())!.width
 
     await page.reload()
-    await page.locator('[data-file-drop-target]:visible').first().waitFor()
-    await page.keyboard.press('Meta+k')
-    await page.getByTestId('command-palette-input').fill('Toggle Changes')
-    await page.getByTestId('command-palette-command-title').filter({ hasText: 'Toggle Changes' }).click()
+    // The saved layout brings the Diff tab back in front, so no terminal is on screen to wait for.
+    await expect(page.getByTestId('panel-tab-diff')).toBeVisible()
+    await addDiffTab(page)
     await expect(page.getByTestId('changes-stream')).toContainText('return err')
     await expect(page.getByTestId('command-palette-input')).toBeHidden()
     await expect(review).toBeHidden()

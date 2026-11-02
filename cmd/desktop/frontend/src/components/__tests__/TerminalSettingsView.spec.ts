@@ -11,6 +11,7 @@ import { resetInstalledFontsForTests } from '../../composables/useInstalledFonts
 
 const mocks = vi.hoisted(() => ({
   SetTerminalShowScrollbars: vi.fn().mockResolvedValue(undefined),
+  SetTerminalMonochromeAgentIcons: vi.fn().mockResolvedValue(undefined),
   SetTerminalShowWindows: vi.fn(),
   SetTerminalPoolSize: vi.fn(),
   SetTerminalSessionAge: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   SetTerminalFontFamily: mocks.SetTerminalFontFamily,
   SetTerminalFontWeights: mocks.SetTerminalFontWeights,
   SetTerminalShowScrollbars: mocks.SetTerminalShowScrollbars,
+  SetTerminalMonochromeAgentIcons: mocks.SetTerminalMonochromeAgentIcons,
   SetTerminalShowWindows: mocks.SetTerminalShowWindows,
   SetTerminalPoolSize: mocks.SetTerminalPoolSize,
   SetTerminalSessionAge: mocks.SetTerminalSessionAge,
@@ -64,6 +66,18 @@ describe('TerminalSettingsView', () => {
     await toggle.trigger('click')
     await flushPromises()
     expect(mocks.SetTerminalShowScrollbars).toHaveBeenLastCalledWith(false)
+    wrapper.unmount()
+  })
+
+  it('toggles monochrome agent icons and persists the choice', async () => {
+    const wrapper = mount(TerminalSettingsView)
+    await flushPromises()
+    const toggle = wrapper.get('[data-testid="settings-terminal-monochrome-agent-icons"]')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(mocks.SetTerminalMonochromeAgentIcons).toHaveBeenLastCalledWith(true)
     wrapper.unmount()
   })
 

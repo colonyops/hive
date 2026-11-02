@@ -17,14 +17,12 @@ import IconList from '~icons/lucide/list'
 import IconListTree from '~icons/lucide/list-tree'
 import IconPanelLeft from '~icons/lucide/panel-left'
 import IconRows2 from '~icons/lucide/rows-2'
-import IconX from '~icons/lucide/x'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import Kbd from '@hive/ui/components/ui/Kbd.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
-import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import ChangesLoading from './ChangesLoading.vue'
@@ -54,10 +52,14 @@ import { OpenSessionInEditor } from '../../../bindings/github.com/colonyops/hive
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import type { AgentTarget } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
-const props = defineProps<{ sessionId: string }>()
-const emit = defineEmits<{ close: [] }>()
-
-useEscapeToClose(() => emit('close'))
+const props = withDefaults(
+  defineProps<{
+    sessionId: string
+    /** A tab is mounted while another shows, and its bare keys must not fire from there. */
+    keysActive?: boolean
+  }>(),
+  { keysActive: true },
+)
 const openModalCount = useOpenModalCount()
 
 const sessionId = toRef(props, 'sessionId')
@@ -177,13 +179,8 @@ const loading = computed(
   () => !error.value && (pending.value || !changes.value || (openPaths.value.size > 0 && !answered.value)),
 )
 
-// Arrow keys and Page Down scroll what has focus. HubOverlay focuses the panel
-// one tick after it mounts, which is after this child, so this waits one more.
-onMounted(() => {
-  void nextTick()
-    .then(() => nextTick())
-    .then(() => stream.value?.focus())
-})
+// Arrow keys and Page Down scroll what has focus.
+onMounted(() => stream.value?.focus())
 watch(
   () => files.value.map((file) => file.path).join('\n'),
   () => {
@@ -436,7 +433,7 @@ async function sendReview(): Promise<void> {
 // On the window, because a click on a file header moves focus to the panel,
 // which is outside this view's root.
 useEventListener(window, 'keydown', (event: KeyboardEvent) => {
-  if (openModalCount.value > 0) return
+  if (openModalCount.value > 0 || !props.keysActive || event.defaultPrevented) return
   if ((event.metaKey || event.ctrlKey) && !event.altKey) {
     if (event.key === 'f') {
       event.preventDefault()
@@ -511,13 +508,12 @@ const KEY_HINTS = [
   ['b', 'files'],
   ['r', 'comments'],
   [SEND_KEY, 'send'],
-  ['esc', 'close'],
 ]
 </script>
 
 <template>
   <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="changes-view">
-    <ViewHeader>
+    <ViewHeader class="overflow-x-auto">
       <template #title>
         <IconButton
           :label="filesOpen ? 'Hide files' : 'Show files'"
@@ -587,8 +583,6 @@ const KEY_HINTS = [
             >{{ comments.length }}</span
           >
         </span>
-        <span class="mx-1 h-4 w-px bg-strong" aria-hidden="true" />
-        <IconButton label="Close" :icon="IconX" size="lg" data-testid="changes-close" @click="emit('close')" />
       </template>
     </ViewHeader>
 

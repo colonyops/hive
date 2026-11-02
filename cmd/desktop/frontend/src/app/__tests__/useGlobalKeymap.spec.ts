@@ -14,6 +14,7 @@ type Modules = {
   useKeybindings: typeof import('../../composables/useKeybindings').useKeybindings
   useRegisterOpenModal: typeof import('@hive/ui/composables/useOpenModalCount').useRegisterOpenModal
   SEQUENCE_TIMEOUT_MS: number
+  useViewKeys: typeof import('../../stores/useViewKeys').useViewKeys
 }
 let m: Modules
 let scope: EffectScope
@@ -22,7 +23,6 @@ const activeContexts = new Set<CommandContext>()
 const paletteOpen = ref(false)
 const activityOpen = ref(false)
 const tasksOpen = ref(false)
-const changesOpen = ref(false)
 const actionRunsOpen = ref(false)
 
 beforeEach(async () => {
@@ -30,11 +30,13 @@ beforeEach(async () => {
   const keymap = await import('../useGlobalKeymap')
   const keybindings = await import('../../composables/useKeybindings')
   const modals = await import('@hive/ui/composables/useOpenModalCount')
+  const viewKeys = await import('../../stores/useViewKeys')
   m = {
     useGlobalKeymap: keymap.useGlobalKeymap,
     useKeybindings: keybindings.useKeybindings,
     useRegisterOpenModal: modals.useRegisterOpenModal,
     SEQUENCE_TIMEOUT_MS: keybindings.SEQUENCE_TIMEOUT_MS,
+    useViewKeys: viewKeys.useViewKeys,
   }
   runCommand.mockReset()
   activeContexts.clear()
@@ -42,7 +44,6 @@ beforeEach(async () => {
   paletteOpen.value = false
   activityOpen.value = false
   tasksOpen.value = false
-  changesOpen.value = false
   actionRunsOpen.value = false
   scope = effectScope()
   scope.run(() =>
@@ -52,7 +53,6 @@ beforeEach(async () => {
       paletteOpen,
       activityOpen,
       tasksOpen,
-      changesOpen,
       actionRunsOpen,
     }),
   )
@@ -107,6 +107,20 @@ describe('useGlobalKeymap dispatch', () => {
     press('k', { metaKey: true }, input)
     expect(runCommand).toHaveBeenCalledWith('palette.toggle')
   })
+
+  it('leaves bare keys to a view tab that owns them, but not chords', () => {
+    press('/')
+    expect(runCommand).toHaveBeenCalledWith('view.focus-search')
+    runCommand.mockReset()
+
+    m.useViewKeys().setOwned(true)
+    const slash = press('/')
+    expect(runCommand).not.toHaveBeenCalled()
+    expect(slash.defaultPrevented).toBe(false)
+
+    press('k', { metaKey: true })
+    expect(runCommand).toHaveBeenCalledWith('palette.toggle')
+  })
 })
 
 describe('useGlobalKeymap overlay gate', () => {
@@ -114,7 +128,6 @@ describe('useGlobalKeymap overlay gate', () => {
     ['the palette', () => (paletteOpen.value = true)],
     ['Activity', () => (activityOpen.value = true)],
     ['Tasks', () => (tasksOpen.value = true)],
-    ['Changes', () => (changesOpen.value = true)],
     ['Action runs', () => (actionRunsOpen.value = true)],
     ['a modal', () => void openModal()],
   ])('suppresses everything but the palette toggle while %s is open', (_name, open) => {
@@ -377,27 +390,5 @@ describe('useGlobalKeymap over a focused terminal', () => {
     activityOpen.value = true
     press('t', tasksChord, pane)
     expect(runCommand).not.toHaveBeenCalled()
-  })
-})
-
-describe('useGlobalKeymap Changes chord over a pane', () => {
-  afterEach(() => {
-    Reflect.deleteProperty(navigator, 'userAgent')
-  })
-
-  it('opens Changes from a focused pane on macOS, where Option rules out the escape form', () => {
-    Object.defineProperty(navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-      configurable: true,
-    })
-    activeContexts.add('session-changes')
-    const pane = document.body.appendChild(document.createElement('div'))
-    pane.setAttribute('data-terminal-input-scope', '')
-    const textarea = pane.appendChild(document.createElement('textarea'))
-
-    const event = press('©', { code: 'KeyG', metaKey: true, altKey: true }, textarea)
-
-    expect(runCommand).toHaveBeenCalledWith('changes.toggle')
-    expect(event.defaultPrevented).toBe(true)
   })
 })

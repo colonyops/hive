@@ -58,6 +58,12 @@ Drag image files or paste clipboard screenshots into a chat's terminal to give
 the agent visual context. See [Image input](../code/terminal-mode.md#image-input)
 for supported formats, limits, and saved clipboard images.
 
+### Tabs and splits
+
+An open chat shows as a tab above its terminal. The `+` on the tab row opens the workspace's **Drive** tab beside it, and the two buttons at the right of the tab row split the panel to the right or downward, so a document can sit beside the conversation. Splits nest, tabs drag between panels, and the divider between two panels drags to resize. Hive remembers each chat's tabs and splits across restarts, and forgets them when you stop or delete the chat. Closing the chat's own tab stops the chat, as **Stop** on its row does.
+
+A chat has one terminal and no Diff or Tasks tab; those belong to a [Code session](../code/terminal-mode.md#tabs-and-splits).
+
 Images that Pi draws show in the chat's terminal. Hive sets
 `PI_IMAGE_PROTOCOL=kitty` for chats it starts. See
 [Images in output](../code/terminal-mode.md#images-in-output).
@@ -119,10 +125,10 @@ Drive is the folder tree of documents that agents and you share. It holds Markdo
 
 ### Where it shows
 
-- **The pane.** The right-panel button in the title bar opens the Drive pane beside a chat. It has a header, the workspace's folder tree, and a reader for the selected document.
-- **The Drive page.** Open it from the views menu (**Drive**), the command palette, or <kbd>⌘⇧P</kbd> (Windows/Linux: <kbd>Ctrl+Shift+P</kbd>) or <kbd>g</kbd> then <kbd>v</kbd>. It takes the whole window, like Settings, and opens on the document the pane shows when a chat or Code session is on screen. Its picker groups spaces as **Repositories**, **Workspaces**, and **Shared**. Press <kbd>Esc</kbd>, <kbd>⌘⇧P</kbd> again, or the close button to return to the view you came from. The page is a place in history, so Back returns to it, and a document on it has a link you can open again.
+- **The tab.** The `+` on a chat's tab row opens a **Drive** tab beside it, with the workspace's folder tree and a reader for the selected document. Split the panel to read a document next to the conversation. A document an agent opens arrives as a Drive tab behind the one you are reading, with a dot until you look at it. See [Tabs and splits](#tabs-and-splits).
+- **The Drive page.** Open it from the views menu (**Drive**), the command palette, or <kbd>⌘⇧P</kbd> (Windows/Linux: <kbd>Ctrl+Shift+P</kbd>) or <kbd>g</kbd> then <kbd>v</kbd>. It takes the whole window, like Settings, and opens on the space of the chat or Code session on screen. Its picker groups spaces as **Repositories**, **Workspaces**, and **Shared**. Press <kbd>Esc</kbd>, <kbd>⌘⇧P</kbd> again, or the close button to return to the view you came from. The page is a place in history, so Back returns to it, and a document on it has a link you can open again.
 
-Search in the pane or on the page looks across every space. To open a document by name or path from anywhere, press <kbd>⌘P</kbd> (Windows/Linux: <kbd>Ctrl+P</kbd>, outside a terminal), or type <kbd>#</kbd> in the command palette. Documents appear only in the palette's **Drive** tab, so they don't crowd out commands. Selecting an image in the tree (PNG, JPEG, GIF, WebP, SVG, AVIF, or ICO, up to 32 MB) shows it in the reader. Copy a document as Markdown, save it to a file, or open its links from the reader. A Markdown link to another document in the space opens it in place.
+Search in a Drive tab or on the page looks across every space. To open a document by name or path from anywhere, press <kbd>⌘P</kbd> (Windows/Linux: <kbd>Ctrl+P</kbd>, outside a terminal), or type <kbd>#</kbd> in the command palette. Documents appear only in the palette's **Drive** tab, so they don't crowd out commands. Selecting an image in the tree (PNG, JPEG, GIF, WebP, SVG, AVIF, or ICO, up to 32 MB) shows it in the reader. Copy a document as Markdown, save it to a file, or open its links from the reader. A Markdown link to another document in the space opens it in place.
 
 ### Document kinds
 
@@ -138,7 +144,7 @@ A Markdown document or a canvas can include front matter such as tags, status, o
 
 ### Comment on a document
 
-Comments live on the Drive page. The pane beside a chat or a Code session does not show them; open the document with **Open full page** to review it. Reviewing is off until you turn it on with the comment button in the document's header. Hive remembers the choice, and while it is off documents take no comments and show none. Select text in a Markdown document and a comment box floats under it with the selection marked; drag it by its top row to move it out of the way. To comment on a whole paragraph, list item, heading, code block, or table, point at it and click the comment button beside it in the margin. While nothing else has focus, the keyboard goes to the box:
+Comments live on the Drive page. A Drive tab beside a chat or a Code session does not show them; open the Drive page on the document to review it. Reviewing is off until you turn it on with the comment button in the document's header. Hive remembers the choice, and while it is off documents take no comments and show none. Select text in a Markdown document and a comment box floats under it with the selection marked; drag it by its top row to move it out of the way. To comment on a whole paragraph, list item, heading, code block, or table, point at it and click the comment button beside it in the margin. While nothing else has focus, the keyboard goes to the box:
 
 - Start typing to write a comment, then press <kbd>⌘↵</kbd> or **Add Comment**.
 - Press <kbd>1</kbd> to <kbd>4</kbd> to apply a label: **Clarify this**, **Verify this**, **Needs tests**, or **Looks good**. The icons in the box are the same labels. Text you typed first follows the label. Change them under **Settings ▸ Drive ▸ Comment labels**, or with `review.labels` in [settings](../configuration/settings.md).
@@ -170,16 +176,17 @@ A [Code session's](../code/terminal-mode.md#drive) checkout links its space as `
 
 ### Let an agent write
 
-An agent with **Hive Drive** enabled can publish documents beside its chat. The seeded Hive workspace has it on. The MCP server is at `/mcp/drive`; the older address `/mcp/canvas` answers the same server, so existing agent setups keep working. The six document tools are:
+An agent with **Hive Drive** enabled can publish documents beside its chat. The seeded Hive workspace has it on. The MCP server is at `/mcp/drive`; the older address `/mcp/canvas` answers the same server, so existing agent setups keep working. The five document tools are:
 
 - `list_documents`
 - `read_document`
 - `write_document`
 - `move_document`
 - `delete_document`
-- `open_document`
 
-The ten canvas tools remain. A canvas name can include folders, so `reports/perf` is filed as `reports/perf.canvas.json`, and a bare name is filed under `canvases/`. An agent can only write `.md` and `.html` documents with `write_document`. `read_document` reads markdown, html, and any other text file in the space.
+The layout tools on the same server (`open_tab`, `close_tab`, `move_tab`, `focus_tab`, `close_panel`, `resize_split`, `turn_split`, and `get_layout`) let the agent arrange the tabs beside its chat, open Drive on a document, and in Code open a terminal. See [Agents and the layout](../code/agent-layout.md).
+
+The eight canvas tools remain. A canvas name can include folders, so `reports/perf` is filed as `reports/perf.canvas.json`, and a bare name is filed under `canvases/`. An agent can only write `.md` and `.html` documents with `write_document`. `read_document` reads markdown, html, and any other text file in the space.
 
 A repository with no documents yet links to the setup in **Settings ▸ MCP servers**.
 

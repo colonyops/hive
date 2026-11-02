@@ -65,7 +65,10 @@ prepare_action_runtime() {
   git --git-dir="${remote}" symbolic-ref HEAD refs/heads/main
 
   # The window command is deliberately harmless. Session creation still runs
-  # the real clone/save path, but no agent process starts.
+  # the real clone/save path, but no agent process starts. It outlives the
+  # startup check because tmux 3.4 drops the exit status of about one short
+  # command in five, and the launch fails a dead pane that has no status. It
+  # ends before a retry, which reuses the session name, about 20s later.
   cat >"${data_dir}/hive-e2e.yaml" <<EOF
 version: "0.2.7"
 git_path: git
@@ -79,7 +82,7 @@ rules:
   - pattern: ".*"
     windows:
       - name: smoke
-        command: /usr/bin/true
+        command: sleep 5
 EOF
 }
 

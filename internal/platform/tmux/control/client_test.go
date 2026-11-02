@@ -149,6 +149,25 @@ func TestUnsizedAttachSetsNoClientSizeUntilResized(t *testing.T) {
 	require.Equal(t, "refresh-client -C 213,55", f.sentCommands()[len(f.sentCommands())-1])
 }
 
+func TestResizeWindowAsksForThatWindowsOwnGrid(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setWindows("@1 1 %1 120 40 0 b25f,120x40,0,0,1 claude")
+
+	ctx := t.Context()
+	client, err := Attach(ctx, ctx, Options{Slug: f.slug, newProcess: f.factory()})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = client.Close(context.WithoutCancel(ctx)) })
+
+	require.NoError(t, client.ResizeWindow(ctx, "@1", 60, 20))
+	require.Equal(t, "refresh-client -C @1:60x20", f.sentCommands()[len(f.sentCommands())-1])
+
+	require.Error(t, client.ResizeWindow(ctx, "@1; kill-server", 60, 20), "a window id goes into a tmux command line")
+	require.ErrorIs(t, client.ResizeWindow(ctx, "@99", 60, 20), ErrUnknownWindow, "a window id is server-wide, so another session's window is refused")
+	require.Error(t, client.ResizeWindow(ctx, "@1", 0, 20))
+}
+
 // First paint reaches a subscriber that connects after Attach, because the
 // broker buffered it.
 func TestAttachFirstPaintsEachWindow(t *testing.T) {

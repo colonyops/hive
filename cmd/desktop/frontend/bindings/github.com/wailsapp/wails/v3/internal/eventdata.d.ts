@@ -15,7 +15,6 @@ declare module "@wailsio/runtime" {
             "actions:updated": string;
             "activity:appended": number;
             "connection:updated": string;
-            "drive:toggle": wailsui$0.DriveToggle;
             "drive:updated": wailsui$0.DriveWrite;
             "flows:updated": string;
             "inbox:updated": string;
@@ -26,6 +25,7 @@ declare module "@wailsio/runtime" {
             "notification:activated": wailsui$0.NotificationActivation;
             "notification:toast": wailsui$0.NotificationToast;
             "schedules:updated": string;
+            "session:layout": wailsui$0.SessionLayout;
             "sessions:create-failed": string;
             "sessions:updated": string;
             "tasks:updated": string;

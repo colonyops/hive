@@ -115,6 +115,8 @@ type terminalSizeRequest struct {
 	Slug string `json:"slug"`
 	Cols int    `json:"cols"`
 	Rows int    `json:"rows"`
+	// WindowID asks for that window's own grid instead of voting for the session.
+	WindowID string `json:"windowId,omitempty"`
 }
 
 func (b terminalSizeRequest) Validate() error {
@@ -372,7 +374,12 @@ func (ctrl *Controller) TerminalResize(w http.ResponseWriter, r *http.Request) e
 	if err != nil {
 		return err
 	}
-	if err := ctrl.core.Terminals.Resize(r.Context(), body.Slug, body.Cols, body.Rows); err != nil {
+	if body.WindowID != "" {
+		err = ctrl.core.Terminals.ResizeWindow(r.Context(), body.Slug, body.WindowID, body.Cols, body.Rows)
+	} else {
+		err = ctrl.core.Terminals.Resize(r.Context(), body.Slug, body.Cols, body.Rows)
+	}
+	if err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)

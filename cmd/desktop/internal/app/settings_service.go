@@ -85,6 +85,7 @@ type AppearanceSettings struct {
 	TerminalLineHeight              float64
 	TerminalLetterSpacing           int
 	TerminalShowScrollbars          bool
+	TerminalMonochromeAgentIcons    bool
 	TerminalShowWindows             bool
 	TerminalShowStatusBar           bool
 	TerminalPoolSize                int
@@ -168,6 +169,7 @@ func (s *SettingsService) Appearance(context.Context) (AppearanceSettings, error
 		TerminalLineHeight:              cfg.Appearance.TerminalLineHeight,
 		TerminalLetterSpacing:           cfg.Appearance.TerminalLetterSpacing,
 		TerminalShowScrollbars:          cfg.Appearance.TerminalShowScrollbars,
+		TerminalMonochromeAgentIcons:    cfg.Appearance.TerminalMonochromeAgentIcons,
 		TerminalShowWindows:             cfg.Appearance.TerminalShowWindows,
 		TerminalShowStatusBar:           cfg.Appearance.TerminalShowStatusBar,
 		TerminalPoolSize:                cfg.Appearance.TerminalPoolSize,
@@ -250,6 +252,14 @@ func (s *SettingsService) SetTerminalLetterSpacing(_ context.Context, spacing in
 func (s *SettingsService) SetTerminalShowScrollbars(_ context.Context, show bool) error {
 	_, err := s.store.Update(func(current *settings.Settings) error {
 		current.Appearance.TerminalShowScrollbars = show
+		return nil
+	})
+	return Wrap(err, KindInternal, "saving settings")
+}
+
+func (s *SettingsService) SetTerminalMonochromeAgentIcons(_ context.Context, monochrome bool) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Appearance.TerminalMonochromeAgentIcons = monochrome
 		return nil
 	})
 	return Wrap(err, KindInternal, "saving settings")

@@ -129,7 +129,6 @@ export function useAppCommands(deps: AppCommandDeps) {
     },
     'report.bundle': report.openBundleDialog,
     'tasks.toggle': overlays.toggleTasks,
-    'changes.toggle': overlays.toggleChanges,
     'canvas.toggle': appMode.toggleDrive,
     'action-runs.toggle': () => overlays.toggleActionRuns(),
     'terminal.popup.toggle': togglePopupTerminal,
@@ -209,8 +208,6 @@ export function useAppCommands(deps: AppCommandDeps) {
         return terminalActive.value && !!onScreenSessionSlug.value
       case 'terminal-pane':
         return terminalActive.value && !!onScreenSessionSlug.value && codePaneFocused()
-      case 'session-changes':
-        return appMode.codeChangesSession.value !== null
       case 'agents':
         return agentsActive.value
       case 'sidebar':

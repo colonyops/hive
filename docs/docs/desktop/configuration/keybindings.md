@@ -21,7 +21,6 @@ The command palette at <kbd>⌘K</kbd> can run commands with or without a shortc
 | Open Settings | <kbd>⌘,</kbd> or <kbd>g</kbd> then <kbd>s</kbd> |
 | Show or hide the current sidebar | <kbd>⌘B</kbd> (Windows/Linux: <kbd>Ctrl+B</kbd>) |
 | Show or hide the right panel | <kbd>⌘⌥B</kbd> (Windows/Linux: <kbd>Ctrl+Alt+B</kbd>) |
-| Review the session's [changes](../code/terminal-mode.md#changes) | <kbd>⌘⌥G</kbd> (Windows/Linux: <kbd>Ctrl+Alt+G</kbd>) |
 | Show or hide a document's comments | <kbd>⌘⇧M</kbd> (Windows/Linux: <kbd>Ctrl+Shift+M</kbd>) |
 | Go to Inbox | <kbd>g</kbd> then <kbd>i</kbd> |
 | Go to Code | <kbd>g</kbd> then <kbd>c</kbd> |
@@ -66,6 +65,6 @@ On Linux, a shortcut whose first key already uses Shift, such as `mod+shift+b`, 
 
 **Toggle sidebar** (`terminal.toggle-sidebar`) shows or hides the sidebar in Inbox, Code, Chats, and the Drive page's folder tree. It uses <kbd>⌘B</kbd> on macOS and <kbd>Ctrl+B</kbd> on Windows and Linux, including inside a focused terminal. On macOS, <kbd>Ctrl+B</kbd> still reaches the terminal. On Windows and Linux, rebind this command in **Settings ▸ Keyboard** if you need <kbd>Ctrl+B</kbd> for tmux.
 
-**Toggle right panel** (`view.toggle-panel`) is the same for the right edge, like the title bar's right button: the preview in Inbox, the Drive pane in Code and Chats, and the comments column on the Drive page. **Toggle comments** (`drive.toggle-comments`) shows or hides the comments column on the Drive page.
+**Toggle right panel** (`view.toggle-panel`) is the same for the right edge, like the title bar's right button: the preview in Inbox and the comments column on the Drive page. Code and Chats have no right panel; Drive is a tab in the session there. **Toggle comments** (`drive.toggle-comments`) shows or hides the comments column on the Drive page.
 
 Check **Settings ▸ Keyboard** before assigning a Control shortcut that your shell or terminal program already uses.
