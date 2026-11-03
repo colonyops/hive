@@ -15,7 +15,7 @@ import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import { useConfirmation } from '@hive/ui/composables/useConfirmation'
 import { actionTypeMeta } from '../lib/actionPresentation'
 import { moveId } from '../lib/listOrder'
-import { dropClass, dropEdge, useDragReorder } from '../composables/useDragReorder'
+import { dropEdge, useDragReorder } from '../composables/useDragReorder'
 import { useActionsSettings, type EditableAction } from '../composables/useActionsSettings'
 import { SessionLaunchWorkspaces } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
@@ -91,19 +91,31 @@ function requestDelete(action: EditableAction): void {
 }
 
 // The catalog order is what the detail pane and item menu render, so a drop
-// rewrites actions.yml's sequence.
-const drag = useDragReorder<string>({
+// rewrites actions.yml's sequence. The drag target is the whole previewed
+// list, so the cards slide into place while the pointer moves and the drop
+// commits what the user already sees.
+const drag = useDragReorder<string, string[]>({
   mime: 'application/x-hive-action',
-  onDrop: (id, target) => {
-    const order = moveId(
-      actions.value.map((action) => action.id),
-      id,
-      target,
-    )
-    if (order) void reorder(order)
+  onDrop: (_id, order) => {
+    const ids = actionIds.value
+    if (order.length === ids.length && order.every((id, at) => id === ids[at])) return
+    void reorder(order)
   },
 })
-const { dragging, target: dropTarget } = drag
+const { dragging, target: preview } = drag
+
+const actionIds = computed(() => actions.value.map((action) => action.id))
+const shownActions = computed(() => {
+  if (!preview.value) return actions.value
+  const byId = new Map(actions.value.map((action) => [action.id, action]))
+  return preview.value.map((id) => byId.get(id)).filter((action) => action !== undefined)
+})
+
+function overCard(event: DragEvent, id: string): void {
+  if (dragging.value === null) return
+  const next = moveId(preview.value ?? actionIds.value, dragging.value, { id, edge: dropEdge(event) })
+  drag.over(event, next ?? preview.value)
+}
 </script>
 
 <template>
@@ -122,40 +134,52 @@ const { dragging, target: dropTarget } = drag
     <InlineError v-if="error && !editing" :message="error" testid="actions-error" />
     <p v-if="loading" class="text-xs text-text-4">Loading actions…</p>
 
-    <div v-else class="flex flex-col gap-3">
-      <ConfigItemCard
-        v-for="action in actions"
-        :key="action.id"
-        :title="action.label"
-        :icon="appIcon(actionTypeMeta(action.type).icon)"
-        :data-testid="`action-row-${action.id}`"
-        :class="[dropClass(dropTarget, action.id), { dragging: dragging === action.id }]"
-        draggable="true"
-        @dragstart="drag.start($event, action.id)"
-        @dragover.prevent="drag.over($event, { id: action.id, edge: dropEdge($event) })"
-        @drop.prevent="drag.drop"
-        @dragend="drag.end"
-        @edit="edit(action, $event)"
-        @delete="requestDelete(action)"
-      >
-        <template #leading>
-          <span
-            class="-mx-1.5 flex w-3 flex-none cursor-grab items-center justify-center text-text-4 opacity-0 transition-opacity group-hover/item:opacity-100 group-[.dragging]/item:opacity-100"
-            aria-hidden="true"
-            :data-testid="`action-grip-${action.id}`"
-            ><IconGripVertical class="size-3.75"
-          /></span>
-        </template>
-        <template #badges>
-          <BaseBadge class="border border-row !bg-app px-1.75 py-0.5 font-mono text-caption">{{ action.id }}</BaseBadge>
-          <BaseBadge class="px-2 py-0.5 text-caption !text-text-2">{{ actionTypeMeta(action.type).label }}</BaseBadge>
-          <BaseBadge class="px-2 py-0.5 text-caption">
-            <span class="size-1.5 rounded-full" :class="action.showInDetail ? 'bg-severity-success' : 'bg-text-4'" />{{
-              action.showInDetail ? 'Shown in detail' : 'Flow-only'
-            }}
-          </BaseBadge>
-        </template>
-      </ConfigItemCard>
+    <!-- The list takes the drop, not the cards: a release in the gap between
+         two cards still lands where the preview shows. -->
+    <div
+      v-else
+      class="flex flex-col gap-3"
+      data-testid="actions-list"
+      @dragover="dragging !== null && $event.preventDefault()"
+      @drop.prevent="drag.drop"
+    >
+      <TransitionGroup name="action-card" tag="div" class="contents">
+        <ConfigItemCard
+          v-for="action in shownActions"
+          :key="action.id"
+          :title="action.label"
+          :icon="appIcon(actionTypeMeta(action.type).icon)"
+          :data-testid="`action-row-${action.id}`"
+          :class="{ dragging: dragging === action.id }"
+          draggable="true"
+          @dragstart="drag.start($event, action.id)"
+          @dragover="overCard($event, action.id)"
+          @dragend="drag.end"
+          @edit="edit(action, $event)"
+          @delete="requestDelete(action)"
+        >
+          <template #leading>
+            <span
+              class="-mx-1.5 flex w-3 flex-none cursor-grab items-center justify-center text-text-4 opacity-0 transition-opacity group-hover/item:opacity-100 group-[.dragging]/item:opacity-100"
+              aria-hidden="true"
+              :data-testid="`action-grip-${action.id}`"
+              ><IconGripVertical class="size-3.75"
+            /></span>
+          </template>
+          <template #badges>
+            <BaseBadge class="border border-row !bg-app px-1.75 py-0.5 font-mono text-caption">{{
+              action.id
+            }}</BaseBadge>
+            <BaseBadge class="px-2 py-0.5 text-caption !text-text-2">{{ actionTypeMeta(action.type).label }}</BaseBadge>
+            <BaseBadge class="px-2 py-0.5 text-caption">
+              <span
+                class="size-1.5 rounded-full"
+                :class="action.showInDetail ? 'bg-severity-success' : 'bg-text-4'"
+              />{{ action.showInDetail ? 'Shown in detail' : 'Flow-only' }}
+            </BaseBadge>
+          </template>
+        </ConfigItemCard>
+      </TransitionGroup>
 
       <EmptyState v-if="!actions.length" message="No actions configured." />
       <div
@@ -182,3 +206,15 @@ const { dragging, target: dropTarget } = drag
     <ConfirmationHost :confirmation="confirmation" />
   </SettingsPage>
 </template>
+
+<style scoped>
+.action-card-move {
+  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action-card-move {
+    transition: none;
+  }
+}
+</style>

@@ -303,6 +303,32 @@ describe('SideBar folders', () => {
     expect(tree[tree.length - 1]).toMatchObject({ kind: 'feed', feed: { id: 'desktop' } })
   })
 
+  it('previews the move while dragging and commits it when dropped between rows', async () => {
+    const wrapper = mountGrouped()
+    const order = () => wrapper.text().indexOf('Backend') < wrapper.text().indexOf('Desktop UI')
+
+    await wrapper.findAll('[data-testid="sidebar-item"]')[0].trigger('dragstart')
+    // jsdom rects are all zeroes, so a dragover with no clientY lands on the bottom half.
+    await wrapper.findAll('[data-testid="sidebar-item"]')[1].trigger('dragover')
+    expect(order()).toBe(true)
+    expect(wrapper.get('[data-testid="sidebar-folder"]').text()).toContain('Desktop UI')
+    expect(wrapper.emitted('reorder')).toBeUndefined()
+
+    await wrapper.get('[data-testid="sidebar-feeds"]').trigger('drop')
+    expect(folderNamed(lastReorder(wrapper), 'work')?.feeds.map((f) => f.id)).toEqual(['backend', 'desktop'])
+  })
+
+  it('puts the tree back when a drag is cancelled', async () => {
+    const wrapper = mountGrouped()
+    const desktop = wrapper.findAll('[data-testid="sidebar-item"]')[0]
+    await desktop.trigger('dragstart')
+    await wrapper.get('[data-testid="sidebar-drop-end"]').trigger('dragover')
+    await desktop.trigger('dragend')
+
+    expect(wrapper.text().indexOf('Desktop UI')).toBeLessThan(wrapper.text().indexOf('Backend'))
+    expect(wrapper.emitted('reorder')).toBeUndefined()
+  })
+
   it('falls back to a flat list of feeds when the profile has no tree', () => {
     const wrapper = mountSideBar()
     expect(wrapper.findAll('[data-testid="sidebar-item"]')).toHaveLength(2)

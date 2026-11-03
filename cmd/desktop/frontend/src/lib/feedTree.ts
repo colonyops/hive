@@ -168,6 +168,10 @@ function insert(tree: FeedTree, node: SidebarNode, target: DropTarget): FeedTree
   return [...tree, node]
 }
 
+function isTopLevelFeed(tree: FeedTree, feedId: string): boolean {
+  return tree.some((n) => n.kind === 'feed' && n.feed.id === feedId)
+}
+
 function sameRef(a: DragRef, b: DragRef): boolean {
   return a.kind === b.kind && a.id === b.id
 }
@@ -177,6 +181,9 @@ function sameRef(a: DragRef, b: DragRef): boolean {
 export function applyMove(tree: FeedTree, drag: DragRef, target: DropTarget): FeedTree {
   if ((target.kind === 'before' || target.kind === 'after') && sameRef(drag, target.ref)) return tree
   if (drag.kind === 'folder' && target.kind === 'into') return tree
+  // Folders don't nest, so a folder cannot land beside a feed inside one.
+  if (drag.kind === 'folder' && 'ref' in target && target.ref.kind === 'feed' && !isTopLevelFeed(tree, target.ref.id))
+    return tree
 
   const { tree: without, node } = extract(cloneTree(tree), drag)
   if (!node) return tree

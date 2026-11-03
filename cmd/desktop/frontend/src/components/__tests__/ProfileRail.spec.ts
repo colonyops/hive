@@ -84,6 +84,33 @@ describe('ProfileRail', () => {
     expect(wrapper.emitted('reorder')).toBeUndefined()
   })
 
+  it('slides the tiles into the previewed order while dragging', async () => {
+    const wrapper = mount(ProfileRail, { props: { profiles: rail, activeProfileId: 'hive' } })
+    const tiles = wrapper.findAll('[data-testid="profile-tile"]')
+    const order = () => wrapper.findAll('[data-testid="profile-tile"]').map((t) => t.attributes('data-id'))
+
+    await tiles[0].trigger('dragstart', { dataTransfer: new DataTransfer() })
+    tiles[1].element.getBoundingClientRect = () => ({ top: 0, height: 38 }) as DOMRect
+    await tiles[1].trigger('dragover', { clientY: 30 })
+    expect(order()).toEqual(['personal', 'hive', 'recipinned'])
+    expect(wrapper.emitted('reorder')).toBeUndefined()
+
+    await tiles[0].trigger('dragend')
+    expect(order()).toEqual(['hive', 'personal', 'recipinned'])
+  })
+
+  it('commits the preview when the drop lands in the gap between tiles', async () => {
+    const wrapper = mount(ProfileRail, { props: { profiles: rail, activeProfileId: 'hive' } })
+    const tiles = wrapper.findAll('[data-testid="profile-tile"]')
+
+    await tiles[0].trigger('dragstart', { dataTransfer: new DataTransfer() })
+    tiles[1].element.getBoundingClientRect = () => ({ top: 0, height: 38 }) as DOMRect
+    await tiles[1].trigger('dragover', { clientY: 30 })
+    await wrapper.get('aside').trigger('drop')
+
+    expect(wrapper.emitted('reorder')).toEqual([[['personal', 'hive', 'recipinned']]])
+  })
+
   it('moves the focused tile with alt+arrow, and stops at the ends', async () => {
     const wrapper = mount(ProfileRail, { props: { profiles: rail, activeProfileId: 'hive' } })
     const tiles = wrapper.findAll('[data-testid="profile-tile"]')
