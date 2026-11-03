@@ -11,8 +11,14 @@ import type { AgentTarget } from '../../bindings/github.com/colonyops/hive/cmd/d
 import type { DiffBase } from '../composables/useSessionChanges'
 import { defineStore } from './defineStore'
 
+/** What a comment is about when it is not a run of rows: one file, or the changes as a whole. */
+export type ChangesCommentKind = 'file' | 'review'
+
 export interface ChangesComment extends DiffSpan {
   id: string
+  /** Unset for a comment on rows. A file or review comment has no rows: its lines are 0. */
+  kind?: ChangesCommentKind
+  /** Empty for a review comment. */
   path: string
   /** The comparison the comment was made in: removed lines are only numbered within it. */
   base: DiffBase

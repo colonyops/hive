@@ -120,6 +120,13 @@ export function searchDiffRows(
 export const sameMatch = (a: DiffSearchMatch, b: DiffSearchMatch): boolean =>
   a.path === b.path && a.side === b.side && a.line === b.line && a.occurrence === b.occurrence
 
+/** What a comment's header names: its lines, `Whole file`, or `Overall`. */
+export function commentLabel(comment: DiffSpan & { kind?: 'file' | 'review' }): string {
+  if (comment.kind === 'review') return 'Overall'
+  if (comment.kind === 'file') return 'Whole file'
+  return spanLabel(comment)
+}
+
 /** The label a comment's lines show: `L12`, `L12-14`, and `old L7` for a removed line. */
 export function spanLabel(span: Pick<DiffSpan, 'startSide' | 'startLine' | 'endSide' | 'endLine'>): string {
   const old = (side: DiffSide) => (side === 'deletions' ? 'old ' : '')

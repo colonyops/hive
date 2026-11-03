@@ -9,7 +9,10 @@ import IconChevronsUpDown from '~icons/lucide/chevrons-up-down'
 import IconColumns2 from '~icons/lucide/columns-2'
 import IconEye from '~icons/lucide/eye'
 import IconEyeOff from '~icons/lucide/eye-off'
+import IconFile from '~icons/lucide/file'
+import IconFiles from '~icons/lucide/files'
 import IconMessageSquare from '~icons/lucide/message-square'
+import IconMessageSquareText from '~icons/lucide/message-square-text'
 import IconSearch from '~icons/lucide/search'
 import IconSend from '~icons/lucide/send'
 import IconGitBranch from '~icons/lucide/git-branch'
@@ -42,13 +45,16 @@ import { useToasts } from '../../composables/useToasts'
 import { errorText } from '../../lib/appError'
 import { readOrder, type DiffMode } from '../../lib/diffItems'
 import { branchName } from '../../lib/diffTarget'
-import { diffSpan, hasDiffLine, spanLabel, type DiffSearchMatch, type DiffSpan } from '../../lib/diffReview'
+import { commentLabel, diffSpan, hasDiffLine, type DiffSearchMatch, type DiffSpan } from '../../lib/diffReview'
 import type { DiffLineSelection } from '../../lib/diffSelection'
 import { gitFileName, gitRows, type GitLayout } from '../../lib/gitTree'
 import { isEditableTarget } from '../../lib/isEditableTarget'
-import { useChangesReview, type ChangesComment } from '../../stores/useChangesReview'
+import { useChangesReview, type ChangesComment, type ChangesCommentKind } from '../../stores/useChangesReview'
 import { useChangesViewed } from '../../stores/useChangesViewed'
-import { OpenSessionInEditor } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
+import {
+  OpenSessionInEditor,
+  SessionFileContext,
+} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import type { AgentTarget } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
@@ -82,6 +88,8 @@ const against = computed({
 const target = computed(() => ({ base: base.value, against: against.value, commit: commit.value }))
 const layout = useStorage<GitLayout>('hive.git.layout', 'tree')
 const mode = useStorage<DiffMode>('hive.git.diffMode', 'unified')
+// One file at a time: the rail picks which, and j and k still walk every file.
+const isolate = useStorage('hive.git.isolate', false)
 
 // Held diffs set the scrollbar's length and take memory, so the read takes this
 // many open files nearest the one on screen. Scrolling on reads further.
@@ -138,9 +146,11 @@ const isViewed = (file: ChangedFile) => viewedStore.isViewed(props.sessionId, fi
 const viewedPaths = computed(() => new Set(files.value.filter(isViewed).map((file) => file.path)))
 
 // An override wins until the file's viewed mark changes. With none, a viewed
-// file is folded, so a later edit that clears the mark opens it again.
+// file is folded, so a later edit that clears the mark opens it again. A file
+// shown on its own opens, or picking a viewed one would show only its header.
 const foldOverrides = ref(new Map<string, boolean>())
-const isOpen = (file: ChangedFile) => foldOverrides.value.get(file.path) ?? !isViewed(file)
+const isOpen = (file: ChangedFile) =>
+  foldOverrides.value.get(file.path) ?? ((isolate.value && file.path === current.value) || !isViewed(file))
 
 function toggleFold(file: ChangedFile): void {
   foldOverrides.value.set(file.path, !isOpen(file))
@@ -173,6 +183,9 @@ const wanted = computed(() => {
   return open.slice(0, READ_WINDOW).map((file) => file.path)
 })
 const { entries, answered } = useFileDiffs(sessionId, target, files, wanted)
+const streamFiles = computed(() =>
+  isolate.value ? files.value.filter((file) => file.path === current.value) : files.value,
+)
 // The file tree and the diffs appear together. Alone, the tree lands first and the
 // diffs one read later. A failed read ends the wait, because its error is what to show.
 const loading = computed(
@@ -260,7 +273,7 @@ const sendLabel = computed(() =>
 const shownComments = computed(() => {
   const byPath = new Map<string, ChangesComment[]>()
   for (const comment of comments.value) {
-    if (!inShownComparison(comment)) continue
+    if (comment.kind || !inShownComparison(comment)) continue
     if (!hasDiffLine(entryRows(entries.value.get(comment.path)), comment.endLine, comment.endSide)) continue
     byPath.set(comment.path, [...(byPath.get(comment.path) ?? []), comment])
   }
@@ -268,7 +281,7 @@ const shownComments = computed(() => {
 })
 const commentCounts = computed(() => {
   const counts = new Map<string, number>()
-  for (const { path } of comments.value) counts.set(path, (counts.get(path) ?? 0) + 1)
+  for (const { path } of comments.value) if (path) counts.set(path, (counts.get(path) ?? 0) + 1)
   return counts
 })
 
@@ -280,7 +293,7 @@ function inShownComparison(comment: ChangesComment): boolean {
 
 // Stamps belong to a comparison, so only the comment's own can say it moved.
 function isOutdated(comment: ChangesComment): boolean {
-  if (pending.value || !inShownComparison(comment)) return false
+  if (comment.kind === 'review' || pending.value || !inShownComparison(comment)) return false
   const file = files.value.find((candidate) => candidate.path === comment.path)
   return !file || fileVersion(file) !== comment.version
 }
@@ -288,6 +301,7 @@ function isOutdated(comment: ChangesComment): boolean {
 // The comparison and version are the diff's when the selection was made: the view
 // can move to another session or comparison, or the file can change, during typing.
 interface CommentDraft {
+  kind?: ChangesCommentKind
   sessionId: string
   comparison: Pick<ChangesComment, 'base' | 'against' | 'commit' | 'staged' | 'version'>
   path: string
@@ -304,13 +318,7 @@ function startComment(selection: DiffLineSelection): void {
   stream.value?.selectLines(selection.path, selection.range)
   draft.value = {
     sessionId: props.sessionId,
-    comparison: {
-      base: shownBase.value,
-      against: shownBase.value === 'branch' ? changes.value?.against : undefined,
-      commit: shownBase.value === 'commit' ? changes.value?.commit : undefined,
-      staged: shownBase.value === 'staged' || undefined,
-      version: fileVersion(file),
-    },
+    comparison: currentComparison(file),
     path: selection.path,
     span: selection.text ? { ...span, quote: selection.text } : span,
     rect: selection.rect,
@@ -318,18 +326,72 @@ function startComment(selection: DiffLineSelection): void {
   }
 }
 
+// A file or review comment has no rows to stand on.
+const NO_LINES: Omit<DiffSpan, 'quote'> = { startSide: 'additions', startLine: 0, endSide: 'additions', endLine: 0 }
+
+function currentComparison(file: ChangedFile | undefined): CommentDraft['comparison'] {
+  return {
+    base: shownBase.value,
+    against: shownBase.value === 'branch' ? changes.value?.against : undefined,
+    commit: shownBase.value === 'commit' ? changes.value?.commit : undefined,
+    staged: shownBase.value === 'staged' || undefined,
+    version: file ? fileVersion(file) : '',
+  }
+}
+
+function startFileComment(file: ChangedFile, rect: CommentDraft['rect']): void {
+  draft.value = {
+    kind: 'file',
+    sessionId: props.sessionId,
+    comparison: currentComparison(file),
+    path: file.path,
+    span: { ...NO_LINES, quote: '' },
+    rect,
+    text: '',
+  }
+}
+
+const reviewButton = ref<{ $el: HTMLElement } | null>(null)
+
+function startReviewComment(): void {
+  const rect = reviewButton.value?.$el.getBoundingClientRect() ?? {
+    top: 80,
+    left: window.innerWidth / 2,
+    width: 0,
+    height: 0,
+  }
+  draft.value = {
+    kind: 'review',
+    sessionId: props.sessionId,
+    comparison: currentComparison(undefined),
+    path: '',
+    span: { ...NO_LINES, quote: '' },
+    rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+    text: '',
+  }
+}
+
 const draftRange = computed(() => {
-  const span = draft.value?.span
-  return span
-    ? {
-        startLine: span.startLine,
-        endLine: span.endLine,
-        context: span.quote
-          .split('\n')[0]
-          .replace(/^[-+ ]/, '')
-          .trim(),
-      }
-    : null
+  const held = draft.value
+  if (!held) return null
+  if (held.kind) {
+    return { startLine: 0, endLine: 0, context: held.kind === 'file' ? held.path : 'All the changes' }
+  }
+  return {
+    startLine: held.span.startLine,
+    endLine: held.span.endLine,
+    context: held.span.quote
+      .split('\n')[0]
+      .replace(/^[-+ ]/, '')
+      .trim(),
+  }
+})
+
+const draftLabel = computed(() => {
+  const held = draft.value
+  if (!held) return ''
+  const label = commentLabel({ ...held.span, kind: held.kind })
+  return held.path ? `${gitFileName(held.path)} ${label}` : label
 })
 
 function endDraft(): void {
@@ -341,11 +403,18 @@ function endDraft(): void {
 function saveDraft(text: string): void {
   const held = draft.value
   if (!held) return
-  review.add(held.sessionId, { ...held.span, ...held.comparison, path: held.path, text: text.trim() })
+  review.add(held.sessionId, {
+    ...held.span,
+    ...held.comparison,
+    ...(held.kind ? { kind: held.kind } : {}),
+    path: held.path,
+    text: text.trim(),
+  })
   endDraft()
 }
 
 function pickComment(comment: ChangesComment): void {
+  if (comment.kind === 'review') return
   if (!inShownComparison(comment)) {
     base.value = comment.base
     if (comment.base === 'branch') against.value = comment.against ?? ''
@@ -376,7 +445,7 @@ function settleReveal(): void {
   const entry = entries.value.get(file.path)
   if (!entry || !stream.value?.holds(file.path)) return
   pendingReveal.value = null
-  if (!hasDiffLine(entryRows(entry), comment.endLine, comment.endSide)) {
+  if (comment.kind || !hasDiffLine(entryRows(entry), comment.endLine, comment.endSide)) {
     stream.value.scrollToFile(file.path)
     return
   }
@@ -464,6 +533,9 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
     case 's':
       mode.value = mode.value === 'split' ? 'unified' : 'split'
       break
+    case 'f':
+      toggleIsolate()
+      break
     case 'v':
       if (file) toggleViewed(file)
       break
@@ -475,6 +547,12 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
       break
     case 'r':
       reviewOpen.value = !reviewOpen.value
+      break
+    case 'c':
+      if (file) startFileComment(file, { top: 80, left: window.innerWidth / 2, width: 0, height: 0 })
+      break
+    case 'C':
+      startReviewComment()
       break
     case 'b':
       filesOpen.value = !filesOpen.value
@@ -491,6 +569,11 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   event.preventDefault()
 })
 
+function toggleIsolate(): void {
+  isolate.value = !isolate.value
+  if (current.value) stream.value?.scrollToFile(current.value)
+}
+
 function openInEditor(): void {
   OpenSessionInEditor(props.sessionId).catch((err: unknown) =>
     toasts.showToast(errorText(err, 'Could not open the editor.'), { severity: 'error' }),
@@ -503,9 +586,11 @@ const KEY_HINTS = [
   ['v', 'viewed'],
   ['o', 'fold'],
   ['s', 'side by side'],
+  ['f', 'one file'],
   ['/', 'search'],
   ['[ ]', 'commit'],
   ['b', 'files'],
+  ['c C', 'comment on file, overall'],
   ['r', 'comments'],
   [SEND_KEY, 'send'],
 ]
@@ -550,12 +635,30 @@ const KEY_HINTS = [
           @click="mode = mode === 'split' ? 'unified' : 'split'"
         />
         <IconButton
+          :label="isolate ? 'Show every file' : 'Show one file'"
+          :tooltip="`${isolate ? 'Show every file' : 'Show only the picked file'} (f)`"
+          :icon="isolate ? IconFile : IconFiles"
+          size="lg"
+          :aria-pressed="isolate"
+          data-testid="changes-isolate"
+          @click="toggleIsolate"
+        />
+        <IconButton
           label="Search the diffs"
           tooltip="Search the diffs (/)"
           :icon="IconSearch"
           size="lg"
           data-testid="changes-search-open"
           @click="openSearch"
+        />
+        <IconButton
+          ref="reviewButton"
+          label="Comment on all the changes"
+          tooltip="Comment on all the changes (C)"
+          :icon="IconMessageSquareText"
+          size="lg"
+          data-testid="changes-review-comment"
+          @click="startReviewComment"
         />
         <IconButton
           :label="reviewOpen ? 'Hide comments' : 'Show comments'"
@@ -670,7 +773,7 @@ const KEY_HINTS = [
           v-model:current="current"
           class="min-h-0"
           :scope="scope"
-          :files="files"
+          :files="streamFiles"
           :entries="entries"
           :open-paths="openPaths"
           :viewed-paths="viewedPaths"
@@ -679,10 +782,12 @@ const KEY_HINTS = [
           :is-outdated="isOutdated"
           :search-query="search.debounced.value"
           :active-match="search.active.value"
+          :load-whole-file="(path: string) => SessionFileContext(sessionId, target, path)"
           @synced="settleReveal"
           @fold="toggleFold"
           @toggle-viewed="toggleViewed"
           @open-editor="openInEditor"
+          @comment-file="(file, rect) => startFileComment(file, rect)"
           @select-lines="startComment"
           @update-comment="(comment, text) => review.update(sessionId, comment.id, text)"
           @remove-comment="(comment) => review.remove(sessionId, comment.id)"
@@ -697,7 +802,7 @@ const KEY_HINTS = [
       v-model:text="draft.text"
       :rect="draft.rect"
       :range="draftRange"
-      :label="`${gitFileName(draft.path)} ${spanLabel(draft.span)}`"
+      :label="draftLabel"
       :busy="false"
       :error="null"
       testid="changes"

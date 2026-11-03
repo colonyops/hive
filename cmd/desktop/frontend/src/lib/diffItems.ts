@@ -21,11 +21,17 @@ export interface DiffMetrics {
 /**
  * The header is app chrome (DiffFileHeader's h-8), so it follows the interface
  * scale and may be fractional. Rows follow the code scale in whole pixels, or a
- * long file's estimated heights would add up to a visible error.
+ * long file's estimated heights would add up to a visible error. A separator
+ * stacks two expand buttons, so it is taller than a row.
  */
 export function diffMetrics(codeScale = 100, interfaceScale = 100): DiffMetrics {
   const rowPx = Math.round((20 * codeScale) / 100)
-  return { fontPx: (13 * codeScale) / 100, headerPx: (32 * interfaceScale) / 100, rowPx, separatorPx: rowPx }
+  return {
+    fontPx: (13 * codeScale) / 100,
+    headerPx: (32 * interfaceScale) / 100,
+    rowPx,
+    separatorPx: Math.round(rowPx * 1.5),
+  }
 }
 
 export function diffHasText(diff: SessionFileDiff | undefined): boolean {

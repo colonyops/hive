@@ -60,7 +60,7 @@ function sentFiles(review: SentReview): string {
         v-if="!comments.length"
         variant="inline"
         class="p-2.5"
-        message="Drag across line numbers or select code to comment."
+        message="Drag across line numbers or select code to comment. Press c to comment on a file, C on all the changes."
         data-testid="changes-review-empty"
       />
     </div>

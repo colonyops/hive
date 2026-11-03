@@ -7,6 +7,8 @@ import {
   CodeView,
   type CodeViewDiffItem,
   type CodeViewOptions,
+  type FileDiffLoadedFiles,
+  type FileDiffMetadata,
   type LineAnnotation,
   type PostRenderPhase,
   type SelectedLineRange,
@@ -19,12 +21,16 @@ import { useScrollGestureSpan } from '../../composables/useScrollGestureSpan'
 import type { DiffEntry } from '../../composables/useFileDiffs'
 import { useSurfaceScale } from '../../stores/useSurfaceScale'
 import { diffThemeName, diffWorkerPool } from '../../lib/diffHighlight'
+import { hunksMatch, wholeFileFromPatch } from '../../lib/diffContext'
 import { diffMetrics, diffHasText, emptyFileDiff, hunkOffsets, parseFileDiff, type DiffMode } from '../../lib/diffItems'
 import type { DiffSearchMatch, DiffSide } from '../../lib/diffReview'
 import { clearSearchPaint, paintSearch, SEARCH_HIGHLIGHT_CSS } from '../../lib/diffSearchPaint'
 import { diffTextSelection, type DiffLineSelection } from '../../lib/diffSelection'
 import type { ChangesComment } from '../../stores/useChangesReview'
-import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type {
+  ChangedFile,
+  SessionFileDiff,
+} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
   /** Which read this stream shows: a session and a target. Held diffs are cached under it. */
@@ -39,12 +45,15 @@ const props = defineProps<{
   isOutdated: (comment: ChangesComment) => boolean
   searchQuery: string
   activeMatch: DiffSearchMatch | null
+  /** Reads a file's diff with the whole file as context, for the lines between hunks. */
+  loadWholeFile: (path: string) => Promise<SessionFileDiff>
 }>()
 const emit = defineEmits<{
   'update:current': [path: string]
   fold: [file: ChangedFile]
   'toggle-viewed': [file: ChangedFile]
   'open-editor': []
+  'comment-file': [file: ChangedFile, rect: DOMRect]
   /** The user selected lines to comment on. `text` is set when they selected code rather than line numbers. */
   'select-lines': [selection: DiffLineSelection]
   'update-comment': [comment: ChangesComment, text: string]
@@ -55,11 +64,21 @@ const emit = defineEmits<{
 
 // The separator's height is the only row the library's own stylesheet sizes
 // past what its variables reach. No background of its own: the app's shows through.
+//
+// A file's horizontal scrollbar takes its own height below the last row, and
+// CodeView lays files out from itemMetrics without measuring them. Left to the
+// library, that height is whatever the platform's scrollbar measures, so each
+// mounted file overflowed its slot and the last one lost its bottom rows. Fixing
+// it here lets SCROLLBAR_PX stand in itemMetrics as the file's bottom padding.
+const SCROLLBAR_PX = 8
 const unsafeCss = (separatorPx: number): string => `
-  :host { --diffs-bg: var(--color-app); }
-  [data-separator=metadata] { height: ${separatorPx}px; }
+  :host { --diffs-bg: var(--color-app); --diffs-scrollbar-gutter-override: ${SCROLLBAR_PX}px; }
+  [data-separator=line-info-basic] { height: ${separatorPx}px; }
   ${SEARCH_HIGHLIGHT_CSS}
 `
+// Lines a click on a separator reveals, as a review tool does: enough to read
+// the code around a hunk without burying it.
+const EXPANSION_LINES = 20
 
 // A saved comment's row, found by id across CodeView remounting it.
 interface CommentAnnotation {
@@ -188,18 +207,45 @@ const rowStyle = computed(() => ({
   '--diffs-line-height': `${metrics.value.rowPx}px`,
 }))
 
+// CodeView calls this on the first expansion in a file. A file that changed since
+// its diff was read fails here rather than mixing two versions; the next poll
+// brings a diff of the new version.
+async function loadDiffFiles(fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> {
+  const path = fileDiff.name
+  const read = await props.loadWholeFile(path)
+  const whole = read.state === 'text' ? wholeFileFromPatch(read.text) : null
+  if (!whole || !hunksMatch(fileDiff, whole)) {
+    const reason = read.state === 'error' ? read.error : `the whole file came back ${read.state}`
+    log.warn('could not expand the diff context', { path, reason })
+    throw new Error(`could not read ${path} in full: ${reason}`)
+  }
+  const key = fileDiff.cacheKey ?? `${props.scope}:${path}`
+  return {
+    oldFile: { name: fileDiff.prevName ?? path, contents: whole.old, cacheKey: `${key}:old` },
+    newFile: { name: path, contents: whole.new, cacheKey: `${key}:new` },
+  }
+}
+
 function viewerOptions(): CodeViewOptions<CommentAnnotation, undefined> {
   const { headerPx, rowPx, separatorPx } = metrics.value
   return {
     diffStyle: props.mode,
     // A wrapped line would break the fixed row height everything is laid out from.
     overflow: 'scroll',
-    hunkSeparators: 'metadata',
+    hunkSeparators: 'line-info-basic',
+    expansionLineCount: EXPANSION_LINES,
+    loadDiffFiles,
     // WKWebView paints a sticky header transparent during a fast scroll, so the
     // header stays pinned from outside the scroller instead.
     stickyHeaders: false,
     layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
-    itemMetrics: { lineHeight: rowPx, diffHeaderHeight: headerPx, hunkSeparatorHeight: separatorPx, spacing: 0 },
+    itemMetrics: {
+      lineHeight: rowPx,
+      diffHeaderHeight: headerPx,
+      hunkSeparatorHeight: separatorPx,
+      spacing: 0,
+      paddingBottom: SCROLLBAR_PX,
+    },
     unsafeCSS: unsafeCss(separatorPx),
     enableLineSelection: true,
     enableGutterUtility: true,
@@ -412,6 +458,7 @@ watch(
         @fold="emit('fold', pinnedFile!)"
         @toggle-viewed="emit('toggle-viewed', pinnedFile!)"
         @open-editor="emit('open-editor')"
+        @comment="emit('comment-file', pinnedFile!, $event)"
       />
     </div>
     <Teleport v-for="path in mountedHeaders" :key="path" :to="headerHosts.get(path)">
@@ -424,6 +471,7 @@ watch(
         @fold="emit('fold', fileByPath.get(path)!)"
         @toggle-viewed="emit('toggle-viewed', fileByPath.get(path)!)"
         @open-editor="emit('open-editor')"
+        @comment="emit('comment-file', fileByPath.get(path)!, $event)"
       />
     </Teleport>
     <Teleport v-for="id in mountedComments" :key="id" :to="commentHosts.get(id)">

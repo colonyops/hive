@@ -5,7 +5,7 @@ import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import TextArea from '@hive/ui/components/ui/TextArea.vue'
 import IconPencil from '~icons/lucide/pencil'
 import IconTrash from '~icons/lucide/trash-2'
-import { spanLabel } from '../../lib/diffReview'
+import { commentLabel } from '../../lib/diffReview'
 import { gitFileName } from '../../lib/gitTree'
 import { labelOf } from '../../lib/reviewLabels'
 import { useReviewLabels } from '../../stores/useReviewLabels'
@@ -65,12 +65,12 @@ function onKeydown(event: KeyboardEvent): void {
       <button
         type="button"
         class="flex min-w-0 cursor-pointer gap-1.5 text-left font-mono text-micro text-text-3 hover:text-text"
-        :title="`${comment.path} ${spanLabel(comment)}`"
+        :title="`${comment.path} ${commentLabel(comment)}`.trim()"
         :data-testid="`${testid}-pick`"
         @click="emit('pick')"
       >
-        <span v-if="row" class="min-w-0 truncate text-text-2">{{ gitFileName(comment.path) }}</span>
-        <span class="shrink-0">{{ spanLabel(comment) }}</span>
+        <span v-if="row && comment.path" class="min-w-0 truncate text-text-2">{{ gitFileName(comment.path) }}</span>
+        <span class="shrink-0">{{ commentLabel(comment) }}</span>
       </button>
       <span
         v-if="outdated"

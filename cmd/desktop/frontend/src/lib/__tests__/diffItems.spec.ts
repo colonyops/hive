@@ -54,7 +54,7 @@ describe('diffHasText', () => {
 
 describe('diffMetrics', () => {
   it('scales rows with code in whole pixels and the header with the interface', () => {
-    expect(diffMetrics()).toEqual({ fontPx: 13, headerPx: 32, rowPx: 20, separatorPx: 20 })
+    expect(diffMetrics()).toEqual({ fontPx: 13, headerPx: 32, rowPx: 20, separatorPx: 30 })
     const scaled = diffMetrics(115, 110)
     expect(scaled.rowPx).toBe(23)
     expect(scaled.fontPx).toBeCloseTo(14.95)
