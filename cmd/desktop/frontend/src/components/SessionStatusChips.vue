@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The session half of the status bar. Session-only — a chat has no branch —
-// which is why it sits in PaneStatusBar's slot rather than in the bar itself.
+// A Code session's git and pull-request chips. A chat has no branch, so the
+// Chats pane never shows them.
 import { computed } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import IconCheck from '~icons/lucide/check'

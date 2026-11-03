@@ -511,14 +511,14 @@ describe('AgentsMode', () => {
     expect(wrapper.find('[data-testid="agents-workspace-sidebar"]').exists()).toBe(false)
   })
 
-  it('raises the status bar over an open chat and opens its workspace outside the app', async () => {
+  it("shows the open chat's workspace actions in the tab row", async () => {
     mocks.createAgentWorkspacesClient.mockReturnValue(fakeClient())
     const { wrapper } = await mountAgentsMode('/workspaces/web-app')
     expect(wrapper.find('[data-testid="agents-pane-statusbar"]').exists()).toBe(false)
 
     await startChat(wrapper)
 
-    expect(wrapper.get('[data-testid="agents-pane-statusbar-workspace"]').text()).toBe('Web App')
+    expect(wrapper.find('[data-testid="agents-pane-statusbar"]').exists()).toBe(true)
     expect(tooltipFor(wrapper, 'agents-pane-statusbar-open-editor')).toBe('Open in Zed')
   })
 
@@ -533,14 +533,15 @@ describe('AgentsMode', () => {
   })
 
   // The open chat need not belong to the focused workspace: moving the focus
-  // filter must not repoint the bar (or its actions) at the newly focused one.
-  it("keeps naming the open chat's workspace when the focus filter moves", async () => {
-    const { wrapper, router } = await mountWithOpenChat()
+  // filter must not repoint the actions at the newly focused one.
+  it("keeps the actions on the open chat's workspace when the focus filter moves", async () => {
+    const { wrapper, router, client } = await mountWithOpenChat()
 
     await router.push({ name: 'agents', params: { workspace: 'api' } })
     await flushPromises()
+    await wrapper.get('[data-testid="agents-pane-statusbar-reveal"]').trigger('click')
 
-    expect(wrapper.get('[data-testid="agents-pane-statusbar-workspace"]').text()).toBe('Web App')
+    expect(client.revealWorkspace).toHaveBeenCalledWith('web-app')
   })
 
   it('offers no editor action when no editor is configured', async () => {
@@ -580,7 +581,8 @@ describe('AgentsMode', () => {
     const { wrapper } = await mountAgentsMode('/workspaces/web-app?chat=7')
 
     expect(client.resumeSession).toHaveBeenCalledWith({ id: '7' })
-    expect(wrapper.get('[data-testid="agents-pane-statusbar-workspace"]').text()).toBe('Web App')
+    await wrapper.get('[data-testid="agents-pane-statusbar-reveal"]').trigger('click')
+    expect(client.revealWorkspace).toHaveBeenCalledWith('web-app')
   })
 
   it('reattaches and canonicalizes a routed chat that still uses its legacy numeric ID', async () => {
@@ -622,7 +624,7 @@ describe('AgentsMode', () => {
     expect(sidebar.find('[data-testid="agents-sidebar-workspaces-empty"]').exists()).toBe(false)
   })
 
-  it('holds the opening pane and its status bar while a routed chat resolves', async () => {
+  it('holds the opening pane and its workspace actions while a routed chat resolves', async () => {
     const client = fakeClient()
     client.allSessions.mockReturnValue(new Promise(() => {}))
     mocks.createAgentWorkspacesClient.mockReturnValue(client)
@@ -630,7 +632,7 @@ describe('AgentsMode', () => {
 
     expect(wrapper.find('[data-testid="agents-pane-empty"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="agents-pane-opening"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="agents-pane-statusbar-workspace"]').text()).toBe('Web App')
+    expect(wrapper.find('[data-testid="agents-pane-statusbar"]').exists()).toBe(true)
   })
 
   // A route naming another chat is a request to switch, whatever the pane is
