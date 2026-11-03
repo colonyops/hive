@@ -5,7 +5,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -63,5 +62,5 @@ func TestDocMessagingNamesRealFlags(t *testing.T) {
 	guide := buf.String()
 
 	assert.NotContains(t, guide, "--new")
-	assert.False(t, strings.Contains(guide, "hive ls"), "the guide points at hive session list")
+	assert.NotContains(t, guide, "hive ls", "the guide points at hive session list")
 }

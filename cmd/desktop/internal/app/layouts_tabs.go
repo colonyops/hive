@@ -6,6 +6,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/internal/domain/drive"
+	"github.com/colonyops/hive/internal/ops/layout"
 )
 
 // TabView names a view that opens as a tab beside a chat or Code session.
@@ -45,9 +46,9 @@ func parseTabView(s string) (TabView, error) {
 type TabPlacement string
 
 const (
-	TabPlacementBehind TabPlacement = "behind"
-	TabPlacementBeside TabPlacement = "beside"
-	TabPlacementBelow  TabPlacement = "below"
+	TabPlacementBehind TabPlacement = layout.PlacementBehind
+	TabPlacementBeside TabPlacement = layout.PlacementBeside
+	TabPlacementBelow  TabPlacement = layout.PlacementBelow
 )
 
 // TabVerb names one change to a session's panel layout; it is the verb of the
@@ -64,11 +65,6 @@ const (
 	TabVerbTurn       TabVerb = "turn"
 )
 
-const (
-	minSplitShare = 0.2
-	maxSplitShare = 0.8
-)
-
 // parseTabPlacement reads an empty placement as behind, the one that never
 // takes the screen.
 func parseTabPlacement(s string) (TabPlacement, error) {
@@ -78,7 +74,7 @@ func parseTabPlacement(s string) (TabPlacement, error) {
 	case TabPlacementBehind, TabPlacementBeside, TabPlacementBelow:
 		return p, nil
 	}
-	return "", Errorf(KindInvalid, "placement %q is not one of behind, beside, below", s)
+	return "", Errorf(KindInvalid, "placement %q is not one of %s", s, strings.Join(layout.Placements, ", "))
 }
 
 // TabRef is a tab as an agent names it: a view, plus for a Code session's
@@ -374,8 +370,8 @@ func (s *LayoutsService) ClosePanel(ctx context.Context, session, tab string) er
 // its nearest split. A share outside [0.2, 0.8] is refused: the UI clamps to
 // the same range, and an agent that asks for 0.95 should learn it cannot have it.
 func (s *LayoutsService) ResizeSplit(ctx context.Context, session, tab string, share float64) error {
-	if share < minSplitShare || share > maxSplitShare {
-		return Errorf(KindInvalid, "share %v is outside %v to %v", share, minSplitShare, maxSplitShare)
+	if share < layout.MinSplitShare || share > layout.MaxSplitShare {
+		return Errorf(KindInvalid, "share %v is outside %v to %v", share, layout.MinSplitShare, layout.MaxSplitShare)
 	}
 	caller, ref, err := s.resolveTabCall(ctx, session, tab)
 	if err != nil {

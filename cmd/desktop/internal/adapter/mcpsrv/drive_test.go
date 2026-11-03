@@ -192,7 +192,7 @@ func TestTabToolsPublishTheRequest(t *testing.T) {
 		return append([]events.SessionLayoutRequested(nil), tabs...)
 	}
 
-	text := callErr(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "path": "plans/ghost.md"})
+	text := callErr(t, session, "tab_open", map[string]any{"caller": id, "view": "drive", "path": "plans/ghost.md"})
 	assert.Contains(t, text, "not_found", "the document must exist")
 
 	var wrote documentView
@@ -203,7 +203,7 @@ func TestTabToolsPublishTheRequest(t *testing.T) {
 		Path      string  `json:"path"`
 		Window    *string `json:"window"`
 	}
-	call(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "path": "plans/auth.md", "placement": "beside"}, &opened)
+	call(t, session, "tab_open", map[string]any{"caller": id, "view": "drive", "path": "plans/auth.md", "placement": "beside"}, &opened)
 	assert.Equal(t, "open", opened.Requested)
 	require.NotNil(t, opened.Window, "the result always carries window")
 	assert.Empty(t, *opened.Window, "and it is empty for a drive tab")
@@ -213,7 +213,7 @@ func TestTabToolsPublishTheRequest(t *testing.T) {
 		Requested string `json:"requested"`
 		View      string `json:"view"`
 	}
-	call(t, session, "close_tab", map[string]any{"session": id, "view": "drive"}, &closed)
+	call(t, session, "tab_close", map[string]any{"caller": id, "view": "drive"}, &closed)
 	assert.Equal(t, "close", closed.Requested)
 
 	assert.Equal(t, []events.SessionLayoutRequested{
@@ -221,19 +221,19 @@ func TestTabToolsPublishTheRequest(t *testing.T) {
 		{Session: id, Space: "workspaces/demo", Verb: "close", View: "drive"},
 	}, waitTabs(2))
 
-	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "diff"})
+	text = callErr(t, session, "tab_open", map[string]any{"caller": id, "view": "diff"})
 	assert.Contains(t, text, "invalid", "a chat has only a Drive tab")
-	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "terminal"})
+	text = callErr(t, session, "tab_open", map[string]any{"caller": id, "view": "terminal"})
 	assert.Contains(t, text, "a chat has one terminal", "new terminals belong to a Code session")
-	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "terminal", "window": "@3", "name": "x"})
+	text = callErr(t, session, "tab_open", map[string]any{"caller": id, "view": "terminal", "window": "@3", "name": "x"})
 	assert.Contains(t, text, "window places an existing terminal")
-	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "name": "x"})
+	text = callErr(t, session, "tab_open", map[string]any{"caller": id, "view": "drive", "name": "x"})
 	assert.Contains(t, text, "apply only to the terminal view")
-	text = callErr(t, session, "close_tab", map[string]any{"session": id, "view": "terminal", "window": "@3"})
+	text = callErr(t, session, "tab_close", map[string]any{"caller": id, "view": "terminal", "window": "@3"})
 	assert.Contains(t, text, "a chat's terminal is the chat")
-	text = callErr(t, session, "open_tab", map[string]any{"session": "global", "view": "drive"})
+	text = callErr(t, session, "tab_open", map[string]any{"caller": "global", "view": "drive"})
 	assert.Contains(t, text, "invalid", "the shared space has no tabs")
-	text = callErr(t, session, "close_tab", map[string]any{"session": "global", "view": "drive"})
+	text = callErr(t, session, "tab_close", map[string]any{"caller": "global", "view": "drive"})
 	assert.Contains(t, text, "invalid", "the shared space has no tabs")
 }
 
@@ -254,12 +254,12 @@ func TestLayoutToolsPublishAndRefuse(t *testing.T) {
 		Requested string `json:"requested"`
 		Tab       string `json:"tab"`
 	}
-	call(t, session, "move_tab", map[string]any{"session": id, "tab": "terminal", "placement": "below", "anchor": "drive"}, &moved)
+	call(t, session, "tab_move", map[string]any{"caller": id, "tab": "terminal", "placement": "below", "anchor": "drive"}, &moved)
 	assert.Equal(t, "move", moved.Requested)
-	call(t, session, "focus_tab", map[string]any{"session": id, "tab": "drive"}, &moved)
-	call(t, session, "turn_split", map[string]any{"session": id, "tab": "terminal"}, &moved)
-	call(t, session, "close_panel", map[string]any{"session": id, "tab": "drive"}, &moved)
-	call(t, session, "resize_split", map[string]any{"session": id, "tab": "drive", "share": 0.3}, &moved)
+	call(t, session, "tab_focus", map[string]any{"caller": id, "tab": "drive"}, &moved)
+	call(t, session, "split_turn", map[string]any{"caller": id, "tab": "terminal"}, &moved)
+	call(t, session, "panel_close", map[string]any{"caller": id, "tab": "drive"}, &moved)
+	call(t, session, "split_resize", map[string]any{"caller": id, "tab": "drive", "share": 0.3}, &moved)
 
 	require.Eventually(t, func() bool {
 		mu.Lock()
@@ -277,11 +277,11 @@ func TestLayoutToolsPublishAndRefuse(t *testing.T) {
 		{Session: id, Space: space, Verb: "resize", View: "drive", Share: 0.3},
 	}, got)
 
-	text := callErr(t, session, "resize_split", map[string]any{"session": id, "tab": "drive", "share": 0.1})
+	text := callErr(t, session, "split_resize", map[string]any{"caller": id, "tab": "drive", "share": 0.1})
 	assert.Contains(t, text, "invalid")
-	text = callErr(t, session, "focus_tab", map[string]any{"session": id, "tab": "@3"})
+	text = callErr(t, session, "tab_focus", map[string]any{"caller": id, "tab": "@3"})
 	assert.Contains(t, text, "a chat has one terminal; say terminal")
-	text = callErr(t, session, "move_tab", map[string]any{"session": id, "tab": "diff"})
+	text = callErr(t, session, "tab_move", map[string]any{"caller": id, "tab": "diff"})
 	assert.Contains(t, text, "invalid")
 }
 
@@ -311,7 +311,7 @@ func TestGetLayoutAnswersFromTheMirror(t *testing.T) {
 		} `json:"splits"`
 	}
 	var before layout
-	call(t, session, "get_layout", map[string]any{"session": id}, &before)
+	call(t, session, "layout_get", map[string]any{"caller": id}, &before)
 	assert.False(t, before.Known)
 	assert.NotEmpty(t, before.Note)
 	assert.Empty(t, before.Panels)
@@ -326,7 +326,7 @@ func TestGetLayoutAnswersFromTheMirror(t *testing.T) {
 		}},
 	}))
 	var after layout
-	call(t, session, "get_layout", map[string]any{"session": id}, &after)
+	call(t, session, "layout_get", map[string]any{"caller": id}, &after)
 	assert.True(t, after.Known)
 	assert.True(t, after.OnScreen)
 	assert.Equal(t, "p1", after.FocusedPanel)

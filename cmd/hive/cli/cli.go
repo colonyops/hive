@@ -34,6 +34,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/servers"
+	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/pkg/buildinfo"
@@ -396,6 +397,9 @@ Run 'hive new' to create a new session from the current repository.`,
 		exitCode = 1
 		if exitErr, ok := errors.AsType[commands.ExitError](runErr); ok {
 			exitCode = exitErr.Code
+		}
+		if opErr, ok := errors.AsType[*ops.Error](runErr); ok {
+			exitCode = ops.ExitCode(opErr.Kind)
 		}
 	}
 

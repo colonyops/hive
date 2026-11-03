@@ -99,9 +99,7 @@ func TestCanvasToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 	res, err := session.ListTools(t.Context(), nil)
 	require.NoError(t, err)
 
-	names := make([]string, 0, len(res.Tools))
 	for _, tool := range res.Tools {
-		names = append(names, tool.Name)
 		assert.NotEmpty(t, tool.Description, "tool %s has no description", tool.Name)
 
 		require.NotNil(t, tool.InputSchema, "tool %s has no input schema", tool.Name)
@@ -109,12 +107,6 @@ func TestCanvasToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 		require.True(t, ok, "tool %s input schema is not an object", tool.Name)
 		assert.Equal(t, "object", schema["type"], "tool %s input schema is not type object", tool.Name)
 	}
-
-	assert.ElementsMatch(t, []string{
-		"put_block", "put_blocks", "remove_block", "set_frontmatter", "clear_canvas", "delete_canvas", "read_canvas", "list_canvases",
-		"list_documents", "read_document", "write_document", "move_document", "delete_document", "open_tab", "close_tab",
-		"move_tab", "focus_tab", "close_panel", "resize_split", "turn_split", "get_layout",
-	}, names)
 }
 
 func TestCanvasRoundTrip(t *testing.T) {
@@ -220,24 +212,24 @@ func TestTabToolsReportTheAsk(t *testing.T) {
 		View      string `json:"view"`
 		Path      string `json:"path"`
 	}
-	call(t, session, "open_tab", map[string]any{"session": id, "view": "drive"}, &opened)
+	call(t, session, "tab_open", map[string]any{"caller": id, "view": "drive"}, &opened)
 	assert.Equal(t, "open", opened.Requested, "the result reports the ask, not a tab state nothing acknowledges")
 	assert.Equal(t, "drive", opened.View)
 	assert.Empty(t, opened.Path)
 
-	text := callErr(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "path": "ghost"})
+	text := callErr(t, session, "tab_open", map[string]any{"caller": id, "view": "drive", "path": "ghost"})
 	assert.Contains(t, text, "not_found", "pinning the Drive tab to a canvas requires it to exist")
 
 	var wrote canvasWriteView
 	call(t, session, "put_block", map[string]any{"session": id, "canvas": "plan", "id": "a", "kind": "markdown", "body": "x"}, &wrote)
-	call(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "path": "plan", "placement": "beside"}, &opened)
+	call(t, session, "tab_open", map[string]any{"caller": id, "view": "drive", "path": "plan", "placement": "beside"}, &opened)
 	assert.Equal(t, "canvases/plan.canvas.json", opened.Path, "a canvas name resolves to its file")
 
 	var closed struct {
 		Requested string `json:"requested"`
 		View      string `json:"view"`
 	}
-	call(t, session, "close_tab", map[string]any{"session": id, "view": "drive"}, &closed)
+	call(t, session, "tab_close", map[string]any{"caller": id, "view": "drive"}, &closed)
 	assert.Equal(t, "close", closed.Requested)
 	assert.Equal(t, "drive", closed.View)
 }

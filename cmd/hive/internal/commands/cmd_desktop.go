@@ -11,7 +11,9 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/cmd/hive/internal/opscli"
 	"github.com/colonyops/hive/internal/domain/deeplink"
+	"github.com/colonyops/hive/internal/ops/catalog"
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
@@ -50,21 +52,40 @@ on a code or chats link opens the session's Drive tab. A drive <space> is shared
 hive://drive/colonyops/hive/plans/x.md; with no path the link opens the
 space. Escape each part, so "release plan" is release%20plan.
 
-The running desktop also serves its tab and layout tools to the CLI:
+The running desktop also serves its operations to the CLI, one command per
+MCP tool: "hive dt tab open drive" calls tab_open. Each takes its fields as
+flags, or the whole input as JSON with --input. They print the result as one
+JSON line and exit with a code for the kind of a refused call: invalid 2,
+not_found 3, conflict 4, unavailable 5, unauthenticated 6, any other 1.
 
-  layout; tab open|close|move|focus <tab>; panel close <tab>; split resize|turn <tab>
-
-They act on --session (default: $HIVE_AGENT_SESSION, else the current
+They act for --caller (default: $HIVE_AGENT_SESSION, else the current
 directory) and find the desktop through its endpoint file, or --url.`,
-		Commands: []*cli.Command{
-			cmd.openCmd(),
-			cmd.layoutCmd(),
-			cmd.tabCmd(),
-			cmd.panelCmd(),
-			cmd.splitCmd(),
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "caller",
+				Usage:   "Who the call acts for (default: $HIVE_AGENT_SESSION, else the current directory)",
+				Sources: cli.EnvVars("HIVE_AGENT_SESSION"),
+			},
+			&cli.StringFlag{
+				Name:    "url",
+				Usage:   "Base URL of Hive Desktop (default: $HIVE_DESKTOP_URL, else the running desktop)",
+				Sources: cli.EnvVars("HIVE_DESKTOP_URL"),
+			},
 		},
+		Commands: append([]*cli.Command{cmd.openCmd()}, cmd.opCommands()...),
 	})
 	return app
+}
+
+// opCommands builds a command for every desktop operation in the catalog.
+// A spec the CLI cannot spell is a programming error that the parity test
+// catches.
+func (cmd *DesktopCmd) opCommands() []*cli.Command {
+	commands, err := opscli.DesktopCommands(catalog.All(), cmd.call, desktopCaller)
+	if err != nil {
+		panic(err)
+	}
+	return commands
 }
 
 func (cmd *DesktopCmd) openCmd() *cli.Command {

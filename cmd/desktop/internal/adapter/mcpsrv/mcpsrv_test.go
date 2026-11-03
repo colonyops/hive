@@ -127,9 +127,7 @@ func TestToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 	res, err := session.ListTools(t.Context(), nil)
 	require.NoError(t, err)
 
-	names := make([]string, 0, len(res.Tools))
 	for _, tool := range res.Tools {
-		names = append(names, tool.Name)
 		assert.NotEmpty(t, tool.Description, "tool %s has no description", tool.Name)
 
 		// The input schema is what a model calls through, so it must be present
@@ -139,18 +137,6 @@ func TestToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 		require.True(t, ok, "tool %s input schema is not an object", tool.Name)
 		assert.Equal(t, "object", schema["type"], "tool %s input schema is not type object", tool.Name)
 	}
-
-	assert.ElementsMatch(t, []string{
-		"get_status", "read_diagnostics", "list_profiles", "get_flow", "list_feeds", "list_inbox",
-		"list_inbox_item_events", "list_item_sessions", "list_sessions", "edit_session_tags", "list_actions", "list_applets", "refresh_sources",
-		"list_action_runs", "get_action_run",
-		"create_profile", "delete_profile",
-		"get_profile_image", "set_profile_image", "clear_profile_image",
-		"get_node_image", "set_node_image", "clear_node_image",
-		"execute_flow",
-		"list_workspaces", "list_schedules", "put_schedule", "remove_schedule",
-		"preview_schedule", "schedule_runs",
-	}, names)
 }
 
 func TestToolsListMatchesGolden(t *testing.T) {
