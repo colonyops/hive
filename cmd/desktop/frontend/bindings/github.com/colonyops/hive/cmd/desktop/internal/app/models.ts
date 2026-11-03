@@ -325,11 +325,16 @@ export interface DiagnosticsSnapshot {
 }
 
 /**
- * DiffCommentInput is a comment on rows of a session's diff. Unlike a Drive
- * comment it stays in the frontend until it is sent: the lines it points at move
- * whenever the agent edits the file, so nothing here keeps it in hive.db.
+ * DiffCommentInput is a comment on rows of a session's diff, on one file as a
+ * whole, or on the changes as a whole, as Kind says. Unlike a Drive comment it
+ * stays in the frontend until it is sent: the lines it points at move whenever
+ * the agent edits the file, so nothing here keeps it in hive.db.
  */
 export interface DiffCommentInput {
+    /**
+     * "" (rows) | file | review
+     */
+    "kind"?: string;
     "path": string;
 
     /**

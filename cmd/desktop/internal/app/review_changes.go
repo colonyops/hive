@@ -8,10 +8,12 @@ import (
 	"github.com/colonyops/hive/internal/domain/terminal"
 )
 
-// DiffCommentInput is a comment on rows of a session's diff. Unlike a Drive
-// comment it stays in the frontend until it is sent: the lines it points at move
-// whenever the agent edits the file, so nothing here keeps it in hive.db.
+// DiffCommentInput is a comment on rows of a session's diff, on one file as a
+// whole, or on the changes as a whole, as Kind says. Unlike a Drive comment it
+// stays in the frontend until it is sent: the lines it points at move whenever
+// the agent edits the file, so nothing here keeps it in hive.db.
 type DiffCommentInput struct {
+	Kind      string `json:"kind,omitempty"` // "" (rows) | file | review
 	Path      string `json:"path"`
 	StartSide string `json:"startSide"` // additions | deletions
 	StartLine int    `json:"startLine"`
@@ -77,11 +79,26 @@ func diffComments(comments []DiffCommentInput) ([]review.DiffComment, error) {
 	converted := make([]review.DiffComment, 0, len(comments))
 	for _, c := range comments {
 		text := strings.TrimSpace(c.Text)
+		kind := review.DiffCommentKind(c.Kind)
+		switch kind {
+		case review.DiffCommentReview:
+			if text == "" {
+				return nil, Errorf(KindInvalid, "an overall comment needs text")
+			}
+			converted = append(converted, review.DiffComment{Kind: kind, Text: text})
+			continue
+		case review.DiffCommentFile, review.DiffCommentLines:
+		default:
+			return nil, Errorf(KindInvalid, "a comment has an unknown kind %q", c.Kind)
+		}
 		switch {
 		case c.Path == "":
 			return nil, Errorf(KindInvalid, "a comment needs a file")
 		case text == "":
 			return nil, Errorf(KindInvalid, "a comment on %s needs text", c.Path)
+		case kind == review.DiffCommentFile:
+			converted = append(converted, review.DiffComment{Kind: kind, Path: c.Path, Text: text, Commit: c.Commit, Staged: c.Staged})
+			continue
 		case c.StartLine < 1 || c.EndLine < 1:
 			return nil, Errorf(KindInvalid, "lines %d-%d of %s are not a range", c.StartLine, c.EndLine, c.Path)
 		case !validDiffSide(review.DiffSide(c.StartSide)) || !validDiffSide(review.DiffSide(c.EndSide)):

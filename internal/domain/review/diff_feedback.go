@@ -22,10 +22,22 @@ const maxQuotedDiffLines = 30
 
 const shortCommitLength = 8
 
+// DiffCommentKind says what a comment is about. The zero value is a run of rows.
+type DiffCommentKind string
+
+const (
+	DiffCommentLines DiffCommentKind = ""
+	// DiffCommentFile is about one file as a whole, and has no rows.
+	DiffCommentFile DiffCommentKind = "file"
+	// DiffCommentReview is about the changes as a whole, and has no file.
+	DiffCommentReview DiffCommentKind = "review"
+)
+
 // DiffComment is feedback on a run of rows in one file's diff. The run starts
 // and ends on a side each, because a unified diff can select from a removed
 // line into an added one.
 type DiffComment struct {
+	Kind      DiffCommentKind
 	Path      string
 	StartSide DiffSide
 	StartLine int
@@ -52,6 +64,9 @@ type DiffComment struct {
 //
 //	I reviewed the changes in this session and have <n> pieces of feedback:
 //
+//	## Overall
+//	> <comment on the changes as a whole>
+//
 //	## 1. <path> (lines <start>-<end>)
 //	```
 //	<quote>
@@ -76,17 +91,38 @@ func DiffFeedback(comments []DiffComment) string {
 		b.WriteString("\nRemoved lines are numbered as in the version the diff started from. Other lines are numbered as in the working tree, unless a comment names another version.\n")
 	}
 
-	sorted := slices.Clone(comments)
-	slices.SortStableFunc(sorted, func(a, b DiffComment) int {
+	overall, rest := splitOverall(comments)
+	if len(overall) > 0 {
+		b.WriteString("\n## Overall\n")
+		for i, c := range overall {
+			if i > 0 {
+				b.WriteString("\n")
+			}
+			writeQuoted(&b, strings.TrimSpace(dropControl(c.Text, true)))
+		}
+	}
+
+	slices.SortStableFunc(rest, func(a, b DiffComment) int {
 		return cmp.Or(cmp.Compare(a.Path, b.Path), cmp.Compare(a.StartLine, b.StartLine))
 	})
-	for i, c := range sorted {
+	for i, c := range rest {
 		c.Path, c.Commit = dropControl(c.Path, false), dropControl(c.Commit, false)
 		fmt.Fprintf(&b, "\n## %d. %s (%s)\n", i+1, c.Path, diffLineLabel(c))
 		writeFencedQuote(&b, dropControl(c.Quote, true))
 		writeQuoted(&b, strings.TrimSpace(dropControl(c.Text, true)))
 	}
 	return b.String()
+}
+
+func splitOverall(comments []DiffComment) (overall, rest []DiffComment) {
+	for _, c := range comments {
+		if c.Kind == DiffCommentReview {
+			overall = append(overall, c)
+		} else {
+			rest = append(rest, c)
+		}
+	}
+	return overall, rest
 }
 
 func dropControl(s string, keepNewlines bool) string {
@@ -110,6 +146,9 @@ func diffLineLabel(c DiffComment) string {
 }
 
 func diffLineRange(c DiffComment) string {
+	if c.Kind == DiffCommentFile {
+		return "whole file"
+	}
 	removed := func(side DiffSide) string {
 		if side == DiffSideDeletions {
 			return "removed "
