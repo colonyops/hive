@@ -18,7 +18,7 @@
 // keep the unauthenticated-behind-loopback posture the REST API had (ADR
 // terminal-transport, ADR a-workspace-declares-its-own-authority). The one
 // process the drive server starts is the user's shell, with no input, in a
-// detached window of the caller's own Code session; close_tab kills a window
+// detached window of the caller's own Code session; tab_close kills a window
 // of that session (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows).
 package mcpsrv
 

@@ -33,7 +33,7 @@ func (ctrl *DriveController) registerCanvas(srv *mcp.Server) {
 }
 
 type canvasBlock struct {
-	ID        string `json:"id"              jsonschema:"The agent-chosen id put_block was called with."`
+	ID        string `json:"id"              jsonschema:"The agent-chosen id canvas_block_put was called with."`
 	Kind      string `json:"kind"            jsonschema:"markdown, html or link."`
 	Title     string `json:"title,omitempty"`
 	Body      string `json:"body,omitempty"  jsonschema:"The markdown source of a markdown block, or an html block's markup as you wrote it."`
@@ -67,7 +67,7 @@ type canvasMetaResult struct {
 // canvasWriteResult is what a mutation answers: the canvas metadata rather
 // than every block, so revising a large canvas does not re-send the whole
 // surface into the agent's context. Block carries the stored block for a
-// single-block write; read_canvas returns the full surface.
+// single-block write; canvas_get returns the full surface.
 type canvasWriteResult struct {
 	Workspace   string         `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, owner/repo for a hive session's repository, or @global."`
 	Name        string         `json:"name"`

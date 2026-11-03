@@ -226,7 +226,7 @@ func TestProfileLifecycle(t *testing.T) {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	}
-	call(t, session, "create_profile", map[string]any{"name": "Work"}, &created)
+	call(t, session, "profile_create", map[string]any{"name": "Work"}, &created)
 	require.NotEmpty(t, created.ID)
 	assert.Equal(t, "Work", created.Name)
 
@@ -235,16 +235,16 @@ func TestProfileLifecycle(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"profiles"`
 	}
-	call(t, session, "list_profiles", struct{}{}, &listed)
+	call(t, session, "profile_list", struct{}{}, &listed)
 	ids := make([]string, 0, len(listed.Profiles))
 	for _, p := range listed.Profiles {
 		ids = append(ids, p.ID)
 	}
 	assert.Contains(t, ids, created.ID)
 
-	call(t, session, "delete_profile", map[string]any{"profileId": created.ID}, nil)
+	call(t, session, "profile_delete", map[string]any{"profileId": created.ID}, nil)
 
-	call(t, session, "list_profiles", struct{}{}, &listed)
+	call(t, session, "profile_list", struct{}{}, &listed)
 	ids = ids[:0]
 	for _, p := range listed.Profiles {
 		ids = append(ids, p.ID)
@@ -252,7 +252,7 @@ func TestProfileLifecycle(t *testing.T) {
 	assert.NotContains(t, ids, created.ID)
 }
 
-// Nothing else on the surface reports a node id, and execute_flow's nodeId and
+// Nothing else on the surface reports a node id, and flow_preview's nodeId and
 // the node-image tools all require one — so without this the headline tool
 // cannot be driven from the server alone.
 func TestGetFlowReportsNodeIDsAndWires(t *testing.T) {
@@ -273,7 +273,7 @@ func TestGetFlowReportsNodeIDsAndWires(t *testing.T) {
 			To   string `json:"to"`
 		} `json:"wires"`
 	}
-	call(t, session, "get_flow", map[string]any{"profileId": "hooks"}, &got)
+	call(t, session, "flow_get", map[string]any{"profileId": "hooks"}, &got)
 
 	assert.Equal(t, "hooks", got.ID)
 	assert.True(t, got.Valid)
@@ -303,7 +303,7 @@ func TestGetFlowReportsAProfileThatDoesNotParse(t *testing.T) {
 		Error string `json:"error"`
 		Nodes []any  `json:"nodes"`
 	}
-	call(t, session, "get_flow", map[string]any{"profileId": "broken"}, &got)
+	call(t, session, "flow_get", map[string]any{"profileId": "broken"}, &got)
 
 	assert.False(t, got.Valid)
 	assert.NotEmpty(t, got.Error, "the load error is the whole point of answering at all")
@@ -314,7 +314,7 @@ func TestGetFlowReportsAnUnknownProfileAsNotFound(t *testing.T) {
 	t.Parallel()
 	_, session := testSession(t)
 
-	assert.Contains(t, callErr(t, session, "get_flow", map[string]any{"profileId": "nope"}),
+	assert.Contains(t, callErr(t, session, "flow_get", map[string]any{"profileId": "nope"}),
 		string(app.KindNotFound))
 }
 
@@ -583,19 +583,19 @@ func TestNodeImageLifecycle(t *testing.T) {
 		NodeID    string `json:"nodeId"`
 		HasImage  bool   `json:"hasImage"`
 	}
-	call(t, session, "set_node_image", map[string]any{
+	call(t, session, "node_image_put", map[string]any{
 		"profileId": "hooks", "nodeId": "hook", "imageBase64": onePixelPNG,
 	}, &set)
 	assert.Equal(t, "hooks", set.ProfileID)
 	assert.Equal(t, "hook", set.NodeID)
 	assert.True(t, set.HasImage)
 
-	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "get_node_image", Arguments: target})
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "node_image_get", Arguments: target})
 	require.NoError(t, err)
 	require.False(t, res.IsError, textOf(res))
 	require.Len(t, res.Content, 1)
 	img, ok := res.Content[0].(*mcp.ImageContent)
-	require.True(t, ok, "get_node_image must answer with image content")
+	require.True(t, ok, "node_image_get must answer with image content")
 	decoded, err := png.Decode(bytes.NewReader(img.Data))
 	require.NoError(t, err)
 	assert.Equal(t, image.Rect(0, 0, 128, 128), decoded.Bounds(), "the mark is normalized to 128x128")
@@ -603,9 +603,9 @@ func TestNodeImageLifecycle(t *testing.T) {
 	var cleared struct {
 		HasImage bool `json:"hasImage"`
 	}
-	call(t, session, "clear_node_image", target, &cleared)
+	call(t, session, "node_image_delete", target, &cleared)
 	assert.False(t, cleared.HasImage)
-	assert.Contains(t, callErr(t, session, "get_node_image", target), string(app.KindNotFound))
+	assert.Contains(t, callErr(t, session, "node_image_get", target), string(app.KindNotFound))
 }
 
 // Handler() runs stateless with JSON responses rather than SSE, which is not
@@ -752,41 +752,41 @@ func TestProfileImageRoundTripsThroughBase64(t *testing.T) {
 	var created struct {
 		ID string `json:"id"`
 	}
-	call(t, session, "create_profile", map[string]any{"name": "Work"}, &created)
+	call(t, session, "profile_create", map[string]any{"name": "Work"}, &created)
 
 	var withImage struct {
 		HasImage bool `json:"hasImage"`
 	}
-	call(t, session, "set_profile_image", map[string]any{
+	call(t, session, "profile_image_put", map[string]any{
 		"profileId": created.ID, "imageBase64": onePixelPNG,
 	}, &withImage)
 	assert.True(t, withImage.HasImage)
 
 	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "get_profile_image", Arguments: map[string]any{"profileId": created.ID},
+		Name: "profile_image_get", Arguments: map[string]any{"profileId": created.ID},
 	})
 	require.NoError(t, err)
 	require.False(t, res.IsError, textOf(res))
 	require.Len(t, res.Content, 1)
 	img, ok := res.Content[0].(*mcp.ImageContent)
-	require.True(t, ok, "get_profile_image must answer with image content")
+	require.True(t, ok, "profile_image_get must answer with image content")
 	assert.Equal(t, "image/png", img.MIMEType)
 	assert.NotEmpty(t, img.Data)
 
 	var cleared struct {
 		HasImage bool `json:"hasImage"`
 	}
-	call(t, session, "clear_profile_image", map[string]any{"profileId": created.ID}, &cleared)
+	call(t, session, "profile_image_delete", map[string]any{"profileId": created.ID}, &cleared)
 	assert.False(t, cleared.HasImage)
 }
 
-// delete_profile is the only irreversible tool here, so its answer must never
+// profile_delete is the only irreversible tool here, so its answer must never
 // be a constant: a mistyped id has to be distinguishable from a deletion.
 func TestDeleteProfileReportsAnUnknownProfileAsNotFound(t *testing.T) {
 	t.Parallel()
 	_, session := testSession(t)
 
-	assert.Contains(t, callErr(t, session, "delete_profile", map[string]any{"profileId": "this-never-existed"}),
+	assert.Contains(t, callErr(t, session, "profile_delete", map[string]any{"profileId": "this-never-existed"}),
 		string(app.KindNotFound))
 }
 
@@ -800,11 +800,11 @@ func TestProfileImageDistinguishesAMissingProfileFromAMissingAvatar(t *testing.T
 	var created struct {
 		ID string `json:"id"`
 	}
-	call(t, session, "create_profile", map[string]any{"name": "Work"}, &created)
+	call(t, session, "profile_create", map[string]any{"name": "Work"}, &created)
 
-	assert.Contains(t, callErr(t, session, "get_profile_image", map[string]any{"profileId": created.ID}),
+	assert.Contains(t, callErr(t, session, "profile_image_get", map[string]any{"profileId": created.ID}),
 		"has no image")
-	missing := callErr(t, session, "get_profile_image", map[string]any{"profileId": "nope"})
+	missing := callErr(t, session, "profile_image_get", map[string]any{"profileId": "nope"})
 	assert.Contains(t, missing, string(app.KindNotFound))
 	assert.NotContains(t, missing, "has no image")
 }
@@ -815,7 +815,7 @@ func TestAToolErrorCarriesTheWrappedCause(t *testing.T) {
 	t.Parallel()
 	_, session := testSession(t)
 
-	msg := callErr(t, session, "clear_profile_image", map[string]any{"profileId": "nope"})
+	msg := callErr(t, session, "profile_image_delete", map[string]any{"profileId": "nope"})
 	assert.Contains(t, msg, string(app.KindNotFound), "a missing profile is not an invalid request")
 	assert.Contains(t, msg, "not found")
 }
@@ -829,12 +829,12 @@ func TestSetProfileImageAcceptsADataURL(t *testing.T) {
 	var created struct {
 		ID string `json:"id"`
 	}
-	call(t, session, "create_profile", map[string]any{"name": "Work"}, &created)
+	call(t, session, "profile_create", map[string]any{"name": "Work"}, &created)
 
 	var got struct {
 		HasImage bool `json:"hasImage"`
 	}
-	call(t, session, "set_profile_image", map[string]any{
+	call(t, session, "profile_image_put", map[string]any{
 		"profileId": created.ID, "imageBase64": "data:image/png;base64," + onePixelPNG,
 	}, &got)
 	assert.True(t, got.HasImage)
@@ -847,9 +847,9 @@ func TestSetProfileImageRejectsNonBase64(t *testing.T) {
 	var created struct {
 		ID string `json:"id"`
 	}
-	call(t, session, "create_profile", map[string]any{"name": "Work"}, &created)
+	call(t, session, "profile_create", map[string]any{"name": "Work"}, &created)
 
-	msg := callErr(t, session, "set_profile_image", map[string]any{
+	msg := callErr(t, session, "profile_image_put", map[string]any{
 		"profileId": created.ID, "imageBase64": "not base64!!",
 	})
 	assert.Contains(t, msg, string(app.KindInvalid))
@@ -859,11 +859,11 @@ func TestExecuteFlowNeedsExactlyOneFlowSource(t *testing.T) {
 	t.Parallel()
 	_, session := testSession(t)
 
-	msg := callErr(t, session, "execute_flow", map[string]any{
+	msg := callErr(t, session, "flow_preview", map[string]any{
 		"nodeId":   "n1",
 		"messages": []map[string]any{{"ID": "1"}},
 	})
-	assert.Contains(t, msg, "exactly one of flowId, flow, or flowYaml")
+	assert.Contains(t, msg, "exactly one of profileId, flow, or flowYaml")
 }
 
 // A JSON-object payload has to survive the schema and reach the node. It is
@@ -875,25 +875,25 @@ func TestExecuteFlowDeliversAnObjectPayloadAndCommitsNothing(t *testing.T) {
 	core, session := testSession(t)
 
 	var got struct {
-		FlowID string `json:"flowId"`
-		Nodes  []struct {
+		ProfileID string `json:"profileId"`
+		Nodes     []struct {
 			NodeID   string `json:"nodeId"`
 			Received []struct {
 				Payload json.RawMessage `json:"Payload"`
 			} `json:"received"`
 		} `json:"nodes"`
 	}
-	call(t, session, "execute_flow", map[string]any{
-		"flowYaml":       inlineFlowYAML,
-		"flowIdOverride": "scratch",
-		"nodeId":         "fn",
-		"detail":         "full",
+	call(t, session, "flow_preview", map[string]any{
+		"flowYaml":          inlineFlowYAML,
+		"profileIdOverride": "scratch",
+		"nodeId":            "fn",
+		"detail":            "full",
 		"messages": []map[string]any{{
 			"ID": "1", "Topic": "t", "Payload": map[string]any{"a": 1},
 		}},
 	}, &got)
 
-	assert.Equal(t, "scratch", got.FlowID)
+	assert.Equal(t, "scratch", got.ProfileID)
 	require.NotEmpty(t, got.Nodes)
 	require.NotEmpty(t, got.Nodes[0].Received)
 	assert.JSONEq(t, `{"a":1}`, string(got.Nodes[0].Received[0].Payload))
@@ -921,7 +921,7 @@ func TestExecuteFlowDetailControlsHowManyCopiesOfAPayloadComeBack(t *testing.T) 
 	) {
 		t.Helper()
 		args := map[string]any{
-			"flowYaml": inlineFlowYAML, "flowIdOverride": "scratch", "nodeId": "fn",
+			"flowYaml": inlineFlowYAML, "profileIdOverride": "scratch", "nodeId": "fn",
 			"messages": []map[string]any{{"ID": "1", "Topic": "t", "Payload": map[string]any{"a": 1}}},
 		}
 		if detail != "" {
@@ -936,7 +936,7 @@ func TestExecuteFlowDetailControlsHowManyCopiesOfAPayloadComeBack(t *testing.T) 
 				Emitted  *[]any `json:"emitted"`
 			} `json:"nodes"`
 		}
-		call(t, session, "execute_flow", args, &got)
+		call(t, session, "flow_preview", args, &got)
 		require.NotEmpty(t, got.Nodes)
 		return got.Nodes, got.Detail
 	}
@@ -978,8 +978,8 @@ func TestExecuteFlowDistinguishesAnEmptyEmissionFromAnOmittedOne(t *testing.T) {
 			Emitted *[]any `json:"emitted"`
 		} `json:"nodes"`
 	}
-	call(t, session, "execute_flow", map[string]any{
-		"flowId": "hooks", "nodeId": "hook",
+	call(t, session, "flow_preview", map[string]any{
+		"profileId": "hooks", "nodeId": "hook",
 		"messages": []map[string]any{{"Key": "k", "Payload": map[string]any{"a": 1}}},
 	}, &got)
 
@@ -997,7 +997,7 @@ func TestExecuteFlowRejectsAnUnknownDetailLevel(t *testing.T) {
 	t.Parallel()
 	_, session := testSession(t)
 
-	msg := callErr(t, session, "execute_flow", map[string]any{
+	msg := callErr(t, session, "flow_preview", map[string]any{
 		"flowYaml": inlineFlowYAML, "nodeId": "fn", "detail": "verbose",
 		"messages": []map[string]any{{"ID": "1"}},
 	})
@@ -1025,7 +1025,7 @@ const onePixelPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP
 
 // A single function node the dry run injects into, wired to nothing. It is
 // inline so the test exercises the unsaved-edit path, which is the reason
-// execute_flow takes a document at all.
+// flow_preview takes a document at all.
 const inlineFlowYAML = `version: 1
 name: Scratch
 enabled: false

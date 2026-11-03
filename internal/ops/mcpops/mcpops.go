@@ -178,20 +178,11 @@ const (
 	errorTypeTool     = "tool_error"
 )
 
-// Instrument makes every call of a tool root a trigger span and record its
-// duration (ADR a-span-is-a-trigger-or-a-wait-and-its-count-per-trigger-is-bounded-by-configuration).
+// instrumentRaw makes every call of a tool root a trigger span and record
+// its duration (ADR a-span-is-a-trigger-or-a-wait-and-its-count-per-trigger-is-bounded-by-configuration).
 // The span is named from the registered tool rather than from the request,
 // so a client naming a tool that does not exist cannot mint a span name: the
 // SDK refuses that call before any handler runs.
-func Instrument[In, Out any](name string, handler mcp.ToolHandlerFor[In, Out]) mcp.ToolHandlerFor[In, Out] {
-	t := newTiming(name)
-	return func(ctx context.Context, req *mcp.CallToolRequest, in In) (res *mcp.CallToolResult, out Out, err error) {
-		ctx, done := t.start(ctx)
-		defer func() { done(err) }()
-		return handler(ctx, req, in)
-	}
-}
-
 func instrumentRaw(name string, call func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, any, error)) mcp.ToolHandler {
 	t := newTiming(name)
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {

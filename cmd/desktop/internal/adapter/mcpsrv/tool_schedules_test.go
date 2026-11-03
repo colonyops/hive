@@ -55,7 +55,7 @@ func TestScheduleToolsEditOneWorkspaceEntryInPlace(t *testing.T) {
 			Schedules []string `json:"schedules"`
 		} `json:"workspaces"`
 	}
-	call(t, session, "list_workspaces", map[string]any{}, &workspaces)
+	call(t, session, "workspace_list", map[string]any{}, &workspaces)
 	byDir := map[string]string{}
 	for _, w := range workspaces.Workspaces {
 		byDir[w.Dir] = w.Problem
@@ -66,7 +66,7 @@ func TestScheduleToolsEditOneWorkspaceEntryInPlace(t *testing.T) {
 	assert.NotEmpty(t, byDir["broken"], "a workspace whose manifest does not parse still lists, with its problem")
 
 	var put scheduleRow
-	call(t, session, "put_schedule", map[string]any{
+	call(t, session, "schedule_put", map[string]any{
 		"workspace": "demo", "id": "weekly", "name": "Weekly summary", "cron": "0 9 * * 5", "prompt": "Summarize {{ .Workspace.Name }}.",
 	}, &put)
 	assert.Equal(t, "weekly", put.ID)
@@ -84,7 +84,7 @@ func TestScheduleToolsEditOneWorkspaceEntryInPlace(t *testing.T) {
 		Prompt         string   `json:"prompt"`
 		FirstRunPrompt string   `json:"firstRunPrompt"`
 	}
-	call(t, session, "preview_schedule", map[string]any{
+	call(t, session, "schedule_preview", map[string]any{
 		"workspace": "demo", "cron": "0 9 * * 5",
 		"prompt": "Summarize {{ .Workspace.Name }}{{ if .LastRun }} since {{ date \"2006-01-02\" .LastRun }}{{ end }}.",
 	}, &preview)
@@ -98,20 +98,20 @@ func TestScheduleToolsEditOneWorkspaceEntryInPlace(t *testing.T) {
 	}
 	// HIVE_AGENT_WORKSPACE holds the workspace's absolute path, and the
 	// argument descriptions send an agent to it, so the path is accepted too.
-	call(t, session, "list_schedules", map[string]any{"workspace": filepath.Dir(demoManifest)}, &listed)
+	call(t, session, "schedule_list", map[string]any{"workspace": filepath.Dir(demoManifest)}, &listed)
 	assert.Equal(t, "demo", listed.Workspace)
 	require.Len(t, listed.Schedules, 1)
 	assert.Equal(t, "weekly", listed.Schedules[0].ID)
 
-	assert.Contains(t, callErr(t, session, "schedule_runs", map[string]any{"workspace": "demo", "id": "never-existed"}), "not_found",
+	assert.Contains(t, callErr(t, session, "schedule_run_list", map[string]any{"workspace": "demo", "id": "never-existed"}), "not_found",
 		"an id that is neither declared nor has run is not an empty history")
-	assert.Contains(t, callErr(t, session, "put_schedule", map[string]any{"workspace": "demo", "id": "bad", "cron": "not a cron", "prompt": "go"}), "invalid")
+	assert.Contains(t, callErr(t, session, "schedule_put", map[string]any{"workspace": "demo", "id": "bad", "cron": "not a cron", "prompt": "go"}), "invalid")
 
 	var removed struct {
-		Removed bool `json:"removed"`
+		Deleted bool `json:"deleted"`
 	}
-	call(t, session, "remove_schedule", map[string]any{"workspace": "demo", "id": "weekly"}, &removed)
-	assert.True(t, removed.Removed)
-	call(t, session, "list_schedules", map[string]any{"workspace": "demo"}, &listed)
+	call(t, session, "schedule_delete", map[string]any{"workspace": "demo", "id": "weekly"}, &removed)
+	assert.True(t, removed.Deleted)
+	call(t, session, "schedule_list", map[string]any{"workspace": "demo"}, &listed)
 	assert.Empty(t, listed.Schedules)
 }
