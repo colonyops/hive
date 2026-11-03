@@ -34,7 +34,7 @@ a-workspace-declares-its-own-authority).
 
 ## Stability
 
-`beta`. Each tool is declared once in the operation catalog, with a
+`stable`. Each tool is declared once in the operation catalog, with a
 noun-first name (`inbox_list`, `schedule_put`), and the same operation is a
 `hive dt` command (`hive dt inbox list`).
 
