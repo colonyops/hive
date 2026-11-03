@@ -113,17 +113,20 @@ func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 	input, err := cmd.fr.Read()
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to read input")
-		return iojson.WriteError(fmt.Sprintf("read input: %s", err), nil)
+		_ = iojson.WriteError(fmt.Sprintf("read input: %s", err), nil)
+		return errAlreadyReported
 	}
 
 	if err := input.Validate(); err != nil {
 		logger.Error().Err(err).Msg("input validation failed")
-		return iojson.WriteError(fmt.Sprintf("invalid input: %s", err), nil)
+		_ = iojson.WriteError(fmt.Sprintf("invalid input: %s", err), nil)
+		return errAlreadyReported
 	}
 
 	if err := cmd.validateAgents(input); err != nil {
 		logger.Error().Err(err).Msg("agent validation failed")
-		return iojson.WriteError(fmt.Sprintf("invalid input: %s", err), nil)
+		_ = iojson.WriteError(fmt.Sprintf("invalid input: %s", err), nil)
+		return errAlreadyReported
 	}
 
 	output := BatchOutput{

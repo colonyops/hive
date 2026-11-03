@@ -386,12 +386,17 @@ Run 'hive new' to create a new session from the current repository.`,
 	exitCode := 0
 	runErr := app.Run(ctx, os.Args)
 	if runErr != nil {
-		fmt.Fprintln(os.Stderr, runErr)
+		if msg := runErr.Error(); msg != "" {
+			fmt.Fprintln(os.Stderr, msg)
+		}
 		var unreachable *wire.UnreachableError
 		if errors.As(runErr, &unreachable) && unreachable.Server != "" {
 			fmt.Fprintln(os.Stderr, "Check your servers with: hive servers ls")
 		}
 		exitCode = 1
+		if exitErr, ok := errors.AsType[commands.ExitError](runErr); ok {
+			exitCode = exitErr.Code
+		}
 	}
 
 	os.Exit(exitCode)

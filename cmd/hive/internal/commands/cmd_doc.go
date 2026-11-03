@@ -96,9 +96,9 @@ Your inbox topic follows the convention: ` + "`agent.{session-id}.inbox`" + `
 
 ## Checking Your Inbox
 
-Read unread messages only (since last check):
+Read unread messages only:
 ` + "```bash" + `
-hive msg sub -t agent.{id}.inbox --new
+hive msg inbox
 ` + "```" + `
 
 Read all messages:
@@ -110,7 +110,7 @@ hive msg sub -t agent.{id}.inbox
 
 First, discover active agents:
 ` + "```bash" + `
-hive ls --json
+hive session list --json
 ` + "```" + `
 
 Then send to their inbox:
@@ -158,11 +158,12 @@ I completed the authentication refactor. Tests are passing.
 | Command | Description |
 |---------|-------------|
 | ` + "`hive session info`" + ` | Get your session ID |
-| ` + "`hive ls --json`" + ` | List agents with inbox info |
+| ` + "`hive session list --json`" + ` | List agents with inbox info |
 | ` + "`hive msg sub -t TOPIC`" + ` | Subscribe to a topic |
-| ` + "`hive msg sub -t TOPIC --new`" + ` | Subscribe to unread only |
+| ` + "`hive msg sub -t TOPIC --listen`" + ` | Poll a topic for new messages |
+| ` + "`hive msg inbox`" + ` | Read your unread inbox messages |
 | ` + "`hive msg pub -t TOPIC MSG`" + ` | Publish a message |
-| ` + "`hive msg topic --new`" + ` | Generate a new topic ID |
+| ` + "`hive msg topic`" + ` | Generate a new topic ID |
 `
 	_, _ = fmt.Fprintln(w, guide)
 }

@@ -215,10 +215,9 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	if sessionID == "" {
 		if cmd.infoJSON {
 			_, _ = fmt.Fprintln(c.Root().Writer, "{\"error\":\"not in a hive session\"}")
-			return nil
+			return errAlreadyReported
 		}
-		fmt.Fprintf(os.Stderr, "Not in a hive session\nRun this command from within a hive session directory\n")
-		return nil
+		return errors.New("not in a hive session; run this command from within a hive session directory")
 	}
 
 	// Get full session details
