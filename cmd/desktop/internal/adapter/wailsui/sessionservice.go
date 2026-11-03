@@ -6,6 +6,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 )
 
 // SessionService is the frontend API for the New Session form and for managing
@@ -103,6 +104,16 @@ func (s *SessionService) SessionFileDiffs(ctx context.Context, id string, target
 		return nil, err
 	}
 	return sessionFileDiffsOf(diffs), nil
+}
+
+// SessionFileContext reads one file's diff with the whole file as context, so the
+// view can show the unchanged lines between hunks.
+func (s *SessionService) SessionFileContext(ctx context.Context, id string, target DiffTarget, path string) (SessionFileDiff, error) {
+	diff, err := s.sessions.SessionFileContext(ctx, id, target.gitstatus(), path)
+	if err != nil {
+		return SessionFileDiff{}, err
+	}
+	return sessionFileDiffsOf([]gitstatus.FileDiff{diff})[0], nil
 }
 
 // SessionBranches lists the full refs the session's checkout can compare against.

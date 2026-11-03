@@ -2,7 +2,9 @@
 import { computed } from 'vue'
 import IconCheck from '~icons/lucide/check'
 import IconChevronRight from '~icons/lucide/chevron-right'
+import IconMessageSquarePlus from '~icons/lucide/message-square-plus'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { documentIcon } from '../drive/driveIcon'
 import type { DiffEntry } from '../../composables/useFileDiffs'
 import { diffHasText } from '../../lib/diffItems'
@@ -17,7 +19,7 @@ const props = defineProps<{
   /** Prefixes the test ids, because the pinned header repeats a file's header in the stream. */
   testPrefix?: string
 }>()
-const emit = defineEmits<{ fold: []; 'toggle-viewed': []; 'open-editor': [] }>()
+const emit = defineEmits<{ fold: []; 'toggle-viewed': []; 'open-editor': []; comment: [rect: DOMRect] }>()
 
 const prefix = computed(() => props.testPrefix ?? `changes-file-${props.file.path}`)
 const status = computed(() => gitStatus(props.file.status))
@@ -85,6 +87,14 @@ const note = computed(() => {
       <span v-if="file.additions" class="text-severity-success">+{{ file.additions }}</span>
       <span v-if="file.deletions" class="ml-1.5 text-severity-error">-{{ file.deletions }}</span>
     </span>
+    <IconButton
+      label="Comment on this file"
+      tooltip="Comment on this file (c)"
+      :icon="IconMessageSquarePlus"
+      size="sm"
+      :data-testid="`${prefix}-comment`"
+      @click.stop="emit('comment', ($event.currentTarget as HTMLElement).getBoundingClientRect())"
+    />
     <button
       type="button"
       class="inline-flex h-5 shrink-0 cursor-pointer items-center gap-1 rounded-md border px-1.5 text-caption"

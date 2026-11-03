@@ -80,6 +80,17 @@ type DiffRange struct {
 	commit    string
 }
 
+// wholeFileContext is a context length past any file a diff read accepts, so
+// every unchanged line appears in the patch.
+const wholeFileContext = "--unified=1000000000"
+
+// WholeFile is diff with every unchanged line as context, so the patch holds
+// both versions of a file in full.
+func (d DiffRange) WholeFile() DiffRange {
+	d.args = slices.Concat([]string{wholeFileContext}, d.args)
+	return d
+}
+
 // WorkingTree compares the working tree with ref. It lists untracked files.
 func WorkingTree(ref string) DiffRange {
 	return DiffRange{args: []string{ref}, untracked: true}

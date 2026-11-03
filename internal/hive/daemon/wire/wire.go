@@ -270,27 +270,35 @@ func ChangesFromProto(p *daemonv1.ChangesResponse) gitstatus.Changes {
 func FileDiffsToProto(diffs []gitstatus.FileDiff) *daemonv1.FileDiffsResponse {
 	out := make([]*daemonv1.FileDiff, 0, len(diffs))
 	for _, d := range diffs {
-		out = append(out, &daemonv1.FileDiff{
-			Path:  validUTF8(d.Path),
-			State: d.State.String(),
-			Text:  d.Text,
-			Error: validUTF8(d.Error),
-		})
+		out = append(out, FileDiffToProto(d))
 	}
 	return &daemonv1.FileDiffsResponse{Diffs: out}
+}
+
+func FileDiffToProto(d gitstatus.FileDiff) *daemonv1.FileDiff {
+	return &daemonv1.FileDiff{
+		Path:  validUTF8(d.Path),
+		State: d.State.String(),
+		Text:  d.Text,
+		Error: validUTF8(d.Error),
+	}
 }
 
 func FileDiffsFromProto(p *daemonv1.FileDiffsResponse) []gitstatus.FileDiff {
 	out := make([]gitstatus.FileDiff, 0, len(p.GetDiffs()))
 	for _, d := range p.GetDiffs() {
-		out = append(out, gitstatus.FileDiff{
-			Path:  d.GetPath(),
-			State: gitstatus.FileDiffState(d.GetState()),
-			Text:  d.GetText(),
-			Error: d.GetError(),
-		})
+		out = append(out, FileDiffFromProto(d))
 	}
 	return out
+}
+
+func FileDiffFromProto(d *daemonv1.FileDiff) gitstatus.FileDiff {
+	return gitstatus.FileDiff{
+		Path:  d.GetPath(),
+		State: gitstatus.FileDiffState(d.GetState()),
+		Text:  d.GetText(),
+		Error: d.GetError(),
+	}
 }
 
 func LaunchOptionsFromProto(p *daemonv1.LaunchOptionsResponse) sessionsvc.LaunchOptions {

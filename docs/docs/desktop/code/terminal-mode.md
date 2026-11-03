@@ -185,11 +185,16 @@ Branch changes, Uncommitted, and Unstaged include untracked files.
 | <kbd>v</kbd> | Mark the file viewed, which folds it |
 | <kbd>o</kbd> | Fold or unfold the file |
 | <kbd>s</kbd> | Switch between unified and side by side |
+| <kbd>f</kbd> | Show one file or every file |
 | <kbd>/</kbd> or <kbd>⌘F</kbd> (Windows/Linux: <kbd>Ctrl+F</kbd>) | Search the diffs |
 | <kbd>[</kbd> <kbd>]</kbd> | Step to an older or newer commit |
 | <kbd>b</kbd> | Show or hide the file list |
+| <kbd>c</kbd> | Comment on the current file as a whole |
+| <kbd>C</kbd> | Comment on all the changes |
 | <kbd>r</kbd> | Show or hide the comments panel |
 | <kbd>⌘↵</kbd> (Windows/Linux: <kbd>Ctrl+Enter</kbd>) | Send your comments to the agent |
+
+Selecting a file in the list shows that file on its own. Press <kbd>f</kbd> or use the file button in the header to see every file again. Select the bar between two hunks to show the unchanged lines around them, 20 at a time.
 
 The view refreshes every 5 seconds while it's open and the window has focus. A viewed file comes back unviewed when it changes again. Viewed marks last until you quit Hive.
 
@@ -201,7 +206,7 @@ Press <kbd>/</kbd> or <kbd>⌘F</kbd> (Windows/Linux: <kbd>Ctrl+F</kbd>) to sear
 
 ### Comments
 
-To comment, drag across line numbers, click the **+** beside a line, or select code with the mouse. Type in the box that opens and press <kbd>⌘↵</kbd> (Windows/Linux: <kbd>Ctrl+Enter</kbd>). A label button saves that label as the comment. Comments appear under their lines and as rows in the comments panel, which the comment button in the header or <kbd>r</kbd> opens.
+To comment, drag across line numbers, click the **+** beside a line, or select code with the mouse. Type in the box that opens and press <kbd>⌘↵</kbd> (Windows/Linux: <kbd>Ctrl+Enter</kbd>). A label button saves that label as the comment. Comments appear under their lines and as rows in the comments panel, which the comment button in the header or <kbd>r</kbd> opens. To comment on a whole file, use the comment button on its header or press <kbd>c</kbd>. To comment on all the changes, use the comment button in the header or press <kbd>C</kbd>. These two kinds show only in the panel, and the agent reads comments on all the changes first.
 
 The send button in the header, which shows how many comments you've written, pastes them into the session's agent and submits them, then clears them. If the session has one agent, it goes straight there, even mid-turn. With several agents, a dialog asks which one. An agent waiting on a prompt can't receive comments, because the Enter would answer the prompt. If a send fails, or no agent is running, your comments stay and an error offers **Copy comments**, which copies them as the text the agent would have received.
 

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   scroll: null as ((top: number) => void) | null,
   tops: new Map<string, number>(),
   SessionFileDiffs: vi.fn(),
+  SessionFileContext: vi.fn(),
   OpenSessionInEditor: vi.fn(),
   setRenderOptions: vi.fn(() => Promise.resolve()),
   setOptions: vi.fn(),
@@ -24,11 +25,13 @@ const mocks = vi.hoisted(() => ({
   ChangesFeedback: vi.fn(),
   SendChanges: vi.fn(),
   writeText: vi.fn(),
+  lastOptions: null as { loadDiffFiles?: (diff: unknown) => Promise<unknown> } | null,
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   SessionChanges: mocks.SessionChanges,
   SessionBranches: mocks.SessionBranches,
   SessionFileDiffs: mocks.SessionFileDiffs,
+  SessionFileContext: mocks.SessionFileContext,
   OpenSessionInEditor: mocks.OpenSessionInEditor,
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reviewservice', () => ({
@@ -55,6 +58,7 @@ vi.mock('@pierre/diffs', async (importOriginal) => {
   class FakeCodeView {
     root: HTMLElement | null = null
     constructor(public options: Record<string, (...args: unknown[]) => HTMLElement>) {
+      mocks.lastOptions = options
       mocks.setOptions.mockClear()
       mocks.lineSelectionEnd = options.onLineSelectionEnd
     }
@@ -76,6 +80,10 @@ vi.mock('@pierre/diffs', async (importOriginal) => {
     scrollTo = mocks.scrollTo
     setOptions = mocks.setOptions
     setItems(items: FakeItem[]): void {
+      const kept = new Set(items.map((item) => `fake-${item.id}`))
+      for (const body of this.root?.querySelectorAll('[data-fake]') ?? []) {
+        if (!kept.has(body.getAttribute('data-fake')!)) body.remove()
+      }
       for (const item of items) {
         const id = `fake-${item.id}`
         const body = this.root?.querySelector(`[data-fake="${id}"]`) ?? document.createElement('div')
@@ -189,6 +197,72 @@ describe('ChangesView', () => {
     await wrapper.setProps({ keysActive: true })
     await press('j')
     expect(wrapper.get(testid('changes-row-b.go')).attributes('aria-selected')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('shows a file picked in the list on its own, and f goes back to every file', async () => {
+    const viewed = useChangesViewed()
+    viewed.setViewed('s1', 'b.go', fileVersion(file('b.go')), true)
+    const wrapper = await mountView()
+    const shown = () => wrapper.findAll('[data-fake]').map((body) => body.attributes('data-fake'))
+    expect(shown()).toHaveLength(2)
+
+    await wrapper.get(testid('changes-row-b.go')).trigger('click')
+    await flushPromises()
+    expect(shown()).toEqual(['fake-b.go'])
+    // A viewed file shown on its own opens rather than showing only its header.
+    expect(wrapper.get('[data-fake="fake-b.go"]').text()).toContain('new b.go')
+    await press('k')
+    expect(shown()).toEqual(['fake-a.go'])
+    wrapper.unmount()
+
+    const again = await mountView()
+    expect(again.findAll('[data-fake]')).toHaveLength(1)
+    await press('f')
+    expect(again.findAll('[data-fake]')).toHaveLength(2)
+    again.unmount()
+  })
+
+  it('says why more context could not be shown', async () => {
+    mocks.SessionFileContext.mockRejectedValue(new Error('the daemon is too old'))
+    const wrapper = await mountView()
+    const load = mocks.lastOptions!.loadDiffFiles!
+    await expect(load({ name: 'a.go', hunks: [], additionLines: [], deletionLines: [] })).rejects.toThrow()
+    expect(useToasts().toasts.value.map((toast) => toast.message)).toEqual([
+      'Could not show more of a.go: the daemon is too old',
+    ])
+    wrapper.unmount()
+  })
+
+  it('reads the whole file when a separator asks for more context', async () => {
+    mocks.SessionFileContext.mockResolvedValue({
+      path: 'a.go',
+      text: '@@ -1,3 +1,3 @@\n top\n-old a.go\n+new a.go\n bottom\n',
+      ...noState,
+    })
+    const wrapper = await mountView()
+    const load = mocks.lastOptions!.loadDiffFiles!
+    const files = await load({
+      name: 'a.go',
+      cacheKey: 'k',
+      hunks: [
+        {
+          additionStart: 2,
+          additionCount: 1,
+          additionLineIndex: 0,
+          deletionStart: 2,
+          deletionCount: 1,
+          deletionLineIndex: 0,
+        },
+      ],
+      additionLines: ['new a.go\n'],
+      deletionLines: ['old a.go\n'],
+    })
+    expect(mocks.SessionFileContext).toHaveBeenCalledWith('s1', expect.objectContaining({ base: 'branch' }), 'a.go')
+    expect(files).toEqual({
+      oldFile: { name: 'a.go', contents: 'top\nold a.go\nbottom\n', cacheKey: 'k:old' },
+      newFile: { name: 'a.go', contents: 'top\nnew a.go\nbottom\n', cacheKey: 'k:new' },
+    })
     wrapper.unmount()
   })
 
@@ -923,6 +997,39 @@ describe('ChangesView', () => {
     wrapper = await mountView()
     expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
     expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
+    wrapper.unmount()
+  })
+
+  it('comments on a whole file from its header and on all the changes from the toolbar', async () => {
+    mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
+    mocks.SendChanges.mockResolvedValue(undefined)
+    const wrapper = await mountView()
+    const write = async (text: string) => {
+      const field = document.querySelector<HTMLTextAreaElement>(testid('changes-comment-text'))!
+      field.value = text
+      field.dispatchEvent(new Event('input'))
+      await flushPromises()
+      document.querySelector<HTMLButtonElement>(testid('changes-comment-save'))!.click()
+      await flushPromises()
+    }
+
+    await wrapper.get(testid('changes-file-b.go-comment')).trigger('click')
+    expect(document.querySelector(testid('changes-comment-popover'))!.textContent).toContain('b.go Whole file')
+    await write('needs tests')
+    await wrapper.get(testid('changes-review-comment')).trigger('click')
+    expect(document.querySelector(testid('changes-comment-popover'))!.textContent).toContain('Overall')
+    await write('split this up')
+
+    await press('r')
+    const panel = wrapper.get(testid('changes-review')).text()
+    expect(panel.indexOf('split this up')).toBeLessThan(panel.indexOf('needs tests'))
+    expect(wrapper.get(testid('changes-row-b.go-comments')).text()).toBe('1')
+    await wrapper.get(testid('changes-send')).trigger('click')
+    await flushPromises()
+    expect(mocks.SendChanges).toHaveBeenCalledWith('s1', '%1', [
+      expect.objectContaining({ kind: 'review', path: '', text: 'split this up', startLine: 0 }),
+      expect.objectContaining({ kind: 'file', path: 'b.go', text: 'needs tests', startLine: 0 }),
+    ])
     wrapper.unmount()
   })
 

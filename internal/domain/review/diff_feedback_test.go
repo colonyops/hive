@@ -37,6 +37,35 @@ I reviewed the changes in this session and have 3 pieces of feedback:
 `, got)
 }
 
+func TestDiffFeedbackPutsOverallCommentsFirstAndNamesWholeFiles(t *testing.T) {
+	got := DiffFeedback([]DiffComment{
+		{Path: "a.go", StartSide: DiffSideAdditions, StartLine: 2, EndSide: DiffSideAdditions, EndLine: 2, Text: "first"},
+		{Kind: DiffCommentReview, Text: "split this up"},
+		{Kind: DiffCommentFile, Path: "a.go", Text: "needs tests"},
+		{Kind: DiffCommentFile, Path: "b.go", Text: "staged", Staged: true},
+		{Kind: DiffCommentReview, Text: "otherwise fine"},
+	})
+
+	assert.Equal(t, `# Code Review Feedback
+
+I reviewed the changes in this session and have 5 pieces of feedback:
+
+## Overall
+> split this up
+
+> otherwise fine
+
+## 1. a.go (whole file)
+> needs tests
+
+## 2. a.go (line 2)
+> first
+
+## 3. b.go (whole file of the staged version)
+> staged
+`, got)
+}
+
 func TestDiffFeedbackNamesRemovedLines(t *testing.T) {
 	cases := map[string]DiffComment{
 		"(removed line 4)":           {StartSide: DiffSideDeletions, StartLine: 4, EndSide: DiffSideDeletions, EndLine: 4},

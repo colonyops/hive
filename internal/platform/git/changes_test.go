@@ -3,6 +3,7 @@ package git_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -276,6 +277,34 @@ func TestFileDiffReadsEachStatus(t *testing.T) {
 	assert.Contains(t, renamed, "rename from moved.txt")
 	assert.Contains(t, renamed, "+edited\n")
 	assert.Contains(t, diffOf(t, g, dir, git.ChangedFile{Path: "[id].txt", Status: git.FileStatusAdded}), "+brackets\n")
+}
+
+func TestFileDiffWholeFileHoldsEveryLine(t *testing.T) {
+	t.Parallel()
+	dir, g := newRepo(t)
+	lines := make([]string, 40)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line %d", i+1)
+	}
+	writeFile(t, dir, "long.txt", strings.Join(lines, "\n")+"\n")
+	runGit(t, dir, "add", "long.txt")
+	runGit(t, dir, "commit", "-q", "-m", "long")
+	// A new length, because git trusts a same-size file whose mtime matches the
+	// index entry and reports no change.
+	lines[19] = "line twenty, changed"
+	writeFile(t, dir, "long.txt", strings.Join(lines, "\n")+"\n")
+
+	file := git.ChangedFile{Path: "long.txt", Status: git.FileStatusModified}
+	partial, err := g.FileDiff(t.Context(), dir, git.WorkingTree("HEAD"), file)
+	require.NoError(t, err)
+	assert.NotContains(t, partial, " line 1\n")
+
+	whole, err := g.FileDiff(t.Context(), dir, git.WorkingTree("HEAD").WholeFile(), file)
+	require.NoError(t, err)
+	assert.Contains(t, whole, "@@ -1,40 +1,40 @@")
+	assert.Contains(t, whole, " line 1\n")
+	assert.Contains(t, whole, " line 40\n")
+	assert.Contains(t, whole, "-line 20\n+line twenty, changed\n")
 }
 
 func TestFileDiffIgnoresColorAndPrefixConfig(t *testing.T) {

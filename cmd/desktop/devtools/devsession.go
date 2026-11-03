@@ -60,7 +60,22 @@ const (
 // whole point, and it is lost if the runner starts killing groups on its own
 // copy of the same Ctrl+C. A close that delivers no signal at all is caught by
 // terminalClosed instead, so neither half of this depends on the other.
+//
+// The instance's hive daemon is the third thing it owns. The app starts the
+// daemon detached, so it outlives the app on purpose; here that would leave a
+// stale build serving the next session. The session builds hive first, stops
+// a daemon an earlier session left, and stops its own on the way out.
 func runDevSession(logger zerolog.Logger, argv []string) error {
+	if worktree, err := findWorktree(); err == nil {
+		if daemon, ok := devDaemonFromEnv(logger, worktree); ok {
+			if err := daemon.build(); err != nil {
+				return err
+			}
+			daemon.stop()
+			defer daemon.stop()
+		}
+	}
+
 	runner := exec.Command(argv[0], argv[1:]...) //nolint:noctx // lifetime is this supervisor's, not a request's
 	runner.Stdin, runner.Stdout, runner.Stderr = os.Stdin, os.Stdout, os.Stderr
 	runner.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

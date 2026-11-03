@@ -257,6 +257,21 @@ type FileDiff struct {
 // ReadFileDiffs returns one FileDiff per path, in order. It reads only paths in
 // the current change list. A session with no checkout reports every path Gone.
 func (s *Service) ReadFileDiffs(ctx context.Context, sess session.Session, target DiffTarget, paths []string) ([]FileDiff, error) {
+	return s.readFileDiffs(ctx, sess, target, paths, false)
+}
+
+// ReadFileContext returns the diff of one path with the whole file as context,
+// so a reader can show the unchanged lines between hunks. It reads only a path
+// in the current change list, as ReadFileDiffs does.
+func (s *Service) ReadFileContext(ctx context.Context, sess session.Session, target DiffTarget, path string) (FileDiff, error) {
+	diffs, err := s.readFileDiffs(ctx, sess, target, []string{path}, true)
+	if err != nil {
+		return FileDiff{}, err
+	}
+	return diffs[0], nil
+}
+
+func (s *Service) readFileDiffs(ctx context.Context, sess session.Session, target DiffTarget, paths []string, wholeFile bool) ([]FileDiff, error) {
 	diffs := make([]FileDiff, len(paths))
 	for i, path := range paths {
 		diffs[i] = FileDiff{Path: path, State: FileDiffStateGone}
@@ -295,7 +310,11 @@ func (s *Service) ReadFileDiffs(ctx context.Context, sess session.Session, targe
 	if len(toRead) == 0 {
 		return diffs, nil
 	}
-	for i, result := range s.git.FileDiffs(ctx, sess.Path, list.diff, toRead) {
+	diff := list.diff
+	if wholeFile {
+		diff = diff.WholeFile()
+	}
+	for i, result := range s.git.FileDiffs(ctx, sess.Path, diff, toRead) {
 		diffs[readAt[i]] = s.fileDiffOf(sess.Path, toRead[i], result)
 	}
 	return diffs, nil

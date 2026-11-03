@@ -35,6 +35,10 @@ const (
 	EnvAgentWorkspacesDir = "HIVE_DESKTOP_AGENT_WORKSPACES_DIR"
 
 	EnvPerfEnabled = "HIVE_DESKTOP_DEVELOPMENT_PERF_ENABLED"
+
+	// EnvDaemonHivePath is the environment name behind daemon.hive_path,
+	// duplicated for the same reason as EnvAgentWorkspacesDir.
+	EnvDaemonHivePath = "HIVE_DESKTOP_DAEMON_HIVE_PATH"
 )
 
 // Paths is the immutable startup snapshot of every desktop-owned location.

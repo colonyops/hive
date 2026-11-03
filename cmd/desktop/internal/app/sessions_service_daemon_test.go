@@ -12,8 +12,10 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemon"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	"github.com/colonyops/hive/internal/hive/hivetest"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
 
@@ -116,4 +118,26 @@ func TestSessionsServiceEditsTagsOverTheDaemon(t *testing.T) {
 
 	_, err = svc.EditSessionTags(t.Context(), created.ID, []string{"a,b"}, nil)
 	assert.Equal(t, KindInvalid, KindOf(err))
+}
+
+// oldDaemon answers as a daemon whose hive predates FileContext.
+type oldDaemon struct {
+	sessionapi.API
+}
+
+func (oldDaemon) SessionFileContext(context.Context, string, gitstatus.DiffTarget, string) (gitstatus.FileDiff, error) {
+	return gitstatus.FileDiff{}, daemonclient.ErrFileContextUnsupported
+}
+
+func TestSessionFileContextReadsALocalSessionWhenTheDaemonIsTooOld(t *testing.T) {
+	local := newHiveHarness(t, engineOptions{})
+	local.save(t, reviewSession())
+	svc := newSessionsService(SessionsDeps{Hive: local.engine, Sessions: oldDaemon{}, Logger: zerolog.Nop()})
+
+	diff, err := svc.SessionFileContext(t.Context(), "s1", gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, "a.go")
+	require.NoError(t, err)
+	assert.Equal(t, "a.go", diff.Path)
+
+	_, err = svc.SessionFileContext(t.Context(), "elsewhere", gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, "a.go")
+	require.ErrorIs(t, err, daemonclient.ErrFileContextUnsupported, "a session the engine does not hold keeps the daemon's answer")
 }

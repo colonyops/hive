@@ -188,6 +188,14 @@ func (s *sessionServer) FileDiffs(ctx context.Context, req *connect.Request[daem
 	return connect.NewResponse(wire.FileDiffsToProto(diffs)), nil
 }
 
+func (s *sessionServer) FileContext(ctx context.Context, req *connect.Request[daemonv1.FileContextRequest]) (*connect.Response[daemonv1.FileContextResponse], error) {
+	diff, err := s.api.SessionFileContext(ctx, req.Msg.GetId(), wire.DiffTargetFromProto(req.Msg.GetTarget()), req.Msg.GetPath())
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(&daemonv1.FileContextResponse{Diff: wire.FileDiffToProto(diff)}), nil
+}
+
 func (s *sessionServer) Branches(ctx context.Context, req *connect.Request[daemonv1.BranchesRequest]) (*connect.Response[daemonv1.BranchesResponse], error) {
 	refs, err := s.api.SessionBranches(ctx, req.Msg.GetId())
 	if err != nil {

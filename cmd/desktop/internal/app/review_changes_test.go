@@ -78,6 +78,9 @@ func TestSendChangesRefusals(t *testing.T) {
 		{"nothing to send", "%1", "s1", nil, KindInvalid},
 		{"empty comment", "%1", "s1", []DiffCommentInput{diffComment("  ")}, KindInvalid},
 		{"bad range", "%1", "s1", []DiffCommentInput{badRange}, KindInvalid},
+		{"unknown kind", "%1", "s1", []DiffCommentInput{{Kind: "hunk", Path: "a.go", Text: "x"}}, KindInvalid},
+		{"empty overall comment", "%1", "s1", []DiffCommentInput{{Kind: "review", Text: " "}}, KindInvalid},
+		{"file comment without a file", "%1", "s1", []DiffCommentInput{{Kind: "file", Text: "x"}}, KindInvalid},
 		{"agent on a prompt", "%2", "s1", []DiffCommentInput{diffComment("x")}, KindConflict},
 		{"a shell pane", "%3", "s1", []DiffCommentInput{diffComment("x")}, KindNotFound},
 		{"another session's pane", "%9", "s1", []DiffCommentInput{diffComment("x")}, KindNotFound},
@@ -107,6 +110,17 @@ func TestChangesFeedbackFormatsWithoutTheSession(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, text, "a.go (line 4)")
 	assert.Contains(t, text, "> rename")
+}
+
+func TestChangesFeedbackTakesFileAndOverallComments(t *testing.T) {
+	t.Parallel()
+	text, err := newReviewService(ReviewDeps{}).ChangesFeedback(t.Context(), []DiffCommentInput{
+		{Kind: "review", Text: "looks close"},
+		{Kind: "file", Path: "a.go", Text: "add tests"},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, text, "## Overall\n> looks close\n")
+	assert.Contains(t, text, "## 1. a.go (whole file)\n> add tests\n")
 }
 
 func TestChangesTargetsTellApartAgentsThatReadTheSame(t *testing.T) {

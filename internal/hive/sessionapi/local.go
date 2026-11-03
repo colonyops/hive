@@ -97,6 +97,14 @@ func (l *Local) SessionFileDiffs(ctx context.Context, id string, target gitstatu
 	return l.engine.GitStatus().ReadFileDiffs(ctx, sess, target, paths)
 }
 
+func (l *Local) SessionFileContext(ctx context.Context, id string, target gitstatus.DiffTarget, path string) (gitstatus.FileDiff, error) {
+	sess, err := l.engine.Sessions().GetSession(ctx, id)
+	if err != nil {
+		return gitstatus.FileDiff{}, err
+	}
+	return l.engine.GitStatus().ReadFileContext(ctx, sess, target, path)
+}
+
 func (l *Local) SessionBranches(ctx context.Context, id string) ([]string, error) {
 	sess, err := l.engine.Sessions().GetSession(ctx, id)
 	if err != nil {
