@@ -479,6 +479,13 @@ root is in iCloud Drive or another File Provider. Separate worktrees therefore
 have separate config, workspaces, data, databases and logs. Explicit
 `HIVE_DESKTOP_DATA_DIR` / `HIVE_DESKTOP_CONFIG_DIR` values still win.
 
+The instance's hive is isolated too: `hive.db` lives in `.hive-desktop/hive`,
+which starts empty, and the hive daemon runs from `.hive-desktop/bin/hive`,
+built from the worktree each time `desktop:dev` starts. The session stops
+that daemon when it starts and when it ends, so the installed daemon and its
+sessions are never touched. Create test sessions from the dev app's New
+Session form, or with `HIVE_DATA_DIR=.hive-desktop/hive hive ...`.
+
 `mise run desktop:dev:onboarding` recreates `.hive-desktop-onboarding/` with blank data
 and config, then launches the live providers with `launch.onboarding.env`. It
 talks directly to GitHub and does not load `overrides.env`, so normal development

@@ -102,9 +102,11 @@ func TestPrepareReuseFreshAndReset(t *testing.T) {
 	// registration.
 	mcpURLs := readMCPConfig(t, tools.mcpPath)
 	assert.Equal(t, map[string]string{"hive-desktop-ui": "http://127.0.0.1:" + strconv.Itoa(mcpPort) + "/mcp"}, mcpURLs)
-	// hive.db is not seeded; dev points at the installed hive data dir instead.
+	// The instance runs its own hive daemon, so it gets its own empty hive data
+	// dir: the installed hive.db is neither shared nor seeded.
 	assert.NoFileExists(t, filepath.Join(tools.instanceDir, "data", "hive.db"))
-	assert.Equal(t, sourceData, launch[settings.EnvHiveDataDir])
+	assert.Equal(t, filepath.Join(tools.instanceDir, "hive"), launch[settings.EnvHiveDataDir])
+	assert.Equal(t, filepath.Join(tools.instanceDir, "bin", "hive"), launch[settings.EnvDaemonHivePath])
 	assert.FileExists(t, filepath.Join(tools.instanceDir, "data", "desktop", "desktop-pipeline.db"))
 	assert.FileExists(t, filepath.Join(tools.instanceDir, "config", "actions.yml"))
 
@@ -131,38 +133,34 @@ func TestPrepareReuseFreshAndReset(t *testing.T) {
 	assert.NoFileExists(t, tools.mcpPath)
 }
 
-// The installed app follows the CLI's HIVE_DATA_DIR, so the dev instance has to
-// follow it too. Otherwise it reads a hive.db that nothing else writes.
-func TestPrepareFollowsTheCLIsHiveDataDir(t *testing.T) {
+// A daemon is the one writer of its data dir, so the instance never takes the
+// installed hive's, even one the shell exports.
+func TestPrepareKeepsTheHiveDataDirInTheInstance(t *testing.T) {
 	tools, _, _ := testDevtools(t)
-	cliData := t.TempDir()
-	t.Setenv(config.EnvDataDir, cliData)
+	t.Setenv(config.EnvDataDir, t.TempDir())
 
 	require.NoError(t, tools.prepare(false))
 	launch, err := tools.readLaunchIfPresent()
 	require.NoError(t, err)
-	assert.Equal(t, cliData, launch[settings.EnvHiveDataDir])
+	assert.Equal(t, filepath.Join(tools.instanceDir, "hive"), launch[settings.EnvHiveDataDir])
 }
 
-// A valid launch.env is reused as it is, so a HIVE_DATA_DIR the developer
-// exports after the instance exists has to reach it on the next prepare. The
-// ports stay: a running dev app holds them.
-func TestPrepareReuseFollowsALaterHiveDataDir(t *testing.T) {
+// A launch.env written before the instance had its own daemon names the
+// installed hive data dir and no daemon binary. Prepare regenerates it.
+func TestPrepareRegeneratesALaunchEnvThatSharesTheInstalledHive(t *testing.T) {
 	tools, sourceData, _ := testDevtools(t)
 	require.NoError(t, tools.prepare(false))
-	before, err := tools.readLaunchIfPresent()
+	launch, err := tools.readLaunchIfPresent()
 	require.NoError(t, err)
-	require.Equal(t, sourceData, before[settings.EnvHiveDataDir])
+	delete(launch, settings.EnvDaemonHivePath)
+	launch[settings.EnvHiveDataDir] = sourceData
+	require.NoError(t, writeDotenvAtomic(tools.launchPath, launch))
 
-	cliData := t.TempDir()
-	t.Setenv(config.EnvDataDir, cliData)
 	require.NoError(t, tools.prepare(false))
-
 	after, err := tools.readLaunchIfPresent()
 	require.NoError(t, err)
-	assert.Equal(t, cliData, after[settings.EnvHiveDataDir])
-	before[settings.EnvHiveDataDir] = cliData
-	assert.Equal(t, before, after, "nothing else in launch.env changes")
+	assert.Equal(t, filepath.Join(tools.instanceDir, "hive"), after[settings.EnvHiveDataDir])
+	assert.Equal(t, filepath.Join(tools.instanceDir, "bin", "hive"), after[settings.EnvDaemonHivePath])
 }
 
 // A deleted .mcp.json comes back on the next prepare, from the ports the

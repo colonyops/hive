@@ -1073,10 +1073,14 @@ then the CLI's `HIVE_DATA_DIR`, then `DataDir`. Both variables are read from
 the login shell, so a Dock launch sees what the user exported for the CLI.
 A login shell that cannot be read hides `HIVE_DATA_DIR`: the app falls back to
 `DataDir` for that run and logs a warning that names the directory.
-Development sets `HIVE_DESKTOP_HIVE_DATA_DIR` to the hive data dir the
-installed app uses (the shell's `HIVE_DATA_DIR`, else the installed `DataDir`),
-so `hive.db` is shared in dev too while the desktop's own state stays
-worktree-isolated. ADR desktop-configuration records the
+Development sets `HIVE_DESKTOP_HIVE_DATA_DIR` to `.hive-desktop/hive`, an
+empty hive data dir of the worktree's own, and `HIVE_DESKTOP_DAEMON_HIVE_PATH`
+to a hive built from the worktree. A daemon is the one writer of its data
+dir, so a branch build cannot serve the installed `hive.db` beside the
+installed daemon. `devtools run` builds that hive before each dev session and
+stops the instance's daemon at the start and the end of it, because the app
+starts the daemon detached and it would otherwise serve the next session with
+a stale build. ADR desktop-configuration records the
 configuration decision, and ADR both-programs-run-on-one-layered-hive-engine
 adds the `HIVE_DATA_DIR` fallback.
 
