@@ -1,6 +1,6 @@
 # Browser image version matches cmd/desktop/e2e/package-lock.json's @playwright/test.
 # Index digests retain the upstream multi-architecture manifests.
-FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+FROM mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
 ENV CI=1
 
 # The server-build action runtime uses git and tmux, and the remote lane's
