@@ -2,7 +2,11 @@
 // app-control MCP server.
 package sessions
 
-import "github.com/colonyops/hive/internal/ops"
+import (
+	"errors"
+
+	"github.com/colonyops/hive/internal/ops"
+)
 
 var Toolset = ops.Toolset{Name: "sessions", MCPPath: "/mcp"}
 
@@ -28,6 +32,13 @@ type SessionTagsUpdateIn struct {
 	SessionID string   `json:"sessionId"        jsonschema:"Session id, from session_list."`
 	Add       []string `json:"add,omitempty"    jsonschema:"Tags to add. A tag the session already carries is kept as it is."`
 	Remove    []string `json:"remove,omitempty" jsonschema:"Tags to remove, after the adds. A tag the session does not carry is ignored."`
+}
+
+func (in SessionTagsUpdateIn) Validate() error {
+	if len(in.Add) == 0 && len(in.Remove) == 0 {
+		return errors.New("provide add or remove")
+	}
+	return nil
 }
 
 var SessionTagsUpdate = ops.Spec[SessionTagsUpdateIn]{

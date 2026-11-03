@@ -145,10 +145,6 @@ func traceViews(traces []runtime.NodeTrace, detail string) []nodeTraceView {
 }
 
 func (ctrl *Controller) ExecuteFlow(ctx context.Context, in flows.FlowPreviewIn) (any, error) {
-	if err := validateFlowSource(in); err != nil {
-		return nil, err
-	}
-
 	document, err := flowDocument(in)
 	if err != nil {
 		return nil, err
@@ -182,30 +178,6 @@ func (ctrl *Controller) ExecuteFlow(ctx context.Context, in flows.FlowPreviewIn)
 		DryRunResult: result.Run,
 		Nodes:        traceViews(result.Run.Nodes, detail),
 	}, nil
-}
-
-func validateFlowSource(in flows.FlowPreviewIn) error {
-	sources := 0
-	for _, given := range []bool{in.ProfileID != "", len(in.Flow) > 0, in.FlowYAML != ""} {
-		if given {
-			sources++
-		}
-	}
-	if sources != 1 {
-		return app.Errorf(app.KindInvalid, "set exactly one of profileId, flow, or flowYaml")
-	}
-	if in.NodeID == "" {
-		return app.Errorf(app.KindInvalid, "nodeId is required")
-	}
-	if len(in.Messages) == 0 {
-		return app.Errorf(app.KindInvalid, "messages must not be empty")
-	}
-	switch in.Detail {
-	case "", ops.DetailSummary, flows.DetailEmitted, ops.DetailFull:
-	default:
-		return app.Errorf(app.KindInvalid, "detail must be one of %q, %q or %q", ops.DetailSummary, flows.DetailEmitted, ops.DetailFull)
-	}
-	return nil
 }
 
 // flowDocument renders whichever inline form was given back into bytes for the

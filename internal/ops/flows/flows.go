@@ -2,7 +2,11 @@
 // desktop's app-control MCP server.
 package flows
 
-import "github.com/colonyops/hive/internal/ops"
+import (
+	"errors"
+
+	"github.com/colonyops/hive/internal/ops"
+)
 
 var Toolset = ops.Toolset{Name: "flows", MCPPath: "/mcp"}
 
@@ -108,6 +112,25 @@ type FlowPreviewIn struct {
 	// is the whole world a kv.get sees.
 	KV     map[string]map[string]any `json:"kv,omitempty"     jsonschema:"Seeds an in-memory KV sandbox as nodeId -> key -> value; durable KV is neither read nor written."`
 	Detail string                    `json:"detail,omitempty" jsonschema:"How much of each message body to report — one of summary, emitted (the default) or full."`
+}
+
+func (in FlowPreviewIn) Validate() error {
+	sources := 0
+	for _, given := range []bool{in.ProfileID != "", len(in.Flow) > 0, in.FlowYAML != ""} {
+		if given {
+			sources++
+		}
+	}
+	if sources != 1 {
+		return errors.New("set exactly one of profileId, flow, or flowYaml")
+	}
+	if in.NodeID == "" {
+		return errors.New("nodeId is required")
+	}
+	if len(in.Messages) == 0 {
+		return errors.New("messages must not be empty")
+	}
+	return nil
 }
 
 // Message mirrors the desktop's message envelope for the wire. That envelope

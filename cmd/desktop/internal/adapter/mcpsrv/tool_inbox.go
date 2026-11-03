@@ -113,13 +113,13 @@ func (ctrl *Controller) ListInbox(ctx context.Context, in inbox.InboxListIn) (an
 	if in.Limit < 0 {
 		return nil, app.Errorf(app.KindInvalid, "limit must be positive")
 	}
-	detail, err := readDetail(in.Detail)
-	if err != nil {
-		return nil, err
-	}
+	detail := cmp.Or(in.Detail, ops.DetailSummary)
 	limit := cmp.Or(in.Limit, defaultListLimit)
 
-	var items []stores.InboxItem
+	var (
+		items []stores.InboxItem
+		err   error
+	)
 	switch {
 	case in.ExternalID != "":
 		items, err = ctrl.core.Inbox.FindItems(ctx, in.ProfileID, in.ExternalID)
@@ -144,20 +144,6 @@ func (ctrl *Controller) ListInbox(ctx context.Context, in inbox.InboxListIn) (an
 		return nil, err
 	}
 	return itemsResult{Items: views, Detail: detail}, nil
-}
-
-// readDetail resolves a read tool's detail argument. These tools have no middle
-// rung: there is one source-supplied field on each and it is either there or
-// not.
-func readDetail(detail string) (string, error) {
-	switch detail {
-	case "":
-		return ops.DetailSummary, nil
-	case ops.DetailSummary, ops.DetailFull:
-		return detail, nil
-	default:
-		return "", app.Errorf(app.KindInvalid, "detail must be %q or %q", ops.DetailSummary, ops.DetailFull)
-	}
 }
 
 // explainEmptyScope turns an empty listing into not_found when the profile or
@@ -218,16 +204,10 @@ type eventsResult struct {
 }
 
 func (ctrl *Controller) ListInboxItemEvents(ctx context.Context, in inbox.InboxEventListIn) (any, error) {
-	if in.ItemID == 0 && in.ExternalID == "" {
-		return nil, app.Errorf(app.KindInvalid, "provide itemId or externalId")
-	}
 	if in.Limit < 0 {
 		return nil, app.Errorf(app.KindInvalid, "limit must be positive")
 	}
-	detail, err := readDetail(in.Detail)
-	if err != nil {
-		return nil, err
-	}
+	detail := cmp.Or(in.Detail, ops.DetailSummary)
 	itemID, err := ctrl.resolveItemID(ctx, in.ItemID, in.ExternalID, in.ProfileID)
 	if err != nil {
 		return nil, err
@@ -277,9 +257,6 @@ type itemSessionsResult struct {
 // cannot account for is dropped, while a failed listing drops nothing — absent
 // evidence is never evidence of absence.
 func (ctrl *Controller) ListItemSessions(ctx context.Context, in inbox.InboxSessionListIn) (any, error) {
-	if in.ItemID == 0 && in.ExternalID == "" {
-		return nil, app.Errorf(app.KindInvalid, "provide itemId or externalId")
-	}
 	itemID, err := ctrl.resolveItemID(ctx, in.ItemID, in.ExternalID, in.ProfileID)
 	if err != nil {
 		return nil, err

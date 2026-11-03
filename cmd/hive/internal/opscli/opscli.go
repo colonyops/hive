@@ -174,9 +174,33 @@ func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) 
 					return err
 				}
 			}
+			if err := validate(op, args); err != nil {
+				return err
+			}
 			return run(ctx, c, args)
 		},
 	}, nil
+}
+
+// validate runs the input type's cross-field rules, so the CLI refuses the
+// same mistakes the desktop would without dialing it.
+func validate(op ops.Op, args map[string]any) error {
+	in := reflect.New(op.InputType())
+	v, ok := in.Interface().(ops.Validator)
+	if !ok {
+		return nil
+	}
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Errorf("encode arguments: %w", err)
+	}
+	if err := json.Unmarshal(raw, v); err != nil {
+		return ops.Errorf(ops.KindInvalid, "%v", err)
+	}
+	if err := v.Validate(); err != nil {
+		return ops.Errorf(ops.KindInvalid, "%s", err.Error())
+	}
+	return nil
 }
 
 func spell(f ops.Field, info ops.Info) string {
@@ -291,6 +315,9 @@ func input(c *cli.Command) (map[string]any, error) {
 	}
 	if err := json.Unmarshal(data, &args); err != nil {
 		return nil, ops.Errorf(ops.KindInvalid, "--input is not a JSON object: %v", err)
+	}
+	if args == nil {
+		return nil, ops.Errorf(ops.KindInvalid, "--input is not a JSON object")
 	}
 	return args, nil
 }

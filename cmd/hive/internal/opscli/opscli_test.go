@@ -14,6 +14,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/opscli"
 	"github.com/colonyops/hive/internal/ops"
+	"github.com/colonyops/hive/internal/ops/sessions"
 )
 
 type block struct {
@@ -96,4 +97,23 @@ func TestNestedFieldsHaveNoFlagAndSayHowToSetThem(t *testing.T) {
 func TestAFieldFlagMustNotHideAParentFlag(t *testing.T) {
 	_, err := opscli.DesktopCommands([]ops.Op{put}, nil, nil, "tags")
 	require.ErrorContains(t, err, "flag --tags is reserved")
+}
+
+func TestInputNullIsInvalid(t *testing.T) {
+	_, _, err := run(t, "", "canvas-blocks", "put", "--input", "null")
+	require.EqualError(t, err, "invalid: --input is not a JSON object")
+}
+
+func TestCrossFieldRulesRunBeforeTheCall(t *testing.T) {
+	called := false
+	groups, err := opscli.DesktopCommands([]ops.Op{sessions.SessionTagsUpdate},
+		func(context.Context, *cli.Command, string, string, map[string]any) (any, error) {
+			called = true
+			return nil, nil
+		}, nil)
+	require.NoError(t, err)
+	root := &cli.Command{Name: "hive", Writer: &bytes.Buffer{}, Commands: groups}
+	err = root.Run(context.Background(), []string{"hive", "session-tags", "update", "s1"})
+	require.EqualError(t, err, "invalid: provide add or remove")
+	assert.False(t, called)
 }

@@ -2,7 +2,11 @@
 // desktop's app-control MCP server.
 package inbox
 
-import "github.com/colonyops/hive/internal/ops"
+import (
+	"errors"
+
+	"github.com/colonyops/hive/internal/ops"
+)
 
 var Toolset = ops.Toolset{Name: "inbox", MCPPath: "/mcp"}
 
@@ -47,6 +51,13 @@ type InboxEventListIn struct {
 	ProfileID  string `json:"profileId,omitempty"  jsonschema:"Profile id used to disambiguate an externalId that matches items in more than one profile."`
 	Limit      int    `json:"limit,omitempty"      jsonschema:"Maximum events to return; defaults to 50."`
 	Detail     string `json:"detail,omitempty"     jsonschema:"summary (the default) omits each event's raw source-specific detail; full includes it."`
+}
+
+func (in InboxEventListIn) Validate() error {
+	if in.ItemID == 0 && in.ExternalID == "" {
+		return errors.New("provide itemId or externalId")
+	}
+	return nil
 }
 
 var InboxEventList = ops.Spec[InboxEventListIn]{

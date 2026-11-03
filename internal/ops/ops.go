@@ -76,8 +76,8 @@ type Spec[In any] struct {
 	Fields Constraints
 }
 
-// Validator is implemented by an In that has cross-field rules. The side that
-// runs the handler calls it.
+// Validator is implemented by an In that has cross-field rules. Mount calls it
+// before the handler, and the CLI calls it before it dials the desktop.
 type Validator interface{ Validate() error }
 
 // Info is a Spec with its type parameter erased.
