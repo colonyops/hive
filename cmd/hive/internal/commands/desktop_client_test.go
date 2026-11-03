@@ -150,6 +150,14 @@ func TestDesktopToolArguments(t *testing.T) {
 			want:     map[string]any{"caller": "s1", "view": "applet:radio"},
 		},
 		{
+			name:     "a field named url keeps its own flag",
+			args:     []string{"canvas-block", "put", "plan", "pr", "--kind", "link", "--title", "PR", "--url", "https://example.com/1"},
+			wantTool: "canvas_block_put",
+			want: map[string]any{
+				"caller": "s1", "canvas": "plan", "id": "pr", "kind": "link", "title": "PR", "url": "https://example.com/1",
+			},
+		},
+		{
 			name:     "close a terminal window",
 			args:     []string{"tab", "close", "terminal", "--window", "@3"},
 			wantTool: "tab_close",
@@ -202,7 +210,7 @@ func TestDesktopToolArguments(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := newFakeDrive(t, "")
-			args := append(append([]string{}, tt.args...), "--url", fake.srv.URL, "--caller", "s1")
+			args := append(append([]string{}, tt.args...), "--desktop-url", fake.srv.URL, "--caller", "s1")
 
 			res := runDesktop(t, t.TempDir(), args...)
 			require.NoError(t, res.err)
@@ -225,7 +233,7 @@ func TestDesktopCallerDefaults(t *testing.T) {
 		t.Setenv("HIVE_AGENT_SESSION", "chat-42")
 		fake := newFakeDrive(t, "")
 
-		res := runDesktop(t, t.TempDir(), "layout", "get", "--url", fake.srv.URL)
+		res := runDesktop(t, t.TempDir(), "layout", "get", "--desktop-url", fake.srv.URL)
 		require.NoError(t, res.err)
 		assert.Equal(t, "chat-42", fake.only(t).Args["caller"])
 	})
@@ -238,7 +246,7 @@ func TestDesktopCallerDefaults(t *testing.T) {
 		require.NoError(t, err)
 		fake := newFakeDrive(t, "")
 
-		res := runDesktop(t, t.TempDir(), "layout", "get", "--url", fake.srv.URL)
+		res := runDesktop(t, t.TempDir(), "layout", "get", "--desktop-url", fake.srv.URL)
 		require.NoError(t, res.err)
 		assert.Equal(t, wd, fake.only(t).Args["caller"])
 	})
@@ -247,7 +255,7 @@ func TestDesktopCallerDefaults(t *testing.T) {
 		t.Setenv("HIVE_AGENT_SESSION", "chat-42")
 		fake := newFakeDrive(t, "")
 
-		res := runDesktop(t, t.TempDir(), "layout", "get", "--url", fake.srv.URL, "--caller", "other")
+		res := runDesktop(t, t.TempDir(), "layout", "get", "--desktop-url", fake.srv.URL, "--caller", "other")
 		require.NoError(t, res.err)
 		assert.Equal(t, "other", fake.only(t).Args["caller"])
 	})
@@ -288,7 +296,7 @@ func TestDesktopURLResolution(t *testing.T) {
 		assert.Equal(t, "layout_get", fromEnv.only(t).Tool)
 
 		fromFlag := newFakeDrive(t, "")
-		res = runDesktop(t, dataDir, "layout", "get", "--caller", "s1", "--url", fromFlag.srv.URL)
+		res = runDesktop(t, dataDir, "layout", "get", "--caller", "s1", "--desktop-url", fromFlag.srv.URL)
 		require.NoError(t, res.err)
 		assert.Equal(t, "layout_get", fromFlag.only(t).Tool)
 	})
@@ -297,7 +305,7 @@ func TestDesktopURLResolution(t *testing.T) {
 func TestDesktopToolErrorIsTheMessage(t *testing.T) {
 	fake := newFakeDrive(t, `not_found: tab "@9" is not in this session`)
 
-	res := runDesktop(t, t.TempDir(), "tab", "focus", "@9", "--url", fake.srv.URL, "--caller", "s1")
+	res := runDesktop(t, t.TempDir(), "tab", "focus", "@9", "--desktop-url", fake.srv.URL, "--caller", "s1")
 
 	require.EqualError(t, res.err, `not_found: tab "@9" is not in this session`)
 	opErr, ok := errors.AsType[*ops.Error](res.err)
@@ -311,7 +319,7 @@ func TestDesktopNotRunning(t *testing.T) {
 
 	t.Run("no endpoint file", func(t *testing.T) {
 		res := runDesktop(t, t.TempDir(), "layout", "get", "--caller", "s1")
-		require.EqualError(t, res.err, "Hive Desktop is not running; start it, or pass --url")
+		require.EqualError(t, res.err, "Hive Desktop is not running; start it, or pass --desktop-url")
 	})
 
 	t.Run("connection refused", func(t *testing.T) {
@@ -319,8 +327,8 @@ func TestDesktopNotRunning(t *testing.T) {
 		url := closed.URL
 		closed.Close()
 
-		res := runDesktop(t, t.TempDir(), "layout", "get", "--caller", "s1", "--url", url)
-		require.EqualError(t, res.err, "Hive Desktop is not running; start it, or pass --url")
+		res := runDesktop(t, t.TempDir(), "layout", "get", "--caller", "s1", "--desktop-url", url)
+		require.EqualError(t, res.err, "Hive Desktop is not running; start it, or pass --desktop-url")
 	})
 
 	t.Run("stale endpoint file", func(t *testing.T) {
@@ -331,13 +339,13 @@ func TestDesktopNotRunning(t *testing.T) {
 		require.NoError(t, desktopendpoint.Write(dataDir, desktopendpoint.Endpoint{URL: url, PID: 1}))
 
 		res := runDesktop(t, dataDir, "layout", "get", "--caller", "s1")
-		require.EqualError(t, res.err, "Hive Desktop is not running; start it, or pass --url")
+		require.EqualError(t, res.err, "Hive Desktop is not running; start it, or pass --desktop-url")
 	})
 }
 
 func TestDesktopLocalValidation(t *testing.T) {
 	fake := newFakeDrive(t, "")
-	base := []string{"--url", fake.srv.URL, "--caller", "s1"}
+	base := []string{"--desktop-url", fake.srv.URL, "--caller", "s1"}
 
 	tests := []struct {
 		name    string

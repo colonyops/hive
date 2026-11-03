@@ -59,15 +59,15 @@ JSON line and exit with a code for the kind of a refused call: invalid 2,
 not_found 3, conflict 4, unavailable 5, unauthenticated 6, any other 1.
 
 They act for --caller (default: $HIVE_AGENT_SESSION, else the current
-directory) and find the desktop through its endpoint file, or --url.`,
+directory) and find the desktop through its endpoint file, or --desktop-url.`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:    "caller",
+				Name:    callerFlag,
 				Usage:   "Who the call acts for (default: $HIVE_AGENT_SESSION, else the current directory)",
 				Sources: cli.EnvVars("HIVE_AGENT_SESSION"),
 			},
 			&cli.StringFlag{
-				Name:    "url",
+				Name:    desktopURLFlag,
 				Usage:   "Base URL of Hive Desktop (default: $HIVE_DESKTOP_URL, else the running desktop)",
 				Sources: cli.EnvVars("HIVE_DESKTOP_URL"),
 			},
@@ -81,7 +81,7 @@ directory) and find the desktop through its endpoint file, or --url.`,
 // A spec the CLI cannot spell is a programming error that the parity test
 // catches.
 func (cmd *DesktopCmd) opCommands() []*cli.Command {
-	commands, err := opscli.DesktopCommands(catalog.All(), cmd.call, desktopCaller)
+	commands, err := opscli.DesktopCommands(catalog.All(), cmd.call, desktopCaller, callerFlag, desktopURLFlag)
 	if err != nil {
 		panic(err)
 	}

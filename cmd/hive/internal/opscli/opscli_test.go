@@ -92,3 +92,8 @@ func TestNestedFieldsHaveNoFlagAndSayHowToSetThem(t *testing.T) {
 	assert.Contains(t, help.String(), "--tags")
 	assert.NotContains(t, help.String(), "--caller", "the caller field has no flag of its own")
 }
+
+func TestAFieldFlagMustNotHideAParentFlag(t *testing.T) {
+	_, err := opscli.DesktopCommands([]ops.Op{put}, nil, nil, "tags")
+	require.ErrorContains(t, err, "flag --tags is reserved")
+}

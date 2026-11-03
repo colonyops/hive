@@ -35,7 +35,7 @@ A new terminal opens detached, so it never takes the keyboard. It is a shell in 
 
 ## From the CLI
 
-The commands find the running app through a file the desktop writes in the hive data directory when it starts. Pass `--url http://127.0.0.1:<port>` or set `HIVE_DESKTOP_URL` to reach a different instance, such as a development build. `--caller` defaults to `HIVE_AGENT_SESSION` inside a chat and to the current directory inside a Code session's checkout. Every command takes its fields as flags, or the whole input as JSON with `--input` (inline, `@file`, or `-` for stdin).
+The commands find the running app through a file the desktop writes in the hive data directory when it starts. Pass `--desktop-url http://127.0.0.1:<port>` or set `HIVE_DESKTOP_URL` to reach a different instance, such as a development build. `--caller` defaults to `HIVE_AGENT_SESSION` inside a chat and to the current directory inside a Code session's checkout. Every command takes its fields as flags, or the whole input as JSON with `--input` (inline, `@file`, or `-` for stdin).
 
 ```bash
 hive dt layout get | jq

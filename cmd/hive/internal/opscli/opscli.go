@@ -31,7 +31,11 @@ type Caller func(c *cli.Command) (string, error)
 // DesktopCommands builds `<resource-kebab> <verb>` groups for every
 // desktop-owned op. It fails on an op whose input has a field the CLI cannot
 // spell, so a bad spec fails the first test rather than a user's call.
-func DesktopCommands(list []ops.Op, call Call, caller Caller) ([]*cli.Command, error) {
+//
+// reserved names the flags of the parent command. urfave/cli resolves a flag
+// name from the nearest command first, so a field flag with a reserved name
+// would hide the parent's flag from the command.
+func DesktopCommands(list []ops.Op, call Call, caller Caller, reserved ...string) ([]*cli.Command, error) {
 	var groups []*cli.Command
 	for _, op := range list {
 		info := op.Info()
@@ -44,7 +48,7 @@ func DesktopCommands(list []ops.Op, call Call, caller Caller) ([]*cli.Command, e
 				return err
 			}
 			return iojson.WriteLine(c.Root().Writer, out)
-		}, caller)
+		}, caller, reserved)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", info.Name, err)
 		}
@@ -70,7 +74,7 @@ func findOrAdd(groups *[]*cli.Command, name string) *cli.Command {
 
 const inputFlag = "input"
 
-func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) error, caller Caller) (*cli.Command, error) {
+func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) error, caller Caller, reserved []string) (*cli.Command, error) {
 	info := op.Info()
 	fields, err := ops.Fields(op)
 	if err != nil {
@@ -102,6 +106,9 @@ func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) 
 		if !ok {
 			nested = append(nested, f.Name)
 			continue
+		}
+		if name := Kebab(f.Name); name == inputFlag || slices.Contains(reserved, name) {
+			return nil, fmt.Errorf("field %q: flag --%s is reserved", f.Name, name)
 		}
 		flags = append(flags, flag)
 	}

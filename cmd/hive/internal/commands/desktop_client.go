@@ -20,14 +20,19 @@ import (
 	"github.com/colonyops/hive/internal/platform/desktopendpoint"
 )
 
-const desktopCallTimeout = 10 * time.Second
+const (
+	desktopCallTimeout = 10 * time.Second
+
+	callerFlag     = "caller"
+	desktopURLFlag = "desktop-url"
+)
 
 // desktopNotRunningError is a type, not errors.New, because the message starts
 // with the product name and staticcheck rejects a capitalized error string.
 type desktopNotRunningError struct{}
 
 func (desktopNotRunningError) Error() string {
-	return "Hive Desktop is not running; start it, or pass --url"
+	return "Hive Desktop is not running; start it, or pass --desktop-url"
 }
 
 // call runs one desktop tool and answers its result. A refused call comes back
@@ -82,7 +87,7 @@ func toolError(res *mcp.CallToolResult, tool string) error {
 }
 
 func (cmd *DesktopCmd) desktopURL(c *cli.Command) (string, error) {
-	if u := c.String("url"); u != "" {
+	if u := c.String(desktopURLFlag); u != "" {
 		return u, nil
 	}
 	e, err := desktopendpoint.Read(cmd.app.Config.DataDir)
@@ -96,7 +101,7 @@ func (cmd *DesktopCmd) desktopURL(c *cli.Command) (string, error) {
 }
 
 func desktopCaller(c *cli.Command) (string, error) {
-	if s := c.String("caller"); s != "" {
+	if s := c.String(callerFlag); s != "" {
 		return s, nil
 	}
 	wd, err := os.Getwd()
