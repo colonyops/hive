@@ -101,7 +101,7 @@ func TestOperationsRecordActorAndResult(t *testing.T) {
 func TestOperationAnnotatesTheCallersSpan(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, nil)
-	ctx, span := otel.Tracer("test").Start(context.Background(), "mcp.tool write_document")
+	ctx, span := otel.Tracer("test").Start(context.Background(), "mcp.tool document_put")
 
 	_, err := f.svc.Write(ctx, ws, "plans/a.md", drive.Author{}, []byte("# A\n"))
 	require.NoError(t, err)

@@ -690,7 +690,7 @@ the pane on screen (ADR terminal-performance-is-measured-by-scenarios-that-run-i
 
 Window ▸ Diagnostics (macOS), or Open Diagnostics in the command palette,
 opens an independent window with Desktop/CLI log tails and job outcomes.
-Its evidence service and read_diagnostics MCP tool share bounded queries;
+Its evidence service and diagnostics_get MCP tool share bounded queries;
 agent execution is optional and uses the authenticated ephemeral PTY transport.
 CLI and Desktop share hive.log; service_name distinguishes their entries.
 The reader accepts both text and JSON lines.

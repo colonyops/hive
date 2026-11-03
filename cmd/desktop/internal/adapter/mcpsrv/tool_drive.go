@@ -1,101 +1,23 @@
 package mcpsrv
 
 import (
+	"cmp"
 	"context"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/internal/domain/drive"
-)
-
-// The list_documents detail ladder. A space is as large as its owner made it,
-// so the default answers one level and the whole subtree is asked for.
-const (
-	detailChildren = "children"
-	detailTree     = "tree"
+	driveops "github.com/colonyops/hive/internal/ops/drive"
+	"github.com/colonyops/hive/internal/ops/mcpops"
 )
 
 func (ctrl *DriveController) registerDocuments(srv *mcp.Server) {
-	addTool(srv, &mcp.Tool{
-		Name:  "list_documents",
-		Title: "List documents",
-		Description: "List a folder of Hive Drive, the document tree the user sees in the Drive tab of this chat or Code session. " +
-			"Your session decides the space: a chat's workspace, a hive session's repository (the folder a checkout links as .hive), " +
-			"or the shared space for global. Each entry has a kind (dir, markdown, html, canvas, or file for anything else), its path " +
-			"inside the space, name, title, size and modified time; markdown and canvas entries carry their front matter as front. " +
-			"An empty path is the space root. detail defaults to children, one level down; pass tree for the whole subtree. " +
-			"A folder that does not exist is not_found; a document path lists that document alone.",
-	}, ctrl.ListDocuments)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "read_document",
-		Title: "Read a document",
-		Description: "Read one markdown or html document, or any other UTF-8 text file in the space, as stored, front matter " +
-			"included, with its entry. A canvas is blocks rather than a body: read it with read_canvas. A folder is listed " +
-			"with list_documents, and a binary file is refused. Use this before rewriting a document another chat or the " +
-			"user may have changed.",
-	}, ctrl.ReadDocument)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "write_document",
-		Title: "Write a document",
-		Description: "Create or replace a whole markdown (.md) or html (.html) document in Hive Drive. Folders in the path are " +
-			"created as needed, so file a plan as plans/auth-rewrite.md or a report as reports/2026-10/perf.md. A markdown " +
-			"body may open with YAML front matter between --- lines; title sets the name the user sees, and front matter that " +
-			"does not parse is refused rather than saved. An html document renders as a page of its own in a sandboxed frame: " +
-			"inline styles and scripts run; other scripts, styles and fetches load only over https; images, fonts and media " +
-			"load over https or as data: URLs; forms and frames do not work; a #fragment link scrolls the page and a relative " +
-			"link does nothing. It is not sanitized like a canvas html block, " +
-			"and the canvas hv- classes do not apply. The body is capped at 2 MiB. A .canvas.json path is refused: write " +
-			"canvas blocks with put_blocks. Answers with the entry as stored. No Drive tab opens by itself; use " +
-			"open_tab when the user should look now.",
-	}, ctrl.WriteDocument)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "move_document",
-		Title: "Move a document",
-		Description: "Rename or move one document, a canvas included, or a whole folder inside this space, creating the folders " +
-			"above the target. The target must not exist, and a document keeps its extension. Answers with the entry at its new " +
-			"path. Only move what you wrote or were asked to move; the user may have filed the rest on purpose.",
-	}, ctrl.MoveDocument)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "delete_document",
-		Title: "Delete a document",
-		Description: "Delete one document, a canvas included, or an empty folder. A folder with anything in it is refused; there " +
-			"is no recursive delete and no trash. Answers with the path it deleted. Only delete what you made obsolete " +
-			"yourself; the user may be keeping the rest.",
-	}, ctrl.DeleteDocument)
-}
-
-type listDocumentsInput struct {
-	Session string `json:"session"          jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
-	Path    string `json:"path,omitempty"   jsonschema:"Folder to list, forward slashes, relative to the space root; empty is the space root."`
-	Detail  string `json:"detail,omitempty" jsonschema:"children (default) lists one level; tree lists the whole subtree."`
-}
-
-type readDocumentInput struct {
-	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
-	Path    string `json:"path"    jsonschema:"Document path inside the space, forward slashes; it must exist."`
-}
-
-type writeDocumentInput struct {
-	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
-	Path    string `json:"path"    jsonschema:"Document path inside the space, forward slashes, ending in .md or .html; folders are created as needed."`
-	Body    string `json:"body"    jsonschema:"The whole document. Markdown may start with YAML front matter."`
-}
-
-type moveDocumentInput struct {
-	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
-	From    string `json:"from"    jsonschema:"The document or folder to move, by its path in the space."`
-	To      string `json:"to"      jsonschema:"Its new path. Must not exist; a document keeps its extension."`
-}
-
-type deleteDocumentInput struct {
-	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
-	Path    string `json:"path"    jsonschema:"The document, or empty folder, to delete."`
+	mcpops.Mount(srv, driveops.DocumentList, ctrl.ListDocuments, ctrl.toolError)
+	mcpops.Mount(srv, driveops.DocumentGet, ctrl.ReadDocument, ctrl.toolError)
+	mcpops.Mount(srv, driveops.DocumentPut, ctrl.WriteDocument, ctrl.toolError)
+	mcpops.Mount(srv, driveops.DocumentMove, ctrl.MoveDocument, ctrl.toolError)
+	mcpops.Mount(srv, driveops.DocumentDelete, ctrl.DeleteDocument, ctrl.toolError)
 }
 
 type documentEntry struct {
@@ -128,56 +50,53 @@ type readDocumentResult struct {
 }
 
 type deleteDocumentResult struct {
-	Deleted string `json:"deleted" jsonschema:"The path that was deleted."`
+	Path    string    `json:"path"    jsonschema:"The path that was deleted."`
+	Deleted bool      `json:"deleted" jsonschema:"Always true: a delete that did not happen is an error."`
+	At      time.Time `json:"at"      jsonschema:"When it was deleted."`
 }
 
-func (ctrl *DriveController) ListDocuments(ctx context.Context, _ *mcp.CallToolRequest, in listDocumentsInput) (*mcp.CallToolResult, listDocumentsResult, error) {
-	if in.Detail == "" {
-		in.Detail = detailChildren
-	}
-	if in.Detail != detailChildren && in.Detail != detailTree {
-		return nil, listDocumentsResult{}, ctrl.toolError(app.Errorf(app.KindInvalid, "detail must be children or tree"))
-	}
-	space, entry, err := ctrl.core.Drive.ListDocuments(ctx, in.Session, in.Path, in.Detail == detailTree)
+func (ctrl *DriveController) ListDocuments(ctx context.Context, in driveops.DocumentListIn) (listDocumentsResult, error) {
+	detail := cmp.Or(in.Detail, driveops.DetailChildren)
+	space, entry, err := ctrl.core.Drive.ListDocuments(ctx, in.Caller, in.Path, detail == driveops.DetailTree)
 	if err != nil {
-		return nil, listDocumentsResult{}, ctrl.toolError(err)
+		return listDocumentsResult{}, err
 	}
 	children := make([]any, 0, len(entry.Children))
 	for _, child := range entry.Children {
 		children = append(children, documentNodeFrom(child))
 	}
-	return nil, listDocumentsResult{Space: space.Key, documentEntry: documentEntryFrom(entry), Children: children, Detail: in.Detail}, nil
+	return listDocumentsResult{Space: space.Key, documentEntry: documentEntryFrom(entry), Children: children, Detail: detail}, nil
 }
 
-func (ctrl *DriveController) ReadDocument(ctx context.Context, _ *mcp.CallToolRequest, in readDocumentInput) (*mcp.CallToolResult, readDocumentResult, error) {
-	entry, body, err := ctrl.core.Drive.ReadDocument(ctx, in.Session, in.Path)
+func (ctrl *DriveController) ReadDocument(ctx context.Context, in driveops.DocumentGetIn) (readDocumentResult, error) {
+	entry, body, err := ctrl.core.Drive.ReadDocument(ctx, in.Caller, in.Path)
 	if err != nil {
-		return nil, readDocumentResult{}, ctrl.toolError(err)
+		return readDocumentResult{}, err
 	}
-	return nil, readDocumentResult{documentEntry: documentEntryFrom(entry), Body: string(body)}, nil
+	return readDocumentResult{documentEntry: documentEntryFrom(entry), Body: string(body)}, nil
 }
 
-func (ctrl *DriveController) WriteDocument(ctx context.Context, _ *mcp.CallToolRequest, in writeDocumentInput) (*mcp.CallToolResult, documentEntry, error) {
-	entry, err := ctrl.core.Drive.WriteDocument(ctx, in.Session, in.Path, []byte(in.Body))
+func (ctrl *DriveController) WriteDocument(ctx context.Context, in driveops.DocumentPutIn) (documentEntry, error) {
+	entry, err := ctrl.core.Drive.WriteDocument(ctx, in.Caller, in.Path, []byte(in.Body))
 	if err != nil {
-		return nil, documentEntry{}, ctrl.toolError(err)
+		return documentEntry{}, err
 	}
-	return nil, documentEntryFrom(entry), nil
+	return documentEntryFrom(entry), nil
 }
 
-func (ctrl *DriveController) MoveDocument(ctx context.Context, _ *mcp.CallToolRequest, in moveDocumentInput) (*mcp.CallToolResult, documentEntry, error) {
-	entry, err := ctrl.core.Drive.MoveDocument(ctx, in.Session, in.From, in.To)
+func (ctrl *DriveController) MoveDocument(ctx context.Context, in driveops.DocumentMoveIn) (documentEntry, error) {
+	entry, err := ctrl.core.Drive.MoveDocument(ctx, in.Caller, in.From, in.To)
 	if err != nil {
-		return nil, documentEntry{}, ctrl.toolError(err)
+		return documentEntry{}, err
 	}
-	return nil, documentEntryFrom(entry), nil
+	return documentEntryFrom(entry), nil
 }
 
-func (ctrl *DriveController) DeleteDocument(ctx context.Context, _ *mcp.CallToolRequest, in deleteDocumentInput) (*mcp.CallToolResult, deleteDocumentResult, error) {
-	if err := ctrl.core.Drive.DeleteDocument(ctx, in.Session, in.Path); err != nil {
-		return nil, deleteDocumentResult{}, ctrl.toolError(err)
+func (ctrl *DriveController) DeleteDocument(ctx context.Context, in driveops.DocumentDeleteIn) (deleteDocumentResult, error) {
+	if err := ctrl.core.Drive.DeleteDocument(ctx, in.Caller, in.Path); err != nil {
+		return deleteDocumentResult{}, err
 	}
-	return nil, deleteDocumentResult{Deleted: in.Path}, nil
+	return deleteDocumentResult{Path: in.Path, Deleted: true, At: time.Now()}, nil
 }
 
 func documentEntryFrom(e drive.Entry) documentEntry {

@@ -25,6 +25,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	driveops "github.com/colonyops/hive/internal/ops/drive"
 	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/colonyops/hive/pkg/osopen"
 )
@@ -36,9 +37,6 @@ const maxCanvasBodyBytes = 256 * 1024
 const (
 	maxCanvasBlockIDLength = 200
 	maxCanvasTitleLength   = 200
-	// maxCanvasBatchBlocks caps one put_blocks call; a larger layout is
-	// written in slices.
-	maxCanvasBatchBlocks = 50
 )
 
 // canvasSessionResolver is the one store read a chat's canvas mutation starts
@@ -125,8 +123,8 @@ func (s *DriveService) PutBlocks(ctx context.Context, session, name, title strin
 	if len(blocks) == 0 {
 		return drive.Canvas{}, Errorf(KindInvalid, "a batch needs at least one block")
 	}
-	if len(blocks) > maxCanvasBatchBlocks {
-		return drive.Canvas{}, Errorf(KindInvalid, "too many blocks in one batch (%d max)", maxCanvasBatchBlocks)
+	if len(blocks) > driveops.MaxBlocksPerCall {
+		return drive.Canvas{}, Errorf(KindInvalid, "too many blocks in one batch (%d max)", driveops.MaxBlocksPerCall)
 	}
 	return s.putBlocks(ctx, session, name, title, "", blocks)
 }
@@ -811,7 +809,7 @@ func (s *DriveService) withCanonicalAuthor(ctx context.Context, c drive.Canvas) 
 	return c, nil
 }
 
-// canvasGlobalSession is the session argument of an agent outside any chat
+// canvasGlobalSession is the caller argument of an agent outside any chat
 // or hive session. It still reads "global", not "shared", because existing
 // agent configurations and the HIVE_AGENT_SESSION docs pass that word.
 const canvasGlobalSession = "global"
@@ -875,7 +873,7 @@ func (s *DriveService) resolveTabPath(ctx context.Context, caller driveCaller, p
 	return c.Path, nil
 }
 
-// resolve reads the tool's session argument. A UUID is a chat's record id;
+// resolve reads the tool's caller argument. A UUID is a chat's record id;
 // a positive integer is a migrated chat's legacy alias. HIVE_AGENT_SESSION
 // carries one of those values. "global" is an agent outside any session.
 // Anything else is the caller's working directory: hive puts no id in a

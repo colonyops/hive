@@ -45,7 +45,7 @@ func TestReadDocumentRefusesCanvasesAndFolders(t *testing.T) {
 	require.NoError(t, err)
 	_, _, err = f.svc.ReadDocument(ctx, "1", "reports/perf.canvas.json")
 	assert.Equal(t, KindInvalid, KindOf(err))
-	assert.Contains(t, err.Error(), "read_canvas")
+	assert.Contains(t, err.Error(), "canvas_get")
 
 	_, _, err = f.svc.ReadDocument(ctx, "1", "reports")
 	assert.Equal(t, KindInvalid, KindOf(err))

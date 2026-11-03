@@ -60,7 +60,7 @@ The same shortcut brings a tab forward, and closes a pop-up.
 
 To change where an applet shows, select it in **Settings ▸ Applets** and use the switches, which save to its `applet.yaml`. Turning a surface off writes `enabled: false`, so it keeps its size and page for when you turn it back on. You can also edit the file. A title bar needs a page, so that switch stays off until the file lists `surfaces.titlebar`. The Applet Builder ships with Hive and has no file, so where it shows is fixed.
 
-Agents can open and close a tab too, with [`open_tab` and `close_tab`](../code/agent-layout.md).
+Agents can open and close a tab too, with [`tab_open` and `tab_close`](../code/agent-layout.md).
 
 ## Palette and keys
 

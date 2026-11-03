@@ -34,6 +34,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/servers"
+	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/pkg/buildinfo"
@@ -383,16 +384,29 @@ Run 'hive new' to create a new session from the current repository.`,
 		return tuiCmd.Run(ctx, c)
 	}
 
-	exitCode := 0
 	runErr := app.Run(ctx, os.Args)
 	if runErr != nil {
-		fmt.Fprintln(os.Stderr, runErr)
+		if msg := runErr.Error(); msg != "" {
+			fmt.Fprintln(os.Stderr, msg)
+		}
 		var unreachable *wire.UnreachableError
 		if errors.As(runErr, &unreachable) && unreachable.Server != "" {
 			fmt.Fprintln(os.Stderr, "Check your servers with: hive servers ls")
 		}
-		exitCode = 1
 	}
 
-	os.Exit(exitCode)
+	os.Exit(exitCode(runErr))
+}
+
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	if opErr, ok := errors.AsType[*ops.Error](err); ok {
+		return ops.ExitCode(opErr.Kind)
+	}
+	if exitErr, ok := errors.AsType[commands.ExitError](err); ok {
+		return exitErr.Code
+	}
+	return 1
 }

@@ -26,15 +26,17 @@ That is also why the catalogue reports a problem, rather than a URL, when the
 loopback server is disabled: an entry that rendered an address nothing answers
 would fail silently inside the agent's own `/mcp` output.
 
-The server requires no token. It sits behind the loopback bind and spawns no
-processes — session control stays on the HTTP adapter's token-guarded terminal
-prefix (ADR terminal-transport, ADR a-workspace-declares-its-own-authority).
+The server requires no token. It sits behind the loopback bind and runs no
+command a caller writes: a source refresh runs only the command sources a flow
+already declares, and session control stays on the HTTP adapter's
+token-guarded terminal prefix (ADR terminal-transport, ADR
+a-workspace-declares-its-own-authority).
 
 ## Stability
 
-`beta`. The tool set is settled enough to build against, but it is new and
-still growing toward the rest of the app's surface; tool names may still
-change before it is called stable.
+`beta`. Each tool is declared once in the operation catalog, with a
+noun-first name (`inbox_list`, `schedule_put`), and the same operation is a
+`hive dt` command (`hive dt inbox list`).
 
 ## What it needs
 

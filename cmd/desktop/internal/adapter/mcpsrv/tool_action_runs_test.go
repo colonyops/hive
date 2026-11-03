@@ -35,7 +35,7 @@ func TestActionRunToolsReadTheRunAndItsLog(t *testing.T) {
 	var listed struct {
 		Runs []app.ActionRunSummary `json:"runs"`
 	}
-	call(t, session, "list_action_runs", map[string]any{"status": "failed"}, &listed)
+	call(t, session, "action_run_list", map[string]any{"status": "failed"}, &listed)
 	require.Len(t, listed.Runs, 1)
 	assert.Equal(t, run.ID, listed.Runs[0].ID)
 	assert.Equal(t, "manual", listed.Runs[0].Lane)
@@ -51,18 +51,18 @@ func TestActionRunToolsReadTheRunAndItsLog(t *testing.T) {
 		} `json:"result"`
 		Log app.ActionRunLogPage `json:"log"`
 	}
-	call(t, session, "get_action_run", map[string]any{"id": run.ID}, &got)
+	call(t, session, "action_run_get", map[string]any{"id": run.ID}, &got)
 	assert.Equal(t, "failed", got.Result.Status)
 	require.Len(t, got.Log.Lines, 500, "the default read is the tail")
 	assert.Equal(t, "boom", got.Log.Lines[499].Text)
 	assert.Equal(t, "stderr", got.Log.Lines[499].Stream)
 	assert.False(t, got.Log.More)
 
-	call(t, session, "get_action_run", map[string]any{"id": run.ID, "afterId": 1, "lines": 10}, &got)
+	call(t, session, "action_run_get", map[string]any{"id": run.ID, "afterId": 1, "lines": 10}, &got)
 	require.Len(t, got.Log.Lines, 10)
 	assert.Equal(t, "step 0", got.Log.Lines[0].Text)
 	assert.True(t, got.Log.More)
 	assert.Equal(t, got.Log.Lines[9].ID, got.Log.NextAfterID)
 
-	assert.Contains(t, callErr(t, session, "get_action_run", map[string]any{"id": 999999}), "not_found")
+	assert.Contains(t, callErr(t, session, "action_run_get", map[string]any{"id": 999999}), "not_found")
 }

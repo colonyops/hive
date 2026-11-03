@@ -84,6 +84,6 @@ Flow YAML is strict. Unknown fields, invalid connections, and duplicate node IDs
 
 ## Testing a flow
 
-The Hive workspace can dry-run a flow against sample input through the app's MCP server. A dry run reports what each node received and emitted without changing feeds or running actions.
+The Hive workspace can dry-run a flow against sample input through the `flow_preview` tool of the app's MCP server. A dry run reports what each node received and emitted without changing feeds or running actions. From a terminal, `hive dt flow preview --input @run.json` does the same.
 
 Deploying or restarting recalculates feed membership. It does not replay notifications or actions for existing items.

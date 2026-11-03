@@ -4,15 +4,18 @@ import (
 	"context"
 	"encoding/base64"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
+	"github.com/colonyops/hive/internal/ops"
+	"github.com/colonyops/hive/internal/ops/flows"
 )
 
 // profileView is a profile (flow) as this adapter reports it: identity plus
 // load status and whether an avatar is set. Deliberately smaller than the Wails
-// FlowSummary — no inline image bytes, since get_profile_image answers those.
+// FlowSummary — no inline image bytes, since profile_image_get answers those.
 type profileView struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -29,68 +32,57 @@ func profileViewOf(id, name string, enabled, valid, hasImage bool) profileView {
 	return profileView{ID: id, Name: name, Enabled: enabled, Valid: valid, HasImage: hasImage}
 }
 
-func (ctrl *Controller) ListProfiles(ctx context.Context, _ *mcp.CallToolRequest, _ noInput) (*mcp.CallToolResult, profilesResult, error) {
+func (ctrl *Controller) ListProfiles(ctx context.Context, _ ops.NoInput) (profilesResult, error) {
 	statuses := ctrl.core.Flows.Statuses(ctx)
 	out := make([]profileView, 0, len(statuses))
 	for _, st := range statuses {
 		out = append(out, profileViewOf(st.ID, st.Flow.Name, st.Flow.Enabled, st.Valid, st.Flow.Image != ""))
 	}
-	return nil, profilesResult{Profiles: out}, nil
+	return profilesResult{Profiles: out}, nil
 }
 
-type createProfileInput struct {
-	Name string `json:"name" jsonschema:"Display name for the new profile."`
-}
-
-func (ctrl *Controller) CreateProfile(ctx context.Context, _ *mcp.CallToolRequest, in createProfileInput) (*mcp.CallToolResult, profileView, error) {
+func (ctrl *Controller) CreateProfile(ctx context.Context, in flows.ProfileCreateIn) (profileView, error) {
 	if strings.TrimSpace(in.Name) == "" {
-		return nil, profileView{}, ctrl.toolError(app.Errorf(app.KindInvalid, "name is required"))
+		return profileView{}, app.Errorf(app.KindInvalid, "name is required")
 	}
 	f, err := ctrl.core.Flows.Create(ctx, in.Name)
 	if err != nil {
-		return nil, profileView{}, ctrl.toolError(err)
+		return profileView{}, err
 	}
-	return nil, profileViewOf(f.ID, f.Name, f.Enabled, true, f.Image != ""), nil
-}
-
-type profileInput struct {
-	ProfileID string `json:"profileId" jsonschema:"Profile id from list_profiles."`
+	return profileViewOf(f.ID, f.Name, f.Enabled, true, f.Image != ""), nil
 }
 
 type deleteProfileResult struct {
-	Deleted bool `json:"deleted"`
+	ProfileID string    `json:"profileId"`
+	Deleted   bool      `json:"deleted"   jsonschema:"Always true: a delete that did not happen is an error."`
+	At        time.Time `json:"at"        jsonschema:"When it was deleted."`
 }
 
-func (ctrl *Controller) DeleteProfile(ctx context.Context, _ *mcp.CallToolRequest, in profileInput) (*mcp.CallToolResult, deleteProfileResult, error) {
+func (ctrl *Controller) DeleteProfile(ctx context.Context, in flows.ProfileIn) (deleteProfileResult, error) {
 	if err := ctrl.core.Flows.Delete(ctx, in.ProfileID); err != nil {
-		return nil, deleteProfileResult{}, ctrl.toolError(err)
+		return deleteProfileResult{}, err
 	}
-	return nil, deleteProfileResult{Deleted: true}, nil
+	return deleteProfileResult{ProfileID: in.ProfileID, Deleted: true, At: time.Now()}, nil
 }
 
-type setProfileImageInput struct {
-	ProfileID   string `json:"profileId"   jsonschema:"Profile id from list_profiles."`
-	ImageBase64 string `json:"imageBase64" jsonschema:"The image as base64 (PNG, JPEG, GIF or WebP). A data: URL is accepted and its prefix ignored."`
-}
-
-func (ctrl *Controller) SetProfileImage(ctx context.Context, _ *mcp.CallToolRequest, in setProfileImageInput) (*mcp.CallToolResult, profileView, error) {
+func (ctrl *Controller) SetProfileImage(ctx context.Context, in flows.ProfileImagePutIn) (profileView, error) {
 	raw, err := decodeImage(in.ImageBase64)
 	if err != nil {
-		return nil, profileView{}, ctrl.toolError(err)
+		return profileView{}, err
 	}
 	f, err := ctrl.core.Flows.SetProfileImage(ctx, in.ProfileID, raw)
 	if err != nil {
-		return nil, profileView{}, ctrl.toolError(err)
+		return profileView{}, err
 	}
-	return nil, profileViewOf(f.ID, f.Name, f.Enabled, true, f.Image != ""), nil
+	return profileViewOf(f.ID, f.Name, f.Enabled, true, f.Image != ""), nil
 }
 
-func (ctrl *Controller) ClearProfileImage(ctx context.Context, _ *mcp.CallToolRequest, in profileInput) (*mcp.CallToolResult, profileView, error) {
+func (ctrl *Controller) ClearProfileImage(ctx context.Context, in flows.ProfileIn) (profileView, error) {
 	f, err := ctrl.core.Flows.ClearProfileImage(ctx, in.ProfileID)
 	if err != nil {
-		return nil, profileView{}, ctrl.toolError(err)
+		return profileView{}, err
 	}
-	return nil, profileViewOf(f.ID, f.Name, f.Enabled, true, f.Image != ""), nil
+	return profileViewOf(f.ID, f.Name, f.Enabled, true, f.Image != ""), nil
 }
 
 // GetProfileImage answers with an image content block rather than a structured
@@ -100,16 +92,16 @@ func (ctrl *Controller) ClearProfileImage(ctx context.Context, _ *mcp.CallToolRe
 // Both failures are not_found and they must not read alike: "has no image"
 // asserts the profile exists, so a mistyped id has to be answered as a
 // mistyped id rather than as an avatar-less profile.
-func (ctrl *Controller) GetProfileImage(ctx context.Context, _ *mcp.CallToolRequest, in profileInput) (*mcp.CallToolResult, any, error) {
+func (ctrl *Controller) GetProfileImage(ctx context.Context, in flows.ProfileIn) (*mcp.CallToolResult, any, error) {
 	if _, err := ctrl.core.Flows.Get(ctx, in.ProfileID); err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, nil, err
 	}
 	data, err := ctrl.core.Flows.ProfileImage(ctx, in.ProfileID)
 	if err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, nil, err
 	}
 	if len(data) == 0 {
-		return nil, nil, ctrl.toolError(app.Errorf(app.KindNotFound, "profile %q has no image", in.ProfileID))
+		return nil, nil, app.Errorf(app.KindNotFound, "profile %q has no image", in.ProfileID)
 	}
 	return pngResult(data), nil, nil
 }

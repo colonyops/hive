@@ -45,8 +45,8 @@ func TestDocumentRoundTrip(t *testing.T) {
 	id := seedAgentSession(t, core, "demo", "chat")
 
 	var wrote documentView
-	call(t, session, "write_document", map[string]any{
-		"session": id, "path": "plans/auth.md", "body": "---\ntitle: Auth rewrite\ntags: [auth]\n---\n# Plan\n",
+	call(t, session, "document_put", map[string]any{
+		"caller": id, "path": "plans/auth.md", "body": "---\ntitle: Auth rewrite\ntags: [auth]\n---\n# Plan\n",
 	}, &wrote)
 	assert.Equal(t, "markdown", wrote.Kind)
 	assert.Equal(t, "plans/auth.md", wrote.Path)
@@ -54,29 +54,33 @@ func TestDocumentRoundTrip(t *testing.T) {
 	assert.Equal(t, []any{"auth"}, wrote.Front["tags"])
 
 	var read documentView
-	call(t, session, "read_document", map[string]any{"session": id, "path": "plans/auth.md"}, &read)
+	call(t, session, "document_get", map[string]any{"caller": id, "path": "plans/auth.md"}, &read)
 	assert.Equal(t, "---\ntitle: Auth rewrite\ntags: [auth]\n---\n# Plan\n", read.Body)
 
-	call(t, session, "write_document", map[string]any{
-		"session": id, "path": "reports/2026-10/perf.html", "body": "<h1>Perf</h1>",
+	call(t, session, "document_put", map[string]any{
+		"caller": id, "path": "reports/2026-10/perf.html", "body": "<h1>Perf</h1>",
 	}, &wrote)
 	assert.Equal(t, "html", wrote.Kind)
 
 	var moved documentView
-	call(t, session, "move_document", map[string]any{"session": id, "from": "plans/auth.md", "to": "archive/auth.md"}, &moved)
+	call(t, session, "document_move", map[string]any{"caller": id, "from": "plans/auth.md", "to": "archive/auth.md"}, &moved)
 	assert.Equal(t, "archive/auth.md", moved.Path)
-	text := callErr(t, session, "read_document", map[string]any{"session": id, "path": "plans/auth.md"})
+	text := callErr(t, session, "document_get", map[string]any{"caller": id, "path": "plans/auth.md"})
 	assert.Contains(t, text, "not_found")
 
 	var deleted struct {
-		Deleted string `json:"deleted"`
+		Path    string    `json:"path"`
+		Deleted bool      `json:"deleted"`
+		At      time.Time `json:"at"`
 	}
-	call(t, session, "delete_document", map[string]any{"session": id, "path": "archive/auth.md"}, &deleted)
-	assert.Equal(t, "archive/auth.md", deleted.Deleted, "the answer names what was deleted, never a constant")
-	call(t, session, "delete_document", map[string]any{"session": id, "path": "archive"}, &deleted)
-	assert.Equal(t, "archive", deleted.Deleted, "an empty folder deletes")
+	call(t, session, "document_delete", map[string]any{"caller": id, "path": "archive/auth.md"}, &deleted)
+	assert.Equal(t, "archive/auth.md", deleted.Path, "the answer names what was deleted")
+	assert.True(t, deleted.Deleted)
+	assert.WithinDuration(t, time.Now(), deleted.At, time.Minute)
+	call(t, session, "document_delete", map[string]any{"caller": id, "path": "archive"}, &deleted)
+	assert.Equal(t, "archive", deleted.Path, "an empty folder deletes")
 
-	text = callErr(t, session, "delete_document", map[string]any{"session": id, "path": "reports"})
+	text = callErr(t, session, "document_delete", map[string]any{"caller": id, "path": "reports"})
 	assert.Contains(t, text, "not empty")
 }
 
@@ -85,14 +89,14 @@ func TestWriteDocumentRefusals(t *testing.T) {
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
-	text := callErr(t, session, "write_document", map[string]any{"session": id, "path": "reports/perf.canvas.json", "body": "{}"})
+	text := callErr(t, session, "document_put", map[string]any{"caller": id, "path": "reports/perf.canvas.json", "body": "{}"})
 	assert.Contains(t, text, "invalid")
-	assert.Contains(t, text, "put_blocks", "a canvas path points at the canvas tools")
+	assert.Contains(t, text, "canvas_blocks_put", "a canvas path points at the canvas tools")
 
-	text = callErr(t, session, "write_document", map[string]any{"session": id, "path": "../escape.md", "body": "x"})
+	text = callErr(t, session, "document_put", map[string]any{"caller": id, "path": "../escape.md", "body": "x"})
 	assert.Contains(t, text, "invalid")
 
-	text = callErr(t, session, "write_document", map[string]any{"session": id, "path": "notes.txt", "body": "x"})
+	text = callErr(t, session, "document_put", map[string]any{"caller": id, "path": "notes.txt", "body": "x"})
 	assert.Contains(t, text, "invalid")
 }
 
@@ -102,37 +106,37 @@ func TestListDocuments(t *testing.T) {
 	id := seedAgentSession(t, core, "demo", "chat")
 
 	var root documentListView
-	call(t, session, "list_documents", map[string]any{"session": id}, &root)
+	call(t, session, "document_list", map[string]any{"caller": id}, &root)
 	assert.Equal(t, "workspaces/demo", root.Space)
 	assert.Equal(t, "dir", root.Kind)
 	assert.Equal(t, "children", root.Detail, "the answer echoes the level it used")
 	assert.Empty(t, root.Children)
 
-	text := callErr(t, session, "list_documents", map[string]any{"session": id, "path": "ghost"})
+	text := callErr(t, session, "document_list", map[string]any{"caller": id, "path": "ghost"})
 	assert.Contains(t, text, "not_found")
-	text = callErr(t, session, "list_documents", map[string]any{"session": id, "detail": "full"})
+	text = callErr(t, session, "document_list", map[string]any{"caller": id, "detail": "full"})
 	assert.Contains(t, text, "invalid")
 
 	var wrote documentView
-	call(t, session, "write_document", map[string]any{"session": id, "path": "reports/2026-10/perf.md", "body": "x"}, &wrote)
-	call(t, session, "write_document", map[string]any{"session": id, "path": "readme.md", "body": "x"}, &wrote)
+	call(t, session, "document_put", map[string]any{"caller": id, "path": "reports/2026-10/perf.md", "body": "x"}, &wrote)
+	call(t, session, "document_put", map[string]any{"caller": id, "path": "readme.md", "body": "x"}, &wrote)
 
-	call(t, session, "list_documents", map[string]any{"session": id}, &root)
+	call(t, session, "document_list", map[string]any{"caller": id}, &root)
 	assert.Equal(t, []string{"reports", "readme.md"}, childPaths(root.Children), "folders first")
 	assert.Empty(t, root.Children[0].Children, "one level by default")
 
-	call(t, session, "list_documents", map[string]any{"session": id, "detail": "tree"}, &root)
+	call(t, session, "document_list", map[string]any{"caller": id, "detail": "tree"}, &root)
 	assert.Equal(t, "tree", root.Detail)
 	require.Len(t, root.Children[0].Children, 1)
 	assert.Equal(t, "reports/2026-10", root.Children[0].Children[0].Path)
 	assert.Equal(t, []string{"reports/2026-10/perf.md"}, childPaths(root.Children[0].Children[0].Children))
 
 	var folder documentListView
-	call(t, session, "list_documents", map[string]any{"session": id, "path": "reports/2026-10"}, &folder)
+	call(t, session, "document_list", map[string]any{"caller": id, "path": "reports/2026-10"}, &folder)
 	assert.Equal(t, []string{"reports/2026-10/perf.md"}, childPaths(folder.Children))
 
 	var doc documentListView
-	call(t, session, "list_documents", map[string]any{"session": id, "path": "readme.md"}, &doc)
+	call(t, session, "document_list", map[string]any{"caller": id, "path": "readme.md"}, &doc)
 	assert.Equal(t, "markdown", doc.Kind, "a document path lists that document")
 }
 
@@ -142,25 +146,25 @@ func TestCanvasNamesFileUnderPaths(t *testing.T) {
 	id := seedAgentSession(t, core, "demo", "chat")
 
 	var wrote canvasWriteView
-	call(t, session, "put_blocks", map[string]any{
-		"session": id, "canvas": "reports/2026-10/perf", "blocks": []map[string]any{{"id": "a", "kind": "markdown", "body": "x"}},
+	call(t, session, "canvas_blocks_put", map[string]any{
+		"caller": id, "canvas": "reports/2026-10/perf", "blocks": []map[string]any{{"id": "a", "kind": "markdown", "body": "x"}},
 	}, &wrote)
 	assert.Equal(t, "reports/2026-10/perf", wrote.Name)
-	call(t, session, "put_block", map[string]any{"session": id, "canvas": "plan", "id": "a", "kind": "markdown", "body": "x"}, &wrote)
+	call(t, session, "canvas_block_put", map[string]any{"caller": id, "canvas": "plan", "id": "a", "kind": "markdown", "body": "x"}, &wrote)
 	assert.Equal(t, "plan", wrote.Name)
 
 	var folder documentListView
-	call(t, session, "list_documents", map[string]any{"session": id, "path": "reports/2026-10"}, &folder)
+	call(t, session, "document_list", map[string]any{"caller": id, "path": "reports/2026-10"}, &folder)
 	assert.Equal(t, []string{"reports/2026-10/perf.canvas.json"}, childPaths(folder.Children))
-	call(t, session, "list_documents", map[string]any{"session": id, "path": "canvases"}, &folder)
+	call(t, session, "document_list", map[string]any{"caller": id, "path": "canvases"}, &folder)
 	assert.Equal(t, []string{"canvases/plan.canvas.json"}, childPaths(folder.Children), "a bare name still files under canvases/")
 
 	var got canvasView
-	call(t, session, "read_canvas", map[string]any{"session": id, "canvas": "reports/2026-10/perf"}, &got)
+	call(t, session, "canvas_get", map[string]any{"caller": id, "canvas": "reports/2026-10/perf"}, &got)
 	require.Len(t, got.Blocks, 1)
 
 	var listed canvasListView
-	call(t, session, "list_canvases", map[string]any{"session": id}, &listed)
+	call(t, session, "canvas_list", map[string]any{"caller": id}, &listed)
 	names := []string{}
 	for _, c := range listed.Canvases {
 		names = append(names, c.Name)
@@ -192,18 +196,18 @@ func TestTabToolsPublishTheRequest(t *testing.T) {
 		return append([]events.SessionLayoutRequested(nil), tabs...)
 	}
 
-	text := callErr(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "path": "plans/ghost.md"})
+	text := callErr(t, session, "tab_open", map[string]any{"caller": id, "view": "drive", "path": "plans/ghost.md"})
 	assert.Contains(t, text, "not_found", "the document must exist")
 
 	var wrote documentView
-	call(t, session, "write_document", map[string]any{"session": id, "path": "plans/auth.md", "body": "x"}, &wrote)
+	call(t, session, "document_put", map[string]any{"caller": id, "path": "plans/auth.md", "body": "x"}, &wrote)
 	var opened struct {
 		Requested string  `json:"requested"`
 		View      string  `json:"view"`
 		Path      string  `json:"path"`
 		Window    *string `json:"window"`
 	}
-	call(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "path": "plans/auth.md", "placement": "beside"}, &opened)
+	call(t, session, "tab_open", map[string]any{"caller": id, "view": "drive", "path": "plans/auth.md", "placement": "beside"}, &opened)
 	assert.Equal(t, "open", opened.Requested)
 	require.NotNil(t, opened.Window, "the result always carries window")
 	assert.Empty(t, *opened.Window, "and it is empty for a drive tab")
@@ -213,7 +217,7 @@ func TestTabToolsPublishTheRequest(t *testing.T) {
 		Requested string `json:"requested"`
 		View      string `json:"view"`
 	}
-	call(t, session, "close_tab", map[string]any{"session": id, "view": "drive"}, &closed)
+	call(t, session, "tab_close", map[string]any{"caller": id, "view": "drive"}, &closed)
 	assert.Equal(t, "close", closed.Requested)
 
 	assert.Equal(t, []events.SessionLayoutRequested{
@@ -221,19 +225,19 @@ func TestTabToolsPublishTheRequest(t *testing.T) {
 		{Session: id, Space: "workspaces/demo", Verb: "close", View: "drive"},
 	}, waitTabs(2))
 
-	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "diff"})
+	text = callErr(t, session, "tab_open", map[string]any{"caller": id, "view": "diff"})
 	assert.Contains(t, text, "invalid", "a chat has only a Drive tab")
-	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "terminal"})
+	text = callErr(t, session, "tab_open", map[string]any{"caller": id, "view": "terminal"})
 	assert.Contains(t, text, "a chat has one terminal", "new terminals belong to a Code session")
-	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "terminal", "window": "@3", "name": "x"})
+	text = callErr(t, session, "tab_open", map[string]any{"caller": id, "view": "terminal", "window": "@3", "name": "x"})
 	assert.Contains(t, text, "window places an existing terminal")
-	text = callErr(t, session, "open_tab", map[string]any{"session": id, "view": "drive", "name": "x"})
+	text = callErr(t, session, "tab_open", map[string]any{"caller": id, "view": "drive", "name": "x"})
 	assert.Contains(t, text, "apply only to the terminal view")
-	text = callErr(t, session, "close_tab", map[string]any{"session": id, "view": "terminal", "window": "@3"})
+	text = callErr(t, session, "tab_close", map[string]any{"caller": id, "view": "terminal", "window": "@3"})
 	assert.Contains(t, text, "a chat's terminal is the chat")
-	text = callErr(t, session, "open_tab", map[string]any{"session": "global", "view": "drive"})
+	text = callErr(t, session, "tab_open", map[string]any{"caller": "global", "view": "drive"})
 	assert.Contains(t, text, "invalid", "the shared space has no tabs")
-	text = callErr(t, session, "close_tab", map[string]any{"session": "global", "view": "drive"})
+	text = callErr(t, session, "tab_close", map[string]any{"caller": "global", "view": "drive"})
 	assert.Contains(t, text, "invalid", "the shared space has no tabs")
 }
 
@@ -254,12 +258,12 @@ func TestLayoutToolsPublishAndRefuse(t *testing.T) {
 		Requested string `json:"requested"`
 		Tab       string `json:"tab"`
 	}
-	call(t, session, "move_tab", map[string]any{"session": id, "tab": "terminal", "placement": "below", "anchor": "drive"}, &moved)
+	call(t, session, "tab_move", map[string]any{"caller": id, "tab": "terminal", "placement": "below", "anchor": "drive"}, &moved)
 	assert.Equal(t, "move", moved.Requested)
-	call(t, session, "focus_tab", map[string]any{"session": id, "tab": "drive"}, &moved)
-	call(t, session, "turn_split", map[string]any{"session": id, "tab": "terminal"}, &moved)
-	call(t, session, "close_panel", map[string]any{"session": id, "tab": "drive"}, &moved)
-	call(t, session, "resize_split", map[string]any{"session": id, "tab": "drive", "share": 0.3}, &moved)
+	call(t, session, "tab_focus", map[string]any{"caller": id, "tab": "drive"}, &moved)
+	call(t, session, "split_turn", map[string]any{"caller": id, "tab": "terminal"}, &moved)
+	call(t, session, "panel_close", map[string]any{"caller": id, "tab": "drive"}, &moved)
+	call(t, session, "split_resize", map[string]any{"caller": id, "tab": "drive", "share": 0.3}, &moved)
 
 	require.Eventually(t, func() bool {
 		mu.Lock()
@@ -277,11 +281,11 @@ func TestLayoutToolsPublishAndRefuse(t *testing.T) {
 		{Session: id, Space: space, Verb: "resize", View: "drive", Share: 0.3},
 	}, got)
 
-	text := callErr(t, session, "resize_split", map[string]any{"session": id, "tab": "drive", "share": 0.1})
+	text := callErr(t, session, "split_resize", map[string]any{"caller": id, "tab": "drive", "share": 0.1})
 	assert.Contains(t, text, "invalid")
-	text = callErr(t, session, "focus_tab", map[string]any{"session": id, "tab": "@3"})
+	text = callErr(t, session, "tab_focus", map[string]any{"caller": id, "tab": "@3"})
 	assert.Contains(t, text, "a chat has one terminal; say terminal")
-	text = callErr(t, session, "move_tab", map[string]any{"session": id, "tab": "diff"})
+	text = callErr(t, session, "tab_move", map[string]any{"caller": id, "tab": "diff"})
 	assert.Contains(t, text, "invalid")
 }
 
@@ -311,7 +315,7 @@ func TestGetLayoutAnswersFromTheMirror(t *testing.T) {
 		} `json:"splits"`
 	}
 	var before layout
-	call(t, session, "get_layout", map[string]any{"session": id}, &before)
+	call(t, session, "layout_get", map[string]any{"caller": id}, &before)
 	assert.False(t, before.Known)
 	assert.NotEmpty(t, before.Note)
 	assert.Empty(t, before.Panels)
@@ -326,7 +330,7 @@ func TestGetLayoutAnswersFromTheMirror(t *testing.T) {
 		}},
 	}))
 	var after layout
-	call(t, session, "get_layout", map[string]any{"session": id}, &after)
+	call(t, session, "layout_get", map[string]any{"caller": id}, &after)
 	assert.True(t, after.Known)
 	assert.True(t, after.OnScreen)
 	assert.Equal(t, "p1", after.FocusedPanel)

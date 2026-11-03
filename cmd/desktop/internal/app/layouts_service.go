@@ -54,7 +54,7 @@ type LayoutsService struct {
 	mu    sync.Mutex
 	kinds map[string]layoutKind
 
-	// callers resolves a tool's session argument; nil answers KindUnavailable.
+	// callers resolves a tool's caller argument; nil answers KindUnavailable.
 	callers tabCallers
 	// terminals is nil when tmux windows are not wired in; a terminal tab then
 	// answers KindUnavailable.

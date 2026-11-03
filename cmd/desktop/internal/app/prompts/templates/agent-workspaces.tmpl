@@ -76,9 +76,9 @@ nothing back-fires: Hive only ever measures missed occurrences since the last
 time this exact `cron` ran, never since the schedule was first created. An
 edit to `schedules:` -- yours or the agent's -- takes effect the next time this
 workspace opens; no restart needed. With the `hive-desktop` MCP server
-declared in `mcps:`, `put_schedule`, `remove_schedule`, `list_schedules` and
-`preview_schedule` make the same edit in place, one entry at a time, without
-touching the rest of the file; a `put_schedule` on an existing id changes only
+declared in `mcps:`, `schedule_put`, `schedule_delete`, `schedule_list` and
+`schedule_preview` make the same edit in place, one entry at a time, without
+touching the rest of the file; a `schedule_put` on an existing id changes only
 the fields it passes.
 
 ### Prompt template variables

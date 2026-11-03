@@ -16,7 +16,7 @@ const (
 
 // Block is one entry on a canvas. An html block's Body is the agent's source
 // verbatim; sanitizing happens on the way out, never on the way in, so
-// read_canvas shows the agent what it wrote. Timestamps are unix
+// canvas_get shows the agent what it wrote. Timestamps are unix
 // milliseconds.
 type Block struct {
 	ID        string `json:"id"`

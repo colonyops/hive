@@ -21,7 +21,7 @@ function definePanelLayouts(name: string, storageKey: string, kind: 'code' | 'ch
     // The key the user is looking at, or '' while this host is off screen.
     const onScreen = ref('')
 
-    // Go keeps a copy for the agents' get_layout, which is the only way an
+    // Go keeps a copy for the agents' layout_get, which is the only way an
     // agent learns what it is addressing: the layout lives here, in the browser.
     // The debounce is short because an agent reads right after it writes.
     watchDebounced(

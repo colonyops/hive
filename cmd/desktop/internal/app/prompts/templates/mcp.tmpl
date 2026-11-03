@@ -14,8 +14,12 @@ Connect over Streamable HTTP at:
 
     {{if .Env.MCPEndpoint}}{{.Env.MCPEndpoint}}{{else}}http://127.0.0.1:<port>/mcp{{end}}
 
-There is no token to configure: the server is bound to loopback and spawns no
-processes.
+There is no token to configure: the server is bound to loopback and runs no
+command you write. A source refresh still runs the command sources a flow
+already declares, and nothing here starts an agent.
+
+Every tool is also a `hive dt` command with the same input: `inbox_list` is
+`hive dt inbox list`, and `--input` takes the arguments as JSON.
 
 The server describes itself, so you do not work from this prompt — you work
 from the server. Call `tools/list` and work from what it reports; the input
@@ -25,11 +29,11 @@ actually accepts.
 Conventions those schemas assume:
 
 - A failing tool answers with an error result whose text opens with a stable machine string — `invalid`, `not_found`, `conflict`, `unavailable`, `unauthenticated`, `internal` — followed by the detail. Branch on that, never on the prose.
-- Every id-taking argument names a profile, and `list_profiles` is where profile ids come from. `get_flow` turns one into its graph, which is where node ids come from — `execute_flow` and the node-image tools take those.
+- Every id-taking argument names a profile, and `profile_list` is where profile ids come from. `flow_get` turns one into its graph, which is where node ids come from — `flow_preview` and the node-image tools take those.
 - A thing that does not exist is `not_found`, not an empty collection. An empty list means nothing has landed there, never that you named the wrong profile, feed or item.
-- Images go in as base64 and come back as images: `set_profile_image` takes base64 bytes (a `data:` URL is accepted, prefix and all), while `get_profile_image` answers with the PNG itself.
+- Images go in as base64 and come back as images: `profile_image_put` takes base64 bytes (a `data:` URL is accepted, prefix and all), while `profile_image_get` answers with the PNG itself.
 - Any tool that would answer with source-supplied JSON takes a `detail` argument and defaults to `summary`, which omits it. A payload is as large as the source made it and gets repeated per item or per node, so ask for `full` only once you have narrowed the read. Each answer echoes the level it used.
-- Scheduled chats are managed here too. `list_workspaces` names the agent workspaces; `list_schedules`, `put_schedule` and `remove_schedule` read and write one workspace's `schedules:` list, editing its `agent-workspace.yaml` in place with every other key and comment kept; `put_schedule` on an existing id changes only the fields you pass, so an omitted `disabled` or `name` stays as stored; `preview_schedule` dry-runs a cron and prompt template before you save it, rendering the prompt both with a previous run and as the first run sees it; `schedule_runs` reads what a schedule did. Running a schedule outside its timetable spawns an agent CLI, which this server never does; that stays the Chats area's "Run now".
-- Hive sessions carry tags, and tags are how an agent finds the sessions it works on. `list_sessions` filters by tags (every tag must match, ignoring case) and by state; `edit_session_tags` adds and then removes tags on one session in a single call, and starts or attaches nothing. An orchestrator polls `list_sessions` with `tags: ["auto"]`, and when it picks a session up it calls `edit_session_tags` with `remove: ["auto"]` and `add: ["claimed"]`, so the next poll does not return that session again. A launch-session action or flow node can put `tags` on a session when it creates one.
-- Reads and dry runs are safe to repeat. `execute_flow` commits nothing in particular — no feed membership, inbox rows, notifications, queued actions or durable kv — so use it to test a flow edit, including one you have not saved, instead of deploying and waiting for a poll.
+- Scheduled chats are managed here too. `workspace_list` names the agent workspaces; `schedule_list`, `schedule_put` and `schedule_delete` read and write one workspace's `schedules:` list, editing its `agent-workspace.yaml` in place with every other key and comment kept; `schedule_put` on an existing id changes only the fields you pass, so an omitted `disabled` or `name` stays as stored; `schedule_preview` dry-runs a cron and prompt template before you save it, rendering the prompt both with a previous run and as the first run sees it; `schedule_run_list` reads what a schedule did. Running a schedule outside its timetable spawns an agent CLI, which this server never does; that stays the Chats area's "Run now".
+- Hive sessions carry tags, and tags are how an agent finds the sessions it works on. `session_list` filters by tags (every tag must match, ignoring case) and by state; `session_tags_update` adds and then removes tags on one session in a single call, and starts or attaches nothing. An orchestrator polls `session_list` with `tags: ["auto"]`, and when it picks a session up it calls `session_tags_update` with `remove: ["auto"]` and `add: ["claimed"]`, so the next poll does not return that session again. A launch-session action or flow node can put `tags` on a session when it creates one.
+- Reads and dry runs are safe to repeat. `flow_preview` commits nothing in particular — no feed membership, inbox rows, notifications, queued actions or durable kv — so use it to test a flow edit, including one you have not saved, instead of deploying and waiting for a poll.
 {{template "task" .}}

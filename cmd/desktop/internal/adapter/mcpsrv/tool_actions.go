@@ -3,9 +3,8 @@ package mcpsrv
 import (
 	"context"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
+	"github.com/colonyops/hive/internal/ops"
 )
 
 // actionsResult is the actions catalog as the running app holds it. An
@@ -20,9 +19,9 @@ type actionsResult struct {
 	Actions []actions.EditableAction `json:"actions"`
 }
 
-func (ctrl *Controller) ListActions(ctx context.Context, _ *mcp.CallToolRequest, _ noInput) (*mcp.CallToolResult, any, error) {
+func (ctrl *Controller) ListActions(ctx context.Context, _ ops.NoInput) (any, error) {
 	catalog := ctrl.core.Actions.List(ctx)
-	return nil, actionsResult{
+	return actionsResult{
 		Path:    ctrl.core.RuntimePaths().ActionsPath,
 		Valid:   catalog.Error == "",
 		Error:   catalog.Error,

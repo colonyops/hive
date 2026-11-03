@@ -3,7 +3,7 @@
 
 /**
  * LayoutService takes the panel layouts the frontend holds, so agents can read
- * them through get_layout.
+ * them through layout_get.
  * @module
  */
 

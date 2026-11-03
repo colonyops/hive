@@ -4,16 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
-	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/ops/sessions"
 )
-
-type listSessionsInput struct {
-	Tags  []string `json:"tags,omitempty"  jsonschema:"Only sessions carrying every one of these tags. Tags compare case-insensitively."`
-	State string   `json:"state,omitempty" jsonschema:"Only sessions in this state: active, recycled or corrupted."`
-}
 
 type sessionView struct {
 	ID        string    `json:"id"`
@@ -38,15 +31,10 @@ func sessionViewOf(s session.Session) sessionView {
 
 // ListSessions reports hive sessions, newest first, filtered by tags and
 // state.
-func (ctrl *Controller) ListSessions(ctx context.Context, _ *mcp.CallToolRequest, in listSessionsInput) (*mcp.CallToolResult, any, error) {
-	switch session.State(in.State) {
-	case "", session.StateActive, session.StateRecycled, session.StateCorrupted:
-	default:
-		return nil, nil, ctrl.toolError(app.Errorf(app.KindInvalid, "state %q is not active, recycled or corrupted", in.State))
-	}
+func (ctrl *Controller) ListSessions(ctx context.Context, in sessions.SessionListIn) (any, error) {
 	sessions, err := ctrl.core.Sessions.ListSessions(ctx)
 	if err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, err
 	}
 	views := []sessionView{}
 	for _, s := range sessions {
@@ -58,13 +46,7 @@ func (ctrl *Controller) ListSessions(ctx context.Context, _ *mcp.CallToolRequest
 		}
 		views = append(views, sessionViewOf(s))
 	}
-	return nil, listSessionsResult{Sessions: views}, nil
-}
-
-type editSessionTagsInput struct {
-	SessionID string   `json:"sessionId"        jsonschema:"Session id, from list_sessions."`
-	Add       []string `json:"add,omitempty"    jsonschema:"Tags to add. A tag the session already carries is kept as it is."`
-	Remove    []string `json:"remove,omitempty" jsonschema:"Tags to remove, after the adds. A tag the session does not carry is ignored."`
+	return listSessionsResult{Sessions: views}, nil
 }
 
 type editSessionTagsResult struct {
@@ -73,13 +55,10 @@ type editSessionTagsResult struct {
 
 // EditSessionTags adds and removes tags on one session. It changes the
 // session record only; nothing is spawned or attached.
-func (ctrl *Controller) EditSessionTags(ctx context.Context, _ *mcp.CallToolRequest, in editSessionTagsInput) (*mcp.CallToolResult, any, error) {
-	if len(in.Add) == 0 && len(in.Remove) == 0 {
-		return nil, nil, ctrl.toolError(app.Errorf(app.KindInvalid, "provide add or remove"))
-	}
+func (ctrl *Controller) EditSessionTags(ctx context.Context, in sessions.SessionTagsUpdateIn) (any, error) {
 	saved, err := ctrl.core.Sessions.EditSessionTags(ctx, in.SessionID, in.Add, in.Remove)
 	if err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, err
 	}
-	return nil, editSessionTagsResult{Session: sessionViewOf(saved)}, nil
+	return editSessionTagsResult{Session: sessionViewOf(saved)}, nil
 }

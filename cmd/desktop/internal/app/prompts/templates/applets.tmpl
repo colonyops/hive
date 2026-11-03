@@ -22,7 +22,7 @@ surfaces:
     height: 760
 ```
 
-A key Hive does not know is a warning in `list_applets`, and the applet still opens, so check it for a misspelled key. A wrong value under a key Hive knows is an error.
+A key Hive does not know is a warning in `applet_list`, and the applet still opens, so check it for a misspelled key. A wrong value under a key Hive knows is an error.
 
 - `version`: must be `1`. It is the format of this file, not a release of the applet.
 - `hive`: optional oldest Hive that can run the applet, as `">=0.60"`. Set it when the applet needs a key added in that release, and always when a key limits what the applet can do, because an older Hive would otherwise ignore the limit.
@@ -90,7 +90,7 @@ page.
 
 ## In a session
 
-An applet with `surfaces.tab` is in a session's + menu and opens as a tab beside its terminals. From the palette or a key it opens as that tab when a session is on screen. You can open and close it yourself with the `open_tab` and `close_tab` tools, as `applet:<id>`. A tab fills its panel, so make the page fit any size down to a narrow split.  A tab's page reloads when the user comes back from another session, so keep what matters in `localStorage`.
+An applet with `surfaces.tab` is in a session's + menu and opens as a tab beside its terminals. From the palette or a key it opens as that tab when a session is on screen. You can open and close it yourself with the `tab_open` and `tab_close` tools, as `applet:<id>`. A tab fills its panel, so make the page fit any size down to a narrow split.  A tab's page reloads when the user comes back from another session, so keep what matters in `localStorage`.
 
 ## In the title bar
 
@@ -122,7 +122,7 @@ The user shares an applet from Settings > Applets, as one `.hiveapplet` file. An
 ## Check your work
 
 1. Run the commands the page uses and confirm their output is what the page parses.
-2. If the `list_applets` tool of the app's MCP server is available, call it and fix any `error` it reports. Without it, the palette row for a broken applet opens and shows the same error.
+2. If the `applet_list` tool of the app's MCP server is available, call it and fix any `error` it reports. Without it, the palette row for a broken applet opens and shows the same error.
 3. Tell the user the applet's name and where it shows. For a tab or a pop-up, say they open it from the command palette and can bind it to a key as `applet.<id>`, and for a tab, from a session's + menu. Name any `commands` it has.
 {{with .Brief}}
 {{if eq .Style "hive"}}{{template "applet-style-hive"}}{{end -}}

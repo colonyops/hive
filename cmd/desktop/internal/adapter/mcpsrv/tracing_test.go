@@ -27,8 +27,8 @@ func TestToolCallRootsASpanNamedForTheTool(t *testing.T) {
 	_, session := testSession(t)
 	recorder := recordSpans(t)
 
-	call(t, session, "get_status", struct{}{}, nil)
-	callErr(t, session, "get_flow", map[string]any{"profileId": "nope"})
+	call(t, session, "status_get", struct{}{}, nil)
+	callErr(t, session, "flow_get", map[string]any{"profileId": "nope"})
 
 	var roots []sdktrace.ReadOnlySpan
 	for _, span := range recorder.Ended() {
@@ -39,11 +39,11 @@ func TestToolCallRootsASpanNamedForTheTool(t *testing.T) {
 	require.Len(t, roots, 2, "a tool call is a trigger, so its span is a root")
 
 	ok, failed := roots[0], roots[1]
-	assert.Equal(t, "mcp.tool get_status", ok.Name())
+	assert.Equal(t, "mcp.tool status_get", ok.Name())
 	assert.Equal(t, trace.SpanKindServer, ok.SpanKind())
 	assert.Equal(t, codes.Unset, ok.Status().Code)
 
-	assert.Equal(t, "mcp.tool get_flow", failed.Name())
+	assert.Equal(t, "mcp.tool flow_get", failed.Name())
 	assert.Equal(t, codes.Error, failed.Status().Code)
 	assert.Contains(t, failed.Status().Description, "not_found")
 }
@@ -55,8 +55,8 @@ func TestToolCallRecordsItsDurationByToolAndOutcome(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
 	otel.SetMeterProvider(sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader)))
 
-	call(t, session, "get_status", struct{}{}, nil)
-	callErr(t, session, "get_flow", map[string]any{"profileId": "nope"})
+	call(t, session, "status_get", struct{}{}, nil)
+	callErr(t, session, "flow_get", map[string]any{"profileId": "nope"})
 
 	var rm metricdata.ResourceMetrics
 	require.NoError(t, reader.Collect(t.Context(), &rm))
@@ -74,5 +74,5 @@ func TestToolCallRecordsItsDurationByToolAndOutcome(t *testing.T) {
 			}
 		}
 	}
-	assert.Equal(t, map[string]uint64{"get_status|": 1, "get_flow|tool_error": 1}, counts)
+	assert.Equal(t, map[string]uint64{"status_get|": 1, "flow_get|tool_error": 1}, counts)
 }

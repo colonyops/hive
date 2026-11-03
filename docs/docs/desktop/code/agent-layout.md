@@ -22,29 +22,40 @@ A tab is named by what it shows:
 
 | Tool | CLI | What it does |
 | --- | --- | --- |
-| `open_tab` | `hive dt tab open <view>` | Opens Drive, Diff, Tasks, a terminal, or `applet:<id>` for an [applet](../configuration/applets.md) that lists a tab. `--path` picks a Drive document or canvas. `--placement behind` adds the tab behind the one in front with a dot; `beside` and `below` split the panel. `--anchor` names the tab to place next to. |
-| `close_tab` | `hive dt tab close <tab>` | Closes a Drive, Diff, Tasks, or `applet:<id>` tab. On a Code window it kills that tmux window. |
-| `move_tab` | `hive dt tab move <tab> --placement P` | Moves an open tab behind, beside, or below the anchor, or the panel in front. |
-| `focus_tab` | `hive dt tab focus <tab>` | Brings a tab forward and focuses its panel. This one takes the screen. |
-| `close_panel` | `hive dt panel close <tab>` | Closes the panel holding the tab; its tabs join the neighbour. |
-| `resize_split` | `hive dt split resize <tab> --share 0.6` | Gives the side holding the tab that share of its split, from 0.2 to 0.8. |
-| `turn_split` | `hive dt split turn <tab>` | Turns the split between side by side and stacked. |
-| `get_layout` | `hive dt layout` | Prints the panels, their tabs, and the splits as JSON. |
+| `tab_open` | `hive dt tab open <view>` | Opens Drive, Diff, Tasks, a terminal, or `applet:<id>` for an [applet](../configuration/applets.md) that lists a tab. `--path` picks a Drive document or canvas. `--placement behind` adds the tab behind the one in front with a dot; `beside` and `below` split the panel. `--anchor` names the tab to place next to. |
+| `tab_close` | `hive dt tab close <view>` | Closes a Drive, Diff, Tasks, or `applet:<id>` tab. `hive dt tab close terminal --window <window>` kills that tmux window of a Code session. |
+| `tab_move` | `hive dt tab move <tab> --placement P` | Moves an open tab behind, beside, or below the anchor, or the panel in front. |
+| `tab_focus` | `hive dt tab focus <tab>` | Brings a tab forward and focuses its panel. This one takes the screen. |
+| `panel_close` | `hive dt panel close <tab>` | Closes the panel holding the tab; its tabs join the neighbour. |
+| `split_resize` | `hive dt split resize <tab> --share 0.6` | Gives the side holding the tab that share of its split, from 0.2 to 0.8. |
+| `split_turn` | `hive dt split turn <tab>` | Turns the split between side by side and stacked. |
+| `layout_get` | `hive dt layout get` | Prints the panels, their tabs, and the splits as JSON. |
 
 A new terminal opens detached, so it never takes the keyboard. It is a shell in the session's checkout with nothing running in it, and `--name` names the window. The tool takes no command: an agent runs its own work itself and opens a terminal for you to type in.
 
 ## From the CLI
 
-The commands find the running app through a file the desktop writes in the hive data directory when it starts. Pass `--url http://127.0.0.1:<port>` or set `HIVE_DESKTOP_URL` to reach a different instance, such as a development build. `--session` defaults to `HIVE_AGENT_SESSION` inside a chat and to the current directory inside a Code session's checkout.
+The commands find the running app through a file the desktop writes in the hive data directory when it starts. Pass `--desktop-url http://127.0.0.1:<port>` or set `HIVE_DESKTOP_URL` to reach a different instance, such as a development build. `--caller` defaults to `HIVE_AGENT_SESSION` inside a chat and to the current directory inside a Code session's checkout. Every command takes its fields as flags, or the whole input as JSON with `--input` (inline, `@file`, or `-` for stdin).
 
 ```bash
-hive dt layout | jq
+hive dt layout get | jq
 hive dt tab open terminal --name tests --placement beside
 hive dt tab move drive --placement below --anchor tests
 hive dt split resize tests --share 0.4
 ```
 
-A refused request prints the reason, such as `invalid: a chat has only a Drive tab`, and exits with status 1.
+A refused request prints the reason, such as `invalid: a chat has only a Drive tab`, and exits with a status for its kind:
+
+| Kind | Exit status |
+| --- | --- |
+| `invalid` | 2 |
+| `not_found` | 3 |
+| `conflict` | 4 |
+| `unavailable` | 5 |
+| `unauthenticated` | 6 |
+| any other failure | 1 |
+
+`hive dt` has a command for every tool on the Hive Desktop and Hive Drive servers, not only the layout tools: `hive dt document put`, `hive dt inbox list`, `hive dt schedule list`, and so on. Run `hive dt --help` for the list.
 
 ## From MCP
 

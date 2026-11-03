@@ -64,7 +64,8 @@ individual choices; this document describes the shape everything fits into.
 > (ADR mcp-replaces-the-agent-facing-http-api, ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows). It replaced the REST control surface that preceded it, whose
 > routes and generated OpenAPI document are deleted rather than deprecated —
 > `tools/list`, inferred from the same Go types the handlers take, is what
-> makes it self-describing now.
+> makes it self-describing now. Every tool is a spec in `internal/ops`, and
+> `hive dt` builds a CLI command from the same spec (ADR every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it).
 >
 > `cmd/desktop/internal/adapter/httpapi` remains, narrowed to two things that are not an
 > agent surface: the Wails frontend's terminal, pop-up-terminal and
@@ -116,8 +117,9 @@ in-process callers of the same `App`, not clients over a wire.
 
 `hive` (the CLI/TUI in `cmd/hive`) is the other program in the same
 repository. Both run on the hive engine under `internal/`, and neither
-imports the other. When this document says "CLI", it means a future surface
-of *this* binary.
+imports the other. When this document says "CLI", it means `hive dt`: the
+hive CLI's commands for the desktop's operations, built from the same specs
+the desktop mounts (ADR every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it).
 
 ### Named patterns
 
@@ -140,7 +142,7 @@ Domain-Driven Design, (Go) an idiom specific to the language.
 | **Store** (Repository, PoEAA) | `app/data/stores`, one type per persisted **aggregate root** | One aggregate's persistence behind hand-written domain types; it publishes nothing and knows nothing about `app.Error`. The placement rules and the transaction contract are in [Stores and services](#stores-and-services). |
 | **Adapter** (GoF) | `wailsui`, `httpapi`, `mcpsrv` | A bound method builds a request and calls a service. More than ~5 lines of logic means it belongs in `app`. Transport vocabulary — status codes, exit codes, wire encodings — stops here. |
 | **Error chain** (httpkit `errchain`) | every HTTP surface: `httpapi`, devserver control | Handlers are `func(w, r) error` behind one `internal/web/mid.Errors` middleware that maps error types to responses exactly once — no handler writes a status inline. Input enters only through `internal/web/extractors` (`Body` decode + the struct's criterio `Validate`). Per-resource `ctrl_*.go` files, routes registered in one place. See ADR http-handler-conventions. |
-| **Tool table** | `mcpsrv` | One file declares every MCP tool — name, title, description — and nothing else; the handler beside it is a thin call into `App`. Input schemas are *inferred from the handler's typed input struct*, never hand-written, so a tool cannot advertise a field its handler does not accept. A store type whose `jsonschema` tags were written for the OpenAPI reflector cannot be a tool's input or output type: the SDK's inferrer rejects a `WORD=`-prefixed tag, and `json.RawMessage` infers as an array. Declare an adapter-local type and convert at the seam. Three contracts hold across the whole surface, because an agent has no UI to disambiguate from: an id that resolves to nothing is `not_found` and never an empty collection; a mutation's answer is never a constant, so a caller can tell it happened; and a field whose size the *source* decides — an item payload, an event detail, a dry run's messages — is behind a `detail` argument that defaults to omitting it, with the level echoed on the answer. See ADR mcp-replaces-the-agent-facing-http-api. |
+| **Operation catalog** | `internal/ops`, `mcpsrv`, `cmd/hive/internal/opscli` | An operation is one `ops.Spec[In]` in `internal/ops/<toolset>`: a noun-first name, owner, effect, toolset, typed input, typed constraints and guidance. `mcpsrv` mounts each spec with `mcpops.Mount` and a thin handler into `App`, which may supply the output type; `opscli` builds `hive dt <resource> <verb>` from the same spec. Input schemas are *inferred from the spec's input type*, never hand-written, so a tool cannot advertise a field its handler does not accept. Tests fail when a spec is missing from `catalog.All()`, when a server does not serve exactly its catalog tools, and when an op has no command (ADR every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it). A store type whose `jsonschema` tags were written for the OpenAPI reflector cannot be a tool's input or output type: the SDK's inferrer rejects a `WORD=`-prefixed tag, and `json.RawMessage` infers as an array. Declare an adapter-local type and convert at the seam. Three contracts hold across the whole surface, because an agent has no UI to disambiguate from: an id that resolves to nothing is `not_found` and never an empty collection; a mutation's answer is never a constant, so a caller can tell it happened; and a field whose size the *source* decides — an item payload, an event detail, a dry run's messages — is behind a `detail` argument that defaults to omitting it, with the level echoed on the answer. See ADR mcp-replaces-the-agent-facing-http-api. |
 | **Data-plane mount** | streaming surfaces on the loopback server: the terminal WebSocket | A surface that streams bytes is a raw `http.Handler` mounted at its own prefix via `App.MountAPI` — never a row in the errchain operations table, which cannot frame a hijacked socket. Its request/response half stays REST on `httpapi`; only what needs latency or backpressure rides the socket. It authenticates itself if it must, because the errchain surface around it is deliberately unauthenticated. See ADR terminal-transport. |
 | **Shared Kernel** (DDD) | `internal/`, the hive engine | One model both programs run on. `app` calls `hive.Engine` and its services directly, and domain types (`session.Session`, `hc.Item`) may appear in any `app` signature. Where a transport needs another shape, the adapter converts (`wailsui`, `mcpsrv`), never `app`. A change here changes both programs, and CI builds and tests both. See [Layers and the dependency rule](#layers-and-the-dependency-rule) and ADR both-programs-run-on-one-layered-hive-engine. |
 
@@ -150,7 +152,7 @@ Domain-Driven Design, (Go) an idiom specific to the language.
 | --- | --- | --- |
 | **Strategy** (GoF) | action executors, event delivery, script runtimes | One implementation per variant behind one interface, selected by a registry lookup — never a `switch` that grows a case per type. For event delivery the strategy is *constructed*, not an enum: `events.Coalesce()` / `events.Buffer(n)`, so "coalesce with a queue size" is unrepresentable rather than merely wrong. |
 | **Command** (GoF) | action dispatch | An `output_command` row is the durable identity, state, and diagnostics for one item action. Automatic rows carry replayable payloads; manual inputs stay process-local and interrupted manual runs never replay. The non-rerun `UNIQUE (action_id, key)` index and active-command partial index prevent an already-run or concurrent action from re-firing -- treat both as load-bearing. Attempts execute only under token-guarded claims (ADR action-commands-use-durable-claims-and-bounded-dispatch-lanes). An attempt of an `actions.yml` action writes its ordered line log through the `RunLog` on its execution context; an executor never opens its own log (ADR action-runs-keep-a-line-log-written-through-the-execution-context). |
-| **Registry** | the [extension points](#extension-points) | An explicit map keyed by a type string, declared in one file, with per-type config carrying its own `Validate`. Never `init()` self-registration — `gochecknoinits` is enabled. A registry used for enumeration (MCP tool listing, CLI generation) carries *metadata only*, never dispatch. |
+| **Registry** | the [extension points](#extension-points) | An explicit map keyed by a type string, declared in one file, with per-type config carrying its own `Validate`. Never `init()` self-registration — `gochecknoinits` is enabled. A registry used for enumeration (the operation catalog, which MCP tool listing and CLI generation both walk) carries *metadata only*, never dispatch. |
 | **Factory Method** (GoF) | node config decoding, connector instances | The registry stores a constructor, not an instance. `func() NodeConfig` must return a **distinct** value per call because the decoder mutates it in place. For connectors, a `Descriptor` (schema, capabilities, stability) is what gets registered; instances are constructed per-use from parsed config. |
 | **Observer** (GoF) — typed and payload-carrying | core → adapters | Core events carry payloads and each subscriber declares a delivery policy. The Wails adapter degrades them to wake-up signals; **the core never does**, because an MCP client cannot cheaply "re-read the service" and a streaming consumer needs the delta. |
 | **Declared capabilities** | connectors, any pluggable type | A type states what it supports. Never `if s, ok := x.(Backfiller)` — sniffing hides capability from the editor, the docs, and an LLM, all of which need to know before calling. |
@@ -182,7 +184,7 @@ column is the section that specifies it.
 | A new **script language** | Strategy behind the `ScriptRuntime` port, Registry | [Script nodes](#script-nodes) |
 | A new **bound method / RPC** | Facade, Adapter, Typed errors | [Placement rules](#placement-rules), rules 1–4 |
 | A new **HTTP, MCP or CLI surface** | Adapter, Ports & Adapters (driving side — no interface) | [The Go amendment](#the-go-amendment-to-hexagonal) |
-| A new **agent capability** | Tool table — one row in `mcpsrv/tools.go`, a typed input struct, a thin `App` call | ADR mcp-replaces-the-agent-facing-http-api |
+| A new **agent capability** | Operation catalog — one spec in `internal/ops/<toolset>` and one `mcpops.Mount` line with a thin `App` call; the `hive dt` command follows | ADR every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it |
 | A new **HTTP endpoint** | Error chain — `errchain` handler, `internal/web/extractors` input, `ctrl_*.go` + routes in one place. Only for the frontend's own transport: an agent capability is a tool | ADR http-handler-conventions, ADR mcp-replaces-the-agent-facing-http-api |
 | A new **streaming endpoint** (WebSocket/SSE) | Data-plane mount — raw handler at its own prefix, REST control plane beside it | [Terminal sessions](#terminal-sessions), ADR terminal-transport |
 | A new **event** | Observer — payload in core, degraded to a wake-up in `wailsui` | [Events](#events) |
@@ -272,6 +274,7 @@ needs no lint edit:
 | Platform | `internal/platform/` | Drivers for one outside system each: git, tmux, SQLite, process inspection, the login-shell environment, credentials, secrets, the OTel API, the directory-tree file watcher (`fswatch`) | `pkg/`, `domain/`, other `platform/*` | `platform-is-a-driver` |
 | Store | `internal/store/` | `hive.db`: sqlc output, migrations, one store per aggregate | `pkg/`, `domain/`, `platform/sqlite` | `store-is-persistence` |
 | Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer | `pkg/`, `domain/` | `config-is-data` |
+| Operations | `internal/ops/` | The operation catalog: one spec per operation, grouped by toolset, plus the MCP binder `mcpops` | `pkg/`, `domain/`, `platform/observe`, other `ops/*` | `ops-is-a-contract` |
 | Web | `internal/web/` | Shared HTTP plumbing every program's HTTP surface uses: the error wire shape, `mid/` middleware, `extractors/` input decoding | everything except `hive/` and `store/` | `web-is-plumbing` |
 | Engine | `internal/hive/` | One subpackage per application service (`drive` owns the document tree under the context root), the event bus, and `hive.Engine`, which composes them | everything above | |
 | Engine consumers | `internal/hive/sessionapi`, `daemon`, `daemon/daemonpath`, `daemonclient`, `servers`, `hivetest` | Code both programs share that runs on a whole `hive.Engine`: the session API over the engine or over RPC, the hive daemon that serves it, the socket and lock paths a client finds it by, the fleet of the local session API and each remote server, and the engine test fakes | everything above, including the engine root | |
@@ -519,14 +522,14 @@ cmd/desktop/internal/
                                   #   liveness probe
     mcpsrv/                       # THE AGENT SURFACE: tools over App, served over
                                   #   Streamable HTTP at /mcp on that same loopback
-                                  #   server (ADR mcp-replaces-the-agent-facing-http-api). tools.go is the tool table
-                                  #   — metadata only, one place; tool_*.go per
-                                  #   domain hold typed inputs and thin App calls;
+                                  #   server (ADR mcp-replaces-the-agent-facing-http-api). tools.go mounts
+                                  #   the catalog specs of internal/ops; tool_*.go
+                                  #   per domain hold outputs and thin App calls;
                                   #   errors.go maps app.Kind once. Stateless, so
                                   #   no session outlives a request and there is no
                                   #   lifecycle to unwind; unauthenticated behind
-                                  #   the loopback bind because nothing here spawns
-                                  #   a process
+                                  #   the loopback bind because nothing here runs
+                                  #   a command a caller writes
 
 pkg/                              # kit: hive-agnostic helpers (atomicfile,
                                   #   executil, pathutil, tmpl, buildinfo, ...)
@@ -1274,7 +1277,7 @@ or a profile type updates the panel that reads it.
 
 `App.Diagnostics` combines bounded file tails with `Jobs` outcomes; it owns no
 second log store (ADR [diagnostics-combines-bounded-evidence-independently-of-agent-execution](decisions/2026-10-06-diagnostics-combines-bounded-evidence-independently-of-agent-execution.md)).
-Wails and the read-only `read_diagnostics` MCP tool use the same service.
+Wails and the read-only `diagnostics_get` MCP tool use the same service.
 Records retain source identity, evidence IDs, raw text, structured fields, and
 truncation status. JSON fields are exact; fields parsed from legacy console text
 are best effort. CLI and Desktop share hive.log, with service_name identifying
@@ -1458,7 +1461,7 @@ opened in `AppletFrame`
   `setTabHost`, so the palette and a chord open an applet as a tab where one can show.
   Delete and import close saved tabs for the id, and import does it before `ConfirmImport`,
   because its catalog reload would mount the imported page in a leftover tab.
-  Agents use every layout verb on `applet:<id>`, including `open_tab` and `close_tab`.
+  Agents use every layout verb on `applet:<id>`, including `tab_open` and `tab_close`.
   `LayoutsService` asks `AppletsService.CheckTab` whether the file lists a tab first. This is
   the one verb on that server that runs a page, and the ADR says why that is acceptable.
 - **`applet.yaml` reads forward.** A key or icon this Hive does not know is a warning on the
@@ -2192,7 +2195,7 @@ detached or found; the tab itself still arrives through the reconcile, and
 special for `behind`, a new split on the anchor for `beside` or `below`,
 whether the tab is already there or the event beat the listing. Each layout
 store reports its map and the key on screen to Go (`lib/layoutReport.ts`,
-`LayoutService.Report`), which is how `get_layout` answers.
+`LayoutService.Report`), which is how `layout_get` answers.
 
 #### Pop-up terminals
 
@@ -2557,7 +2560,7 @@ watches that file's directory alone, because the directory may be as large
 as a home directory.
 
 **The desktop adds the UI surface and the agent surface.**
-`app.DriveService` serves the agent tools, which resolve a `session` argument
+`app.DriveService` serves the agent tools, which resolve a `caller` argument
 to a space, and the UI methods: `Spaces`, `Tree`, `Search`, `Document`,
 `Markdown`, `Export`, `CreateFolder`, `Rename`, `Move` and `Delete`. The Wails
 `DriveService` in `adapter/wailsui` binds the UI methods with camelCase wire
@@ -2581,32 +2584,33 @@ at `/mcp/drive` and at `/mcp/canvas`; the old address keeps answering for
 existing agent configurations. It has twenty-one tools: the eight canvas tools,
 whose `canvas` argument is a name or a path (`reports/perf` files at
 `reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), five document
-tools: `list_documents`, `read_document`, `write_document`, `move_document`
-and `delete_document`, and eight layout tools: `open_tab` (`view` is `drive`,
+tools: `document_list`, `document_get`, `document_put`, `document_move`
+and `document_delete`, and eight layout tools: `tab_open` (`view` is `drive`,
 `diff`, `tasks` or `terminal`; `path`, for `drive`, is a document path or a
 canvas name; `window`, `name` and `command`, for `terminal`, pick an existing
 window or start a new detached one in the checkout, a shell with no command;
 `placement` is `behind`, `beside` or `below`, relative to an optional
-`anchor`), `close_tab` (a terminal needs `window` and is killed through
-`tmuxcc.Manager.KillWindow`, with no event), `move_tab`, `focus_tab`,
-`close_panel`, `resize_split`, `turn_split` and `get_layout`. The verbs are
+`anchor`), `tab_close` (a terminal needs `window` and is killed through
+`tmuxcc.Manager.KillWindow`, with no event), `tab_move`, `tab_focus`,
+`panel_close`, `split_resize`, `split_turn` and `layout_get`. The verbs are
 `app.LayoutsService` (`layouts_tabs.go`), which asks `app.DriveService` only
-who a session argument is and what document a Drive tab opens on. A tab is
+who a `caller` argument is and what document a Drive tab opens on. A tab is
 addressed by one string: a view name, `terminal` for a chat's one window, or a
 Code window by tmux id or exact name, which `parseTabRef` and `FindWindow`
-resolve before anything is published. `get_layout` answers from the same
+resolve before anything is published. `layout_get` answers from the same
 service's in-memory mirror, which the frontend fills through the Wails
 `LayoutService.Report` whenever a layout store changes (debounced, with the
 key on screen), joined with tmux window names; the layout itself still lives
 only in the browser, and `known: false` says the frontend has not reported
-yet. The hive CLI reaches the same tools as an MCP client: `hive dt layout`,
-`hive dt tab open|close|move|focus`, `hive dt panel close`, `hive dt split
-resize|turn`, with `--session` defaulting to `HIVE_AGENT_SESSION` or the
-working directory and `--url` to the endpoint file the desktop writes at
+yet. The hive CLI reaches the same tools as an MCP client: `hive dt` has a
+`<resource> <verb>` command for every desktop op (`hive dt layout get`,
+`hive dt tab open|close|move|focus`, `hive dt split resize|turn`, and so on),
+with `--caller` defaulting to `HIVE_AGENT_SESSION` or the working directory
+and `--desktop-url` to the endpoint file the desktop writes at
 `<hive data dir>/desktop/endpoint.json` after `core.Start`
 (`internal/platform/desktopendpoint`; removed on shutdown only when its PID is
 this process, because a dev build beside the installed app shares the
-directory). `read_document` reads markdown, html
+directory). `document_get` reads markdown, html
 and any other UTF-8 text file, and answers `not_found` for hive state files
 (`kv.json`, `kv.json.lock`). An app-hosted catalogue entry declares
 its mount as `Descriptor.RuntimePath`, joined with the live loopback base when
@@ -2615,9 +2619,9 @@ agreeing with the adapter's constants. The app does not wire the server into a
 Code session's agent: the user adds its address to the agent's own MCP
 configuration, and Settings ▸ MCP servers lists it.
 
-**A session resolves to a space.** The `session` argument is `global`, a chat's
+**A caller resolves to a space.** The `caller` argument is `global`, a chat's
 record id, or the caller's working directory. `global` is the `shared` space,
-which sits beside no session and so has no tabs: `open_tab` and `close_tab`
+which sits beside no session and so has no tabs: `tab_open` and `tab_close`
 refuse it, and they refuse `diff` and `tasks` for a chat, which has only Drive.
 The `@global` store is gone, but canvas tool results still name the shared
 space's owner `@global`, so agents and `hive://canvas` links that match on it
@@ -2734,7 +2738,7 @@ A canvas's `frontmatter` is a flat mapping of agent-editable scalars or scalar
 lists, validated by `drive.ValidateFrontmatter`
 (ADR canvases-carry-front-matter-and-users-can-delete-them). `created_at` and
 `updated_at` are derived from the canvas timestamps and cannot be overwritten.
-`set_frontmatter` replaces the editable mapping in one atomic file write; an
+`canvas_frontmatter_put` replaces the editable mapping in one atomic file write; an
 empty mapping removes it all. A markdown document's front matter is read-only
 to the app. One localStorage-backed disclosure state expands or collapses the
 properties across every document, and Markdown copy and export prepend the
@@ -2888,8 +2892,8 @@ workspace view and the MCP tools cannot disagree about a row's last run.
 `app.SchedulesService` fronts the scheduler with
 `RunNow`, `Runs` and `Preview`, on the token-guarded
 `/api/terminal/agents/schedules/...` prefix because "run now" spawns a
-process. The MCP server carries `list_workspaces`, `list_schedules`,
-`put_schedule`, `remove_schedule`, `preview_schedule` and `schedule_runs`, and
+process. The MCP server carries `workspace_list`, `schedule_list`,
+`schedule_put`, `schedule_delete`, `schedule_preview` and `schedule_run_list`, and
 no run-now: that surface never spawns a process.
 
 Schedules are a section of the workspace editor, not a surface of their own:
@@ -2963,7 +2967,7 @@ browser routed. That split made the desktop window a hard dependency of flow
 execution and put the correctness-critical parts — topological order,
 fan-out, offset advancement, commit atomicity — out of reach of any headless
 surface. Consolidating in Go is what made the dry-run surface possible: one
-execution path an editor preview and the `execute_flow` MCP tool each drive
+execution path an editor preview and the `flow_preview` MCP tool each drive
 identically, rather than a second implementation of routing semantics.
 
 `Runner.Run` returns the `CommitBatch` a batch of messages is worth and
@@ -3165,12 +3169,6 @@ quality gate and the release CLI run it.
 
 These are deliberately unresolved; revisit when the relevant work starts.
 
-- **Command placement** — per-domain service methods with request structs
-  (current plan, matching the CLI's `cmd/hive/internal/app/app.go`) versus a flat
-  `app/command` + `app/query` package that gives MCP and CLI generation one
-  place to enumerate. The httpapi operations table is an
-  adapter-local precedent for the enumeration side, not a resolution of where
-  the commands live.
 - **`adapter/` as a grouping directory** versus flat `internal/wailsui`,
   `internal/httpapi`, `internal/mcpsrv`.
 - **Schema-driven editor forms** — a connector's config schema is reflected

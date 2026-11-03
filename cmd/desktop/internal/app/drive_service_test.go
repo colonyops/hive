@@ -25,6 +25,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	hiveevents "github.com/colonyops/hive/internal/hive/events"
+	driveops "github.com/colonyops/hive/internal/ops/drive"
 )
 
 type fakeCanvasSessions map[string]stores.AgentSession
@@ -357,7 +358,7 @@ func TestCanvasHTMLIsSanitizedOnTheWayOutNotIn(t *testing.T) {
 
 	stored, err := f.svc.GetCanvas(ctx, "1", "plan")
 	require.NoError(t, err)
-	assert.Contains(t, stored.Blocks[0].Body, "<script>", "read_canvas shows the agent what it wrote")
+	assert.Contains(t, stored.Blocks[0].Body, "<script>", "canvas_get shows the agent what it wrote")
 }
 
 func TestCanvasReadsReportAMigratedChatByItsUUID(t *testing.T) {
@@ -429,7 +430,7 @@ func TestCanvasPutBlocks(t *testing.T) {
 	assert.Len(t, c.Blocks, 2)
 	f.signals.waitUpdates(t, 1)
 
-	oversized := make([]drive.Block, maxCanvasBatchBlocks+1)
+	oversized := make([]drive.Block, driveops.MaxBlocksPerCall+1)
 	for i := range oversized {
 		oversized[i] = markdownBlock(strings.Repeat("a", i+1), "x")
 	}
