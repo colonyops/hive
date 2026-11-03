@@ -271,10 +271,6 @@ function tabAttention(tab: PanelTab): boolean {
   return tab.kind === 'docs' && !!shownDrive.value && driveActivity.isUnseen(shownDrive.value.session)
 }
 
-function isWindowTab(tab: PanelTab): boolean {
-  return !!windowIdOf(tab)
-}
-
 // A running window has a tab and a tree row, so closing its tab closes the window,
 // through the same confirmation as the tree.
 function closePanelTab(panelId: string, tabId: string): void {
@@ -503,7 +499,6 @@ onBeforeUnmount(() => {
       :move-tab="panels.moveTabTo"
       :tab-label="tabLabel"
       :tab-attention="tabAttention"
-      :tab-mono="isWindowTab"
       :has-content="(tab) => !!viewOfTab(tab)"
       :content-key="panels.key"
       :hidden="!visible"

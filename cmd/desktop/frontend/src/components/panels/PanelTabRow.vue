@@ -10,8 +10,6 @@ const props = defineProps<{
   focused: boolean
   label: (tab: PanelTab) => string
   attention: (tab: PanelTab) => boolean
-  /** Window names are commands and paths, so they read in the mono face. */
-  mono?: (tab: PanelTab) => boolean
   /** The gap a dragged tab would land in, when this row is the target. */
   dropGap: number | null
   /** The tab being dragged, in this row or another; it fades where it sits. */
@@ -103,9 +101,7 @@ watch(tabIds, (ids, before) => {
           @click="emit('select', tab.id)"
         >
           <slot name="icon" :tab="tab" />
-          <span v-if="!compact || shown(tab)" class="min-w-0 truncate" :class="mono?.(tab) ? 'font-mono' : ''">{{
-            label(tab)
-          }}</span>
+          <span v-if="!compact || shown(tab)" class="min-w-0 truncate">{{ label(tab) }}</span>
           <span
             v-if="attention(tab)"
             class="size-1.5 shrink-0 rounded-full bg-accent"
@@ -134,7 +130,7 @@ watch(tabIds, (ids, before) => {
       data-testid="panel-tab-drop-marker"
     />
 
-    <div class="relative ml-0.5 flex shrink-0 items-center">
+    <div class="relative ml-1.5 flex shrink-0 items-center">
       <slot name="add" :panel="panel" />
     </div>
 
