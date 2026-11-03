@@ -533,6 +533,14 @@ func (s *SessionsService) SessionFileContext(ctx context.Context, id string, tar
 		return gitstatus.FileDiff{}, Errorf(KindInvalid, "session id is required")
 	}
 	diff, err := s.sessions.SessionFileContext(ctx, id, target, path)
+	// The daemon is a separate install and can be older than Desktop. Desktop
+	// keeps its own engine open, which can read a local session's checkout.
+	// A session on another machine is not in it, and then the daemon's answer stands.
+	if errors.Is(err, daemonclient.ErrFileContextUnsupported) && s.hive != nil {
+		if local, localErr := sessionapi.NewLocal(s.hive).SessionFileContext(ctx, id, target, path); !errors.Is(localErr, session.ErrNotFound) {
+			diff, err = local, localErr
+		}
+	}
 	if errors.Is(err, session.ErrNotFound) {
 		return gitstatus.FileDiff{}, Wrap(err, KindNotFound, "reading %s for session %q", path, id)
 	}

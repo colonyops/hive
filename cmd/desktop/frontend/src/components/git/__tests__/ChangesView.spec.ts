@@ -200,27 +200,38 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
-  it('shows only the picked file in one-file mode, and remembers the mode', async () => {
+  it('shows a file picked in the list on its own, and f goes back to every file', async () => {
     const viewed = useChangesViewed()
     viewed.setViewed('s1', 'b.go', fileVersion(file('b.go')), true)
     const wrapper = await mountView()
     const shown = () => wrapper.findAll('[data-fake]').map((body) => body.attributes('data-fake'))
+    expect(shown()).toHaveLength(2)
 
-    await press('f')
-    expect(shown()).toEqual(['fake-a.go'])
     await wrapper.get(testid('changes-row-b.go')).trigger('click')
     await flushPromises()
     expect(shown()).toEqual(['fake-b.go'])
     // A viewed file shown on its own opens rather than showing only its header.
     expect(wrapper.get('[data-fake="fake-b.go"]').text()).toContain('new b.go')
+    await press('k')
+    expect(shown()).toEqual(['fake-a.go'])
     wrapper.unmount()
 
     const again = await mountView()
     expect(again.findAll('[data-fake]')).toHaveLength(1)
-    await again.get(testid('changes-isolate')).trigger('click')
-    await flushPromises()
+    await press('f')
     expect(again.findAll('[data-fake]')).toHaveLength(2)
     again.unmount()
+  })
+
+  it('says why more context could not be shown', async () => {
+    mocks.SessionFileContext.mockRejectedValue(new Error('the daemon is too old'))
+    const wrapper = await mountView()
+    const load = mocks.lastOptions!.loadDiffFiles!
+    await expect(load({ name: 'a.go', hunks: [], additionLines: [], deletionLines: [] })).rejects.toThrow()
+    expect(useToasts().toasts.value.map((toast) => toast.message)).toEqual([
+      'Could not show more of a.go: the daemon is too old',
+    ])
+    wrapper.unmount()
   })
 
   it('reads the whole file when a separator asks for more context', async () => {

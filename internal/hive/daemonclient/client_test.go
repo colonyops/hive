@@ -22,6 +22,7 @@ import (
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
 	"github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1/daemonv1connect"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 )
 
 // countingServer counts the calls that reach it.
@@ -284,6 +285,16 @@ func TestClientReadTimeoutBoundsOnlyReads(t *testing.T) {
 
 	require.NoError(t, client.DeleteSession(t.Context(), "s1"), "a delete outlives the read timeout")
 	require.NoError(t, client.RecycleSession(t.Context(), "s1", nil), "a stream outlives the read timeout")
+}
+
+func TestClientFileContextNamesADaemonThatPredatesIt(t *testing.T) {
+	t.Parallel()
+	path := socketPath(t)
+	serve(t, path, slowServer{}, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop()})
+
+	_, err := client.SessionFileContext(t.Context(), "s1", gitstatus.DiffTarget{}, "a.go")
+	require.ErrorIs(t, err, ErrFileContextUnsupported)
 }
 
 func TestClientGitStatusesNamesADaemonThatPredatesThem(t *testing.T) {

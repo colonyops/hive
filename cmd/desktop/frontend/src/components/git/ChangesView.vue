@@ -88,7 +88,7 @@ const against = computed({
 const target = computed(() => ({ base: base.value, against: against.value, commit: commit.value }))
 const layout = useStorage<GitLayout>('hive.git.layout', 'tree')
 const mode = useStorage<DiffMode>('hive.git.diffMode', 'unified')
-// One file at a time: the rail picks which, and j and k still walk every file.
+// One file at a time: a pick in the rail turns it on, and j and k still walk every file.
 const isolate = useStorage('hive.git.isolate', false)
 
 // Held diffs set the scrollbar's length and take memory, so the read takes this
@@ -215,6 +215,11 @@ function jumpTo(path: string): void {
   pendingReveal.value = null
   current.value = path
   stream.value?.scrollToFile(path)
+}
+
+function pickFile(path: string): void {
+  isolate.value = true
+  jumpTo(path)
 }
 
 function stepFile(delta: number): void {
@@ -586,7 +591,7 @@ const KEY_HINTS = [
   ['v', 'viewed'],
   ['o', 'fold'],
   ['s', 'side by side'],
-  ['f', 'one file'],
+  ['f', 'one file or all'],
   ['/', 'search'],
   ['[ ]', 'commit'],
   ['b', 'files'],
@@ -743,7 +748,7 @@ const KEY_HINTS = [
             :selected="current"
             :viewed="viewedPaths"
             :comment-counts="commentCounts"
-            @pick="jumpTo"
+            @pick="pickFile"
             @open-editor="openInEditor"
           />
           <p v-if="changes?.truncated" class="px-3 pb-3 text-xs text-text-3" data-testid="changes-truncated">

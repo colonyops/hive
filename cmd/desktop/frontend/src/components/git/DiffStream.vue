@@ -17,11 +17,14 @@ import { useHiveUiPlatform } from '@hive/ui/platform'
 import DiffCommentCard from './DiffCommentCard.vue'
 import DiffFileHeader from './DiffFileHeader.vue'
 import { usePerf } from '../../composables/usePerf'
+import { useToasts } from '../../composables/useToasts'
 import { useScrollGestureSpan } from '../../composables/useScrollGestureSpan'
 import type { DiffEntry } from '../../composables/useFileDiffs'
 import { useSurfaceScale } from '../../stores/useSurfaceScale'
 import { diffThemeName, diffWorkerPool } from '../../lib/diffHighlight'
+import { errorText } from '../../lib/appError'
 import { hunksMatch, wholeFileFromPatch } from '../../lib/diffContext'
+import { gitFileName } from '../../lib/gitTree'
 import { diffMetrics, diffHasText, emptyFileDiff, hunkOffsets, parseFileDiff, type DiffMode } from '../../lib/diffItems'
 import type { DiffSearchMatch, DiffSide } from '../../lib/diffReview'
 import { clearSearchPaint, paintSearch, SEARCH_HIGHLIGHT_CSS } from '../../lib/diffSearchPaint'
@@ -207,16 +210,30 @@ const rowStyle = computed(() => ({
   '--diffs-line-height': `${metrics.value.rowPx}px`,
 }))
 
+const toasts = useToasts()
+
 // CodeView calls this on the first expansion in a file. A file that changed since
 // its diff was read fails here rather than mixing two versions; the next poll
-// brings a diff of the new version.
+// brings a diff of the new version. CodeView only logs a failure, so the toast
+// is what tells the user why the click did nothing.
 async function loadDiffFiles(fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> {
   const path = fileDiff.name
-  const read = await props.loadWholeFile(path)
+  let read: SessionFileDiff
+  try {
+    read = await props.loadWholeFile(path)
+  } catch (err) {
+    read = { path, state: 'error', text: '', error: errorText(err, 'the read failed') }
+  }
   const whole = read.state === 'text' ? wholeFileFromPatch(read.text) : null
   if (!whole || !hunksMatch(fileDiff, whole)) {
-    const reason = read.state === 'error' ? read.error : `the whole file came back ${read.state}`
+    const reason =
+      read.state === 'error'
+        ? read.error
+        : whole
+          ? 'the file changed since its diff was read'
+          : `the file reads as ${read.state}`
     log.warn('could not expand the diff context', { path, reason })
+    toasts.showToast(`Could not show more of ${gitFileName(path)}: ${reason}`, { severity: 'error' })
     throw new Error(`could not read ${path} in full: ${reason}`)
   }
   const key = fileDiff.cacheKey ?? `${props.scope}:${path}`

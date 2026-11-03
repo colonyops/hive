@@ -2,4 +2,4 @@
 kind: added
 ---
 
-Changes: press f or use the toolbar to show only the file picked in the list
+Changes: clicking a file in the list shows that file on its own; press f or use the toolbar to see every file again
