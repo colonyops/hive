@@ -809,7 +809,7 @@ func (s *DriveService) withCanonicalAuthor(ctx context.Context, c drive.Canvas) 
 	return c, nil
 }
 
-// canvasGlobalSession is the session argument of an agent outside any chat
+// canvasGlobalSession is the caller argument of an agent outside any chat
 // or hive session. It still reads "global", not "shared", because existing
 // agent configurations and the HIVE_AGENT_SESSION docs pass that word.
 const canvasGlobalSession = "global"
@@ -873,7 +873,7 @@ func (s *DriveService) resolveTabPath(ctx context.Context, caller driveCaller, p
 	return c.Path, nil
 }
 
-// resolve reads the tool's session argument. A UUID is a chat's record id;
+// resolve reads the tool's caller argument. A UUID is a chat's record id;
 // a positive integer is a migrated chat's legacy alias. HIVE_AGENT_SESSION
 // carries one of those values. "global" is an agent outside any session.
 // Anything else is the caller's working directory: hive puts no id in a

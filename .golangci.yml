@@ -118,7 +118,7 @@ linters:
             - github.com/colonyops/hive/internal/platform/observe
           deny:
             - pkg: github.com/colonyops/hive/internal
-              desc: internal/ops declares operations that both programs compile. It imports only domain and its own packages, so neither program drags in the other's dependencies (docs/architecture.md, "Operation catalog").
+              desc: internal/ops declares operations that both programs compile. It imports only domain, platform/observe and its own packages, so neither program drags in the other's dependencies (docs/architecture.md, "Operation catalog").
         store-is-persistence:
           files:
             - "**/internal/store/**"

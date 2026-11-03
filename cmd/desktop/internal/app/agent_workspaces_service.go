@@ -1583,7 +1583,7 @@ func (s *AgentWorkspacesService) launchTerminal(ctx context.Context, rec stores.
 	}
 
 	name := sessionName(rec)
-	// The record id is the canvas tools' session argument; handing it to the
+	// The record id is the canvas tools' caller argument; handing it to the
 	// process at launch is what lets the agent name its own chat without
 	// guessing (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
 	// The token and the URL are what let it end its own chat

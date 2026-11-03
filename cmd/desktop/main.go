@@ -322,7 +322,7 @@ func main() {
 	if base := core.MCPBaseURL(ctx); base != "" {
 		endpoint := desktopendpoint.Endpoint{URL: base, PID: os.Getpid(), StartedAt: time.Now()}
 		if err := desktopendpoint.Write(core.HiveDataDir(), endpoint); err != nil {
-			logger.Warn().Err(err).Msg("the desktop endpoint file was not written; hive dt commands need --url")
+			logger.Warn().Err(err).Msg("the desktop endpoint file was not written; hive dt commands need --desktop-url or HIVE_DESKTOP_URL")
 		}
 	}
 
