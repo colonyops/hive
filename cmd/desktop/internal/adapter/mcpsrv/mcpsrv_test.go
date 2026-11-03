@@ -170,10 +170,10 @@ func TestInboxToolsMatchGolden(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assertGoldenToolResponse(t, session, "list_feeds", map[string]any{"profile": "hooks"})
-	assertGoldenToolResponse(t, session, "list_inbox", map[string]any{"profile": "hooks", "detail": "full"})
-	assertGoldenToolResponse(t, session, "list_inbox_item_events", map[string]any{"itemId": item.ID, "detail": "full"})
-	assertGoldenToolResponse(t, session, "list_item_sessions", map[string]any{"itemId": item.ID})
+	assertGoldenToolResponse(t, session, "feed_list", map[string]any{"profileId": "hooks"})
+	assertGoldenToolResponse(t, session, "inbox_list", map[string]any{"profileId": "hooks", "detail": "full"})
+	assertGoldenToolResponse(t, session, "inbox_event_list", map[string]any{"itemId": item.ID, "detail": "full"})
+	assertGoldenToolResponse(t, session, "inbox_session_list", map[string]any{"itemId": item.ID})
 }
 
 func assertGoldenToolResponse(t *testing.T, session *mcp.ClientSession, name string, args any) {
@@ -212,7 +212,7 @@ func TestGetStatusReportsTheBuildAndWebhookListener(t *testing.T) {
 			PathPrefix string `json:"pathPrefix"`
 		} `json:"webhook"`
 	}
-	call(t, session, "get_status", struct{}{}, &got)
+	call(t, session, "status_get", struct{}{}, &got)
 
 	assert.Equal(t, "test", got.Version)
 	assert.NotEmpty(t, got.Webhook.PathPrefix)
@@ -330,7 +330,7 @@ func TestListInboxReturnsSeededItemsWithTheirFeed(t *testing.T) {
 			Payload    json.RawMessage `json:"payload"`
 		} `json:"items"`
 	}
-	call(t, session, "list_inbox", map[string]any{"profile": "hive", "detail": "full"}, &got)
+	call(t, session, "inbox_list", map[string]any{"profileId": "hive", "detail": "full"}, &got)
 
 	require.Len(t, got.Items, 1)
 	assert.Equal(t, "ext-1", got.Items[0].ExternalID)
@@ -355,7 +355,7 @@ func TestListInboxOmitsPayloadsByDefault(t *testing.T) {
 			Payload    *json.RawMessage `json:"payload"`
 		} `json:"items"`
 	}
-	call(t, session, "list_inbox", map[string]any{"profile": "hive"}, &got)
+	call(t, session, "inbox_list", map[string]any{"profileId": "hive"}, &got)
 
 	assert.Equal(t, "summary", got.Detail, "the level is echoed so an omitted payload is never read as an absent one")
 	require.Len(t, got.Items, 1)
@@ -372,10 +372,10 @@ func TestListInboxItemEventsOmitsEventDetailByDefault(t *testing.T) {
 	var got struct {
 		Detail string `json:"detail"`
 	}
-	call(t, session, "list_inbox_item_events", map[string]any{"itemId": id}, &got)
+	call(t, session, "inbox_event_list", map[string]any{"itemId": id}, &got)
 	assert.Equal(t, "summary", got.Detail)
 
-	assert.Contains(t, callErr(t, session, "list_inbox_item_events", map[string]any{"itemId": id, "detail": "emitted"}),
+	assert.Contains(t, callErr(t, session, "inbox_event_list", map[string]any{"itemId": id, "detail": "emitted"}),
 		string(app.KindInvalid), "a read has no middle rung — the payload is there or it is not")
 }
 
@@ -395,7 +395,7 @@ func TestListFeedsIncludesADeclaredFeedNothingHasLandedIn(t *testing.T) {
 			Total    int64  `json:"total"`
 		} `json:"feeds"`
 	}
-	call(t, session, "list_feeds", map[string]any{"profile": "hooks"}, &got)
+	call(t, session, "feed_list", map[string]any{"profileId": "hooks"}, &got)
 
 	require.Len(t, got.Feeds, 1)
 	assert.Equal(t, "hooks/inbox", got.Feeds[0].ID)
@@ -408,7 +408,7 @@ func TestListFeedsReportsAnUnknownProfileAsNotFound(t *testing.T) {
 	t.Parallel()
 	_, session := testSession(t)
 
-	assert.Contains(t, callErr(t, session, "list_feeds", map[string]any{"profile": "nope"}),
+	assert.Contains(t, callErr(t, session, "feed_list", map[string]any{"profileId": "nope"}),
 		string(app.KindNotFound))
 }
 
@@ -425,7 +425,7 @@ func TestListInboxReadsAProfileWithRowsButNoFlow(t *testing.T) {
 			ExternalID string `json:"externalId"`
 		} `json:"items"`
 	}
-	call(t, session, "list_inbox", map[string]any{"profile": "orphaned"}, &got)
+	call(t, session, "inbox_list", map[string]any{"profileId": "orphaned"}, &got)
 	require.Len(t, got.Items, 1)
 	assert.Equal(t, "ext-orphan", got.Items[0].ExternalID)
 }
@@ -435,9 +435,9 @@ func TestListInboxReportsAnUnknownProfileOrFeedAsNotFound(t *testing.T) {
 	core, session := testSession(t)
 	require.NoError(t, core.Flows.Save(t.Context(), webhookFlow()))
 
-	assert.Contains(t, callErr(t, session, "list_inbox", map[string]any{"profile": "nope"}),
+	assert.Contains(t, callErr(t, session, "inbox_list", map[string]any{"profileId": "nope"}),
 		string(app.KindNotFound), "a typo'd profile is not an empty inbox")
-	assert.Contains(t, callErr(t, session, "list_inbox", map[string]any{"profile": "hooks", "feed": "hooks/nope"}),
+	assert.Contains(t, callErr(t, session, "inbox_list", map[string]any{"profileId": "hooks", "feed": "hooks/nope"}),
 		string(app.KindNotFound), "a feed the graph does not declare is not an empty feed")
 }
 
@@ -450,9 +450,9 @@ func TestListItemSessionsResolvesAnItemAndReconcilesOnRead(t *testing.T) {
 	id := seedItem(t, core, "p1", "PR_1", `{}`)
 	seedItem(t, core, "p2", "PR_1", `{}`) // same external id, second profile
 
-	assert.Contains(t, callErr(t, session, "list_item_sessions", struct{}{}),
+	assert.Contains(t, callErr(t, session, "inbox_session_list", struct{}{}),
 		string(app.KindInvalid), "itemId or externalId is required")
-	assert.Contains(t, callErr(t, session, "list_item_sessions", map[string]any{"externalId": "PR_1"}),
+	assert.Contains(t, callErr(t, session, "inbox_session_list", map[string]any{"externalId": "PR_1"}),
 		string(app.KindConflict), "one external id matched two items")
 
 	ref, err := core.Stores.InboxItems.RefByID(t.Context(), id)
@@ -464,7 +464,7 @@ func TestListItemSessionsResolvesAnItemAndReconcilesOnRead(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"sessions"`
 	}
-	call(t, session, "list_item_sessions", map[string]any{"itemId": id}, &got)
+	call(t, session, "inbox_session_list", map[string]any{"itemId": id}, &got)
 	assert.Empty(t, got.Sessions, "a link hive cannot account for is dropped rather than reported as a ghost")
 
 	links, err := core.Stores.ItemSessions.List(t.Context(), ref)
@@ -476,7 +476,7 @@ func TestListInboxItemEventsReportsAnUnknownItemIDAsNotFound(t *testing.T) {
 	t.Parallel()
 	_, session := testSession(t)
 
-	assert.Contains(t, callErr(t, session, "list_inbox_item_events", map[string]any{"itemId": 9999}),
+	assert.Contains(t, callErr(t, session, "inbox_event_list", map[string]any{"itemId": 9999}),
 		string(app.KindNotFound))
 }
 
@@ -484,7 +484,7 @@ func TestListInboxRequiresProfileWhenFeedIsSet(t *testing.T) {
 	t.Parallel()
 	_, session := testSession(t)
 
-	msg := callErr(t, session, "list_inbox", map[string]any{"feed": "hive/prs"})
+	msg := callErr(t, session, "inbox_list", map[string]any{"feed": "hive/prs"})
 	assert.Contains(t, msg, string(app.KindInvalid), "the Kind leads the message so an agent can branch on it")
 }
 
@@ -498,7 +498,7 @@ func TestListInboxItemEventsResolvesAnExternalID(t *testing.T) {
 			ID int64 `json:"id"`
 		} `json:"events"`
 	}
-	call(t, session, "list_inbox_item_events", map[string]any{"externalId": "ext-1"}, &got)
+	call(t, session, "inbox_event_list", map[string]any{"externalId": "ext-1"}, &got)
 	assert.Empty(t, got.Events, "a freshly inserted item has no lifecycle events yet")
 }
 
@@ -506,7 +506,7 @@ func TestListInboxItemEventsReportsAnUnknownExternalIDAsNotFound(t *testing.T) {
 	t.Parallel()
 	_, session := testSession(t)
 
-	msg := callErr(t, session, "list_inbox_item_events", map[string]any{"externalId": "nope"})
+	msg := callErr(t, session, "inbox_event_list", map[string]any{"externalId": "nope"})
 	assert.Contains(t, msg, string(app.KindNotFound))
 }
 
@@ -514,7 +514,7 @@ func TestListInboxItemEventsNeedsAnIdentifier(t *testing.T) {
 	t.Parallel()
 	_, session := testSession(t)
 
-	msg := callErr(t, session, "list_inbox_item_events", struct{}{})
+	msg := callErr(t, session, "inbox_event_list", struct{}{})
 	assert.Contains(t, msg, string(app.KindInvalid))
 }
 
@@ -526,7 +526,7 @@ func TestListActionsReportsTheCatalogAndItsLoadStatus(t *testing.T) {
 		Path  string `json:"path"`
 		Valid bool   `json:"valid"`
 	}
-	call(t, session, "list_actions", struct{}{}, &got)
+	call(t, session, "action_list", struct{}{}, &got)
 
 	assert.NotEmpty(t, got.Path, "the catalog reports the file to fix")
 	assert.True(t, got.Valid)
@@ -551,7 +551,7 @@ func TestListActionsSurfacesAParseError(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"actions"`
 	}
-	call(t, session, "list_actions", struct{}{}, &got)
+	call(t, session, "action_list", struct{}{}, &got)
 
 	assert.False(t, got.Valid, "an unknown key is a hard error, not a silent drop")
 	assert.Contains(t, got.Error, "txt_template", "the error names the offending key")
@@ -564,7 +564,7 @@ func TestRefreshSourcesIsUnavailableInMockMode(t *testing.T) {
 	t.Parallel()
 	_, session := testSession(t)
 
-	msg := callErr(t, session, "refresh_sources", struct{}{})
+	msg := callErr(t, session, "source_refresh", struct{}{})
 	assert.Contains(t, msg, string(app.KindUnavailable))
 }
 
@@ -636,7 +636,7 @@ func TestHandlerServesToolsOverHTTP(t *testing.T) {
 			ExternalID string `json:"externalId"`
 		} `json:"items"`
 	}
-	call(t, session, "list_inbox", map[string]any{"profile": "hive"}, &got)
+	call(t, session, "inbox_list", map[string]any{"profileId": "hive"}, &got)
 	require.Len(t, got.Items, 1)
 	assert.Equal(t, "ext-http", got.Items[0].ExternalID)
 }
@@ -674,7 +674,7 @@ func TestRawJSONRPCPostNeedsNoHandshake(t *testing.T) {
 	assert.NotEmpty(t, result["tools"])
 
 	called := post(`{"jsonrpc":"2.0","id":2,"method":"tools/call",` +
-		`"params":{"name":"get_status","arguments":{}}}`)
+		`"params":{"name":"status_get","arguments":{}}}`)
 	result, ok = called["result"].(map[string]any)
 	require.True(t, ok, "tools/call answered %v", called)
 	structured, ok := result["structuredContent"].(map[string]any)
@@ -723,7 +723,7 @@ func TestMountedOnTheSharedLoopbackServer(t *testing.T) {
 			ExternalID string `json:"externalId"`
 		} `json:"items"`
 	}
-	call(t, session, "list_inbox", map[string]any{"profile": "hive"}, &got)
+	call(t, session, "inbox_list", map[string]any{"profileId": "hive"}, &got)
 	require.Len(t, got.Items, 1)
 	assert.Equal(t, "ext-mounted", got.Items[0].ExternalID)
 
@@ -1012,7 +1012,7 @@ func TestSchemaValidationRejectsAWronglyTypedArgument(t *testing.T) {
 	_, session := testSession(t)
 
 	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "list_inbox", Arguments: map[string]any{"limit": "many"},
+		Name: "inbox_list", Arguments: map[string]any{"limit": "many"},
 	})
 	if err == nil {
 		require.True(t, res.IsError, "a wrongly typed argument must not be accepted")
@@ -1046,7 +1046,7 @@ func TestDiagnosticsToolReadsJobsAndReportsMissingEvidence(t *testing.T) {
 		app.DiagnosticsSnapshot
 		Detail string `json:"detail"`
 	}
-	call(t, session, "read_diagnostics", map[string]any{"source": "jobs", "levels": []string{"warn", "error"}, "search": "review 347"}, &summary)
+	call(t, session, "diagnostics_get", map[string]any{"source": "jobs", "levels": []string{"warn", "error"}, "search": "review 347"}, &summary)
 	require.Equal(t, "summary", summary.Detail)
 	require.Equal(t, []string{"warn", "error"}, summary.Query.Levels)
 	require.NotEmpty(t, summary.Entries)
@@ -1055,9 +1055,9 @@ func TestDiagnosticsToolReadsJobsAndReportsMissingEvidence(t *testing.T) {
 		app.DiagnosticsSnapshot
 		Detail string `json:"detail"`
 	}
-	call(t, session, "read_diagnostics", map[string]any{"source": "jobs", "reference": fmt.Sprintf("job-%d", id), "detail": "full"}, &full)
+	call(t, session, "diagnostics_get", map[string]any{"source": "jobs", "reference": fmt.Sprintf("job-%d", id), "detail": "full"}, &full)
 	require.NotEmpty(t, full.Entries[0].Raw)
-	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "read_diagnostics", Arguments: map[string]any{"reference": "job-999999"}})
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "diagnostics_get", Arguments: map[string]any{"reference": "job-999999"}})
 	require.NoError(t, err)
 	require.True(t, res.IsError)
 	require.Contains(t, textOf(res), "not_found")

@@ -367,7 +367,7 @@ func TestCanvasMountedBesideTheDesktopServer(t *testing.T) {
 	for _, tool := range tools.Tools {
 		names = append(names, tool.Name)
 	}
-	assert.Contains(t, names, "get_status")
+	assert.Contains(t, names, "status_get")
 	assert.NotContains(t, names, "canvas_block_put", "the canvas table must not leak onto the app-control server")
 }
 

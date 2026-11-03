@@ -3,9 +3,8 @@ package mcpsrv
 import (
 	"context"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
+	"github.com/colonyops/hive/internal/ops"
 )
 
 type webhookStatus struct {
@@ -20,9 +19,9 @@ type statusResult struct {
 	Webhook webhookStatus `json:"webhook"`
 }
 
-func (ctrl *Controller) GetStatus(ctx context.Context, _ *mcp.CallToolRequest, _ noInput) (*mcp.CallToolResult, statusResult, error) {
+func (ctrl *Controller) GetStatus(ctx context.Context, _ ops.NoInput) (statusResult, error) {
 	running, port := ctrl.core.Webhooks.Endpoint(ctx)
-	return nil, statusResult{
+	return statusResult{
 		Version: ctrl.opts.Version,
 		Webhook: webhookStatus{
 			Running:    running,

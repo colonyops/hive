@@ -1,6 +1,14 @@
 package mcpsrv
 
-import "github.com/modelcontextprotocol/go-sdk/mcp"
+import (
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/colonyops/hive/internal/ops/actions"
+	"github.com/colonyops/hive/internal/ops/diagnostics"
+	"github.com/colonyops/hive/internal/ops/inbox"
+	"github.com/colonyops/hive/internal/ops/mcpops"
+	"github.com/colonyops/hive/internal/ops/sessions"
+)
 
 // noInput is the input type of a tool that takes no arguments. The SDK
 // requires a struct or map so the inferred schema has type "object".
@@ -40,14 +48,19 @@ const (
 // written for a model rather than for a person reading a reference: what the
 // tool answers, what it will not do, and what a surprising answer means.
 func (ctrl *Controller) register(srv *mcp.Server) {
-	addTool(srv, &mcp.Tool{Name: "read_diagnostics", Title: "Read diagnostics", Description: "Read bounded Desktop/CLI log tails and job outcomes, with source paths, last-write times, and truncation indicators. No processes are started. Use a reference to fetch surrounding evidence, or source jobs and search to find an operation. Missing references answer not_found; historical evidence outside the retained tail may be unavailable."}, ctrl.ReadDiagnostics)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "get_status",
-		Title: "Desktop status",
-		Description: "Report the running build and whether the webhook listener is up, on which host and port. " +
-			"Use this first to confirm the app is reachable and to discover the webhook base URL a push should go to.",
-	}, ctrl.GetStatus)
+	mcpops.Mount(srv, diagnostics.StatusGet, ctrl.GetStatus, ctrl.toolError)
+	mcpops.Mount(srv, diagnostics.DiagnosticsGet, ctrl.ReadDiagnostics, ctrl.toolError)
+	mcpops.Mount(srv, inbox.FeedList, ctrl.ListFeeds, ctrl.toolError)
+	mcpops.Mount(srv, inbox.InboxList, ctrl.ListInbox, ctrl.toolError)
+	mcpops.Mount(srv, inbox.InboxEventList, ctrl.ListInboxItemEvents, ctrl.toolError)
+	mcpops.Mount(srv, inbox.InboxSessionList, ctrl.ListItemSessions, ctrl.toolError)
+	mcpops.Mount(srv, inbox.SourceRefresh, ctrl.RefreshSources, ctrl.toolError)
+	mcpops.Mount(srv, sessions.SessionList, ctrl.ListSessions, ctrl.toolError)
+	mcpops.Mount(srv, sessions.SessionTagsUpdate, ctrl.EditSessionTags, ctrl.toolError)
+	mcpops.Mount(srv, actions.ActionList, ctrl.ListActions, ctrl.toolError)
+	mcpops.Mount(srv, actions.ActionRunList, ctrl.ListActionRuns, ctrl.toolError)
+	mcpops.Mount(srv, actions.ActionRunGet, ctrl.GetActionRun, ctrl.toolError)
+	mcpops.Mount(srv, actions.AppletList, ctrl.ListApplets, ctrl.toolError)
 
 	addTool(srv, &mcp.Tool{
 		Name:  "list_profiles",
@@ -64,99 +77,6 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"This is where node ids come from — execute_flow's nodeId and the node-image tools take them. " +
 			"A profile whose flow file does not parse still answers, with valid=false and the load error.",
 	}, ctrl.GetFlow)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "list_feeds",
-		Title: "List feeds",
-		Description: "List the feeds a profile's graph declares, with their total, unread and archived counts. " +
-			"A declared feed nothing has landed in yet still lists, at zero — so an empty feed and a feed id that does not exist are different answers.",
-	}, ctrl.ListFeeds)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "list_inbox",
-		Title: "List inbox items",
-		Description: "List a profile's inbox items, optionally scoped to one feed or resolved by the source's own external id. " +
-			"Each item carries the id of the feed claiming it, empty when unrouted. " +
-			"detail defaults to summary, which omits each item's raw source payload — a payload is as large as the source made it (a PR body is kilobytes) " +
-			"and a listing repeats it per item, so a whole feed at full is megabytes. Ask for full once you have narrowed to the items you need, " +
-			"by feed, by externalId or with limit.",
-	}, ctrl.ListInbox)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "list_inbox_item_events",
-		Title: "List an inbox item's events",
-		Description: "List one inbox item's lifecycle events, resolved by itemId or by an externalId that matches exactly one item. " +
-			"An externalId matching items in more than one profile is a conflict — pass profile to disambiguate. " +
-			"Each event's own detail is source-specific raw JSON and is omitted unless detail is full.",
-	}, ctrl.ListInboxItemEvents)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "list_item_sessions",
-		Title: "List the hive sessions an inbox item started",
-		Description: "List the hive sessions one inbox item created, newest first, each with the state hive reports for it now; " +
-			"slug is the tmux session name an attach targets. Resolved by itemId or by an externalId matching exactly one item. " +
-			"Links to sessions hive no longer has are dropped as a side effect of this read, but only when hive answered — a failed listing drops nothing.",
-	}, ctrl.ListItemSessions)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "list_sessions",
-		Title: "List hive sessions",
-		Description: "List hive sessions newest first, with each one's tags and state; slug is the tmux session name an attach targets. " +
-			"tags keeps only sessions that carry every tag given, compared case-insensitively, so polling with a tag such as auto finds the sessions waiting for an agent to pick them up. " +
-			"state keeps only active, recycled or corrupted sessions. An empty list means no session matched, not that hive is unreachable: a failed read is an error.",
-	}, ctrl.ListSessions)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "edit_session_tags",
-		Title: "Add and remove a session's tags",
-		Description: "Add tags to one hive session and then remove tags from it, leaving its other tags in place, and return the session. " +
-			"Use one call to swap a tag, for example remove auto and add claimed when an orchestrator picks a session up; two agents that each add a tag both keep theirs. " +
-			"Tags compare case-insensitively, keep the first spelling, are at most 40 characters and cannot contain commas. " +
-			"This changes the session record only: it starts, stops and attaches nothing.",
-	}, ctrl.EditSessionTags)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "list_actions",
-		Title: "List the action catalog",
-		Description: "List the action catalog with the actions.yml it was loaded from and whether that file currently parses. " +
-			"An invalid edit leaves the previous catalog in effect and reports its error here, so this is how to confirm an edit actually loaded.",
-	}, ctrl.ListActions)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "list_applets",
-		Title: "List the applets",
-		Description: "List the applets with the directory they are written under and, for each, the error in its applet.yaml if it does not load. " +
-			"An applet that fails to load keeps its last good file, so this is how to confirm a write actually took.",
-	}, ctrl.ListApplets)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "list_action_runs",
-		Title: "List action runs",
-		Description: "List action runs newest first: every durable execution of an actions.yml action, whether run from an item's detail pane or by a flow action node, " +
-			"with its status, attempts, lane (manual or automatic), timestamps, last error and the inbox item it ran against. " +
-			"status and actionId filter the page after it is read, so page back with before when a filtered page comes back short. " +
-			"Notify and launch nodes are not actions.yml actions and are not listed. Actions run from a terminal session or window are not durable and never appear here. " +
-			"Use get_action_run to read what a run printed.",
-	}, ctrl.ListActionRuns)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "get_action_run",
-		Title: "Read an action run and its log",
-		Description: "Return one action run, its result, and its log: the stdout and stderr of any process it ran, interleaved in order, " +
-			"plus system lines describing each step (the command line, a session created, a message published, exit codes, retries, cancellation). " +
-			"Every line carries its attempt number, so automatic retries read as separate attempts. " +
-			"By default it returns the last 500 lines, which is where a failure explains itself; pass afterId to read forward from a line, " +
-			"and follow nextAfterId while more is true to read the rest. A running run's log grows, so read again with the last nextAfterId to follow it. " +
-			"Each attempt keeps up to 8 MiB of output, and a run's log is kept for as long as the run is (the newest 100 finished runs by default, " +
-			"set by retention.action_runs in settings.yaml).",
-	}, ctrl.GetActionRun)
-
-	addTool(srv, &mcp.Tool{
-		Name:  "refresh_sources",
-		Title: "Force a source refresh",
-		Description: "Force one producer tick across all sources, dropping fetch caches. " +
-			"Returns aggregate totals rather than a per-source breakdown. Use it after changing a flow or pushing a test event instead of waiting for the next poll.",
-	}, ctrl.RefreshSources)
 
 	addTool(srv, &mcp.Tool{
 		Name:        "create_profile",

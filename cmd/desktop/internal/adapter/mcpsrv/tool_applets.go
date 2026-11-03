@@ -3,9 +3,8 @@ package mcpsrv
 import (
 	"context"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
+	"github.com/colonyops/hive/internal/ops"
 )
 
 // appletsResult closes the loop on an agent's write: a file that failed to parse
@@ -15,6 +14,6 @@ type appletsResult struct {
 	Applets []app.Applet `json:"applets"`
 }
 
-func (ctrl *Controller) ListApplets(ctx context.Context, _ *mcp.CallToolRequest, _ noInput) (*mcp.CallToolResult, any, error) {
-	return nil, appletsResult{Dir: ctrl.core.Applets.Dir(), Applets: ctrl.core.Applets.List(ctx)}, nil
+func (ctrl *Controller) ListApplets(ctx context.Context, _ ops.NoInput) (any, error) {
+	return appletsResult{Dir: ctrl.core.Applets.Dir(), Applets: ctrl.core.Applets.List(ctx)}, nil
 }

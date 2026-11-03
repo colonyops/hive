@@ -7,20 +7,16 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
+	"github.com/colonyops/hive/internal/ops"
+	"github.com/colonyops/hive/internal/ops/inbox"
 )
 
 const (
 	defaultListLimit  = 200
 	defaultEventLimit = 50
 )
-
-type listFeedsInput struct {
-	Profile string `json:"profile" jsonschema:"Profile id to list feeds for; ids come from list_profiles."`
-}
 
 // feedView is one feed and what has landed in it. Name comes from the graph and
 // the counts from inbox membership, so a feed can appear with either half
@@ -47,22 +43,22 @@ type feedsResult struct {
 // an empty feed and a misspelled one the same answer. The graph alone would
 // hide a feed whose node was deleted out from under its items. Neither half is
 // authoritative on its own, so this reports the union and says which is which.
-func (ctrl *Controller) ListFeeds(ctx context.Context, _ *mcp.CallToolRequest, in listFeedsInput) (*mcp.CallToolResult, feedsResult, error) {
-	if in.Profile == "" {
-		return nil, feedsResult{}, ctrl.toolError(app.Errorf(app.KindInvalid, "profile is required"))
+func (ctrl *Controller) ListFeeds(ctx context.Context, in inbox.FeedListIn) (feedsResult, error) {
+	if in.ProfileID == "" {
+		return feedsResult{}, app.Errorf(app.KindInvalid, "profileId is required")
 	}
-	counts, err := ctrl.core.Inbox.FeedCounts(ctx, in.Profile)
+	counts, err := ctrl.core.Inbox.FeedCounts(ctx, in.ProfileID)
 	if err != nil {
-		return nil, feedsResult{}, ctrl.toolError(err)
+		return feedsResult{}, err
 	}
 	byID := make(map[string]stores.FeedCount, len(counts))
 	for _, c := range counts {
 		byID[c.FeedID] = c
 	}
 
-	f, err := ctrl.core.Flows.Get(ctx, in.Profile)
+	f, err := ctrl.core.Flows.Get(ctx, in.ProfileID)
 	if err != nil && (len(counts) == 0 || app.KindOf(err) != app.KindNotFound) {
-		return nil, feedsResult{}, ctrl.toolError(err)
+		return feedsResult{}, err
 	}
 
 	feeds := make([]feedView, 0, len(f.Nodes)+len(counts))
@@ -82,16 +78,7 @@ func (ctrl *Controller) ListFeeds(ctx context.Context, _ *mcp.CallToolRequest, i
 			ID: id, Total: count.Total, Unread: count.Unread, Archived: count.Archived,
 		})
 	}
-	return nil, feedsResult{Feeds: feeds}, nil
-}
-
-type listInboxInput struct {
-	Profile    string `json:"profile,omitempty"    jsonschema:"Profile id to scope to; required when feed is set."`
-	ExternalID string `json:"externalId,omitempty" jsonschema:"A source's own id (e.g. a GitHub node id); returns every matching item across profiles."`
-	Feed       string `json:"feed,omitempty"       jsonschema:"Feed id from list_feeds (e.g. hive/desktop-prs) to return only that feed's items."`
-	Archived   bool   `json:"archived,omitempty"   jsonschema:"When true, list archived items instead of active ones."`
-	Limit      int    `json:"limit,omitempty"      jsonschema:"Maximum items to return; defaults to 200."`
-	Detail     string `json:"detail,omitempty"     jsonschema:"summary (the default) omits each item's raw source payload; full includes it, and its size is the source's to decide."`
+	return feedsResult{Feeds: feeds}, nil
 }
 
 // inboxItemView is the store view plus the feed that claims the item, so a flat
@@ -118,45 +105,45 @@ type itemsResult struct {
 // store views carry for the OpenAPI reflector they were written for. Omitting
 // the output schema costs nothing: it is advisory, the content is still the
 // same JSON, and the input schemas — the ones a model actually calls through —
-// are inferred in full from the adapter-local input structs above.
-func (ctrl *Controller) ListInbox(ctx context.Context, _ *mcp.CallToolRequest, in listInboxInput) (*mcp.CallToolResult, any, error) {
-	if in.Feed != "" && in.Profile == "" {
-		return nil, nil, ctrl.toolError(app.Errorf(app.KindInvalid, "profile is required when feed is set"))
+// are inferred in full from the input types in internal/ops.
+func (ctrl *Controller) ListInbox(ctx context.Context, in inbox.InboxListIn) (any, error) {
+	if in.Feed != "" && in.ProfileID == "" {
+		return nil, app.Errorf(app.KindInvalid, "profileId is required when feed is set")
 	}
 	if in.Limit < 0 {
-		return nil, nil, ctrl.toolError(app.Errorf(app.KindInvalid, "limit must be positive"))
+		return nil, app.Errorf(app.KindInvalid, "limit must be positive")
 	}
 	detail, err := readDetail(in.Detail)
 	if err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, err
 	}
 	limit := cmp.Or(in.Limit, defaultListLimit)
 
 	var items []stores.InboxItem
 	switch {
 	case in.ExternalID != "":
-		items, err = ctrl.core.Inbox.FindItems(ctx, in.Profile, in.ExternalID)
+		items, err = ctrl.core.Inbox.FindItems(ctx, in.ProfileID, in.ExternalID)
 	case in.Feed != "" && in.Archived:
-		items, err = ctrl.core.Inbox.ListArchivedByFeed(ctx, in.Profile, in.Feed, limit)
+		items, err = ctrl.core.Inbox.ListArchivedByFeed(ctx, in.ProfileID, in.Feed, limit)
 	case in.Feed != "":
-		items, err = ctrl.core.Inbox.ListByFeed(ctx, in.Profile, in.Feed, limit)
+		items, err = ctrl.core.Inbox.ListByFeed(ctx, in.ProfileID, in.Feed, limit)
 	default:
-		items, err = ctrl.core.Inbox.ListItems(ctx, in.Profile, limit)
+		items, err = ctrl.core.Inbox.ListItems(ctx, in.ProfileID, limit)
 	}
 	if err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, err
 	}
 	if len(items) == 0 {
-		if err := ctrl.explainEmptyScope(ctx, in.Profile, in.Feed); err != nil {
-			return nil, nil, ctrl.toolError(err)
+		if err := ctrl.explainEmptyScope(ctx, in.ProfileID, in.Feed); err != nil {
+			return nil, err
 		}
 	}
 
 	views, err := ctrl.itemsWithFeed(ctx, items, detail)
 	if err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, err
 	}
-	return nil, itemsResult{Items: views, Detail: detail}, nil
+	return itemsResult{Items: views, Detail: detail}, nil
 }
 
 // readDetail resolves a read tool's detail argument. These tools have no middle
@@ -165,11 +152,11 @@ func (ctrl *Controller) ListInbox(ctx context.Context, _ *mcp.CallToolRequest, i
 func readDetail(detail string) (string, error) {
 	switch detail {
 	case "":
-		return detailSummary, nil
-	case detailSummary, detailFull:
+		return ops.DetailSummary, nil
+	case ops.DetailSummary, ops.DetailFull:
 		return detail, nil
 	default:
-		return "", app.Errorf(app.KindInvalid, "detail must be %q or %q", detailSummary, detailFull)
+		return "", app.Errorf(app.KindInvalid, "detail must be %q or %q", ops.DetailSummary, ops.DetailFull)
 	}
 }
 
@@ -211,19 +198,11 @@ func (ctrl *Controller) itemsWithFeed(ctx context.Context, items []stores.InboxI
 	out := make([]inboxItemView, len(items))
 	for i, it := range items {
 		out[i] = inboxItemView{InboxItem: it, FeedID: feeds[it.ID]}
-		if detail == detailFull {
+		if detail == ops.DetailFull {
 			out[i].Payload = &items[i].Payload
 		}
 	}
 	return out, nil
-}
-
-type listEventsInput struct {
-	ItemID     int64  `json:"itemId,omitempty"     jsonschema:"Inbox item id. Provide this or externalId."`
-	ExternalID string `json:"externalId,omitempty" jsonschema:"External id resolving to one item; provide this or itemId."`
-	Profile    string `json:"profile,omitempty"    jsonschema:"Profile id used to disambiguate an externalId that matches items in more than one profile."`
-	Limit      int    `json:"limit,omitempty"      jsonschema:"Maximum events to return; defaults to 50."`
-	Detail     string `json:"detail,omitempty"     jsonschema:"summary (the default) omits each event's raw source-specific detail; full includes it."`
 }
 
 // eventView drops each event's raw detail at summary, for the reason
@@ -238,33 +217,33 @@ type eventsResult struct {
 	Detail string      `json:"detail"`
 }
 
-func (ctrl *Controller) ListInboxItemEvents(ctx context.Context, _ *mcp.CallToolRequest, in listEventsInput) (*mcp.CallToolResult, any, error) {
+func (ctrl *Controller) ListInboxItemEvents(ctx context.Context, in inbox.InboxEventListIn) (any, error) {
 	if in.ItemID == 0 && in.ExternalID == "" {
-		return nil, nil, ctrl.toolError(app.Errorf(app.KindInvalid, "provide itemId or externalId"))
+		return nil, app.Errorf(app.KindInvalid, "provide itemId or externalId")
 	}
 	if in.Limit < 0 {
-		return nil, nil, ctrl.toolError(app.Errorf(app.KindInvalid, "limit must be positive"))
+		return nil, app.Errorf(app.KindInvalid, "limit must be positive")
 	}
 	detail, err := readDetail(in.Detail)
 	if err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, err
 	}
-	itemID, err := ctrl.resolveItemID(ctx, in.ItemID, in.ExternalID, in.Profile)
+	itemID, err := ctrl.resolveItemID(ctx, in.ItemID, in.ExternalID, in.ProfileID)
 	if err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, err
 	}
 	events, err := ctrl.core.Inbox.Events(ctx, itemID, cmp.Or(in.Limit, defaultEventLimit))
 	if err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, err
 	}
 	views := make([]eventView, len(events))
 	for i, event := range events {
 		views[i] = eventView{InboxEvent: event}
-		if detail == detailFull {
+		if detail == ops.DetailFull {
 			views[i].Detail = &events[i].Detail
 		}
 	}
-	return nil, eventsResult{Events: views, Detail: detail}, nil
+	return eventsResult{Events: views, Detail: detail}, nil
 }
 
 // resolveItemID accepts an explicit itemId, or an externalId that must resolve
@@ -284,14 +263,8 @@ func (ctrl *Controller) resolveItemID(ctx context.Context, itemID int64, externa
 	case 1:
 		return items[0].ID, nil
 	default:
-		return 0, app.Errorf(app.KindConflict, "external id %q matches %d items; add profile to disambiguate", externalID, len(items))
+		return 0, app.Errorf(app.KindConflict, "external id %q matches %d items; add profileId to disambiguate", externalID, len(items))
 	}
-}
-
-type itemSessionsInput struct {
-	ItemID     int64  `json:"itemId,omitempty"     jsonschema:"Inbox item id. Provide this or externalId."`
-	ExternalID string `json:"externalId,omitempty" jsonschema:"External id resolving to one item; provide this or itemId."`
-	Profile    string `json:"profile,omitempty"    jsonschema:"Profile id used to disambiguate an externalId that matches items in more than one profile."`
 }
 
 type itemSessionsResult struct {
@@ -303,17 +276,17 @@ type itemSessionsResult struct {
 // The read reconciles as a side effect: a link a *successful* hive listing
 // cannot account for is dropped, while a failed listing drops nothing — absent
 // evidence is never evidence of absence.
-func (ctrl *Controller) ListItemSessions(ctx context.Context, _ *mcp.CallToolRequest, in itemSessionsInput) (*mcp.CallToolResult, any, error) {
+func (ctrl *Controller) ListItemSessions(ctx context.Context, in inbox.InboxSessionListIn) (any, error) {
 	if in.ItemID == 0 && in.ExternalID == "" {
-		return nil, nil, ctrl.toolError(app.Errorf(app.KindInvalid, "provide itemId or externalId"))
+		return nil, app.Errorf(app.KindInvalid, "provide itemId or externalId")
 	}
-	itemID, err := ctrl.resolveItemID(ctx, in.ItemID, in.ExternalID, in.Profile)
+	itemID, err := ctrl.resolveItemID(ctx, in.ItemID, in.ExternalID, in.ProfileID)
 	if err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, err
 	}
 	sessions, err := ctrl.core.Sessions.ItemSessions(ctx, itemID)
 	if err != nil {
-		return nil, nil, ctrl.toolError(err)
+		return nil, err
 	}
-	return nil, itemSessionsResult{Sessions: sessions}, nil
+	return itemSessionsResult{Sessions: sessions}, nil
 }

@@ -48,19 +48,19 @@ func TestListSessionsFiltersByTagsAndState(t *testing.T) {
 	seedHiveSession(t, core, "s4", "active", "", 4)
 
 	var all sessionsAnswer
-	call(t, session, "list_sessions", struct{}{}, &all)
+	call(t, session, "session_list", struct{}{}, &all)
 	assert.Equal(t, []string{"s4", "s3", "s2", "s1"}, sessionIDs(all), "newest first")
 	assert.Equal(t, []string{}, all.Sessions[0].Tags, "no tags is an empty list, not null")
 
 	var auto sessionsAnswer
-	call(t, session, "list_sessions", map[string]any{"tags": []string{"AUTO"}, "state": "active"}, &auto)
+	call(t, session, "session_list", map[string]any{"tags": []string{"AUTO"}, "state": "active"}, &auto)
 	assert.Equal(t, []string{"s2", "s1"}, sessionIDs(auto))
 
 	var both sessionsAnswer
-	call(t, session, "list_sessions", map[string]any{"tags": []string{"auto", "backend"}}, &both)
+	call(t, session, "session_list", map[string]any{"tags": []string{"auto", "backend"}}, &both)
 	assert.Equal(t, []string{"s1"}, sessionIDs(both))
 
-	assert.Contains(t, callErr(t, session, "list_sessions", map[string]any{"state": "paused"}), string(app.KindInvalid))
+	assert.Contains(t, callErr(t, session, "session_list", map[string]any{"state": "paused"}), string(app.KindInvalid))
 }
 
 func TestEditSessionTagsSwapsATag(t *testing.T) {
@@ -74,14 +74,14 @@ func TestEditSessionTagsSwapsATag(t *testing.T) {
 			Tags []string `json:"tags"`
 		} `json:"session"`
 	}
-	call(t, session, "edit_session_tags", map[string]any{"sessionId": "s1", "add": []string{"claimed"}, "remove": []string{"Auto"}}, &got)
+	call(t, session, "session_tags_update", map[string]any{"sessionId": "s1", "add": []string{"claimed"}, "remove": []string{"Auto"}}, &got)
 	assert.Equal(t, []string{"backend", "claimed"}, got.Session.Tags)
 
 	var auto sessionsAnswer
-	call(t, session, "list_sessions", map[string]any{"tags": []string{"auto"}}, &auto)
+	call(t, session, "session_list", map[string]any{"tags": []string{"auto"}}, &auto)
 	assert.Empty(t, auto.Sessions, "the swap is persisted")
 
-	assert.Contains(t, callErr(t, session, "edit_session_tags", map[string]any{"sessionId": "s1"}), string(app.KindInvalid))
-	assert.Contains(t, callErr(t, session, "edit_session_tags", map[string]any{"sessionId": "s1", "add": []string{"a,b"}}), string(app.KindInvalid))
-	assert.Contains(t, callErr(t, session, "edit_session_tags", map[string]any{"sessionId": "nope", "add": []string{"x"}}), string(app.KindNotFound))
+	assert.Contains(t, callErr(t, session, "session_tags_update", map[string]any{"sessionId": "s1"}), string(app.KindInvalid))
+	assert.Contains(t, callErr(t, session, "session_tags_update", map[string]any{"sessionId": "s1", "add": []string{"a,b"}}), string(app.KindInvalid))
+	assert.Contains(t, callErr(t, session, "session_tags_update", map[string]any{"sessionId": "nope", "add": []string{"x"}}), string(app.KindNotFound))
 }

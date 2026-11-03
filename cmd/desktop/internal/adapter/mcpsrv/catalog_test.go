@@ -16,9 +16,7 @@ import (
 // catalog.
 var notMigrated = map[string][]string{
 	mcpsrv.PathPrefix: {
-		"get_status", "read_diagnostics", "list_profiles", "get_flow", "list_feeds", "list_inbox",
-		"list_inbox_item_events", "list_item_sessions", "list_sessions", "edit_session_tags", "list_actions", "list_applets", "refresh_sources",
-		"list_action_runs", "get_action_run",
+		"list_profiles", "get_flow",
 		"create_profile", "delete_profile",
 		"get_profile_image", "set_profile_image", "clear_profile_image",
 		"get_node_image", "set_node_image", "clear_node_image",
