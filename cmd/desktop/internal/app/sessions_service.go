@@ -526,6 +526,22 @@ func (s *SessionsService) SessionFileDiffs(ctx context.Context, id string, targe
 	return diffs, nil
 }
 
+// SessionFileContext reads one file's diff with the whole file as context, for
+// showing the unchanged lines a diff leaves out.
+func (s *SessionsService) SessionFileContext(ctx context.Context, id string, target gitstatus.DiffTarget, path string) (gitstatus.FileDiff, error) {
+	if strings.TrimSpace(id) == "" {
+		return gitstatus.FileDiff{}, Errorf(KindInvalid, "session id is required")
+	}
+	diff, err := s.sessions.SessionFileContext(ctx, id, target, path)
+	if errors.Is(err, session.ErrNotFound) {
+		return gitstatus.FileDiff{}, Wrap(err, KindNotFound, "reading %s for session %q", path, id)
+	}
+	if err != nil {
+		return gitstatus.FileDiff{}, Wrap(err, KindInternal, "reading %s for session %q", path, id)
+	}
+	return diff, nil
+}
+
 // SessionBranches lists the full refs the session's checkout can compare against.
 func (s *SessionsService) SessionBranches(ctx context.Context, id string) ([]string, error) {
 	if strings.TrimSpace(id) == "" {

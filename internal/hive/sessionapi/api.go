@@ -42,6 +42,8 @@ type API interface {
 	SessionLaunchOptions(ctx context.Context) (sessionsvc.LaunchOptions, error)
 	SessionChanges(ctx context.Context, id string, target gitstatus.DiffTarget) (gitstatus.Changes, error)
 	SessionFileDiffs(ctx context.Context, id string, target gitstatus.DiffTarget, paths []string) ([]gitstatus.FileDiff, error)
+	// SessionFileContext reads one file's diff with the whole file as context.
+	SessionFileContext(ctx context.Context, id string, target gitstatus.DiffTarget, path string) (gitstatus.FileDiff, error)
 	SessionBranches(ctx context.Context, id string) ([]string, error)
 	// GitStatuses reads the checkouts of the sessions ids name on the machine
 	// that holds them, keyed by id. An id with no session is absent.

@@ -559,6 +559,16 @@ func (c *Client) SessionFileDiffs(ctx context.Context, id string, target gitstat
 	return wire.FileDiffsFromProto(resp.Msg), nil
 }
 
+func (c *Client) SessionFileContext(ctx context.Context, id string, target gitstatus.DiffTarget, path string) (gitstatus.FileDiff, error) {
+	resp, err := retryRead(func() (*connect.Response[daemonv1.FileContextResponse], error) {
+		return c.sessions.FileContext(ctx, connect.NewRequest(&daemonv1.FileContextRequest{Id: id, Target: wire.DiffTargetToProto(target), Path: path}))
+	})
+	if err != nil {
+		return gitstatus.FileDiff{}, wire.FromConnectError(err)
+	}
+	return wire.FileDiffFromProto(resp.Msg.GetDiff()), nil
+}
+
 func (c *Client) SessionBranches(ctx context.Context, id string) ([]string, error) {
 	resp, err := retryRead(func() (*connect.Response[daemonv1.BranchesResponse], error) {
 		return c.sessions.Branches(ctx, connect.NewRequest(&daemonv1.BranchesRequest{Id: id}))

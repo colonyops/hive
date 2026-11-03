@@ -3850,6 +3850,110 @@ func (x *FileDiffsResponse) GetDiffs() []*FileDiff {
 	return nil
 }
 
+type FileContextRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Target        *DiffTarget            `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	Path          string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FileContextRequest) Reset() {
+	*x = FileContextRequest{}
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FileContextRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileContextRequest) ProtoMessage() {}
+
+func (x *FileContextRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileContextRequest.ProtoReflect.Descriptor instead.
+func (*FileContextRequest) Descriptor() ([]byte, []int) {
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{64}
+}
+
+func (x *FileContextRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *FileContextRequest) GetTarget() *DiffTarget {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *FileContextRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+type FileContextResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Diff          *FileDiff              `protobuf:"bytes,1,opt,name=diff,proto3" json:"diff,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FileContextResponse) Reset() {
+	*x = FileContextResponse{}
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FileContextResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileContextResponse) ProtoMessage() {}
+
+func (x *FileContextResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileContextResponse.ProtoReflect.Descriptor instead.
+func (*FileContextResponse) Descriptor() ([]byte, []int) {
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *FileContextResponse) GetDiff() *FileDiff {
+	if x != nil {
+		return x.Diff
+	}
+	return nil
+}
+
 type BranchesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -3859,7 +3963,7 @@ type BranchesRequest struct {
 
 func (x *BranchesRequest) Reset() {
 	*x = BranchesRequest{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[64]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3871,7 +3975,7 @@ func (x *BranchesRequest) String() string {
 func (*BranchesRequest) ProtoMessage() {}
 
 func (x *BranchesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[64]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3884,7 +3988,7 @@ func (x *BranchesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BranchesRequest.ProtoReflect.Descriptor instead.
 func (*BranchesRequest) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{64}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *BranchesRequest) GetId() string {
@@ -3903,7 +4007,7 @@ type BranchesResponse struct {
 
 func (x *BranchesResponse) Reset() {
 	*x = BranchesResponse{}
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[65]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3915,7 +4019,7 @@ func (x *BranchesResponse) String() string {
 func (*BranchesResponse) ProtoMessage() {}
 
 func (x *BranchesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[65]
+	mi := &file_hive_daemon_v1_daemon_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3928,7 +4032,7 @@ func (x *BranchesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BranchesResponse.ProtoReflect.Descriptor instead.
 func (*BranchesResponse) Descriptor() ([]byte, []int) {
-	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{65}
+	return file_hive_daemon_v1_daemon_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *BranchesResponse) GetRefs() []string {
@@ -4226,7 +4330,13 @@ const file_hive_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x06target\x18\x02 \x01(\v2\x1a.hive.daemon.v1.DiffTargetR\x06target\x12\x14\n" +
 	"\x05paths\x18\x03 \x03(\tR\x05paths\"C\n" +
 	"\x11FileDiffsResponse\x12.\n" +
-	"\x05diffs\x18\x01 \x03(\v2\x18.hive.daemon.v1.FileDiffR\x05diffs\"!\n" +
+	"\x05diffs\x18\x01 \x03(\v2\x18.hive.daemon.v1.FileDiffR\x05diffs\"l\n" +
+	"\x12FileContextRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x122\n" +
+	"\x06target\x18\x02 \x01(\v2\x1a.hive.daemon.v1.DiffTargetR\x06target\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\"C\n" +
+	"\x13FileContextResponse\x12,\n" +
+	"\x04diff\x18\x01 \x01(\v2\x18.hive.daemon.v1.FileDiffR\x04diff\"!\n" +
 	"\x0fBranchesRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"&\n" +
 	"\x10BranchesResponse\x12\x12\n" +
@@ -4235,7 +4345,7 @@ const file_hive_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x05Hello\x12\x1c.hive.daemon.v1.HelloRequest\x1a\x1d.hive.daemon.v1.HelloResponse\x12G\n" +
 	"\x06Health\x12\x1d.hive.daemon.v1.HealthRequest\x1a\x1e.hive.daemon.v1.HealthResponse\x12A\n" +
 	"\x04Stop\x12\x1b.hive.daemon.v1.StopRequest\x1a\x1c.hive.daemon.v1.StopResponse\x12G\n" +
-	"\x06Reload\x12\x1d.hive.daemon.v1.ReloadRequest\x1a\x1e.hive.daemon.v1.ReloadResponse2\xc9\f\n" +
+	"\x06Reload\x12\x1d.hive.daemon.v1.ReloadRequest\x1a\x1e.hive.daemon.v1.ReloadResponse2\xa1\r\n" +
 	"\x0eSessionService\x12A\n" +
 	"\x04List\x12\x1b.hive.daemon.v1.ListRequest\x1a\x1c.hive.daemon.v1.ListResponse\x12>\n" +
 	"\x03Get\x12\x1a.hive.daemon.v1.GetRequest\x1a\x1b.hive.daemon.v1.GetResponse\x12I\n" +
@@ -4253,7 +4363,8 @@ const file_hive_daemon_v1_daemon_proto_rawDesc = "" +
 	"\rLaunchOptions\x12$.hive.daemon.v1.LaunchOptionsRequest\x1a%.hive.daemon.v1.LaunchOptionsResponse\x12M\n" +
 	"\bStatuses\x12\x1f.hive.daemon.v1.StatusesRequest\x1a .hive.daemon.v1.StatusesResponse\x12J\n" +
 	"\aChanges\x12\x1e.hive.daemon.v1.ChangesRequest\x1a\x1f.hive.daemon.v1.ChangesResponse\x12P\n" +
-	"\tFileDiffs\x12 .hive.daemon.v1.FileDiffsRequest\x1a!.hive.daemon.v1.FileDiffsResponse\x12M\n" +
+	"\tFileDiffs\x12 .hive.daemon.v1.FileDiffsRequest\x1a!.hive.daemon.v1.FileDiffsResponse\x12V\n" +
+	"\vFileContext\x12\".hive.daemon.v1.FileContextRequest\x1a#.hive.daemon.v1.FileContextResponse\x12M\n" +
 	"\bBranches\x12\x1f.hive.daemon.v1.BranchesRequest\x1a .hive.daemon.v1.BranchesResponse\x12V\n" +
 	"\vGitStatuses\x12\".hive.daemon.v1.GitStatusesRequest\x1a#.hive.daemon.v1.GitStatusesResponse\x12P\n" +
 	"\tStartTmux\x12 .hive.daemon.v1.StartTmuxRequest\x1a!.hive.daemon.v1.StartTmuxResponseB\xc7\x01\n" +
@@ -4271,7 +4382,7 @@ func file_hive_daemon_v1_daemon_proto_rawDescGZIP() []byte {
 	return file_hive_daemon_v1_daemon_proto_rawDescData
 }
 
-var file_hive_daemon_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 70)
+var file_hive_daemon_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 72)
 var file_hive_daemon_v1_daemon_proto_goTypes = []any{
 	(*HelloRequest)(nil),              // 0: hive.daemon.v1.HelloRequest
 	(*HelloResponse)(nil),             // 1: hive.daemon.v1.HelloResponse
@@ -4337,25 +4448,27 @@ var file_hive_daemon_v1_daemon_proto_goTypes = []any{
 	(*FileDiff)(nil),                  // 61: hive.daemon.v1.FileDiff
 	(*FileDiffsRequest)(nil),          // 62: hive.daemon.v1.FileDiffsRequest
 	(*FileDiffsResponse)(nil),         // 63: hive.daemon.v1.FileDiffsResponse
-	(*BranchesRequest)(nil),           // 64: hive.daemon.v1.BranchesRequest
-	(*BranchesResponse)(nil),          // 65: hive.daemon.v1.BranchesResponse
-	nil,                               // 66: hive.daemon.v1.HealthResponse.SessionsByStateEntry
-	nil,                               // 67: hive.daemon.v1.Session.MetadataEntry
-	nil,                               // 68: hive.daemon.v1.StatusesResponse.StatusesEntry
-	nil,                               // 69: hive.daemon.v1.GitStatusesResponse.StatusesEntry
-	(*timestamppb.Timestamp)(nil),     // 70: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),       // 71: google.protobuf.Duration
+	(*FileContextRequest)(nil),        // 64: hive.daemon.v1.FileContextRequest
+	(*FileContextResponse)(nil),       // 65: hive.daemon.v1.FileContextResponse
+	(*BranchesRequest)(nil),           // 66: hive.daemon.v1.BranchesRequest
+	(*BranchesResponse)(nil),          // 67: hive.daemon.v1.BranchesResponse
+	nil,                               // 68: hive.daemon.v1.HealthResponse.SessionsByStateEntry
+	nil,                               // 69: hive.daemon.v1.Session.MetadataEntry
+	nil,                               // 70: hive.daemon.v1.StatusesResponse.StatusesEntry
+	nil,                               // 71: hive.daemon.v1.GitStatusesResponse.StatusesEntry
+	(*timestamppb.Timestamp)(nil),     // 72: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),       // 73: google.protobuf.Duration
 }
 var file_hive_daemon_v1_daemon_proto_depIdxs = []int32{
-	70, // 0: hive.daemon.v1.HelloResponse.started_at:type_name -> google.protobuf.Timestamp
+	72, // 0: hive.daemon.v1.HelloResponse.started_at:type_name -> google.protobuf.Timestamp
 	5,  // 1: hive.daemon.v1.HealthResponse.status_loop:type_name -> hive.daemon.v1.StatusLoopHealth
-	66, // 2: hive.daemon.v1.HealthResponse.sessions_by_state:type_name -> hive.daemon.v1.HealthResponse.SessionsByStateEntry
-	71, // 3: hive.daemon.v1.HealthResponse.uptime:type_name -> google.protobuf.Duration
+	68, // 2: hive.daemon.v1.HealthResponse.sessions_by_state:type_name -> hive.daemon.v1.HealthResponse.SessionsByStateEntry
+	73, // 3: hive.daemon.v1.HealthResponse.uptime:type_name -> google.protobuf.Duration
 	4,  // 4: hive.daemon.v1.HealthResponse.agents:type_name -> hive.daemon.v1.AgentCheck
-	70, // 5: hive.daemon.v1.StatusLoopHealth.last_tick:type_name -> google.protobuf.Timestamp
-	67, // 6: hive.daemon.v1.Session.metadata:type_name -> hive.daemon.v1.Session.MetadataEntry
-	70, // 7: hive.daemon.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	70, // 8: hive.daemon.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
+	72, // 5: hive.daemon.v1.StatusLoopHealth.last_tick:type_name -> google.protobuf.Timestamp
+	69, // 6: hive.daemon.v1.Session.metadata:type_name -> hive.daemon.v1.Session.MetadataEntry
+	72, // 7: hive.daemon.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	72, // 8: hive.daemon.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
 	10, // 9: hive.daemon.v1.ListResponse.sessions:type_name -> hive.daemon.v1.Session
 	10, // 10: hive.daemon.v1.GetResponse.session:type_name -> hive.daemon.v1.Session
 	10, // 11: hive.daemon.v1.CreateResponse.session:type_name -> hive.daemon.v1.Session
@@ -4367,8 +4480,8 @@ var file_hive_daemon_v1_daemon_proto_depIdxs = []int32{
 	10, // 17: hive.daemon.v1.EditTagsResponse.session:type_name -> hive.daemon.v1.Session
 	40, // 18: hive.daemon.v1.LaunchOptionsResponse.repositories:type_name -> hive.daemon.v1.LaunchRepository
 	42, // 19: hive.daemon.v1.StatusesRequest.roots:type_name -> hive.daemon.v1.RootRepoTarget
-	68, // 20: hive.daemon.v1.StatusesResponse.statuses:type_name -> hive.daemon.v1.StatusesResponse.StatusesEntry
-	69, // 21: hive.daemon.v1.GitStatusesResponse.statuses:type_name -> hive.daemon.v1.GitStatusesResponse.StatusesEntry
+	70, // 20: hive.daemon.v1.StatusesResponse.statuses:type_name -> hive.daemon.v1.StatusesResponse.StatusesEntry
+	71, // 21: hive.daemon.v1.GitStatusesResponse.statuses:type_name -> hive.daemon.v1.GitStatusesResponse.StatusesEntry
 	50, // 22: hive.daemon.v1.WindowStatus.panes:type_name -> hive.daemon.v1.PaneStatus
 	51, // 23: hive.daemon.v1.TerminalStatus.windows:type_name -> hive.daemon.v1.WindowStatus
 	57, // 24: hive.daemon.v1.ChangesRequest.target:type_name -> hive.daemon.v1.DiffTarget
@@ -4376,61 +4489,65 @@ var file_hive_daemon_v1_daemon_proto_depIdxs = []int32{
 	59, // 26: hive.daemon.v1.ChangesResponse.commits:type_name -> hive.daemon.v1.CommitInfo
 	57, // 27: hive.daemon.v1.FileDiffsRequest.target:type_name -> hive.daemon.v1.DiffTarget
 	61, // 28: hive.daemon.v1.FileDiffsResponse.diffs:type_name -> hive.daemon.v1.FileDiff
-	52, // 29: hive.daemon.v1.StatusesResponse.StatusesEntry.value:type_name -> hive.daemon.v1.TerminalStatus
-	49, // 30: hive.daemon.v1.GitStatusesResponse.StatusesEntry.value:type_name -> hive.daemon.v1.GitStatus
-	0,  // 31: hive.daemon.v1.DaemonService.Hello:input_type -> hive.daemon.v1.HelloRequest
-	2,  // 32: hive.daemon.v1.DaemonService.Health:input_type -> hive.daemon.v1.HealthRequest
-	6,  // 33: hive.daemon.v1.DaemonService.Stop:input_type -> hive.daemon.v1.StopRequest
-	8,  // 34: hive.daemon.v1.DaemonService.Reload:input_type -> hive.daemon.v1.ReloadRequest
-	11, // 35: hive.daemon.v1.SessionService.List:input_type -> hive.daemon.v1.ListRequest
-	13, // 36: hive.daemon.v1.SessionService.Get:input_type -> hive.daemon.v1.GetRequest
-	15, // 37: hive.daemon.v1.SessionService.Create:input_type -> hive.daemon.v1.CreateRequest
-	17, // 38: hive.daemon.v1.SessionService.CreateFromRequest:input_type -> hive.daemon.v1.CreateFromRequestRequest
-	21, // 39: hive.daemon.v1.SessionService.CreateWithWindows:input_type -> hive.daemon.v1.CreateWithWindowsRequest
-	23, // 40: hive.daemon.v1.SessionService.Rename:input_type -> hive.daemon.v1.RenameRequest
-	25, // 41: hive.daemon.v1.SessionService.SetGroup:input_type -> hive.daemon.v1.SetGroupRequest
-	27, // 42: hive.daemon.v1.SessionService.SetTags:input_type -> hive.daemon.v1.SetTagsRequest
-	29, // 43: hive.daemon.v1.SessionService.EditTags:input_type -> hive.daemon.v1.EditTagsRequest
-	31, // 44: hive.daemon.v1.SessionService.Delete:input_type -> hive.daemon.v1.DeleteRequest
-	33, // 45: hive.daemon.v1.SessionService.Recycle:input_type -> hive.daemon.v1.RecycleRequest
-	35, // 46: hive.daemon.v1.SessionService.Prune:input_type -> hive.daemon.v1.PruneRequest
-	37, // 47: hive.daemon.v1.SessionService.Risk:input_type -> hive.daemon.v1.RiskRequest
-	39, // 48: hive.daemon.v1.SessionService.LaunchOptions:input_type -> hive.daemon.v1.LaunchOptionsRequest
-	43, // 49: hive.daemon.v1.SessionService.Statuses:input_type -> hive.daemon.v1.StatusesRequest
-	58, // 50: hive.daemon.v1.SessionService.Changes:input_type -> hive.daemon.v1.ChangesRequest
-	62, // 51: hive.daemon.v1.SessionService.FileDiffs:input_type -> hive.daemon.v1.FileDiffsRequest
-	64, // 52: hive.daemon.v1.SessionService.Branches:input_type -> hive.daemon.v1.BranchesRequest
-	47, // 53: hive.daemon.v1.SessionService.GitStatuses:input_type -> hive.daemon.v1.GitStatusesRequest
-	45, // 54: hive.daemon.v1.SessionService.StartTmux:input_type -> hive.daemon.v1.StartTmuxRequest
-	1,  // 55: hive.daemon.v1.DaemonService.Hello:output_type -> hive.daemon.v1.HelloResponse
-	3,  // 56: hive.daemon.v1.DaemonService.Health:output_type -> hive.daemon.v1.HealthResponse
-	7,  // 57: hive.daemon.v1.DaemonService.Stop:output_type -> hive.daemon.v1.StopResponse
-	9,  // 58: hive.daemon.v1.DaemonService.Reload:output_type -> hive.daemon.v1.ReloadResponse
-	12, // 59: hive.daemon.v1.SessionService.List:output_type -> hive.daemon.v1.ListResponse
-	14, // 60: hive.daemon.v1.SessionService.Get:output_type -> hive.daemon.v1.GetResponse
-	16, // 61: hive.daemon.v1.SessionService.Create:output_type -> hive.daemon.v1.CreateResponse
-	18, // 62: hive.daemon.v1.SessionService.CreateFromRequest:output_type -> hive.daemon.v1.CreateFromRequestResponse
-	22, // 63: hive.daemon.v1.SessionService.CreateWithWindows:output_type -> hive.daemon.v1.CreateWithWindowsResponse
-	24, // 64: hive.daemon.v1.SessionService.Rename:output_type -> hive.daemon.v1.RenameResponse
-	26, // 65: hive.daemon.v1.SessionService.SetGroup:output_type -> hive.daemon.v1.SetGroupResponse
-	28, // 66: hive.daemon.v1.SessionService.SetTags:output_type -> hive.daemon.v1.SetTagsResponse
-	30, // 67: hive.daemon.v1.SessionService.EditTags:output_type -> hive.daemon.v1.EditTagsResponse
-	32, // 68: hive.daemon.v1.SessionService.Delete:output_type -> hive.daemon.v1.DeleteResponse
-	34, // 69: hive.daemon.v1.SessionService.Recycle:output_type -> hive.daemon.v1.RecycleResponse
-	36, // 70: hive.daemon.v1.SessionService.Prune:output_type -> hive.daemon.v1.PruneResponse
-	38, // 71: hive.daemon.v1.SessionService.Risk:output_type -> hive.daemon.v1.RiskResponse
-	41, // 72: hive.daemon.v1.SessionService.LaunchOptions:output_type -> hive.daemon.v1.LaunchOptionsResponse
-	44, // 73: hive.daemon.v1.SessionService.Statuses:output_type -> hive.daemon.v1.StatusesResponse
-	60, // 74: hive.daemon.v1.SessionService.Changes:output_type -> hive.daemon.v1.ChangesResponse
-	63, // 75: hive.daemon.v1.SessionService.FileDiffs:output_type -> hive.daemon.v1.FileDiffsResponse
-	65, // 76: hive.daemon.v1.SessionService.Branches:output_type -> hive.daemon.v1.BranchesResponse
-	48, // 77: hive.daemon.v1.SessionService.GitStatuses:output_type -> hive.daemon.v1.GitStatusesResponse
-	46, // 78: hive.daemon.v1.SessionService.StartTmux:output_type -> hive.daemon.v1.StartTmuxResponse
-	55, // [55:79] is the sub-list for method output_type
-	31, // [31:55] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	57, // 29: hive.daemon.v1.FileContextRequest.target:type_name -> hive.daemon.v1.DiffTarget
+	61, // 30: hive.daemon.v1.FileContextResponse.diff:type_name -> hive.daemon.v1.FileDiff
+	52, // 31: hive.daemon.v1.StatusesResponse.StatusesEntry.value:type_name -> hive.daemon.v1.TerminalStatus
+	49, // 32: hive.daemon.v1.GitStatusesResponse.StatusesEntry.value:type_name -> hive.daemon.v1.GitStatus
+	0,  // 33: hive.daemon.v1.DaemonService.Hello:input_type -> hive.daemon.v1.HelloRequest
+	2,  // 34: hive.daemon.v1.DaemonService.Health:input_type -> hive.daemon.v1.HealthRequest
+	6,  // 35: hive.daemon.v1.DaemonService.Stop:input_type -> hive.daemon.v1.StopRequest
+	8,  // 36: hive.daemon.v1.DaemonService.Reload:input_type -> hive.daemon.v1.ReloadRequest
+	11, // 37: hive.daemon.v1.SessionService.List:input_type -> hive.daemon.v1.ListRequest
+	13, // 38: hive.daemon.v1.SessionService.Get:input_type -> hive.daemon.v1.GetRequest
+	15, // 39: hive.daemon.v1.SessionService.Create:input_type -> hive.daemon.v1.CreateRequest
+	17, // 40: hive.daemon.v1.SessionService.CreateFromRequest:input_type -> hive.daemon.v1.CreateFromRequestRequest
+	21, // 41: hive.daemon.v1.SessionService.CreateWithWindows:input_type -> hive.daemon.v1.CreateWithWindowsRequest
+	23, // 42: hive.daemon.v1.SessionService.Rename:input_type -> hive.daemon.v1.RenameRequest
+	25, // 43: hive.daemon.v1.SessionService.SetGroup:input_type -> hive.daemon.v1.SetGroupRequest
+	27, // 44: hive.daemon.v1.SessionService.SetTags:input_type -> hive.daemon.v1.SetTagsRequest
+	29, // 45: hive.daemon.v1.SessionService.EditTags:input_type -> hive.daemon.v1.EditTagsRequest
+	31, // 46: hive.daemon.v1.SessionService.Delete:input_type -> hive.daemon.v1.DeleteRequest
+	33, // 47: hive.daemon.v1.SessionService.Recycle:input_type -> hive.daemon.v1.RecycleRequest
+	35, // 48: hive.daemon.v1.SessionService.Prune:input_type -> hive.daemon.v1.PruneRequest
+	37, // 49: hive.daemon.v1.SessionService.Risk:input_type -> hive.daemon.v1.RiskRequest
+	39, // 50: hive.daemon.v1.SessionService.LaunchOptions:input_type -> hive.daemon.v1.LaunchOptionsRequest
+	43, // 51: hive.daemon.v1.SessionService.Statuses:input_type -> hive.daemon.v1.StatusesRequest
+	58, // 52: hive.daemon.v1.SessionService.Changes:input_type -> hive.daemon.v1.ChangesRequest
+	62, // 53: hive.daemon.v1.SessionService.FileDiffs:input_type -> hive.daemon.v1.FileDiffsRequest
+	64, // 54: hive.daemon.v1.SessionService.FileContext:input_type -> hive.daemon.v1.FileContextRequest
+	66, // 55: hive.daemon.v1.SessionService.Branches:input_type -> hive.daemon.v1.BranchesRequest
+	47, // 56: hive.daemon.v1.SessionService.GitStatuses:input_type -> hive.daemon.v1.GitStatusesRequest
+	45, // 57: hive.daemon.v1.SessionService.StartTmux:input_type -> hive.daemon.v1.StartTmuxRequest
+	1,  // 58: hive.daemon.v1.DaemonService.Hello:output_type -> hive.daemon.v1.HelloResponse
+	3,  // 59: hive.daemon.v1.DaemonService.Health:output_type -> hive.daemon.v1.HealthResponse
+	7,  // 60: hive.daemon.v1.DaemonService.Stop:output_type -> hive.daemon.v1.StopResponse
+	9,  // 61: hive.daemon.v1.DaemonService.Reload:output_type -> hive.daemon.v1.ReloadResponse
+	12, // 62: hive.daemon.v1.SessionService.List:output_type -> hive.daemon.v1.ListResponse
+	14, // 63: hive.daemon.v1.SessionService.Get:output_type -> hive.daemon.v1.GetResponse
+	16, // 64: hive.daemon.v1.SessionService.Create:output_type -> hive.daemon.v1.CreateResponse
+	18, // 65: hive.daemon.v1.SessionService.CreateFromRequest:output_type -> hive.daemon.v1.CreateFromRequestResponse
+	22, // 66: hive.daemon.v1.SessionService.CreateWithWindows:output_type -> hive.daemon.v1.CreateWithWindowsResponse
+	24, // 67: hive.daemon.v1.SessionService.Rename:output_type -> hive.daemon.v1.RenameResponse
+	26, // 68: hive.daemon.v1.SessionService.SetGroup:output_type -> hive.daemon.v1.SetGroupResponse
+	28, // 69: hive.daemon.v1.SessionService.SetTags:output_type -> hive.daemon.v1.SetTagsResponse
+	30, // 70: hive.daemon.v1.SessionService.EditTags:output_type -> hive.daemon.v1.EditTagsResponse
+	32, // 71: hive.daemon.v1.SessionService.Delete:output_type -> hive.daemon.v1.DeleteResponse
+	34, // 72: hive.daemon.v1.SessionService.Recycle:output_type -> hive.daemon.v1.RecycleResponse
+	36, // 73: hive.daemon.v1.SessionService.Prune:output_type -> hive.daemon.v1.PruneResponse
+	38, // 74: hive.daemon.v1.SessionService.Risk:output_type -> hive.daemon.v1.RiskResponse
+	41, // 75: hive.daemon.v1.SessionService.LaunchOptions:output_type -> hive.daemon.v1.LaunchOptionsResponse
+	44, // 76: hive.daemon.v1.SessionService.Statuses:output_type -> hive.daemon.v1.StatusesResponse
+	60, // 77: hive.daemon.v1.SessionService.Changes:output_type -> hive.daemon.v1.ChangesResponse
+	63, // 78: hive.daemon.v1.SessionService.FileDiffs:output_type -> hive.daemon.v1.FileDiffsResponse
+	65, // 79: hive.daemon.v1.SessionService.FileContext:output_type -> hive.daemon.v1.FileContextResponse
+	67, // 80: hive.daemon.v1.SessionService.Branches:output_type -> hive.daemon.v1.BranchesResponse
+	48, // 81: hive.daemon.v1.SessionService.GitStatuses:output_type -> hive.daemon.v1.GitStatusesResponse
+	46, // 82: hive.daemon.v1.SessionService.StartTmux:output_type -> hive.daemon.v1.StartTmuxResponse
+	58, // [58:83] is the sub-list for method output_type
+	33, // [33:58] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_hive_daemon_v1_daemon_proto_init() }
@@ -4448,7 +4565,7 @@ func file_hive_daemon_v1_daemon_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_hive_daemon_v1_daemon_proto_rawDesc), len(file_hive_daemon_v1_daemon_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   70,
+			NumMessages:   72,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

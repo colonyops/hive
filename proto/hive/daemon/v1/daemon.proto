@@ -39,6 +39,8 @@ service SessionService {
   // Changes reads the session's checkout on the machine that holds it.
   rpc Changes(ChangesRequest) returns (ChangesResponse);
   rpc FileDiffs(FileDiffsRequest) returns (FileDiffsResponse);
+  // FileContext reads one file's diff with the whole file as context.
+  rpc FileContext(FileContextRequest) returns (FileContextResponse);
   rpc Branches(BranchesRequest) returns (BranchesResponse);
   // GitStatuses reads the checkouts of sessions on the daemon's machine. A
   // read is shared by every client that asks within a few seconds.
@@ -437,6 +439,16 @@ message FileDiffsRequest {
 
 message FileDiffsResponse {
   repeated FileDiff diffs = 1;
+}
+
+message FileContextRequest {
+  string id = 1;
+  DiffTarget target = 2;
+  string path = 3;
+}
+
+message FileContextResponse {
+  FileDiff diff = 1;
 }
 
 message BranchesRequest {

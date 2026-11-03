@@ -191,6 +191,14 @@ export function SessionDraftFromActivity(metadata: { [_ in string]?: string } | 
 }
 
 /**
+ * SessionFileContext reads one file's diff with the whole file as context, so the
+ * view can show the unchanged lines between hunks.
+ */
+export function SessionFileContext(id: string, target: $models.DiffTarget, path: string): $CancellablePromise<$models.SessionFileDiff> {
+    return $Call.ByID(1723333654, id, target, path);
+}
+
+/**
  * SessionFileDiffs reads the diffs of paths for a target. Only a path in the
  * current change list is read.
  */
