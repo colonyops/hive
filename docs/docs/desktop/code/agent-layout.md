@@ -60,3 +60,11 @@ A refused request prints the reason, such as `invalid: a chat has only a Drive t
 ## From MCP
 
 The same tools are on the **Hive Drive** server, which a workspace enables under **MCP servers** and a Code session's agent adds from **Settings ▸ MCP servers**. See [Let an agent write](../chats/agent-workspaces.md#let-an-agent-write) for the document tools beside them.
+
+`hive mcp serve` serves the same tools over stdio, so an agent's configuration needs no port. It finds the running app the way `hive dt` does, fills `caller` itself, and answers `unavailable: Hive Desktop is not running` while the app is closed. `--toolset` picks the tools: `drive,layout` for Hive Drive, or `inbox,sessions,actions,diagnostics,flows,workspaces` for Hive Desktop.
+
+```bash
+claude mcp add --scope user hive-drive -- hive mcp serve --toolset drive,layout
+```
+
+When the `hive` command is the same version as the app, workspaces and **Settings ▸ MCP servers** write this form for you. Otherwise they write the HTTP address.

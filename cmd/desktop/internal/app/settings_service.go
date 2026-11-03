@@ -490,6 +490,15 @@ func (s *SettingsService) Editor(context.Context) (string, error) {
 	return cfg.Editor.Command, nil
 }
 
+// DaemonHivePath is daemon.hive_path, empty when unset or unreadable.
+func (s *SettingsService) DaemonHivePath(context.Context) string {
+	cfg, err := s.store.Effective()
+	if err != nil {
+		return ""
+	}
+	return cfg.Daemon.HivePath
+}
+
 // SessionEndDelay is zero when settings cannot be read; the caller takes the
 // shipped value.
 func (s *SettingsService) SessionEndDelay(context.Context) time.Duration {

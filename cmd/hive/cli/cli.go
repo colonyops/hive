@@ -135,7 +135,7 @@ func commandPath(root *cli.Command, args []string) []string {
 // daemon and servers reach a daemon or are one, so opening hive.db and the
 // plugins in the client is wasted work.
 func skipsEngine(path []string) bool {
-	return len(path) > 0 && (path[0] == "daemon" || path[0] == "servers")
+	return len(path) > 0 && (path[0] == "daemon" || path[0] == "servers" || path[0] == "mcp")
 }
 
 // Main runs the hive CLI and exits the process.
@@ -369,6 +369,7 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewWorkspaceCmd(flags, hiveApp).Register(app)
 	app = commands.NewInitCmd(flags, hiveApp).Register(app)
 	app = commands.NewDesktopCmd(flags, hiveApp).Register(app)
+	app = commands.NewMCPCmd(flags, hiveApp).Register(app)
 	app = commands.NewExperimentalCmd(flags, hiveApp).Register(app)
 	app = commands.NewDaemonCmd(flags, hiveApp).Register(app)
 	app = commands.NewServersCmd(flags, hiveApp).Register(app)

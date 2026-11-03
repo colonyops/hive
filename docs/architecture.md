@@ -2615,9 +2615,17 @@ and any other UTF-8 text file, and answers `not_found` for hive state files
 (`kv.json`, `kv.json.lock`). An app-hosted catalogue entry declares
 its mount as `Descriptor.RuntimePath`, joined with the live loopback base when
 the catalogue is rendered; a pinning test in `mcpsrv` keeps those paths
-agreeing with the adapter's constants. The app does not wire the server into a
-Code session's agent: the user adds its address to the agent's own MCP
-configuration, and Settings ▸ MCP servers lists it.
+agreeing with the adapter's constants. `hive mcp serve` is the stdio form of the
+same servers: it lists the catalog ops of the `--toolset`s it is given, drops
+`caller` from their schemas, fills it from `--caller`, `HIVE_AGENT_SESSION` or
+the working directory, and forwards each call to the toolset's `MCPPath`
+through the endpoint file, answering `unavailable` while the desktop is down.
+The catalogue renders the three hive entries in that form when
+`hiveCLIResolver` finds a `hive` (`daemon.hive_path`, else the login-shell
+PATH) whose `--version` equals the app's, and as the HTTP address otherwise,
+because a CLI of another version compiles a different catalog. The app wires a
+Code session's agent only when the user presses Add in Settings ▸ MCP servers,
+which writes the same form (ADR agents-reach-hive-desktop-through-hive-mcp-serve-when-the-cli-matches-the-app).
 
 **A caller resolves to a space.** The `caller` argument is `global`, a chat's
 record id, or the caller's working directory. `global` is the `shared` space,

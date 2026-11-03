@@ -127,3 +127,23 @@ func TestHasConversationIsTrueWithoutAProbe(t *testing.T) {
 	assert.True(t, HasConversation("codex", "any-id"), "no probe means resume decides for itself")
 	assert.True(t, HasConversation("mystery-agent", "any-id"))
 }
+
+func TestRenderStdioHiveServer(t *testing.T) {
+	t.Parallel()
+
+	servers := map[string]mcpcatalog.Server{
+		"hive-drive": {
+			Transport: mcpcatalog.TransportStdio,
+			Command:   "/opt/bin/hive",
+			Args:      []string{"--data-dir", "/data", "mcp", "serve", "--toolset", "drive,layout"},
+		},
+	}
+
+	js, err := renderMCPJSON(servers)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"mcpServers":{"hive-drive":{"command":"/opt/bin/hive","args":["--data-dir","/data","mcp","serve","--toolset","drive,layout"]}}}`, string(js))
+
+	toml, err := renderCodexTOML(servers)
+	require.NoError(t, err)
+	assert.Equal(t, "[mcp_servers.hive-drive]\ncommand = \"/opt/bin/hive\"\nargs = [\"--data-dir\", \"/data\", \"mcp\", \"serve\", \"--toolset\", \"drive,layout\"]\n", string(toml))
+}

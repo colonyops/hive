@@ -461,11 +461,16 @@ the loopback server is disabled. The first allocated port is written to
 `settings.yaml` as `http.port`, so the address stays the same across
 restarts.
 
-A workspace that lists `hive-drive` gets this address in its generated MCP
-configuration. Any other agent, such as the one a hive session runs, reaches
-the same server once the user adds the address to that agent's own MCP
-configuration. Hive never edits an agent's configuration outside a workspace.
+A workspace that lists `hive-drive` gets this server in its generated MCP
+configuration. When the `hive` command (`daemon.hive_path`, else the
+login-shell PATH) reports the same version as the app, the entry is a stdio
+server, `hive --data-dir <dir> mcp serve --toolset drive,layout`. It finds
+the app through its endpoint file on every call and fills `caller` itself, so
+the entry holds no port and the agent passes no caller. Otherwise the entry is
+the HTTP address above. Any other agent, such as the one a hive session runs,
+gets the same entry when the user presses Add in Settings ▸ MCP servers; Hive
+edits an agent's own configuration only then.
 
-The server requires no token. It sits behind the loopback bind, spawns no
-processes, and writes only inside the caller's space under hive's context
-directory.
+The HTTP server requires no token. It sits behind the loopback bind, runs no
+command a caller writes, and writes only inside the caller's space under
+hive's context directory.

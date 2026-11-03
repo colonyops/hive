@@ -42,3 +42,7 @@ noun-first name (`inbox_list`, `schedule_put`), and the same operation is a
 
 `http.enabled` in `settings.yaml`, which is on by default. Nothing else — no
 Node, no network access, and no per-workspace configuration.
+
+When the `hive` command reports the same version as the app, a workspace's
+entry runs `hive --data-dir <dir> mcp serve` with this server's toolsets over
+stdio instead of the HTTP address, so it holds no port.
