@@ -1,10 +1,15 @@
 package cli
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli/v3"
+
+	"github.com/colonyops/hive/cmd/hive/internal/commands"
+	"github.com/colonyops/hive/internal/ops"
 )
 
 func TestCommandPath(t *testing.T) {
@@ -61,6 +66,25 @@ func TestIsShellCompletion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, isShellCompletion(tt.args))
+		})
+	}
+}
+
+func TestExitCode(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"success", nil, 0},
+		{"plain error", errors.New("boom"), 1},
+		{"exit error", commands.ExitError{Code: 7}, 7},
+		{"refused call", &ops.Error{Kind: ops.KindNotFound}, 3},
+		{"wrapped refused call", fmt.Errorf("tab open: %w", &ops.Error{Kind: ops.KindConflict}), 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, exitCode(tt.err))
 		})
 	}
 }

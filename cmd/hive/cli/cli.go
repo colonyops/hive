@@ -384,7 +384,6 @@ Run 'hive new' to create a new session from the current repository.`,
 		return tuiCmd.Run(ctx, c)
 	}
 
-	exitCode := 0
 	runErr := app.Run(ctx, os.Args)
 	if runErr != nil {
 		if msg := runErr.Error(); msg != "" {
@@ -394,14 +393,20 @@ Run 'hive new' to create a new session from the current repository.`,
 		if errors.As(runErr, &unreachable) && unreachable.Server != "" {
 			fmt.Fprintln(os.Stderr, "Check your servers with: hive servers ls")
 		}
-		exitCode = 1
-		if exitErr, ok := errors.AsType[commands.ExitError](runErr); ok {
-			exitCode = exitErr.Code
-		}
-		if opErr, ok := errors.AsType[*ops.Error](runErr); ok {
-			exitCode = ops.ExitCode(opErr.Kind)
-		}
 	}
 
-	os.Exit(exitCode)
+	os.Exit(exitCode(runErr))
+}
+
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	if opErr, ok := errors.AsType[*ops.Error](err); ok {
+		return ops.ExitCode(opErr.Kind)
+	}
+	if exitErr, ok := errors.AsType[commands.ExitError](err); ok {
+		return exitErr.Code
+	}
+	return 1
 }

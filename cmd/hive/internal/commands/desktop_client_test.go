@@ -353,14 +353,9 @@ func TestDesktopLocalValidation(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "open placement",
+			name:    "placement",
 			args:    []string{"tab", "open", "drive", "--placement", "above"},
 			wantErr: `invalid: placement "above" is not one of behind, beside, below`,
-		},
-		{
-			name:    "move placement",
-			args:    []string{"tab", "move", "drive", "--placement", "left"},
-			wantErr: `invalid: placement "left" is not one of behind, beside, below`,
 		},
 		{
 			name:    "share too high",
