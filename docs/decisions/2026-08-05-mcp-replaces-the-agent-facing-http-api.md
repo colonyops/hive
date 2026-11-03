@@ -1,6 +1,6 @@
 # The MCP server replaces the agent-facing HTTP API
 
-- **Status:** accepted
+- **Status:** accepted; its hand-written tool table superseded by [every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it](2026-11-03-every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it.md)
 - **Date:** 2026-08-05
 
 ## Context

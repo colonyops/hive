@@ -1,6 +1,6 @@
 # A Code session's canvases belong to its repository and live in the hive context directory
 
-- **Status:** accepted
+- **Status:** accepted; the tool and argument names superseded in part by [every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it](2026-11-03-every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it.md)
 - **Date:** 2026-10-04
 
 ## Context
