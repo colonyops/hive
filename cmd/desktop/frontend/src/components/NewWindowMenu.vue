@@ -13,7 +13,8 @@ const props = defineProps<{
   flip: boolean
   ignore: (HTMLElement | null)[]
   anchor?: HTMLElement | null
-  agents: string[]
+  /** Null where agents cannot run at all, which drops the agent part of the menu. */
+  agents: string[] | null
   defaultAgent: string
   loading: boolean
   failed: boolean
@@ -29,6 +30,27 @@ const emit = defineEmits<{
   retry: []
 }>()
 
+function agentEntries(agents: string[]): MenuEntry[] {
+  return [
+    { kind: 'separator' },
+    ...(!props.running ? [{ kind: 'label' as const, text: 'Start the session to add an agent' }] : []),
+    ...(props.loading
+      ? [{ kind: 'label' as const, text: 'Loading agents…' }]
+      : props.failed
+        ? [{ kind: 'action' as const, id: 'retry', label: 'Could not load agents. Retry', testid: 'new-window-retry' }]
+        : agents.length
+          ? agents.map((agent) => ({
+              kind: 'action' as const,
+              id: `agent:${agent}`,
+              label: agent === props.defaultAgent ? `${agent} (default)` : agent,
+              icon: agentBrandIcon(agent),
+              disabled: !props.running,
+              testid: `new-window-agent-${agent}`,
+            }))
+          : [{ kind: 'label' as const, text: 'No agents configured' }]),
+  ]
+}
+
 const entries = computed<MenuEntry[]>(() => [
   {
     kind: 'action',
@@ -37,22 +59,7 @@ const entries = computed<MenuEntry[]>(() => [
     icon: IconTerminal,
     testid: 'new-window-terminal',
   },
-  { kind: 'separator' },
-  ...(!props.running ? [{ kind: 'label' as const, text: 'Start the session to add an agent' }] : []),
-  ...(props.loading
-    ? [{ kind: 'label' as const, text: 'Loading agents…' }]
-    : props.failed
-      ? [{ kind: 'action' as const, id: 'retry', label: 'Could not load agents. Retry', testid: 'new-window-retry' }]
-      : props.agents.length
-        ? props.agents.map((agent) => ({
-            kind: 'action' as const,
-            id: `agent:${agent}`,
-            label: agent === props.defaultAgent ? `${agent} (default)` : agent,
-            icon: agentBrandIcon(agent),
-            disabled: !props.running,
-            testid: `new-window-agent-${agent}`,
-          }))
-        : [{ kind: 'label' as const, text: 'No agents configured' }]),
+  ...(props.agents ? agentEntries(props.agents) : []),
   ...(props.views?.length ? [{ kind: 'separator' as const }] : []),
   ...(props.views ?? []).map((view) => ({
     kind: 'action' as const,

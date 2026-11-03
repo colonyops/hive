@@ -2898,6 +2898,21 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
+    it("adds a tab from the tab row's + without a menu, because it holds only shells", async () => {
+      const start = vi.fn().mockResolvedValue({ started: true })
+      mocks.createTerminalClient.mockReturnValue({ start, newWindow: vi.fn(), listWindows: fakeListWindows({}) })
+      const { wrapper, session } = await mountAvailable()
+      await heading(wrapper).get('[data-testid="terminal-new-window"]').trigger('click')
+      await flushPromises()
+
+      await wrapper.get('[data-testid^="panel-tab-add-"]').trigger('click')
+      await flushPromises()
+
+      expect(session.newWindow).toHaveBeenCalledOnce()
+      expect(wrapper.find('[data-testid="new-window-menu"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
     // What the user hits first: tmux is holding the session from a previous run,
     // nothing in this window has attached to it yet, and + has to work anyway.
     it('adds a tab to a running terminal it has not attached to', async () => {
