@@ -9,7 +9,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 )
 
-// maxDocumentBytes caps one write_document body. A document is read back
+// maxDocumentBytes caps one document_put body. A document is read back
 // whole into an agent's context and rendered whole in the Drive tab, so a larger
 // one is a mistake on both ends.
 const maxDocumentBytes = 2 << 20
@@ -35,7 +35,7 @@ func (s *DriveService) ListDocuments(ctx context.Context, session, path string, 
 	}
 	entry, err := d.Entry(ctx, caller.space, path)
 	if errors.Is(err, drive.ErrNotFound) {
-		return drive.Space{}, drive.Entry{}, Errorf(KindNotFound, "nothing at %q in this space; list_documents with an empty path shows the root", path)
+		return drive.Space{}, drive.Entry{}, Errorf(KindNotFound, "nothing at %q in this space; document_list with an empty path shows the root", path)
 	}
 	if err != nil {
 		return drive.Space{}, drive.Entry{}, documentError(err, caller.space, path)
@@ -50,7 +50,7 @@ func (s *DriveService) ListDocuments(ctx context.Context, session, path string, 
 
 // ReadDocument is one markdown, html, or plain UTF-8 file and its bytes, as
 // stored. A canvas is a structure of blocks rather than a body, so it is read
-// with read_canvas. Hive's own state files answer not_found, as they are
+// with canvas_get. Hive's own state files answer not_found, as they are
 // absent from every listing.
 func (s *DriveService) ReadDocument(ctx context.Context, session, path string) (drive.Entry, []byte, error) {
 	d, caller, err := s.open(ctx, session)
@@ -64,14 +64,14 @@ func (s *DriveService) ReadDocument(ctx context.Context, session, path string) (
 		return drive.Entry{}, nil, documentNotFound(caller.space, path)
 	}
 	if drive.KindOf(path) == drive.KindCanvas {
-		return drive.Entry{}, nil, Errorf(KindInvalid, "%q is a canvas; read it with read_canvas and the name %q", path, drive.CanvasName(path))
+		return drive.Entry{}, nil, Errorf(KindInvalid, "%q is a canvas; read it with canvas_get and the name %q", path, drive.CanvasName(path))
 	}
 	isDir, err := s.isDir(d, caller.space, path)
 	if err != nil {
 		return drive.Entry{}, nil, err
 	}
 	if isDir {
-		return drive.Entry{}, nil, Errorf(KindInvalid, "%q is a folder; list it with list_documents", path)
+		return drive.Entry{}, nil, Errorf(KindInvalid, "%q is a folder; list it with document_list", path)
 	}
 	entry, body, err := d.Read(ctx, caller.space, path)
 	if err != nil {
@@ -96,7 +96,7 @@ func (s *DriveService) WriteDocument(ctx context.Context, session, path string, 
 	switch drive.KindOf(path) {
 	case drive.KindMarkdown, drive.KindHtml:
 	case drive.KindCanvas:
-		return drive.Entry{}, Errorf(KindInvalid, "%q is a canvas; write its blocks with put_blocks and the name %q", path, drive.CanvasName(path))
+		return drive.Entry{}, Errorf(KindInvalid, "%q is a canvas; write its blocks with canvas_blocks_put and the name %q", path, drive.CanvasName(path))
 	default:
 		return drive.Entry{}, Errorf(KindInvalid, "%q is neither a markdown (.md) nor an html (.html) document", path)
 	}

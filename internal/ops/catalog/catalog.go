@@ -3,10 +3,13 @@
 package catalog
 
 import (
+	"slices"
+
 	"github.com/colonyops/hive/internal/ops"
+	"github.com/colonyops/hive/internal/ops/drive"
 	"github.com/colonyops/hive/internal/ops/layout"
 )
 
 func All() []ops.Op {
-	return layout.All()
+	return slices.Concat(layout.All(), drive.All())
 }

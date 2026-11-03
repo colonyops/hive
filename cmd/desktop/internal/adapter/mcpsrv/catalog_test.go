@@ -26,10 +26,6 @@ var notMigrated = map[string][]string{
 		"list_workspaces", "list_schedules", "put_schedule", "remove_schedule",
 		"preview_schedule", "schedule_runs",
 	},
-	mcpsrv.DrivePathPrefix: {
-		"put_block", "put_blocks", "remove_block", "set_frontmatter", "clear_canvas", "delete_canvas", "read_canvas", "list_canvases",
-		"list_documents", "read_document", "write_document", "move_document", "delete_document",
-	},
 }
 
 // TestServedToolsAreTheCatalog fails when a catalog operation is not mounted
