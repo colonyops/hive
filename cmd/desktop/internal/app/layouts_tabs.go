@@ -102,7 +102,7 @@ func parseTabRef(s string) (TabRef, error) {
 	return TabRef{View: TabViewTerminal, Window: s}, nil
 }
 
-// OpenTabRequest is one open_tab call. Path applies to the drive view; Window
+// OpenTabRequest is one tab_open call. Path applies to the drive view; Window
 // and Name to the terminal view.
 type OpenTabRequest struct {
 	Session   string
@@ -289,7 +289,7 @@ func (s *LayoutsService) closeTerminal(ctx context.Context, caller driveCaller, 
 		return Errorf(KindInvalid, "a chat's terminal is the chat; stop it from its row")
 	}
 	if window == "" {
-		return Errorf(KindInvalid, "close_tab on a terminal needs window: name the window by id (@3) or name")
+		return Errorf(KindInvalid, "tab_close on a terminal needs window: name the window by id (@3) or name")
 	}
 	ref, err := s.resolveTab(ctx, caller, TabRef{View: TabViewTerminal, Window: window})
 	if err != nil {
@@ -298,7 +298,7 @@ func (s *LayoutsService) closeTerminal(ctx context.Context, caller driveCaller, 
 	return terminalError(s.terminals.CloseWindow(ctx, caller.tmuxSession, ref.Window), "closing window %q of session %q", ref.Window, caller.tmuxSession)
 }
 
-// MoveTabRequest is one move_tab call. Tab and Anchor are tab references.
+// MoveTabRequest is one tab_move call. Tab and Anchor are tab references.
 type MoveTabRequest struct {
 	Session   string
 	Tab       string

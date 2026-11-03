@@ -11,12 +11,12 @@ install, nothing to fetch. It is a separate entry so a workspace can have the
 drive without granting the app-control tool set, and the other way around.
 `hive-canvas` is the same server at its older address.
 
-## Spaces and the session argument
+## Spaces and the caller argument
 
 Hive Drive is one folder tree under hive's context directory, split into
 spaces. A space is a repository (`owner/repo`), a Chats workspace
 (`workspaces/<name>`), or the one `shared` space. Every tool works inside the
-space of the caller, and every tool takes a `session` that names the caller.
+space of the caller, and every tool takes a `caller` that names the caller.
 It is one of three things:
 
 - In a Hive chat it is the `HIVE_AGENT_SESSION` environment variable, which
@@ -31,14 +31,14 @@ It is one of three things:
 - Outside a chat and a hive session it is the word `global`, and the space is
   `shared`. A directory inside no hive session is `not_found`, not global:
   pass `global` yourself. The shared space sits beside no chat or session and has
-  no tabs, so `open_tab` and `close_tab` refuse it; the user reads it in the
+  no tabs, so `tab_open` and `tab_close` refuse it; the user reads it in the
   Drive page.
 
 ## Paths and kinds
 
 A path is relative to the space root, with forward slashes, no empty segment,
 no segment that starts with a dot, and nothing that climbs out with `..`.
-The empty path is the space root, which only `list_documents` takes.
+The empty path is the space root, which only `document_list` takes.
 
 What a document is follows from its name:
 
@@ -54,7 +54,7 @@ What a document is follows from its name:
 - **canvas**, `.canvas.json`: an ordered list of blocks that you edit one
   block at a time with the canvas tools.
 - **file**: anything else in the folder. Hive lists it and leaves it alone,
-  and `read_document` reads it when it is UTF-8 text.
+  and `document_get` reads it when it is UTF-8 text.
 
 Folders are created as needed when you write, so file a plan as
 `plans/auth-rewrite.md` without making `plans/` first. Name documents by
@@ -66,15 +66,15 @@ same tree. List before you write over something you did not make.
 
 A markdown document may open with YAML front matter between two `---` lines.
 `title` is the name the user sees in the tree; any other keys are yours.
-`write_document` refuses front matter that does not parse, and front matter
+`document_put` refuses front matter that does not parse, and front matter
 that does not close within the first 8 KiB, rather than saving a document
 Hive would show without its title. Hive does not add or change anything in a
 markdown document's front matter.
 
-A canvas carries editable front matter too, set with `set_frontmatter`. Keys
+A canvas carries editable front matter too, set with `canvas_frontmatter_put`. Keys
 use letters, digits, dots, hyphens, or underscores. Values are strings,
 finite numbers, booleans, null, or flat lists of those scalar values. `tags`
-is conventionally a list of strings. `set_frontmatter` replaces the complete
+is conventionally a list of strings. `canvas_frontmatter_put` replaces the complete
 editable mapping, so read the canvas first when preserving fields another
 agent wrote, and pass an empty object to remove every editable field. Hive
 owns `created_at` and `updated_at`, updates them with the canvas, and refuses
@@ -82,27 +82,27 @@ either key in the tool. Copy and save include all of them in a YAML header.
 
 ## Document tools
 
-- `list_documents`: a folder's entries, folders first. Each entry has a
+- `document_list`: a folder's entries, folders first. Each entry has a
   `kind` (`dir`, `markdown`, `html`, `canvas`, `file`), `path`, `name`,
   `title`, `size`, `modified`, and `front` for markdown and canvas. `detail`
   defaults to `children`, one level down; `tree` returns the whole subtree.
   The answer names the `space` and echoes the `detail` it used. A missing
   folder is `not_found`.
-- `read_document`: one markdown or html document, or any other UTF-8 text
+- `document_get`: one markdown or html document, or any other UTF-8 text
   file, its entry plus `body` exactly as stored. A canvas is read with
-  `read_canvas`, and a binary file is refused.
-- `write_document`: create or replace a whole `.md` or `.html` document,
+  `canvas_get`, and a binary file is refused.
+- `document_put`: create or replace a whole `.md` or `.html` document,
   up to 2 MiB. A `.canvas.json` path is refused; write canvases with the
   canvas tools. Answers with the entry as stored.
-- `move_document`: rename or move a document, a canvas, or a folder inside
+- `document_move`: rename or move a document, a canvas, or a folder inside
   the space. The target must not exist, and a document keeps its extension.
   Answers with the entry at its new path.
-- `delete_document`: delete a document, a canvas, or an empty folder, and
+- `document_delete`: delete a document, a canvas, or an empty folder, and
   answer with the path deleted. There is no recursive delete and no trash.
 
 A write while a Drive tab is open behind another tab lights a dot on that tab.
 With no Drive tab open, a write shows nothing until the user opens Drive, so
-call `open_tab` when something is finished and worth reading now, not on every
+call `tab_open` when something is finished and worth reading now, not on every
 write.
 
 ## Tabs and layout
@@ -112,22 +112,22 @@ session. A panel holds tabs, and a split joins two panels side by side or
 stacked. You can do with the layout what the user can. Every call below is a
 request to the app: the tab change applies only while the user is viewing this
 chat or session, and there is no acknowledgment. The tmux side of `terminal`
-is the exception: `open_tab` starts or finds the window and `close_tab` kills
+is the exception: `tab_open` starts or finds the window and `tab_close` kills
 it whether or not the session is on screen.
 
 A tab reference names one tab, in a `tab` or `anchor` input:
 
 - `drive`, `diff` or `tasks` name that view. A chat has only `drive`.
 - `terminal` names a chat's one terminal.
-- `applet:<id>` names an applet's tab. `open_tab` opens it if the applet's
-  `applet.yaml` lists `surfaces.tab`, which runs its page, and `close_tab` ends
+- `applet:<id>` names an applet's tab. `tab_open` opens it if the applet's
+  `applet.yaml` lists `surfaces.tab`, which runs its page, and `tab_close` ends
   it.
 - Anything else is a tmux window of a Code session, by id (`@3`) or exact
   name. A Code session must name its window; `terminal` alone is refused.
 
 The tools:
 
-- `open_tab`: open the tab for a `view` (`drive`, `diff`, `tasks`, `terminal`
+- `tab_open`: open the tab for a `view` (`drive`, `diff`, `tasks`, `terminal`
   or `applet:<id>`). `path`, for `drive`, is a document by its path in the space or a
   canvas by name or path (`perf` is `canvases/perf.canvas.json`); it must
   exist, and a folder is refused. `placement` is `behind` (the default; behind
@@ -136,23 +136,23 @@ The tools:
   to; omit it for the tab in front of the focused panel. A tab that is already
   open stays where it is. The answer names the `view`, the resolved `path` and,
   for `terminal`, the `window` id.
-- `close_tab`: close the tab for `drive`, `diff` or `tasks`. Documents and
+- `tab_close`: close the tab for `drive`, `diff` or `tasks`. Documents and
   canvases are untouched. `terminal` needs `window` and kills that tmux window
   and what runs in it; only close a window you started. A chat's terminal is
   the chat, so it is refused.
-- `move_tab`: move `tab`. `placement` `behind` puts it in the anchor's panel
+- `tab_move`: move `tab`. `placement` `behind` puts it in the anchor's panel
   right after the anchor, or at the end of the focused panel with no anchor.
   `beside` and `below` split the anchor's panel (or the focused one) and move
   the tab into the new panel.
-- `focus_tab`: bring `tab` forward and focus its panel. A window is also
+- `tab_focus`: bring `tab` forward and focus its panel. A window is also
   selected in tmux, by the app and only while the session is on screen.
-- `close_panel`: close the panel that holds `tab`. Its tabs join the
+- `panel_close`: close the panel that holds `tab`. Its tabs join the
   neighbouring panel, and the last panel stays.
-- `resize_split`: give the side that holds `tab` a `share` of its nearest
+- `split_resize`: give the side that holds `tab` a `share` of its nearest
   split, from 0.2 to 0.8.
-- `turn_split`: turn the nearest split of `tab` between side by side and
+- `split_turn`: turn the nearest split of `tab` between side by side and
   stacked.
-- `get_layout`: read the layout the app last reported: `panels` with their
+- `layout_get`: read the layout the app last reported: `panels` with their
   `tabs` (each spelled the way the tools take it, with `kind`, the window
   `name` for a Code session, and `shown` for the panel's front tab),
   `focusedPanel`, `splits` (`axis` `row` is side by side, `column` is
@@ -161,20 +161,20 @@ The tools:
   just after it started or when the session has never been open in Code; act
   without it.
 
-Call `get_layout` first when you are not sure what is open. Layout changes may
+Call `layout_get` first when you are not sure what is open. Layout changes may
 land after the call returns, so read again before you build on one.
 
-`focus_tab` and `close_tab` on a terminal are the two that take something from
+`tab_focus` and `tab_close` on a terminal are the two that take something from
 the user: the first takes the screen, the second ends a running process. Use
-`focus_tab` when the user asked to see something, not to show off a result;
-for a result use `open_tab`, which leaves the focus where it is. Close only a
+`tab_focus` when the user asked to see something, not to show off a result;
+for a result use `tab_open`, which leaves the focus where it is. Close only a
 window you started.
 
 A `terminal` opens detached, so it never takes the keyboard or the screen. A
 new one is a shell in the session's checkout with nothing running in it: the
 tool takes no command, so run your own work yourself and open a terminal for
 the user to type in. The session must be running; start it in Code first. Two
-inputs apply to `open_tab` with `terminal` only, and either with another view
+inputs apply to `tab_open` with `terminal` only, and either with another view
 is refused:
 
 - `name`: the name of the new window.
@@ -203,24 +203,24 @@ A canvas is addressed by name or by path. A bare name like `perf` files at
 `canvases/perf.canvas.json`. A name with folders files where it says:
 `reports/2026-10/perf` is `reports/2026-10/perf.canvas.json`, and the folders
 are created on the first write. The last segment is short, lowercase and
-filename-like. `list_canvases` answers each canvas by the name the other
+filename-like. `canvas_list` answers each canvas by the name the other
 canvas tools take. A canvas at the space root is named `./<stem>`: write
 `./perf` to file one at `perf.canvas.json`.
 
 The canvas tools:
 
-- `put_block`: create or replace one block; the first write under a new name
+- `canvas_block_put`: create or replace one block; the first write under a new name
   creates that canvas. Answers with the canvas metadata and the stored block,
   never the whole surface.
-- `put_blocks`: write a batch of blocks in one atomic call, for laying out a
+- `canvas_blocks_put`: write a batch of blocks in one atomic call, for laying out a
   canvas whole instead of block by block.
-- `remove_block`: remove one block by id.
-- `set_frontmatter`: replace the complete editable front matter mapping.
-- `clear_canvas`: remove every block; the canvas, its name and title survive.
-- `delete_canvas`: remove a canvas entirely.
-- `read_canvas`: read one canvas exactly as the user sees it, every block in
+- `canvas_block_delete`: remove one block by id.
+- `canvas_frontmatter_put`: replace the complete editable front matter mapping.
+- `canvas_clear`: remove every block; the canvas, its name and title survive.
+- `canvas_delete`: remove a canvas entirely.
+- `canvas_get`: read one canvas exactly as the user sees it, every block in
   order.
-- `list_canvases`: every canvas in the space, including ones earlier chats
+- `canvas_list`: every canvas in the space, including ones earlier chats
   made, most recently updated first.
 
 ## Writing a Mermaid diagram

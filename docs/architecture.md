@@ -1274,7 +1274,7 @@ or a profile type updates the panel that reads it.
 
 `App.Diagnostics` combines bounded file tails with `Jobs` outcomes; it owns no
 second log store (ADR [diagnostics-combines-bounded-evidence-independently-of-agent-execution](decisions/2026-10-06-diagnostics-combines-bounded-evidence-independently-of-agent-execution.md)).
-Wails and the read-only `read_diagnostics` MCP tool use the same service.
+Wails and the read-only `diagnostics_get` MCP tool use the same service.
 Records retain source identity, evidence IDs, raw text, structured fields, and
 truncation status. JSON fields are exact; fields parsed from legacy console text
 are best effort. CLI and Desktop share hive.log, with service_name identifying
@@ -1458,7 +1458,7 @@ opened in `AppletFrame`
   `setTabHost`, so the palette and a chord open an applet as a tab where one can show.
   Delete and import close saved tabs for the id, and import does it before `ConfirmImport`,
   because its catalog reload would mount the imported page in a leftover tab.
-  Agents use every layout verb on `applet:<id>`, including `open_tab` and `close_tab`.
+  Agents use every layout verb on `applet:<id>`, including `tab_open` and `tab_close`.
   `LayoutsService` asks `AppletsService.CheckTab` whether the file lists a tab first. This is
   the one verb on that server that runs a page, and the ADR says why that is acceptable.
 - **`applet.yaml` reads forward.** A key or icon this Hive does not know is a warning on the
@@ -2192,7 +2192,7 @@ detached or found; the tab itself still arrives through the reconcile, and
 special for `behind`, a new split on the anchor for `beside` or `below`,
 whether the tab is already there or the event beat the listing. Each layout
 store reports its map and the key on screen to Go (`lib/layoutReport.ts`,
-`LayoutService.Report`), which is how `get_layout` answers.
+`LayoutService.Report`), which is how `layout_get` answers.
 
 #### Pop-up terminals
 
@@ -2557,7 +2557,7 @@ watches that file's directory alone, because the directory may be as large
 as a home directory.
 
 **The desktop adds the UI surface and the agent surface.**
-`app.DriveService` serves the agent tools, which resolve a `session` argument
+`app.DriveService` serves the agent tools, which resolve a `caller` argument
 to a space, and the UI methods: `Spaces`, `Tree`, `Search`, `Document`,
 `Markdown`, `Export`, `CreateFolder`, `Rename`, `Move` and `Delete`. The Wails
 `DriveService` in `adapter/wailsui` binds the UI methods with camelCase wire
@@ -2581,20 +2581,20 @@ at `/mcp/drive` and at `/mcp/canvas`; the old address keeps answering for
 existing agent configurations. It has twenty-one tools: the eight canvas tools,
 whose `canvas` argument is a name or a path (`reports/perf` files at
 `reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), five document
-tools: `list_documents`, `read_document`, `write_document`, `move_document`
-and `delete_document`, and eight layout tools: `open_tab` (`view` is `drive`,
+tools: `document_list`, `document_get`, `document_put`, `document_move`
+and `document_delete`, and eight layout tools: `tab_open` (`view` is `drive`,
 `diff`, `tasks` or `terminal`; `path`, for `drive`, is a document path or a
 canvas name; `window`, `name` and `command`, for `terminal`, pick an existing
 window or start a new detached one in the checkout, a shell with no command;
 `placement` is `behind`, `beside` or `below`, relative to an optional
-`anchor`), `close_tab` (a terminal needs `window` and is killed through
-`tmuxcc.Manager.KillWindow`, with no event), `move_tab`, `focus_tab`,
-`close_panel`, `resize_split`, `turn_split` and `get_layout`. The verbs are
+`anchor`), `tab_close` (a terminal needs `window` and is killed through
+`tmuxcc.Manager.KillWindow`, with no event), `tab_move`, `tab_focus`,
+`panel_close`, `split_resize`, `split_turn` and `layout_get`. The verbs are
 `app.LayoutsService` (`layouts_tabs.go`), which asks `app.DriveService` only
 who a session argument is and what document a Drive tab opens on. A tab is
 addressed by one string: a view name, `terminal` for a chat's one window, or a
 Code window by tmux id or exact name, which `parseTabRef` and `FindWindow`
-resolve before anything is published. `get_layout` answers from the same
+resolve before anything is published. `layout_get` answers from the same
 service's in-memory mirror, which the frontend fills through the Wails
 `LayoutService.Report` whenever a layout store changes (debounced, with the
 key on screen), joined with tmux window names; the layout itself still lives
@@ -2606,7 +2606,7 @@ working directory and `--url` to the endpoint file the desktop writes at
 `<hive data dir>/desktop/endpoint.json` after `core.Start`
 (`internal/platform/desktopendpoint`; removed on shutdown only when its PID is
 this process, because a dev build beside the installed app shares the
-directory). `read_document` reads markdown, html
+directory). `document_get` reads markdown, html
 and any other UTF-8 text file, and answers `not_found` for hive state files
 (`kv.json`, `kv.json.lock`). An app-hosted catalogue entry declares
 its mount as `Descriptor.RuntimePath`, joined with the live loopback base when
@@ -2615,9 +2615,9 @@ agreeing with the adapter's constants. The app does not wire the server into a
 Code session's agent: the user adds its address to the agent's own MCP
 configuration, and Settings ▸ MCP servers lists it.
 
-**A session resolves to a space.** The `session` argument is `global`, a chat's
+**A caller resolves to a space.** The `caller` argument is `global`, a chat's
 record id, or the caller's working directory. `global` is the `shared` space,
-which sits beside no session and so has no tabs: `open_tab` and `close_tab`
+which sits beside no session and so has no tabs: `tab_open` and `tab_close`
 refuse it, and they refuse `diff` and `tasks` for a chat, which has only Drive.
 The `@global` store is gone, but canvas tool results still name the shared
 space's owner `@global`, so agents and `hive://canvas` links that match on it
@@ -2734,7 +2734,7 @@ A canvas's `frontmatter` is a flat mapping of agent-editable scalars or scalar
 lists, validated by `drive.ValidateFrontmatter`
 (ADR canvases-carry-front-matter-and-users-can-delete-them). `created_at` and
 `updated_at` are derived from the canvas timestamps and cannot be overwritten.
-`set_frontmatter` replaces the editable mapping in one atomic file write; an
+`canvas_frontmatter_put` replaces the editable mapping in one atomic file write; an
 empty mapping removes it all. A markdown document's front matter is read-only
 to the app. One localStorage-backed disclosure state expands or collapses the
 properties across every document, and Markdown copy and export prepend the
@@ -2888,8 +2888,8 @@ workspace view and the MCP tools cannot disagree about a row's last run.
 `app.SchedulesService` fronts the scheduler with
 `RunNow`, `Runs` and `Preview`, on the token-guarded
 `/api/terminal/agents/schedules/...` prefix because "run now" spawns a
-process. The MCP server carries `list_workspaces`, `list_schedules`,
-`put_schedule`, `remove_schedule`, `preview_schedule` and `schedule_runs`, and
+process. The MCP server carries `workspace_list`, `schedule_list`,
+`schedule_put`, `schedule_delete`, `schedule_preview` and `schedule_run_list`, and
 no run-now: that surface never spawns a process.
 
 Schedules are a section of the workspace editor, not a surface of their own:
@@ -2963,7 +2963,7 @@ browser routed. That split made the desktop window a hard dependency of flow
 execution and put the correctness-critical parts — topological order,
 fan-out, offset advancement, commit atomicity — out of reach of any headless
 surface. Consolidating in Go is what made the dry-run surface possible: one
-execution path an editor preview and the `execute_flow` MCP tool each drive
+execution path an editor preview and the `flow_preview` MCP tool each drive
 identically, rather than a second implementation of routing semantics.
 
 `Runner.Run` returns the `CommitBatch` a batch of messages is worth and

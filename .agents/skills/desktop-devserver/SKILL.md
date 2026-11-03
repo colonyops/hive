@@ -134,9 +134,9 @@ you do not wait the 60s floor, then read and retry (the engine commits a moment
 after the fetch):
 
 ```bash
-# refresh_sources reloads now (pull sources), list_inbox reads the result
-call refresh_sources
-call list_inbox '{"profile":"'"$P"'"}' | jq '.items[] | {title, lifecycle, sourceState, unread}'
+# source_refresh reloads now (pull sources), inbox_list reads the result
+call source_refresh
+call inbox_list '{"profileId":"'"$P"'"}' | jq '.items[] | {title, lifecycle, sourceState, unread}'
 ```
 
 A webhook push already appends directly, so skip the refresh and just read +
