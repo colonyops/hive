@@ -95,10 +95,4 @@ describe('PanelTabRow', () => {
     await resizable.get('[data-testid="panel-tab-row-p0"]').trigger('pointerdown')
     expect(resizable.emitted('resize-start')).toHaveLength(1)
   })
-
-  it('sets a tab in the mono face when asked', () => {
-    const wrapper = mountRow({ mono: (tab: { id: string }) => tab.id === 'a' })
-    expect(wrapper.get('[data-testid="panel-tab-a"] span.truncate').classes()).toContain('font-mono')
-    expect(wrapper.get('[data-testid="panel-tab-b"] span.truncate').classes()).not.toContain('font-mono')
-  })
 })

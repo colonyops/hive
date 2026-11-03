@@ -340,6 +340,21 @@ describe('ActionSettingsView', () => {
     wrapper.unmount()
   })
 
+  it('slides the cards into the previewed order and commits a drop between cards', async () => {
+    const wrapper = mountSettings(['a', 'b', 'c'].map(shell))
+    await flushPromises()
+
+    await wrapper.get('[data-testid="action-row-a"]').trigger('dragstart')
+    await wrapper.get('[data-testid="action-row-b"]').trigger('dragover')
+    expect(rowIds(wrapper)).toEqual(['b', 'a', 'c'])
+    expect(mocks.ReorderActions).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-testid="actions-list"]').trigger('drop')
+    await flushPromises()
+    expect(mocks.ReorderActions).toHaveBeenCalledWith(['b', 'a', 'c'])
+    wrapper.unmount()
+  })
+
   it('restores the previous order when the backend rejects the reorder', async () => {
     mocks.ReorderActions.mockRejectedValue(new Error('the catalog changed'))
     const wrapper = mountSettings(['a', 'b'].map(shell))

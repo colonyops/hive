@@ -34,8 +34,6 @@ const props = withDefaults(
     moveTab: (tabId: string, panel: string, gap: number) => void
     tabLabel: (tab: PanelTab) => string
     tabAttention?: (tab: PanelTab) => boolean
-    /** Window names are commands and paths, so they read in the mono face. */
-    tabMono?: (tab: PanelTab) => boolean
     /** A tab drawn in the floating layer has no content of its own to wrap. */
     hasContent?: (tab: PanelTab) => boolean
     contentKey?: string
@@ -43,7 +41,6 @@ const props = withDefaults(
   }>(),
   {
     tabAttention: () => false,
-    tabMono: () => false,
     hasContent: () => true,
     contentKey: '',
     hidden: false,
@@ -187,7 +184,6 @@ function contentTabs(tabs: readonly PanelTab[]): PanelTab[] {
         :focused="layout.focusedPanel === panel.id"
         :label="tabLabel"
         :attention="tabAttention"
-        :mono="tabMono"
         :drop-gap="tabDrop?.panel === panel.id ? tabDrop.gap : null"
         :dragging="dragging"
         :resizable="!!boundaryAbove(panel.id)"
@@ -271,9 +267,7 @@ function contentTabs(tabs: readonly PanelTab[]): PanelTab[] {
         data-testid="panel-drag-ghost"
       >
         <slot name="icon" :tab="draggedTab" />
-        <span class="max-w-42 truncate" :class="tabMono(draggedTab) ? 'font-mono' : ''">{{
-          tabLabel(draggedTab)
-        }}</span>
+        <span class="max-w-42 truncate">{{ tabLabel(draggedTab) }}</span>
       </div>
     </Teleport>
 

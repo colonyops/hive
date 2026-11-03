@@ -60,12 +60,44 @@ function folderTotal(folder: FeedFolder): number {
 }
 
 // ── drag-and-drop ─────────────────────────────────────────────────────────
-const drag = useDragReorder<DragRef, DropTarget>({
+// The drag target is the whole previewed tree, so rows slide into place while
+// the pointer moves and the drop commits what the user already sees.
+const drag = useDragReorder<DragRef, FeedTree>({
   mime: SIDEBAR_DRAG_MIME,
   payload: (item) => item.id,
-  onDrop: (dragged, target) => emit('reorder', applyMove(tree.value, dragged, target)),
+  onDrop: (_dragged, next) => {
+    if (treeKey(next) !== treeKey(tree.value)) emit('reorder', next)
+  },
 })
-const { target: dropTarget } = drag
+const { dragging, target: preview } = drag
+const shownTree = computed(() => preview.value ?? tree.value)
+
+// A collapsed folder hides the feed it takes in, so the header carries the
+// sign that the drop lands inside it.
+const intoFolderId = ref<string | null>(null)
+
+function treeKey(t: FeedTree): string {
+  return t
+    .map((n) => (n.kind === 'feed' ? n.feed.id : `${n.folder.id}[${n.folder.feeds.map((f) => f.id).join()}]`))
+    .join()
+}
+
+function overTarget(e: DragEvent, target: DropTarget): void {
+  const dragged = dragging.value
+  if (!dragged) return
+  intoFolderId.value = target.kind === 'into' ? target.folderId : null
+  drag.over(e, applyMove(shownTree.value, dragged, target))
+}
+
+function dropDrag(): void {
+  intoFolderId.value = null
+  drag.drop()
+}
+
+function endDrag(): void {
+  intoFolderId.value = null
+  drag.end()
+}
 
 // A feed onto a folder header: top slice drops before the folder, bottom slice
 // after it (both top level), the middle drops into the folder.
@@ -73,28 +105,16 @@ function onFolderDragOver(e: DragEvent, folder: FeedFolder): void {
   const header = folderDragRef(folder)
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
   const y = e.clientY - rect.top
-  if (drag.dragging.value?.kind === 'folder') drag.over(e, { kind: dropEdge(e), ref: header })
-  else if (y < rect.height * 0.25) drag.over(e, { kind: 'before', ref: header })
-  else if (y > rect.height * 0.75) drag.over(e, { kind: 'after', ref: header })
-  else drag.over(e, { kind: 'into', folderId: folder.id })
+  if (dragging.value?.kind === 'folder') overTarget(e, { kind: dropEdge(e), ref: header })
+  else if (y < rect.height * 0.25) overTarget(e, { kind: 'before', ref: header })
+  else if (y > rect.height * 0.75) overTarget(e, { kind: 'after', ref: header })
+  else overTarget(e, { kind: 'into', folderId: folder.id })
 }
 
-function sameRef(a: DragRef, b: DragRef): boolean {
-  return a.kind === b.kind && a.id === b.id
+function isDragging(ref: DragRef): boolean {
+  const d = dragging.value
+  return !!d && d.kind === ref.kind && d.id === ref.id
 }
-function showBefore(ref: DragRef): boolean {
-  const t = dropTarget.value
-  return !!t && t.kind === 'before' && sameRef(t.ref, ref)
-}
-function showAfter(ref: DragRef): boolean {
-  const t = dropTarget.value
-  return !!t && t.kind === 'after' && sameRef(t.ref, ref)
-}
-function showInto(folderId: string): boolean {
-  const t = dropTarget.value
-  return !!t && t.kind === 'into' && t.folderId === folderId
-}
-const showEnd = computed(() => dropTarget.value?.kind === 'top-end')
 
 // ── folder collapse (view state) ────────────────────────────────────────────
 // Expand/collapse is transient view state, not configuration — it lives in
@@ -214,7 +234,14 @@ function deleteFolder(folder: FeedFolder): void {
       />
     </div>
 
-    <section class="px-2.5 pb-1.5 pt-3" data-testid="sidebar-feeds">
+    <!-- The section takes the drop, not the rows: a release between two rows
+         still lands where the preview shows. -->
+    <section
+      class="px-2.5 pb-1.5 pt-3"
+      data-testid="sidebar-feeds"
+      @dragover="dragging && $event.preventDefault()"
+      @drop.prevent="dropDrag"
+    >
       <div class="section-label">
         <IconRss class="size-3 text-feeds" /><span>FEEDS</span>
         <IconButton
@@ -227,103 +254,96 @@ function deleteFolder(folder: FeedFolder): void {
         />
       </div>
 
-      <template v-for="node in tree" :key="node.kind === 'feed' ? node.feed.id : node.folder.id">
-        <!-- top-level feed -->
-        <div
-          v-if="node.kind === 'feed'"
-          class="sb-item"
-          :class="{ 'drop-before': showBefore(feedRef(node.feed)), 'drop-after': showAfter(feedRef(node.feed)) }"
-          draggable="true"
-          data-testid="sidebar-item"
-          @dragstart="drag.start($event, feedRef(node.feed))"
-          @dragover.prevent="drag.over($event, { kind: dropEdge($event), ref: feedRef(node.feed) })"
-          @drop.prevent="drag.drop"
-          @dragend="drag.end"
-        >
-          <SidebarFeedRow
-            :feed="node.feed"
-            :selected="feedSelected(node.feed.id)"
-            @select="emit('select', { type: 'feed', feedId: node.feed.id })"
-          />
-        </div>
-
-        <!-- folder -->
-        <div
-          v-else
-          class="sb-folder"
-          data-testid="sidebar-folder"
-          :data-id="node.folder.id"
-          :class="{
-            'drop-before': showBefore(folderDragRef(node.folder)),
-            'drop-after': showAfter(folderDragRef(node.folder)),
-            'drop-into': showInto(node.folder.id),
-          }"
-        >
+      <TransitionGroup name="sb" tag="div">
+        <template v-for="node in shownTree">
+          <!-- top-level feed -->
           <div
-            class="folder-header"
+            v-if="node.kind === 'feed'"
+            :key="node.feed.id"
+            class="sb-item"
+            :class="{ 'sb-dragging': isDragging(feedRef(node.feed)) }"
             draggable="true"
-            @dragstart="drag.start($event, folderDragRef(node.folder))"
-            @dragover.prevent="onFolderDragOver($event, node.folder)"
-            @drop.prevent="drag.drop"
-            @dragend="drag.end"
-            @click="onHeaderClick(node.folder)"
+            data-testid="sidebar-item"
+            @dragstart="drag.start($event, feedRef(node.feed))"
+            @dragover="overTarget($event, { kind: dropEdge($event), ref: feedRef(node.feed) })"
+            @dragend="endDrag"
           >
-            <span class="nav-icon">
-              <IconFolder class="folder-glyph size-3" />
-              <component
-                :is="isCollapsed(node.folder.id) ? IconChevronRight : IconChevronDown"
-                class="folder-chevron size-3"
-              />
-            </span>
-            <span class="min-w-0 flex-1 truncate text-left font-medium" data-testid="folder-name">{{
-              node.folder.name
-            }}</span>
-            <IconButton
-              label="Edit folder"
-              :icon="IconPencil"
-              size="sm"
-              class="folder-action"
-              data-testid="folder-edit"
-              @click.stop="editingId = node.folder.id"
+            <SidebarFeedRow
+              :feed="node.feed"
+              :selected="feedSelected(node.feed.id)"
+              @select="emit('select', { type: 'feed', feedId: node.feed.id })"
             />
-            <span class="font-mono text-caption" :class="folderNew(node.folder) ? 'text-accent' : 'text-text-3'">{{
-              folderNew(node.folder) || folderTotal(node.folder)
-            }}</span>
           </div>
 
-          <div v-if="!isCollapsed(node.folder.id)" class="folder-body">
+          <!-- folder -->
+          <div
+            v-else
+            :key="node.folder.id"
+            class="sb-folder"
+            data-testid="sidebar-folder"
+            :data-id="node.folder.id"
+            :class="{
+              'sb-dragging': isDragging(folderDragRef(node.folder)),
+              'drop-into': intoFolderId === node.folder.id,
+            }"
+          >
             <div
-              v-for="feed in node.folder.feeds"
-              :key="feed.id"
-              class="sb-item indented"
-              :class="{ 'drop-before': showBefore(feedRef(feed)), 'drop-after': showAfter(feedRef(feed)) }"
+              class="folder-header"
               draggable="true"
-              data-testid="sidebar-item"
-              @dragstart="drag.start($event, feedRef(feed))"
-              @dragover.prevent="drag.over($event, { kind: dropEdge($event), ref: feedRef(feed) })"
-              @drop.prevent="drag.drop"
-              @dragend="drag.end"
+              @dragstart="drag.start($event, folderDragRef(node.folder))"
+              @dragover="onFolderDragOver($event, node.folder)"
+              @dragend="endDrag"
+              @click="onHeaderClick(node.folder)"
             >
-              <SidebarFeedRow
-                :feed="feed"
-                :selected="feedSelected(feed.id)"
-                @select="emit('select', { type: 'feed', feedId: feed.id })"
+              <span class="nav-icon">
+                <IconFolder class="folder-glyph size-3" />
+                <component
+                  :is="isCollapsed(node.folder.id) ? IconChevronRight : IconChevronDown"
+                  class="folder-chevron size-3"
+                />
+              </span>
+              <span class="min-w-0 flex-1 truncate text-left font-medium" data-testid="folder-name">{{
+                node.folder.name
+              }}</span>
+              <IconButton
+                label="Edit folder"
+                :icon="IconPencil"
+                size="sm"
+                class="folder-action"
+                data-testid="folder-edit"
+                @click.stop="editingId = node.folder.id"
               />
+              <span class="font-mono text-caption" :class="folderNew(node.folder) ? 'text-accent' : 'text-text-3'">{{
+                folderNew(node.folder) || folderTotal(node.folder)
+              }}</span>
             </div>
-            <div v-if="node.folder.feeds.length === 0" class="folder-empty">Drop feeds here</div>
+
+            <TransitionGroup v-if="!isCollapsed(node.folder.id)" name="sb" tag="div" class="folder-body">
+              <div
+                v-for="feed in node.folder.feeds"
+                :key="feed.id"
+                class="sb-item indented"
+                :class="{ 'sb-dragging': isDragging(feedRef(feed)) }"
+                draggable="true"
+                data-testid="sidebar-item"
+                @dragstart="drag.start($event, feedRef(feed))"
+                @dragover="overTarget($event, { kind: dropEdge($event), ref: feedRef(feed) })"
+                @dragend="endDrag"
+              >
+                <SidebarFeedRow
+                  :feed="feed"
+                  :selected="feedSelected(feed.id)"
+                  @select="emit('select', { type: 'feed', feedId: feed.id })"
+                />
+              </div>
+              <div v-if="node.folder.feeds.length === 0" key="empty" class="folder-empty">Drop feeds here</div>
+            </TransitionGroup>
           </div>
-        </div>
-      </template>
+        </template>
+      </TransitionGroup>
 
       <!-- Trailing drop zone: drop here to move an item to the end / out of a folder. -->
-      <div
-        class="sb-end"
-        :class="{ 'drop-end': showEnd }"
-        data-testid="sidebar-drop-end"
-        @dragover.prevent="drag.over($event, { kind: 'top-end' })"
-        @drop.prevent="drag.drop"
-        @dragend="drag.end"
-      />
+      <div class="sb-end" data-testid="sidebar-drop-end" @dragover="overTarget($event, { kind: 'top-end' })" />
     </section>
 
     <!-- Trash: unrouted + ignored items. Deliberately de-emphasized — no
@@ -472,19 +492,16 @@ function deleteFolder(folder: FeedFolder): void {
   opacity: 1;
 }
 
-/* An item wrapper carries the drag handle + insertion indicator; the row/header
-   inside it stays visually unchanged. */
+/* An item wrapper carries the drag handle; the row/header inside it stays
+   visually unchanged. */
 .sb-item {
   border-radius: var(--radius-lg);
 }
 .sb-item.indented {
   padding-left: 0.75rem;
 }
-.drop-before {
-  box-shadow: inset 0 2px 0 0 var(--color-accent);
-}
-.drop-after {
-  box-shadow: inset 0 -2px 0 0 var(--color-accent);
+.sb-dragging {
+  opacity: 0.4;
 }
 
 .folder-header {
@@ -537,18 +554,21 @@ function deleteFolder(folder: FeedFolder): void {
   background: var(--color-accent-tint);
   border-radius: var(--radius-lg);
 }
-.sb-folder.drop-before {
-  box-shadow: inset 0 2px 0 0 var(--color-accent);
-}
-.sb-folder.drop-after {
-  box-shadow: inset 0 -2px 0 0 var(--color-accent);
-}
 
 .sb-end {
   height: 0.875rem;
   border-radius: var(--radius-md);
 }
-.sb-end.drop-end {
-  box-shadow: inset 0 2px 0 0 var(--color-accent);
+
+/* A row that changes folders leaves one group and enters another, so only
+   moves within a group glide. */
+.sb-move {
+  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-move {
+    transition: none;
+  }
 }
 </style>

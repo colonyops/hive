@@ -135,6 +135,22 @@ describe('applyMove', () => {
     expect(shape(out)).toEqual(['a', 'work[b,c]', 'd'])
   })
 
+  it('refuses to put a folder beside a feed inside another folder (no-op)', () => {
+    const nested: SidebarLayout = {
+      items: [
+        { folder: { id: 'work', name: 'Work', feeds: ['a', 'b'] } },
+        { folder: { id: 'home', name: 'Home', feeds: ['c'] } },
+        { feed: 'd' },
+      ],
+    }
+    const out = applyMove(
+      buildFeedTree(feeds, nested, FLOW),
+      { kind: 'folder', id: 'home' },
+      { kind: 'after', ref: { kind: 'feed', id: `${FLOW}/a` } },
+    )
+    expect(shape(out)).toEqual(['work[a,b]', 'home[c]', 'd'])
+  })
+
   it('is a no-op when dropped onto itself', () => {
     const out = applyMove(
       tree(),

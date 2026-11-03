@@ -18,6 +18,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDocumentVisibility } from '@vueuse/core'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import IconArrowDown from '~icons/lucide/arrow-down'
+import IconCode from '~icons/lucide/code'
+import IconFolderOpen from '~icons/lucide/folder-open'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import AgentsSidebar from './AgentsSidebar.vue'
 import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
@@ -31,7 +33,7 @@ import SessionTabIcon from './terminal/SessionTabIcon.vue'
 import ModeSkeleton from './ModeSkeleton.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import RenameDialog from '@hive/ui/components/ui/RenameDialog.vue'
-import PaneStatusBar from './PaneStatusBar.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { appletIdOf, appletTab, appletTabOfId } from '../lib/appletTabs'
 import { useApplets } from '../stores/useApplets'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
@@ -163,9 +165,6 @@ let panePaneId = ''
 
 const paneLaidOut = computed(() => paneStatus.value === 'opening' || term.value !== null)
 const paneHolding = ref(false)
-const paneWorkspaceName = computed(
-  () => workspaces.value.find((ws) => ws.dir === paneWorkspaceDir.value)?.name || paneWorkspaceDir.value,
-)
 
 // ── Route-driven workspace selection ────────────────────────────────────────
 const route = useRoute()
@@ -996,10 +995,9 @@ onBeforeUnmount(() => {
         @delete-session="removeRow"
       />
 
-      <!-- The pane's chrome is conditional strips: the missing-capability
-           warnings, and — while a session is opening or open — a status bar
-           naming the session's own workspace, which the focused one need not
-           match. -->
+      <!-- The pane's chrome is the missing-capability warnings, as strips over
+           the panels. The open chat's workspace actions sit in the lead
+           panel's tab row. -->
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           v-if="selectedWorkspace && missingMCPs.length"
@@ -1025,18 +1023,6 @@ onBeforeUnmount(() => {
           Missing skill packages: {{ unknownPackageNames.join(', ') }}
         </div>
 
-        <PaneStatusBar
-          v-if="paneStatus !== 'idle' || paneResuming"
-          testid="agents-pane-statusbar"
-          :label="paneWorkspaceName"
-          :path="paneWorkspaceDir"
-          :error="paneActionError"
-          :editor-title="editor.command ? editor.title : ''"
-          @open-editor="openPaneWorkspaceInEditor"
-          @reveal="revealPaneWorkspace"
-        >
-        </PaneStatusBar>
-
         <div class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-app">
           <PanelLayoutHost
             :layout="layout"
@@ -1055,6 +1041,34 @@ onBeforeUnmount(() => {
                 :agent="tab.kind === WINDOW_TAB_KIND ? chatAgent : undefined"
                 :applet="appletIdOf(tab)"
               />
+            </template>
+            <template #actions="{ lead }">
+              <div
+                v-if="lead && (paneStatus !== 'idle' || paneResuming)"
+                class="flex min-w-0 items-center gap-px"
+                data-testid="agents-pane-statusbar"
+              >
+                <span
+                  v-if="paneActionError"
+                  class="max-w-40 truncate px-1.5 text-caption text-severity-error"
+                  data-testid="agents-pane-statusbar-error"
+                  >{{ paneActionError }}</span
+                >
+                <IconButton
+                  v-if="editor.command"
+                  :label="`Open in ${editor.title}`"
+                  :icon="IconCode"
+                  data-testid="agents-pane-statusbar-open-editor"
+                  @click="openPaneWorkspaceInEditor"
+                />
+                <IconButton
+                  label="Show in Finder"
+                  :icon="IconFolderOpen"
+                  data-testid="agents-pane-statusbar-reveal"
+                  @click="revealPaneWorkspace"
+                />
+                <span class="mx-1 h-3.5 w-px bg-strong" aria-hidden="true" />
+              </div>
             </template>
             <template #add="{ panel }">
               <ChatTabAdd

@@ -23,6 +23,10 @@ const emit = defineEmits<{ close: [] }>()
 const { tree, ops, panels } = useTerminalModeContext()
 const applets = useApplets()
 
+// Agents open in a session's own checkout, which a server session, the scratch
+// terminal, and a pinned chat do not have here.
+const offersAgents = computed(() => tree.isHiveSession(props.row) && !props.row.server)
+
 const views = computed(() =>
   panels.viewsFor(props.row).map((kind) => {
     const { label, icon } = sessionView(kind)
@@ -37,10 +41,10 @@ const views = computed(() =>
     :flip="flip"
     :ignore="ignore"
     :anchor="anchor"
-    :agents="row.server ? [] : ops.agentProfiles"
+    :agents="offersAgents ? ops.agentProfiles : null"
     :default-agent="ops.defaultAgentProfile"
-    :loading="!row.server && ops.agentProfilesLoading"
-    :failed="!row.server && ops.agentProfilesFailed"
+    :loading="offersAgents && ops.agentProfilesLoading"
+    :failed="offersAgents && ops.agentProfilesFailed"
     :views="views"
     :applets="applets.sessionMenu.value"
     @close="emit('close')"
