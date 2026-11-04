@@ -39,6 +39,18 @@ func TestPathPrefersTheLoginShell(t *testing.T) {
 
 // A probe that fails is the common case on a machine with an exotic shell, so
 // it must degrade to what the app could already reach rather than to nothing.
+func TestUserPathOmitsTheAppendedPrefixes(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin")
+	t.Setenv("HOME", t.TempDir())
+
+	r := NewResolver(Options{Shell: "/bin/zsh", Probe: func(context.Context, string) (map[string]string, error) {
+		return map[string]string{"PATH": "/opt/tools/bin:/usr/bin"}, nil
+	}})
+
+	assert.Equal(t, []string{"/opt/tools/bin", "/usr/bin"}, pathEntries(t, r.UserPath(t.Context())))
+	assert.Contains(t, pathEntries(t, r.Path(t.Context())), filepath.Join(os.Getenv("HOME"), ".local", "bin"))
+}
+
 func TestPathFallsBackWhenTheProbeFails(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
 

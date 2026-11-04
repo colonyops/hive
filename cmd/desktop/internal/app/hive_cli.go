@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"os"
-	osexec "os/exec"
 	"slices"
 	"strings"
 	"sync"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/app/hivecli"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/mcpcatalog"
 	"github.com/colonyops/hive/internal/ops/catalog"
 	"github.com/colonyops/hive/internal/platform/execenv"
@@ -52,18 +52,11 @@ func newHiveCLIResolver(configuredPath func(context.Context) string, execEnv *ex
 		execEnv:        execEnv,
 		version:        version,
 		logger:         logger,
-		probe:          runHiveVersion,
-		cache:          map[hiveProbeKey]bool{},
+		probe: func(ctx context.Context, path string, env []string) (string, error) {
+			return hivecli.RunVersion(ctx, path, env, 5*time.Second)
+		},
+		cache: map[hiveProbeKey]bool{},
 	}
-}
-
-func runHiveVersion(ctx context.Context, path string, env []string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	cmd := osexec.CommandContext(ctx, path, "--version")
-	cmd.Env = env
-	out, err := cmd.Output()
-	return string(out), err
 }
 
 func (r *hiveCLIResolver) Usable(ctx context.Context) (string, bool) {
@@ -93,7 +86,7 @@ func (r *hiveCLIResolver) Usable(ctx context.Context) (string, bool) {
 		r.logger.Debug().Err(err).Str("path", path).Msg("hive MCP stdio unavailable: version probe failed")
 		return "", false
 	}
-	got, _ := parseHiveVersion(out)
+	got, _ := hivecli.ParseVersion(out)
 	ok := got != "" && got == r.version
 	if !ok {
 		r.logger.Debug().Str("path", path).Str("hive", got).Str("desktop", r.version).Msg("hive MCP stdio unavailable: version differs")
@@ -103,20 +96,6 @@ func (r *hiveCLIResolver) Usable(ctx context.Context) (string, bool) {
 		return "", false
 	}
 	return path, true
-}
-
-// parseHiveVersion reads the first token after "version " in `hive --version`
-// output ("hive version 1.2.3 (abc1234) 2026-01-01").
-func parseHiveVersion(out string) (string, bool) {
-	_, rest, found := strings.Cut(out, "version ")
-	if !found {
-		return "", false
-	}
-	fields := strings.Fields(rest)
-	if len(fields) == 0 {
-		return "", false
-	}
-	return fields[0], true
 }
 
 // serveToolsets lists the toolsets `hive mcp serve` serves for servePath,

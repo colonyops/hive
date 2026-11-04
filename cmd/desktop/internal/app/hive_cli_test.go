@@ -130,15 +130,6 @@ func TestHiveCLIResolverMatchesVersionAndCachesTheProbe(t *testing.T) {
 	assert.False(t, ok, "missing binary")
 }
 
-func TestParseHiveVersion(t *testing.T) {
-	t.Parallel()
-	got, ok := parseHiveVersion("hive version v0.5.0 (abc) now\n")
-	assert.True(t, ok)
-	assert.Equal(t, "v0.5.0", got)
-	_, ok = parseHiveVersion("garbage")
-	assert.False(t, ok)
-}
-
 func TestDriveMCPCommand(t *testing.T) {
 	t.Parallel()
 	stdio := &stdioServe{hive: "/opt/bin/hive", dataDir: "/data"}

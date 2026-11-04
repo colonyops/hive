@@ -1105,7 +1105,10 @@ A value one surface uses lives on that surface's pane; a value several use lives
 in **General** (the editor command); **Observability** is runtime cost and the
 install's telemetry exports; **System** is this install — storage, diagnostics,
 the problem reporter; **About** is the running build. **Hive CLI**
-is the compatibility boundary for the included Hive runtime: it shows the exact
+is the compatibility boundary for the included Hive runtime, and the switch for
+the `hive` command the app can install (`hivecli`: a symlink at
+`~/.local/bin/hive` to the app executable, owned by the link's target name and
+never overwriting another file). It shows the exact
 external Hive config loaded at startup, reports one that would not parse, and
 creates or opens that file without making it required. It does not edit it —
 first run is the only writer, and a change made later is a hand edit plus a

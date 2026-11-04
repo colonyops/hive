@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   Setup: vi.fn(),
   Save: vi.fn(),
   InspectWorkspace: vi.fn(),
+  CLIStatus: vi.fn(),
+  SetInstall: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/systemservice', () => ({
@@ -28,10 +30,34 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   Save: mocks.Save,
   InspectWorkspace: mocks.InspectWorkspace,
 }))
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/hivecliservice', () => ({
+  Status: mocks.CLIStatus,
+  SetInstall: mocks.SetInstall,
+}))
 vi.mock('@wailsio/runtime', () => ({
   Browser: { OpenURL: mocks.OpenURL },
   Clipboard: { SetText: mocks.SetText },
 }))
+
+function command(over: Record<string, unknown> = {}, install: boolean | null = true) {
+  return {
+    install,
+    command: {
+      skip: '',
+      detail: '',
+      installPath: '/home/u/.local/bin/hive',
+      owner: 'app',
+      target: '/Applications/Hive.app/Contents/MacOS/hive-desktop',
+      resolved: '/home/u/.local/bin/hive',
+      shadowed: false,
+      onPath: true,
+      appVersion: '1.2.0',
+      commandVersion: '1.2.0',
+      differs: false,
+      ...over,
+    },
+  }
+}
 
 const CONFIG = '/home/u/.config/hive/config.yaml'
 const WORKSPACE = '/home/u/code'
@@ -94,6 +120,7 @@ beforeEach(() => {
   mocks.OpenPath.mockResolvedValue(undefined)
   mocks.RevealPath.mockResolvedValue(undefined)
   mocks.Setup.mockResolvedValue(setup())
+  mocks.CLIStatus.mockResolvedValue(command())
   mocks.Save.mockImplementation(async () => setup())
   mocks.InspectWorkspace.mockResolvedValue({ path: WORKSPACE, exists: true, repos: 12 })
   mocks.ChooseDirectory.mockResolvedValue(WORKSPACE)
@@ -102,12 +129,11 @@ beforeEach(() => {
 describe('HiveSettingsView', () => {
   // The pane points at the file and nothing more: first run is the only
   // writer, so every change here is a hand edit followed by a restart.
-  it('explains the included runtime and sends edits to the file', async () => {
+  it('points edits at the file', async () => {
     mocks.Info.mockResolvedValue(info(true))
     const wrapper = mount(HiveSettingsView)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('does not require or invoke a separately installed Hive CLI')
     expect(wrapper.get('[data-testid="hive-data-dir-path"]').text()).toBe('/home/u/.local/share/hive')
     const notice = wrapper.get('[data-testid="hive-restart-notice"]').text()
     expect(notice).toContain('Edit this file in your own editor')
@@ -207,5 +233,93 @@ describe('HiveSettingsView', () => {
     expect(wrapper.get('[data-testid="hive-settings-error"]').text()).toContain('no editor opened')
     expect(wrapper.find('[data-testid="hive-config-missing"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="hive-config-open"]').exists()).toBe(true)
+  })
+
+  describe('the hive command section', () => {
+    async function mounted(status: ReturnType<typeof command>) {
+      mocks.Info.mockResolvedValue(info(true))
+      mocks.CLIStatus.mockResolvedValue(status)
+      const wrapper = mount(HiveSettingsView)
+      await flushPromises()
+      return wrapper
+    }
+
+    it('shows an installed command that matches the app', async () => {
+      const wrapper = await mounted(command())
+
+      expect(wrapper.get('[data-testid="hive-command-install"]').attributes('aria-checked')).toBe('true')
+      expect(wrapper.get('[data-testid="hive-command-path"]').text()).toBe('/home/u/.local/bin/hive')
+      expect(wrapper.get('[data-testid="hive-command-owner"]').text()).toBe('Installed by Hive.')
+      expect(wrapper.get('[data-testid="hive-command-app-version"]').text()).toBe('1.2.0')
+      expect(wrapper.get('[data-testid="hive-command-version"]').text()).toContain('1.2.0')
+      for (const id of ['differs', 'path-hint', 'shadowed']) {
+        expect(wrapper.find(`[data-testid="hive-command-${id}"]`).exists()).toBe(false)
+      }
+    })
+
+    it('turns the command on and off through the service', async () => {
+      const wrapper = await mounted(command({ owner: 'none', target: '', resolved: '' }, null))
+      expect(wrapper.get('[data-testid="hive-command-install"]').attributes('aria-checked')).toBe('false')
+
+      mocks.SetInstall.mockResolvedValue(command())
+      await wrapper.get('[data-testid="hive-command-install"]').trigger('click')
+      await flushPromises()
+
+      expect(mocks.SetInstall).toHaveBeenCalledWith(true)
+      expect(wrapper.get('[data-testid="hive-command-install"]').attributes('aria-checked')).toBe('true')
+    })
+
+    it('warns when the command in the terminal is another version', async () => {
+      const wrapper = await mounted(command({ commandVersion: '1.1.0', differs: true }))
+      expect(wrapper.get('[data-testid="hive-command-differs"]').text()).toContain('not the version of this app')
+    })
+
+    it('gives the PATH line when the install directory is not on the login shell PATH', async () => {
+      const wrapper = await mounted(command({ onPath: false, resolved: '', commandVersion: '' }))
+
+      expect(wrapper.get('[data-testid="hive-command-path-hint"]').text()).toContain(
+        'export PATH="$HOME/.local/bin:$PATH"',
+      )
+      expect(wrapper.get('[data-testid="hive-command-version"]').text()).toBe('not found')
+      expect(wrapper.find('[data-testid="hive-command-differs"]').exists()).toBe(false)
+
+      await wrapper.get('[data-testid="hive-command-copy-path"]').trigger('click')
+      expect(mocks.SetText).toHaveBeenCalledWith('export PATH="$HOME/.local/bin:$PATH"')
+    })
+
+    it('names the copy that shadows the link and how to remove it', async () => {
+      const wrapper = await mounted(
+        command({ resolved: '/opt/homebrew/bin/hive', shadowed: true, commandVersion: '1.1.0', differs: true }),
+      )
+
+      const hint = wrapper.get('[data-testid="hive-command-shadowed"]').text()
+      expect(hint).toContain('/opt/homebrew/bin/hive')
+      expect(hint).toContain('brew uninstall --cask hive')
+      expect(hint).toContain('go install')
+    })
+
+    it('leaves a hive it did not install alone and says so', async () => {
+      const wrapper = await mounted(command({ owner: 'foreign', target: '/opt/homebrew/bin/hive' }, false))
+      expect(wrapper.get('[data-testid="hive-command-owner"]').text()).toContain('Hive leaves it alone')
+    })
+
+    it('disables the switch for a development build and says why', async () => {
+      const wrapper = await mounted(command({ skip: 'dev', owner: 'none', resolved: '' }, null))
+
+      expect(wrapper.get('[data-testid="hive-command-install"]').attributes('disabled')).toBeDefined()
+      expect(wrapper.get('[data-testid="hive-command-row"]').text()).toContain('Development builds')
+    })
+
+    it('tells a translocated app to move to Applications', async () => {
+      const wrapper = await mounted(command({ skip: 'translocated', owner: 'none', resolved: '' }, true))
+
+      expect(wrapper.get('[data-testid="hive-command-install"]').attributes('disabled')).toBeDefined()
+      expect(wrapper.get('[data-testid="hive-command-row"]').text()).toContain('Applications folder')
+    })
+
+    it('shows why an unwritable directory could not take the link', async () => {
+      const wrapper = await mounted(command({ skip: 'unwritable', detail: 'permission denied', owner: 'none' }))
+      expect(wrapper.get('[data-testid="hive-command-unwritable"]').text()).toContain('permission denied')
+    })
   })
 })

@@ -101,6 +101,7 @@ type Resolver struct {
 	// hooks spawn one shell between them rather than one each.
 	mu       sync.Mutex
 	path     string
+	userPath string
 	env      map[string]string
 	probeErr error
 	resolved bool
@@ -144,6 +145,17 @@ func (r *Resolver) Path(ctx context.Context) string {
 	defer r.mu.Unlock()
 	r.resolveLocked(ctx)
 	return r.path
+}
+
+// UserPath is Path without the package-manager and per-user prefixes the app
+// appends: what the user's own terminal searches. A caller that asks whether
+// the user can run a command by name needs it, because Path always lists
+// ~/.local/bin and would answer yes for a directory the shell never reads.
+func (r *Resolver) UserPath(ctx context.Context) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.resolveLocked(ctx)
+	return r.userPath
 }
 
 // Getenv answers a variable the way the user's terminal would: this process's
@@ -196,7 +208,8 @@ func (r *Resolver) resolveLocked(ctx context.Context) {
 
 	r.env = env
 	r.probeErr = err
-	r.path = join(env["PATH"], inherited, strings.Join(SearchDirs(), string(os.PathListSeparator)))
+	r.userPath = join(env["PATH"], inherited)
+	r.path = join(r.userPath, strings.Join(SearchDirs(), string(os.PathListSeparator)))
 	r.resolved = true
 	r.logger.Debug().Ctx(ctx).Str("path", r.path).Msg("subprocess PATH")
 }

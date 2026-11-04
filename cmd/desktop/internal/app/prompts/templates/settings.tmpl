@@ -70,6 +70,10 @@ daemon:
                            # experimental daemon (experimental.daemon in the
                            # Hive config); empty uses the desktop executable
 
+hive_cli:
+  install_command: true    # install the hive command at ~/.local/bin/hive; absent means
+                           # not asked yet. The app writes it; it removes only a link it made
+
 retention:
   action_runs: 100         # finished action runs kept, each with its full log (1-10000)
 

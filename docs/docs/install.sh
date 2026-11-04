@@ -16,6 +16,10 @@
 #
 # or set `HIVE_CHANNEL`.
 #
+# This script does not touch PATH or install a `hive` command. Hive Desktop
+# offers to link ~/.local/bin/hive to itself on first run, and Settings > Hive
+# CLI has the same switch.
+#
 set -euo pipefail
 
 DL_BASE="${HIVE_DL_BASE:-https://dl.hivedesktop.com}"

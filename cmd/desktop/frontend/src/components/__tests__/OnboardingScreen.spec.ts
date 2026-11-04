@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import OnboardingScreen from '../OnboardingScreen.vue'
 import { useHiveSetup } from '../../composables/useHiveSetup'
+import type { useHiveCLI } from '../../composables/useHiveCLI'
 
 vi.mock('@wailsio/runtime', () => ({
   Browser: {
@@ -70,11 +71,54 @@ function mountScreen(props: Partial<InstanceType<typeof OnboardingScreen>['$prop
 }
 
 describe('OnboardingScreen', () => {
+  describe('the hive command card', () => {
+    function cliFake(otherCopy: { path: string; version: string } | null) {
+      return { otherCopy: { value: otherCopy } } as unknown as ReturnType<typeof useHiveCLI>
+    }
+
+    it('offers the install checked by default and reports the choice', async () => {
+      const wrapper = mountScreen({ card: 'command', cli: cliFake(null), installCommand: true })
+
+      expect(wrapper.get('h2').text()).toBe('Install the hive command')
+      const box = wrapper.get<HTMLInputElement>('[data-testid="onboarding-command-install"]')
+      expect(box.element.checked).toBe(true)
+      expect(wrapper.find('[data-testid="onboarding-command-other"]').exists()).toBe(false)
+
+      await box.setValue(false)
+      expect(wrapper.emitted('setInstallCommand')).toEqual([[false]])
+
+      await wrapper.get('[data-testid="onboarding-command-continue"]').trigger('click')
+      expect(wrapper.emitted('saveCommand')).toHaveLength(1)
+
+      await wrapper.get('[data-testid="onboarding-command-skip"]').trigger('click')
+      expect(wrapper.emitted('finishCommand')).toHaveLength(1)
+    })
+
+    it('shows a hive it did not install, with its version, and says it stays', () => {
+      const wrapper = mountScreen({
+        card: 'command',
+        cli: cliFake({ path: '/opt/homebrew/bin/hive', version: '1.1.0' }),
+        installCommand: true,
+      })
+
+      const other = wrapper.get('[data-testid="onboarding-command-other"]').text()
+      expect(other).toContain('/opt/homebrew/bin/hive')
+      expect(other).toContain('version 1.1.0')
+      expect(other).toContain('Hive will not replace it')
+    })
+
+    it('shows the save error under the button', () => {
+      const wrapper = mountScreen({ card: 'command', cli: cliFake(null), installCommand: true, error: 'disk full' })
+      expect(wrapper.get('[data-testid="onboarding-command-error"]').text()).toContain('disk full')
+    })
+  })
+
   // Profile naming is absent because a profile exists before the walk starts.
   it('lists exactly the steps onboarding has', () => {
     const wrapper = mountScreen()
-    expect(wrapper.findAll('ol li').map((li) => li.text())).toHaveLength(4)
+    expect(wrapper.findAll('ol li').map((li) => li.text())).toHaveLength(5)
     expect(wrapper.text()).toContain('Set up your agent and code')
+    expect(wrapper.text()).toContain('Install the hive command')
     expect(wrapper.text()).toContain('Connect GitHub')
     expect(wrapper.text()).toContain('Turn on notifications')
     expect(wrapper.text()).toContain('Configure Hive with your agent')
@@ -87,18 +131,20 @@ describe('OnboardingScreen', () => {
   it('orders the steps and marks the ones already past as done', () => {
     const connecting = mountScreen({ card: 'idle' }).findAll('ol li')
     expect(connecting[0].text()).toContain('Set up your agent and code')
-    expect(connecting[1].text()).toContain('Connect GitHub')
-    expect(connecting[2].text()).toContain('Turn on notifications')
+    expect(connecting[1].text()).toContain('Install the hive command')
+    expect(connecting[2].text()).toContain('Connect GitHub')
+    expect(connecting[3].text()).toContain('Turn on notifications')
     expect(connecting[0].text()).toContain('complete')
-    expect(connecting[1].text()).toContain('2')
-    expect(connecting[1].attributes('aria-current')).toBe('step')
+    expect(connecting[1].text()).toContain('complete')
+    expect(connecting[2].text()).toContain('3')
+    expect(connecting[2].attributes('aria-current')).toBe('step')
 
     const agent = mountScreen({ card: 'agent' }).findAll('ol li')
-    expect(agent[2].text()).not.toContain('3')
-    expect(agent[2].attributes('aria-current')).toBeUndefined()
-    expect(agent[2].text()).toContain('complete')
-    expect(agent[3].text()).toContain('4')
-    expect(agent[3].attributes('aria-current')).toBe('step')
+    expect(agent[3].text()).not.toContain('4')
+    expect(agent[3].attributes('aria-current')).toBeUndefined()
+    expect(agent[3].text()).toContain('complete')
+    expect(agent[4].text()).toContain('5')
+    expect(agent[4].attributes('aria-current')).toBe('step')
   })
 
   it('emits startDeviceFlow from the idle card', async () => {
@@ -195,9 +241,10 @@ describe('OnboardingScreen', () => {
       .map((li) => li.text())
     expect(steps[0]).not.toContain('1')
     expect(steps[1]).not.toContain('2')
-    expect(steps[2]).toContain('Turn on notifications')
-    expect(steps[2]).toContain('3')
+    expect(steps[2]).not.toContain('3')
+    expect(steps[3]).toContain('Turn on notifications')
     expect(steps[3]).toContain('4')
+    expect(steps[4]).toContain('5')
   })
 
   it('offers the agent hand-off and an honest way past it', async () => {

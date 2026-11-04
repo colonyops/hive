@@ -104,6 +104,7 @@ type App struct {
 	MenuBar    *MenuBarService
 	System     *SystemService
 	HiveConfig *HiveConfigService
+	HiveCLI    *HiveCLIService
 	Webhooks   *WebhookService
 	GitHub     *GitHubService
 	Gitea      *GiteaService
@@ -471,6 +472,11 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		},
 		Reload: a.ReloadHiveRuntime,
 	})
+	hiveCLI, err := newHiveCLIService(cfg.SettingsStore, a.execEnv, cfg.Build.Version, logutils.Component(cfg.Logger, "hivecommand"))
+	if err != nil {
+		return nil, err
+	}
+	a.HiveCLI = hiveCLI
 	a.ReleaseNotes = NewReleaseNotesService(cfg.Paths, cfg.Logger)
 	a.Webhooks = newWebhookService(WebhookDeps{Settings: cfg.SettingsStore, Captures: a.Stores.WebhookCaptures, Listener: a.webhook, Host: a.webhookHost, Port: a.webhookPort})
 	a.GitHub = newGitHubService(a.gitHubConnection)
@@ -705,10 +711,15 @@ func (a *App) Start(ctx context.Context) error {
 	}
 	// The login shell probe costs a shell startup and everything the app spawns
 	// on the user's behalf waits on it, so it is paid here rather than by
-	// whichever click reaches it first. Skipped in mock/e2e runs: a fixture
-	// launch must not start the machine's shell.
+	// whichever click reaches it first. The hive command reconciles after it,
+	// because its status reads the probed PATH. Skipped in mock/e2e runs: a
+	// fixture launch must not start the machine's shell or write to the real
+	// home directory.
 	if a.mock == "" {
-		go func() { _ = a.execEnv.Path(a.ctx) }()
+		go func() {
+			_ = a.execEnv.Path(a.ctx)
+			a.HiveCLI.Reconcile(a.ctx)
+		}()
 	}
 	return nil
 }

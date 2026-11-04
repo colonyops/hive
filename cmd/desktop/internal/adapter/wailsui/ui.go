@@ -184,6 +184,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		application.NewService(NewReviewService(core.Review, u.logger)),
 		application.NewService(NewSystemService(core.System, opts.Build.Version, opts.Build.Commit, opts.Build.Date)),
 		application.NewService(NewHiveConfigService(core.HiveConfig)),
+		application.NewService(NewHiveCLIService(core.HiveCLI)),
 		application.NewService(NewSettingsService(core.Settings)),
 		application.NewService(NewMenuBarService(core.MenuBar)),
 		application.NewService(NewWebhookService(core.Webhooks)),

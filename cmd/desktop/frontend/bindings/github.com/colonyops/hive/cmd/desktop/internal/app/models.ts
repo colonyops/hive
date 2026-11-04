@@ -6,6 +6,9 @@
 import * as diagnostics$0 from "./diagnostics/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as hivecli$0 from "./hivecli/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as hiveconf$0 from "./hiveconf/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -352,6 +355,17 @@ export interface DiffCommentInput {
     "text": string;
     "commit"?: string;
     "staged"?: boolean;
+}
+
+/**
+ * HiveCLIStatus is the `hive` command as Settings and first run show it.
+ */
+export interface HiveCLIStatus {
+    /**
+     * Install is hive_cli.install_command, nil until the user was asked.
+     */
+    "install": boolean | null;
+    "command": hivecli$0.Status;
 }
 
 /**

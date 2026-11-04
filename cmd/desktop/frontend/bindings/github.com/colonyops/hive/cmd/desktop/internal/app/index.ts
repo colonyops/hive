@@ -32,6 +32,7 @@ export type {
     DiagnosticsQuery,
     DiagnosticsSnapshot,
     DiffCommentInput,
+    HiveCLIStatus,
     HiveSetup,
     HiveSetupRequest,
     Integration,
