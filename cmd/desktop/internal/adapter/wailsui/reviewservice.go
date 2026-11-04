@@ -132,10 +132,10 @@ func (s *ReviewService) DismissDiffComment(ctx context.Context, commentID string
 }
 
 // DismissDiffReview removes one agent review with all its comments.
-func (s *ReviewService) DismissDiffReview(ctx context.Context, sessionID, reviewID string) (err error) {
-	ctx, span := startReviewCommand(ctx, "dismiss-diff-review", "", sessionID)
+func (s *ReviewService) DismissDiffReview(ctx context.Context, reviewID string) (err error) {
+	ctx, span := startReviewCommand(ctx, "dismiss-diff-review", "", reviewID)
 	defer observe.End(span, &err)
-	return s.fail(ctx, "dismiss-diff-review", s.diffs.DismissReview(ctx, sessionID, reviewID))
+	return s.fail(ctx, "dismiss-diff-review", s.diffs.DismissReview(ctx, reviewID))
 }
 
 func startReviewCommand(ctx context.Context, command, space, path string) (context.Context, trace.Span) {

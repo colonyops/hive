@@ -96,7 +96,8 @@ func TestDiffReviewStoreDeleteLastCommentDropsReview(t *testing.T) {
 
 	_, err = store.DeleteDiffReviewComment(ctx, "c2")
 	require.ErrorIs(t, err, review.ErrDiffReviewNotFound)
-	assert.ErrorIs(t, store.DeleteDiffReview(ctx, "r1"), review.ErrDiffReviewNotFound)
+	_, err = store.DeleteDiffReview(ctx, "r1")
+	assert.ErrorIs(t, err, review.ErrDiffReviewNotFound)
 }
 
 func TestDiffReviewStoreFollowsTheSession(t *testing.T) {

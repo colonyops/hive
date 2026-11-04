@@ -108,15 +108,15 @@ func (s *DiffReviewStore) DeleteDiffReviewComment(ctx context.Context, commentID
 	return sessionID, err
 }
 
-func (s *DiffReviewStore) DeleteDiffReview(ctx context.Context, reviewID string) error {
-	n, err := s.db.Ctx(ctx).DeleteDiffReview(ctx, reviewID)
+func (s *DiffReviewStore) DeleteDiffReview(ctx context.Context, reviewID string) (string, error) {
+	sessionID, err := s.db.Ctx(ctx).DeleteDiffReview(ctx, reviewID)
+	if IsNotFoundError(err) {
+		return "", review.ErrDiffReviewNotFound
+	}
 	if err != nil {
-		return fmt.Errorf("delete diff review: %w", err)
+		return "", fmt.Errorf("delete diff review: %w", err)
 	}
-	if n == 0 {
-		return review.ErrDiffReviewNotFound
-	}
-	return nil
+	return sessionID, nil
 }
 
 func (s *DiffReviewStore) DeleteDiffReviews(ctx context.Context, sessionID string) (int, error) {

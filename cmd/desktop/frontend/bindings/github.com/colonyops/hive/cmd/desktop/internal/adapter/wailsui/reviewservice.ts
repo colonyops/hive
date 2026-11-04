@@ -72,8 +72,8 @@ export function DismissDiffComment(commentID: string): $CancellablePromise<void>
 /**
  * DismissDiffReview removes one agent review with all its comments.
  */
-export function DismissDiffReview(sessionID: string, reviewID: string): $CancellablePromise<void> {
-    return $Call.ByID(3011899394, sessionID, reviewID);
+export function DismissDiffReview(reviewID: string): $CancellablePromise<void> {
+    return $Call.ByID(3011899394, reviewID);
 }
 
 /**

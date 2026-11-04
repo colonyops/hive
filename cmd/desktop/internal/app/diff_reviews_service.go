@@ -148,12 +148,13 @@ func (s *DiffReviewsService) Dismiss(ctx context.Context, commentID string) erro
 }
 
 // DismissReview removes one review with every comment it still has.
-func (s *DiffReviewsService) DismissReview(ctx context.Context, sessionID, reviewID string) error {
+func (s *DiffReviewsService) DismissReview(ctx context.Context, reviewID string) error {
 	engine, err := s.service()
 	if err != nil {
 		return err
 	}
-	if err := engine.DiffReviews().DismissReview(ctx, reviewID); err != nil {
+	sessionID, err := engine.DiffReviews().DismissReview(ctx, reviewID)
+	if err != nil {
 		return diffReviewError(err, reviewID)
 	}
 	s.updated(ctx, sessionID)

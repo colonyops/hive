@@ -286,7 +286,7 @@ func (s *Service) Dismiss(ctx context.Context, commentID string) (sessionID stri
 }
 
 // DismissReview removes one review and its comments.
-func (s *Service) DismissReview(ctx context.Context, reviewID string) error {
+func (s *Service) DismissReview(ctx context.Context, reviewID string) (sessionID string, err error) {
 	return s.store.DeleteDiffReview(ctx, reviewID)
 }
 

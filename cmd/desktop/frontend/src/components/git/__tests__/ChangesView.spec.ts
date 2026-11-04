@@ -1330,7 +1330,7 @@ describe('ChangesView', () => {
       await wrapper.get(testid('changes-overview-row')).trigger('click')
       await wrapper.get(testid('agent-review-r1-dismiss-all')).trigger('click')
       await flushPromises()
-      expect(mocks.DismissDiffReview).toHaveBeenCalledWith('s1', 'r1')
+      expect(mocks.DismissDiffReview).toHaveBeenCalledWith('r1')
       expect(wrapper.find(testid('agent-review-r1')).exists()).toBe(false)
       expect(wrapper.find(testid('changes-overview-empty')).exists()).toBe(true)
       wrapper.unmount()

@@ -20,16 +20,15 @@ func (q *Queries) CountDiffReviewComments(ctx context.Context, reviewID string) 
 	return count, err
 }
 
-const deleteDiffReview = `-- name: DeleteDiffReview :execrows
-DELETE FROM diff_reviews WHERE id = ?
+const deleteDiffReview = `-- name: DeleteDiffReview :one
+DELETE FROM diff_reviews WHERE id = ? RETURNING session_id
 `
 
-func (q *Queries) DeleteDiffReview(ctx context.Context, id string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteDiffReview, id)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+func (q *Queries) DeleteDiffReview(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRowContext(ctx, deleteDiffReview, id)
+	var session_id string
+	err := row.Scan(&session_id)
+	return session_id, err
 }
 
 const deleteDiffReviewByAuthor = `-- name: DeleteDiffReviewByAuthor :execrows

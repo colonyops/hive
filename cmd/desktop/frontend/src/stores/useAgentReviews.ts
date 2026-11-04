@@ -94,7 +94,7 @@ export const useAgentReviews = defineStore('agentReviews', () => {
   async function dismissReview(sessionId: string, reviewId: string): Promise<string | null> {
     drop(sessionId, (review) => (review.id === reviewId ? null : review))
     try {
-      await DismissDiffReview(sessionId, reviewId)
+      await DismissDiffReview(reviewId)
       return null
     } catch (err) {
       void reload(sessionId)

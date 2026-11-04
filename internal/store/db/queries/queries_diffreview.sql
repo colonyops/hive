@@ -30,8 +30,8 @@ DELETE FROM diff_review_comments WHERE id = ?;
 -- name: CountDiffReviewComments :one
 SELECT COUNT(*) FROM diff_review_comments WHERE review_id = ?;
 
--- name: DeleteDiffReview :execrows
-DELETE FROM diff_reviews WHERE id = ?;
+-- name: DeleteDiffReview :one
+DELETE FROM diff_reviews WHERE id = ? RETURNING session_id;
 
 -- name: DeleteDiffReviewsBySession :execrows
 DELETE FROM diff_reviews WHERE session_id = ?;
