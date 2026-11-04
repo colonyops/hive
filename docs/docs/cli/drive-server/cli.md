@@ -28,7 +28,7 @@ export HIVE_DRIVE_TOKEN=hds_...
 
 `HIVE_DRIVE_TOKEN` overrides any stored token.
 
-A command picks the server in this order: `--server`, `HIVE_DRIVE_SERVER`, then the one server you are signed in to. With several logins and neither of the first two, the command asks for `--server`.
+A command picks the server in this order: `--drive-server`, `HIVE_DRIVE_SERVER`, then the one server you are signed in to. With several logins and neither of the first two, the command asks for `--drive-server`.
 
 ## Choose a space
 
@@ -72,7 +72,7 @@ This prints a public link. The document must already be on the server. See [Shar
 
 | Flag | Commands | Effect |
 | --- | --- | --- |
-| `--server` | push, pull, share | The server URL or host. |
+| `--drive-server` | push, pull, share | The server URL or host. |
 | `--json` | push, pull, share | One JSON object per path, with `path`, `action`, and `error`. |
 | `--force` | push | Upload documents that did not change. |
 | `--expires` | share | `1d`, `7d`, or `30d`. |

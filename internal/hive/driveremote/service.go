@@ -130,7 +130,7 @@ func (s *Service) DefaultServer(flag string) (string, error) {
 	case 1:
 		return refs[0].Account, nil
 	default:
-		return "", fmt.Errorf("%d drive servers are signed in: pass --server", len(refs))
+		return "", fmt.Errorf("%d drive servers are signed in: pass --drive-server", len(refs))
 	}
 }
 

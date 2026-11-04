@@ -17,11 +17,11 @@ import (
 	"github.com/colonyops/hive/pkg/iojson"
 )
 
-func (cmd *DriveCmd) serverFlag() cli.Flag {
+func (cmd *DriveCmd) driveServerFlag() cli.Flag {
 	return &cli.StringFlag{
-		Name:        "server",
+		Name:        "drive-server",
 		Usage:       "drive server URL or host (default: $HIVE_DRIVE_SERVER, else your one login)",
-		Destination: &cmd.server,
+		Destination: &cmd.driveServer,
 	}
 }
 
@@ -136,7 +136,7 @@ func (cmd *DriveCmd) pushCmd() *cli.Command {
 
 Example: hive drive push --repo colonyops/hive plans/`,
 		Flags: []cli.Flag{
-			cmd.serverFlag(),
+			cmd.driveServerFlag(),
 			cmd.jsonFlag(),
 			&cli.BoolFlag{
 				Name:        "force",
@@ -170,7 +170,7 @@ written beside it as <name>-1.md, <name>-2.md, and so on.
 
 Example: hive drive pull --repo colonyops/hive`,
 		Flags: []cli.Flag{
-			cmd.serverFlag(),
+			cmd.driveServerFlag(),
 			cmd.jsonFlag(),
 		},
 		Action: cmd.runPull,
@@ -203,7 +203,7 @@ link keeps its expiry; none removes an existing expiry.
 
 Example: hive drive share plans/ship.md --expires 7d`,
 		Flags: []cli.Flag{
-			cmd.serverFlag(),
+			cmd.driveServerFlag(),
 			cmd.jsonFlag(),
 			&cli.StringFlag{
 				Name:        "expires",
@@ -261,7 +261,7 @@ func (cmd *DriveCmd) remoteTarget(ctx context.Context) (*driveremote.Service, dr
 	if err != nil {
 		return nil, drive.Space{}, "", err
 	}
-	server, err := remote.DefaultServer(cmd.server)
+	server, err := remote.DefaultServer(cmd.driveServer)
 	if err != nil {
 		return nil, drive.Space{}, "", err
 	}
