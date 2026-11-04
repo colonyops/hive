@@ -656,12 +656,17 @@ async function deliver(target: AgentTarget): Promise<string | null> {
   }
   stopWalk()
   sendNote.value = ''
-  // The agent has them now, so their rows go, as the user's own comments do.
+  void dropSent(agents)
+  return null
+}
+
+// The agent has them now, so their rows go, as the user's own comments do. The
+// send has succeeded, so the view does not wait on this to report it.
+async function dropSent(agents: readonly AgentComment[]): Promise<void> {
   for (const comment of agents) {
     const dropped = await agentStore.dismiss(props.sessionId, comment.id)
     if (dropped) log.warn('a sent agent comment stayed in hive.db', { id: comment.id, reason: dropped })
   }
-  return null
 }
 
 // The view belongs to one session, so its only agent needs no picking. Go refuses
