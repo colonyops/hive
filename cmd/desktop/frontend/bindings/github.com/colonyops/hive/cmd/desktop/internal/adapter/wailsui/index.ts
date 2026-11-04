@@ -93,6 +93,8 @@ export type {
     ClientLogEntry,
     CommentWire,
     DevToolsInfo,
+    DiffReviewCommentWire,
+    DiffReviewWire,
     DiffTarget,
     DocumentReviewWire,
     DocumentWire,

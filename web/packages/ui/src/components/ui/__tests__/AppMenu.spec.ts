@@ -142,6 +142,17 @@ describe('AppMenu', () => {
     wrapper.unmount()
   })
 
+  it('outgrows a small anchor it ends at when given a width', async () => {
+    const anchor = document.createElement('button')
+    anchor.getBoundingClientRect = () => ({ left: 400, right: 450, top: 10, bottom: 28, width: 50 }) as DOMRect
+    const wrapper = mount(AppMenu, { props: { entries, anchor, anchoredWidth: 220, testid: 'anchored-menu' } })
+    await wrapper.vm.$nextTick()
+    const panel = document.querySelector<HTMLElement>('[data-testid="anchored-menu"]')!
+    expect(panel.style.width).toBe('220px')
+    expect(panel.style.left).toBe('230px')
+    wrapper.unmount()
+  })
+
   it('flips upward when asked to open above its anchor', () => {
     const wrapper = mount(AppMenu, { props: { entries, flip: true } })
     expect(wrapper.get('.app-menu').classes()).toContain('flip')

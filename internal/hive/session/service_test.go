@@ -2008,3 +2008,27 @@ func TestRemoteIdentity_NonDefaultPortIsDistinct(t *testing.T) {
 	t.Parallel()
 	assert.False(t, git.EquivalentRemote("https://host:8443/o/r", "git@host:o/r"))
 }
+
+func TestResolveSession(t *testing.T) {
+	t.Parallel()
+	store := newMockStore()
+	store.sessions["abc"] = session.Session{ID: "abc", Name: "First", Slug: "first"}
+	store.sessions["def"] = session.Session{ID: "def", Name: "abc", Slug: "second"}
+	svc := newTestService(t, store, nil)
+	ctx := context.Background()
+
+	got, err := svc.ResolveSession(ctx, "abc")
+	require.NoError(t, err)
+	assert.Equal(t, "abc", got.ID, "an id wins over another session's name")
+
+	got, err = svc.ResolveSession(ctx, "second")
+	require.NoError(t, err)
+	assert.Equal(t, "def", got.ID)
+
+	got, err = svc.ResolveSession(ctx, "First")
+	require.NoError(t, err)
+	assert.Equal(t, "abc", got.ID)
+
+	_, err = svc.ResolveSession(ctx, "nope")
+	require.ErrorIs(t, err, session.ErrNotFound)
+}

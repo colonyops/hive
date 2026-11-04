@@ -2709,6 +2709,20 @@ review travels whole to `ReviewService.SendChanges`, which formats it with
 `review.DiffFeedback` and delivers it the way a document's Send does, to an agent
 pane of that one session.
 
+**Agents' reviews of a session's diff live in `hive.db`**
+(ADR agent-reviews-of-a-session-s-diff-live-in-hive-db-and-are-sent-with-the-user-s-comments).
+`diffreview.Service` (`Engine.DiffReviews()`) owns them: one review per session and
+author in `diff_reviews`, its comments in `diff_review_comments`, anchored to the
+branch comparison against the default base and quoted with `review.ParseDiffRows`,
+which matches `diffRows` in `lib/diffReview.ts`. Agents write them through the
+`diff_review_*` tools on the drive MCP server (`internal/ops/reviews`, served by
+`app.DiffReviewsService`) or `hive review diff`, which needs no desktop. The
+desktop hears of every write, its own and the CLI's, through the `diff-reviews`
+hivewatch probe, which publishes `events.DiffReviewsUpdated`. `stores/useAgentReviews` holds what the Diff
+view shows. The user only dismisses: Send passes the agent comments still waiting
+to `useChangesReview.send` beside the user's own, and deletes their rows once the
+paste succeeds.
+
 **HTML has two tiers.** A canvas **html block** is the one place
 agent-authored markup reaches the app's DOM
 (ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).

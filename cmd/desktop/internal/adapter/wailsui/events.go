@@ -46,6 +46,7 @@ func registerEvents() struct{} {
 	application.RegisterEvent[string]("sessions:create-failed")
 	application.RegisterEvent[string]("sessions:updated")
 	application.RegisterEvent[string]("tasks:updated")
+	application.RegisterEvent[string]("diff-reviews:updated")
 	// window:focus and window:blur carry the current focus state. Consumers use
 	// them to update focus-sensitive UI without querying the native window.
 	application.RegisterEvent[bool]("window:focus")
@@ -132,6 +133,9 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		}),
 		events.Subscribe(ctx, bus, "wailsui.tasks", events.Coalesce(), func(context.Context, events.TasksUpdated) {
 			emitTasksUpdated()
+		}),
+		events.Subscribe(ctx, bus, "wailsui.diff-reviews", events.Coalesce(), func(context.Context, events.DiffReviewsUpdated) {
+			emitDiffReviewsUpdated()
 		}),
 		events.Subscribe(ctx, bus, "wailsui.actions", events.Coalesce(), func(context.Context, events.ActionsUpdated) {
 			emitActionsUpdated()
@@ -297,6 +301,12 @@ func emitSessionsUpdated() {
 func emitTasksUpdated() {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("tasks:updated", "changed")
+	}
+}
+
+func emitDiffReviewsUpdated() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("diff-reviews:updated", "changed")
 	}
 }
 

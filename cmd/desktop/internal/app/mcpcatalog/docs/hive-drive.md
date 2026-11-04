@@ -182,6 +182,35 @@ is refused:
   window name. It is placed instead of starting one, so it excludes `name`. A
   window the session does not have is `not_found`.
 
+## Diff reviews
+
+When the user asks you to review a Code session's changes, write the review
+with these tools instead of pasting it into the terminal. The Diff view draws
+each comment under the lines it is about. The user dismisses the ones they
+disagree with, and Send delivers the rest to the session's agent with their own
+comments. A review is about the branch
+against its base, the Branch comparison, which is what a pull request shows.
+
+- `diff_review_put`: store your review: a `summary` and `comments`. In a hive
+  session it reviews your own session; in a chat, name one in `sessionId`, by
+  id or name from `session_list`. Each comment has a `path`, `text`, a
+  `severity` (`issue`, `suggestion` by default, or `note`), and either
+  `startLine` and `endLine` or `kind` `file` for the whole file. Lines count
+  as the branch has them; with `startSide` `deletions` they count as the base
+  had them, for a removed line. Hive quotes the rows itself. Set `agent` to
+  `claude`, `codex` or `pi` so the view draws your mark. A second review from
+  the same `author` replaces the first, so send the whole review each time.
+- `diff_review_get`: the reviews still waiting. A comment the user dismissed or
+  sent is gone from it.
+- `diff_review_clear`: withdraw your review, or every review of the session.
+
+Every comment must name a file in the branch diff, and a lines comment must
+name rows the diff shows: changed lines or the context around them. Read the
+diff with `git diff $(git merge-base HEAD origin/<base>)` in the checkout to
+get the numbers right. A refused review lists every comment to fix and stores
+nothing. Keep each comment to one actionable point and put the overview in
+`summary`. When the review is stored, open the `diff` tab with `tab_open`.
+
 ## Canvases
 
 A canvas is a document of blocks you revise in place. Blocks are:

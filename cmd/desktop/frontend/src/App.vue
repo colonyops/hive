@@ -20,6 +20,7 @@ import { useHubOverlays } from './app/useHubOverlays'
 import { loadAgentsMode, loadTerminalMode, useModePreload } from './app/useModePreload'
 import { useOnboarding } from './app/useOnboarding'
 import { useProfileActions } from './app/useProfileActions'
+import { useHiveLinkClicks } from './app/useHiveLinkClicks'
 import { useReveal } from './app/useReveal'
 import { useSelectedItemDetail } from './app/useSelectedItemDetail'
 import { useSelfUpdate } from './app/useSelfUpdate'
@@ -73,6 +74,7 @@ const overlays = useHubOverlays(terminalActive)
 const { tasksOpen, activityOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
 const reveal = useReveal(nav, session, feed.showToast, appMode.openDrive)
+useHiveLinkClicks((message) => feed.showToast(message, { severity: 'error' }))
 const feedCommands = useFeedCommands(feed, confirmation)
 const itemDetail = useSelectedItemDetail(feed)
 

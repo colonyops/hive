@@ -192,3 +192,40 @@ Comments are inserted with proper markdown formatting and indentation alignment:
 
 │  43 │ 1. Add OAuth2 client configuration
 ```
+
+## Diff Reviews
+
+`hive review diff` lets an agent review a session's changes: the branch against the default branch, as Hive Desktop's [Diff view](../../desktop/code/terminal-mode.md#agent-reviews) shows it. The desktop draws each comment under its lines, where you dismiss it or send it with your own comments. The command writes to hive's database, so the desktop does not have to be running.
+
+```bash
+# Store a review of the session in the current directory, read from stdin
+hive review diff put < review.json
+
+# Review another session, by id or name
+hive review diff put --session-id my-feature -f review.json
+
+# Print the reviews still waiting, one JSON line each
+hive review diff show
+
+# Withdraw one agent's review
+hive review diff clear --author claude
+```
+
+The review is JSON:
+
+```json
+{
+  "agent": "claude",
+  "summary": "One real bug, two cleanups.",
+  "comments": [
+    {"path": "internal/a.go", "startLine": 12, "endLine": 14, "severity": "issue", "text": "The error is dropped here."},
+    {"path": "internal/a.go", "startSide": "deletions", "startLine": 30, "text": "Why remove this check?"},
+    {"path": "internal/a_test.go", "kind": "file", "text": "Add a failing case."}
+  ]
+}
+```
+
+- `startLine` and `endLine` count lines as the branch has them. With `"startSide": "deletions"` they count lines as the base had them, for a removed line.
+- Every comment names a file in the branch diff, and a lines comment names rows the diff shows. hive quotes those rows itself.
+- `severity` is `issue`, `suggestion` (the default), or `note`. `author` defaults to the `agent` field, then to the word `agent`.
+- A second review from the same author replaces the first. A refused review lists every comment to fix and stores nothing.

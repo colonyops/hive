@@ -3,8 +3,9 @@
 
 /**
  * ReviewService exposes comments on Drive Markdown documents and their
- * delivery as feedback, to the clipboard or to a running agent. space and
- * path name a document the way DriveService does.
+ * delivery as feedback, to the clipboard or to a running agent, and agents'
+ * reviews of a session's diff. space and path name a document the way
+ * DriveService does.
  * @module
  */
 
@@ -51,6 +52,28 @@ export function Clear(space: string, path: string): $CancellablePromise<void> {
 
 export function DeleteComment(space: string, path: string, id: string): $CancellablePromise<void> {
     return $Call.ByID(704852001, space, path, id);
+}
+
+/**
+ * DiffReviews lists the agent reviews of a session's branch diff, oldest first.
+ */
+export function DiffReviews(sessionID: string): $CancellablePromise<$models.DiffReviewWire[] | null> {
+    return $Call.ByID(2788741561, sessionID);
+}
+
+/**
+ * DismissDiffComment removes one agent comment. The frontend calls it after Send
+ * delivers the comment too.
+ */
+export function DismissDiffComment(commentID: string): $CancellablePromise<void> {
+    return $Call.ByID(2930048103, commentID);
+}
+
+/**
+ * DismissDiffReview removes one agent review with all its comments.
+ */
+export function DismissDiffReview(reviewID: string): $CancellablePromise<void> {
+    return $Call.ByID(3011899394, reviewID);
 }
 
 /**

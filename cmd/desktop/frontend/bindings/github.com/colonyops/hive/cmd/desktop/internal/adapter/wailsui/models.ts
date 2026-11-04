@@ -211,6 +211,36 @@ export interface DevToolsInfo {
 }
 
 /**
+ * DiffReviewCommentWire is one comment. Kind is "" for rows and "file" for a
+ * whole file, as the frontend's own diff comments spell it.
+ */
+export interface DiffReviewCommentWire {
+    "id": string;
+    "kind": string;
+    "path": string;
+    "startSide": string;
+    "startLine": number;
+    "endSide": string;
+    "endLine": number;
+    "quote": string;
+    "severity": string;
+    "text": string;
+}
+
+/**
+ * DiffReviewWire is one agent's review of a session's branch diff.
+ */
+export interface DiffReviewWire {
+    "id": string;
+    "author": string;
+    "agent": string;
+    "head": string;
+    "summary": string;
+    "createdAt": string;
+    "comments": DiffReviewCommentWire[] | null;
+}
+
+/**
  * DiffTarget says what a read compares. See gitstatus.DiffTarget.
  */
 export interface DiffTarget {

@@ -41,3 +41,44 @@ func documentReviewWireOf(r app.DocumentReview) DocumentReviewWire {
 	}
 	return DocumentReviewWire{SessionID: r.SessionID, Current: r.Current, Comments: comments}
 }
+
+// DiffReviewWire is one agent's review of a session's branch diff.
+type DiffReviewWire struct {
+	ID        string                  `json:"id"`
+	Author    string                  `json:"author"`
+	Agent     string                  `json:"agent"`
+	Head      string                  `json:"head"`
+	Summary   string                  `json:"summary"`
+	CreatedAt time.Time               `json:"createdAt"`
+	Comments  []DiffReviewCommentWire `json:"comments"`
+}
+
+// DiffReviewCommentWire is one comment. Kind is "" for rows and "file" for a
+// whole file, as the frontend's own diff comments spell it.
+type DiffReviewCommentWire struct {
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	Path      string `json:"path"`
+	StartSide string `json:"startSide"`
+	StartLine int    `json:"startLine"`
+	EndSide   string `json:"endSide"`
+	EndLine   int    `json:"endLine"`
+	Quote     string `json:"quote"`
+	Severity  string `json:"severity"`
+	Text      string `json:"text"`
+}
+
+func diffReviewWireOf(r review.DiffReview) DiffReviewWire {
+	comments := make([]DiffReviewCommentWire, 0, len(r.Comments))
+	for _, c := range r.Comments {
+		comments = append(comments, DiffReviewCommentWire{
+			ID: c.ID, Kind: string(c.Kind), Path: c.Path,
+			StartSide: string(c.StartSide), StartLine: c.StartLine, EndSide: string(c.EndSide), EndLine: c.EndLine,
+			Quote: c.Quote, Severity: string(c.Severity), Text: c.Text,
+		})
+	}
+	return DiffReviewWire{
+		ID: r.ID, Author: r.Author, Agent: r.Agent, Head: r.Head, Summary: r.Summary,
+		CreatedAt: r.CreatedAt, Comments: comments,
+	}
+}

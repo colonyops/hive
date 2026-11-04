@@ -33,6 +33,22 @@ func TestLinkService_HoldsTheLatestLinkUntilTaken(t *testing.T) {
 	assert.Nil(t, links.Take())
 }
 
+func TestLinkService_OpenTakesALinkFromTheApp(t *testing.T) {
+	opens := countLinkOpens(t)
+	links := NewLinkService(zerolog.Nop())
+
+	require.NoError(t, links.Open("hive://drive/colonyops/hive/plans/x.md"))
+	assert.Equal(t, 1, *opens)
+	got := links.Take()
+	require.NotNil(t, got)
+	assert.Equal(t, deeplink.AreaDrive, got.Area)
+
+	require.Error(t, links.Open("https://example.com"))
+	require.Error(t, links.Open("hive://nowhere"))
+	assert.Equal(t, 1, *opens, "a link that does not parse wakes nothing")
+	assert.Nil(t, links.Take())
+}
+
 func TestUI_OpenLinkToastsALinkThatDoesNotParse(t *testing.T) {
 	opens := countLinkOpens(t)
 	toasts := make(chan NotificationToast, 1)

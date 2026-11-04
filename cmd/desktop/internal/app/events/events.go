@@ -43,6 +43,11 @@ type SessionsUpdated struct{ Added, Changed, Removed []string }
 // there are no ids to carry.
 type TasksUpdated struct{}
 
+// DiffReviewsUpdated reports that an agent review of a session's diff was
+// written or dismissed since the last read, whichever process wrote it. The
+// read is a fingerprint, so there are no ids to carry.
+type DiffReviewsUpdated struct{}
+
 // FlowsUpdated reports that the flow set was reloaded. Reason names what
 // caused it — an external edit, or the app's own save.
 type FlowsUpdated struct{ Reason string }
@@ -133,6 +138,7 @@ func (JobsUpdated) eventName() string            { return "jobs.updated" }
 func (SessionCreateFailed) eventName() string    { return "session.create-failed" }
 func (SessionsUpdated) eventName() string        { return "sessions.updated" }
 func (TasksUpdated) eventName() string           { return "tasks.updated" }
+func (DiffReviewsUpdated) eventName() string     { return "diff-reviews.updated" }
 func (FlowsUpdated) eventName() string           { return "flows.updated" }
 func (ActionsUpdated) eventName() string         { return "actions.updated" }
 func (AppletsUpdated) eventName() string         { return "applets.updated" }

@@ -67,7 +67,8 @@ Examples:
 				Destination: &cmd.all,
 			},
 		},
-		Action: cmd.run,
+		Action:   cmd.run,
+		Commands: []*cli.Command{cmd.diffCmd()},
 	})
 
 	return app

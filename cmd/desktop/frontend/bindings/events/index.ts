@@ -29,6 +29,11 @@ export const AppletsUpdated = "applets:updated";
 export const ConnectionUpdated = "connection:updated";
 
 /**
+ * Name of the custom event "diff-reviews:updated".
+ */
+export const DiffReviewsUpdated = "diff-reviews:updated";
+
+/**
  * Name of the custom event "drive:updated".
  */
 export const DriveUpdated = "drive:updated";

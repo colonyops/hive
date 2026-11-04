@@ -190,11 +190,12 @@ Branch changes, Uncommitted, and Unstaged include untracked files.
 | <kbd>[</kbd> <kbd>]</kbd> | Step to an older or newer commit |
 | <kbd>b</kbd> | Show or hide the file list |
 | <kbd>c</kbd> | Comment on the current file as a whole |
-| <kbd>C</kbd> | Comment on all the changes |
+| <kbd>C</kbd> | Send with a note |
 | <kbd>r</kbd> | Show or hide the comments panel |
+| <kbd>w</kbd> | Walk through the agent comments |
 | <kbd>⌘↵</kbd> (Windows/Linux: <kbd>Ctrl+Enter</kbd>) | Send your comments to the agent |
 
-Selecting a file in the list shows that file on its own. Press <kbd>f</kbd> or use the file button in the header to see every file again. Select the bar between two hunks to show the unchanged lines around them, 20 at a time.
+Selecting a file in the list shows that file on its own. Select it again, or press <kbd>f</kbd>, to see every file again. Select the bar between two hunks to show the unchanged lines around them, 20 at a time.
 
 The view refreshes every 5 seconds while it's open and the window has focus. A viewed file comes back unviewed when it changes again. Viewed marks last until you quit Hive.
 
@@ -206,15 +207,35 @@ Press <kbd>/</kbd> or <kbd>⌘F</kbd> (Windows/Linux: <kbd>Ctrl+F</kbd>) to sear
 
 ### Comments
 
-To comment, drag across line numbers, click the **+** beside a line, or select code with the mouse. Type in the box that opens and press <kbd>⌘↵</kbd> (Windows/Linux: <kbd>Ctrl+Enter</kbd>). A label button saves that label as the comment. Comments appear under their lines and as rows in the comments panel, which the comment button in the header or <kbd>r</kbd> opens. To comment on a whole file, use the comment button on its header or press <kbd>c</kbd>. To comment on all the changes, use the comment button in the header or press <kbd>C</kbd>. These two kinds show only in the panel, and the agent reads comments on all the changes first.
+To comment, drag across line numbers, click the **+** beside a line, or select code with the mouse. Type in the box that opens and press <kbd>⌘↵</kbd> (Windows/Linux: <kbd>Ctrl+Enter</kbd>). A label button saves that label as the comment. Comments appear under their lines and as rows in the comments panel, which the comment button in the header or <kbd>r</kbd> opens. To comment on a whole file, use the comment button on its header or press <kbd>c</kbd>. A comment on a whole file shows only in the panel.
 
-The send button in the header, which shows how many comments you've written, pastes them into the session's agent and submits them, then clears them. If the session has one agent, it goes straight there, even mid-turn. With several agents, a dialog asks which one. An agent waiting on a prompt can't receive comments, because the Enter would answer the prompt. If a send fails, or no agent is running, your comments stay and an error offers **Copy comments**, which copies them as the text the agent would have received.
+The send button in the header, which shows how many comments will go, pastes them into the session's agent and submits them, then clears them. Its arrow opens **Send** and **Send with a note…**: the note, which you can also start with <kbd>C</kbd>, says what the comments don't, and the agent reads it first. A note is sent once and not kept. If the session has one agent, it goes straight there, even mid-turn. With several agents, a dialog asks which one. An agent waiting on a prompt can't receive comments, because the Enter would answer the prompt. If a send fails, or no agent is running, your comments stay and an error offers **Copy comments**, which copies them as the text the agent would have received.
 
 The panel keeps the last three reviews you sent from each session under **Sent**, in case the agent never acted on one. Copy one, or restore it to edit and send again.
 
 Deleting a session deletes its comments and sent reviews, so the confirmation warns about any unsent comments, and a message afterward offers to copy them. Recycling warns too, but a recycled session keeps its comments unless the recycle deletes it.
 
 Comments are kept on this machine, per session, until you send or delete them, and they survive quitting Hive. They point at line numbers, so a comment shows an amber dot when the agent edits the file after you commented. If the line has left the diff, or the comment was made under another comparison, the comment shows only in the panel. A comment made on a commit, or on the staged version, tells the agent which version its line numbers belong to. Select its line label to jump to it, which also switches the comparison back and unfolds the file. If the line has left the diff, this goes to the file instead.
+
+### Agent reviews
+
+An agent can review the session's changes and leave comments for you. Its comments show under their lines in the **Branch** comparison against the default branch, with the agent's mark and name, and a bar for how much each one matters: red for an issue, blue for a suggestion, gray for a note. A comment on a whole file shows at the top of the file.
+
+**Overview**, at the top of the file list, shows each review the way a pull request page does: the agent's summary, how many issues, suggestions and notes it raised, and its comments, each of which jumps to its lines. The count beside **Overview** says how many agent comments are waiting. Press <kbd>Esc</kbd> or select a file to go back to the diffs.
+
+Agent comments go to the session's agent with your own when you press send, each marked with the agent that wrote it, and the send button's count includes them. Dismiss the ones you disagree with, from the comment or with **Dismiss** on the Overview for a whole review. To add your own take, comment on the same lines.
+
+Press <kbd>w</kbd> or select **Walk through** on the Overview to step through every agent comment in file order. The diff scrolls to each one, and these keys act on it:
+
+| Key | Action |
+| --- | --- |
+| <kbd>d</kbd> | Dismiss |
+| <kbd>n</kbd> <kbd>p</kbd> | Next or previous comment |
+| <kbd>Esc</kbd> | Stop |
+
+A comment shows an amber dot when the lines under it changed after the agent wrote it. Agent reviews are kept in hive's database, so they survive quitting Hive and go when the session is deleted. A second review from the same agent replaces its first. A sent or dismissed comment is gone for good.
+
+To ask for a review, tell an agent to review the session. An agent in the session or in a chat uses the `diff_review_put` tool on the [hive-drive MCP server](agent-layout.md#from-mcp); any other agent runs [`hive review diff put`](../../cli/getting-started/context.md#diff-reviews).
 
 Changes never writes to the checkout, so it's safe to use while an agent works in it. It can't stage or commit. These limits apply:
 
