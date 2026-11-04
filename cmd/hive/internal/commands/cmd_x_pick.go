@@ -517,6 +517,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 		flagRepo        string
 		flagPrint       bool
 		flagFormat      string
+		flagJSON        bool
 		flagHideCurrent bool
 		flagNoRecents   bool
 	)
@@ -528,7 +529,8 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			&cli.StringFlag{Name: "status", Usage: "Filter by terminal status (active, approval, ready, missing)", Destination: &flagStatus},
 			&cli.StringFlag{Name: "repo", Usage: "Filter by repository remote URL (substring match)", Destination: &flagRepo},
 			&cli.BoolFlag{Name: "print", Usage: "Print selected session info instead of switching tmux", Destination: &flagPrint},
-			&cli.StringFlag{Name: "format", Value: "id", Usage: "Output format for --print (id, name, path, json)", Destination: &flagFormat},
+			&cli.StringFlag{Name: "format", Value: "id", Usage: "Output format for --print (id, name, path)", Destination: &flagFormat},
+			&cli.BoolFlag{Name: "json", Usage: "With --print, print the selected session as one JSON line", Destination: &flagJSON},
 			&cli.BoolFlag{Name: "hide-current", Usage: "Hide the current tmux session from the list", Destination: &flagHideCurrent},
 			&cli.BoolFlag{Name: "no-recents", Usage: "Don't prioritize recently-used sessions", Destination: &flagNoRecents},
 		},
@@ -539,9 +541,12 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				return invalidf("invalid --status %q: valid values are all, active, approval, ready, missing", flagStatus)
 			}
 
-			validFormats := map[string]bool{"id": true, "name": true, "path": true, "json": true}
+			validFormats := map[string]bool{"id": true, "name": true, "path": true}
 			if !validFormats[flagFormat] {
-				return invalidf("invalid --format %q: valid values are id, name, path, json", flagFormat)
+				return invalidf("invalid --format %q: valid values are id, name, path", flagFormat)
+			}
+			if flagJSON && !flagPrint {
+				return invalidf("--json needs --print")
 			}
 
 			sessions, err := cmd.app.Sessions().ListSessions(ctx)
@@ -618,6 +623,9 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			_ = cmd.app.KV().SetTTL(ctx, recentsKeyPrefix+result.selected.Session.ID, result.selected.Session.Name, recentsTTL)
 
 			if flagPrint {
+				if flagJSON {
+					return iojson.WriteLine(c.Root().Writer, result.selected.Session)
+				}
 				switch flagFormat {
 				case "id":
 					_, err = fmt.Fprintln(c.Root().Writer, result.selected.Session.ID)
@@ -625,8 +633,6 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 					_, err = fmt.Fprintln(c.Root().Writer, result.selected.Session.Name)
 				case "path":
 					_, err = fmt.Fprintln(c.Root().Writer, result.selected.Session.Path)
-				case "json":
-					err = iojson.WriteLine(c.Root().Writer, result.selected.Session)
 				}
 				return err
 			}

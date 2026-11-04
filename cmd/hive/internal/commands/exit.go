@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/urfave/cli/v3"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
+	"github.com/colonyops/hive/internal/hive/driveremote"
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/pkg/iojson"
 )
@@ -82,10 +84,18 @@ func (e *ReportedError) Unwrap() error { return e.Err }
 // ApplyErrorRules wraps the action of every command below root so that the
 // error it returns carries its kind and whether the command prints JSON.
 // urfave/cli does not tell the caller of Run which command failed, so the
-// command has to say so itself.
-func ApplyErrorRules(root *cli.Command) {
+// command has to say so itself. args are the arguments passed to root.Run.
+//
+// A flag-parse error never reaches an action, and urfave/cli has not parsed
+// --json yet when it fails, so OnUsageError reads the raw args to pick the
+// output mode.
+func ApplyErrorRules(root *cli.Command, args []string) {
 	for _, sub := range root.Commands {
-		ApplyErrorRules(sub)
+		ApplyErrorRules(sub, args)
+	}
+	root.OnUsageError = func(_ context.Context, c *cli.Command, err error, _ bool) error {
+		jsonMode := c.Metadata[outputMetadataKey] == "json" || (hasJSONFlag(c) && slices.Contains(argsBeforeTerminator(args), "--json"))
+		return &ReportedError{Err: invalidf("%s", err.Error()), Kind: ops.KindInvalid, JSON: jsonMode}
 	}
 	action := root.Action
 	if action == nil {
@@ -101,6 +111,17 @@ func ApplyErrorRules(root *cli.Command) {
 		}
 		return &ReportedError{Err: err, Kind: ErrorKind(err), JSON: printsJSON(c)}
 	}
+}
+
+func hasJSONFlag(c *cli.Command) bool {
+	return slices.ContainsFunc(c.Flags, func(f cli.Flag) bool { return slices.Contains(f.Names(), "json") })
+}
+
+func argsBeforeTerminator(args []string) []string {
+	if i := slices.Index(args, "--"); i >= 0 {
+		return args[:i]
+	}
+	return args
 }
 
 // ErrorKind classifies err. A *ops.Error and a kindError name their kind;
@@ -136,6 +157,9 @@ func ErrorKind(err error) ops.Kind {
 		errors.Is(err, drive.ErrExists),
 		errors.Is(err, drive.ErrNotEmpty):
 		return ops.KindConflict
+	}
+	if driveremote.IsUnauthenticated(err) {
+		return ops.KindUnauthenticated
 	}
 	var unreachable *wire.UnreachableError
 	var desktopUnreachable *desktopUnreachableError

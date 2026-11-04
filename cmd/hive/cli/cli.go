@@ -382,6 +382,6 @@ Run 'hive new' to create a new session from the current repository.`,
 		return tuiCmd.Run(ctx, c)
 	}
 
-	commands.ApplyErrorRules(app)
+	commands.ApplyErrorRules(app, os.Args)
 	os.Exit(commands.ReportError(os.Stderr, app.Run(ctx, os.Args)))
 }

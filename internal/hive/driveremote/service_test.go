@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -457,4 +458,12 @@ func TestShareReturnsServerLink(t *testing.T) {
 	share, err := f.svc.Share(t.Context(), f.server.URL, f.space, "plans/ship.md", "7d")
 	require.NoError(t, err)
 	assert.Equal(t, "https://drive.test/s/abc?path=plans/ship.md&exp=7d", share.URL)
+}
+
+func TestIsUnauthenticated(t *testing.T) {
+	assert.True(t, driveremote.IsUnauthenticated(driveremote.ErrNoServer))
+	assert.True(t, driveremote.IsUnauthenticated(fmt.Errorf("%w example.com", driveremote.ErrNotSignedIn)))
+	assert.True(t, driveremote.IsUnauthenticated(fmt.Errorf("push: %w", &driveapi.APIError{Status: http.StatusUnauthorized})))
+	assert.False(t, driveremote.IsUnauthenticated(&driveapi.APIError{Status: http.StatusForbidden}))
+	assert.False(t, driveremote.IsUnauthenticated(&driveapi.APIError{Status: http.StatusInternalServerError}))
 }

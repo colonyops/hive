@@ -35,7 +35,8 @@ hive x pick --hide-current   # exclude the session you're currently in
 | `--status` | Pre-set the status filter (`active`, `approval`, `ready`, `missing`) |
 | `--repo` | Filter by repository remote URL (substring match) |
 | `--print` | Print selected session info instead of switching tmux |
-| `--format` | Output format for `--print`: `id` (default), `name`, `path`, `json` |
+| `--format` | Output format for `--print`: `id` (default), `name`, `path` |
+| `--json` | With `--print`, print the selected session as one JSON line. Without `--print` it is an `invalid` error |
 | `--hide-current` | Hide the session you are currently in |
 | `--no-recents` | Don't prioritize recently-used sessions |
 
