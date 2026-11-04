@@ -50,9 +50,7 @@ var (
 	date    = "now"
 )
 
-func build() string {
-	info := buildinfo.Resolve(version, commit, date)
-
+func buildString(info buildinfo.Info) string {
 	short := info.Commit
 	if len(short) > 7 {
 		short = short[:7]
@@ -61,8 +59,7 @@ func build() string {
 	return fmt.Sprintf("%s (%s) %s", info.Version, short, info.Date)
 }
 
-func hiveBuildInfo() app.BuildInfo {
-	info := buildinfo.Resolve(version, commit, date)
+func hiveBuildInfo(info buildinfo.Info) app.BuildInfo {
 	return app.BuildInfo{Version: info.Version, Commit: info.Commit, Date: info.Date}
 }
 
@@ -137,6 +134,13 @@ func skipsEngine(path []string) bool {
 
 // Main runs the hive CLI and exits the process.
 func Main() {
+	Run(buildinfo.Resolve(version, commit, date))
+}
+
+// Run runs the hive CLI and reports info as its build. Hive Desktop calls it
+// when its executable is invoked as hive, so the CLI reports the desktop's
+// stamped version instead of this package's own.
+func Run(info buildinfo.Info) {
 	ctx := context.Background()
 
 	var (
@@ -161,7 +165,7 @@ spawning terminal sessions with your preferred AI tool.
 
 Run 'hive' with no arguments to open the interactive session manager.
 Run 'hive new' to create a new session from the current repository.`,
-		Version:               build(),
+		Version:               buildString(info),
 		EnableShellCompletion: true,
 
 		ConfigureShellCompletionCommand: commands.ConfigureCompletionCommand,
@@ -205,7 +209,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			path := commandPath(c, os.Args)
 			// init runs before any config exists, so it skips the config load too.
 			if len(path) > 0 && path[0] == "init" {
-				hiveApp.Build = hiveBuildInfo()
+				hiveApp.Build = hiveBuildInfo(info)
 				return ctx, nil
 			}
 
@@ -239,17 +243,17 @@ Run 'hive new' to create a new session from the current repository.`,
 				hiveApp.Logger = logger
 				hiveApp.Config = cfg
 				hiveApp.ConfigPath = flags.ConfigPath
-				hiveApp.Build = hiveBuildInfo()
+				hiveApp.Build = hiveBuildInfo(info)
 				// No engine, so no local session API: these commands reach
 				// only the daemon on this machine or on a server.
-				hiveApp.Servers = servers.New(logger, nil, cfg.Servers, version)
+				hiveApp.Servers = servers.New(logger, nil, cfg.Servers, info.Version)
 				return ctx, nil
 			}
 
 			exec := &executil.RealExecutor{}
 			tmuxClient := tmuxexec.NewDefault(logger)
 			hiveRuntime, err = hive.StartRuntime(ctx, &cfg.Config, hive.RuntimeOptions{
-				ScriptsVersion: version,
+				ScriptsVersion: info.Version,
 				Ports: hive.Ports{
 					Executor:   exec,
 					Mux:        tmuxClient,
@@ -319,8 +323,8 @@ Run 'hive new' to create a new session from the current repository.`,
 
 			// Populate the pre-allocated App struct (commands already hold a pointer to it)
 			*hiveApp = *app.NewApp(logger, engine, cfg, tmuxClient, pluginMgr, commandSet, pluginInfos, flags.ConfigPath)
-			hiveApp.Build = hiveBuildInfo()
-			hiveApp.Servers = servers.New(logger, hiveApp.SessionAPI(), cfg.Servers, version)
+			hiveApp.Build = hiveBuildInfo(info)
+			hiveApp.Servers = servers.New(logger, hiveApp.SessionAPI(), cfg.Servers, info.Version)
 			hiveApp.Sources = app.BuildSourceRegistry(logger, cfg, exec, kvStore)
 			return ctx, nil
 		},

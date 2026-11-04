@@ -29,6 +29,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/report"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/telemetry"
+	hivecli "github.com/colonyops/hive/cmd/hive/cli"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/platform/desktopendpoint"
 	"github.com/colonyops/hive/internal/platform/execenv"
@@ -56,6 +57,12 @@ var trayIcon []byte
 var trayIconLinux []byte
 
 func main() {
+	// Before settings load: invoked as hive, this executable is the CLI and
+	// must not touch the desktop's state.
+	if filepath.Base(os.Args[0]) == "hive" {
+		hivecli.Run(buildinfo.Resolve(version, commit, date))
+		return
+	}
 	bootstrap, err := settings.LoadBootstrap()
 	if err != nil {
 		log.Fatal(err)

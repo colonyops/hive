@@ -116,8 +116,9 @@ would double-poll sources and re-execute actions. Adapters are therefore
 in-process callers of the same `App`, not clients over a wire.
 
 `hive` (the CLI/TUI in `cmd/hive`) is the other program in the same
-repository. Both run on the hive engine under `internal/`, and neither
-imports the other. When this document says "CLI", it means `hive dt`: the
+repository. Both run on the hive engine under `internal/`. The CLI does
+not import the desktop. The desktop imports one CLI package, `cmd/hive/cli`,
+because its executable runs the CLI when invoked as `hive` (ADR hive-desktop-s-executable-runs-the-hive-cli-when-invoked-as-hive). When this document says "CLI", it means `hive dt`: the
 hive CLI's commands for the desktop's operations, built from the same specs
 the desktop mounts (ADR every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it).
 

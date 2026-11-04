@@ -206,9 +206,12 @@ linters:
         desktop-no-cli-deps:
           files:
             - "**/cmd/desktop/**"
+          list-mode: lax
+          allow:
+            - github.com/colonyops/hive/cmd/hive/cli
           deny:
             - pkg: github.com/colonyops/hive/cmd/hive
-              desc: The desktop must not import the CLI program.
+              desc: The desktop imports only the CLI entry package, cmd/hive/cli (ADR hive-desktop-s-executable-runs-the-hive-cli-when-invoked-as-hive).
             - pkg: github.com/colonyops/hive/cmd/drive-server
               desc: The desktop must not import the drive server program.
         drive-server-no-program-deps:

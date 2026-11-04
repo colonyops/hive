@@ -4,9 +4,11 @@
 <dict>
 	<key>Label</key>
 	<string>com.colonyops.hive.daemon</string>
+	<key>Program</key>
+	<string>/opt/hive/bin/hive</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/opt/hive/bin/hive</string>
+		<string>hive</string>
 		<string>daemon</string>
 		<string>run</string>
 		<string>--wait-lock</string>

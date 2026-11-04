@@ -334,8 +334,8 @@ type PathsSettings struct {
 // DaemonSettings configures the experimental hive daemon, which Hive Desktop
 // uses when experimental.daemon is on in the Hive config.
 type DaemonSettings struct {
-	// HivePath is the hive binary that runs the daemon. Empty looks hive up
-	// on the login-shell PATH.
+	// HivePath is the hive binary that runs the daemon. Empty runs the
+	// daemon from the desktop executable.
 	HivePath string `yaml:"hive_path,omitempty" env:"HIVE_DESKTOP_DAEMON_HIVE_PATH"`
 }
 

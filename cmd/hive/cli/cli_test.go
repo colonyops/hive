@@ -5,7 +5,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli/v3"
+
+	"github.com/colonyops/hive/pkg/buildinfo"
 )
+
+func TestBuildStringReportsThePassedInfo(t *testing.T) {
+	got := buildString(buildinfo.Info{Version: "v9.9.9", Commit: "0123456789abcdef", Date: "2026-11-04"})
+	assert.Equal(t, "v9.9.9 (0123456) 2026-11-04", got)
+}
 
 func TestCommandPath(t *testing.T) {
 	root := &cli.Command{Flags: []cli.Flag{
