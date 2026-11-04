@@ -19,16 +19,16 @@ type DriveCmd struct {
 	flags *Flags
 	app   *app.App
 
-	repo       string
-	workspace  string
-	shared     bool
-	all        bool
-	json       bool
-	olderThan  string
-	server     string
-	force      bool
-	tokenStdin bool
-	expires    string
+	repo        string
+	workspace   string
+	shared      bool
+	all         bool
+	json        bool
+	olderThan   string
+	driveServer string
+	force       bool
+	tokenStdin  bool
+	expires     string
 }
 
 // NewDriveCmd creates a new drive command.
