@@ -20,15 +20,16 @@ func (q *Queries) CountDiffReviewComments(ctx context.Context, reviewID string) 
 	return count, err
 }
 
-const deleteDiffReview = `-- name: DeleteDiffReview :one
-DELETE FROM diff_reviews WHERE id = ? RETURNING session_id
+const deleteDiffReview = `-- name: DeleteDiffReview :execrows
+DELETE FROM diff_reviews WHERE id = ?
 `
 
-func (q *Queries) DeleteDiffReview(ctx context.Context, id string) (string, error) {
-	row := q.db.QueryRowContext(ctx, deleteDiffReview, id)
-	var session_id string
-	err := row.Scan(&session_id)
-	return session_id, err
+func (q *Queries) DeleteDiffReview(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteDiffReview, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const deleteDiffReviewByAuthor = `-- name: DeleteDiffReviewByAuthor :execrows
@@ -91,25 +92,6 @@ func (q *Queries) DiffReviewFingerprint(ctx context.Context) (DiffReviewFingerpr
 	row := q.db.QueryRowContext(ctx, diffReviewFingerprint)
 	var i DiffReviewFingerprintRow
 	err := row.Scan(&i.Reviews, &i.Comments, &i.Latest)
-	return i, err
-}
-
-const getDiffReview = `-- name: GetDiffReview :one
-SELECT id, session_id, author, agent, head, summary, created_at FROM diff_reviews WHERE id = ?
-`
-
-func (q *Queries) GetDiffReview(ctx context.Context, id string) (DiffReview, error) {
-	row := q.db.QueryRowContext(ctx, getDiffReview, id)
-	var i DiffReview
-	err := row.Scan(
-		&i.ID,
-		&i.SessionID,
-		&i.Author,
-		&i.Agent,
-		&i.Head,
-		&i.Summary,
-		&i.CreatedAt,
-	)
 	return i, err
 }
 

@@ -171,9 +171,7 @@ func TestClearAndDismiss(t *testing.T) {
 	_, err = svc.Put(ctx, PutInput{SessionID: "s1", Author: "pi", Summary: "fine"})
 	require.NoError(t, err)
 
-	sessionID, err := svc.Dismiss(ctx, first.Comments[0].ID)
-	require.NoError(t, err)
-	assert.Equal(t, "s1", sessionID)
+	require.NoError(t, svc.Dismiss(ctx, first.Comments[0].ID))
 
 	n, err := svc.Clear(ctx, "s1", "claude")
 	require.NoError(t, err)

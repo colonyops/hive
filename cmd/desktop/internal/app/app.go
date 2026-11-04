@@ -569,7 +569,6 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Engine:  func() *hive.Engine { return a.hive },
 		Callers: a.Drive,
 		Chats:   a.Stores.AgentSessions,
-		Events:  a.Events,
 		Logger:  cfg.Logger,
 	})
 	a.Review = newReviewService(ReviewDeps{

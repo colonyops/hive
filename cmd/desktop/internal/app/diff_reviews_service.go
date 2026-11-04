@@ -7,7 +7,6 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
@@ -24,7 +23,6 @@ type DiffReviewsService struct {
 	engine  func() *hive.Engine
 	callers *DriveService
 	chats   canvasSessionResolver
-	events  *events.Bus
 	logger  zerolog.Logger
 }
 
@@ -32,13 +30,12 @@ type DiffReviewsDeps struct {
 	Engine  func() *hive.Engine
 	Callers *DriveService
 	Chats   canvasSessionResolver
-	Events  *events.Bus
 	Logger  zerolog.Logger
 }
 
 func newDiffReviewsService(d DiffReviewsDeps) *DiffReviewsService {
 	return &DiffReviewsService{
-		engine: d.Engine, callers: d.Callers, chats: d.Chats, events: d.Events,
+		engine: d.Engine, callers: d.Callers, chats: d.Chats,
 		logger: logutils.Component(d.Logger, "desktop.diff-reviews"),
 	}
 }
@@ -83,7 +80,6 @@ func (s *DiffReviewsService) Put(ctx context.Context, in reviews.DiffReviewPutIn
 	if err != nil {
 		return review.DiffReview{}, diffReviewError(err, target.Name)
 	}
-	s.updated(ctx, target.ID)
 	return r, nil
 }
 
@@ -114,9 +110,6 @@ func (s *DiffReviewsService) Clear(ctx context.Context, caller, sessionRef, auth
 	if err != nil {
 		return 0, diffReviewError(err, target.Name)
 	}
-	if n > 0 {
-		s.updated(ctx, target.ID)
-	}
 	return n, nil
 }
 
@@ -139,11 +132,9 @@ func (s *DiffReviewsService) Dismiss(ctx context.Context, commentID string) erro
 	if err != nil {
 		return err
 	}
-	sessionID, err := engine.DiffReviews().Dismiss(ctx, commentID)
-	if err != nil {
+	if err := engine.DiffReviews().Dismiss(ctx, commentID); err != nil {
 		return diffReviewError(err, commentID)
 	}
-	s.updated(ctx, sessionID)
 	return nil
 }
 
@@ -153,16 +144,10 @@ func (s *DiffReviewsService) DismissReview(ctx context.Context, reviewID string)
 	if err != nil {
 		return err
 	}
-	sessionID, err := engine.DiffReviews().DismissReview(ctx, reviewID)
-	if err != nil {
+	if err := engine.DiffReviews().DismissReview(ctx, reviewID); err != nil {
 		return diffReviewError(err, reviewID)
 	}
-	s.updated(ctx, sessionID)
 	return nil
-}
-
-func (s *DiffReviewsService) updated(ctx context.Context, sessionID string) {
-	s.events.Publish(ctx, events.DiffReviewsUpdated{SessionID: sessionID})
 }
 
 // target resolves which Code session a call is about. A hive session's agent

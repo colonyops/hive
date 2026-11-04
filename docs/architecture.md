@@ -2713,8 +2713,8 @@ branch comparison against the default base and quoted with `review.ParseDiffRows
 which matches `diffRows` in `lib/diffReview.ts`. Agents write them through the
 `diff_review_*` tools on the drive MCP server (`internal/ops/reviews`, served by
 `app.DiffReviewsService`) or `hive review diff`, which needs no desktop. The
-desktop hears its own writes as `events.DiffReviewsUpdated` and the CLI's through
-the `diff-reviews` hivewatch probe. `stores/useAgentReviews` holds what the Diff
+desktop hears of every write, its own and the CLI's, through the `diff-reviews`
+hivewatch probe, which publishes `events.DiffReviewsUpdated`. `stores/useAgentReviews` holds what the Diff
 view shows. The user only dismisses: Send passes the agent comments still waiting
 to `useChangesReview.send` beside the user's own, and deletes their rows once the
 paste succeeds.

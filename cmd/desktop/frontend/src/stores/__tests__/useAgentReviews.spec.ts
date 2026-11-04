@@ -37,11 +37,11 @@ const review = (id: string, comments: string[]) => ({
   })),
 })
 
-function fire(sessionId: string): void {
+function fire(): void {
   const handler = (mocks.On.mock.calls as unknown as [string, (event: { data: unknown }) => void][]).find(
     ([name]) => name === 'diff-reviews:updated',
   )?.[1]
-  handler?.({ data: sessionId })
+  handler?.({ data: 'changed' })
 }
 
 describe('useAgentReviews', () => {
@@ -51,23 +51,21 @@ describe('useAgentReviews', () => {
     mocks.DismissDiffComment.mockResolvedValue(undefined)
   })
 
-  it('reads a watched session again on its event or on one from another process, and stops when unwatched', async () => {
+  it('reads every watched session again when Go says a review changed, and stops when unwatched', async () => {
     mocks.DiffReviews.mockResolvedValue([review('r1', ['c1'])])
     const store = useAgentReviews()
     const stop = store.watch('s1')
     await flushPromises()
     expect(store.reviews('s1')).toHaveLength(1)
 
-    fire('s2')
-    fire('s1')
-    fire('')
+    fire()
     await flushPromises()
-    expect(mocks.DiffReviews).toHaveBeenCalledTimes(3)
+    expect(mocks.DiffReviews).toHaveBeenCalledTimes(2)
 
     stop()
-    fire('s1')
+    fire()
     await flushPromises()
-    expect(mocks.DiffReviews).toHaveBeenCalledTimes(3)
+    expect(mocks.DiffReviews).toHaveBeenCalledTimes(2)
   })
 
   it('drops a dismissed comment at once, and its review with its last comment', async () => {

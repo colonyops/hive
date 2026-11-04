@@ -44,9 +44,9 @@ type SessionsUpdated struct{ Added, Changed, Removed []string }
 type TasksUpdated struct{}
 
 // DiffReviewsUpdated reports that an agent review of a session's diff was
-// written or dismissed. SessionID is empty when the hive.db probe saw a write
-// from another process and cannot say which session it was for.
-type DiffReviewsUpdated struct{ SessionID string }
+// written or dismissed since the last read, whichever process wrote it. The
+// read is a fingerprint, so there are no ids to carry.
+type DiffReviewsUpdated struct{}
 
 // FlowsUpdated reports that the flow set was reloaded. Reason names what
 // caused it — an external edit, or the app's own save.

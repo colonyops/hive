@@ -30,8 +30,8 @@ DELETE FROM diff_review_comments WHERE id = ?;
 -- name: CountDiffReviewComments :one
 SELECT COUNT(*) FROM diff_review_comments WHERE review_id = ?;
 
--- name: DeleteDiffReview :one
-DELETE FROM diff_reviews WHERE id = ? RETURNING session_id;
+-- name: DeleteDiffReview :execrows
+DELETE FROM diff_reviews WHERE id = ?;
 
 -- name: DeleteDiffReviewsBySession :execrows
 DELETE FROM diff_reviews WHERE session_id = ?;
@@ -42,5 +42,3 @@ SELECT
     (SELECT COUNT(*) FROM diff_review_comments) AS comments,
     CAST((SELECT COALESCE(MAX(created_at), 0) FROM diff_reviews) AS INTEGER) AS latest;
 
--- name: GetDiffReview :one
-SELECT * FROM diff_reviews WHERE id = ?;

@@ -281,12 +281,12 @@ func (s *Service) List(ctx context.Context, sessionID string) ([]review.DiffRevi
 }
 
 // Dismiss removes one comment. The review goes with its last comment.
-func (s *Service) Dismiss(ctx context.Context, commentID string) (sessionID string, err error) {
+func (s *Service) Dismiss(ctx context.Context, commentID string) error {
 	return s.store.DeleteDiffReviewComment(ctx, commentID)
 }
 
 // DismissReview removes one review and its comments.
-func (s *Service) DismissReview(ctx context.Context, reviewID string) (sessionID string, err error) {
+func (s *Service) DismissReview(ctx context.Context, reviewID string) error {
 	return s.store.DeleteDiffReview(ctx, reviewID)
 }
 

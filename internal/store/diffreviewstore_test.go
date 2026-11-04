@@ -80,24 +80,19 @@ func TestDiffReviewStoreDeleteLastCommentDropsReview(t *testing.T) {
 		Comments: []review.DiffReviewComment{lineComment("c1", "a.go", 3, "one"), lineComment("c2", "a.go", 9, "two")},
 	}))
 
-	sessionID, err := store.DeleteDiffReviewComment(ctx, "c1")
-	require.NoError(t, err)
-	assert.Equal(t, "s1", sessionID)
+	require.NoError(t, store.DeleteDiffReviewComment(ctx, "c1"))
 	got, err := store.ListDiffReviews(ctx, "s1")
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Len(t, got[0].Comments, 1)
 
-	_, err = store.DeleteDiffReviewComment(ctx, "c2")
-	require.NoError(t, err)
+	require.NoError(t, store.DeleteDiffReviewComment(ctx, "c2"))
 	got, err = store.ListDiffReviews(ctx, "s1")
 	require.NoError(t, err)
 	assert.Empty(t, got)
 
-	_, err = store.DeleteDiffReviewComment(ctx, "c2")
-	require.ErrorIs(t, err, review.ErrDiffReviewNotFound)
-	_, err = store.DeleteDiffReview(ctx, "r1")
-	assert.ErrorIs(t, err, review.ErrDiffReviewNotFound)
+	require.ErrorIs(t, store.DeleteDiffReviewComment(ctx, "c2"), review.ErrDiffReviewNotFound)
+	assert.ErrorIs(t, store.DeleteDiffReview(ctx, "r1"), review.ErrDiffReviewNotFound)
 }
 
 func TestDiffReviewStoreFollowsTheSession(t *testing.T) {

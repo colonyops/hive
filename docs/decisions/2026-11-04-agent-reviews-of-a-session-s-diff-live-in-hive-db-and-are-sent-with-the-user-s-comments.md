@@ -39,8 +39,9 @@ which no other process can write.
 
 ## Consequences
 
-- The desktop learns of a CLI write through a `hivewatch` probe, so it shows up
-  within the probe interval rather than at once.
+- The desktop learns of every write through a `hivewatch` probe, its own as well
+  as the CLI's, so a new review shows up within the probe interval rather than at
+  once. A dismiss removes the card in the view before the probe sees it.
 - A dismissed or sent comment is gone from `hive.db`; `diff_review_get` shows an
   agent only what is still waiting.
 - An agent comment cannot be edited. A user who wants different wording dismisses

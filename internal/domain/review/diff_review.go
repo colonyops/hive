@@ -73,12 +73,11 @@ type DiffReviewStore interface {
 	ListDiffReviews(ctx context.Context, sessionID string) ([]DiffReview, error)
 
 	// DeleteDiffReviewComment removes one comment, and its review when that was
-	// the review's last comment. It returns the session the comment was on.
-	DeleteDiffReviewComment(ctx context.Context, commentID string) (sessionID string, err error)
+	// the review's last comment.
+	DeleteDiffReviewComment(ctx context.Context, commentID string) error
 
-	// DeleteDiffReview removes one review and its comments. It returns the
-	// session the review was on.
-	DeleteDiffReview(ctx context.Context, reviewID string) (sessionID string, err error)
+	// DeleteDiffReview removes one review and its comments.
+	DeleteDiffReview(ctx context.Context, reviewID string) error
 
 	// DeleteDiffReviewByAuthor removes the session's review by author, if any,
 	// and returns how many it removed.

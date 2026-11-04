@@ -76,9 +76,8 @@ func (s *DiffReviewStore) ListDiffReviews(ctx context.Context, sessionID string)
 	return out, nil
 }
 
-func (s *DiffReviewStore) DeleteDiffReviewComment(ctx context.Context, commentID string) (string, error) {
-	var sessionID string
-	err := s.db.WithinTx(ctx, func(ctx context.Context, tx *db.DB) error {
+func (s *DiffReviewStore) DeleteDiffReviewComment(ctx context.Context, commentID string) error {
+	return s.db.WithinTx(ctx, func(ctx context.Context, tx *db.DB) error {
 		comment, err := tx.GetDiffReviewComment(ctx, commentID)
 		if IsNotFoundError(err) {
 			return review.ErrDiffReviewNotFound
@@ -86,37 +85,31 @@ func (s *DiffReviewStore) DeleteDiffReviewComment(ctx context.Context, commentID
 		if err != nil {
 			return fmt.Errorf("get diff review comment: %w", err)
 		}
-		r, err := tx.GetDiffReview(ctx, comment.ReviewID)
-		if err != nil {
-			return fmt.Errorf("get diff review: %w", err)
-		}
-		sessionID = r.SessionID
 		if _, err := tx.DeleteDiffReviewComment(ctx, commentID); err != nil {
 			return fmt.Errorf("delete diff review comment: %w", err)
 		}
-		left, err := tx.CountDiffReviewComments(ctx, r.ID)
+		left, err := tx.CountDiffReviewComments(ctx, comment.ReviewID)
 		if err != nil {
 			return fmt.Errorf("count diff review comments: %w", err)
 		}
 		if left == 0 {
-			if _, err := tx.DeleteDiffReview(ctx, r.ID); err != nil {
+			if _, err := tx.DeleteDiffReview(ctx, comment.ReviewID); err != nil {
 				return fmt.Errorf("delete emptied diff review: %w", err)
 			}
 		}
 		return nil
 	})
-	return sessionID, err
 }
 
-func (s *DiffReviewStore) DeleteDiffReview(ctx context.Context, reviewID string) (string, error) {
-	sessionID, err := s.db.Ctx(ctx).DeleteDiffReview(ctx, reviewID)
-	if IsNotFoundError(err) {
-		return "", review.ErrDiffReviewNotFound
-	}
+func (s *DiffReviewStore) DeleteDiffReview(ctx context.Context, reviewID string) error {
+	n, err := s.db.Ctx(ctx).DeleteDiffReview(ctx, reviewID)
 	if err != nil {
-		return "", fmt.Errorf("delete diff review: %w", err)
+		return fmt.Errorf("delete diff review: %w", err)
 	}
-	return sessionID, nil
+	if n == 0 {
+		return review.ErrDiffReviewNotFound
+	}
+	return nil
 }
 
 func (s *DiffReviewStore) DeleteDiffReviews(ctx context.Context, sessionID string) (int, error) {

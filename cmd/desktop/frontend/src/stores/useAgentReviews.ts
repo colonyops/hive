@@ -54,11 +54,9 @@ export const useAgentReviews = defineStore('agentReviews', () => {
     }
   }
 
-  // An empty session id is a write another process made, which could be any session's.
-  useWailsEvent('diff-reviews:updated', (event) => {
-    const data: unknown = Array.isArray(event.data) ? event.data[0] : event.data
-    const sessionId = typeof data === 'string' ? data : ''
-    for (const watched of watchers.keys()) if (!sessionId || sessionId === watched) void reload(watched)
+  // The event comes from a fingerprint of every review, so it cannot say whose changed.
+  useWailsEvent('diff-reviews:updated', () => {
+    for (const watched of watchers.keys()) void reload(watched)
   })
 
   function reviews(sessionId: string): readonly DiffReviewWire[] {
