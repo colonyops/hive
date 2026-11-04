@@ -258,6 +258,8 @@ paths:
   tmux: "" # absolute path to tmux; empty discovers it (ADR tmux-discovery)
 daemon:
   hive_path: "" # absolute path to hive for the daemon; empty uses the desktop executable
+hive_cli:
+  install_command: true # install the hive command at ~/.local/bin/hive; absent means not asked yet
 development:
   mocks:
     mode: live # live, feed, pipeline, onboarding, or action-smoke

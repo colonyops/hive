@@ -375,6 +375,14 @@ type OnboardingSettings struct {
 	Completed bool `yaml:"completed,omitempty"`
 }
 
+// HiveCLISettings records the user's choice about the `hive` command Hive
+// Desktop can install at ~/.local/bin/hive.
+type HiveCLISettings struct {
+	// InstallCommand is a pointer so an install that was never asked (nil, an
+	// existing install that upgraded) differs from one that said no.
+	InstallCommand *bool `yaml:"install_command,omitempty"`
+}
+
 // TelemetrySettings configures OTLP export of the app's own signals. It is
 // top-level rather than under development because it is the user's own
 // observability, not a debug facility.
@@ -509,6 +517,7 @@ type Settings struct {
 	Keybindings     map[string][]string     `yaml:"keybindings,omitempty"`
 	Paths           PathsSettings           `yaml:"paths,omitempty"`
 	Daemon          DaemonSettings          `yaml:"daemon,omitempty"`
+	HiveCLI         HiveCLISettings         `yaml:"hive_cli,omitempty"`
 	Editor          EditorSettings          `yaml:"editor,omitempty"`
 	Retention       RetentionSettings       `yaml:"retention,omitempty"`
 	AgentWorkspaces AgentWorkspacesSettings `yaml:"agent_workspaces,omitempty"`
