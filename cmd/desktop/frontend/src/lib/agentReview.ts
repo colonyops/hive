@@ -1,4 +1,5 @@
 import { diffSpan, hasDiffLine, type DiffRow, type DiffSide } from './diffReview'
+import type { ChangesComment } from '../stores/useChangesReview'
 import type {
   DiffReviewCommentWire,
   DiffReviewWire,
@@ -30,11 +31,11 @@ export function agentComments(reviews: readonly DiffReviewWire[]): AgentComment[
 }
 
 /**
- * The order triage walks: the files as the rail lists them, a file's own
+ * The order the walkthrough takes: the files as the rail lists them, a file's own
  * comments before its rows, rows by line. A file the rail does not list goes
  * last, so a comment on it is still reachable.
  */
-export function triageOrder(comments: readonly AgentComment[], files: readonly string[]): AgentComment[] {
+export function walkOrder(comments: readonly AgentComment[], files: readonly string[]): AgentComment[] {
   const rank = new Map(files.map((path, index) => [path, index]))
   const fileRank = (path: string) => rank.get(path) ?? files.length
   return [...comments].sort(
@@ -95,4 +96,24 @@ export function anchorAgentComment(comment: AgentComment, rows: readonly DiffRow
   return hasDiffLine(rows, comment.endLine, comment.endSide)
     ? { comment, side: comment.endSide, line: comment.endLine }
     : null
+}
+
+/**
+ * An agent comment as Send delivers it beside the user's own: in the comparison
+ * the agent wrote it in, with the author and severity leading its text.
+ */
+export function agentFeedback(comment: AgentComment): Omit<ChangesComment, 'id'> {
+  return {
+    ...(comment.kind === 'file' ? { kind: 'file' as const } : {}),
+    path: comment.path,
+    startSide: comment.startSide,
+    startLine: comment.startLine,
+    endSide: comment.endSide,
+    endLine: comment.endLine,
+    quote: comment.quote,
+    base: 'branch',
+    version: '',
+    text: `${comment.author} (${comment.severity}): ${comment.text}`,
+    from: comment.author,
+  }
 }

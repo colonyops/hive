@@ -18,7 +18,7 @@ import (
 
 // DiffReviewsService serves agents' reviews of a Code session's branch diff:
 // agents write them through the drive MCP server, the Diff view reads them,
-// and the user dismisses or adopts each comment. The reviews live in hive.db,
+// and the user dismisses a comment or sends it on to the session's agent. The reviews live in hive.db,
 // so the hive CLI writes them too; the hive.db probe reports those writes.
 type DiffReviewsService struct {
 	engine  func() *hive.Engine
@@ -133,8 +133,7 @@ func (s *DiffReviewsService) List(ctx context.Context, sessionID string) ([]revi
 	return out, nil
 }
 
-// Dismiss removes one agent comment, for a dismissal and for an adoption:
-// once adopted, the comment is the user's own and the agent's copy goes.
+// Dismiss removes one agent comment: the user dismissed it, or Send delivered it.
 func (s *DiffReviewsService) Dismiss(ctx context.Context, commentID string) error {
 	engine, err := s.service()
 	if err != nil {

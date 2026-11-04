@@ -46,13 +46,6 @@ function sentFiles(review: SentReview): string {
   >
     <PanelResizeHandle edge="left" name="changes-review" :start="startResize" :step="step" />
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto">
-      <slot name="agents" />
-      <div
-        v-if="$slots.agents"
-        class="flex h-8 items-center px-2.5 font-mono text-micro tracking-[0.12em] text-text-4 uppercase"
-      >
-        Your comments
-      </div>
       <DiffCommentCard
         v-for="comment in comments"
         :key="comment.id"

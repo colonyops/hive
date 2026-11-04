@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentComments, anchorAgentComment, isAgentCommentStale, triageOrder, type AgentComment } from '../agentReview'
+import { agentComments, anchorAgentComment, isAgentCommentStale, walkOrder, type AgentComment } from '../agentReview'
 import { diffRows } from '../diffReview'
 
 const rows = diffRows('@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n')
@@ -40,7 +40,7 @@ describe('agentReview', () => {
   })
 
   it('orders by the rail, the file comment first, then by line, and an unlisted file last', () => {
-    const order = triageOrder(
+    const order = walkOrder(
       [
         comment({ id: 'late', startLine: 9 }),
         comment({ id: 'unlisted', path: 'z.go' }),

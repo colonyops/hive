@@ -235,6 +235,18 @@ describe('ChangesView', () => {
     again.unmount()
   })
 
+  it('goes back to every file when the file shown alone is picked again', async () => {
+    const wrapper = await mountView()
+    const shown = () => wrapper.findAll('[data-fake]').map((body) => body.attributes('data-fake'))
+    await wrapper.get(testid('changes-row-b.go')).trigger('click')
+    await flushPromises()
+    expect(shown()).toEqual(['fake-b.go'])
+    await wrapper.get(testid('changes-row-b.go')).trigger('click')
+    await flushPromises()
+    expect(shown()).toHaveLength(2)
+    wrapper.unmount()
+  })
+
   it('says why more context could not be shown', async () => {
     mocks.SessionFileContext.mockRejectedValue(new Error('the daemon is too old'))
     const wrapper = await mountView()
@@ -1012,36 +1024,49 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
-  it('comments on a whole file from its header and on all the changes from the toolbar', async () => {
+  it('comments on a whole file from its header, and sends with a note from the send menu', async () => {
     mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
     mocks.SendChanges.mockResolvedValue(undefined)
     const wrapper = await mountView()
-    const write = async (text: string) => {
-      const field = document.querySelector<HTMLTextAreaElement>(testid('changes-comment-text'))!
-      field.value = text
-      field.dispatchEvent(new Event('input'))
-      await flushPromises()
-      document.querySelector<HTMLButtonElement>(testid('changes-comment-save'))!.click()
-      await flushPromises()
-    }
-
     await wrapper.get(testid('changes-file-b.go-comment')).trigger('click')
     expect(document.querySelector(testid('changes-comment-popover'))!.textContent).toContain('b.go Whole file')
-    await write('needs tests')
-    await wrapper.get(testid('changes-review-comment')).trigger('click')
-    expect(document.querySelector(testid('changes-comment-popover'))!.textContent).toContain('Overall')
-    await write('split this up')
-
-    await press('r')
-    const panel = wrapper.get(testid('changes-review')).text()
-    expect(panel.indexOf('split this up')).toBeLessThan(panel.indexOf('needs tests'))
-    expect(wrapper.get(testid('changes-row-b.go-comments')).text()).toBe('1')
-    await wrapper.get(testid('changes-send')).trigger('click')
+    const field = document.querySelector<HTMLTextAreaElement>(testid('changes-comment-text'))!
+    field.value = 'needs tests'
+    field.dispatchEvent(new Event('input'))
     await flushPromises()
-    expect(mocks.SendChanges).toHaveBeenCalledWith('s1', '%1', [
-      expect.objectContaining({ kind: 'review', path: '', text: 'split this up', startLine: 0 }),
-      expect.objectContaining({ kind: 'file', path: 'b.go', text: 'needs tests', startLine: 0 }),
-    ])
+    document.querySelector<HTMLButtonElement>(testid('changes-comment-save'))!.click()
+    await flushPromises()
+    expect(wrapper.get(testid('changes-row-b.go-comments')).text()).toBe('1')
+
+    await wrapper.get(testid('changes-send-menu')).trigger('click')
+    document.querySelector<HTMLElement>(testid('changes-send-with-note'))!.click()
+    await flushPromises()
+    const note = document.querySelector<HTMLTextAreaElement>(testid('changes-send-note-text'))!
+    note.value = 'split this up'
+    note.dispatchEvent(new Event('input'))
+    await flushPromises()
+    document.querySelector<HTMLButtonElement>(testid('changes-send-note-send'))!.click()
+    await flushPromises()
+
+    expect(mocks.SendChanges).toHaveBeenCalledWith(
+      's1',
+      '%1',
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'review', path: '', text: 'split this up', startLine: 0 }),
+        expect.objectContaining({ kind: 'file', path: 'b.go', text: 'needs tests', startLine: 0 }),
+      ]),
+    )
+    expect(useChangesReview().comments('s1')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('does not select a file in the list while the Overview is open', async () => {
+    const wrapper = await mountView()
+    await wrapper.get(testid('changes-row-a.go')).trigger('click')
+    await flushPromises()
+    expect(wrapper.get(testid('changes-row-a.go')).attributes('aria-selected')).toBe('true')
+    await wrapper.get(testid('changes-overview-row')).trigger('click')
+    expect(wrapper.get(testid('changes-row-a.go')).attributes('aria-selected')).not.toBe('true')
     wrapper.unmount()
   })
 
@@ -1233,39 +1258,47 @@ describe('ChangesView', () => {
       localStorage.setItem('hive.git.base', JSON.stringify('staged'))
       const wrapper = await mountView()
       expect(annotationIds()).not.toContain('c1')
-      await press('r')
-      expect(wrapper.find(testid('agent-reviews-hidden')).exists()).toBe(true)
-      expect(wrapper.find(testid('agent-reviews-triage')).exists()).toBe(false)
+      await wrapper.get(testid('changes-overview-row')).trigger('click')
+      expect(wrapper.find(testid('changes-overview-hidden')).exists()).toBe(true)
+      expect(wrapper.find(testid('changes-overview-walk')).exists()).toBe(false)
       wrapper.unmount()
     })
 
-    it("walks the comments in file order, adopts one as the user's own, and stops after the last", async () => {
+    it('walks the comments in file order, dismisses one, and stops after the last', async () => {
       mocks.DiffReviews.mockResolvedValue([agentReview([{ path: 'b.go', quote: '+new b.go' }, {}])])
       const wrapper = await mountView()
       mocks.scrollTo.mockClear()
 
-      await press('t')
-      expect(wrapper.get(testid('changes-triage-position')).text()).toBe('1 / 2')
-      expect(wrapper.get(testid('changes-triage')).text()).toContain('a.go')
+      await press('w')
+      expect(wrapper.get(testid('changes-walk-position')).text()).toBe('Comment 1 of 2')
+      expect(wrapper.get(testid('changes-walk')).text()).toContain('a.go')
       expect(mocks.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ type: 'line', id: 'a.go', lineNumber: 1 }))
 
-      await press('a')
+      await press('d')
       expect(mocks.DismissDiffComment).toHaveBeenCalledWith('c2')
-      const adopted = useChangesReview().comments('s1')
-      expect(adopted).toHaveLength(1)
-      expect(adopted[0]).toMatchObject({
-        path: 'a.go',
-        text: 'comment 2',
-        from: 'claude',
-        base: 'branch',
-        quote: '+new a.go',
-      })
-      expect(wrapper.get(testid('changes-triage-position')).text()).toBe('1 / 1')
+      expect(useChangesReview().comments('s1')).toHaveLength(0)
+      expect(wrapper.get(testid('changes-walk-position')).text()).toBe('Comment 1 of 1')
 
       await press('d')
       expect(mocks.DismissDiffComment).toHaveBeenCalledWith('c1')
-      expect(useChangesReview().comments('s1')).toHaveLength(1)
-      expect(wrapper.find(testid('changes-triage')).exists()).toBe(false)
+      expect(wrapper.find(testid('changes-walk')).exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it("sends the agent comments left with the user's own, then clears them", async () => {
+      mocks.DiffReviews.mockResolvedValue([agentReview([{}])])
+      mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
+      mocks.SendChanges.mockResolvedValue(undefined)
+      const wrapper = await mountView()
+      expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
+
+      await wrapper.get(testid('changes-send')).trigger('click')
+      await flushPromises()
+      expect(mocks.SendChanges).toHaveBeenCalledWith('s1', '%1', [
+        expect.objectContaining({ path: 'a.go', endLine: 1, text: 'claude (issue): comment 1', quote: '+new a.go' }),
+      ])
+      expect(mocks.DismissDiffComment).toHaveBeenCalledWith('c1')
+      expect(wrapper.find(testid('changes-send')).exists()).toBe(false)
       wrapper.unmount()
     })
 
@@ -1274,20 +1307,32 @@ describe('ChangesView', () => {
         agentReview([{ quote: '+something else' }, { path: 'b.go', quote: '+new b.go' }]),
       ])
       const wrapper = await mountView()
-      await press('r')
+      await wrapper.get(testid('changes-overview-row')).trigger('click')
       expect(wrapper.get(testid('agent-row-c1')).html()).toContain('Lines changed')
       expect(wrapper.get(testid('agent-row-c2')).html()).not.toContain('Lines changed')
       wrapper.unmount()
     })
 
-    it('dismisses a whole review from the panel', async () => {
+    it('shows each review on the Overview, dismisses one whole, and jumps to a comment from it', async () => {
       mocks.DiffReviews.mockResolvedValue([agentReview([{}])])
       const wrapper = await mountView()
-      await press('r')
+      await wrapper.get(testid('changes-overview-row')).trigger('click')
+      expect(wrapper.get(testid('agent-review-r1')).text()).toContain('One bug.')
+
+      mocks.scrollTo.mockClear()
+      await wrapper.get(testid('agent-row-c1')).trigger('click')
+      await flushPromises()
+      expect(wrapper.find(testid('changes-overview')).exists()).toBe(false)
+      expect(mocks.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ type: 'line', id: 'a.go', lineNumber: 1 }))
+      expect(wrapper.get(testid('changes-walk-position')).text()).toBe('Comment 1 of 1')
+
+      await press('Escape')
+      await wrapper.get(testid('changes-overview-row')).trigger('click')
       await wrapper.get(testid('agent-review-r1-dismiss-all')).trigger('click')
       await flushPromises()
       expect(mocks.DismissDiffReview).toHaveBeenCalledWith('s1', 'r1')
-      expect(wrapper.find(testid('agent-reviews')).exists()).toBe(false)
+      expect(wrapper.find(testid('agent-review-r1')).exists()).toBe(false)
+      expect(wrapper.find(testid('changes-overview-empty')).exists()).toBe(true)
       wrapper.unmount()
     })
   })

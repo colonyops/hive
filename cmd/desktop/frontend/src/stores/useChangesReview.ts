@@ -95,12 +95,18 @@ export const useChangesReview = defineStore('changesReview', () => {
   /**
    * Delivers the review and clears what it delivered. A failed delivery keeps every
    * comment, and a comment added or edited during the delivery stays to send next.
+   * extra goes out with the review but is not held here: the agents' comments,
+   * which their own store clears.
    * Returns why it failed, or null.
    */
-  async function send(sessionId: string, pane: string): Promise<string | null> {
+  async function send(
+    sessionId: string,
+    pane: string,
+    extra: readonly Omit<ChangesComment, 'id'>[] = [],
+  ): Promise<string | null> {
     const delivered = [...comments(sessionId)]
     try {
-      await SendChanges(sessionId, pane, delivered)
+      await SendChanges(sessionId, pane, [...delivered, ...extra.map((comment) => ({ ...comment, id: '' }))])
     } catch (err) {
       return errorText(err, 'Could not send the feedback.')
     }

@@ -65,7 +65,7 @@ export const useAgentReviews = defineStore('agentReviews', () => {
     return bySession.value[sessionId] ?? []
   }
 
-  // The row leaves at once: triage moves on without waiting for Go. A failed
+  // The row leaves at once: the walkthrough moves on without waiting for Go. A failed
   // call reads the session again, which puts it back.
   function drop(sessionId: string, keep: (review: DiffReviewWire) => DiffReviewWire | null): void {
     bySession.value = set(

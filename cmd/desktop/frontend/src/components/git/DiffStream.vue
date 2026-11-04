@@ -55,10 +55,9 @@ const props = defineProps<{
   /** Agents' comments by path, each on the row it is drawn under. */
   agentComments?: ReadonlyMap<string, readonly AnchoredAgentComment[]>
   isAgentStale?: (comment: AgentComment) => boolean
-  /** The agent comment triage is on, the one being edited, and whether the cards show triage keys. */
+  /** The agent comment the walkthrough is on, and whether the cards name its keys. */
   focusedAgent?: string | null
-  editingAgent?: string | null
-  triageKeys?: boolean
+  walkKeys?: boolean
 }>()
 const emit = defineEmits<{
   'update:current': [path: string]
@@ -71,10 +70,7 @@ const emit = defineEmits<{
   'update-comment': [comment: ChangesComment, text: string]
   'remove-comment': [comment: ChangesComment]
   'pick-comment': [comment: ChangesComment]
-  'adopt-agent': [comment: AgentComment, text?: string]
   'dismiss-agent': [comment: AgentComment]
-  'edit-agent': [comment: AgentComment]
-  'cancel-agent': []
   'pick-agent': [comment: AgentComment]
   synced: []
 }>()
@@ -100,6 +96,8 @@ const EXPANSION_LINES = 20
 // A saved comment's row, found by id across CodeView remounting it.
 interface CommentAnnotation {
   commentId: string
+  /** An agent's comment, which sits on a band of its own so it stands out while scrolling. */
+  agent?: boolean
 }
 
 const root = ref<HTMLElement | null>(null)
@@ -161,11 +159,11 @@ const agentById = computed(
     ),
 )
 
-function commentHost(id: string): HTMLElement {
+function commentHost(id: string, agent = false): HTMLElement {
   let host = commentHosts.get(id)
   if (!host) {
     host = document.createElement('div')
-    host.className = 'p-2'
+    host.className = agent ? 'agent-band border-y border-border bg-pane px-3 py-2' : 'p-2'
     commentHosts.set(id, host)
     mountedComments.value = new Set([...mountedComments.value, id])
   }
@@ -225,6 +223,8 @@ function queuePaint(): void {
 
 const { scales } = useSurfaceScale()
 const metrics = computed(() => diffMetrics(scales.code.value, scales.interface.value))
+// Comments follow the code scale, as the rows around them do, so + and - size both.
+const commentZoom = computed(() => ({ zoom: metrics.value.fontPx / 13 }))
 const rowStyle = computed(() => ({
   '--diffs-font-size': `${metrics.value.fontPx}px`,
   '--diffs-line-height': `${metrics.value.rowPx}px`,
@@ -290,7 +290,8 @@ function viewerOptions(): CodeViewOptions<CommentAnnotation, undefined> {
     onGutterUtilityClick: () => {},
     onLineSelectionEnd,
     renderCustomHeader: (_fileDiff: unknown, context: ItemContext) => headerHost(context.item.id),
-    renderAnnotation: (annotation: LineAnnotation<CommentAnnotation>) => commentHost(annotation.metadata.commentId),
+    renderAnnotation: (annotation: LineAnnotation<CommentAnnotation>) =>
+      commentHost(annotation.metadata.commentId, annotation.metadata.agent),
     onPostRender: (_node: unknown, _instance: unknown, phase: PostRenderPhase, context: ItemContext) => {
       if (phase === 'unmount') setHeaderMounted(context.item.id, false)
       queuePaint()
@@ -335,7 +336,7 @@ function itemFor(file: ChangedFile): CodeViewDiffItem<CommentAnnotation> {
       ...(agents ?? []).map((anchored) => ({
         side: anchored.side,
         lineNumber: anchored.line,
-        metadata: { commentId: anchored.comment.id },
+        metadata: { commentId: anchored.comment.id, agent: true },
       })),
     ],
     collapsed: !open || fileDiff.hunks.length === 0,
@@ -525,27 +526,25 @@ watch(
       />
     </Teleport>
     <Teleport v-for="id in mountedComments" :key="id" :to="commentHosts.get(id)">
-      <DiffCommentCard
-        v-if="commentById.get(id)"
-        :comment="commentById.get(id)!"
-        :outdated="isOutdated(commentById.get(id)!)"
-        @update="emit('update-comment', commentById.get(id)!, $event)"
-        @remove="emit('remove-comment', commentById.get(id)!)"
-        @pick="emit('pick-comment', commentById.get(id)!)"
-      />
-      <AgentCommentCard
-        v-else-if="agentById.get(id)"
-        :comment="agentById.get(id)!"
-        :stale="isAgentStale?.(agentById.get(id)!)"
-        :focused="focusedAgent === id"
-        :editing="editingAgent === id"
-        :keys="triageKeys && focusedAgent === id"
-        @adopt="(text?: string) => emit('adopt-agent', agentById.get(id)!, text)"
-        @dismiss="emit('dismiss-agent', agentById.get(id)!)"
-        @edit="emit('edit-agent', agentById.get(id)!)"
-        @cancel="emit('cancel-agent')"
-        @pick="emit('pick-agent', agentById.get(id)!)"
-      />
+      <div :style="commentZoom">
+        <DiffCommentCard
+          v-if="commentById.get(id)"
+          :comment="commentById.get(id)!"
+          :outdated="isOutdated(commentById.get(id)!)"
+          @update="emit('update-comment', commentById.get(id)!, $event)"
+          @remove="emit('remove-comment', commentById.get(id)!)"
+          @pick="emit('pick-comment', commentById.get(id)!)"
+        />
+        <AgentCommentCard
+          v-else-if="agentById.get(id)"
+          :comment="agentById.get(id)!"
+          :stale="isAgentStale?.(agentById.get(id)!)"
+          :focused="focusedAgent === id"
+          :keys="walkKeys && focusedAgent === id"
+          @dismiss="emit('dismiss-agent', agentById.get(id)!)"
+          @pick="emit('pick-agent', agentById.get(id)!)"
+        />
+      </div>
     </Teleport>
   </div>
 </template>

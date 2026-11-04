@@ -3,11 +3,6 @@ import { computed } from 'vue'
 
 const props = defineProps<{ severity: string; count?: number }>()
 
-const STYLES: Record<string, string> = {
-  issue: 'bg-severity-error-tint text-severity-error',
-  suggestion: 'bg-severity-info-tint text-severity-info',
-  note: 'bg-chip text-text-2',
-}
 const PLURALS: Record<string, string> = { issue: 'issues', suggestion: 'suggestions', note: 'notes' }
 const text = computed(() =>
   props.count === undefined
@@ -17,9 +12,5 @@ const text = computed(() =>
 </script>
 
 <template>
-  <span
-    class="shrink-0 rounded-sm px-1 py-px font-mono text-micro font-semibold tracking-wide uppercase"
-    :class="STYLES[severity] ?? STYLES.note"
-    >{{ text }}</span
-  >
+  <span class="shrink-0 text-caption text-text-3">{{ text }}</span>
 </template>

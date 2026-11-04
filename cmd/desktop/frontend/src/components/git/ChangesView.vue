@@ -9,35 +9,37 @@ import IconChevronsUpDown from '~icons/lucide/chevrons-up-down'
 import IconColumns2 from '~icons/lucide/columns-2'
 import IconEye from '~icons/lucide/eye'
 import IconEyeOff from '~icons/lucide/eye-off'
-import IconFile from '~icons/lucide/file'
-import IconFiles from '~icons/lucide/files'
 import IconMessageSquare from '~icons/lucide/message-square'
-import IconMessageSquareText from '~icons/lucide/message-square-text'
 import IconSearch from '~icons/lucide/search'
+import IconChevronDown from '~icons/lucide/chevron-down'
+import IconMessageSquareQuote from '~icons/lucide/message-square-quote'
 import IconSend from '~icons/lucide/send'
 import IconGitBranch from '~icons/lucide/git-branch'
+import IconGitPullRequest from '~icons/lucide/git-pull-request'
 import IconList from '~icons/lucide/list'
 import IconListTree from '~icons/lucide/list-tree'
 import IconPanelLeft from '~icons/lucide/panel-left'
 import IconRows2 from '~icons/lucide/rows-2'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
+import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import type { MenuEntry } from '@hive/ui/types/menu'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
-import Kbd from '@hive/ui/components/ui/Kbd.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
-import AgentReviewsSection from './AgentReviewsSection.vue'
 import ChangesLoading from './ChangesLoading.vue'
+import ChangesOverview from './ChangesOverview.vue'
 import ChangesReviewPanel from './ChangesReviewPanel.vue'
 import ChangesTargetPicker from './ChangesTargetPicker.vue'
-import ChangesTriageBar from './ChangesTriageBar.vue'
+import ChangesWalkBar from './ChangesWalkBar.vue'
 import DiffSearchBar from './DiffSearchBar.vue'
 import DiffStream from './DiffStream.vue'
 import GitTree from './GitTree.vue'
 import DriveCommentPopover from '../drive/DriveCommentPopover.vue'
 import SendToAgentDialog from '../drive/SendToAgentDialog.vue'
+import SendNoteDialog from './SendNoteDialog.vue'
 import { entryRows, useDiffSearch } from '../../composables/useDiffSearch'
 import { useCopyReview } from '../../composables/useCopyReview'
 import { formatCombo } from '../../composables/useKeybindings'
@@ -48,11 +50,13 @@ import {
   agentComments,
   anchorAgentComment,
   isAgentCommentStale,
-  triageOrder,
+  agentFeedback,
+  walkOrder,
   type AgentComment,
   type AnchoredAgentComment,
 } from '../../lib/agentReview'
 import { errorText } from '../../lib/appError'
+import { createLogger } from '../../lib/log'
 import { readOrder, type DiffMode } from '../../lib/diffItems'
 import { branchName } from '../../lib/diffTarget'
 import { commentLabel, diffSpan, hasDiffLine, type DiffSearchMatch, type DiffSpan } from '../../lib/diffReview'
@@ -153,6 +157,7 @@ function stepCommit(delta: 1 | -1): void {
 }
 
 const toasts = useToasts()
+const log = createLogger('changes')
 const viewedStore = useChangesViewed()
 const isViewed = (file: ChangedFile) => viewedStore.isViewed(props.sessionId, file.path, fileVersion(file))
 const viewedPaths = computed(() => new Set(files.value.filter(isViewed).map((file) => file.path)))
@@ -224,12 +229,18 @@ watch(sessionId, () => {
 })
 
 function jumpTo(path: string): void {
+  overviewOpen.value = false
   pendingReveal.value = null
   current.value = path
   stream.value?.scrollToFile(path)
 }
 
+// A second pick of the file shown alone goes back to every file.
 function pickFile(path: string): void {
+  if (isolate.value && current.value === path && !overviewOpen.value) {
+    toggleIsolate()
+    return
+  }
   isolate.value = true
   jumpTo(path)
 }
@@ -272,6 +283,9 @@ function closeSearch(): void {
 }
 
 const review = useChangesReview()
+// The Overview takes the diff's place, as a pull request's page sits above its files.
+const overviewOpen = ref(false)
+watch(sessionId, () => (overviewOpen.value = false))
 const copyReview = useCopyReview()
 const comments = computed(() => review.comments(props.sessionId))
 // Comments already sit under their lines, so the panel waits to be asked for.
@@ -280,9 +294,11 @@ const filesOpen = useStorage('hive.panel.changes.files.open', true)
 const hideViewed = useStorage('hive.git.hideViewed', false)
 const railFiles = computed(() => (hideViewed.value ? files.value.filter((file) => !isViewed(file)) : files.value))
 const tree = ref<{ anyFolderOpen: boolean; setAllFolders: (open: boolean) => void } | null>(null)
-const canSend = computed(() => comments.value.length > 0)
+// Send carries the user's comments and every agent comment they did not dismiss.
+const sendCount = computed(() => comments.value.length + pendingAgent.value.length)
+const canSend = computed(() => sendCount.value > 0)
 const sendLabel = computed(() =>
-  comments.value.length === 1 ? 'Send 1 comment to the agent' : `Send ${comments.value.length} comments to the agent`,
+  sendCount.value === 1 ? 'Send 1 comment to the agent' : `Send ${sendCount.value} comments to the agent`,
 )
 
 // Only comments whose line is in the diff on screen get a row. The rest stay in
@@ -368,26 +384,6 @@ function startFileComment(file: ChangedFile, rect: CommentDraft['rect']): void {
   }
 }
 
-const reviewButton = ref<{ $el: HTMLElement } | null>(null)
-
-function startReviewComment(): void {
-  const rect = reviewButton.value?.$el.getBoundingClientRect() ?? {
-    top: 80,
-    left: window.innerWidth / 2,
-    width: 0,
-    height: 0,
-  }
-  draft.value = {
-    kind: 'review',
-    sessionId: props.sessionId,
-    comparison: currentComparison(undefined),
-    path: '',
-    span: { ...NO_LINES, quote: '' },
-    rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
-    text: '',
-  }
-}
-
 const draftRange = computed(() => {
   const held = draft.value
   if (!held) return null
@@ -431,7 +427,11 @@ function saveDraft(text: string): void {
 }
 
 function pickComment(comment: ChangesComment): void {
-  if (comment.kind === 'review') return
+  if (comment.kind === 'review') {
+    overviewOpen.value = true
+    return
+  }
+  overviewOpen.value = false
   if (!inShownComparison(comment)) {
     base.value = comment.base
     if (comment.base === 'branch') against.value = comment.against ?? ''
@@ -483,7 +483,7 @@ watch(sessionId, (id, _previous, onCleanup) => onCleanup(agentStore.watch(id)), 
 const agentReviews = computed<readonly DiffReviewWire[]>(() => agentStore.reviews(props.sessionId))
 const inAgentComparison = computed(() => shownBase.value === 'branch' && !changes.value?.against)
 const pendingAgent = computed(() =>
-  triageOrder(
+  walkOrder(
     agentComments(agentReviews.value),
     files.value.map((file) => file.path),
   ),
@@ -503,18 +503,17 @@ function isAgentStale(comment: AgentComment): boolean {
   return inAgentComparison.value && !!entry && isAgentCommentStale(comment, entryRows(entry))
 }
 
-const triageId = ref<string | null>(null)
-const editingAgent = ref<string | null>(null)
-const triaging = computed(() => triageId.value !== null)
-const triageIndex = computed(() => pendingAgent.value.findIndex((comment) => comment.id === triageId.value))
-const triageComment = computed(() => pendingAgent.value[triageIndex.value] ?? null)
+const walkId = ref<string | null>(null)
+const walking = computed(() => walkId.value !== null)
+const walkIndex = computed(() => pendingAgent.value.findIndex((comment) => comment.id === walkId.value))
+const walkComment = computed(() => pendingAgent.value[walkIndex.value] ?? null)
 // The comment a jump is waiting to scroll to, until its file's diff is read.
 const pendingAgentReveal = shallowRef<AgentComment | null>(null)
 
-watch(sessionId, () => stopTriage())
-// Another process can dismiss the comment triage is on; triage then ends rather than jump.
-watch(triageComment, (comment) => {
-  if (triageId.value && !comment) stopTriage()
+watch(sessionId, () => stopWalk())
+// Another process can dismiss the comment the walkthrough is on; it then ends rather than jump.
+watch(walkComment, (comment) => {
+  if (walkId.value && !comment) stopWalk()
 })
 
 function showAgentComparison(): void {
@@ -525,8 +524,8 @@ function showAgentComparison(): void {
 }
 
 function focusAgent(comment: AgentComment): void {
-  triageId.value = comment.id
-  editingAgent.value = null
+  overviewOpen.value = false
+  walkId.value = comment.id
   showAgentComparison()
   pendingAgentReveal.value = comment
 }
@@ -556,55 +555,32 @@ function settleAgentReveal(): void {
 }
 watch([pendingAgentReveal, pending, files, entries, openPaths], settleAgentReveal, { flush: 'post' })
 
-function startTriage(): void {
+function startWalk(): void {
   const first = pendingAgent.value[0]
-  if (!first) return
-  reviewOpen.value = true
-  focusAgent(first)
+  if (first) focusAgent(first)
 }
 
-function stopTriage(): void {
-  triageId.value = null
-  editingAgent.value = null
+function stopWalk(): void {
+  walkId.value = null
   pendingAgentReveal.value = null
 }
 
-function stepTriage(delta: 1 | -1): void {
+function stepWalk(delta: 1 | -1): void {
   const list = pendingAgent.value
   if (!list.length) return
-  const from = triageIndex.value < 0 ? 0 : triageIndex.value
+  const from = walkIndex.value < 0 ? 0 : walkIndex.value
   focusAgent(list[(from + delta + list.length) % list.length])
 }
 
-// Triage moves to the next comment before the store drops this one, so the
+// The walkthrough moves to the next comment before the store drops this one, so the
 // position holds rather than jumping back to the start.
 function afterRemoving(comment: AgentComment): void {
-  if (triageId.value !== comment.id) return
+  if (walkId.value !== comment.id) return
   const list = pendingAgent.value
   const index = list.findIndex((candidate) => candidate.id === comment.id)
   const next = list[index + 1] ?? list[index - 1]
   if (next && next.id !== comment.id) focusAgent(next)
-  else stopTriage()
-}
-
-async function adoptAgent(comment: AgentComment, text?: string): Promise<void> {
-  const file = files.value.find((candidate) => candidate.path === comment.path)
-  review.add(props.sessionId, {
-    ...(comment.kind === 'file' ? { kind: 'file' as const } : {}),
-    path: comment.path,
-    startSide: comment.startSide,
-    startLine: comment.startLine,
-    endSide: comment.endSide,
-    endLine: comment.endLine,
-    quote: comment.quote,
-    base: 'branch',
-    version: file ? fileVersion(file) : '',
-    text: (text ?? comment.text).trim(),
-    from: comment.author,
-  })
-  afterRemoving(comment)
-  const failure = await agentStore.dismiss(props.sessionId, comment.id)
-  if (failure) toasts.showToast(`Adopted, but the agent's copy stayed: ${failure}`, { severity: 'error' })
+  else stopWalk()
 }
 
 async function dismissAgent(comment: AgentComment): Promise<void> {
@@ -613,46 +589,34 @@ async function dismissAgent(comment: AgentComment): Promise<void> {
   if (failure) toasts.showToast(failure, { severity: 'error' })
 }
 
-async function adoptAllAgent(agentReview: DiffReviewWire): Promise<void> {
-  for (const comment of pendingAgent.value.filter((candidate) => candidate.reviewId === agentReview.id)) {
-    await adoptAgent(comment)
-  }
-}
-
 async function dismissAgentReview(agentReview: DiffReviewWire): Promise<void> {
-  if (triageComment.value?.reviewId === agentReview.id) stopTriage()
+  if (walkComment.value?.reviewId === agentReview.id) stopWalk()
   const failure = await agentStore.dismissReview(props.sessionId, agentReview.id)
   if (failure) toasts.showToast(failure, { severity: 'error' })
 }
 
-// Returns whether the key was triage's. n and p walk the comments while triage
+// Returns whether the key was the walkthrough's. n and p walk the comments while it
 // is on, in place of the hunk keys.
-function triageKey(event: KeyboardEvent): boolean {
-  if (!triaging.value) {
-    if (event.key !== 't' || !pendingAgent.value.length) return false
-    startTriage()
+function walkKey(event: KeyboardEvent): boolean {
+  if (!walking.value) {
+    if (event.key !== 'w' || !pendingAgent.value.length) return false
+    startWalk()
     return true
   }
-  const comment = triageComment.value
+  const comment = walkComment.value
   if (!comment) return false
   switch (event.key) {
-    case 'a':
-      void adoptAgent(comment)
-      return true
-    case 'e':
-      editingAgent.value = comment.id
-      return true
     case 'd':
       void dismissAgent(comment)
       return true
     case 'n':
-      stepTriage(1)
+      stepWalk(1)
       return true
     case 'p':
-      stepTriage(-1)
+      stepWalk(-1)
       return true
     case 'Escape':
-      stopTriage()
+      stopWalk()
       return true
   }
   return false
@@ -668,18 +632,74 @@ function offerCopy(message: string): void {
   toasts.showToast(message, {
     severity: 'error',
     duration: 0,
-    actions: [{ label: 'Copy comments', onClick: () => void copyReview([...comments.value]) }],
+    actions: [
+      {
+        label: 'Copy comments',
+        onClick: () =>
+          void copyReview([
+            ...comments.value,
+            ...pendingAgent.value.map((comment) => ({ ...agentFeedback(comment), id: comment.id })),
+          ]),
+      },
+    ],
   })
 }
 
+// A note leads the review as a comment on all the changes. It is never stored:
+// it exists for this one send.
+function noteComment(note: string): Omit<ChangesComment, 'id'> {
+  return { ...NO_LINES, kind: 'review', path: '', quote: '', base: shownBase.value, version: '', text: note }
+}
+
 async function deliver(target: AgentTarget): Promise<string | null> {
-  const failure = await review.send(props.sessionId, target.pane)
-  if (failure) offerCopy(failure)
-  return failure
+  const agents = [...pendingAgent.value]
+  const note = sendNote.value.trim()
+  const extra = [...(note ? [noteComment(note)] : []), ...agents.map(agentFeedback)]
+  const failure = await review.send(props.sessionId, target.pane, extra)
+  if (failure) {
+    offerCopy(failure)
+    return failure
+  }
+  stopWalk()
+  sendNote.value = ''
+  // The agent has them now, so their rows go, as the user's own comments do.
+  for (const comment of agents) {
+    const dropped = await agentStore.dismiss(props.sessionId, comment.id)
+    if (dropped) log.warn('a sent agent comment stayed in hive.db', { id: comment.id, reason: dropped })
+  }
+  return null
 }
 
 // The view belongs to one session, so its only agent needs no picking. Go refuses
 // one on a prompt, which arrives here as the failure. Only several agents need the dialog.
+const sendNote = ref('')
+const sendMenuOpen = ref(false)
+const noteOpen = ref(false)
+const sendMenu = ref<HTMLElement | null>(null)
+const sendEntries = computed<MenuEntry[]>(() => [
+  { kind: 'action', id: 'send', label: 'Send', icon: IconSend, kbd: SEND_KEY, testid: 'changes-send-now' },
+  {
+    kind: 'action',
+    id: 'note',
+    label: 'Send with a note…',
+    icon: IconMessageSquareQuote,
+    kbd: 'C',
+    testid: 'changes-send-with-note',
+  },
+])
+
+function pickSend(id: string): void {
+  sendMenuOpen.value = false
+  if (id === 'note') noteOpen.value = true
+  else void sendReview()
+}
+
+function sendWithNote(note: string): void {
+  noteOpen.value = false
+  sendNote.value = note
+  void sendReview()
+}
+
 async function sendReview(): Promise<void> {
   if (!canSend.value || sending.value) return
   sending.value = true
@@ -695,6 +715,7 @@ async function sendReview(): Promise<void> {
     offerCopy(errorText(err, 'Could not list the agents in this session.'))
   } finally {
     sending.value = false
+    if (!picking.value) sendNote.value = ''
   }
 }
 
@@ -715,7 +736,12 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
     return
   }
   if (isEditableTarget(event.target) || event.ctrlKey || event.altKey) return
-  if (triageKey(event)) {
+  if (walkKey(event)) {
+    event.preventDefault()
+    return
+  }
+  if (event.key === 'Escape' && overviewOpen.value) {
+    overviewOpen.value = false
     event.preventDefault()
     return
   }
@@ -755,7 +781,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
       if (file) startFileComment(file, { top: 80, left: window.innerWidth / 2, width: 0, height: 0 })
       break
     case 'C':
-      startReviewComment()
+      if (canSend.value) noteOpen.value = true
       break
     case 'b':
       filesOpen.value = !filesOpen.value
@@ -782,33 +808,6 @@ function openInEditor(): void {
     toasts.showToast(errorText(err, 'Could not open the editor.'), { severity: 'error' }),
   )
 }
-
-const TRIAGE_HINTS = [
-  ['a', 'adopt'],
-  ['e', 'edit, then adopt'],
-  ['d', 'dismiss'],
-  ['n p', 'next, previous'],
-  ['esc', 'stop triage'],
-]
-const keyHints = computed(() => {
-  if (triaging.value) return TRIAGE_HINTS
-  return pendingAgent.value.length ? [['t', 'triage agent review'], ...KEY_HINTS] : KEY_HINTS
-})
-
-const KEY_HINTS = [
-  ['j k', 'file'],
-  ['n N', 'hunk'],
-  ['v', 'viewed'],
-  ['o', 'fold'],
-  ['s', 'side by side'],
-  ['f', 'one file or all'],
-  ['/', 'search'],
-  ['[ ]', 'commit'],
-  ['b', 'files'],
-  ['c C', 'comment on file, overall'],
-  ['r', 'comments'],
-  [SEND_KEY, 'send'],
-]
 </script>
 
 <template>
@@ -850,30 +849,12 @@ const KEY_HINTS = [
           @click="mode = mode === 'split' ? 'unified' : 'split'"
         />
         <IconButton
-          :label="isolate ? 'Show every file' : 'Show one file'"
-          :tooltip="`${isolate ? 'Show every file' : 'Show only the picked file'} (f)`"
-          :icon="isolate ? IconFile : IconFiles"
-          size="lg"
-          :aria-pressed="isolate"
-          data-testid="changes-isolate"
-          @click="toggleIsolate"
-        />
-        <IconButton
           label="Search the diffs"
           tooltip="Search the diffs (/)"
           :icon="IconSearch"
           size="lg"
           data-testid="changes-search-open"
           @click="openSearch"
-        />
-        <IconButton
-          ref="reviewButton"
-          label="Comment on all the changes"
-          tooltip="Comment on all the changes (C)"
-          :icon="IconMessageSquareText"
-          size="lg"
-          data-testid="changes-review-comment"
-          @click="startReviewComment"
         />
         <IconButton
           :label="reviewOpen ? 'Hide comments' : 'Show comments'"
@@ -885,28 +866,46 @@ const KEY_HINTS = [
           @click="reviewOpen = !reviewOpen"
         />
         <span
-          v-if="pendingAgent.length"
-          class="-ml-2.5 flex h-3.5 min-w-3.5 -translate-y-2 items-center justify-center self-start rounded-full bg-node-purple px-0.5 font-mono text-micro font-semibold text-app"
-          title="Agent comments to triage"
-          data-testid="changes-agent-count"
-          >{{ pendingAgent.length }}</span
+          v-if="canSend"
+          ref="sendMenu"
+          class="flex h-7 shrink-0 items-center overflow-hidden rounded-lg bg-accent-tint text-accent"
         >
-        <span v-if="canSend" class="relative flex shrink-0">
-          <IconButton
-            :label="sendLabel"
-            :tooltip="`${sendLabel} (${SEND_KEY})`"
-            :icon="IconSend"
-            size="lg"
-            active
-            :busy="sending"
+          <button
+            type="button"
+            class="flex h-full cursor-pointer items-center gap-1.5 pr-2 pl-2 font-mono text-caption font-semibold hover:bg-accent/15 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+            :title="`${sendLabel} (${SEND_KEY})`"
+            :aria-label="sendLabel"
+            :aria-busy="sending || undefined"
+            :disabled="sending"
             data-testid="changes-send"
             @click="sendReview"
-          />
-          <span
-            class="pointer-events-none absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-0.5 font-mono text-micro font-semibold text-accent-contrast"
-            data-testid="changes-send-count"
-            >{{ comments.length }}</span
           >
+            <IconSend class="size-3.5" aria-hidden="true" />
+            <span data-testid="changes-send-count">{{ sendCount }}</span>
+          </button>
+          <span class="h-4 w-px bg-accent/30" aria-hidden="true" />
+          <button
+            type="button"
+            class="flex h-full w-6 cursor-pointer items-center justify-center hover:bg-accent/15 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+            title="More ways to send"
+            aria-label="More ways to send"
+            aria-haspopup="menu"
+            :aria-expanded="sendMenuOpen"
+            data-testid="changes-send-menu"
+            @click="sendMenuOpen = !sendMenuOpen"
+          >
+            <IconChevronDown class="size-3.5 transition-transform" :class="sendMenuOpen ? 'rotate-180' : ''" />
+          </button>
+          <AppMenu
+            v-if="sendMenuOpen"
+            :entries="sendEntries"
+            :anchor="sendMenu"
+            :anchored-width="224"
+            :ignore="[sendMenu]"
+            testid="changes-send-options"
+            @select="pickSend"
+            @close="sendMenuOpen = false"
+          />
         </span>
       </template>
     </ViewHeader>
@@ -957,12 +956,30 @@ const KEY_HINTS = [
             @click="layout = layout === 'tree' ? 'flat' : 'tree'"
           />
         </div>
+        <button
+          type="button"
+          class="flex h-7 shrink-0 cursor-pointer items-center gap-2 border-b border-border px-2.5 text-left text-small"
+          :class="overviewOpen ? 'bg-accent-tint text-text' : 'text-text-2 hover:bg-chip'"
+          :aria-pressed="overviewOpen"
+          data-testid="changes-overview-row"
+          @click="overviewOpen = !overviewOpen"
+        >
+          <IconGitPullRequest class="size-3.5 shrink-0 text-text-3" aria-hidden="true" />
+          <span class="min-w-0 flex-1 truncate">Overview</span>
+          <span
+            v-if="pendingAgent.length"
+            class="shrink-0 rounded-full bg-chip px-1.5 font-mono text-micro text-text-2"
+            title="Agent comments waiting"
+            data-testid="changes-agent-count"
+            >{{ pendingAgent.length }}</span
+          >
+        </button>
         <div class="hive-scroll min-h-0 flex-1 overflow-y-auto">
           <GitTree
             ref="tree"
             :files="railFiles"
             :layout="layout"
-            :selected="current"
+            :selected="overviewOpen ? null : current"
             :viewed="viewedPaths"
             :comment-counts="commentCounts"
             @pick="pickFile"
@@ -1016,49 +1033,43 @@ const KEY_HINTS = [
           @pick-comment="pickComment"
           :agent-comments="shownAgentComments"
           :is-agent-stale="isAgentStale"
-          :focused-agent="triageId"
-          :editing-agent="editingAgent"
-          :triage-keys="triaging"
-          @adopt-agent="(comment, text) => void adoptAgent(comment, text)"
+          :focused-agent="walkId"
+          :walk-keys="walking"
           @dismiss-agent="(comment) => void dismissAgent(comment)"
-          @edit-agent="(comment) => (editingAgent = comment.id)"
-          @cancel-agent="editingAgent = null"
           @pick-agent="focusAgent"
         />
+        <ChangesOverview
+          v-if="overviewOpen"
+          class="absolute inset-0 z-30"
+          :reviews="agentReviews"
+          :comments="pendingAgent"
+          :hidden="!inAgentComparison"
+          :is-stale="isAgentStale"
+          :branch="changes?.branch ?? ''"
+          :base="changes?.against ? branchName(changes.against) : (changes?.defaultBranch ?? 'the default branch')"
+          :files="files.length"
+          :additions="additions"
+          :deletions="deletions"
+          @pick="focusAgent"
+          @walk="startWalk"
+          @dismiss-all="(agentReview) => void dismissAgentReview(agentReview)"
+        />
         <div
-          v-if="triageComment && inAgentComparison"
+          v-if="walkComment && inAgentComparison"
           class="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center"
         >
-          <ChangesTriageBar
-            :comment="triageComment"
-            :index="triageIndex"
+          <ChangesWalkBar
+            :comment="walkComment"
+            :index="walkIndex"
             :total="pendingAgent.length"
-            @prev="stepTriage(-1)"
-            @next="stepTriage(1)"
-            @adopt="void adoptAgent(triageComment)"
-            @edit="editingAgent = triageComment.id"
-            @dismiss="void dismissAgent(triageComment)"
-            @stop="stopTriage"
+            @prev="stepWalk(-1)"
+            @next="stepWalk(1)"
+            @dismiss="void dismissAgent(walkComment)"
+            @stop="stopWalk"
           />
         </div>
       </div>
-      <ChangesReviewPanel v-if="reviewOpen" :session-id="sessionId" :is-outdated="isOutdated" @pick="pickComment">
-        <template v-if="agentReviews.length" #agents>
-          <AgentReviewsSection
-            :reviews="agentReviews"
-            :comments="pendingAgent"
-            :focused="triageId"
-            :triaging="triaging"
-            :hidden="!inAgentComparison"
-            :is-stale="isAgentStale"
-            @pick="focusAgent"
-            @triage="startTriage"
-            @stop="stopTriage"
-            @adopt-all="(agentReview) => void adoptAllAgent(agentReview)"
-            @dismiss-all="(agentReview) => void dismissAgentReview(agentReview)"
-          />
-        </template>
-      </ChangesReviewPanel>
+      <ChangesReviewPanel v-if="reviewOpen" :session-id="sessionId" :is-outdated="isOutdated" @pick="pickComment" />
     </div>
 
     <DriveCommentPopover
@@ -1078,16 +1089,14 @@ const KEY_HINTS = [
       :load="loadTargets"
       :deliver="deliver"
       testid="changes"
-      @close="picking = false"
+      @close="((picking = false), (sendNote = ''))"
     />
-
-    <div
-      class="flex shrink-0 flex-wrap items-center gap-x-3.5 gap-y-0.5 border-t border-border px-3 py-1 text-caption text-text-3"
-    >
-      <span v-for="[key, label] in keyHints" :key="key" class="flex items-center gap-1">
-        <Kbd>{{ key }}</Kbd>
-        {{ label }}
-      </span>
-    </div>
+    <SendNoteDialog
+      v-if="noteOpen"
+      :count="sendCount"
+      :send-key="SEND_KEY"
+      @send="sendWithNote"
+      @close="noteOpen = false"
+    />
   </div>
 </template>

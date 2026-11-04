@@ -33,7 +33,7 @@ type DiffReviewCommentIn struct {
 	StartSide string `json:"startSide,omitempty" jsonschema:"additions (default) or deletions: which version startLine counts in. Use deletions for a removed line."`
 	EndSide   string `json:"endSide,omitempty"   jsonschema:"additions or deletions for endLine. Defaults to startSide."`
 	Severity  string `json:"severity,omitempty"  jsonschema:"issue (a bug or a real risk), suggestion (default; a change worth making) or note (context, no change asked)."`
-	Text      string `json:"text"                jsonschema:"The comment, in Markdown. Say what to change and why; the user adopts it as their own feedback to the session's agent."`
+	Text      string `json:"text"                jsonschema:"The comment, in Markdown. Say what to change and why; unless the user dismisses it, it goes to the session's agent with their own comments."`
 }
 
 type DiffReviewPutIn struct {
@@ -49,8 +49,8 @@ var DiffReviewPut = ops.Spec[DiffReviewPutIn]{
 	Name: "diff_review.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
 	Summary: "Review a Code session's branch diff",
 	Guidance: "Store your review of a Code session's changes: the branch against its base, as the Diff view's Branch comparison " +
-		"shows it, which is what a pull request shows. The user reads each comment inline under its lines, then adopts it into " +
-		"their own feedback or dismisses it. A review replaces your earlier one for the session, so send the whole review each " +
+		"shows it, which is what a pull request shows. The user reads each comment inline under its lines and dismisses the ones " +
+		"they disagree with; Send delivers the rest to the session's agent with their own comments. A review replaces your earlier one for the session, so send the whole review each " +
 		"time. Every comment names a file in that diff; a lines comment names rows the diff shows, changed or context, and " +
 		"Hive quotes them for you. Read the diff with git diff $(git merge-base HEAD <base>) in the checkout to get the line " +
 		"numbers right. A refused review lists every comment that needs fixing, and stores nothing. Keep comments actionable, " +
@@ -66,8 +66,8 @@ type DiffReviewGetIn struct {
 var DiffReviewGet = ops.Spec[DiffReviewGetIn]{
 	Name: "diff_review.get", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset,
 	Summary: "Read the reviews of a Code session's diff",
-	Guidance: "List the agent reviews stored for a Code session, each with the comments the user has not adopted or dismissed " +
-		"yet. A comment the user adopted or dismissed is gone, so compare with what you sent to see what they kept. An empty " +
+	Guidance: "List the agent reviews stored for a Code session, each with the comments the user has not dismissed or sent " +
+		"yet. A dismissed or sent comment is gone, so compare with what you wrote to see what is still waiting. An empty " +
 		"list means no review is waiting.",
 }
 

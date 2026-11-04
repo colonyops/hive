@@ -1,10 +1,9 @@
 <script setup lang="ts">
 // One agent's mark, in color or in the monochrome shape the setting asks for.
 // Tabs, tree rows and agent review cards all draw an agent through here.
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import IconSparkles from '~icons/lucide/sparkles'
 import claudeCodeMark from '../assets/agents/claude-code.svg'
-import codexMark from '../assets/agents/codex.svg'
 import piMark from '../assets/agents/pi.svg'
 import AgentIcon from './AgentIcon.vue'
 import type { AgentIconID } from '../lib/agentIcon'
@@ -13,7 +12,13 @@ import { useTerminalAgentIcons } from '../stores/useTerminalAgentIcons'
 /** With no agent, the mark is a generic one: an author Hive does not recognise. */
 const props = defineProps<{ agent?: AgentIconID }>()
 
-const MARKS: Partial<Record<AgentIconID, string>> = { claude: claudeCodeMark, codex: codexMark, pi: piMark }
+const MARKS: Partial<Record<AgentIconID, string>> = { claude: claudeCodeMark, pi: piMark }
+// Codex's vendor mark puts the glyph on a white tile, which reads as a hole in a
+// dark row, so the color mark is the glyph alone with the vendor's gradient.
+const GRADIENT_GLYPHS: Partial<Record<AgentIconID, { stops: [string, string, string] }>> = {
+  codex: { stops: ['#B1A7FF', '#7A9DFF', '#3941FF'] },
+}
+const gradientId = `agent-mark-${useId()}`
 // The full-color marks' shapes, so turning the setting on changes only the color. Pi's
 // shape is already AgentIcon's. Codex's color mark is a glyph on a solid tile, which in
 // one color is a plain square, so this is the glyph alone, cropped to the same size.
@@ -42,6 +47,22 @@ const monochromeMark = computed(() => (monochrome.value && props.agent ? MONOCHR
     data-monochrome
   >
     <path fill-rule="evenodd" clip-rule="evenodd" :d="monochromeMark.path" />
+  </svg>
+  <svg
+    v-else-if="agent && GRADIENT_GLYPHS[agent] && MONOCHROME_MARKS[agent]"
+    :viewBox="MONOCHROME_MARKS[agent]!.viewBox"
+    aria-hidden="true"
+    class="size-3.5 shrink-0"
+    :data-agent-icon="agent"
+  >
+    <defs>
+      <linearGradient :id="gradientId" gradientUnits="objectBoundingBox" x1="0.5" x2="0.5" y1="0" y2="1">
+        <stop :stop-color="GRADIENT_GLYPHS[agent]!.stops[0]" />
+        <stop offset=".5" :stop-color="GRADIENT_GLYPHS[agent]!.stops[1]" />
+        <stop offset="1" :stop-color="GRADIENT_GLYPHS[agent]!.stops[2]" />
+      </linearGradient>
+    </defs>
+    <path fill-rule="evenodd" clip-rule="evenodd" :fill="`url(#${gradientId})`" :d="MONOCHROME_MARKS[agent]!.path" />
   </svg>
   <img
     v-else-if="agent && !monochrome && MARKS[agent]"

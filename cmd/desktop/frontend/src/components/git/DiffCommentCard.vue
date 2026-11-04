@@ -74,7 +74,7 @@ function onKeydown(event: KeyboardEvent): void {
       </button>
       <span
         v-if="comment.from"
-        class="min-w-0 shrink truncate text-micro text-node-purple"
+        class="min-w-0 shrink truncate text-micro text-text-3"
         :title="`Adopted from ${comment.from}'s review`"
         :data-testid="`${testid}-from`"
         >from {{ comment.from }}</span

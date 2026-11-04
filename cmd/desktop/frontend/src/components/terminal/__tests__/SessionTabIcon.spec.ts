@@ -15,10 +15,19 @@ describe('SessionTabIcon', () => {
     await flushPromises()
   })
 
-  it.each(['claude', 'codex', 'pi'] as const)('draws %s in full color by default', (agent) => {
+  it.each(['claude', 'pi'] as const)('draws %s in full color by default', (agent) => {
     const wrapper = mount(SessionTabIcon, { props: { kind: 'window', agent } })
     expect(wrapper.find('img').attributes('data-agent-icon')).toBe(agent)
     expect(wrapper.find('svg').exists()).toBe(false)
+  })
+
+  // The vendor's mark puts the glyph on a white tile; the glyph alone keeps its gradient.
+  it('draws codex as its glyph in the vendor gradient, with no tile', () => {
+    const wrapper = mount(SessionTabIcon, { props: { kind: 'window', agent: 'codex' } })
+    expect(wrapper.find('img').exists()).toBe(false)
+    const svg = wrapper.get('svg[data-agent-icon="codex"]')
+    expect(svg.find('linearGradient').exists()).toBe(true)
+    expect(svg.findAll('path')).toHaveLength(1)
   })
 
   // No image and no fill of its own: currentColor is what makes it match the row.

@@ -531,7 +531,7 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
     expect((await review.boundingBox())!.width).toBe(resized);
   });
 
-  test("shows a picked file alone, reveals unchanged lines, and comments on a file and on all the changes (mock terminal)", async ({
+  test("shows a picked file alone, reveals unchanged lines, and comments on a file and sends with a note (mock terminal)", async ({
     page,
     browserName,
   }) => {
@@ -541,13 +541,13 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
     const stream = page.getByTestId("changes-stream");
 
     await page.getByTestId("changes-row-web/ui/App.vue").click();
-    await expect(page.getByTestId("changes-isolate")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
     await expect(stream).toContainText("<template>");
     await expect(stream).not.toContainText("return err");
     await page.keyboard.press("f");
+    await expect(stream).toContainText("return err");
+    await page.getByTestId("changes-row-web/ui/App.vue").click();
+    await expect(stream).not.toContainText("return err");
+    await page.getByTestId("changes-row-web/ui/App.vue").click();
     await expect(stream).toContainText("return err");
 
     await page
@@ -568,25 +568,22 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
       .getByTestId("changes-comment-text")
       .fill("Add a test for this file.");
     await page.getByTestId("changes-comment-save").click();
+    await expect(page.getByTestId("changes-send-count")).toHaveText("1");
     await page.keyboard.press("Shift+C");
-    await expect(page.getByTestId("changes-comment-popover")).toContainText(
-      "Overall",
-    );
+    await expect(page.getByTestId("changes-send-note")).toBeVisible();
     await page
-      .getByTestId("changes-comment-text")
+      .getByTestId("changes-send-note-text")
       .fill("Split this into two commits.");
-    await page.getByTestId("changes-comment-save").click();
-    await expect(page.getByTestId("changes-send-count")).toHaveText("2");
-
-    await page.getByTestId("changes-send").click();
+    await page.getByTestId("changes-send-note-send").click();
     await expect(page.getByTestId("changes-send")).toBeHidden();
+    // The page sends what the user wrote, then the note; Go puts the note first.
     expect(sent[0][2]).toMatchObject([
-      { kind: "review", path: "", text: "Split this into two commits." },
       {
         kind: "file",
         path: "internal/platform/git/changes.go",
         text: "Add a test for this file.",
       },
+      { kind: "review", path: "", text: "Split this into two commits." },
     ]);
   });
 });

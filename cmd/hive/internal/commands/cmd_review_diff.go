@@ -29,7 +29,8 @@ func (cmd *ReviewCmd) diffCmd() *cli.Command {
 		Usage: "Write and read agent reviews of a session's branch diff",
 		Description: `An agent's review of a hive session's changes: the branch against its base,
 as the Diff view in Hive Desktop shows it. The desktop draws each comment
-inline, and the user adopts it into their own feedback or dismisses it.
+inline. The user dismisses the ones they disagree with and sends the rest to
+the session's agent with their own comments.
 
 put reads the review as JSON from stdin or --file. It replaces the author's
 earlier review of the session. Every comment names a file in the branch diff,
