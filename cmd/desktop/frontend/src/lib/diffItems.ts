@@ -1,4 +1,4 @@
-import { processFile, type FileDiffMetadata, type Hunk } from '@pierre/diffs'
+import { getFiletypeFromFileName, processFile, type FileDiffMetadata, type Hunk } from '@pierre/diffs'
 import type {
   ChangedFile,
   SessionFileDiff,
@@ -75,6 +75,21 @@ export function parseFileDiff(file: ChangedFile, text: string, cacheKey: string)
   parsed.prevName = file.oldPath || undefined
   parsed.type = changeType(file)
   return parsed
+}
+
+// Grammars that switch language partway through a file, as a .vue file does at
+// <script>. Highlighted alone, a hunk starts outside every such block, so the
+// code in it reads as markup.
+const EMBEDDING_LANGUAGES = new Set(['vue', 'svelte', 'astro', 'html', 'angular-html', 'php', 'markdown', 'mdx'])
+
+/** Whether the diff highlights correctly only with both whole files behind it. */
+export function highlightsFromWholeFile(fileDiff: FileDiffMetadata): boolean {
+  return (
+    fileDiff.isPartial &&
+    fileDiff.hunks.length > 0 &&
+    (fileDiff.type === 'change' || fileDiff.type === 'rename-changed') &&
+    EMBEDDING_LANGUAGES.has(getFiletypeFromFileName(fileDiff.name))
+  )
 }
 
 /**
