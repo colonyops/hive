@@ -161,8 +161,8 @@ as a terminal.
 
 With `experimental: { daemon: true }` in the Hive config, Hive Desktop sends
 session reads, writes, and agent status to `hive daemon` instead of its own
-engine, and starts the daemon when none is running. That needs an installed
-`hive` CLI: on the login-shell PATH, or at the absolute path in
+engine, and starts the daemon when none is running. The daemon runs from the Hive Desktop
+executable, or from the hive binary at the absolute path in
 `daemon.hive_path`. Terminal panes still attach to tmux directly. The flag is
 experimental and read at startup, so restart after changing it.
 
@@ -257,7 +257,7 @@ onboarding:
 paths:
   tmux: "" # absolute path to tmux; empty discovers it (ADR tmux-discovery)
 daemon:
-  hive_path: "" # absolute path to hive for the daemon; empty searches PATH
+  hive_path: "" # absolute path to hive for the daemon; empty uses the desktop executable
 development:
   mocks:
     mode: live # live, feed, pipeline, onboarding, or action-smoke

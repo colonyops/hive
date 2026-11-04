@@ -36,6 +36,14 @@ func TestSpawnEnvKeepsAnEmptyConfig(t *testing.T) {
 	assert.Equal(t, []string{"HIVE_CONFIG=", "HIVE_DATA_DIR=/d"}, spawnEnv([]string{"HIVE_CONFIG="}, "/d"))
 }
 
+func TestDaemonCommandRunsTheBinaryAsHive(t *testing.T) {
+	t.Parallel()
+	cmd := daemonCommand("/Applications/Hive.app/Contents/MacOS/hive-desktop", "/d", nil)
+
+	assert.Equal(t, "/Applications/Hive.app/Contents/MacOS/hive-desktop", cmd.Path)
+	assert.Equal(t, []string{"hive", "daemon", "run"}, cmd.Args, "hive-desktop runs the CLI only when argv[0] is hive")
+}
+
 // fakeDaemon writes a binary that exits with code at once, as a daemon does
 // when another one holds the lock. It writes marker first, when marker is set.
 func fakeDaemon(t *testing.T, code int, marker string) string {

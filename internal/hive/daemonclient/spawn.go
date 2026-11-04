@@ -44,13 +44,9 @@ func spawn(ctx context.Context, binary, dataDir string, env []string, readyTimeo
 	}
 	defer func() { _ = out.Close() }()
 
-	// Not exec.CommandContext: the daemon must outlive ctx and the caller.
-	cmd := exec.Command(binary, "daemon", "run") //nolint:noctx // detached on purpose
-	cmd.Env = spawnEnv(env, dataDir)
-	cmd.Dir = dataDir
+	cmd := daemonCommand(binary, dataDir, env)
 	cmd.Stdout = out
 	cmd.Stderr = out
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start %s daemon run: %w", binary, err)
 	}
@@ -88,6 +84,18 @@ func spawn(ctx context.Context, binary, dataDir string, env []string, readyTimeo
 		case <-ticker.C:
 		}
 	}
+}
+
+func daemonCommand(binary, dataDir string, env []string) *exec.Cmd {
+	// Not exec.CommandContext: the daemon must outlive ctx and the caller.
+	cmd := exec.Command(binary, "daemon", "run") //nolint:noctx // detached on purpose
+	// The binary may be hive-desktop, which runs the CLI only when argv[0] is
+	// "hive".
+	cmd.Args[0] = "hive"
+	cmd.Env = spawnEnv(env, dataDir)
+	cmd.Dir = dataDir
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	return cmd
 }
 
 func exitError(err error) error {

@@ -2,7 +2,7 @@
 Description=hive daemon
 
 [Service]
-ExecStart="/opt/hive/bin/hive" daemon run --wait-lock
+ExecStart=@"/opt/hive/bin/hive" hive daemon run --wait-lock
 Environment="HIVE_CONFIG=/home/ada/.config/hive/config & 100%%.yaml"
 Environment="HIVE_DATA_DIR=/home/ada/.local/share/hive"
 WorkingDirectory=/home/ada/.local/share/hive

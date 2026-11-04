@@ -1361,7 +1361,7 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	if a.mock == "" {
 		ports.PaneSource = tmuxClient
 	}
-	hiveRuntime, err := hive.StartRuntime(ctx, hiveCfg, hive.RuntimeOptions{Ports: ports, ScriptsVersion: "desktop"})
+	hiveRuntime, err := hive.StartRuntime(ctx, hiveCfg, hive.RuntimeOptions{Ports: ports, ScriptsVersion: cfg.Build.Version})
 	if err != nil {
 		return hiveStartError(err)
 	}
@@ -1400,18 +1400,19 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	return nil
 }
 
-// startHiveDaemon starts `hive daemon run` the way the user's terminal would:
+// startHiveDaemon starts `hive daemon run` from this executable (which runs
+// the CLI when started as hive) the way the user's terminal would:
 // with the login-shell environment and the Hive config this app resolved, so
 // the daemon and Desktop read the same config.yaml and hive.db.
 func (a *App) startHiveDaemon(dataDir string) func(context.Context) error {
 	return func(ctx context.Context) error {
 		binary := a.settings.Daemon.HivePath
 		if binary == "" {
-			found, err := a.execEnv.LookPath(ctx, "hive")
+			exe, err := os.Executable()
 			if err != nil {
-				return fmt.Errorf("the experimental hive daemon needs the hive CLI on PATH or in daemon.hive_path: %w", err)
+				return fmt.Errorf("find the desktop executable for the hive daemon: %w", err)
 			}
-			binary = found
+			binary = exe
 		}
 		env := a.execEnv.Environ(ctx)
 		if path := a.HiveConfigLocation().Path; path != "" {

@@ -43,6 +43,16 @@ func TestServiceUnits(t *testing.T) {
 	}
 }
 
+func TestServiceUnitsSetArgvZeroToHive(t *testing.T) {
+	t.Parallel()
+	launchd := daemon.LaunchdUnit("/h", "/bin/hive-desktop", "/d", "/c.yaml").Contents
+	assert.Contains(t, launchd, "<key>Program</key>\n\t<string>/bin/hive-desktop</string>")
+	assert.Contains(t, launchd, "<array>\n\t\t<string>hive</string>\n\t\t<string>daemon</string>")
+
+	systemd := daemon.SystemdUnit("/h", "/bin/hive-desktop", "/d", "/c.yaml").Contents
+	assert.Contains(t, systemd, `ExecStart=@"/bin/hive-desktop" hive daemon run --wait-lock`)
+}
+
 func TestSystemdUnitKillsOnlyTheDaemon(t *testing.T) {
 	t.Parallel()
 	unit := daemon.SystemdUnit("/h", "/bin/hive", "/d", "/c.yaml")

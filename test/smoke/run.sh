@@ -64,7 +64,7 @@ tui() {
 }
 
 daemon_pid() {
-  as_root "$1" pgrep -f '^/usr/local/bin/hive daemon run'
+  as_root "$1" pgrep -f '^hive daemon run'
 }
 
 fault() {
@@ -124,7 +124,7 @@ clear_faults() {
   done
   as_root "$server" bash -c '
     rm -f /usr/local/bin/git
-    pkill -CONT -f "^/usr/local/bin/hive daemon run" || true
+    pkill -CONT -f "^hive daemon run" || true
     tc qdisc del dev eth0 root 2>/dev/null || true'
   on "$server" bash -c '[ ! -f ~/.bashrc.fault ] || mv ~/.bashrc.fault ~/.bashrc'
 }

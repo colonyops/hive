@@ -37,9 +37,13 @@ func LaunchdUnit(home, binary, dataDir, configPath string) Unit {
 
 	key("Label")
 	str("\t", LaunchdLabel)
+	// Program and ProgramArguments[0] differ because the binary may be
+	// hive-desktop, which runs the CLI only when argv[0] is "hive".
+	key("Program")
+	str("\t", binary)
 	key("ProgramArguments")
 	b.WriteString("\t<array>\n")
-	for _, arg := range []string{binary, "daemon", "run", "--wait-lock"} {
+	for _, arg := range []string{"hive", "daemon", "run", "--wait-lock"} {
 		str("\t\t", arg)
 	}
 	b.WriteString("\t</array>\n")
@@ -78,7 +82,7 @@ func SystemdUnit(home, binary, dataDir, configPath string) Unit {
 Description=hive daemon
 
 [Service]
-ExecStart=%s daemon run --wait-lock
+ExecStart=@%s hive daemon run --wait-lock
 Environment=%s
 Environment=%s
 WorkingDirectory=%s
