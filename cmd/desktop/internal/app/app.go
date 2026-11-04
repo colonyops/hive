@@ -1374,6 +1374,11 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 			Dialer:    daemonclient.LocalDialer(dataDir),
 			Logger:    a.logger,
 			AutoStart: a.startHiveDaemon(dataDir),
+
+			CheckProtocol: true,
+			ClientVersion: cfg.Build.Version,
+			ReplaceOlder:  true,
+			DataDir:       dataDir,
 		})
 		a.sessions = a.hiveDaemon
 	} else {

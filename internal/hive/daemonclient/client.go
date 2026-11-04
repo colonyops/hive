@@ -76,10 +76,18 @@ type Options struct {
 	FailureDetail func() string
 	// CheckProtocol refuses every call to a daemon whose protocol this
 	// client does not support, with an error that names ClientVersion and
-	// the daemon's version. A remote daemon can be any version; a local one
-	// is the binary that spawned it.
+	// the daemon's version. A remote daemon can be any version, and so can a
+	// local one that outlived an update.
 	CheckProtocol bool
 	ClientVersion string
+	// ReplaceOlder, for a local client with AutoStart and CheckProtocol, stops
+	// a daemon that is an older release than ClientVersion and starts this
+	// client's binary in its place, once per client. A local daemon is not
+	// always the binary that spawned it: it outlives updates. A dev or
+	// unparseable version on either side never triggers it.
+	ReplaceOlder bool
+	// DataDir lets a restart wait for the old daemon's lock. Empty skips that.
+	DataDir string
 }
 
 // baseURL is never resolved: every connection goes through the Dialer.
@@ -149,7 +157,12 @@ func New(opts Options) *Client {
 	}}
 	interceptors := []connect.Interceptor{c.explainFailures()}
 	if opts.CheckProtocol {
-		c.protocol = &protocolGate{client: c, clientVersion: opts.ClientVersion}
+		c.protocol = &protocolGate{
+			client:        c,
+			clientVersion: opts.ClientVersion,
+			replaceOlder:  opts.ReplaceOlder && opts.AutoStart != nil,
+			dataDir:       opts.DataDir,
+		}
 		interceptors = append(interceptors, c.protocol)
 	}
 	// Inside the gate: its Hello has its own limit, so connecting on a slow link

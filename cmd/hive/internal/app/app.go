@@ -166,6 +166,10 @@ func (a *App) DaemonClient(autoStart bool) *daemonclient.Client {
 	}
 	if autoStart {
 		dataDir, configPath := a.Config.DataDir, a.ConfigPath
+		opts.CheckProtocol = true
+		opts.ClientVersion = a.Build.Version
+		opts.ReplaceOlder = true
+		opts.DataDir = dataDir
 		opts.AutoStart = func(ctx context.Context) error {
 			binary, err := os.Executable()
 			if err != nil {
