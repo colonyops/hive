@@ -9,7 +9,6 @@ import {
   type CodeViewOptions,
   type FileDiffLoadedFiles,
   type FileDiffMetadata,
-  hydratePartialDiff,
   type LineAnnotation,
   type PostRenderPhase,
   type SelectedLineRange,
@@ -26,15 +25,7 @@ import { diffThemeName, diffWorkerPool } from '../../lib/diffHighlight'
 import { errorText } from '../../lib/appError'
 import { hunksMatch, wholeFileFromPatch } from '../../lib/diffContext'
 import { gitFileName } from '../../lib/gitTree'
-import {
-  diffMetrics,
-  diffHasText,
-  emptyFileDiff,
-  highlightsFromWholeFile,
-  hunkOffsets,
-  parseFileDiff,
-  type DiffMode,
-} from '../../lib/diffItems'
+import { diffMetrics, diffHasText, emptyFileDiff, hunkOffsets, parseFileDiff, type DiffMode } from '../../lib/diffItems'
 import type { DiffSearchMatch, DiffSide } from '../../lib/diffReview'
 import { clearSearchPaint, paintSearch, SEARCH_HIGHLIGHT_CSS } from '../../lib/diffSearchPaint'
 import { diffTextSelection, type DiffLineSelection } from '../../lib/diffSelection'
@@ -221,9 +212,11 @@ const rowStyle = computed(() => ({
 
 const toasts = useToasts()
 
-// A file that changed since its diff was read fails here rather than mixing two
-// versions; the next poll brings a diff of the new version.
-async function readWholeFile(fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> {
+// CodeView calls this on the first expansion in a file. A file that changed since
+// its diff was read fails here rather than mixing two versions; the next poll
+// brings a diff of the new version. CodeView only logs a failure, so the toast
+// is what tells the user why the click did nothing.
+async function loadDiffFiles(fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> {
   const path = fileDiff.name
   let read: SessionFileDiff
   try {
@@ -233,32 +226,20 @@ async function readWholeFile(fileDiff: FileDiffMetadata): Promise<FileDiffLoaded
   }
   const whole = read.state === 'text' ? wholeFileFromPatch(read.text) : null
   if (!whole || !hunksMatch(fileDiff, whole)) {
-    throw new Error(
+    const reason =
       read.state === 'error'
         ? read.error
         : whole
           ? 'the file changed since its diff was read'
-          : `the file reads as ${read.state}`,
-    )
+          : `the file reads as ${read.state}`
+    log.warn('could not expand the diff context', { path, reason })
+    toasts.showToast(`Could not show more of ${gitFileName(path)}: ${reason}`, { severity: 'error' })
+    throw new Error(`could not read ${path} in full: ${reason}`)
   }
   const key = fileDiff.cacheKey ?? `${props.scope}:${path}`
   return {
     oldFile: { name: fileDiff.prevName ?? path, contents: whole.old, cacheKey: `${key}:old` },
     newFile: { name: path, contents: whole.new, cacheKey: `${key}:new` },
-  }
-}
-
-// CodeView calls this on the first expansion in a file. CodeView only logs a
-// failure, so the toast is what tells the user why the click did nothing.
-async function loadDiffFiles(fileDiff: FileDiffMetadata): Promise<FileDiffLoadedFiles> {
-  const path = fileDiff.name
-  try {
-    return await readWholeFile(fileDiff)
-  } catch (err) {
-    const reason = errorText(err, 'the read failed')
-    log.warn('could not expand the diff context', { path, reason })
-    toasts.showToast(`Could not show more of ${gitFileName(path)}: ${reason}`, { severity: 'error' })
-    throw new Error(`could not read ${path} in full: ${reason}`, { cause: err })
   }
 }
 
@@ -305,43 +286,18 @@ interface BuiltItem {
 }
 const built = new Map<string, BuiltItem>()
 
-// Whole-file diffs for the files highlightsFromWholeFile picks, each for the
-// entry it was read against. Null while the read is in flight.
-const wholeDiffs = new Map<string, { entry: DiffEntry; fileDiff: FileDiffMetadata | null }>()
-
-function readWholeDiff(path: string, entry: DiffEntry, partial: FileDiffMetadata): void {
-  wholeDiffs.set(path, { entry, fileDiff: null })
-  readWholeFile(partial)
-    .then((files) => {
-      // A separator click may have hydrated it already, in place.
-      if (wholeDiffs.get(path)?.entry !== entry || !partial.isPartial) return
-      wholeDiffs.set(path, { entry, fileDiff: hydratePartialDiff('clone', partial, files) })
-      syncItems()
-    })
-    .catch((err: unknown) => {
-      log.debug('highlighting the diff hunk by hunk', { path, reason: errorText(err, 'the read failed') })
-    })
-}
-
 function itemFor(file: ChangedFile): CodeViewDiffItem<CommentAnnotation> {
   const entry = props.entries.get(file.path)
   const open = props.openPaths.has(file.path)
   const comments = props.comments.get(file.path)
   const held = built.get(file.path)
-  const whole = wholeDiffs.get(file.path)
-  const wholeDiff = whole && whole.entry === entry ? whole.fileDiff : null
-  const current = !!held && held.entry === entry && held.open === open && held.comments === comments
-  if (current && (!wholeDiff || held.item.fileDiff === wholeDiff)) return held.item
+  if (held && held.entry === entry && held.open === open && held.comments === comments) return held.item
   const fileDiff =
-    wholeDiff ??
-    (held && held.entry === entry
+    held && held.entry === entry
       ? held.item.fileDiff
       : entry && diffHasText(entry.diff)
         ? parseFileDiff(file, entry.diff.text, `${props.scope}:${file.path}:${entry.version}`)
-        : emptyFileDiff(file))
-  if (open && entry && whole?.entry !== entry && highlightsFromWholeFile(fileDiff)) {
-    readWholeDiff(file.path, entry, fileDiff)
-  }
+        : emptyFileDiff(file)
   const item: CodeViewDiffItem<CommentAnnotation> = {
     id: file.path,
     type: 'diff',
@@ -366,7 +322,6 @@ let pendingJump: string | null = null
 
 function syncItems(): void {
   for (const path of built.keys()) if (!fileByPath.value.has(path)) built.delete(path)
-  for (const path of wholeDiffs.keys()) if (!fileByPath.value.has(path)) wholeDiffs.delete(path)
   shown.value = props.files.filter(
     (file) => built.has(file.path) || !props.openPaths.has(file.path) || props.entries.has(file.path),
   )
