@@ -5,6 +5,7 @@ sql:
       - "internal/store/db/queries/queries.sql"
       - "internal/store/db/queries/queries_hc.sql"
       - "internal/store/db/queries/queries_drive.sql"
+      - "internal/store/db/queries/queries_diffreview.sql"
     schema: "internal/store/db/migrations/*.up.sql"
     gen:
       go:

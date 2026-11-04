@@ -21,6 +21,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/terminal"
+	diffreviewsvc "github.com/colonyops/hive/internal/hive/diffreview"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	"github.com/colonyops/hive/internal/hive/driveremote"
 	"github.com/colonyops/hive/internal/hive/events"
@@ -66,15 +67,16 @@ type Ports struct {
 // services is everything one config decides. It is never mutated after
 // build, so a caller holding one sees a consistent set.
 type services struct {
-	cfg       *config.Config
-	renderer  *tmpl.Renderer
-	git       git.Git
-	sessions  *sessionsvc.Service
-	terminal  *terminal.Manager
-	status    *statussvc.Service
-	messages  *msgsvc.Service
-	todos     *todosvc.Service
-	gitStatus *gitstatus.Service
+	cfg         *config.Config
+	renderer    *tmpl.Renderer
+	git         git.Git
+	sessions    *sessionsvc.Service
+	terminal    *terminal.Manager
+	status      *statussvc.Service
+	messages    *msgsvc.Service
+	todos       *todosvc.Service
+	gitStatus   *gitstatus.Service
+	diffReviews *diffreviewsvc.Service
 }
 
 // Engine is the hive engine. Accessors return the services built from the
@@ -207,6 +209,7 @@ func (e *Engine) build(cfg *config.Config) (*services, error) {
 		todos:     todosvc.NewService(p.Logger, store.NewTodoStore(p.Logger, p.DB), p.Bus, cfg),
 		gitStatus: gitstatus.NewService(p.Logger, gitExec, cfg.Git.StatusWorkers),
 	}
+	set.diffReviews = diffreviewsvc.NewService(p.Logger, store.NewDiffReviewStore(p.DB), set.sessions, set.gitStatus, gitExec)
 	if p.PaneSource != nil {
 		set.terminal = NewTerminalManager(p.Logger, cfg, p.PaneSource)
 		set.status = statussvc.NewService(p.Logger, set.terminal, cfg.Git.StatusWorkers)
@@ -258,6 +261,9 @@ func (e *Engine) DriveRemote() *driveremote.Service { return e.driveRemote }
 func (e *Engine) Todos() *todosvc.Service { return e.load().todos }
 
 func (e *Engine) GitStatus() *gitstatus.Service { return e.load().gitStatus }
+
+// DiffReviews returns agents' reviews of a session's branch diff.
+func (e *Engine) DiffReviews() *diffreviewsvc.Service { return e.load().diffReviews }
 
 // Doctor returns the health checks for the current config. validator checks
 // the program's whole config: a program whose config has sections the engine

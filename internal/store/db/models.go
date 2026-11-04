@@ -10,6 +10,31 @@ import (
 	"github.com/colonyops/hive/internal/domain/hc"
 )
 
+type DiffReview struct {
+	ID        string `json:"id"`
+	SessionID string `json:"session_id"`
+	Author    string `json:"author"`
+	Agent     string `json:"agent"`
+	Head      string `json:"head"`
+	Summary   string `json:"summary"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+type DiffReviewComment struct {
+	ID        string `json:"id"`
+	ReviewID  string `json:"review_id"`
+	Position  int64  `json:"position"`
+	Kind      string `json:"kind"`
+	Path      string `json:"path"`
+	StartSide string `json:"start_side"`
+	StartLine int64  `json:"start_line"`
+	EndSide   string `json:"end_side"`
+	EndLine   int64  `json:"end_line"`
+	Quote     string `json:"quote"`
+	Text      string `json:"text"`
+	Severity  string `json:"severity"`
+}
+
 type DriveUpload struct {
 	ID         string `json:"id"`
 	Server     string `json:"server"`
