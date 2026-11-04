@@ -133,7 +133,6 @@ Examples:
 			},
 			&cli.StringFlag{
 				Name:        "sender",
-				Aliases:     []string{"s"},
 				Usage:       "override sender ID (default: auto-detect from session)",
 				Destination: &cmd.pubSender,
 			},
@@ -251,13 +250,11 @@ Examples:
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:        "new",
-				Aliases:     []string{"n"},
 				Usage:       "generate a new random topic ID (default behavior)",
 				Destination: &cmd.topicNew,
 			},
 			&cli.StringFlag{
 				Name:        "prefix",
-				Aliases:     []string{"p"},
 				Usage:       "topic prefix (overrides config, use empty string for no prefix)",
 				Destination: &cmd.topicPrefix,
 			},

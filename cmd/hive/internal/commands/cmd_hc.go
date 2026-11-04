@@ -157,7 +157,7 @@ Examples:
   echo '{"title":"Auth System","type":"epic","children":[...]}' | hive hc create
   hive hc create --file epic.json`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "type", Aliases: []string{"t"}, Usage: "item type (epic, task)", Value: "task", Destination: &flagType},
+			&cli.StringFlag{Name: "type", Usage: "item type (epic, task)", Value: "task", Destination: &flagType},
 			&cli.StringFlag{Name: "desc", Aliases: []string{"d"}, Usage: "item description", Destination: &flagDesc},
 			&cli.StringFlag{Name: "parent", Aliases: []string{"p"}, Usage: "parent item ID", Destination: &flagParentID},
 			bulk.Flag(),
@@ -245,7 +245,7 @@ Examples:
   hive hc list --json hc-abc123`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "status", Usage: "filter by status (open, in_progress, done, cancelled)", Destination: &flagStatus},
-			&cli.BoolFlag{Name: "all", Aliases: []string{"a"}, Usage: "show all statuses (overrides default open filter)", Destination: &flagAll},
+			&cli.BoolFlag{Name: "all", Usage: "show all statuses (overrides default open filter)", Destination: &flagAll},
 			&cli.BoolFlag{Name: "all-repos", Usage: "list items across all repos, ignoring CWD repo detection", Destination: &flagAllRepos},
 			&cli.StringFlag{Name: "session-id", Usage: "filter by session id (bare or local:<id>)", Destination: &flagSession},
 			&cli.BoolFlag{Name: "json", Usage: "output as JSON lines", Destination: &flagJSON},

@@ -154,7 +154,6 @@ func (cmd *ExperimentalCmd) assessFileCmd() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "tool",
-				Aliases:     []string{"t"},
 				Usage:       "Tool to assess as (claude, codex, ...); unrecognized tools use the generic rule set",
 				Value:       "claude",
 				Destination: &flagTool,

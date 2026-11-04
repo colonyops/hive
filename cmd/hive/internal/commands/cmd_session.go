@@ -118,7 +118,6 @@ Use --json for LLM-friendly output with additional fields like inbox topic and u
 			},
 			&cli.StringSliceFlag{
 				Name:        "tags",
-				Aliases:     []string{"t"},
 				Usage:       "filter sessions by tag (repeatable, all tags must match, case-insensitive)",
 				Destination: &cmd.lsTags,
 			},
@@ -618,7 +617,6 @@ This action cannot be undone. Use 'hive session recycle' to preserve the directo
 			serverFlag(&cmd.server),
 			&cli.BoolFlag{
 				Name:        "force",
-				Aliases:     []string{"f"},
 				Usage:       "delete even if the session has uncommitted or unpushed work",
 				Destination: &cmd.deleteForce,
 			},
@@ -675,7 +673,6 @@ feature branch that was pushed but not merged still counts as unpushed. Use
 			serverFlag(&cmd.server),
 			&cli.BoolFlag{
 				Name:        "force",
-				Aliases:     []string{"f"},
 				Usage:       "recycle even if the session has uncommitted or unpushed work",
 				Destination: &cmd.recycleForce,
 			},

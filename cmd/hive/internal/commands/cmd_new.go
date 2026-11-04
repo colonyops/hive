@@ -64,7 +64,6 @@ func sessionCreateFlags(f *createSessionFlags) []cli.Flag {
 		},
 		&cli.StringSliceFlag{
 			Name:        "tags",
-			Aliases:     []string{"t"},
 			Usage:       "tags to attach to the session (repeatable)",
 			Destination: &f.tags,
 		},
