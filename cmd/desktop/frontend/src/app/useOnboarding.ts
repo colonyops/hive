@@ -2,6 +2,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import type { Router } from 'vue-router'
 import { useFirstRun } from '../composables/useFirstRun'
 import type { useGitHubConnection } from '../composables/useGitHubConnection'
+import { useHiveCLI } from '../composables/useHiveCLI'
 import { useHiveSetup } from '../composables/useHiveSetup'
 import { useNotificationSettings } from '../composables/useNotificationSettings'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
@@ -11,8 +12,9 @@ import { createLogger } from '../lib/log'
 const log = createLogger('onboarding')
 
 /**
- * The first-run walk: hive setup -> connect GitHub -> notifications -> meet the
- * agent. Hive setup goes first because the new-session picker is built from it
+ * The first-run walk: hive setup -> install the hive command -> connect GitHub
+ * -> notifications -> meet the agent. The command step skips itself in a build
+ * that cannot install it. Hive setup goes first because the new-session picker is built from it
  * and abandoning it costs nothing that early. The agent hand-off is last
  * because it needs the agent the Hive step chose and the profile connecting
  * seeded. A profile is not a step: one exists before the app opens
@@ -36,6 +38,11 @@ export function useOnboarding(feed: FeedState, github: ReturnType<typeof useGitH
   const hiveStepActive = computed(
     () => firstRun.completed.value === false && !!hive.setup.value && !hive.unreadable.value && !hiveStepDone.value,
   )
+  const cli = useHiveCLI()
+  // Checked by default: the command keeps the CLI at the app's version, which
+  // is the point of offering it. Unchecking records the refusal.
+  const installCommand = ref(true)
+  const commandStep = ref(false)
   const connectStep = ref(false)
   // The only place onboarding pops the OS prompt; advanceToPermissions skips a
   // permission that is already resolved.
@@ -43,29 +50,39 @@ export function useOnboarding(feed: FeedState, github: ReturnType<typeof useGitH
   const agentStep = ref(false)
   const agentError = ref<string | null>(null)
   const startingAgent = ref(false)
-  const active = computed(() => hiveStepActive.value || connectStep.value || permissionsStep.value || agentStep.value)
+  const active = computed(
+    () => hiveStepActive.value || commandStep.value || connectStep.value || permissionsStep.value || agentStep.value,
+  )
   const loaded = computed(() => hive.loaded.value && firstRun.completed.value !== null)
 
   // Read alongside the profiles: the shell holds its empty frame until they
   // land, and a step that resolved later would flash in behind it.
   onMounted(() => {
     void hive.load()
+    void cli.load()
     void firstRun.load()
   })
 
   // Starting before the GitHub status lands would put the connect card up for
   // an account that is connected.
-  const ready = computed(() => firstRun.completed.value !== null && hive.loaded.value && github.status.value !== null)
+  const ready = computed(
+    () => firstRun.completed.value !== null && hive.loaded.value && cli.loaded.value && github.status.value !== null,
+  )
   let started = false
   watch(
     ready,
     (isReady) => {
       if (!isReady || started || firstRun.completed.value !== false) return
       started = true
-      if (!hiveStepActive.value) advanceToConnect()
+      if (!hiveStepActive.value) advanceToCommand()
     },
     { immediate: true },
   )
+
+  function advanceToCommand(): void {
+    commandStep.value = cli.managed.value
+    if (!commandStep.value) advanceToConnect()
+  }
 
   function advanceToConnect(): void {
     connectStep.value = !github.connected.value
@@ -81,6 +98,17 @@ export function useOnboarding(feed: FeedState, github: ReturnType<typeof useGitH
   // picker's empty state points at Settings > Hive CLI afterwards.
   function finishHive(): void {
     hiveStepDone.value = true
+    advanceToCommand()
+  }
+
+  // A failed save keeps the card up with its error: the choice is not
+  // recorded, and the Skip link is the way past it.
+  async function saveCommand(): Promise<void> {
+    if (await cli.setInstall(installCommand.value)) finishCommand()
+  }
+
+  function finishCommand(): void {
+    commandStep.value = false
     advanceToConnect()
   }
 
@@ -129,6 +157,7 @@ export function useOnboarding(feed: FeedState, github: ReturnType<typeof useGitH
 
   const step = computed(() => {
     if (hiveStepActive.value) return 'hive'
+    if (commandStep.value) return 'command'
     if (connectStep.value) return 'connect'
     if (permissionsStep.value) return 'permissions'
     return 'agent'
@@ -137,6 +166,7 @@ export function useOnboarding(feed: FeedState, github: ReturnType<typeof useGitH
   const screen = computed(() => {
     const byStep = {
       hive: { card: 'hive', error: hive.error.value, busy: hive.saving.value },
+      command: { card: 'command', error: cli.error.value, busy: cli.saving.value },
       connect: { card: github.card.value, error: github.error.value, busy: github.busy.value },
       permissions: {
         card: 'permissions',
@@ -151,6 +181,8 @@ export function useOnboarding(feed: FeedState, github: ReturnType<typeof useGitH
       githubConnected: github.connected.value,
       permission: notifications.permission.value,
       hive,
+      cli,
+      installCommand: installCommand.value,
     }
   })
 
@@ -159,6 +191,11 @@ export function useOnboarding(feed: FeedState, github: ReturnType<typeof useGitH
       if (await hive.save()) finishHive()
     },
     finishHive,
+    saveCommand,
+    finishCommand,
+    setInstallCommand: (value: boolean) => {
+      installCommand.value = value
+    },
     startDeviceFlow: github.startDeviceFlow,
     useTokenInstead: github.useTokenInstead,
     backToStart: github.backToStart,

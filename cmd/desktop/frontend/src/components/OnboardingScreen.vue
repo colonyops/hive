@@ -7,18 +7,21 @@ import IconAlertTriangle from '~icons/lucide/alert-triangle'
 import IconBell from '~icons/lucide/bell'
 import IconBot from '~icons/lucide/bot'
 import IconCheck from '~icons/lucide/check'
+import IconTerminal from '~icons/lucide/square-terminal'
 import IconFolderGit2 from '~icons/lucide/folder-git-2'
 import IconGithub from '~icons/lucide/github'
 import HiveSetupForm from './HiveSetupForm.vue'
+import AppCheckbox from '@hive/ui/components/ui/AppCheckbox.vue'
 import type { DeviceFlowInfo } from '../types/github'
 import type { ConnectCard } from '../composables/useGitHubConnection'
 import type { NotificationPermission } from '../composables/useNotificationSettings'
+import type { useHiveCLI } from '../composables/useHiveCLI'
 import type { useHiveSetup } from '../composables/useHiveSetup'
 import { useClipboard } from '@hive/ui/composables/useClipboard'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 
 const props = defineProps<{
-  card: ConnectCard | 'hive' | 'permissions' | 'agent'
+  card: ConnectCard | 'hive' | 'command' | 'permissions' | 'agent'
   deviceFlow: DeviceFlowInfo | null
   error: string | null
   busy: boolean
@@ -27,6 +30,9 @@ const props = defineProps<{
   permission?: NotificationPermission
   // useOnboarding owns the single draft instance that the wizard advances.
   hive?: ReturnType<typeof useHiveSetup>
+  // The command step's status and its checkbox, both owned by useOnboarding.
+  cli?: ReturnType<typeof useHiveCLI>
+  installCommand?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +44,9 @@ const emit = defineEmits<{
   // Leaving the Hive step without a save: confirming a found config, or
   // skipping the form.
   finishHive: []
+  saveCommand: []
+  finishCommand: []
+  setInstallCommand: [value: boolean]
   skipConnect: []
   requestPermission: []
   finishPermissions: []
@@ -62,15 +71,17 @@ watch(
 // connecting seeds it.
 const activeStep = computed(() => {
   if (props.card === 'hive') return 1
-  if (props.card === 'permissions') return 3
-  if (props.card === 'agent') return 4
-  return 2
+  if (props.card === 'command') return 2
+  if (props.card === 'permissions') return 4
+  if (props.card === 'agent') return 5
+  return 3
 })
 const steps = [
   { label: 'Set up your agent and code', step: 1 },
-  { label: 'Connect GitHub', step: 2 },
-  { label: 'Turn on notifications', step: 3 },
-  { label: 'Configure Hive with your agent', step: 4 },
+  { label: 'Install the hive command', step: 2 },
+  { label: 'Connect GitHub', step: 3 },
+  { label: 'Turn on notifications', step: 4 },
+  { label: 'Configure Hive with your agent', step: 5 },
 ]
 
 const isConnectCard = computed(() => props.card === 'idle' || props.card === 'device' || props.card === 'token')
@@ -78,6 +89,7 @@ const isConnectCard = computed(() => props.card === 'idle' || props.card === 'de
 const heading = computed(() => {
   if (confirmingSkip.value) return 'Skip connecting GitHub?'
   if (props.card === 'hive') return props.hive?.usable.value ? 'Using your Hive config' : 'Set up your agent and code'
+  if (props.card === 'command') return 'Install the hive command'
   if (props.card === 'permissions') return 'Turn on notifications'
   if (props.card === 'agent') return 'Configure Hive with your agent'
   return 'Connect to GitHub'
@@ -124,9 +136,11 @@ function submit() {
         {{
           card === 'hive'
             ? 'Point Hive at your agent and your repositories, then connect the account it triages.'
-            : card === 'agent'
-              ? 'Your agent can set up the rest: the profiles and feeds that sort your inbox the way you work.'
-              : 'Connect the account Hive pulls PRs, issues, and notifications from.'
+            : card === 'command'
+              ? 'Run hive from any terminal, at the same version as this app.'
+              : card === 'agent'
+                ? 'Your agent can set up the rest: the profiles and feeds that sort your inbox the way you work.'
+                : 'Connect the account Hive pulls PRs, issues, and notifications from.'
         }}
       </p>
       <ol class="flex flex-col gap-5">
@@ -166,6 +180,7 @@ function submit() {
         >
           <IconAlertTriangle v-if="confirmingSkip" class="size-7.5" />
           <IconFolderGit2 v-else-if="card === 'hive'" class="size-7.5" />
+          <IconTerminal v-else-if="card === 'command'" class="size-7.5" />
           <IconBell v-else-if="card === 'permissions'" class="size-7.5" />
           <IconBot v-else-if="card === 'agent'" class="size-7.5" />
           <IconGithub v-else class="size-7.5" />
@@ -264,7 +279,52 @@ function submit() {
           </template>
         </template>
 
-        <!-- permissions: step 3, the OS notification grant -->
+        <!-- command: the hive symlink. A hive the user installed another way
+             is named and left alone. -->
+        <template v-else-if="card === 'command' && cli">
+          <p class="mb-6 text-body leading-relaxed text-text-3">
+            Hive can add a <span class="font-mono text-text-2">hive</span> command to
+            <span class="font-mono text-text-2">~/.local/bin</span>. It runs the same version as this app and updates
+            with it.
+          </p>
+          <div
+            v-if="cli.otherCopy.value"
+            class="mb-6 rounded-xl border border-strong bg-chip px-4 py-3.5 text-left"
+            data-testid="onboarding-command-other"
+          >
+            <p class="truncate font-mono text-small text-text-3">{{ cli.otherCopy.value.path }}</p>
+            <p class="mt-2 text-small text-text-2">
+              You already have a <span class="font-mono text-text">hive</span>
+              <template v-if="cli.otherCopy.value.version"> (version {{ cli.otherCopy.value.version }})</template>. Hive
+              will not replace it.
+            </p>
+          </div>
+          <div class="mb-6 flex justify-center">
+            <AppCheckbox
+              :model-value="installCommand ?? true"
+              label="Install the hive command"
+              testid="onboarding-command-install"
+              @update:model-value="emit('setInstallCommand', $event)"
+            />
+          </div>
+          <BaseButton
+            class="w-full"
+            :busy="busy"
+            data-testid="onboarding-command-continue"
+            @click="emit('saveCommand')"
+          >
+            {{ busy ? 'Saving…' : 'Continue' }}
+          </BaseButton>
+          <InlineError v-if="error" testid="onboarding-command-error" variant="line" class="mt-4" :message="error" />
+          <p class="mt-4 text-xs leading-relaxed text-text-4">
+            <button class="link-quiet underline" data-testid="onboarding-command-skip" @click="emit('finishCommand')">
+              Skip for now
+            </button>
+            — Settings ▸ Hive CLI has the same switch.
+          </p>
+        </template>
+
+        <!-- permissions: step 4, the OS notification grant -->
         <template v-else-if="card === 'permissions'">
           <template v-if="permission === 'granted'">
             <p class="mb-6 text-body leading-relaxed text-text-3">

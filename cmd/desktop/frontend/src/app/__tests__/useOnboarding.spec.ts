@@ -7,6 +7,7 @@ import type { FeedState } from '../useAppNavigation'
 // The factories close over the fakes below; they are read only once a test
 // calls setup(), after the module has initialized them.
 vi.mock('../../composables/useHiveSetup', () => ({ useHiveSetup: () => hive }))
+vi.mock('../../composables/useHiveCLI', () => ({ useHiveCLI: () => cli }))
 vi.mock('../../composables/useFirstRun', () => ({ useFirstRun: () => firstRun }))
 vi.mock('../../composables/useNotificationSettings', () => ({ useNotificationSettings: () => notifications }))
 vi.mock('../../stores/useAgentWorkspaces', () => ({ useAgentWorkspaces: () => ({ startFirstRunChat }) }))
@@ -21,6 +22,14 @@ const hive = {
   saving: ref(false),
   load: vi.fn(),
   save: vi.fn(),
+}
+const cli = {
+  loaded: ref(true),
+  managed: ref(true),
+  error: ref(''),
+  saving: ref(false),
+  load: vi.fn(),
+  setInstall: vi.fn(),
 }
 const firstRun = { completed: ref<boolean | null>(false), load: vi.fn(), complete: vi.fn() }
 const notifications = {
@@ -72,6 +81,10 @@ beforeEach(() => {
   hive.setup.value = {}
   hive.unreadable.value = ''
   hive.loaded.value = true
+  cli.loaded.value = true
+  cli.managed.value = false
+  cli.error.value = ''
+  cli.setInstall.mockResolvedValue(true)
   firstRun.completed.value = false
   firstRun.complete.mockImplementation(() => {
     firstRun.completed.value = true
@@ -85,7 +98,8 @@ beforeEach(() => {
 })
 
 describe('useOnboarding', () => {
-  it('walks hive setup, connect, permissions, then the agent hand-off', async () => {
+  it('walks hive setup, the hive command, connect, permissions, then the agent hand-off', async () => {
+    cli.managed.value = true
     const onboarding = setup()
     expect(hive.load).toHaveBeenCalledOnce()
     expect(firstRun.load).toHaveBeenCalledOnce()
@@ -94,6 +108,11 @@ describe('useOnboarding', () => {
 
     hive.save.mockResolvedValue(true)
     await onboarding.screenEvents.saveHive()
+    expect(onboarding.screen.value.card).toBe('command')
+    expect(onboarding.screen.value.installCommand).toBe(true)
+
+    await onboarding.screenEvents.saveCommand()
+    expect(cli.setInstall).toHaveBeenCalledWith(true)
     expect(onboarding.screen.value.card).toBe('idle')
 
     onboarding.screenEvents.skipConnect()
@@ -106,6 +125,38 @@ describe('useOnboarding', () => {
     expect(firstRun.complete).toHaveBeenCalledOnce()
     expect(router.push).toHaveBeenCalledWith({ name: 'agents', params: { workspace: 'hive' }, query: { chat: '4' } })
     expect(onboarding.active.value).toBe(false)
+  })
+
+  it('records a refusal when the box is unchecked', async () => {
+    cli.managed.value = true
+    hive.setup.value = null
+    const onboarding = setup()
+    expect(onboarding.screen.value.card).toBe('command')
+
+    onboarding.screenEvents.setInstallCommand(false)
+    await onboarding.screenEvents.saveCommand()
+
+    expect(cli.setInstall).toHaveBeenCalledWith(false)
+    expect(onboarding.screen.value.card).toBe('idle')
+  })
+
+  it('stays on the command card when the save fails, and the skip link moves on', async () => {
+    cli.managed.value = true
+    hive.setup.value = null
+    cli.setInstall.mockResolvedValue(false)
+    const onboarding = setup()
+
+    await onboarding.screenEvents.saveCommand()
+    expect(onboarding.screen.value.card).toBe('command')
+
+    onboarding.screenEvents.finishCommand()
+    expect(onboarding.screen.value.card).toBe('idle')
+  })
+
+  it('skips the command card in a build that cannot install it', () => {
+    hive.setup.value = null
+
+    expect(setup().screen.value.card).toBe('idle')
   })
 
   it('skips the steps whose answer is already known', () => {
