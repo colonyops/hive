@@ -835,7 +835,6 @@ func (cmd *HoneycombCmd) contextCmd() *cli.Command {
 	var flagJSON bool
 	return &cli.Command{
 		Name:      "context",
-		Aliases:   []string{"ctx"},
 		Usage:     "Show context block for an epic",
 		UsageText: "hive hc context <epic-id> [--json]",
 		Description: `Assembles and displays the context block for an epic.
