@@ -15,6 +15,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/events/testbus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/store/db"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
@@ -71,6 +72,8 @@ type Options struct {
 	PaneSource terminal.PaneSource
 	// Mux defaults to Mux{}.
 	Mux sessionsvc.Multiplexer
+	// Credentials nil leaves the engine without a drive server client.
+	Credentials credentials.Store
 }
 
 type Harness struct {
@@ -104,6 +107,8 @@ func NewEngine(t *testing.T, opts Options) Harness {
 		PaneSource: opts.PaneSource,
 		DataDir:    t.TempDir(),
 		Logger:     zerolog.Nop(),
+
+		Credentials: opts.Credentials,
 	})
 	require.NoError(t, err)
 	return h

@@ -16,7 +16,7 @@ func TestPickHelp(t *testing.T) {
 	require.NoError(t, err, "hive x pick --help should exit 0: %s", out)
 
 	// Verify all flags are documented
-	for _, flag := range []string{"--status", "--repo", "--print", "--format", "--hide-current", "--no-recents"} {
+	for _, flag := range []string{"--status", "--repo", "--print", "--format", "--json", "--hide-current", "--no-recents"} {
 		assert.Contains(t, out, flag, "help should document %s flag", flag)
 	}
 }
@@ -37,4 +37,12 @@ func TestPickInvalidFormatFlag(t *testing.T) {
 	require.Error(t, err, "invalid --format should fail")
 	assert.Contains(t, out, "invalid --format")
 	assert.Contains(t, out, "bogus")
+}
+
+func TestPickJSONNeedsPrint(t *testing.T) {
+	t.Parallel()
+	h := NewHarness(t)
+	out, err := h.Run("x", "pick", "--json")
+	require.Error(t, err, "--json without --print should fail")
+	assert.Contains(t, out, "--json needs --print")
 }

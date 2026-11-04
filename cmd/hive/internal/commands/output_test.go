@@ -14,20 +14,25 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/internal/hive/hivetest"
 	"github.com/colonyops/hive/internal/hive/servers"
 	"github.com/colonyops/hive/internal/ops"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // outputTree is the full command tree with the error rules cmd/hive/cli
 // applies.
-func outputTree(root *cli.Command, a *app.App) *cli.Command {
+func outputTree(root *cli.Command, a *app.App, args ...string) *cli.Command {
 	root = registerCommands(root, a)
-	ApplyErrorRules(root)
+	ApplyErrorRules(root, args)
 	return root
 }
 
 type outputRun struct {
 	stdout string
+	// stderr is what urfave/cli itself printed.
+	stderr string
 	// reported is what the program prints for the returned error.
 	reported string
 	code     int
@@ -36,10 +41,11 @@ type outputRun struct {
 func runForOutputTest(t *testing.T, a *app.App, args ...string) outputRun {
 	t.Helper()
 	var stdout, stderr, reported bytes.Buffer
-	root := outputTree(&cli.Command{Name: "hive", Writer: &stdout, ErrWriter: &stderr}, a)
-	err := root.Run(context.Background(), append([]string{"hive"}, args...))
+	full := append([]string{"hive"}, args...)
+	root := outputTree(&cli.Command{Name: "hive", Writer: &stdout, ErrWriter: &stderr}, a, full...)
+	err := root.Run(context.Background(), full)
 	code := ReportError(&reported, err)
-	return outputRun{stdout: stdout.String(), reported: reported.String(), code: code}
+	return outputRun{stdout: stdout.String(), stderr: stderr.String(), reported: reported.String(), code: code}
 }
 
 func walkCommands(c *cli.Command, path []string, visit func(path []string, c *cli.Command)) {
@@ -93,7 +99,11 @@ func assertErrorLine(t *testing.T, r outputRun) ops.Kind {
 // spelling of --json.
 func outputTestApp(t *testing.T) *app.App {
 	t.Helper()
-	a := testApp(t)
+	t.Setenv("HIVE_DRIVE_SERVER", "")
+	t.Setenv("HIVE_DRIVE_TOKEN", "")
+	cfg := &config.Config{Config: *hivetest.LoadConfig(t, t.TempDir())}
+	h := hivetest.NewEngine(t, hivetest.Options{Config: &cfg.Config, Credentials: credentials.NewMemoryStore()})
+	a := app.NewApp(zerolog.Nop(), h.Engine, cfg, nil, nil, nil, nil, "")
 	a.Servers = servers.New(zerolog.Nop(), a.SessionAPI(), a.Config.Servers, "test")
 	return a
 }
@@ -110,9 +120,8 @@ func TestJSONFlagSpelling(t *testing.T) {
 		_, jsonl := hasFlag(c, "jsonl")
 		assert.False(t, jsonl, "hive %s: spell the JSON switch --json", name)
 
-		if _, format := hasFlag(c, "format"); format {
-			// x pick --format chooses what --print writes; json is one of four values.
-			assert.Equal(t, "x pick", name, "hive %s: spell the JSON switch --json", name)
+		if f, format := hasFlag(c, "format"); format {
+			assert.NotContains(t, strings.ToLower(f.(*cli.StringFlag).Usage), "json", "hive %s: spell the JSON switch --json", name)
 		}
 	})
 }
@@ -130,9 +139,10 @@ var jsonCommandCases = map[string]failingJSONCase{
 	"doctor":          {args: []string{"doctor", "--json"}},
 	"drive ls":        {args: []string{"drive", "ls", "--json", "--all", "--shared"}, kind: ops.KindInvalid},
 	"drive spaces":    {args: []string{"drive", "spaces", "--json"}},
-	"drive push":      {args: []string{"drive", "push", "--json"}, kind: ops.KindInternal},
-	"drive pull":      {args: []string{"drive", "pull", "--json"}, kind: ops.KindInternal},
-	"drive share":     {args: []string{"drive", "share", "--json"}, kind: ops.KindInternal},
+	"drive push":      {args: []string{"drive", "push", "--shared", "--json"}, kind: ops.KindUnauthenticated},
+	"drive pull":      {args: []string{"drive", "pull", "--shared", "--json"}, kind: ops.KindUnauthenticated},
+	"drive share":     {args: []string{"drive", "share", "--shared", "--json", "a.md"}, kind: ops.KindUnauthenticated},
+	"x pick":          {args: []string{"x", "pick", "--json"}, kind: ops.KindInvalid},
 	"session list":    {args: []string{"session", "list", "--json"}},
 	"session info":    {args: []string{"session", "info", "--json"}, kind: ops.KindNotFound},
 	"session show":    {args: []string{"session", "show", "--json", "missing"}, kind: ops.KindNotFound},
@@ -239,4 +249,41 @@ func TestPlainCommandReportsTextError(t *testing.T) {
 	assert.Equal(t, ops.ExitCode(ops.KindNotFound), r.code)
 	assert.Contains(t, r.reported, "not in a hive session")
 	assert.False(t, strings.HasPrefix(r.reported, "{"), "text mode prints text: %q", r.reported)
+}
+
+func TestUnknownFlagIsInvalid(t *testing.T) {
+	a := outputTestApp(t)
+	t.Chdir(t.TempDir())
+
+	t.Run("text", func(t *testing.T) {
+		r := runForOutputTest(t, a, "session", "info", "--bogus")
+
+		assert.Equal(t, ops.ExitCode(ops.KindInvalid), r.code)
+		assert.Contains(t, r.reported, "bogus")
+		assert.False(t, strings.HasPrefix(r.reported, "{"), "text mode prints text: %q", r.reported)
+		assert.Empty(t, r.stdout)
+		assert.Empty(t, r.stderr, "urfave/cli prints nothing; the program reports once")
+	})
+
+	t.Run("json", func(t *testing.T) {
+		r := runForOutputTest(t, a, "doctor", "--bogus", "--json")
+
+		assert.Equal(t, ops.KindInvalid, assertErrorLine(t, r))
+		assert.Empty(t, r.stdout)
+		assert.Empty(t, r.stderr)
+	})
+
+	t.Run("json flag after the unknown flag", func(t *testing.T) {
+		r := runForOutputTest(t, a, "drive", "ls", "--json", "--bogus")
+
+		assert.Equal(t, ops.KindInvalid, assertErrorLine(t, r))
+		assert.Empty(t, r.stdout)
+	})
+
+	t.Run("always-json command", func(t *testing.T) {
+		r := runForOutputTest(t, a, "detect", "--bogus")
+
+		assert.Equal(t, ops.KindInvalid, assertErrorLine(t, r))
+		assert.Empty(t, r.stdout)
+	})
 }

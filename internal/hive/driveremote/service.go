@@ -198,6 +198,16 @@ func (s *Service) pushOne(ctx context.Context, client *driveapi.Client, host str
 	return PushResult{Path: p, Action: ActionUploaded, SHA256: doc.SHA256}, nil
 }
 
+// IsUnauthenticated reports whether err means the caller has no usable login:
+// no server or token is configured, or the server answered 401.
+func IsUnauthenticated(err error) bool {
+	if errors.Is(err, ErrNoServer) || errors.Is(err, ErrNotSignedIn) {
+		return true
+	}
+	apiErr, ok := errors.AsType[*driveapi.APIError](err)
+	return ok && apiErr.Status == http.StatusUnauthorized
+}
+
 func isPerDocument(err error) bool {
 	apiErr, ok := errors.AsType[*driveapi.APIError](err)
 	return ok && apiErr.Status != http.StatusUnauthorized && apiErr.Status != http.StatusForbidden
