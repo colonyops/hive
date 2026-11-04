@@ -188,21 +188,14 @@ func (s *DiffReviewsService) target(ctx context.Context, engine *hive.Engine, ca
 		}
 		ref = from.author.HiveSession
 	}
-	sessions, err := engine.Sessions().ListSessions(ctx)
+	target, err := engine.Sessions().ResolveSession(ctx, ref)
+	if errors.Is(err, session.ErrNotFound) {
+		return session.Session{}, "", Errorf(KindNotFound, "no hive session has the id or name %q", ref)
+	}
 	if err != nil {
-		return session.Session{}, "", Wrap(err, KindInternal, "listing hive sessions")
+		return session.Session{}, "", Wrap(err, KindInternal, "finding hive session %q", ref)
 	}
-	for _, match := range []func(session.Session) bool{
-		func(c session.Session) bool { return c.ID == ref },
-		func(c session.Session) bool { return c.Name == ref || c.Slug == ref },
-	} {
-		for _, candidate := range sessions {
-			if match(candidate) {
-				return candidate, author, nil
-			}
-		}
-	}
-	return session.Session{}, "", Errorf(KindNotFound, "no hive session has the id or name %q", ref)
+	return target, author, nil
 }
 
 func diffReviewError(err error, subject string) error {

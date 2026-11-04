@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -145,8 +146,8 @@ func putInput(sessionID string, in reviews.DiffReviewPutIn) diffreview.PutInput 
 	return diffreview.PutInput{SessionID: sessionID, Author: author, Agent: in.Agent, Summary: in.Summary, Comments: comments}
 }
 
-// diffSession finds the session by id first and by name or slug second, so a
-// name that looks like another session's id still means the id.
+// diffSession resolves ref, or the session of the working directory when ref
+// is empty.
 func (cmd *ReviewCmd) diffSession(ctx context.Context, ref string) (session.Session, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
@@ -159,16 +160,9 @@ func (cmd *ReviewCmd) diffSession(ctx context.Context, ref string) (session.Sess
 		}
 		ref = id
 	}
-	sessions, err := cmd.app.Sessions().ListSessions(ctx)
-	if err != nil {
-		return session.Session{}, err
+	s, err := cmd.app.Sessions().ResolveSession(ctx, ref)
+	if errors.Is(err, session.ErrNotFound) {
+		return session.Session{}, notFoundf("no hive session has the id or name %q", ref)
 	}
-	for _, byName := range []bool{false, true} {
-		for _, s := range sessions {
-			if (!byName && s.ID == ref) || (byName && (s.Name == ref || s.Slug == ref)) {
-				return s, nil
-			}
-		}
-	}
-	return session.Session{}, notFoundf("no hive session has the id or name %q", ref)
+	return s, err
 }

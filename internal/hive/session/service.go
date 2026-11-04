@@ -4,6 +4,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -468,6 +469,25 @@ func (s *Service) ListSessions(ctx context.Context) ([]session.Session, error) {
 // GetSession returns a session by ID.
 func (s *Service) GetSession(ctx context.Context, id string) (session.Session, error) {
 	return s.sessions.Get(ctx, id)
+}
+
+// ResolveSession finds a session by id first and by name or slug second, so a
+// name that looks like another session's id still means the id. It returns
+// session.ErrNotFound when nothing matches.
+func (s *Service) ResolveSession(ctx context.Context, ref string) (session.Session, error) {
+	if sess, err := s.sessions.Get(ctx, ref); !errors.Is(err, session.ErrNotFound) {
+		return sess, err
+	}
+	sessions, err := s.sessions.List(ctx)
+	if err != nil {
+		return session.Session{}, err
+	}
+	for _, sess := range sessions {
+		if sess.Name == ref || sess.Slug == ref {
+			return sess, nil
+		}
+	}
+	return session.Session{}, session.ErrNotFound
 }
 
 // RecycleSession marks a session for recycling and runs recycle commands.
