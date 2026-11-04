@@ -43,6 +43,7 @@ import { useTerminalOutcomes, type TerminalEndReason } from '../stores/useTermin
 export type { TerminalEndReason } from '../stores/useTerminalOutcomes'
 import { usePerf } from './usePerf'
 import { createTerminal, loadTerminalFont, watchTerminalAppearance } from './useXtermPane'
+import { isEditableTarget } from '../lib/isEditableTarget'
 import { createLogger } from '../lib/log'
 
 const log = createLogger('terminal-windows')
@@ -651,6 +652,20 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     scheduleVote()
   }
 
+  // tmux announces the window it shows next before the close, so the
+  // keyboard is still on what the close removes: the closed pane, or the
+  // close button on its tab. The window on screen takes it, unless it is in a
+  // field, or this session or mode is not the one on screen.
+  function keepKeyboardAfterClose(closedHost?: HTMLElement): void {
+    void nextTick(() => {
+      const host = windows.get(activeWindowId.value)?.host
+      if (!paneMayAutoFocus.value || !host?.getClientRects().length) return
+      const focused = document.activeElement
+      if (isEditableTarget(focused) && focused?.isConnected && !closedHost?.contains(focused)) return
+      focusActive()
+    })
+  }
+
   function focusIsInside(windowId: string): boolean {
     const host = windows.get(windowId)?.host
     return !!host && host.contains(document.activeElement)
@@ -872,7 +887,10 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
         if (intended && tabs.value.length === 1) {
           outcomes.report(slug, { reason: 'stopped', detail: 'The terminal was closed.' })
         }
+        const closedHost = windows.get(windowId)?.host
+        const hadKeyboard = intended || focusIsInside(windowId)
         disposeTab(windowId)
+        if (hadKeyboard) keepKeyboardAfterClose(closedHost)
         return
       }
       case 'renamed':
