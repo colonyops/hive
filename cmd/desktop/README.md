@@ -141,7 +141,10 @@ fallback. Settings ▸ Hive CLI shows the effective Hive data directory.
 ## Hive CLI compatibility config
 
 Hive Desktop includes the Hive runtime it needs and does not invoke or require
-an installed Hive CLI. It still reads Hive's optional configuration file for
+an installed Hive CLI. It can also install a `hive` command, a symlink at
+`~/.local/bin/hive` to its own executable (`hive_cli.install_command`, offered
+on first run and switched in Settings ▸ Hive CLI). It only ever removes a link
+it made. It still reads Hive's optional configuration file for
 compatibility with existing agent profiles, workspace paths, tmux settings,
 and other Hive behavior. Startup uses `HIVE_CONFIG` when set, then probes
 `config.yaml`, `config.yml`, `hive.yaml`, and `hive.yml` under
