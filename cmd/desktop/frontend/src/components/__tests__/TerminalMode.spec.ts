@@ -1,4 +1,4 @@
-import { openTab, panelsOf } from '../../lib/panelLayout'
+import { moveTab, openTab, panelsOf } from '../../lib/panelLayout'
 import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { viewTab } from '../terminal/panelViews'
 import { useTerminalAgentIcons } from '../../stores/useTerminalAgentIcons'
@@ -1005,6 +1005,27 @@ describe('TerminalMode', () => {
     selectTerminalWindow(3)
     await flushPromises()
     expect(session.select).not.toHaveBeenCalled()
+  })
+
+  // ⌘N counts the strip as it shows, so a view between windows takes a digit.
+  it('jumps to a view tab by position, counting it among the windows', async () => {
+    const { wrapper, session } = await mountAvailable()
+    await sessionRows(wrapper)[0].trigger('click')
+    await flushPromises()
+    const panel = (): ReturnType<typeof panelsOf>[number] => panelsOf(usePanelLayouts().layoutOf('2'))[0]
+    usePanelLayouts().apply('2', (layout) => moveTab(openTab(layout, viewTab('docs')), 'docs', panel().id, 1))
+    await flushPromises()
+    expect(panel().tabs.map((tab) => tab.id)).toEqual(['window:@1', 'docs', 'window:@2'])
+    session.select.mockClear()
+
+    selectTerminalWindow(2)
+    await flushPromises()
+    expect(panel().activeTab).toBe('docs')
+    expect(session.select).not.toHaveBeenCalled()
+
+    selectTerminalWindow(3)
+    await flushPromises()
+    expect(session.select).toHaveBeenCalledWith('@2')
   })
 
   // Wrapping is the difference from the numbered jumps: a session's windows are
@@ -4153,8 +4174,8 @@ describe('TerminalMode', () => {
         slug: 'hive-fix-parser',
         name: 'fix the parser',
         windows: [
-          { windowId: '@1', name: 'agent', active: true },
-          { windowId: '@2', name: 'shell', active: false },
+          { windowId: '@1', name: 'agent', active: true, position: 1 },
+          { windowId: '@2', name: 'shell', active: false, position: 2 },
         ],
       })
 
@@ -4186,8 +4207,8 @@ describe('TerminalMode', () => {
         slug: 'hive-fix-parser',
         name: 'fix the parser',
         windows: [
-          { windowId: '@1', name: 'agent', active: true },
-          { windowId: '@2', name: 'shell', active: false },
+          { windowId: '@1', name: 'agent', active: true, position: 1 },
+          { windowId: '@2', name: 'shell', active: false, position: 2 },
         ],
       })
     })

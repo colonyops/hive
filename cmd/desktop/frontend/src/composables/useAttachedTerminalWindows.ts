@@ -5,6 +5,8 @@ export interface AttachedWindow {
   windowId: string
   name: string
   active: boolean
+  /** The 1-based place of its tab in the strip, counting views such as docs. */
+  position: number
 }
 
 interface Attached {

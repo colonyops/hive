@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted } from 'vue'
 import IconInfo from '~icons/lucide/info'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPencil from '~icons/lucide/pencil'
@@ -12,8 +12,8 @@ import IconTrash from '~icons/lucide/trash-2'
 import { useCommands, useShellEscape, type Command } from '../../composables/useCommands'
 import type { TerminalWindowTab } from '../../composables/useTerminalWindows'
 import { activePaneOf } from '../../lib/terminalLayout'
-import { closeTab, focusedTab } from '../../lib/panelLayout'
-import { focusedWindow, inTabOrder, revealWindow } from '../../lib/windowTabs'
+import { closeTab, focusTab, focusedTab } from '../../lib/panelLayout'
+import { focusedWindow, inTabOrder, revealWindow, stripTabs } from '../../lib/windowTabs'
 import { paneMayAutoFocus, setTerminalTreeHandles } from '../../lib/terminalTree'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { MenuActionEntry, MenuEntry } from '@hive/ui/types/menu'
@@ -181,6 +181,30 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
     void current.value?.select(tab.windowId)
   }
 
+  function goToTab(position: number): void {
+    const tabs = current.value?.tabs.value ?? []
+    const entry = stripTabs(
+      panels.layout.value,
+      tabs.map((tab) => tab.windowId),
+    )[position - 1]
+    if (!entry) return
+    if (entry.kind === 'window') {
+      goToWindow(tabs.find((tab) => tab.windowId === entry.windowId))
+      return
+    }
+    panels.apply((layout) => focusTab(layout, entry.tabId))
+    // A click on the tab would move the keyboard onto it. Left alone, it stays
+    // in the terminal the view now hides, and keys go to that terminal.
+    void nextTick(() => {
+      const focused = document.activeElement
+      if (focused instanceof HTMLElement && focused.getClientRects().length > 0) return
+      const tabButtons = document.querySelectorAll<HTMLElement>(
+        `[data-panel-tab][data-tab-id="${CSS.escape(entry.tabId)}"] [role="tab"]`,
+      )
+      ;[...tabButtons].find((button) => button.getClientRects().length > 0)?.focus()
+    })
+  }
+
   // Wrapping, where the tree's walk clamps: a session's windows are a ring in
   // every terminal emulator.
   function windowsInTabOrder(): TerminalWindowTab[] {
@@ -203,8 +227,9 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
       focusTree: nav.focusTree,
       focusFilter: nav.focusFilter,
       focusPane: (): void => current.value?.focusActive(),
-      // Counted along the strip rather than clamped: ⌘3 means the third window.
-      selectWindow: (position: number): void => goToWindow(windowsInTabOrder()[position - 1]),
+      // Counted along the strip rather than clamped: ⌘3 means the third tab,
+      // a view such as docs included.
+      selectWindow: (position: number): void => goToTab(position),
       stepWindow: (delta: number): void => goToWindow(relativeWindow(delta)),
       newWindow: (): void => {
         const row = tree.attachedRow.value

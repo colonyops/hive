@@ -101,7 +101,7 @@ brew install colonyops/tap/hive                        # hive CLI</code></pre>
     <p>Code is built on the <a href="cli/getting-started/sessions/">hive CLI session engine</a> and tmux. Each session gets its own checkout and windows, keeps running when Hive closes, and stays visible to an existing hive install and to <code>tmux attach</code>.</p>
     <ul>
       <li><strong>One shared session model.</strong> By default, sessions created in Hive Desktop or the hive CLI appear in both. Agent profiles, clone strategies, setup commands, and starting windows come from <a href="cli/configuration/">hive CLI configuration</a>.</li>
-      <li><strong>A sidebar for every session.</strong> Attach to any window, switch with <kbd>⌘1</kbd> through <kbd>⌘9</kbd>, filter sessions, and search scrollback.</li>
+      <li><strong>A sidebar for every session.</strong> Attach to any window, switch tabs with <kbd>⌘1</kbd> through <kbd>⌘9</kbd>, filter sessions, and search scrollback.</li>
       <li><strong>Your commands in the menus.</strong> Actions add commands to session and window menus. Quick terminals open tools such as lazygit in the active checkout.</li>
       <li><strong>Scratch terminals.</strong> A tmux session for shells that belong to no repository, with tabs you can rename and reorder.</li>
     </ul>

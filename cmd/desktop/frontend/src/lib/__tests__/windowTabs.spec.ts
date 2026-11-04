@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { closePanel, newPanelLayout, openTab, panelsOf, selectTab, splitPanel, type PanelLayout } from '../panelLayout'
+import {
+  closePanel,
+  moveTab,
+  newPanelLayout,
+  openTab,
+  panelsOf,
+  selectTab,
+  splitPanel,
+  type PanelLayout,
+} from '../panelLayout'
 import {
   focusedWindow,
   inTabOrder,
@@ -7,6 +16,7 @@ import {
   placeWindow,
   reconcileWindows,
   revealWindow,
+  stripTabs,
   terminalPanel,
   windowIdOf,
   windowIdOfTab,
@@ -119,5 +129,24 @@ describe('window tabs', () => {
     const panel = panelsOf(layout).find((candidate) => candidate.id === asking.focusedPanel)!
     expect(panel.picking).toBe(false)
     expect(panel.tabs.map((tab) => tab.id)).toEqual(['window:@2'])
+  })
+
+  describe('stripTabs', () => {
+    it('counts a view between windows as a place in the strip', () => {
+      const layout = moveTab(openTab(attached('@1', '@2'), docs), 'docs', panelId(attached('@1', '@2')), 1)
+
+      expect(stripTabs(layout, ['@1', '@2'])).toEqual([
+        { kind: 'window', windowId: '@1' },
+        { kind: 'view', tabId: 'docs' },
+        { kind: 'window', windowId: '@2' },
+      ])
+    })
+
+    it('puts a window with no tab yet last, and drops a tab whose window is gone', () => {
+      expect(stripTabs(attached('@1', '@2'), ['@1', '@3'])).toEqual([
+        { kind: 'window', windowId: '@1' },
+        { kind: 'window', windowId: '@3' },
+      ])
+    })
   })
 })
