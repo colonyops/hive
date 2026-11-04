@@ -144,7 +144,7 @@ func (cmd *ExperimentalCmd) assessDriveCmd() *cli.Command {
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.Args().Len() != 1 {
-				return fmt.Errorf("usage: hive x assess drive <frames.jsonl> --target <pane> [--allow-host]")
+				return invalidf("usage: hive x assess drive <frames.jsonl> --target <pane> [--allow-host]")
 			}
 
 			return runAssessDriveCmd(ctx, c.Root().Writer, c.Args().First(), flagTarget, flagAllowHost, resolveTmuxSocketPath, runningInContainer)

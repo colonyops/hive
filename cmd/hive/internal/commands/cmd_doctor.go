@@ -3,7 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
@@ -16,7 +16,7 @@ import (
 type DoctorCmd struct {
 	flags   *Flags
 	app     *app.App
-	format  string
+	json    bool
 	autofix bool
 }
 
@@ -31,11 +31,10 @@ func (cmd *DoctorCmd) Register(app *cli.Command) *cli.Command {
 		UsageText:   "hive doctor [options]",
 		Description: "Runs diagnostic checks on configuration, environment, and dependencies.",
 		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:        "format",
-				Usage:       "output format (text, json)",
-				Value:       "text",
-				Destination: &cmd.format,
+			&cli.BoolFlag{
+				Name:        "json",
+				Usage:       "print the report as one JSON line",
+				Destination: &cmd.json,
 			},
 			&cli.BoolFlag{
 				Name:        "autofix",
@@ -51,11 +50,11 @@ func (cmd *DoctorCmd) Register(app *cli.Command) *cli.Command {
 func (cmd *DoctorCmd) run(ctx context.Context, c *cli.Command) error {
 	results := cmd.app.Doctor.RunChecks(ctx, cmd.flags.ConfigPath, cmd.autofix)
 
-	if cmd.format == "json" {
+	if cmd.json {
 		return cmd.outputJSON(c, results)
 	}
 
-	return cmd.outputText(ctx, results)
+	return cmd.outputText(c.Root().Writer, results)
 }
 
 func (cmd *DoctorCmd) outputJSON(c *cli.Command, results []doctor.Result) error {
@@ -71,7 +70,7 @@ func (cmd *DoctorCmd) outputJSON(c *cli.Command, results []doctor.Result) error 
 		Checks:  results,
 	}
 
-	return iojson.WriteWith(c.Root().Writer, os.Stderr, out)
+	return iojson.WriteLine(c.Root().Writer, out)
 }
 
 type summaryJSON struct {
@@ -80,8 +79,7 @@ type summaryJSON struct {
 	Failed int `json:"failed"`
 }
 
-func (cmd *DoctorCmd) outputText(_ context.Context, results []doctor.Result) error {
-	w := os.Stderr
+func (cmd *DoctorCmd) outputText(w io.Writer, results []doctor.Result) error {
 	divider := styles.TextMutedStyle.Render(strings.Repeat("─", 40))
 
 	_, _ = fmt.Fprintln(w)
@@ -131,7 +129,7 @@ func (cmd *DoctorCmd) outputText(_ context.Context, results []doctor.Result) err
 	}
 
 	if failed > 0 {
-		return cli.Exit("", 1)
+		return errAlreadyReported
 	}
 
 	return nil

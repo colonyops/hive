@@ -4,16 +4,20 @@ import (
 	"testing"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 )
 
 // commandTree builds the hive command tree the way cmd/hive/cli does, for
 // tests that check a rule across every command.
 func commandTree(t *testing.T) *cli.Command {
 	t.Helper()
-	flags := &Flags{}
-	a := testApp(t)
+	return registerCommands(&cli.Command{Name: "hive"}, testApp(t))
+}
 
-	root := &cli.Command{Name: "hive", Flags: NewTuiCmd(flags, a).Flags()}
+func registerCommands(root *cli.Command, a *app.App) *cli.Command {
+	flags := &Flags{}
+	root.Flags = append(root.Flags, NewTuiCmd(flags, a).Flags()...)
 	for _, register := range []func(*cli.Command) *cli.Command{
 		NewNewCmd(flags, a).Register,
 		NewPruneCmd(flags, a).Register,

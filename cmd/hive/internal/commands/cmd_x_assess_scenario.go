@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
 	tmuxstatus "github.com/colonyops/hive/internal/platform/tmux/status"
+	"github.com/colonyops/hive/pkg/iojson"
 )
 
 // tmuxSender sends input to the pane under test. Production binds a resolved
@@ -76,6 +76,7 @@ func (cmd *ExperimentalCmd) assessScenarioCmd() *cli.Command {
 
 	return &cli.Command{
 		Name:      "scenario",
+		Metadata:  alwaysJSON(),
 		Usage:     "Drive and score a scripted scenario against a tmux pane (sends input; container-only)",
 		UsageText: "hive x assess scenario <scenario.yaml> --target <pane> [--allow-host] [--interval 1.5s]",
 		Flags: []cli.Flag{
@@ -98,7 +99,7 @@ func (cmd *ExperimentalCmd) assessScenarioCmd() *cli.Command {
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.Args().Len() != 1 {
-				return fmt.Errorf("usage: hive x assess scenario <scenario.yaml> --target <pane> [--allow-host] [--interval 1.5s]")
+				return invalidf("usage: hive x assess scenario <scenario.yaml> --target <pane> [--allow-host] [--interval 1.5s]")
 			}
 
 			return runAssessScenarioCmd(ctx, c.Root().Writer, c.Args().First(), flagTarget, flagAllowHost, c.IsSet("interval"), flagInterval, cmd.app, resolveTmuxSocketPath, runningInContainer)
@@ -143,9 +144,7 @@ func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target
 	log, runErr := runScenario(ctx, target, spec, sender, tmuxstatus.TmuxCapture{}, paneExtra, tracker, scenarioWait(ctx, interval))
 	report := scoreScenario(spec, log)
 
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	if encErr := enc.Encode(report); encErr != nil {
+	if encErr := iojson.WriteLine(w, report); encErr != nil {
 		return encErr
 	}
 
@@ -172,13 +171,13 @@ func scenarioTrackerOptions(app *app.App, intervalSet bool, interval time.Durati
 	opts := trackerOptions(app)
 	if intervalSet {
 		if interval <= 0 {
-			return status.Options{}, 0, fmt.Errorf("--interval must be greater than zero")
+			return status.Options{}, 0, invalidf("--interval must be greater than zero")
 		}
 	} else {
 		interval = opts.PollInterval
 	}
 	if interval <= 0 {
-		return status.Options{}, 0, fmt.Errorf("configured poll interval must be greater than zero")
+		return status.Options{}, 0, invalidf("configured poll interval must be greater than zero")
 	}
 	opts.PollInterval = interval
 	return opts, interval, nil

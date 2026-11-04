@@ -71,7 +71,7 @@ func (cmd *DriveCmd) runLogin(ctx context.Context, c *cli.Command) error {
 	}
 	server := c.Args().First()
 	if server == "" {
-		return errors.New("login: server is required")
+		return invalidf("login: server is required")
 	}
 	token, err := cmd.readToken()
 	if err != nil {
@@ -80,20 +80,21 @@ func (cmd *DriveCmd) runLogin(ctx context.Context, c *cli.Command) error {
 
 	me, err := remote.Login(ctx, server, token)
 	if errors.Is(err, driveremote.ErrStoreCredential) {
-		fmt.Fprintln(os.Stderr, "The token is valid but could not be stored: no OS keychain is available.")
-		fmt.Fprintln(os.Stderr, "Set HIVE_DRIVE_SERVER and HIVE_DRIVE_TOKEN in the environment instead.")
+		_, _ = fmt.Fprintln(c.Root().ErrWriter, "The token is valid but could not be stored: no OS keychain is available.")
+		_, _ = fmt.Fprintln(c.Root().ErrWriter, "Set HIVE_DRIVE_SERVER and HIVE_DRIVE_TOKEN in the environment instead.")
 		return err
 	}
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Signed in as %s\n", me.Email)
-	fmt.Printf("Policy: %s\n", me.Policy)
+	w := c.Root().Writer
+	_, _ = fmt.Fprintf(w, "Signed in as %s\n", me.Email)
+	_, _ = fmt.Fprintf(w, "Policy: %s\n", me.Policy)
 	if me.Quota.Limit == nil {
-		fmt.Printf("Quota: %d bytes used, no limit\n", me.Quota.Used)
+		_, _ = fmt.Fprintf(w, "Quota: %d bytes used, no limit\n", me.Quota.Used)
 	} else {
-		fmt.Printf("Quota: %d of %d bytes used\n", me.Quota.Used, *me.Quota.Limit)
+		_, _ = fmt.Fprintf(w, "Quota: %d of %d bytes used\n", me.Quota.Used, *me.Quota.Limit)
 	}
 	return nil
 }
@@ -154,7 +155,7 @@ func (cmd *DriveCmd) runPush(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 	results, runErr := remote.Push(ctx, server, space, c.Args().Slice(), cmd.force)
-	return reportResults(cmd, results, runErr, func(r driveremote.PushResult) resultRow {
+	return reportResults(c, cmd, results, runErr, func(r driveremote.PushResult) resultRow {
 		return resultRow{action: r.Action, line: r.Path, path: r.Path, err: r.Error}
 	})
 }
@@ -183,7 +184,7 @@ func (cmd *DriveCmd) runPull(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 	results, runErr := remote.Pull(ctx, server, space, c.Args().Slice())
-	return reportResults(cmd, results, runErr, func(r driveremote.PullResult) resultRow {
+	return reportResults(c, cmd, results, runErr, func(r driveremote.PullResult) resultRow {
 		line := r.Path
 		if r.LocalPath != "" {
 			line += " -> " + r.LocalPath
@@ -222,24 +223,24 @@ func (cmd *DriveCmd) runShare(ctx context.Context, c *cli.Command) error {
 	}
 	path := c.Args().First()
 	if path == "" || c.Args().Len() > 1 {
-		return errors.New("share: exactly one path is required")
+		return invalidf("share: exactly one path is required")
 	}
 
 	share, err := remote.Share(ctx, server, space, path, cmd.expires)
 	if err != nil {
 		if cmd.json {
-			if jerr := iojson.WriteLine(os.Stdout, shareResult{Path: path, Action: driveremote.ActionFailed, Error: err.Error()}); jerr != nil {
+			if jerr := iojson.WriteLine(c.Root().Writer, shareResult{Path: path, Action: driveremote.ActionFailed, Error: err.Error()}); jerr != nil {
 				return jerr
 			}
 		}
 		return err
 	}
 	if cmd.json {
-		return iojson.WriteLine(os.Stdout, shareResult{Path: path, Action: "shared", URL: share.URL, ExpiresAt: share.ExpiresAt})
+		return iojson.WriteLine(c.Root().Writer, shareResult{Path: path, Action: "shared", URL: share.URL, ExpiresAt: share.ExpiresAt})
 	}
-	fmt.Println(share.URL)
+	_, _ = fmt.Fprintln(c.Root().Writer, share.URL)
 	if share.ExpiresAt != nil {
-		fmt.Fprintf(os.Stderr, "Expires %s\n", share.ExpiresAt.Local().Format(time.DateTime))
+		_, _ = fmt.Fprintf(c.Root().ErrWriter, "Expires %s\n", share.ExpiresAt.Local().Format(time.DateTime))
 	}
 	return nil
 }
@@ -277,7 +278,7 @@ type resultRow struct {
 
 // reportResults prints every result before it returns runErr, so a push
 // that stopped early still shows what it finished.
-func reportResults[T any](cmd *DriveCmd, results []T, runErr error, row func(T) resultRow) error {
+func reportResults[T any](c *cli.Command, cmd *DriveCmd, results []T, runErr error, row func(T) resultRow) error {
 	failed := 0
 	for _, r := range results {
 		rr := row(r)
@@ -285,14 +286,14 @@ func reportResults[T any](cmd *DriveCmd, results []T, runErr error, row func(T) 
 			failed++
 		}
 		if cmd.json {
-			if err := iojson.WriteLine(os.Stdout, r); err != nil {
+			if err := iojson.WriteLine(c.Root().Writer, r); err != nil {
 				return err
 			}
 			continue
 		}
-		fmt.Printf("%-9s  %s\n", rr.action, rr.line)
+		_, _ = fmt.Fprintf(c.Root().Writer, "%-9s  %s\n", rr.action, rr.line)
 		if rr.err != "" {
-			fmt.Fprintf(os.Stderr, "  %s: %s\n", rr.path, rr.err)
+			_, _ = fmt.Fprintf(c.Root().ErrWriter, "  %s: %s\n", rr.path, rr.err)
 		}
 	}
 	if runErr != nil {

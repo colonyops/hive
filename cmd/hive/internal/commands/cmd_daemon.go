@@ -239,11 +239,11 @@ func okText(ok bool, detail string) string {
 	}
 }
 
-func (cmd *DaemonCmd) stop(ctx context.Context, _ *cli.Command) error {
+func (cmd *DaemonCmd) stop(ctx context.Context, c *cli.Command) error {
 	if err := cmd.app.DaemonClient(false).Stop(ctx); err != nil {
 		return fmt.Errorf("stop the daemon: %w", err)
 	}
-	fmt.Fprintln(os.Stderr, "daemon stopped")
+	_, _ = fmt.Fprintln(c.Root().ErrWriter, "daemon stopped")
 	return nil
 }
 
@@ -322,7 +322,7 @@ func (cmd *DaemonCmd) install(ctx context.Context, c *cli.Command) error {
 	// A daemon a client spawned keeps the lock, so the supervised one would
 	// wait behind it until it exits.
 	if err := cmd.app.DaemonClient(false).Stop(ctx); err == nil {
-		fmt.Fprintln(os.Stderr, "stopped the running daemon so the service can take over")
+		_, _ = fmt.Fprintln(c.Root().ErrWriter, "stopped the running daemon so the service can take over")
 	}
 
 	w := c.Root().Writer
@@ -359,11 +359,11 @@ func (cmd *DaemonCmd) uninstall(ctx context.Context, c *cli.Command) error {
 	case "darwin":
 		target := "gui/" + strconv.Itoa(os.Getuid()) + "/" + daemon.LaunchdLabel
 		if err := runService(ctx, "launchctl", "bootout", target); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+			_, _ = fmt.Fprintf(c.Root().ErrWriter, "warning: %v\n", err)
 		}
 	default:
 		if err := runService(ctx, "systemctl", "--user", "disable", "--now", daemon.SystemdUnitName); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+			_, _ = fmt.Fprintf(c.Root().ErrWriter, "warning: %v\n", err)
 		}
 	}
 	if err := os.Remove(unit.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -371,7 +371,7 @@ func (cmd *DaemonCmd) uninstall(ctx context.Context, c *cli.Command) error {
 	}
 	if runtime.GOOS == "linux" {
 		if err := runService(ctx, "systemctl", "--user", "daemon-reload"); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+			_, _ = fmt.Fprintf(c.Root().ErrWriter, "warning: %v\n", err)
 		}
 	}
 	_, _ = fmt.Fprintf(c.Root().Writer, "removed %s\n", unit.Path)

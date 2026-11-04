@@ -5,7 +5,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -30,11 +29,9 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/theme"
 	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/daemon/wire"
 	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/servers"
-	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/pkg/buildinfo"
@@ -385,29 +382,6 @@ Run 'hive new' to create a new session from the current repository.`,
 		return tuiCmd.Run(ctx, c)
 	}
 
-	runErr := app.Run(ctx, os.Args)
-	if runErr != nil {
-		if msg := runErr.Error(); msg != "" {
-			fmt.Fprintln(os.Stderr, msg)
-		}
-		var unreachable *wire.UnreachableError
-		if errors.As(runErr, &unreachable) && unreachable.Server != "" {
-			fmt.Fprintln(os.Stderr, "Check your servers with: hive servers ls")
-		}
-	}
-
-	os.Exit(exitCode(runErr))
-}
-
-func exitCode(err error) int {
-	if err == nil {
-		return 0
-	}
-	if opErr, ok := errors.AsType[*ops.Error](err); ok {
-		return ops.ExitCode(opErr.Kind)
-	}
-	if exitErr, ok := errors.AsType[commands.ExitError](err); ok {
-		return exitErr.Code
-	}
-	return 1
+	commands.ApplyErrorRules(app)
+	os.Exit(commands.ReportError(os.Stderr, app.Run(ctx, os.Args)))
 }

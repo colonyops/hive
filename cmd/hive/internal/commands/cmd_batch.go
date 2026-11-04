@@ -34,8 +34,9 @@ func NewBatchCmd(flags *Flags, app *app.App) *BatchCmd {
 
 func (cmd *BatchCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
-		Name:  "batch",
-		Usage: "Create multiple sessions from JSON input",
+		Name:     "batch",
+		Metadata: alwaysJSON(),
+		Usage:    "Create multiple sessions from JSON input",
 		UsageText: `hive batch [options]
 
 Read from stdin:
@@ -113,20 +114,17 @@ func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 	input, err := cmd.fr.Read()
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to read input")
-		_ = iojson.WriteError(fmt.Sprintf("read input: %s", err), nil)
-		return errAlreadyReported
+		return invalidf("read input: %w", err)
 	}
 
 	if err := input.Validate(); err != nil {
 		logger.Error().Err(err).Msg("input validation failed")
-		_ = iojson.WriteError(fmt.Sprintf("invalid input: %s", err), nil)
-		return errAlreadyReported
+		return invalidf("invalid input: %w", err)
 	}
 
 	if err := cmd.validateAgents(input); err != nil {
 		logger.Error().Err(err).Msg("agent validation failed")
-		_ = iojson.WriteError(fmt.Sprintf("invalid input: %s", err), nil)
-		return errAlreadyReported
+		return invalidf("invalid input: %w", err)
 	}
 
 	output := BatchOutput{
@@ -168,7 +166,7 @@ func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 		Int("skipped", countByStatus(output.Results, StatusSkipped)).
 		Msg("batch processing complete")
 
-	return iojson.Write(output)
+	return iojson.WriteLine(c.Root().Writer, output)
 }
 
 func (cmd *BatchCmd) validateAgents(input BatchInput) error {

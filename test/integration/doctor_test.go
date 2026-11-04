@@ -15,7 +15,7 @@ func TestDoctorJSON(t *testing.T) {
 
 	// Doctor may exit non-zero when checks fail, so use RunStdout + manual parse
 	// rather than RunJSON which would treat a non-zero exit as an error.
-	out, err := h.RunStdout("doctor", "--format", "json")
+	out, err := h.RunStdout("doctor", "--json")
 	if err != nil {
 		t.Logf("doctor exited with error (may be expected): %v", err)
 	}

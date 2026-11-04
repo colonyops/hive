@@ -133,7 +133,7 @@ func (h *Harness) RunJSONLinesInDir(dir string, args ...string) ([]map[string]an
 }
 
 // RunJSON executes hive and parses stdout as a single JSON object.
-// Use for commands that return one structured result (batch, doctor --format json).
+// Use for commands that return one structured result (batch, doctor --json).
 func (h *Harness) RunJSON(args ...string) (map[string]any, error) {
 	h.t.Helper()
 	out, err := h.RunStdout(args...)

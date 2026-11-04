@@ -24,7 +24,7 @@ Hive detects agent status in two stages: `internal/domain/terminal/assess` (Stag
 
    This replays every `test/calibration/sequences/*.jsonl` through a fresh `assess.Engine` + `status.Tracker` on a virtual clock (never wall time, never an ambient config file — `status.DefaultOptions()` only) and diffs the published-status sequence against its `.expected.json` sidecar. A failing subtest names the sequence and the exact frame index where the sequences diverge.
 
-   For a single sequence, `hive x assess replay <frames.jsonl> --jsonl` prints the full per-frame decision trail (state, rule ID, hold, published, candidate, candidatePolls, churned) — the same information the test compares, but human-readable.
+   For a single sequence, `hive x assess replay <frames.jsonl> --json` prints the full per-frame decision trail (state, rule ID, hold, published, candidate, candidatePolls, churned) — the same information the test compares, but human-readable.
 
 2. **Diagnose with `file`.** Isolate the offending frame's raw content into its own file and run:
 

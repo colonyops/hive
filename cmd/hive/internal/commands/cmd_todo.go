@@ -60,6 +60,7 @@ Session ID is auto-detected from the current working directory.`,
 func (cmd *TodoCmd) addCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "add",
+		Metadata:  alwaysJSON(),
 		Usage:     "Create a new todo item",
 		UsageText: "hive todo add --title <title> [--uri <uri>] [--source <source>]",
 		Description: `Creates a new todo item for operator attention.
@@ -101,6 +102,7 @@ Examples:
 func (cmd *TodoCmd) listCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "list",
+		Metadata:  alwaysJSON(),
 		Usage:     "List todo items",
 		UsageText: "hive todo list [--status <status>]",
 		Description: `Lists todo items as JSON lines.
@@ -122,6 +124,7 @@ Examples:
 func (cmd *TodoCmd) updateCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "update",
+		Metadata:  alwaysJSON(),
 		Usage:     "Update a todo item's status",
 		UsageText: "hive todo update <id> --status <status>",
 		Description: `Updates a todo item's status.
@@ -149,7 +152,7 @@ Examples:
 func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 	src, err := todo.ParseSource(cmd.addSource)
 	if err != nil {
-		return fmt.Errorf("invalid source %q: valid values are %s", cmd.addSource, strings.Join(todo.SourceNames(), ", "))
+		return invalidf("invalid source %q: valid values are %s", cmd.addSource, strings.Join(todo.SourceNames(), ", "))
 	}
 
 	// Auto-detect session ID (best-effort)
@@ -170,7 +173,7 @@ func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 		var parseErr error
 		ref, parseErr = todo.ParseRef(uri)
 		if parseErr != nil {
-			return fmt.Errorf("invalid URI %q: %w", uri, parseErr)
+			return invalidf("invalid URI %q: %w", uri, parseErr)
 		}
 	}
 
@@ -204,7 +207,7 @@ func (cmd *TodoCmd) runList(ctx context.Context, c *cli.Command) error {
 	if cmd.listStatus != "" {
 		status, err := todo.ParseStatus(cmd.listStatus)
 		if err != nil {
-			return fmt.Errorf("invalid status %q: valid values are %s", cmd.listStatus, strings.Join(todo.StatusNames(), ", "))
+			return invalidf("invalid status %q: valid values are %s", cmd.listStatus, strings.Join(todo.StatusNames(), ", "))
 		}
 		filter.Status = &status
 	}
@@ -225,13 +228,13 @@ func (cmd *TodoCmd) runList(ctx context.Context, c *cli.Command) error {
 
 func (cmd *TodoCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 	if c.NArg() < 1 {
-		return fmt.Errorf("todo ID required as argument")
+		return invalidf("todo ID required as argument")
 	}
 
 	id := c.Args().First()
 	status, err := todo.ParseStatus(cmd.updateStatus)
 	if err != nil {
-		return fmt.Errorf("invalid status %q: valid values are %s", cmd.updateStatus, strings.Join(todo.StatusNames(), ", "))
+		return invalidf("invalid status %q: valid values are %s", cmd.updateStatus, strings.Join(todo.StatusNames(), ", "))
 	}
 
 	var updated todo.Todo

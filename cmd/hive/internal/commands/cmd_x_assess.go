@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/pkg/iojson"
 )
 
 // trackerOptions resolves the debounce options the watch/replay/scenario
@@ -114,16 +114,11 @@ func newAssessObservation(ts time.Time, generation uint64, published terminal.St
 }
 
 // writeAssessObservation prints one observation either as a compact JSON
-// line (jsonl, for scripting/analysis) or as a human-readable summary line
+// line (asJSON, for scripting/analysis) or as a human-readable summary line
 // (the default, for watching interactively).
-func writeAssessObservation(w io.Writer, jsonl bool, out assessObservationOutput) error {
-	if jsonl {
-		data, err := json.Marshal(out)
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintln(w, string(data))
-		return err
+func writeAssessObservation(w io.Writer, asJSON bool, out assessObservationOutput) error {
+	if asJSON {
+		return iojson.WriteLine(w, out)
 	}
 
 	_, err := fmt.Fprintf(w, "%s gen=%-4d state=%-9s rule=%-26s hold=%-5v -> %-8s candidate=%s(%d) churned=%-5v inMode=%v\n",
@@ -149,6 +144,7 @@ func (cmd *ExperimentalCmd) assessFileCmd() *cli.Command {
 
 	return &cli.Command{
 		Name:      "file",
+		Metadata:  alwaysJSON(),
 		Usage:     "Assess a captured pane file once and print the result as JSON",
 		UsageText: "hive x assess file <capture.txt> --tool <tool>",
 		Flags: []cli.Flag{
@@ -161,7 +157,7 @@ func (cmd *ExperimentalCmd) assessFileCmd() *cli.Command {
 		},
 		Action: func(_ context.Context, c *cli.Command) error {
 			if c.Args().Len() != 1 {
-				return fmt.Errorf("usage: hive x assess file <capture.txt> --tool <tool>")
+				return invalidf("usage: hive x assess file <capture.txt> --tool <tool>")
 			}
 
 			data, err := os.ReadFile(c.Args().First())
@@ -192,9 +188,7 @@ func (cmd *ExperimentalCmd) assessFileCmd() *cli.Command {
 				},
 			}
 
-			enc := json.NewEncoder(c.Root().Writer)
-			enc.SetIndent("", "  ")
-			return enc.Encode(out)
+			return iojson.WriteLine(c.Root().Writer, out)
 		},
 	}
 }

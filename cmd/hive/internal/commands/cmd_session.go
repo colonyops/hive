@@ -212,11 +212,7 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	}
 
 	if sessionID == "" {
-		if cmd.infoJSON {
-			_, _ = fmt.Fprintln(c.Root().Writer, "{\"error\":\"not in a hive session\"}")
-			return errAlreadyReported
-		}
-		return errors.New("not in a hive session; run this command from within a hive session directory")
+		return notFoundf("not in a hive session; run this command from within a hive session directory")
 	}
 
 	// Get full session details
@@ -305,12 +301,12 @@ Example:
 func (cmd *SessionCmd) runCreate(ctx context.Context, c *cli.Command) error {
 	args := c.Args().Slice()
 	if len(args) == 0 {
-		return fmt.Errorf("session name required\n\nUsage: hive session create <name...>")
+		return invalidf("session name required\n\nUsage: hive session create <name...>")
 	}
 	name := strings.Join(args, " ")
 
 	// Keep stdout clean for --json output; progress goes to stderr.
-	sess, err := createSessionFromFlags(ctx, cmd.app, name, &cmd.createFlags, os.Stderr)
+	sess, err := createSessionFromFlags(ctx, cmd.app, name, &cmd.createFlags, c.Root().ErrWriter)
 	if err != nil {
 		return err
 	}
@@ -319,7 +315,7 @@ func (cmd *SessionCmd) runCreate(ctx context.Context, c *cli.Command) error {
 		return iojson.WriteLine(c.Root().Writer, buildSessionJSON(cmd.app.DefaultServer(), *sess))
 	}
 
-	fmt.Fprintf(os.Stderr, "Session created\n  %s\n", sess.Path)
+	_, _ = fmt.Fprintf(c.Root().ErrWriter, "Session created\n  %s\n", sess.Path)
 	return nil
 }
 
@@ -390,11 +386,11 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 	}
 
 	if cmd.updateGroup != "" && cmd.updateClearGroup {
-		return fmt.Errorf("--group and --clear-group are mutually exclusive")
+		return invalidf("--group and --clear-group are mutually exclusive")
 	}
 	editsTags := len(cmd.updateAddTags) > 0 || len(cmd.updateRemoveTags) > 0 || cmd.updateClearTags
 	if cmd.updateName == "" && cmd.updateGroup == "" && !cmd.updateClearGroup && !editsTags {
-		return fmt.Errorf("nothing to update: provide --name, --group, --clear-group, or a tag flag")
+		return invalidf("nothing to update: provide --name, --group, --clear-group, or a tag flag")
 	}
 	// Checked before any write, so a bad tag leaves the session untouched.
 	addTags, err := session.NormalizeTags(cmd.updateAddTags)
@@ -443,7 +439,7 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 		return iojson.WriteLine(c.Root().Writer, buildSessionJSON(ref.Server, sess))
 	}
 
-	fmt.Fprintf(os.Stderr, "Session %s updated\n", ref)
+	_, _ = fmt.Fprintf(c.Root().ErrWriter, "Session %s updated\n", ref)
 	return nil
 }
 
@@ -519,7 +515,7 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 			if !showServer || listing.server == session.LocalServer {
 				return fmt.Errorf("list sessions: %w", listing.err)
 			}
-			fmt.Fprintf(os.Stderr, "warning: server %s: %v\n", listing.server, listing.err)
+			_, _ = fmt.Fprintf(c.Root().ErrWriter, "warning: server %s: %v\n", listing.server, listing.err)
 			continue
 		}
 		var mine []listedSession
@@ -541,7 +537,7 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 
 	if len(normal) == 0 && len(corrupted) == 0 {
 		if !cmd.lsJSON {
-			fmt.Fprintf(os.Stderr, "No sessions found\n")
+			_, _ = fmt.Fprintf(c.Root().ErrWriter, "No sessions found\n")
 		}
 		return nil
 	}
@@ -579,20 +575,20 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 
 	if len(corrupted) > 0 {
 		_, _ = fmt.Fprintln(out)
-		fmt.Fprintf(os.Stderr, "Found %d corrupted session(s) with invalid git repositories:\n", len(corrupted))
+		_, _ = fmt.Fprintf(c.Root().ErrWriter, "Found %d corrupted session(s) with invalid git repositories:\n", len(corrupted))
 		for _, s := range corrupted {
 			repo := git.ExtractRepoName(s.Remote)
 			if showServer {
-				fmt.Fprintf(os.Stderr, "  %s: %s (%s)\n", s.server, repo, s.Path)
+				_, _ = fmt.Fprintf(c.Root().ErrWriter, "  %s: %s (%s)\n", s.server, repo, s.Path)
 			} else {
-				fmt.Fprintf(os.Stderr, "  %s (%s)\n", repo, s.Path)
+				_, _ = fmt.Fprintf(c.Root().ErrWriter, "  %s (%s)\n", repo, s.Path)
 			}
 		}
 		_, _ = fmt.Fprintln(out)
 		if showServer || cmd.app.TargetsServer() {
-			fmt.Fprintf(os.Stderr, "Run 'hive prune' on the machine that has them to clean up\n")
+			_, _ = fmt.Fprintf(c.Root().ErrWriter, "Run 'hive prune' on the machine that has them to clean up\n")
 		} else {
-			fmt.Fprintf(os.Stderr, "Run 'hive prune' to clean up\n")
+			_, _ = fmt.Fprintf(c.Root().ErrWriter, "Run 'hive prune' to clean up\n")
 		}
 	}
 
@@ -651,7 +647,7 @@ func (cmd *SessionCmd) runDelete(ctx context.Context, c *cli.Command) error {
 		return iojson.WriteLine(c.Root().Writer, map[string]any{"server": ref.Server, "id": ref.ID, "deleted": true})
 	}
 
-	fmt.Fprintf(os.Stderr, "Session %s deleted\n", ref)
+	_, _ = fmt.Fprintf(c.Root().ErrWriter, "Session %s deleted\n", ref)
 	return nil
 }
 
@@ -699,7 +695,7 @@ func (cmd *SessionCmd) runRecycle(ctx context.Context, c *cli.Command) error {
 		}
 	}
 
-	if err := api.RecycleSession(ctx, ref.ID, os.Stderr); err != nil {
+	if err := api.RecycleSession(ctx, ref.ID, c.Root().ErrWriter); err != nil {
 		return fmt.Errorf("recycle session: %w", err)
 	}
 
@@ -715,7 +711,7 @@ func (cmd *SessionCmd) runRecycle(ctx context.Context, c *cli.Command) error {
 		return iojson.WriteLine(c.Root().Writer, buildSessionJSON(ref.Server, sess))
 	}
 
-	fmt.Fprintf(os.Stderr, "Session %s recycled\n", ref)
+	_, _ = fmt.Fprintf(c.Root().ErrWriter, "Session %s recycled\n", ref)
 	return nil
 }
 
@@ -771,7 +767,7 @@ func (cmd *SessionCmd) checkRisk(ctx context.Context, api sessionapi.API, ref se
 // default server, and finds that server's session API.
 func (cmd *SessionCmd) resolve(arg string) (session.Ref, sessionapi.API, error) {
 	if arg == "" {
-		return session.Ref{}, nil, fmt.Errorf("session ID required")
+		return session.Ref{}, nil, invalidf("session ID required")
 	}
 	ref, err := session.ParseRef(arg, cmd.app.DefaultServer())
 	if err != nil {
@@ -817,7 +813,7 @@ func (cmd *SessionCmd) runAttach(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("start session %s: %w", sess.Name, err)
 	}
 	if result.Completed {
-		fmt.Fprintf(os.Stderr, "session %s: %v\n", sess.Name, app.ErrSessionCompleted)
+		_, _ = fmt.Fprintf(c.Root().ErrWriter, "session %s: %v\n", sess.Name, app.ErrSessionCompleted)
 		return nil
 	}
 	streams := multiplexer.AttachStreams{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}

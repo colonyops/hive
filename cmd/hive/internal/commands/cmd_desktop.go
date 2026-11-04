@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -85,6 +84,11 @@ func (cmd *DesktopCmd) opCommands() []*cli.Command {
 	if err != nil {
 		panic(err)
 	}
+	for _, group := range commands {
+		for _, leaf := range group.Commands {
+			leaf.Metadata = alwaysJSON()
+		}
+	}
 	return commands
 }
 
@@ -101,7 +105,7 @@ Desktop if it is not running. See 'hive desktop --help' for the link format.`,
 
 func (cmd *DesktopCmd) runOpen(ctx context.Context, c *cli.Command) error {
 	if c.Args().Len() != 1 {
-		return errors.New("open takes one hive:// link")
+		return invalidf("open takes one hive:// link")
 	}
 	link := c.Args().First()
 	if _, err := deeplink.Parse(link); err != nil {

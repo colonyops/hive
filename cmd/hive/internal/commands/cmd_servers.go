@@ -171,7 +171,7 @@ type probeSession struct {
 func (cmd *ServersCmd) probe(ctx context.Context, c *cli.Command) error {
 	name := c.Args().First()
 	if name == "" {
-		return fmt.Errorf("usage: hive servers probe <name>")
+		return invalidf("usage: hive servers probe <name>")
 	}
 	server, ok := cmd.app.Servers.Server(name)
 	if !ok {

@@ -53,7 +53,7 @@ func watchTrackerOptions(app *app.App, intervalSet bool, interval time.Duration)
 		interval = opts.PollInterval
 	}
 	if interval <= 0 {
-		return status.Options{}, 0, fmt.Errorf("--interval must be greater than zero")
+		return status.Options{}, 0, invalidf("--interval must be greater than zero")
 	}
 	opts.PollInterval = interval
 	return opts, interval, nil
@@ -121,7 +121,7 @@ func runAssessWatchPoll(
 	tracker *status.Tracker,
 	record io.Writer,
 	output io.Writer,
-	jsonl bool,
+	asJSON bool,
 ) error {
 	content, err := capture.CapturePane(ctx, target)
 	if err != nil {
@@ -147,7 +147,7 @@ func runAssessWatchPoll(
 	snap := assess.Snapshot{Content: content, Title: title, Tool: tool, InMode: inMode, Generation: generation}
 	published, assessment := tracker.Observe(target, snap)
 	debug, _ := tracker.DebugState(target)
-	return writeAssessObservation(output, jsonl, newAssessObservation(timestamp, generation, published, assessment, debug, inMode))
+	return writeAssessObservation(output, asJSON, newAssessObservation(timestamp, generation, published, assessment, debug, inMode))
 }
 
 // assessWatchCmd observes a live tmux pane through the Stage 1 engine and
@@ -158,7 +158,7 @@ func runAssessWatchPoll(
 func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 	var (
 		flagTool     string
-		flagJSONL    bool
+		flagJSON     bool
 		flagRecord   string
 		flagInterval time.Duration
 	)
@@ -166,7 +166,7 @@ func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "watch",
 		Usage:     "Observe a live tmux pane through the assessment engine and tracker (read-only)",
-		UsageText: "hive x assess watch <pane-target> [--tool <tool>] [--jsonl] [--record frames.jsonl] [--interval 1.5s]",
+		UsageText: "hive x assess watch <pane-target> [--tool <tool>] [--json] [--record frames.jsonl] [--interval 1.5s]",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "tool",
@@ -174,9 +174,9 @@ func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 				Destination: &flagTool,
 			},
 			&cli.BoolFlag{
-				Name:        "jsonl",
+				Name:        "json",
 				Usage:       "Emit machine-readable JSON lines instead of a human summary",
-				Destination: &flagJSONL,
+				Destination: &flagJSON,
 			},
 			&cli.StringFlag{
 				Name:        "record",
@@ -192,7 +192,7 @@ func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.Args().Len() != 1 {
-				return fmt.Errorf("usage: hive x assess watch <pane-target> [--tool <tool>] [--jsonl] [--record frames.jsonl] [--interval 1.5s]")
+				return invalidf("usage: hive x assess watch <pane-target> [--tool <tool>] [--json] [--record frames.jsonl] [--interval 1.5s]")
 			}
 			target := c.Args().First()
 
@@ -219,7 +219,7 @@ func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 			var generation uint64
 			for {
 				generation++
-				if err := runAssessWatchPoll(ctx, target, flagTool, generation, capture, paneExtra, time.Now, tracker, recordFile, writer, flagJSONL); err != nil {
+				if err := runAssessWatchPoll(ctx, target, flagTool, generation, capture, paneExtra, time.Now, tracker, recordFile, writer, flagJSON); err != nil {
 					return err
 				}
 
