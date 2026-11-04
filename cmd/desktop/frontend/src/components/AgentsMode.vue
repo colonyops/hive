@@ -387,6 +387,22 @@ function stopActivityPolling(): void {
   sessionActivity.value = {}
 }
 
+// The titlebar or palette that brings Chats back keeps the keyboard, and a chat
+// has no attach probe to take it back the way Code does. A field in Chats keeps
+// it. The paint check repeats this: a clicked control can take the keyboard
+// after the mode shows.
+const modeRoot = ref<HTMLElement | null>(null)
+function handKeyboardToChat(): void {
+  if (!props.active || paneStatus.value !== 'live') return
+  const focused = document.activeElement
+  if (focused && modeRoot.value?.contains(focused) && (isEditableTarget(focused) || focused.closest('.xterm'))) return
+  term.value?.focus()
+}
+watch(() => props.active, handKeyboardToChat, { flush: 'post' })
+watch(painted, (shown) => {
+  if (shown) handKeyboardToChat()
+})
+
 // A hidden window is off-screen too: the poll parks, and the dots it last drew
 // stay up for the moment the window shows again.
 const visibility = useDocumentVisibility()
@@ -951,7 +967,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-app" data-testid="agents-mode">
+  <div ref="modeRoot" class="flex min-h-0 min-w-0 flex-1 flex-col bg-app" data-testid="agents-mode">
     <ModeSkeleton v-if="checking" :sidebar="AGENTS_SIDEBAR" />
 
     <div

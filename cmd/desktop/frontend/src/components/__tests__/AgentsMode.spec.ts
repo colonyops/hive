@@ -858,6 +858,42 @@ describe('AgentsMode', () => {
     expect(created.focus).toHaveBeenCalled()
   })
 
+  it('hands the keyboard back to the open chat when Chats shows again', async () => {
+    const { wrapper } = await mountWithOpenChat(fakeClient())
+    const term = xterm.FakeTerminal.instances.at(-1)!
+    await wrapper.setProps({ active: false })
+    await flushPromises()
+    // The control that switched modes, or the palette's input, holds it on the way back.
+    const palette = document.createElement('input')
+    document.body.append(palette)
+    palette.focus()
+    term.focus.mockClear()
+
+    await wrapper.setProps({ active: true })
+    await flushPromises()
+
+    expect(term.focus).toHaveBeenCalled()
+    palette.remove()
+  })
+
+  it('leaves the keyboard in a field of Chats when Chats shows again', async () => {
+    const { wrapper } = await mountWithOpenChat(fakeClient())
+    document.body.append(wrapper.element)
+    const term = xterm.FakeTerminal.instances.at(-1)!
+    await wrapper.setProps({ active: false })
+    await flushPromises()
+    const filter = document.createElement('input')
+    wrapper.element.append(filter)
+    filter.focus()
+    term.focus.mockClear()
+
+    await wrapper.setProps({ active: true })
+    await flushPromises()
+
+    expect(term.focus).not.toHaveBeenCalled()
+    wrapper.element.remove()
+  })
+
   // Parity with the Code view's pill (#469): a chat that keeps streaming while
   // the viewport is scrolled up has to offer the way back.
   it('offers a way back to the live tail while the chat pane is scrolled up', async () => {

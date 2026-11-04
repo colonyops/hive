@@ -795,6 +795,97 @@ describe('useTerminalWindows', () => {
     expect(FakeResizeObserver.instances[0].disconnected).toBe(false)
   })
 
+  describe('the keyboard after a window closes', () => {
+    // happy-dom lays nothing out, so a host on screen states its box.
+    function shownHost(): HTMLElement {
+      const host = paneHost()
+      host.getClientRects = () => [new DOMRect(0, 0, 800, 600)] as unknown as DOMRectList
+      document.body.append(host)
+      return host
+    }
+
+    // tmux announces the window it shows next, then the close.
+    function closeShown(socket: (typeof sockets)[number]): void {
+      socket.onmessage?.({ data: windowFrame('active-changed', '@2', { name: 'shell', active: true }) })
+      socket.onmessage?.({ data: windowFrame('closed', '@1', { name: 'agent' }) })
+    }
+
+    afterEach(() => {
+      document.body.replaceChildren()
+    })
+
+    it('goes to the window tmux shows when the app closed the one in use', async () => {
+      const { session, socket } = await attached()
+      mountWindow(session, '@1', shownHost())
+      mountWindow(session, '@2', shownHost())
+      const closeButton = document.createElement('button')
+      document.body.append(closeButton)
+      closeButton.focus()
+      const next = xterm.FakeTerminal.instances[1]
+      next.focus.mockClear()
+
+      await session.closeWindow('@1')
+      closeShown(socket)
+      await flushPromises()
+
+      expect(next.focus).toHaveBeenCalled()
+    })
+
+    it('goes to the window tmux shows when the shell in use exits', async () => {
+      const { session, socket } = await attached()
+      const closing = shownHost()
+      mountWindow(session, '@1', closing)
+      mountWindow(session, '@2', shownHost())
+      const keyboard = document.createElement('textarea')
+      closing.append(keyboard)
+      keyboard.focus()
+      const next = xterm.FakeTerminal.instances[1]
+      next.focus.mockClear()
+
+      closeShown(socket)
+      await flushPromises()
+
+      expect(next.focus).toHaveBeenCalled()
+    })
+
+    it('stays in a field', async () => {
+      const { session, socket } = await attached()
+      mountWindow(session, '@1', shownHost())
+      mountWindow(session, '@2', shownHost())
+      const filter = document.createElement('input')
+      document.body.append(filter)
+      filter.focus()
+      const next = xterm.FakeTerminal.instances[1]
+      next.focus.mockClear()
+
+      await session.closeWindow('@1')
+      closeShown(socket)
+      await flushPromises()
+
+      expect(next.focus).not.toHaveBeenCalled()
+      expect(document.activeElement).toBe(filter)
+    })
+
+    it('stays put while the session is not on screen', async () => {
+      const { session, socket } = await attached()
+      const hidden = (): HTMLElement => {
+        const host = paneHost()
+        host.getClientRects = () => [] as unknown as DOMRectList
+        return host
+      }
+      mountWindow(session, '@1', hidden())
+      mountWindow(session, '@2', hidden())
+      const next = xterm.FakeTerminal.instances[1]
+      next.focus.mockClear()
+
+      await session.closeWindow('@1')
+      closeShown(socket)
+      await flushPromises()
+
+      expect(next.focus).not.toHaveBeenCalled()
+    })
+  })
+
   // xterm's DOM renderer cannot join box drawing or underlines across cells, so
   // an atlas renderer is the fix for #131 rather than any cell-metric tuning.
   it('loads the WebGL renderer, and only once the pane is open', async () => {
