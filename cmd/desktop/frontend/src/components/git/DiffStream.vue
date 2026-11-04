@@ -55,9 +55,8 @@ const props = defineProps<{
   /** Agents' comments by path, each on the row it is drawn under. */
   agentComments?: ReadonlyMap<string, readonly AnchoredAgentComment[]>
   isAgentStale?: (comment: AgentComment) => boolean
-  /** The agent comment the walkthrough is on, and whether the cards name its keys. */
+  /** The agent comment the walkthrough is on. */
   focusedAgent?: string | null
-  walkKeys?: boolean
 }>()
 const emit = defineEmits<{
   'update:current': [path: string]
@@ -163,7 +162,7 @@ function commentHost(id: string, agent = false): HTMLElement {
   let host = commentHosts.get(id)
   if (!host) {
     host = document.createElement('div')
-    host.className = agent ? 'agent-band border-y border-border bg-pane px-3 py-2' : 'p-2'
+    host.className = agent ? 'border-y border-border bg-pane px-3 py-2' : 'p-2'
     commentHosts.set(id, host)
     mountedComments.value = new Set([...mountedComments.value, id])
   }
@@ -540,7 +539,6 @@ watch(
           :comment="agentById.get(id)!"
           :stale="isAgentStale?.(agentById.get(id)!)"
           :focused="focusedAgent === id"
-          :keys="walkKeys && focusedAgent === id"
           @dismiss="emit('dismiss-agent', agentById.get(id)!)"
           @pick="emit('pick-agent', agentById.get(id)!)"
         />

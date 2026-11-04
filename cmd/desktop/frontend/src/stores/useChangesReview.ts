@@ -31,8 +31,6 @@ export interface ChangesComment extends DiffSpan {
   /** The file's version when the comment was made, to tell when the lines have moved under it. */
   version: string
   text: string
-  /** The agent whose review comment this was adopted from. */
-  from?: string
 }
 
 /** A review that went to the agent, kept in case the agent never acted on it. */

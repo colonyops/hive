@@ -1,4 +1,4 @@
-import { shallowReadonly, shallowRef } from 'vue'
+import { shallowRef } from 'vue'
 import { errorText } from '../lib/appError'
 import { hiveUiPlatform } from '../lib/hiveUiPlatform'
 import {
@@ -106,5 +106,5 @@ export const useAgentReviews = defineStore('agentReviews', () => {
     return errors.value[sessionId] ?? null
   }
 
-  return { state: shallowReadonly(bySession), reviews, error, watch, reload, dismiss, dismissReview }
+  return { reviews, error, watch, dismiss, dismissReview }
 })

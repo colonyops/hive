@@ -114,6 +114,5 @@ export function agentFeedback(comment: AgentComment): Omit<ChangesComment, 'id'>
     base: 'branch',
     version: '',
     text: `${comment.author} (${comment.severity}): ${comment.text}`,
-    from: comment.author,
   }
 }

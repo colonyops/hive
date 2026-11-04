@@ -64,7 +64,7 @@ import type { DiffLineSelection } from '../../lib/diffSelection'
 import { gitFileName, gitRows, type GitLayout } from '../../lib/gitTree'
 import { isEditableTarget } from '../../lib/isEditableTarget'
 import { useAgentReviews } from '../../stores/useAgentReviews'
-import { useChangesReview, type ChangesComment, type ChangesCommentKind } from '../../stores/useChangesReview'
+import { useChangesReview, type ChangesComment } from '../../stores/useChangesReview'
 import { useChangesViewed } from '../../stores/useChangesViewed'
 import {
   OpenSessionInEditor,
@@ -326,7 +326,7 @@ function inShownComparison(comment: ChangesComment): boolean {
 
 // Stamps belong to a comparison, so only the comment's own can say it moved.
 function isOutdated(comment: ChangesComment): boolean {
-  if (comment.kind === 'review' || pending.value || !inShownComparison(comment)) return false
+  if (pending.value || !inShownComparison(comment)) return false
   const file = files.value.find((candidate) => candidate.path === comment.path)
   return !file || fileVersion(file) !== comment.version
 }
@@ -334,7 +334,7 @@ function isOutdated(comment: ChangesComment): boolean {
 // The comparison and version are the diff's when the selection was made: the view
 // can move to another session or comparison, or the file can change, during typing.
 interface CommentDraft {
-  kind?: ChangesCommentKind
+  kind?: 'file'
   sessionId: string
   comparison: Pick<ChangesComment, 'base' | 'against' | 'commit' | 'staged' | 'version'>
   path: string
@@ -387,9 +387,7 @@ function startFileComment(file: ChangedFile, rect: CommentDraft['rect']): void {
 const draftRange = computed(() => {
   const held = draft.value
   if (!held) return null
-  if (held.kind) {
-    return { startLine: 0, endLine: 0, context: held.kind === 'file' ? held.path : 'All the changes' }
-  }
+  if (held.kind) return { startLine: 0, endLine: 0, context: held.path }
   return {
     startLine: held.span.startLine,
     endLine: held.span.endLine,
@@ -427,10 +425,6 @@ function saveDraft(text: string): void {
 }
 
 function pickComment(comment: ChangesComment): void {
-  if (comment.kind === 'review') {
-    overviewOpen.value = true
-    return
-  }
   overviewOpen.value = false
   if (!inShownComparison(comment)) {
     base.value = comment.base
@@ -1034,7 +1028,6 @@ function openInEditor(): void {
           :agent-comments="shownAgentComments"
           :is-agent-stale="isAgentStale"
           :focused-agent="walkId"
-          :walk-keys="walking"
           @dismiss-agent="(comment) => void dismissAgent(comment)"
           @pick-agent="focusAgent"
         />

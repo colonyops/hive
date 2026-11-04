@@ -14,8 +14,6 @@ const props = defineProps<{
   stale?: boolean
   /** The walkthrough is on this comment. */
   focused?: boolean
-  /** Names the walkthrough key in the button tooltip. */
-  keys?: boolean
 }>()
 const emit = defineEmits<{ dismiss: []; pick: [] }>()
 
@@ -74,7 +72,7 @@ const bar = computed(() => BARS[props.comment.severity] ?? BARS.note)
       <IconButton
         class="ml-auto"
         :class="focused ? '' : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'"
-        :label="keys ? 'Dismiss (d)' : 'Dismiss'"
+        :label="focused ? 'Dismiss (d)' : 'Dismiss'"
         :icon="IconX"
         size="md"
         :data-testid="`${testid}-dismiss`"

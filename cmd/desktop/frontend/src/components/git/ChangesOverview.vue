@@ -18,7 +18,7 @@ import type { DiffReviewWire } from '../../../bindings/github.com/colonyops/hive
 // changes.
 const props = defineProps<{
   reviews: readonly DiffReviewWire[]
-  /** Every review's comments, in the order triage walks them. */
+  /** Every review's comments, in the order the walkthrough takes them. */
   comments: readonly AgentComment[]
   /** Another comparison is on screen, so the agents' rows cannot be shown in place. */
   hidden: boolean
