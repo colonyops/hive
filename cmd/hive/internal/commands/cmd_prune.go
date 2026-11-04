@@ -3,7 +3,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/urfave/cli/v3"
@@ -54,14 +53,14 @@ func (cmd *PruneCmd) run(ctx context.Context, c *cli.Command) error {
 
 	if count == 0 {
 		if all {
-			fmt.Fprintf(os.Stderr, "No recycled sessions to prune\n")
+			_, _ = fmt.Fprintf(c.Root().ErrWriter, "No recycled sessions to prune\n")
 		} else {
-			fmt.Fprintf(os.Stderr, "No sessions exceed max_recycled limit\n")
+			_, _ = fmt.Fprintf(c.Root().ErrWriter, "No sessions exceed max_recycled limit\n")
 		}
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "Pruned %d session(s)\n", count)
+	_, _ = fmt.Fprintf(c.Root().ErrWriter, "Pruned %d session(s)\n", count)
 
 	return nil
 }

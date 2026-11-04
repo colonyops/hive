@@ -142,7 +142,7 @@ func aliasShellFor(rcFile string) string {
 func validateRCFile(s string) error {
 	path := pathutil.ExpandHome(strings.TrimSpace(s))
 	if path == "" {
-		return fmt.Errorf("path is required")
+		return invalidf("path is required")
 	}
 	if info, err := os.Stat(path); err == nil && info.IsDir() {
 		return fmt.Errorf("path is a directory")

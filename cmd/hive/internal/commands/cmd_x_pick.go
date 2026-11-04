@@ -536,12 +536,12 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			// Validate flags
 			validStatuses := map[string]bool{"all": true, "active": true, "approval": true, "ready": true, "missing": true}
 			if flagStatus != "" && !validStatuses[flagStatus] {
-				return fmt.Errorf("invalid --status %q: valid values are all, active, approval, ready, missing", flagStatus)
+				return invalidf("invalid --status %q: valid values are all, active, approval, ready, missing", flagStatus)
 			}
 
 			validFormats := map[string]bool{"id": true, "name": true, "path": true, "json": true}
 			if !validFormats[flagFormat] {
-				return fmt.Errorf("invalid --format %q: valid values are id, name, path, json", flagFormat)
+				return invalidf("invalid --format %q: valid values are id, name, path, json", flagFormat)
 			}
 
 			sessions, err := cmd.app.Sessions().ListSessions(ctx)

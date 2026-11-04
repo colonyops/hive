@@ -88,6 +88,7 @@ Warnings and errors are written to stderr.`,
 func (cmd *MsgCmd) pubCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "pub",
+		Metadata:  alwaysJSON(),
 		Usage:     "Publish a message to topic(s)",
 		UsageText: "hive msg pub --topic <topic> [--topic <topic2>] [-m message | message | -f file | stdin]",
 		Description: `Publishes a message to the specified topic(s).
@@ -144,6 +145,7 @@ Examples:
 func (cmd *MsgCmd) subCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "sub",
+		Metadata:  alwaysJSON(),
 		Usage:     "Read messages from a topic",
 		UsageText: "hive msg sub [--topic <pattern>] [--tail N] [--listen] [--ack]",
 		Description: `Reads messages from topics, optionally filtering by topic pattern.
@@ -216,6 +218,7 @@ Examples:
 func (cmd *MsgCmd) listCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "list",
+		Metadata:  alwaysJSON(),
 		Usage:     "List all topics with activity info",
 		UsageText: "hive msg list",
 		Description: `Lists all topics with message counts, activity timestamps, and unread counts.
@@ -288,7 +291,7 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 
 	topics := cmd.pubTopics
 	if len(topics) == 0 {
-		return fmt.Errorf("at least one topic required")
+		return invalidf("at least one topic required")
 	}
 
 	// Determine message content — exactly one source allowed
@@ -414,7 +417,7 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, msgs *msgsvc.Service, topic string, ack bool) error {
 	timeout, err := time.ParseDuration(cmd.subTimeout)
 	if err != nil {
-		return fmt.Errorf("invalid timeout: %w", err)
+		return invalidf("invalid timeout: %w", err)
 	}
 
 	deadline := time.Now().Add(timeout)
@@ -457,7 +460,7 @@ func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, msgs *msg
 		var err error
 		timeout, err = time.ParseDuration(cmd.subTimeout)
 		if err != nil {
-			return fmt.Errorf("invalid timeout: %w", err)
+			return invalidf("invalid timeout: %w", err)
 		}
 	}
 
@@ -508,7 +511,7 @@ func (cmd *MsgCmd) handleTimeout(c *cli.Command, topic string, duration time.Dur
 		Topic:    topic,
 		Duration: duration.String(),
 	})
-	return cli.Exit("", 1)
+	return errAlreadyReported
 }
 
 func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
@@ -630,8 +633,9 @@ func (cmd *MsgCmd) acknowledgeMessages(ctx context.Context, msgs *msgsvc.Service
 
 func (cmd *MsgCmd) inboxCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "inbox",
-		Usage: "Read messages from your session's inbox",
+		Name:     "inbox",
+		Metadata: alwaysJSON(),
+		Usage:    "Read messages from your session's inbox",
 		Description: `Auto-resolves inbox topic (agent.<id>.inbox).
 Shows unread messages by default (without acknowledging).
 Use --ack to mark messages as read, or --all to see all messages.

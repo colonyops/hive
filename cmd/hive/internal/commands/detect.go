@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/urfave/cli/v3"
@@ -13,6 +12,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/colonyops/hive/internal/platform/proc/classifier"
 	tmuxstatus "github.com/colonyops/hive/internal/platform/tmux/status"
+	"github.com/colonyops/hive/pkg/iojson"
 )
 
 // DetectCmd classifies tmux panes for a hive session.
@@ -33,6 +33,7 @@ func (cmd *DetectCmd) Register(app *cli.Command) *cli.Command {
 		Hidden:    true,
 		Usage:     "Classify tmux panes for a session (development/diagnostic tool)",
 		UsageText: "hive detect <session-slug>",
+		Metadata:  alwaysJSON(),
 		Action:    cmd.run,
 	})
 	return app
@@ -60,7 +61,7 @@ type detectOutput struct {
 
 func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 	if c.Args().Len() != 1 {
-		return fmt.Errorf("usage: hive detect <session-slug>")
+		return invalidf("usage: hive detect <session-slug>")
 	}
 
 	sess, err := cmd.findSession(ctx, c.Args().First())
@@ -107,9 +108,7 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 		out.Panes = append(out.Panes, paneOut)
 	}
 
-	enc := json.NewEncoder(c.Root().Writer)
-	enc.SetIndent("", "  ")
-	return enc.Encode(out)
+	return iojson.WriteLine(c.Root().Writer, out)
 }
 
 func assessDetectedAgentPane(ctx context.Context, pane classifier.PaneInput, tool string, capture classifier.ContentCapture, engine *assess.Engine) (string, string) {

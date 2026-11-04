@@ -3,7 +3,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"os"
 	"text/tabwriter"
 
 	"github.com/colonyops/hive/pkg/logutils"
@@ -65,7 +64,7 @@ type workspaceRepoOutput struct {
 func (cmd *WorkspaceCmd) runList(ctx context.Context, c *cli.Command) error {
 	dirs := cmd.app.Config.Workspaces
 	if len(dirs) == 0 {
-		fmt.Fprintln(os.Stderr, "No workspaces configured. Add parent folders containing Git repositories to your config.")
+		_, _ = fmt.Fprintln(c.Root().ErrWriter, "No workspaces configured. Add parent folders containing Git repositories to your config.")
 		return nil
 	}
 

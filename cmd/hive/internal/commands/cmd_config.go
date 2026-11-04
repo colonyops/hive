@@ -24,16 +24,17 @@ func (cmd *ConfigCmd) Register(app *cli.Command) *cli.Command {
 		Name:      "config",
 		Usage:     "Display resolved configuration",
 		UsageText: "hive config",
-		Description: `Dumps the fully resolved configuration as pretty-printed JSON.
+		Description: `Dumps the fully resolved configuration as one JSON line.
 
 This shows the effective configuration after loading the config file,
 applying defaults, and merging keybindings.`,
-		Action: cmd.run,
+		Metadata: alwaysJSON(),
+		Action:   cmd.run,
 	})
 
 	return app
 }
 
 func (cmd *ConfigCmd) run(_ context.Context, c *cli.Command) error {
-	return iojson.WriteWith(c.Root().Writer, c.Root().ErrWriter, cmd.app.Config)
+	return iojson.WriteLine(c.Root().Writer, cmd.app.Config)
 }

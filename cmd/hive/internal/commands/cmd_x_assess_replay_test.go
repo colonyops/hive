@@ -63,7 +63,7 @@ func TestAssessReplayCmd_Deterministic(t *testing.T) {
 		cmd.Register(app)
 
 		err := app.Run(context.Background(), []string{
-			"hive", "x", "assess", "replay", framesPath, "--tool", "test-tool", "--jsonl",
+			"hive", "x", "assess", "replay", framesPath, "--tool", "test-tool", "--json",
 		})
 		require.NoError(t, err)
 		return out.String()

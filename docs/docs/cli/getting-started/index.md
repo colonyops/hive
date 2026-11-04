@@ -110,6 +110,21 @@ workspaces:
     hive new Fix Auth Bug
     ```
 
+## Output and exit codes
+
+Commands print results to stdout and progress or warnings to stderr. A command with a `--json` flag prints human-readable text by default. With `--json`, stdout carries JSON Lines: one compact JSON value per line. Commands that always print JSON, such as `hive batch`, `hive config`, `hive hc update`, `hive msg pub`, and `hive desktop` operations, take no flag.
+
+When a command fails in JSON mode, stderr carries one line, `{"kind": "...", "message": "..."}`, and nothing is added to stdout. Without JSON mode, stderr carries the message as text. The exit code follows the kind:
+
+| Kind | Exit code | Meaning |
+| --- | --- | --- |
+| `invalid` | 2 | The arguments or input are wrong. |
+| `not_found` | 3 | The session, item, topic, or document does not exist. |
+| `conflict` | 4 | The name or path is already taken. |
+| `unavailable` | 5 | The daemon, server, or Hive Desktop cannot be reached. |
+| `unauthenticated` | 6 | The call needs a sign-in. |
+| `internal` | 1 | Any other failure. |
+
 ## Next Steps
 
 - [Sessions](sessions.md) — How sessions, agents, and lifecycle work

@@ -22,14 +22,14 @@ import (
 // offline.
 func (cmd *ExperimentalCmd) assessReplayCmd() *cli.Command {
 	var (
-		flagTool  string
-		flagJSONL bool
+		flagTool string
+		flagJSON bool
 	)
 
 	return &cli.Command{
 		Name:      "replay",
 		Usage:     "Replay recorded frames through a fresh engine+tracker on a virtual clock",
-		UsageText: "hive x assess replay <frames.jsonl> [--tool <tool>] [--jsonl]",
+		UsageText: "hive x assess replay <frames.jsonl> [--tool <tool>] [--json]",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "tool",
@@ -37,14 +37,14 @@ func (cmd *ExperimentalCmd) assessReplayCmd() *cli.Command {
 				Destination: &flagTool,
 			},
 			&cli.BoolFlag{
-				Name:        "jsonl",
+				Name:        "json",
 				Usage:       "Emit machine-readable JSON lines instead of a human summary",
-				Destination: &flagJSONL,
+				Destination: &flagJSON,
 			},
 		},
 		Action: func(_ context.Context, c *cli.Command) error {
 			if c.Args().Len() != 1 {
-				return fmt.Errorf("usage: hive x assess replay <frames.jsonl> [--tool <tool>] [--jsonl]")
+				return invalidf("usage: hive x assess replay <frames.jsonl> [--tool <tool>] [--json]")
 			}
 
 			frames, err := readAssessFrames(c.Args().First())
@@ -59,7 +59,7 @@ func (cmd *ExperimentalCmd) assessReplayCmd() *cli.Command {
 
 			tracker := status.NewTracker(assess.NewEngine(), opts)
 
-			return replayFrames(c.Root().Writer, tracker, frames, flagTool, flagJSONL, &virtualNow)
+			return replayFrames(c.Root().Writer, tracker, frames, flagTool, flagJSON, &virtualNow)
 		},
 	}
 }
@@ -89,7 +89,7 @@ func readAssessFrames(path string) ([]assessFrame, error) {
 // observation line per frame in recording order. A fresh tracker plus a
 // clock driven only by recorded data (never wall time) is what makes this
 // deterministic across repeated runs of the same file.
-func replayFrames(w io.Writer, tracker *status.Tracker, frames []assessFrame, tool string, jsonl bool, virtualNow *time.Time) error {
+func replayFrames(w io.Writer, tracker *status.Tracker, frames []assessFrame, tool string, asJSON bool, virtualNow *time.Time) error {
 	var generation uint64
 	for _, f := range frames {
 		generation++
@@ -97,7 +97,7 @@ func replayFrames(w io.Writer, tracker *status.Tracker, frames []assessFrame, to
 		debug, _ := tracker.DebugState("replay")
 
 		out := newAssessObservation(f.Timestamp, generation, published, assessment, debug, f.InMode)
-		if err := writeAssessObservation(w, jsonl, out); err != nil {
+		if err := writeAssessObservation(w, asJSON, out); err != nil {
 			return err
 		}
 	}

@@ -2,8 +2,8 @@ package commands
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -125,11 +125,12 @@ Example: hive drive ls`,
 }
 
 func (cmd *DriveCmd) runLs(ctx context.Context, c *cli.Command) error {
+	w, ew := c.Root().Writer, c.Root().ErrWriter
 	if cmd.all {
 		if cmd.repo != "" || cmd.shared || cmd.workspace != "" {
-			return fmt.Errorf("--all cannot be combined with --repo, --shared, or --workspace")
+			return invalidf("--all cannot be combined with --repo, --shared, or --workspace")
 		}
-		return cmd.runLsAll(ctx)
+		return cmd.runLsAll(ctx, w)
 	}
 
 	space, err := cmd.space(ctx)
@@ -145,7 +146,7 @@ func (cmd *DriveCmd) runLs(ctx context.Context, c *cli.Command) error {
 		if cmd.json {
 			return nil
 		}
-		fmt.Println("Context directory does not exist. Run 'hive drive init' first.")
+		_, _ = fmt.Fprintln(w, "Context directory does not exist. Run 'hive drive init' first.")
 		return nil
 	}
 
@@ -154,16 +155,16 @@ func (cmd *DriveCmd) runLs(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 	if cmd.json {
-		return writeEntries(root, func(e drive.Entry) any { return e })
+		return writeEntries(w, root, func(e drive.Entry) any { return e })
 	}
-	fmt.Println(dir)
-	printEntries(root, cmd.uploadStatus(ctx, space))
+	_, _ = fmt.Fprintln(w, dir)
+	printEntries(w, root, cmd.uploadStatus(ctx, ew, space))
 	return nil
 }
 
 // uploadStatus is nil unless a drive server is known, so a machine that never
 // logged in sees the plain listing.
-func (cmd *DriveCmd) uploadStatus(ctx context.Context, space drive.Space) map[string]driveremote.UploadStatus {
+func (cmd *DriveCmd) uploadStatus(ctx context.Context, ew io.Writer, space drive.Space) map[string]driveremote.UploadStatus {
 	remote := cmd.app.DriveRemote()
 	if remote == nil {
 		return nil
@@ -174,13 +175,13 @@ func (cmd *DriveCmd) uploadStatus(ctx context.Context, space drive.Space) map[st
 	}
 	status, err := remote.Status(ctx, server, space)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: upload status unavailable: %v\n", err)
+		_, _ = fmt.Fprintf(ew, "warning: upload status unavailable: %v\n", err)
 		return nil
 	}
 	return status
 }
 
-func (cmd *DriveCmd) runLsAll(ctx context.Context) error {
+func (cmd *DriveCmd) runLsAll(ctx context.Context, w io.Writer) error {
 	spaces, err := cmd.app.Drive().Spaces(ctx)
 	if err != nil {
 		return err
@@ -191,7 +192,7 @@ func (cmd *DriveCmd) runLsAll(ctx context.Context) error {
 			return err
 		}
 		if cmd.json {
-			err = writeEntries(root, func(e drive.Entry) any {
+			err = writeEntries(w, root, func(e drive.Entry) any {
 				return struct {
 					Space drive.Space `json:"space"`
 					Entry drive.Entry `json:"entry"`
@@ -202,34 +203,34 @@ func (cmd *DriveCmd) runLsAll(ctx context.Context) error {
 			}
 			continue
 		}
-		fmt.Println(space.Key)
-		printEntries(root, nil)
+		_, _ = fmt.Fprintln(w, space.Key)
+		printEntries(w, root, nil)
 	}
 	return nil
 }
 
 // A non-nil status adds a column for the uploaded or changed documents.
-func printEntries(root drive.Entry, status map[string]driveremote.UploadStatus) {
+func printEntries(w io.Writer, root drive.Entry, status map[string]driveremote.UploadStatus) {
 	for _, entry := range root.Children {
 		if status == nil {
-			fmt.Printf("%-8s  %s\n", entry.Kind, entry.Path)
+			_, _ = fmt.Fprintf(w, "%-8s  %s\n", entry.Kind, entry.Path)
 		} else {
-			fmt.Printf("%-8s  %-8s  %s\n", entry.Kind, status[entry.Path], entry.Path)
+			_, _ = fmt.Fprintf(w, "%-8s  %-8s  %s\n", entry.Kind, status[entry.Path], entry.Path)
 		}
-		printEntries(entry, status)
+		printEntries(w, entry, status)
 	}
 }
 
 // writeEntries writes every entry under root, depth first, as one JSON line
 // each. The entry carries no children: the lines are the tree.
-func writeEntries(root drive.Entry, wrap func(drive.Entry) any) error {
+func writeEntries(w io.Writer, root drive.Entry, wrap func(drive.Entry) any) error {
 	for _, entry := range root.Children {
 		children := entry.Children
 		entry.Children = nil
-		if err := iojson.WriteLine(os.Stdout, wrap(entry)); err != nil {
+		if err := iojson.WriteLine(w, wrap(entry)); err != nil {
 			return err
 		}
-		if err := writeEntries(drive.Entry{Children: children}, wrap); err != nil {
+		if err := writeEntries(w, drive.Entry{Children: children}, wrap); err != nil {
 			return err
 		}
 	}
@@ -262,12 +263,12 @@ func (cmd *DriveCmd) runSpaces(ctx context.Context, c *cli.Command) error {
 	}
 	for _, space := range spaces {
 		if cmd.json {
-			if err := iojson.WriteLine(os.Stdout, space); err != nil {
+			if err := iojson.WriteLine(c.Root().Writer, space); err != nil {
 				return err
 			}
 			continue
 		}
-		fmt.Printf("%-10s  %s\n", space.Kind, space.Key)
+		_, _ = fmt.Fprintf(c.Root().Writer, "%-10s  %s\n", space.Kind, space.Key)
 	}
 	return nil
 }
@@ -309,13 +310,13 @@ func (cmd *DriveCmd) runInit(ctx context.Context, c *cli.Command) error {
 
 	symlinkName := cmd.app.Config.Context.SymlinkName
 	if alreadyExists {
-		fmt.Fprintf(os.Stderr, "Symlink already exists: %s -> %s\n", symlinkName, ctxDir)
+		_, _ = fmt.Fprintf(c.Root().ErrWriter, "Symlink already exists: %s -> %s\n", symlinkName, ctxDir)
 	} else {
-		fmt.Fprintf(os.Stderr, "Created symlink: %s -> %s\n", symlinkName, ctxDir)
+		_, _ = fmt.Fprintf(c.Root().ErrWriter, "Created symlink: %s -> %s\n", symlinkName, ctxDir)
 	}
 
 	if len(createdSubdirs) > 0 {
-		fmt.Fprintf(os.Stderr, "Created subdirectories: %s\n", strings.Join(createdSubdirs, ", "))
+		_, _ = fmt.Fprintf(c.Root().ErrWriter, "Created subdirectories: %s\n", strings.Join(createdSubdirs, ", "))
 	}
 	return nil
 }
@@ -328,7 +329,7 @@ func (cmd *DriveCmd) runPrune(ctx context.Context, c *cli.Command) error {
 
 	duration, err := parseDuration(cmd.olderThan)
 	if err != nil {
-		return fmt.Errorf("invalid duration: %w", err)
+		return invalidf("invalid duration: %w", err)
 	}
 
 	count, err := cmd.app.Drive().Prune(ctxDir, duration)
@@ -337,9 +338,9 @@ func (cmd *DriveCmd) runPrune(ctx context.Context, c *cli.Command) error {
 	}
 
 	if count == 0 {
-		fmt.Fprintf(os.Stderr, "No files older than %s\n", cmd.olderThan)
+		_, _ = fmt.Fprintf(c.Root().ErrWriter, "No files older than %s\n", cmd.olderThan)
 	} else {
-		fmt.Fprintf(os.Stderr, "Removed %d file(s) older than %s\n", count, cmd.olderThan)
+		_, _ = fmt.Fprintf(c.Root().ErrWriter, "Removed %d file(s) older than %s\n", count, cmd.olderThan)
 	}
 	return nil
 }
@@ -359,7 +360,7 @@ func (cmd *DriveCmd) space(ctx context.Context) (drive.Space, error) {
 		return cmd.app.Drive().ResolveSpace(ctx, cmd.repo, cmd.shared)
 	}
 	if cmd.repo != "" || cmd.shared {
-		return drive.Space{}, errors.New("--workspace cannot be combined with --repo or --shared")
+		return drive.Space{}, invalidf("--workspace cannot be combined with --repo or --shared")
 	}
 	return drive.WorkspaceSpace(cmd.workspace)
 }
@@ -370,7 +371,7 @@ func parseDuration(s string) (time.Duration, error) {
 		days := before
 		var d int
 		if _, err := fmt.Sscanf(days, "%d", &d); err != nil {
-			return 0, fmt.Errorf("invalid days: %s", s)
+			return 0, invalidf("invalid days: %s", s)
 		}
 		return time.Duration(d) * 24 * time.Hour, nil
 	}

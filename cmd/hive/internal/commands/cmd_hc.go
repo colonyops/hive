@@ -162,6 +162,7 @@ Examples:
 			&cli.StringFlag{Name: "parent", Aliases: []string{"p"}, Usage: "parent item ID", Destination: &flagParentID},
 			bulk.Flag(),
 		},
+		Metadata: alwaysJSON(),
 		Action: func(ctx context.Context, c *cli.Command) error {
 			repoKey := cmd.detectRepoKey(ctx)
 			if repoKey == "" {
@@ -187,7 +188,7 @@ Examples:
 
 			itemType, err := hc.ParseItemType(flagType)
 			if err != nil {
-				return fmt.Errorf("invalid type %q: valid values are epic, task", flagType)
+				return invalidf("invalid type %q: valid values are epic, task", flagType)
 			}
 
 			if itemType == hc.ItemTypeTask && flagParentID == "" {
@@ -268,7 +269,7 @@ Examples:
 			case flagStatus != "":
 				status, err := hc.ParseStatus(flagStatus)
 				if err != nil {
-					return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
+					return invalidf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
 				}
 				filter.Status = &status
 			case !flagAll:
@@ -466,7 +467,7 @@ Examples:
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 1 {
-				return fmt.Errorf("item ID required as argument")
+				return invalidf("item ID required as argument")
 			}
 			id := c.Args().First()
 
@@ -673,18 +674,19 @@ Examples:
 			&cli.StringFlag{Name: "title", Usage: "new title for the item", Destination: &flagTitle},
 			&cli.StringFlag{Name: "desc", Usage: "new description for the item", Destination: &flagDesc},
 		},
+		Metadata: alwaysJSON(),
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 1 {
-				return fmt.Errorf("item ID required as argument")
+				return invalidf("item ID required as argument")
 			}
 			id := c.Args().First()
 
 			if flagStatus == "" && !flagAssign && !flagUnassign && flagAddBlocker == "" && flagRemoveBlocker == "" && !c.IsSet("title") && !c.IsSet("desc") {
-				return fmt.Errorf("at least one of --status, --assign, --unassign, --add-blocker, --remove-blocker, --title, or --desc is required")
+				return invalidf("at least one of --status, --assign, --unassign, --add-blocker, --remove-blocker, --title, or --desc is required")
 			}
 
 			if flagAddBlocker != "" && flagRemoveBlocker != "" {
-				return fmt.Errorf("--add-blocker and --remove-blocker are mutually exclusive")
+				return invalidf("--add-blocker and --remove-blocker are mutually exclusive")
 			}
 
 			// Apply item field updates first so that if they fail, no blocker
@@ -697,13 +699,13 @@ Examples:
 				if flagStatus != "" {
 					status, err := hc.ParseStatus(flagStatus)
 					if err != nil {
-						return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
+						return invalidf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
 					}
 					update.Status = &status
 				}
 
 				if flagAssign && flagUnassign {
-					return fmt.Errorf("--assign and --unassign are mutually exclusive")
+					return invalidf("--assign and --unassign are mutually exclusive")
 				}
 
 				if flagAssign {
@@ -721,7 +723,7 @@ Examples:
 
 				if c.IsSet("title") {
 					if flagTitle == "" {
-						return fmt.Errorf("--title cannot be empty")
+						return invalidf("--title cannot be empty")
 					}
 					update.Title = &flagTitle
 				}
@@ -784,9 +786,10 @@ Examples:
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "assign", Usage: "assign item to current session and set in_progress", Destination: &flagAssign},
 		},
+		Metadata: alwaysJSON(),
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 1 {
-				return fmt.Errorf("epic ID required as argument")
+				return invalidf("epic ID required as argument")
 			}
 
 			filter := hc.NextFilter{
@@ -839,9 +842,10 @@ Use for recording progress notes, decisions, or handoff context.
 Examples:
   hive hc comment hc-abc123 "Decided to use JWT for auth"
   hive hc comment hc-abc123 "Stopping here — middleware wired, handlers pending"`,
+		Metadata: alwaysJSON(),
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 2 {
-				return fmt.Errorf("item ID and message required as arguments")
+				return invalidf("item ID and message required as arguments")
 			}
 
 			comment, err := cmd.app.HC().AddComment(ctx, c.Args().Get(0), strings.Join(c.Args().Slice()[1:], " "))
@@ -866,7 +870,7 @@ The context block contains the epic title, task counts by status, tasks assigned
 to the current session (with latest comment), and all open/in-progress tasks.
 
 Without --json, outputs a markdown representation suitable for AI agent consumption.
-With --json, outputs a single JSON object.
+With --json, outputs a single JSON line.
 
 Examples:
   hive hc context hc-epic123
@@ -876,7 +880,7 @@ Examples:
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 1 {
-				return fmt.Errorf("epic ID required as argument")
+				return invalidf("epic ID required as argument")
 			}
 
 			epicID := c.Args().First()
@@ -886,7 +890,7 @@ Examples:
 			}
 
 			if flagJSON {
-				return iojson.WriteWith(c.Root().Writer, c.Root().ErrWriter, cb)
+				return iojson.WriteLine(c.Root().Writer, cb)
 			}
 
 			renderMarkdown(c.Root().Writer, cb.String())
@@ -918,10 +922,11 @@ Examples:
 			&cli.StringSliceFlag{Name: "status", Usage: "statuses to prune (default: done, cancelled)", Destination: &flagStatuses},
 			&cli.BoolFlag{Name: "dry-run", Usage: "show what would be pruned without removing", Destination: &flagDryRun},
 		},
+		Metadata: alwaysJSON(),
 		Action: func(ctx context.Context, c *cli.Command) error {
 			olderThan, err := time.ParseDuration(flagOlderThan)
 			if err != nil {
-				return fmt.Errorf("invalid duration %q: %w", flagOlderThan, err)
+				return invalidf("invalid duration %q: %w", flagOlderThan, err)
 			}
 
 			statuses := make([]hc.Status, 0, len(flagStatuses))
@@ -931,7 +936,7 @@ Examples:
 				for _, s := range flagStatuses {
 					status, err := hc.ParseStatus(s)
 					if err != nil {
-						return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", s)
+						return invalidf("invalid status %q: valid values are open, in_progress, done, cancelled", s)
 					}
 					statuses = append(statuses, status)
 				}
@@ -952,7 +957,7 @@ Examples:
 				action = "would prune"
 			}
 
-			return iojson.WriteWith(c.Root().Writer, c.Root().ErrWriter, map[string]any{
+			return iojson.WriteLine(c.Root().Writer, map[string]any{
 				"action": action,
 				"count":  count,
 			})

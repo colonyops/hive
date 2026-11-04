@@ -137,7 +137,7 @@ func checkAgent(ctx context.Context, app *app.App, agent string) error {
 	}
 	if !app.TargetsServer() {
 		if _, ok := app.Config.Agents.Profiles[agent]; !ok {
-			return fmt.Errorf("unknown agent %q", agent)
+			return invalidf("unknown agent %q", agent)
 		}
 		return nil
 	}
@@ -236,15 +236,15 @@ Example:
 func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 	args := c.Args().Slice()
 	if len(args) == 0 {
-		return fmt.Errorf("session name required\n\nUsage: hive new <name...>\n\nExample: hive new Fix Auth Bug")
+		return invalidf("session name required\n\nUsage: hive new <name...>\n\nExample: hive new Fix Auth Bug")
 	}
 	name := strings.Join(args, " ")
 
-	sess, err := createSessionFromFlags(ctx, cmd.app, name, &cmd.createFlags, nil)
+	sess, err := createSessionFromFlags(ctx, cmd.app, name, &cmd.createFlags, c.Root().ErrWriter)
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Session created\n  %s\n", sess.Path)
+	_, _ = fmt.Fprintf(c.Root().ErrWriter, "Session created\n  %s\n", sess.Path)
 	return nil
 }
