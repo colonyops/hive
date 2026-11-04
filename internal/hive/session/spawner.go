@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/colonyops/hive/internal/config"
@@ -52,6 +53,13 @@ func NewSpawner(log zerolog.Logger, renderer *tmpl.Renderer, tmuxClient SessionC
 	}
 }
 
+// sessionEnv adds HIVE_AGENT_SESSION=<id> to env. Every tmux session hive
+// creates for a hive session carries it, so each window and agent in it tells
+// ResolveCaller which session is calling.
+func sessionEnv(id string, env []string) []string {
+	return append(slices.Clone(env), AgentSessionEnv+"="+id)
+}
+
 // SpawnWindows renders window templates and creates a tmux session.
 func (s *Spawner) SpawnWindows(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool) error {
 	return s.SpawnWindowsWith(ctx, windows, data, background, s.renderer, nil)
@@ -84,11 +92,12 @@ func (s *Spawner) SpawnWindowsWith(ctx context.Context, windows []config.WindowC
 // OpenWindows renders window templates and opens (or creates) a tmux session.
 // If the session already exists, it attaches to it (optionally selecting targetWindow).
 func (s *Spawner) OpenWindows(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, targetWindow string) (multiplexer.LaunchResult, error) {
-	return s.OpenWindowsWith(ctx, windows, data, background, targetWindow, s.renderer)
+	return s.OpenWindowsWith(ctx, windows, data, background, targetWindow, s.renderer, nil)
 }
 
-// OpenWindowsWith renders window templates using the given renderer and opens (or creates) a tmux session.
-func (s *Spawner) OpenWindowsWith(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, targetWindow string, renderer *tmpl.Renderer) (multiplexer.LaunchResult, error) {
+// OpenWindowsWith renders window templates using the given renderer and opens (or creates) a tmux session
+// whose environment includes env when it has to be created.
+func (s *Spawner) OpenWindowsWith(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, targetWindow string, renderer *tmpl.Renderer, env []string) (multiplexer.LaunchResult, error) {
 	rendered, err := RenderWindows(renderer, windows, data)
 	if err != nil {
 		return multiplexer.LaunchResult{}, err
@@ -101,6 +110,7 @@ func (s *Spawner) OpenWindowsWith(ctx context.Context, windows []config.WindowCo
 		WorkingDirectory: data.Path,
 		Windows:          rendered,
 		Background:       background,
+		Env:              env,
 	}, targetFromLegacy(data.Slug, targetWindow))
 	if err != nil {
 		return multiplexer.LaunchResult{}, fmt.Errorf("open tmux session: %w", err)

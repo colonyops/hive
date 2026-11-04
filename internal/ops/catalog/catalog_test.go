@@ -141,3 +141,20 @@ func TestCatalogShape(t *testing.T) {
 		})
 	}
 }
+
+func TestCallerRuleMatchesTheCallerField(t *testing.T) {
+	for _, op := range catalog.All() {
+		info := op.Info()
+		t.Run(info.Name, func(t *testing.T) {
+			schema, err := op.InputSchema()
+			require.NoError(t, err)
+			_, hasField := schema.Properties[ops.CallerField]
+			assert.True(t, info.Caller.IsValid(), "caller rule %q is unknown", info.Caller)
+			if hasField {
+				assert.NotEqual(t, ops.CallerRuleNone, info.Caller, "%s has a caller input and no caller rule", info.Name)
+			} else {
+				assert.Equal(t, ops.CallerRuleNone, info.Caller, "%s has a caller rule and no caller input", info.Name)
+			}
+		})
+	}
+}

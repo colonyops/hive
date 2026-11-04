@@ -38,7 +38,7 @@ type TabOpenIn struct {
 }
 
 var TabOpen = ops.Spec[TabOpenIn]{
-	Name: "tab.open", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "tab.open", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary: "Open a tab or terminal beside the session",
 	Guidance: "Ask Hive to open a tab beside this chat or Code session. view is drive (the session's documents and " +
 		"canvases), diff (the Code session's changes), tasks (its task board), terminal (a tmux window of the Code " +
@@ -72,7 +72,7 @@ type TabCloseIn struct {
 }
 
 var TabClose = ops.Spec[TabCloseIn]{
-	Name: "tab.close", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "tab.close", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary: "Close a tab",
 	Guidance: "Ask Hive to close this chat or Code session's tab for a view (drive, diff, tasks or applet:<id>), wherever it " +
 		"sits. Closing an applet's tab ends its page. Like tab_open, the tab closes only while the user is viewing this chat or session. Documents and " +
@@ -91,7 +91,7 @@ type TabMoveIn struct {
 }
 
 var TabMove = ops.Spec[TabMoveIn]{
-	Name: "tab.move", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "tab.move", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary: "Move a tab",
 	Guidance: "Ask Hive to move a tab within this chat or Code session's panels. tab is a tab reference. placement " +
 		"behind (the default) puts it in the anchor's panel right after the anchor, or at the end of the focused panel " +
@@ -109,7 +109,7 @@ type TabIn struct {
 }
 
 var TabFocus = ops.Spec[TabIn]{
-	Name: "tab.focus", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "tab.focus", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary: "Bring a tab to the front",
 	Guidance: "Ask Hive to bring a tab forward and focus its panel; a terminal window is also selected in tmux. " +
 		"This one takes the screen: use it when the user asked to see something, not to show off a result. For a result " +
@@ -118,7 +118,7 @@ var TabFocus = ops.Spec[TabIn]{
 }
 
 var PanelClose = ops.Spec[TabIn]{
-	Name: "panel.close", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "panel.close", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary: "Close a panel",
 	Guidance: "Ask Hive to close the panel that holds a tab. Its tabs join the neighbouring panel and none of them " +
 		"close. The last panel stays.",
@@ -132,7 +132,7 @@ type SplitResizeIn struct {
 }
 
 var SplitResize = ops.Spec[SplitResizeIn]{
-	Name: "split.resize", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "split.resize", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary: "Resize a split",
 	Guidance: "Ask Hive to resize the nearest split of the panel that holds a tab. share, from 0.2 to 0.8, is the " +
 		"share of the split that the side holding the tab gets.",
@@ -141,7 +141,7 @@ var SplitResize = ops.Spec[SplitResizeIn]{
 }
 
 var SplitTurn = ops.Spec[TabIn]{
-	Name: "split.turn", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "split.turn", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary:  "Turn a split",
 	Guidance: "Ask Hive to turn the nearest split of the panel that holds a tab between side by side and stacked.",
 	Args:     []string{"tab"},
@@ -152,7 +152,7 @@ type LayoutGetIn struct {
 }
 
 var LayoutGet = ops.Spec[LayoutGetIn]{
-	Name: "layout.get", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset,
+	Name: "layout.get", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary: "Read the panel layout",
 	Guidance: "Read the panel layout of this chat or Code session as the app last reported it: each panel with its " +
 		"tabs, which tab is shown, which panel has focus, and the splits that join the panels. Each tab is spelled the " +

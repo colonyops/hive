@@ -134,11 +134,15 @@ func desktopCaller(c *cli.Command) (string, error) {
 	return resolveCaller(c.String(callerFlag))
 }
 
-// resolveCaller answers who a call acts for: explicit when set, else the
-// absolute current directory.
+// resolveCaller answers who a call acts for: explicit when set, else
+// HIVE_AGENT_SESSION, else the absolute current directory. It does no lookup:
+// the desktop resolves the value.
 func resolveCaller(explicit string) (string, error) {
 	if explicit != "" {
 		return explicit, nil
+	}
+	if env := strings.TrimSpace(os.Getenv("HIVE_AGENT_SESSION")); env != "" {
+		return env, nil
 	}
 	wd, err := os.Getwd()
 	if err != nil {

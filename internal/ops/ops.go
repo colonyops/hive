@@ -74,6 +74,9 @@ type Spec[In any] struct {
 	Args []string
 	// Fields adds constraints to input fields, keyed by json name.
 	Fields Constraints
+	// Caller is the rule for the input's caller field. Leave it unset for an
+	// operation with no caller field.
+	Caller CallerRule
 }
 
 // Validator is implemented by an In that has cross-field rules. Mount calls it
@@ -94,6 +97,7 @@ type Info struct {
 	Guidance string
 	Args     []string
 	Fields   Constraints
+	Caller   CallerRule
 }
 
 // Description is the MCP tool description: the summary as a sentence, then
@@ -126,10 +130,14 @@ func (s Spec[In]) Info() Info {
 	if !slices.Contains(Verbs, verb) {
 		panic(fmt.Sprintf("ops: %s: verb %q is not in ops.Verbs", s.Name, verb))
 	}
+	caller := s.Caller
+	if caller == "" {
+		caller = CallerRuleNone
+	}
 	return Info{
 		Name: s.Name, Resource: resource, Verb: verb, ToolName: resource + "_" + verb,
 		Owner: s.Owner, Effect: s.Effect, Toolset: s.Toolset,
-		Summary: s.Summary, Guidance: s.Guidance, Args: s.Args, Fields: s.Fields,
+		Summary: s.Summary, Guidance: s.Guidance, Args: s.Args, Fields: s.Fields, Caller: caller,
 	}
 }
 

@@ -415,3 +415,24 @@ func TestClientCLI_ServerFlagPicksTheServer(t *testing.T) {
 	}
 	assert.True(t, made, "hive new --server creates the session on that server")
 }
+
+func TestServer_ASessionsAgentKnowsItsSession(t *testing.T) {
+	created := serverA.CreateSession(t, "caller-env")
+	target := shellQuote(created.Name)
+	require.Eventually(t, func() bool {
+		return serverA.Shell(t, "tmux has-session -t "+target).Err == nil
+	}, 20*time.Second, 500*time.Millisecond, "the session's tmux session starts")
+
+	env := serverA.Shell(t, "tmux show-environment -t "+target+" HIVE_AGENT_SESSION").Ok(t)
+	assert.Equal(t, "HIVE_AGENT_SESSION="+created.ID, strings.TrimSpace(env.Stdout))
+
+	// A window opened in the session runs where the agent runs, outside its
+	// checkout, so only the environment can name the session.
+	out := "/tmp/caller-env-" + created.ID + ".json"
+	serverA.Shell(t, "tmux new-window -d -t "+target+" -c / "+shellQuote("hive session info --json > "+out)).Ok(t)
+	require.Eventually(t, func() bool {
+		return serverA.Shell(t, "test -s "+out).Err == nil
+	}, 20*time.Second, 500*time.Millisecond, "the window wrote its session info")
+	info := DecodeJSON[Session](t, serverA.Shell(t, "cat "+out).Ok(t))
+	assert.Equal(t, created.ID, info.ID)
+}

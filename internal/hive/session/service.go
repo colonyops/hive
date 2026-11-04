@@ -387,7 +387,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		if err != nil {
 			return nil, err
 		}
-		if err := s.spawner.SpawnWindowsWith(ctx, strategy.Windows, data, opts.Background, renderer, opts.Env); err != nil {
+		if err := s.spawner.SpawnWindowsWith(ctx, strategy.Windows, data, opts.Background, renderer, sessionEnv(sess.ID, opts.Env)); err != nil {
 			return nil, fmt.Errorf("spawn terminal: %w", err)
 		}
 	}
@@ -1046,12 +1046,14 @@ func (s *Service) OpenTmuxSession(ctx context.Context, name, path, remote, targe
 
 	owner, repo := git.ExtractOwnerRepo(remote)
 	tmuxName := session.Slugify(name)
+	var env []string
 	if sessions, listErr := s.sessions.List(ctx); listErr != nil {
 		s.log.Debug().Err(listErr).Str("path", path).Msg("failed to resolve persisted tmux session target")
 	} else {
 		for _, sess := range sessions {
 			if (path != "" && sess.Path == path) || (path == "" && sess.Name == name) {
 				tmuxName = Target(sess).Session
+				env = sessionEnv(sess.ID, nil)
 				break
 			}
 		}
@@ -1070,7 +1072,7 @@ func (s *Service) OpenTmuxSession(ctx context.Context, name, path, remote, targe
 		return multiplexer.LaunchResult{}, err
 	}
 
-	return s.spawner.OpenWindowsWith(ctx, strategy.Windows, data, background, targetWindow, renderer)
+	return s.spawner.OpenWindowsWith(ctx, strategy.Windows, data, background, targetWindow, renderer, env)
 }
 
 func (s *Service) rendererForAgent(agentKey string) (*tmpl.Renderer, error) {
@@ -1380,6 +1382,7 @@ func (s *Service) CreateSessionWithWindows(ctx context.Context, req NewSessionRe
 		WorkingDirectory: sess.Path,
 		Windows:          windows,
 		Background:       background,
+		Env:              sessionEnv(sess.ID, nil),
 	}); err != nil {
 		cleanup()
 		return nil, fmt.Errorf("create tmux session: %w", err)

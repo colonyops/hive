@@ -84,11 +84,7 @@ func (cmd *HoneycombCmd) logger() *zerolog.Logger {
 }
 
 func (cmd *HoneycombCmd) detectSession(ctx context.Context) string {
-	sessionID, err := cmd.app.Sessions().DetectSession(ctx)
-	if err != nil {
-		cmd.logger().Debug().Err(err).Msg("failed to detect session for hc")
-	}
-	return sessionID
+	return callingSessionID(ctx, cmd.app, "", "cli.hc")
 }
 
 func (cmd *HoneycombCmd) detectRepoKey(ctx context.Context) string {
