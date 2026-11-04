@@ -158,14 +158,28 @@ func (a *App) TargetsServer() bool {
 // DaemonClient reaches the daemon for this data directory. It needs only the
 // logger, the config, and ConfigPath, so commands that skip the engine can
 // call it. With autoStart, a dial that finds no daemon starts this binary as
-// one.
+// one, and a daemon that is an older release than this binary is replaced.
 func (a *App) DaemonClient(autoStart bool) *daemonclient.Client {
+	return a.daemonClient(autoStart, true)
+}
+
+// InspectDaemonClient is DaemonClient without the replacement, for commands
+// that report on the daemon that runs now.
+func (a *App) InspectDaemonClient(autoStart bool) *daemonclient.Client {
+	return a.daemonClient(autoStart, false)
+}
+
+func (a *App) daemonClient(autoStart, replaceOlder bool) *daemonclient.Client {
 	opts := daemonclient.Options{
 		Dialer: daemonclient.LocalDialer(a.Config.DataDir),
 		Logger: a.Logger,
 	}
 	if autoStart {
 		dataDir, configPath := a.Config.DataDir, a.ConfigPath
+		opts.CheckProtocol = true
+		opts.ClientVersion = a.Build.Version
+		opts.ReplaceOlder = replaceOlder
+		opts.DataDir = dataDir
 		opts.AutoStart = func(ctx context.Context) error {
 			binary, err := os.Executable()
 			if err != nil {

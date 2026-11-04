@@ -20,8 +20,20 @@ client needs. Before this decision, the client did not compare versions.
 - **Remote clients check it.** A fleet server client sends `Hello` before
   the first other call on each new connection and refuses every call while the
   protocol is out of range. The error names both hive versions. The fleet
-  reports the server as `incompatible`. A local daemon is not checked, because
-  it is the binary that spawned it or a unit the user installed.
+  reports the server as `incompatible`.
+- **A local daemon is checked too, and replaced when older.** A daemon never
+  exits on its own, so it outlives app and CLI updates and Desktop can spawn
+  another `hive` than the CLI on `PATH`. A local client that can start a daemon
+  sends `Hello` on its first call and compares `version` with its own build.
+  When both are `X.Y.Z` releases and the daemon's is lower, the client sends
+  `Stop`, waits up to 5 seconds for the socket and the lock to go, and lets
+  autostart spawn its own binary. Tmux servers outlive the daemon, so agents
+  keep running. It restarts at most once per process. If the daemon is still
+  older afterwards, such as a service unit that names an old binary, the
+  client logs a warning that names both versions and suggests `hive daemon
+  install`, and continues. A daemon that is newer or equal, or a `dev` or
+  unparseable version on either side, is never restarted. The protocol range
+  check above then decides, with the same error.
 - **When to raise it.** Most releases raise nothing, so a client and a server
   can run different versions. Raise `ProtocolVersion` for a change that breaks
   a client or a daemon of the previous version, such as a removed RPC or a
