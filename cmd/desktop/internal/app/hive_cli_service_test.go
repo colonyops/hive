@@ -30,7 +30,7 @@ func TestHiveCLIServiceKeepsTheChoiceSeparateFromTheLink(t *testing.T) {
 	assert.True(t, *status.Install)
 	assert.Equal(t, "dev", string(status.Command.Skip), "a dev build saves the choice and writes no link")
 	_, err = os.Lstat(filepath.Join(home, ".local", "bin", "hive"))
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 
 	persisted, err := store.Persisted()
 	require.NoError(t, err)
