@@ -266,6 +266,26 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
+  it('highlights a vue file from the whole file, so a hunk inside <script> reads as code', async () => {
+    mocks.SessionChanges.mockResolvedValue(changes([file('App.vue'), file('a.go')]))
+    mocks.SessionFileDiffs.mockImplementation((_id: string, _target: unknown, paths: string[]) =>
+      Promise.resolve(paths.map((path) => ({ path, text: `@@ -2 +2 @@\n-const a = 1\n+const a = 2\n`, ...noState }))),
+    )
+    mocks.SessionFileContext.mockResolvedValue({
+      path: 'App.vue',
+      text: '@@ -1,3 +1,3 @@\n <script setup lang="ts">\n-const a = 1\n+const a = 2\n </script>\n',
+      ...noState,
+    })
+    const wrapper = await mountView()
+    await flushPromises()
+
+    expect(mocks.SessionFileContext).toHaveBeenCalledTimes(1)
+    expect(mocks.SessionFileContext).toHaveBeenCalledWith('s1', expect.anything(), 'App.vue')
+    expect(wrapper.get('[data-fake="fake-App.vue"]').text()).toContain('<script setup lang="ts">')
+    expect(wrapper.get('[data-fake="fake-a.go"]').text()).not.toContain('<script')
+    wrapper.unmount()
+  })
+
   it('orders the stream as the rail does, folders first', async () => {
     mocks.SessionChanges.mockResolvedValue(changes([file('a.go'), file('z/b.go')]))
     const wrapper = await mountView()

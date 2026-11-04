@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { diffHasText, diffMetrics, emptyFileDiff, hunkOffsets, parseFileDiff, readOrder } from '../diffItems'
+import {
+  diffHasText,
+  diffMetrics,
+  emptyFileDiff,
+  highlightsFromWholeFile,
+  hunkOffsets,
+  parseFileDiff,
+  readOrder,
+} from '../diffItems'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const file = (extra: Partial<ChangedFile> = {}): ChangedFile => ({
@@ -15,6 +23,20 @@ const file = (extra: Partial<ChangedFile> = {}): ChangedFile => ({
 const GIT_HEADER =
   'diff --git a/dir/a file.go b/dir/a file.go\nindex 1..2 100644\n--- a/dir/a file.go\n+++ b/dir/a file.go\n'
 const TWO_HUNKS = '@@ -10,2 +10,3 @@ func x() {\n ctx\n-old\n+new\n+more\n@@ -40 +41 @@\n-var a\n+var b\n'
+
+describe('highlightsFromWholeFile', () => {
+  const hunk = '@@ -5 +5 @@\n-const a = 1\n+const a = 2\n'
+
+  it('picks a changed file whose grammar embeds other languages', () => {
+    expect(highlightsFromWholeFile(parseFileDiff(file({ path: 'App.vue' }), hunk, 'k'))).toBe(true)
+    expect(highlightsFromWholeFile(parseFileDiff(file({ path: 'a.go' }), hunk, 'k'))).toBe(false)
+  })
+
+  it('leaves out files whose patch already holds the whole file, or nothing', () => {
+    expect(highlightsFromWholeFile(parseFileDiff(file({ path: 'App.vue', status: 'added' }), hunk, 'k'))).toBe(false)
+    expect(highlightsFromWholeFile(emptyFileDiff(file({ path: 'App.vue' })))).toBe(false)
+  })
+})
 
 describe('parseFileDiff', () => {
   it('keeps the real path and reads git headers and bare hunks the same', () => {
