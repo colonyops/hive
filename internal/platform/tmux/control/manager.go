@@ -466,6 +466,10 @@ func (m *Manager) KillSession(ctx context.Context, slug string) (bool, error) {
 		m.remove(slug, mc.gen)
 	}
 	if _, err := m.oneShot(ctx, "kill-session", "-t", "="+slug); err != nil {
+		// The session can end on its own between the check above and the kill.
+		if alive, aliveErr := m.HasSession(ctx, slug); aliveErr == nil && !alive {
+			return false, nil
+		}
 		return false, fmt.Errorf("tmuxcc: kill session %s: %w", slug, err)
 	}
 	return true, nil

@@ -1631,14 +1631,17 @@ func (s *AgentWorkspacesService) launchTerminal(ctx context.Context, rec stores.
 	}
 
 	if s.awaitEarlyExit(ctx, name) {
-		view.ExitedEarly = true
-		view.Notice = "the session exited immediately; check that the agent CLI is installed and on PATH"
-		return view, nil
+		return exitedEarly(view), nil
 	}
 
 	if !opts.detached {
 		window, err := s.attach(ctx, name, opts.cols, opts.rows)
 		if err != nil {
+			// On a loaded machine the command can outlive earlyExitWindow and
+			// still end before the control client attaches.
+			if alive, aliveErr := s.terminals.HasSession(ctx, name); aliveErr == nil && !alive {
+				return exitedEarly(view), nil
+			}
 			return SessionView{}, err
 		}
 		view.TerminalID = name
@@ -1656,6 +1659,12 @@ func (s *AgentWorkspacesService) launchTerminal(ctx context.Context, rec stores.
 	}
 	view.Notice = strings.Join(notices, "; ")
 	return view, nil
+}
+
+func exitedEarly(view SessionView) SessionView {
+	view.ExitedEarly = true
+	view.Notice = "the session exited immediately; check that the agent CLI is installed and on PATH"
+	return view
 }
 
 // A UI launch keeps its record as the row the user retries from. A detached
