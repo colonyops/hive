@@ -22,7 +22,7 @@ func NewDiffReviewStore(db *db.DB) *DiffReviewStore {
 
 func (s *DiffReviewStore) ReplaceDiffReview(ctx context.Context, r review.DiffReview) error {
 	return s.db.WithinTx(ctx, func(ctx context.Context, tx *db.DB) error {
-		if err := tx.DeleteDiffReviewByAuthor(ctx, db.DeleteDiffReviewByAuthorParams{SessionID: r.SessionID, Author: r.Author}); err != nil {
+		if _, err := tx.DeleteDiffReviewByAuthor(ctx, db.DeleteDiffReviewByAuthorParams{SessionID: r.SessionID, Author: r.Author}); err != nil {
 			return fmt.Errorf("drop earlier diff review: %w", err)
 		}
 		err := tx.InsertDiffReview(ctx, db.InsertDiffReviewParams{
@@ -123,6 +123,14 @@ func (s *DiffReviewStore) DeleteDiffReviews(ctx context.Context, sessionID strin
 	n, err := s.db.Ctx(ctx).DeleteDiffReviewsBySession(ctx, sessionID)
 	if err != nil {
 		return 0, fmt.Errorf("delete diff reviews: %w", err)
+	}
+	return int(n), nil
+}
+
+func (s *DiffReviewStore) DeleteDiffReviewByAuthor(ctx context.Context, sessionID, author string) (int, error) {
+	n, err := s.db.Ctx(ctx).DeleteDiffReviewByAuthor(ctx, db.DeleteDiffReviewByAuthorParams{SessionID: sessionID, Author: author})
+	if err != nil {
+		return 0, fmt.Errorf("delete diff review by author: %w", err)
 	}
 	return int(n), nil
 }

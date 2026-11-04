@@ -32,7 +32,7 @@ func (q *Queries) DeleteDiffReview(ctx context.Context, id string) (int64, error
 	return result.RowsAffected()
 }
 
-const deleteDiffReviewByAuthor = `-- name: DeleteDiffReviewByAuthor :exec
+const deleteDiffReviewByAuthor = `-- name: DeleteDiffReviewByAuthor :execrows
 
 DELETE FROM diff_reviews WHERE session_id = ? AND author = ?
 `
@@ -43,9 +43,12 @@ type DeleteDiffReviewByAuthorParams struct {
 }
 
 // Diff reviews
-func (q *Queries) DeleteDiffReviewByAuthor(ctx context.Context, arg DeleteDiffReviewByAuthorParams) error {
-	_, err := q.db.ExecContext(ctx, deleteDiffReviewByAuthor, arg.SessionID, arg.Author)
-	return err
+func (q *Queries) DeleteDiffReviewByAuthor(ctx context.Context, arg DeleteDiffReviewByAuthorParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteDiffReviewByAuthor, arg.SessionID, arg.Author)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const deleteDiffReviewComment = `-- name: DeleteDiffReviewComment :execrows

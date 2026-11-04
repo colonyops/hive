@@ -1,6 +1,6 @@
 -- Diff reviews
 
--- name: DeleteDiffReviewByAuthor :exec
+-- name: DeleteDiffReviewByAuthor :execrows
 DELETE FROM diff_reviews WHERE session_id = ? AND author = ?;
 
 -- name: InsertDiffReview :exec

@@ -15,8 +15,6 @@ const (
 	SeverityIssue      Severity = "issue"
 )
 
-var Severities = []Severity{SeverityNote, SeveritySuggestion, SeverityIssue}
-
 func (s Severity) Valid() bool {
 	return s == SeverityNote || s == SeveritySuggestion || s == SeverityIssue
 }
@@ -80,6 +78,10 @@ type DiffReviewStore interface {
 
 	// DeleteDiffReview removes one review and its comments.
 	DeleteDiffReview(ctx context.Context, reviewID string) error
+
+	// DeleteDiffReviewByAuthor removes the session's review by author, if any,
+	// and returns how many it removed.
+	DeleteDiffReviewByAuthor(ctx context.Context, sessionID, author string) (int, error)
 
 	// DeleteDiffReviews removes every review of a session and returns how many.
 	DeleteDiffReviews(ctx context.Context, sessionID string) (int, error)

@@ -168,6 +168,8 @@ func TestClearAndDismiss(t *testing.T) {
 	require.NoError(t, err)
 	_, err = svc.Put(ctx, PutInput{SessionID: "s1", Author: "codex", Summary: "fine"})
 	require.NoError(t, err)
+	_, err = svc.Put(ctx, PutInput{SessionID: "s1", Author: "pi", Summary: "fine"})
+	require.NoError(t, err)
 
 	sessionID, err := svc.Dismiss(ctx, first.Comments[0].ID)
 	require.NoError(t, err)
@@ -176,6 +178,13 @@ func TestClearAndDismiss(t *testing.T) {
 	n, err := svc.Clear(ctx, "s1", "claude")
 	require.NoError(t, err)
 	assert.Zero(t, n, "the review went with its last comment")
+
+	n, err = svc.Clear(ctx, "s1", "codex")
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+
+	_, err = svc.Clear(ctx, "nope", "pi")
+	require.ErrorIs(t, err, session.ErrNotFound)
 
 	n, err = svc.Clear(ctx, "s1", "")
 	require.NoError(t, err)

@@ -293,22 +293,13 @@ func (s *Service) DismissReview(ctx context.Context, reviewID string) error {
 // Clear removes the session's reviews: every one, or only author's when
 // author is set. It returns how many it removed.
 func (s *Service) Clear(ctx context.Context, sessionID, author string) (int, error) {
+	if _, err := s.sessions.GetSession(ctx, sessionID); err != nil {
+		return 0, fmt.Errorf("get session %s: %w", sessionID, err)
+	}
 	if author == "" {
-		if _, err := s.sessions.GetSession(ctx, sessionID); err != nil {
-			return 0, fmt.Errorf("get session %s: %w", sessionID, err)
-		}
 		return s.store.DeleteDiffReviews(ctx, sessionID)
 	}
-	reviews, err := s.List(ctx, sessionID)
-	if err != nil {
-		return 0, err
-	}
-	for _, r := range reviews {
-		if r.Author == author {
-			return 1, s.store.DeleteDiffReview(ctx, r.ID)
-		}
-	}
-	return 0, nil
+	return s.store.DeleteDiffReviewByAuthor(ctx, sessionID, author)
 }
 
 func (s *Service) Fingerprint(ctx context.Context) (review.DiffReviewFingerprint, error) {
