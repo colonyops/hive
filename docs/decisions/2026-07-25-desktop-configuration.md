@@ -41,8 +41,9 @@ isolated data and config roots plus a marker binding it to the worktree. `deskto
 reuses it, `desktop:dev:fresh` deletes and reseeds it, `desktop:dev:reset` deletes it. Destructive
 operations require the exact worktree-local path, the ownership marker, and no root symlink; a worktree
 lock serializes them, and fresh/reset refuse while a dev server is running. Config snapshots materialize
-symlink targets. The agent-workspace root is copied into the instance and pinned with
-`HIVE_DESKTOP_AGENT_WORKSPACES_DIR`, so a dev process cannot reopen a File Provider path.
+symlink targets, except a dangling link or a link to a git repository, which are left out. The
+agent-workspace root is copied into the instance and pinned with `HIVE_DESKTOP_AGENT_WORKSPACES_DIR`, so a
+dev process cannot reopen a File Provider path.
 `cmd/desktop/devtools prepare` writes the non-secret `launch.env` (paths and preselected Wails/Vite ports);
 `desktop:dev` loads it, then the optional developer-authored `overrides.env`. The Vite host is fixed to
 `127.0.0.1` because Wails builds the frontend URL with localhost.
