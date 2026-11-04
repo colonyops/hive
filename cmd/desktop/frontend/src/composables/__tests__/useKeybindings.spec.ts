@@ -35,7 +35,6 @@ beforeEach(() => {
 function ev(init: Partial<KeyboardEvent>): KeyboardEvent {
   return {
     isComposing: false,
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- comboFromEvent reads keyCode 229 for WebKit IME
     keyCode: 0,
     key: '',
     code: '',
@@ -127,7 +126,6 @@ describe('comboFromEvent', () => {
     expect(comboFromEvent(ev({ key: 'Shift', shiftKey: true }))).toBeNull()
     expect(comboFromEvent(ev({ key: 'Meta', metaKey: true }))).toBeNull()
     expect(comboFromEvent(ev({ key: 'a', isComposing: true }))).toBeNull()
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- WebKit IME commit
     expect(comboFromEvent(ev({ key: 'a', keyCode: 229 }))).toBeNull()
     expect(comboFromEvent(ev({ key: 'Unidentified' }))).toBeNull()
   })
