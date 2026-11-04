@@ -50,8 +50,8 @@ and a lines comment names rows of it; hive quotes those rows itself:
   }
 
 startSide additions counts lines as the branch has them, deletions as the base
-had them. severity is issue, suggestion (default) or note. author defaults to
-agent. A refused review lists every comment to fix and stores nothing.
+had them. severity is issue, suggestion (default) or note. author defaults to the
+agent field, then to "agent". A refused review lists every comment to fix and stores nothing.
 
 Examples:
   hive review diff put < review.json
@@ -129,6 +129,9 @@ func putInput(sessionID string, in reviews.DiffReviewPutIn) diffreview.PutInput 
 	author := strings.TrimSpace(in.Author)
 	if author == "" {
 		author = strings.TrimSpace(in.Agent)
+	}
+	if author == "" {
+		author = "agent"
 	}
 	comments := make([]diffreview.CommentInput, 0, len(in.Comments))
 	for _, c := range in.Comments {

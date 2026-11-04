@@ -195,7 +195,7 @@ Comments are inserted with proper markdown formatting and indentation alignment:
 
 ## Diff Reviews
 
-`hive review diff` lets an agent review a session's changes: the branch against the default branch, as Hive Desktop's [Diff view](../../desktop/code/terminal-mode.md#agent-reviews) shows it. The desktop draws each comment under its lines, where you adopt or dismiss it. The command writes to hive's database, so the desktop does not have to be running.
+`hive review diff` lets an agent review a session's changes: the branch against the default branch, as Hive Desktop's [Diff view](../../desktop/code/terminal-mode.md#agent-reviews) shows it. The desktop draws each comment under its lines, where you dismiss it or send it with your own comments. The command writes to hive's database, so the desktop does not have to be running.
 
 ```bash
 # Store a review of the session in the current directory, read from stdin
@@ -227,5 +227,5 @@ The review is JSON:
 
 - `startLine` and `endLine` count lines as the branch has them. With `"startSide": "deletions"` they count lines as the base had them, for a removed line.
 - Every comment names a file in the branch diff, and a lines comment names rows the diff shows. hive quotes those rows itself.
-- `severity` is `issue`, `suggestion` (the default), or `note`. `author` defaults to `agent`.
+- `severity` is `issue`, `suggestion` (the default), or `note`. `author` defaults to the `agent` field, then to the word `agent`.
 - A second review from the same author replaces the first. A refused review lists every comment to fix and stores nothing.

@@ -20,6 +20,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/events/testbus"
 	"github.com/colonyops/hive/internal/hive/hivetest"
 	"github.com/colonyops/hive/internal/ops"
+	"github.com/colonyops/hive/internal/ops/reviews"
 	"github.com/colonyops/hive/internal/store"
 	"github.com/colonyops/hive/pkg/executil"
 )
@@ -131,4 +132,10 @@ func TestReviewDiffRefusals(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, ops.KindInvalid, ErrorKind(err))
 	assert.Contains(t, err.Error(), "the file is not in the branch diff")
+}
+
+func TestReviewDiffPutInputAuthor(t *testing.T) {
+	assert.Equal(t, "pr-bot", putInput("s1", reviews.DiffReviewPutIn{Author: " pr-bot ", Agent: "claude"}).Author)
+	assert.Equal(t, "claude", putInput("s1", reviews.DiffReviewPutIn{Agent: "claude"}).Author)
+	assert.Equal(t, "agent", putInput("s1", reviews.DiffReviewPutIn{}).Author)
 }
