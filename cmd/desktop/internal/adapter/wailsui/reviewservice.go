@@ -12,15 +12,17 @@ import (
 )
 
 // ReviewService exposes comments on Drive Markdown documents and their
-// delivery as feedback, to the clipboard or to a running agent. space and
-// path name a document the way DriveService does.
+// delivery as feedback, to the clipboard or to a running agent, and agents'
+// reviews of a session's diff. space and path name a document the way
+// DriveService does.
 type ReviewService struct {
 	review *app.ReviewService
+	diffs  *app.DiffReviewsService
 	logger zerolog.Logger
 }
 
-func NewReviewService(r *app.ReviewService, logger zerolog.Logger) *ReviewService {
-	return &ReviewService{review: r, logger: logutils.Component(logger, "wails.review")}
+func NewReviewService(r *app.ReviewService, diffs *app.DiffReviewsService, logger zerolog.Logger) *ReviewService {
+	return &ReviewService{review: r, diffs: diffs, logger: logutils.Component(logger, "wails.review")}
 }
 
 func (s *ReviewService) Review(ctx context.Context, space, path string) (DocumentReviewWire, error) {
@@ -106,6 +108,34 @@ func (s *ReviewService) SendChanges(ctx context.Context, sessionID, pane string,
 	ctx, span := startReviewCommand(ctx, "send-changes", "", sessionID)
 	defer observe.End(span, &err)
 	return s.fail(ctx, "send-changes", s.review.SendChanges(ctx, sessionID, pane, comments))
+}
+
+// DiffReviews lists the agent reviews of a session's branch diff, oldest first.
+func (s *ReviewService) DiffReviews(ctx context.Context, sessionID string) ([]DiffReviewWire, error) {
+	list, err := s.diffs.List(ctx, sessionID)
+	if err != nil {
+		return nil, s.fail(ctx, "diff-reviews", err)
+	}
+	out := make([]DiffReviewWire, 0, len(list))
+	for _, r := range list {
+		out = append(out, diffReviewWireOf(r))
+	}
+	return out, nil
+}
+
+// DismissDiffComment removes one agent comment. The frontend calls it for an
+// adoption too, after the comment is in the user's own review.
+func (s *ReviewService) DismissDiffComment(ctx context.Context, commentID string) (err error) {
+	ctx, span := startReviewCommand(ctx, "dismiss-diff-comment", "", commentID)
+	defer observe.End(span, &err)
+	return s.fail(ctx, "dismiss-diff-comment", s.diffs.Dismiss(ctx, commentID))
+}
+
+// DismissDiffReview removes one agent review with all its comments.
+func (s *ReviewService) DismissDiffReview(ctx context.Context, sessionID, reviewID string) (err error) {
+	ctx, span := startReviewCommand(ctx, "dismiss-diff-review", "", sessionID)
+	defer observe.End(span, &err)
+	return s.fail(ctx, "dismiss-diff-review", s.diffs.DismissReview(ctx, sessionID, reviewID))
 }
 
 func startReviewCommand(ctx context.Context, command, space, path string) (context.Context, trace.Span) {

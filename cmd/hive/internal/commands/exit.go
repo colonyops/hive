@@ -16,6 +16,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
+	"github.com/colonyops/hive/internal/hive/diffreview"
 	"github.com/colonyops/hive/internal/hive/driveremote"
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/pkg/iojson"
@@ -141,6 +142,7 @@ func ErrorKind(err error) ops.Kind {
 	case errors.Is(err, session.ErrNotFound),
 		errors.Is(err, hc.ErrNotFound),
 		errors.Is(err, review.ErrSessionNotFound),
+		errors.Is(err, review.ErrDiffReviewNotFound),
 		errors.Is(err, messaging.ErrTopicNotFound),
 		errors.Is(err, drive.ErrNotFound),
 		errors.Is(err, kv.ErrNotFound):
@@ -151,7 +153,8 @@ func ErrorKind(err error) ops.Kind {
 		errors.Is(err, hc.ErrInvalidStatus),
 		errors.Is(err, drive.ErrInvalidSpace),
 		errors.Is(err, drive.ErrInvalidPath),
-		errors.Is(err, drive.ErrInvalidFrontmatter):
+		errors.Is(err, drive.ErrInvalidFrontmatter),
+		errors.Is(err, diffreview.ErrInvalid):
 		return ops.KindInvalid
 	case errors.Is(err, session.ErrDuplicateName),
 		errors.Is(err, drive.ErrExists),

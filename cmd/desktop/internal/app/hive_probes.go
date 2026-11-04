@@ -9,6 +9,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/hivewatch"
 	"github.com/colonyops/hive/internal/domain/hc"
+	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 )
@@ -74,6 +75,17 @@ func tasksProbe(fingerprint func(context.Context) (hc.Fingerprint, error), bus *
 		Equal: func(a, b hc.Fingerprint) bool { return a == b },
 		OnChange: func(ctx context.Context, _, _ hc.Fingerprint) {
 			bus.Publish(ctx, events.TasksUpdated{})
+		},
+	})
+}
+
+func diffReviewsProbe(fingerprint func(context.Context) (review.DiffReviewFingerprint, error), bus *events.Bus) hivewatch.Probe {
+	return hivewatch.NewProbe(hivewatch.Spec[review.DiffReviewFingerprint]{
+		Name:  "diff-reviews",
+		Read:  fingerprint,
+		Equal: func(a, b review.DiffReviewFingerprint) bool { return a == b },
+		OnChange: func(ctx context.Context, _, _ review.DiffReviewFingerprint) {
+			bus.Publish(ctx, events.DiffReviewsUpdated{})
 		},
 	})
 }

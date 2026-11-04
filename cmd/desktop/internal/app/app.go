@@ -48,6 +48,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/terminalimg"
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	hiveevents "github.com/colonyops/hive/internal/hive/events"
@@ -142,6 +143,7 @@ type App struct {
 	Tasks           *TasksService
 	Drive           *DriveService
 	Review          *ReviewService
+	DiffReviews     *DiffReviewsService
 	Schedules       *SchedulesService
 	Layouts         *LayoutsService
 
@@ -375,6 +377,9 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.hiveWatcher = hivewatch.New(hiveWatchInterval, cfg.Logger,
 		sessionsProbe(a.sessions.ListSessions, a.Events),
 		tasksProbe(a.hive.HC().Fingerprint, a.Events),
+		diffReviewsProbe(func(ctx context.Context) (review.DiffReviewFingerprint, error) {
+			return a.hive.DiffReviews().Fingerprint(ctx)
+		}, a.Events),
 	)
 	a.serverTerminals = newServerTerminals(runCtx, cfg.Logger, a.hiveServers.Load, a.execEnv.Environ, sshControlDir(cfg.Logger))
 	a.popupTerminals = ptyterm.NewManager(ptyterm.ManagerOptions{Environ: a.execEnv.Environ})
@@ -560,6 +565,13 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	})
 	a.Diagnostics = &DiagnosticsService{paths: cfg.Paths, jobs: a.Jobs, build: cfg.Build, environ: a.execEnv.Environ, hive: a.HiveConfig, commands: a.profileCommands, webhooks: a.Webhooks, reveal: a.System.revealPath}
 	a.Tasks = newTasksService(a.hive)
+	a.DiffReviews = newDiffReviewsService(DiffReviewsDeps{
+		Engine:  func() *hive.Engine { return a.hive },
+		Callers: a.Drive,
+		Chats:   a.Stores.AgentSessions,
+		Events:  a.Events,
+		Logger:  cfg.Logger,
+	})
 	a.Review = newReviewService(ReviewDeps{
 		Reviews: a.hive.Reviews(),
 		Drive:   a.Drive,

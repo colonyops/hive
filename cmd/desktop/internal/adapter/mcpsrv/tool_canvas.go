@@ -19,6 +19,7 @@ func (ctrl *DriveController) register(srv *mcp.Server) {
 	ctrl.registerCanvas(srv)
 	ctrl.registerDocuments(srv)
 	ctrl.registerTabs(srv)
+	ctrl.registerReviews(srv)
 }
 
 func (ctrl *DriveController) registerCanvas(srv *mcp.Server) {

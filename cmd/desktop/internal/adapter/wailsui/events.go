@@ -46,6 +46,10 @@ func registerEvents() struct{} {
 	application.RegisterEvent[string]("sessions:create-failed")
 	application.RegisterEvent[string]("sessions:updated")
 	application.RegisterEvent[string]("tasks:updated")
+	// diff-reviews:updated names the session whose agent reviews changed, or
+	// is empty for a write another process made. The Diff view re-reads its
+	// own session either way, because coalescing keeps only the last name.
+	application.RegisterEvent[string]("diff-reviews:updated")
 	// window:focus and window:blur carry the current focus state. Consumers use
 	// them to update focus-sensitive UI without querying the native window.
 	application.RegisterEvent[bool]("window:focus")
@@ -132,6 +136,9 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		}),
 		events.Subscribe(ctx, bus, "wailsui.tasks", events.Coalesce(), func(context.Context, events.TasksUpdated) {
 			emitTasksUpdated()
+		}),
+		events.Subscribe(ctx, bus, "wailsui.diff-reviews", events.Coalesce(), func(_ context.Context, e events.DiffReviewsUpdated) {
+			emitDiffReviewsUpdated(e.SessionID)
 		}),
 		events.Subscribe(ctx, bus, "wailsui.actions", events.Coalesce(), func(context.Context, events.ActionsUpdated) {
 			emitActionsUpdated()
@@ -297,6 +304,12 @@ func emitSessionsUpdated() {
 func emitTasksUpdated() {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("tasks:updated", "changed")
+	}
+}
+
+func emitDiffReviewsUpdated(sessionID string) {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("diff-reviews:updated", sessionID)
 	}
 }
 
