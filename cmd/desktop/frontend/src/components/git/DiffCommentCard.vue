@@ -73,6 +73,13 @@ function onKeydown(event: KeyboardEvent): void {
         <span class="shrink-0">{{ commentLabel(comment) }}</span>
       </button>
       <span
+        v-if="comment.from"
+        class="min-w-0 shrink truncate text-micro text-node-purple"
+        :title="`Adopted from ${comment.from}'s review`"
+        :data-testid="`${testid}-from`"
+        >from {{ comment.from }}</span
+      >
+      <span
         v-if="outdated"
         class="size-1.5 shrink-0 rounded-full bg-severity-warning"
         title="The agent changed this file after you wrote the comment"

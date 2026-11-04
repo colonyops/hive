@@ -14,6 +14,7 @@ import {
   type SelectedLineRange,
 } from '@pierre/diffs'
 import { useHiveUiPlatform } from '@hive/ui/platform'
+import AgentCommentCard from './AgentCommentCard.vue'
 import DiffCommentCard from './DiffCommentCard.vue'
 import DiffFileHeader from './DiffFileHeader.vue'
 import { usePerf } from '../../composables/usePerf'
@@ -26,6 +27,7 @@ import { errorText } from '../../lib/appError'
 import { hunksMatch, wholeFileFromPatch } from '../../lib/diffContext'
 import { gitFileName } from '../../lib/gitTree'
 import { diffMetrics, diffHasText, emptyFileDiff, hunkOffsets, parseFileDiff, type DiffMode } from '../../lib/diffItems'
+import type { AgentComment, AnchoredAgentComment } from '../../lib/agentReview'
 import type { DiffSearchMatch, DiffSide } from '../../lib/diffReview'
 import { clearSearchPaint, paintSearch, SEARCH_HIGHLIGHT_CSS } from '../../lib/diffSearchPaint'
 import { diffTextSelection, type DiffLineSelection } from '../../lib/diffSelection'
@@ -50,6 +52,13 @@ const props = defineProps<{
   activeMatch: DiffSearchMatch | null
   /** Reads a file's diff with the whole file as context, for the lines between hunks. */
   loadWholeFile: (path: string) => Promise<SessionFileDiff>
+  /** Agents' comments by path, each on the row it is drawn under. */
+  agentComments?: ReadonlyMap<string, readonly AnchoredAgentComment[]>
+  isAgentStale?: (comment: AgentComment) => boolean
+  /** The agent comment triage is on, the one being edited, and whether the cards show triage keys. */
+  focusedAgent?: string | null
+  editingAgent?: string | null
+  triageKeys?: boolean
 }>()
 const emit = defineEmits<{
   'update:current': [path: string]
@@ -62,6 +71,11 @@ const emit = defineEmits<{
   'update-comment': [comment: ChangesComment, text: string]
   'remove-comment': [comment: ChangesComment]
   'pick-comment': [comment: ChangesComment]
+  'adopt-agent': [comment: AgentComment, text?: string]
+  'dismiss-agent': [comment: AgentComment]
+  'edit-agent': [comment: AgentComment]
+  'cancel-agent': []
+  'pick-agent': [comment: AgentComment]
   synced: []
 }>()
 
@@ -140,6 +154,12 @@ interface ItemContext {
 const commentHosts = new Map<string, HTMLElement>()
 const mountedComments = shallowRef<ReadonlySet<string>>(new Set())
 const commentById = computed(() => new Map([...props.comments.values()].flat().map((comment) => [comment.id, comment])))
+const agentById = computed(
+  () =>
+    new Map(
+      [...(props.agentComments?.values() ?? [])].flat().map((anchored) => [anchored.comment.id, anchored.comment]),
+    ),
+)
 
 function commentHost(id: string): HTMLElement {
   let host = commentHosts.get(id)
@@ -282,6 +302,7 @@ interface BuiltItem {
   entry: DiffEntry | undefined
   open: boolean
   comments: readonly ChangesComment[] | undefined
+  agents: readonly AnchoredAgentComment[] | undefined
   item: CodeViewDiffItem<CommentAnnotation>
 }
 const built = new Map<string, BuiltItem>()
@@ -290,8 +311,11 @@ function itemFor(file: ChangedFile): CodeViewDiffItem<CommentAnnotation> {
   const entry = props.entries.get(file.path)
   const open = props.openPaths.has(file.path)
   const comments = props.comments.get(file.path)
+  const agents = props.agentComments?.get(file.path)
   const held = built.get(file.path)
-  if (held && held.entry === entry && held.open === open && held.comments === comments) return held.item
+  if (held && held.entry === entry && held.open === open && held.comments === comments && held.agents === agents) {
+    return held.item
+  }
   const fileDiff =
     held && held.entry === entry
       ? held.item.fileDiff
@@ -302,15 +326,22 @@ function itemFor(file: ChangedFile): CodeViewDiffItem<CommentAnnotation> {
     id: file.path,
     type: 'diff',
     fileDiff,
-    annotations: comments?.map((comment) => ({
-      side: comment.endSide,
-      lineNumber: comment.endLine,
-      metadata: { commentId: comment.id },
-    })),
+    annotations: [
+      ...(comments ?? []).map((comment) => ({
+        side: comment.endSide,
+        lineNumber: comment.endLine,
+        metadata: { commentId: comment.id },
+      })),
+      ...(agents ?? []).map((anchored) => ({
+        side: anchored.side,
+        lineNumber: anchored.line,
+        metadata: { commentId: anchored.comment.id },
+      })),
+    ],
     collapsed: !open || fileDiff.hunks.length === 0,
     version: (held?.item.version ?? 0) + 1,
   }
-  built.set(file.path, { entry, open, comments, item })
+  built.set(file.path, { entry, open, comments, agents, item })
   return item
 }
 
@@ -430,7 +461,9 @@ onBeforeUnmount(() => {
   viewer = null
 })
 
-watch(() => [props.files, props.entries, props.openPaths, props.comments] as const, syncItems, { flush: 'post' })
+watch(() => [props.files, props.entries, props.openPaths, props.comments, props.agentComments] as const, syncItems, {
+  flush: 'post',
+})
 watch(() => [props.searchQuery, props.activeMatch] as const, queuePaint)
 watch(
   () => [props.mode, metrics.value] as const,
@@ -499,6 +532,19 @@ watch(
         @update="emit('update-comment', commentById.get(id)!, $event)"
         @remove="emit('remove-comment', commentById.get(id)!)"
         @pick="emit('pick-comment', commentById.get(id)!)"
+      />
+      <AgentCommentCard
+        v-else-if="agentById.get(id)"
+        :comment="agentById.get(id)!"
+        :stale="isAgentStale?.(agentById.get(id)!)"
+        :focused="focusedAgent === id"
+        :editing="editingAgent === id"
+        :keys="triageKeys && focusedAgent === id"
+        @adopt="(text?: string) => emit('adopt-agent', agentById.get(id)!, text)"
+        @dismiss="emit('dismiss-agent', agentById.get(id)!)"
+        @edit="emit('edit-agent', agentById.get(id)!)"
+        @cancel="emit('cancel-agent')"
+        @pick="emit('pick-agent', agentById.get(id)!)"
       />
     </Teleport>
   </div>

@@ -24,6 +24,10 @@ const mocks = vi.hoisted(() => ({
   ChangesTargets: vi.fn(),
   ChangesFeedback: vi.fn(),
   SendChanges: vi.fn(),
+  DiffReviews: vi.fn(),
+  DismissDiffComment: vi.fn(),
+  DismissDiffReview: vi.fn(),
+  items: [] as FakeItem[],
   writeText: vi.fn(),
   lastOptions: null as { loadDiffFiles?: (diff: unknown) => Promise<unknown> } | null,
 }))
@@ -38,6 +42,9 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
   ChangesTargets: mocks.ChangesTargets,
   ChangesFeedback: mocks.ChangesFeedback,
   SendChanges: mocks.SendChanges,
+  DiffReviews: mocks.DiffReviews,
+  DismissDiffComment: mocks.DismissDiffComment,
+  DismissDiffReview: mocks.DismissDiffReview,
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   ReviewLabels: vi.fn().mockResolvedValue([]),
@@ -80,6 +87,7 @@ vi.mock('@pierre/diffs', async (importOriginal) => {
     scrollTo = mocks.scrollTo
     setOptions = mocks.setOptions
     setItems(items: FakeItem[]): void {
+      mocks.items = items
       const kept = new Set(items.map((item) => `fake-${item.id}`))
       for (const body of this.root?.querySelectorAll('[data-fake]') ?? []) {
         if (!kept.has(body.getAttribute('data-fake')!)) body.remove()
@@ -105,6 +113,7 @@ vi.mock('@pierre/diffs', async (importOriginal) => {
 interface FakeItem {
   id: string
   collapsed: boolean
+  annotations?: { side: string; lineNumber: number; metadata: { commentId: string } }[]
   fileDiff: { hunks: { hunkContent: unknown[] }[]; deletionLines: string[]; additionLines: string[] }
 }
 
@@ -173,6 +182,9 @@ describe('ChangesView', () => {
     vi.clearAllMocks()
     mocks.tops.clear()
     mocks.OpenSessionInEditor.mockResolvedValue(undefined)
+    mocks.DiffReviews.mockResolvedValue([])
+    mocks.DismissDiffComment.mockResolvedValue(undefined)
+    mocks.DismissDiffReview.mockResolvedValue(undefined)
     mocks.SessionChanges.mockResolvedValue(changes([file('a.go'), file('b.go')]))
     mocks.SessionBranches.mockResolvedValue(['refs/heads/main', 'refs/heads/release', 'refs/remotes/origin/release'])
     mocks.SessionFileDiffs.mockImplementation((_id: string, _target: unknown, paths: string[]) =>
@@ -1179,5 +1191,104 @@ describe('ChangesView', () => {
     await input.trigger('keydown', { key: 'Enter', shiftKey: true })
     expect(wrapper.get(testid('changes-search-count')).text()).toBe('1 of 2')
     wrapper.unmount()
+  })
+  describe('agent reviews', () => {
+    const agentReview = (comments: Record<string, unknown>[]) => ({
+      id: 'r1',
+      author: 'claude',
+      agent: 'claude',
+      head: 'abcdef1234',
+      summary: 'One bug.',
+      createdAt: new Date().toISOString(),
+      comments: comments.map((extra, index) => ({
+        id: `c${index + 1}`,
+        kind: '',
+        path: 'a.go',
+        startSide: 'additions',
+        startLine: 1,
+        endSide: 'additions',
+        endLine: 1,
+        quote: '+new a.go',
+        severity: 'issue',
+        text: `comment ${index + 1}`,
+        ...extra,
+      })),
+    })
+    const annotationIds = () =>
+      mocks.items.flatMap((item) => (item.annotations ?? []).map((annotation) => annotation.metadata.commentId))
+
+    it('draws each comment under its row, and a file comment on the first row', async () => {
+      mocks.DiffReviews.mockResolvedValue([agentReview([{}, { kind: 'file', path: 'b.go', startLine: 0, endLine: 0 }])])
+      const wrapper = await mountView()
+      expect(annotationIds()).toEqual(expect.arrayContaining(['c1', 'c2']))
+      expect(wrapper.get(testid('changes-agent-count')).text()).toBe('2')
+      wrapper.unmount()
+    })
+
+    it('draws nothing in another comparison, and says where to look', async () => {
+      mocks.SessionChanges.mockImplementation((_id: string, target: { base: string }) =>
+        Promise.resolve(changes([file('a.go'), file('b.go')], { base: target.base })),
+      )
+      mocks.DiffReviews.mockResolvedValue([agentReview([{}])])
+      localStorage.setItem('hive.git.base', JSON.stringify('staged'))
+      const wrapper = await mountView()
+      expect(annotationIds()).not.toContain('c1')
+      await press('r')
+      expect(wrapper.find(testid('agent-reviews-hidden')).exists()).toBe(true)
+      expect(wrapper.find(testid('agent-reviews-triage')).exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it("walks the comments in file order, adopts one as the user's own, and stops after the last", async () => {
+      mocks.DiffReviews.mockResolvedValue([agentReview([{ path: 'b.go', quote: '+new b.go' }, {}])])
+      const wrapper = await mountView()
+      mocks.scrollTo.mockClear()
+
+      await press('t')
+      expect(wrapper.get(testid('changes-triage-position')).text()).toBe('1 / 2')
+      expect(wrapper.get(testid('changes-triage')).text()).toContain('a.go')
+      expect(mocks.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ type: 'line', id: 'a.go', lineNumber: 1 }))
+
+      await press('a')
+      expect(mocks.DismissDiffComment).toHaveBeenCalledWith('c2')
+      const adopted = useChangesReview().comments('s1')
+      expect(adopted).toHaveLength(1)
+      expect(adopted[0]).toMatchObject({
+        path: 'a.go',
+        text: 'comment 2',
+        from: 'claude',
+        base: 'branch',
+        quote: '+new a.go',
+      })
+      expect(wrapper.get(testid('changes-triage-position')).text()).toBe('1 / 1')
+
+      await press('d')
+      expect(mocks.DismissDiffComment).toHaveBeenCalledWith('c1')
+      expect(useChangesReview().comments('s1')).toHaveLength(1)
+      expect(wrapper.find(testid('changes-triage')).exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('marks a comment whose rows changed since the agent quoted them', async () => {
+      mocks.DiffReviews.mockResolvedValue([
+        agentReview([{ quote: '+something else' }, { path: 'b.go', quote: '+new b.go' }]),
+      ])
+      const wrapper = await mountView()
+      await press('r')
+      expect(wrapper.get(testid('agent-row-c1')).html()).toContain('Lines changed')
+      expect(wrapper.get(testid('agent-row-c2')).html()).not.toContain('Lines changed')
+      wrapper.unmount()
+    })
+
+    it('dismisses a whole review from the panel', async () => {
+      mocks.DiffReviews.mockResolvedValue([agentReview([{}])])
+      const wrapper = await mountView()
+      await press('r')
+      await wrapper.get(testid('agent-review-r1-dismiss-all')).trigger('click')
+      await flushPromises()
+      expect(mocks.DismissDiffReview).toHaveBeenCalledWith('s1', 'r1')
+      expect(wrapper.find(testid('agent-reviews')).exists()).toBe(false)
+      wrapper.unmount()
+    })
   })
 })

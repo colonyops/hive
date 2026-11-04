@@ -28,9 +28,11 @@ import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
+import AgentReviewsSection from './AgentReviewsSection.vue'
 import ChangesLoading from './ChangesLoading.vue'
 import ChangesReviewPanel from './ChangesReviewPanel.vue'
 import ChangesTargetPicker from './ChangesTargetPicker.vue'
+import ChangesTriageBar from './ChangesTriageBar.vue'
 import DiffSearchBar from './DiffSearchBar.vue'
 import DiffStream from './DiffStream.vue'
 import GitTree from './GitTree.vue'
@@ -42,6 +44,14 @@ import { formatCombo } from '../../composables/useKeybindings'
 import { fileVersion, useFileDiffs } from '../../composables/useFileDiffs'
 import { targetKey, useSessionBranches, useSessionChanges, type DiffBase } from '../../composables/useSessionChanges'
 import { useToasts } from '../../composables/useToasts'
+import {
+  agentComments,
+  anchorAgentComment,
+  isAgentCommentStale,
+  triageOrder,
+  type AgentComment,
+  type AnchoredAgentComment,
+} from '../../lib/agentReview'
 import { errorText } from '../../lib/appError'
 import { readOrder, type DiffMode } from '../../lib/diffItems'
 import { branchName } from '../../lib/diffTarget'
@@ -49,6 +59,7 @@ import { commentLabel, diffSpan, hasDiffLine, type DiffSearchMatch, type DiffSpa
 import type { DiffLineSelection } from '../../lib/diffSelection'
 import { gitFileName, gitRows, type GitLayout } from '../../lib/gitTree'
 import { isEditableTarget } from '../../lib/isEditableTarget'
+import { useAgentReviews } from '../../stores/useAgentReviews'
 import { useChangesReview, type ChangesComment, type ChangesCommentKind } from '../../stores/useChangesReview'
 import { useChangesViewed } from '../../stores/useChangesViewed'
 import {
@@ -56,6 +67,7 @@ import {
   SessionFileContext,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { DiffReviewWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import type { AgentTarget } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const props = withDefaults(
@@ -464,6 +476,188 @@ function settleReveal(): void {
 }
 watch([pendingReveal, pending, files, entries, openPaths], settleReveal, { flush: 'post' })
 
+// Agents' reviews of the branch diff, from hive.db. Their rows are numbered in
+// the branch comparison against the default base, so they are drawn only there.
+const agentStore = useAgentReviews()
+watch(sessionId, (id, _previous, onCleanup) => onCleanup(agentStore.watch(id)), { immediate: true })
+const agentReviews = computed<readonly DiffReviewWire[]>(() => agentStore.reviews(props.sessionId))
+const inAgentComparison = computed(() => shownBase.value === 'branch' && !changes.value?.against)
+const pendingAgent = computed(() =>
+  triageOrder(
+    agentComments(agentReviews.value),
+    files.value.map((file) => file.path),
+  ),
+)
+const shownAgentComments = computed(() => {
+  const byPath = new Map<string, AnchoredAgentComment[]>()
+  if (!inAgentComparison.value) return byPath
+  for (const comment of pendingAgent.value) {
+    const anchored = anchorAgentComment(comment, entryRows(entries.value.get(comment.path)))
+    if (anchored) byPath.set(comment.path, [...(byPath.get(comment.path) ?? []), anchored])
+  }
+  return byPath
+})
+
+function isAgentStale(comment: AgentComment): boolean {
+  const entry = entries.value.get(comment.path)
+  return inAgentComparison.value && !!entry && isAgentCommentStale(comment, entryRows(entry))
+}
+
+const triageId = ref<string | null>(null)
+const editingAgent = ref<string | null>(null)
+const triaging = computed(() => triageId.value !== null)
+const triageIndex = computed(() => pendingAgent.value.findIndex((comment) => comment.id === triageId.value))
+const triageComment = computed(() => pendingAgent.value[triageIndex.value] ?? null)
+// The comment a jump is waiting to scroll to, until its file's diff is read.
+const pendingAgentReveal = shallowRef<AgentComment | null>(null)
+
+watch(sessionId, () => stopTriage())
+// Another process can dismiss the comment triage is on; triage then ends rather than jump.
+watch(triageComment, (comment) => {
+  if (triageId.value && !comment) stopTriage()
+})
+
+function showAgentComparison(): void {
+  if (inAgentComparison.value) return
+  base.value = 'branch'
+  against.value = ''
+  commit.value = ''
+}
+
+function focusAgent(comment: AgentComment): void {
+  triageId.value = comment.id
+  editingAgent.value = null
+  showAgentComparison()
+  pendingAgentReveal.value = comment
+}
+
+function settleAgentReveal(): void {
+  const comment = pendingAgentReveal.value
+  if (!comment || pending.value || !changes.value || !inAgentComparison.value) return
+  const file = files.value.find((candidate) => candidate.path === comment.path)
+  if (!file) {
+    pendingAgentReveal.value = null
+    return
+  }
+  current.value = file.path
+  if (!isOpen(file)) {
+    foldOverrides.value.set(file.path, true)
+    return
+  }
+  const entry = entries.value.get(file.path)
+  if (!entry || !stream.value?.holds(file.path)) return
+  pendingAgentReveal.value = null
+  const anchored = anchorAgentComment(comment, entryRows(entry))
+  if (!anchored) {
+    stream.value.scrollToFile(file.path)
+    return
+  }
+  stream.value.scrollToLine(file.path, anchored.line, anchored.side)
+}
+watch([pendingAgentReveal, pending, files, entries, openPaths], settleAgentReveal, { flush: 'post' })
+
+function startTriage(): void {
+  const first = pendingAgent.value[0]
+  if (!first) return
+  reviewOpen.value = true
+  focusAgent(first)
+}
+
+function stopTriage(): void {
+  triageId.value = null
+  editingAgent.value = null
+  pendingAgentReveal.value = null
+}
+
+function stepTriage(delta: 1 | -1): void {
+  const list = pendingAgent.value
+  if (!list.length) return
+  const from = triageIndex.value < 0 ? 0 : triageIndex.value
+  focusAgent(list[(from + delta + list.length) % list.length])
+}
+
+// Triage moves to the next comment before the store drops this one, so the
+// position holds rather than jumping back to the start.
+function afterRemoving(comment: AgentComment): void {
+  if (triageId.value !== comment.id) return
+  const list = pendingAgent.value
+  const index = list.findIndex((candidate) => candidate.id === comment.id)
+  const next = list[index + 1] ?? list[index - 1]
+  if (next && next.id !== comment.id) focusAgent(next)
+  else stopTriage()
+}
+
+async function adoptAgent(comment: AgentComment, text?: string): Promise<void> {
+  const file = files.value.find((candidate) => candidate.path === comment.path)
+  review.add(props.sessionId, {
+    ...(comment.kind === 'file' ? { kind: 'file' as const } : {}),
+    path: comment.path,
+    startSide: comment.startSide,
+    startLine: comment.startLine,
+    endSide: comment.endSide,
+    endLine: comment.endLine,
+    quote: comment.quote,
+    base: 'branch',
+    version: file ? fileVersion(file) : '',
+    text: (text ?? comment.text).trim(),
+    from: comment.author,
+  })
+  afterRemoving(comment)
+  const failure = await agentStore.dismiss(props.sessionId, comment.id)
+  if (failure) toasts.showToast(`Adopted, but the agent's copy stayed: ${failure}`, { severity: 'error' })
+}
+
+async function dismissAgent(comment: AgentComment): Promise<void> {
+  afterRemoving(comment)
+  const failure = await agentStore.dismiss(props.sessionId, comment.id)
+  if (failure) toasts.showToast(failure, { severity: 'error' })
+}
+
+async function adoptAllAgent(agentReview: DiffReviewWire): Promise<void> {
+  for (const comment of pendingAgent.value.filter((candidate) => candidate.reviewId === agentReview.id)) {
+    await adoptAgent(comment)
+  }
+}
+
+async function dismissAgentReview(agentReview: DiffReviewWire): Promise<void> {
+  if (triageComment.value?.reviewId === agentReview.id) stopTriage()
+  const failure = await agentStore.dismissReview(props.sessionId, agentReview.id)
+  if (failure) toasts.showToast(failure, { severity: 'error' })
+}
+
+// Returns whether the key was triage's. n and p walk the comments while triage
+// is on, in place of the hunk keys.
+function triageKey(event: KeyboardEvent): boolean {
+  if (!triaging.value) {
+    if (event.key !== 't' || !pendingAgent.value.length) return false
+    startTriage()
+    return true
+  }
+  const comment = triageComment.value
+  if (!comment) return false
+  switch (event.key) {
+    case 'a':
+      void adoptAgent(comment)
+      return true
+    case 'e':
+      editingAgent.value = comment.id
+      return true
+    case 'd':
+      void dismissAgent(comment)
+      return true
+    case 'n':
+      stepTriage(1)
+      return true
+    case 'p':
+      stepTriage(-1)
+      return true
+    case 'Escape':
+      stopTriage()
+      return true
+  }
+  return false
+}
+
 const SEND_KEY = formatCombo('mod+enter')
 const picking = ref(false)
 const sending = ref(false)
@@ -521,6 +715,10 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
     return
   }
   if (isEditableTarget(event.target) || event.ctrlKey || event.altKey) return
+  if (triageKey(event)) {
+    event.preventDefault()
+    return
+  }
   const file = files.value.find((candidate) => candidate.path === current.value)
   switch (event.key) {
     case 'j':
@@ -584,6 +782,18 @@ function openInEditor(): void {
     toasts.showToast(errorText(err, 'Could not open the editor.'), { severity: 'error' }),
   )
 }
+
+const TRIAGE_HINTS = [
+  ['a', 'adopt'],
+  ['e', 'edit, then adopt'],
+  ['d', 'dismiss'],
+  ['n p', 'next, previous'],
+  ['esc', 'stop triage'],
+]
+const keyHints = computed(() => {
+  if (triaging.value) return TRIAGE_HINTS
+  return pendingAgent.value.length ? [['t', 'triage agent review'], ...KEY_HINTS] : KEY_HINTS
+})
 
 const KEY_HINTS = [
   ['j k', 'file'],
@@ -674,6 +884,13 @@ const KEY_HINTS = [
           data-testid="changes-review-toggle"
           @click="reviewOpen = !reviewOpen"
         />
+        <span
+          v-if="pendingAgent.length"
+          class="-ml-2.5 flex h-3.5 min-w-3.5 -translate-y-2 items-center justify-center self-start rounded-full bg-node-purple px-0.5 font-mono text-micro font-semibold text-app"
+          title="Agent comments to triage"
+          data-testid="changes-agent-count"
+          >{{ pendingAgent.length }}</span
+        >
         <span v-if="canSend" class="relative flex shrink-0">
           <IconButton
             :label="sendLabel"
@@ -756,7 +973,7 @@ const KEY_HINTS = [
           </p>
         </div>
       </aside>
-      <div class="flex min-w-0 flex-1 flex-col">
+      <div class="relative flex min-w-0 flex-1 flex-col">
         <DiffSearchBar
           v-if="search.open.value"
           ref="searchBar"
@@ -797,9 +1014,51 @@ const KEY_HINTS = [
           @update-comment="(comment, text) => review.update(sessionId, comment.id, text)"
           @remove-comment="(comment) => review.remove(sessionId, comment.id)"
           @pick-comment="pickComment"
+          :agent-comments="shownAgentComments"
+          :is-agent-stale="isAgentStale"
+          :focused-agent="triageId"
+          :editing-agent="editingAgent"
+          :triage-keys="triaging"
+          @adopt-agent="(comment, text) => void adoptAgent(comment, text)"
+          @dismiss-agent="(comment) => void dismissAgent(comment)"
+          @edit-agent="(comment) => (editingAgent = comment.id)"
+          @cancel-agent="editingAgent = null"
+          @pick-agent="focusAgent"
         />
+        <div
+          v-if="triageComment && inAgentComparison"
+          class="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center"
+        >
+          <ChangesTriageBar
+            :comment="triageComment"
+            :index="triageIndex"
+            :total="pendingAgent.length"
+            @prev="stepTriage(-1)"
+            @next="stepTriage(1)"
+            @adopt="void adoptAgent(triageComment)"
+            @edit="editingAgent = triageComment.id"
+            @dismiss="void dismissAgent(triageComment)"
+            @stop="stopTriage"
+          />
+        </div>
       </div>
-      <ChangesReviewPanel v-if="reviewOpen" :session-id="sessionId" :is-outdated="isOutdated" @pick="pickComment" />
+      <ChangesReviewPanel v-if="reviewOpen" :session-id="sessionId" :is-outdated="isOutdated" @pick="pickComment">
+        <template v-if="agentReviews.length" #agents>
+          <AgentReviewsSection
+            :reviews="agentReviews"
+            :comments="pendingAgent"
+            :focused="triageId"
+            :triaging="triaging"
+            :hidden="!inAgentComparison"
+            :is-stale="isAgentStale"
+            @pick="focusAgent"
+            @triage="startTriage"
+            @stop="stopTriage"
+            @adopt-all="(agentReview) => void adoptAllAgent(agentReview)"
+            @dismiss-all="(agentReview) => void dismissAgentReview(agentReview)"
+          />
+        </template>
+      </ChangesReviewPanel>
     </div>
 
     <DriveCommentPopover
@@ -825,7 +1084,7 @@ const KEY_HINTS = [
     <div
       class="flex shrink-0 flex-wrap items-center gap-x-3.5 gap-y-0.5 border-t border-border px-3 py-1 text-caption text-text-3"
     >
-      <span v-for="[key, label] in KEY_HINTS" :key="key" class="flex items-center gap-1">
+      <span v-for="[key, label] in keyHints" :key="key" class="flex items-center gap-1">
         <Kbd>{{ key }}</Kbd>
         {{ label }}
       </span>
