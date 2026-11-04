@@ -205,18 +205,13 @@ func printSessionHuman(out io.Writer, server string, sess session.Session) {
 }
 
 func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
-	// Detect session from current working directory
-	sessionID, err := cmd.app.Sessions().DetectSession(ctx)
+	caller, err := requireCallingSession(ctx, cmd.app, "",
+		"not in a hive session; run this command from within a hive session directory")
 	if err != nil {
-		return fmt.Errorf("detect session: %w", err)
+		return err
 	}
 
-	if sessionID == "" {
-		return notFoundf("not in a hive session; run this command from within a hive session directory")
-	}
-
-	// Get full session details
-	sess, err := cmd.app.SessionAPI().GetSession(ctx, sessionID)
+	sess, err := cmd.app.SessionAPI().GetSession(ctx, caller.ID)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}

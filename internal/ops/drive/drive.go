@@ -34,7 +34,7 @@ type DocumentListIn struct {
 }
 
 var DocumentList = ops.Spec[DocumentListIn]{
-	Name: "document.list", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset,
+	Name: "document.list", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "List documents",
 	Guidance: "List a folder of Hive Drive, the document tree the user sees in the Drive tab of this chat or Code session. " +
 		"Your session decides the space: a chat's workspace, a hive session's repository (the folder a checkout links as .hive), " +
@@ -52,7 +52,7 @@ type DocumentGetIn struct {
 }
 
 var DocumentGet = ops.Spec[DocumentGetIn]{
-	Name: "document.get", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset,
+	Name: "document.get", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Read a document",
 	Guidance: "Read one markdown or html document, or any other UTF-8 text file in the space, as stored, front matter " +
 		"included, with its entry. A canvas is blocks rather than a body: read it with canvas_get. A folder is listed " +
@@ -68,7 +68,7 @@ type DocumentPutIn struct {
 }
 
 var DocumentPut = ops.Spec[DocumentPutIn]{
-	Name: "document.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "document.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Write a document",
 	Guidance: "Create or replace a whole markdown (.md) or html (.html) document in Hive Drive. Folders in the path are " +
 		"created as needed, so file a plan as plans/auth-rewrite.md or a report as reports/2026-10/perf.md. A markdown " +
@@ -90,7 +90,7 @@ type DocumentMoveIn struct {
 }
 
 var DocumentMove = ops.Spec[DocumentMoveIn]{
-	Name: "document.move", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "document.move", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Move a document",
 	Guidance: "Rename or move one document, a canvas included, or a whole folder inside this space, creating the folders " +
 		"above the target. The target must not exist, and a document keeps its extension. Answers with the entry at its new " +
@@ -104,7 +104,7 @@ type DocumentDeleteIn struct {
 }
 
 var DocumentDelete = ops.Spec[DocumentDeleteIn]{
-	Name: "document.delete", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "document.delete", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Delete a document",
 	Guidance: "Delete one document, a canvas included, or an empty folder. A folder with anything in it is refused; there " +
 		"is no recursive delete and no trash. Answers with the path it deleted, deleted true, and when. Only delete what you made obsolete " +
@@ -117,7 +117,7 @@ type CanvasListIn struct {
 }
 
 var CanvasList = ops.Spec[CanvasListIn]{
-	Name: "canvas.list", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset,
+	Name: "canvas.list", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "List the canvases",
 	Guidance: "List every canvas where yours are kept — this chat's workspace, the repository of this hive " +
 		"session, or the shared space when caller is global — most recently updated first: name, title, block count and which chat or session created it. " +
@@ -132,7 +132,7 @@ type CanvasIn struct {
 }
 
 var CanvasGet = ops.Spec[CanvasIn]{
-	Name: "canvas.get", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset,
+	Name: "canvas.get", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Read a canvas",
 	Guidance: "Read one canvas exactly as the user sees it: its editable front matter and every block in order, " +
 		"with your ids, kinds and content — an html block comes back as the markup you wrote, before the app sanitizes it for display. A name " +
@@ -142,7 +142,7 @@ var CanvasGet = ops.Spec[CanvasIn]{
 }
 
 var CanvasClear = ops.Spec[CanvasIn]{
-	Name: "canvas.clear", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "canvas.clear", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Clear a canvas",
 	Guidance: "Remove every block from one canvas at once and answer with its now-empty metadata. The canvas, its " +
 		"name and its title survive — canvas_block_put after a clear starts a fresh layout in the same canvas. Prefer " +
@@ -152,7 +152,7 @@ var CanvasClear = ops.Spec[CanvasIn]{
 }
 
 var CanvasDelete = ops.Spec[CanvasIn]{
-	Name: "canvas.delete", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "canvas.delete", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Delete a canvas",
 	Guidance: "Remove one canvas entirely — its file is deleted and it leaves the Drive " +
 		"tab's picker. A name that does not exist is not_found. Answers with the canvas, deleted true, and when. " +
@@ -173,7 +173,7 @@ type CanvasBlockPutIn struct {
 }
 
 var CanvasBlockPut = ops.Spec[CanvasBlockPutIn]{
-	Name: "canvas_block.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "canvas_block.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Put a canvas block",
 	Guidance: "Create or replace one block on a named canvas. The first canvas_block_put under a new canvas name creates " +
 		"that canvas; a workspace keeps as many as you make, so name canvases by artifact (release-notes, " +
@@ -208,7 +208,7 @@ type CanvasBlocksPutIn struct {
 }
 
 var CanvasBlocksPut = ops.Spec[CanvasBlocksPutIn]{
-	Name: "canvas_blocks.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "canvas_blocks.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Put a batch of canvas blocks",
 	Guidance: "Write several blocks to one canvas in a single atomic call — one write, one render, so an " +
 		"initial layout appears whole instead of assembling block by block. Blocks follow canvas_block_put's rules and " +
@@ -224,7 +224,7 @@ type CanvasBlockDeleteIn struct {
 }
 
 var CanvasBlockDelete = ops.Spec[CanvasBlockDeleteIn]{
-	Name: "canvas_block.delete", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "canvas_block.delete", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Remove a canvas block",
 	Guidance: "Remove one block by the id you gave it in canvas_block_put, and answer with the canvas metadata that " +
 		"remains. An id that is not on the canvas is not_found — nothing is ever reported removed that was not there.",
@@ -238,7 +238,7 @@ type CanvasFrontmatterPutIn struct {
 }
 
 var CanvasFrontmatterPut = ops.Spec[CanvasFrontmatterPutIn]{
-	Name: "canvas_frontmatter.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "canvas_frontmatter.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Set canvas front matter",
 	Guidance: "Replace all editable front matter on an existing canvas. Use short keys and scalar values or " +
 		"lists of scalars; tags is conventionally a list of strings. Hive owns created_at and updated_at, updates " +

@@ -11,7 +11,6 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/messaging"
-	"github.com/colonyops/hive/internal/domain/session"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"
@@ -301,7 +300,7 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 	}
 
 	// Auto-detect session and set sender
-	sessionID, _ := cmd.detectSessionID(ctx) // Best-effort detection for sender
+	sessionID := callingSessionID(ctx, cmd.app, "", "cli.msg") // best-effort: the sender label
 	sender := cmd.pubSender
 	if sessionID != "" && sender == "" {
 		sender = sessionID // Auto-set sender = session_id
@@ -526,8 +525,7 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 		return nil // No topics, no output
 	}
 
-	// Try to detect session for unread counts (best-effort)
-	sessionID, _ := cmd.detectSessionID(ctx)
+	sessionID := callingSessionID(ctx, cmd.app, "", "cli.msg") // best-effort: unread counts
 
 	type topicInfo struct {
 		Name         string `json:"name"`
@@ -571,36 +569,6 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 	return nil
 }
 
-func (cmd *MsgCmd) detectSessionID(ctx context.Context) (string, error) {
-	return cmd.app.Sessions().DetectSession(ctx)
-}
-
-// resolveSessionID resolves a session from a --caller value (ID or name).
-// Returns the session ID if found, or an error.
-func (cmd *MsgCmd) resolveSessionID(ctx context.Context, sessionRef string) (string, error) {
-	// Try direct ID lookup first
-	sess, err := cmd.app.Sessions().GetSession(ctx, sessionRef)
-	if err == nil {
-		return sess.ID, nil
-	}
-
-	// Fall back to name match
-	sessions, err := cmd.app.Sessions().ListSessions(ctx)
-	if err != nil {
-		return "", fmt.Errorf("list sessions: %w", err)
-	}
-	for _, s := range sessions {
-		if s.State != session.StateActive {
-			continue
-		}
-		if s.Name == sessionRef || s.Slug == sessionRef {
-			return s.ID, nil
-		}
-	}
-
-	return "", fmt.Errorf("session not found: %s", sessionRef)
-}
-
 func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) error {
 	for _, msg := range messages {
 		if err := iojson.WriteLine(w, msg); err != nil {
@@ -613,11 +581,7 @@ func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) erro
 // acknowledgeMessages marks messages as read by the current session.
 // Logs errors but does not fail the operation.
 func (cmd *MsgCmd) acknowledgeMessages(ctx context.Context, msgs *msgsvc.Service, messages []messaging.Message) {
-	sessionID, err := cmd.detectSessionID(ctx)
-	if err != nil {
-		log.Printf("warning: failed to detect session for acknowledgment: %v", err)
-		return
-	}
+	sessionID := callingSessionID(ctx, cmd.app, cmd.inboxSession, "cli.msg")
 	if sessionID == "" {
 		return // Not in a session, skip acknowledgment
 	}
@@ -640,8 +604,8 @@ func (cmd *MsgCmd) inboxCmd() *cli.Command {
 Shows unread messages by default (without acknowledging).
 Use --ack to mark messages as read, or --all to see all messages.
 
-The calling session is --caller, a session id or name (default:
-$HIVE_AGENT_SESSION, else detected from the working directory).
+The calling session is --caller, a session id or name. Without it,
+$HIVE_AGENT_SESSION decides, then the working directory.
 
 Output: One JSON object per line (JSON Lines format).
 On timeout (--listen/--wait), prints a JSON status line and exits with code 1.
@@ -667,7 +631,7 @@ Examples:
 			},
 			&cli.StringFlag{
 				Name:        callerFlag,
-				Usage:       "session id or name of the calling session (default: $HIVE_AGENT_SESSION, else detected from the working directory)",
+				Usage:       "session id or name of the calling session (default: $HIVE_AGENT_SESSION, then the working directory)",
 				Sources:     cli.EnvVars("HIVE_AGENT_SESSION"),
 				Destination: &cmd.inboxSession,
 			},
@@ -703,10 +667,12 @@ Examples:
 func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
 	msgs := cmd.messages()
 
-	sessionID, err := cmd.resolveInboxSession(ctx)
+	sess, err := requireCallingSession(ctx, cmd.app, cmd.inboxSession,
+		"could not detect the calling session; use --caller <id>, or run 'hive session info' to check")
 	if err != nil {
 		return err
 	}
+	sessionID := sess.ID
 
 	inboxTopic := "agent." + sessionID + ".inbox"
 
@@ -749,32 +715,4 @@ func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
 	}
 
 	return nil
-}
-
-// resolveInboxSession resolves the session ID for inbox operations.
-// Uses --caller (or $HIVE_AGENT_SESSION) if provided, otherwise falls back to CWD detection.
-func (cmd *MsgCmd) resolveInboxSession(ctx context.Context) (string, error) {
-	if cmd.inboxSession != "" {
-		resolvedID, err := cmd.resolveSessionID(ctx, cmd.inboxSession)
-		if err != nil {
-			return "", fmt.Errorf("resolve --caller %q: %w", cmd.inboxSession, err)
-		}
-
-		// Warn if CWD detection returns a different session
-		if detected, _ := cmd.detectSessionID(ctx); detected != "" && detected != resolvedID {
-			log.Printf("warning: --caller %s overrides detected session %s", cmd.inboxSession, detected)
-		}
-
-		return resolvedID, nil
-	}
-
-	sessionID, err := cmd.detectSessionID(ctx)
-	if err != nil {
-		return "", fmt.Errorf("detect session: %w", err)
-	}
-	if sessionID == "" {
-		return "", fmt.Errorf("could not detect session from working directory; use --caller <id> or run 'hive session info' to check")
-	}
-
-	return sessionID, nil
 }

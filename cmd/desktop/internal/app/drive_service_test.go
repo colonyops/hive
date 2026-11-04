@@ -813,6 +813,26 @@ func TestHiveSessionsOfOneRepositoryShareItsCanvases(t *testing.T) {
 	assert.Equal(t, "abc123", metas[0].HiveSession, "the first author stays the provenance")
 }
 
+func TestCallerResolvesAChatWithoutTheHiveEngine(t *testing.T) {
+	svc := newDriveService(DriveDeps{
+		Engine:   func() *hive.Engine { return nil },
+		Sessions: fakeCanvasSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
+		Events:   newTestBus(t),
+	})
+	ctx := t.Context()
+
+	chat, err := svc.resolve(ctx, "1")
+	require.NoError(t, err)
+	assert.Equal(t, "1", chat.author.Session)
+
+	global, err := svc.resolve(ctx, "global")
+	require.NoError(t, err)
+	assert.Equal(t, drive.Shared, global.space)
+
+	_, err = svc.resolve(ctx, "abc123")
+	assert.Equal(t, KindUnavailable, KindOf(err), "a hive session needs the engine")
+}
+
 func TestCanvasSessionArgumentThatResolvesToNothing(t *testing.T) {
 	noRemote := session.Session{
 		ID: "zzz999", Name: "scratch", Slug: "scratch", Path: "/work/scratch",
@@ -827,7 +847,10 @@ func TestCanvasSessionArgumentThatResolvesToNothing(t *testing.T) {
 	require.ErrorContains(t, err, "global", "the error names the way out")
 
 	_, err = f.svc.PutBlock(ctx, "site-abc123", "plan", "", "", block)
-	assert.Equal(t, KindInvalid, KindOf(err), "neither a chat id nor an absolute path")
+	assert.Equal(t, KindNotFound, KindOf(err), "not a chat id or an absolute path, so a session id that names no session")
+
+	_, err = f.svc.PutBlock(ctx, "abc123", "plan", "", "", block)
+	require.NoError(t, err, "a Code session's HIVE_AGENT_SESSION is its session id")
 
 	_, err = f.svc.PutBlock(ctx, "/work/scratch", "plan", "", "", block)
 	assert.Equal(t, KindInvalid, KindOf(err), "a session whose remote names no repository")

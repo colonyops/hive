@@ -53,7 +53,7 @@ Shows all messages (read and unread).
 hive msg inbox --caller <id|name>
 ```
 
-Names the session whose inbox to read, by id or name. The default is `$HIVE_AGENT_SESSION`, else detection from the working directory. Useful when running outside a session directory.
+Names the session whose inbox to read, by id or name. The default is `$HIVE_AGENT_SESSION`, which hive sets in a session's terminals, else detection from the working directory. Useful when running outside a session directory.
 
 ### Wait for a Message
 

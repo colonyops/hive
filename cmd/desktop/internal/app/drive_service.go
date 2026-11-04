@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
@@ -22,9 +21,11 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/internal/domain/drive"
+	hivesession "github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/ops"
 	driveops "github.com/colonyops/hive/internal/ops/drive"
 	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/colonyops/hive/pkg/osopen"
@@ -809,11 +810,6 @@ func (s *DriveService) withCanonicalAuthor(ctx context.Context, c drive.Canvas) 
 	return c, nil
 }
 
-// canvasGlobalSession is the caller argument of an agent outside any chat
-// or hive session. It still reads "global", not "shared", because existing
-// agent configurations and the HIVE_AGENT_SESSION docs pass that word.
-const canvasGlobalSession = "global"
-
 func (s *DriveService) engineDrive() (*drivesvc.Service, error) {
 	engine := s.engine()
 	if engine == nil {
@@ -873,56 +869,46 @@ func (s *DriveService) resolveTabPath(ctx context.Context, caller driveCaller, p
 	return c.Path, nil
 }
 
-// resolve reads the tool's caller argument. A UUID is a chat's record id;
-// a positive integer is a migrated chat's legacy alias. HIVE_AGENT_SESSION
-// carries one of those values. "global" is an agent outside any session.
-// Anything else is the caller's working directory: hive puts no id in a
-// session's environment, and an agent the user wired up by hand has only
-// where it runs
-// (ADR a-code-session-s-canvases-belong-to-its-repository-and-live-in-the-hive-context-directory).
+// resolve reads the tool's caller argument through the engine's ResolveCaller.
+// A chat is the one kind the engine cannot look up: its record lives in the
+// desktop's store.
 //
 // A directory inside no session stays not_found rather than falling back to
 // the shared space: until the hive engine starts, every directory is inside
 // no session, and a session's agent would file its canvases where its Drive tab
 // never looks (ADR agents-outside-every-session-share-one-global-canvas-owner).
 func (s *DriveService) resolve(ctx context.Context, session string) (driveCaller, error) {
-	session = strings.TrimSpace(session)
-	if session == canvasGlobalSession {
-		return driveCaller{space: drive.Shared}, nil
-	}
-	if !filepath.IsAbs(session) {
-		if _, err := uuid.Parse(session); err != nil {
-			legacyID, legacyErr := strconv.ParseInt(session, 10, 64)
-			if legacyErr != nil || legacyID <= 0 {
-				return driveCaller{}, Errorf(KindInvalid,
-					"session %q is not a chat's HIVE_AGENT_SESSION, the absolute path of a working directory, or global", session)
-			}
-		}
-		rec, err := s.sessions.Get(ctx, session)
-		if stores.IsNotFound(err) {
-			return driveCaller{}, Errorf(KindNotFound, "session %q not found", session)
-		}
-		if err != nil {
-			return driveCaller{}, Wrap(err, KindInternal, "loading session %q", session)
-		}
-		space, err := drive.WorkspaceSpace(rec.Workspace)
-		if err != nil {
-			return driveCaller{}, Errorf(KindInvalid, "workspace %q is not a valid workspace directory name", rec.Workspace)
-		}
-		return driveCaller{space: space, author: drive.Author{Session: rec.ID}}, nil
-	}
 	engine := s.engine()
 	if engine == nil {
+		// A chat and global need no hive engine, so they still resolve before it runs.
+		value := strings.TrimSpace(session)
+		switch {
+		case value == sessionsvc.CallerGlobal:
+			return driveCaller{space: drive.Shared}, nil
+		case sessionsvc.LooksLikeChatID(value):
+			return s.chatCaller(ctx, value)
+		}
 		return driveCaller{}, Errorf(KindUnavailable, "hive sessions are not available in this build")
 	}
-	sess, ok, err := engine.Sessions().SessionAtPath(ctx, session)
+	caller, err := engine.Sessions().ResolveCaller(ctx, session, "", "")
 	if err != nil {
-		return driveCaller{}, Wrap(err, KindInternal, "finding the hive session at %q", session)
+		if opErr, ok := errors.AsType[*ops.Error](err); ok {
+			return driveCaller{}, Errorf(Kind(opErr.Kind), "%s", opErr.Msg)
+		}
+		return driveCaller{}, Wrap(err, KindInternal, "resolving caller %q", session)
 	}
-	if !ok {
-		return driveCaller{}, Errorf(KindNotFound,
-			"no hive session's checkout holds %q; pass HIVE_AGENT_SESSION from a Hive chat, the working directory of a hive session, or global outside both", session)
+	switch caller.Kind {
+	case sessionsvc.CallerKindGlobal:
+		return driveCaller{space: drive.Shared}, nil
+	case sessionsvc.CallerKindChat:
+		return s.chatCaller(ctx, caller.ChatID)
+	case sessionsvc.CallerKindSession:
+		return hiveSessionCaller(engine, caller.Session)
 	}
+	return driveCaller{}, Errorf(KindInternal, "caller %q resolved to an unknown kind %q", session, caller.Kind)
+}
+
+func hiveSessionCaller(engine *hive.Engine, sess hivesession.Session) (driveCaller, error) {
 	space, ok := engine.Drive().SpaceForRemote(sess.Remote)
 	if !ok {
 		return driveCaller{}, Errorf(KindInvalid,
@@ -932,6 +918,21 @@ func (s *DriveService) resolve(ctx context.Context, session string) (driveCaller
 		space: space, author: drive.Author{HiveSession: sess.ID},
 		checkout: sess.Path, tmuxSession: sessionsvc.Target(sess).Session,
 	}, nil
+}
+
+func (s *DriveService) chatCaller(ctx context.Context, chatID string) (driveCaller, error) {
+	rec, err := s.sessions.Get(ctx, chatID)
+	if stores.IsNotFound(err) {
+		return driveCaller{}, Errorf(KindNotFound, "session %q not found", chatID)
+	}
+	if err != nil {
+		return driveCaller{}, Wrap(err, KindInternal, "loading session %q", chatID)
+	}
+	space, err := drive.WorkspaceSpace(rec.Workspace)
+	if err != nil {
+		return driveCaller{}, Errorf(KindInvalid, "workspace %q is not a valid workspace directory name", rec.Workspace)
+	}
+	return driveCaller{space: space, author: drive.Author{Session: rec.ID}}, nil
 }
 
 type driveTarget struct {
