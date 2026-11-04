@@ -36,9 +36,8 @@ Active sessions are not affected.`,
 		Action: cmd.run,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
-				Name:    "all",
-				Aliases: []string{"a"},
-				Usage:   "Delete all recycled sessions (ignore max_recycled limit)",
+				Name:  "all",
+				Usage: "Delete all recycled sessions (ignore max_recycled limit)",
 			},
 		},
 	})

@@ -87,7 +87,7 @@ hive drive spaces        # the space keys
 hive drive prune --older-than 30d
 ```
 
-`hive drive spaces` prints each space's kind and key, such as `repository  my-org/my-repo`, `workspace  workspaces/hive`, and `shared  shared`. Another repository or the shared space is `hive drive -r owner/repo ls` or `hive drive -s ls`. A Chats workspace is `hive drive -w hive ls`. `--all` cannot combine with `-r`, `-s`, or `-w`. `prune` removes files older than the given age.
+`hive drive spaces` prints each space's kind and key, such as `repository  my-org/my-repo`, `workspace  workspaces/hive`, and `shared  shared`. Another repository or the shared space is `hive drive --repo owner/repo ls` or `hive drive --shared ls`. A Chats workspace is `hive drive --workspace hive ls`. `--all` cannot combine with `--repo`, `--shared`, or `--workspace`. `prune` removes files older than the given age.
 
 ### Finding Documents
 

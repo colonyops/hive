@@ -36,7 +36,7 @@ Push, pull, and share work on one space. `hive drive` finds it from the current 
 
 ```bash
 hive drive --workspace hive push
-hive drive -r colonyops/hive pull
+hive drive --repo colonyops/hive pull
 ```
 
 ## Push

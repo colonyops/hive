@@ -76,7 +76,6 @@ Examples:
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "title",
-				Aliases:     []string{"t"},
 				Usage:       "todo title",
 				Required:    true,
 				Destination: &cmd.addTitle,

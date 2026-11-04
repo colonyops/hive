@@ -54,19 +54,16 @@ in a git repository to create a .hive symlink pointing to its space.
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "repo",
-				Aliases:     []string{"r"},
 				Usage:       "target a specific repository space (owner/repo)",
 				Destination: &cmd.repo,
 			},
 			&cli.BoolFlag{
 				Name:        "shared",
-				Aliases:     []string{"s"},
 				Usage:       "use the shared space",
 				Destination: &cmd.shared,
 			},
 			&cli.StringFlag{
 				Name:        "workspace",
-				Aliases:     []string{"w"},
 				Usage:       "target a Chats workspace space by name",
 				Destination: &cmd.workspace,
 			},

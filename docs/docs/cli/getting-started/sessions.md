@@ -154,3 +154,24 @@ The TUI shows real-time agent status:
 | `[>]`     | Cyan             | Agent ready for input           |
 | `[?]`     | Dim              | Terminal session not found      |
 | `[○]`     | Gray             | Session recycled                |
+
+## Short flags
+
+A short flag has the same meaning in every hive command. A flag that is not in the table has no short form, so use its long name.
+
+| Short | Long        | Used by                                      |
+| ----- | ----------- | -------------------------------------------- |
+| `-a`  | `--agent`   | `new`, `batch`, `session create`             |
+| `-d`  | `--desc`    | `hc create`                                  |
+| `-f`  | `--file`    | `batch`, `hc create`, `msg pub`, `review`    |
+| `-l`  | `--listen`  | `msg inbox`, `msg sub`                       |
+| `-m`  | `--message` | `msg pub`                                    |
+| `-n`  | `--tail`    | `msg inbox`, `msg sub`                       |
+| `-p`  | `--parent`  | `hc create`                                  |
+| `-r`  | `--remote`  | `new`, `session create`                      |
+| `-s`  | `--source`  | `new`, `session create`, `todo add`          |
+| `-t`  | `--topic`   | `msg pub`, `msg sub`                         |
+| `-u`  | `--uri`     | `todo add`                                   |
+| `-w`  | `--wait`    | `msg inbox`, `msg sub`                       |
+
+Commands generated for Hive Desktop (`hive dt`) follow the same table and have no other short flags.

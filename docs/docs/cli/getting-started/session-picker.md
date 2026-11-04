@@ -32,10 +32,10 @@ hive x pick --hide-current   # exclude the session you're currently in
 
 | Flag | Description |
 | ---- | ----------- |
-| `--status`, `-s` | Pre-set the status filter (`active`, `approval`, `ready`, `missing`) |
-| `--repo`, `-r` | Filter by repository remote URL (substring match) |
-| `--print`, `-p` | Print selected session info instead of switching tmux |
-| `--format`, `-f` | Output format for `--print`: `id` (default), `name`, `path`, `json` |
+| `--status` | Pre-set the status filter (`active`, `approval`, `ready`, `missing`) |
+| `--repo` | Filter by repository remote URL (substring match) |
+| `--print` | Print selected session info instead of switching tmux |
+| `--format` | Output format for `--print`: `id` (default), `name`, `path`, `json` |
 | `--hide-current` | Hide the session you are currently in |
 | `--no-recents` | Don't prioritize recently-used sessions |
 
