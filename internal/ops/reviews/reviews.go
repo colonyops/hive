@@ -46,7 +46,7 @@ type DiffReviewPutIn struct {
 }
 
 var DiffReviewPut = ops.Spec[DiffReviewPutIn]{
-	Name: "diff_review.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "diff_review.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary: "Review a Code session's branch diff",
 	Guidance: "Store your review of a Code session's changes: the branch against its base, as the Diff view's Branch comparison " +
 		"shows it, which is what a pull request shows. The user reads each comment inline under its lines and dismisses the ones " +
@@ -64,7 +64,7 @@ type DiffReviewGetIn struct {
 }
 
 var DiffReviewGet = ops.Spec[DiffReviewGetIn]{
-	Name: "diff_review.get", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset,
+	Name: "diff_review.get", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary: "Read the reviews of a Code session's diff",
 	Guidance: "List the agent reviews stored for a Code session, each with the comments the user has not dismissed or sent " +
 		"yet. A dismissed or sent comment is gone, so compare with what you wrote to see what is still waiting. An empty " +
@@ -78,7 +78,7 @@ type DiffReviewClearIn struct {
 }
 
 var DiffReviewClear = ops.Spec[DiffReviewClearIn]{
-	Name: "diff_review.clear", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "diff_review.clear", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary: "Remove reviews of a Code session's diff",
 	Guidance: "Remove the reviews of a Code session: every one, or only author's. Use it to withdraw a review that no longer " +
 		"applies; to correct one, send diff_review_put again instead. Answers with how many reviews it removed.",
