@@ -121,7 +121,7 @@ hive hc create "New feature epic" --type epic
 hive hc list <epic-id> --status open
 
 # List items assigned to a specific session
-hive hc list --session <session-id>
+hive hc list --session-id <session-id>
 
 # Show item + full comment history
 hive hc show <id>
@@ -143,7 +143,7 @@ Bulk mode (no positional arg, reads JSON from stdin or `--file`):
 
 - `[epic-id]` — optional positional arg to filter by epic (returns children only, not the epic itself)
 - `--status open|in_progress|done|cancelled` — filter by status
-- `--session <id>` — filter by session ID
+- `--session-id <id>` — filter by session id (bare or `local:<id>`)
 
 Output: JSON lines with `--json`; colored tree without (use `--json` when parsing programmatically).
 

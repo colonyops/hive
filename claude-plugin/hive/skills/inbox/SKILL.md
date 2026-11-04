@@ -47,13 +47,13 @@ hive msg inbox --all
 
 Shows all messages (read and unread).
 
-### Specify Session Explicitly
+### Specify the Calling Session
 
 ```bash
-hive msg inbox --session <id|name>
+hive msg inbox --caller <id|name>
 ```
 
-Overrides auto-detection from working directory. Useful when running outside a session directory.
+Names the session whose inbox to read, by id or name. The default is `$HIVE_AGENT_SESSION`, else detection from the working directory. Useful when running outside a session directory.
 
 ### Wait for a Message
 
