@@ -22,6 +22,16 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as deeplink$0 from "../../../../../internal/domain/deeplink/models.js";
 
 /**
+ * Open takes a hive:// link clicked inside the app, such as one in an agent's
+ * review, down the same path as one the operating system delivers. Handing it
+ * to the OS instead would raise whichever app registered the scheme, which in a
+ * dev build is the installed one.
+ */
+export function Open(raw: string): $CancellablePromise<void> {
+    return $Call.ByID(3353641007, raw);
+}
+
+/**
  * Take returns the link waiting to be opened and clears it, or nil when there
  * is none.
  */

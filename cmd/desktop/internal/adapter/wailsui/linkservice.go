@@ -1,6 +1,7 @@
 package wailsui
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -16,6 +17,7 @@ type linkSource string
 const (
 	linkFromOS             linkSource = "os"
 	linkFromSecondInstance linkSource = "second-instance"
+	linkFromApp            linkSource = "app"
 )
 
 // LinkService holds the hive:// link the operating system delivered until the
@@ -48,6 +50,17 @@ func (s *LinkService) Take() *deeplink.Location {
 		s.logger.Info().Interface("link", *loc).Msg("frontend took hive:// link")
 	}
 	return loc
+}
+
+// Open takes a hive:// link clicked inside the app, such as one in an agent's
+// review, down the same path as one the operating system delivers. Handing it
+// to the OS instead would raise whichever app registered the scheme, which in a
+// dev build is the installed one.
+func (s *LinkService) Open(raw string) error {
+	if err := s.deliver(raw, linkFromApp); err != nil {
+		return fmt.Errorf("%q is not a hive:// link Hive can open: %w", raw, err)
+	}
+	return nil
 }
 
 // deliver parses a link the operating system handed the app and queues it for
