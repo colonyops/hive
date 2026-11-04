@@ -39,6 +39,10 @@ const props = defineProps<{
    * the same side. With `anchor`, `start` also frees the panel from the anchor's
    * width, so a small toggle can anchor it. */
   align?: 'start' | 'end'
+  /** With `anchor` and `align` end, the panel's width when it should outgrow a
+   * small anchor at the right of a toolbar. It still ends at the anchor's right
+   * edge, and stops short of the window's left. */
+  anchoredWidth?: number
 }>()
 const emit = defineEmits<{ select: [id: string]; close: [] }>()
 
@@ -81,7 +85,7 @@ function measure(): void {
   if (!el) return
   const rect = el.getBoundingClientRect()
   const start = props.align === 'start'
-  const width = start ? 230 : Math.min(230, rect.width)
+  const width = start ? 230 : (props.anchoredWidth ?? Math.min(230, rect.width))
   const flip = rect.bottom > window.innerHeight - Math.max(FLIP_WITHIN, root.value?.offsetHeight ?? 0)
   // Teleported, it layers with AppSelect's popover, above a modal or a hub
   // overlay that may host its anchor.
@@ -89,7 +93,7 @@ function measure(): void {
     position: 'fixed',
     zIndex: '50',
     right: 'auto',
-    left: `${start ? rect.left : rect.right - width}px`,
+    left: `${start ? rect.left : Math.max(ANCHOR_GAP, rect.right - width)}px`,
     width: `${width}px`,
     top: flip ? 'auto' : `${rect.bottom + ANCHOR_GAP}px`,
     bottom: flip ? `${window.innerHeight - rect.top + ANCHOR_GAP}px` : 'auto',
