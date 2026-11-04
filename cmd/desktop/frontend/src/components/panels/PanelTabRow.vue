@@ -74,6 +74,7 @@ watch(tabIds, (ids, before) => {
         v-for="(tab, at) in panel.tabs"
         :key="tab.id"
         data-panel-tab
+        :data-tab-id="tab.id"
         class="panel-tab group relative flex min-w-0 max-w-42 shrink touch-none select-none items-center text-small"
         :class="[
           shown(tab) ? (focused ? 'panel-tab-focused' : 'panel-tab-shown') : 'text-text-2',

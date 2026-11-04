@@ -1710,8 +1710,8 @@ describe('App', () => {
         slug: 'hive-fix-parser',
         name: 'fix the parser',
         windows: [
-          { windowId: '@1', name: 'agent', active: true },
-          { windowId: '@2', name: 'shell', active: false },
+          { windowId: '@1', name: 'agent', active: true, position: 1 },
+          { windowId: '@2', name: 'shell', active: false, position: 2 },
         ],
       })
       expect(terminalOnScreen(wrapper)).toBe(false)

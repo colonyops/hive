@@ -150,7 +150,7 @@ const windowJumpCommands: BindableCommand[] = Array.from({ length: DIRECT_WINDOW
   const position = index + 1
   return {
     id: terminalWindowCommandID(position),
-    title: `Go to window ${position}`,
+    title: `Go to tab ${position}`,
     group: 'Code',
     keywords: ['terminal', 'window', 'tab', 'switch', String(position)],
     icon: IconTerminal,

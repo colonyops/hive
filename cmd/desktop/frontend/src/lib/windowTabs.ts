@@ -76,6 +76,25 @@ export function windowOrder(layout: PanelLayout): string[] {
   })
 }
 
+/** One place in the tab strip: a window, or a view such as docs. */
+export type StripEntry = { kind: 'window'; windowId: string } | { kind: 'view'; tabId: string }
+
+/**
+ * Every tab in the order the strip shows it, so ⌘3 means the third tab
+ * whatever it holds. A window with no tab yet goes last, as in inTabOrder.
+ */
+export function stripTabs(layout: PanelLayout, windowIds: readonly string[]): StripEntry[] {
+  const entries: StripEntry[] = orderedTabs(layout).map(({ tab }) => {
+    const windowId = windowIdOf(tab)
+    return windowId ? { kind: 'window', windowId } : { kind: 'view', tabId: tab.id }
+  })
+  const placed = new Set(entries.flatMap((entry) => (entry.kind === 'window' ? [entry.windowId] : [])))
+  for (const windowId of windowIds) {
+    if (!placed.has(windowId)) entries.push({ kind: 'window', windowId })
+  }
+  return entries.filter((entry) => entry.kind === 'view' || windowIds.includes(entry.windowId))
+}
+
 /**
  * Windows in the order the tabs and the tree show them. tmux's own can differ,
  * as when a closed panel's tabs join the end of its neighbour's, and one move

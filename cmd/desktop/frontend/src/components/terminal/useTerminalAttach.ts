@@ -2,6 +2,8 @@ import { useStorage } from '@vueuse/core'
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { setAttachedTerminalWindows } from '../../composables/useAttachedTerminalWindows'
+import { stripTabs } from '../../lib/windowTabs'
+import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { useAgentWorkspaces } from '../../stores/useAgentWorkspaces'
 import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
 import { useTerminalOutcomes } from '../../stores/useTerminalOutcomes'
@@ -33,6 +35,7 @@ export function useTerminalAttach(options: {
   onWindowChosen: (row: TerminalSessionRow, windowId: string) => void
 }) {
   const { pool, tree } = options
+  const panelLayouts = usePanelLayouts()
   const { activeSlug, current } = pool
   const route = useRoute()
   const router = useRouter()
@@ -176,6 +179,10 @@ export function useTerminalAttach(options: {
       const live = slug ? pool.pool.get(slug) : undefined
       const row = live ? tree.attachable.value.find((candidate) => candidate.slug === slug) : undefined
       if (!live || !row) return null
+      const ids = live.tabs.value.map((tab) => tab.windowId)
+      const strip = stripTabs(panelLayouts.layoutOf(row.id), ids)
+      const positionOf = (windowId: string): number =>
+        strip.findIndex((entry) => entry.kind === 'window' && entry.windowId === windowId) + 1
       return {
         slug: row.slug,
         name: row.name,
@@ -183,6 +190,7 @@ export function useTerminalAttach(options: {
           windowId: tab.windowId,
           name: tab.name || tab.windowId,
           active: tab.windowId === live.activeWindowId.value,
+          position: positionOf(tab.windowId),
         })),
       }
     },

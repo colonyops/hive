@@ -405,7 +405,7 @@ export function useAppPaletteRows(
       // already binds to each position in the strip.
       if (attachedTerminal.value) {
         const { slug, name, windows } = attachedTerminal.value
-        windows.forEach((win, index) => {
+        windows.forEach((win) => {
           cmds.push({
             id: `terminal:window:${win.windowId}`,
             title: win.name,
@@ -414,7 +414,7 @@ export function useAppPaletteRows(
             kind: 'window',
             keywords: ['window', 'tab', 'jump', 'switch'],
             icon: IconTerminal,
-            hint: hintFor(terminalWindowCommandID(index + 1)),
+            hint: hintFor(terminalWindowCommandID(win.position)),
             run: () => void router.push({ name: 'terminal', params: { slug }, query: { window: win.windowId } }),
           })
         })
