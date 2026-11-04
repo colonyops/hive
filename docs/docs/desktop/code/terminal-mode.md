@@ -226,13 +226,19 @@ Changes never writes to the checkout, so it's safe to use while an agent works i
 
 ## Drive
 
-An agent in a Code session can publish documents to Drive the same way a chat does. Hive does not change your agent's configuration, so add the server yourself. **Settings ▸ MCP servers** shows the address of the Hive Drive server and the command or config entry for Claude Code, Codex, and other agents. For Claude Code it is:
+An agent in a Code session can publish documents to Drive the same way a chat does. Hive does not change your agent's configuration on its own, so add the server from **Settings ▸ MCP servers**, or by hand. With the `hive` command installed, the entry needs no port:
+
+```bash
+claude mcp add --scope user hive-drive -- hive mcp serve --toolset drive,layout
+```
+
+Without it, use the address that **Settings ▸ MCP servers** shows:
 
 ```bash
 claude mcp add --scope user --transport http hive-drive http://127.0.0.1:<port>/mcp/drive
 ```
 
-The address stays the same across restarts. An agent already set up with `/mcp/canvas` keeps working. The server needs the local HTTP server, which is enabled by default. An empty Drive tab in Code links to the same settings page.
+The address stays the same across restarts. See [Agents and the layout](agent-layout.md#from-mcp) for `hive mcp serve`. An agent already set up with `/mcp/canvas` keeps working. The server needs the local HTTP server, which is enabled by default. An empty Drive tab in Code links to the same settings page.
 
 Open a session's **Drive** tab with the `+` button on its tab row or its row in the sidebar. A document an agent opens arrives as a Drive tab behind the one you are reading, with a dot until you look at it. A session's documents belong to its repository, so every session of that repository shows the same ones, and they remain after the session is deleted. They are in `<root>/<owner>/<repo>/` under the hive context directory, which `hive drive init` links into a checkout as `.hive`, so a file you write to `.hive/plans/` shows in the tab within a second.
 

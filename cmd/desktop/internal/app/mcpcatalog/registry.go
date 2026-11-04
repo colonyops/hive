@@ -50,6 +50,7 @@ var registry = map[string]Descriptor{
 		Server:      Server{Transport: TransportHttp},
 		RuntimeURL:  true,
 		RuntimePath: "/mcp/canvas",
+		ServePath:   "/mcp/drive",
 	},
 	"chrome-devtools": {
 		Type:        "chrome-devtools",

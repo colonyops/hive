@@ -98,9 +98,13 @@ type AgentWorkspacesService struct {
 	// is down. Read per call rather than captured, because the listener's
 	// port is not known when this service is built and can change if it
 	// rebinds.
-	mcpBase  MCPBaseReader
-	endDelay SessionEndDelayReader
-	events   *events.Bus
+	mcpBase MCPBaseReader
+	// hiveCLI and hiveDataDir decide between the stdio and HTTP forms of the
+	// hive MCP entries. Either nil leaves them on HTTP.
+	hiveCLI     HiveCLI
+	hiveDataDir func() string
+	endDelay    SessionEndDelayReader
+	events      *events.Bus
 	// OnSchedulesChanged is a field rather than a constructor argument because
 	// the scheduler it reloads is built after this service, over it.
 	OnSchedulesChanged func(workspace string)
@@ -153,6 +157,9 @@ type AgentWorkspacesDeps struct {
 	EditorCommand EditorCommandReader
 	// MCPBase nil means NopMCPBaseReader.
 	MCPBase MCPBaseReader
+	// HiveCLI nil means the hive MCP entries stay on HTTP.
+	HiveCLI     HiveCLI
+	HiveDataDir func() string
 	// EndDelay nil means the shipped defaultEndDelay.
 	EndDelay SessionEndDelayReader
 	Events   *events.Bus
@@ -184,6 +191,8 @@ func newAgentWorkspacesService(d AgentWorkspacesDeps) *AgentWorkspacesService {
 		execEnv:         d.ExecEnv,
 		editorCommand:   d.EditorCommand,
 		mcpBase:         d.MCPBase,
+		hiveCLI:         d.HiveCLI,
+		hiveDataDir:     d.HiveDataDir,
 		endDelay:        d.EndDelay,
 		events:          d.Events,
 		logger:          d.Logger,
@@ -200,6 +209,7 @@ func newAgentWorkspacesService(d AgentWorkspacesDeps) *AgentWorkspacesService {
 func (s *AgentWorkspacesService) catalogue(ctx context.Context) []agentws.CatalogueEntry {
 	entries := agentws.Catalogue(ctx, s.store.Library().Library, s.lookPath())
 	base := s.mcpBase.MCPBaseURL(ctx)
+	stdio := s.stdioServe(ctx)
 	for i, entry := range entries {
 		descriptor, ok := mcpcatalog.Lookup(entry.ID)
 		// Shipped is false for a user entry shadowing this id, and the user's
@@ -209,6 +219,10 @@ func (s *AgentWorkspacesService) catalogue(ctx context.Context) []agentws.Catalo
 		}
 		if base == "" {
 			entries[i].Problem = "the local HTTP server is not running; set http.enabled in settings.yaml"
+			continue
+		}
+		if stdio != nil {
+			entries[i].Server = stdio.server(serveToolsets(servePathOf(descriptor)))
 			continue
 		}
 		entries[i].Server.URL = base + descriptor.RuntimePath
@@ -227,22 +241,25 @@ func (s *AgentWorkspacesService) lookPath() func(context.Context, string) (strin
 	return s.execEnv.LookPath
 }
 
+// stdioServe is non-nil when the hive entries can run as `hive mcp serve`.
+func (s *AgentWorkspacesService) stdioServe(ctx context.Context) *stdioServe {
+	if s.hiveCLI == nil || s.hiveDataDir == nil {
+		return nil
+	}
+	path, ok := s.hiveCLI.Usable(ctx)
+	if !ok {
+		return nil
+	}
+	return &stdioServe{hive: path, dataDir: s.hiveDataDir()}
+}
+
 // AddDriveMCP installs Hive Drive in the selected agent's user configuration.
 func (s *AgentWorkspacesService) AddDriveMCP(ctx context.Context, agent, url string) error {
-	var command string
-	var args []string
-	switch agent {
-	case "claude":
-		command = "claude"
-		args = []string{"mcp", "add", "--scope", "user", "--transport", "http", "hive-drive", url}
-	case "codex":
-		command = "codex"
-		args = []string{"mcp", "add", "hive-drive", "--url", url}
-	default:
-		return Errorf(KindInvalid, "MCP setup is not supported for agent %q", agent)
+	command, args, err := driveMCPCommand(agent, url, s.stdioServe(ctx))
+	if err != nil {
+		return err
 	}
 	var path string
-	var err error
 	if s.execEnv == nil {
 		path, err = osexec.LookPath(command)
 	} else {

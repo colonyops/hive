@@ -35,11 +35,26 @@ func (desktopNotRunningError) Error() string {
 	return "Hive Desktop is not running; start it, or pass --desktop-url"
 }
 
-// call runs one desktop tool and answers its result. A refused call comes back
-// as an *ops.Error with the tool's own text, so the message reads the same
-// here as it does to an agent over MCP, and the exit code follows its kind.
-func (cmd *DesktopCmd) call(ctx context.Context, c *cli.Command, mcpPath, tool string, args map[string]any) (any, error) {
-	baseURL, err := cmd.desktopURL(c)
+// DesktopClient calls tools on the running Hive Desktop. It reads the
+// endpoint file on every call, because the desktop may restart on a new port.
+type DesktopClient struct {
+	dataDir     string
+	urlOverride string
+	version     string
+}
+
+// NewDesktopClient finds the desktop through the endpoint file in dataDir, or
+// at urlOverride when that is set.
+func NewDesktopClient(dataDir, urlOverride, version string) *DesktopClient {
+	return &DesktopClient{dataDir: dataDir, urlOverride: urlOverride, version: version}
+}
+
+// Call runs one tool at mcpPath and answers the desktop's raw result, refused
+// or not. An error means the call did not complete: the desktop is not
+// reachable (a desktopNotRunningError or *desktopUnreachableError), or it
+// answered with a protocol error, such as a tool this desktop does not have.
+func (d *DesktopClient) Call(ctx context.Context, mcpPath, tool string, args map[string]any) (*mcp.CallToolResult, error) {
+	baseURL, err := d.baseURL()
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +73,7 @@ func (cmd *DesktopCmd) call(ctx context.Context, c *cli.Command, mcpPath, tool s
 		MaxRetries:           -1,
 		DisableStandaloneSSE: true,
 	}
-	client := mcp.NewClient(&mcp.Implementation{Name: "hive", Version: cmd.app.Build.Version}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "hive", Version: d.version}, nil)
 	cs, err := client.Connect(ctx, transport, nil)
 	if err != nil {
 		return nil, desktopConnectError(baseURL, err)
@@ -70,6 +85,35 @@ func (cmd *DesktopCmd) call(ctx context.Context, c *cli.Command, mcpPath, tool s
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
 	if err != nil {
 		return nil, fmt.Errorf("call %s: %w", tool, err)
+	}
+	return res, nil
+}
+
+func (d *DesktopClient) baseURL() (string, error) {
+	if d.urlOverride != "" {
+		return d.urlOverride, nil
+	}
+	e, err := desktopendpoint.Read(d.dataDir)
+	if errors.Is(err, desktopendpoint.ErrNotRunning) {
+		return "", desktopNotRunningError{}
+	}
+	if err != nil {
+		return "", err
+	}
+	return e.URL, nil
+}
+
+func (cmd *DesktopCmd) desktopClient(c *cli.Command) *DesktopClient {
+	return NewDesktopClient(cmd.app.Config.DataDir, c.String(desktopURLFlag), cmd.app.Build.Version)
+}
+
+// call runs one desktop tool and answers its result. A refused call comes back
+// as an *ops.Error with the tool's own text, so the message reads the same
+// here as it does to an agent over MCP, and the exit code follows its kind.
+func (cmd *DesktopCmd) call(ctx context.Context, c *cli.Command, mcpPath, tool string, args map[string]any) (any, error) {
+	res, err := cmd.desktopClient(c).Call(ctx, mcpPath, tool, args)
+	if err != nil {
+		return nil, err
 	}
 	if res.IsError {
 		return nil, toolError(res, tool)
@@ -86,23 +130,15 @@ func toolError(res *mcp.CallToolResult, tool string) error {
 	return &ops.Error{Kind: kind, Msg: strings.TrimSpace(strings.TrimPrefix(text, string(kind)+":"))}
 }
 
-func (cmd *DesktopCmd) desktopURL(c *cli.Command) (string, error) {
-	if u := c.String(desktopURLFlag); u != "" {
-		return u, nil
-	}
-	e, err := desktopendpoint.Read(cmd.app.Config.DataDir)
-	if errors.Is(err, desktopendpoint.ErrNotRunning) {
-		return "", desktopNotRunningError{}
-	}
-	if err != nil {
-		return "", err
-	}
-	return e.URL, nil
+func desktopCaller(c *cli.Command) (string, error) {
+	return resolveCaller(c.String(callerFlag))
 }
 
-func desktopCaller(c *cli.Command) (string, error) {
-	if s := c.String(callerFlag); s != "" {
-		return s, nil
+// resolveCaller answers who a call acts for: explicit when set, else the
+// absolute current directory.
+func resolveCaller(explicit string) (string, error) {
+	if explicit != "" {
+		return explicit, nil
 	}
 	wd, err := os.Getwd()
 	if err != nil {
@@ -118,8 +154,21 @@ func desktopConnectError(baseURL string, err error) error {
 	if errors.Is(err, syscall.ECONNREFUSED) || strings.Contains(err.Error(), "connection refused") {
 		return desktopNotRunningError{}
 	}
-	return fmt.Errorf("reach Hive Desktop at %s: %w", baseURL, err)
+	return &desktopUnreachableError{URL: baseURL, Err: err}
 }
+
+// desktopUnreachableError is a connection that failed for a reason other than
+// a refusal, such as a timeout.
+type desktopUnreachableError struct {
+	URL string
+	Err error
+}
+
+func (e *desktopUnreachableError) Error() string {
+	return fmt.Sprintf("reach Hive Desktop at %s: %v", e.URL, e.Err)
+}
+
+func (e *desktopUnreachableError) Unwrap() error { return e.Err }
 
 func toolResultText(res *mcp.CallToolResult, tool string) string {
 	var parts []string

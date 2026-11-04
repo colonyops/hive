@@ -513,6 +513,8 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		ExecEnv:         a.execEnv,
 		EditorCommand:   a.Settings,
 		MCPBase:         a,
+		HiveCLI:         newHiveCLIResolver(a.Settings.DaemonHivePath, a.execEnv, cfg.Build.Version, logutils.Component(cfg.Logger, "hivecli")),
+		HiveDataDir:     func() string { return a.hiveDataDir },
 		EndDelay:        a.Settings,
 		Events:          a.Events,
 		Logger:          cfg.Logger,
