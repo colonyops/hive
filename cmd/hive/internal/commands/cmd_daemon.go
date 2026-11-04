@@ -175,7 +175,7 @@ type daemonStatus struct {
 }
 
 func (cmd *DaemonCmd) status(ctx context.Context, c *cli.Command) error {
-	client := cmd.app.DaemonClient(!cmd.statusNoStart)
+	client := cmd.app.InspectDaemonClient(!cmd.statusNoStart)
 	info, err := client.Hello(ctx)
 	if err != nil {
 		return fmt.Errorf("reach the daemon at %s: %w", daemonpath.SocketPath(cmd.flags.DataDir), err)
