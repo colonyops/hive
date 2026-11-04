@@ -1,4 +1,4 @@
-import { computed, onScopeDispose, ref, toValue, watch } from 'vue'
+import { computed, nextTick, onScopeDispose, ref, toValue, watch } from 'vue'
 import type { Component, ComputedRef, MaybeRefOrGetter, Ref } from 'vue'
 import {
   scopeForSigil,
@@ -400,6 +400,25 @@ const _open = ref(false)
 const _query = ref('')
 const _scope = ref<PaletteScopeId>('all')
 
+// The palette's own input takes focus on open, so whatever had the keyboard
+// (a terminal, say) is lost unless it is remembered here and handed back when
+// the palette is dismissed.
+let focusBeforeOpen: HTMLElement | null = null
+
+function rememberFocus(): void {
+  const active = document.activeElement
+  focusBeforeOpen = active instanceof HTMLElement && active !== document.body ? active : null
+}
+
+function restoreFocus(): void {
+  const target = focusBeforeOpen
+  focusBeforeOpen = null
+  if (!target) return
+  void nextTick(() => {
+    if (target.isConnected && target.getClientRects().length > 0) target.focus()
+  })
+}
+
 /** Registry entries whose tab is currently shown (Shell/Keys only where available). */
 const visibleScopes = computed<PaletteScopeSpec[]>(() =>
   paletteScopes.filter((s) => {
@@ -475,14 +494,19 @@ export function useCommandPalette(): {
   })
 
   function toggle(): void {
-    _open.value = !_open.value
-    if (!_open.value) {
+    if (_open.value) {
+      _open.value = false
       _query.value = ''
       _scope.value = 'all'
+      restoreFocus()
+      return
     }
+    rememberFocus()
+    _open.value = true
   }
 
   function openWithScope(scope: PaletteScopeId): void {
+    if (!_open.value) rememberFocus()
     _open.value = true
     _scope.value = scope
     _query.value = ''
@@ -534,6 +558,7 @@ export function useCommandPalette(): {
     // Recent only draws in All, where a Drive row never shows. So only All/Go
     // to/Actions rows earn a place in it.
     if (_scope.value === 'all' || _scope.value === 'goto' || _scope.value === 'actions') recordRun(cmd.id)
+    focusBeforeOpen = null
     _open.value = false
     _query.value = ''
     _scope.value = 'all'

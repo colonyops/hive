@@ -632,4 +632,59 @@ describe('CommandPalette', () => {
     expect(runDesktop).not.toHaveBeenCalled()
     expect(runBackend).not.toHaveBeenCalled()
   })
+
+  describe('keyboard on close', () => {
+    let outside: HTMLTextAreaElement
+
+    beforeEach(() => {
+      outside = document.createElement('textarea')
+      document.body.appendChild(outside)
+      // jsdom has no layout, so every element reports no client rects.
+      outside.getClientRects = () => [{}] as unknown as DOMRectList
+      outside.focus()
+    })
+
+    afterEach(() => {
+      outside.remove()
+    })
+
+    it('gives the keyboard back to what had it when Escape dismisses the palette', async () => {
+      await openPalette()
+      expect(document.activeElement).not.toBe(outside)
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      await flushPromises()
+
+      expect(document.activeElement).toBe(outside)
+    })
+
+    it('does not restore focus when a command ran', async () => {
+      await openPalette()
+
+      await wrapper!.findAll('.palette-row')[0].trigger('click')
+      await flushPromises()
+
+      expect(document.activeElement).not.toBe(outside)
+    })
+
+    it('leaves focus alone when the element is gone', async () => {
+      await openPalette()
+      outside.remove()
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      await flushPromises()
+
+      expect(document.activeElement).not.toBe(outside)
+    })
+
+    it('leaves focus alone when the element is hidden', async () => {
+      await openPalette()
+      outside.getClientRects = () => [] as unknown as DOMRectList
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      await flushPromises()
+
+      expect(document.activeElement).not.toBe(outside)
+    })
+  })
 })
