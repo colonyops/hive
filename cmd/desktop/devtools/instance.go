@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
@@ -630,7 +631,7 @@ func (d *devtools) seedConfig(source, destination string) error {
 	} else if err != nil {
 		return err
 	}
-	if err := copyTreeMaterialized(source, destination, make(map[string]bool)); err != nil {
+	if err := d.copyTreeMaterialized(source, destination, make(map[string]bool)); err != nil {
 		return fmt.Errorf("copy installed config: %w", err)
 	}
 	_ = os.Remove(filepath.Join(destination, "bootstrap.yaml"))
@@ -657,13 +658,13 @@ func (d *devtools) seedAgentWorkspaces(source, destination string, replace bool)
 	} else if err != nil {
 		return err
 	}
-	if err := copyTreeMaterialized(source, destination, make(map[string]bool)); err != nil {
+	if err := d.copyTreeMaterialized(source, destination, make(map[string]bool)); err != nil {
 		return fmt.Errorf("copy installed agent workspaces: %w", err)
 	}
 	return nil
 }
 
-func copyTreeMaterialized(source, destination string, stack map[string]bool) error {
+func (d *devtools) copyTreeMaterialized(source, destination string, stack map[string]bool) error {
 	realSource, err := filepath.EvalSymlinks(source)
 	if err != nil {
 		return err
@@ -690,7 +691,17 @@ func copyTreeMaterialized(source, destination string, stack map[string]bool) err
 			return err
 		}
 		for _, entry := range entries {
-			if err := copyTreeMaterialized(filepath.Join(realSource, entry.Name()), filepath.Join(destination, entry.Name()), stack); err != nil {
+			entryPath := filepath.Join(realSource, entry.Name())
+			if entry.Type()&fs.ModeSymlink != 0 {
+				skip, err := d.skipLink(entryPath)
+				if err != nil {
+					return err
+				}
+				if skip {
+					continue
+				}
+			}
+			if err := d.copyTreeMaterialized(entryPath, filepath.Join(destination, entry.Name()), stack); err != nil {
 				return err
 			}
 		}
@@ -700,6 +711,26 @@ func copyTreeMaterialized(source, destination string, stack map[string]bool) err
 		return fmt.Errorf("unsupported config file type at %s", source)
 	}
 	return copyFile(realSource, destination)
+}
+
+// skipLink reports whether a symlink stays out of a config snapshot. A
+// repository is the user's code, not config, and a copy would go stale.
+func (d *devtools) skipLink(link string) (bool, error) {
+	target, err := filepath.EvalSymlinks(link)
+	if errors.Is(err, fs.ErrNotExist) {
+		d.logger.Warn().Str("link", link).Str("reason", "dangling").Msg("skipping symlink in config snapshot")
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if _, err := os.Lstat(filepath.Join(target, ".git")); err == nil {
+		d.logger.Warn().Str("link", link).Str("target", target).Str("reason", "repository").Msg("skipping symlink in config snapshot")
+		return true, nil
+	} else if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
+		return false, err
+	}
+	return false, nil
 }
 
 func copyFile(source, destination string) error {

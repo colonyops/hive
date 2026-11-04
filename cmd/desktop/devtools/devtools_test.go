@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -240,6 +241,33 @@ func TestPrepareMaterializesConfigSymlinks(t *testing.T) {
 	assert.True(t, info.IsDir())
 	assert.Zero(t, info.Mode()&os.ModeSymlink)
 	assert.FileExists(t, filepath.Join(copied, "flow.yaml"))
+}
+
+func TestPrepareSkipsDanglingAndRepositorySymlinks(t *testing.T) {
+	tools, _, sourceConfig := testDevtools(t)
+	repo := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(repo, ".git"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "main.go"), []byte("code"), 0o600))
+	worktree := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(worktree, ".git"), []byte("gitdir: x"), 0o600))
+	inTree := filepath.Join(sourceConfig, "shared")
+	require.NoError(t, os.MkdirAll(inTree, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(inTree, "a.yaml"), []byte("a"), 0o600))
+	require.NoError(t, os.Symlink(repo, filepath.Join(sourceConfig, "repo")))
+	require.NoError(t, os.Symlink(worktree, filepath.Join(sourceConfig, "worktree")))
+	require.NoError(t, os.Symlink(filepath.Join(t.TempDir(), "missing"), filepath.Join(sourceConfig, "dangling")))
+	require.NoError(t, os.Symlink(inTree, filepath.Join(sourceConfig, "alias")))
+
+	require.NoError(t, tools.withLock(func() error { return tools.prepare(false) }))
+	config := filepath.Join(tools.instanceDir, "config")
+	for _, name := range []string{"repo", "worktree", "dangling"} {
+		_, err := os.Lstat(filepath.Join(config, name))
+		require.ErrorIs(t, err, fs.ErrNotExist, name)
+	}
+	info, err := os.Lstat(filepath.Join(config, "alias"))
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+	assert.FileExists(t, filepath.Join(config, "alias", "a.yaml"))
 }
 
 func TestPrepareCopiesConfiguredAgentWorkspaces(t *testing.T) {
