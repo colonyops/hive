@@ -621,8 +621,10 @@ const picking = ref(false)
 const sending = ref(false)
 const loadTargets = () => review.targets(props.sessionId)
 // The comments stay after a failure. A toast that waits offers them as text too,
-// for when the agent cannot take them any time soon.
+// for when the agent cannot take them any time soon. The send clears its note when
+// it ends, so the toast holds its own copy.
 function offerCopy(message: string): void {
+  const note = sendNote.value.trim()
   toasts.showToast(message, {
     severity: 'error',
     duration: 0,
@@ -631,6 +633,7 @@ function offerCopy(message: string): void {
         label: 'Copy comments',
         onClick: () =>
           void copyReview([
+            ...(note ? [{ ...noteComment(note), id: '' }] : []),
             ...comments.value,
             ...pendingAgent.value.map((comment) => ({ ...agentFeedback(comment), id: comment.id })),
           ]),
@@ -1040,6 +1043,7 @@ function openInEditor(): void {
           v-if="overviewOpen"
           class="absolute inset-0 z-30"
           :reviews="agentReviews"
+          :error="agentStore.error(sessionId)"
           :comments="pendingAgent"
           :hidden="!inAgentComparison"
           :is-stale="isAgentStale"

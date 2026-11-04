@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import IconArrowRight from '~icons/lucide/arrow-right'
 import IconFileCode from '~icons/lucide/file-code'
 import IconGitBranch from '~icons/lucide/git-branch'
@@ -18,6 +19,8 @@ import type { DiffReviewWire } from '../../../bindings/github.com/colonyops/hive
 // changes.
 const props = defineProps<{
   reviews: readonly DiffReviewWire[]
+  /** Why the reviews could not be read, or null. */
+  error: string | null
   /** Every review's comments, in the order the walkthrough takes them. */
   comments: readonly AgentComment[]
   /** Another comparison is on screen, so the agents' rows cannot be shown in place. */
@@ -118,6 +121,8 @@ const lines = (comment: AgentComment) =>
         Agents reviewed the branch against its base. Switch to that comparison to see their comments in place.
       </p>
 
+      <InlineError :message="error" variant="banner" testid="changes-overview-error" />
+
       <div v-if="reviews.length" class="flex flex-col divide-y divide-border">
         <section
           v-for="review in reviews"
@@ -202,7 +207,7 @@ const lines = (comment: AgentComment) =>
       </div>
 
       <div
-        v-else
+        v-else-if="!error"
         class="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-card px-6 py-8 text-center"
         data-testid="changes-overview-empty"
       >

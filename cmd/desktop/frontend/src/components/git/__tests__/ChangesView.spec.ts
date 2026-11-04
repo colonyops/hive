@@ -1060,6 +1060,33 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
+  it('copies the note with the comments after a send with a note fails', async () => {
+    mocks.SendChanges.mockRejectedValue(new Error('waiting on a prompt'))
+    mocks.ChangesFeedback.mockResolvedValue('# feedback')
+    mocks.writeText.mockResolvedValue(undefined)
+    const wrapper = await mountView()
+    await comment('rename this')
+
+    await wrapper.get(testid('changes-send-menu')).trigger('click')
+    document.querySelector<HTMLElement>(testid('changes-send-with-note'))!.click()
+    await flushPromises()
+    const note = document.querySelector<HTMLTextAreaElement>(testid('changes-send-note-text'))!
+    note.value = 'split this up'
+    note.dispatchEvent(new Event('input'))
+    await flushPromises()
+    document.querySelector<HTMLButtonElement>(testid('changes-send-note-send'))!.click()
+    await flushPromises()
+
+    const [toast] = useToasts().toasts.value
+    toast.actions[0].onClick()
+    await flushPromises()
+    expect(mocks.ChangesFeedback).toHaveBeenCalledWith([
+      expect.objectContaining({ kind: 'review', text: 'split this up' }),
+      expect.objectContaining({ text: 'rename this' }),
+    ])
+    wrapper.unmount()
+  })
+
   it('does not select a file in the list while the Overview is open', async () => {
     const wrapper = await mountView()
     await wrapper.get(testid('changes-row-a.go')).trigger('click')
@@ -1310,6 +1337,15 @@ describe('ChangesView', () => {
       await wrapper.get(testid('changes-overview-row')).trigger('click')
       expect(wrapper.get(testid('agent-row-c1')).html()).toContain('Lines changed')
       expect(wrapper.get(testid('agent-row-c2')).html()).not.toContain('Lines changed')
+      wrapper.unmount()
+    })
+
+    it('says on the Overview when the reviews cannot be read', async () => {
+      mocks.DiffReviews.mockRejectedValue(new Error('database is locked'))
+      const wrapper = await mountView()
+      await wrapper.get(testid('changes-overview-row')).trigger('click')
+      expect(wrapper.get(testid('changes-overview-error')).text()).toContain('database is locked')
+      expect(wrapper.find(testid('changes-overview-empty')).exists()).toBe(false)
       wrapper.unmount()
     })
 
