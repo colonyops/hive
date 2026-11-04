@@ -199,7 +199,7 @@ func TestClientCLI_ANewSessionOnARecycledCloneIsANewSession(t *testing.T) {
 	gone := client.HiveOn(serverA, "session", "show", first.ID).Fails(t)
 	assert.Contains(t, gone.Stderr, session.ErrNotFound.Error())
 
-	inbox := serverA.Hive(t, "msg", "inbox", "--session", second.ID, "--all").Ok(t)
+	inbox := serverA.Hive(t, "msg", "inbox", "--caller", second.ID, "--all").Ok(t)
 	assert.NotContains(t, inbox.Stdout, "for first-task")
 }
 

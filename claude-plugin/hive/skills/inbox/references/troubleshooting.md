@@ -33,5 +33,5 @@
 
 **Solutions:**
 - Verify you're in a hive session directory: `pwd`
-- Use `--session` flag explicitly: `hive msg inbox --session <id|name>`
+- Use `--caller` explicitly: `hive msg inbox --caller <id|name>`
 - List sessions to find correct ID: `hive ls`

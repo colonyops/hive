@@ -19,6 +19,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui"
 	"github.com/colonyops/hive/internal/domain/hc"
+	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/timeutil"
@@ -220,7 +221,7 @@ func (cmd *HoneycombCmd) listCmd() *cli.Command {
 		Name:      "list",
 		Aliases:   []string{"ls"},
 		Usage:     "List items (defaults to open items)",
-		UsageText: "hive hc list [epic-id] [--status <status>] [--all] [--all-repos] [--session <id>] [--json]",
+		UsageText: "hive hc list [epic-id] [--status <status>] [--all] [--all-repos] [--session-id <id>] [--json]",
 		Description: `Lists items as a colored tree. Optional positional arg filters by epic ID.
 
 By default only open items are shown. Use --all to show all statuses,
@@ -230,6 +231,9 @@ Use --all-repos to list items across all repos (ignores CWD repo detection).
 
 With --json, outputs flat JSON lines instead of the tree view.
 
+--session-id takes a bare session id or local:<id>. Items live on this
+machine, so an id qualified with another server is an error.
+
 Examples:
   hive hc list
   hive hc list --all
@@ -237,12 +241,13 @@ Examples:
   hive hc list --all-repos --status in_progress --json
   hive hc list hc-abc123
   hive hc list --status done
+  hive hc list --session-id local:abc123
   hive hc list --json hc-abc123`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "status", Usage: "filter by status (open, in_progress, done, cancelled)", Destination: &flagStatus},
 			&cli.BoolFlag{Name: "all", Aliases: []string{"a"}, Usage: "show all statuses (overrides default open filter)", Destination: &flagAll},
 			&cli.BoolFlag{Name: "all-repos", Usage: "list items across all repos, ignoring CWD repo detection", Destination: &flagAllRepos},
-			&cli.StringFlag{Name: "session", Usage: "filter by session ID", Destination: &flagSession},
+			&cli.StringFlag{Name: "session-id", Usage: "filter by session id (bare or local:<id>)", Destination: &flagSession},
 			&cli.BoolFlag{Name: "json", Usage: "output as JSON lines", Destination: &flagJSON},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
@@ -250,13 +255,14 @@ Examples:
 			if !flagAllRepos {
 				repoKey = cmd.detectRepoKey(ctx)
 			}
-			if strings.Contains(flagSession, ":") {
-				fmt.Fprintf(os.Stderr, "warning: --session %q has a server prefix; hc tracks items on this machine by bare session id, so it matches no items\n", flagSession)
+			sessionID, err := parseHCSessionID(flagSession)
+			if err != nil {
+				return err
 			}
 			filter := hc.ListFilter{
 				RepoKey:   repoKey,
 				EpicID:    c.Args().First(),
-				SessionID: flagSession,
+				SessionID: sessionID,
 			}
 			switch {
 			case flagStatus != "":
@@ -287,6 +293,23 @@ Examples:
 			renderColoredTree(c.Root().Writer, items)
 			return nil
 		},
+	}
+}
+
+// parseHCSessionID strips the local: qualifier. Honeycomb items live on this
+// machine, so an id qualified with any other server can never match.
+func parseHCSessionID(value string) (string, error) {
+	server, id, qualified := strings.Cut(value, ":")
+	switch {
+	case !qualified:
+		return value, nil
+	case server == "local":
+		return id, nil
+	default:
+		return "", &ops.Error{
+			Kind: ops.KindInvalid,
+			Msg:  fmt.Sprintf("--session-id %q names server %q; honeycomb items live on this machine, so use a bare id or local:<id>", value, server),
+		}
 	}
 }
 

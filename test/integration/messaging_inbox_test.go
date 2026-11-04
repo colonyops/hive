@@ -274,7 +274,7 @@ func TestInboxDefaultDoesNotAcknowledge(t *testing.T) {
 	assert.Equal(t, "dflt msg", lines[0]["payload"])
 }
 
-func TestInboxWithSessionFlag(t *testing.T) {
+func TestInboxWithCallerFlag(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 	repo := createBareRepo(t, "sessfl-repo")
@@ -293,14 +293,14 @@ func TestInboxWithSessionFlag(t *testing.T) {
 	_, err = h.Run("msg", "pub", "--topic", inboxTopic, "--sender", "test", "session-flag msg")
 	require.NoError(t, err)
 
-	// Use --session with ID (no need to be in session dir)
-	lines, err := h.RunJSONLines("msg", "inbox", "--session", sessionID)
+	// Use --caller with ID (no need to be in session dir)
+	lines, err := h.RunJSONLines("msg", "inbox", "--caller", sessionID)
 	require.NoError(t, err)
 	require.Len(t, lines, 1)
 	assert.Equal(t, "session-flag msg", lines[0]["payload"])
 
-	// Use --session with name
-	lines, err = h.RunJSONLines("msg", "inbox", "--session", sessionName)
+	// Use --caller with name
+	lines, err = h.RunJSONLines("msg", "inbox", "--caller", sessionName)
 	require.NoError(t, err)
 	require.Len(t, lines, 1)
 	assert.Equal(t, "session-flag msg", lines[0]["payload"])
