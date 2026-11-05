@@ -24,6 +24,11 @@ export const ActivityAppended = "activity:appended";
 export const AppletsUpdated = "applets:updated";
 
 /**
+ * Name of the custom event "chats:updated".
+ */
+export const ChatsUpdated = "chats:updated";
+
+/**
  * Name of the custom event "connection:updated".
  */
 export const ConnectionUpdated = "connection:updated";

@@ -158,7 +158,7 @@ const chatMenuEntries: MenuEntry[] = [
 
 function onChatMenuSelect(row: TerminalSessionRow, id: string): void {
   menus.openRow = ''
-  if (id === 'unpin') tree.unpinSlug(row.slug)
+  if (id === 'unpin') void tree.unpinSlug(row.slug)
   else if (id === 'open-in-agents') ops.openChatInAgents(row)
 }
 

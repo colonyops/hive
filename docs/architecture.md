@@ -2631,6 +2631,20 @@ because a CLI of another version compiles a different catalog. The app wires a
 Code session's agent only when the user presses Add in Settings ▸ MCP servers,
 which writes the same form (ADR agents-reach-hive-desktop-through-hive-mcp-serve-when-the-cli-matches-the-app).
 
+**Chat control has its own guarded server.** `hive-chats` mounts at
+`/mcp/chats` with the `chats` toolset: `chat_list`, `chat_create`,
+`chat_pin_put` and `chat_pin_delete`. `chat_create` runs a workspace's
+command, so the server requires a bearer token that `main.go` mints per run,
+apart from the terminal token. The desktop writes it into the endpoint file,
+and `hive mcp serve` and `hive dt` send it on every call. Its catalogue entry
+is `StdioOnly`: with no matching hive CLI it reports a problem instead of an
+address. `AgentWorkspacesService.CreateChat` starts the chat detached, with
+the prompt unframed. A pin is the chat record's `pinned_at`; pin order is that
+column's order, and `AgentChatsUpdated` (`chats:updated`) tells the sidebar to
+reread the listing. Applets reach the same service through
+`hive.startChat`, `hive.pinChat` and `hive.unpinChat`, after the check
+`hive.exec` passes (ADR chat-control-is-served-on-a-token-guarded-mcp-server-whose-token-the-endpoint-file-carries).
+
 **A caller resolves to a space.** The `caller` argument is `global`, a chat's
 record id, or the caller's working directory. `global` is the `shared` space,
 which sits beside no session and so has no tabs: `tab_open` and `tab_close`

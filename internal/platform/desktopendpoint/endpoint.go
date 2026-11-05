@@ -24,6 +24,11 @@ type Endpoint struct {
 	URL       string    `json:"url"`
 	PID       int       `json:"pid"`
 	StartedAt time.Time `json:"startedAt"`
+	// Token is the bearer token of the desktop's token-guarded MCP servers. It
+	// changes on every run. The file is 0600 so that only the user's own
+	// processes can read it: a web page can reach the loopback port, but it
+	// cannot read this file.
+	Token string `json:"token,omitempty"`
 }
 
 // Path returns the endpoint file path under the hive data directory.

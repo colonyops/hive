@@ -1,47 +1,66 @@
-import { computed, readonly, shallowRef, watch } from 'vue'
-import { useStorage } from '@vueuse/core'
+import { computed, shallowRef, watch } from 'vue'
+import { useToasts } from '../composables/useToasts'
 import { useWailsEvent } from '../composables/useWailsEvent'
+import { errorText } from '../lib/appError'
 import { defineStore } from './defineStore'
 import { useAgentSessionsAll } from './useAgentSessionsAll'
+import { useAgentWorkspaces } from './useAgentWorkspaces'
 import type { TerminalSessionRow } from './useTerminalSessions'
 
-// Which agent chats the Code view lists above its session tree. A pin is an
-// arrangement of that sidebar rather than a fact about the chat, so it is
-// stored beside the tree's other layout state instead of on the chat's record —
-// the same call `hive.terminal.sidebar.groups` and the active Code view make.
-//
-// Pin order is insertion order, deliberately: the list is the user's, and
-// re-sorting it on activity would move a row out from under the pointer.
-export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
-  const pinnedIds = useStorage<string[]>('hive.terminal.sidebar.pinned-chats', [])
+const legacyPinsKey = 'hive.terminal.sidebar.pinned-chats'
 
-  // A chat is not a hive session, so nothing prunes its pin when the chat is
-  // deleted. The listing is what says it went away — but only once it has
-  // actually loaded: `recents` is empty both before the first read and when the
-  // Agents area is gated off, and pruning against either would silently discard
-  // every pin. The listing keeps its last-good rows on failure, so a failed
-  // revalidation cannot look like a deletion here.
+function readLegacyPins(): string[] | null {
+  try {
+    const raw = localStorage.getItem(legacyPinsKey)
+    if (raw === null) return null
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return null
+  }
+}
+
+function forgetLegacyPins(): void {
+  try {
+    localStorage.removeItem(legacyPinsKey)
+  } catch {
+    // Storage that cannot be written cannot import again either.
+  }
+}
+
+// Which agent chats the Code view lists above its session tree. The chat
+// record holds the pin, so an agent, an applet or `hive dt chat-pin` can pin a
+// chat too. Pin order is pin time, which keeps the user's insertion order:
+// re-sorting on activity would move a row out from under the pointer.
+export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
   const { recents, recentsLoaded, reload: reloadRecents } = useAgentSessionsAll()
+
+  const pinnedSessions = computed(() =>
+    recents.value
+      .filter((session) => session.pinnedAt > 0)
+      .sort((a, b) => a.pinnedAt - b.pinnedAt || a.id.localeCompare(b.id)),
+  )
+  const pinnedIds = computed(() => pinnedSessions.value.map((session) => session.id))
+
+  // Pins from before the record held them. They are imported once, after the
+  // listing loads, because the import needs the client the listing probes for.
+  let importStarted = false
   watch(
-    [recents, recentsLoaded],
-    ([sessions, loaded]) => {
-      if (!loaded || !pinnedIds.value.length) return
-      const canonicalByID = new Map<string, string>()
-      for (const session of sessions) {
-        canonicalByID.set(session.id, session.id)
-        if (session.legacyId) canonicalByID.set(session.legacyId, session.id)
-      }
-      const seen = new Set<string>()
-      const kept: string[] = []
-      for (const storedID of pinnedIds.value) {
-        const canonicalID = canonicalByID.get(String(storedID))
-        if (canonicalID && !seen.has(canonicalID)) {
-          kept.push(canonicalID)
-          seen.add(canonicalID)
-        }
-      }
-      if (kept.length !== pinnedIds.value.length || kept.some((id, index) => id !== pinnedIds.value[index])) {
-        pinnedIds.value = kept
+    recentsLoaded,
+    async (loaded) => {
+      if (!loaded || importStarted) return
+      const legacy = readLegacyPins()
+      if (legacy === null) return
+      importStarted = true
+      try {
+        const { client } = useAgentWorkspaces()
+        if (!client.value) return
+        if (legacy.length) await client.value.importPins(legacy)
+        forgetLegacyPins()
+        if (legacy.length) await reloadRecents()
+      } catch (e) {
+        importStarted = false
+        useToasts().showToast(errorText(e, 'Could not import pinned chats.'), { severity: 'error' })
       }
     },
     { immediate: true },
@@ -52,30 +71,24 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
    * session name the core declares whether or not it is running, so a row is the
    * same row — poolable, routable, keyboard-reachable — either way; its liveness
    * is the sidebar's own window sweep to answer, exactly as for the scratch
-   * terminal. A pin whose chat the listing has not produced yet draws nothing
-   * rather than a row with no slug to attach.
+   * terminal.
    */
-  const rows = computed<TerminalSessionRow[]>(() => {
-    const byID = new Map(recents.value.map((session) => [session.id, session]))
-    const out: TerminalSessionRow[] = []
-    for (const id of pinnedIds.value) {
-      const session = byID.get(id)
-      if (session?.slug)
-        out.push({
-          server: '',
-          id: session.slug,
-          name: session.name,
-          slug: session.slug,
-          repo: '',
-          repoIdentity: '',
-          state: 'active',
-          canvasOwner: '',
-          tags: [],
-          createdAt: '',
-        })
-    }
-    return out
-  })
+  const rows = computed<TerminalSessionRow[]>(() =>
+    pinnedSessions.value
+      .filter((session) => session.slug)
+      .map((session) => ({
+        server: '',
+        id: session.slug,
+        name: session.name,
+        slug: session.slug,
+        repo: '',
+        repoIdentity: '',
+        state: 'active',
+        canvasOwner: '',
+        tags: [],
+        createdAt: '',
+      })),
+  )
 
   const slugs = computed(() => new Set(rows.value.map((row) => row.slug)))
 
@@ -83,12 +96,26 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
     return pinnedIds.value.includes(id)
   }
 
-  function togglePin(id: string): void {
-    pinnedIds.value = isPinned(id) ? pinnedIds.value.filter((pinned) => pinned !== id) : [...pinnedIds.value, id]
+  async function setPinned(id: string, pinned: boolean): Promise<void> {
+    try {
+      const { client, ready } = useAgentWorkspaces()
+      await ready()
+      if (!client.value) throw new Error('The Agents area is unavailable.')
+      await client.value.pinSession(id, pinned)
+      await reloadRecents()
+    } catch (e) {
+      useToasts().showToast(errorText(e, pinned ? 'Could not pin the chat.' : 'Could not unpin the chat.'), {
+        severity: 'error',
+      })
+    }
   }
 
-  function pin(id: string): void {
-    if (!isPinned(id)) pinnedIds.value = [...pinnedIds.value, id]
+  function togglePin(id: string): Promise<void> {
+    return setPinned(id, !isPinned(id))
+  }
+
+  function pin(id: string): Promise<void> {
+    return isPinned(id) ? Promise.resolve() : setPinned(id, true)
   }
 
   // A chat created as a background job has no id until the job lands it in the
@@ -115,7 +142,7 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
         (session) =>
           session.workspace === want.workspace && session.name === want.name && !want.existing.has(session.id),
       )
-      if (match) pin(match.id)
+      if (match) void pin(match.id)
       return !match
     })
     if (still.length !== waiting.length) awaited.value = still
@@ -128,10 +155,19 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
   })
 
   /** Unpins by slug, which is what the Code view's own rows are keyed on. */
-  function unpinSlug(slug: string): void {
+  function unpinSlug(slug: string): Promise<void> {
     const session = recents.value.find((candidate) => candidate.slug === slug)
-    if (session) togglePin(session.id)
+    return session ? setPinned(session.id, false) : Promise.resolve()
   }
 
-  return { pinnedIds: readonly(pinnedIds), rows, slugs, isPinned, togglePin, pin, pinWhenListed, unpinSlug }
+  return {
+    pinnedIds,
+    rows,
+    slugs,
+    isPinned,
+    togglePin,
+    pin,
+    pinWhenListed,
+    unpinSlug,
+  }
 })

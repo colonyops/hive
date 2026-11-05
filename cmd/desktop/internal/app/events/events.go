@@ -63,6 +63,10 @@ type MenuBarUpdated struct{}
 // AgentWorkspacesUpdated reports that the workspace set was reloaded.
 type AgentWorkspacesUpdated struct{ Count int }
 
+// AgentChatsUpdated reports that a chat started outside the New chat dialog,
+// or that a chat's pin changed.
+type AgentChatsUpdated struct{}
+
 // DriveChanged reports that documents in a drive space changed: Paths names
 // them, and empty means the whole space. The content is stored state a
 // reader re-reads. Session or HiveSession names the chat or hive session
@@ -144,6 +148,7 @@ func (ActionsUpdated) eventName() string         { return "actions.updated" }
 func (AppletsUpdated) eventName() string         { return "applets.updated" }
 func (MenuBarUpdated) eventName() string         { return "menu-bar.updated" }
 func (AgentWorkspacesUpdated) eventName() string { return "agent-workspaces.updated" }
+func (AgentChatsUpdated) eventName() string      { return "agent-chats.updated" }
 func (DriveChanged) eventName() string           { return "drive.changed" }
 func (SessionLayoutRequested) eventName() string { return "session.layout-requested" }
 func (SchedulesUpdated) eventName() string       { return "schedules.updated" }

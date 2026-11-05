@@ -61,6 +61,7 @@ const recentFixtures: AgentSession[] = [
     resumeAttempted: true,
     notice: '',
     scheduleId: '',
+    pinnedAt: 0,
   },
   {
     id: '1',
@@ -77,6 +78,7 @@ const recentFixtures: AgentSession[] = [
     resumeAttempted: true,
     notice: '',
     scheduleId: '',
+    pinnedAt: 0,
   },
 ]
 

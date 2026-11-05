@@ -29,7 +29,7 @@ func (q *Queries) DeleteAgentWorkspaceSessionsByWorkspace(ctx context.Context, w
 }
 
 const getAgentWorkspaceSession = `-- name: GetAgentWorkspaceSession :one
-SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session WHERE id = ?
+SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id, pinned_at FROM agent_workspace_session WHERE id = ?
 `
 
 func (q *Queries) GetAgentWorkspaceSession(ctx context.Context, id string) (AgentWorkspaceSession, error) {
@@ -47,12 +47,13 @@ func (q *Queries) GetAgentWorkspaceSession(ctx context.Context, id string) (Agen
 		&i.ScheduleID,
 		&i.EndToken,
 		&i.TerminalID,
+		&i.PinnedAt,
 	)
 	return i, err
 }
 
 const getAgentWorkspaceSessionByEndToken = `-- name: GetAgentWorkspaceSessionByEndToken :one
-SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session WHERE end_token = ? AND end_token <> ''
+SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id, pinned_at FROM agent_workspace_session WHERE end_token = ? AND end_token <> ''
 `
 
 // The session a launch handed this token to. An empty token matches nothing:
@@ -72,12 +73,13 @@ func (q *Queries) GetAgentWorkspaceSessionByEndToken(ctx context.Context, endTok
 		&i.ScheduleID,
 		&i.EndToken,
 		&i.TerminalID,
+		&i.PinnedAt,
 	)
 	return i, err
 }
 
 const getAgentWorkspaceSessionByLegacyID = `-- name: GetAgentWorkspaceSessionByLegacyID :one
-SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session WHERE legacy_id = ?
+SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id, pinned_at FROM agent_workspace_session WHERE legacy_id = ?
 `
 
 func (q *Queries) GetAgentWorkspaceSessionByLegacyID(ctx context.Context, legacyID sql.NullInt64) (AgentWorkspaceSession, error) {
@@ -95,6 +97,7 @@ func (q *Queries) GetAgentWorkspaceSessionByLegacyID(ctx context.Context, legacy
 		&i.ScheduleID,
 		&i.EndToken,
 		&i.TerminalID,
+		&i.PinnedAt,
 	)
 	return i, err
 }
@@ -102,7 +105,7 @@ func (q *Queries) GetAgentWorkspaceSessionByLegacyID(ctx context.Context, legacy
 const insertAgentWorkspaceSession = `-- name: InsertAgentWorkspaceSession :one
 INSERT INTO agent_workspace_session (id, workspace, name, agent, agent_session_id, terminal_id, created_at, last_opened_at, schedule_id, end_token)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id
+RETURNING id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id, pinned_at
 `
 
 type InsertAgentWorkspaceSessionParams struct {
@@ -144,12 +147,13 @@ func (q *Queries) InsertAgentWorkspaceSession(ctx context.Context, arg InsertAge
 		&i.ScheduleID,
 		&i.EndToken,
 		&i.TerminalID,
+		&i.PinnedAt,
 	)
 	return i, err
 }
 
 const listAgentWorkspaceSessions = `-- name: ListAgentWorkspaceSessions :many
-SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session
+SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id, pinned_at FROM agent_workspace_session
 WHERE workspace = ?
 ORDER BY created_at DESC, id DESC
 `
@@ -179,6 +183,7 @@ func (q *Queries) ListAgentWorkspaceSessions(ctx context.Context, workspace stri
 			&i.ScheduleID,
 			&i.EndToken,
 			&i.TerminalID,
+			&i.PinnedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -194,7 +199,7 @@ func (q *Queries) ListAgentWorkspaceSessions(ctx context.Context, workspace stri
 }
 
 const listAllAgentWorkspaceSessions = `-- name: ListAllAgentWorkspaceSessions :many
-SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session
+SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id, pinned_at FROM agent_workspace_session
 ORDER BY created_at DESC, id DESC
 `
 
@@ -221,6 +226,7 @@ func (q *Queries) ListAllAgentWorkspaceSessions(ctx context.Context) ([]AgentWor
 			&i.ScheduleID,
 			&i.EndToken,
 			&i.TerminalID,
+			&i.PinnedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -265,6 +271,23 @@ type SetAgentWorkspaceSessionAgentIDParams struct {
 func (q *Queries) SetAgentWorkspaceSessionAgentID(ctx context.Context, arg SetAgentWorkspaceSessionAgentIDParams) error {
 	_, err := q.db.ExecContext(ctx, setAgentWorkspaceSessionAgentID, arg.AgentSessionID, arg.ID)
 	return err
+}
+
+const setAgentWorkspaceSessionPinnedAt = `-- name: SetAgentWorkspaceSessionPinnedAt :execrows
+UPDATE agent_workspace_session SET pinned_at = ? WHERE id = ?
+`
+
+type SetAgentWorkspaceSessionPinnedAtParams struct {
+	PinnedAt int64  `json:"pinned_at"`
+	ID       string `json:"id"`
+}
+
+func (q *Queries) SetAgentWorkspaceSessionPinnedAt(ctx context.Context, arg SetAgentWorkspaceSessionPinnedAtParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setAgentWorkspaceSessionPinnedAt, arg.PinnedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const touchAgentWorkspaceSession = `-- name: TouchAgentWorkspaceSession :exec

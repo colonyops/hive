@@ -374,7 +374,7 @@ export function useNewSession() {
       const launch = chatLauncher
       cancel()
       const id = await launch({ workspace: input.workspace, name: input.name, prompt: input.prompt ?? '' })
-      if (id && input.pinToCode) useTerminalPinnedChats().pin(id)
+      if (id && input.pinToCode) void useTerminalPinnedChats().pin(id)
       return
     }
     busy.value = true

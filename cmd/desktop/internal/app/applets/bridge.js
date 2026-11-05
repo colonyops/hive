@@ -102,6 +102,9 @@
     terminal: (command, options = {}) => call('terminal', { command, ...options }),
     toast: (message, options = {}) => call('toast', { message, ...options }),
     copy: (text) => call('copy', { text }),
+    startChat: (options) => call('startChat', options),
+    pinChat: (id) => call('pinChat', { id }),
+    unpinChat: (id) => call('unpinChat', { id }),
     authoringPrompt: (brief) => call('authoringPrompt', { brief }),
     close() {
       saveNow()

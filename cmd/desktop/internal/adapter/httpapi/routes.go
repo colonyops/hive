@@ -201,6 +201,16 @@ func (ctrl *Controller) agentOperations() []Op {
 			Errors: agentErrors("no such session"),
 		},
 		{
+			Method: "POST", Path: AgentWorkspacesPathPrefix + "sessions/pin", Summary: "Pin a chat to the Code sidebar after the chats already pinned, or unpin it, and return the chat. A chat already in the asked state keeps its place.",
+			Request: agentSessionPinRequest{}, Response: agentSessionView{}, Handler: ctrl.AgentSessionPin,
+			Errors: agentErrors("no such session"),
+		},
+		{
+			Method: "POST", Path: AgentWorkspacesPathPrefix + "sessions/pins/import", Summary: "Pin the given chats in order, for pins kept in browser storage before the chat record held them. An id with no chat is skipped, and a chat already pinned keeps its place.",
+			Request: agentSessionPinsImportRequest{}, Status: http.StatusNoContent, Handler: ctrl.AgentSessionPinsImport,
+			Errors: agentErrors(""),
+		},
+		{
 			Method: "POST", Path: AgentWorkspacesPathPrefix + "sessions/rename", Summary: "Set a session's display name. The record is the only thing touched — a live tmux session keeps its agentws-<terminal id> name.",
 			Request: agentSessionRenameRequest{}, Status: http.StatusNoContent, Handler: ctrl.AgentSessionRename,
 			Errors: agentErrors("no such session"),

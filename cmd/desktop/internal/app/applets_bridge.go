@@ -93,6 +93,14 @@ func (s *AppletsService) page(id string) (applets.Applet, error) {
 	return applet, nil
 }
 
+// CheckBridge refuses a bridge call from an applet that is gone, turned off, or
+// served where pages cannot run. A bridge call that lives in another service
+// checks it first, as exec does.
+func (s *AppletsService) CheckBridge(id string) error {
+	_, err := s.page(id)
+	return err
+}
+
 func (s *AppletsService) Context(ctx context.Context, id, sessionSlug string) (AppletContext, error) {
 	applet, err := s.page(id)
 	if err != nil {

@@ -182,7 +182,11 @@ func forwardHandler(client *DesktopClient, caller string, info ops.Info, log zer
 			return res, nil
 		}
 		var unreachable *desktopUnreachableError
+		var refused *ops.Error
 		switch {
+		case errors.As(err, &refused):
+			log.Warn().Err(err).Str("tool", info.ToolName).Msg("desktop refused the call")
+			return refusal(refused.Kind, refused.Msg), nil
 		case errors.As(err, &desktopNotRunningError{}):
 			log.Debug().Str("tool", info.ToolName).Msg("desktop is not running")
 			return refusal(ops.KindUnavailable, "Hive Desktop is not running"), nil

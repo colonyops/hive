@@ -1,5 +1,6 @@
 import { readonly, ref, shallowReadonly, shallowRef } from 'vue'
 import type { AgentSession } from '../lib/agentWorkspacesClient'
+import { useWailsEvent } from '../composables/useWailsEvent'
 import { errorText } from '../lib/appError'
 import { defineStore } from './defineStore'
 import { useAgentWorkspaces } from './useAgentWorkspaces'
@@ -8,7 +9,8 @@ import { useAgentWorkspaces } from './useAgentWorkspaces'
 // recently opened first. It reuses useAgentWorkspaces' client and probe rather
 // than duplicating the probe, which keeps the two lists in step with the same
 // availability answer. The store does not load itself: the Agents area and
-// the palette reload it when they open.
+// the palette reload it when they open. Once loaded, it follows chats:updated,
+// which says a chat started or a pin changed outside this window's own calls.
 export const useAgentSessionsAll = defineStore('agentSessionsAll', () => {
   const recents = shallowRef<AgentSession[]>([])
   const recentsLoading = ref(false)
@@ -31,6 +33,10 @@ export const useAgentSessionsAll = defineStore('agentSessionsAll', () => {
       recentsLoaded.value = true
     }
   }
+
+  useWailsEvent('chats:updated', () => {
+    if (recentsLoaded.value) void reload()
+  })
 
   return {
     recents: shallowReadonly(recents),

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -23,8 +24,9 @@ import (
 const (
 	desktopCallTimeout = 10 * time.Second
 
-	callerFlag     = "caller"
-	desktopURLFlag = "desktop-url"
+	callerFlag      = "caller"
+	desktopURLFlag  = "desktop-url"
+	desktopTokenEnv = "HIVE_DESKTOP_TOKEN"
 )
 
 // desktopNotRunningError is a type, not errors.New, because the message starts
@@ -54,7 +56,7 @@ func NewDesktopClient(dataDir, urlOverride, version string) *DesktopClient {
 // reachable (a desktopNotRunningError or *desktopUnreachableError), or it
 // answered with a protocol error, such as a tool this desktop does not have.
 func (d *DesktopClient) Call(ctx context.Context, mcpPath, tool string, args map[string]any) (*mcp.CallToolResult, error) {
-	baseURL, err := d.baseURL()
+	baseURL, token, err := d.endpoint()
 	if err != nil {
 		return nil, err
 	}
@@ -67,15 +69,19 @@ func (d *DesktopClient) Call(ctx context.Context, mcpPath, tool string, args map
 	// MaxRetries stops a refused connection from retrying inside the timeout.
 	// The HTTP client carries its own timeout because Close sends the session
 	// DELETE on a context of its own, outside ctx.
+	auth := &bearerTransport{token: token}
 	transport := &mcp.StreamableClientTransport{
 		Endpoint:             strings.TrimRight(baseURL, "/") + mcpPath,
-		HTTPClient:           &http.Client{Timeout: desktopCallTimeout},
+		HTTPClient:           &http.Client{Timeout: desktopCallTimeout, Transport: auth},
 		MaxRetries:           -1,
 		DisableStandaloneSSE: true,
 	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "hive", Version: d.version}, nil)
 	cs, err := client.Connect(ctx, transport, nil)
 	if err != nil {
+		if auth.refused.Load() {
+			return nil, d.unauthenticated(mcpPath, token)
+		}
 		return nil, desktopConnectError(baseURL, err)
 	}
 	defer func() { _ = cs.Close() }()
@@ -89,18 +95,50 @@ func (d *DesktopClient) Call(ctx context.Context, mcpPath, tool string, args map
 	return res, nil
 }
 
-func (d *DesktopClient) baseURL() (string, error) {
+// endpoint answers the desktop's base URL and the token of its guarded MCP
+// servers. An override URL takes its token from desktopTokenEnv, never from
+// the endpoint file, so this desktop's token does not go to another address.
+func (d *DesktopClient) endpoint() (string, string, error) {
 	if d.urlOverride != "" {
-		return d.urlOverride, nil
+		return d.urlOverride, os.Getenv(desktopTokenEnv), nil
 	}
 	e, err := desktopendpoint.Read(d.dataDir)
 	if errors.Is(err, desktopendpoint.ErrNotRunning) {
-		return "", desktopNotRunningError{}
+		return "", "", desktopNotRunningError{}
 	}
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return e.URL, nil
+	return e.URL, e.Token, nil
+}
+
+func (d *DesktopClient) unauthenticated(mcpPath, token string) error {
+	switch {
+	case d.urlOverride != "" && token == "":
+		return ops.Errorf(ops.KindUnauthenticated, "Hive Desktop at %s needs a token for %s; set %s to the token in %s", d.urlOverride, mcpPath, desktopTokenEnv, desktopendpoint.Path(d.dataDir))
+	case d.urlOverride != "":
+		return ops.Errorf(ops.KindUnauthenticated, "Hive Desktop at %s refused the token in %s for %s", d.urlOverride, desktopTokenEnv, mcpPath)
+	}
+	return ops.Errorf(ops.KindUnauthenticated, "Hive Desktop refused the token in %s for %s; the file may belong to another Hive Desktop on this data directory", desktopendpoint.Path(d.dataDir), mcpPath)
+}
+
+// bearerTransport records a 401, because the SDK reports a refused request
+// with the status text only.
+type bearerTransport struct {
+	token   string
+	refused atomic.Bool
+}
+
+func (b *bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if b.token != "" {
+		r = r.Clone(r.Context())
+		r.Header.Set("Authorization", "Bearer "+b.token)
+	}
+	res, err := http.DefaultTransport.RoundTrip(r)
+	if err == nil && res.StatusCode == http.StatusUnauthorized {
+		b.refused.Store(true)
+	}
+	return res, err
 }
 
 func (cmd *DesktopCmd) desktopClient(c *cli.Command) *DesktopClient {

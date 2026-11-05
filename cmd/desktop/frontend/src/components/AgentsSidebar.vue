@@ -455,7 +455,7 @@ function sessionMenuEntries(session: AgentSession): MenuEntry[] {
 function onSessionMenuSelect(session: AgentSession, id: string): void {
   closeSessionMenu()
   if (id === 'rename') emit('rename-session', session)
-  else if (id === 'pin') togglePin(session.id)
+  else if (id === 'pin') void togglePin(session.id)
   else if (id === 'start') emit('select-session', session)
   else if (id === 'stop') emit('close-session', session)
   else if (id === 'delete') pendingDeleteSession.value = session

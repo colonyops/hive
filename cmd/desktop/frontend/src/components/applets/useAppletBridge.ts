@@ -6,12 +6,14 @@ import {
   Context,
   Exec,
   KillSpawns,
+  PinChat,
   ReadFile,
   SaveStorage,
   Spawn,
   SpawnKill,
   SpawnRead,
   SpawnWrite,
+  StartChat,
   WriteFile,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/appletsservice'
 import { Render } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/promptsservice'
@@ -232,6 +234,15 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     async copy(args) {
       if (!(await clipboard.copy(String(args.text ?? '')))) throw new Error('The clipboard refused the text.')
     },
+    startChat: (args) =>
+      StartChat(id, {
+        workspace: String(args.workspace ?? ''),
+        name: String(args.name ?? ''),
+        prompt: String(args.prompt ?? ''),
+        pinToCode: args.pinToCode === true,
+      }),
+    pinChat: (args) => PinChat(id, String(args.id), true),
+    unpinChat: (args) => PinChat(id, String(args.id), false),
     // The Applet Builder's own call, kept off the API so its shape can change with the
     // prompt. A directory that replaces the Builder keeps it.
     async authoringPrompt(args) {

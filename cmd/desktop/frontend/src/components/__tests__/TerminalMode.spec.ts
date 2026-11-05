@@ -14,7 +14,7 @@ import { resetSessionStatusesForTests, useSessionStatuses } from '../../composab
 import { useTerminalShowWindows } from '../../stores/useTerminalShowWindows'
 import { useTerminalStatusBar } from '../../stores/useTerminalStatusBar'
 import { resetTerminalWindowListingsForTests } from '../../composables/useTerminalWindowListings'
-import { useTerminalPinnedChats } from '../../stores/useTerminalPinnedChats'
+import { useAgentSessionsAll } from '../../stores/useAgentSessionsAll'
 import {
   resetAttachedTerminalWindowsForTests,
   useAttachedTerminalWindows,
@@ -71,6 +71,7 @@ const mocks = vi.hoisted(() => ({
   OpenURL: vi.fn(),
   AgentsAvailable: vi.fn(),
   allSessions: vi.fn(),
+  pinSession: vi.fn(),
   resumeSession: vi.fn(),
 }))
 
@@ -95,6 +96,7 @@ vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => {
         workspaces: [],
       }),
       allSessions: mocks.allSessions,
+      pinSession: mocks.pinSession,
       resumeSession: mocks.resumeSession,
     }),
   }
@@ -3086,16 +3088,15 @@ describe('TerminalMode', () => {
       rows: 24,
       resumeAttempted: true,
       notice: '',
+      pinnedAt: 1,
     }
 
-    // The listing has to have landed before a pin resolves to a row, so every
-    // test here pins after the mount rather than seeding localStorage.
     async function mountWithPinnedChat(session = fakeSession(), listed: typeof chat = chat) {
       mocks.AgentsAvailable.mockResolvedValue({ available: true, reason: '' })
       mocks.allSessions.mockResolvedValue([listed])
       mocks.useTerminalWindows.mockReturnValue(session)
       const { wrapper, router } = await mountAt()
-      useTerminalPinnedChats().togglePin(listed.id)
+      await useAgentSessionsAll().reload()
       await flushPromises()
       return { wrapper, router, session }
     }
@@ -3122,7 +3123,7 @@ describe('TerminalMode', () => {
 
     it('draws no section at all when nothing is pinned', async () => {
       mocks.AgentsAvailable.mockResolvedValue({ available: true, reason: '' })
-      mocks.allSessions.mockResolvedValue([chat])
+      mocks.allSessions.mockResolvedValue([{ ...chat, pinnedAt: 0 }])
       const { wrapper } = await mountAvailable()
 
       expect(wrapper.find('[data-testid="terminal-chats-group"]').exists()).toBe(false)
@@ -3174,6 +3175,7 @@ describe('TerminalMode', () => {
 
     it('unpins from its own row menu, which drops the row', async () => {
       const { wrapper } = await mountWithPinnedChat()
+      mocks.allSessions.mockResolvedValue([{ ...chat, pinnedAt: 0 }])
 
       await wrapper
         .get(`[data-testid="terminal-chat-row"][data-slug="${CHAT_SLUG}"] [data-testid="terminal-chat-menu-toggle"]`)
@@ -3181,6 +3183,7 @@ describe('TerminalMode', () => {
       await wrapper.get('[data-testid="terminal-chat-unpin"]').trigger('click')
       await flushPromises()
 
+      expect(mocks.pinSession).toHaveBeenCalledWith('7', false)
       expect(chatRows(wrapper)).toHaveLength(0)
       expect(wrapper.find('[data-testid="terminal-chats-group"]').exists()).toBe(false)
       wrapper.unmount()

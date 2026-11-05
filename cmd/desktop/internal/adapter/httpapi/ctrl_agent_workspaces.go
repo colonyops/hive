@@ -81,6 +81,9 @@ type agentSessionView struct {
 	// ScheduleID names the schedule whose run started this chat, and is what
 	// marks a scheduled chat in the sidebar. Empty when a person started it.
 	ScheduleID string `json:"scheduleId"`
+	// PinnedAt is when the chat was pinned to the Code sidebar, in Unix
+	// milliseconds, or 0 when it is not pinned.
+	PinnedAt int64 `json:"pinnedAt"`
 }
 
 func toAgentWorkspaceView(w app.WorkspaceView) agentWorkspaceView {
@@ -119,7 +122,7 @@ func toAgentSessionView(s app.SessionView) agentSessionView {
 	return agentSessionView{
 		ID: s.ID, LegacyID: s.LegacyID, Workspace: s.Workspace, Name: s.Name, Agent: s.Agent, LastOpenedAt: s.LastOpenedAt,
 		Slug: s.Slug, TerminalID: s.TerminalID, WindowID: s.WindowID, PaneID: s.PaneID, Cols: s.Cols, Rows: s.Rows,
-		ResumeAttempted: s.ResumeAttempted, Notice: s.Notice, ScheduleID: s.ScheduleID,
+		ResumeAttempted: s.ResumeAttempted, Notice: s.Notice, ScheduleID: s.ScheduleID, PinnedAt: s.PinnedAt,
 	}
 }
 
@@ -699,6 +702,47 @@ func (ctrl *Controller) AgentSessionRename(w http.ResponseWriter, r *http.Reques
 		return err
 	}
 	if err := ctrl.core.AgentWorkspaces.RenameSession(r.Context(), body.ID, body.Name); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+type agentSessionPinRequest struct {
+	ID     string `json:"id"`
+	Pinned bool   `json:"pinned"`
+}
+
+func (b agentSessionPinRequest) Validate() error {
+	return criterio.Run("id", b.ID, criterio.Required)
+}
+
+func (ctrl *Controller) AgentSessionPin(w http.ResponseWriter, r *http.Request) error {
+	body, err := terminalBody[agentSessionPinRequest](ctrl, w, r)
+	if err != nil {
+		return err
+	}
+	view, err := ctrl.core.AgentWorkspaces.PinChat(r.Context(), body.ID, body.Pinned)
+	if err != nil {
+		return err
+	}
+	return server.JSON(w, http.StatusOK, toAgentSessionView(view))
+}
+
+type agentSessionPinsImportRequest struct {
+	IDs []string `json:"ids"`
+}
+
+func (b agentSessionPinsImportRequest) Validate() error { return nil }
+
+// AgentSessionPinsImport takes the pins the sidebar kept in browser storage
+// before the chat record held them.
+func (ctrl *Controller) AgentSessionPinsImport(w http.ResponseWriter, r *http.Request) error {
+	body, err := terminalBody[agentSessionPinsImportRequest](ctrl, w, r)
+	if err != nil {
+		return err
+	}
+	if err := ctrl.core.AgentWorkspaces.ImportPins(r.Context(), body.IDs); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)

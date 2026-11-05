@@ -30,7 +30,8 @@ type Effect string
 const (
 	EffectRead  Effect = "read"
 	EffectWrite Effect = "write"
-	// EffectExec runs a command the caller supplies.
+	// EffectExec runs a command, or starts an agent on input the caller
+	// supplies.
 	EffectExec Effect = "exec"
 )
 

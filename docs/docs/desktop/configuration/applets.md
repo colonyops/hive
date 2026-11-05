@@ -140,6 +140,8 @@ The page gets `window.hive`:
 | `hive.terminal(command)` | Opens the pop-up terminal |
 | `hive.toast(message, options)` | Shows a toast |
 | `hive.copy(text)` | Puts text on the clipboard |
+| `hive.startChat({workspace, name, prompt, pinToCode})` | Starts an agent workspace chat in the background, optionally pinned to Code, and returns `{id, workspace, name, slug, pinnedAt}`. The prompt needs a workspace command that passes `.Prompt` |
+| `hive.pinChat(id)`, `hive.unpinChat(id)` | Pins a chat to the Code sidebar or unpins it |
 | `hive.context()` | Returns the applet's directory, working directory, and session |
 | `hive.close()` | Closes the applet's pop-up or tab. In a title bar page, closes its dropdown |
 | `hive.open()` | Opens the applet: as a tab if its file lists one and a session is on screen, otherwise as a pop-up if it lists one. Closes its pop-up if that is already open |

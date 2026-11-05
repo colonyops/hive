@@ -19,8 +19,10 @@ func TestServedToolsAreTheCatalog(t *testing.T) {
 	t.Parallel()
 	_, app := testSession(t)
 	_, drive := testCanvasSession(t)
+	_, chats := testChatsSession(t)
 
-	for path, session := range map[string]*mcp.ClientSession{mcpsrv.PathPrefix: app, mcpsrv.DrivePathPrefix: drive} {
+	sessions := map[string]*mcp.ClientSession{mcpsrv.PathPrefix: app, mcpsrv.DrivePathPrefix: drive, mcpsrv.ChatsPathPrefix: chats}
+	for path, session := range sessions {
 		t.Run(path, func(t *testing.T) {
 			var want []string
 			for _, op := range catalog.All() {

@@ -12,7 +12,7 @@ import (
 
 func TestWriteReadRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	want := Endpoint{URL: "http://127.0.0.1:4321", PID: 99, StartedAt: time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)}
+	want := Endpoint{URL: "http://127.0.0.1:4321", PID: 99, StartedAt: time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC), Token: "tok"}
 
 	require.NoError(t, Write(dir, want))
 
@@ -20,6 +20,7 @@ func TestWriteReadRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, want.URL, got.URL)
 	assert.Equal(t, want.PID, got.PID)
+	assert.Equal(t, want.Token, got.Token)
 	assert.True(t, want.StartedAt.Equal(got.StartedAt))
 }
 
