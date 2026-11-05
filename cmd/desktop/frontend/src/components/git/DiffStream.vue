@@ -174,7 +174,7 @@ function commentHost(id: string, agent = false): HTMLElement {
   let host = commentHosts.get(id)
   if (!host) {
     host = document.createElement('div')
-    host.className = agent ? 'border-y border-border bg-pane px-3 py-2' : 'p-2'
+    host.className = agent ? 'border-y border-border bg-pane px-3 py-2' : 'px-3 py-2'
     commentHosts.set(id, host)
     mountedComments.value = new Set([...mountedComments.value, id])
   }

@@ -136,10 +136,10 @@ defineExpose({ startReply })
     </div>
     <div
       v-else-if="reply"
-      class="group/reply flex flex-col gap-0.5 border-t border-card pt-2 text-small"
+      class="group/reply flex flex-col gap-0.5 border-t border-card pt-2"
       :data-testid="`${testid}-reply`"
     >
-      <div class="flex h-5 items-center gap-1.5 text-text-3">
+      <div class="flex h-5 items-center gap-1.5 text-small text-text-3">
         <IconReply class="size-3.5" aria-hidden="true" />
         <span class="font-medium text-text-2">You</span>
         <span
@@ -161,7 +161,7 @@ defineExpose({ startReply })
           />
         </span>
       </div>
-      <p class="leading-snug break-words whitespace-pre-wrap text-text">{{ reply }}</p>
+      <p class="leading-relaxed break-words whitespace-pre-wrap text-text">{{ reply }}</p>
     </div>
     <div v-else class="flex">
       <BaseButton variant="ghost" size="xs" :data-testid="`${testid}-reply-start`" @click="startReply">

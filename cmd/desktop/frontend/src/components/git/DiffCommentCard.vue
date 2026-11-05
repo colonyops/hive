@@ -53,18 +53,22 @@ function onKeydown(event: KeyboardEvent): void {
 <template>
   <!-- A pointer press here must not reach CodeView, which would start a line selection under the card. -->
   <div
-    class="group flex flex-col gap-0.5 font-sans text-caption"
+    class="group flex flex-col gap-0.5 font-sans"
     :class="
-      row ? 'border-b border-row px-2.5 py-1.5 hover:bg-chip' : 'rounded-md border border-card bg-raised px-2 py-1'
+      row
+        ? 'border-b border-row px-2.5 py-1.5 text-caption hover:bg-chip'
+        : 'max-w-3xl gap-1.5 rounded-md border border-card bg-raised py-2 pr-3 pl-5 text-body'
     "
     :data-testid="testid"
     @pointerdown.stop
     @click.stop
   >
-    <div class="flex h-4.5 min-w-0 items-center gap-1.5">
+    <div class="flex min-w-0 items-center" :class="row ? 'h-4.5 gap-1.5' : 'h-6 gap-2 text-small'">
+      <span v-if="!row" class="shrink-0 font-medium text-text">You</span>
       <button
         type="button"
-        class="flex min-w-0 cursor-pointer gap-1.5 text-left font-mono text-micro text-text-3 hover:text-text"
+        class="flex min-w-0 cursor-pointer gap-1.5 text-left font-mono text-text-3 hover:text-text"
+        :class="row ? 'text-micro' : 'text-caption'"
         :title="`${comment.path} ${commentLabel(comment)}`.trim()"
         :data-testid="`${testid}-pick`"
         @click="emit('pick')"
@@ -86,14 +90,14 @@ function onKeydown(event: KeyboardEvent): void {
         <IconButton
           label="Edit comment"
           :icon="IconPencil"
-          size="sm"
+          :size="row ? 'sm' : 'md'"
           :data-testid="`${testid}-edit`"
           @click="startEdit"
         />
         <IconButton
           label="Delete comment"
           :icon="IconTrash"
-          size="sm"
+          :size="row ? 'sm' : 'md'"
           :data-testid="`${testid}-delete`"
           @click="emit('remove')"
         />
@@ -110,8 +114,8 @@ function onKeydown(event: KeyboardEvent): void {
     </div>
     <p
       v-else
-      class="flex items-start gap-1 leading-snug break-words text-text"
-      :class="row ? 'line-clamp-2' : 'whitespace-pre-wrap'"
+      class="flex items-start gap-1 break-words text-text"
+      :class="row ? 'line-clamp-2 leading-snug' : 'leading-relaxed whitespace-pre-wrap'"
       :title="row ? comment.text : undefined"
     >
       <component :is="label.icon" v-if="label" class="mt-px size-3 shrink-0 text-accent" aria-hidden="true" />
