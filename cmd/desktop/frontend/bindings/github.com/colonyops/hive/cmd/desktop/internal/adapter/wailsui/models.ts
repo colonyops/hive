@@ -105,6 +105,28 @@ export interface AppearanceSettings {
     "canvasPageWidth": string;
 }
 
+/**
+ * AppletChat is the chat a hive.startChat, hive.pinChat or hive.unpinChat
+ * call answers with.
+ */
+export interface AppletChat {
+    "id": string;
+    "workspace": string;
+    "name": string;
+    "slug": string;
+    "pinnedAt": number;
+}
+
+/**
+ * AppletChatStart is hive.startChat's argument.
+ */
+export interface AppletChatStart {
+    "workspace": string;
+    "name": string;
+    "prompt": string;
+    "pinToCode": boolean;
+}
+
 export interface BlockWire {
     "id": string;
     "kind": string;

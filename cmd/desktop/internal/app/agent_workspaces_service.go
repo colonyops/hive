@@ -225,6 +225,10 @@ func (s *AgentWorkspacesService) catalogue(ctx context.Context) []agentws.Catalo
 			entries[i].Server = stdio.server(serveToolsets(servePathOf(descriptor)))
 			continue
 		}
+		if descriptor.StdioOnly {
+			entries[i].Problem = "needs the hive CLI at this app's version on PATH, or set daemon.hive_path: this server requires a token that only hive mcp serve reads"
+			continue
+		}
 		entries[i].Server.URL = base + descriptor.RuntimePath
 	}
 	return entries
@@ -357,6 +361,9 @@ type SessionView struct {
 	// ScheduleID is a column on the session record rather than a lookup in the
 	// run history because history is pruned and cannot remain the authority.
 	ScheduleID string `json:"scheduleId"`
+	// PinnedAt is when the chat was pinned to the Code sidebar, in Unix
+	// milliseconds, or 0 when it is not pinned.
+	PinnedAt int64 `json:"pinnedAt"`
 }
 
 // SessionActivityItem is one live session's detected activity, keyed by
@@ -843,7 +850,7 @@ func (s *AgentWorkspacesService) ResumeSession(ctx context.Context, id string, c
 		return SessionView{
 			ID: rec.ID, LegacyID: rec.LegacyID, Workspace: rec.Workspace, Name: rec.Name, Agent: rec.Agent,
 			LastOpenedAt: rec.LastOpenedAt, Slug: name, TerminalID: name, WindowID: window.ID, PaneID: window.ActivePane,
-			Cols: window.Width, Rows: window.Height,
+			Cols: window.Width, Rows: window.Height, PinnedAt: rec.PinnedAt,
 			ResumeAttempted: true,
 		}, nil
 	}
@@ -1627,7 +1634,7 @@ func (s *AgentWorkspacesService) launchTerminal(ctx context.Context, rec stores.
 	view := SessionView{
 		ID: rec.ID, LegacyID: rec.LegacyID, Workspace: rec.Workspace, Name: rec.Name, Agent: rec.Agent,
 		LastOpenedAt: rec.LastOpenedAt, Slug: name, ResumeAttempted: opts.resumeAttempted,
-		ScheduleID: rec.ScheduleID,
+		ScheduleID: rec.ScheduleID, PinnedAt: rec.PinnedAt,
 	}
 
 	if s.awaitEarlyExit(ctx, name) {
@@ -1838,7 +1845,7 @@ func (s *AgentWorkspacesService) sessionViews(ctx context.Context, records []sto
 		views = append(views, SessionView{
 			ID: rec.ID, LegacyID: rec.LegacyID, Workspace: rec.Workspace, Name: rec.Name, Agent: rec.Agent,
 			LastOpenedAt: rec.LastOpenedAt, Slug: name, TerminalID: live,
-			ScheduleID: rec.ScheduleID,
+			ScheduleID: rec.ScheduleID, PinnedAt: rec.PinnedAt,
 		})
 	}
 	return views

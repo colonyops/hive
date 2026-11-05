@@ -14,6 +14,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // @ts-ignore: Unused imports
 import * as app$0 from "../../app/models.js";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
+
 export function BridgeToken(id: string): $CancellablePromise<string> {
     return $Call.ByID(2552326400, id);
 }
@@ -62,6 +66,10 @@ export function List(): $CancellablePromise<app$0.Applet[] | null> {
     return $Call.ByID(64825518);
 }
 
+export function PinChat(id: string, chatID: string, pinned: boolean): $CancellablePromise<$models.AppletChat> {
+    return $Call.ByID(3227159607, id, chatID, pinned);
+}
+
 export function PrepareImport(encoded: string): $CancellablePromise<app$0.AppletImportPreview> {
     return $Call.ByID(705952256, encoded);
 }
@@ -100,6 +108,14 @@ export function SpawnRead(handle: string): $CancellablePromise<app$0.AppletOutpu
 
 export function SpawnWrite(handle: string, data: string): $CancellablePromise<void> {
     return $Call.ByID(767453888, handle, data);
+}
+
+/**
+ * StartChat adds no authority: an applet's exec already runs any command as
+ * the user (ADR applets-are-web-pages-with-full-access-to-the-machine).
+ */
+export function StartChat(id: string, req: $models.AppletChatStart): $CancellablePromise<$models.AppletChat> {
+    return $Call.ByID(3824445268, id, req);
 }
 
 export function WriteFile(id: string, path: string, content: string): $CancellablePromise<void> {

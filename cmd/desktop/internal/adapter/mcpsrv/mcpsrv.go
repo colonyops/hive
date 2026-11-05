@@ -20,6 +20,10 @@
 // process the drive server starts is the user's shell, with no input, in a
 // detached window of the caller's own Code session; tab_close kills a window
 // of that session (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows).
+//
+// The chats server is the exception: chat_create starts an agent, so that
+// server requires the bearer token the endpoint file carries
+// (ADR chat-control-is-served-on-a-token-guarded-mcp-server-whose-token-the-endpoint-file-carries).
 package mcpsrv
 
 import (

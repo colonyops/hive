@@ -7,6 +7,7 @@ import (
 
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/ops/actions"
+	"github.com/colonyops/hive/internal/ops/chats"
 	"github.com/colonyops/hive/internal/ops/diagnostics"
 	"github.com/colonyops/hive/internal/ops/drive"
 	"github.com/colonyops/hive/internal/ops/flows"
@@ -21,6 +22,6 @@ func All() []ops.Op {
 	return slices.Concat(
 		layout.All(), drive.All(), reviews.All(),
 		inbox.All(), sessions.All(), actions.All(), diagnostics.All(),
-		flows.All(), workspaces.All(),
+		flows.All(), workspaces.All(), chats.All(),
 	)
 }

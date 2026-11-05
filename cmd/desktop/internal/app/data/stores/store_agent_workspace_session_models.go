@@ -25,6 +25,9 @@ type AgentSession struct {
 	// started by hand. It is a column rather than a lookup in run history,
 	// which can be pruned independently of the chat.
 	ScheduleID string `json:"scheduleId"`
+	// PinnedAt is when the chat was pinned to the Code sidebar, in Unix
+	// milliseconds, or 0 when it is not pinned.
+	PinnedAt int64 `json:"pinnedAt"`
 	// EndToken is the capability a launch hands its own process; presenting it
 	// is what lets a chat end its own session. It never leaves the core.
 	EndToken string `json:"-"`
@@ -51,6 +54,6 @@ func mapAgentSessionFromDB(row queries.AgentWorkspaceSession) AgentSession {
 		ID: row.ID, LegacyID: legacyID, Workspace: row.Workspace, Name: row.Name, Agent: row.Agent,
 		AgentSessionID: row.AgentSessionID, TerminalID: row.TerminalID,
 		CreatedAt: row.CreatedAt, LastOpenedAt: row.LastOpenedAt,
-		ScheduleID: row.ScheduleID, EndToken: row.EndToken,
+		ScheduleID: row.ScheduleID, PinnedAt: row.PinnedAt, EndToken: row.EndToken,
 	}
 }

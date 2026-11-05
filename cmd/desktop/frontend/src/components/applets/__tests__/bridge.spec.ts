@@ -14,12 +14,14 @@ const service = vi.hoisted(() => ({
   Context: vi.fn(),
   Exec: vi.fn(),
   KillSpawns: vi.fn(),
+  PinChat: vi.fn(),
   ReadFile: vi.fn(),
   SaveStorage: vi.fn(),
   Spawn: vi.fn(),
   SpawnKill: vi.fn(),
   SpawnRead: vi.fn(),
   SpawnWrite: vi.fn(),
+  StartChat: vi.fn(),
   WriteFile: vi.fn(),
 }))
 
@@ -44,6 +46,9 @@ interface Hive {
   context(): Promise<unknown>
   toast(message: string): Promise<void>
   authoringPrompt(brief: object): Promise<string>
+  startChat(options: object): Promise<unknown>
+  pinChat(id: string): Promise<unknown>
+  unpinChat(id: string): Promise<unknown>
   close(): Promise<void>
   on(event: string, listener: (data: unknown) => void): () => void
   setCommands(rows: object[]): Promise<void>
@@ -198,6 +203,42 @@ describe('bridge.js', () => {
       expect.objectContaining({ command: 'echo hi', timeoutMillis: 5 }),
     )
     expect(service.WriteFile).toHaveBeenCalledWith('applet-builder', 'a.txt', 'body')
+    wrapper.unmount()
+  })
+
+  it('starts and pins a chat for the applet that asks', async () => {
+    service.StartChat.mockResolvedValue({
+      id: 'c1',
+      workspace: 'orchestrator',
+      name: 'Run',
+      slug: 'agentws-x',
+      pinnedAt: 5,
+    })
+    service.PinChat.mockResolvedValue({
+      id: 'c1',
+      workspace: 'orchestrator',
+      name: 'Run',
+      slug: 'agentws-x',
+      pinnedAt: 0,
+    })
+    const { wrapper, page } = loadPage()
+
+    await expect(
+      page.hive.startChat({ workspace: 'orchestrator', name: 'Run', prompt: 'go', pinToCode: true }),
+    ).resolves.toMatchObject({ id: 'c1', pinnedAt: 5 })
+    await page.hive.unpinChat('c1')
+    await page.hive.pinChat('c1')
+
+    expect(service.StartChat).toHaveBeenCalledWith('applet-builder', {
+      workspace: 'orchestrator',
+      name: 'Run',
+      prompt: 'go',
+      pinToCode: true,
+    })
+    expect(service.PinChat.mock.calls).toEqual([
+      ['applet-builder', 'c1', false],
+      ['applet-builder', 'c1', true],
+    ])
     wrapper.unmount()
   })
 

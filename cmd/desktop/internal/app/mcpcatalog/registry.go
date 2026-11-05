@@ -40,6 +40,19 @@ var registry = map[string]Descriptor{
 		RuntimeURL:  true,
 		RuntimePath: "/mcp/drive",
 	},
+	// The chat operations (ADR chat-control-is-served-on-a-token-guarded-mcp-server-whose-token-the-endpoint-file-carries).
+	// Its own entry, because starting a chat runs a workspace's command: a
+	// workspace grants that apart from the app-control surface.
+	"hive-chats": {
+		Type:        "hive-chats",
+		Title:       "Hive Chats",
+		Description: "Start agent workspace chats with an opening prompt, and pin or unpin chats in the Code sidebar. A started chat runs its workspace's command with that workspace's permission settings.",
+		Stability:   StabilityStable,
+		Server:      Server{Transport: TransportHttp},
+		RuntimeURL:  true,
+		RuntimePath: "/mcp/chats",
+		StdioOnly:   true,
+	},
 	// The same server at the address it had before it served documents. A
 	// workspace manifest names it, so dropping the entry would break those.
 	"hive-canvas": {

@@ -93,6 +93,19 @@ func (s *AgentSessionStore) Rename(ctx context.Context, id, name string) error {
 	}))
 }
 
+// SetPinnedAt pins the session at at, or unpins it when at is 0. It returns
+// false when no session has the id.
+func (s *AgentSessionStore) SetPinnedAt(ctx context.Context, id string, at int64) (bool, error) {
+	n, err := s.q.Ctx(ctx).SetAgentWorkspaceSessionPinnedAt(ctx, queries.SetAgentWorkspaceSessionPinnedAtParams{
+		PinnedAt: at,
+		ID:       id,
+	})
+	if err != nil {
+		return false, wrap("pinning agent workspace session", err)
+	}
+	return n > 0, nil
+}
+
 // Callers must close the live terminal first to avoid orphaning its agent.
 func (s *AgentSessionStore) Delete(ctx context.Context, id string) error {
 	return wrap("deleting agent workspace session", s.q.Ctx(ctx).DeleteAgentWorkspaceSession(ctx, id))

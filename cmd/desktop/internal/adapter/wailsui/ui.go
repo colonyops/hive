@@ -178,7 +178,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		application.NewService(NewJobService(core.Jobs)),
 		application.NewService(NewActionRunService(core.ActionRuns)),
 		application.NewService(NewTasksService(core.Tasks)),
-		application.NewService(NewAppletsService(core.Applets)),
+		application.NewService(NewAppletsService(core.Applets, core.AgentWorkspaces)),
 		application.NewService(NewDriveService(core.Drive, u.logger)),
 		application.NewService(NewLayoutService(core.Layouts)),
 		application.NewService(NewReviewService(core.Review, core.DiffReviews, u.logger)),

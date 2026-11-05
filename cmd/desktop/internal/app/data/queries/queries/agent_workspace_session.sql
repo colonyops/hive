@@ -47,3 +47,6 @@ DELETE FROM agent_workspace_session WHERE workspace = ?;
 -- stable creation order the scoped list uses.
 SELECT * FROM agent_workspace_session
 ORDER BY created_at DESC, id DESC;
+
+-- name: SetAgentWorkspaceSessionPinnedAt :execrows
+UPDATE agent_workspace_session SET pinned_at = ? WHERE id = ?;

@@ -263,6 +263,15 @@ func main() {
 			logger.Info().Str("path", prefix).Msg("drive MCP server mounted")
 		}
 	}
+	// Its own token, not the terminal one: the endpoint file hands this token
+	// to every hive CLI of the user, and it must not also open the terminals.
+	chatsToken, err := mcpsrv.MintChatsToken()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if core.MountAPI(mcpsrv.ChatsPathPrefix, mcpsrv.NewChats(core, logger, mcpsrv.Options{Version: build.Version}, chatsToken).Handler()) {
+		logger.Info().Str("path", mcpsrv.ChatsPathPrefix).Msg("chats MCP server mounted")
+	}
 	terminal := wailsui.TerminalTransport{}
 	popupTerminal := wailsui.PopupTerminalTransport{}
 	agents := wailsui.AgentsTransport{}
@@ -327,7 +336,7 @@ func main() {
 	// data directory it shares with the engine (hive dt tab ...). Written after
 	// Start, which is when the loopback port exists.
 	if base := core.MCPBaseURL(ctx); base != "" {
-		endpoint := desktopendpoint.Endpoint{URL: base, PID: os.Getpid(), StartedAt: time.Now()}
+		endpoint := desktopendpoint.Endpoint{URL: base, PID: os.Getpid(), StartedAt: time.Now(), Token: chatsToken}
 		if err := desktopendpoint.Write(core.HiveDataDir(), endpoint); err != nil {
 			logger.Warn().Err(err).Msg("the desktop endpoint file was not written; hive dt commands need --desktop-url or HIVE_DESKTOP_URL")
 		}

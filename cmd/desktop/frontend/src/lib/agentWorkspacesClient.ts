@@ -178,6 +178,8 @@ export interface AgentSession {
   notice: string
   /** The schedule that launched this chat, empty when a person started it. */
   scheduleId: string
+  /** Unix ms when the chat was pinned to the Code sidebar; 0 when it is not pinned. Pin order is this order. */
+  pinnedAt: number
 }
 
 /** One live session's detected activity — ready, active, or approval. */
@@ -318,6 +320,10 @@ export interface AgentWorkspacesClient {
   resizeSession(id: string, cols: number, rows: number): Promise<void>
   /** Sets a session's display name; the live terminal, if any, is untouched. */
   renameSession(id: string, name: string): Promise<void>
+  /** Pins a chat to the Code sidebar after the chats already pinned, or unpins it. */
+  pinSession(id: string, pinned: boolean): Promise<AgentSession>
+  /** Pins ids in order, skipping ids with no chat; for pins kept in browser storage. */
+  importPins(ids: string[]): Promise<void>
   /** Every session across every workspace, newest first in stable creation order. */
   allSessions(): Promise<AgentSession[]>
   startSession(request: StartSessionRequest): Promise<AgentSession>
@@ -442,6 +448,14 @@ export function createAgentWorkspacesClient(endpoint: AgentsEndpoint): AgentWork
     },
     async renameSession(id, name) {
       await post('/sessions/rename', { id, name })
+    },
+    async pinSession(id, pinned) {
+      const body = await post<AgentSession>('/sessions/pin', { id, pinned })
+      if (!body) throw new AgentRequestError('the pin did not change', '')
+      return body
+    },
+    async importPins(ids) {
+      await post('/sessions/pins/import', { ids })
     },
     async allSessions() {
       const body = await post<{ sessions: AgentSession[] | null }>('/sessions/all', {})

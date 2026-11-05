@@ -114,6 +114,7 @@ Hive includes these MCP entries:
 
 - **Hive Desktop** for reading and configuring the running app. It requires the local HTTP server, which is enabled by default. Its `session_list` and `session_tags_update` tools let an agent find hive sessions by tag and add or remove tags, so an orchestrating agent can pick up the sessions taged `auto` and retag each one it takes.
 - **Hive Drive** for durable Markdown, HTML, and canvas documents beside a chat.
+- **Hive Chats** for starting chats in other workspaces with an opening prompt, and pinning chats to Code. A started chat runs its workspace's command with that workspace's permission settings, so enable it only in a workspace you trust to start others. It runs through `hive mcp serve` and needs the hive CLI at the app's version.
 - **Playwright** for browser automation. It requires Node.js and a Playwright browser.
 - **Chrome DevTools** for a running Chrome browser. It requires Node.js 20.19 or newer and Chrome.
 
@@ -192,4 +193,4 @@ A repository with no documents yet links to the setup in **Settings ▸ MCP serv
 
 ## Use a chat in Code
 
-Pin a chat to the Code session tree when you want it beside repository terminals. Use **Pin to Code** on a chat's row menu, or check **Pin to Code** in the New chat dialog to pin it when it starts. It attaches to the same tmux session from either area. Unpinning it does not stop the agent.
+Pin a chat to the Code session tree when you want it beside repository terminals. Use **Pin to Code** on a chat's row menu, or check **Pin to Code** in the New chat dialog to pin it when it starts. It attaches to the same tmux session from either area. Unpinning it does not stop the agent. An applet (`hive.startChat`, `hive.pinChat`), an agent with **Hive Chats**, or `hive dt chat create --pin-to-code` and `hive dt chat-pin put <id>` can start and pin chats too.

@@ -86,6 +86,8 @@ export type {
     AgentsAvailability,
     AgentsEndpoint,
     AppearanceSettings,
+    AppletChat,
+    AppletChatStart,
     BlockWire,
     BuildInfo,
     CanvasWire,

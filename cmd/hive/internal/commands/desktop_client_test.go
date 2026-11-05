@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 
@@ -391,4 +392,64 @@ func TestDesktopLocalValidation(t *testing.T) {
 	fake.mu.Lock()
 	defer fake.mu.Unlock()
 	assert.Empty(t, fake.calls, "a locally refused call never reaches the desktop")
+}
+
+func TestDesktopClientSendsTheEndpointToken(t *testing.T) {
+	var mu sync.Mutex
+	var seen []string
+	server := mcp.NewServer(&mcp.Implementation{Name: "fake", Version: "test"}, nil)
+	server.AddTool(&mcp.Tool{Name: "status_get", InputSchema: map[string]any{"type": "object"}},
+		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "{}"}}}, nil
+		})
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, r.Header.Get("Authorization"))
+		mu.Unlock()
+		mcpHandler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	headers := func(client *DesktopClient) []string {
+		t.Helper()
+		mu.Lock()
+		seen = nil
+		mu.Unlock()
+		_, err := client.Call(t.Context(), "/mcp", "status_get", map[string]any{})
+		require.NoError(t, err)
+		mu.Lock()
+		defer mu.Unlock()
+		require.NotEmpty(t, seen)
+		return slices.Compact(slices.Clone(seen))
+	}
+
+	dataDir := t.TempDir()
+	require.NoError(t, desktopendpoint.Write(dataDir, desktopendpoint.Endpoint{URL: srv.URL, PID: 1, Token: "from-file"}))
+	assert.Equal(t, []string{"Bearer from-file"}, headers(NewDesktopClient(dataDir, "", "test")))
+
+	t.Setenv(desktopTokenEnv, "")
+	assert.Equal(t, []string{""}, headers(NewDesktopClient(dataDir, srv.URL, "test")), "an override URL never gets the file's token")
+
+	t.Setenv(desktopTokenEnv, "from-env")
+	assert.Equal(t, []string{"Bearer from-env"}, headers(NewDesktopClient(dataDir, srv.URL, "test")))
+}
+
+func TestDesktopClientReportsARefusedTokenAsUnauthenticated(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unauthenticated", http.StatusUnauthorized)
+	}))
+	t.Cleanup(srv.Close)
+	dataDir := t.TempDir()
+	require.NoError(t, desktopendpoint.Write(dataDir, desktopendpoint.Endpoint{URL: srv.URL, PID: 1, Token: "stale"}))
+
+	_, err := NewDesktopClient(dataDir, "", "test").Call(t.Context(), "/mcp/chats", "chat_list", map[string]any{})
+	var opErr *ops.Error
+	require.ErrorAs(t, err, &opErr)
+	assert.Equal(t, ops.KindUnauthenticated, opErr.Kind)
+
+	t.Setenv(desktopTokenEnv, "")
+	_, err = NewDesktopClient(dataDir, srv.URL, "test").Call(t.Context(), "/mcp/chats", "chat_list", map[string]any{})
+	require.ErrorAs(t, err, &opErr)
+	assert.Contains(t, opErr.Msg, desktopTokenEnv)
 }

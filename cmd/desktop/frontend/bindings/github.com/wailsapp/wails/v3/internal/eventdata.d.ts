@@ -15,6 +15,7 @@ declare module "@wailsio/runtime" {
             "actions:updated": string;
             "activity:appended": number;
             "applets:updated": string;
+            "chats:updated": string;
             "connection:updated": string;
             "diff-reviews:updated": string;
             "drive:updated": wailsui$0.DriveWrite;

@@ -9,10 +9,59 @@ import (
 // AppletsService exposes the applet catalog and the bridge behind window.hive.
 type AppletsService struct {
 	applets *app.AppletsService
+	chats   *app.AgentWorkspacesService
 }
 
-func NewAppletsService(a *app.AppletsService) *AppletsService {
-	return &AppletsService{applets: a}
+func NewAppletsService(a *app.AppletsService, chats *app.AgentWorkspacesService) *AppletsService {
+	return &AppletsService{applets: a, chats: chats}
+}
+
+// AppletChatStart is hive.startChat's argument.
+type AppletChatStart struct {
+	Workspace string `json:"workspace"`
+	Name      string `json:"name"`
+	Prompt    string `json:"prompt"`
+	PinToCode bool   `json:"pinToCode"`
+}
+
+// AppletChat is the chat a hive.startChat, hive.pinChat or hive.unpinChat
+// call answers with.
+type AppletChat struct {
+	ID        string `json:"id"`
+	Workspace string `json:"workspace"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	PinnedAt  int64  `json:"pinnedAt"`
+}
+
+func toAppletChat(v app.SessionView) AppletChat {
+	return AppletChat{ID: v.ID, Workspace: v.Workspace, Name: v.Name, Slug: v.Slug, PinnedAt: v.PinnedAt}
+}
+
+// StartChat adds no authority: an applet's exec already runs any command as
+// the user (ADR applets-are-web-pages-with-full-access-to-the-machine).
+func (s *AppletsService) StartChat(ctx context.Context, id string, req AppletChatStart) (AppletChat, error) {
+	if err := s.applets.CheckBridge(id); err != nil {
+		return AppletChat{}, err
+	}
+	view, err := s.chats.CreateChat(ctx, app.CreateChat{
+		Workspace: req.Workspace, Name: req.Name, Prompt: req.Prompt, PinToCode: req.PinToCode,
+	})
+	if err != nil {
+		return AppletChat{}, err
+	}
+	return toAppletChat(view), nil
+}
+
+func (s *AppletsService) PinChat(ctx context.Context, id, chatID string, pinned bool) (AppletChat, error) {
+	if err := s.applets.CheckBridge(id); err != nil {
+		return AppletChat{}, err
+	}
+	view, err := s.chats.PinChat(ctx, chatID, pinned)
+	if err != nil {
+		return AppletChat{}, err
+	}
+	return toAppletChat(view), nil
 }
 
 func (s *AppletsService) List(ctx context.Context) []app.Applet {
