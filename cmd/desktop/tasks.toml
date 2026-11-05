@@ -141,17 +141,19 @@ run = "./scripts/check-migration-order.sh cmd/desktop/internal/app/data/queries/
 ["desktop:test"]
 description = "Run the desktop slice: frontend vitest + the app's Go packages and the shared packages it runs on"
 depends = ["desktop:frontend:test"]
-env = { HIVE_DEFAULT_AGENT = "" }
+env = { HIVE_DEFAULT_AGENT = false }
 run = "scripts/gotest.sh ./cmd/desktop/... ./internal/... ./pkg/..."
 
 ["desktop:e2e"]
 description = "Run desktop e2e tests in the pinned Docker/Playwright environment"
 depends = ["desktop:frontend:install"]
+env = { HIVE_DEFAULT_AGENT = false }
 run = "./cmd/desktop/e2e/scripts/run-docker.sh"
 
 ["desktop:e2e:remote"]
 description = "Run the desktop e2e tests that use the test/remote ssh fixture as a server"
 depends = ["desktop:frontend:install", "cli:build:container"]
+env = { HIVE_DEFAULT_AGENT = false }
 # Both e2e tasks build the same server binary and image and share test-results/.
 wait_for = ["desktop:e2e"]
 run = "./cmd/desktop/e2e/scripts/run-remote.sh"

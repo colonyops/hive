@@ -59,6 +59,7 @@ run = "podman run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CL
 ["cli:integration"]
 description = "Run the CLI integration tests inside Docker (never on the host)"
 depends = ["cli:build:container"]
+env = { HIVE_DEFAULT_AGENT = false }
 run = "test/integration/run.sh"
 
 # The ssh fixture for remote hive servers: two containers, server-a and
@@ -71,10 +72,12 @@ run = "test/remote/run.sh up"
 ["cli:remote:test"]
 description = "Run the remote tests against a fresh ssh fixture, then remove it (args go to go test)"
 depends = ["cli:build:container"]
+env = { HIVE_DEFAULT_AGENT = false }
 run = "test/remote/run.sh test"
 
 ["cli:remote:run"]
 description = "Run the remote tests against the fixture cli:remote:up started (args go to go test)"
+env = { HIVE_DEFAULT_AGENT = false }
 run = "test/remote/run.sh run"
 
 ["cli:remote:down"]
@@ -111,6 +114,7 @@ run = "test/smoke/run.sh down"
 ["cli:smoke:test"]
 description = "Check the smoke stack tooling against a fresh stack, then remove it"
 depends = ["cli:build:container"]
+env = { HIVE_DEFAULT_AGENT = false }
 run = "test/smoke/run.sh test"
 
 # A sandbox of hive servers for trying remote sessions by hand from Hive
