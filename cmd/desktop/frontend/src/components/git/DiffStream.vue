@@ -66,6 +66,8 @@ const props = defineProps<{
   isAgentStale?: (comment: AgentComment) => boolean
   /** The agent comment the walkthrough is on. */
   focusedAgent?: string | null
+  /** The user's replies to agent comments, by comment id. */
+  agentReplies?: Readonly<Record<string, string>>
 }>()
 const emit = defineEmits<{
   'update:current': [path: string]
@@ -80,6 +82,7 @@ const emit = defineEmits<{
   'pick-comment': [comment: ChangesComment]
   'dismiss-agent': [comment: AgentComment]
   'pick-agent': [comment: AgentComment]
+  'reply-agent': [comment: AgentComment, text: string]
   synced: []
 }>()
 
@@ -483,7 +486,22 @@ function scrollToLine(path: string, line: number, side: DiffSide): void {
   viewer?.scrollTo({ type: 'line', id: path, lineNumber: line, side, align: 'center' })
 }
 
-defineExpose({ focus, scrollToFile, holds, stepHunk, scrollToLine, selectLines, clearSelection })
+const agentCards = new Map<string, { startReply: () => Promise<void> }>()
+
+function setAgentCard(id: string, card: unknown): void {
+  if (card) agentCards.set(id, card as { startReply: () => Promise<void> })
+  else agentCards.delete(id)
+}
+
+/** Opens the reply field on an agent comment. False when its card is not on screen. */
+function replyToAgent(id: string): boolean {
+  const card = agentCards.get(id)
+  if (!card) return false
+  void card.startReply()
+  return true
+}
+
+defineExpose({ focus, scrollToFile, holds, stepHunk, scrollToLine, selectLines, clearSelection, replyToAgent })
 
 onMounted(() => {
   if (!root.value) return
@@ -580,11 +598,14 @@ watch(
         />
         <AgentCommentCard
           v-else-if="agentById.get(id)"
+          :ref="(card) => setAgentCard(id, card)"
           :comment="agentById.get(id)!"
           :stale="isAgentStale?.(agentById.get(id)!)"
           :focused="focusedAgent === id"
+          :reply="agentReplies?.[id]"
           @dismiss="emit('dismiss-agent', agentById.get(id)!)"
           @pick="emit('pick-agent', agentById.get(id)!)"
+          @reply="emit('reply-agent', agentById.get(id)!, $event)"
         />
       </div>
     </Teleport>

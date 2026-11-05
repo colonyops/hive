@@ -30,7 +30,10 @@ which no other process can write.
    out with the user's own comments when they press Send, its author and
    severity leading its text, and its row is deleted once the paste succeeds.
    There is no step that copies an agent comment into the user's review: the
-   user disagrees by dismissing and adds to it by writing a comment of their own.
+   user disagrees by dismissing and adds to it with a reply. A reply stays in
+   browser storage beside the user's own comments and goes out after the agent
+   comment's text. It never reaches `hive.db`, so the reviewing agent does not
+   read it; the session's agent does, on Send.
 
 4. **One input type, two writers.** `internal/ops/reviews` declares
    `diff_review.put`, `.get` and `.clear` on the drive toolset, which the drive

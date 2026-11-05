@@ -1,6 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import TextArea from '@hive/ui/components/ui/TextArea.vue'
+import IconPencil from '~icons/lucide/pencil'
+import IconReply from '~icons/lucide/reply'
+import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
 import AgentMark from '../AgentMark.vue'
 import AgentMarkdown from './AgentMarkdown.vue'
@@ -14,8 +19,10 @@ const props = defineProps<{
   stale?: boolean
   /** The walkthrough is on this comment. */
   focused?: boolean
+  /** What the user wrote back, which goes out with the comment on Send. */
+  reply?: string
 }>()
-const emit = defineEmits<{ dismiss: []; pick: [] }>()
+const emit = defineEmits<{ dismiss: []; pick: []; reply: [text: string] }>()
 
 const agent = computed(() => agentIconID(props.comment.agent || props.comment.author))
 const label = computed(() =>
@@ -29,6 +36,36 @@ const BARS: Record<string, string> = {
   note: 'bg-text-4',
 }
 const bar = computed(() => BARS[props.comment.severity] ?? BARS.note)
+
+const replying = ref(false)
+const draft = ref('')
+const field = ref<{ focus: () => void } | null>(null)
+
+async function startReply(): Promise<void> {
+  draft.value = props.reply ?? ''
+  replying.value = true
+  await nextTick()
+  field.value?.focus()
+}
+
+function saveReply(): void {
+  if (!draft.value.trim()) return
+  emit('reply', draft.value.trim())
+  replying.value = false
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+    event.preventDefault()
+    event.stopPropagation()
+    saveReply()
+  } else if (event.key === 'Escape') {
+    event.stopPropagation()
+    replying.value = false
+  }
+}
+
+defineExpose({ startReply })
 </script>
 
 <template>
@@ -80,5 +117,57 @@ const bar = computed(() => BARS[props.comment.severity] ?? BARS.note)
       />
     </div>
     <AgentMarkdown class="leading-relaxed text-text" :source="comment.text" />
+    <div v-if="replying" class="flex flex-col gap-1.5 border-t border-card pt-2">
+      <TextArea
+        ref="field"
+        v-model="draft"
+        :rows="2"
+        size="sm"
+        placeholder="Reply with context for the agent"
+        :data-testid="`${testid}-reply-text`"
+        @keydown="onKeydown"
+      />
+      <div class="flex justify-end gap-1.5">
+        <BaseButton variant="ghost" size="xs" @click="replying = false">Cancel</BaseButton>
+        <BaseButton size="xs" :disabled="!draft.trim()" :data-testid="`${testid}-reply-save`" @click="saveReply">
+          Reply
+        </BaseButton>
+      </div>
+    </div>
+    <div
+      v-else-if="reply"
+      class="group/reply flex flex-col gap-0.5 border-t border-card pt-2 text-small"
+      :data-testid="`${testid}-reply`"
+    >
+      <div class="flex h-5 items-center gap-1.5 text-text-3">
+        <IconReply class="size-3.5" aria-hidden="true" />
+        <span class="font-medium text-text-2">You</span>
+        <span
+          class="ml-auto flex items-center gap-0.5 opacity-0 group-focus-within/reply:opacity-100 group-hover/reply:opacity-100"
+        >
+          <IconButton
+            label="Edit reply"
+            :icon="IconPencil"
+            size="sm"
+            :data-testid="`${testid}-reply-edit`"
+            @click="startReply"
+          />
+          <IconButton
+            label="Delete reply"
+            :icon="IconTrash"
+            size="sm"
+            :data-testid="`${testid}-reply-delete`"
+            @click="emit('reply', '')"
+          />
+        </span>
+      </div>
+      <p class="leading-snug break-words whitespace-pre-wrap text-text">{{ reply }}</p>
+    </div>
+    <div v-else class="flex">
+      <BaseButton variant="ghost" size="xs" :data-testid="`${testid}-reply-start`" @click="startReply">
+        <IconReply class="size-3.5" aria-hidden="true" />
+        Reply
+      </BaseButton>
+    </div>
   </div>
 </template>

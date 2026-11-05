@@ -51,6 +51,24 @@ const MAX_SENT_REVIEWS = 3
 export const useChangesReview = defineStore('changesReview', () => {
   const sessions = useStorage<Record<string, ChangesComment[]>>('hive.changes.comments', {})
   const sent = useStorage<Record<string, SentReview[]>>('hive.changes.sent', {})
+  // Keyed by the agent comment they answer: a reply has no lines of its own and goes
+  // out inside that comment on Send.
+  const agentReplies = useStorage<Record<string, Record<string, string>>>('hive.changes.agentReplies', {})
+
+  function replies(sessionId: string): Readonly<Record<string, string>> {
+    return agentReplies.value[sessionId] ?? {}
+  }
+
+  /** Sets the reply to an agent comment; empty text removes it. */
+  function setReply(sessionId: string, commentId: string, text: string): void {
+    const next = { ...replies(sessionId) }
+    if (text.trim()) next[commentId] = text.trim()
+    else delete next[commentId]
+    const rest = { ...agentReplies.value }
+    if (Object.keys(next).length) rest[sessionId] = next
+    else delete rest[sessionId]
+    agentReplies.value = rest
+  }
 
   function comments(sessionId: string): readonly ChangesComment[] {
     return sessions.value[sessionId] ?? []
@@ -156,7 +174,23 @@ export const useChangesReview = defineStore('changesReview', () => {
     const rest = { ...sent.value }
     delete rest[sessionId]
     sent.value = rest
+    const restReplies = { ...agentReplies.value }
+    delete restReplies[sessionId]
+    agentReplies.value = restReplies
   }
 
-  return { comments, add, update, remove, targets, send, sentReviews, restore, copy, forget }
+  return {
+    comments,
+    add,
+    update,
+    remove,
+    replies,
+    setReply,
+    targets,
+    send,
+    sentReviews,
+    restore,
+    copy,
+    forget,
+  }
 })

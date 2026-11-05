@@ -187,6 +187,7 @@ const stream = ref<{
   scrollToLine: (path: string, line: number, side: DiffSpan['startSide']) => void
   selectLines: (path: string, range: DiffLineSelection['range']) => void
   clearSelection: () => void
+  replyToAgent: (id: string) => boolean
 } | null>(null)
 const scope = computed(() => `${props.sessionId}:${targetKey(target.value)}`)
 const current = ref<string | null>(null)
@@ -577,8 +578,11 @@ function afterRemoving(comment: AgentComment): void {
   else stopWalk()
 }
 
+const agentReplies = computed(() => review.replies(props.sessionId))
+
 async function dismissAgent(comment: AgentComment): Promise<void> {
   afterRemoving(comment)
+  review.setReply(props.sessionId, comment.id, '')
   const failure = await agentStore.dismiss(props.sessionId, comment.id)
   if (failure) toasts.showToast(failure, { severity: 'error' })
 }
@@ -587,6 +591,11 @@ async function dismissAgentReview(agentReview: DiffReviewWire): Promise<void> {
   if (walkComment.value?.reviewId === agentReview.id) stopWalk()
   const failure = await agentStore.dismissReview(props.sessionId, agentReview.id)
   if (failure) toasts.showToast(failure, { severity: 'error' })
+}
+
+function replyToWalked(): void {
+  const comment = walkComment.value
+  if (comment && !stream.value?.replyToAgent(comment.id)) focusAgent(comment)
 }
 
 // Returns whether the key was the walkthrough's. n and p walk the comments while it
@@ -602,6 +611,10 @@ function walkKey(event: KeyboardEvent): boolean {
   switch (event.key) {
     case 'd':
       void dismissAgent(comment)
+      return true
+    case 'r':
+      event.preventDefault()
+      replyToWalked()
       return true
     case 'n':
       stepWalk(1)
@@ -635,7 +648,10 @@ function offerCopy(message: string): void {
           void copyReview([
             ...(note ? [{ ...noteComment(note), id: '' }] : []),
             ...comments.value,
-            ...pendingAgent.value.map((comment) => ({ ...agentFeedback(comment), id: comment.id })),
+            ...pendingAgent.value.map((comment) => ({
+              ...agentFeedback(comment, agentReplies.value[comment.id]),
+              id: comment.id,
+            })),
           ]),
       },
     ],
@@ -650,8 +666,12 @@ function noteComment(note: string): Omit<ChangesComment, 'id'> {
 
 async function deliver(target: AgentTarget): Promise<string | null> {
   const agents = [...pendingAgent.value]
+  const replies = { ...agentReplies.value }
   const note = sendNote.value.trim()
-  const extra = [...(note ? [noteComment(note)] : []), ...agents.map(agentFeedback)]
+  const extra = [
+    ...(note ? [noteComment(note)] : []),
+    ...agents.map((comment) => agentFeedback(comment, replies[comment.id])),
+  ]
   const failure = await review.send(props.sessionId, target.pane, extra)
   if (failure) {
     offerCopy(failure)
@@ -667,6 +687,7 @@ async function deliver(target: AgentTarget): Promise<string | null> {
 // send has succeeded, so the view does not wait on this to report it.
 async function dropSent(agents: readonly AgentComment[]): Promise<void> {
   for (const comment of agents) {
+    review.setReply(props.sessionId, comment.id, '')
     const dropped = await agentStore.dismiss(props.sessionId, comment.id)
     if (dropped) log.warn('a sent agent comment stayed in hive.db', { id: comment.id, reason: dropped })
   }
@@ -1036,8 +1057,10 @@ function openInEditor(): void {
           :agent-comments="shownAgentComments"
           :is-agent-stale="isAgentStale"
           :focused-agent="walkId"
+          :agent-replies="agentReplies"
           @dismiss-agent="(comment) => void dismissAgent(comment)"
           @pick-agent="focusAgent"
+          @reply-agent="(comment, text) => review.setReply(sessionId, comment.id, text)"
         />
         <ChangesOverview
           v-if="overviewOpen"
@@ -1066,6 +1089,7 @@ function openInEditor(): void {
             :total="pendingAgent.length"
             @prev="stepWalk(-1)"
             @next="stepWalk(1)"
+            @reply="replyToWalked"
             @dismiss="void dismissAgent(walkComment)"
             @stop="stopWalk"
           />

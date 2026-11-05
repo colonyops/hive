@@ -100,9 +100,11 @@ export function anchorAgentComment(comment: AgentComment, rows: readonly DiffRow
 
 /**
  * An agent comment as Send delivers it beside the user's own: in the comparison
- * the agent wrote it in, with the author and severity leading its text.
+ * the agent wrote it in, with the author and severity leading its text and the
+ * user's reply, if any, after it.
  */
-export function agentFeedback(comment: AgentComment): Omit<ChangesComment, 'id'> {
+export function agentFeedback(comment: AgentComment, reply = ''): Omit<ChangesComment, 'id'> {
+  const text = `${comment.author} (${comment.severity}): ${comment.text}`
   return {
     ...(comment.kind === 'file' ? { kind: 'file' as const } : {}),
     path: comment.path,
@@ -113,6 +115,6 @@ export function agentFeedback(comment: AgentComment): Omit<ChangesComment, 'id'>
     quote: comment.quote,
     base: 'branch',
     version: '',
-    text: `${comment.author} (${comment.severity}): ${comment.text}`,
+    text: reply.trim() ? `${text}\n\nMy reply: ${reply.trim()}` : text,
   }
 }

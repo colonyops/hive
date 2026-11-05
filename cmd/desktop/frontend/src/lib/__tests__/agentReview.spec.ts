@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { agentComments, anchorAgentComment, isAgentCommentStale, walkOrder, type AgentComment } from '../agentReview'
+import {
+  agentComments,
+  agentFeedback,
+  anchorAgentComment,
+  isAgentCommentStale,
+  walkOrder,
+  type AgentComment,
+} from '../agentReview'
 import { diffRows } from '../diffReview'
 
 const rows = diffRows('@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n')
@@ -65,5 +72,13 @@ describe('agentReview', () => {
     expect(anchorAgentComment(comment({ kind: 'file' }), rows)).toMatchObject({ side: 'additions', line: 1 })
     expect(anchorAgentComment(comment({ endLine: 40 }), rows)).toBeNull()
     expect(anchorAgentComment(comment({ kind: 'file' }), [])).toBeNull()
+  })
+
+  it("puts the user's reply after the agent's text", () => {
+    expect(agentFeedback(comment({})).text).toBe('claude (issue): t')
+    expect(agentFeedback(comment({}), '  that is on purpose ').text).toBe(
+      'claude (issue): t\n\nMy reply: that is on purpose',
+    )
+    expect(agentFeedback(comment({}), '  ').text).toBe('claude (issue): t')
   })
 })

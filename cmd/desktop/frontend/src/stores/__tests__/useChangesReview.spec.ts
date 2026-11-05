@@ -49,6 +49,18 @@ describe('useChangesReview', () => {
     expect(store.comments('s1').map((comment) => comment.text)).toEqual(['edited'])
   })
 
+  it('keeps one reply per agent comment, and drops it when emptied or the session goes', () => {
+    const store = useChangesReview()
+    store.setReply('s1', 'c1', ' first ')
+    store.setReply('s1', 'c1', 'second')
+    store.setReply('s1', 'c2', 'other')
+    expect(store.replies('s1')).toEqual({ c1: 'second', c2: 'other' })
+    store.setReply('s1', 'c2', '  ')
+    expect(store.replies('s1')).toEqual({ c1: 'second' })
+    store.forget('s1')
+    expect(store.replies('s1')).toEqual({})
+  })
+
   it('survives a relaunch', async () => {
     useChangesReview().add('s1', { ...span, path: 'a.go', text: 'written' })
     await nextTick()
