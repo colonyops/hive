@@ -40,7 +40,7 @@ import type { AgentComment, AnchoredAgentComment } from '../../lib/agentReview'
 import type { DiffSearchMatch, DiffSide } from '../../lib/diffReview'
 import { clearSearchPaint, paintSearch, SEARCH_HIGHLIGHT_CSS } from '../../lib/diffSearchPaint'
 import { diffTextSelection, type DiffLineSelection } from '../../lib/diffSelection'
-import type { ChangesComment } from '../../stores/useChangesReview'
+import type { ChangesComment, ThreadResponse } from '../../stores/useChangesReview'
 import type {
   ChangedFile,
   SessionFileDiff,
@@ -66,6 +66,8 @@ const props = defineProps<{
   isAgentStale?: (comment: AgentComment) => boolean
   /** The agent comment the walkthrough is on. */
   focusedAgent?: string | null
+  /** The responses under each agent comment, by comment id. */
+  agentThreads?: Readonly<Record<string, readonly ThreadResponse[]>>
 }>()
 const emit = defineEmits<{
   'update:current': [path: string]
@@ -80,6 +82,9 @@ const emit = defineEmits<{
   'pick-comment': [comment: ChangesComment]
   'dismiss-agent': [comment: AgentComment]
   'pick-agent': [comment: AgentComment]
+  'respond-agent': [comment: AgentComment, text: string]
+  /** Blank text removes the response. */
+  'edit-agent-response': [comment: AgentComment, responseId: string, text: string]
   synced: []
 }>()
 
@@ -171,7 +176,7 @@ function commentHost(id: string, agent = false): HTMLElement {
   let host = commentHosts.get(id)
   if (!host) {
     host = document.createElement('div')
-    host.className = agent ? 'border-y border-border bg-pane px-3 py-2' : 'p-2'
+    host.className = agent ? 'border-y border-border bg-pane px-3 py-2' : 'px-3 py-2'
     commentHosts.set(id, host)
     mountedComments.value = new Set([...mountedComments.value, id])
   }
@@ -483,7 +488,22 @@ function scrollToLine(path: string, line: number, side: DiffSide): void {
   viewer?.scrollTo({ type: 'line', id: path, lineNumber: line, side, align: 'center' })
 }
 
-defineExpose({ focus, scrollToFile, holds, stepHunk, scrollToLine, selectLines, clearSelection })
+const agentCards = new Map<string, { startReply: () => Promise<void> }>()
+
+function setAgentCard(id: string, card: unknown): void {
+  if (card) agentCards.set(id, card as { startReply: () => Promise<void> })
+  else agentCards.delete(id)
+}
+
+/** Opens the reply field on an agent comment. False when its card is not on screen. */
+function replyToAgent(id: string): boolean {
+  const card = agentCards.get(id)
+  if (!card) return false
+  void card.startReply()
+  return true
+}
+
+defineExpose({ focus, scrollToFile, holds, stepHunk, scrollToLine, selectLines, clearSelection, replyToAgent })
 
 onMounted(() => {
   if (!root.value) return
@@ -580,11 +600,15 @@ watch(
         />
         <AgentCommentCard
           v-else-if="agentById.get(id)"
+          :ref="(card) => setAgentCard(id, card)"
           :comment="agentById.get(id)!"
           :stale="isAgentStale?.(agentById.get(id)!)"
           :focused="focusedAgent === id"
+          :responses="agentThreads?.[id]"
           @dismiss="emit('dismiss-agent', agentById.get(id)!)"
           @pick="emit('pick-agent', agentById.get(id)!)"
+          @respond="emit('respond-agent', agentById.get(id)!, $event)"
+          @edit-response="(responseId, text) => emit('edit-agent-response', agentById.get(id)!, responseId, text)"
         />
       </div>
     </Teleport>

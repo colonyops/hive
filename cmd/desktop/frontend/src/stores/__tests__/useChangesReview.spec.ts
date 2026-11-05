@@ -49,6 +49,44 @@ describe('useChangesReview', () => {
     expect(store.comments('s1').map((comment) => comment.text)).toEqual(['edited'])
   })
 
+  it('keeps a thread of responses per agent comment, in order', () => {
+    const store = useChangesReview()
+    store.respond('s1', 'c1', ' first ')
+    store.respond('s1', 'c1', 'second')
+    store.respond('s1', 'c1', 'from codex', 'codex')
+    store.respond('s1', 'c1', '   ')
+    expect(store.thread('s1', 'c1').map(({ author, text }) => [author, text])).toEqual([
+      ['you', 'first'],
+      ['you', 'second'],
+      ['codex', 'from codex'],
+    ])
+  })
+
+  it('edits a response, and removes it when the text is blank', () => {
+    const store = useChangesReview()
+    store.respond('s1', 'c1', 'one')
+    store.respond('s1', 'c1', 'two')
+    const [first, second] = store.thread('s1', 'c1')
+    store.editResponse('s1', 'c1', first.id, 'edited')
+    store.editResponse('s1', 'c1', second.id, ' ')
+    expect(store.thread('s1', 'c1').map((response) => response.text)).toEqual(['edited'])
+    store.editResponse('s1', 'c1', first.id, '')
+    expect(store.threads('s1')).toEqual({})
+  })
+
+  it('clears only the responses named, or the whole thread, or the session', () => {
+    const store = useChangesReview()
+    store.respond('s1', 'c1', 'sent')
+    store.respond('s1', 'c1', 'written during the send')
+    store.respond('s1', 'c2', 'other')
+    store.clearThread('s1', 'c1', [store.thread('s1', 'c1')[0].id])
+    expect(store.thread('s1', 'c1').map((response) => response.text)).toEqual(['written during the send'])
+    store.clearThread('s1', 'c1')
+    expect(Object.keys(store.threads('s1'))).toEqual(['c2'])
+    store.forget('s1')
+    expect(store.threads('s1')).toEqual({})
+  })
+
   it('survives a relaunch', async () => {
     useChangesReview().add('s1', { ...span, path: 'a.go', text: 'written' })
     await nextTick()

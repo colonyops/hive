@@ -2719,9 +2719,12 @@ which matches `diffRows` in `lib/diffReview.ts`. Agents write them through the
 `app.DiffReviewsService`) or `hive review diff`, which needs no desktop. The
 desktop hears of every write, its own and the CLI's, through the `diff-reviews`
 hivewatch probe, which publishes `events.DiffReviewsUpdated`. `stores/useAgentReviews` holds what the Diff
-view shows. The user only dismisses: Send passes the agent comments still waiting
-to `useChangesReview.send` beside the user's own, and deletes their rows once the
-paste succeeds.
+view shows. The user only dismisses or replies: Send passes the agent comments still
+waiting to `useChangesReview.send` beside the user's own, each with its thread from
+`useChangesReview.threads` after its text, and deletes their rows and the responses
+it delivered once the paste succeeds. A thread is an ordered list of responses, each
+with an author, kept in browser storage as the user's own comments are. Only the user
+writes one today; an agent that adds to a thread needs it in `hive.db`.
 
 **HTML has two tiers.** A canvas **html block** is the one place
 agent-authored markup reaches the app's DOM

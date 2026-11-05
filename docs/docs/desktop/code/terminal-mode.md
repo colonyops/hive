@@ -223,12 +223,13 @@ An agent can review the session's changes and leave comments for you. Its commen
 
 **Overview**, at the top of the file list, shows each review the way a pull request page does: the agent's summary, how many issues, suggestions and notes it raised, and its comments, each of which jumps to its lines. The count beside **Overview** says how many agent comments are waiting. Press <kbd>Esc</kbd> or select a file to go back to the diffs.
 
-Agent comments go to the session's agent with your own when you press send, each marked with the agent that wrote it, and the send button's count includes them. Dismiss the ones you disagree with, from the comment or with **Dismiss** on the Overview for a whole review. To add your own take, comment on the same lines.
+Agent comments go to the session's agent with your own when you press send, each marked with the agent that wrote it, and the send button's count includes them. Dismiss the ones you disagree with, from the comment or with **Dismiss** on the Overview for a whole review. To give the agent context on a comment, reply in the field at the bottom of its card. A comment's replies form a thread, and you can add, edit or delete as many as you need. The thread goes out with its comment when you send, each reply after the agent's text in order, and it goes when you dismiss the comment.
 
 Press <kbd>w</kbd> or select **Walk through** on the Overview to step through every agent comment in file order. The diff scrolls to each one, and these keys act on it:
 
 | Key | Action |
 | --- | --- |
+| <kbd>r</kbd> | Reply |
 | <kbd>d</kbd> | Dismiss |
 | <kbd>n</kbd> <kbd>p</kbd> | Next or previous comment |
 | <kbd>Esc</kbd> | Stop |

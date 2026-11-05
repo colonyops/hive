@@ -64,7 +64,7 @@ import type { DiffLineSelection } from '../../lib/diffSelection'
 import { gitFileName, gitRows, type GitLayout } from '../../lib/gitTree'
 import { isEditableTarget } from '../../lib/isEditableTarget'
 import { useAgentReviews } from '../../stores/useAgentReviews'
-import { useChangesReview, type ChangesComment } from '../../stores/useChangesReview'
+import { useChangesReview, type ChangesComment, type ThreadResponse } from '../../stores/useChangesReview'
 import { useChangesViewed } from '../../stores/useChangesViewed'
 import {
   OpenSessionInEditor,
@@ -187,6 +187,7 @@ const stream = ref<{
   scrollToLine: (path: string, line: number, side: DiffSpan['startSide']) => void
   selectLines: (path: string, range: DiffLineSelection['range']) => void
   clearSelection: () => void
+  replyToAgent: (id: string) => boolean
 } | null>(null)
 const scope = computed(() => `${props.sessionId}:${targetKey(target.value)}`)
 const current = ref<string | null>(null)
@@ -577,8 +578,11 @@ function afterRemoving(comment: AgentComment): void {
   else stopWalk()
 }
 
+const agentThreads = computed(() => review.threads(props.sessionId))
+
 async function dismissAgent(comment: AgentComment): Promise<void> {
   afterRemoving(comment)
+  review.clearThread(props.sessionId, comment.id)
   const failure = await agentStore.dismiss(props.sessionId, comment.id)
   if (failure) toasts.showToast(failure, { severity: 'error' })
 }
@@ -587,6 +591,11 @@ async function dismissAgentReview(agentReview: DiffReviewWire): Promise<void> {
   if (walkComment.value?.reviewId === agentReview.id) stopWalk()
   const failure = await agentStore.dismissReview(props.sessionId, agentReview.id)
   if (failure) toasts.showToast(failure, { severity: 'error' })
+}
+
+function replyToWalked(): void {
+  const comment = walkComment.value
+  if (comment && !stream.value?.replyToAgent(comment.id)) focusAgent(comment)
 }
 
 // Returns whether the key was the walkthrough's. n and p walk the comments while it
@@ -602,6 +611,10 @@ function walkKey(event: KeyboardEvent): boolean {
   switch (event.key) {
     case 'd':
       void dismissAgent(comment)
+      return true
+    case 'r':
+      event.preventDefault()
+      replyToWalked()
       return true
     case 'n':
       stepWalk(1)
@@ -635,7 +648,10 @@ function offerCopy(message: string): void {
           void copyReview([
             ...(note ? [{ ...noteComment(note), id: '' }] : []),
             ...comments.value,
-            ...pendingAgent.value.map((comment) => ({ ...agentFeedback(comment), id: comment.id })),
+            ...pendingAgent.value.map((comment) => ({
+              ...agentFeedback(comment, agentThreads.value[comment.id]),
+              id: comment.id,
+            })),
           ]),
       },
     ],
@@ -650,8 +666,12 @@ function noteComment(note: string): Omit<ChangesComment, 'id'> {
 
 async function deliver(target: AgentTarget): Promise<string | null> {
   const agents = [...pendingAgent.value]
+  const threads = { ...agentThreads.value }
   const note = sendNote.value.trim()
-  const extra = [...(note ? [noteComment(note)] : []), ...agents.map(agentFeedback)]
+  const extra = [
+    ...(note ? [noteComment(note)] : []),
+    ...agents.map((comment) => agentFeedback(comment, threads[comment.id])),
+  ]
   const failure = await review.send(props.sessionId, target.pane, extra)
   if (failure) {
     offerCopy(failure)
@@ -659,14 +679,22 @@ async function deliver(target: AgentTarget): Promise<string | null> {
   }
   stopWalk()
   sendNote.value = ''
-  void dropSent(agents)
+  void dropSent(agents, threads)
   return null
 }
 
 // The agent has them now, so their rows go, as the user's own comments do. The
 // send has succeeded, so the view does not wait on this to report it.
-async function dropSent(agents: readonly AgentComment[]): Promise<void> {
+async function dropSent(
+  agents: readonly AgentComment[],
+  threads: Readonly<Record<string, readonly ThreadResponse[]>>,
+): Promise<void> {
   for (const comment of agents) {
+    review.clearThread(
+      props.sessionId,
+      comment.id,
+      (threads[comment.id] ?? []).map((response) => response.id),
+    )
     const dropped = await agentStore.dismiss(props.sessionId, comment.id)
     if (dropped) log.warn('a sent agent comment stayed in hive.db', { id: comment.id, reason: dropped })
   }
@@ -1036,8 +1064,11 @@ function openInEditor(): void {
           :agent-comments="shownAgentComments"
           :is-agent-stale="isAgentStale"
           :focused-agent="walkId"
+          :agent-threads="agentThreads"
           @dismiss-agent="(comment) => void dismissAgent(comment)"
           @pick-agent="focusAgent"
+          @respond-agent="(comment, text) => review.respond(sessionId, comment.id, text)"
+          @edit-agent-response="(comment, id, text) => review.editResponse(sessionId, comment.id, id, text)"
         />
         <ChangesOverview
           v-if="overviewOpen"
@@ -1066,6 +1097,7 @@ function openInEditor(): void {
             :total="pendingAgent.length"
             @prev="stepWalk(-1)"
             @next="stepWalk(1)"
+            @reply="replyToWalked"
             @dismiss="void dismissAgent(walkComment)"
             @stop="stopWalk"
           />

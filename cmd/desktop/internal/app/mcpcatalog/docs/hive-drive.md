@@ -187,8 +187,10 @@ is refused:
 When the user asks you to review a Code session's changes, write the review
 with these tools instead of pasting it into the terminal. The Diff view draws
 each comment under the lines it is about. The user dismisses the ones they
-disagree with, and Send delivers the rest to the session's agent with their own
-comments. A review is about the branch
+disagree with, can reply to one with context, and Send delivers the rest to the
+session's agent with their own comments. The user's replies to a comment reach
+the session's agent inside that comment, in order; they do not come back
+through `diff_review_get`. A review is about the branch
 against its base, the Branch comparison, which is what a pull request shows.
 
 - `diff_review_put`: store your review: a `summary` and `comments`. In a hive

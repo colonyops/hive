@@ -12,7 +12,7 @@ import { commentLabel } from '../../lib/diffReview'
 import { gitFileName } from '../../lib/gitTree'
 
 const props = defineProps<{ comment: AgentComment; index: number; total: number }>()
-const emit = defineEmits<{ prev: []; next: []; dismiss: []; stop: [] }>()
+const emit = defineEmits<{ prev: []; next: []; reply: []; dismiss: []; stop: [] }>()
 
 const label = computed(() =>
   commentLabel({ ...props.comment, kind: props.comment.kind === 'file' ? 'file' : undefined }),
@@ -47,6 +47,9 @@ const label = computed(() =>
         data-testid="changes-walk-next"
         @click="emit('next')"
       />
+      <BaseButton variant="ghost" size="xs" data-testid="changes-walk-reply" @click="emit('reply')">
+        Reply<span class="ml-1 font-mono opacity-60">r</span>
+      </BaseButton>
       <BaseButton variant="ghost" size="xs" data-testid="changes-walk-dismiss" @click="emit('dismiss')">
         Dismiss<span class="ml-1 font-mono opacity-60">d</span>
       </BaseButton>

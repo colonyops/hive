@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { agentComments, anchorAgentComment, isAgentCommentStale, walkOrder, type AgentComment } from '../agentReview'
+import {
+  agentComments,
+  agentFeedback,
+  anchorAgentComment,
+  isAgentCommentStale,
+  walkOrder,
+  type AgentComment,
+} from '../agentReview'
 import { diffRows } from '../diffReview'
 
 const rows = diffRows('@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n')
@@ -65,5 +72,18 @@ describe('agentReview', () => {
     expect(anchorAgentComment(comment({ kind: 'file' }), rows)).toMatchObject({ side: 'additions', line: 1 })
     expect(anchorAgentComment(comment({ endLine: 40 }), rows)).toBeNull()
     expect(anchorAgentComment(comment({ kind: 'file' }), [])).toBeNull()
+  })
+
+  it("puts the thread's responses after the agent's text, in order", () => {
+    const response = (author: string, text: string) => ({ id: text, author, text, at: 0 })
+    expect(agentFeedback(comment({})).text).toBe('claude (issue): t')
+    expect(
+      agentFeedback(comment({}), [
+        response('you', ' that is on purpose '),
+        response('codex', 'agreed'),
+        response('you', '  '),
+        response('you', 'see #12'),
+      ]).text,
+    ).toBe('claude (issue): t\n\nMy reply: that is on purpose\n\ncodex replied: agreed\n\nMy reply: see #12')
   })
 })
