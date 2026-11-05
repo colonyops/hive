@@ -64,7 +64,7 @@ import type { DiffLineSelection } from '../../lib/diffSelection'
 import { gitFileName, gitRows, type GitLayout } from '../../lib/gitTree'
 import { isEditableTarget } from '../../lib/isEditableTarget'
 import { useAgentReviews } from '../../stores/useAgentReviews'
-import { useChangesReview, type ChangesComment } from '../../stores/useChangesReview'
+import { useChangesReview, type ChangesComment, type ThreadResponse } from '../../stores/useChangesReview'
 import { useChangesViewed } from '../../stores/useChangesViewed'
 import {
   OpenSessionInEditor,
@@ -578,11 +578,11 @@ function afterRemoving(comment: AgentComment): void {
   else stopWalk()
 }
 
-const agentReplies = computed(() => review.replies(props.sessionId))
+const agentThreads = computed(() => review.threads(props.sessionId))
 
 async function dismissAgent(comment: AgentComment): Promise<void> {
   afterRemoving(comment)
-  review.setReply(props.sessionId, comment.id, '')
+  review.clearThread(props.sessionId, comment.id)
   const failure = await agentStore.dismiss(props.sessionId, comment.id)
   if (failure) toasts.showToast(failure, { severity: 'error' })
 }
@@ -649,7 +649,7 @@ function offerCopy(message: string): void {
             ...(note ? [{ ...noteComment(note), id: '' }] : []),
             ...comments.value,
             ...pendingAgent.value.map((comment) => ({
-              ...agentFeedback(comment, agentReplies.value[comment.id]),
+              ...agentFeedback(comment, agentThreads.value[comment.id]),
               id: comment.id,
             })),
           ]),
@@ -666,11 +666,11 @@ function noteComment(note: string): Omit<ChangesComment, 'id'> {
 
 async function deliver(target: AgentTarget): Promise<string | null> {
   const agents = [...pendingAgent.value]
-  const replies = { ...agentReplies.value }
+  const threads = { ...agentThreads.value }
   const note = sendNote.value.trim()
   const extra = [
     ...(note ? [noteComment(note)] : []),
-    ...agents.map((comment) => agentFeedback(comment, replies[comment.id])),
+    ...agents.map((comment) => agentFeedback(comment, threads[comment.id])),
   ]
   const failure = await review.send(props.sessionId, target.pane, extra)
   if (failure) {
@@ -679,15 +679,22 @@ async function deliver(target: AgentTarget): Promise<string | null> {
   }
   stopWalk()
   sendNote.value = ''
-  void dropSent(agents)
+  void dropSent(agents, threads)
   return null
 }
 
 // The agent has them now, so their rows go, as the user's own comments do. The
 // send has succeeded, so the view does not wait on this to report it.
-async function dropSent(agents: readonly AgentComment[]): Promise<void> {
+async function dropSent(
+  agents: readonly AgentComment[],
+  threads: Readonly<Record<string, readonly ThreadResponse[]>>,
+): Promise<void> {
   for (const comment of agents) {
-    review.setReply(props.sessionId, comment.id, '')
+    review.clearThread(
+      props.sessionId,
+      comment.id,
+      (threads[comment.id] ?? []).map((response) => response.id),
+    )
     const dropped = await agentStore.dismiss(props.sessionId, comment.id)
     if (dropped) log.warn('a sent agent comment stayed in hive.db', { id: comment.id, reason: dropped })
   }
@@ -1057,10 +1064,11 @@ function openInEditor(): void {
           :agent-comments="shownAgentComments"
           :is-agent-stale="isAgentStale"
           :focused-agent="walkId"
-          :agent-replies="agentReplies"
+          :agent-threads="agentThreads"
           @dismiss-agent="(comment) => void dismissAgent(comment)"
           @pick-agent="focusAgent"
-          @reply-agent="(comment, text) => review.setReply(sessionId, comment.id, text)"
+          @respond-agent="(comment, text) => review.respond(sessionId, comment.id, text)"
+          @edit-agent-response="(comment, id, text) => review.editResponse(sessionId, comment.id, id, text)"
         />
         <ChangesOverview
           v-if="overviewOpen"

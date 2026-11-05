@@ -33,6 +33,19 @@ export interface ChangesComment extends DiffSpan {
   text: string
 }
 
+/** The author of a response the user wrote. */
+export const USER_AUTHOR = 'you'
+
+/** One response in the thread under an agent comment, oldest first. */
+export interface ThreadResponse {
+  id: string
+  /** USER_AUTHOR, or the name of the agent that wrote it. */
+  author: string
+  text: string
+  /** Milliseconds since the epoch. */
+  at: number
+}
+
 /** A review that went to the agent, kept in case the agent never acted on it. */
 export interface SentReview {
   id: string
@@ -51,23 +64,58 @@ const MAX_SENT_REVIEWS = 3
 export const useChangesReview = defineStore('changesReview', () => {
   const sessions = useStorage<Record<string, ChangesComment[]>>('hive.changes.comments', {})
   const sent = useStorage<Record<string, SentReview[]>>('hive.changes.sent', {})
-  // Keyed by the agent comment they answer: a reply has no lines of its own and goes
-  // out inside that comment on Send.
-  const agentReplies = useStorage<Record<string, Record<string, string>>>('hive.changes.agentReplies', {})
+  // Keyed by the agent comment they answer: a response has no lines of its own and
+  // goes out inside that comment on Send.
+  const agentThreads = useStorage<Record<string, Record<string, readonly ThreadResponse[]>>>(
+    'hive.changes.agentThreads',
+    {},
+  )
 
-  function replies(sessionId: string): Readonly<Record<string, string>> {
-    return agentReplies.value[sessionId] ?? {}
+  function threads(sessionId: string): Readonly<Record<string, readonly ThreadResponse[]>> {
+    return agentThreads.value[sessionId] ?? {}
   }
 
-  /** Sets the reply to an agent comment; empty text removes it. */
-  function setReply(sessionId: string, commentId: string, text: string): void {
-    const next = { ...replies(sessionId) }
-    if (text.trim()) next[commentId] = text.trim()
-    else delete next[commentId]
-    const rest = { ...agentReplies.value }
-    if (Object.keys(next).length) rest[sessionId] = next
+  function writeThread(sessionId: string, commentId: string, next: readonly ThreadResponse[]): void {
+    const session = { ...threads(sessionId) }
+    if (next.length) session[commentId] = next
+    else delete session[commentId]
+    const rest = { ...agentThreads.value }
+    if (Object.keys(session).length) rest[sessionId] = session
     else delete rest[sessionId]
-    agentReplies.value = rest
+    agentThreads.value = rest
+  }
+
+  function thread(sessionId: string, commentId: string): readonly ThreadResponse[] {
+    return threads(sessionId)[commentId] ?? []
+  }
+
+  /** Adds a response at the end of an agent comment's thread. Blank text adds nothing. */
+  function respond(sessionId: string, commentId: string, text: string, author = USER_AUTHOR): void {
+    if (!text.trim()) return
+    writeThread(sessionId, commentId, [
+      ...thread(sessionId, commentId),
+      { id: crypto.randomUUID(), author, text: text.trim(), at: Date.now() },
+    ])
+  }
+
+  /** Rewrites one response. Blank text removes it. */
+  function editResponse(sessionId: string, commentId: string, responseId: string, text: string): void {
+    writeThread(
+      sessionId,
+      commentId,
+      thread(sessionId, commentId).flatMap((response) =>
+        response.id !== responseId ? [response] : text.trim() ? [{ ...response, text: text.trim() }] : [],
+      ),
+    )
+  }
+
+  /**
+   * Drops an agent comment's thread, or only the responses named in ids: a send
+   * clears what it delivered and keeps a response written while it ran.
+   */
+  function clearThread(sessionId: string, commentId: string, ids?: readonly string[]): void {
+    const keep = ids ? thread(sessionId, commentId).filter((response) => !ids.includes(response.id)) : []
+    writeThread(sessionId, commentId, keep)
   }
 
   function comments(sessionId: string): readonly ChangesComment[] {
@@ -174,9 +222,9 @@ export const useChangesReview = defineStore('changesReview', () => {
     const rest = { ...sent.value }
     delete rest[sessionId]
     sent.value = rest
-    const restReplies = { ...agentReplies.value }
-    delete restReplies[sessionId]
-    agentReplies.value = restReplies
+    const restThreads = { ...agentThreads.value }
+    delete restThreads[sessionId]
+    agentThreads.value = restThreads
   }
 
   return {
@@ -184,8 +232,11 @@ export const useChangesReview = defineStore('changesReview', () => {
     add,
     update,
     remove,
-    replies,
-    setReply,
+    threads,
+    thread,
+    respond,
+    editResponse,
+    clearThread,
     targets,
     send,
     sentReviews,

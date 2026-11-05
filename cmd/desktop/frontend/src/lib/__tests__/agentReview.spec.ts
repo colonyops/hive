@@ -74,11 +74,16 @@ describe('agentReview', () => {
     expect(anchorAgentComment(comment({ kind: 'file' }), [])).toBeNull()
   })
 
-  it("puts the user's reply after the agent's text", () => {
+  it("puts the thread's responses after the agent's text, in order", () => {
+    const response = (author: string, text: string) => ({ id: text, author, text, at: 0 })
     expect(agentFeedback(comment({})).text).toBe('claude (issue): t')
-    expect(agentFeedback(comment({}), '  that is on purpose ').text).toBe(
-      'claude (issue): t\n\nMy reply: that is on purpose',
-    )
-    expect(agentFeedback(comment({}), '  ').text).toBe('claude (issue): t')
+    expect(
+      agentFeedback(comment({}), [
+        response('you', ' that is on purpose '),
+        response('codex', 'agreed'),
+        response('you', '  '),
+        response('you', 'see #12'),
+      ]).text,
+    ).toBe('claude (issue): t\n\nMy reply: that is on purpose\n\ncodex replied: agreed\n\nMy reply: see #12')
   })
 })

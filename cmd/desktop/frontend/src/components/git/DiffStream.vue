@@ -40,7 +40,7 @@ import type { AgentComment, AnchoredAgentComment } from '../../lib/agentReview'
 import type { DiffSearchMatch, DiffSide } from '../../lib/diffReview'
 import { clearSearchPaint, paintSearch, SEARCH_HIGHLIGHT_CSS } from '../../lib/diffSearchPaint'
 import { diffTextSelection, type DiffLineSelection } from '../../lib/diffSelection'
-import type { ChangesComment } from '../../stores/useChangesReview'
+import type { ChangesComment, ThreadResponse } from '../../stores/useChangesReview'
 import type {
   ChangedFile,
   SessionFileDiff,
@@ -66,8 +66,8 @@ const props = defineProps<{
   isAgentStale?: (comment: AgentComment) => boolean
   /** The agent comment the walkthrough is on. */
   focusedAgent?: string | null
-  /** The user's replies to agent comments, by comment id. */
-  agentReplies?: Readonly<Record<string, string>>
+  /** The responses under each agent comment, by comment id. */
+  agentThreads?: Readonly<Record<string, readonly ThreadResponse[]>>
 }>()
 const emit = defineEmits<{
   'update:current': [path: string]
@@ -82,7 +82,9 @@ const emit = defineEmits<{
   'pick-comment': [comment: ChangesComment]
   'dismiss-agent': [comment: AgentComment]
   'pick-agent': [comment: AgentComment]
-  'reply-agent': [comment: AgentComment, text: string]
+  'respond-agent': [comment: AgentComment, text: string]
+  /** Blank text removes the response. */
+  'edit-agent-response': [comment: AgentComment, responseId: string, text: string]
   synced: []
 }>()
 
@@ -602,10 +604,11 @@ watch(
           :comment="agentById.get(id)!"
           :stale="isAgentStale?.(agentById.get(id)!)"
           :focused="focusedAgent === id"
-          :reply="agentReplies?.[id]"
+          :responses="agentThreads?.[id]"
           @dismiss="emit('dismiss-agent', agentById.get(id)!)"
           @pick="emit('pick-agent', agentById.get(id)!)"
-          @reply="emit('reply-agent', agentById.get(id)!, $event)"
+          @respond="emit('respond-agent', agentById.get(id)!, $event)"
+          @edit-response="(responseId, text) => emit('edit-agent-response', agentById.get(id)!, responseId, text)"
         />
       </div>
     </Teleport>

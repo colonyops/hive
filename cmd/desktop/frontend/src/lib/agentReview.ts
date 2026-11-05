@@ -1,5 +1,5 @@
 import { diffSpan, hasDiffLine, type DiffRow, type DiffSide } from './diffReview'
-import type { ChangesComment } from '../stores/useChangesReview'
+import { USER_AUTHOR, type ChangesComment, type ThreadResponse } from '../stores/useChangesReview'
 import type {
   DiffReviewCommentWire,
   DiffReviewWire,
@@ -101,10 +101,22 @@ export function anchorAgentComment(comment: AgentComment, rows: readonly DiffRow
 /**
  * An agent comment as Send delivers it beside the user's own: in the comparison
  * the agent wrote it in, with the author and severity leading its text and the
- * user's reply, if any, after it.
+ * thread's responses after it, in order.
  */
-export function agentFeedback(comment: AgentComment, reply = ''): Omit<ChangesComment, 'id'> {
-  const text = `${comment.author} (${comment.severity}): ${comment.text}`
+export function agentFeedback(
+  comment: AgentComment,
+  responses: readonly ThreadResponse[] = [],
+): Omit<ChangesComment, 'id'> {
+  const lead = `${comment.author} (${comment.severity}): ${comment.text}`
+  const text = [
+    lead,
+    ...responses
+      .filter((response) => response.text.trim())
+      .map(
+        (response) =>
+          `${response.author === USER_AUTHOR ? 'My reply' : `${response.author} replied`}: ${response.text.trim()}`,
+      ),
+  ].join('\n\n')
   return {
     ...(comment.kind === 'file' ? { kind: 'file' as const } : {}),
     path: comment.path,
@@ -115,6 +127,6 @@ export function agentFeedback(comment: AgentComment, reply = ''): Omit<ChangesCo
     quote: comment.quote,
     base: 'branch',
     version: '',
-    text: reply.trim() ? `${text}\n\nMy reply: ${reply.trim()}` : text,
+    text,
   }
 }

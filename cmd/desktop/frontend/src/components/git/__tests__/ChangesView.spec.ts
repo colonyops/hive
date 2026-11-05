@@ -1349,31 +1349,34 @@ describe('ChangesView', () => {
       wrapper.unmount()
     })
 
-    it('sends a reply inside the agent comment it answers, then clears it', async () => {
+    it('sends the thread inside the agent comment it answers, then clears it', async () => {
       mocks.DiffReviews.mockResolvedValue([agentReview([{}])])
       mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
       mocks.SendChanges.mockResolvedValue(undefined)
-      useChangesReview().setReply('s1', 'c1', 'the nil check is upstream')
+      useChangesReview().respond('s1', 'c1', 'the nil check is upstream')
+      useChangesReview().respond('s1', 'c1', 'and it has a test')
       const wrapper = await mountView()
       expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
 
       await wrapper.get(testid('changes-send')).trigger('click')
       await flushPromises()
       expect(mocks.SendChanges).toHaveBeenCalledWith('s1', '%1', [
-        expect.objectContaining({ text: 'claude (issue): comment 1\n\nMy reply: the nil check is upstream' }),
+        expect.objectContaining({
+          text: 'claude (issue): comment 1\n\nMy reply: the nil check is upstream\n\nMy reply: and it has a test',
+        }),
       ])
-      expect(useChangesReview().replies('s1')).toEqual({})
+      expect(useChangesReview().threads('s1')).toEqual({})
       wrapper.unmount()
     })
 
-    it('drops the reply when its agent comment is dismissed', async () => {
+    it('drops the thread when its agent comment is dismissed', async () => {
       mocks.DiffReviews.mockResolvedValue([agentReview([{}])])
-      useChangesReview().setReply('s1', 'c1', 'context')
+      useChangesReview().respond('s1', 'c1', 'context')
       const wrapper = await mountView()
       await press('w')
       await press('d')
       expect(mocks.DismissDiffComment).toHaveBeenCalledWith('c1')
-      expect(useChangesReview().replies('s1')).toEqual({})
+      expect(useChangesReview().threads('s1')).toEqual({})
       wrapper.unmount()
     })
 
