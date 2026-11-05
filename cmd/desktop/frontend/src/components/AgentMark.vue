@@ -10,7 +10,8 @@ import type { AgentIconID } from '../lib/agentIcon'
 import { useTerminalAgentIcons } from '../stores/useTerminalAgentIcons'
 
 /** With no agent, the mark is a generic one: an author Hive does not recognise. */
-const props = defineProps<{ agent?: AgentIconID }>()
+const props = defineProps<{ agent?: AgentIconID; size?: 'sm' | 'md' }>()
+const sizeClass = computed(() => (props.size === 'md' ? 'size-4.5' : 'size-3.5'))
 
 const MARKS: Partial<Record<AgentIconID, string>> = { claude: claudeCodeMark, pi: piMark }
 // Codex's vendor mark puts the glyph on a white tile, which reads as a hole in a
@@ -42,7 +43,8 @@ const monochromeMark = computed(() => (monochrome.value && props.agent ? MONOCHR
     :viewBox="monochromeMark.viewBox"
     fill="currentColor"
     aria-hidden="true"
-    class="size-3.5 shrink-0"
+    :class="sizeClass"
+    class="shrink-0"
     :data-agent-icon="agent"
     data-monochrome
   >
@@ -52,7 +54,8 @@ const monochromeMark = computed(() => (monochrome.value && props.agent ? MONOCHR
     v-else-if="agent && GRADIENT_GLYPHS[agent] && MONOCHROME_MARKS[agent]"
     :viewBox="MONOCHROME_MARKS[agent]!.viewBox"
     aria-hidden="true"
-    class="size-3.5 shrink-0"
+    :class="sizeClass"
+    class="shrink-0"
     :data-agent-icon="agent"
   >
     <defs>
@@ -69,9 +72,10 @@ const monochromeMark = computed(() => (monochrome.value && props.agent ? MONOCHR
     :src="MARKS[agent]"
     alt=""
     draggable="false"
-    class="size-3.5 shrink-0 rounded-sm"
+    :class="sizeClass"
+    class="shrink-0 rounded-sm"
     :data-agent-icon="agent"
   />
-  <AgentIcon v-else-if="agent" :id="agent" class="size-3.5 shrink-0" />
-  <IconSparkles v-else class="size-3.5 shrink-0" aria-hidden="true" data-agent-icon="" />
+  <AgentIcon v-else-if="agent" :id="agent" :class="sizeClass" class="shrink-0" />
+  <IconSparkles v-else :class="sizeClass" class="shrink-0" aria-hidden="true" data-agent-icon="" />
 </template>
