@@ -134,9 +134,9 @@ The page gets `window.hive`:
 
 | Call | What it does |
 | --- | --- |
-| `hive.exec(command, options)` | Runs a command and returns `{stdout, stderr, code}` |
+| `hive.exec(command, options)` | Runs a command and returns `{stdout, stderr, code}`. Commands get the environment Hive read from your login shell at startup. If that read failed, they get the app's own `PATH`, and the app log says so |
 | `hive.spawn(command, options)` | Starts a long-running process with `onStdout`, `onStderr`, and `onExit` callbacks, and returns `{write, kill}` |
-| `hive.readFile(path)`, `hive.writeFile(path, text)` | Reads and writes files anywhere |
+| `hive.readFile(path)`, `hive.writeFile(path, text)` | Reads and writes files anywhere. `writeFile` creates missing parent directories |
 | `hive.terminal(command)` | Opens the pop-up terminal |
 | `hive.toast(message, options)` | Shows a toast |
 | `hive.copy(text)` | Puts text on the clipboard |
@@ -145,7 +145,7 @@ The page gets `window.hive`:
 | `hive.context()` | Returns the applet's directory, working directory, and session |
 | `hive.close()` | Closes the applet's pop-up or tab. In a title bar page, closes its dropdown |
 | `hive.open()` | Opens the applet: as a tab if its file lists one and a session is on screen, otherwise as a pop-up if it lists one. Closes its pop-up if that is already open |
-| `hive.commands()`, `hive.command(id)` | Lists Hive's commands with `{id, title, group, keys}`, and runs one. An unknown id rejects |
+| `hive.commands()`, `hive.command(id)` | Lists Hive's commands with `{id, title, group, keys}`, and runs one. An unknown id rejects. A command takes no arguments: `session.new` opens an empty dialog |
 | `hive.setCommands(rows)` | Replaces the palette rows this page added |
 | `hive.on('command', fn)` | Reports the id of the applet's command or row that was run |
 | `hive.openPalette(query)` | Opens the command palette on a query. `+`, `@` or `>` first picks a tab |
