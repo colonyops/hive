@@ -71,10 +71,10 @@ const tree = usePathTree({
   defaultOpen: true,
   gitStatus,
   renderRowDecoration: decorate,
+  // A folder or a multiple selection is not a file on screen.
   onSelectionChange(paths) {
-    const file = paths.length === 1 ? byTreePath.value.get(paths[0]) : undefined
-    if (file && file.path !== props.selected) emit('pick', file.path)
-    else if (!file) tree.selectOnly(props.selected && gitTreePath(props.selected))
+    if (paths.length !== 1 || !byTreePath.value.has(paths[0]))
+      tree.selectOnly(props.selected && gitTreePath(props.selected))
   },
   composition: {
     contextMenu: {
@@ -108,14 +108,15 @@ watch(
   { immediate: true },
 )
 
-// Picking the file on screen again turns off showing it alone, and a click on
-// a row that is already selected changes no selection, so the tree reports nothing.
+// A pick comes from the click, not the selection: the tree selects a row
+// before its click, and the file on screen picked again means something
+// (it stops showing alone), but selects nothing new.
 function onClick(event: MouseEvent): void {
   const row = event
     .composedPath()
     .find((node): node is HTMLElement => node instanceof HTMLElement && node.getAttribute('role') === 'treeitem')
   const file = row?.dataset.itemPath ? byTreePath.value.get(row.dataset.itemPath) : undefined
-  if (file && file.path === props.selected) emit('pick', file.path)
+  if (file) emit('pick', file.path)
 }
 
 function onKeydown(event: KeyboardEvent): void {
