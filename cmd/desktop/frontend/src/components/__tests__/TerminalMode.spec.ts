@@ -1,5 +1,6 @@
 import { moveTab, openTab, panelsOf } from '../../lib/panelLayout'
 import { usePanelLayouts } from '../../stores/usePanelLayouts'
+import { useSessionTabHost } from '../../stores/useSessionTabHost'
 import { viewTab } from '../terminal/panelViews'
 import { useTerminalAgentIcons } from '../../stores/useTerminalAgentIcons'
 import { flushPromises, mount, type DOMWrapper } from '@vue/test-utils'
@@ -1008,6 +1009,19 @@ describe('TerminalMode', () => {
   })
 
   // ⌘N counts the strip as it shows, so a view between windows takes a digit.
+  it('opens the attached session’s views from outside the mode', async () => {
+    const { wrapper } = await mountAvailable()
+    await sessionRows(wrapper)[0].trigger('click')
+    await flushPromises()
+    const host = useSessionTabHost()
+    expect(host.views.value).toEqual(expect.arrayContaining(['diff', 'tasks']))
+
+    host.open('diff')
+    await flushPromises()
+    const panel = panelsOf(usePanelLayouts().layoutOf('2'))[0]
+    expect(panel.activeTab).toBe('diff')
+  })
+
   it('jumps to a view tab by position, counting it among the windows', async () => {
     const { wrapper, session } = await mountAvailable()
     await sessionRows(wrapper)[0].trigger('click')

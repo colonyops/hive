@@ -2,6 +2,7 @@ import { computed, ref, type Component, type ComputedRef } from 'vue'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
+import IconFileDiff from '~icons/lucide/file-diff'
 import IconFileSearch from '~icons/lucide/file-search'
 import IconArrowUp from '~icons/lucide/arrow-up'
 import IconFolderTree from '~icons/lucide/folder-tree'
@@ -57,7 +58,8 @@ import type { CommandScope } from '../palette/scopes'
 // panel, `review` commands while a Drive document with comments is on screen,
 // `any-terminal` commands wherever an emulator is
 // drawn — an attached Code session, the Agents area, or the pop-up panel over
-// any view; `global` commands run anywhere.
+// any view; `session` commands wherever a session's tabs are on screen, a Code
+// session or an open chat; `global` commands run anywhere.
 // `defaultCombos` are canonical combo strings (see useKeybindings.comboFromEvent)
 // — an empty array means "bindable, but unbound by default".
 //
@@ -85,6 +87,7 @@ export type CommandContext =
   | 'terminal-session'
   | 'terminal-pane'
   | 'any-terminal'
+  | 'session'
   | 'agents'
   | 'sidebar'
   | 'panel'
@@ -160,6 +163,29 @@ const windowJumpCommands: BindableCommand[] = Array.from({ length: DIRECT_WINDOW
     piercesPane: true,
   }
 })
+
+/** The command that opens a session view, by the view's wire name. Written into settings.yaml, so permanent. */
+export function sessionViewCommandID(wire: string): string {
+  return `session.open-${wire}`
+}
+
+// Unbound: the obvious chords already belong to the app-wide Drive and Tasks
+// overlays and the pane splits. Palette-hidden because the session on screen
+// contributes a row per view it offers, which a session without the view hides.
+const sessionViewCommands: BindableCommand[] = [
+  { wire: 'drive', title: 'Open Drive tab', icon: IconFolderTree, keywords: ['drive', 'documents', 'docs', 'canvas'] },
+  { wire: 'diff', title: 'Open Diff tab', icon: IconFileDiff, keywords: ['diff', 'changes', 'review', 'git'] },
+  { wire: 'tasks', title: 'Open Tasks tab', icon: IconListTodo, keywords: ['tasks', 'honeycomb', 'hc', 'epics'] },
+].map(({ wire, title, icon, keywords }) => ({
+  id: sessionViewCommandID(wire),
+  title,
+  group: 'Session',
+  keywords: ['session', 'tab', 'view', 'open', ...keywords],
+  icon,
+  defaultCombos: [],
+  context: 'session',
+  paletteHidden: true,
+}))
 
 export const commandCatalog: BindableCommand[] = [
   {
@@ -848,6 +874,7 @@ export const commandCatalog: BindableCommand[] = [
     piercesPane: true,
     scope: 'goto',
   },
+  ...sessionViewCommands,
   {
     id: 'window.hide',
     title: 'Hide window',

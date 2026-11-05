@@ -28,6 +28,7 @@ import DrivePage from './drive/DrivePage.vue'
 import PanelLayoutHost from './panels/PanelLayoutHost.vue'
 import AppletTabsLayer from './applets/AppletTabsLayer.vue'
 import { useAppletTabHost } from './applets/useAppletTabHost'
+import { useSessionTabHost } from './panels/useSessionTabHost'
 import SessionPanelPicker from './terminal/SessionPanelPicker.vue'
 import SessionTabIcon from './terminal/SessionTabIcon.vue'
 import ModeSkeleton from './ModeSkeleton.vue'
@@ -213,6 +214,13 @@ useAppletTabHost({
   active: () => props.active && !!panels.key.value,
   apply: (rule) => panels.apply(rule),
   sessionSlug: () => chatSlug.value,
+})
+
+useSessionTabHost({
+  active: () => props.active && !!panels.key.value,
+  apply: (rule) => panels.apply(rule),
+  sessionName: () => openChat.value?.name || 'Chat',
+  views: () => chatViews,
 })
 
 function tabAttention(tab: PanelTab): boolean {

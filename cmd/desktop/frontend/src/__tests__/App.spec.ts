@@ -24,11 +24,12 @@ import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import type { AgentWorkspacesClient } from '../lib/agentWorkspacesClient'
 import { useTasks } from '../stores/useTasks'
+import { useSessionTabHost, type SessionTabHost } from '../stores/useSessionTabHost'
 import { applicationSettingsSections, createAppRouter } from '../router'
 import TerminalMode from '../components/TerminalMode.vue'
 import DrivePage from '../components/drive/DrivePage.vue'
 import SettingsView from '../components/SettingsView.vue'
-import { viewTab, withDocsScope } from '../components/terminal/panelViews'
+import { viewTab, withDocsScope, type SessionViewKind } from '../components/terminal/panelViews'
 import { newPanelLayout, openTab } from '../lib/panelLayout'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { setTerminalTreeHandles, type TerminalTreeHandles } from '../lib/terminalTree'
@@ -2041,6 +2042,56 @@ describe('App', () => {
       expect(focusFilter).toHaveBeenCalled()
 
       setTerminalTreeHandles(null)
+      wrapper.unmount()
+    })
+  })
+
+  // Stands in for the session area on screen, so the rows and chords are checked
+  // against the views it offers rather than against TerminalMode's attach.
+  describe('session view commands', () => {
+    function stubSessionTabHost(views: readonly SessionViewKind[]) {
+      const host: SessionTabHost = { sessionName: () => 'fix-parser', views: () => views, open: vi.fn() }
+      useSessionTabHost().setHost(host, true)
+      return host
+    }
+
+    it('offers a row per view the session on screen offers, under its name', async () => {
+      const { wrapper } = await mountAppWithRouter()
+      const host = stubSessionTabHost(['diff', 'tasks'])
+      useKeybindings().addBinding('session.open-diff', 'alt+d')
+
+      const { results, query } = useCommandPalette()
+      query.value = ''
+      const ids = results.value.map((cmd) => cmd.id)
+      expect(ids).toEqual(expect.arrayContaining(['session:view:diff', 'session:view:tasks']))
+      expect(ids).not.toContain('session:view:docs')
+      expect(ids.filter((id) => id.startsWith('session.open-'))).toEqual([])
+      const diff = results.value.find((cmd) => cmd.id === 'session:view:diff')
+      expect(diff?.title).toBe('Open Diff tab')
+      expect(diff?.group).toBe('fix-parser')
+      expect(diff?.hint).toBe(formatCombo('alt+d'))
+
+      await diff!.run()
+      expect(host.open).toHaveBeenCalledWith('diff')
+
+      useSessionTabHost().setHost(host, false)
+      wrapper.unmount()
+    })
+
+    it('opens a view from its chord only where the session offers it', async () => {
+      const { wrapper } = await mountAppWithRouter()
+      const host = stubSessionTabHost(['docs'])
+      const { addBinding } = useKeybindings()
+      addBinding('session.open-drive', 'alt+v')
+      addBinding('session.open-diff', 'alt+d')
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', altKey: true, bubbles: true, cancelable: true }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', altKey: true, bubbles: true, cancelable: true }))
+
+      expect(host.open).toHaveBeenCalledTimes(1)
+      expect(host.open).toHaveBeenCalledWith('docs')
+
+      useSessionTabHost().setHost(host, false)
       wrapper.unmount()
     })
   })

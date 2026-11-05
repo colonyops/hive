@@ -1,4 +1,4 @@
-import { nextTick, onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import IconInfo from '~icons/lucide/info'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPencil from '~icons/lucide/pencil'
@@ -18,6 +18,7 @@ import { paneMayAutoFocus, setTerminalTreeHandles } from '../../lib/terminalTree
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { MenuActionEntry, MenuEntry } from '@hive/ui/types/menu'
 import type { TerminalModeContext } from './terminalModeContext'
+import { focusShownTab } from '../panels/panelTabRow'
 import { windowKey } from './useTreeKeyboardNav'
 
 function actionsOf(entries: MenuEntry[]): MenuActionEntry[] {
@@ -193,16 +194,7 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
       return
     }
     panels.apply((layout) => focusTab(layout, entry.tabId))
-    // A click on the tab would move the keyboard onto it. Left alone, it stays
-    // in the terminal the view now hides, and keys go to that terminal.
-    void nextTick(() => {
-      const focused = document.activeElement
-      if (focused instanceof HTMLElement && focused.getClientRects().length > 0) return
-      const tabButtons = document.querySelectorAll<HTMLElement>(
-        `[data-panel-tab][data-tab-id="${CSS.escape(entry.tabId)}"] [role="tab"]`,
-      )
-      ;[...tabButtons].find((button) => button.getClientRects().length > 0)?.focus()
-    })
+    focusShownTab(entry.tabId)
   }
 
   // Wrapping, where the tree's walk clamps: a session's windows are a ring in

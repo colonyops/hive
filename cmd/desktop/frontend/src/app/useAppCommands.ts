@@ -11,6 +11,7 @@ import {
   appletID,
   launcherActionID,
   launcherCommandID,
+  sessionViewCommandID,
   terminalWindowPosition,
   type CommandContext,
 } from '../keybindings/catalog'
@@ -30,9 +31,11 @@ import {
   stepTerminalWindow,
   zoomTerminalPane,
 } from '../lib/terminalTree'
+import { SESSION_VIEWS } from '../components/terminal/panelViews'
 import { useApplets } from '../stores/useApplets'
 import { useDriveReview } from '../stores/useDriveReview'
 import { usePopupTerminal } from '../stores/usePopupTerminal'
+import { useSessionTabHost } from '../stores/useSessionTabHost'
 import { useScaleTarget } from '../composables/useScaleTarget'
 import { surfaces, useSurfaceScale } from '../stores/useSurfaceScale'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
@@ -75,6 +78,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   // user's home (ADR ephemeral-popup-terminals).
   const popupTerminal = usePopupTerminal()
   const review = useDriveReview()
+  const sessionTabs = useSessionTabHost()
   const popupTerminalMounted = ref(false)
 
   function togglePopupTerminal(): void {
@@ -195,6 +199,9 @@ export function useAppCommands(deps: AppCommandDeps) {
     'history.forward': () => nav.router.forward(),
     'palette.keys': () => palette.openWithScope('keys'),
     'palette.drive': () => palette.openWithScope('drive'),
+    ...Object.fromEntries(
+      SESSION_VIEWS.map((view) => [sessionViewCommandID(view.wire), () => sessionTabs.open(view.kind)]),
+    ),
   }
 
   // Launchers and the numbered window jumps are one implementation each,
@@ -255,6 +262,8 @@ export function useAppCommands(deps: AppCommandDeps) {
         return (
           (terminalActive.value && !!onScreenSessionSlug.value) || agentsActive.value || popupTerminal.visible.value
         )
+      case 'session':
+        return sessionTabs.views.value.length > 0
       case 'global':
         return true
     }

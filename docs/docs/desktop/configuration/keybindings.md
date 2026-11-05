@@ -65,6 +65,15 @@ keybindings:
 
 While an applet's pop-up is open, only <kbd>⌘K</kbd>, the key that closes it, and that applet's commands run. A page can keep a shortcut for itself, so one it uses may not reach Hive.
 
+## Session tabs
+
+**Open Drive tab** (`session.open-drive`), **Open Diff tab** (`session.open-diff`), and **Open Tasks tab** (`session.open-tasks`) open that tab in the session on screen, in Code or in an open chat, or bring it forward. They have no default key. In the palette they appear under the session's name, only for the tabs that session offers: a chat has Drive but no Diff or Tasks. **Toggle Drive** and **Toggle Tasks** are different commands that open the app-wide views.
+
+```yaml
+keybindings:
+  session.open-diff: [mod+alt+d]
+```
+
 ## Terminal shortcuts
 
 A focused terminal sends most keys to the running program. A shortcut works from a terminal when it starts with Command on macOS, or with Control on Linux, where you press it with Control+Shift from inside the terminal. Shortcuts without one of those, such as <kbd>g</kbd> then <kbd>i</kbd>, only work outside a terminal, so typing `git` always reaches the shell.
