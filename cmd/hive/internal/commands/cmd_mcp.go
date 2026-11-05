@@ -172,13 +172,10 @@ func dropCaller(schema *jsonschema.Schema) {
 
 func forwardHandler(client *DesktopClient, caller string, info ops.Info, log zerolog.Logger) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		args := map[string]any{}
-		if len(req.Params.Arguments) > 0 {
-			if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
-				return refusal(ops.KindInvalid, fmt.Sprintf("arguments are not a JSON object: %v", err)), nil
-			}
+		args, err := forwardedArgs(req.Params.Arguments, info, caller)
+		if err != nil {
+			return refusal(ops.KindInvalid, err.Error()), nil
 		}
-		args[ops.CallerField] = caller
 
 		res, err := client.Call(ctx, info.Toolset.MCPPath, info.ToolName, args)
 		if err == nil {
@@ -196,6 +193,24 @@ func forwardHandler(client *DesktopClient, caller string, info ops.Info, log zer
 		log.Warn().Err(err).Str("tool", info.ToolName).Msg("desktop call failed")
 		return nil, err
 	}
+}
+
+// forwardedArgs sets caller on an operation that declares it and removes it
+// from one that does not. The desktop validates against a schema that rejects
+// unknown fields, and an agent may still send caller out of habit.
+func forwardedArgs(raw json.RawMessage, info ops.Info, caller string) (map[string]any, error) {
+	args := map[string]any{}
+	if len(raw) > 0 && string(raw) != "null" {
+		if err := json.Unmarshal(raw, &args); err != nil {
+			return nil, fmt.Errorf("arguments are not a JSON object: %w", err)
+		}
+	}
+	if info.Caller == ops.CallerRuleNone {
+		delete(args, ops.CallerField)
+	} else {
+		args[ops.CallerField] = caller
+	}
+	return args, nil
 }
 
 func refusal(kind ops.Kind, msg string) *mcp.CallToolResult {
