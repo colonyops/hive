@@ -14,7 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/ops"
+	"github.com/colonyops/hive/internal/ops/actions"
 	"github.com/colonyops/hive/internal/ops/catalog"
+	"github.com/colonyops/hive/internal/ops/layout"
+	"github.com/colonyops/hive/internal/ops/mcpops"
 	"github.com/colonyops/hive/internal/platform/desktopendpoint"
 )
 
@@ -25,30 +28,40 @@ type fakeDesktop struct {
 	calls map[string][]recordedCall
 }
 
-// newFakeDesktop serves one fake tool at /mcp and one at /mcp/drive.
+// newFakeDesktop mounts applet_list at /mcp and tab_open at /mcp/drive with
+// the catalog specs, so a call validates against the schema the desktop
+// enforces.
 func newFakeDesktop(t *testing.T) *fakeDesktop {
 	t.Helper()
 	f := &fakeDesktop{calls: map[string][]recordedCall{}}
 	mux := http.NewServeMux()
-	for path, tool := range map[string]string{"/mcp": "inbox_list", "/mcp/drive": "tab_open"} {
-		server := mcp.NewServer(&mcp.Implementation{Name: "fake", Version: "test"}, nil)
-		server.AddTool(&mcp.Tool{Name: tool, InputSchema: map[string]any{"type": "object"}},
-			func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				args := map[string]any{}
-				require.NoError(t, json.Unmarshal(req.Params.Arguments, &args))
-				f.mu.Lock()
-				f.calls[path] = append(f.calls[path], recordedCall{Tool: req.Params.Name, Args: args})
-				f.mu.Unlock()
-				return &mcp.CallToolResult{
-					Content:           []mcp.Content{&mcp.TextContent{Text: `{"ok":true}`}},
-					StructuredContent: map[string]any{"ok": true, "path": path},
-				}, nil
-			})
-		mux.Handle(path, mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
-	}
+
+	root := mcp.NewServer(&mcp.Implementation{Name: "fake", Version: "test"}, nil)
+	mountRecorded(t, f, root, "/mcp", actions.AppletList)
+	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return root }, nil))
+
+	drive := mcp.NewServer(&mcp.Implementation{Name: "fake", Version: "test"}, nil)
+	mountRecorded(t, f, drive, "/mcp/drive", layout.TabOpen)
+	mux.Handle("/mcp/drive", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return drive }, nil))
+
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
 	return f
+}
+
+func mountRecorded[In any](t *testing.T, f *fakeDesktop, srv *mcp.Server, path string, spec ops.Spec[In]) {
+	t.Helper()
+	tool := spec.Info().ToolName
+	mcpops.Mount(srv, spec, func(_ context.Context, in In) (map[string]any, error) {
+		raw, err := json.Marshal(in)
+		require.NoError(t, err)
+		args := map[string]any{}
+		require.NoError(t, json.Unmarshal(raw, &args))
+		f.mu.Lock()
+		f.calls[path] = append(f.calls[path], recordedCall{Tool: tool, Args: args})
+		f.mu.Unlock()
+		return map[string]any{"ok": true, "path": path}, nil
+	}, func(err error) error { return err })
 }
 
 func connectServe(t *testing.T, dataDir string, toolsets ...string) *mcp.ClientSession {
@@ -107,29 +120,52 @@ func TestMCPServeDefaultsToEveryToolset(t *testing.T) {
 	assert.Len(t, listed.Tools, desktopOps)
 }
 
-func TestMCPServeForwardsWithCaller(t *testing.T) {
+func TestMCPServeForwardsCallerOnlyWhereDeclared(t *testing.T) {
 	fake := newFakeDesktop(t)
 	dataDir := t.TempDir()
 	require.NoError(t, desktopendpoint.Write(dataDir, desktopendpoint.Endpoint{URL: fake.srv.URL, PID: 1}))
-	cs := connectServe(t, dataDir, "layout", "inbox")
+	cs := connectServe(t, dataDir, "layout", "actions")
 
 	res, err := cs.CallTool(t.Context(), &mcp.CallToolParams{
 		Name:      "tab_open",
 		Arguments: map[string]any{"view": "drive", "caller": "spoofed"},
 	})
 	require.NoError(t, err)
-	require.False(t, res.IsError)
+	require.False(t, res.IsError, "%v", res.Content)
 	assert.Equal(t, map[string]any{"ok": true, "path": "/mcp/drive"}, res.StructuredContent)
 
-	res, err = cs.CallTool(t.Context(), &mcp.CallToolParams{Name: "inbox_list", Arguments: map[string]any{}})
-	require.NoError(t, err)
-	require.False(t, res.IsError)
-	assert.Equal(t, map[string]any{"ok": true, "path": "/mcp"}, res.StructuredContent)
+	for _, args := range []map[string]any{{}, {"caller": "habit"}} {
+		res, err = cs.CallTool(t.Context(), &mcp.CallToolParams{Name: "applet_list", Arguments: args})
+		require.NoError(t, err)
+		require.False(t, res.IsError, "%v", res.Content)
+		assert.Equal(t, map[string]any{"ok": true, "path": "/mcp"}, res.StructuredContent)
+	}
 
 	fake.mu.Lock()
 	defer fake.mu.Unlock()
-	assert.Equal(t, []recordedCall{{Tool: "tab_open", Args: map[string]any{"view": "drive", "caller": "agent-1"}}}, fake.calls["/mcp/drive"])
-	assert.Equal(t, []recordedCall{{Tool: "inbox_list", Args: map[string]any{"caller": "agent-1"}}}, fake.calls["/mcp"])
+	require.Len(t, fake.calls["/mcp/drive"], 1)
+	assert.Equal(t, "agent-1", fake.calls["/mcp/drive"][0].Args["caller"])
+	assert.Equal(t, []recordedCall{{Tool: "applet_list", Args: map[string]any{}}, {Tool: "applet_list", Args: map[string]any{}}}, fake.calls["/mcp"])
+}
+
+func TestForwardedArgsMatchEachOpsCallerField(t *testing.T) {
+	for _, op := range catalog.All() {
+		info := op.Info()
+		if info.Owner != ops.OwnerDesktop {
+			continue
+		}
+		schema, err := op.InputSchema()
+		require.NoError(t, err)
+		_, declared := schema.Properties[ops.CallerField]
+
+		args, err := forwardedArgs(json.RawMessage(`{"caller":"spoofed"}`), info, "agent-1")
+		require.NoError(t, err)
+		got, sent := args[ops.CallerField]
+		assert.Equal(t, declared, sent, info.ToolName)
+		if declared {
+			assert.Equal(t, "agent-1", got, info.ToolName)
+		}
+	}
 }
 
 func TestMCPServeDesktopNotRunning(t *testing.T) {
