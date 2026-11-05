@@ -270,6 +270,39 @@ func TestManifestProviderDownload(t *testing.T) {
 	require.Equal(t, int64(len(ms.zipBody)), lastTotal)
 }
 
+// Manifests name GitHub release assets, which GitHub serves as a redirect to
+// another host. Builds already installed must follow it with no app update.
+func TestManifestProviderDownloadFollowsCrossHostRedirect(t *testing.T) {
+	body := []byte("PK\x03\x04 fake zip")
+	assets := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(assets.Close)
+
+	sum := sha256.Sum256(body)
+	mux := http.NewServeMux()
+	releases := httptest.NewServer(mux)
+	t.Cleanup(releases.Close)
+	mux.HandleFunc("/desktop/channels/stable/latest.json", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprintf(w, `{"channel":"stable","version":"1.4.0","pub_date":"2026-08-01T00:00:00Z",
+  "platforms":{"darwin-universal":{"url":"%s/colonyops/hive/releases/download/v1.4.0/Hive-1.4.0-darwin-universal.zip","sha256":%q,"size":%d}}}`,
+			releases.URL, hex.EncodeToString(sum[:]), len(body))
+	})
+	mux.HandleFunc("/colonyops/hive/releases/download/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, assets.URL+"/asset?sig=x", http.StatusFound)
+	})
+
+	p := NewManifestProvider(releases.URL, settings.ChannelStable)
+	rel, err := p.Check(context.Background(), darwinCheck("1.3.0"))
+	require.NoError(t, err)
+	require.NotNil(t, rel)
+	require.Equal(t, "Hive-1.4.0-darwin-universal.zip", rel.Artifact.Filename)
+
+	var dst bytes.Buffer
+	require.NoError(t, p.Download(context.Background(), rel, &dst, nil))
+	require.Equal(t, body, dst.Bytes())
+}
+
 func TestManifestProviderDownloadMissingMetadata(t *testing.T) {
 	p := NewManifestProvider("https://example.invalid", settings.ChannelStable)
 	err := p.Download(context.Background(), &updater.Release{}, &bytes.Buffer{}, nil)

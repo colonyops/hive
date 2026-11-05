@@ -95,8 +95,8 @@ func newReleaseCommand() *cli.Command {
 				Usage:     "build, sign, notarize, and publish a release",
 				ArgsUsage: "<version>",
 				Description: "Public publishing requires a clean current main or a matching release tag on main; the command builds the universal macOS app, signs it, " +
-					"notarizes and staples it, packages and verifies it, uploads immutable artifacts to R2, writes every desktop manifest, verifies the public artifact, " +
-					"then tags the release and dispatches the CLI's publish workflow. Run this through `mise run release:publish -- <version>` so mise loads credentials.",
+					"notarizes and staples it, packages and verifies it, tags the release, attaches the desktop artifacts to its GitHub release, writes every desktop manifest to R2, " +
+					"verifies the public artifacts, then dispatches the CLI's publish workflow. Run this through `mise run release:publish -- <version>` so mise loads credentials.",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "skip-notarize", Usage: "skip notarization and stapling (requires --skip-upload)"},
 					&cli.BoolFlag{Name: "skip-upload", Usage: "build and package without publishing"},
@@ -120,10 +120,10 @@ func newReleaseCommand() *cli.Command {
 				Name:      "github",
 				Usage:     "push the release tag and dispatch the publish workflow",
 				ArgsUsage: "<version>",
-				Description: "Pushes the lightweight v<version> tag and dispatches publish.yml, which builds the CLI with GoReleaser, creates the GitHub release " +
-					"with every program's notes, and deploys the site. It waits for the run. Desktop downloads still come from R2 (decision 0003). " +
-					"Safe to re-run for a release whose GitHub step failed after the R2 upload: it reuses the tag, watches a run still in progress, " +
-					"reports one that succeeded, and for a run that failed after it created the release names the `gh run rerun` to run instead. " +
+				Description: "Pushes the lightweight v<version> tag and dispatches publish.yml, which builds the CLI with GoReleaser, attaches its archives " +
+					"to the release the desktop publish created, and deploys the site. It waits for the run. " +
+					"Safe to re-run for a release whose CLI half failed after the desktop went live: it reuses the tag, watches a run still in progress, " +
+					"reports one that succeeded, and for a run that failed after it attached the CLI archives names the `gh run rerun` to run instead. " +
 					"Requires an authenticated gh.",
 				Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 1 {
@@ -210,7 +210,7 @@ func newReleaseCommand() *cli.Command {
 							if err != nil {
 								return fmt.Errorf("invalid version %q: %w", cmd.Args().First(), err)
 							}
-							body, err := releaseNotesBody(version, downloadBaseURL())
+							body, err := releaseNotesBody(version)
 							if err != nil {
 								return err
 							}

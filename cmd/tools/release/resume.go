@@ -26,7 +26,7 @@ func (p *publisher) resumePublish(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	platforms, err := platformManifests(p.options.downloadBase, "desktop/releases/"+p.options.version.String(), artifacts)
+	platforms, err := platformManifests(releaseAssetBase(p.options.version), artifacts)
 	if err != nil {
 		return err
 	}

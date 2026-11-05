@@ -1,6 +1,6 @@
 # Distribution Reference
 
-Concrete infrastructure and runbook for shipping the desktop app, and the one release run that ships it with the hive CLI. Decisions behind this: [r2-manifest-distribution](decisions/2026-07-23-r2-manifest-distribution.md) (R2 + manifests), [release-channels](decisions/2026-07-23-release-channels.md) (the manifest layout), [every-program-ships-under-one-shared-version](decisions/2026-10-01-every-program-ships-under-one-shared-version.md) (one version, one release run), [problem-reports-are-github-issues](decisions/2026-09-14-problem-reports-are-github-issues.md) (problem reporting).
+Concrete infrastructure and runbook for shipping the desktop app, and the one release run that ships it with the hive CLI. Decisions behind this: [r2-manifest-distribution](decisions/2026-07-23-r2-manifest-distribution.md) (GitHub release assets + R2 manifests), [release-channels](decisions/2026-07-23-release-channels.md) (the manifest layout), [every-program-ships-under-one-shared-version](decisions/2026-10-01-every-program-ships-under-one-shared-version.md) (one version, one release run), [problem-reports-are-github-issues](decisions/2026-09-14-problem-reports-are-github-issues.md) (problem reporting).
 
 ## Infrastructure
 
@@ -9,24 +9,31 @@ Concrete infrastructure and runbook for shipping the desktop app, and the one re
 | Cloudflare account | `bce6b95e4e84d92b1972d3b55b6cfaf6` |
 | Zone | `hivedesktop.com` (`654b5078db773efcbf7c73b7c67eae89`) |
 | Landing page | GitHub Pages → https://hivedesktop.com (source: `docs/`, deployed by `.github/workflows/deploy-site.yml`) |
-| Artifact bucket | R2 `hive-desktop-releases` (ENAM, Standard) |
-| Download domain | https://dl.hivedesktop.com (bucket custom domain, public, TLS ≥ 1.2) |
+| Artifacts | Assets of the GitHub release `v<version>` on `colonyops/hive` |
+| Manifest bucket | R2 `hive-desktop-releases` (ENAM, Standard) |
+| Manifest domain | https://dl.hivedesktop.com (bucket custom domain, public, TLS ≥ 1.2) |
 | Liveness probe | https://dl.hivedesktop.com/healthcheck.txt |
 
-## Bucket layout
+## Release layout
 
 ```
-desktop/
-├── releases/<full-semver>/                  # immutable
-│   ├── Hive-<ver>-darwin-universal.dmg
-│   ├── Hive-<ver>-darwin-universal.zip
-│   ├── Hive-<ver>-linux-amd64.tar.gz
-│   ├── Hive-<ver>-linux-arm64.tar.gz
-│   └── SHA256SUMS
-└── channels/{stable,beta,dev}/latest.json   # mutable pointers; every release writes all three
+GitHub release v<full-semver>                # immutable desktop assets, beside the CLI's
+├── Hive-<ver>-darwin-universal.dmg
+├── Hive-<ver>-darwin-universal.zip
+├── Hive-<ver>-linux-amd64.tar.gz
+├── Hive-<ver>-linux-arm64.tar.gz
+├── SHA256SUMS                               # the desktop artifacts
+└── checksums.txt, hive_*.tar.gz             # the CLI, attached by GoReleaser
+
+R2 hive-desktop-releases
+└── desktop/channels/{stable,beta,dev}/latest.json   # mutable pointers; every release writes all three
 ```
 
-One `SHA256SUMS` lists every artifact in the release. A logical publish writes each object under the prefix once. Recovery may fill objects a failed attempt did not reach, but reuses an existing object only after proving its bytes match, so nothing under the prefix is rewritten. That matters because those objects carry a one-year immutable `Cache-Control`.
+R2 holds only the three manifests, so the bucket stays a few kilobytes no matter how many releases ship. Releases up to 0.74.0 left their artifacts under `desktop/releases/<ver>/` in the bucket; a rollback to one of them needs those objects, so delete them only when no rollback should reach that far.
+
+One `SHA256SUMS` lists every desktop artifact in the release. A logical publish uploads each asset once. Recovery may fill assets a failed attempt did not reach, but reuses an existing asset only when GitHub's sha256 digest for it matches the local file, so nothing a manifest may name is rewritten.
+
+GitHub serves an asset URL as a `302` to its asset host. The updater, the install script (`curl -L`), and browsers all follow it. Immutable releases must stay off for the repository, because the publish workflow attaches the CLI archives after the desktop publish has published the release.
 
 ## Artifact formats
 
@@ -52,20 +59,20 @@ The Linux tarballs contain **exactly one entry, and that entry is the binary**. 
   "notes": "## Added\n\n- ...",
   "platforms": {
     "darwin-universal": {
-      "url": "https://dl.hivedesktop.com/desktop/releases/1.4.0/Hive-1.4.0-darwin-universal.zip",
+      "url": "https://github.com/colonyops/hive/releases/download/v1.4.0/Hive-1.4.0-darwin-universal.zip",
       "sha256": "<hex>",
       "size": 48123456,
-      "installer_url": "https://dl.hivedesktop.com/desktop/releases/1.4.0/Hive-1.4.0-darwin-universal.dmg",
+      "installer_url": "https://github.com/colonyops/hive/releases/download/v1.4.0/Hive-1.4.0-darwin-universal.dmg",
       "installer_sha256": "<hex>",
       "installer_size": 47987654
     },
     "linux-amd64": {
-      "url": "https://dl.hivedesktop.com/desktop/releases/1.4.0/Hive-1.4.0-linux-amd64.tar.gz",
+      "url": "https://github.com/colonyops/hive/releases/download/v1.4.0/Hive-1.4.0-linux-amd64.tar.gz",
       "sha256": "<hex>",
       "size": 41234567
     },
     "linux-arm64": {
-      "url": "https://dl.hivedesktop.com/desktop/releases/1.4.0/Hive-1.4.0-linux-arm64.tar.gz",
+      "url": "https://github.com/colonyops/hive/releases/download/v1.4.0/Hive-1.4.0-linux-arm64.tar.gz",
       "sha256": "<hex>",
       "size": 40123456
     }
@@ -81,7 +88,7 @@ Platform keys come from `platformKey` in `cmd/desktop/internal/adapter/wailsui/u
 
 ## Landing page
 
-The download buttons on hivedesktop.com resolve through a channel manifest at runtime, so shipping a release does not require redeploying the site. The page fetches `channels/<channel>/latest.json` from `dl.hivedesktop.com` directly. The bucket must allow cross-origin reads from `https://hivedesktop.com`; without that rule the fetch fails and the buttons keep their fallback links.
+The download buttons on hivedesktop.com resolve through a channel manifest at runtime, so shipping a release does not require redeploying the site. The page fetches `channels/<channel>/latest.json` from `dl.hivedesktop.com` directly. The bucket must allow cross-origin reads from `https://hivedesktop.com`; without that rule the fetch fails and the buttons keep their fallback links. The page links an artifact only when its URL is under `https://github.com/colonyops/hive/releases/download/` or, for a rollback to an older release, on `dl.hivedesktop.com`.
 
 Two surfaces consume it (`docs/docs/javascripts/download.js`): the landing page's hero and CTA buttons, which offer the visitor's own platform, and the `## Install` section of Getting Started, which lists every platform in the manifest with its file size and SHA-256. Both read `installer_url`, `installer_sha256`, and `installer_size` as a set when present and fall back to `url` otherwise: on macOS the zip is the updater's artifact, and handing it to a first-time visitor is the problem the DMG exists to solve. The page reads the manifest's own `channel` field and labels anything but `stable`.
 
@@ -118,10 +125,9 @@ wrangler secret delete REPORT_TOKEN --name hive-desktop-web
 # 3. Drop the WAF rate-limiting rule on hivedesktop.com + /api/report (dashboard).
 ```
 
-## Cache-Control (set per object at upload)
+## Cache-Control (set at upload)
 
-- `releases/**`: `public, max-age=31536000, immutable`
-- `channels/**/latest.json`: `no-cache`
+- `desktop/channels/**/latest.json`: `no-cache`
 
 ## Publish flow
 
@@ -132,8 +138,9 @@ The pipeline is the Go CLI in `cmd/tools/release`, run on the maintainer's machi
 1. builds the universal .app, Developer ID signs it with an ephemeral keychain, notarizes + staples it, packages without macOS AppleDouble metadata, and verifies the extracted archive's signature and stapled ticket;
 2. builds the installer `.dmg` from that stapled app, signs it, notarizes and staples **the image** (a second Apple round trip), then mounts it and asserts the layout the user will see;
 3. builds `linux-amd64` and `linux-arm64` in a container, asserting each binary carries the version stamp and each tarball still satisfies the updater's single-entry rule;
-4. writes one `SHA256SUMS` covering all four, uploads them to `releases/<semver>/`, writes the stable, beta, and dev manifests naming all of them, and verifies every published artifact — installer included — against the manifests it just wrote;
-5. pushes the lightweight `v<semver>` tag at the release commit and dispatches `.github/workflows/publish.yml` for it, then waits for the run. The workflow builds the CLI with GoReleaser, creates the version's one GitHub release, publishes the Homebrew cask, and deploys the site. The release body is `release changelog notes <version>`: a header pointing at the desktop's R2 downloads, then every program's entry under its own heading. The release attaches only the CLI archives — desktop downloads stay in R2 (decision 0003) — and takes GitHub's Latest flag, which the CLI's update check reads. `release github <version>` recovers a release whose GitHub step failed after the upload: it reuses the tag, watches a run still in progress, reports one that succeeded, and dispatches a new run only when none has created the GitHub release yet. GoReleaser creates the release before the cask publish and the site deploy, so for a run that failed after that point it names the `gh run rerun <id> --failed` to run instead; a second run would collide with the release's assets.
+4. writes one `SHA256SUMS` covering all four, pushes the lightweight `v<semver>` tag at the release commit, creates the version's one GitHub release from it with `release changelog notes <version>` as the body, and attaches the four artifacts and `SHA256SUMS` to it;
+5. writes the stable, beta, and dev manifests to R2 naming those assets, and verifies every published artifact — installer included — against the manifests it just wrote;
+6. dispatches `.github/workflows/publish.yml` for the tag, then waits for the run. The workflow builds the CLI with GoReleaser, which adds the CLI archives to the existing release and leaves its body and the desktop assets alone (`release.mode: keep-existing`), publishes the Homebrew cask, and deploys the site. The release takes GitHub's Latest flag when the desktop publish creates it, which the CLI's update check reads, so for the few minutes the workflow runs the CLI announces a version whose archives are not attached yet. `release github <version>` recovers a release whose CLI half failed: it reuses the tag, watches a run still in progress, reports one that succeeded, and dispatches a new run only when the release has no CLI archives yet (no `checksums.txt`). GoReleaser attaches them before the cask publish and the site deploy, so for a run that failed after that point it names the `gh run rerun <id> --failed` to run instead; a second run would collide with those assets.
 
 Publishing every desktop platform in one process is what keeps the manifest-advancement rule (below) usable: a second publish topping up another platform would be rejected for not advancing the version the first just set. It also means a release needs macOS, a running Docker, **and** an authenticated `gh` on the same machine. `next`, `prepare`, and `verify` handle version selection, preflight validation, and standalone diagnostics without separate scripts.
 
@@ -159,7 +166,7 @@ The interactive command refreshes release tags, checks the source and GitHub aut
 
 `--dry-run` is a prompt preview that also works from a dirty feature worktree. It reads live manifests and tags and validates the version, but skips the clean-main and GitHub-authentication requirements and stops after confirmation without running gates, building artifacts, uploading, tagging, or dispatching the workflow.
 
-`mise run release:publish -- <version>` is the low-level publisher used for local build diagnostics and recovery (`--skip-upload`, `--skip-notarize` with `--skip-upload`, `--force`, `--resume`); do not use it to bypass the interactive confirmation for a normal public release. `publish` verifies every live manifest and downloads the public artifact to verify its size and SHA-256, then pushes the `v<semver>` tag and dispatches the publish workflow — do not tag by hand. A local build (`--skip-upload`) records nothing on GitHub. `verify` remains available for later diagnostics without rebuilding, and `release github <version>` re-runs the GitHub side alone.
+`mise run release:publish -- <version>` is the low-level publisher used for local build diagnostics and recovery (`--skip-upload`, `--skip-notarize` with `--skip-upload`, `--force`, `--resume`); do not use it to bypass the interactive confirmation for a normal public release. `publish` pushes the `v<semver>` tag before it creates the release, verifies every live manifest and downloads the public artifact to verify its size and SHA-256, then dispatches the publish workflow — do not tag by hand. A local build (`--skip-upload`) records nothing on GitHub. `verify` remains available for later diagnostics without rebuilding, and `release github <version>` re-runs the GitHub side alone.
 
 Rules enforced by the publisher:
 1. Release preparation requires a clean, current `main`. Publishing requires the same state. Source state is checked again immediately before upload.
@@ -167,20 +174,20 @@ Rules enforced by the publisher:
 3. SQLite migrations must be contiguous, and every migration present in the latest reachable `v*` tag must remain at the same path with the same contents. Both `prepare` and `publish` run `scripts/check-migration-order.sh` before release work begins.
 4. A version is a bare `X.Y.Z` that advances every tag and every live manifest; a prerelease is rejected.
 5. `latest.json` is written for **every channel** (stable, beta, and dev), so installs that follow any of them converge on the release.
-6. `releases/<semver>/` is immutable. A normal re-publish rejects any existing object. Resume reuses one only after downloading it and proving it is byte-identical to the verified local artifact; `--force` remains a separate manual override and cannot be combined with `--resume`.
-7. After the artifacts are live and verified, the `v<semver>` tag is pushed and the publish workflow dispatched; an existing tag pointing at another commit is a conflict, a tag already at the release commit is reused, and a run already in progress or finished for the tag is watched or reported rather than dispatched again. The workflow queues a second dispatch for one tag behind the first.
+6. A release's desktop assets are immutable. A normal re-publish rejects any asset already on the release. Resume reuses one only when GitHub's digest and size for it match the verified local artifact, and replaces an asset GitHub never finished receiving; `--force` remains a separate manual override and cannot be combined with `--resume`. A draft release is refused, because its assets need authentication to download.
+7. The `v<semver>` tag is pushed before the release is created; an existing tag pointing at another commit is a conflict and a tag already at the release commit is reused. After the artifacts are live and verified, the publish workflow is dispatched; a run already in progress or finished for the tag is watched or reported rather than dispatched again. The workflow queues a second dispatch for one tag behind the first.
 
 ### Recovering an interrupted publish
 
-R2 HEAD, GET, and PUT calls retry bounded transient curl failures, including connection, TLS, and partial-transfer errors. If those retries are exhausted after the build finished, keep `cmd/desktop/bin` intact and resume the same version:
+Manifest PUTs to R2 retry bounded transient curl failures. A failed `gh release upload` does not retry. If either fails after the build finished, keep `cmd/desktop/bin` intact and resume the same version:
 
 ```bash
 mise run release:publish -- <version> --resume
 ```
 
-Resume does not rebuild, sign, or submit anything to Apple. It loads the four versioned artifacts already in `cmd/desktop/bin`, verifies both macOS signatures and stapled tickets, checks both Linux archive shapes, confirms every binary carries the current release commit, and reconstructs `SHA256SUMS`. It downloads every object already present under the release prefix and reuses it only when its bytes match the local artifact, uploads missing objects, and completes any channel manifests not already written. A manifest already on the version must have identical notes and artifact metadata; a conflicting or newer manifest stops recovery.
+Resume does not rebuild, sign, or submit anything to Apple. It loads the four versioned artifacts already in `cmd/desktop/bin`, verifies both macOS signatures and stapled tickets, checks both Linux archive shapes, confirms every binary carries the current release commit, and reconstructs `SHA256SUMS`. It reuses the tag and the GitHub release, reuses every asset whose GitHub digest matches the local artifact, uploads missing ones, and completes any channel manifests not already written. A manifest already on the version must have identical notes and artifact metadata; a conflicting or newer manifest stops recovery.
 
-Do not cut a replacement version for a partial upload, and do not use `--force`: both discard the verified build that resume exists to preserve. If `cmd/desktop/bin` was deleted or any local artifact differs from an already-uploaded object, the interrupted version cannot be resumed safely. If R2 and the manifests are already live and only the final GitHub step failed, use `go run ./cmd/tools/release github <version>` instead.
+Do not cut a replacement version for a partial upload, and do not use `--force`: both discard the verified build that resume exists to preserve. If `cmd/desktop/bin` was deleted or any local artifact differs from an already-uploaded asset, the interrupted version cannot be resumed safely. If the desktop assets and the manifests are already live and only the CLI workflow failed, use `go run ./cmd/tools/release github <version>` instead.
 
 ## Installing on macOS
 
@@ -194,7 +201,7 @@ Linux ships a plain tarball, deliberately — no `.deb`, `.rpm`, AppImage, or re
 
 ```bash
 VER=1.4.0
-BASE=https://dl.hivedesktop.com/desktop/releases/$VER
+BASE=https://github.com/colonyops/hive/releases/download/v$VER
 ARCH=amd64                                  # or arm64
 curl -fLO "$BASE/Hive-$VER-linux-$ARCH.tar.gz"
 curl -fL "$BASE/SHA256SUMS" | grep "linux-$ARCH" | sha256sum -c -
@@ -212,7 +219,7 @@ The terminal installer creates `hive-desktop.desktop` and installs the app icon 
 
 ## Auto-update
 
-The in-app updater (`cmd/desktop/internal/adapter/wailsui/updater_provider.go`) polls `https://dl.hivedesktop.com/desktop/channels/<channel>/latest.json`, compares semver against the running version, and downloads the manifest's artifact URL with the manifest's sha256 verified by the Wails updater. A published build follows the stable manifest (a build from before the single version follows the channel its prerelease identifier named), and `updates.channel: stable|beta|dev` in the desktop `settings.yaml` overrides that. Every release writes all three manifests, so each of them leads to the same release. Source builds (version `dev`) never self-update.
+The in-app updater (`cmd/desktop/internal/adapter/wailsui/updater_provider.go`) polls `https://dl.hivedesktop.com/desktop/channels/<channel>/latest.json`, compares semver against the running version, and downloads the manifest's artifact URL (a GitHub release asset; the HTTP client follows GitHub's redirect) with the manifest's sha256 verified by the Wails updater. A published build follows the stable manifest (a build from before the single version follows the channel its prerelease identifier named), and `updates.channel: stable|beta|dev` in the desktop `settings.yaml` overrides that. Every release writes all three manifests, so each of them leads to the same release. Source builds (version `dev`) never self-update.
 
 On both platforms the update is an in-place swap: the framework downloads and verifies the artifact, unpacks it, and a detached helper waits for the app to exit before renaming the new payload over the old one and relaunching.
 
@@ -223,14 +230,14 @@ On both platforms the update is an in-place swap: the framework downloads and ve
 
 ## Rollback
 
-Rewrite every channel's `latest.json` (stable, beta, and dev) to point at a prior `releases/<semver>/` directory; every release writes all three, so a rollback of one leaves the installs that follow the others on the bad release. Never modify or delete release artifacts as part of a rollback.
+Rewrite every channel's `latest.json` (stable, beta, and dev) to point at a prior release's artifacts: the GitHub release assets for a release after 0.74.0, or `desktop/releases/<semver>/` in R2 for an older one; every release writes all three, so a rollback of one leaves the installs that follow the others on the bad release. Never modify or delete release artifacts as part of a rollback.
 
 ## Retention
 
-Releases are no longer cut as `-dev.` prereleases. The ones already in the bucket can be pruned by a scheduled job (delete `-dev.` versions older than N days); R2 lifecycle rules are prefix-only and cannot match `-dev.` mid-key.
+New releases add nothing to R2 except the three manifest rewrites. The artifacts earlier releases left under `desktop/releases/` can be deleted, oldest first, once no rollback should reach them; the `-dev.` prereleases among them can go first.
 
 ## Credentials
 
-- `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` (local `.env`) — S3 credentials for `hive-desktop-releases`.
+- `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` (local `.env`) — S3 credentials for `hive-desktop-releases`, used only to write the manifests.
 - Signing/notary set (local `.env`): `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`, `MACOS_SIGN_IDENTITY`, `AC_API_KEY`, `AC_API_KEY_ID`, `AC_API_ISSUER_ID`. macOS only — Linux publishing needs nothing beyond the R2 pair.
-- `gh` authentication (`gh auth status`) — the maintainer's own GitHub login, used to create the GitHub Release; the tag push uses `git`'s configured push credentials. Not a repo secret. `publish` checks it in preflight so a missing login aborts before the upload.
+- `gh` authentication (`gh auth status`) — the maintainer's own GitHub login, used to create the GitHub Release and upload the desktop assets; the tag push uses `git`'s configured push credentials. Not a repo secret. `publish` checks it in preflight so a missing login aborts before the build.

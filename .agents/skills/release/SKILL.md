@@ -16,10 +16,11 @@ the release CLI's `publish` command outside `mise`.
 
 The run publishes the desktop first: it builds every platform here (macOS plus
 both Linux architectures, so it needs macOS and a running Docker together),
-uploads to R2, and writes the stable, beta, and dev manifests. It then pushes
-the `v<version>` tag and dispatches `publish.yml`, which builds the CLI with
-GoReleaser, creates the one GitHub release with every program's notes,
-publishes the Homebrew cask, and deploys the site. The run waits for the
+pushes the `v<version>` tag, creates the one GitHub release with every
+program's notes, attaches the desktop artifacts to it, and writes the stable,
+beta, and dev manifests to R2. It then dispatches `publish.yml`, which builds
+the CLI with GoReleaser, adds the CLI archives to that release, publishes the
+Homebrew cask, and deploys the site. The run waits for the
 workflow. Step 9 covers recovering that last step.
 
 **The release notes pick the version.** The desktop embeds its notes, and the
@@ -101,21 +102,22 @@ the version, and there is one release line.
    live manifest and downloads the public artifact to check its size and
    SHA-256 before it moves on to the tag.
 
-   R2 operations have bounded retries. If they are exhausted after packaging has
-   completed, keep `cmd/desktop/bin` intact and resume the same version:
+   If an asset upload or a manifest write fails after packaging has completed,
+   keep `cmd/desktop/bin` intact and resume the same version:
 
    ```bash
    mise run release:publish -- <version> --resume
    ```
 
    Resume skips builds, signing, and Apple submissions. It re-verifies the local
-   artifacts, reuses only byte-identical R2 objects, uploads missing objects,
+   artifacts, reuses the tag and the release, reuses only release assets whose
+   GitHub digest matches, uploads missing ones,
    and finishes partial manifest writes before the normal live verification and
    GitHub step. Stop if resume reports a local or remote mismatch. Never use
    `--force` for recovery and never invent a replacement version for a partial
    upload.
-9. Publishing finishes by pushing the `v<version>` tag and dispatching
-   `publish.yml`, then watching the run. Do not tag or push by hand. If only
+9. Publishing finishes by dispatching `publish.yml` and watching the run. Do
+   not tag or push by hand. If only
    that step fails (a `gh` outage, a failed workflow run), the desktop release is
    already live and verified. Fix the cause, then run the GitHub step again:
 
@@ -124,16 +126,16 @@ the version, and there is one release line.
    ```
 
    It reuses the tag, watches a run that is still in progress, reports one
-   that succeeded, and dispatches a new run only when no run has created the
-   GitHub release yet. GoReleaser creates the release before the Homebrew cask
+   that succeeded, and dispatches a new run only when the release has no CLI
+   archives yet. GoReleaser attaches them before the Homebrew cask
    publish and the site deploy, so for a run that failed after that point the
    command names what to run instead: `gh run rerun <run-id> --failed`. Run
    exactly that; do not dispatch the workflow by hand, because a second run
-   would collide with the release's assets.
+   would collide with those assets.
 
    Report the version, the pushed tag and its GitHub release URL, the workflow
    run URL, and the desktop artifact URL prefix
-   (`https://dl.hivedesktop.com/desktop/releases/<version>/`).
+   (`https://github.com/colonyops/hive/releases/download/v<version>/`).
 
 ## Version rules
 

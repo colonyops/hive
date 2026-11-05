@@ -96,12 +96,12 @@ func TestDemoteHeadingsLeavesFencedCodeAlone(t *testing.T) {
 func TestRenderReleaseNotesBody(t *testing.T) {
 	t.Parallel()
 	version := mustVersion(t, "0.60.0")
-	body := renderReleaseNotesBody(version, "https://dl.hivedesktop.com", []productNotes{
+	body := renderReleaseNotesBody(version, []productNotes{
 		{product: cliProduct, entry: releasenotes.Entry{Summary: "No changes to the hive CLI."}},
 		{product: desktopProduct, entry: releasenotes.Entry{Summary: "A short line.", Body: "## Added\n\n- a thing"}},
 	})
 
-	want := releaseNotesHeader(version, "https://dl.hivedesktop.com") +
+	want := releaseNotesHeader(version) +
 		"\n## hive CLI\n\nNo changes to the hive CLI.\n" +
 		"\n## Hive Desktop\n\nA short line.\n\n### Added\n\n- a thing\n"
 	if body != want {

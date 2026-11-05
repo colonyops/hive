@@ -23,11 +23,12 @@ stay on the last v0 release.
 - **Promotion picks the version.** `release changelog promote` names it, and
   `release run` publishes the newest version that every program has an entry
   for and no release has published.
-- **One release run.** `mise run release` runs the gates, publishes the
-  desktop to R2, pushes the `v*` tag, and dispatches `publish.yml`, then
-  waits for it. The workflow builds the CLI with GoReleaser and the
-  `hive-drive-server` image, creates the one GitHub release with every
-  program's notes (`release changelog notes`), and deploys the site.
+- **One release run.** `mise run release` runs the gates, pushes the `v*`
+  tag, creates the one GitHub release with every program's notes
+  (`release changelog notes`) and the desktop artifacts, writes the desktop
+  manifests to R2, and dispatches `publish.yml`, then waits for it. The
+  workflow builds the CLI with GoReleaser and the `hive-drive-server` image,
+  adds the CLI archives to that release, and deploys the site.
 - **One release line.** A release is a bare `X.Y.Z`. It writes the stable,
   beta, and dev desktop manifests, so an install on any channel converges on
   it.
