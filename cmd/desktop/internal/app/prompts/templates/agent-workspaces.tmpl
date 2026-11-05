@@ -28,9 +28,9 @@ prose in `AGENTS.md`, not in the manifest: `agent-workspace.yaml` carries no
 - `name` — display name shown on the workspace's card.
 - `command` — the whole invocation, as a Go template rendered when a session starts. It is required, and it is the only thing that decides what runs. There is no `agent` key: Hive reads the label off the command's first word to pick the icon, the activity indicator and the resume probe, and a CLI it has never heard of is a normal workspace.
 
-  Available fields: `.Dir` (the workspace directory), `.MCPConfig` (the generated `.mcp.json`, written for every workspace whatever the agent), `.SessionID` (a uuid Hive minted), `.Resume` (true when reattaching to a conversation), and `.Prompt` (an optional opening message for a schedule, New Session form, or action). `shq` quotes a value for the shell: use it on every interpolated value.
+  Available fields: `.Dir` (the workspace directory), `.MCPConfig` (the generated `.mcp.json`, written for every workspace whatever the agent), `.SessionID` (a uuid Hive minted), `.Resume` (true when reattaching to a conversation), and `.Prompt` (an optional opening message for a schedule, the New chat dialog, an action, or a chat started with `chat_create`, `hive dt chat create` or an applet's `hive.startChat`). `shq` quotes a value for the shell: use it on every interpolated value.
 
-  A workspace with `schedules:` or one used by a prompted launch needs a command that passes `.Prompt` through `shq`. Hive refuses a prompt-dropping or unquoted command because the detached chat would either sit idle or let prompt text become shell syntax. End the command with `{{ "{{ if .Prompt }}-- {{ .Prompt | shq }}{{ end }}" }}`, which is what the shipped presets do.
+  A workspace with `schedules:` or one used by a prompted launch needs a command that passes `.Prompt` through `shq`. Hive refuses a prompt-dropping or unquoted command because the detached chat would either sit idle or let prompt text become shell syntax. Every launch that carries a prompt checks this: the New chat dialog disables such a workspace when a prompt is set, and the other launches refuse with `invalid`. A config migration that rewrites `command` can drop the tail, so check a migrated workspace's command (`workspace_list` reports it) before you point a prompt at it. End the command with `{{ "{{ if .Prompt }}-- {{ .Prompt | shq }}{{ end }}" }}`, which is what the shipped presets do.
 
   The line runs as `cd <workspace> && <your command>` under a login shell, so an env prefix or a pipeline works. Break it across several lines for readability; they are folded before rendering.
 
@@ -80,6 +80,17 @@ declared in `mcps:`, `schedule_put`, `schedule_delete`, `schedule_list` and
 `schedule_preview` make the same edit in place, one entry at a time, without
 touching the rest of the file; a `schedule_put` on an existing id changes only
 the fields it passes.
+
+### Chats started by an agent or an applet
+
+A chat started with `chat_create` (the `hive-chats` MCP server), `hive dt chat create` or
+an applet's `hive.startChat` is not a scheduled chat. Hive passes the prompt as written
+and does not tell the agent to end the session, so use it for a chat that keeps running,
+such as an orchestrator. The same callers pin and unpin chats in the Code sidebar with
+`chat_pin_put` and `chat_pin_delete`, `hive dt chat-pin`, or `hive.pinChat`.
+
+To let a workspace's own agent start chats in other workspaces, add `hive-chats` to its
+`mcps:`. Each started chat runs its own workspace's command and permission settings.
 
 ### Prompt template variables
 

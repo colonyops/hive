@@ -51,7 +51,7 @@ A foreign page in the frame can load any of your pages with a query or hash it c
 
 - `hive.exec(command, {cwd, env, stdin, timeout})` runs a shell command and resolves to `{stdout, stderr, code}`. A non-zero `code` does not reject. `timeout` is in milliseconds and defaults to 5 minutes.
 - `hive.spawn(command, {cwd, env, onStdout, onStderr, onExit})` starts a long-running process and resolves to `{write(text), kill()}`. Output arrives as text in arbitrary chunks. Closing the frame that started it stops it.
-- `hive.readFile(path)` and `hive.writeFile(path, text)` handle text files. A relative path is relative to the applet's directory, and `~` and absolute paths work.
+- `hive.readFile(path)` and `hive.writeFile(path, text)` handle text files. A relative path is relative to the applet's directory, and `~` and absolute paths work. `writeFile` creates missing parent directories.
 - `hive.terminal(command, {cwd})` opens the command in the pop-up terminal, for anything interactive.
 - `hive.toast(message, {severity, body})` shows a Hive toast. `severity` is `info`, `success`, `warning`, or `error`.
 - `hive.copy(text)` puts text on the clipboard.
@@ -61,13 +61,18 @@ A foreign page in the frame can load any of your pages with a query or hash it c
 - `hive.open()` opens the applet from any of them: as a tab if the user added it as one and a session is on screen, otherwise as a pop-up. It closes the pop-up if that is already open.
 - `hive.broadcast(data)` sends to the applet's other open frames, which listen with `hive.on('message', fn)`.
 - `hive.on('session', fn)` reports the slug of the session on screen when it changes. `hive.on` returns a function that stops listening, and does nothing for an event this Hive does not have.
-- `hive.commands()` resolves to Hive's commands as `{id, title, group, keys}`, and `hive.command(id)` runs one and rejects an id that does not exist, so a page can do what the command palette can.
+- `hive.commands()` resolves to Hive's commands as `{id, title, group, keys}`, and `hive.command(id)` runs one and rejects an id that does not exist, so a page can do what the command palette can. A command takes no arguments: `session.new`, for one, opens an empty New session dialog. See "Find a command id".
+- `hive.startChat({workspace, name, prompt, pinToCode})` starts an agent workspace chat in the background and resolves to `{id, workspace, name, slug, pinnedAt}`. `hive.pinChat(id)` and `hive.unpinChat(id)` pin a chat to the Code sidebar or unpin it. See "Start a chat".
 - `hive.openPalette(query)` opens the command palette on a query. A first character of `+`, `@` or `>` picks its tab.
 - `hive.setCommands(rows)` and `hive.on('command', fn)` add to the palette. See "In the command palette".
 - `hive.navigate(path)` goes to a route of the app: `/feed`, `/terminal/<session-slug>`, `/settings/<section>`.
 
 Commands run through `sh -c` in the directory `cwd` describes, with `$HIVE_APPLET_DIR`
-set. Pass values to a command through `env` and quote them in the command
+set. The environment is the one Hive reads from the user's login shell at startup, the same
+one a session gets. If that read failed or timed out, commands get the app's own `PATH`,
+which lacks Homebrew, `~/.local/bin` and mise tools, and the app log says so. Before you
+rely on a tool, check it with `command -v` and show its absence as an error in the page.
+Do not write a `PATH` from this machine into a page someone may share. Pass values to a command through `env` and quote them in the command
 (`hive.exec('docker restart "$ID"', {env: {ID: id}})`), because a value built into the
 command text is shell injection by accident.
 
@@ -87,6 +92,30 @@ pop-up is open that only runs the palette, the key that closes it, and this appl
 commands. So call `preventDefault()` on any chord the page uses for itself, such as Command-K
 for its own search. Other keys stay in the page. Audio needs a user gesture first, as on any
 page.
+
+## Find a command id
+
+No document lists Hive's command ids, because the app builds the list at runtime. Ask the
+page: while you author, have it write the list to a file and read that file.
+
+```js
+await hive.writeFile('commands.json', JSON.stringify(await hive.commands(), null, 2))
+```
+
+Remove that line before you finish. The ids are part of the applet API: a renamed command
+keeps its old id as an alias.
+
+## Start a chat
+
+`hive.startChat` starts a chat in an agent workspace, the same launch the New chat dialog
+makes, without the dialog. `workspace` is the workspace directory name. The chat runs in
+the background until the user opens it, and `pinToCode: true` puts it in the Code sidebar
+too. The prompt goes to the agent as written: unlike a scheduled chat, Hive does not tell
+the agent to end the session.
+
+- A prompt needs a workspace whose `command` passes `.Prompt`. Otherwise the call rejects and nothing starts.
+- The chat runs the workspace's command with its permission settings. Start a chat only when the user asked for it, in a workspace they named or picked.
+- Do not call Hive's `/api/terminal/` routes. They are the app window's own, and no local tool gets their token. The bridge calls above, `hive dt chat create` and the `hive-chats` MCP tools are the ways in.
 
 ## In a session
 
