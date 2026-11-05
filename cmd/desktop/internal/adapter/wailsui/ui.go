@@ -436,8 +436,7 @@ func (u *UI) singleInstance(dataDir string) *application.SingleInstanceOptions {
 		u.logger.Warn().Msg("single-instance lock off: DBUS_SESSION_BUS_ADDRESS is unset; a hive:// link starts a second Hive")
 		return nil
 	}
-	sum := sha256.Sum256([]byte(dataDir))
-	uniqueID := "com.hivedesktop.app." + hex.EncodeToString(sum[:8])
+	uniqueID := singleInstanceID(dataDir)
 	u.logger.Info().Str("unique_id", uniqueID).Str("data_dir", dataDir).Msg("single-instance lock on")
 	return &application.SingleInstanceOptions{
 		UniqueID: uniqueID,
@@ -451,6 +450,12 @@ func (u *UI) singleInstance(dataDir string) *application.SingleInstanceOptions {
 			u.reveal()
 		},
 	}
+}
+
+func singleInstanceID(dataDir string) string {
+	sum := sha256.Sum256([]byte(dataDir))
+	// D-Bus name elements cannot start with a digit, even when the hash does.
+	return "com.hivedesktop.app.data_" + hex.EncodeToString(sum[:8])
 }
 
 // Run blocks until the app quits.
