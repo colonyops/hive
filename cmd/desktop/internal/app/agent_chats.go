@@ -43,6 +43,9 @@ func (s *AgentWorkspacesService) CreateChat(ctx context.Context, req CreateChat)
 		}
 		return SessionView{}, Errorf(KindInternal, "%s", view.Notice)
 	}
+	// A detached start attaches no client, so the view carries no TerminalID,
+	// but the tmux session it names runs.
+	view.TerminalID = view.Slug
 	if req.PinToCode {
 		at := time.Now().UnixMilli()
 		if _, err := s.sessions.SetPinnedAt(ctx, view.ID, at); err != nil {

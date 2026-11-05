@@ -1746,10 +1746,15 @@ func (s *AgentWorkspacesService) liveSessionCount(ctx context.Context) (int, err
 // resolveServers resolves a workspace's declared MCP ids through the store's
 // catalogue. An id with no catalogue entry is simply omitted here; Generate
 // itself reports it in MissingMCPs by comparing ws.MCPs against this map, so
-// there is nothing to track twice.
+// there is nothing to track twice. An app-hosted entry whose address did not
+// resolve is omitted the same way: written out, it is an http entry with no
+// url, which no agent can reach.
 func (s *AgentWorkspacesService) resolveServers(ctx context.Context, ws agentws.Workspace) map[string]mcpcatalog.Server {
 	byID := make(map[string]mcpcatalog.Server, len(ws.MCPs))
 	for _, entry := range s.catalogue(ctx) {
+		if entry.Server.Transport != mcpcatalog.TransportStdio && entry.Server.URL == "" {
+			continue
+		}
 		byID[entry.ID] = entry.Server
 	}
 	servers := make(map[string]mcpcatalog.Server, len(ws.MCPs))

@@ -33,6 +33,7 @@ func TestCreateChatStartsDetachedWithTheUnframedPromptAndPins(t *testing.T) {
 
 	assert.Equal(t, "Manage sessions", view.Name)
 	assert.Positive(t, view.PinnedAt)
+	assert.Equal(t, view.Slug, view.TerminalID, "the answer says the chat runs")
 	assert.Equal(t, 1, liveAgentSessionCount(t, svc))
 	require.Eventually(t, func() bool {
 		got, readErr := os.ReadFile(capture)
@@ -93,4 +94,23 @@ func TestPinChatIsIdempotent(t *testing.T) {
 	off, err := svc.PinChat(t.Context(), rec.ID, false)
 	require.NoError(t, err)
 	assert.Zero(t, off.PinnedAt)
+}
+
+// hive-chats needs the token only hive mcp serve reads, so without a matching
+// hive CLI it has no form an agent can use, and the open must not write one.
+func TestHiveChatsWithoutAMatchingCLIIsReportedAndNotWritten(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	dir := writeAgentWorkspaceManifest(t, root, "orchestrator", agentWorkspaceYAML("Orchestrator", "claude", "mcps: [hive-chats, hive-desktop]\n"))
+	svc := newManifestOnlyService(t, root, nil)
+
+	assert.Contains(t, mcpCatalogueItem(t, svc, "hive-chats").Problem, "hive CLI")
+
+	result, err := svc.Open(t.Context(), "orchestrator")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"hive-chats"}, result.MissingMCPs)
+	raw, err := os.ReadFile(filepath.Join(dir, ".mcp.json"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "hive-chats")
+	assert.Contains(t, string(raw), testMCPBaseURL+"/mcp")
 }
