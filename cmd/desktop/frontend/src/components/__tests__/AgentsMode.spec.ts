@@ -9,6 +9,7 @@ import { resetNewSessionForTests, useNewSession } from '../../composables/useNew
 import { newPanelLayout, openTab } from '../../lib/panelLayout'
 import { createAppRouter } from '../../router'
 import { useDriveActivity } from '../../stores/useDriveActivity'
+import { useSessionTabHost } from '../../stores/useSessionTabHost'
 import { viewTab } from '../terminal/panelViews'
 import { tooltipFor } from '../../test-utils/tooltip'
 import type { MissingSkillPackage } from '../../lib/agentWorkspacesClient'
@@ -1139,6 +1140,18 @@ describe('AgentsMode', () => {
 
   // The terminal's element is placed by position, never moved: opening and
   // closing the Drive tab beside it must keep xterm's screen.
+  it('opens the open chat’s Drive tab from outside the mode, and offers no Diff', async () => {
+    const { wrapper } = await mountWithOpenChat()
+    const host = useSessionTabHost()
+    expect(host.views.value).toEqual(['docs'])
+
+    host.open('diff')
+    host.open('docs')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="panel-view-docs"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="panel-view-diff"]').exists()).toBe(false)
+  })
+
   it('keeps the terminal pane element across a Drive tab opening and closing', async () => {
     const { wrapper, router } = await mountWithOpenChat()
     const paneBefore = wrapper.find('[data-testid="agents-session-pane"]').element

@@ -14,6 +14,7 @@ import IconWorkflow from '~icons/lucide/workflow'
 import {
   commandById,
   commands as bindableCommands,
+  sessionViewCommandID,
   terminalWindowCommandID,
   type CommandContext,
 } from '../keybindings/catalog'
@@ -29,6 +30,8 @@ import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { documentsOf, entryLabel } from '../lib/drive'
 import { useDrive } from '../stores/useDrive'
+import { useSessionTabHost } from '../stores/useSessionTabHost'
+import { sessionView } from '../components/terminal/panelViews'
 import { useAttachedTerminalWindows } from '../composables/useAttachedTerminalWindows'
 import { useNewSession } from '../composables/useNewSession'
 import { applicationSettingsSections } from '../router'
@@ -119,6 +122,7 @@ export function useAppPaletteRows(
     return map
   })
   const drive = useDrive()
+  const sessionTabs = useSessionTabHost()
 
   useCommands(
     computed(() => {
@@ -135,6 +139,24 @@ export function useAppPaletteRows(
           scope: command.scope,
           hint: hintFor(command.id),
           run: () => runCommand(command.id),
+        })
+      }
+
+      // The session.open-* commands are palette-hidden: a row per view the session
+      // on screen offers stands in, under the session's name beside its other rows.
+      for (const kind of sessionTabs.views.value) {
+        const catalogID = sessionViewCommandID(sessionView(kind).wire)
+        const catalog = commandById.value.get(catalogID)
+        if (!catalog) continue
+        cmds.push({
+          id: `session:view:${kind}`,
+          title: catalog.title,
+          group: sessionTabs.sessionName.value,
+          order: -3,
+          keywords: catalog.keywords,
+          icon: catalog.icon,
+          hint: hintFor(catalogID),
+          run: () => runCommand(catalogID),
         })
       }
 

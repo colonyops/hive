@@ -63,6 +63,7 @@ import {
 import { appletIdOf, appletTab, appletTabOfId } from '../../lib/appletTabs'
 import { useApplets } from '../../stores/useApplets'
 import { useAppletTabHost } from '../applets/useAppletTabHost'
+import { useSessionTabHost } from '../panels/useSessionTabHost'
 import { docsScopeOf, viewOfTab, viewTab, withDocsScope } from './panelViews'
 import ServerConnectionStatus from './ServerConnectionStatus.vue'
 import { useTerminalModeContext } from './terminalModeContext'
@@ -399,6 +400,13 @@ useAppletTabHost({
   active: () => props.active && !!panels.row,
   apply: (rule) => panels.apply(rule),
   sessionSlug: () => panels.row?.slug ?? '',
+})
+
+useSessionTabHost({
+  active: () => props.active && !!panels.row,
+  apply: (rule) => panels.apply(rule),
+  sessionName: () => panels.row?.name ?? '',
+  views: () => availableViews.value,
 })
 
 const panelLayouts = usePanelLayouts()
