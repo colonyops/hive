@@ -26,7 +26,6 @@ const props = defineProps<{
   tree: EntryWire | null
   selected: string | null
   error?: string | null
-  compact?: boolean
   /** Heads the tree with a collapsible section of this title, which takes the new folder button. */
   treeTitle?: string
   /** The field searches every space and lists hits in place of the tree. */
@@ -242,7 +241,6 @@ function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | n
             :tree="tree"
             :selected="selected"
             :filter="filter"
-            :compact="compact"
             :testid="testid"
             @pick="emit('pick', $event)"
             @menu="openMenu"

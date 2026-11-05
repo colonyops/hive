@@ -1,16 +1,12 @@
 <script setup lang="ts">
-// One space as a folder tree. Rows are the tree flattened through the fold
-// state, so the list stays a plain v-for and keyboard walk; folders come first
-// as the Go side sorts them.
-import { computed, nextTick, ref, watch } from 'vue'
-import IconChevronRight from '~icons/lucide/chevron-right'
-import IconEllipsis from '~icons/lucide/ellipsis'
-import IconButton from '@hive/ui/components/ui/IconButton.vue'
+// One space as a @pierre/trees tree. The tree applies a rename or a drop to
+// itself first; the server's answer then either arrives as a new tree or, on
+// a refusal, resync puts the last one back.
+import type { FileTreeRowDecoration, FileTreeRowDecorationContext } from '@pierre/trees'
+import { computed, ref, watch } from 'vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
-import { useListKeyboardNav } from '@hive/ui/composables/useListKeyboardNav'
-import { useTreeExpansion } from '../../composables/useTreeExpansion'
-import { documentIcon, folderIcon, type DriveIcon } from './driveIcon'
-import { ancestorPaths, entryLabel, entryMatches } from '../../lib/drive'
+import PathTree from '../tree/PathTree.vue'
+import { directory, usePathTree } from '../tree/usePathTree'
 import { useDrive } from '../../stores/useDrive'
 import { useDriveActivity } from '../../stores/useDriveActivity'
 import type { EntryWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
@@ -21,9 +17,7 @@ const props = defineProps<{
   /** The document on screen, revealed and marked. */
   selected: string | null
   filter: string
-  /** Tighter rows for the narrow pane. */
-  compact?: boolean
-  /** Derives `-tree` and `-row-<path>`. */
+  /** Derives `-tree`, `-move-error`, and `-rename-error`. */
   testid: string
 }>()
 const emit = defineEmits<{
@@ -37,297 +31,180 @@ const emit = defineEmits<{
 const activity = useDriveActivity()
 const drive = useDrive()
 
-interface Row {
-  entry: EntryWire
-  depth: number
+const stripSlash = (path: string) => path.replace(/\/$/, '')
+const parentOf = (path: string) => {
+  const slash = path.lastIndexOf('/')
+  return slash < 0 ? '' : path.slice(0, slash)
 }
 
-const query = computed(() => props.filter.trim().toLowerCase())
-
-const allDirs = computed(() => {
-  const dirs: EntryWire[] = []
+// Folders go in as "path/" so an empty one still shows.
+const indexed = computed(() => {
+  const entries = new Map<string, EntryWire>()
+  const paths: string[] = []
   const walk = (entry: EntryWire) => {
     for (const child of entry.children ?? []) {
+      entries.set(child.path, child)
       if (child.kind === 'dir') {
-        dirs.push(child)
+        paths.push(`${child.path}/`)
         walk(child)
-      }
+      } else paths.push(child.path)
     }
   }
   walk(props.tree)
-  return dirs
+  return { entries, paths }
+})
+const entryAt = (treePath: string) => indexed.value.entries.get(stripSlash(treePath))
+
+const unseen = computed(() =>
+  [...indexed.value.entries.values()].filter(
+    (entry) => entry.kind !== 'dir' && activity.isUnopened(props.space, entry.path),
+  ),
+)
+
+function decorate({ row }: FileTreeRowDecorationContext): FileTreeRowDecoration | null {
+  if (row.kind !== 'file' || !activity.isUnopened(props.space, row.path)) return null
+  return { text: '●', title: 'Written since you last opened it', parts: [{ text: '●', color: 'var(--color-accent)' }] }
+}
+
+const renameError = ref<string | null>(null)
+const moveError = ref<string | null>(null)
+
+const tree = usePathTree({
+  paths: () => indexed.value.paths,
+  storageKey: 'hive.drive.tree.expanded',
+  storagePrefix: () => props.space,
+  defaultOpen: false,
+  fileTreeSearchMode: 'hide-non-matches',
+  renderRowDecoration: decorate,
+  onSelectionChange(paths) {
+    const entry = paths.length === 1 ? entryAt(paths[0]) : undefined
+    if (entry && entry.kind !== 'dir') {
+      if (entry.path !== props.selected) emit('pick', entry.path)
+    } else tree.selectOnly(props.selected)
+  },
+  renaming: {
+    onRename: (event) => void rename(event.sourcePath, event.destinationPath),
+    onError: (error) => (renameError.value = error),
+  },
+  // A document row stands for its own folder, as in a file manager, and only
+  // documents drag, which keeps a move inside one space.
+  dragAndDrop: {
+    canDrag: (paths) => paths.every((path) => entryAt(path)?.kind !== 'dir'),
+    onDropComplete: (event) => void drop(event.draggedPaths, event.target.directoryPath),
+    onDropError: (error) => (moveError.value = error),
+  },
+  composition: {
+    contextMenu: {
+      enabled: true,
+      triggerMode: 'both',
+      onOpen(item, context) {
+        context.close({ restoreFocus: false })
+        const entry = entryAt(item.path)
+        if (entry) emit('menu', entry, tree.rowElement(item.path) ?? context.anchorElement, context.anchorElement)
+      },
+    },
+  },
 })
 
-const expansion = useTreeExpansion<EntryWire>('hive.drive.tree.expanded', {
-  key: (entry) => `${props.space}\n${entry.path}`,
-  defaultOpen: () => false,
-  filtering: () => query.value !== '',
-  nodes: () => allDirs.value,
-})
+async function rename(sourcePath: string, destinationPath: string): Promise<void> {
+  const from = stripSlash(sourcePath)
+  const name = stripSlash(destinationPath).split('/').pop() ?? ''
+  renameError.value = null
+  const { result, error } = await drive.rename(props.space, from, name)
+  renameError.value = error
+  if (!result) tree.resync()
+  else if (result.path !== from) emit('moved', from, result.path)
+}
 
-// A folder stays while filtering when it or anything under it matches; a
-// matching folder keeps its whole subtree.
-const rows = computed(() => {
-  const out: Row[] = []
-  const walk = (parent: EntryWire, depth: number, keep: boolean) => {
-    for (const child of parent.children ?? []) {
-      const own = keep || !query.value || entryMatches(child, query.value)
-      if (child.kind === 'dir') {
-        const start = out.length
-        out.push({ entry: child, depth })
-        if (expansion.expanded(child)) walk(child, depth + 1, own && query.value !== '')
-        if (!own && out.length === start + 1) out.pop()
-      } else if (own) out.push({ entry: child, depth })
+async function drop(dragged: readonly string[], directoryPath: string | null): Promise<void> {
+  moveError.value = null
+  const dir = stripSlash(directoryPath ?? '')
+  for (const path of dragged) {
+    const from = stripSlash(path)
+    if (parentOf(from) === dir) continue
+    const { result, error } = await drive.move(props.space, from, dir)
+    moveError.value = error
+    if (!result) {
+      tree.resync()
+      return
     }
+    emit('moved', from, result.path)
   }
-  walk(props.tree, 0, false)
-  return out
-})
-
-const active = ref(0)
-// By path, not a v-for ref array: Vue appends the rows a fold opens to the
-// end of that array, so its order stops matching rows.
-const rowElements = new Map<string, HTMLElement>()
-
-function setRowElement(path: string, el: unknown): void {
-  if (el instanceof HTMLElement) rowElements.set(path, el)
-  else rowElements.delete(path)
 }
 
-function rowElement(index: number): HTMLElement | undefined {
-  const row = rows.value[index]
-  return row ? rowElements.get(row.entry.path) : undefined
-}
-
-const nav = useListKeyboardNav({
-  active,
-  count: () => rows.value.length,
-  wrap: false,
-  homeEnd: () => true,
-  row: rowElement,
-})
-
-watch(query, () => {
-  active.value = 0
-})
-
-function inTree(entry: EntryWire, path: string): boolean {
-  return entry.path === path || (entry.children ?? []).some((child) => inTree(child, path))
-}
+watch(unseen, () => tree.redecorate())
+watch(
+  () => props.filter.trim(),
+  (query) => tree.model.setSearch(query || null),
+  { immediate: true },
+)
 
 // The selected document is revealed once per selection, as soon as it is in
 // the tree. Revealing on every tree replacement (each drive:updated, refocus,
 // or rename) would reopen a folder the user just folded.
 let revealed: string | null = null
 watch(
-  () => [props.selected, props.tree] as const,
+  () => [props.selected, indexed.value] as const,
   ([selected], previous) => {
     if (previous && selected !== previous[0]) revealed = null
-    if (!selected || selected === revealed || !inTree(props.tree, selected)) return
+    if (!selected) tree.selectOnly(null)
+    if (!selected || selected === revealed || !indexed.value.entries.has(selected)) return
     revealed = selected
-    reveal(selected)
+    tree.reveal(selected)
   },
   { immediate: true },
 )
 
-/** Opens the folders above path and moves the keyboard highlight onto its row. */
-function reveal(path: string): void {
-  for (const ancestor of ancestorPaths(path)) {
-    const dir = allDirs.value.find((entry) => entry.path === ancestor)
-    if (dir) expansion.unfold(dir)
-  }
-  void nextTick(() => {
-    const index = rows.value.findIndex((row) => row.entry.path === path)
-    if (index < 0) return
-    active.value = index
-    rowElement(index)?.scrollIntoView?.({ block: 'nearest' })
-  })
+function activateFocused(): boolean {
+  const path = tree.model.getFocusedPath()
+  const entry = path ? entryAt(path) : undefined
+  if (!path || !entry) return false
+  const dir = directory(tree.model, path)
+  if (dir) dir.toggle()
+  else emit('pick', entry.path)
+  return true
 }
 
-function rowIcon(entry: EntryWire): DriveIcon {
-  return entry.kind === 'dir' ? folderIcon(entry.name, expansion.expanded(entry)) : documentIcon(entry.name, entry.kind)
-}
-
-function activate(row: Row): void {
-  if (row.entry.kind === 'dir') expansion.toggle(row.entry)
-  else emit('pick', row.entry.path)
-}
-
-function parentIndex(index: number): number {
-  const depth = rows.value[index]?.depth ?? 0
-  for (let i = index - 1; i >= 0; i--) if (rows.value[i].depth < depth) return i
-  return -1
-}
-
-/** Handles the walk keys; true when it took the key. A search field forwards its keys here. */
+/** Walks the tree for a search field that keeps focus; true when it took the key. */
 function onKeydown(event: KeyboardEvent): boolean {
-  if (renaming.value !== null) return false
-  if (nav.onKeydown(event)) return true
-  const row = rows.value[active.value]
-  if (!row) return false
-  if (event.key === 'Enter') activate(row)
-  else if (event.key === 'F2') startRename(row.entry.path)
-  else if (event.key === 'ArrowRight' && row.entry.kind === 'dir' && !expansion.expanded(row.entry))
-    expansion.toggle(row.entry)
-  else if (event.key === 'ArrowLeft') {
-    if (row.entry.kind === 'dir' && expansion.expanded(row.entry) && !query.value) expansion.toggle(row.entry)
-    else {
-      const parent = parentIndex(active.value)
-      if (parent < 0) return false
-      active.value = parent
-    }
+  const { model } = tree
+  if (event.key === 'ArrowDown') model.focusNextItem()
+  else if (event.key === 'ArrowUp') model.focusPreviousItem()
+  else if (event.key === 'Home') model.focusFirstItem()
+  else if (event.key === 'End') model.focusLastItem()
+  else if (event.key === 'Enter') {
+    if (!activateFocused()) return false
   } else return false
   event.preventDefault()
   return true
 }
 
-function openMenu(row: Row, event: MouseEvent): void {
-  emit('menu', row.entry, event.currentTarget as HTMLElement, null)
+function onHostKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Enter' && activateFocused()) event.preventDefault()
 }
 
-function openRowMenu(index: number, event: MouseEvent): void {
-  const row = rows.value[index]
-  const anchor = rowElement(index)
-  if (row && anchor) emit('menu', row.entry, anchor, event.currentTarget as HTMLElement)
-}
-
-function openRootMenu(event: MouseEvent): void {
+function onHostContextmenu(event: MouseEvent): void {
+  const onRow = event
+    .composedPath()
+    .some((node) => node instanceof HTMLElement && node.getAttribute('role') === 'treeitem')
+  if (onRow) return
+  event.preventDefault()
   emit('menu', props.tree, event.currentTarget as HTMLElement, null)
 }
 
-const renaming = ref<string | null>(null)
-const draft = ref('')
-const renameError = ref<string | null>(null)
-const renameInput = ref<HTMLInputElement[]>([])
-let committing = false
-
-function stemLength(name: string): number {
-  if (name.endsWith('.canvas.json')) return name.length - '.canvas.json'.length
-  const dot = name.lastIndexOf('.')
-  return dot > 0 ? dot : name.length
-}
-
-/** Replaces the row's name with a field; Enter or leaving it commits, Escape cancels. */
-function startRename(path: string): void {
-  const row = rows.value.find((candidate) => candidate.entry.path === path)
-  if (!row) return
-  renaming.value = path
-  draft.value = row.entry.name
-  renameError.value = null
-  void nextTick(() => {
-    const input = renameInput.value[0]
-    input?.focus()
-    // The stem only, as Finder does: a document keeps its kind's extension.
-    input?.setSelectionRange(0, row.entry.kind === 'dir' ? row.entry.name.length : stemLength(row.entry.name))
-  })
-}
-
-function cancelRename(): void {
-  renaming.value = null
-  renameError.value = null
-}
-
-async function commitRename(): Promise<void> {
-  const path = renaming.value
-  if (path === null || committing) return
-  const name = draft.value.trim()
-  const current = path.split('/').pop() ?? path
-  if (!name || name === current) {
-    cancelRename()
-    return
-  }
-  committing = true
-  const { result, error } = await drive.rename(props.space, path, name)
-  committing = false
-  if (renaming.value !== path) return
-  renameError.value = error
-  if (!result) return
-  renaming.value = null
-  if (result.path !== path) emit('moved', path, result.path)
-}
-
-function onRenameKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Enter') {
-    event.preventDefault()
-    void commitRename()
-  } else if (event.key === 'Escape') {
-    event.preventDefault()
-    cancelRename()
-  }
-}
-
-// Only a drag that started in this tree is accepted, which keeps a move
-// inside one space. A document row stands for its own folder, as in a file
-// manager, so the rows at the top level are part of the root's drop area.
-const dragging = ref<string | null>(null)
-const dropTarget = ref<string | null>(null)
-const moveError = ref<string | null>(null)
-
-function parentOf(path: string): string {
-  const slash = path.lastIndexOf('/')
-  return slash < 0 ? '' : path.slice(0, slash)
-}
-
-function onDragStart(row: Row, event: DragEvent): void {
-  if (row.entry.kind === 'dir' || renaming.value !== null) {
-    event.preventDefault()
-    return
-  }
-  dragging.value = row.entry.path
-  moveError.value = null
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', row.entry.path)
-  }
-}
-
-function onDragOver(event: DragEvent, row: Row | null): void {
-  if (dragging.value === null) return
-  event.preventDefault()
-  event.stopPropagation()
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
-  dropTarget.value = row === null ? '' : row.entry.kind === 'dir' ? row.entry.path : parentOf(row.entry.path)
-}
-
-function onDragLeave(event: DragEvent): void {
-  const next = event.relatedTarget as Node | null
-  if (!next || !(event.currentTarget as HTMLElement).contains(next)) dropTarget.value = null
-}
-
-function endDrag(): void {
-  dragging.value = null
-  dropTarget.value = null
-}
-
-async function onDrop(event: DragEvent): Promise<void> {
-  const from = dragging.value
-  const dir = dropTarget.value
-  endDrag()
-  if (from === null || dir === null) return
-  event.preventDefault()
-  if (parentOf(from) === dir) return
-  const { result, error } = await drive.move(props.space, from, dir)
-  moveError.value = error
-  if (result) emit('moved', from, result.path)
-}
-
-defineExpose({ onKeydown, startRename, reveal })
+defineExpose({
+  onKeydown,
+  startRename: (path: string) => tree.model.startRenaming(entryAt(path)?.kind === 'dir' ? `${path}/` : path),
+  reveal: (path: string) => tree.reveal(path),
+})
 </script>
 
 <template>
   <div
-    role="tree"
-    :aria-label="`Documents in ${space}`"
-    tabindex="0"
-    class="min-h-full pb-6 outline-none"
-    :class="dropTarget === '' ? 'drive-drop-root' : ''"
+    class="flex min-h-0 flex-1 flex-col"
     :data-testid="`${testid}-tree`"
-    :data-drop="dropTarget === '' ? 'true' : undefined"
-    @keydown="onKeydown"
-    @contextmenu.self.prevent="openRootMenu"
-    @dragover="onDragOver($event, null)"
-    @dragleave="onDragLeave"
-    @drop="onDrop"
+    @keydown="onHostKeydown"
+    @contextmenu="onHostContextmenu"
   >
     <InlineError
       v-if="moveError"
@@ -336,86 +213,7 @@ defineExpose({ onKeydown, startRename, reveal })
       :message="moveError"
       :testid="`${testid}-move-error`"
     />
-    <div
-      v-for="(row, index) in rows"
-      :key="row.entry.path"
-      :ref="(el) => setRowElement(row.entry.path, el)"
-      role="treeitem"
-      class="drive-row flex cursor-pointer items-center gap-1.5 pr-1 text-small"
-      :class="[
-        row.entry.path === selected ? 'bg-selection text-text' : 'text-text-2 hover:bg-chip',
-        index === active ? 'drive-row-active' : '',
-        row.entry.kind === 'dir' && dropTarget === row.entry.path ? 'drive-row-drop' : '',
-      ]"
-      :style="{ '--depth': row.depth }"
-      :title="row.entry.path"
-      :aria-level="row.depth + 1"
-      :aria-expanded="row.entry.kind === 'dir' ? expansion.expanded(row.entry) : undefined"
-      :aria-selected="row.entry.path === selected"
-      :data-kind="row.entry.kind"
-      :data-drop="row.entry.kind === 'dir' && dropTarget === row.entry.path ? 'true' : undefined"
-      :data-testid="`${testid}-row-${row.entry.path}`"
-      :draggable="row.entry.kind !== 'dir' && renaming === null"
-      @click="
-        () => {
-          active = index
-          activate(row)
-        }
-      "
-      @contextmenu.prevent="openMenu(row, $event)"
-      @dragstart="onDragStart(row, $event)"
-      @dragover="onDragOver($event, row)"
-      @dragend="endDrag"
-    >
-      <IconChevronRight
-        v-if="row.entry.kind === 'dir'"
-        class="size-3 shrink-0 text-text-4 transition-transform"
-        :class="expansion.expanded(row.entry) ? 'rotate-90' : ''"
-        aria-hidden="true"
-      />
-      <span v-else class="size-3 shrink-0" aria-hidden="true" />
-      <component
-        :is="rowIcon(row.entry).icon"
-        class="size-3.5 shrink-0"
-        :class="rowIcon(row.entry).color"
-        aria-hidden="true"
-      />
-      <template v-if="renaming === row.entry.path">
-        <input
-          ref="renameInput"
-          v-model="draft"
-          type="text"
-          autocapitalize="off"
-          autocorrect="off"
-          spellcheck="false"
-          :aria-label="`Rename ${row.entry.name}`"
-          :aria-invalid="renameError ? 'true' : undefined"
-          class="drive-rename min-w-0 flex-1 rounded-sm bg-app px-1 text-small text-text outline-none"
-          :data-testid="`${testid}-rename-input`"
-          @click.stop
-          @keydown.stop="onRenameKeydown"
-          @blur="commitRename"
-        />
-      </template>
-      <span v-else class="min-w-0 flex-1 truncate" :class="compact ? '' : 'leading-snug'">{{
-        entryLabel(row.entry)
-      }}</span>
-      <span
-        v-if="row.entry.kind !== 'dir' && activity.isUnopened(space, row.entry.path)"
-        class="size-1.5 shrink-0 rounded-full bg-accent"
-        :data-testid="`${testid}-row-${row.entry.path}-unseen`"
-        aria-label="Written since you last opened it"
-      />
-      <IconButton
-        v-if="renaming !== row.entry.path"
-        class="drive-row-more shrink-0"
-        size="sm"
-        :label="`Actions for ${row.entry.name}`"
-        :icon="IconEllipsis"
-        :data-testid="`${testid}-row-${row.entry.path}-menu`"
-        @click.stop="openRowMenu(index, $event)"
-      />
-    </div>
+    <PathTree :model="tree.model" />
     <InlineError
       v-if="renameError"
       variant="line"
@@ -425,34 +223,3 @@ defineExpose({ onKeydown, startRename, reveal })
     />
   </div>
 </template>
-
-<style scoped>
-.drive-row {
-  height: 1.625rem;
-  padding-left: calc(0.5rem + var(--depth) * 0.875rem);
-}
-.drive-row-active {
-  box-shadow: inset 2px 0 0 var(--color-accent);
-}
-.drive-row-drop {
-  background: var(--color-accent-tint);
-  box-shadow: inset 0 0 0 1px var(--color-accent);
-}
-.drive-drop-root {
-  box-shadow: inset 0 0 0 1px var(--color-accent);
-}
-.drive-rename {
-  box-shadow: 0 0 0 1px var(--color-accent);
-}
-/* The row's menu button shows where the pointer or the keyboard is, so a
-   long list does not repeat it on every line. */
-.drive-row-more {
-  opacity: 0;
-}
-.drive-row:hover .drive-row-more,
-.drive-row-active .drive-row-more,
-.drive-row[aria-selected='true'] .drive-row-more,
-.drive-row-more:focus-visible {
-  opacity: 1;
-}
-</style>

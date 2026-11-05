@@ -6,6 +6,11 @@ import { expect, tag, test } from '../../../fixtures/test.js'
 
 const plan = 'plans/2026-10-11-plan.md'
 
+// The tree renders in a shadow root; CSS locators reach into it. A folder's
+// row path ends in a slash.
+const row = (page: Page, path: string) =>
+  page.getByTestId('drive-page-tree').locator(`[role="treeitem"][data-item-path="${path}"]`)
+
 async function openRepoSpace(page: Page): Promise<void> {
   await page.goto('/')
   await expect(page.getByTestId('feed-item').first()).toBeVisible()
@@ -13,7 +18,7 @@ async function openRepoSpace(page: Page): Promise<void> {
   await page.getByTestId('titlebar-menu-drive').click()
   await page.getByTestId('drive-page-space').click()
   await page.getByTestId('drive-page-space-option-e2e/repo').click()
-  await expect(page.getByTestId('drive-page-row-plans')).toBeVisible()
+  await expect(row(page, 'plans/')).toBeVisible()
 }
 
 // The reader reveals the document it shows by opening its folders, and which
@@ -21,16 +26,15 @@ async function openRepoSpace(page: Page): Promise<void> {
 // clicked open only while the row under it is still hidden.
 async function showRow(page: Page, folder: string, path: string): Promise<void> {
   await expect(async () => {
-    if (!(await page.getByTestId(`drive-page-row-${path}`).isVisible())) {
-      await page.getByTestId(`drive-page-row-${folder}`).click()
+    if (!(await row(page, path).isVisible())) {
+      await row(page, `${folder}/`).click()
     }
-    await expect(page.getByTestId(`drive-page-row-${path}`)).toBeVisible({ timeout: 1_000 })
+    await expect(row(page, path)).toBeVisible({ timeout: 1_000 })
   }).toPass()
 }
 
 async function rowMenu(page: Page, path: string, action: string): Promise<void> {
-  await page.getByTestId(`drive-page-row-${path}`).hover()
-  await page.getByTestId(`drive-page-row-${path}-menu`).click()
+  await row(page, path).click({ button: 'right' })
   await page.getByTestId(`drive-page-menu-${action}`).click()
 }
 
@@ -41,36 +45,38 @@ test.describe('drive reorganize', { tag: [tag.drive] }, () => {
     await page.getByTestId('drive-page-new-folder-open').click()
     await page.getByTestId('drive-page-new-folder-input').fill('inbox')
     await page.getByTestId('drive-page-new-folder-save').click()
-    await expect(page.getByTestId('drive-page-row-inbox')).toHaveAttribute('data-kind', 'dir')
+    await expect(row(page, 'inbox/')).toHaveAttribute('data-item-type', 'folder')
 
-    await rowMenu(page, 'inbox', 'rename')
-    await page.getByTestId('drive-page-rename-input').fill('archive')
-    await page.getByTestId('drive-page-rename-input').press('Enter')
-    await expect(page.getByTestId('drive-page-row-archive')).toBeVisible()
-    await expect(page.getByTestId('drive-page-row-inbox')).toHaveCount(0)
+    await rowMenu(page, 'inbox/', 'rename')
+    const renameInput = page.getByTestId('drive-page-tree').locator('[data-item-rename-input]')
+    await renameInput.fill('archive')
+    await renameInput.press('Enter')
+    await expect(row(page, 'archive/')).toBeVisible()
+    await expect(row(page, 'inbox/')).toHaveCount(0)
 
     await showRow(page, 'plans', plan)
     await rowMenu(page, plan, 'move')
-    await expect(page.getByTestId('drive-page-move-folder-plans')).toHaveAttribute('aria-selected', 'true')
-    await page.getByTestId('drive-page-move-folder-archive').click()
+    const moveFolder = (path: string) =>
+      page.getByTestId('drive-page-move-folders').locator(`[role="treeitem"][data-item-path="${path}"]`)
+    await expect(moveFolder('plans/')).toHaveAttribute('aria-selected', 'true')
+    await moveFolder('archive/').click()
     await page.getByTestId('drive-page-move-confirm').click()
     await expect(page.getByTestId('drive-page-move')).toHaveCount(0)
-    await expect(page.getByTestId(`drive-page-row-${plan}`)).toHaveCount(0)
+    await expect(row(page, plan)).toHaveCount(0)
     await showRow(page, 'archive', 'archive/2026-10-11-plan.md')
 
-    await page.getByTestId('drive-page-row-archive').hover()
-    await page.getByTestId('drive-page-row-archive-menu').click()
+    await row(page, 'archive/').click({ button: 'right' })
     await expect(page.getByTestId('drive-page-menu-delete')).toBeDisabled()
     await page.keyboard.press('Escape')
 
     await rowMenu(page, 'archive/2026-10-11-plan.md', 'delete')
     await page.getByTestId('drive-page-delete-confirmation-confirm').click()
-    await expect(page.getByTestId('drive-page-row-archive/2026-10-11-plan.md')).toHaveCount(0)
+    await expect(row(page, 'archive/2026-10-11-plan.md')).toHaveCount(0)
 
-    await rowMenu(page, 'archive', 'delete')
+    await rowMenu(page, 'archive/', 'delete')
     await page.getByTestId('drive-page-delete-confirmation-confirm').click()
-    await expect(page.getByTestId('drive-page-row-archive')).toHaveCount(0)
-    await expect(page.getByTestId('drive-page-row-plans')).toBeVisible()
-    await expect(page.getByTestId('drive-page-row-canvases')).toBeVisible()
+    await expect(row(page, 'archive/')).toHaveCount(0)
+    await expect(row(page, 'plans/')).toBeVisible()
+    await expect(row(page, 'canvases/')).toBeVisible()
   })
 })

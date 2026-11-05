@@ -1,23 +1,18 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import IconChevronRight from '~icons/lucide/chevron-right'
+import type { FileTreeRowDecoration, FileTreeRowDecorationContext, GitStatus } from '@pierre/trees'
+import { computed, shallowRef, watch } from 'vue'
 import IconClipboardCopy from '~icons/lucide/clipboard-copy'
-import IconEllipsis from '~icons/lucide/ellipsis'
 import IconExternalLink from '~icons/lucide/external-link'
-import IconMessageSquare from '~icons/lucide/message-square'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
-import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { useClipboard } from '@hive/ui/composables/useClipboard'
-import { useListKeyboardNav } from '@hive/ui/composables/useListKeyboardNav'
 import type { MenuEntry } from '@hive/ui/types/menu'
-import { documentIcon, folderIcon } from '../drive/driveIcon'
-import { useTreeExpansion } from '../../composables/useTreeExpansion'
-import { gitFileDir, gitFileName, gitRows, gitStatus, type GitLayout, type GitRow } from '../../lib/gitTree'
+import PathTree from '../tree/PathTree.vue'
+import { usePathTree } from '../tree/usePathTree'
+import { gitOrder, gitTreePath } from '../../lib/gitTree'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
   files: ChangedFile[]
-  layout: GitLayout
   selected: string | null
   /** Files marked viewed, which dim in the list. */
   viewed?: ReadonlySet<string>
@@ -26,91 +21,127 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ pick: [path: string]; 'open-editor': [] }>()
 
-const folders = computed(() =>
-  gitRows(props.files, props.layout, () => true).flatMap((row) => (row.kind === 'dir' ? [row.key] : [])),
-)
-const expansion = useTreeExpansion<string>('hive.git.tree.expanded', {
-  key: (dir) => dir,
-  defaultOpen: () => true,
-  filtering: () => false,
-  nodes: () => folders.value,
-})
-const anyFolderOpen = computed(() => folders.value.some((dir) => expansion.expanded(dir)))
-defineExpose({ anyFolderOpen, setAllFolders: expansion.setAll })
+const byTreePath = computed(() => new Map(props.files.map((file) => [gitTreePath(file.path), file])))
+const treePaths = computed(() => gitOrder(props.files).map((file) => gitTreePath(file.path)))
 
-const rows = computed(() => gitRows(props.files, props.layout, expansion.expanded))
+const GIT_STATUSES = new Set<string>(['added', 'deleted', 'modified', 'renamed', 'untracked'])
+const gitStatus = computed(() =>
+  props.files.flatMap((file) =>
+    GIT_STATUSES.has(file.status) ? [{ path: gitTreePath(file.path), status: file.status as GitStatus }] : [],
+  ),
+)
 
 function folderComments(dir: string): number {
   let total = 0
-  for (const [path, count] of props.commentCounts ?? []) if (path.startsWith(`${dir}/`)) total += count
+  for (const [path, count] of props.commentCounts ?? []) if (gitTreePath(path).startsWith(dir)) total += count
   return total
 }
 
-const rowElements = new Map<string, HTMLElement>()
-
-function rowKey(row: GitRow): string {
-  return row.kind === 'dir' ? `dir:${row.key}` : `file:${row.file.path}`
+function decorate({ row }: FileTreeRowDecorationContext): FileTreeRowDecoration | null {
+  if (row.kind === 'directory') {
+    const total = row.isExpanded ? 0 : folderComments(row.path)
+    return total
+      ? {
+          text: String(total),
+          title: `${total} review comments`,
+          parts: [{ text: `${total}`, color: 'var(--color-accent)' }],
+        }
+      : null
+  }
+  const file = byTreePath.value.get(row.path)
+  if (!file) return null
+  const comments = props.commentCounts?.get(file.path) ?? 0
+  const parts = [
+    ...(comments ? [{ text: `${comments} `, color: 'var(--color-accent)' }] : []),
+    ...(!file.binary && file.additions ? [{ text: `+${file.additions}`, color: 'var(--color-severity-success)' }] : []),
+    ...(!file.binary && file.deletions ? [{ text: ` -${file.deletions}`, color: 'var(--color-severity-error)' }] : []),
+  ]
+  if (!parts.length) return null
+  const title = [comments ? `${comments} review comments` : '', file.oldPath ? `${file.oldPath} -> ${file.path}` : '']
+    .filter(Boolean)
+    .join(' · ')
+  return { text: parts.map((part) => part.text).join(''), title: title || undefined, parts }
 }
 
-function setRowElement(row: GitRow, el: unknown): void {
-  if (el instanceof HTMLElement) rowElements.set(rowKey(row), el)
-  else rowElements.delete(rowKey(row))
-}
+const menu = shallowRef<{ file: ChangedFile; anchor: HTMLElement; toggle: HTMLElement } | null>(null)
 
-const active = ref(0)
-const nav = useListKeyboardNav({
-  active,
-  count: () => rows.value.length,
-  wrap: false,
-  homeEnd: () => true,
-  row: (index) => {
-    const row = rows.value[index]
-    return row ? rowElements.get(rowKey(row)) : undefined
+const tree = usePathTree({
+  paths: treePaths,
+  storageKey: 'hive.git.tree.expanded',
+  defaultOpen: true,
+  gitStatus,
+  renderRowDecoration: decorate,
+  onSelectionChange(paths) {
+    const file = paths.length === 1 ? byTreePath.value.get(paths[0]) : undefined
+    if (file && file.path !== props.selected) emit('pick', file.path)
+    else if (!file) tree.selectOnly(props.selected && gitTreePath(props.selected))
+  },
+  composition: {
+    contextMenu: {
+      enabled: true,
+      triggerMode: 'both',
+      onOpen(item, context) {
+        context.close({ restoreFocus: false })
+        const file = byTreePath.value.get(item.path)
+        if (!file) return
+        menu.value = {
+          file,
+          anchor: tree.rowElement(item.path) ?? context.anchorElement,
+          toggle: context.anchorElement,
+        }
+      },
+    },
   },
 })
+defineExpose({ anyFolderOpen: tree.anyFolderOpen, setAllFolders: tree.setAllFolders })
 
+watch(
+  () => [props.commentCounts, props.viewed] as const,
+  () => tree.redecorate(),
+)
 watch(
   () => props.selected,
   (path) => {
-    if (path) rowElements.get(`file:${path}`)?.scrollIntoView?.({ block: 'nearest' })
+    if (path) tree.reveal(gitTreePath(path))
+    else tree.selectOnly(null)
   },
+  { immediate: true },
 )
 
-function activate(row: GitRow): void {
-  if (row.kind === 'dir') expansion.toggle(row.key)
-  else emit('pick', row.file.path)
-}
-
-function parentIndex(index: number): number {
-  const depth = rows.value[index]?.depth ?? 0
-  for (let i = index - 1; i >= 0; i--) if (rows.value[i].depth < depth) return i
-  return -1
+// Picking the file on screen again turns off showing it alone, and a click on
+// a row that is already selected changes no selection, so the tree reports nothing.
+function onClick(event: MouseEvent): void {
+  const row = event
+    .composedPath()
+    .find((node): node is HTMLElement => node instanceof HTMLElement && node.getAttribute('role') === 'treeitem')
+  const file = row?.dataset.itemPath ? byTreePath.value.get(row.dataset.itemPath) : undefined
+  if (file && file.path === props.selected) emit('pick', file.path)
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (nav.onKeydown(event)) return
-  const row = rows.value[active.value]
-  if (!row) return
-  if (event.key === 'Enter') activate(row)
-  else if (event.key === 'ArrowRight' && row.kind === 'dir' && !expansion.expanded(row.key)) expansion.toggle(row.key)
-  else if (event.key === 'ArrowLeft') {
-    if (row.kind === 'dir' && expansion.expanded(row.key)) expansion.toggle(row.key)
-    else {
-      const parent = parentIndex(active.value)
-      if (parent < 0) return
-      active.value = parent
-    }
-  } else return
+  if (event.key !== 'Enter') return
+  const path = tree.model.getFocusedPath()
+  const file = path ? byTreePath.value.get(path) : undefined
+  if (!file) return
   event.preventDefault()
+  emit('pick', file.path)
 }
 
-function rowTitle(file: ChangedFile): string {
-  return file.oldPath ? `${file.oldPath} -> ${file.path}` : file.path
-}
+const viewedCss = computed(() =>
+  [...(props.viewed ?? [])]
+    .map(
+      (path) =>
+        `[data-item-path=${JSON.stringify(gitTreePath(path))}] [data-item-section="content"] { color: var(--color-text-4); text-decoration: line-through; }`,
+    )
+    .join('\n'),
+)
+// Every folder in a list of changes holds a change, so the tree's
+// changed-descendant dot would mark them all.
+const rowCss = computed(
+  () => `[data-item-type="folder"] [data-item-section="git"] { visibility: hidden; }\n${viewedCss.value}`,
+)
 
-const menu = ref<{ file: ChangedFile; anchor: HTMLElement; toggle: HTMLElement } | null>(null)
 const clipboard = useClipboard()
-
 const menuEntries: MenuEntry[] = [
   { kind: 'action', id: 'copy-path', label: 'Copy path', icon: IconClipboardCopy, testid: 'changes-copy-path' },
   {
@@ -122,12 +153,6 @@ const menuEntries: MenuEntry[] = [
   },
 ]
 
-function openMenu(file: ChangedFile, event: MouseEvent): void {
-  const toggle = event.currentTarget as HTMLElement
-  const anchor = rowElements.get(`file:${file.path}`)
-  if (anchor) menu.value = { file, anchor, toggle }
-}
-
 function onMenuSelect(id: string): void {
   const file = menu.value?.file
   menu.value = null
@@ -138,122 +163,8 @@ function onMenuSelect(id: string): void {
 </script>
 
 <template>
-  <div
-    role="tree"
-    aria-label="Changed files"
-    tabindex="0"
-    class="min-h-full pb-6 outline-none"
-    data-testid="changes-tree"
-    @keydown="onKeydown"
-  >
-    <template v-for="(row, index) in rows" :key="rowKey(row)">
-      <div
-        v-if="row.kind === 'dir'"
-        :ref="(el) => setRowElement(row, el)"
-        role="treeitem"
-        class="git-row flex cursor-pointer items-center gap-1.5 pr-1 text-small text-text-2 hover:bg-chip"
-        :class="index === active ? 'git-row-active' : ''"
-        :style="{ '--depth': row.depth }"
-        :title="row.key"
-        :aria-level="row.depth + 1"
-        :aria-expanded="expansion.expanded(row.key)"
-        :data-testid="`changes-dir-${row.key}`"
-        @click="
-          () => {
-            active = index
-            activate(row)
-          }
-        "
-      >
-        <IconChevronRight
-          class="size-3 shrink-0 text-text-4 transition-transform"
-          :class="expansion.expanded(row.key) ? 'rotate-90' : ''"
-          aria-hidden="true"
-        />
-        <component
-          :is="folderIcon(gitFileName(row.label), expansion.expanded(row.key)).icon"
-          class="size-3.5 shrink-0"
-          :class="folderIcon(gitFileName(row.label), expansion.expanded(row.key)).color"
-          aria-hidden="true"
-        />
-        <span class="min-w-0 flex-1 truncate">{{ row.label }}</span>
-        <span
-          v-if="!expansion.expanded(row.key) && folderComments(row.key)"
-          class="flex shrink-0 items-center gap-0.5 pr-1 font-mono text-caption text-accent"
-          :title="`${folderComments(row.key)} review comments`"
-          :data-testid="`changes-row-${row.key}-comments`"
-        >
-          <IconMessageSquare class="size-3" aria-hidden="true" />
-          {{ folderComments(row.key) }}
-        </span>
-      </div>
-      <div
-        v-else
-        :ref="(el) => setRowElement(row, el)"
-        role="treeitem"
-        class="git-row flex cursor-pointer items-center gap-1.5 pr-1 text-small"
-        :class="[
-          row.file.path === selected ? 'bg-selection text-text' : 'text-text-2 hover:bg-chip',
-          index === active ? 'git-row-active' : '',
-        ]"
-        :style="{ '--depth': row.depth }"
-        :title="rowTitle(row.file)"
-        :aria-level="row.depth + 1"
-        :aria-selected="row.file.path === selected"
-        :data-testid="`changes-row-${row.file.path}`"
-        @click="
-          () => {
-            active = index
-            activate(row)
-          }
-        "
-      >
-        <span class="size-3 shrink-0" aria-hidden="true" />
-        <component
-          :is="documentIcon(gitFileName(row.file.path), '').icon"
-          class="size-3.5 shrink-0"
-          :class="documentIcon(gitFileName(row.file.path), '').color"
-          aria-hidden="true"
-        />
-        <span class="min-w-0 truncate" :class="viewed?.has(row.file.path) ? 'text-text-4 line-through' : ''">{{
-          gitFileName(row.file.path)
-        }}</span>
-        <span
-          v-if="layout === 'flat' && gitFileDir(row.file.path)"
-          class="min-w-0 truncate text-caption text-text-4"
-          dir="rtl"
-          >{{ gitFileDir(row.file.path) }}</span
-        >
-        <span class="min-w-0 flex-1" />
-        <span
-          v-if="commentCounts?.get(row.file.path)"
-          class="flex shrink-0 items-center gap-0.5 font-mono text-caption text-accent"
-          :title="`${commentCounts.get(row.file.path)} review comments`"
-          :data-testid="`changes-row-${row.file.path}-comments`"
-        >
-          <IconMessageSquare class="size-3" aria-hidden="true" />
-          {{ commentCounts.get(row.file.path) }}
-        </span>
-        <span v-if="!row.file.binary" class="git-row-reveal shrink-0 font-mono text-caption">
-          <span v-if="row.file.additions" class="text-severity-success">+{{ row.file.additions }}</span>
-          <span v-if="row.file.deletions" class="ml-1 text-severity-error">-{{ row.file.deletions }}</span>
-        </span>
-        <IconButton
-          class="git-row-reveal shrink-0"
-          size="sm"
-          :label="`Actions for ${gitFileName(row.file.path)}`"
-          :icon="IconEllipsis"
-          :data-testid="`changes-row-${row.file.path}-menu`"
-          @click.stop="openMenu(row.file, $event)"
-        />
-        <span
-          class="w-3 shrink-0 text-center font-mono text-caption font-semibold"
-          :class="gitStatus(row.file.status).color"
-          :title="gitStatus(row.file.status).label"
-          >{{ gitStatus(row.file.status).letter }}</span
-        >
-      </div>
-    </template>
+  <div class="flex min-h-0 flex-1 flex-col" data-testid="changes-tree" @click="onClick" @keydown="onKeydown">
+    <PathTree :model="tree.model" :row-css="rowCss" />
     <AppMenu
       v-if="menu"
       :entries="menuEntries"
@@ -265,24 +176,3 @@ function onMenuSelect(id: string): void {
     />
   </div>
 </template>
-
-<style scoped>
-.git-row {
-  height: 1.625rem;
-  padding-left: calc(0.5rem + var(--depth) * 0.875rem);
-}
-.git-row-active {
-  box-shadow: inset 2px 0 0 var(--color-accent);
-}
-/* At rest a row is its name and letter, so a long list does not repeat the
-   counts and the menu on every line. */
-.git-row-reveal {
-  opacity: 0;
-}
-.git-row:hover .git-row-reveal,
-.git-row-active .git-row-reveal,
-.git-row[aria-selected='true'] .git-row-reveal,
-.git-row-reveal:focus-visible {
-  opacity: 1;
-}
-</style>

@@ -16,8 +16,6 @@ import IconMessageSquareQuote from '~icons/lucide/message-square-quote'
 import IconSend from '~icons/lucide/send'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconGitPullRequest from '~icons/lucide/git-pull-request'
-import IconList from '~icons/lucide/list'
-import IconListTree from '~icons/lucide/list-tree'
 import IconPanelLeft from '~icons/lucide/panel-left'
 import IconRows2 from '~icons/lucide/rows-2'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
@@ -61,7 +59,7 @@ import { readOrder, type DiffMode } from '../../lib/diffItems'
 import { branchName } from '../../lib/diffTarget'
 import { commentLabel, diffSpan, hasDiffLine, type DiffSearchMatch, type DiffSpan } from '../../lib/diffReview'
 import type { DiffLineSelection } from '../../lib/diffSelection'
-import { gitFileName, gitRows, type GitLayout } from '../../lib/gitTree'
+import { gitFileName, gitOrder } from '../../lib/gitTree'
 import { isEditableTarget } from '../../lib/isEditableTarget'
 import { useAgentReviews } from '../../stores/useAgentReviews'
 import { useChangesReview, type ChangesComment, type ThreadResponse } from '../../stores/useChangesReview'
@@ -102,7 +100,6 @@ const against = computed({
   },
 })
 const target = computed(() => ({ base: base.value, against: against.value, commit: commit.value }))
-const layout = useStorage<GitLayout>('hive.git.layout', 'tree')
 const mode = useStorage<DiffMode>('hive.git.diffMode', 'unified')
 // One file at a time: a pick in the rail turns it on, and j and k still walk every file.
 const isolate = useStorage('hive.git.isolate', false)
@@ -116,13 +113,7 @@ const branches = useSessionBranches(sessionId)
 // The tree lists folders first, so the stream follows the rail's order rather
 // than git's: j and k then walk the rail row by row. While a new target's answer
 // is on its way, the last target's files would be read against the new one.
-const files = computed<ChangedFile[]>(() =>
-  pending.value
-    ? []
-    : gitRows(changes.value?.files ?? [], layout.value, () => true).flatMap((row) =>
-        row.kind === 'file' ? [row.file] : [],
-      ),
-)
+const files = computed<ChangedFile[]>(() => (pending.value ? [] : gitOrder(changes.value?.files ?? [])))
 
 const shownBase = computed<DiffBase>(() => (changes.value?.base as DiffBase | undefined) || base.value)
 const additions = computed(() => files.value.reduce((sum, file) => sum + file.additions, 0))
@@ -963,7 +954,6 @@ function openInEditor(): void {
             >{{ viewedPaths.size }}/{{ files.length }} viewed</span
           >
           <IconButton
-            v-if="layout === 'tree'"
             size="sm"
             :label="tree?.anyFolderOpen ? 'Collapse all folders' : 'Expand all folders'"
             :icon="tree?.anyFolderOpen ? IconChevronsDownUp : IconChevronsUpDown"
@@ -977,13 +967,6 @@ function openInEditor(): void {
             :aria-pressed="hideViewed"
             data-testid="changes-hide-viewed"
             @click="hideViewed = !hideViewed"
-          />
-          <IconButton
-            size="sm"
-            :label="layout === 'tree' ? 'Show as list' : 'Show as tree'"
-            :icon="layout === 'tree' ? IconList : IconListTree"
-            data-testid="changes-layout"
-            @click="layout = layout === 'tree' ? 'flat' : 'tree'"
           />
         </div>
         <button
@@ -1004,18 +987,17 @@ function openInEditor(): void {
             >{{ pendingAgent.length }}</span
           >
         </button>
-        <div class="hive-scroll min-h-0 flex-1 overflow-y-auto">
+        <div class="flex min-h-0 flex-1 flex-col">
           <GitTree
             ref="tree"
             :files="railFiles"
-            :layout="layout"
             :selected="overviewOpen ? null : current"
             :viewed="viewedPaths"
             :comment-counts="commentCounts"
             @pick="pickFile"
             @open-editor="openInEditor"
           />
-          <p v-if="changes?.truncated" class="px-3 pb-3 text-xs text-text-3" data-testid="changes-truncated">
+          <p v-if="changes?.truncated" class="shrink-0 px-3 py-2 text-xs text-text-3" data-testid="changes-truncated">
             Showing the first {{ files.length }} files. Open the session in an editor to see the rest.
           </p>
         </div>

@@ -7,6 +7,7 @@ import { useDriveReview } from '../../../stores/useDriveReview'
 import type { EntryWire } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { chooseOption, openSelect } from '@hive/ui/test-utils/select'
 import { doc, documentFor, folder, root, space } from '../../../test-utils/drive'
+import { settleTree, treeRow } from '../../../test-utils/pathTree'
 
 const wailsEvents = vi.hoisted(() => ({
   handlers: [] as Array<[string, (event: { data: unknown }) => void]>,
@@ -150,9 +151,8 @@ describe('DrivePage', () => {
     )
     expect(wrapper.get('[data-testid="drive-page-markdown"] h1').text()).toBe('E2E Drive Plan')
     expect(wrapper.get('[data-testid="drive-page-frontmatter-type"]').text()).toContain('plan')
-    expect(wrapper.get('[data-testid="drive-page-row-plans/2026-10-11-plan.md"]').attributes('aria-selected')).toBe(
-      'true',
-    )
+    await settleTree()
+    expect(treeRow(wrapper.element, 'plans/2026-10-11-plan.md').getAttribute('aria-selected')).toBe('true')
   })
 
   it('lets the full-page width setting widen the measure', async () => {
@@ -168,9 +168,11 @@ describe('DrivePage', () => {
     const { wrapper, scope } = await mountPage({ path: report.path })
     expect(wrapper.get('[data-testid="drive-page-block-summary"]').text()).toContain('Summary.')
 
-    await wrapper.get('[data-testid="drive-page-row-plans"]').trigger('click')
-    await wrapper.get('[data-testid="drive-page-row-plans/2026-10-11-plan.md"]').trigger('click')
-    await flushPromises()
+    await settleTree()
+    treeRow(wrapper.element, 'plans/').click()
+    await settleTree()
+    treeRow(wrapper.element, 'plans/2026-10-11-plan.md').click()
+    await settleTree()
     expect(scope.value).toEqual({ space: 'e2e/repo', path: 'plans/2026-10-11-plan.md', session: null })
     expect(wrapper.get('[data-testid="drive-page-title"]').text()).toBe('E2E Drive Plan')
   })

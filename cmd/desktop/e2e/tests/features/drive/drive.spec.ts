@@ -26,8 +26,11 @@ test.describe('drive', { tag: [tag.drive] }, () => {
     ).toBeVisible();
     await page.getByTestId("drive-page-space-option-e2e/repo").click();
 
-    await page.getByTestId("drive-page-row-plans").click();
-    await page.getByTestId(`drive-page-row-${planPath}`).click();
+    const tree = page.getByTestId("drive-page-tree");
+    await tree.locator('[role="treeitem"][data-item-path="plans/"]').click();
+    await tree
+      .locator(`[role="treeitem"][data-item-path="${planPath}"]`)
+      .click();
     await expect(page.getByTestId("drive-page-title")).toHaveText(planTitle);
     await expect(
       page

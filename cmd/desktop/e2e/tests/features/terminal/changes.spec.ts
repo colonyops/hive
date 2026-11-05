@@ -4,6 +4,12 @@ import { expect, tag, test } from "../../../fixtures/test.js";
 import { bindingID } from "../../../fixtures/wails.js";
 import { mockTerminalAPI, noAgents } from "../../../fixtures/terminal.js";
 
+// The file tree renders in a shadow root; CSS locators reach into it.
+const changesRow = (page: Page, path: string) =>
+  page
+    .getByTestId("changes-tree")
+    .locator(`[role="treeitem"][data-item-path="${path}"]`);
+
 // Server builds cannot run terminals, so the session list and both git reads are
 // mocked. The go tests and test/remote cover the reads themselves.
 const windowState = {
@@ -263,9 +269,9 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
     await page.getByTestId("changes-target-option-branch").click();
 
     await page.getByTestId("changes-folders-toggle").click();
-    await expect(page.getByTestId("changes-row-web/ui/App.vue")).toHaveCount(0);
+    await expect(changesRow(page, "web/ui/App.vue")).toHaveCount(0);
     await page.getByTestId("changes-folders-toggle").click();
-    await expect(page.getByTestId("changes-row-web/ui/App.vue")).toBeVisible();
+    await expect(changesRow(page, "web/ui/App.vue")).toBeVisible();
     await page.keyboard.press("b");
     await expect(page.getByTestId("changes-files")).toBeHidden();
     await page.screenshot({
@@ -327,8 +333,10 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
     await expect(stream).toContainText("Wrap this error.");
     await expect(page.getByTestId("changes-send-count")).toHaveText("1");
     await expect(
-      page.getByTestId("changes-row-internal/platform/git/changes.go-comments"),
-    ).toHaveText("1");
+      changesRow(page, "internal/platform/git/changes.go").locator(
+        '[data-item-section="decoration"] [title="1 review comments"]',
+      ),
+    ).toBeVisible();
     await page.screenshot({
       path: screenshotPath(`changes-review-${browserName}.png`),
     });
@@ -540,18 +548,17 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
     await openChanges(page);
     const stream = page.getByTestId("changes-stream");
 
-    await page.getByTestId("changes-row-web/ui/App.vue").click();
+    await changesRow(page, "web/ui/App.vue").click();
     await expect(stream).toContainText("<template>");
     await expect(stream).not.toContainText("return err");
     await page.keyboard.press("f");
     await expect(stream).toContainText("return err");
-    await page.getByTestId("changes-row-web/ui/App.vue").click();
+    await changesRow(page, "web/ui/App.vue").click();
     await expect(stream).not.toContainText("return err");
-    await page.getByTestId("changes-row-web/ui/App.vue").click();
+    await changesRow(page, "web/ui/App.vue").click();
     await expect(stream).toContainText("return err");
 
-    await page
-      .getByTestId("changes-row-internal/platform/git/changes.go")
+    await changesRow(page, "internal/platform/git/changes.go")
       .click();
     await expect(stream).not.toContainText("filler 9");
     await stream.locator("[data-expand-button]").first().click();

@@ -1,7 +1,8 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DriveTree from '../DriveTree.vue'
 import { doc, folder, root } from '../../../test-utils/drive'
+import { settleTree, treeKey, treePaths, treeRow, treeShadow } from '../../../test-utils/pathTree'
 
 const events = vi.hoisted(() => ({ On: vi.fn() }))
 vi.mock('@wailsio/runtime', () => ({ Events: { On: events.On } }))
@@ -24,248 +25,177 @@ const tree = root([
     folder('plans/old', [doc('plans/old/a.md')]),
     doc('plans/2026-10-11-plan.md', { title: 'The Plan' }),
   ]),
+  folder('empty', []),
   doc('index.html'),
   doc('notes.txt'),
 ])
 
-function mountTree(props: Partial<{ selected: string | null; filter: string; tree: typeof tree }> = {}) {
-  return mount(DriveTree, {
+async function mountTree(props: Partial<{ selected: string | null; filter: string; tree: typeof tree }> = {}) {
+  const wrapper = mount(DriveTree, {
     props: { space: 'acme/site', tree, selected: null, filter: '', testid: 't', ...props },
     attachTo: document.body,
   })
+  await settleTree()
+  return wrapper
 }
 
-const rowPaths = (wrapper: ReturnType<typeof mountTree>) =>
-  wrapper.findAll('[role="treeitem"]').map((row) => row.attributes('data-testid')?.replace('t-row-', ''))
+const scopeOf = (wrapper: Awaited<ReturnType<typeof mountTree>>) => wrapper.element as Element
+const rows = (wrapper: Awaited<ReturnType<typeof mountTree>>) => treePaths(scopeOf(wrapper))
+const row = (wrapper: Awaited<ReturnType<typeof mountTree>>, path: string) => treeRow(scopeOf(wrapper), path)
 
 describe('DriveTree', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    document.body.innerHTML = ''
     events.On.mockReturnValue(() => {})
     drive.Spaces.mockResolvedValue([])
     drive.Tree.mockResolvedValue(tree)
   })
 
-  it('lists folders first as served, folded, with a kind per row', () => {
-    const wrapper = mountTree()
-    expect(rowPaths(wrapper)).toEqual(['canvases', 'plans', 'index.html', 'notes.txt'])
-    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('false')
-    expect(wrapper.get('[data-testid="t-row-index.html"]').attributes('data-kind')).toBe('html')
-    expect(wrapper.get('[data-testid="t-row-notes.txt"]').attributes('data-kind')).toBe('file')
+  it('lists folders first, folded, and keeps an empty folder', async () => {
+    const wrapper = await mountTree()
+    expect(rows(wrapper)).toEqual(['canvases/', 'empty/', 'plans/', 'index.html', 'notes.txt'])
+    expect(row(wrapper, 'plans/').getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('opens and closes a folder on click, and emits pick for a document', async () => {
-    const wrapper = mountTree()
-    await wrapper.get('[data-testid="t-row-plans"]').trigger('click')
-    expect(rowPaths(wrapper)).toEqual([
-      'canvases',
-      'plans',
-      'plans/old',
-      'plans/2026-10-11-plan.md',
-      'index.html',
-      'notes.txt',
-    ])
-    expect(wrapper.get('[data-testid="t-row-plans/2026-10-11-plan.md"]').text()).toBe('The Plan')
+  it('opens a folder on click and emits pick for a document', async () => {
+    const wrapper = await mountTree()
+    row(wrapper, 'plans/').click()
+    await settleTree()
+    expect(rows(wrapper)).toContain('plans/2026-10-11-plan.md')
 
-    await wrapper.get('[data-testid="t-row-plans/2026-10-11-plan.md"]').trigger('click')
+    row(wrapper, 'plans/2026-10-11-plan.md').click()
+    await settleTree()
     expect(wrapper.emitted('pick')).toEqual([['plans/2026-10-11-plan.md']])
-
-    await wrapper.get('[data-testid="t-row-plans"]').trigger('click')
-    expect(rowPaths(wrapper)).toEqual(['canvases', 'plans', 'index.html', 'notes.txt'])
   })
 
-  it('opens every folder while filtering and keeps only the matches and their folders', async () => {
-    const wrapper = mountTree({ filter: 'a.md' })
-    expect(rowPaths(wrapper)).toEqual(['plans', 'plans/old', 'plans/old/a.md'])
-
-    await wrapper.setProps({ filter: 'report' })
-    expect(rowPaths(wrapper)).toEqual(['canvases', 'canvases/report.canvas.json'])
-  })
-
-  it('walks the rows with the keyboard, opening a folder and picking a document', async () => {
-    const wrapper = mountTree()
-    const host = wrapper.get('[data-testid="t-tree"]')
-    await host.trigger('keydown', { key: 'ArrowDown' })
-    await host.trigger('keydown', { key: 'ArrowRight' })
-    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('true')
-
-    await host.trigger('keydown', { key: 'ArrowDown' })
-    await host.trigger('keydown', { key: 'ArrowDown' })
-    await host.trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('pick')).toEqual([['plans/2026-10-11-plan.md']])
-
-    await host.trigger('keydown', { key: 'ArrowLeft' })
-    await host.trigger('keydown', { key: 'ArrowLeft' })
-    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('false')
-  })
-
-  it('reveals the selected document by opening its folders and scrolling to it', async () => {
-    const scrolled: string[] = []
-    const original = Element.prototype.scrollIntoView
-    Element.prototype.scrollIntoView = function (this: Element) {
-      scrolled.push(this.getAttribute('data-testid') ?? '')
-    }
-    try {
-      const wrapper = mountTree({ selected: 'plans/old/a.md' })
-      await flushPromises()
-      expect(wrapper.get('[data-testid="t-row-plans/old/a.md"]').attributes('aria-selected')).toBe('true')
-      expect(wrapper.get('[data-testid="t-row-plans/old"]').attributes('aria-expanded')).toBe('true')
-      expect(scrolled).toContain('t-row-plans/old/a.md')
-    } finally {
-      Element.prototype.scrollIntoView = original
-    }
-  })
-
-  it('emits menu with the row as its anchor on a right click', async () => {
-    const wrapper = mountTree()
-    await wrapper.get('[data-testid="t-row-index.html"]').trigger('contextmenu')
-    const [entry, anchor, toggle] = wrapper.emitted('menu')?.[0] ?? []
-    expect((entry as { path: string }).path).toBe('index.html')
-    expect((anchor as HTMLElement).getAttribute('data-testid')).toBe('t-row-index.html')
-    expect(toggle).toBeNull()
-  })
-
-  it('emits menu from the row button with the row as anchor and the button as toggle', async () => {
-    const wrapper = mountTree()
-    await wrapper.get('[data-testid="t-row-plans-menu"]').trigger('click')
-    const [entry, anchor, toggle] = wrapper.emitted('menu')?.[0] ?? []
-    expect((entry as { path: string }).path).toBe('plans')
-    expect((anchor as HTMLElement).getAttribute('data-testid')).toBe('t-row-plans')
-    expect((toggle as HTMLElement).getAttribute('data-testid')).toBe('t-row-plans-menu')
+  it('keeps the shown document selected when a folder is clicked', async () => {
+    const wrapper = await mountTree({ selected: 'index.html' })
+    row(wrapper, 'plans/').click()
+    await settleTree()
+    expect(row(wrapper, 'index.html').getAttribute('aria-selected')).toBe('true')
+    expect(row(wrapper, 'plans/').getAttribute('aria-selected')).toBe('false')
     expect(wrapper.emitted('pick')).toBeUndefined()
-    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('false')
   })
 
-  it("anchors a later row's menu on that row after a folder opens above it", async () => {
-    const wrapper = mountTree()
-    await wrapper.get('[data-testid="t-row-plans"]').trigger('click')
-    await wrapper.get('[data-testid="t-row-index.html-menu"]').trigger('click')
-    const [entry, anchor] = wrapper.emitted('menu')?.[0] ?? []
-    expect((entry as { path: string }).path).toBe('index.html')
-    expect((anchor as HTMLElement).getAttribute('data-testid')).toBe('t-row-index.html')
+  it('keeps only the matches and their folders while filtering', async () => {
+    const wrapper = await mountTree({ filter: 'a.md' })
+    expect(rows(wrapper)).toEqual(['plans/', 'plans/old/', 'plans/old/a.md'])
+
+    await wrapper.setProps({ filter: '' })
+    await settleTree()
+    expect(rows(wrapper)).toEqual(['canvases/', 'empty/', 'plans/', 'index.html', 'notes.txt'])
+  })
+
+  it('walks the rows from a search field and picks with Enter', async () => {
+    const wrapper = await mountTree()
+    const exposed = wrapper.vm as unknown as { onKeydown: (event: KeyboardEvent) => boolean }
+    const key = (name: string) => exposed.onKeydown(new KeyboardEvent('keydown', { key: name, cancelable: true }))
+    expect(key('End')).toBe(true)
+    expect(key('Enter')).toBe(true)
+    expect(wrapper.emitted('pick')).toEqual([['notes.txt']])
+    expect(key('x')).toBe(false)
+  })
+
+  it('reveals the selected document by opening its folders', async () => {
+    const wrapper = await mountTree({ selected: 'plans/old/a.md' })
+    expect(row(wrapper, 'plans/').getAttribute('aria-expanded')).toBe('true')
+    expect(row(wrapper, 'plans/old/').getAttribute('aria-expanded')).toBe('true')
+    expect(row(wrapper, 'plans/old/a.md').getAttribute('aria-selected')).toBe('true')
   })
 
   it('keeps a folder the user folded closed when the tree is replaced', async () => {
-    const wrapper = mountTree({ selected: 'plans/old/a.md' })
-    await flushPromises()
-    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('true')
-
-    await wrapper.get('[data-testid="t-row-plans"]').trigger('click')
-    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('false')
+    const wrapper = await mountTree({ selected: 'plans/old/a.md' })
+    row(wrapper, 'plans/').click()
+    await settleTree()
+    expect(row(wrapper, 'plans/').getAttribute('aria-expanded')).toBe('false')
 
     await wrapper.setProps({ tree: structuredClone(tree) })
-    await flushPromises()
-    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('false')
+    await settleTree()
+    expect(row(wrapper, 'plans/').getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('keeps folders open across a remount', async () => {
+    const first = await mountTree()
+    row(first, 'plans/').click()
+    await settleTree()
+    first.unmount()
+
+    const second = await mountTree()
+    expect(row(second, 'plans/').getAttribute('aria-expanded')).toBe('true')
   })
 
   it('reveals a selected document once it first appears in the tree', async () => {
-    const wrapper = mountTree({ selected: 'plans/old/b.md' })
-    await flushPromises()
-    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('false')
+    const wrapper = await mountTree({ selected: 'plans/old/b.md' })
+    expect(row(wrapper, 'plans/').getAttribute('aria-expanded')).toBe('false')
 
     const grown = root([folder('plans', [folder('plans/old', [doc('plans/old/a.md'), doc('plans/old/b.md')])])])
     await wrapper.setProps({ tree: grown })
-    await flushPromises()
-    expect(wrapper.get('[data-testid="t-row-plans/old/b.md"]').attributes('aria-selected')).toBe('true')
+    await settleTree()
+    expect(row(wrapper, 'plans/old/b.md').getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('emits menu with the row as its anchor on a right click', async () => {
+    const wrapper = await mountTree()
+    row(wrapper, 'index.html').dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, composed: true, cancelable: true }),
+    )
+    await settleTree()
+    const [entry, anchor] = wrapper.emitted('menu')?.[0] ?? []
+    expect((entry as { path: string }).path).toBe('index.html')
+    expect((anchor as HTMLElement).dataset.itemPath).toBe('index.html')
   })
 
   it('emits menu for the space root on a right click below the rows', async () => {
-    const wrapper = mountTree()
+    const wrapper = await mountTree()
     await wrapper.get('[data-testid="t-tree"]').trigger('contextmenu')
-    const [entry] = wrapper.emitted('menu')?.[0] ?? []
+    const [entry, , toggle] = wrapper.emitted('menu')?.[0] ?? []
     expect((entry as { path: string }).path).toBe('')
+    expect(toggle).toBeNull()
   })
 
-  it('renames in place on F2 and commits on Enter', async () => {
+  it('marks a document written since it was last opened', async () => {
+    const { useDriveActivity } = await import('../../../stores/useDriveActivity')
+    vi.spyOn(useDriveActivity(), 'isUnopened').mockImplementation((_space, path) => path === 'notes.txt')
+    const wrapper = await mountTree()
+    const decoration = (path: string) =>
+      row(wrapper, path).querySelector('[data-item-section="decoration"]')?.textContent
+    expect(decoration('notes.txt')).toBe('●')
+    expect(decoration('index.html')).toBe('')
+  })
+
+  it('renames through the drive and reports the move', async () => {
     drive.Rename.mockResolvedValue(doc('renamed.html'))
-    const wrapper = mountTree()
-    const host = wrapper.get('[data-testid="t-tree"]')
-    for (let i = 0; i < 2; i++) await host.trigger('keydown', { key: 'ArrowDown' })
-    await host.trigger('keydown', { key: 'F2' })
-    await flushPromises()
+    const wrapper = await mountTree()
+    ;(wrapper.vm as unknown as { startRename: (path: string) => void }).startRename('index.html')
+    await settleTree()
 
-    const input = wrapper.get<HTMLInputElement>('[data-testid="t-rename-input"]')
-    expect(input.element.value).toBe('index.html')
-    expect(document.activeElement).toBe(input.element)
-    expect([input.element.selectionStart, input.element.selectionEnd]).toEqual([0, 'index'.length])
-
-    await input.setValue('renamed.html')
-    await input.trigger('keydown', { key: 'Enter' })
-    await flushPromises()
+    const input = treeShadow(scopeOf(wrapper)).querySelector<HTMLInputElement>('[data-item-rename-input]')
+    expect(input?.value).toBe('index.html')
+    input!.value = 'renamed.html'
+    input!.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
+    treeKey(input!, 'Enter')
+    await settleTree()
 
     expect(drive.Rename).toHaveBeenCalledWith('acme/site', 'index.html', 'renamed.html')
     expect(wrapper.emitted('moved')).toEqual([['index.html', 'renamed.html']])
-    expect(wrapper.find('[data-testid="t-rename-input"]').exists()).toBe(false)
   })
 
-  it('cancels a rename on Escape and commits one on blur', async () => {
-    drive.Rename.mockResolvedValue(folder('canvases-old', []))
-    const wrapper = mountTree()
-    const exposed = wrapper.vm as unknown as { startRename: (path: string) => void }
-
-    exposed.startRename('canvases')
-    await flushPromises()
-    await wrapper.get('[data-testid="t-rename-input"]').setValue('ignored')
-    await wrapper.get('[data-testid="t-rename-input"]').trigger('keydown', { key: 'Escape' })
-    expect(wrapper.find('[data-testid="t-rename-input"]').exists()).toBe(false)
-    expect(drive.Rename).not.toHaveBeenCalled()
-
-    exposed.startRename('canvases')
-    await flushPromises()
-    await wrapper.get('[data-testid="t-rename-input"]').setValue('canvases-old')
-    await wrapper.get('[data-testid="t-rename-input"]').trigger('blur')
-    await flushPromises()
-    expect(drive.Rename).toHaveBeenCalledWith('acme/site', 'canvases', 'canvases-old')
-  })
-
-  it('keeps the field open with the error when the drive refuses a rename', async () => {
+  it('puts the old name back and shows the error when the drive refuses a rename', async () => {
     drive.Rename.mockRejectedValue(new Error('"notes.txt" already exists in acme/site'))
-    const wrapper = mountTree()
+    const wrapper = await mountTree()
     ;(wrapper.vm as unknown as { startRename: (path: string) => void }).startRename('index.html')
-    await flushPromises()
-    await wrapper.get('[data-testid="t-rename-input"]').setValue('notes.txt')
-    await wrapper.get('[data-testid="t-rename-input"]').trigger('keydown', { key: 'Enter' })
-    await flushPromises()
+    await settleTree()
+    const input = treeShadow(scopeOf(wrapper)).querySelector<HTMLInputElement>('[data-item-rename-input]')!
+    input.value = 'other.html'
+    input.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
+    treeKey(input, 'Enter')
+    await settleTree()
 
     expect(wrapper.get('[data-testid="t-rename-error"]').text()).toContain('already exists')
-    expect(wrapper.find('[data-testid="t-rename-input"]').exists()).toBe(true)
+    expect(rows(wrapper)).toContain('index.html')
+    expect(rows(wrapper)).not.toContain('other.html')
     expect(wrapper.emitted('moved')).toBeUndefined()
-  })
-
-  it('moves a dragged document onto a folder, and onto the root below the rows', async () => {
-    drive.Move.mockResolvedValue(doc('plans/index.html'))
-    const wrapper = mountTree()
-    const row = wrapper.get('[data-testid="t-row-index.html"]')
-    expect(row.attributes('draggable')).toBe('true')
-    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('draggable')).toBe('false')
-
-    await row.trigger('dragstart')
-    await wrapper.get('[data-testid="t-row-plans"]').trigger('dragover')
-    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('data-drop')).toBe('true')
-    await wrapper.get('[data-testid="t-row-plans"]').trigger('drop')
-    await flushPromises()
-    expect(drive.Move).toHaveBeenCalledWith('acme/site', 'index.html', 'plans')
-    expect(wrapper.emitted('moved')).toEqual([['index.html', 'plans/index.html']])
-    expect(wrapper.find('[data-drop]').exists()).toBe(false)
-
-    await wrapper.get('[data-testid="t-row-plans"]').trigger('click')
-    drive.Move.mockResolvedValue(doc('plans/2026-10-11-plan.md'))
-    await wrapper.get('[data-testid="t-row-plans/2026-10-11-plan.md"]').trigger('dragstart')
-    await wrapper.get('[data-testid="t-tree"]').trigger('dragover')
-    expect(wrapper.get('[data-testid="t-tree"]').attributes('data-drop')).toBe('true')
-    await wrapper.get('[data-testid="t-tree"]').trigger('drop')
-    await flushPromises()
-    expect(drive.Move).toHaveBeenLastCalledWith('acme/site', 'plans/2026-10-11-plan.md', '')
-  })
-
-  it('does not move a document dropped into the folder it is already in', async () => {
-    const wrapper = mountTree()
-    await wrapper.get('[data-testid="t-row-index.html"]').trigger('dragstart')
-    await wrapper.get('[data-testid="t-row-notes.txt"]').trigger('dragover')
-    expect(wrapper.get('[data-testid="t-tree"]').attributes('data-drop')).toBe('true')
-    await wrapper.get('[data-testid="t-row-notes.txt"]').trigger('drop')
-    await flushPromises()
-    expect(drive.Move).not.toHaveBeenCalled()
   })
 })

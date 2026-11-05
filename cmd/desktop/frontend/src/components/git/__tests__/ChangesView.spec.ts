@@ -7,6 +7,7 @@ import { useChangesViewed } from '../../../stores/useChangesViewed'
 import { fileVersion } from '../../../composables/useFileDiffs'
 import { resetStores } from '../../../stores/defineStore'
 import { resetToastsForTests, useToasts } from '../../../composables/useToasts'
+import { settleTree, treePaths, treeRow } from '../../../test-utils/pathTree'
 
 const mocks = vi.hoisted(() => ({
   SessionChanges: vi.fn(),
@@ -117,6 +118,18 @@ interface FakeItem {
   fileDiff: { hunks: { hunkContent: unknown[] }[]; deletionLines: string[]; additionLines: string[] }
 }
 
+const row = (wrapper: VueWrapper, path: string) => treeRow(wrapper.element as Element, path)
+const hasRow = (wrapper: VueWrapper, path: string) => treePaths(wrapper.element as Element).includes(path)
+/** The review-comment count a row shows, from its decoration's title. */
+const rowComments = (wrapper: VueWrapper, path: string) =>
+  /(\d+) review comments/.exec(
+    row(wrapper, path).querySelector('[data-item-section="decoration"] span')?.getAttribute('title') ?? '',
+  )?.[1] ?? null
+async function clickRow(wrapper: VueWrapper, path: string) {
+  row(wrapper, path).click()
+  await settleTree()
+}
+
 function file(path: string, extra: Record<string, unknown> = {}) {
   return { path, oldPath: '', status: 'modified', additions: 1, deletions: 1, binary: false, stamp: '1', ...extra }
 }
@@ -140,7 +153,7 @@ const noState = { state: 'text', error: '' }
 async function mountView(props: { keysActive?: boolean } = {}) {
   const wrapper = mount(ChangesView, { props: { sessionId: 's1', ...props }, attachTo: document.body })
   await flushPromises()
-  await flushPromises()
+  await settleTree()
   return wrapper
 }
 const testid = (id: string) => `[data-testid="${id}"]`
@@ -202,13 +215,13 @@ describe('ChangesView', () => {
 
     await press('j')
     expect(mocks.scrollTo).not.toHaveBeenCalled()
-    expect(wrapper.get(testid('changes-row-b.go')).attributes('aria-selected')).not.toBe('true')
+    expect(row(wrapper, 'b.go').getAttribute('aria-selected')).not.toBe('true')
     await press('s')
     expect(mocks.setOptions).not.toHaveBeenCalledWith(expect.objectContaining({ diffStyle: 'split' }))
 
     await wrapper.setProps({ keysActive: true })
     await press('j')
-    expect(wrapper.get(testid('changes-row-b.go')).attributes('aria-selected')).toBe('true')
+    expect(row(wrapper, 'b.go').getAttribute('aria-selected')).toBe('true')
     wrapper.unmount()
   })
 
@@ -219,7 +232,7 @@ describe('ChangesView', () => {
     const shown = () => wrapper.findAll('[data-fake]').map((body) => body.attributes('data-fake'))
     expect(shown()).toHaveLength(2)
 
-    await wrapper.get(testid('changes-row-b.go')).trigger('click')
+    await clickRow(wrapper, 'b.go')
     await flushPromises()
     expect(shown()).toEqual(['fake-b.go'])
     // A viewed file shown on its own opens rather than showing only its header.
@@ -238,10 +251,10 @@ describe('ChangesView', () => {
   it('goes back to every file when the file shown alone is picked again', async () => {
     const wrapper = await mountView()
     const shown = () => wrapper.findAll('[data-fake]').map((body) => body.attributes('data-fake'))
-    await wrapper.get(testid('changes-row-b.go')).trigger('click')
+    await clickRow(wrapper, 'b.go')
     await flushPromises()
     expect(shown()).toEqual(['fake-b.go'])
-    await wrapper.get(testid('changes-row-b.go')).trigger('click')
+    await clickRow(wrapper, 'b.go')
     await flushPromises()
     expect(shown()).toHaveLength(2)
     wrapper.unmount()
@@ -345,7 +358,7 @@ describe('ChangesView', () => {
     const wrapper = await mountView()
     await press('j')
     expect(mocks.scrollTo).toHaveBeenCalledWith({ type: 'item', id: 'b.go', align: 'start' })
-    expect(wrapper.get(testid('changes-row-b.go')).attributes('aria-selected')).toBe('true')
+    expect(row(wrapper, 'b.go').getAttribute('aria-selected')).toBe('true')
     wrapper.unmount()
   })
 
@@ -914,12 +927,12 @@ describe('ChangesView', () => {
     expect(toggle().attributes('aria-label')).toBe('Collapse all folders')
 
     await toggle().trigger('click')
-    expect(wrapper.find(testid('changes-row-x/a.go')).exists()).toBe(false)
-    expect(wrapper.find(testid('changes-row-z/c.go')).exists()).toBe(false)
+    expect(hasRow(wrapper, 'x/a.go')).toBe(false)
+    expect(hasRow(wrapper, 'z/c.go')).toBe(false)
     expect(toggle().attributes('aria-label')).toBe('Expand all folders')
 
     await toggle().trigger('click')
-    expect(wrapper.find(testid('changes-row-x/y/b.go')).exists()).toBe(true)
+    expect(hasRow(wrapper, 'x/y/b.go')).toBe(true)
     wrapper.unmount()
   })
 
@@ -952,9 +965,9 @@ describe('ChangesView', () => {
   it('hides viewed files from the list but not from the diffs', async () => {
     const wrapper = await mountView()
     await press('v')
-    expect(wrapper.find(testid('changes-row-a.go')).exists()).toBe(true)
+    expect(hasRow(wrapper, 'a.go')).toBe(true)
     await wrapper.get(testid('changes-hide-viewed')).trigger('click')
-    expect(wrapper.find(testid('changes-row-a.go')).exists()).toBe(false)
+    expect(hasRow(wrapper, 'a.go')).toBe(false)
     expect(wrapper.find(testid('changes-file-a.go-header')).exists()).toBe(true)
     wrapper.unmount()
   })
@@ -1027,7 +1040,7 @@ describe('ChangesView', () => {
     await press('r')
     expect(wrapper.get(testid('changes-review')).text()).toContain('rename this')
     expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
-    expect(wrapper.get(testid('changes-row-a.go-comments')).text()).toBe('1')
+    expect(rowComments(wrapper, 'a.go')).toBe('1')
     wrapper.unmount()
   })
 
@@ -1056,7 +1069,7 @@ describe('ChangesView', () => {
     await flushPromises()
     document.querySelector<HTMLButtonElement>(testid('changes-comment-save'))!.click()
     await flushPromises()
-    expect(wrapper.get(testid('changes-row-b.go-comments')).text()).toBe('1')
+    expect(rowComments(wrapper, 'b.go')).toBe('1')
 
     await wrapper.get(testid('changes-send-menu')).trigger('click')
     document.querySelector<HTMLElement>(testid('changes-send-with-note'))!.click()
@@ -1109,11 +1122,11 @@ describe('ChangesView', () => {
 
   it('does not select a file in the list while the Overview is open', async () => {
     const wrapper = await mountView()
-    await wrapper.get(testid('changes-row-a.go')).trigger('click')
+    await clickRow(wrapper, 'a.go')
     await flushPromises()
-    expect(wrapper.get(testid('changes-row-a.go')).attributes('aria-selected')).toBe('true')
+    expect(row(wrapper, 'a.go').getAttribute('aria-selected')).toBe('true')
     await wrapper.get(testid('changes-overview-row')).trigger('click')
-    expect(wrapper.get(testid('changes-row-a.go')).attributes('aria-selected')).not.toBe('true')
+    expect(row(wrapper, 'a.go').getAttribute('aria-selected')).not.toBe('true')
     wrapper.unmount()
   })
 
@@ -1208,14 +1221,10 @@ describe('ChangesView', () => {
       document.querySelector<HTMLButtonElement>(testid('changes-comment-save'))!.click()
       await flushPromises()
     }
-    expect(wrapper.find(testid('changes-row-z-comments')).exists()).toBe(false)
+    expect(rowComments(wrapper, 'z/')).toBeNull()
 
-    await wrapper
-      .findAll('[role="treeitem"]')
-      .find((row) => row.text() === 'z')!
-      .trigger('click')
-    await flushPromises()
-    expect(wrapper.get(testid('changes-row-z-comments')).text()).toBe('2')
+    await clickRow(wrapper, 'z/')
+    expect(rowComments(wrapper, 'z/')).toBe('2')
     wrapper.unmount()
   })
 
