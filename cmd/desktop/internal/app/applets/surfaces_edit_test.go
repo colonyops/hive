@@ -44,6 +44,12 @@ func TestSetSurface(t *testing.T) {
 		assert.Equal(t, 64, a.Surfaces.Titlebar.Width)
 		assert.Equal(t, 640, a.Surfaces.Popup.Width)
 	})
+	t.Run("turns a page on and off", func(t *testing.T) {
+		on := edit(t, minimal+"\nsurfaces:\n  tab: {}\n", SurfacePage, true)
+		assert.True(t, on.ShowsPage())
+		assert.True(t, on.ShowsTab())
+		assert.False(t, edit(t, minimal+"\nsurfaces:\n  page: {}\n", SurfacePage, false).ShowsPage())
+	})
 	t.Run("a bare key takes the switch", func(t *testing.T) {
 		assert.False(t, edit(t, minimal+"\nsurfaces:\n  tab:\n", SurfaceTab, false).ShowsTab())
 	})

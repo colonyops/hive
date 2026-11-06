@@ -202,6 +202,12 @@ func TestParseSurfaces(t *testing.T) {
 	t.Run("a file that names one is only there", func(t *testing.T) {
 		assert.Equal(t, Surfaces{Tab: &TabSurface{}}, parse(t, "  tab: {}\n"))
 	})
+	t.Run("a page alone is an app-wide tab and not a session tab", func(t *testing.T) {
+		got := parse(t, "  page:\n")
+		assert.Equal(t, Surfaces{Page: &PageSurface{}}, got)
+		assert.True(t, got.ShowsPage())
+		assert.False(t, got.ShowsTab())
+	})
 	t.Run("a bare key asks for the surface", func(t *testing.T) {
 		assert.Equal(t, Surfaces{Tab: &TabSurface{}, Popup: &PopupSurface{}}, parse(t, "  tab:\n  popup:\n"))
 	})

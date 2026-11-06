@@ -257,6 +257,7 @@ export interface AppletProcess {
  */
 export interface AppletSurfaces {
     "tab": boolean;
+    "page": boolean;
     "popup": AppletPopup | null;
     "titlebar": AppletTitlebar | null;
     "titlebarPage": string;

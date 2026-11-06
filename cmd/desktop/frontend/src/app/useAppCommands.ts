@@ -282,9 +282,9 @@ export function useAppCommands(deps: AppCommandDeps) {
   useAppPaletteRows(deps, runCommand, contextActive)
   useCommands(applets.pageRows)
   applets.setCommandRunner(runCommand)
-  // An applet the user keeps as a title-bar tab opens there, wherever they are.
-  applets.setPageTabOpener((id) => {
-    if (!appTabs.has(appletTabId(id))) return false
+  // An applet's tab in the title bar strip. `add` puts it in the strip when it is not there.
+  applets.setPageTabOpener((id, add) => {
+    if (!add && !appTabs.has(appletTabId(id))) return false
     appMode.activateTab(appletTabId(id))
     return true
   })

@@ -58,7 +58,7 @@ export interface AppletPageRow {
 
 /** A broken file still opens, to show its error. An applet only in the title bar has nothing to open. */
 function opens(applet: Applet): boolean {
-  return !applet.runnable || applet.surfaces.tab || applet.surfaces.popup !== null
+  return !applet.runnable || applet.surfaces.tab || applet.surfaces.page || applet.surfaces.popup !== null
 }
 
 function appletPaletteTitle(applet: Applet): string {
@@ -87,10 +87,7 @@ export const useApplets = defineStore('applets', () => {
   const usable = computed(() => catalog.data.value.filter((applet) => applet.runnable && applet.enabled))
   const sessionMenu = computed(() => usable.value.filter((applet) => applet.surfaces.tab))
   const titlebarApplets = computed(() => usable.value.filter((applet) => applet.surfaces.titlebar))
-  // A page that fills a panel or a pop-up can fill a title-bar tab as well.
-  const globalTabApplets = computed(() =>
-    usable.value.filter((applet) => applet.surfaces.tab || applet.surfaces.popup !== null),
-  )
+  const globalTabApplets = computed(() => usable.value.filter((applet) => applet.surfaces.page))
 
   // The session area on screen, which can show an applet as a tab. Both areas stay
   // mounted, so only the one the user is in holds this.
@@ -119,21 +116,30 @@ export const useApplets = defineStore('applets', () => {
     return true
   }
 
-  let pageTabOpener: (id: string) => boolean = () => false
+  // Brings an applet's title-bar tab forward. Without `add` it does so only when the tab is
+  // already in the strip.
+  let pageTabOpener: (id: string, add: boolean) => boolean = () => false
 
-  function setPageTabOpener(open: (id: string) => boolean): void {
+  function setPageTabOpener(open: (id: string, add: boolean) => boolean): void {
     pageTabOpener = open
   }
 
-  // A tab comes first where one can show, and an applet shows only where its file says.
+  function openPageTab(id: string, add: boolean): boolean {
+    if (!pageTabOpener(id, add)) return false
+    openID.value = null
+    return true
+  }
+
+  // A tab comes first where one can show, and an applet shows only where its file says: a
+  // title-bar tab the user keeps, then a tab in the session on screen, then a new title-bar
+  // tab, then a pop-up.
   function openApplet(id: string): boolean {
     const applet = byID(id)
     if (!applet) return false
-    if (applet.runnable && pageTabOpener(id)) {
-      openID.value = null
-      return true
-    }
+    const page = applet.runnable && applet.surfaces.page
+    if (page && openPageTab(id, false)) return true
     if (openTabFor(id)) return true
+    if (page && openPageTab(id, true)) return true
     if (!applet.runnable || applet.surfaces.popup) {
       openPopup(id)
       return true

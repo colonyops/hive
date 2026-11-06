@@ -41,7 +41,7 @@ const pages = computed(() =>
 
 function opens(id: string): boolean {
   const applet = applets.byID(id)
-  return !!applet?.runnable && applet.enabled && (applet.surfaces.tab || applet.surfaces.popup !== null)
+  return !!applet?.runnable && applet.enabled && applet.surfaces.page
 }
 </script>
 
@@ -67,7 +67,9 @@ function opens(id: string): boolean {
       <p v-else-if="page.applet && !page.applet.enabled" class="text-small text-text-3">
         {{ page.applet.title }} is turned off.
       </p>
-      <p v-else-if="page.applet" class="text-small text-text-3">{{ page.applet.title }} has no page to show.</p>
+      <p v-else-if="page.applet" class="text-small text-text-3">
+        {{ page.applet.title }} no longer opens as a global tab.
+      </p>
       <p v-else-if="applets.loaded.value" class="text-small text-text-3">
         There is no applet named <span class="font-mono">{{ page.id }}</span> any more.
       </p>
