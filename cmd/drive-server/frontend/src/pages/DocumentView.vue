@@ -64,7 +64,6 @@ const moreAnchor = shallowRef<HTMLElement | null>(null)
 const {
   data: body,
   error: bodyError,
-  loading: loadingBody,
   reload: loadBody,
 } = useLoad(() => api.documentBody(props.space.apiPrefix, props.path), 'Could not load the document.', {
   immediate: false,
@@ -223,7 +222,6 @@ function onMore(id: string): void {
             :font-size-px="prefs.fontSizePx"
             :line-height="prefs.lineHeight"
             :html-src="htmlSrc"
-            :loading="loadingBody"
             @open-link="openLink"
           />
         </div>

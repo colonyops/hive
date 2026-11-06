@@ -254,7 +254,7 @@ func main() {
 	}
 	// The drive MCP server is a separate mount and catalogue entry, so a
 	// workspace can enable documents without the app-control tool set
-	// (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
+	// (ADR hive-drive-has-no-canvas-document-kind).
 	if core.MountAPI(mcpsrv.DrivePathPrefix, mcpsrv.NewDrive(core, logger, mcpsrv.Options{Version: build.Version}).Handler()) {
 		logger.Info().Str("path", mcpsrv.DrivePathPrefix).Msg("drive MCP server mounted")
 	}

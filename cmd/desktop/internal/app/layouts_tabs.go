@@ -130,8 +130,8 @@ type OpenTabResult struct {
 // OpenTab asks the UI to open one tab beside the calling chat or Code
 // session. It is UI intent, applied only while the user is viewing that chat
 // or session, so an agent can surface what it made without taking the screen
-// from the user. A path names an existing document or canvas of the Drive
-// view; a canvas may be given by name. The terminal view starts a detached
+// from the user. A path names an existing document of the Drive view. The
+// terminal view starts a detached
 // tmux window of the Code session, a login shell in its checkout, or places
 // one that exists. It takes no command: this surface runs nothing an agent
 // writes (ADR a-code-session-is-a-panel-layout-that-the-tree-mirrors-and-tmux-follows).
@@ -255,8 +255,8 @@ func (s *LayoutsService) requireRunning(ctx context.Context, caller driveCaller)
 }
 
 // CloseTab closes the calling session's tab for view. Drive, Diff and Tasks
-// ask the UI to close the tab wherever it sits, and documents and canvases are
-// untouched. A terminal is a tmux window of a Code session: closing it kills
+// ask the UI to close the tab wherever it sits, and documents are untouched.
+// A terminal is a tmux window of a Code session: closing it kills
 // the window and everything running in it, and the UI's reconcile removes the
 // tab, so no event is published. Closing an applet's tab ends its page.
 func (s *LayoutsService) CloseTab(ctx context.Context, session, view, window string) error {

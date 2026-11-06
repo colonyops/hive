@@ -32,5 +32,8 @@ injected CSP) stays.
 - Prune no longer keeps `canvases/` folders or `.canvas.json` files.
 - This is a breaking change for agent configs. The canvas tool names, an MCP
   config that points at `/mcp/canvas`, and `hive://canvas` links stop working.
+- The drive keeps its own MCP server, mounted at `/mcp/drive` and listed
+  as the `hive-drive` catalog entry, apart from `hive-desktop`. A workspace
+  can enable documents without the app-control tools, and the reverse.
 - The appearance settings `canvas_line_spacing` and `canvas_page_width` keep
   their names. They style the Drive reader for every document.

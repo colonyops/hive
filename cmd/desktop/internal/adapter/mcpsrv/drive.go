@@ -23,7 +23,7 @@ const driveServerName = "hive-drive"
 // DriveController is the drive server's half of what Controller is for the
 // app-control surface: a separate server with its own small tool table, so a
 // workspace can enable documents without the app-driving tools
-// (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
+// (ADR hive-drive-has-no-canvas-document-kind).
 // Same stateless posture, same loopback threat model.
 type DriveController struct {
 	core *app.App

@@ -26,7 +26,7 @@ var registry = map[string]Descriptor{
 		RuntimeURL:  true,
 		RuntimePath: "/mcp",
 	},
-	// The desktop's drive server (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry):
+	// The desktop's drive server (ADR hive-drive-has-no-canvas-document-kind):
 	// the surface an agent writes documents in front of the user
 	// through. Its own entry rather than more hive-desktop tools, so a
 	// workspace can have the drive without granting the app-control surface,

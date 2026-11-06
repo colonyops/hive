@@ -6,7 +6,6 @@ import { computed, ref, type ComponentPublicInstance } from 'vue'
 import HtmlDocumentFrame from './HtmlDocumentFrame.vue'
 import DocumentFrontmatter from './DocumentFrontmatter.vue'
 import CanvasMarkdown from '../CanvasMarkdown.vue'
-import EmptyState from '../ui/EmptyState.vue'
 import InlineError from '../ui/InlineError.vue'
 import { entryTime, markdownBody, type FrontmatterValue, type ReaderDocument } from '../../lib/document'
 import type { SourceLines } from '../../lib/githubMarkdown'
@@ -18,15 +17,14 @@ const props = withDefaults(
     lineHeight: number
     /** Loads the html document from this URL instead of inlining it as `srcdoc`. */
     htmlSrc?: string
-    /** Derives `-document`, `-markdown`, `-frame`, `-error`, and `-empty`. */
+    /** Derives `-document`, `-markdown`, `-frame`, and `-error`. */
     testid?: string
     error?: string | null
-    loading?: boolean
     /** Marks each markdown block with its source lines (renderCanvasMarkdown). */
     sourceLines?: SourceLines
     bodyClass?: string | Record<string, boolean>
   }>(),
-  { htmlSrc: undefined, testid: 'document', error: null, loading: false, sourceLines: undefined, bodyClass: undefined },
+  { htmlSrc: undefined, testid: 'document', error: null, sourceLines: undefined, bodyClass: undefined },
 )
 const emit = defineEmits<{ (e: 'open-link', target: string): void }>()
 
@@ -90,7 +88,6 @@ const properties = computed<{ frontmatter: Record<string, FrontmatterValue>; cre
       @follow="emit('open-link', $event)"
     />
     <HtmlDocumentFrame v-else-if="kind === 'html'" :html="document.html ?? ''" :src="htmlSrc" :testid="testid" />
-    <EmptyState v-else-if="!loading" variant="inline" message="Nothing here yet." :data-testid="`${testid}-empty`" />
     <slot />
   </div>
 </template>
