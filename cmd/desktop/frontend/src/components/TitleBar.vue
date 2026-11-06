@@ -29,10 +29,9 @@ import { useApplets } from '../stores/useApplets'
 //            and the + that adds one. The strip scrolls when it runs out of
 //            room; the empty space after it stays a drag surface.
 //   right  — status chips, then the pages of the applets that list the title
-//            bar, then the command-palette launcher (a pill with its icon and
-//            chord as key caps: visible at rest, small enough that the room
-//            goes to tabs and applets, and round so it never reads as a tab),
-//            then Activity, then the
+//            bar, then the command-palette launcher (its icon and chord as key
+//            caps in the tabs' dark box: visible at rest, and small enough that
+//            the room goes to tabs and applets), then Activity, then the
 //            preview (right-panel) toggle bracketing the far edge. Pages and
 //            Settings are tabs, reached from the strip's +.
 // Every control is a 28px square icon button or a 28px labeled button, both
@@ -244,7 +243,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <button
         v-if="profileName"
         type="button"
-        class="flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-strong/60 bg-chip pl-2 pr-1 text-text-2 transition-colors hover:border-strong hover:text-text"
+        class="flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-app pl-2 pr-1 text-text-2 shadow-sm transition-colors hover:border-strong hover:text-text"
         style="--wails-draggable: no-drag"
         aria-label="Open command palette"
         :title="`Search (${isMac ? '⌘' : 'Ctrl+'}K)`"
