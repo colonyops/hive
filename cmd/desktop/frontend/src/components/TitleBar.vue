@@ -29,9 +29,9 @@ import { useApplets } from '../stores/useApplets'
 //            and the + that adds one. The strip scrolls when it runs out of
 //            room; the empty space after it stays a drag surface.
 //   right  — status chips, then the pages of the applets that list the title
-//            bar, then the command-palette launcher (its icon and chord in the
-//            tabs' dark box: visible at rest, and small enough that the room
-//            goes to tabs and applets), then Activity, then the
+//            bar, then the command-palette launcher (a search field at its
+//            natural width, so the room goes to tabs and applets), then
+//            Activity, then the
 //            preview (right-panel) toggle bracketing the far edge. Pages and
 //            Settings are tabs, reached from the strip's +.
 // Every control is a 28px square icon button or a 28px labeled button, both
@@ -243,7 +243,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <button
         v-if="profileName"
         type="button"
-        class="flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-app px-2 text-text-2 shadow-sm transition-colors hover:border-strong hover:text-text"
+        class="flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-app pr-[5px] pl-2 text-text-3 transition-colors hover:border-strong hover:text-text-2"
         style="--wails-draggable: no-drag"
         aria-label="Open command palette"
         :title="`Search (${isMac ? '⌘' : 'Ctrl+'}K)`"
@@ -251,7 +251,8 @@ function onTitlebarDblclick(event: MouseEvent): void {
         @click="emit('open-palette')"
       >
         <IconSearch class="size-3.5 shrink-0" />
-        <Kbd class="text-caption leading-none text-text-3" aria-hidden="true">{{ isMac ? '⌘K' : 'Ctrl K' }}</Kbd>
+        <span class="pr-1 text-small">Search</span>
+        <Kbd variant="boxed" class="shrink-0" aria-hidden="true">{{ isMac ? '⌘K' : 'Ctrl K' }}</Kbd>
       </button>
       <!-- Activity: a 28px icon between the palette and the frame. An amber dot
            flags activity recorded since the page was last opened; amber fill
