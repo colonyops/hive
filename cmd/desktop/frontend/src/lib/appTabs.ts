@@ -66,3 +66,44 @@ export function globalTabLocation(id: GlobalTabId): RouteLocationRaw {
       return { name: 'applet', params: { id: id.slice('applet:'.length) } }
   }
 }
+
+/** How much of each tab the title-bar strip can afford to show. */
+export interface TabStripDensity {
+  globalLabels: boolean
+  pinnedLabels: boolean
+}
+
+export interface TabStripSpace {
+  /** The strip's own width, or 0 before it is measured. */
+  width: number
+  /** What Inbox, Code and Chats take with their labels. */
+  pinnedLabeledWidth: number
+  globalCount: number
+  /** A global tab is in front, so it keeps its close button even as an icon. */
+  globalSelected: boolean
+}
+
+// Matched to the classes in TitleBarTabs.vue.
+const TAB_GAP = 4
+const GLOBAL_LABELED_MIN = 84
+const GLOBAL_ICON = 32
+const CLOSE_BUTTON = 22
+const ADD_BUTTON = 36
+const SEPARATOR = 17
+
+/**
+ * Crunches the strip the way a browser does: global tabs shrink and truncate
+ * down to a minimum, then drop to icons; the pinned tabs drop their labels
+ * only once icon-only global tabs still do not fit. Past that the strip
+ * scrolls. An unmeasured strip shows everything, so nothing flickers in on
+ * mount and a test without layout sees the labels.
+ */
+export function tabStripDensity(space: TabStripSpace): TabStripDensity {
+  const { width, pinnedLabeledWidth, globalCount, globalSelected } = space
+  if (width <= 0) return { globalLabels: true, pinnedLabels: true }
+  const room = width - pinnedLabeledWidth - ADD_BUTTON - (globalCount ? SEPARATOR : 0)
+  const need = (perTab: number, extra = 0) => globalCount * perTab + Math.max(0, globalCount - 1) * TAB_GAP + extra
+  if (room >= need(GLOBAL_LABELED_MIN)) return { globalLabels: true, pinnedLabels: true }
+  if (room >= need(GLOBAL_ICON, globalSelected ? CLOSE_BUTTON : 0)) return { globalLabels: false, pinnedLabels: true }
+  return { globalLabels: false, pinnedLabels: false }
+}

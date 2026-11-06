@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
 import { createAppRouter } from '../../router'
-import { globalTabLocation, isGlobalTabId, tabOfRoute, VIEW_TABS } from '../appTabs'
+import { globalTabLocation, isGlobalTabId, tabOfRoute, tabStripDensity, VIEW_TABS } from '../appTabs'
 
 describe('tabOfRoute', () => {
   it.each([
@@ -37,5 +37,27 @@ describe('isGlobalTabId', () => {
     expect(isGlobalTabId('applet:')).toBe(false)
     expect(isGlobalTabId('inbox')).toBe(false)
     expect(isGlobalTabId(3)).toBe(false)
+  })
+})
+
+describe('tabStripDensity', () => {
+  const space = { pinnedLabeledWidth: 230, globalCount: 4, globalSelected: true }
+
+  it('shows every label when the strip is unmeasured or roomy', () => {
+    expect(tabStripDensity({ ...space, width: 0 })).toEqual({ globalLabels: true, pinnedLabels: true })
+    expect(tabStripDensity({ ...space, width: 1200 })).toEqual({ globalLabels: true, pinnedLabels: true })
+  })
+
+  it('drops the global labels first, then the pinned ones', () => {
+    // 230 pinned + 36 add + 17 separator leaves 317 for four tabs: under 4 × 84 + gaps.
+    expect(tabStripDensity({ ...space, width: 600 })).toEqual({ globalLabels: false, pinnedLabels: true })
+    expect(tabStripDensity({ ...space, width: 400 })).toEqual({ globalLabels: false, pinnedLabels: false })
+  })
+
+  it('keeps labels with no global tabs at any width that fits the pinned ones', () => {
+    expect(tabStripDensity({ ...space, globalCount: 0, globalSelected: false, width: 300 })).toEqual({
+      globalLabels: true,
+      pinnedLabels: true,
+    })
   })
 })

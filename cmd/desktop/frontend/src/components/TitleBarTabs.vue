@@ -6,7 +6,8 @@
 // outline, so it reads as the tab the frame below belongs to and stands apart
 // from the `chip` hover fill. It stays neutral: amber is for what asks for
 // attention.
-import { computed, ref, type Component } from 'vue'
+import { useElementSize } from '@vueuse/core'
+import { computed, ref, watch, type Component } from 'vue'
 import IconCode from '~icons/lucide/code'
 import IconFolderTree from '~icons/lucide/folder-tree'
 import IconInbox from '~icons/lucide/inbox'
@@ -21,7 +22,14 @@ import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
 import { appletTabId, isAppletTabId } from '../lib/appletTabs'
-import { VIEW_TABS, type AppTabId, type GlobalTabId, type PinnedTabId, type ViewTabId } from '../lib/appTabs'
+import {
+  VIEW_TABS,
+  tabStripDensity,
+  type AppTabId,
+  type GlobalTabId,
+  type PinnedTabId,
+  type ViewTabId,
+} from '../lib/appTabs'
 import { launcherIconComponent } from '../lib/launcherIcons'
 import { useApplets } from '../stores/useApplets'
 
@@ -197,21 +205,51 @@ function onAuxClick(event: MouseEvent, id: GlobalTabId): void {
 const SELECTED = 'border-strong bg-app text-text shadow-sm'
 const UNSELECTED = 'border-transparent text-text-3 hover:bg-chip hover:text-text-2'
 
+const strip = ref<HTMLElement | null>(null)
+const pinnedGroup = ref<HTMLElement | null>(null)
+const { width: stripWidth } = useElementSize(strip)
+const { width: pinnedWidth } = useElementSize(pinnedGroup)
+// Measured only while the labels show, so dropping them cannot feed back into
+// the decision to drop them.
+const pinnedLabeledWidth = ref(230)
+
+const density = computed(() =>
+  tabStripDensity({
+    width: stripWidth.value,
+    pinnedLabeledWidth: pinnedLabeledWidth.value,
+    globalCount: props.tabs.length,
+    globalSelected: !!props.activeTab && props.tabs.includes(props.activeTab as GlobalTabId),
+  }),
+)
+
+watch([pinnedWidth, () => density.value.pinnedLabels], ([width, labeled]) => {
+  if (labeled && width > 0) pinnedLabeledWidth.value = width
+})
+
 const tabClass = (selected: boolean) => [
-  'flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-small font-medium transition-colors',
+  'flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border text-small font-medium transition-colors',
+  density.value.pinnedLabels ? 'px-2.5' : 'px-2',
   selected ? SELECTED : UNSELECTED,
 ]
 </script>
 
 <template>
+  <!-- The strip fills the cluster so it can measure the room it has; its empty
+       end stays a drag surface for the window. -->
   <div
-    class="flex min-w-0 items-center gap-1"
-    style="--wails-draggable: no-drag"
+    ref="strip"
+    class="flex min-w-0 flex-1 items-center gap-1"
     role="tablist"
     aria-label="Tabs"
     data-testid="titlebar-tabs"
+    :data-density="density.globalLabels ? 'full' : density.pinnedLabels ? 'compact' : 'icons'"
   >
-    <div class="flex shrink-0 items-center gap-1" data-testid="titlebar-mode">
+    <div
+      ref="pinnedGroup"
+      class="flex shrink-0 items-center gap-1"
+      style="--wails-draggable: no-drag"
+      data-testid="titlebar-mode"
+    >
       <button
         v-for="tab in pinned"
         :key="tab.id"
@@ -226,7 +264,7 @@ const tabClass = (selected: boolean) => [
         @click="emit('activate', tab.id)"
       >
         <component :is="tab.icon" class="size-3.5 shrink-0" />
-        <span class="hidden min-[860px]:inline">{{ tab.label }}</span>
+        <span v-if="density.pinnedLabels">{{ tab.label }}</span>
       </button>
     </div>
 
@@ -234,13 +272,15 @@ const tabClass = (selected: boolean) => [
 
     <div
       class="-my-1 flex min-w-0 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none]"
+      style="--wails-draggable: no-drag"
       data-testid="titlebar-global-tabs"
     >
       <div
         v-for="(tab, index) in globals"
         :key="tab.id"
-        class="group relative flex h-7 shrink-0 items-center rounded-lg border"
+        class="group relative flex h-7 items-center rounded-lg border"
         :class="[
+          density.globalLabels ? 'min-w-[84px] max-w-44' : 'shrink-0',
           activeTab === tab.id ? SELECTED : UNSELECTED,
           dragging === tab.id ? 'opacity-50' : '',
           dropMarker(index),
@@ -256,17 +296,24 @@ const tabClass = (selected: boolean) => [
         <button
           type="button"
           role="tab"
-          class="flex h-full max-w-44 cursor-pointer items-center gap-1.5 rounded-lg pl-2.5 pr-1 text-small font-medium"
-          :class="activeTab === tab.id ? 'text-text' : 'text-text-3 group-hover:text-text-2'"
+          class="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-lg text-small font-medium"
+          :class="[
+            activeTab === tab.id ? 'text-text' : 'text-text-3 group-hover:text-text-2',
+            density.globalLabels ? 'pl-2.5 pr-1' : activeTab === tab.id ? 'pl-2 pr-1' : 'px-2',
+          ]"
+          :aria-label="tab.label"
           :aria-selected="activeTab === tab.id"
           :title="tooltip(tab)"
           :data-testid="tab.testid"
           @click="emit('activate', tab.id)"
         >
           <component :is="tab.icon" class="size-3.5 shrink-0" />
-          <span class="min-w-0 truncate">{{ tab.label }}</span>
+          <span v-if="density.globalLabels" class="min-w-0 truncate">{{ tab.label }}</span>
         </button>
+        <!-- As an icon a tab has no room to spare, so only the one in front keeps
+             its close; a middle click still closes the others. -->
         <button
+          v-if="density.globalLabels || activeTab === tab.id"
           type="button"
           class="mr-1 flex size-4.5 shrink-0 cursor-pointer items-center justify-center rounded text-text-4 hover:bg-chip hover:text-text"
           :class="activeTab === tab.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'"
@@ -279,7 +326,7 @@ const tabClass = (selected: boolean) => [
       </div>
     </div>
 
-    <div ref="addWrap" class="relative ml-0.5 shrink-0">
+    <div ref="addWrap" class="relative ml-0.5 shrink-0" style="--wails-draggable: no-drag">
       <IconButton
         label="Add a tab"
         tooltip="Add a tab"
