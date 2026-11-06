@@ -96,6 +96,9 @@ const emit = defineEmits<{
 // Both heights are odd on purpose: the bottom border takes 1px, and an even
 // content box under it centers the 28px controls on a whole pixel. An odd one
 // centers them on a half pixel, which splits their margins 7/6 on a 1x display.
+// The eye reads the border as part of the bar's edge, though, so on macOS a 1px
+// top pad centers the controls in the full 43px. That lands on a half pixel,
+// which a Retina display draws as a whole device pixel.
 const isMac = navigator.userAgent.includes('Mac')
 const applets = useApplets()
 
@@ -125,7 +128,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
 <template>
   <header
     class="relative flex shrink-0 items-center border-b border-border bg-raised"
-    :class="isMac ? 'h-[43px]' : 'h-[41px]'"
+    :class="isMac ? 'h-[43px] pt-px' : 'h-[41px]'"
     style="--wails-draggable: drag"
     data-testid="titlebar"
     @dblclick="onTitlebarDblclick"

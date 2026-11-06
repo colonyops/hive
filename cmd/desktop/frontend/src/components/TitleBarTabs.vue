@@ -205,13 +205,13 @@ const tabClass = (selected: boolean) => [
 
 <template>
   <div
-    class="flex min-w-0 items-center gap-0.5"
+    class="flex min-w-0 items-center gap-1"
     style="--wails-draggable: no-drag"
     role="tablist"
     aria-label="Tabs"
     data-testid="titlebar-tabs"
   >
-    <div class="flex shrink-0 items-center gap-0.5" data-testid="titlebar-mode">
+    <div class="flex shrink-0 items-center gap-1" data-testid="titlebar-mode">
       <button
         v-for="tab in pinned"
         :key="tab.id"
@@ -233,7 +233,7 @@ const tabClass = (selected: boolean) => [
     <span v-if="globals.length" class="mx-1 h-4 w-px shrink-0 bg-strong" aria-hidden="true" />
 
     <div
-      class="-my-1 flex min-w-0 items-center gap-0.5 overflow-x-auto py-1 [scrollbar-width:none]"
+      class="-my-1 flex min-w-0 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none]"
       data-testid="titlebar-global-tabs"
     >
       <div
