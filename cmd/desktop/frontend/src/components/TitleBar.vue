@@ -29,7 +29,8 @@ import { useApplets } from '../stores/useApplets'
 //            and the + that adds one. The strip scrolls when it runs out of
 //            room; the empty space after it stays a drag surface.
 //   right  — status chips, then the pages of the applets that list the title
-//            bar, then the command-palette launcher, then Activity, then the
+//            bar, then the command-palette launcher (an icon and its chord, so
+//            the room goes to tabs and applets), then Activity, then the
 //            preview (right-panel) toggle bracketing the far edge. Pages and
 //            Settings are tabs, reached from the strip's +.
 // Every control is a 28px square icon button or a 28px labeled button, both
@@ -241,15 +242,15 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <button
         v-if="profileName"
         type="button"
-        class="flex h-7 w-[clamp(6rem,10vw,9rem)] cursor-pointer items-center gap-2 rounded-md border border-border bg-app px-2.5 text-text-3 hover:border-strong hover:text-text-2"
+        class="flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-text-3 hover:bg-chip hover:text-text-2"
         style="--wails-draggable: no-drag"
         aria-label="Open command palette"
+        :title="`Search (${isMac ? '⌘' : 'Ctrl+'}K)`"
         data-testid="titlebar-command-palette"
         @click="emit('open-palette')"
       >
         <IconSearch class="size-3.5 shrink-0" />
-        <span class="min-w-0 flex-1 truncate text-left text-small">Search…</span>
-        <Kbd variant="boxed" class="hidden shrink-0 min-[700px]:block">{{ isMac ? '⌘' : 'Ctrl ' }}K</Kbd>
+        <Kbd class="text-caption">{{ isMac ? '⌘' : 'Ctrl ' }}K</Kbd>
       </button>
       <!-- Activity: a 28px icon between the palette and the frame. An amber dot
            flags activity recorded since the page was last opened; amber fill
