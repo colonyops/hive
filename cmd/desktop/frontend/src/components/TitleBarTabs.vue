@@ -2,8 +2,10 @@
 // The title bar's tab strip. Inbox, Code and Chats are pinned at the left and
 // never close; the global tabs after them are pages the user added from the +
 // menu (Drive, Tasks, Settings, an applet), which close, reorder by drag, and
-// persist. Selected is the chrome's neutral `chip` fill, so amber stays free
-// for what asks for attention.
+// persist. The selected tab takes the content's own `app` background with an
+// outline, so it reads as the tab the frame below belongs to and stands apart
+// from the `chip` hover fill. It stays neutral: amber is for what asks for
+// attention.
 import { computed, ref, type Component } from 'vue'
 import IconCode from '~icons/lucide/code'
 import IconFolderTree from '~icons/lucide/folder-tree'
@@ -189,9 +191,12 @@ function onAuxClick(event: MouseEvent, id: GlobalTabId): void {
   emit('close', id)
 }
 
+const SELECTED = 'bg-app text-text shadow-sm ring-1 ring-strong'
+const UNSELECTED = 'text-text-3 hover:bg-chip hover:text-text-2'
+
 const tabClass = (selected: boolean) => [
   'flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-small font-medium transition-colors',
-  selected ? 'bg-chip text-text' : 'text-text-3 hover:bg-chip/60 hover:text-text-2',
+  selected ? SELECTED : UNSELECTED,
 ]
 </script>
 
@@ -233,7 +238,7 @@ const tabClass = (selected: boolean) => [
         :key="tab.id"
         class="group relative flex shrink-0 items-center rounded-lg"
         :class="[
-          activeTab === tab.id ? 'bg-chip' : 'hover:bg-chip/60',
+          activeTab === tab.id ? SELECTED : UNSELECTED,
           dragging === tab.id ? 'opacity-50' : '',
           dropMarker(index),
         ]"
