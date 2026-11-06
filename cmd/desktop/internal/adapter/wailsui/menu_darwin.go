@@ -43,6 +43,13 @@ func (u *UI) closeFront() {
 	emitWindowCloseRequest()
 }
 
+// emitWindowCloseRequest asks the main window's frontend to close what is in front.
+func emitWindowCloseRequest() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("window:close-request", "close")
+	}
+}
+
 // replaceCloseItem swaps the File menu's Close role for a plain item on the same chord.
 // On macOS a role item runs its AppKit selector (performClose:) and never its Go callback,
 // so the role cannot be given a new action.

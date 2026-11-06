@@ -372,13 +372,6 @@ func emitWindowFocus() {
 	}
 }
 
-// emitWindowCloseRequest asks the main window's frontend to close what is in front.
-func emitWindowCloseRequest() {
-	if app := application.Get(); app != nil {
-		app.Event.Emit("window:close-request", "close")
-	}
-}
-
 // emitWindowBlur pushes the current unfocused state to the frontend. Safe to
 // call from native window event callbacks once the app is running.
 func emitWindowBlur() {
