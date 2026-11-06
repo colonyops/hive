@@ -191,11 +191,14 @@ function onAuxClick(event: MouseEvent, id: GlobalTabId): void {
   emit('close', id)
 }
 
-const SELECTED = 'bg-app text-text shadow-sm ring-1 ring-strong'
-const UNSELECTED = 'text-text-3 hover:bg-chip hover:text-text-2'
+// A border, not a ring: a ring draws outside the box, and the global tabs'
+// scroller clips it to the sides. Unselected tabs keep a transparent one so
+// selecting never shifts the strip.
+const SELECTED = 'border-strong bg-app text-text shadow-sm'
+const UNSELECTED = 'border-transparent text-text-3 hover:bg-chip hover:text-text-2'
 
 const tabClass = (selected: boolean) => [
-  'flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-small font-medium transition-colors',
+  'flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-small font-medium transition-colors',
   selected ? SELECTED : UNSELECTED,
 ]
 </script>
@@ -230,13 +233,13 @@ const tabClass = (selected: boolean) => [
     <span v-if="globals.length" class="mx-1 h-4 w-px shrink-0 bg-strong" aria-hidden="true" />
 
     <div
-      class="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]"
+      class="-my-1 flex min-w-0 items-center gap-0.5 overflow-x-auto py-1 [scrollbar-width:none]"
       data-testid="titlebar-global-tabs"
     >
       <div
         v-for="(tab, index) in globals"
         :key="tab.id"
-        class="group relative flex shrink-0 items-center rounded-lg"
+        class="group relative flex h-7 shrink-0 items-center rounded-lg border"
         :class="[
           activeTab === tab.id ? SELECTED : UNSELECTED,
           dragging === tab.id ? 'opacity-50' : '',
@@ -253,7 +256,7 @@ const tabClass = (selected: boolean) => [
         <button
           type="button"
           role="tab"
-          class="flex h-7 max-w-44 cursor-pointer items-center gap-1.5 rounded-lg pl-2.5 pr-1 text-small font-medium"
+          class="flex h-full max-w-44 cursor-pointer items-center gap-1.5 rounded-lg pl-2.5 pr-1 text-small font-medium"
           :class="activeTab === tab.id ? 'text-text' : 'text-text-3 group-hover:text-text-2'"
           :aria-selected="activeTab === tab.id"
           :title="tooltip(tab)"
