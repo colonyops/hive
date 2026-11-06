@@ -59,6 +59,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   scope.stop()
+  vi.restoreAllMocks()
   vi.useRealTimers()
   document.body.innerHTML = ''
 })
@@ -400,5 +401,32 @@ describe('useGlobalKeymap ⌘W', () => {
     press('w', closeChord)
     wailsHandlers.get('window:close-request')?.()
     expect(runCommand).toHaveBeenCalledExactlyOnceWith('page.close')
+  })
+
+  it('drops the second delivery when the first one returned to Code', () => {
+    press('w', closeChord)
+    activeContexts.add('terminal')
+    wailsHandlers.get('window:close-request')?.()
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('page.close')
+
+    activeContexts.delete('terminal')
+    vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 1000)
+    runCommand.mockReset()
+    wailsHandlers.get('window:close-request')?.()
+    activeContexts.add('terminal')
+    press('w', closeChord)
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('page.close')
+  })
+
+  it('runs a second press that comes after the same-press window', () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1000)
+    press('w', closeChord)
+    now.mockReturnValue(1401)
+    wailsHandlers.get('window:close-request')?.()
+    expect(runCommand).toHaveBeenCalledTimes(2)
+
+    now.mockReturnValue(1802)
+    press('w', closeChord)
+    expect(runCommand).toHaveBeenCalledTimes(3)
   })
 })

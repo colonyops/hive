@@ -66,12 +66,14 @@ export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activi
 
   // One ⌘W pressed in an applet frame arrives twice: as the keydown the frame forwards,
   // and as the macOS menu's Close, which AppKit runs because the frame did not stop the
-  // key. Whichever lands first runs; the other is dropped, or a press would close two tabs.
+  // key. Whichever lands first runs and the other is dropped. The match is on the press,
+  // not the command: the first delivery can change the route (closing a page opened from
+  // Code returns to Code), so the second would resolve to a different command. 400ms
+  // outlasts the menu's round trip through Go and is shorter than a deliberate second ⌘W.
   const SAME_PRESS_MS = 400
-  let forwarded: { id: string; at: number } | null = null
-  let fromMenu: { id: string; at: number } | null = null
-  const samePress = (ran: { id: string; at: number } | null, id: string) =>
-    ran !== null && ran.id === id && performance.now() - ran.at < SAME_PRESS_MS
+  let forwardedCloseAt = Number.NEGATIVE_INFINITY
+  let menuCloseAt = Number.NEGATIVE_INFINITY
+  const withinSamePress = (at: number) => performance.now() - at < SAME_PRESS_MS
 
   function dispatchIfActive(id: string, event?: KeyboardEvent): boolean {
     const command = commandById.value.get(id)
@@ -81,18 +83,18 @@ export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activi
     if (anyOverlayOpen.value && id !== 'palette.toggle' && !closesOwnOverlay(id) && !firesOverOverlays(id)) return false
     if (!contextActive(command.context)) return false
     // A frame's forwarded keydown is synthetic; a real one is the webview's own.
-    if (event && !event.isTrusted) {
-      if (samePress(fromMenu, id)) return true
-      forwarded = { id, at: performance.now() }
+    if (event && !event.isTrusted && comboFromEvent(event) === 'mod+w') {
+      if (withinSamePress(menuCloseAt)) return true
+      forwardedCloseAt = performance.now()
     }
     runCommand(id)
     return true
   }
 
   useWailsEvent('window:close-request', () => {
+    if (withinSamePress(forwardedCloseAt)) return
     const id = kb.resolve('mod+w', applies)
-    if (!id || samePress(forwarded, id)) return
-    if (dispatchIfActive(id)) fromMenu = { id, at: performance.now() }
+    if (id && dispatchIfActive(id)) menuCloseAt = performance.now()
   })
 
   function armSequenceTimer(deferredCommandId: string): void {
