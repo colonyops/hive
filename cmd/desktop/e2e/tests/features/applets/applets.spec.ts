@@ -241,9 +241,11 @@ test.describe("applets", { tag: [tag.applets] }, () => {
     await expect(slot).toHaveCSS("width", "60px");
     const header = await page.getByTestId("titlebar").boundingBox();
     const box = await slot.boundingBox();
-    // The bar's bottom border takes a pixel, and the controls center in what is left.
+    // On macOS the controls center in the whole bar, its bottom border included. Elsewhere
+    // the border takes a pixel, and the controls center in what is left.
+    const mac = await page.evaluate(() => navigator.userAgent.includes("Mac"));
     expect(box!.y - header!.y).toBe(
-      header!.y + header!.height - 1 - (box!.y + box!.height),
+      header!.y + header!.height - (mac ? 0 : 1) - (box!.y + box!.height),
     );
 
     await bar.locator("#grow").click();
