@@ -29,8 +29,10 @@ import { useApplets } from '../stores/useApplets'
 //            and the + that adds one. The strip scrolls when it runs out of
 //            room; the empty space after it stays a drag surface.
 //   right  — status chips, then the pages of the applets that list the title
-//            bar, then the command-palette launcher (an icon and its chord, so
-//            the room goes to tabs and applets), then Activity, then the
+//            bar, then the command-palette launcher (a pill with its icon and
+//            chord as key caps: visible at rest, small enough that the room
+//            goes to tabs and applets, and round so it never reads as a tab),
+//            then Activity, then the
 //            preview (right-panel) toggle bracketing the far edge. Pages and
 //            Settings are tabs, reached from the strip's +.
 // Every control is a 28px square icon button or a 28px labeled button, both
@@ -242,7 +244,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <button
         v-if="profileName"
         type="button"
-        class="flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-text-3 hover:bg-chip hover:text-text-2"
+        class="flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-strong/60 bg-chip pl-2 pr-1 text-text-2 transition-colors hover:border-strong hover:text-text"
         style="--wails-draggable: no-drag"
         aria-label="Open command palette"
         :title="`Search (${isMac ? '⌘' : 'Ctrl+'}K)`"
@@ -250,7 +252,10 @@ function onTitlebarDblclick(event: MouseEvent): void {
         @click="emit('open-palette')"
       >
         <IconSearch class="size-3.5 shrink-0" />
-        <Kbd class="text-caption">{{ isMac ? '⌘' : 'Ctrl ' }}K</Kbd>
+        <span class="flex items-center gap-0.5" aria-hidden="true">
+          <Kbd variant="boxed" class="min-w-4 !px-1 text-center">{{ isMac ? '⌘' : 'Ctrl' }}</Kbd>
+          <Kbd variant="boxed" class="min-w-4 !px-1 text-center">K</Kbd>
+        </span>
       </button>
       <!-- Activity: a 28px icon between the palette and the frame. An amber dot
            flags activity recorded since the page was last opened; amber fill
