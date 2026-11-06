@@ -1,5 +1,5 @@
 import type { RouteLocationRaw, RouteParamsGeneric, RouteRecordNameGeneric } from 'vue-router'
-import { appletTabId, isAppletTabId, type AppletTabId } from './appletTabs'
+import { appletIdOfTabId, appletTabId, isAppletTabId, type AppletTabId } from './appletTabs'
 
 /** The three areas every window has. They hold the left of the strip and never close. */
 export type PinnedTabId = 'inbox' | 'code' | 'chats'
@@ -8,6 +8,25 @@ export type ViewTabId = 'drive' | 'tasks' | 'runs' | 'settings'
 /** A tab the user added, closed, and can drag: a built-in page or an applet. */
 export type GlobalTabId = ViewTabId | AppletTabId
 export type AppTabId = PinnedTabId | GlobalTabId
+
+/** The area that owns the frame under the title bar. */
+export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings' | 'drive' | 'tasks' | 'runs' | 'applet'
+
+const TAB_MODES: Record<PinnedTabId | ViewTabId, AppMode> = {
+  inbox: 'hub',
+  code: 'terminal',
+  chats: 'agents',
+  drive: 'drive',
+  tasks: 'tasks',
+  runs: 'runs',
+  settings: 'settings',
+}
+
+/** A route with no tab yet (before the first navigation) shows the hub. */
+export function modeOfTab(tab: AppTabId | null): AppMode {
+  if (!tab) return 'hub'
+  return isAppletTabId(tab) ? 'applet' : TAB_MODES[tab]
+}
 
 export const PINNED_TABS: readonly PinnedTabId[] = ['inbox', 'code', 'chats']
 export const VIEW_TABS: readonly ViewTabId[] = ['drive', 'tasks', 'runs', 'settings']
@@ -67,7 +86,7 @@ export function globalTabLocation(id: GlobalTabId): RouteLocationRaw {
     case 'settings':
       return { name: 'application-settings' }
     default:
-      return { name: 'applet', params: { id: id.slice('applet:'.length) } }
+      return { name: 'applet', params: { id: appletIdOfTabId(id) } }
   }
 }
 

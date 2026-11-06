@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
-import { appletTabId, isAppletTabId } from '../../lib/appletTabs'
+import { appletIdOfTabId, appletTabId, isAppletTabId } from '../../lib/appletTabs'
 import type { GlobalTabId } from '../../lib/appTabs'
 import { useApplets } from '../../stores/useApplets'
 import AppletFrame from './AppletFrame.vue'
@@ -34,7 +34,7 @@ watch(
 const pages = computed(() =>
   props.tabs
     .filter(isAppletTabId)
-    .map((tab) => tab.slice('applet:'.length))
+    .map(appletIdOfTabId)
     .filter((id) => started.value.has(id))
     .map((id) => ({ id, applet: applets.byID(id) })),
 )

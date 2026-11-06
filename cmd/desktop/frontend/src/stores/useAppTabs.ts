@@ -15,8 +15,7 @@ export const useAppTabs = defineStore('appTabs', () => {
   // A hand-edited or older value must not put a tab in the strip that nothing can render.
   const tabs = computed<GlobalTabId[]>(() => [...new Set(stored.value.filter(isGlobalTabId))])
 
-  // Most recent first. Closing the tab in front returns to the one before it,
-  // as the old overlay-style pages returned to where they were opened from.
+  // Most recent first. Closing the tab in front returns to the one before it.
   const recent = ref<AppTabId[]>([])
 
   function has(id: GlobalTabId): boolean {

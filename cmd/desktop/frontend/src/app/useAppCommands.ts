@@ -150,8 +150,8 @@ export function useAppCommands(deps: AppCommandDeps) {
     'tasks.toggle': () => {
       // Only opening re-resolves the scope, and no resolved repo leaves the
       // persisted last-picked scope alone.
-      if (!appMode.tasksActive.value && terminalActive.value && overlays.terminalSessionRepoKey.value) {
-        tasks.setRepoKey(overlays.terminalSessionRepoKey.value)
+      if (!appMode.tasksActive.value && terminalActive.value && appMode.codeSessionRepoKey.value) {
+        tasks.setRepoKey(appMode.codeSessionRepoKey.value)
       }
       appMode.toggleTab('tasks')
     },

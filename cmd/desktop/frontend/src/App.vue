@@ -76,7 +76,7 @@ const { terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
 useModePreload(() => shellLoaded.value && !onboardingActive.value, appMode.prepareTerminal)
 const overlays = useHubOverlays()
-const { activityOpen, terminalSessionRepoKey } = overlays
+const { activityOpen } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
 const reveal = useReveal(nav, session, feed.showToast, appMode.openDrive)
 useHiveLinkClicks((message) => feed.showToast(message, { severity: 'error' }))
@@ -183,7 +183,7 @@ const appTabs = useAppTabs()
           :sidebar-collapsed="terminalSidebarCollapsed"
           :drive="appMode.codeDrive.value"
           :overlay-open="activityOpen || !!applets.open.value"
-          @session-repo-key="terminalSessionRepoKey = $event"
+          @session-repo-key="appMode.codeSessionRepoKey.value = $event"
         />
         <AgentsMode
           v-if="agentsMounted"
@@ -195,7 +195,7 @@ const appTabs = useAppTabs()
           v-if="settingsActive"
           :active-category="nav.applicationSettingsSection.value"
           :known-feed-types="knownFeedTypes"
-          @close="appMode.closeSettings"
+          @close="appMode.closeTab('settings')"
           @select-category="nav.selectApplicationSettingsSection"
         />
         <DrivePage
@@ -203,7 +203,7 @@ const appTabs = useAppTabs()
           :scope="appMode.driveScope.value"
           :sidebar-collapsed="appMode.driveSidebarCollapsed.value"
           @update:scope="appMode.updateDriveScope"
-          @close="appMode.closeDrive"
+          @close="appMode.closeTab('drive')"
           @open-url="feed.openUrl"
           @setup="nav.selectApplicationSettingsSection('mcp')"
         />
@@ -214,8 +214,8 @@ const appTabs = useAppTabs()
         />
         <ActionRunsView
           v-if="appMode.runsActive.value"
-          embedded
           :initial-run-id="appMode.runsRunId.value"
+          @select="appMode.selectActionRun"
           @open-item="nav.openActionRunItem"
         />
         <div v-show="appletActive" class="flex min-h-0 min-w-0 flex-1 flex-col">

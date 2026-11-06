@@ -7,13 +7,10 @@ import { ref } from 'vue'
  */
 export function useHubOverlays() {
   const activityOpen = ref(false)
-  // TerminalMode reports the attached session's owner/repo continuously, so
-  // opening Tasks from Code scopes it to that session's repository.
-  const terminalSessionRepoKey = ref('')
 
   function toggleActivity(): void {
     activityOpen.value = !activityOpen.value
   }
 
-  return { activityOpen, terminalSessionRepoKey, toggleActivity }
+  return { activityOpen, toggleActivity }
 }

@@ -4,7 +4,15 @@ import { Window } from '@wailsio/runtime'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { docsScopeOf } from '../components/terminal/panelViews'
 import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
-import { globalTabLocation, isPinnedTabId, tabOfRoute, type AppTabId, type GlobalTabId } from '../lib/appTabs'
+import {
+  globalTabLocation,
+  isPinnedTabId,
+  modeOfTab,
+  tabOfRoute,
+  type AppMode,
+  type AppTabId,
+  type GlobalTabId,
+} from '../lib/appTabs'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useAppTabs } from '../stores/useAppTabs'
 import { useDriveReview } from '../stores/useDriveReview'
@@ -16,20 +24,11 @@ import { AGENTS_SIDEBAR, TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 
 const log = createLogger('app-mode')
 
-export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings' | 'drive' | 'tasks' | 'runs' | 'applet'
-export type PinnedMode = 'hub' | 'terminal' | 'agents'
-
-const PINNED_MODES: Record<'inbox' | 'code' | 'chats', PinnedMode> = {
-  inbox: 'hub',
-  code: 'terminal',
-  chats: 'agents',
-}
-
 /**
  * Which area owns the frame under the title bar, and that frame's panel chrome.
  * The title bar is a strip of tabs: Inbox (the feed, flows, and profile
  * settings), Code (terminal mode) and Chats (the agents area) are pinned, and
- * Drive, Tasks, Settings and applets are global tabs the user adds and closes.
+ * Drive, Tasks, Action runs, Settings and applets are pages the user adds and closes.
  * Each tab is a route, so history restores where each was left and a tab
  * opened by a link joins the strip. A relaunch lands on the hub, so none
  * attaches a tmux client or an agent session unprompted.
@@ -48,16 +47,8 @@ export function useAppMode(
   const codeLayouts = usePanelLayouts()
   const chatLayouts = useChatPanelLayouts()
 
-  const mode = computed<AppMode>(() => {
-    if (route.name === 'terminal') return 'terminal'
-    if (route.name === 'agents') return 'agents'
-    if (route.name === 'application-settings') return 'settings'
-    if (route.name === 'drive') return 'drive'
-    if (route.name === 'tasks') return 'tasks'
-    if (route.name === 'action-runs') return 'runs'
-    if (route.name === 'applet') return 'applet'
-    return 'hub'
-  })
+  const activeTab = computed<AppTabId | null>(() => tabOfRoute(route.name, route.params))
+  const mode = computed<AppMode>(() => modeOfTab(activeTab.value))
   // Each area is its own positive case rather than "not terminal", so a deep
   // link to one never mounts the hub under it.
   const shown = (area: AppMode) => computed(() => mode.value === area && shellLoaded.value && !onboardingActive.value)
@@ -110,8 +101,6 @@ export function useAppMode(
   const lastAgentsPath = useStorage('hive.mode.agents.path', '')
   if (!lastAgentsPath.value.startsWith('/workspaces')) lastAgentsPath.value = ''
 
-  const activeTab = computed<AppTabId | null>(() => tabOfRoute(route.name, route.params))
-
   watch(
     () => route.fullPath,
     (path) => {
@@ -140,7 +129,7 @@ export function useAppMode(
   function activateTab(id: AppTabId): void {
     if (id === activeTab.value) return
     if (isPinnedTabId(id)) {
-      setMode(PINNED_MODES[id])
+      setMode(modeOfTab(id))
       return
     }
     tabs.add(id)
@@ -160,20 +149,24 @@ export function useAppMode(
     else activateTab(id)
   }
 
-  // A run rides the query, so a link opens on it and Back walks the runs opened.
+  // A run rides the query, so a link opens on it and Back walks the runs opened. A pick
+  // in the list replaces it, so the tab comes back on that run, and Back leaves the page.
   function openActionRuns(runId?: number): void {
     if (runId) void router.push({ name: 'action-runs', query: { run: String(runId) } })
     else activateTab('runs')
   }
 
-  function closeSettings(): void {
-    closeTab('settings')
+  function selectActionRun(runId: number): void {
+    void router.replace({ name: 'action-runs', query: { run: String(runId) } })
   }
 
   // The URL is the attach state, so it is also which session is on screen.
   const onScreenSessionSlug = computed(() =>
     route.name === 'terminal' && typeof route.params.slug === 'string' ? route.params.slug : '',
   )
+  // TerminalMode reports the attached session's owner/repo continuously, so
+  // opening Tasks from Code scopes it to that session's repository.
+  const codeSessionRepoKey = ref('')
 
   const feedSidebarCollapsed = useStorage('hive.panel.sidebar.collapsed', false)
   const terminalSidebarCollapsed = useStorage(TERMINAL_SIDEBAR.collapsedKey, false)
@@ -283,10 +276,6 @@ export function useAppMode(
     void router.replace(driveLocation(scope))
   }
 
-  function closeDrive(): void {
-    closeTab('drive')
-  }
-
   // Opening follows the chat or session on screen; from anywhere else it
   // returns to the document last read.
   function toggleDrive(): void {
@@ -332,6 +321,7 @@ export function useAppMode(
     runsActive,
     runsRunId,
     openActionRuns,
+    selectActionRun,
     appletActive,
     openAppletId,
     terminalActive,
@@ -342,13 +332,12 @@ export function useAppMode(
     driveScope,
     openDrive,
     updateDriveScope,
-    closeDrive,
     toggleDrive,
-    closeSettings,
     terminalMounted,
     prepareTerminal,
     agentsMounted,
     onScreenSessionSlug,
+    codeSessionRepoKey,
     feedSidebarCollapsed,
     terminalSidebarCollapsed,
     agentsSidebarCollapsed,

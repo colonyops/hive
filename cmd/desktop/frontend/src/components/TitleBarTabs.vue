@@ -22,7 +22,7 @@ import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
-import { appletTabId, isAppletTabId } from '../lib/appletTabs'
+import { appletIdOfTabId, appletTabId, isAppletTabId } from '../lib/appletTabs'
 import {
   VIEW_TABS,
   tabStripDensity,
@@ -80,7 +80,7 @@ const pinned = computed<TabView[]>(() => PINNED.map((tab) => ({ ...tab, kbd: kbd
 
 function globalView(id: GlobalTabId): TabView {
   if (isAppletTabId(id)) {
-    const appletId = id.slice('applet:'.length)
+    const appletId = appletIdOfTabId(id)
     const applet = applets.byID(appletId)
     return {
       id,
@@ -212,7 +212,8 @@ const pinnedGroup = ref<HTMLElement | null>(null)
 const { width: stripWidth } = useElementSize(strip)
 const { width: pinnedWidth } = useElementSize(pinnedGroup)
 // Measured only while the labels show, so dropping them cannot feed back into
-// the decision to drop them.
+// the decision to drop them. The seed is the labeled Inbox, Code and Chats group,
+// for the first layout before a measurement.
 const pinnedLabeledWidth = ref(230)
 
 const density = computed(() =>

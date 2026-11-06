@@ -14,7 +14,7 @@ import IconArrowUpCircle from '~icons/lucide/arrow-up-circle'
 import AppletTitlebarSlot from './applets/AppletTitlebarSlot.vue'
 import JobsPopover from './JobsPopover.vue'
 import TitleBarTabs from './TitleBarTabs.vue'
-import type { AppTabId, GlobalTabId } from '../lib/appTabs'
+import type { AppMode, AppTabId, GlobalTabId } from '../lib/appTabs'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import Kbd from '@hive/ui/components/ui/Kbd.vue'
@@ -25,20 +25,19 @@ import { useApplets } from '../stores/useApplets'
 // is two clusters:
 //   left   — the sidebar (left-panel) toggle brackets the far edge, then
 //            back/forward, then the tab strip: Inbox, Code and Chats pinned,
-//            the global tabs the user added (Drive, Tasks, Settings, applets),
-//            and the + that adds one. The strip scrolls when it runs out of
-//            room; the empty space after it stays a drag surface.
+//            the pages the user added, and the + that adds one. The strip
+//            scrolls when it runs out of room; the empty space after it stays
+//            a drag surface.
 //   right  — status chips, then the pages of the applets that list the title
 //            bar, then the command-palette launcher (a search field at its
 //            natural width, so the room goes to tabs and applets), then
 //            Activity, then the
-//            preview (right-panel) toggle bracketing the far edge. Pages and
-//            Settings are tabs, reached from the strip's +.
+//            preview (right-panel) toggle bracketing the far edge.
 // Every control is a 28px square icon button or a 28px labeled button, both
 // `rounded-lg` with a `chip` hover fill. Amber is reserved for things asking
-// for attention — unread activity, an available update. Selected state is a
-// neutral `chip` fill: it is the only treatment that clears contrast in all 14
-// themes.
+// for attention — unread activity, an available update. A selected icon button
+// is a neutral `chip` fill: it is the only treatment that clears contrast in all
+// 14 themes. Tabs mark selection their own way (see TitleBarTabs).
 //
 // profileName is empty during onboarding: the bar shows no profile controls —
 // no toggle, no history, no tabs, no palette.
@@ -51,7 +50,7 @@ import { useApplets } from '../stores/useApplets'
 // profileName so it can show during onboarding too.
 const props = defineProps<{
   profileName?: string
-  mode?: string
+  mode?: AppMode
   activeTab?: AppTabId | null
   tabs?: readonly GlobalTabId[]
   activityActive?: boolean

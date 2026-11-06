@@ -29,6 +29,7 @@ import { applicationSettingsSections, createAppRouter } from '../router'
 import TerminalMode from '../components/TerminalMode.vue'
 import DrivePage from '../components/drive/DrivePage.vue'
 import SettingsView from '../components/SettingsView.vue'
+import ActionRunsView from '../components/ActionRunsView.vue'
 import { viewTab, withDocsScope, type SessionViewKind } from '../components/terminal/panelViews'
 import { newPanelLayout, openTab } from '../lib/panelLayout'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
@@ -129,6 +130,7 @@ const mocks = vi.hoisted(() => ({
   // runtime
   On: vi.fn().mockReturnValue(() => {}),
   Hide: vi.fn(),
+  Close: vi.fn(),
   // A test installs a fake Agents client here; null keeps the real one.
   agentsClient: null as AgentWorkspacesClient | null,
 }))
@@ -290,7 +292,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
 
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
-  Window: { Hide: mocks.Hide },
+  Window: { Hide: mocks.Hide, Close: mocks.Close },
   Call: { ByID: vi.fn() },
 }))
 
@@ -3280,6 +3282,7 @@ describe('App', () => {
   })
 
   it('closes only the global tab in front on ⌘W', async () => {
+    mocks.Close.mockClear()
     const { wrapper, router } = await mountAppWithRouter()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
@@ -3291,6 +3294,19 @@ describe('App', () => {
     expect(close.defaultPrevented).toBe(true)
     expect(router.currentRoute.value.name).toBe('feed')
     expect(wrapper.find('[data-testid="titlebar-tab-tasks"]').exists()).toBe(false)
+    expect(mocks.Close).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('closes the window on ⌘W with a pinned tab in front', async () => {
+    mocks.Close.mockClear()
+    const { wrapper, router } = await mountAppWithRouter()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', metaKey: true, cancelable: true }))
+    await flushPromises()
+    expect(mocks.Close).toHaveBeenCalledOnce()
+    expect(router.currentRoute.value.name).toBe('feed')
 
     wrapper.unmount()
   })
@@ -3451,6 +3467,23 @@ describe('App', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="action-runs-view"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="titlebar-tab-runs"]').attributes('aria-selected')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('returns to the run picked in the list, not the one Action runs was opened on', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    await router.push({ name: 'action-runs', query: { run: '42' } })
+    await flushPromises()
+
+    wrapper.findComponent(ActionRunsView).vm.$emit('select', 7)
+    await flushPromises()
+    expect(router.currentRoute.value.query.run).toBe('7')
+
+    await wrapper.get('[data-testid="titlebar-mode-hub"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="titlebar-tab-runs"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.run).toBe('7')
     wrapper.unmount()
   })
 

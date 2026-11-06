@@ -49,7 +49,7 @@ describe('tabStripDensity', () => {
   })
 
   it('drops the global labels first, then the pinned ones', () => {
-    // 230 pinned + 36 add + 17 separator leaves 317 for four tabs: under 4 × 84 + gaps.
+    // 230 pinned + 32 add + 17 separator leaves 321 for four tabs: under 4 × 84 + gaps.
     expect(tabStripDensity({ ...space, width: 600 })).toEqual({ globalLabels: false, pinnedLabels: true })
     expect(tabStripDensity({ ...space, width: 400 })).toEqual({ globalLabels: false, pinnedLabels: false })
   })

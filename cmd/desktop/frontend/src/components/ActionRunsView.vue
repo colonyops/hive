@@ -14,7 +14,6 @@ import IconCopy from '~icons/lucide/copy'
 import IconExternalLink from '~icons/lucide/external-link'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconCircleStop from '~icons/lucide/circle-stop'
-import IconX from '~icons/lucide/x'
 import {
   List,
   Log,
@@ -25,7 +24,6 @@ import type {
   ActionRunSummary,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { useClipboard } from '@hive/ui/composables/useClipboard'
-import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { relativeAgo } from '../lib/age'
 import { timeLabel } from '../lib/activityPresentation'
@@ -51,11 +49,9 @@ import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 
 const props = defineProps<{
   initialRunId?: number | null
-  /** Lives in a title-bar tab, which owns closing: no close button and no Escape. */
-  embedded?: boolean
 }>()
 const emit = defineEmits<{
-  close: []
+  select: [runId: number]
   'open-item': [commandId: number, actionId: string]
 }>()
 
@@ -147,6 +143,7 @@ async function readLog(reset: boolean): Promise<void> {
 function select(id: number): void {
   if (selectedId.value === id) return
   selectedId.value = id
+  emit('select', id)
 }
 
 function moveSelection(step: number): void {
@@ -226,7 +223,6 @@ function scheduleListPoll(): void {
 useWailsEvent('jobs:updated', () => {
   void loadRuns()
 })
-useEscapeToClose(() => emit('close'), { enabled: () => !props.embedded })
 useIntervalFn(() => (now.value = Date.now()), 1000)
 
 onMounted(() => {
@@ -256,15 +252,6 @@ function statusIconClass(status: string): string {
         <span class="font-mono text-caption text-text-4"
           >{{ runs.length }} {{ runs.length === 1 ? 'run' : 'runs' }}</span
         >
-        <div class="flex-1" />
-        <IconButton
-          v-if="!embedded"
-          label="Close"
-          :icon="IconX"
-          size="lg"
-          data-testid="action-runs-close"
-          @click="emit('close')"
-        />
       </template>
     </ViewHeader>
 
