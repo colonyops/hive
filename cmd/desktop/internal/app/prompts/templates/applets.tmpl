@@ -32,7 +32,7 @@ A key Hive does not know is a warning in `applet_list`, and the applet still ope
 - `entry`: the page, default `index.html`.
 - `surfaces`: where the applet shows. List each one it belongs on, and it shows only there. With none listed it is a pop-up. Ask the user if the request does not make it clear.
   - `tab`: in a session's + menu, as a tab beside its terminals. Takes no settings: `tab: {}`.
-  - `page`: in the title bar's + menu, as a page beside Inbox, Code and Chats, in no session. Takes no settings: `page: {}`. Use it, without `tab`, for anything that spans sessions, such as a board of every session.
+  - `page`: in the title bar's + menu, as a tab in the strip beside Inbox, Code and Chats, in no session. Takes no settings: `page: {}`. Use it, without `tab`, for anything that spans sessions, such as a board of every session.
   - `popup`: over the app, from the command palette or a key, with `width` and `height` in pixels. The default fills the window.
   - `titlebar`: a page in the title bar, with `entry` (default: the applet's own `entry`) and `width` in pixels (default 28, one icon button). See "In the title bar".
   - Each takes `enabled: false`, which turns it off and keeps its settings. The switches in Settings > Applets write this, so leave it alone unless the user asks.
