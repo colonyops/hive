@@ -14,15 +14,11 @@ describe('TitleBarMenu', () => {
     wrapper.unmount()
   })
 
-  it('lists Drive among the views and toggles it', async () => {
+  it('leaves the pages that are tabs to the tab strip', async () => {
     const wrapper = mount(TitleBarMenu, { attachTo: document.body })
     await wrapper.get('[data-testid="titlebar-menu"]').trigger('click')
-    const entry = wrapper.get('[data-testid="titlebar-menu-drive"]')
-    expect(entry.text()).toContain('Drive')
-    expect(wrapper.find('[data-testid="titlebar-menu-canvases"]').exists()).toBe(false)
-
-    await entry.trigger('click')
-    expect(wrapper.emitted('run-command')).toEqual([['canvas.toggle']])
+    expect(wrapper.find('[data-testid="titlebar-menu-drive"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="titlebar-menu-tasks"]').exists()).toBe(false)
     wrapper.unmount()
   })
 

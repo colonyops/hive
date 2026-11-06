@@ -1,29 +1,17 @@
-import { ref, type Ref } from 'vue'
-import { useTasks } from '../stores/useTasks'
+import { ref } from 'vue'
 
 /**
- * Tasks, Activity and Action runs open over whatever is on screen rather than
+ * Activity and Action runs open over whatever is on screen rather than
  * navigating away from it (hay-kot/hive-desktop#441), so they are overlays,
  * not routes. A title-bar icon or a command toggles each one.
  */
-export function useHubOverlays(terminalActive: Ref<boolean>) {
-  const tasksOpen = ref(false)
+export function useHubOverlays() {
   const activityOpen = ref(false)
   const actionRunsOpen = ref(false)
   const actionRunsRunId = ref<number | null>(null)
-  const { setRepoKey } = useTasks()
   // TerminalMode reports the attached session's owner/repo continuously, so
-  // every way of opening Tasks scopes to it the same way.
+  // opening Tasks from Code scopes it to that session's repository.
   const terminalSessionRepoKey = ref('')
-
-  // Only an opening toggle re-resolves the scope. Closing never moves it, and
-  // no resolved repo leaves the persisted last-picked scope alone.
-  function toggleTasks(): void {
-    if (!tasksOpen.value && terminalActive.value && terminalSessionRepoKey.value) {
-      setRepoKey(terminalSessionRepoKey.value)
-    }
-    tasksOpen.value = !tasksOpen.value
-  }
 
   function toggleActivity(): void {
     activityOpen.value = !activityOpen.value
@@ -42,14 +30,12 @@ export function useHubOverlays(terminalActive: Ref<boolean>) {
   }
 
   return {
-    tasksOpen,
     activityOpen,
     actionRunsOpen,
     actionRunsRunId,
     toggleActionRuns,
     openActionRuns,
     terminalSessionRepoKey,
-    toggleTasks,
     toggleActivity,
   }
 }

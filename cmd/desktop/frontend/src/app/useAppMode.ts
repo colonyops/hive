@@ -4,7 +4,9 @@ import { Window } from '@wailsio/runtime'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { docsScopeOf } from '../components/terminal/panelViews'
 import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
+import { globalTabLocation, isPinnedTabId, tabOfRoute, type AppTabId, type GlobalTabId } from '../lib/appTabs'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
+import { useAppTabs } from '../stores/useAppTabs'
 import { useDriveReview } from '../stores/useDriveReview'
 import { useChatPanelLayouts, usePanelLayouts } from '../stores/usePanelLayouts'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
@@ -14,17 +16,23 @@ import { AGENTS_SIDEBAR, TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 
 const log = createLogger('app-mode')
 
-export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings' | 'drive'
+export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings' | 'drive' | 'tasks' | 'applet'
+export type PinnedMode = 'hub' | 'terminal' | 'agents'
+
+const PINNED_MODES: Record<'inbox' | 'code' | 'chats', PinnedMode> = {
+  inbox: 'hub',
+  code: 'terminal',
+  chats: 'agents',
+}
 
 /**
  * Which area owns the frame under the title bar, and that frame's panel chrome.
- * Inbox (the hub) is the feed, flows, and profile settings; Code is terminal
- * mode; Chats is the agents area. Application settings and Hive Drive answer
- * to the whole app, so each is an area of its own rather than a page of the
- * Inbox, and closing either returns to the page it was opened from. Terminal
- * and agents are routes, so the title bar stays live inside them and history
- * restores where each was left. A relaunch lands on the hub, so none attaches
- * a tmux client or an agent session unprompted.
+ * The title bar is a strip of tabs: Inbox (the feed, flows, and profile
+ * settings), Code (terminal mode) and Chats (the agents area) are pinned, and
+ * Drive, Tasks, Settings and applets are global tabs the user adds and closes.
+ * Each tab is a route, so history restores where each was left and a tab
+ * opened by a link joins the strip. A relaunch lands on the hub, so none
+ * attaches a tmux client or an agent session unprompted.
  */
 export function useAppMode(
   feed: FeedState,
@@ -45,6 +53,8 @@ export function useAppMode(
     if (route.name === 'agents') return 'agents'
     if (route.name === 'application-settings') return 'settings'
     if (route.name === 'drive') return 'drive'
+    if (route.name === 'tasks') return 'tasks'
+    if (route.name === 'applet') return 'applet'
     return 'hub'
   })
   // Each area is its own positive case rather than "not terminal", so a deep
@@ -55,6 +65,11 @@ export function useAppMode(
   const hubActive = shown('hub')
   const settingsActive = shown('settings')
   const driveActive = shown('drive')
+  const tasksActive = shown('tasks')
+  const appletActive = shown('applet')
+  const openAppletId = computed(() =>
+    appletActive.value && typeof route.params.id === 'string' ? route.params.id : '',
+  )
 
   // Mounted on first entry and then only hidden (ADR
   // terminal-mode-is-hidden-not-unmounted): both hold live PTYs and xterm
@@ -78,33 +93,33 @@ export function useAppMode(
   }
   const agentsMounted = mountedOnce(agentsActive)
 
-  // Each mode's toggle lands where that mode was last. Only the agents path
-  // survives a reload: ?chat reattaches only a still-live session (ADR
-  // the-open-chat-rides-the-route), while a restored /terminal/:slug would
-  // attach a tmux control client unconditionally.
+  // Each tab lands where it was last. Only the agents path survives a reload:
+  // ?chat reattaches only a still-live session (ADR the-open-chat-rides-the-route),
+  // while a restored /terminal/:slug would attach a tmux control client
+  // unconditionally.
+  const tabs = useAppTabs()
   let lastHubPath = ''
   let lastTerminalPath = ''
-  // Where closing settings or the drive returns to. Settings remembers the
-  // drive, so Settings opened from the drive closes back onto it; the drive
-  // skips settings, or the two would each return to the other forever.
-  let lastOutsideSettingsPath = ''
-  let lastOutsideDrivePath = ''
-  // The drive reopens on the document last read when no chat or session on
-  // screen names one.
-  let lastDrivePath = ''
+  const lastGlobalPaths = new Map<GlobalTabId, string>()
   const lastAgentsPath = useStorage('hive.mode.agents.path', '')
   if (!lastAgentsPath.value.startsWith('/workspaces')) lastAgentsPath.value = ''
+
+  const activeTab = computed<AppTabId | null>(() => tabOfRoute(route.name, route.params))
+
   watch(
     () => route.fullPath,
     (path) => {
-      if (!route.name) return
-      if (route.name === 'application-settings') return
-      if (route.name !== 'drive') lastOutsideDrivePath = path
-      lastOutsideSettingsPath = path
-      if (route.name === 'drive') lastDrivePath = path
-      else if (route.name === 'terminal') lastTerminalPath = path
-      else if (route.name === 'agents') lastAgentsPath.value = path
-      else lastHubPath = path
+      const tab = activeTab.value
+      if (!tab) return
+      tabs.visited(tab)
+      if (tab === 'code') lastTerminalPath = path
+      else if (tab === 'chats') lastAgentsPath.value = path
+      else if (tab === 'inbox') lastHubPath = path
+      else {
+        // A link, a chord or the palette can open a page that is not in the strip yet.
+        tabs.add(tab)
+        lastGlobalPaths.set(tab, path)
+      }
     },
     { immediate: true },
   )
@@ -116,8 +131,31 @@ export function useAppMode(
     else void router.push(lastHubPath || { name: 'feed' })
   }
 
+  function activateTab(id: AppTabId): void {
+    if (id === activeTab.value) return
+    if (isPinnedTabId(id)) {
+      setMode(PINNED_MODES[id])
+      return
+    }
+    tabs.add(id)
+    void router.push(lastGlobalPaths.get(id) ?? globalTabLocation(id))
+  }
+
+  function closeTab(id: GlobalTabId): void {
+    const wasActive = activeTab.value === id
+    tabs.remove(id)
+    lastGlobalPaths.delete(id)
+    if (wasActive) activateTab(tabs.previous(id))
+  }
+
+  /** A chord's toggle: brings the tab forward, or steps back from it without closing it. */
+  function toggleTab(id: GlobalTabId): void {
+    if (activeTab.value === id) activateTab(tabs.previous(id))
+    else activateTab(id)
+  }
+
   function closeSettings(): void {
-    void router.push(lastOutsideSettingsPath || { name: 'feed' })
+    closeTab('settings')
   }
 
   // The URL is the attach state, so it is also which session is on screen.
@@ -134,11 +172,7 @@ export function useAppMode(
   // hub page claims the route.
   const feedViewActive = computed(
     () =>
-      !onboardingActive.value &&
-      !terminalActive.value &&
-      !agentsActive.value &&
-      !settingsActive.value &&
-      !driveActive.value &&
+      hubActive.value &&
       !nav.profileSettingsActive.value &&
       !nav.flowsActive.value &&
       !nav.devActive.value &&
@@ -238,15 +272,15 @@ export function useAppMode(
   }
 
   function closeDrive(): void {
-    void router.push(lastOutsideDrivePath || { name: 'feed' })
+    closeTab('drive')
   }
 
   // Opening follows the chat or session on screen; from anywhere else it
   // returns to the document last read.
   function toggleDrive(): void {
-    if (mode.value === 'drive') closeDrive()
+    if (mode.value === 'drive') toggleTab('drive')
     else if (viewDriveScope.value) openDrive(viewDriveScope.value)
-    else void router.push(lastDrivePath || { name: 'drive' })
+    else activateTab('drive')
   }
 
   // The hidden-inset title bar loses the native double-click-to-zoom, so it is
@@ -262,6 +296,13 @@ export function useAppMode(
   return {
     mode,
     setMode,
+    activeTab,
+    activateTab,
+    closeTab,
+    toggleTab,
+    tasksActive,
+    appletActive,
+    openAppletId,
     terminalActive,
     agentsActive,
     hubActive,

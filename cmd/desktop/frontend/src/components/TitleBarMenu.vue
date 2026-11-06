@@ -1,11 +1,10 @@
 <script setup lang="ts">
-// The title bar's overflow menu: views and pages that open over whatever is on
-// screen, then the application settings, which answer to every mode. Each entry is a palette command, so the menu, the palette and the
+// The title bar's overflow menu: views that open over whatever is on screen,
+// then the application settings. Pages that fill the frame (Drive, Tasks) are
+// tabs, added from the strip's + menu. Each entry is a palette command, so the menu, the palette and the
 // keymap stay one surface and a rebound key shows up here as its hint.
 import { computed, ref } from 'vue'
-import IconFolderTree from '~icons/lucide/folder-tree'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
-import IconListTodo from '~icons/lucide/list-todo'
 import IconSettings from '~icons/lucide/settings'
 import IconSquareTerminal from '~icons/lucide/square-terminal'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
@@ -33,22 +32,6 @@ const entries = computed<MenuEntry[]>(() => [
     icon: IconSquareTerminal,
     kbd: kbdFor('action-runs.toggle'),
     testid: 'titlebar-menu-action-runs',
-  },
-  {
-    kind: 'action',
-    id: 'tasks.toggle',
-    label: 'Tasks',
-    icon: IconListTodo,
-    kbd: kbdFor('tasks.toggle'),
-    testid: 'titlebar-menu-tasks',
-  },
-  {
-    kind: 'action',
-    id: 'canvas.toggle',
-    label: 'Drive',
-    icon: IconFolderTree,
-    kbd: kbdFor('canvas.toggle'),
-    testid: 'titlebar-menu-drive',
   },
   { kind: 'separator' },
   {

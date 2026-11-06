@@ -15,6 +15,7 @@ import { launcherIconComponent } from '../lib/launcherIcons'
 import type { PanelTab } from '../lib/panelLayout'
 import { SURFACES, type AppletSurface } from './appletSurfaces'
 import { defineStore } from './defineStore'
+import { useAppTabs } from './useAppTabs'
 import { useChatPanelLayouts, usePanelLayouts } from './usePanelLayouts'
 import { useResource } from './useResource'
 
@@ -86,6 +87,10 @@ export const useApplets = defineStore('applets', () => {
   const usable = computed(() => catalog.data.value.filter((applet) => applet.runnable && applet.enabled))
   const sessionMenu = computed(() => usable.value.filter((applet) => applet.surfaces.tab))
   const titlebarApplets = computed(() => usable.value.filter((applet) => applet.surfaces.titlebar))
+  // A page that fills a panel or a pop-up can fill a title-bar tab as well.
+  const globalTabApplets = computed(() =>
+    usable.value.filter((applet) => applet.surfaces.tab || applet.surfaces.popup !== null),
+  )
 
   // The session area on screen, which can show an applet as a tab. Both areas stay
   // mounted, so only the one the user is in holds this.
@@ -114,10 +119,20 @@ export const useApplets = defineStore('applets', () => {
     return true
   }
 
+  let pageTabOpener: (id: string) => boolean = () => false
+
+  function setPageTabOpener(open: (id: string) => boolean): void {
+    pageTabOpener = open
+  }
+
   // A tab comes first where one can show, and an applet shows only where its file says.
   function openApplet(id: string): boolean {
     const applet = byID(id)
     if (!applet) return false
+    if (applet.runnable && pageTabOpener(id)) {
+      openID.value = null
+      return true
+    }
     if (openTabFor(id)) return true
     if (!applet.runnable || applet.surfaces.popup) {
       openPopup(id)
@@ -147,6 +162,7 @@ export const useApplets = defineStore('applets', () => {
   function closeSavedTabs(id: string): void {
     usePanelLayouts().closeTabEverywhere(appletTabId(id))
     useChatPanelLayouts().closeTabEverywhere(appletTabId(id))
+    useAppTabs().remove(appletTabId(id))
   }
 
   async function remove(id: string): Promise<void> {
@@ -353,6 +369,7 @@ export const useApplets = defineStore('applets', () => {
     setTabHost,
     setRouteSession,
     titlebarApplets,
+    globalTabApplets,
     closeSavedTabs,
     setEnabled,
     setSurface,
@@ -363,6 +380,7 @@ export const useApplets = defineStore('applets', () => {
     closeDropdown,
     liveSessionSlug,
     setCommandRunner,
+    setPageTabOpener,
     runCommand,
     connectFrame,
     frameShown,

@@ -2,7 +2,16 @@ import { defineComponent } from 'vue'
 import { createRouter, createWebHashHistory, type RouteRecordRaw, type Router, type RouterHistory } from 'vue-router'
 
 export type AppRouteName =
-  'feed' | 'flows' | 'terminal' | 'agents' | 'application-settings' | 'profile-settings' | 'drive' | 'dev'
+  | 'feed'
+  | 'flows'
+  | 'terminal'
+  | 'agents'
+  | 'application-settings'
+  | 'profile-settings'
+  | 'drive'
+  | 'tasks'
+  | 'applet'
+  | 'dev'
 
 // The one list of application settings sections. It builds the route's own
 // section matcher below and backs isApplicationSettingsSection, which App.vue
@@ -96,6 +105,9 @@ export function createAppRouter(history: RouterHistory = createWebHashHistory())
       name: 'drive',
       component: ShellPage,
     },
+    // Tasks and applets open as title-bar tabs, app-global like Drive.
+    { path: '/tasks', name: 'tasks', component: ShellPage },
+    { path: '/applets/:id', name: 'applet', component: ShellPage },
   ]
 
   // Registered in every build: the developer tools are reachable in a shipped

@@ -18,7 +18,6 @@ export interface GlobalKeymapDeps {
   contextActive: (context: CommandContext) => boolean
   paletteOpen: Ref<boolean>
   activityOpen: Ref<boolean>
-  tasksOpen: Ref<boolean>
   actionRunsOpen: Ref<boolean>
 }
 
@@ -33,19 +32,17 @@ export function useGlobalKeymap({
   contextActive,
   paletteOpen,
   activityOpen,
-  tasksOpen,
   actionRunsOpen,
 }: GlobalKeymapDeps) {
   const kb = useKeybindings()
   const viewKeys = useViewKeys()
 
   // Every dialog and drawer registers in openModalCount while mounted. The
-  // palette and the hub overlays are not modals, so they are named here. Tasks
-  // and Action runs are split out so each one's toggle can close its own
-  // overlay while it stays suppressed under anything else.
+  // palette and the hub overlays are not modals, so they are named here. Action
+  // runs is split out so its toggle can close its own overlay while it stays
+  // suppressed under anything else.
   const openModalCount = useOpenModalCount()
   const toggledOverlays: Record<string, Ref<boolean>> = {
-    'tasks.toggle': tasksOpen,
     'action-runs.toggle': actionRunsOpen,
   }
   const applets = useApplets()

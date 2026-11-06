@@ -22,7 +22,6 @@ const runCommand = vi.fn<(id: string) => void>()
 const activeContexts = new Set<CommandContext>()
 const paletteOpen = ref(false)
 const activityOpen = ref(false)
-const tasksOpen = ref(false)
 const actionRunsOpen = ref(false)
 
 beforeEach(async () => {
@@ -43,7 +42,6 @@ beforeEach(async () => {
   activeContexts.add('global')
   paletteOpen.value = false
   activityOpen.value = false
-  tasksOpen.value = false
   actionRunsOpen.value = false
   scope = effectScope()
   scope.run(() =>
@@ -52,7 +50,6 @@ beforeEach(async () => {
       contextActive: (context) => activeContexts.has(context),
       paletteOpen,
       activityOpen,
-      tasksOpen,
       actionRunsOpen,
     }),
   )
@@ -127,7 +124,6 @@ describe('useGlobalKeymap overlay gate', () => {
   it.each([
     ['the palette', () => (paletteOpen.value = true)],
     ['Activity', () => (activityOpen.value = true)],
-    ['Tasks', () => (tasksOpen.value = true)],
     ['Action runs', () => (actionRunsOpen.value = true)],
     ['a modal', () => void openModal()],
   ])('suppresses everything but the palette toggle while %s is open', (_name, open) => {
@@ -141,32 +137,14 @@ describe('useGlobalKeymap overlay gate', () => {
     expect(runCommand).toHaveBeenCalledWith('palette.toggle')
   })
 
-  it('lets tasks.toggle close the Tasks overlay when nothing else is open', () => {
-    tasksOpen.value = true
-    press('t', tasksChord)
-    expect(runCommand).toHaveBeenCalledWith('tasks.toggle')
-  })
-
-  it.each([
-    ['the palette', () => (paletteOpen.value = true)],
-    ['Activity', () => (activityOpen.value = true)],
-    ['a modal stacked over it', () => void openModal()],
-  ])('swallows tasks.toggle over Tasks while %s is also open', (_name, open) => {
-    tasksOpen.value = true
-    open()
-
-    press('t', tasksChord)
-    expect(runCommand).not.toHaveBeenCalled()
-  })
-
   // The Drive is a page, not an overlay: its chord goes through the ordinary
   // gate, so it is swallowed under any overlay and runs everywhere else.
-  it('runs canvas.toggle with no overlay open and swallows it under Tasks', () => {
+  it('runs canvas.toggle with no overlay open and swallows it under Action runs', () => {
     press('p', driveChord)
     expect(runCommand).toHaveBeenCalledWith('canvas.toggle')
 
     runCommand.mockReset()
-    tasksOpen.value = true
+    actionRunsOpen.value = true
     press('p', driveChord)
     expect(runCommand).not.toHaveBeenCalled()
   })

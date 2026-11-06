@@ -67,7 +67,7 @@ While an applet's pop-up is open, only <kbd>⌘K</kbd>, the key that closes it, 
 
 ## Session tabs
 
-**Open Drive tab** (`session.open-drive`), **Open Diff tab** (`session.open-diff`), and **Open Tasks tab** (`session.open-tasks`) open that tab in the session on screen, in Code or in an open chat, or bring it forward. They have no default key. In the palette they appear under the session's name, only for the tabs that session offers: a chat has Drive but no Diff or Tasks. **Toggle Drive** and **Toggle Tasks** are different commands that open the app-wide views.
+**Open Drive tab** (`session.open-drive`), **Open Diff tab** (`session.open-diff`), and **Open Tasks tab** (`session.open-tasks`) open that tab in the session on screen, in Code or in an open chat, or bring it forward. They have no default key. In the palette they appear under the session's name, only for the tabs that session offers: a chat has Drive but no Diff or Tasks. **Toggle Drive** and **Toggle Tasks** are different commands: they bring the app-wide Drive and Tasks tabs in the title bar forward, adding the tab if it is not there, and return to the tab you were on when pressed again.
 
 ```yaml
 keybindings:

@@ -7,6 +7,8 @@ description: An overview of the core features in the Inbox, Code, and Chats area
 
 Hive Desktop brings incoming work, coding sessions, and long-running agent workspaces into one app. Its three main areas can be used together or independently.
 
+The title bar is a row of tabs. **Inbox**, **Code**, and **Chats** are pinned at the left and always there. Press **+** after them to add a tab for **Drive**, **Tasks**, **Settings**, or any [applet](../configuration/applets.md) that opens as a tab or a pop-up. Added tabs stay across restarts. Drag one to reorder it, and close it with its **×** or a middle click. Closing the tab in front returns you to the tab you were on before.
+
 ## Inbox
 
 Inbox turns scattered updates into focused feeds. Connect the systems you already use, route each item through rules you control, and decide when Hive should notify you or start work.

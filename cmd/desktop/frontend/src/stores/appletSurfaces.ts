@@ -3,7 +3,7 @@ import IconAppWindow from '~icons/lucide/app-window'
 import IconPanelTop from '~icons/lucide/panel-top'
 import IconSquareStack from '~icons/lucide/square-stack'
 
-export type AppletSurface = 'tab' | 'popup' | 'titlebar' | 'dropdown'
+export type AppletSurface = 'tab' | 'page' | 'popup' | 'titlebar' | 'dropdown'
 
 /** What applet.yaml says about where an applet shows, read from an Applet or an import preview. */
 interface DeclaresSurfaces {
@@ -55,6 +55,15 @@ export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
       page: (applet) => (applet.surfaces.tab ? applet.entry : undefined),
       available: () => true,
     },
+  },
+  // A title-bar tab of its own. Any applet that opens as a session tab or a pop-up can fill
+  // one, so it needs no key in applet.yaml. Like a session tab it has a close button and
+  // leaves Escape to the page.
+  page: {
+    panel: true,
+    persistent: false,
+    takesFocus: false,
+    escapeCloses: false,
   },
   popup: {
     panel: true,

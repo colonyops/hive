@@ -26,7 +26,9 @@ The applet appears as soon as its file is valid. If you dislike it, ask for chan
 - Press <kbd>⌘K</kbd> and type <kbd>+</kbd>, or press <kbd>⇥</kbd> to reach the **Applets** tab, to see only applets.
 - Bind one to a key in **Settings ▸ Keyboard**, or in `settings.yaml` as `applet.<id>`. The same key closes a pop-up again.
 
-It opens where [its file says](#where-it-shows). An applet with a tab opens as that tab when a session is on screen. Otherwise it opens as a pop-up, on the session on screen. An applet with only a tab asks you to open a session first.
+To keep one at hand, press **+** in the title bar and pick it under **Applets**. It opens as a tab of its own beside Inbox, Code, and Chats, stays in the title bar across restarts, and keeps running behind other tabs once you have opened it. Any applet that lists a `tab` or a `popup` can be a title-bar tab, with no change to its file. Once it is there, opening the applet from the palette or its key brings that tab forward.
+
+Otherwise it opens where [its file says](#where-it-shows). An applet with a tab opens as that tab when a session is on screen. Otherwise it opens as a pop-up, on the session on screen. An applet with only a tab asks you to open a session first.
 
 <kbd>esc</kbd> closes a pop-up, unless the page uses the key itself first. A tab stays open; close it from its tab.
 
@@ -143,7 +145,7 @@ The page gets `window.hive`:
 | `hive.startChat({workspace, name, prompt, pinToCode})` | Starts an agent workspace chat in the background, optionally pinned to Code, and returns `{id, workspace, name, slug, pinnedAt}`. The prompt needs a workspace command that passes `.Prompt` |
 | `hive.pinChat(id)`, `hive.unpinChat(id)` | Pins a chat to the Code sidebar or unpins it |
 | `hive.context()` | Returns the applet's directory, working directory, and session |
-| `hive.close()` | Closes the applet's pop-up or tab. In a title bar page, closes its dropdown |
+| `hive.close()` | Closes the applet's pop-up or tab, including its title-bar tab. In a title bar page, closes its dropdown |
 | `hive.open()` | Opens the applet: as a tab if its file lists one and a session is on screen, otherwise as a pop-up if it lists one. Closes its pop-up if that is already open |
 | `hive.commands()`, `hive.command(id)` | Lists Hive's commands with `{id, title, group, keys}`, and runs one. An unknown id rejects. A command takes no arguments: `session.new` opens an empty dialog |
 | `hive.setCommands(rows)` | Replaces the palette rows this page added |
@@ -152,7 +154,7 @@ The page gets `window.hive`:
 | `hive.navigate(path)` | Goes to a route of the app, such as `/settings/applets` |
 | `hive.broadcast(data)`, `hive.on('message', fn)` | Talks to the applet's other open frames |
 | `hive.on('session', fn)` | Reports the session on screen when it changes |
-| `hive.surface` | `tab`, `popup`, `titlebar`, or `dropdown` |
+| `hive.surface` | `tab`, `page` (a tab of its own in the title bar), `popup`, `titlebar`, or `dropdown` |
 
 The page also receives Hive's theme as CSS variables such as `--hv-app`, `--hv-text` and `--hv-accent`, which change when you change theme. `localStorage` works and is kept per applet. Cookies and IndexedDB do not work.
 
