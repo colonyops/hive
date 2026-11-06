@@ -202,7 +202,7 @@ export function useAppCommands(deps: AppCommandDeps) {
         sessionServer(onScreenSessionSlug.value),
       ),
     'window.hide': feed.hideWindow,
-    'tab.close': appMode.closeFront,
+    'page.close': appMode.closeFront,
     'view.go-inbox': () => appMode.setMode('hub'),
     'view.go-code': () => appMode.setMode('terminal'),
     'view.go-chats': () => appMode.setMode('agents'),

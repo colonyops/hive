@@ -111,7 +111,7 @@ export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activi
 
   // A command resolves only where it applies, so ⌘F reaches terminal.find over
   // a pane and Focus search everywhere else, and ⌘W reaches Close window in Code
-  // and Close tab everywhere else.
+  // and Close page everywhere else.
   function applies(id: string): boolean {
     const context = commandById.value.get(id)?.context
     return !context || contextActive(context)

@@ -3320,7 +3320,7 @@ describe('App', () => {
     const matches = results.value.filter((cmd) => cmd.id === 'tasks.toggle' || cmd.id === 'view:tasks')
     expect(matches).toHaveLength(1)
     expect(matches[0].id).toBe('tasks.toggle')
-    expect(matches[0].title).toBe('Toggle Tasks')
+    expect(matches[0].title).toBe('Open Tasks page')
     expect(matches[0].hint).toBe(formatCombo('mod+shift+t'))
 
     wrapper.unmount()
@@ -3417,7 +3417,7 @@ describe('App', () => {
     const { results, query } = useCommandPalette()
     query.value = ''
     const row = results.value.find((cmd) => cmd.id === 'action-runs.toggle')
-    expect(row?.title).toBe('Toggle Action runs')
+    expect(row?.title).toBe('Open Action runs page')
     expect(row?.hint).toBe(formatCombo('g l'))
 
     await row?.run()

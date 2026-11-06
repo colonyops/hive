@@ -28,9 +28,9 @@ The applet appears as soon as its file is valid. If you dislike it, ask for chan
 
 It opens where [its file says](#where-it-shows), in this order:
 
-1. A global tab you already have in the title bar comes forward.
+1. Its page, if you already have it in the title bar, comes forward.
 2. A session tab, when the applet lists one and a session is on screen.
-3. A new global tab, when the applet lists `page`.
+3. A new page in the title bar, when the applet lists `page`.
 4. A pop-up, on the session on screen.
 
 An applet with only a session tab asks you to open a session first.
@@ -59,11 +59,11 @@ surfaces:
 | Surface | Where | Settings | Runs |
 | --- | --- | --- | --- |
 | `tab` | In a session's **+** menu, on a tab row and on a session in the sidebar, for chats as well as Code sessions | None | From opening the tab until you close it or switch to another session |
-| `page` | In the title bar's **+** menu, as a global tab beside Inbox, Code, and Chats. It belongs to no session | None | From opening the tab until you close it, behind other tabs too |
+| `page` | In the title bar's **+** menu, as a page beside Inbox, Code, and Chats. It belongs to no session | None | From opening the page until you close it, behind other pages too |
 | `popup` | Over the app, from the palette or a key | `width` and `height` in pixels. Unset fills the window | While it is open |
 | `titlebar` | In the title bar | `entry`, default the applet's own page, and `width` in pixels, default 28 | From the moment the file is valid, whenever Hive is open |
 
-List `page` and not `tab` for an applet that spans every session, such as a board of all your sessions, so it stays out of each session's **+** menu. A global tab stays in the title bar across restarts, and you can drag it to reorder it. It does not run at launch: it starts the first time you open it, then keeps running while you are on other tabs.
+List `page` and not `tab` for an applet that spans every session, such as a board of all your sessions, so it stays out of each session's **+** menu. A page stays in the title bar across restarts, and you can drag it to reorder it. It does not run at launch: it starts the first time you open it, then keeps running while you are on other tabs.
 
 A session tab sits beside the session's terminals and Drive, and you can drag it between panels. Its page keeps running behind other tabs, through a move, and while you are in another part of the app. A session keeps its applet tabs across restarts. If you turn an applet off, or its file stops listing a tab, the tab stays and says so until you close it. Deleting an applet closes its tabs.
 
@@ -154,7 +154,7 @@ The page gets `window.hive`:
 | `hive.startChat({workspace, name, prompt, pinToCode})` | Starts an agent workspace chat in the background, optionally pinned to Code, and returns `{id, workspace, name, slug, pinnedAt}`. The prompt needs a workspace command that passes `.Prompt` |
 | `hive.pinChat(id)`, `hive.unpinChat(id)` | Pins a chat to the Code sidebar or unpins it |
 | `hive.context()` | Returns the applet's directory, working directory, and session |
-| `hive.close()` | Closes the applet's pop-up or tab, including its title-bar tab. In a title bar page, closes its dropdown |
+| `hive.close()` | Closes the applet's pop-up, tab, or page. In a title bar page, closes its dropdown |
 | `hive.open()` | Opens the applet in [the order above](#open-one). Closes its pop-up if that is already open |
 | `hive.commands()`, `hive.command(id)` | Lists Hive's commands with `{id, title, group, keys}`, and runs one. An unknown id rejects. A command takes no arguments: `session.new` opens an empty dialog |
 | `hive.setCommands(rows)` | Replaces the palette rows this page added |

@@ -380,7 +380,7 @@ describe('useGlobalKeymap ⌘W', () => {
 
   it('closes the terminal window in Code and the tab in front everywhere else', () => {
     press('w', closeChord)
-    expect(runCommand).toHaveBeenLastCalledWith('tab.close')
+    expect(runCommand).toHaveBeenLastCalledWith('page.close')
 
     activeContexts.add('terminal')
     press('w', closeChord)
@@ -389,7 +389,7 @@ describe('useGlobalKeymap ⌘W', () => {
 
   it('runs the menu Close as the chord, once per press when a frame also forwards it', () => {
     wailsHandlers.get('window:close-request')?.()
-    expect(runCommand).toHaveBeenCalledExactlyOnceWith('tab.close')
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('page.close')
 
     // The forwarded keydown of the same press lands after the menu.
     press('w', closeChord)
@@ -399,6 +399,6 @@ describe('useGlobalKeymap ⌘W', () => {
   it('drops the menu Close when the forwarded keydown already ran', () => {
     press('w', closeChord)
     wailsHandlers.get('window:close-request')?.()
-    expect(runCommand).toHaveBeenCalledExactlyOnceWith('tab.close')
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('page.close')
   })
 })

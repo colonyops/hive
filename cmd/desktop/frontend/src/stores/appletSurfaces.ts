@@ -71,9 +71,9 @@ export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
     takesFocus: false,
     escapeCloses: false,
     declared: {
-      label: 'Global tab',
+      label: 'Page',
       icon: IconPanelsTopLeft,
-      description: "In the title bar's + menu. Opens as a tab beside Inbox, Code and Chats, in no session.",
+      description: "In the title bar's + menu. Opens as a page beside Inbox, Code and Chats, in no session.",
       page: (applet) => (applet.surfaces.page ? applet.entry : undefined),
       available: () => true,
     },

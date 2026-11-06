@@ -330,8 +330,8 @@ const tabClass = (selected: boolean) => [
 
     <div ref="addWrap" class="relative shrink-0" style="--wails-draggable: no-drag">
       <IconButton
-        label="Add a tab"
-        tooltip="Add a tab"
+        label="Add a page"
+        tooltip="Add a page"
         :icon="IconPlus"
         size="lg"
         aria-haspopup="menu"
