@@ -151,14 +151,6 @@ func TestDesktopToolArguments(t *testing.T) {
 			want:     map[string]any{"caller": "s1", "view": "applet:radio"},
 		},
 		{
-			name:     "a field named url keeps its own flag",
-			args:     []string{"canvas-block", "put", "plan", "pr", "--kind", "link", "--title", "PR", "--url", "https://example.com/1"},
-			wantTool: "canvas_block_put",
-			want: map[string]any{
-				"caller": "s1", "canvas": "plan", "id": "pr", "kind": "link", "title": "PR", "url": "https://example.com/1",
-			},
-		},
-		{
 			name:     "close a terminal window",
 			args:     []string{"tab", "close", "terminal", "--window", "@3"},
 			wantTool: "tab_close",

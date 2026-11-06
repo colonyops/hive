@@ -1,6 +1,6 @@
 // Package drive models Hive Drive: one document tree under the context root,
 // split into spaces (a repository, a Chats workspace, or the shared space)
-// that hold folders and markdown, html, and canvas documents.
+// that hold folders and markdown and html documents.
 package drive
 
 import (

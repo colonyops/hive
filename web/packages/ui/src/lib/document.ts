@@ -38,7 +38,7 @@ function resolvePath(base: string[], relative: string): string | null {
  * Where a link in a document leads. A web or mail address opens outside the
  * app. A path that names a document in the same space opens it: `.hive/...`
  * from the space root, as a checkout's link reads, and anything else from the
- * linking document's folder. A bare canvas name still finds its canvas.
+ * linking document's folder.
  * Anything else leads nowhere, because the webview must never navigate.
  */
 export function linkTarget(href: string, fromPath: string, paths: ReadonlySet<string>): LinkTarget | null {
@@ -54,39 +54,20 @@ export function linkTarget(href: string, fromPath: string, paths: ReadonlySet<st
   const base = fromRoot ? [] : fromPath.split('/').slice(0, -1)
   const resolved = resolvePath(base, fromRoot ? reference.slice('.hive/'.length) : reference)
   if (!resolved) return null
-  if (paths.has(resolved)) return { kind: 'document', path: resolved }
-  const canvas = `${resolved}.canvas.json`
-  return paths.has(canvas) ? { kind: 'document', path: canvas } : null
+  return paths.has(resolved) ? { kind: 'document', path: resolved } : null
 }
 
 export interface ReaderEntry {
   path: string
-  kind: 'markdown' | 'html' | 'canvas'
+  kind: 'markdown' | 'html'
   front?: Record<string, FrontmatterValue>
   /** ISO 8601. */
   created?: string
   modified?: string
 }
 
-export interface ReaderBlock {
-  id: string
-  kind: string
-  title?: string
-  body?: string
-  url?: string
-}
-
-export interface ReaderCanvas {
-  blocks: ReaderBlock[]
-  frontmatter?: Record<string, FrontmatterValue>
-  /** ISO 8601. */
-  createdAt?: string
-  updatedAt?: string
-}
-
 export interface ReaderDocument {
   entry: ReaderEntry
   markdown?: string
   html?: string
-  canvas?: ReaderCanvas
 }

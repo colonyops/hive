@@ -41,7 +41,7 @@ func childPaths(entries []documentListView) []string {
 
 func TestDocumentRoundTrip(t *testing.T) {
 	t.Parallel()
-	core, session := testCanvasSession(t)
+	core, session := testDriveSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
 	var wrote documentView
@@ -86,12 +86,11 @@ func TestDocumentRoundTrip(t *testing.T) {
 
 func TestWriteDocumentRefusals(t *testing.T) {
 	t.Parallel()
-	core, session := testCanvasSession(t)
+	core, session := testDriveSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
 	text := callErr(t, session, "document_put", map[string]any{"caller": id, "path": "reports/perf.canvas.json", "body": "{}"})
 	assert.Contains(t, text, "invalid")
-	assert.Contains(t, text, "canvas_blocks_put", "a canvas path points at the canvas tools")
 
 	text = callErr(t, session, "document_put", map[string]any{"caller": id, "path": "../escape.md", "body": "x"})
 	assert.Contains(t, text, "invalid")
@@ -102,7 +101,7 @@ func TestWriteDocumentRefusals(t *testing.T) {
 
 func TestListDocuments(t *testing.T) {
 	t.Parallel()
-	core, session := testCanvasSession(t)
+	core, session := testDriveSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
 	var root documentListView
@@ -140,41 +139,9 @@ func TestListDocuments(t *testing.T) {
 	assert.Equal(t, "markdown", doc.Kind, "a document path lists that document")
 }
 
-func TestCanvasNamesFileUnderPaths(t *testing.T) {
-	t.Parallel()
-	core, session := testCanvasSession(t)
-	id := seedAgentSession(t, core, "demo", "chat")
-
-	var wrote canvasWriteView
-	call(t, session, "canvas_blocks_put", map[string]any{
-		"caller": id, "canvas": "reports/2026-10/perf", "blocks": []map[string]any{{"id": "a", "kind": "markdown", "body": "x"}},
-	}, &wrote)
-	assert.Equal(t, "reports/2026-10/perf", wrote.Name)
-	call(t, session, "canvas_block_put", map[string]any{"caller": id, "canvas": "plan", "id": "a", "kind": "markdown", "body": "x"}, &wrote)
-	assert.Equal(t, "plan", wrote.Name)
-
-	var folder documentListView
-	call(t, session, "document_list", map[string]any{"caller": id, "path": "reports/2026-10"}, &folder)
-	assert.Equal(t, []string{"reports/2026-10/perf.canvas.json"}, childPaths(folder.Children))
-	call(t, session, "document_list", map[string]any{"caller": id, "path": "canvases"}, &folder)
-	assert.Equal(t, []string{"canvases/plan.canvas.json"}, childPaths(folder.Children), "a bare name still files under canvases/")
-
-	var got canvasView
-	call(t, session, "canvas_get", map[string]any{"caller": id, "canvas": "reports/2026-10/perf"}, &got)
-	require.Len(t, got.Blocks, 1)
-
-	var listed canvasListView
-	call(t, session, "canvas_list", map[string]any{"caller": id}, &listed)
-	names := []string{}
-	for _, c := range listed.Canvases {
-		names = append(names, c.Name)
-	}
-	assert.ElementsMatch(t, []string{"reports/2026-10/perf", "plan"}, names)
-}
-
 func TestTabToolsPublishTheRequest(t *testing.T) {
 	t.Parallel()
-	core, session := testCanvasSession(t)
+	core, session := testDriveSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
 	var mu sync.Mutex
@@ -242,7 +209,7 @@ func TestTabToolsPublishTheRequest(t *testing.T) {
 }
 
 func TestLayoutToolsPublishAndRefuse(t *testing.T) {
-	core, session := testCanvasSession(t)
+	core, session := testDriveSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
 	var mu sync.Mutex
@@ -290,7 +257,7 @@ func TestLayoutToolsPublishAndRefuse(t *testing.T) {
 }
 
 func TestGetLayoutAnswersFromTheMirror(t *testing.T) {
-	core, session := testCanvasSession(t)
+	core, session := testDriveSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
 	type layout struct {

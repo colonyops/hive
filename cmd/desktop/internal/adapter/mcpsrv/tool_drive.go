@@ -21,13 +21,13 @@ func (ctrl *DriveController) registerDocuments(srv *mcp.Server) {
 }
 
 type documentEntry struct {
-	Kind     string         `json:"kind"            jsonschema:"dir, markdown, html, canvas, or file."`
+	Kind     string         `json:"kind"            jsonschema:"dir, markdown, html, or file."`
 	Path     string         `json:"path"            jsonschema:"Path inside the space, forward slashes; empty for the space root."`
 	Name     string         `json:"name"`
-	Title    string         `json:"title,omitempty" jsonschema:"A canvas's title, or the title key of a markdown document's front matter."`
+	Title    string         `json:"title,omitempty" jsonschema:"The title key of a markdown document's front matter."`
 	Size     int64          `json:"size"            jsonschema:"Bytes on disk; 0 for a folder."`
 	Modified time.Time      `json:"modified"`
-	Front    map[string]any `json:"front,omitempty" jsonschema:"Front matter of a markdown or canvas document."`
+	Front    map[string]any `json:"front,omitempty" jsonschema:"Front matter of a markdown document."`
 }
 
 // documentNode is a listed entry with its own children. The result schema

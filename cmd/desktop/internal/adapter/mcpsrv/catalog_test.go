@@ -18,7 +18,7 @@ import (
 func TestServedToolsAreTheCatalog(t *testing.T) {
 	t.Parallel()
 	_, app := testSession(t)
-	_, drive := testCanvasSession(t)
+	_, drive := testDriveSession(t)
 	_, chats := testChatsSession(t)
 
 	sessions := map[string]*mcp.ClientSession{mcpsrv.PathPrefix: app, mcpsrv.DrivePathPrefix: drive, mcpsrv.ChatsPathPrefix: chats}

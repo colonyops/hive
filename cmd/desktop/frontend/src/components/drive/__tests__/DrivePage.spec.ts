@@ -60,10 +60,10 @@ const plan = doc('plans/2026-10-11-plan.md', {
   front: { type: 'plan', title: 'E2E Drive Plan' },
   modified: '2026-10-11T00:00:00Z',
 })
-const report = doc('canvases/report.canvas.json', { title: 'E2E Report', modified: '2026-10-01T00:00:00Z' })
+const report = doc('reports/report.html', { title: 'E2E Report', modified: '2026-10-01T00:00:00Z' })
 const notes = doc('notes.md', { title: 'Notes', modified: '2026-10-02T00:00:00Z' })
 const trees: Record<string, EntryWire> = {
-  'e2e/repo': root([folder('canvases', [report]), folder('plans', [plan])]),
+  'e2e/repo': root([folder('plans', [plan]), folder('reports', [report])]),
   shared: root([notes]),
   'workspaces/demo': root([]),
 }
@@ -107,20 +107,11 @@ describe('DrivePage', () => {
         return Promise.resolve(
           documentFor(key, plan, {
             markdown:
-              '---\ntype: plan\n---\n\n# E2E Drive Plan\n\nThe [report canvas](../canvases/report.canvas.json) and [the PR](https://example.com/pr/1).',
+              '---\ntype: plan\n---\n\n# E2E Drive Plan\n\nThe [report](../reports/report.html) and [the PR](https://example.com/pr/1).',
           }),
         )
       if (path === report.path)
-        return Promise.resolve(
-          documentFor(key, report, {
-            canvas: {
-              title: 'E2E Report',
-              blocks: [
-                { id: 'summary', kind: 'markdown', title: '', body: 'Summary.', url: '', createdAt: 1, updatedAt: 1 },
-              ],
-            },
-          }),
-        )
+        return Promise.resolve(documentFor(key, report, { html: '<html><body>Summary.</body></html>' }))
       return Promise.resolve(documentFor(key, notes, { markdown: '# Notes' }))
     })
     drive.Search.mockResolvedValue([{ space: space('e2e/repo'), entry: plan }])
@@ -166,7 +157,7 @@ describe('DrivePage', () => {
 
   it('opens on the document it was asked for, and moves from the tree without leaving the view', async () => {
     const { wrapper, scope } = await mountPage({ path: report.path })
-    expect(wrapper.get('[data-testid="drive-page-block-summary"]').text()).toContain('Summary.')
+    expect(wrapper.get('[data-testid="drive-page-frame"]').attributes('srcdoc')).toContain('Summary.')
 
     await wrapper.get('[data-testid="drive-page-row-plans"]').trigger('click')
     await wrapper.get('[data-testid="drive-page-row-plans/2026-10-11-plan.md"]').trigger('click')
@@ -195,7 +186,7 @@ describe('DrivePage', () => {
 
     await toReport.trigger('click')
     await flushPromises()
-    expect(scope.value.path).toBe('canvases/report.canvas.json')
+    expect(scope.value.path).toBe('reports/report.html')
   })
 
   it('lists the spaces grouped Repositories, Workspaces, Shared and switches to one', async () => {
@@ -368,7 +359,7 @@ describe('DrivePage', () => {
     expect(wrapper.emitted('close')).toBeUndefined()
   })
 
-  it('offers no review toggle on a canvas', async () => {
+  it('offers no review toggle on an html document', async () => {
     const { wrapper } = await mountPage({ path: report.path })
     expect(wrapper.find('[data-testid="drive-page-review-toggle"]').exists()).toBe(false)
   })

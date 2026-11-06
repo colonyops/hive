@@ -47,7 +47,7 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 		v    any
 		want []string
 	}{
-		{"SessionSummary", SessionSummary{}, sorted("server", "id", "name", "slug", "repo", "repoIdentity", "state", "canvasOwner", "tags", "createdAt")},
+		{"SessionSummary", SessionSummary{}, sorted("server", "id", "name", "slug", "repo", "repoIdentity", "state", "driveSpace", "tags", "createdAt")},
 		{"SessionDetail", SessionDetail{}, sorted("server", "id", "name", "slug", "repo", "state", "path", "cloneStrategy", "worktreeBranch", "tags", "createdAt", "updatedAt")},
 		{"SessionRisk", app.SessionRisk{}, sorted("uncommittedChanges", "unpushedCommits", "recycleDeletes")},
 		{"SessionGitStatus", SessionGitStatus{}, sorted("path", "branch", "dirty", "unpushed", "additions", "deletions", "host", "owner", "repo", "resolved", "error")},
@@ -98,7 +98,7 @@ func TestSessionSummaryOfMapsEachField(t *testing.T) {
 
 	assert.Equal(t, SessionSummary{
 		ID: "s1", Name: "review 81", Slug: "review-81", Repo: "git@github.com:acme/site.git", RepoIdentity: "github.com/acme/site", State: "recycled",
-		CanvasOwner: "acme/site", Tags: []string{"auto"}, CreatedAt: createdAt,
+		DriveSpace: "acme/site", Tags: []string{"auto"}, CreatedAt: createdAt,
 	}, sessionSummaryOf(sameSpace, s))
 }
 
@@ -107,9 +107,9 @@ func TestSessionWireTagsAreNeverNull(t *testing.T) {
 	assert.Equal(t, []string{}, sessionDetailOf("", session.Session{}).Tags)
 }
 
-func TestSessionSummaryOfHasNoCanvasOwnerForARemoteWithNoRepository(t *testing.T) {
+func TestSessionSummaryOfHasNoDriveSpaceForARemoteWithNoRepository(t *testing.T) {
 	for _, remote := range []string{"", "git@github.com:shared/site.git"} {
-		assert.Empty(t, sessionSummaryOf(sameSpace, session.Session{Remote: remote}).CanvasOwner, remote)
+		assert.Empty(t, sessionSummaryOf(sameSpace, session.Session{Remote: remote}).DriveSpace, remote)
 	}
 }
 
@@ -169,7 +169,7 @@ func TestServerSessionsQualifyIDAndSlugWithTheServer(t *testing.T) {
 	assert.Equal(t, "box:s1", row.ID)
 	assert.Equal(t, "box:review", row.Slug)
 	assert.Equal(t, "review", row.Name)
-	assert.Empty(t, row.CanvasOwner, "a server's repository owns no canvas on this machine")
+	assert.Empty(t, row.DriveSpace, "a server's repository has no drive space on this machine")
 	assert.Equal(t, "offline", lists[1].State)
 	assert.Equal(t, []SessionSummary{}, lists[1].Sessions)
 }

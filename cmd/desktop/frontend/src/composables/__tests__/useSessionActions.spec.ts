@@ -29,7 +29,7 @@ const session: SessionSummary = {
   server: '',
   repoIdentity: 'acme/site',
   state: 'active',
-  canvasOwner: '',
+  driveSpace: '',
   tags: [],
   createdAt: '2026-10-01T12:00:00Z',
 }

@@ -63,9 +63,6 @@ func (s *DriveService) ReadDocument(ctx context.Context, session, path string) (
 	if drive.IsHiveState(path) {
 		return drive.Entry{}, nil, documentNotFound(caller.space, path)
 	}
-	if drive.KindOf(path) == drive.KindCanvas {
-		return drive.Entry{}, nil, Errorf(KindInvalid, "%q is a canvas; read it with canvas_get and the name %q", path, drive.CanvasName(path))
-	}
 	isDir, err := s.isDir(d, caller.space, path)
 	if err != nil {
 		return drive.Entry{}, nil, err
@@ -95,8 +92,6 @@ func (s *DriveService) WriteDocument(ctx context.Context, session, path string, 
 	}
 	switch drive.KindOf(path) {
 	case drive.KindMarkdown, drive.KindHtml:
-	case drive.KindCanvas:
-		return drive.Entry{}, Errorf(KindInvalid, "%q is a canvas; write its blocks with canvas_blocks_put and the name %q", path, drive.CanvasName(path))
 	default:
 		return drive.Entry{}, Errorf(KindInvalid, "%q is neither a markdown (.md) nor an html (.html) document", path)
 	}

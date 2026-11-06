@@ -48,34 +48,17 @@ describe('drive', () => {
   })
 
   describe('toReaderDocument', () => {
-    it('maps a canvas, turning unix millisecond stamps into ISO ones and dropping the block stamps', () => {
-      const wire = documentFor('acme/site', doc('c.canvas.json'), {
-        canvas: {
-          createdAt: Date.parse('2026-10-01T00:00:00Z'),
-          updatedAt: 0,
-          frontmatter: { tags: ['a'] },
-          blocks: [{ id: 'b', kind: 'link', title: 'T', body: '', url: 'https://x.test', createdAt: 5, updatedAt: 6 }],
-        },
-      })
-      expect(toReaderDocument(wire)?.canvas).toEqual({
-        blocks: [{ id: 'b', kind: 'link', title: 'T', body: '', url: 'https://x.test' }],
-        frontmatter: { tags: ['a'] },
-        createdAt: '2026-10-01T00:00:00.000Z',
-        updatedAt: undefined,
-      })
-    })
-
     it('carries a markdown entry with its front matter and times', () => {
       const wire = documentFor('acme/site', doc('plans/x.md', { front: { type: 'plan' } }), { markdown: '# X' })
       expect(toReaderDocument(wire)).toMatchObject({
         entry: { path: 'plans/x.md', kind: 'markdown', front: { type: 'plan' }, modified: '2026-10-01T00:00:00Z' },
         markdown: '# X',
-        canvas: undefined,
       })
     })
 
     it('has no reader document for a plain file', () => {
       expect(toReaderDocument(documentFor('acme/site', doc('notes.txt')))).toBeNull()
+      expect(toReaderDocument(documentFor('acme/site', doc('old.canvas.json')))).toBeNull()
     })
   })
 })

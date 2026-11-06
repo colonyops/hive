@@ -8,7 +8,6 @@ import DocumentFrontmatter from './DocumentFrontmatter.vue'
 import CanvasMarkdown from '../CanvasMarkdown.vue'
 import EmptyState from '../ui/EmptyState.vue'
 import InlineError from '../ui/InlineError.vue'
-import IconArrowUpRight from '~icons/lucide/arrow-up-right'
 import { entryTime, markdownBody, type FrontmatterValue, type ReaderDocument } from '../../lib/document'
 import type { SourceLines } from '../../lib/githubMarkdown'
 
@@ -19,7 +18,7 @@ const props = withDefaults(
     lineHeight: number
     /** Loads the html document from this URL instead of inlining it as `srcdoc`. */
     htmlSrc?: string
-    /** Derives `-document`, `-markdown`, `-block-<id>` (with `-html` and `-link`), `-frame`, `-error`, and `-empty`. */
+    /** Derives `-document`, `-markdown`, `-frame`, `-error`, and `-empty`. */
     testid?: string
     error?: string | null
     loading?: boolean
@@ -46,18 +45,10 @@ defineExpose({ root, body })
 const propertiesExpanded = useStorage('hive.canvas.frontmatter.expanded', true)
 
 const kind = computed(() => props.document.entry.kind)
-const blocks = computed(() => props.document.canvas?.blocks ?? [])
 
 const properties = computed<{ frontmatter: Record<string, FrontmatterValue>; created: number; updated: number } | null>(
   () => {
     const doc = props.document
-    if (doc.canvas && entryTime(doc.canvas.createdAt ?? '') > 0) {
-      return {
-        frontmatter: doc.canvas.frontmatter ?? {},
-        created: entryTime(doc.canvas.createdAt ?? ''),
-        updated: entryTime(doc.canvas.updatedAt ?? ''),
-      }
-    }
     if (doc.entry.kind !== 'markdown') return null
     return {
       frontmatter: doc.entry.front ?? {},
@@ -66,21 +57,12 @@ const properties = computed<{ frontmatter: Record<string, FrontmatterValue>; cre
     }
   },
 )
-
-// Links must open in the user's real browser rather than navigate the webview
-// away from the app: DetailPane's interception, for the same reason.
-function onBodyClick(event: MouseEvent): void {
-  const anchor = (event.target as HTMLElement).closest('a')
-  if (!anchor) return
-  event.preventDefault()
-  emit('open-link', anchor.getAttribute('href') ?? '')
-}
 </script>
 
 <template>
   <div
     ref="root"
-    class="canvas-reader isolate flex min-h-0 flex-col"
+    class="document-reader isolate flex min-h-0 flex-col"
     :class="kind === 'html' ? 'absolute inset-0' : 'relative'"
     :style="readerStyle"
     :data-testid="`${testid}-document`"
@@ -98,7 +80,7 @@ function onBodyClick(event: MouseEvent): void {
     <CanvasMarkdown
       v-else-if="kind === 'markdown'"
       ref="markdownView"
-      class="canvas-reading-body text-text-2 markdown-body"
+      class="document-body text-text-2 markdown-body"
       :class="bodyClass"
       :style="readerStyle"
       :source="markdownBody(document.markdown ?? '')"
@@ -108,125 +90,64 @@ function onBodyClick(event: MouseEvent): void {
       @follow="emit('open-link', $event)"
     />
     <HtmlDocumentFrame v-else-if="kind === 'html'" :html="document.html ?? ''" :src="htmlSrc" :testid="testid" />
-    <template v-else-if="kind === 'canvas' && blocks.length">
-      <article
-        v-for="block in blocks"
-        :key="block.id"
-        class="canvas-block"
-        :data-testid="`${testid}-block-${block.id}`"
-      >
-        <template v-if="block.kind === 'markdown' || block.kind === 'html'">
-          <h2 v-if="block.title" class="canvas-block-title">{{ block.title }}</h2>
-          <CanvasMarkdown
-            v-if="block.kind === 'markdown'"
-            class="canvas-reading-body text-text-2 markdown-body"
-            :style="readerStyle"
-            :source="block.body ?? ''"
-            :testid="`${testid}-block-${block.id}`"
-            @follow="emit('open-link', $event)"
-          />
-          <!-- eslint-disable vue/no-v-html -- html blocks arrive sanitized by canvas.SanitizeHTML in Go -->
-          <div
-            v-else
-            class="canvas-reading-body text-text-2 hv-html"
-            :style="readerStyle"
-            :data-testid="`${testid}-block-${block.id}-html`"
-            @click="onBodyClick"
-            v-html="block.body"
-          />
-          <!-- eslint-enable vue/no-v-html -->
-        </template>
-        <button
-          v-else-if="block.kind === 'link'"
-          type="button"
-          class="canvas-link"
-          :title="block.url"
-          :data-testid="`${testid}-block-${block.id}-link`"
-          @click="emit('open-link', block.url ?? '')"
-        >
-          <span class="canvas-link-text">
-            <span class="canvas-link-title">{{ block.title }}</span>
-            <span class="canvas-link-url">{{ block.url }}</span>
-          </span>
-          <IconArrowUpRight class="canvas-link-arrow" aria-hidden="true" />
-        </button>
-      </article>
-    </template>
     <EmptyState v-else-if="!loading" variant="inline" message="Nothing here yet." :data-testid="`${testid}-empty`" />
     <slot />
   </div>
 </template>
 
 <style scoped>
-.canvas-reader {
+.document-reader {
+  --hv-surface-panel: color-mix(in oklab, var(--color-card) 45%, var(--color-raised));
+  --hv-surface-border: color-mix(in oklab, var(--color-text) 8%, var(--color-border));
+  --hv-surface-rule: var(--color-border);
+  --hv-ink-muted: var(--color-text-3);
   font-size: var(--hv-font-size);
   line-height: var(--hv-line-height);
 }
-.canvas-block {
-  padding: 12px 0;
-}
-.canvas-block + .canvas-block {
-  border-top: 1px solid var(--color-border);
-}
-.canvas-block:first-child {
-  padding-top: 0;
-}
-/* A block title is an eyebrow over its body, in the voice of the app's
-   section headers, so it never competes with the body's own headings. */
-.canvas-block-title {
-  margin-bottom: 10px;
-  color: var(--hv-ink-muted);
-  font-family: var(--font-mono);
-  font-size: 0.786em;
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.canvas-reading-body {
+.document-body {
   font-size: var(--hv-font-size);
   line-height: var(--hv-line-height);
 }
-.canvas-reading-body.markdown-body :deep(h1),
-.canvas-reading-body.markdown-body :deep(h2),
-.canvas-reading-body.markdown-body :deep(h3),
-.canvas-reading-body.markdown-body :deep(h4),
-.canvas-reading-body.markdown-body :deep(h5),
-.canvas-reading-body.markdown-body :deep(h6) {
+.document-body.markdown-body :deep(h1),
+.document-body.markdown-body :deep(h2),
+.document-body.markdown-body :deep(h3),
+.document-body.markdown-body :deep(h4),
+.document-body.markdown-body :deep(h5),
+.document-body.markdown-body :deep(h6) {
   line-height: calc(var(--hv-line-height) * 0.79);
 }
-.canvas-reading-body.markdown-body :deep(h1) {
+.document-body.markdown-body :deep(h1) {
   font-size: 1.407em;
 }
-.canvas-reading-body.markdown-body :deep(h2) {
+.document-body.markdown-body :deep(h2) {
   font-size: 1.222em;
 }
-.canvas-reading-body.markdown-body :deep(h3) {
+.document-body.markdown-body :deep(h3) {
   font-size: 1.111em;
 }
-.canvas-reading-body.markdown-body :deep(h4),
-.canvas-reading-body.markdown-body :deep(h5),
-.canvas-reading-body.markdown-body :deep(h6) {
+.document-body.markdown-body :deep(h4),
+.document-body.markdown-body :deep(h5),
+.document-body.markdown-body :deep(h6) {
   font-size: 1.037em;
 }
-.canvas-reading-body.markdown-body :deep(pre) {
+.document-body.markdown-body :deep(pre) {
   line-height: calc(var(--hv-line-height) * 0.91);
 }
-.canvas-reading-body.markdown-body :deep(:not(pre) > code) {
+.document-body.markdown-body :deep(:not(pre) > code) {
   padding: 1px 5px;
   border-radius: 4px;
   background: var(--hv-surface-panel);
   color: var(--color-text);
   font-size: 0.893em;
 }
-.canvas-reading-body.markdown-body :deep(th),
-.canvas-reading-body.markdown-body :deep(td) {
+.document-body.markdown-body :deep(th),
+.document-body.markdown-body :deep(td) {
   padding: 7px 14px 7px 0;
   border: 0;
   border-bottom: 1px solid var(--hv-surface-rule);
   background: transparent;
 }
-.canvas-reading-body.markdown-body :deep(th) {
+.document-body.markdown-body :deep(th) {
   padding-top: 6px;
   padding-bottom: 6px;
   border-bottom-color: var(--hv-surface-border);
@@ -237,56 +158,7 @@ function onBodyClick(event: MouseEvent): void {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.canvas-reading-body.markdown-body :deep(tr) {
+.document-body.markdown-body :deep(tr) {
   background: transparent;
-}
-.canvas-link {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  cursor: pointer;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--hv-surface-border);
-  border-radius: 8px;
-  background: var(--hv-surface-card);
-  box-shadow: var(--hv-surface-shadow);
-  color: var(--color-text);
-  text-align: left;
-  transition: background-color 150ms ease;
-}
-.canvas-link:hover,
-.canvas-link:focus-visible {
-  background: color-mix(in oklab, var(--hv-surface-panel) 60%, var(--hv-surface-card));
-}
-.canvas-link-text {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-}
-.canvas-link-title {
-  font-weight: 500;
-  line-height: 1.4;
-}
-.canvas-link-url {
-  overflow: hidden;
-  color: var(--hv-ink-muted);
-  font-family: var(--font-mono);
-  font-size: 0.857em;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.canvas-link-arrow {
-  flex-shrink: 0;
-  color: var(--hv-ink-muted);
-  transition: color 150ms ease;
-}
-.canvas-link:hover .canvas-link-arrow,
-.canvas-link:focus-visible .canvas-link-arrow {
-  color: var(--color-text);
 }
 </style>

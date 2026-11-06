@@ -46,7 +46,7 @@ export function Locate(space: string, path: string): $CancellablePromise<string>
 }
 
 /**
- * Markdown is a markdown document's body or a canvas rendered as markdown.
+ * Markdown is a markdown document's body.
  */
 export function Markdown(space: string, path: string): $CancellablePromise<string> {
     return $Call.ByID(3233523958, space, path);

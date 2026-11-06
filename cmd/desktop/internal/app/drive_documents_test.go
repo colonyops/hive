@@ -37,16 +37,12 @@ func TestWriteDocumentCapsTheBody(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestReadDocumentRefusesCanvasesAndFolders(t *testing.T) {
+func TestReadDocumentRefusesFolders(t *testing.T) {
 	f := newDriveFixture(t)
 	ctx := t.Context()
 
-	_, err := f.svc.PutBlock(ctx, "1", "reports/perf", "", "", markdownBlock("a", "x"))
+	_, err := f.svc.WriteDocument(ctx, "1", "reports/perf.md", []byte("x"))
 	require.NoError(t, err)
-	_, _, err = f.svc.ReadDocument(ctx, "1", "reports/perf.canvas.json")
-	assert.Equal(t, KindInvalid, KindOf(err))
-	assert.Contains(t, err.Error(), "canvas_get")
-
 	_, _, err = f.svc.ReadDocument(ctx, "1", "reports")
 	assert.Equal(t, KindInvalid, KindOf(err))
 	_, _, err = f.svc.ReadDocument(ctx, "1", "ghost.md")

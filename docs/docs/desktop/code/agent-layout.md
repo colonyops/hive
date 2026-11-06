@@ -22,7 +22,7 @@ A tab is named by what it shows:
 
 | Tool | CLI | What it does |
 | --- | --- | --- |
-| `tab_open` | `hive dt tab open <view>` | Opens Drive, Diff, Tasks, a terminal, or `applet:<id>` for an [applet](../configuration/applets.md) that lists a tab. `--path` picks a Drive document or canvas. `--placement behind` adds the tab behind the one in front with a dot; `beside` and `below` split the panel. `--anchor` names the tab to place next to. |
+| `tab_open` | `hive dt tab open <view>` | Opens Drive, Diff, Tasks, a terminal, or `applet:<id>` for an [applet](../configuration/applets.md) that lists a tab. `--path` picks a Drive document. `--placement behind` adds the tab behind the one in front with a dot; `beside` and `below` split the panel. `--anchor` names the tab to place next to. |
 | `tab_close` | `hive dt tab close <view>` | Closes a Drive, Diff, Tasks, or `applet:<id>` tab. `hive dt tab close terminal --window <window>` kills that tmux window of a Code session. |
 | `tab_move` | `hive dt tab move <tab> --placement P` | Moves an open tab behind, beside, or below the anchor, or the panel in front. |
 | `tab_focus` | `hive dt tab focus <tab>` | Brings a tab forward and focuses its panel. This one takes the screen. |

@@ -56,10 +56,6 @@ type Descriptor struct {
 	// literal lives here, in core, because the adapter cannot be imported
 	// back — a pinning test in mcpsrv asserts the two agree.
 	RuntimePath string
-	// ServePath is the path whose toolsets `hive mcp serve` serves for this
-	// entry. Empty means RuntimePath. hive-canvas sets it because its address
-	// is a legacy alias that no toolset declares.
-	ServePath string
 	// StdioOnly marks a RuntimeURL entry whose server requires the token in
 	// the endpoint file. Only `hive mcp serve` reads that file, so without a
 	// matching hive CLI the entry reports a problem instead of a URL.

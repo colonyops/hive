@@ -27,7 +27,7 @@ type SessionSummary struct {
 	Repo         string    `json:"repo"`
 	RepoIdentity string    `json:"repoIdentity"`
 	State        string    `json:"state"`
-	CanvasOwner  string    `json:"canvasOwner"`
+	DriveSpace   string    `json:"driveSpace"`
 	Tags         []string  `json:"tags"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
@@ -39,12 +39,12 @@ func sessionSummaryOf(canonical func(drive.Space) drive.Space, s session.Session
 	}
 	return SessionSummary{
 		ID: s.ID, Name: s.Name, Slug: s.Slug, Repo: s.Remote, RepoIdentity: git.RemoteIdentity(s.Remote), State: string(s.State),
-		CanvasOwner: space.Key, Tags: tagsOf(s), CreatedAt: s.ActivatedAt(),
+		DriveSpace: space.Key, Tags: tagsOf(s), CreatedAt: s.ActivatedAt(),
 	}
 }
 
-// serverSummaryOf is s as a row of server. Its repository owns no canvas
-// here: the drive is on this machine.
+// serverSummaryOf is s as a row of server. It has no drive space here: the
+// drive is on this machine.
 // serverSummaryOf takes Slug from the tmux target, not s.Slug: a session renamed
 // while stopped keeps its old tmux name, and the row attaches with this value.
 func serverSummaryOf(server string, s session.Session) SessionSummary {

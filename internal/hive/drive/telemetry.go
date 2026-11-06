@@ -58,19 +58,13 @@ var (
 )
 
 const (
-	opRead           = "read"
-	opWrite          = "write"
-	opCreateFolder   = "create_folder"
-	opMove           = "move"
-	opDelete         = "delete"
-	opSearch         = "search"
-	opRecent         = "recent"
-	opLoadCanvas     = "load_canvas"
-	opUpsertBlocks   = "upsert_blocks"
-	opRemoveBlock    = "remove_block"
-	opSetFrontmatter = "set_frontmatter"
-	opClearCanvas    = "clear_canvas"
-	opListCanvases   = "list_canvases"
+	opRead         = "read"
+	opWrite        = "write"
+	opCreateFolder = "create_folder"
+	opMove         = "move"
+	opDelete       = "delete"
+	opSearch       = "search"
+	opRecent       = "recent"
 
 	actorAgent = "agent"
 	actorUser  = "user"
@@ -96,7 +90,6 @@ const (
 	attrPath        = "drive.path"
 	attrTarget      = "drive.target"
 	attrBytes       = "drive.bytes"
-	attrBlocks      = "drive.blocks"
 	attrHits        = "drive.hits"
 	attrWatchDirs   = "drive.watch.dirs"
 	attrWatchSpaces = "drive.watch.spaces"
@@ -107,8 +100,7 @@ const (
 var (
 	operationAttrs = func() map[[3]string]metric.MeasurementOption {
 		ops := []string{
-			opRead, opWrite, opCreateFolder, opMove, opDelete, opSearch, opRecent, opLoadCanvas,
-			opUpsertBlocks, opRemoveBlock, opSetFrontmatter, opClearCanvas, opListCanvases,
+			opRead, opWrite, opCreateFolder, opMove, opDelete, opSearch, opRecent,
 		}
 		out := map[[3]string]metric.MeasurementOption{}
 		for _, op := range ops {
@@ -149,7 +141,7 @@ func resultOf(err error) string {
 	case errors.Is(err, drive.ErrNotFound), errors.Is(err, drive.ErrInvalidPath),
 		errors.Is(err, drive.ErrInvalidSpace), errors.Is(err, drive.ErrExists),
 		errors.Is(err, drive.ErrNotEmpty), errors.Is(err, drive.ErrNotWritable),
-		errors.Is(err, drive.ErrAnchorNotFound), errors.Is(err, drive.ErrInvalidFrontmatter):
+		errors.Is(err, drive.ErrInvalidFrontmatter):
 		return resultRefused
 	default:
 		return resultError

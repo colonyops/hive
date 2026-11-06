@@ -4,22 +4,20 @@
 /**
  * Area is the part of Hive Desktop a link opens.
  * 
- * ENUM(code, chats, inbox, canvas, drive)
+ * ENUM(code, chats, inbox, drive)
  */
 export type Area = string;
 
 /**
  * Location is one place in Hive Desktop. Which fields apply depends on Area:
  * 
- * 	code    Slug, Server, Window, Canvas
- * 	chats   Workspace, Chat, Canvas
+ * 	code    Slug, Server, Window
+ * 	chats   Workspace, Chat
  * 	inbox   Profile, Item, Feed
- * 	canvas  Canvas, Owner
  * 	drive   Space, Path
  * 
  * Slug is a tmux session name, so a code link also reaches a session hive did
- * not create. Canvas on a code or chats link opens the session's Drive tab on that canvas; on a
- * canvas link it is the canvas the full-page view opens.
+ * not create.
  */
 export interface Location {
     "area": Area;
@@ -31,8 +29,6 @@ export interface Location {
     "profile"?: string;
     "item"?: number;
     "feed"?: string;
-    "canvas"?: string;
-    "owner"?: string;
     "space"?: string;
     "path"?: string;
 }

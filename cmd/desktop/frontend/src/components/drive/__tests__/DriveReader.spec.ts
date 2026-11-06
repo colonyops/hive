@@ -14,7 +14,7 @@ vi.mock(
   () => settingsBindings,
 )
 
-const paths = new Set(['plans/x.md', 'canvases/report.canvas.json', 'research/r.md'])
+const paths = new Set(['plans/x.md', 'reports/report.md', 'research/r.md'])
 
 async function mountReader(document: DocumentWire | null, extra: Record<string, unknown> = {}) {
   const wrapper = mount(DriveReader, {
@@ -29,13 +29,13 @@ describe('DriveReader', () => {
     const wrapper = await mountReader(
       documentFor('acme/site', doc('plans/x.md'), {
         markdown:
-          '[web](https://example.com) [report](../canvases/report.canvas.json) [research](.hive/research/r.md) [typo](../canvases/reprot.canvas.json)',
+          '[web](https://example.com) [report](../reports/report.md) [research](.hive/research/r.md) [typo](../reports/reprot.md)',
       }),
     )
     for (const anchor of wrapper.findAll('[data-testid="r-markdown"] a')) await anchor.trigger('click')
 
     expect(wrapper.emitted('open-url')).toEqual([['https://example.com']])
-    expect(wrapper.emitted('open')).toEqual([['canvases/report.canvas.json'], ['research/r.md']])
+    expect(wrapper.emitted('open')).toEqual([['reports/report.md'], ['research/r.md']])
   })
 
   it('draws an image file', async () => {

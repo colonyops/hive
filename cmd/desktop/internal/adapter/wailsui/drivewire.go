@@ -18,7 +18,7 @@ type SpaceWire struct {
 
 // EntryWire is one row of a space's tree. Path is relative to the space root
 // with forward slashes, "" for the root itself. Kind is dir, markdown, html,
-// canvas, or file. Created is the zero time where the file system records no
+// or file. Created is the zero time where the file system records no
 // birth time. Front and Children are never null.
 type EntryWire struct {
 	Path     string         `json:"path"`
@@ -39,39 +39,14 @@ type HitWire struct {
 }
 
 // DocumentWire is one document for the reader. Markdown is set for a
-// markdown document, HTML for an html one, Canvas for a canvas; a plain file
-// carries only its entry.
+// markdown document and HTML for an html one; a plain file carries only its
+// entry.
 type DocumentWire struct {
-	Space    SpaceWire   `json:"space"`
-	Entry    EntryWire   `json:"entry"`
-	Markdown string      `json:"markdown"`
-	HTML     string      `json:"html"`
-	Canvas   *CanvasWire `json:"canvas"`
-	Image    string      `json:"image"`
-}
-
-// CanvasWire is one canvas with its html blocks sanitized. Timestamps are
-// unix milliseconds, as the canvas file stores them.
-type CanvasWire struct {
-	Space       string         `json:"space"`
-	Path        string         `json:"path"`
-	Title       string         `json:"title"`
-	Session     string         `json:"session"`
-	HiveSession string         `json:"hiveSession"`
-	CreatedAt   int64          `json:"createdAt"`
-	UpdatedAt   int64          `json:"updatedAt"`
-	Frontmatter map[string]any `json:"frontmatter"`
-	Blocks      []BlockWire    `json:"blocks"`
-}
-
-type BlockWire struct {
-	ID        string `json:"id"`
-	Kind      string `json:"kind"`
-	Title     string `json:"title"`
-	Body      string `json:"body"`
-	URL       string `json:"url"`
-	CreatedAt int64  `json:"createdAt"`
-	UpdatedAt int64  `json:"updatedAt"`
+	Space    SpaceWire `json:"space"`
+	Entry    EntryWire `json:"entry"`
+	Markdown string    `json:"markdown"`
+	HTML     string    `json:"html"`
+	Image    string    `json:"image"`
 }
 
 func spaceWireOf(s drive.Space) SpaceWire {
@@ -107,26 +82,7 @@ func hitWiresOf(hits []drivesvc.Hit) []HitWire {
 }
 
 func documentWireOf(d app.DocumentView) DocumentWire {
-	out := DocumentWire{Space: spaceWireOf(d.Space), Entry: entryWireOf(d.Entry), Markdown: d.Markdown, HTML: d.HTML, Image: d.Image}
-	if d.Canvas != nil {
-		c := canvasWireOf(*d.Canvas)
-		out.Canvas = &c
-	}
-	return out
-}
-
-func canvasWireOf(c drive.Canvas) CanvasWire {
-	blocks := make([]BlockWire, 0, len(c.Blocks))
-	for _, b := range c.Blocks {
-		blocks = append(blocks, BlockWire{
-			ID: b.ID, Kind: b.Kind, Title: b.Title, Body: b.Body, URL: b.URL,
-			CreatedAt: b.CreatedAt, UpdatedAt: b.UpdatedAt,
-		})
-	}
-	return CanvasWire{
-		Space: c.Space, Path: c.Path, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
-		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Frontmatter: frontOf(c.Frontmatter), Blocks: blocks,
-	}
+	return DocumentWire{Space: spaceWireOf(d.Space), Entry: entryWireOf(d.Entry), Markdown: d.Markdown, HTML: d.HTML, Image: d.Image}
 }
 
 func frontOf(fm drive.Frontmatter) map[string]any {

@@ -12,13 +12,8 @@ import (
 
 // DrivePathPrefix is where main mounts the drive server on the loopback
 // server, beside PathPrefix. It must agree with mcpcatalog's hive-drive
-// RuntimePath; TestCanvasCatalogueAgreement pins it.
+// RuntimePath; TestDriveCatalogueAgreement pins it.
 const DrivePathPrefix = "/mcp/drive"
-
-// CanvasPathPrefix is the drive server's older address. main mounts the same
-// handler there, so an agent configuration written for hive-canvas keeps
-// working; mcpcatalog's hive-canvas entry points at it.
-const CanvasPathPrefix = "/mcp/canvas"
 
 // driveServerName identifies the drive server to a client. Like serverName
 // it is also the id a workspace names in its mcps: list, so the two must
@@ -27,7 +22,7 @@ const driveServerName = "hive-drive"
 
 // DriveController is the drive server's half of what Controller is for the
 // app-control surface: a separate server with its own small tool table, so a
-// workspace can enable documents and canvases without the app-driving tools
+// workspace can enable documents without the app-driving tools
 // (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
 // Same stateless posture, same loopback threat model.
 type DriveController struct {
@@ -52,8 +47,8 @@ func (ctrl *DriveController) Server() *mcp.Server {
 		Name:    driveServerName,
 		Title:   "Hive Drive",
 		Version: version,
-		Description: "Hive Drive: the folder of markdown, html and canvas documents behind the Drive tab of a chat or Code session. Write and " +
-			"organize documents, put canvas blocks, and read back what the user sees in the Drive tab.",
+		Description: "Hive Drive: the folder of markdown and html documents behind the Drive tab of a chat or Code session. Write and " +
+			"organize documents, and read back what the user sees in the Drive tab.",
 	}, nil)
 	ctrl.register(srv)
 	return srv
@@ -68,6 +63,15 @@ func (ctrl *DriveController) Handler() http.Handler {
 		func(*http.Request) *mcp.Server { return srv },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
 	)
+}
+
+// register declares the drive tool table, under the same rules as
+// Controller.register: metadata only, thin handlers, descriptions written for
+// a model.
+func (ctrl *DriveController) register(srv *mcp.Server) {
+	ctrl.registerDocuments(srv)
+	ctrl.registerTabs(srv)
+	ctrl.registerReviews(srv)
 }
 
 func (ctrl *DriveController) toolError(err error) error { return toolError(ctrl.log, err) }

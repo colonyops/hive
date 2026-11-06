@@ -13,18 +13,26 @@ const previewStyle = computed(() => ({
   <div data-testid="settings-canvas-preview">
     <p class="mb-1.5 text-small text-text-2">Preview</p>
     <div class="rounded-lg border border-border bg-app p-4">
-      <div class="hv-html text-text-2" :style="previewStyle" data-testid="settings-canvas-preview-content">
+      <div
+        class="typography-preview markdown-body text-text-2"
+        :style="previewStyle"
+        data-testid="settings-canvas-preview-content"
+      >
         <h2>Project plan</h2>
         <p>Ship the reader controls with a clear default and enough range for a laptop or a large display.</p>
         <ul>
           <li>Keep reports comfortable to scan.</li>
           <li>Leave copied and saved content unchanged.</li>
         </ul>
-        <div class="hv-row">
-          <span class="hv-badge hv-success">Ready</span>
-          <span class="hv-muted">Updated just now</span>
-        </div>
+        <p>Status: <code>ready</code>, updated just now.</p>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.typography-preview {
+  font-size: var(--hv-font-size);
+  line-height: var(--hv-line-height);
+}
+</style>

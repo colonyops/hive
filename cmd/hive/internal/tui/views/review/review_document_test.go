@@ -33,7 +33,7 @@ func TestDocumentsFromTree_Typing(t *testing.T) {
 		{Path: "research/notes.txt", Kind: drive.KindFile},
 		{Path: "image.png", Kind: drive.KindFile},
 		{Path: "page.html", Kind: drive.KindHtml},
-		{Path: "board.canvas.json", Kind: drive.KindCanvas},
+		{Path: "board.canvas.json", Kind: drive.KindFile},
 	}}
 
 	docs := DocumentsFromTree(repoSpace(t), "/ctx/acme/site", root, false)

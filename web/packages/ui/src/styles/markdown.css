@@ -1,6 +1,6 @@
 /* Rendered GitHub-flavored markdown (renderGithubMarkdown output). Shared by
    every .markdown-body surface — the feed's DetailPane, the tasks detail
-   pane, and the Agents canvas pane — so the app's markdown reads the same
+   pane, and the Drive reader — so the app's markdown reads the same
    everywhere; click handling for the links is shared too
    (lib/markdownLinks.ts). */
 .markdown-body h1,

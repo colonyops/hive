@@ -71,6 +71,6 @@ test.describe('drive reorganize', { tag: [tag.drive] }, () => {
     await page.getByTestId('drive-page-delete-confirmation-confirm').click()
     await expect(page.getByTestId('drive-page-row-archive')).toHaveCount(0)
     await expect(page.getByTestId('drive-page-row-plans')).toBeVisible()
-    await expect(page.getByTestId('drive-page-row-canvases')).toBeVisible()
+    await expect(page.getByTestId('drive-page-row-pages')).toBeVisible()
   })
 })

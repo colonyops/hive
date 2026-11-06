@@ -19,7 +19,7 @@ func SearchText(kind drive.Kind, body []byte) string {
 		return string(body)
 	case drive.KindHtml:
 		return htmlText(body)
-	case drive.KindDir, drive.KindCanvas, drive.KindFile:
+	case drive.KindDir, drive.KindFile:
 	}
 	return ""
 }

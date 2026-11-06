@@ -41,7 +41,7 @@ const pageWidthOptions = canvasPageWidths.map((value) => ({
       <SurfaceScaleRow
         surface="document"
         label="Text size"
-        hint="Applies to headings, body text, cards, and diagrams in every markdown and canvas document."
+        hint="Applies to headings, body text, cards, and diagrams in every markdown document."
         testid="settings-drive-scale"
       />
       <SettingsRow

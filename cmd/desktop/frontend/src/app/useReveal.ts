@@ -13,7 +13,7 @@ import type {
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { Take as TakeLink } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/linkservice'
 import type { Location } from '../../bindings/github.com/colonyops/hive/internal/domain/deeplink/models'
-import { canvasDocumentPath, ownerToSpaceKey, type DriveScope } from '../lib/drive'
+import type { DriveScope } from '../lib/drive'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 import { createLogger } from '../lib/log'
 
@@ -115,10 +115,6 @@ export function useReveal(
     }
   }
 
-  // A canvas link from before Hive Drive names the canvas, not its document.
-  // A bare '1' opens the pane and lets it pick.
-  const docQuery = (canvas: string) => (canvas === '1' ? '1' : canvasDocumentPath(canvas))
-
   // Go has already parsed and validated the link, so every field its area
   // needs is present.
   async function revealLocation(loc: Location): Promise<void> {
@@ -129,14 +125,12 @@ export function useReveal(
         const slug = loc.server && loc.server !== 'local' ? `${loc.server}:${loc.slug}` : loc.slug
         const query: Record<string, string> = {}
         if (loc.window) query.window = loc.window
-        if (loc.canvas) query.doc = docQuery(loc.canvas)
         await nav.router.push({ name: 'terminal', params: { slug }, query })
         return
       }
       case 'chats': {
         const query: Record<string, string> = {}
         if (loc.chat) query.chat = loc.chat
-        if (loc.canvas) query.doc = docQuery(loc.canvas)
         await nav.router.push({ name: 'agents', params: { workspace: loc.workspace }, query })
         return
       }
@@ -148,13 +142,6 @@ export function useReveal(
             params: { profileId: loc.profile },
             query: loc.feed ? { feed: loc.feed } : {},
           })
-        return
-      case 'canvas':
-        openDrive({
-          space: ownerToSpaceKey(loc.owner ?? ''),
-          path: loc.canvas ? canvasDocumentPath(loc.canvas) : null,
-          session: null,
-        })
         return
       case 'drive':
         openDrive({ space: loc.space ?? '', path: loc.path || null, session: null })

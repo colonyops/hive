@@ -1,6 +1,6 @@
 import { expect, tag, test } from "../../../fixtures/test.js";
 
-// serve.sh seeds the e2e/repo space with one plan and one canvas
+// serve.sh seeds the e2e/repo space with one plan and one html page
 // (testdata/drive). The drive is the engine's, not the Chats area's, so it
 // works in this server build even though Chats is unavailable here.
 

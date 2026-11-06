@@ -44,7 +44,7 @@ func (cmd *DriveCmd) Register(app *cli.Command) *cli.Command {
 		Usage:   "Browse and manage Hive Drive, the documents under the context root",
 		Description: `Hive Drive is the document tree under the context root: one space per
 repository, per Chats workspace, and one shared space. Agents and people put
-markdown, html, and canvas documents there.
+markdown and html documents there.
 
 The context root is $XDG_DATA_HOME/hive/context, or context.base_dir when set.
 A repository's space is {owner}/{repo} under the root. Use 'hive drive init'
@@ -101,7 +101,7 @@ func (cmd *DriveCmd) lsCmd() *cli.Command {
 		Name:  "ls",
 		Usage: "List the documents and folders of a space",
 		Description: `Prints the space directory, then one line per entry: its kind and its path.
-Kinds are dir, markdown, html, canvas, and file.
+Kinds are dir, markdown, html, and file.
 
 With --all, every space is listed under a header line with its key.
 With --json, each entry is one JSON object per line, without children. With

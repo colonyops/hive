@@ -1,6 +1,6 @@
 # A Code session's canvases belong to its repository and live in the hive context directory
 
-- **Status:** accepted; the tool and argument names superseded in part by [every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it](2026-11-03-every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it.md)
+- **Status:** accepted; the tool and argument names superseded in part by [every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it](2026-11-03-every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it.md); canvases superseded by [hive-drive-has-no-canvas-document-kind](2026-11-06-hive-drive-has-no-canvas-document-kind.md) (a session's documents still go in its repository's space)
 - **Date:** 2026-10-04
 
 ## Context

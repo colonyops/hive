@@ -10,7 +10,7 @@ const row: TerminalSessionRow = {
   server: '',
   repoIdentity: 'r',
   state: 'active',
-  canvasOwner: '',
+  driveSpace: '',
   tags: [],
   createdAt: '',
 }
@@ -22,7 +22,7 @@ const scratch: TerminalSessionRow = {
   server: '',
   repoIdentity: '',
   state: 'active',
-  canvasOwner: '',
+  driveSpace: '',
   tags: [],
   createdAt: '',
 }

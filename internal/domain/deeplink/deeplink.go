@@ -3,10 +3,9 @@
 // app, and the app routes to the place they name. The URL is the contract; the
 // desktop's internal routes are not, and they can change under it.
 //
-//	hive://code/<slug>[?server=<name>][&window=<id>][&canvas=<name>]
-//	hive://chats/<workspace>[/<chat>][?canvas=<name>]
+//	hive://code/<slug>[?server=<name>][&window=<id>]
+//	hive://chats/<workspace>[/<chat>]
 //	hive://inbox/<profile>[/<item>][?feed=<id>]
-//	hive://canvas/<name>?owner=<workspace | owner/repo | @global>
 //	hive://drive/<space-key>[/<path>]
 //
 // A code link without server names a session on this machine. server is a
@@ -35,20 +34,18 @@ const Scheme = "hive"
 
 // Area is the part of Hive Desktop a link opens.
 //
-// ENUM(code, chats, inbox, canvas, drive)
+// ENUM(code, chats, inbox, drive)
 type Area string
 
 // Location is one place in Hive Desktop. Which fields apply depends on Area:
 //
-//	code    Slug, Server, Window, Canvas
-//	chats   Workspace, Chat, Canvas
+//	code    Slug, Server, Window
+//	chats   Workspace, Chat
 //	inbox   Profile, Item, Feed
-//	canvas  Canvas, Owner
 //	drive   Space, Path
 //
 // Slug is a tmux session name, so a code link also reaches a session hive did
-// not create. Canvas on a code or chats link opens the session's Drive tab on that canvas; on a
-// canvas link it is the canvas the full-page view opens.
+// not create.
 type Location struct {
 	Area      Area   `json:"area"`
 	Slug      string `json:"slug,omitempty"`
@@ -59,8 +56,6 @@ type Location struct {
 	Profile   string `json:"profile,omitempty"`
 	Item      int64  `json:"item,omitempty"`
 	Feed      string `json:"feed,omitempty"`
-	Canvas    string `json:"canvas,omitempty"`
-	Owner     string `json:"owner,omitempty"`
 	Space     string `json:"space,omitempty"`
 	Path      string `json:"path,omitempty"`
 }
@@ -96,7 +91,6 @@ func Parse(raw string) (Location, error) {
 		loc.Slug = segments[0]
 		loc.Server = q.Get("server")
 		loc.Window = q.Get("window")
-		loc.Canvas = q.Get("canvas")
 	case AreaChats:
 		if len(segments) < 1 || len(segments) > 2 {
 			return Location{}, errors.New("chats links name a workspace and an optional chat")
@@ -104,10 +98,6 @@ func Parse(raw string) (Location, error) {
 		loc.Workspace = segments[0]
 		if len(segments) == 2 {
 			loc.Chat = segments[1]
-		}
-		loc.Canvas = q.Get("canvas")
-		if loc.Canvas != "" && loc.Chat == "" {
-			return Location{}, errors.New("chats links open a canvas only beside a chat")
 		}
 	case AreaInbox:
 		if len(segments) < 1 || len(segments) > 2 {
@@ -122,15 +112,6 @@ func Parse(raw string) (Location, error) {
 			loc.Item = item
 		}
 		loc.Feed = q.Get("feed")
-	case AreaCanvas:
-		if len(segments) != 1 {
-			return Location{}, errors.New("canvas links name a canvas")
-		}
-		loc.Canvas = segments[0]
-		loc.Owner = q.Get("owner")
-		if loc.Owner == "" {
-			return Location{}, errors.New("canvas links need an owner")
-		}
 	case AreaDrive:
 		space, path, err := driveTarget(segments)
 		if err != nil {

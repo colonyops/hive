@@ -1,6 +1,6 @@
 # Canvases carry front matter and users can delete them
 
-- **Status:** accepted
+- **Status:** superseded by [hive-drive-has-no-canvas-document-kind](2026-11-06-hive-drive-has-no-canvas-document-kind.md)
 - **Date:** 2026-10-09
 
 ## Context

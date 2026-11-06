@@ -1,6 +1,6 @@
 # Canvases are named files, served over their own MCP entry
 
-- **Status:** accepted
+- **Status:** superseded by [hive-drive-has-no-canvas-document-kind](2026-11-06-hive-drive-has-no-canvas-document-kind.md)
 - **Date:** 2026-08-28
 
 ## Context

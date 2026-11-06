@@ -26,7 +26,6 @@ import IconFolderKanban from '~icons/lucide/folder-kanban'
 import IconFolderOpen from '~icons/lucide/folder-open'
 import IconFolderPen from '~icons/lucide/folder-pen'
 import IconFolderSearch from '~icons/lucide/folder-search'
-import IconLayoutDashboard from '~icons/lucide/layout-dashboard'
 
 /** An icon and the text colour class that tints it, so a row reads by its type at a glance. */
 export interface DriveIcon {
@@ -37,7 +36,6 @@ export interface DriveIcon {
 const kinds: Record<string, DriveIcon> = {
   markdown: { icon: IconFileText, color: 'text-node-blue' },
   html: { icon: IconFileCode, color: 'text-node-orange' },
-  canvas: { icon: IconLayoutDashboard, color: 'text-node-purple' },
 }
 
 const json: DriveIcon = { icon: IconFileJson, color: 'text-severity-warning' }
@@ -208,7 +206,6 @@ const folders: Record<string, DriveIcon> = {
   docs: reading,
   'design-docs': drawing,
   designs: drawing,
-  canvases: drawing,
   scripts: codeFolder,
   src: codeFolder,
   test: testing,

@@ -36,7 +36,7 @@ Write these down before deciding anything:
 - **verbs** -- a new button, menu entry, context-menu item, toolbar icon, or
   anything with an `@click` a user can reach;
 - **objects** -- a new kind of thing that can be listed and selected (a
-  workspace, a canvas, a pinned chat, a window, a source);
+  workspace, a Drive document, a pinned chat, a window, a source);
 - **places** -- a new view, overlay, dialog, mode, or settings section;
 - **configured things** -- a new action type, launcher, or flow surface that a
   user's `actions.yml` can now name.
@@ -148,7 +148,7 @@ A pane keeps every key it can use. Two flags take one back:
 - **`piercesPane`**, claimed on the binding alone, whatever modifiers it
   carries. Only for a chord the escape form cannot express (an `alt`
   binding), a combo that must *close* what it opened
-  (`terminal.popup.toggle`, `tasks.toggle`, `canvas.toggle`), or the half of a
+  (`terminal.popup.toggle`, `tasks.toggle`), or the half of a
   focus pair that
   reaches back out of a pane.
 
@@ -188,7 +188,7 @@ useCommands(computed(() => workspaces.value.map((w) => ({
 **Go-to rows are global.** A row meant to be reachable from anywhere
 registers at App level, in `useAppPaletteRows`, off a module-scoped source
 (`useTerminalSessions`, `useAttachedTerminalWindows`, `useAgentSessionsAll`,
-`useWorkspaceCanvases`), so it exists on a fresh launch before its mode has ever mounted. A row
+`useDrive`), so it exists on a fresh launch before its mode has ever mounted. A row
 registered inside a lazily-mounted mode does not exist until the user visits
 that mode.
 

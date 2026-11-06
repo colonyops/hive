@@ -27,10 +27,10 @@ func TestServeToolsetsFollowTheOperationCatalogue(t *testing.T) {
 	assert.Equal(t, []string{"actions", "diagnostics", "flows", "inbox", "sessions", "workspaces"}, serveToolsets("/mcp"))
 	assert.Equal(t, []string{"drive", "layout"}, serveToolsets("/mcp/drive"))
 
-	for id, want := range map[string]string{"hive-desktop": "/mcp", "hive-drive": "/mcp/drive", "hive-canvas": "/mcp/drive"} {
+	for id, want := range map[string]string{"hive-desktop": "/mcp", "hive-drive": "/mcp/drive"} {
 		d, ok := mcpcatalog.Lookup(id)
 		require.True(t, ok)
-		assert.Equal(t, want, servePathOf(d), id)
+		assert.Equal(t, want, d.RuntimePath, id)
 	}
 }
 
@@ -49,11 +49,9 @@ func TestCataloguePicksStdioWhenHiveIsUsable(t *testing.T) {
 		Command:   "/opt/bin/hive",
 		Args:      []string{"--data-dir", "/data/hive", "mcp", "serve", "--toolset", "actions,diagnostics,flows,inbox,sessions,workspaces"},
 	}, byID["hive-desktop"])
-	for _, id := range []string{"hive-drive", "hive-canvas"} {
-		assert.Equal(t, mcpcatalog.TransportStdio, byID[id].Transport, id)
-		assert.Empty(t, byID[id].URL, id)
-		assert.Equal(t, []string{"--data-dir", "/data/hive", "mcp", "serve", "--toolset", "drive,layout"}, byID[id].Args, id)
-	}
+	assert.Equal(t, mcpcatalog.TransportStdio, byID["hive-drive"].Transport)
+	assert.Empty(t, byID["hive-drive"].URL)
+	assert.Equal(t, []string{"--data-dir", "/data/hive", "mcp", "serve", "--toolset", "drive,layout"}, byID["hive-drive"].Args)
 }
 
 func TestCatalogueKeepsHTTPWithoutAUsableHive(t *testing.T) {

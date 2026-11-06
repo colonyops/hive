@@ -1,6 +1,6 @@
 # Hive Desktop is addressed by hive:// URLs, not by its internal routes
 
-- **Status:** accepted
+- **Status:** accepted; the `hive://canvas` link and the `canvas=` parameter superseded by [hive-drive-has-no-canvas-document-kind](2026-11-06-hive-drive-has-no-canvas-document-kind.md)
 - **Date:** 2026-10-10
 
 ## Context

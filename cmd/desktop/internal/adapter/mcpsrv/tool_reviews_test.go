@@ -67,7 +67,7 @@ type diffReviewAnswer struct {
 
 func TestDiffReviewFromTheSessionsOwnAgent(t *testing.T) {
 	t.Parallel()
-	core, session := testCanvasSession(t)
+	core, session := testDriveSession(t)
 	dir := seedBranchSession(t, core, "s1")
 
 	var put diffReviewAnswer
@@ -108,7 +108,7 @@ func TestDiffReviewFromTheSessionsOwnAgent(t *testing.T) {
 
 func TestDiffReviewFromAChatNamesTheSession(t *testing.T) {
 	t.Parallel()
-	core, session := testCanvasSession(t)
+	core, session := testDriveSession(t)
 	seedBranchSession(t, core, "s1")
 	chat := seedAgentSession(t, core, "pr-reviewer", "chat")
 

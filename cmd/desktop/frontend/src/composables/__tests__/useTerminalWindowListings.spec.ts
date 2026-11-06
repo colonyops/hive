@@ -13,7 +13,7 @@ function row(slug: string): TerminalSessionRow {
     server: '',
     repoIdentity: 'owner/repo',
     state: 'active',
-    canvasOwner: '',
+    driveSpace: '',
     tags: [],
     createdAt: '',
   }

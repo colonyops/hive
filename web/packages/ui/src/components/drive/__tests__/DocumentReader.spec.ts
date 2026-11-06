@@ -1,26 +1,15 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DocumentReader from '../DocumentReader.vue'
-import type { ReaderBlock, ReaderDocument } from '../../../lib/document'
+import type { ReaderDocument } from '../../../lib/document'
 
 const mermaid = vi.hoisted(() => ({
   render: vi.fn().mockResolvedValue('<svg viewBox="0 0 100 40"><text>Request</text></svg>'),
 }))
 vi.mock('../../../lib/mermaid', () => ({ renderMermaid: mermaid.render }))
 
-function block(overrides: Partial<ReaderBlock>): ReaderBlock {
-  return { id: 'b', kind: 'markdown', title: '', body: '', url: '', ...overrides }
-}
-
 function markdownDocument(markdown: string, front: Record<string, unknown> = {}, path = 'plans/x.md'): ReaderDocument {
   return { entry: { path, kind: 'markdown', front: front as never }, markdown }
-}
-
-function canvasDocument(blocks: ReaderBlock[], frontmatter: Record<string, unknown> = {}): ReaderDocument {
-  return {
-    entry: { path: 'canvases/report.canvas.json', kind: 'canvas' },
-    canvas: { blocks, frontmatter: frontmatter as never, createdAt: '2026-10-01T00:00:00Z' },
-  }
 }
 
 async function mountReader(document: ReaderDocument, extra: Record<string, unknown> = {}) {
@@ -98,107 +87,40 @@ describe('DocumentReader', () => {
     expect(frame.attributes('sandbox')).toBe('allow-scripts')
   })
 
-  it('shows the empty state for an empty canvas, and an error over everything', async () => {
-    const empty = await mountReader(canvasDocument([]))
-    expect(empty.find('[data-testid="r-empty"]').exists()).toBe(true)
-
-    const failed = await mountReader(canvasDocument([]), { error: 'Could not read the document.' })
+  it('shows an error over the document', async () => {
+    const failed = await mountReader(markdownDocument('# X'), { error: 'Could not read the document.' })
     expect(failed.get('[data-testid="r-error"]').text()).toContain('Could not read the document.')
-    expect(failed.find('[data-testid="r-empty"]').exists()).toBe(false)
-  })
-
-  // An html block's body is sanitized on the Go read path, so the reader
-  // renders it as markup under its own class scope, never through the
-  // markdown renderer, which is shared with untrusted GitHub bodies.
-  it('renders a canvas block by block, html blocks as live markup under the hv-html scope', async () => {
-    const wrapper = await mountReader(
-      canvasDocument(
-        [
-          block({ id: 'doc', body: '# Plan' }),
-          block({
-            id: 'stats',
-            kind: 'html',
-            title: 'Run',
-            body: '<div class="hv-stat"><span class="hv-stat-value">42</span></div>',
-          }),
-        ],
-        { tags: ['release'] },
-      ),
-    )
-
-    expect(wrapper.get('[data-testid="r-block-doc"] h1').text()).toBe('Plan')
-    const rendered = wrapper.get('[data-testid="r-block-stats"] .hv-html')
-    expect(rendered.find('.hv-stat-value').text()).toBe('42')
-    expect(rendered.classes()).not.toContain('markdown-body')
-    expect(wrapper.get('[data-testid="r-block-stats"] h2').text()).toBe('Run')
-    expect(wrapper.get('[data-testid="r-frontmatter-tags"]').text()).toContain('release')
-  })
-
-  it("renders an html block's svg as real svg nodes", async () => {
-    const wrapper = await mountReader(
-      canvasDocument([
-        block({
-          id: 'flow',
-          kind: 'html',
-          body: '<svg viewBox="0 0 200 60"><rect class="hv-node" x="1" y="1" width="70" height="34"/></svg>',
-        }),
-      ]),
-    )
-    const svg = wrapper.get('[data-testid="r-block-flow"] .hv-html svg')
-    expect(svg.element.namespaceURI).toBe('http://www.w3.org/2000/svg')
-    expect(svg.element.getAttribute('viewBox')).toBe('0 0 200 60')
+    expect(failed.find('[data-testid="r-markdown"]').exists()).toBe(false)
   })
 
   it('renders a fenced Mermaid diagram in markdown as a themed SVG', async () => {
-    const wrapper = await mountReader(
-      canvasDocument([block({ id: 'flow', body: '```mermaid\nflowchart LR\nA --> B\n```' })]),
-    )
+    const wrapper = await mountReader(markdownDocument('```mermaid\nflowchart LR\nA --> B\n```'))
     expect(mermaid.render).toHaveBeenCalledWith('flowchart LR\nA --> B\n', expect.objectContaining({ darkMode: true }))
-    expect(wrapper.get('[data-testid="r-block-flow-mermaid-0"]').text()).toContain('Request')
+    expect(wrapper.get('[data-testid="r-markdown-mermaid-0"]').text()).toContain('Request')
   })
 
-  it('applies the reading settings to markdown and html bodies', async () => {
-    const wrapper = await mountReader(
-      canvasDocument([block({ id: 'doc', body: '# Plan' }), block({ id: 'stats', kind: 'html', body: '<p>42</p>' })]),
-      { fontSizePx: 18, lineHeight: 1.85 },
-    )
-    for (const body of wrapper.findAll('.canvas-reading-body')) {
-      const style = (body.element as HTMLElement).style
-      expect(style.getPropertyValue('--hv-font-size')).toBe('18px')
-      expect(style.getPropertyValue('--hv-line-height')).toBe('1.85')
-    }
+  it('applies the reading settings to the markdown body', async () => {
+    const wrapper = await mountReader(markdownDocument('# Plan'), { fontSizePx: 18, lineHeight: 1.85 })
+    const style = (wrapper.get('[data-testid="r-markdown"]').element as HTMLElement).style
+    expect(style.getPropertyValue('--hv-font-size')).toBe('18px')
+    expect(style.getPropertyValue('--hv-line-height')).toBe('1.85')
   })
 
   describe('links', () => {
-    it('reports the target of a link in markdown, an html block, or a link block', async () => {
-      const wrapper = await mountReader(
-        canvasDocument([
-          block({ id: 'doc', body: '[the PR](https://example.com/pr/1)' }),
-          block({ id: 'card', kind: 'html', body: '<p><a href="https://example.com/pr/2">PR 2</a></p>' }),
-          block({ id: 'ok', kind: 'link', title: 'PR 3', url: 'https://example.com/pr/3' }),
-          block({ id: 'bad', kind: 'link', title: 'Nope', url: 'javascript:alert(1)' }),
-        ]),
-      )
-      await wrapper.get('[data-testid="r-block-doc"] a').trigger('click')
-      await wrapper.get('[data-testid="r-block-card"] a').trigger('click')
-      await wrapper.get('[data-testid="r-block-ok"] button').trigger('click')
-      await wrapper.get('[data-testid="r-block-bad"] button').trigger('click')
+    it('reports the target of a link in markdown', async () => {
+      const wrapper = await mountReader(markdownDocument('[the PR](https://example.com/pr/1)'))
+      await wrapper.get('[data-testid="r-markdown"] a').trigger('click')
 
-      expect(wrapper.emitted('open-link')).toEqual([
-        ['https://example.com/pr/1'],
-        ['https://example.com/pr/2'],
-        ['https://example.com/pr/3'],
-        ['javascript:alert(1)'],
-      ])
+      expect(wrapper.emitted('open-link')).toEqual([['https://example.com/pr/1']])
     })
 
     it('reports a relative link as written', async () => {
       const wrapper = await mountReader(
-        markdownDocument('[report](../canvases/report.canvas.json) [research](.hive/research/r.md)'),
+        markdownDocument('[report](../reports/report.md) [research](.hive/research/r.md)'),
       )
       for (const anchor of wrapper.findAll('[data-testid="r-markdown"] a')) await anchor.trigger('click')
 
-      expect(wrapper.emitted('open-link')).toEqual([['../canvases/report.canvas.json'], ['.hive/research/r.md']])
+      expect(wrapper.emitted('open-link')).toEqual([['../reports/report.md'], ['.hive/research/r.md']])
     })
   })
 })

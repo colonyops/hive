@@ -22,9 +22,7 @@ func TestDriveWireTypesKeepTheirFieldNames(t *testing.T) {
 		{"SpaceWire", SpaceWire{}, sorted("kind", "key", "name")},
 		{"EntryWire", EntryWire{}, sorted("path", "name", "kind", "size", "modified", "created", "title", "front", "children")},
 		{"HitWire", HitWire{}, sorted("space", "entry")},
-		{"DocumentWire", DocumentWire{}, sorted("space", "entry", "markdown", "html", "canvas", "image")},
-		{"CanvasWire", CanvasWire{}, sorted("space", "path", "title", "session", "hiveSession", "createdAt", "updatedAt", "frontmatter", "blocks")},
-		{"BlockWire", BlockWire{}, sorted("id", "kind", "title", "body", "url", "createdAt", "updatedAt")},
+		{"DocumentWire", DocumentWire{}, sorted("space", "entry", "markdown", "html", "image")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, jsonKeys(t, tt.v))
@@ -66,22 +64,7 @@ func TestDocumentWireOfCarriesOneBodyPerKind(t *testing.T) {
 	md := documentWireOf(app.DocumentView{Space: space, Entry: drive.Entry{Path: "a.md", Kind: drive.KindMarkdown}, Markdown: "# A"})
 	assert.Equal(t, SpaceWire{Kind: "shared", Key: "shared", Name: "Shared"}, md.Space)
 	assert.Equal(t, "# A", md.Markdown)
-	assert.Nil(t, md.Canvas)
-
-	cv := documentWireOf(app.DocumentView{Space: space, Entry: drive.Entry{Path: "canvases/c.canvas.json", Kind: drive.KindCanvas}, Canvas: &drive.Canvas{
-		Space: "shared", Path: "canvases/c.canvas.json", Title: "C", Session: "1", CreatedAt: 1, UpdatedAt: 2,
-		Blocks: []drive.Block{{ID: "a", Kind: drive.BlockKindLink, Title: "PR", URL: "https://example.com", CreatedAt: 1, UpdatedAt: 2}},
-	}})
-	require.NotNil(t, cv.Canvas)
-	assert.Equal(t, CanvasWire{
-		Space: "shared", Path: "canvases/c.canvas.json", Title: "C", Session: "1", CreatedAt: 1, UpdatedAt: 2,
-		Frontmatter: map[string]any{},
-		Blocks:      []BlockWire{{ID: "a", Kind: "link", Title: "PR", URL: "https://example.com", CreatedAt: 1, UpdatedAt: 2}},
-	}, *cv.Canvas)
-
-	empty := canvasWireOf(drive.Canvas{})
-	assert.NotNil(t, empty.Blocks)
-	assert.NotNil(t, empty.Frontmatter)
+	assert.Empty(t, md.HTML)
 }
 
 func TestHitWiresOfIsNeverNull(t *testing.T) {

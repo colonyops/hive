@@ -36,13 +36,8 @@ function fail(err: unknown, fallback: string): void {
   showToast(errorText(err, fallback), { severity: 'error' })
 }
 
-// Markdown and canvas documents have a markdown form; html and plain files
-// do not.
-const exportable = computed(() => props.entry.kind === 'markdown' || props.entry.kind === 'canvas')
-const fileName = computed(() => {
-  const base = props.entry.name
-  return base.replace(/\.canvas\.json$/, '').replace(/\.md$/, '') + '.md'
-})
+const exportable = computed(() => props.entry.kind === 'markdown')
+const fileName = computed(() => props.entry.name.replace(/\.md$/, '') + '.md')
 
 // Copy is fetch-first: the Go side renders the markdown so copy and save can
 // never disagree, and a failure before SetText is still a failed copy.

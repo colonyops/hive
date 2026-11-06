@@ -19,7 +19,7 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
 }))
 
 const tree = root([
-  folder('canvases', [doc('canvases/report.canvas.json', { title: 'E2E Report' })]),
+  folder('designs', [doc('designs/report.md', { title: 'E2E Report' })]),
   folder('plans', [
     folder('plans/old', [doc('plans/old/a.md')]),
     doc('plans/2026-10-11-plan.md', { title: 'The Plan' }),
@@ -49,7 +49,7 @@ describe('DriveTree', () => {
 
   it('lists folders first as served, folded, with a kind per row', () => {
     const wrapper = mountTree()
-    expect(rowPaths(wrapper)).toEqual(['canvases', 'plans', 'index.html', 'notes.txt'])
+    expect(rowPaths(wrapper)).toEqual(['designs', 'plans', 'index.html', 'notes.txt'])
     expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('false')
     expect(wrapper.get('[data-testid="t-row-index.html"]').attributes('data-kind')).toBe('html')
     expect(wrapper.get('[data-testid="t-row-notes.txt"]').attributes('data-kind')).toBe('file')
@@ -59,7 +59,7 @@ describe('DriveTree', () => {
     const wrapper = mountTree()
     await wrapper.get('[data-testid="t-row-plans"]').trigger('click')
     expect(rowPaths(wrapper)).toEqual([
-      'canvases',
+      'designs',
       'plans',
       'plans/old',
       'plans/2026-10-11-plan.md',
@@ -72,7 +72,7 @@ describe('DriveTree', () => {
     expect(wrapper.emitted('pick')).toEqual([['plans/2026-10-11-plan.md']])
 
     await wrapper.get('[data-testid="t-row-plans"]').trigger('click')
-    expect(rowPaths(wrapper)).toEqual(['canvases', 'plans', 'index.html', 'notes.txt'])
+    expect(rowPaths(wrapper)).toEqual(['designs', 'plans', 'index.html', 'notes.txt'])
   })
 
   it('opens every folder while filtering and keeps only the matches and their folders', async () => {
@@ -80,7 +80,7 @@ describe('DriveTree', () => {
     expect(rowPaths(wrapper)).toEqual(['plans', 'plans/old', 'plans/old/a.md'])
 
     await wrapper.setProps({ filter: 'report' })
-    expect(rowPaths(wrapper)).toEqual(['canvases', 'canvases/report.canvas.json'])
+    expect(rowPaths(wrapper)).toEqual(['designs', 'designs/report.md'])
   })
 
   it('walks the rows with the keyboard, opening a folder and picking a document', async () => {
@@ -200,23 +200,23 @@ describe('DriveTree', () => {
   })
 
   it('cancels a rename on Escape and commits one on blur', async () => {
-    drive.Rename.mockResolvedValue(folder('canvases-old', []))
+    drive.Rename.mockResolvedValue(folder('designs-old', []))
     const wrapper = mountTree()
     const exposed = wrapper.vm as unknown as { startRename: (path: string) => void }
 
-    exposed.startRename('canvases')
+    exposed.startRename('designs')
     await flushPromises()
     await wrapper.get('[data-testid="t-rename-input"]').setValue('ignored')
     await wrapper.get('[data-testid="t-rename-input"]').trigger('keydown', { key: 'Escape' })
     expect(wrapper.find('[data-testid="t-rename-input"]').exists()).toBe(false)
     expect(drive.Rename).not.toHaveBeenCalled()
 
-    exposed.startRename('canvases')
+    exposed.startRename('designs')
     await flushPromises()
-    await wrapper.get('[data-testid="t-rename-input"]').setValue('canvases-old')
+    await wrapper.get('[data-testid="t-rename-input"]').setValue('designs-old')
     await wrapper.get('[data-testid="t-rename-input"]').trigger('blur')
     await flushPromises()
-    expect(drive.Rename).toHaveBeenCalledWith('acme/site', 'canvases', 'canvases-old')
+    expect(drive.Rename).toHaveBeenCalledWith('acme/site', 'designs', 'designs-old')
   })
 
   it('keeps the field open with the error when the drive refuses a rename', async () => {

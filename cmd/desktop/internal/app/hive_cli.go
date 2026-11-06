@@ -112,13 +112,6 @@ func serveToolsets(servePath string) []string {
 	return slices.Compact(names)
 }
 
-func servePathOf(d mcpcatalog.Descriptor) string {
-	if d.ServePath != "" {
-		return d.ServePath
-	}
-	return d.RuntimePath
-}
-
 // stdioServe is a usable hive plus the data directory it serves from.
 type stdioServe struct {
 	hive    string

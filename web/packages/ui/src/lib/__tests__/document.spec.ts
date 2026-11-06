@@ -15,7 +15,7 @@ describe('document', () => {
   })
 
   describe('linkTarget', () => {
-    const paths = new Set(['plans/x.md', 'canvases/report.canvas.json', 'research/r.md'])
+    const paths = new Set(['plans/x.md', 'reports/report.md', 'research/r.md'])
 
     it('opens web and mail links outside the app', () => {
       expect(linkTarget('https://example.com', 'plans/x.md', paths)).toEqual({
@@ -26,9 +26,9 @@ describe('document', () => {
     })
 
     it('resolves a relative link against the linking document', () => {
-      expect(linkTarget('../canvases/report.canvas.json', 'plans/x.md', paths)).toEqual({
+      expect(linkTarget('../reports/report.md', 'plans/x.md', paths)).toEqual({
         kind: 'document',
-        path: 'canvases/report.canvas.json',
+        path: 'reports/report.md',
       })
       expect(linkTarget('./x.md#scope', 'plans/y.md', paths)).toEqual({ kind: 'document', path: 'plans/x.md' })
     })
@@ -40,15 +40,9 @@ describe('document', () => {
       })
     })
 
-    it('finds a canvas by its bare name', () => {
-      expect(linkTarget('report', 'canvases/other.canvas.json', paths)).toEqual({
-        kind: 'document',
-        path: 'canvases/report.canvas.json',
-      })
-    })
-
     it('leads nowhere for an unknown document, an escape, or another scheme', () => {
       expect(linkTarget('missing.md', 'plans/x.md', paths)).toBeNull()
+      expect(linkTarget('report', 'reports/other.md', paths)).toBeNull()
       expect(linkTarget('../../x.md', 'plans/x.md', paths)).toBeNull()
       expect(linkTarget('javascript:alert(1)', 'plans/x.md', paths)).toBeNull()
       expect(linkTarget('/etc/passwd', 'plans/x.md', paths)).toBeNull()

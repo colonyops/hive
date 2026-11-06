@@ -22,14 +22,14 @@ import (
 type DiffReviewsService struct {
 	engine  func() *hive.Engine
 	callers *DriveService
-	chats   canvasSessionResolver
+	chats   chatSessionResolver
 	logger  zerolog.Logger
 }
 
 type DiffReviewsDeps struct {
 	Engine  func() *hive.Engine
 	Callers *DriveService
-	Chats   canvasSessionResolver
+	Chats   chatSessionResolver
 	Logger  zerolog.Logger
 }
 

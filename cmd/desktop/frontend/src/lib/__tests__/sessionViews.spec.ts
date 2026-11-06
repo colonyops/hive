@@ -18,7 +18,7 @@ function row(overrides: Partial<TerminalSessionRow> = {}): TerminalSessionRow {
     repo: 'github.com/acme/site',
     repoIdentity: 'github.com/acme/site',
     state: 'active',
-    canvasOwner: '',
+    driveSpace: '',
     tags: ['bug', 'wip'],
     createdAt: '2026-10-20T12:00:00Z',
     ...overrides,
