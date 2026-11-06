@@ -7,7 +7,7 @@ description: An overview of the core features in the Inbox, Code, and Chats area
 
 Hive Desktop brings incoming work, coding sessions, and long-running agent workspaces into one app. Its three main areas can be used together or independently.
 
-The title bar is a row of tabs. **Inbox**, **Code**, and **Chats** are pinned at the left and always there. Press **+** after them to add a tab for **Drive**, **Tasks**, **Action runs**, **Settings**, or any [applet](../configuration/applets.md) whose file lists `page`. Added tabs stay across restarts. Drag one to reorder it, and close it with its **×** or a middle click. Closing the tab in front returns you to the tab you were on before.
+The title bar is a row of tabs. **Inbox**, **Code**, and **Chats** are pinned at the left and always there. Press **+** after them to add a tab for **Drive**, **Tasks**, **Action runs**, **Settings**, or any [applet](../configuration/applets.md) whose file lists `page`. Added tabs stay across restarts. Drag one to reorder it, and close it with its **×**, a middle click, or <kbd>⌘W</kbd> (Windows/Linux: <kbd>Ctrl+W</kbd>). On Inbox and Chats, <kbd>⌘W</kbd> closes the window; in Code it closes the session tab in front. Closing the tab in front returns you to the tab you were on before.
 
 ## Inbox
 

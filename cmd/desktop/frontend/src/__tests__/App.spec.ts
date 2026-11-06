@@ -3279,6 +3279,22 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('closes only the global tab in front on ⌘W', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('tasks')
+
+    const close = new KeyboardEvent('keydown', { key: 'w', metaKey: true, cancelable: true })
+    window.dispatchEvent(close)
+    await flushPromises()
+    expect(close.defaultPrevented).toBe(true)
+    expect(router.currentRoute.value.name).toBe('feed')
+    expect(wrapper.find('[data-testid="titlebar-tab-tasks"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
   it('adds a page from the + menu and keeps the strip across a remount', async () => {
     const { wrapper, router } = await mountAppWithRouter()
 

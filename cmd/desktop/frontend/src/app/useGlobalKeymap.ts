@@ -10,6 +10,7 @@ import {
   type CommandContext,
 } from '../keybindings/catalog'
 import { useApplets } from '../stores/useApplets'
+import { useWailsEvent } from '../composables/useWailsEvent'
 import { isEditableTarget, isTerminalTarget } from '../lib/isEditableTarget'
 import { useViewKeys } from '../stores/useViewKeys'
 
@@ -63,16 +64,36 @@ export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activi
   // Changes is an overlay with a surface of its own, and a text size only changes how things read.
   const firesOverOverlays = (id: string): boolean => /\.text-size-(increase|decrease|reset)$/.test(id)
 
-  function dispatchIfActive(id: string): boolean {
+  // One ⌘W pressed in an applet frame arrives twice: as the keydown the frame forwards,
+  // and as the macOS menu's Close, which AppKit runs because the frame did not stop the
+  // key. Whichever lands first runs; the other is dropped, or a press would close two tabs.
+  const SAME_PRESS_MS = 400
+  let forwarded: { id: string; at: number } | null = null
+  let fromMenu: { id: string; at: number } | null = null
+  const samePress = (ran: { id: string; at: number } | null, id: string) =>
+    ran !== null && ran.id === id && performance.now() - ran.at < SAME_PRESS_MS
+
+  function dispatchIfActive(id: string, event?: KeyboardEvent): boolean {
     const command = commandById.value.get(id)
     if (!command) return false
     // A different modal (report, new-profile, a confirm stacked inside Tasks)
     // still swallows an overlay's own toggle like any other command.
     if (anyOverlayOpen.value && id !== 'palette.toggle' && !closesOwnOverlay(id) && !firesOverOverlays(id)) return false
     if (!contextActive(command.context)) return false
+    // A frame's forwarded keydown is synthetic; a real one is the webview's own.
+    if (event && !event.isTrusted) {
+      if (samePress(fromMenu, id)) return true
+      forwarded = { id, at: performance.now() }
+    }
     runCommand(id)
     return true
   }
+
+  useWailsEvent('window:close-request', () => {
+    const id = kb.resolve('mod+w', applies)
+    if (!id || samePress(forwarded, id)) return
+    if (dispatchIfActive(id)) fromMenu = { id, at: performance.now() }
+  })
 
   function armSequenceTimer(deferredCommandId: string): void {
     sequenceTimer = setTimeout(() => {
@@ -89,10 +110,11 @@ export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activi
   })
 
   // A command resolves only where it applies, so ⌘F reaches terminal.find over
-  // a pane and Focus search everywhere else.
+  // a pane and Focus search everywhere else, and ⌘W reaches Close window in Code
+  // and Close tab everywhere else.
   function applies(id: string): boolean {
     const context = commandById.value.get(id)?.context
-    return context !== 'terminal-pane' || contextActive(context)
+    return !context || contextActive(context)
   }
 
   // Shared with the pane: a sequence step either dispatches, extends the
@@ -103,7 +125,7 @@ export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activi
     switch (transition.kind) {
       case 'run':
         resetSequence()
-        if (dispatchIfActive(transition.commandId)) e.preventDefault()
+        if (dispatchIfActive(transition.commandId, e)) e.preventDefault()
         return true
       case 'extend': {
         // Only a sequence's start is barred from editable fields and overlays;
@@ -171,7 +193,7 @@ export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activi
     if (!escaped) return
     if (applySequenceStep(e, escaped, true)) return
     const id = kb.resolve(escaped, applies)
-    if (id && dispatchIfActive(id)) e.preventDefault()
+    if (id && dispatchIfActive(id, e)) e.preventDefault()
   }
 
   function onKeydown(e: KeyboardEvent): void {
@@ -202,7 +224,7 @@ export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activi
 
     if (isEditableTarget(e.target) && !hasModifier) return
 
-    if (dispatchIfActive(id)) e.preventDefault()
+    if (dispatchIfActive(id, e)) e.preventDefault()
   }
 
   useEventListener(window, 'keydown', onKeydown)

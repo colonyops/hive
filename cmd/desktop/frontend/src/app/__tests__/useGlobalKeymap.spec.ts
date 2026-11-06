@@ -7,6 +7,11 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   SetKeybindingSettings: vi.fn().mockResolvedValue(undefined),
 }))
 
+const wailsHandlers = vi.hoisted(() => new Map<string, () => void>())
+vi.mock('../../composables/useWailsEvent', () => ({
+  useWailsEvent: (name: string, handler: () => void) => wailsHandlers.set(name, handler),
+}))
+
 // The keymap, the pending sequence, and the modal registry are module
 // singletons, so each test imports them fresh.
 type Modules = {
@@ -367,5 +372,33 @@ describe('useGlobalKeymap over a focused terminal', () => {
     activityOpen.value = true
     press('t', tasksChord, pane)
     expect(runCommand).not.toHaveBeenCalled()
+  })
+})
+
+describe('useGlobalKeymap ⌘W', () => {
+  const closeChord = { metaKey: true }
+
+  it('closes the terminal window in Code and the tab in front everywhere else', () => {
+    press('w', closeChord)
+    expect(runCommand).toHaveBeenLastCalledWith('tab.close')
+
+    activeContexts.add('terminal')
+    press('w', closeChord)
+    expect(runCommand).toHaveBeenLastCalledWith('terminal.close-window')
+  })
+
+  it('runs the menu Close as the chord, once per press when a frame also forwards it', () => {
+    wailsHandlers.get('window:close-request')?.()
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('tab.close')
+
+    // The forwarded keydown of the same press lands after the menu.
+    press('w', closeChord)
+    expect(runCommand).toHaveBeenCalledOnce()
+  })
+
+  it('drops the menu Close when the forwarded keydown already ran', () => {
+    press('w', closeChord)
+    wailsHandlers.get('window:close-request')?.()
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('tab.close')
   })
 })

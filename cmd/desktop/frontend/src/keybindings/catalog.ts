@@ -125,6 +125,11 @@ export interface BindableCommand {
    * Linux, preserving Control on macOS.
    */
   piercesPane?: boolean | 'non-mac'
+  /**
+   * Gives its binding to any other command whose context holds, and never
+   * conflicts with one: Close tab takes ⌘W only where Close window does not.
+   */
+  yieldsBinding?: boolean
 }
 
 // How far the digit row reaches. A session with more windows than this is
@@ -875,6 +880,16 @@ export const commandCatalog: BindableCommand[] = [
     scope: 'goto',
   },
   ...sessionViewCommands,
+  {
+    id: 'tab.close',
+    title: 'Close tab',
+    group: 'Window',
+    keywords: ['close', 'tab', 'page', 'window'],
+    icon: IconX,
+    defaultCombos: ['mod+w'],
+    context: 'global',
+    yieldsBinding: true,
+  },
   {
     id: 'window.hide',
     title: 'Hide window',

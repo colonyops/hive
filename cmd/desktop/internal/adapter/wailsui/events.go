@@ -52,6 +52,8 @@ func registerEvents() struct{} {
 	// them to update focus-sensitive UI without querying the native window.
 	application.RegisterEvent[bool]("window:focus")
 	application.RegisterEvent[bool]("window:blur")
+	// window:close-request is ⌘W from the macOS menu. The frontend decides what it closes.
+	application.RegisterEvent[string]("window:close-request")
 	// activity:appended carries the new event's id after any subsystem (or the
 	// frontend, via ActivityService.Record) appends to the activity log. The
 	// Activity view re-reads its latest page and advances its unseen marker.
@@ -367,6 +369,13 @@ func NotificationActivationFrom(result wailsnotify.NotificationResult) (Notifica
 func emitWindowFocus() {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("window:focus", true)
+	}
+}
+
+// emitWindowCloseRequest asks the main window's frontend to close what is in front.
+func emitWindowCloseRequest() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("window:close-request", "close")
 	}
 }
 

@@ -305,9 +305,25 @@ export function useAppMode(
     }
   }
 
+  // ⌘W closes what is in front: a global tab, or with none the window, which the Go side
+  // hides (or quits, with no tray to restore it from) as the macOS Close item did.
+  async function closeFront(): Promise<void> {
+    const tab = activeTab.value
+    if (tab && !isPinnedTabId(tab)) {
+      closeTab(tab)
+      return
+    }
+    try {
+      if (typeof Window?.Close === 'function') await Window.Close()
+    } catch (error) {
+      log.debug('window close is unavailable outside Wails', error)
+    }
+  }
+
   return {
     mode,
     setMode,
+    closeFront,
     activeTab,
     activateTab,
     closeTab,

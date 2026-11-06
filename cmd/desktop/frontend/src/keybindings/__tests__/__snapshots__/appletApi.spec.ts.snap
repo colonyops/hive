@@ -40,6 +40,7 @@ exports[`what a page can name > keeps every command id 1`] = `
   "session.open-drive",
   "session.open-tasks",
   "settings.open",
+  "tab.close",
   "tasks.toggle",
   "terminal.close-pane",
   "terminal.close-window",

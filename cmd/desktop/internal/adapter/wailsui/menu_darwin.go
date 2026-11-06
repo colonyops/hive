@@ -19,11 +19,43 @@ var zoomRoles = []application.Role{
 func (u *UI) buildMenu() {
 	menu := application.DefaultApplicationMenu()
 	removeRoles(menu, zoomRoles)
+	replaceCloseItem(menu, u.closeFront)
 	if window := menu.FindByRole(application.WindowMenu); window != nil {
 		window.GetSubmenu().AddSeparator()
 		window.GetSubmenu().Add("Diagnostics…").OnClick(func(*application.Context) { u.openDiagnostics() })
 	}
 	u.app.Menu.SetApplicationMenu(menu)
+}
+
+// closeFront is ⌘W from the menu. AppKit runs the item whenever the webview lets the key
+// through, which a page in an applet frame always does: its keydown reaches the app only
+// after the page had its turn. So the main window asks the frontend, which closes the tab
+// in front or the window itself. Any other window closes as before.
+func (u *UI) closeFront() {
+	current := u.app.Window.Current()
+	if current == nil {
+		return
+	}
+	if current.Name() != u.window.Name() {
+		current.Close()
+		return
+	}
+	emitWindowCloseRequest()
+}
+
+// replaceCloseItem swaps the File menu's Close role for a plain item on the same chord.
+// On macOS a role item runs its AppKit selector (performClose:) and never its Go callback,
+// so the role cannot be given a new action.
+func replaceCloseItem(menu *application.Menu, closeFront func()) {
+	file := menu.FindByRole(application.FileMenu)
+	if file == nil {
+		return
+	}
+	submenu := file.GetSubmenu()
+	if role := submenu.FindByRole(application.CloseWindow); role != nil {
+		submenu.RemoveMenuItem(role)
+	}
+	submenu.Add("Close").SetAccelerator("CmdOrCtrl+w").OnClick(func(*application.Context) { closeFront() })
 }
 
 func removeRoles(menu *application.Menu, roles []application.Role) {

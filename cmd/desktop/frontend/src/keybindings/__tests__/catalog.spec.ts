@@ -62,8 +62,9 @@ describe('commandCatalog defaults', () => {
   ])('binds each default to one command on %s', (_, mac) => {
     const owners = new Map<string, string>()
     // A terminal-pane command shares its chord on purpose; it resolves first
-    // over a pane and is skipped everywhere else.
-    for (const command of commandCatalog.filter((c) => c.context !== 'terminal-pane')) {
+    // over a pane and is skipped everywhere else. A command that yields its
+    // binding takes a chord only where no other command applies.
+    for (const command of commandCatalog.filter((c) => c.context !== 'terminal-pane' && !c.yieldsBinding)) {
       for (const combo of defaultCombosFor(command, mac)) {
         expect(owners.get(combo), `${combo} already belongs to ${owners.get(combo)}`).toBeUndefined()
         owners.set(combo, command.id)
