@@ -156,7 +156,7 @@ export function useAppCommands(deps: AppCommandDeps) {
       appMode.toggleTab('tasks')
     },
     'canvas.toggle': appMode.toggleDrive,
-    'action-runs.toggle': () => overlays.toggleActionRuns(),
+    'action-runs.toggle': () => appMode.toggleTab('runs'),
     'terminal.popup.toggle': togglePopupTerminal,
     'terminal.toggle-sidebar': appMode.toggleSidebar,
     'view.toggle-panel': appMode.togglePreview,
@@ -234,7 +234,6 @@ export function useAppCommands(deps: AppCommandDeps) {
       // The palette can open an applet over a hub view, whose own keys would keep
       // acting on rows under it.
       overlays.activityOpen.value = false
-      overlays.actionRunsOpen.value = false
       if (declared !== null) applets.openForCommand(applet, declared)
       else applets.toggle(applet)
       return

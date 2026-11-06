@@ -13,7 +13,6 @@ import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconArrowUpCircle from '~icons/lucide/arrow-up-circle'
 import AppletTitlebarSlot from './applets/AppletTitlebarSlot.vue'
 import JobsPopover from './JobsPopover.vue'
-import TitleBarMenu from './TitleBarMenu.vue'
 import TitleBarTabs from './TitleBarTabs.vue'
 import type { AppTabId, GlobalTabId } from '../lib/appTabs'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
@@ -30,9 +29,9 @@ import { useApplets } from '../stores/useApplets'
 //            and the + that adds one. The strip scrolls when it runs out of
 //            room; the empty space after it stays a drag surface.
 //   right  — status chips, then the pages of the applets that list the title
-//            bar, then the command-palette launcher, then app-level utilities
-//            (Activity, Views) as one icon run, then the preview (right-panel)
-//            toggle bracketing the far edge.
+//            bar, then the command-palette launcher, then Activity, then the
+//            preview (right-panel) toggle bracketing the far edge. Pages and
+//            Settings are tabs, reached from the strip's +.
 // Every control is a 28px square icon button or a 28px labeled button, both
 // `rounded-lg` with a `chip` hover fill. Amber is reserved for things asking
 // for attention — unread activity, an available update. Selected state is a
@@ -54,7 +53,6 @@ const props = defineProps<{
   activeTab?: AppTabId | null
   tabs?: readonly GlobalTabId[]
   activityActive?: boolean
-  actionRunsActive?: boolean
   errorCount?: number
   unseenActivity?: number
   jobsActive?: boolean
@@ -80,7 +78,6 @@ const emit = defineEmits<{
   'open-activity': []
   'open-job-run': [commandId: number]
   'open-job-log': [commandId: number]
-  'run-command': [commandId: string]
   'open-update': []
   'toggle-sidebar': []
   'toggle-preview': []
@@ -244,7 +241,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <button
         v-if="profileName"
         type="button"
-        class="flex h-7 w-[clamp(7.5rem,16vw,14rem)] cursor-pointer items-center gap-2 rounded-md border border-border bg-app px-2.5 text-text-3 hover:border-strong hover:text-text-2"
+        class="flex h-7 w-[clamp(6rem,10vw,9rem)] cursor-pointer items-center gap-2 rounded-md border border-border bg-app px-2.5 text-text-3 hover:border-strong hover:text-text-2"
         style="--wails-draggable: no-drag"
         aria-label="Open command palette"
         data-testid="titlebar-command-palette"
@@ -278,11 +275,6 @@ function onTitlebarDblclick(event: MouseEvent): void {
           data-testid="titlebar-activity-unseen"
         />
       </IconButton>
-      <TitleBarMenu
-        v-if="profileName"
-        :active="actionRunsActive"
-        @run-command="(commandId) => emit('run-command', commandId)"
-      />
       <IconButton
         v-if="profileName"
         :label="`${previewCollapsed ? 'Show' : 'Hide'} ${rightPane}`"

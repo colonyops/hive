@@ -379,8 +379,8 @@ function terminalOnScreen(wrapper: VueWrapper): boolean {
 
 // Same shape as terminalOnScreen: the Agents area is mount-once/v-show too.
 async function openApplicationSettings(wrapper: VueWrapper): Promise<void> {
-  await wrapper.get('[data-testid="titlebar-menu"]').trigger('click')
-  await wrapper.get('[data-testid="application-settings"]').trigger('click')
+  await wrapper.get('[data-testid="titlebar-add-tab"]').trigger('click')
+  await wrapper.get('[data-testid="titlebar-add-tab-settings"]').trigger('click')
 }
 
 function agentsOnScreen(wrapper: VueWrapper): boolean {
@@ -3394,9 +3394,10 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('opens action runs from its palette row, its g l sequence, and the title bar menu', async () => {
-    const { wrapper } = await mountAppWithRouter()
-    const overlay = () => document.querySelector('[data-testid="action-runs-overlay"]')
+  it('opens Action runs as a tab from its palette row, its g l sequence, and the + menu', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    const shown = () =>
+      router.currentRoute.value.name === 'action-runs' && wrapper.find('[data-testid="action-runs-view"]').exists()
     const { results, query } = useCommandPalette()
     query.value = ''
     const row = results.value.find((cmd) => cmd.id === 'action-runs.toggle')
@@ -3405,24 +3406,35 @@ describe('App', () => {
 
     await row?.run()
     await flushPromises()
-    expect(overlay()).not.toBeNull()
+    expect(shown()).toBe(true)
+    // A tab owns closing: Escape leaves it in front.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
-    expect(overlay()).toBeNull()
+    expect(shown()).toBe(true)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g' }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l' }))
     await flushPromises()
-    expect(overlay()).not.toBeNull()
-    document.querySelector<HTMLButtonElement>('[data-testid="action-runs-close"]')?.click()
-    await flushPromises()
-    expect(overlay()).toBeNull()
+    expect(shown()).toBe(false)
 
-    await wrapper.get('[data-testid="titlebar-menu"]').trigger('click')
-    await wrapper.get('[data-testid="titlebar-menu-action-runs"]').trigger('click')
+    await wrapper.get('[data-testid="titlebar-tab-runs-close"]').trigger('click')
     await flushPromises()
-    expect(overlay()).not.toBeNull()
+    expect(wrapper.find('[data-testid="titlebar-tab-runs"]').exists()).toBe(false)
 
+    await wrapper.get('[data-testid="titlebar-add-tab"]').trigger('click')
+    await wrapper.get('[data-testid="titlebar-add-tab-runs"]').trigger('click')
+    await flushPromises()
+    expect(shown()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('opens Action runs on a run through the route', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    await router.push({ name: 'action-runs', query: { run: '42' } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="action-runs-view"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="titlebar-tab-runs"]').attributes('aria-selected')).toBe('true')
     wrapper.unmount()
   })
 

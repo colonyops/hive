@@ -16,7 +16,7 @@ import { AGENTS_SIDEBAR, TERMINAL_SIDEBAR } from '../lib/modeSidebars'
 
 const log = createLogger('app-mode')
 
-export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings' | 'drive' | 'tasks' | 'applet'
+export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings' | 'drive' | 'tasks' | 'runs' | 'applet'
 export type PinnedMode = 'hub' | 'terminal' | 'agents'
 
 const PINNED_MODES: Record<'inbox' | 'code' | 'chats', PinnedMode> = {
@@ -54,6 +54,7 @@ export function useAppMode(
     if (route.name === 'application-settings') return 'settings'
     if (route.name === 'drive') return 'drive'
     if (route.name === 'tasks') return 'tasks'
+    if (route.name === 'action-runs') return 'runs'
     if (route.name === 'applet') return 'applet'
     return 'hub'
   })
@@ -66,6 +67,11 @@ export function useAppMode(
   const settingsActive = shown('settings')
   const driveActive = shown('drive')
   const tasksActive = shown('tasks')
+  const runsActive = shown('runs')
+  const runsRunId = computed(() => {
+    const id = runsActive.value ? Number(route.query.run) : NaN
+    return Number.isInteger(id) && id > 0 ? id : null
+  })
   const appletActive = shown('applet')
   const openAppletId = computed(() =>
     appletActive.value && typeof route.params.id === 'string' ? route.params.id : '',
@@ -152,6 +158,12 @@ export function useAppMode(
   function toggleTab(id: GlobalTabId): void {
     if (activeTab.value === id) activateTab(tabs.previous(id))
     else activateTab(id)
+  }
+
+  // A run rides the query, so a link opens on it and Back walks the runs opened.
+  function openActionRuns(runId?: number): void {
+    if (runId) void router.push({ name: 'action-runs', query: { run: String(runId) } })
+    else activateTab('runs')
   }
 
   function closeSettings(): void {
@@ -301,6 +313,9 @@ export function useAppMode(
     closeTab,
     toggleTab,
     tasksActive,
+    runsActive,
+    runsRunId,
+    openActionRuns,
     appletActive,
     openAppletId,
     terminalActive,

@@ -1515,7 +1515,7 @@ exists; an unavailable mode explains itself inside the mode rather than
 disabling its segment (ADR terminal-agents-grafana-and-commands-graduate-out-of-experimental).
 
 The title bar shows the modes as a tab strip (`TitleBarTabs`). Inbox, Code
-and Chats are pinned tabs. Drive, Tasks, Settings and applets are global tabs
+and Chats are pinned tabs. Drive, Tasks, Action runs, Settings and applets are global tabs
 the user adds, reorders and closes; `stores/useAppTabs` holds their order in
 local storage and the order of visits. Every tab is a route, and
 `lib/appTabs.ts` maps a route to its tab, so the route is still the one source

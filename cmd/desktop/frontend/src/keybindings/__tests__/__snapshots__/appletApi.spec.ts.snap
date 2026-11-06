@@ -91,6 +91,7 @@ exports[`what a page can name > keeps every route 1`] = `
   "/feed/:profileId?",
   "/flows/:profileId",
   "/profiles/:profileId/settings/:section(general|danger)?",
+  "/runs",
   "/settings/:section(general|appearance|drive|notifications|menubar|keybindings|applets|integrations|actions|terminal|launchers|hive|servers|mcp|agents|system|observability|about)?",
   "/tasks",
   "/terminal/:slug?",

@@ -10,6 +10,7 @@ import SequenceHint from './components/SequenceHint.vue'
 import DrivePage from './components/drive/DrivePage.vue'
 import AppletPageTabs from './components/applets/AppletPageTabs.vue'
 import TasksView from './components/tasks/TasksView.vue'
+import ActionRunsView from './components/ActionRunsView.vue'
 import FlowsView from './pipeline/components/FlowsView.vue'
 import FeedHub from './app/FeedHub.vue'
 import AppDialogs from './app/AppDialogs.vue'
@@ -75,7 +76,7 @@ const { terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
 useModePreload(() => shellLoaded.value && !onboardingActive.value, appMode.prepareTerminal)
 const overlays = useHubOverlays()
-const { activityOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
+const { activityOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
 const reveal = useReveal(nav, session, feed.showToast, appMode.openDrive)
 useHiveLinkClicks((message) => feed.showToast(message, { severity: 'error' }))
@@ -100,7 +101,6 @@ useGlobalKeymap({
   contextActive,
   paletteOpen: palette.open,
   activityOpen,
-  actionRunsOpen,
 })
 
 const { unseenCount: unseenActivity } = useActivity()
@@ -135,7 +135,6 @@ const appTabs = useAppTabs()
         :active-tab="appMode.activeTab.value"
         :tabs="appTabs.tabs.value"
         :activity-active="activityOpen"
-        :action-runs-active="actionRunsOpen"
         :error-count="reveal.errorCount.value"
         :unseen-activity="unseenActivity"
         :jobs-active="jobsActive"
@@ -158,8 +157,7 @@ const appTabs = useAppTabs()
         @open-error-node="reveal.openErrorNode"
         @open-activity="overlays.toggleActivity"
         @open-job-run="nav.openJobRun"
-        @open-job-log="overlays.openActionRuns"
-        @run-command="runCommand"
+        @open-job-log="appMode.openActionRuns"
         @open-update="update.openUpdate"
         @toggle-sidebar="appMode.toggleSidebar"
         @toggle-preview="appMode.togglePreview"
@@ -184,7 +182,7 @@ const appTabs = useAppTabs()
           :active="terminalActive"
           :sidebar-collapsed="terminalSidebarCollapsed"
           :drive="appMode.codeDrive.value"
-          :overlay-open="activityOpen || actionRunsOpen || !!applets.open.value"
+          :overlay-open="activityOpen || !!applets.open.value"
           @session-repo-key="terminalSessionRepoKey = $event"
         />
         <AgentsMode
@@ -212,13 +210,19 @@ const appTabs = useAppTabs()
         <TasksView
           v-if="tasksActive"
           embedded
-          :keys-active="!palette.open.value && !activityOpen && !actionRunsOpen && !applets.open.value"
+          :keys-active="!palette.open.value && !activityOpen && !applets.open.value"
+        />
+        <ActionRunsView
+          v-if="appMode.runsActive.value"
+          embedded
+          :initial-run-id="appMode.runsRunId.value"
+          @open-item="nav.openActionRunItem"
         />
         <div v-show="appletActive" class="flex min-h-0 min-w-0 flex-1 flex-col">
           <AppletPageTabs
             :tabs="appTabs.tabs.value"
             :active-id="appMode.openAppletId.value"
-            :on-screen="appletActive && !palette.open.value && !activityOpen && !actionRunsOpen"
+            :on-screen="appletActive && !palette.open.value && !activityOpen"
             @close="appMode.closeTab"
           />
         </div>
@@ -262,7 +266,7 @@ const appTabs = useAppTabs()
             :detail="itemDetail"
             :sidebar-collapsed="feedSidebarCollapsed"
             :github-connected="github.connected.value"
-            @open-run-log="overlays.openActionRuns"
+            @open-run-log="appMode.openActionRuns"
           />
         </div>
       </div>

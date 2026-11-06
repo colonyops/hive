@@ -18,7 +18,6 @@ export interface GlobalKeymapDeps {
   contextActive: (context: CommandContext) => boolean
   paletteOpen: Ref<boolean>
   activityOpen: Ref<boolean>
-  actionRunsOpen: Ref<boolean>
 }
 
 /**
@@ -27,39 +26,22 @@ export interface GlobalKeymapDeps {
  * its context, and an open overlay suppresses everything but the palette
  * toggle.
  */
-export function useGlobalKeymap({
-  runCommand,
-  contextActive,
-  paletteOpen,
-  activityOpen,
-  actionRunsOpen,
-}: GlobalKeymapDeps) {
+export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activityOpen }: GlobalKeymapDeps) {
   const kb = useKeybindings()
   const viewKeys = useViewKeys()
 
   // Every dialog and drawer registers in openModalCount while mounted. The
-  // palette and the hub overlays are not modals, so they are named here. Action
-  // runs is split out so its toggle can close its own overlay while it stays
-  // suppressed under anything else.
+  // palette and Activity are not modals, so they are named here.
   const openModalCount = useOpenModalCount()
-  const toggledOverlays: Record<string, Ref<boolean>> = {
-    'action-runs.toggle': actionRunsOpen,
-  }
   const applets = useApplets()
   const otherOverlayOpen = computed(() => paletteOpen.value || activityOpen.value || openModalCount.value > 0)
-  const anyOverlayOpen = computed(
-    () =>
-      otherOverlayOpen.value ||
-      applets.open.value !== null ||
-      Object.values(toggledOverlays).some((open) => open.value),
-  )
+  const anyOverlayOpen = computed(() => otherOverlayOpen.value || applets.open.value !== null)
 
+  // An applet pop-up takes its own commands as well as the chord that closes it:
+  // a panel still has a use for them.
   function closesOwnOverlay(id: string): boolean {
     if (otherOverlayOpen.value) return false
-    // Its own commands as well as the chord that closes it: a panel still has a use for them.
-    if (appletID(id) !== null) return appletID(id) === applets.open.value?.id
-    if (applets.open.value !== null || !toggledOverlays[id]?.value) return false
-    return Object.entries(toggledOverlays).every(([toggle, open]) => toggle === id || !open.value)
+    return appletID(id) !== null && appletID(id) === applets.open.value?.id
   }
 
   // One timer at a time, for a sequence prefix that is also a complete binding

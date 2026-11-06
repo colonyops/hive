@@ -22,7 +22,6 @@ const runCommand = vi.fn<(id: string) => void>()
 const activeContexts = new Set<CommandContext>()
 const paletteOpen = ref(false)
 const activityOpen = ref(false)
-const actionRunsOpen = ref(false)
 
 beforeEach(async () => {
   vi.resetModules()
@@ -42,7 +41,6 @@ beforeEach(async () => {
   activeContexts.add('global')
   paletteOpen.value = false
   activityOpen.value = false
-  actionRunsOpen.value = false
   scope = effectScope()
   scope.run(() =>
     m.useGlobalKeymap({
@@ -50,7 +48,6 @@ beforeEach(async () => {
       contextActive: (context) => activeContexts.has(context),
       paletteOpen,
       activityOpen,
-      actionRunsOpen,
     }),
   )
 })
@@ -124,7 +121,6 @@ describe('useGlobalKeymap overlay gate', () => {
   it.each([
     ['the palette', () => (paletteOpen.value = true)],
     ['Activity', () => (activityOpen.value = true)],
-    ['Action runs', () => (actionRunsOpen.value = true)],
     ['a modal', () => void openModal()],
   ])('suppresses everything but the palette toggle while %s is open', (_name, open) => {
     activeContexts.add('feed')
@@ -139,19 +135,13 @@ describe('useGlobalKeymap overlay gate', () => {
 
   // The Drive is a page, not an overlay: its chord goes through the ordinary
   // gate, so it is swallowed under any overlay and runs everywhere else.
-  it('runs canvas.toggle with no overlay open and swallows it under Action runs', () => {
+  it('runs canvas.toggle with no overlay open and swallows it under Activity', () => {
     press('p', driveChord)
     expect(runCommand).toHaveBeenCalledWith('canvas.toggle')
 
     runCommand.mockReset()
-    actionRunsOpen.value = true
+    activityOpen.value = true
     press('p', driveChord)
-    expect(runCommand).not.toHaveBeenCalled()
-  })
-
-  it("keeps one overlay's toggle from opening over the other", () => {
-    actionRunsOpen.value = true
-    press('t', tasksChord)
     expect(runCommand).not.toHaveBeenCalled()
   })
 

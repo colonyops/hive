@@ -16,6 +16,7 @@ import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPlus from '~icons/lucide/plus'
 import IconSettings from '~icons/lucide/settings'
 import IconSettings2 from '~icons/lucide/settings-2'
+import IconSquareTerminal from '~icons/lucide/square-terminal'
 import IconX from '~icons/lucide/x'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
@@ -66,6 +67,7 @@ const PINNED: (TabView & { id: PinnedTabId; command: string })[] = [
 const VIEWS: Record<ViewTabId, { label: string; icon: Component; command: string }> = {
   drive: { label: 'Drive', icon: IconFolderTree, command: 'canvas.toggle' },
   tasks: { label: 'Tasks', icon: IconListTodo, command: 'tasks.toggle' },
+  runs: { label: 'Action runs', icon: IconSquareTerminal, command: 'action-runs.toggle' },
   settings: { label: 'Settings', icon: IconSettings, command: 'settings.open' },
 }
 
@@ -326,7 +328,7 @@ const tabClass = (selected: boolean) => [
       </div>
     </div>
 
-    <div ref="addWrap" class="relative ml-0.5 shrink-0" style="--wails-draggable: no-drag">
+    <div ref="addWrap" class="relative shrink-0" style="--wails-draggable: no-drag">
       <IconButton
         label="Add a tab"
         tooltip="Add a tab"

@@ -49,7 +49,11 @@ import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
 import Spinner from '@hive/ui/components/ui/Spinner.vue'
 import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
 
-const props = defineProps<{ initialRunId?: number | null }>()
+const props = defineProps<{
+  initialRunId?: number | null
+  /** Lives in a title-bar tab, which owns closing: no close button and no Escape. */
+  embedded?: boolean
+}>()
 const emit = defineEmits<{
   close: []
   'open-item': [commandId: number, actionId: string]
@@ -222,7 +226,7 @@ function scheduleListPoll(): void {
 useWailsEvent('jobs:updated', () => {
   void loadRuns()
 })
-useEscapeToClose(() => emit('close'))
+useEscapeToClose(() => emit('close'), { enabled: () => !props.embedded })
 useIntervalFn(() => (now.value = Date.now()), 1000)
 
 onMounted(() => {
@@ -253,7 +257,14 @@ function statusIconClass(status: string): string {
           >{{ runs.length }} {{ runs.length === 1 ? 'run' : 'runs' }}</span
         >
         <div class="flex-1" />
-        <IconButton label="Close" :icon="IconX" size="lg" data-testid="action-runs-close" @click="emit('close')" />
+        <IconButton
+          v-if="!embedded"
+          label="Close"
+          :icon="IconX"
+          size="lg"
+          data-testid="action-runs-close"
+          @click="emit('close')"
+        />
       </template>
     </ViewHeader>
 

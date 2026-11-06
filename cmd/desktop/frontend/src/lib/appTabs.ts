@@ -4,13 +4,13 @@ import { appletTabId, isAppletTabId, type AppletTabId } from './appletTabs'
 /** The three areas every window has. They hold the left of the strip and never close. */
 export type PinnedTabId = 'inbox' | 'code' | 'chats'
 /** A built-in page the user can add to the strip. */
-export type ViewTabId = 'drive' | 'tasks' | 'settings'
+export type ViewTabId = 'drive' | 'tasks' | 'runs' | 'settings'
 /** A tab the user added, closed, and can drag: a built-in page or an applet. */
 export type GlobalTabId = ViewTabId | AppletTabId
 export type AppTabId = PinnedTabId | GlobalTabId
 
 export const PINNED_TABS: readonly PinnedTabId[] = ['inbox', 'code', 'chats']
-export const VIEW_TABS: readonly ViewTabId[] = ['drive', 'tasks', 'settings']
+export const VIEW_TABS: readonly ViewTabId[] = ['drive', 'tasks', 'runs', 'settings']
 
 export function isViewTabId(value: unknown): value is ViewTabId {
   return typeof value === 'string' && (VIEW_TABS as readonly string[]).includes(value)
@@ -44,6 +44,8 @@ export function tabOfRoute(
       return 'drive'
     case 'tasks':
       return 'tasks'
+    case 'action-runs':
+      return 'runs'
     case 'application-settings':
       return 'settings'
     case 'applet':
@@ -60,6 +62,8 @@ export function globalTabLocation(id: GlobalTabId): RouteLocationRaw {
       return { name: 'drive' }
     case 'tasks':
       return { name: 'tasks' }
+    case 'runs':
+      return { name: 'action-runs' }
     case 'settings':
       return { name: 'application-settings' }
     default:
@@ -88,7 +92,7 @@ const TAB_GAP = 4
 const GLOBAL_LABELED_MIN = 84
 const GLOBAL_ICON = 32
 const CLOSE_BUTTON = 22
-const ADD_BUTTON = 36
+const ADD_BUTTON = 32
 const SEPARATOR = 17
 
 /**

@@ -162,7 +162,7 @@ Item actions run independently. A long shell action stays **Running** until its 
 
 ## Read what a run did
 
-**Action runs** lists every run of an `actions.yml` action, newest first, whether you started it from an item or a flow started it. Open it from the views menu in the title bar, with <kbd>g</kbd> then <kbd>l</kbd>, from the command palette, from **View log** on an item's action, or from the jobs menu.
+**Action runs** lists every run of an `actions.yml` action, newest first, whether you started it from an item or a flow started it. It opens as a tab in the title bar. Open it from the title bar's **+** menu, with <kbd>g</kbd> then <kbd>l</kbd>, from the command palette, from **View log** on an item's action, or from the jobs menu.
 
 Select a run to read its log: the command line, its stdout and stderr in the order they were written, and the exit status. A session launch or a published message logs the steps it took instead. A running action's log updates as it runs, and you can cancel it from there. Automatic retries appear as separate attempts.
 

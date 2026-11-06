@@ -10,6 +10,7 @@ export type AppRouteName =
   | 'profile-settings'
   | 'drive'
   | 'tasks'
+  | 'action-runs'
   | 'applet'
   | 'dev'
 
@@ -105,8 +106,10 @@ export function createAppRouter(history: RouterHistory = createWebHashHistory())
       name: 'drive',
       component: ShellPage,
     },
-    // Tasks and applets open as title-bar tabs, app-global like Drive.
+    // Tasks, Action runs and applets open as title-bar tabs, app-global like
+    // Drive. ?run=<id> selects a run.
     { path: '/tasks', name: 'tasks', component: ShellPage },
+    { path: '/runs', name: 'action-runs', component: ShellPage },
     { path: '/applets/:id', name: 'applet', component: ShellPage },
   ]
 
