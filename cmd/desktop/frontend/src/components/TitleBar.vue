@@ -88,8 +88,8 @@ const emit = defineEmits<{
 
 // macOS draws its native traffic lights over the top-left of this bar
 // (hidden-inset chrome configured in cmd/desktop/main.go). Pad the left cluster past
-// them and keep the height in sync with InvisibleTitleBarHeight (43) in
-// wailsui/ui.go so the controls stay vertically centered.
+// them and keep the height at the 43px of the compact toolbar (wailsui/ui.go),
+// which places the traffic lights, so the controls center beside them.
 //
 // Both heights are odd on purpose: the bottom border takes 1px, and an even
 // content box under it centers the 28px controls on a whole pixel. An odd one
