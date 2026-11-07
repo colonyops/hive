@@ -1130,6 +1130,26 @@ describe('ChangesView', () => {
     wrapper.unmount()
   })
 
+  it('shows the send as pending until the agent takes it', async () => {
+    mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready')])
+    let finish: () => void = () => {}
+    mocks.SendChanges.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)))
+    const wrapper = await mountView()
+    await comment('rename this')
+    await wrapper.get(testid('changes-send')).trigger('click')
+    await flushPromises()
+    const button = wrapper.get(testid('changes-send'))
+    expect(button.attributes('aria-busy')).toBe('true')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(wrapper.get(testid('changes-send-pending')).text()).toBe('Sending…')
+    expect(wrapper.find(testid('changes-send-count')).exists()).toBe(false)
+
+    finish()
+    await flushPromises()
+    expect(wrapper.find(testid('changes-send')).exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('asks before sending with several agents', async () => {
     mocks.ChangesTargets.mockResolvedValue([agent('%1', 'ready'), agent('%2', 'ready')])
     const wrapper = await mountView()
