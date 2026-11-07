@@ -91,30 +91,43 @@ onMounted(() => {
         />
       </div>
       <template v-else>
-        <SettingsRow
-          label="Address"
-          hint="An HTTP MCP server on this machine. The address stays the same across restarts."
-        >
-          <div class="flex min-w-0 items-center gap-2">
+        <!-- Stacked rather than a SettingsRow: the address has no length bound,
+             and a row's control column would squeeze the label to a sliver. -->
+        <div class="flex flex-col gap-2 px-4 py-3.5">
+          <div>
+            <div class="text-body font-semibold text-text">Address</div>
+            <p class="mt-1 text-small leading-relaxed text-text-3">
+              An HTTP MCP server on this machine. The address stays the same across restarts.
+            </p>
+          </div>
+          <div class="flex min-w-0 items-start gap-2">
             <code
-              class="min-w-0 truncate rounded-sm bg-chip px-1.5 py-0.5 font-mono text-caption text-text-2"
+              class="min-w-0 flex-1 break-all rounded-sm bg-chip px-1.5 py-0.5 font-mono text-caption text-text-2"
               :data-testid="`settings-mcp-${server.id}-url`"
               >{{ server.command }}</code
             >
-            <CopyButton :text="server.command" size="xs" :data-testid="`settings-mcp-${server.id}-url-copy`" />
+            <CopyButton
+              :text="server.command"
+              size="xs"
+              class="shrink-0"
+              :data-testid="`settings-mcp-${server.id}-url-copy`"
+            />
           </div>
-        </SettingsRow>
+        </div>
         <div class="flex flex-col gap-2 px-4 py-3.5">
           <div class="flex items-center justify-between gap-3">
-            <p class="text-small leading-relaxed text-text-3">{{ mcpSetup(agent, server.id, server.command).hint }}</p>
+            <p class="min-w-0 text-small leading-relaxed text-text-3">
+              {{ mcpSetup(agent, server.id, server.command).hint }}
+            </p>
             <CopyButton
               :text="mcpSetup(agent, server.id, server.command).text"
               size="xs"
+              class="shrink-0"
               :data-testid="`settings-mcp-${server.id}-setup-copy`"
             />
           </div>
           <pre
-            class="hive-scroll overflow-x-auto rounded-lg border border-card bg-app p-3 font-mono text-caption leading-relaxed text-text-2"
+            class="whitespace-pre-wrap break-all rounded-lg border border-card bg-app p-3 font-mono text-caption leading-relaxed text-text-2"
             :data-testid="`settings-mcp-${server.id}-setup`"
             >{{ mcpSetup(agent, server.id, server.command).text }}</pre>
           <div v-if="server.id === 'hive-drive'" class="flex flex-wrap items-center gap-3">
