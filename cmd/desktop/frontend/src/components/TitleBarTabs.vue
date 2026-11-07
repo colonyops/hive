@@ -6,9 +6,10 @@
 // outline, so it reads as the tab the frame below belongs to and stands apart
 // from the `chip` hover fill. It stays neutral: amber is for what asks for
 // attention.
-import { useElementSize } from '@vueuse/core'
-import { computed, ref, watch, type Component } from 'vue'
+import { useElementSize, useEventListener } from '@vueuse/core'
+import { computed, ref, shallowRef, watch, type Component } from 'vue'
 import IconCode from '~icons/lucide/code'
+import IconCopyX from '~icons/lucide/copy-x'
 import IconFolderTree from '~icons/lucide/folder-tree'
 import IconInbox from '~icons/lucide/inbox'
 import IconListTodo from '~icons/lucide/list-todo'
@@ -21,6 +22,7 @@ import IconX from '~icons/lucide/x'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import type { MenuEntry } from '@hive/ui/types/menu'
+import { dropEdge, useDragReorder } from '../composables/useDragReorder'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
 import { appletIdOfTabId, appletTabId, isAppletTabId } from '../lib/appletTabs'
 import {
@@ -32,6 +34,7 @@ import {
   type ViewTabId,
 } from '../lib/appTabs'
 import { launcherIconComponent } from '../lib/launcherIcons'
+import { moveId } from '../lib/listOrder'
 import { useApplets } from '../stores/useApplets'
 
 const props = defineProps<{
@@ -93,7 +96,7 @@ function globalView(id: GlobalTabId): TabView {
   return { id, label: view.label, icon: view.icon, testid: `titlebar-tab-${id}`, kbd: kbdFor(view.command) }
 }
 
-const globals = computed(() => props.tabs.map(globalView))
+const globals = computed(() => (preview.value ?? props.tabs).map(globalView))
 
 function tooltip(tab: TabView): string {
   return tab.kbd ? `${tab.label} (${tab.kbd})` : tab.label
@@ -157,41 +160,63 @@ function selectAdd(id: string): void {
 }
 
 // ── Reorder ─────────────────────────────────────────────────────────────
-const dragging = ref<GlobalTabId | null>(null)
-const dropBefore = ref<GlobalTabId | null | undefined>(undefined)
-const TAB_MIME = 'application/x-hive-titlebar-tab'
+// The drag target is the whole previewed order, so the tabs slide into place
+// while the pointer moves and the drop commits what the user already sees, as
+// in ProfileRail. A drop that ends where the strip started emits nothing.
+const drag = useDragReorder<GlobalTabId, GlobalTabId[]>({ mime: 'application/x-hive-titlebar-tab', onDrop: commit })
+const { dragging, target: preview } = drag
 
-function onDragStart(event: DragEvent, id: GlobalTabId): void {
-  dragging.value = id
-  event.dataTransfer?.setData(TAB_MIME, id)
-  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+function commit(id: GlobalTabId, order: GlobalTabId[]): void {
+  if (order.every((tab, at) => tab === props.tabs[at])) return
+  emit('move', id, order[order.indexOf(id) + 1] ?? null)
 }
 
-function onDragOver(event: DragEvent, index: number): void {
-  if (!dragging.value) return
+function overTab(event: DragEvent, id: GlobalTabId): void {
+  if (dragging.value === null) return
   event.preventDefault()
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const after = event.clientX > rect.left + rect.width / 2
-  dropBefore.value = after ? (props.tabs[index + 1] ?? null) : props.tabs[index]
+  const next = moveId([...(preview.value ?? props.tabs)], dragging.value, { id, edge: dropEdge(event, 'x') })
+  drag.over(event, (next as GlobalTabId[] | null) ?? preview.value)
 }
 
-function onDrop(): void {
-  if (dragging.value && dropBefore.value !== undefined) emit('move', dragging.value, dropBefore.value)
-  onDragEnd()
+// ── Context menu ────────────────────────────────────────────────────────
+const tabMenu = ref<GlobalTabId | null>(null)
+const tabMenuAnchor = shallowRef<HTMLElement | null>(null)
+
+function openTabMenu(event: MouseEvent, id: GlobalTabId): void {
+  tabMenuAnchor.value = event.currentTarget as HTMLElement
+  tabMenu.value = id
 }
 
-function onDragEnd(): void {
-  dragging.value = null
-  dropBefore.value = undefined
-}
+// A right-click is not a click, so AppMenu's click-outside misses it and a
+// second tab's menu would open beside this one. Capture runs first, so a
+// right-click on a tab still reopens the menu through openTabMenu.
+useEventListener(
+  () => (tabMenu.value ? window : null),
+  'contextmenu',
+  () => {
+    tabMenu.value = null
+  },
+  { capture: true },
+)
 
-function dropMarker(index: number): string {
-  if (!dragging.value || dropBefore.value === undefined) return ''
-  if (dropBefore.value === props.tabs[index])
-    return 'before:absolute before:-left-0.5 before:inset-y-1 before:w-0.5 before:rounded-full before:bg-accent'
-  if (dropBefore.value === null && index === props.tabs.length - 1)
-    return 'after:absolute after:-right-0.5 after:inset-y-1 after:w-0.5 after:rounded-full after:bg-accent'
-  return ''
+const tabMenuEntries = computed<MenuEntry[]>(() => [
+  { kind: 'action', id: 'close', label: 'Close tab', icon: IconX, testid: 'titlebar-tab-menu-close' },
+  {
+    kind: 'action',
+    id: 'close-others',
+    label: 'Close other tabs',
+    icon: IconCopyX,
+    disabled: props.tabs.length < 2,
+    testid: 'titlebar-tab-menu-close-others',
+  },
+])
+
+function selectTabMenu(action: string): void {
+  const id = tabMenu.value
+  tabMenu.value = null
+  if (!id) return
+  if (action === 'close') emit('close', id)
+  else if (action === 'close-others') for (const other of props.tabs) if (other !== id) emit('close', other)
 }
 
 // A middle click closes a tab, as it does in a browser.
@@ -273,28 +298,33 @@ const tabClass = (selected: boolean) => [
 
     <span v-if="globals.length" class="mx-1 h-4 w-px shrink-0 bg-strong" aria-hidden="true" />
 
-    <div
+    <!-- The strip takes the drop, not the tabs: a release in the gap between two
+         tabs still lands where the preview shows. -->
+    <TransitionGroup
+      name="titlebar-tab"
+      tag="div"
       class="-my-1 flex min-w-0 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none]"
       style="--wails-draggable: no-drag"
       data-testid="titlebar-global-tabs"
+      @dragover="dragging !== null && $event.preventDefault()"
+      @drop.prevent="drag.drop"
     >
       <div
-        v-for="(tab, index) in globals"
+        v-for="tab in globals"
         :key="tab.id"
         class="group relative flex h-7 items-center rounded-lg border"
         :class="[
           density.globalLabels ? 'min-w-[84px] max-w-44' : 'shrink-0',
           activeTab === tab.id ? SELECTED : UNSELECTED,
-          dragging === tab.id ? 'opacity-50' : '',
-          dropMarker(index),
+          dragging === tab.id ? 'opacity-40' : '',
         ]"
         draggable="true"
         :data-testid="`${tab.testid}-wrap`"
-        @dragstart="onDragStart($event, tab.id as GlobalTabId)"
-        @dragover="onDragOver($event, index)"
-        @drop="onDrop"
-        @dragend="onDragEnd"
+        @dragstart="drag.start($event, tab.id as GlobalTabId)"
+        @dragover="overTab($event, tab.id as GlobalTabId)"
+        @dragend="drag.end"
         @auxclick="onAuxClick($event, tab.id as GlobalTabId)"
+        @contextmenu.prevent="openTabMenu($event, tab.id as GlobalTabId)"
       >
         <button
           type="button"
@@ -327,7 +357,19 @@ const tabClass = (selected: boolean) => [
           <IconX class="size-3" />
         </button>
       </div>
-    </div>
+    </TransitionGroup>
+
+    <AppMenu
+      v-if="tabMenu"
+      :entries="tabMenuEntries"
+      :anchor="tabMenuAnchor"
+      :ignore="[tabMenuAnchor]"
+      align="start"
+      width="200px"
+      testid="titlebar-tab-menu"
+      @select="selectTabMenu"
+      @close="tabMenu = null"
+    />
 
     <div ref="addWrap" class="relative shrink-0" style="--wails-draggable: no-drag">
       <IconButton
@@ -354,3 +396,20 @@ const tabClass = (selected: boolean) => [
     </div>
   </div>
 </template>
+
+<style scoped>
+/* ProfileRail's timing. A closing tab drops out of flow at once so its
+   neighbours glide over; absolute would jump it to the start of the flex row. */
+.titlebar-tab-move {
+  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+.titlebar-tab-leave-active {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titlebar-tab-move {
+    transition: none;
+  }
+}
+</style>

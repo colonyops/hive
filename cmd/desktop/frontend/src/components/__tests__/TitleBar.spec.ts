@@ -244,4 +244,52 @@ describe('TitleBar', () => {
     expect(wrapper.emitted('manage-applets')).toHaveLength(1)
     wrapper.unmount()
   })
+
+  it('previews a dragged tab in its new place and commits that order on drop', async () => {
+    const wrapper = mount(TitleBar, {
+      props: { profileName: 'Triage', activeTab: 'inbox', tabs: ['drive', 'tasks', 'settings'] },
+    })
+    const tab = (id: string) => wrapper.get(`[data-testid="titlebar-tab-${id}-wrap"]`)
+    const order = () =>
+      wrapper
+        .findAll('[data-testid$="-wrap"]')
+        .map((el) => el.attributes('data-testid')?.replace(/^titlebar-tab-|-wrap$/g, ''))
+
+    await tab('drive').trigger('dragstart', { dataTransfer: { setData: () => {} } })
+    // jsdom rects are zero-sized, so any pointer lands on the after half.
+    await tab('tasks').trigger('dragover', { clientX: 1 })
+    expect(order()).toEqual(['tasks', 'drive', 'settings'])
+    expect(wrapper.emitted('move-tab')).toBeUndefined()
+
+    await wrapper.get('[data-testid="titlebar-global-tabs"]').trigger('drop')
+    expect(wrapper.emitted('move-tab')).toEqual([['drive', 'settings']])
+  })
+
+  it('emits nothing for a drop that leaves the order as it was', async () => {
+    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', activeTab: 'inbox', tabs: ['drive', 'tasks'] } })
+    await wrapper
+      .get('[data-testid="titlebar-tab-drive-wrap"]')
+      .trigger('dragstart', { dataTransfer: { setData: () => {} } })
+    await wrapper.get('[data-testid="titlebar-tab-drive-wrap"]').trigger('dragover', { clientX: 1 })
+    await wrapper.get('[data-testid="titlebar-global-tabs"]').trigger('drop')
+    expect(wrapper.emitted('move-tab')).toBeUndefined()
+  })
+
+  it('closes a tab, or every other tab, from its context menu', async () => {
+    const wrapper = mount(TitleBar, {
+      props: { profileName: 'Triage', activeTab: 'inbox', tabs: ['drive', 'tasks', 'settings'] },
+      attachTo: document.body,
+    })
+    const menu = () => document.querySelector('[data-testid="titlebar-tab-menu"]')
+    await wrapper.get('[data-testid="titlebar-tab-tasks-wrap"]').trigger('contextmenu')
+    ;(document.querySelector('[data-testid="titlebar-tab-menu-close"]') as HTMLElement).click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('close-tab')).toEqual([['tasks']])
+    expect(menu()).toBeNull()
+
+    await wrapper.get('[data-testid="titlebar-tab-tasks-wrap"]').trigger('contextmenu')
+    ;(document.querySelector('[data-testid="titlebar-tab-menu-close-others"]') as HTMLElement).click()
+    expect(wrapper.emitted('close-tab')?.slice(1)).toEqual([['drive'], ['settings']])
+    wrapper.unmount()
+  })
 })
