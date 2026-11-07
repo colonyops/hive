@@ -227,7 +227,6 @@ type SessionChanges struct {
 	Commit          string          `json:"commit"`
 	Commits         []SessionCommit `json:"commits"`
 	Files           []ChangedFile   `json:"files"`
-	Truncated       bool            `json:"truncated"`
 }
 
 func sessionChangesOf(c gitstatus.Changes) SessionChanges {
@@ -257,7 +256,6 @@ func sessionChangesOf(c gitstatus.Changes) SessionChanges {
 		Commit:          c.Commit,
 		Commits:         commits,
 		Files:           files,
-		Truncated:       c.Truncated,
 	}
 }
 

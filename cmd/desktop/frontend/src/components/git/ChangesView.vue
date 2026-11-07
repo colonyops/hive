@@ -1018,9 +1018,6 @@ function openInEditor(): void {
             @pick="pickFile"
             @open-editor="openInEditor"
           />
-          <p v-if="changes?.truncated" class="px-3 pb-3 text-xs text-text-3" data-testid="changes-truncated">
-            Showing the first {{ files.length }} files. Open the session in an editor to see the rest.
-          </p>
         </div>
       </aside>
       <div class="relative flex min-w-0 flex-1 flex-col">

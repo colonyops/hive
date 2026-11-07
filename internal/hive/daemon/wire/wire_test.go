@@ -29,7 +29,6 @@ func TestChangesSurviveTheWire(t *testing.T) {
 			{Path: "new.go", OldPath: "old.go", Status: git.FileStatusRenamed, Additions: 3, Deletions: 1, Stamp: "1-2"},
 			{Path: "image.png", Status: git.FileStatusModified, Binary: true},
 		},
-		Truncated: true,
 	}
 	assert.Equal(t, changes, wire.ChangesFromProto(wire.ChangesToProto(changes)))
 }
