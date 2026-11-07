@@ -27,6 +27,7 @@ import type { MenuEntry } from '@hive/ui/types/menu'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import ViewHeader from '@hive/ui/components/ui/ViewHeader.vue'
+import Spinner from '@hive/ui/components/ui/Spinner.vue'
 import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
 import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import ChangesLoading from './ChangesLoading.vue'
@@ -902,7 +903,8 @@ function openInEditor(): void {
         >
           <button
             type="button"
-            class="flex h-full cursor-pointer items-center gap-1.5 pr-2 pl-2 font-mono text-caption font-semibold hover:bg-accent/15 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+            class="flex h-full items-center gap-1.5 pr-2 pl-2 font-mono text-caption font-semibold focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+            :class="sending ? 'cursor-wait' : 'cursor-pointer hover:bg-accent/15'"
             :title="`${sendLabel} (${SEND_KEY})`"
             :aria-label="sendLabel"
             :aria-busy="sending || undefined"
@@ -910,7 +912,8 @@ function openInEditor(): void {
             data-testid="changes-send"
             @click="sendReview"
           >
-            <IconSend class="size-3.5" aria-hidden="true" />
+            <Spinner v-if="sending" data-testid="changes-send-pending" />
+            <IconSend v-else class="size-3.5" aria-hidden="true" />
             <span data-testid="changes-send-count">{{ sendCount }}</span>
           </button>
           <span class="h-4 w-px bg-accent/30" aria-hidden="true" />
