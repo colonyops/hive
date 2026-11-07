@@ -27,8 +27,18 @@ const htmlWhitespace = "\t\n\f\r "
 // still refuses one the document declares.
 //
 // The meta needs no attribute escaping: DocumentCSP holds no double quote.
+//
+// The frame does not inherit the app's scrollbar styles, so with a mouse
+// connected WKWebView draws a wide white scrollbar track down the document.
+// The thumb is a mid grey so it reads on light and dark pages, and the style
+// comes before the document's own so a page can still restyle its scrollbars.
 const injectedHead = `<base href="about:srcdoc">` +
-	`<meta http-equiv="Content-Security-Policy" content="` + DocumentCSP + `">`
+	`<meta http-equiv="Content-Security-Policy" content="` + DocumentCSP + `">` +
+	`<style>` + scrollbarStyle + `</style>`
+
+const scrollbarStyle = `::-webkit-scrollbar{width:9px;height:9px}` +
+	`::-webkit-scrollbar-thumb{background:rgb(128 128 128/45%);border:2px solid transparent;border-radius:6px;background-clip:content-box}` +
+	`::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}`
 
 // WrapDocument returns body with injectedHead (a base URL and a CSP meta) as
 // the first elements of <head>, adding <head>, and <html> when the document
