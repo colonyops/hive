@@ -912,14 +912,9 @@ function openInEditor(): void {
             data-testid="changes-send"
             @click="sendReview"
           >
-            <template v-if="sending">
-              <Spinner />
-              <span data-testid="changes-send-pending">Sending…</span>
-            </template>
-            <template v-else>
-              <IconSend class="size-3.5" aria-hidden="true" />
-              <span data-testid="changes-send-count">{{ sendCount }}</span>
-            </template>
+            <Spinner v-if="sending" data-testid="changes-send-pending" />
+            <IconSend v-else class="size-3.5" aria-hidden="true" />
+            <span data-testid="changes-send-count">{{ sendCount }}</span>
           </button>
           <span class="h-4 w-px bg-accent/30" aria-hidden="true" />
           <button

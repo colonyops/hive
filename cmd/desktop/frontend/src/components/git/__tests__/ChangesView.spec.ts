@@ -1141,8 +1141,8 @@ describe('ChangesView', () => {
     const button = wrapper.get(testid('changes-send'))
     expect(button.attributes('aria-busy')).toBe('true')
     expect(button.attributes('disabled')).toBeDefined()
-    expect(wrapper.get(testid('changes-send-pending')).text()).toBe('Sending…')
-    expect(wrapper.find(testid('changes-send-count')).exists()).toBe(false)
+    expect(wrapper.find(testid('changes-send-pending')).exists()).toBe(true)
+    expect(wrapper.get(testid('changes-send-count')).text()).toBe('1')
 
     finish()
     await flushPromises()
