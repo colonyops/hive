@@ -222,9 +222,7 @@ onMounted(async () => {
         <div class="mt-0.5 text-caption text-text-3">
           Install it from the update badge in the title bar — Hive relaunches into the new version.
         </div>
-        <p v-if="update.notes" class="mt-2 whitespace-pre-line text-small text-text-2" data-testid="about-update-notes">
-          {{ update.notes }}
-        </p>
+        <ReleaseNoteBody v-if="update.notes" :body="update.notes" class="mt-2" data-testid="about-update-notes" />
       </div>
     </section>
 
