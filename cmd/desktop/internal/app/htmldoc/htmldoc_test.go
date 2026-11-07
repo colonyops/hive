@@ -98,3 +98,11 @@ func TestWrapDocumentMetaPrecedesLeadingText(t *testing.T) {
 		})
 	}
 }
+
+// A document's own scrollbar style has to follow ours to win the cascade.
+func TestWrapDocumentScrollbarStylePrecedesTheDocuments(t *testing.T) {
+	got := WrapDocument([]byte(`<head><style>::-webkit-scrollbar{width:20px}</style></head>`))
+	ours := strings.Index(got, scrollbarStyle)
+	theirs := strings.Index(got, `::-webkit-scrollbar{width:20px}`)
+	assert.True(t, ours >= 0 && ours < theirs, "unexpected order: %q", got)
+}
