@@ -20,7 +20,7 @@ const open = useStorage(() => props.storageKey ?? 'hive.drive.section.open', tru
 </script>
 
 <template>
-  <div v-if="bare" class="flex flex-1 flex-col" :data-testid="`${testid}-body`">
+  <div v-if="bare" class="flex min-h-0 flex-1 flex-col" :data-testid="`${testid}-body`">
     <slot />
   </div>
   <section v-else class="drive-section flex flex-col" :data-testid="testid" :data-open="open ? 'true' : 'false'">
@@ -44,7 +44,7 @@ const open = useStorage(() => props.storageKey ?? 'hive.drive.section.open', tru
         <slot name="actions" />
       </div>
     </div>
-    <div v-show="open" class="drive-section-body flex flex-1 flex-col py-0.5" :data-testid="`${testid}-body`">
+    <div v-show="open" class="drive-section-body flex min-h-0 flex-1 flex-col py-0.5" :data-testid="`${testid}-body`">
       <slot />
     </div>
   </section>

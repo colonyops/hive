@@ -1007,9 +1007,10 @@ function openInEditor(): void {
             >{{ pendingAgent.length }}</span
           >
         </button>
-        <div class="hive-scroll min-h-0 flex-1 overflow-y-auto">
+        <div class="flex min-h-0 flex-1 flex-col">
           <GitTree
             ref="tree"
+            class="min-h-0 flex-1"
             :files="railFiles"
             :layout="layout"
             :selected="overviewOpen ? null : current"

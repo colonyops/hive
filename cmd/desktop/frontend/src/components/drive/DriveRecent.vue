@@ -34,6 +34,7 @@ const isSelected = (hit: HitWire) => hit.space.key === props.space && hit.entry.
   <DriveSection
     v-if="recent.length || recentError"
     title="Recent"
+    class="shrink-0"
     storage-key="hive.drive.recent.open"
     :testid="`${testid}-recent`"
   >
