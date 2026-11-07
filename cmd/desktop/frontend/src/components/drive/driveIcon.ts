@@ -9,6 +9,8 @@ import {
 
 interface IconifyIcon {
   body: string
+  left?: number
+  top?: number
   width?: number
   height?: number
 }
@@ -43,7 +45,7 @@ function component(name: string): Component | undefined {
   if (cached) return cached
   const icon = resolve(name)
   if (!icon) return undefined
-  const viewBox = `0 0 ${icon.width ?? 16} ${icon.height ?? 16}`
+  const viewBox = `${icon.left ?? 0} ${icon.top ?? 0} ${icon.width ?? 16} ${icon.height ?? 16}`
   const rendered: FunctionalComponent = () =>
     h('svg', { xmlns: 'http://www.w3.org/2000/svg', viewBox, width: '1em', height: '1em', innerHTML: icon.body })
   rendered.displayName = `MaterialIcon(${name})`

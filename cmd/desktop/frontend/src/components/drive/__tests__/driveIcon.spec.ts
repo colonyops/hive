@@ -1,3 +1,4 @@
+import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import type { Component } from 'vue'
 import { documentIcon, folderIcon } from '../driveIcon'
@@ -41,5 +42,10 @@ describe('driveIcon', () => {
     expect(nameOf(folderIcon('plans', false))).toBe('MaterialIcon(folder-tasks)')
     expect(nameOf(folderIcon('unnamed-thing', false))).toBe('MaterialIcon(folder-base)')
     expect(nameOf(folderIcon('unnamed-thing', true))).toBe('MaterialIcon(folder-base-open)')
+  })
+
+  it('keeps an icon’s viewBox offset, which some icons draw at negative coordinates', () => {
+    const svg = mount(documentIcon('data.json', '')).get('svg')
+    expect(svg.attributes('viewBox')).toBe('0 -960 960 960')
   })
 })
