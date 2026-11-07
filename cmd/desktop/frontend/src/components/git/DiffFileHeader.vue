@@ -54,7 +54,7 @@ const note = computed(() => {
       :class="open ? 'rotate-90' : ''"
       aria-hidden="true"
     />
-    <component :is="fileIcon.icon" class="size-3.5 shrink-0" :class="fileIcon.color" aria-hidden="true" />
+    <component :is="fileIcon" class="size-3.5 shrink-0" aria-hidden="true" />
     <span
       class="w-3 shrink-0 text-center font-mono text-body font-semibold"
       :class="status.color"

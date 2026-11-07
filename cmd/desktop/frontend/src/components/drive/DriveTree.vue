@@ -2,14 +2,14 @@
 // One space as a folder tree. Rows are the tree flattened through the fold
 // state, so the list stays a plain v-for and keyboard walk; folders come first
 // as the Go side sorts them.
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch, type Component } from 'vue'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconEllipsis from '~icons/lucide/ellipsis'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { useListKeyboardNav } from '@hive/ui/composables/useListKeyboardNav'
 import { useTreeExpansion } from '../../composables/useTreeExpansion'
-import { documentIcon, folderIcon, type DriveIcon } from './driveIcon'
+import { documentIcon, folderIcon } from './driveIcon'
 import { ancestorPaths, entryLabel, entryMatches } from '../../lib/drive'
 import { useDrive } from '../../stores/useDrive'
 import { useDriveActivity } from '../../stores/useDriveActivity'
@@ -144,7 +144,7 @@ function reveal(path: string): void {
   })
 }
 
-function rowIcon(entry: EntryWire): DriveIcon {
+function rowIcon(entry: EntryWire): Component {
   return entry.kind === 'dir' ? folderIcon(entry.name, expansion.expanded(entry)) : documentIcon(entry.name, entry.kind)
 }
 
@@ -373,12 +373,7 @@ defineExpose({ onKeydown, startRename, reveal })
         aria-hidden="true"
       />
       <span v-else class="size-3 shrink-0" aria-hidden="true" />
-      <component
-        :is="rowIcon(row.entry).icon"
-        class="size-3.5 shrink-0"
-        :class="rowIcon(row.entry).color"
-        aria-hidden="true"
-      />
+      <component :is="rowIcon(row.entry)" class="size-3.5 shrink-0" aria-hidden="true" />
       <template v-if="renaming === row.entry.path">
         <input
           ref="renameInput"

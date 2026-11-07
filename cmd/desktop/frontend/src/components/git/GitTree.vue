@@ -171,9 +171,8 @@ function onMenuSelect(id: string): void {
           aria-hidden="true"
         />
         <component
-          :is="folderIcon(gitFileName(row.label), expansion.expanded(row.key)).icon"
+          :is="folderIcon(gitFileName(row.label), expansion.expanded(row.key))"
           class="size-3.5 shrink-0"
-          :class="folderIcon(gitFileName(row.label), expansion.expanded(row.key)).color"
           aria-hidden="true"
         />
         <span class="min-w-0 flex-1 truncate">{{ row.label }}</span>
@@ -209,12 +208,7 @@ function onMenuSelect(id: string): void {
         "
       >
         <span class="size-3 shrink-0" aria-hidden="true" />
-        <component
-          :is="documentIcon(gitFileName(row.file.path), '').icon"
-          class="size-3.5 shrink-0"
-          :class="documentIcon(gitFileName(row.file.path), '').color"
-          aria-hidden="true"
-        />
+        <component :is="documentIcon(gitFileName(row.file.path), '')" class="size-3.5 shrink-0" aria-hidden="true" />
         <span class="min-w-0 truncate" :class="viewed?.has(row.file.path) ? 'text-text-4 line-through' : ''">{{
           gitFileName(row.file.path)
         }}</span>

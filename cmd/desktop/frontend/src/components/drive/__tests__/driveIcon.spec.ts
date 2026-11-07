@@ -1,32 +1,45 @@
 import { describe, expect, it } from 'vitest'
+import type { Component } from 'vue'
 import { documentIcon, folderIcon } from '../driveIcon'
 
+const nameOf = (icon: Component) => (icon as { displayName?: string }).displayName
+
 describe('driveIcon', () => {
-  it('picks a document icon by kind before extension, and falls back to a plain file', () => {
-    expect(documentIcon('notes.md', 'markdown').color).toBe('text-node-blue')
-    expect(documentIcon('page.html', 'html').color).toBe('text-node-orange')
-    expect(documentIcon('perf.canvas.json', 'file').color).toBe('text-severity-warning')
-    expect(documentIcon('data.JSON', 'file').color).toBe('text-severity-warning')
-    expect(documentIcon('notes.unknown', 'file').color).toBe('text-text-4')
-    expect(documentIcon('noextension', 'file').color).toBe('text-text-4')
-    expect(documentIcon('.hidden', 'file').color).toBe('text-text-4')
+  it('picks a document icon by drive kind before extension, and falls back to a plain file', () => {
+    expect(nameOf(documentIcon('notes.txt', 'markdown'))).toBe('MaterialIcon(markdown)')
+    expect(nameOf(documentIcon('page', 'html'))).toBe('MaterialIcon(html)')
+    expect(nameOf(documentIcon('data.JSON', 'file'))).toBe('MaterialIcon(json)')
+    expect(nameOf(documentIcon('notes.unknown', 'file'))).toBe('MaterialIcon(document)')
+    expect(nameOf(documentIcon('noextension', 'file'))).toBe('MaterialIcon(document)')
   })
 
   it('tells source files apart by language', () => {
-    expect(documentIcon('main.go', '').color).toBe('text-node-teal')
-    expect(documentIcon('App.vue', '').color).toBe('text-node-green')
-    expect(documentIcon('index.ts', '').icon).toBe(documentIcon('main.go', '').icon)
+    expect(nameOf(documentIcon('main.go', ''))).toBe('MaterialIcon(go)')
+    expect(nameOf(documentIcon('App.vue', ''))).toBe('MaterialIcon(vue)')
+    expect(nameOf(documentIcon('index.ts', ''))).toBe('MaterialIcon(typescript)')
   })
 
-  it('knows a file with no useful extension by its whole name, in any case', () => {
-    expect(documentIcon('Dockerfile', '').icon).not.toBe(documentIcon('x.unknown', '').icon)
-    expect(documentIcon('.env', '').icon).toBe(documentIcon('server.pem', '').icon)
-    expect(documentIcon('package-lock.json', '').icon).toBe(documentIcon('go.sum', '').icon)
-    expect(documentIcon('MAKEFILE', '').icon).toBe(documentIcon('config.yaml', '').icon)
+  it('prefers the longest known extension', () => {
+    expect(nameOf(documentIcon('model.spec.ts', ''))).toBe('MaterialIcon(test-ts)')
+    expect(nameOf(documentIcon('env.d.ts', ''))).toBe('MaterialIcon(typescript-def)')
   })
 
-  it('gives a named folder its own icon whether open or not, and any other folder an open and a closed one', () => {
-    expect(folderIcon('Plans', false)).toBe(folderIcon('plans', true))
-    expect(folderIcon('misc', false).icon).not.toBe(folderIcon('misc', true).icon)
+  it('falls back to the base icon when the collection lacks a variant', () => {
+    expect(nameOf(documentIcon('App.tsx', ''))).toBe('MaterialIcon(react_ts)')
+    expect(documentIcon('App.tsx', '')).toBe(documentIcon('App.tsx', ''))
+  })
+
+  it('knows a file by its whole name, in any case', () => {
+    expect(nameOf(documentIcon('Dockerfile', ''))).toBe('MaterialIcon(docker)')
+    expect(nameOf(documentIcon('go.mod', ''))).toBe('MaterialIcon(go-mod)')
+    expect(nameOf(documentIcon('MAKEFILE', ''))).toBe('MaterialIcon(makefile)')
+  })
+
+  it('gives a folder an open and a closed icon, named or not', () => {
+    expect(nameOf(folderIcon('src', false))).toBe('MaterialIcon(folder-src)')
+    expect(nameOf(folderIcon('SRC', true))).toBe('MaterialIcon(folder-src-open)')
+    expect(nameOf(folderIcon('plans', false))).toBe('MaterialIcon(folder-tasks)')
+    expect(nameOf(folderIcon('unnamed-thing', false))).toBe('MaterialIcon(folder-base)')
+    expect(nameOf(folderIcon('unnamed-thing', true))).toBe('MaterialIcon(folder-base-open)')
   })
 })
