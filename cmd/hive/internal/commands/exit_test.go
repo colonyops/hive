@@ -52,6 +52,7 @@ func TestBatchInvalidInputExitsNonZero(t *testing.T) {
 }
 
 func TestSessionInfoOutsideASessionFails(t *testing.T) {
+	t.Setenv("HIVE_AGENT_SESSION", "")
 	t.Chdir(t.TempDir())
 
 	t.Run("text", func(t *testing.T) {

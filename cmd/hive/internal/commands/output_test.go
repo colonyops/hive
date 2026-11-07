@@ -242,6 +242,7 @@ func TestAlwaysJSONCommandsReportErrorKinds(t *testing.T) {
 
 func TestPlainCommandReportsTextError(t *testing.T) {
 	a := outputTestApp(t)
+	t.Setenv("HIVE_AGENT_SESSION", "")
 	t.Chdir(t.TempDir())
 
 	r := runForOutputTest(t, a, "session", "info")
