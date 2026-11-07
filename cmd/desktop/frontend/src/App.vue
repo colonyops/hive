@@ -8,6 +8,9 @@ import ProfileSettingsView from './components/ProfileSettingsView.vue'
 import SettingsView from './components/SettingsView.vue'
 import SequenceHint from './components/SequenceHint.vue'
 import DrivePage from './components/drive/DrivePage.vue'
+import AppletPageTabs from './components/applets/AppletPageTabs.vue'
+import TasksView from './components/tasks/TasksView.vue'
+import ActionRunsView from './components/ActionRunsView.vue'
 import FlowsView from './pipeline/components/FlowsView.vue'
 import FeedHub from './app/FeedHub.vue'
 import AppDialogs from './app/AppDialogs.vue'
@@ -32,6 +35,7 @@ import { useWailsEvent } from './composables/useWailsEvent'
 import { useFlowsSession } from './pipeline/composables/useFlowsSession'
 import { useActivity } from './stores/useActivity'
 import { useApplets } from './stores/useApplets'
+import { useAppTabs } from './stores/useAppTabs'
 import { useJobs } from './stores/useJobs'
 import { kind } from './lib/itemPresentation'
 import { AGENTS_SIDEBAR, TERMINAL_SIDEBAR, type ModeSidebar } from './lib/modeSidebars'
@@ -66,12 +70,13 @@ const onboarding = useOnboarding(feed, github, router)
 const { active: onboardingActive, screen: onboardingScreen } = onboarding
 const shellLoaded = computed(() => (profilesLoaded.value || !!profilesError.value) && onboarding.loaded.value)
 const appMode = useAppMode(feed, nav, onboardingActive, shellLoaded)
-const { mode, terminalActive, agentsActive, hubActive, settingsActive, driveActive } = appMode
+const { mode, terminalActive, agentsActive, hubActive, settingsActive, driveActive, tasksActive, appletActive } =
+  appMode
 const { terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
 useModePreload(() => shellLoaded.value && !onboardingActive.value, appMode.prepareTerminal)
-const overlays = useHubOverlays(terminalActive)
-const { tasksOpen, activityOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
+const overlays = useHubOverlays()
+const { activityOpen } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
 const reveal = useReveal(nav, session, feed.showToast, appMode.openDrive)
 useHiveLinkClicks((message) => feed.showToast(message, { severity: 'error' }))
@@ -96,8 +101,6 @@ useGlobalKeymap({
   contextActive,
   paletteOpen: palette.open,
   activityOpen,
-  tasksOpen,
-  actionRunsOpen,
 })
 
 const { unseenCount: unseenActivity } = useActivity()
@@ -120,6 +123,7 @@ useWailsEvent('flows:updated', () => {
 })
 
 const applets = useApplets()
+const appTabs = useAppTabs()
 </script>
 
 <template>
@@ -128,8 +132,9 @@ const applets = useApplets()
       <TitleBar
         :profile-name="onboardingActive ? undefined : (activeProfile?.name ?? 'Loading')"
         :mode="mode"
+        :active-tab="appMode.activeTab.value"
+        :tabs="appTabs.tabs.value"
         :activity-active="activityOpen"
-        :action-runs-active="actionRunsOpen"
         :error-count="reveal.errorCount.value"
         :unseen-activity="unseenActivity"
         :jobs-active="jobsActive"
@@ -143,14 +148,16 @@ const applets = useApplets()
         :can-toggle-sidebar="appMode.canToggleSidebar.value"
         :preview-collapsed="appMode.previewToggleCollapsed.value"
         :can-toggle-preview="appMode.canTogglePreview.value"
-        @set-mode="appMode.setMode"
+        @activate-tab="appMode.activateTab"
+        @close-tab="appMode.closeTab"
+        @move-tab="appTabs.move"
+        @manage-applets="nav.selectApplicationSettingsSection('applets')"
         @back="router.back()"
         @forward="router.forward()"
         @open-error-node="reveal.openErrorNode"
         @open-activity="overlays.toggleActivity"
         @open-job-run="nav.openJobRun"
-        @open-job-log="overlays.openActionRuns"
-        @run-command="runCommand"
+        @open-job-log="appMode.openActionRuns"
         @open-update="update.openUpdate"
         @toggle-sidebar="appMode.toggleSidebar"
         @toggle-preview="appMode.togglePreview"
@@ -175,8 +182,8 @@ const applets = useApplets()
           :active="terminalActive"
           :sidebar-collapsed="terminalSidebarCollapsed"
           :drive="appMode.codeDrive.value"
-          :overlay-open="tasksOpen || activityOpen || actionRunsOpen || !!applets.open.value"
-          @session-repo-key="terminalSessionRepoKey = $event"
+          :overlay-open="activityOpen || !!applets.open.value"
+          @session-repo-key="appMode.codeSessionRepoKey.value = $event"
         />
         <AgentsMode
           v-if="agentsMounted"
@@ -188,7 +195,7 @@ const applets = useApplets()
           v-if="settingsActive"
           :active-category="nav.applicationSettingsSection.value"
           :known-feed-types="knownFeedTypes"
-          @close="appMode.closeSettings"
+          @close="appMode.closeTab('settings')"
           @select-category="nav.selectApplicationSettingsSection"
         />
         <DrivePage
@@ -196,10 +203,29 @@ const applets = useApplets()
           :scope="appMode.driveScope.value"
           :sidebar-collapsed="appMode.driveSidebarCollapsed.value"
           @update:scope="appMode.updateDriveScope"
-          @close="appMode.closeDrive"
+          @close="appMode.closeTab('drive')"
           @open-url="feed.openUrl"
           @setup="nav.selectApplicationSettingsSection('mcp')"
         />
+        <TasksView
+          v-if="tasksActive"
+          embedded
+          :keys-active="!palette.open.value && !activityOpen && !applets.open.value"
+        />
+        <ActionRunsView
+          v-if="appMode.runsActive.value"
+          :initial-run-id="appMode.runsRunId.value"
+          @select="appMode.selectActionRun"
+          @open-item="nav.openActionRunItem"
+        />
+        <div v-show="appletActive" class="flex min-h-0 min-w-0 flex-1 flex-col">
+          <AppletPageTabs
+            :tabs="appTabs.tabs.value"
+            :active-id="appMode.openAppletId.value"
+            :on-screen="appletActive && !palette.open.value && !activityOpen"
+            @close="appMode.closeTab"
+          />
+        </div>
         <!-- The profile rail stays mounted across the feed, flows, and profile
              settings pages, so the flows canvas never strands the user. -->
         <div v-if="hubActive" class="flex min-h-0 flex-1">
@@ -240,7 +266,7 @@ const applets = useApplets()
             :detail="itemDetail"
             :sidebar-collapsed="feedSidebarCollapsed"
             :github-connected="github.connected.value"
-            @open-run-log="overlays.openActionRuns"
+            @open-run-log="appMode.openActionRuns"
           />
         </div>
       </div>

@@ -10,6 +10,7 @@ import {
   type CommandContext,
 } from '../keybindings/catalog'
 import { useApplets } from '../stores/useApplets'
+import { useWailsEvent } from '../composables/useWailsEvent'
 import { isEditableTarget, isTerminalTarget } from '../lib/isEditableTarget'
 import { useViewKeys } from '../stores/useViewKeys'
 
@@ -18,8 +19,6 @@ export interface GlobalKeymapDeps {
   contextActive: (context: CommandContext) => boolean
   paletteOpen: Ref<boolean>
   activityOpen: Ref<boolean>
-  tasksOpen: Ref<boolean>
-  actionRunsOpen: Ref<boolean>
 }
 
 /**
@@ -28,41 +27,22 @@ export interface GlobalKeymapDeps {
  * its context, and an open overlay suppresses everything but the palette
  * toggle.
  */
-export function useGlobalKeymap({
-  runCommand,
-  contextActive,
-  paletteOpen,
-  activityOpen,
-  tasksOpen,
-  actionRunsOpen,
-}: GlobalKeymapDeps) {
+export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activityOpen }: GlobalKeymapDeps) {
   const kb = useKeybindings()
   const viewKeys = useViewKeys()
 
   // Every dialog and drawer registers in openModalCount while mounted. The
-  // palette and the hub overlays are not modals, so they are named here. Tasks
-  // and Action runs are split out so each one's toggle can close its own
-  // overlay while it stays suppressed under anything else.
+  // palette and Activity are not modals, so they are named here.
   const openModalCount = useOpenModalCount()
-  const toggledOverlays: Record<string, Ref<boolean>> = {
-    'tasks.toggle': tasksOpen,
-    'action-runs.toggle': actionRunsOpen,
-  }
   const applets = useApplets()
   const otherOverlayOpen = computed(() => paletteOpen.value || activityOpen.value || openModalCount.value > 0)
-  const anyOverlayOpen = computed(
-    () =>
-      otherOverlayOpen.value ||
-      applets.open.value !== null ||
-      Object.values(toggledOverlays).some((open) => open.value),
-  )
+  const anyOverlayOpen = computed(() => otherOverlayOpen.value || applets.open.value !== null)
 
+  // An applet pop-up takes its own commands as well as the chord that closes it:
+  // a panel still has a use for them.
   function closesOwnOverlay(id: string): boolean {
     if (otherOverlayOpen.value) return false
-    // Its own commands as well as the chord that closes it: a panel still has a use for them.
-    if (appletID(id) !== null) return appletID(id) === applets.open.value?.id
-    if (applets.open.value !== null || !toggledOverlays[id]?.value) return false
-    return Object.entries(toggledOverlays).every(([toggle, open]) => toggle === id || !open.value)
+    return appletID(id) !== null && appletID(id) === applets.open.value?.id
   }
 
   // One timer at a time, for a sequence prefix that is also a complete binding
@@ -84,16 +64,38 @@ export function useGlobalKeymap({
   // Changes is an overlay with a surface of its own, and a text size only changes how things read.
   const firesOverOverlays = (id: string): boolean => /\.text-size-(increase|decrease|reset)$/.test(id)
 
-  function dispatchIfActive(id: string): boolean {
+  // One ⌘W pressed in an applet frame arrives twice: as the keydown the frame forwards,
+  // and as the macOS menu's Close, which AppKit runs because the frame did not stop the
+  // key. Whichever lands first runs and the other is dropped. The match is on the press,
+  // not the command: the first delivery can change the route (closing a page opened from
+  // Code returns to Code), so the second would resolve to a different command. 400ms
+  // outlasts the menu's round trip through Go and is shorter than a deliberate second ⌘W.
+  const SAME_PRESS_MS = 400
+  let forwardedCloseAt = Number.NEGATIVE_INFINITY
+  let menuCloseAt = Number.NEGATIVE_INFINITY
+  const withinSamePress = (at: number) => performance.now() - at < SAME_PRESS_MS
+
+  function dispatchIfActive(id: string, event?: KeyboardEvent): boolean {
     const command = commandById.value.get(id)
     if (!command) return false
     // A different modal (report, new-profile, a confirm stacked inside Tasks)
     // still swallows an overlay's own toggle like any other command.
     if (anyOverlayOpen.value && id !== 'palette.toggle' && !closesOwnOverlay(id) && !firesOverOverlays(id)) return false
     if (!contextActive(command.context)) return false
+    // A frame's forwarded keydown is synthetic; a real one is the webview's own.
+    if (event && !event.isTrusted && comboFromEvent(event) === 'mod+w') {
+      if (withinSamePress(menuCloseAt)) return true
+      forwardedCloseAt = performance.now()
+    }
     runCommand(id)
     return true
   }
+
+  useWailsEvent('window:close-request', () => {
+    if (withinSamePress(forwardedCloseAt)) return
+    const id = kb.resolve('mod+w', applies)
+    if (id && dispatchIfActive(id)) menuCloseAt = performance.now()
+  })
 
   function armSequenceTimer(deferredCommandId: string): void {
     sequenceTimer = setTimeout(() => {
@@ -110,10 +112,11 @@ export function useGlobalKeymap({
   })
 
   // A command resolves only where it applies, so ⌘F reaches terminal.find over
-  // a pane and Focus search everywhere else.
+  // a pane and Focus search everywhere else, and ⌘W reaches Close window in Code
+  // and Close page everywhere else.
   function applies(id: string): boolean {
     const context = commandById.value.get(id)?.context
-    return context !== 'terminal-pane' || contextActive(context)
+    return !context || contextActive(context)
   }
 
   // Shared with the pane: a sequence step either dispatches, extends the
@@ -124,7 +127,7 @@ export function useGlobalKeymap({
     switch (transition.kind) {
       case 'run':
         resetSequence()
-        if (dispatchIfActive(transition.commandId)) e.preventDefault()
+        if (dispatchIfActive(transition.commandId, e)) e.preventDefault()
         return true
       case 'extend': {
         // Only a sequence's start is barred from editable fields and overlays;
@@ -192,7 +195,7 @@ export function useGlobalKeymap({
     if (!escaped) return
     if (applySequenceStep(e, escaped, true)) return
     const id = kb.resolve(escaped, applies)
-    if (id && dispatchIfActive(id)) e.preventDefault()
+    if (id && dispatchIfActive(id, e)) e.preventDefault()
   }
 
   function onKeydown(e: KeyboardEvent): void {
@@ -223,7 +226,7 @@ export function useGlobalKeymap({
 
     if (isEditableTarget(e.target) && !hasModifier) return
 
-    if (dispatchIfActive(id)) e.preventDefault()
+    if (dispatchIfActive(id, e)) e.preventDefault()
   }
 
   useEventListener(window, 'keydown', onKeydown)

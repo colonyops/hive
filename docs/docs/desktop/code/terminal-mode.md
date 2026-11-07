@@ -151,7 +151,7 @@ An agent in the session can arrange these tabs too, from MCP or from `hive dt`. 
 
 ## Tasks
 
-Open **Tasks** from the command palette or its configured shortcut, or add a **Tasks** tab to a session with its `+` button. It reads the same `hive hc` task tree used by coding agents and the CLI. See the hive CLI [task tracking guide](../../cli/getting-started/task-tracking.md) for the shared task model.
+Open the **Tasks** page from the title bar's **+** menu, the command palette, or its configured shortcut, or add a **Tasks** tab to a session with its `+` button. Opening it from a Code session picks that session's repository. The shortcut brings the page forward, and pressed again returns to where you were. It reads the same `hive hc` task tree used by coding agents and the CLI. See the hive CLI [task tracking guide](../../cli/getting-started/task-tracking.md) for the shared task model.
 
 Switch between two layouts at the top of the view:
 

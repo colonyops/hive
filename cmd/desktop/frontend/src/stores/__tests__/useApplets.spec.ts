@@ -27,6 +27,7 @@ const applet = (id: string, extra: object = {}) => ({
   ...extra,
 })
 const tabOnly = { surfaces: { tab: true, popup: null, titlebar: null } }
+const pageOnly = { surfaces: { tab: false, page: true, popup: null, titlebar: null } }
 const tabAndPopup = { surfaces: { tab: true, popup: {}, titlebar: null } }
 const titlebarOnly = { surfaces: { tab: false, popup: null, titlebar: { entry: 'bar.html', width: 28 } } }
 
@@ -154,6 +155,48 @@ describe('useApplets surfaces', () => {
     const applets = await loadedStore()
     expect(applets.sessionMenu.value.map((row) => row.id)).toEqual(['radio'])
     expect(applets.titlebarApplets.value.map((row) => row.id)).toEqual(['bar'])
+  })
+
+  it('lists only applets whose file names a page as global tabs, never in the session menu', async () => {
+    service.List.mockResolvedValue([
+      applet('board', pageOnly),
+      applet('radio', tabOnly),
+      applet('pop'),
+      applet('off-board', { ...pageOnly, enabled: false }),
+    ])
+    const applets = await loadedStore()
+    expect(applets.globalTabApplets.value.map((row) => row.id)).toEqual(['board'])
+    expect(applets.sessionMenu.value.map((row) => row.id)).toEqual(['radio'])
+  })
+
+  it('opens a page as a global tab, adding it to the strip, even with a session on screen', async () => {
+    service.List.mockResolvedValue([applet('board', pageOnly)])
+    const applets = await loadedStore()
+    const host = hostOf()
+    applets.setTabHost(host, true)
+    const opener = vi.fn((_id: string, add: boolean) => add)
+    applets.setPageTabOpener(opener)
+    applets.toggle('board')
+    expect(host.open).not.toHaveBeenCalled()
+    expect(opener).toHaveBeenLastCalledWith('board', true)
+  })
+
+  it('prefers the session tab for an applet with both, unless its global tab is already in the strip', async () => {
+    service.List.mockResolvedValue([
+      applet('both', { surfaces: { tab: true, page: true, popup: null, titlebar: null } }),
+    ])
+    const applets = await loadedStore()
+    const host = hostOf()
+    applets.setTabHost(host, true)
+    let inStrip = false
+    applets.setPageTabOpener((_id, add) => add || inStrip)
+    applets.toggle('both')
+    expect(host.open).toHaveBeenCalledWith('both')
+
+    host.open.mockClear()
+    inStrip = true
+    applets.toggle('both')
+    expect(host.open).not.toHaveBeenCalled()
   })
 
   it('opens an applet with a tab as a tab where a session area can show one', async () => {

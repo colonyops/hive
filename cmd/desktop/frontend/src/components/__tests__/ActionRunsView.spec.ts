@@ -107,6 +107,7 @@ describe('ActionRunsView', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="action-run-title"]').text()).toBe('Lint')
     expect(wrapper.find('[data-testid="action-run-open-item"]').exists()).toBe(false)
+    expect(wrapper.emitted('select')).toEqual([[11]])
 
     await wrapper.get('[data-testid="action-runs-list"]').trigger('keydown', { key: 'k' })
     await flushPromises()

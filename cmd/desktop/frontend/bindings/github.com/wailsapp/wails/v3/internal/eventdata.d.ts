@@ -35,6 +35,7 @@ declare module "@wailsio/runtime" {
             "terminal:files-dropped": wailsui$0.TerminalFilesDropped;
             "update:available": wailsui$0.UpdateInfo;
             "window:blur": boolean;
+            "window:close-request": string;
             "window:focus": boolean;
         }
     }

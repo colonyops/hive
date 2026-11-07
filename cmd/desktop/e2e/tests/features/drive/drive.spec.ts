@@ -14,8 +14,8 @@ test.describe('drive', { tag: [tag.drive] }, () => {
     await page.goto("/");
     await expect(page.getByTestId("feed-item").first()).toBeVisible();
 
-    await page.getByTestId("titlebar-menu").click();
-    await page.getByTestId("titlebar-menu-drive").click();
+    await page.getByTestId("titlebar-add-tab").click();
+    await page.getByTestId("titlebar-add-tab-drive").click();
     await expect(page.getByTestId("drive-page")).toBeVisible();
     await expect(page.getByTestId("feed-item")).toHaveCount(0);
     await expect(page).toHaveURL(/#\/drive/);

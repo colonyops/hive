@@ -41,3 +41,21 @@ func TestRemoveRolesTakesTheZoomItemsOutOfTheViewMenu(t *testing.T) {
 		require.False(t, view.ItemAt(i).IsSeparator() && view.ItemAt(i-1).IsSeparator(), "adjacent separators at %d", i)
 	}
 }
+
+func TestReplaceCloseItemDropsTheRoleForAPlainCloseOnTheSameChord(t *testing.T) {
+	menu := application.NewMenu()
+	menu.AddRole(application.FileMenu)
+	require.NotNil(t, menu.FindByRole(application.CloseWindow))
+
+	replaceCloseItem(menu, func() {})
+
+	require.Nil(t, menu.FindByRole(application.CloseWindow))
+	file := menu.FindByRole(application.FileMenu).GetSubmenu()
+	var found bool
+	for i := 0; file.ItemAt(i) != nil; i++ {
+		if file.ItemAt(i).Label() == "Close" {
+			found = true
+		}
+	}
+	require.True(t, found, "the File menu keeps a Close item")
+}

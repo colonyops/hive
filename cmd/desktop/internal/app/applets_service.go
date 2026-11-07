@@ -51,6 +51,7 @@ type Applet struct {
 // bar, whether that is on or off, because a switch can only turn on what has a page.
 type AppletSurfaces struct {
 	Tab          bool            `json:"tab"`
+	Page         bool            `json:"page"`
 	Popup        *AppletPopup    `json:"popup"`
 	Titlebar     *AppletTitlebar `json:"titlebar"`
 	TitlebarPage string          `json:"titlebarPage"`
@@ -299,7 +300,7 @@ func appletCommandsOf(a applets.Applet) []AppletCommand {
 }
 
 func appletSurfacesOf(a applets.Applet) AppletSurfaces {
-	out := AppletSurfaces{Tab: a.Surfaces.ShowsTab()}
+	out := AppletSurfaces{Tab: a.Surfaces.ShowsTab(), Page: a.Surfaces.ShowsPage()}
 	if a.Surfaces.ShowsPopup() {
 		out.Popup = &AppletPopup{Width: a.Surfaces.Popup.Width, Height: a.Surfaces.Popup.Height}
 	}

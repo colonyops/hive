@@ -4,9 +4,6 @@ import { computed, ref, watch } from 'vue'
 import IconActivity from '~icons/lucide/activity'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
-import IconInbox from '~icons/lucide/inbox'
-import IconCode from '~icons/lucide/code'
-import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPanelLeftClose from '~icons/lucide/panel-left-close'
 import IconPanelLeftOpen from '~icons/lucide/panel-left-open'
 import IconPanelRightClose from '~icons/lucide/panel-right-close'
@@ -16,61 +13,47 @@ import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconArrowUpCircle from '~icons/lucide/arrow-up-circle'
 import AppletTitlebarSlot from './applets/AppletTitlebarSlot.vue'
 import JobsPopover from './JobsPopover.vue'
-import TitleBarMenu from './TitleBarMenu.vue'
+import TitleBarTabs from './TitleBarTabs.vue'
+import type { AppMode, AppTabId, GlobalTabId } from '../lib/appTabs'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import Kbd from '@hive/ui/components/ui/Kbd.vue'
 import Spinner from '@hive/ui/components/ui/Spinner.vue'
-import SegmentedControl, { type SegmentedControlOption } from '@hive/ui/components/ui/SegmentedControl.vue'
 import { useApplets } from '../stores/useApplets'
 
 // One button grammar for the whole chrome, with a fixed slot per zone. The bar
-// is two clusters, not three centered columns — a window-centered palette sat
-// on top of the mode switch once three labeled modes existed:
-//   left   — structure then history: the sidebar (left-panel) toggle brackets
-//            the far edge, then feed-scoped back/forward, then the mode
-//            switch. The cluster owns all of the bar's slack, so the empty
-//            middle stays a drag surface. Below the labels breakpoint
-//            (min-[860px]) the mode segments drop their labels to icons.
-//   right  — status chips, then the pages of the applets that list the title bar, then
-//            the command-palette launcher (compact, width
-//            clamped to the window so it gives way before the tabs do), then
-//            app-level utilities (Activity, Views) as one icon run, then the
-//            preview (right-panel) toggle bracketing the far
-//            edge. Panel toggles are the only things at the extremes, so they
-//            read as the frame; new utilities append to the icon run.
-// Every control is one of two shapes: a 28px square icon button or a 28px
-// labeled/segmented button, both `rounded-lg` with a `chip` hover fill. Groups
-// are separated by margin, not rules — at four controls a hairline costs as
-// much attention as the control beside it.
-// Amber is reserved for things asking for attention — unread activity, an
-// available update. Selected state is a neutral `chip` fill, so the mode
-// switch (rarely used) cannot outshout them. It is also the only treatment
-// that clears contrast in all 14 themes: accent-on-accent-tint falls to
-// 1.8:1 in the light theme.
+// is two clusters:
+//   left   — the sidebar (left-panel) toggle brackets the far edge, then
+//            back/forward, then the tab strip: Inbox, Code and Chats pinned,
+//            the pages the user added, and the + that adds one. The strip
+//            scrolls when it runs out of room; the empty space after it stays
+//            a drag surface.
+//   right  — status chips, then the pages of the applets that list the title
+//            bar, then the command-palette launcher (a search field at its
+//            natural width, so the room goes to tabs and applets), then
+//            Activity, then the
+//            preview (right-panel) toggle bracketing the far edge.
+// Every control is a 28px square icon button or a 28px labeled button, both
+// `rounded-lg` with a `chip` hover fill. Amber is reserved for things asking
+// for attention — unread activity, an available update. A selected icon button
+// is a neutral `chip` fill: it is the only treatment that clears contrast in all
+// 14 themes. Tabs mark selection their own way (see TitleBarTabs).
 //
 // profileName is empty during onboarding: the bar shows no profile controls —
-// no toggle, no history, no palette.
-// mode is the app-level Inbox|Code|Chats switch. A segment is never disabled,
-// because an unavailable terminal or Chats area explains itself inside the
-// mode. Settings and Drive are areas too, but not peers of the three: they
-// are reached from the Views menu, and while one is open no segment is
-// selected.
+// no toggle, no history, no tabs, no palette.
 // errorCount (8d) is the count of the active flow's nodes whose last run
-// failed. activityActive marks the Activity icon on when the audit-log page is
-// open; unseenActivity (6d) is the number of events since it was last opened,
-// shown as a pulsing amber dot. sidebarCollapsed drives the panel-toggle glyph;
-// canToggleSidebar disables the toggle in views with no left panel (settings,
-// flows, onboarding). previewCollapsed/canTogglePreview are the same pair for
-// the right-hand pane — the detail preview in Inbox, the comments on the Drive
-// page. Code and Chats have none: Drive is a session tab there. updateAvailable
-// renders a click-to-install chip in the right cluster, independent of
+// failed. unseenActivity (6d) is the number of events since Activity was last
+// opened, shown as a pulsing amber dot. canToggleSidebar disables the toggle in
+// views with no left panel. previewCollapsed/canTogglePreview are the same pair
+// for the right-hand pane — the detail preview in Inbox, the comments on the
+// Drive page. updateAvailable renders a click-to-install chip independent of
 // profileName so it can show during onboarding too.
 const props = defineProps<{
   profileName?: string
-  mode?: 'hub' | 'terminal' | 'agents' | 'settings' | 'drive'
+  mode?: AppMode
+  activeTab?: AppTabId | null
+  tabs?: readonly GlobalTabId[]
   activityActive?: boolean
-  actionRunsActive?: boolean
   errorCount?: number
   unseenActivity?: number
   jobsActive?: boolean
@@ -86,14 +69,16 @@ const props = defineProps<{
   canTogglePreview?: boolean
 }>()
 const emit = defineEmits<{
-  'set-mode': [mode: 'hub' | 'terminal' | 'agents']
+  'activate-tab': [id: AppTabId]
+  'close-tab': [id: GlobalTabId]
+  'move-tab': [id: GlobalTabId, before: GlobalTabId | null]
+  'manage-applets': []
   back: []
   forward: []
   'open-error-node': []
   'open-activity': []
   'open-job-run': [commandId: number]
   'open-job-log': [commandId: number]
-  'run-command': [commandId: string]
   'open-update': []
   'toggle-sidebar': []
   'toggle-preview': []
@@ -103,21 +88,18 @@ const emit = defineEmits<{
 
 // macOS draws its native traffic lights over the top-left of this bar
 // (hidden-inset chrome configured in cmd/desktop/main.go). Pad the left cluster past
-// them and keep the height in sync with InvisibleTitleBarHeight (43) in
-// wailsui/ui.go so the controls stay vertically centered.
+// them and keep the height at the 43px of the compact toolbar (wailsui/ui.go),
+// which places the traffic lights, so the controls center beside them.
 //
 // Both heights are odd on purpose: the bottom border takes 1px, and an even
 // content box under it centers the 28px controls on a whole pixel. An odd one
 // centers them on a half pixel, which splits their margins 7/6 on a 1x display.
+// The eye reads the border as part of the bar's edge, though, so on macOS a 1px
+// top pad centers the controls in the full 43px. That lands on a half pixel,
+// which a Retina display draws as a whole device pixel.
 const isMac = navigator.userAgent.includes('Mac')
 const applets = useApplets()
 
-const modeOptions: SegmentedControlOption<'hub' | 'terminal' | 'agents'>[] = [
-  { value: 'hub', label: 'Inbox', title: 'Inbox' },
-  { value: 'terminal', label: 'Code', title: 'Code' },
-  { value: 'agents', label: 'Chats', title: 'Chats' },
-]
-const modeIcons = { hub: IconInbox, terminal: IconCode, agents: IconMessagesSquare }
 const rightPane = computed(() => (props.mode === 'drive' ? 'comments' : 'preview'))
 const jobsRoot = ref<HTMLElement | null>(null)
 const jobsOpen = ref(false)
@@ -144,12 +126,12 @@ function onTitlebarDblclick(event: MouseEvent): void {
 <template>
   <header
     class="relative flex shrink-0 items-center border-b border-border bg-raised"
-    :class="isMac ? 'h-[43px]' : 'h-[41px]'"
+    :class="isMac ? 'h-[43px] pt-px' : 'h-[41px]'"
     style="--wails-draggable: drag"
     data-testid="titlebar"
     @dblclick="onTitlebarDblclick"
   >
-    <!-- Left: panel toggle (frame) · feed history · mode switch -->
+    <!-- Left: panel toggle (frame) · history · tabs -->
     <div class="flex min-w-0 flex-1 items-center gap-1 pr-2" :class="isMac ? 'pl-[84px]' : 'pl-3'">
       <IconButton
         v-if="profileName"
@@ -184,29 +166,16 @@ function onTitlebarDblclick(event: MouseEvent): void {
           @click="emit('forward')"
         />
       </nav>
-      <!-- Segments size to their labels. An equal-width split padded the
-           shorter label out to match the longer, which read as a gap. Below
-           the labels breakpoint the spans hide and the icons carry the
-           segment (title keeps the name). -->
-      <SegmentedControl
+      <TitleBarTabs
         v-if="profileName"
-        variant="compact"
-        size="sm"
-        class="ml-1.5 shrink-0"
-        style="--wails-draggable: no-drag"
-        :model-value="mode === 'settings' || mode === 'drive' ? undefined : mode"
-        :options="modeOptions"
-        aria-label="App mode"
-        testid="titlebar-mode"
-        @update:model-value="emit('set-mode', $event)"
-      >
-        <template #option="{ option }">
-          <component :is="modeIcons[option.value]" class="size-3.5 shrink-0" /><span
-            class="hidden min-[860px]:inline"
-            >{{ option.label }}</span
-          >
-        </template>
-      </SegmentedControl>
+        class="ml-1.5"
+        :active-tab="activeTab ?? null"
+        :tabs="tabs ?? []"
+        @activate="emit('activate-tab', $event)"
+        @close="emit('close-tab', $event)"
+        @move="(id, before) => emit('move-tab', id, before)"
+        @manage-applets="emit('manage-applets')"
+      />
     </div>
 
     <!-- Right: status chips · palette launcher · Activity · preview toggle (frame) -->
@@ -273,15 +242,16 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <button
         v-if="profileName"
         type="button"
-        class="flex h-7 w-[clamp(9.375rem,22vw,16.25rem)] cursor-pointer items-center gap-2 rounded-md border border-border bg-app px-2.5 text-text-3 hover:border-strong hover:text-text-2"
+        class="flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-app pr-[5px] pl-2 text-text-3 transition-colors hover:border-strong hover:text-text-2"
         style="--wails-draggable: no-drag"
         aria-label="Open command palette"
+        :title="`Search (${isMac ? '⌘' : 'Ctrl+'}K)`"
         data-testid="titlebar-command-palette"
         @click="emit('open-palette')"
       >
         <IconSearch class="size-3.5 shrink-0" />
-        <span class="min-w-0 flex-1 truncate text-left text-small">Search…</span>
-        <Kbd variant="boxed" class="hidden shrink-0 min-[700px]:block">{{ isMac ? '⌘' : 'Ctrl ' }}K</Kbd>
+        <span class="pr-1 text-small">Search</span>
+        <Kbd variant="boxed" class="shrink-0" aria-hidden="true">{{ isMac ? '⌘K' : 'Ctrl K' }}</Kbd>
       </button>
       <!-- Activity: a 28px icon between the palette and the frame. An amber dot
            flags activity recorded since the page was last opened; amber fill
@@ -307,11 +277,6 @@ function onTitlebarDblclick(event: MouseEvent): void {
           data-testid="titlebar-activity-unseen"
         />
       </IconButton>
-      <TitleBarMenu
-        v-if="profileName"
-        :active="actionRunsActive || mode === 'settings' || mode === 'drive'"
-        @run-command="(commandId) => emit('run-command', commandId)"
-      />
       <IconButton
         v-if="profileName"
         :label="`${previewCollapsed ? 'Show' : 'Hide'} ${rightPane}`"

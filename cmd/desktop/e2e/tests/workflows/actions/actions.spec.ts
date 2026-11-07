@@ -92,8 +92,8 @@ test.describe('actions', { tag: [tag.actions, tag.critical] }, () => {
   })
 
   test('creates, edits, and deletes through the slideover and common confirmation dialog', async ({ page }) => {
-    await page.getByTestId('titlebar-menu').click()
-    await page.getByTestId('application-settings').click()
+    await page.getByTestId('titlebar-add-tab').click()
+    await page.getByTestId('titlebar-add-tab-settings').click()
     await page.getByTestId('settings-category-actions').click()
     await expect(page.getByTestId('actions-settings')).toBeVisible()
     await page.getByTestId('action-create').click()
@@ -123,8 +123,8 @@ test.describe('actions', { tag: [tag.actions, tag.critical] }, () => {
     const moved = action(state.runId, 'failed-shell')
     const first = action(state.runId, 'pr')
     const inDetail = [first, action(state.runId, 'message'), action(state.runId, 'template-launch')]
-    await page.getByTestId('titlebar-menu').click()
-    await page.getByTestId('application-settings').click()
+    await page.getByTestId('titlebar-add-tab').click()
+    await page.getByTestId('titlebar-add-tab-settings').click()
     await page.getByTestId('settings-category-actions').click()
     // rowIds snapshots through evaluateAll, which does not auto-wait, so one
     // visible row does not mean the list finished rendering — reading it here
@@ -153,8 +153,8 @@ test.describe('actions', { tag: [tag.actions, tag.critical] }, () => {
   test('external malformed actions keep last-good catalog and recover after repair', async ({ page }) => {
     const state = await smoke(page)
     const original = await readFile(state.actionsPath, 'utf8')
-    await page.getByTestId('titlebar-menu').click()
-    await page.getByTestId('application-settings').click()
+    await page.getByTestId('titlebar-add-tab').click()
+    await page.getByTestId('titlebar-add-tab-settings').click()
     await page.getByTestId('settings-category-actions').click()
     await expect(page.getByTestId('action-row-' + action(state.runId, 'pr'))).toBeVisible()
 
@@ -197,8 +197,8 @@ test.describe('actions', { tag: [tag.actions, tag.critical] }, () => {
     await expect(runLog).toContainText('failing-stdout')
     await expect(runLog).toContainText('failing-stderr')
     await expect(runLog).toContainText('Process exited with code')
-    await page.getByTestId('action-runs-close').click()
-    await expect(page.getByTestId('action-runs-overlay')).toBeHidden()
+    await page.getByTestId('titlebar-tab-runs-close').click()
+    await expect(page.getByTestId('action-runs-view')).toBeHidden()
     await expect.poll(async () => (await smoke(page)).outputCommands.find((command) => command.actionId === failing)).toEqual(expect.objectContaining({ status: 'failed', stdout: 'failing-stdout', stderr: 'failing-stderr', lastError: expect.stringContaining('shell: command failed'), result: null }))
     await page.reload()
     await select(page, 'pr2841')

@@ -1499,21 +1499,32 @@ opened in `AppletFrame`
 
 ### App modes
 
-The desktop shell has a fixed set of top-level modes — today Hub, Terminal,
-and Agents, labelled Inbox, Code and Chats in the title bar — that `App.vue`
-owns as a closed type (`'hub' | 'terminal' | 'agents'`) rather than a boolean
-per mode. The labels are UI copy and move on their own; the union, the routes
+The desktop shell has a fixed set of top-level modes — Hub, Terminal and
+Agents, labelled Inbox, Code and Chats in the title bar, plus one per page —
+held as a closed type (`AppMode` in `lib/appTabs.ts`) rather than a boolean
+per mode. `useAppMode` derives the mode from the route's tab, so the tab and
+the mode cannot disagree. The labels are UI copy and move on their own; the union, the routes
 and the component names do not follow them. Each mode's `*Active` computed is a
 sibling of the others (`mode.value === '<name>' && shellLoaded.value &&
 !onboardingActive.value`), never an `else` branch of a two-way toggle — a
 third mode written as `!terminalActive` would render underneath whichever
-mode it collided with. `TitleBar` carries the same closed union for its
-switch, and `router.ts`'s routes each render a null `ShellPage` component
+mode it collided with. `TitleBar` takes the same type for its `mode`, and
+`router.ts`'s routes each render a null `ShellPage` component
 because `App.vue`, not the router, owns what is on screen. A mode remembers
 the last route it was on (`lastTerminalPath`, `lastAgentsPath`) so returning
-to it resumes rather than resetting. Every segment renders once a profile
+to it resumes rather than resetting. Every tab renders once a profile
 exists; an unavailable mode explains itself inside the mode rather than
-disabling its segment (ADR terminal-agents-grafana-and-commands-graduate-out-of-experimental).
+disabling its tab (ADR terminal-agents-grafana-and-commands-graduate-out-of-experimental).
+
+The title bar shows the modes as a tab strip (`TitleBarTabs`). Inbox, Code
+and Chats are pinned tabs. Drive, Tasks, Action runs, Settings and applets are global tabs
+the user adds, reorders and closes; `stores/useAppTabs` holds their order in
+local storage and the order of visits. Every tab is a route, and
+`lib/appTabs.ts` maps a route to its tab, so the route is still the one source
+of what is on screen: navigating to a global tab's route adds it to the
+strip, and closing the tab in front returns to the last tab visited. An
+applet tab mounts its frame on first view and is then only hidden, for the
+same reason Code and Chats are.
 
 The routes are internal. Anything outside the app addresses a place with a
 `hive://` URL from `internal/domain/deeplink`, and `useReveal` is the one

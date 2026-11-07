@@ -12,6 +12,7 @@ import (
 // Names of the keys under surfaces: in applet.yaml.
 const (
 	SurfaceTab      = "tab"
+	SurfacePage     = "page"
 	SurfacePopup    = "popup"
 	SurfaceTitlebar = "titlebar"
 )
@@ -20,7 +21,7 @@ const (
 // Off is enabled: false rather than a removed key, so a pop-up keeps its size and a title
 // bar keeps its page for when the surface comes back.
 func SetSurface(raw []byte, surface string, on bool) ([]byte, error) {
-	if !slices.Contains([]string{SurfaceTab, SurfacePopup, SurfaceTitlebar}, surface) {
+	if !slices.Contains([]string{SurfaceTab, SurfacePage, SurfacePopup, SurfaceTitlebar}, surface) {
 		return nil, fmt.Errorf("no surface %q", surface)
 	}
 	var doc yaml.Node

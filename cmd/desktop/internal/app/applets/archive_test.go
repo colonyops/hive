@@ -197,6 +197,7 @@ func TestUnpackRefusesHostileFiles(t *testing.T) {
 		"no applet.yaml":         {[]zipEntry{manifestEntry("radio"), {name: "files/index.html", body: "x"}}, "no applet.yaml"},
 		"yaml wrong shape":       {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: archiveYAML + "surfaces: {titlebar: nope}\n"}}, "not valid"},
 		"missing entry page":     {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: archiveYAML}}, "no page"},
+		"page with no entry":     {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: archiveYAML + "surfaces: {page: {}}\n"}}, "no page"},
 		"long title":             {[]zipEntry{manifestEntry("radio"), {name: "files/applet.yaml", body: "version: 1\ntitle: " + strings.Repeat("t", maxArchiveTitleRunes+1) + "\n"}, {name: "files/index.html"}}, "title is longer"},
 	} {
 		t.Run(name, func(t *testing.T) {

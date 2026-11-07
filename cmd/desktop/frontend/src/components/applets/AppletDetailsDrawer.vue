@@ -38,7 +38,10 @@ const keybindings = useKeybindings()
 const { revealPath } = useSystemSettings()
 
 const icon = computed(() => launcherIconComponent(props.applet.icon))
-const opens = computed(() => !props.applet.runnable || props.applet.surfaces.tab || !!props.applet.surfaces.popup)
+const opens = computed(
+  () =>
+    !props.applet.runnable || props.applet.surfaces.tab || props.applet.surfaces.page || !!props.applet.surfaces.popup,
+)
 const folder = computed(() => `${props.dir}/${props.applet.id}`)
 
 const commands = computed(() =>

@@ -30,6 +30,7 @@ exports[`what a page can name > keeps every command id 1`] = `
   "interface.text-size-decrease",
   "interface.text-size-increase",
   "interface.text-size-reset",
+  "page.close",
   "palette.drive",
   "palette.keys",
   "palette.toggle",
@@ -86,11 +87,14 @@ exports[`what a page can name > keeps every route 1`] = `
 [
   "/",
   "/:pathMatch(.*)*",
+  "/applets/:id",
   "/drive",
   "/feed/:profileId?",
   "/flows/:profileId",
   "/profiles/:profileId/settings/:section(general|danger)?",
+  "/runs",
   "/settings/:section(general|appearance|drive|notifications|menubar|keybindings|applets|integrations|actions|terminal|launchers|hive|servers|mcp|agents|system|observability|about)?",
+  "/tasks",
   "/terminal/:slug?",
   "/workspaces/:workspace?",
 ]

@@ -258,7 +258,7 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     // Asked of the host because a page reached by a link in the frame cannot read its
     // surface. A tab leaves the key alone: it sits beside terminals and has a close button.
     escape() {
-      if (options.surface() !== 'tab') options.close()
+      if (options.surface() !== 'tab' && options.surface() !== 'page') options.close()
     },
     open: () => applets.runCommand(appletCommandID(id)),
     dropdown(args) {

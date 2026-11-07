@@ -7,6 +7,11 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   SetKeybindingSettings: vi.fn().mockResolvedValue(undefined),
 }))
 
+const wailsHandlers = vi.hoisted(() => new Map<string, () => void>())
+vi.mock('../../composables/useWailsEvent', () => ({
+  useWailsEvent: (name: string, handler: () => void) => wailsHandlers.set(name, handler),
+}))
+
 // The keymap, the pending sequence, and the modal registry are module
 // singletons, so each test imports them fresh.
 type Modules = {
@@ -22,8 +27,6 @@ const runCommand = vi.fn<(id: string) => void>()
 const activeContexts = new Set<CommandContext>()
 const paletteOpen = ref(false)
 const activityOpen = ref(false)
-const tasksOpen = ref(false)
-const actionRunsOpen = ref(false)
 
 beforeEach(async () => {
   vi.resetModules()
@@ -43,8 +46,6 @@ beforeEach(async () => {
   activeContexts.add('global')
   paletteOpen.value = false
   activityOpen.value = false
-  tasksOpen.value = false
-  actionRunsOpen.value = false
   scope = effectScope()
   scope.run(() =>
     m.useGlobalKeymap({
@@ -52,14 +53,13 @@ beforeEach(async () => {
       contextActive: (context) => activeContexts.has(context),
       paletteOpen,
       activityOpen,
-      tasksOpen,
-      actionRunsOpen,
     }),
   )
 })
 
 afterEach(() => {
   scope.stop()
+  vi.restoreAllMocks()
   vi.useRealTimers()
   document.body.innerHTML = ''
 })
@@ -127,8 +127,6 @@ describe('useGlobalKeymap overlay gate', () => {
   it.each([
     ['the palette', () => (paletteOpen.value = true)],
     ['Activity', () => (activityOpen.value = true)],
-    ['Tasks', () => (tasksOpen.value = true)],
-    ['Action runs', () => (actionRunsOpen.value = true)],
     ['a modal', () => void openModal()],
   ])('suppresses everything but the palette toggle while %s is open', (_name, open) => {
     activeContexts.add('feed')
@@ -141,39 +139,15 @@ describe('useGlobalKeymap overlay gate', () => {
     expect(runCommand).toHaveBeenCalledWith('palette.toggle')
   })
 
-  it('lets tasks.toggle close the Tasks overlay when nothing else is open', () => {
-    tasksOpen.value = true
-    press('t', tasksChord)
-    expect(runCommand).toHaveBeenCalledWith('tasks.toggle')
-  })
-
-  it.each([
-    ['the palette', () => (paletteOpen.value = true)],
-    ['Activity', () => (activityOpen.value = true)],
-    ['a modal stacked over it', () => void openModal()],
-  ])('swallows tasks.toggle over Tasks while %s is also open', (_name, open) => {
-    tasksOpen.value = true
-    open()
-
-    press('t', tasksChord)
-    expect(runCommand).not.toHaveBeenCalled()
-  })
-
   // The Drive is a page, not an overlay: its chord goes through the ordinary
   // gate, so it is swallowed under any overlay and runs everywhere else.
-  it('runs canvas.toggle with no overlay open and swallows it under Tasks', () => {
+  it('runs canvas.toggle with no overlay open and swallows it under Activity', () => {
     press('p', driveChord)
     expect(runCommand).toHaveBeenCalledWith('canvas.toggle')
 
     runCommand.mockReset()
-    tasksOpen.value = true
+    activityOpen.value = true
     press('p', driveChord)
-    expect(runCommand).not.toHaveBeenCalled()
-  })
-
-  it("keeps one overlay's toggle from opening over the other", () => {
-    actionRunsOpen.value = true
-    press('t', tasksChord)
     expect(runCommand).not.toHaveBeenCalled()
   })
 
@@ -399,5 +373,60 @@ describe('useGlobalKeymap over a focused terminal', () => {
     activityOpen.value = true
     press('t', tasksChord, pane)
     expect(runCommand).not.toHaveBeenCalled()
+  })
+})
+
+describe('useGlobalKeymap ⌘W', () => {
+  const closeChord = { metaKey: true }
+
+  it('closes the terminal window in Code and the tab in front everywhere else', () => {
+    press('w', closeChord)
+    expect(runCommand).toHaveBeenLastCalledWith('page.close')
+
+    activeContexts.add('terminal')
+    press('w', closeChord)
+    expect(runCommand).toHaveBeenLastCalledWith('terminal.close-window')
+  })
+
+  it('runs the menu Close as the chord, once per press when a frame also forwards it', () => {
+    wailsHandlers.get('window:close-request')?.()
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('page.close')
+
+    // The forwarded keydown of the same press lands after the menu.
+    press('w', closeChord)
+    expect(runCommand).toHaveBeenCalledOnce()
+  })
+
+  it('drops the menu Close when the forwarded keydown already ran', () => {
+    press('w', closeChord)
+    wailsHandlers.get('window:close-request')?.()
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('page.close')
+  })
+
+  it('drops the second delivery when the first one returned to Code', () => {
+    press('w', closeChord)
+    activeContexts.add('terminal')
+    wailsHandlers.get('window:close-request')?.()
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('page.close')
+
+    activeContexts.delete('terminal')
+    vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 1000)
+    runCommand.mockReset()
+    wailsHandlers.get('window:close-request')?.()
+    activeContexts.add('terminal')
+    press('w', closeChord)
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('page.close')
+  })
+
+  it('runs a second press that comes after the same-press window', () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1000)
+    press('w', closeChord)
+    now.mockReturnValue(1401)
+    wailsHandlers.get('window:close-request')?.()
+    expect(runCommand).toHaveBeenCalledTimes(2)
+
+    now.mockReturnValue(1802)
+    press('w', closeChord)
+    expect(runCommand).toHaveBeenCalledTimes(3)
   })
 })

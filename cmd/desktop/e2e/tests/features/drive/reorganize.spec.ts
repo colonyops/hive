@@ -9,8 +9,8 @@ const plan = 'plans/2026-10-11-plan.md'
 async function openRepoSpace(page: Page): Promise<void> {
   await page.goto('/')
   await expect(page.getByTestId('feed-item').first()).toBeVisible()
-  await page.getByTestId('titlebar-menu').click()
-  await page.getByTestId('titlebar-menu-drive').click()
+  await page.getByTestId('titlebar-add-tab').click()
+  await page.getByTestId('titlebar-add-tab-drive').click()
   await page.getByTestId('drive-page-space').click()
   await page.getByTestId('drive-page-space-option-e2e/repo').click()
   await expect(page.getByTestId('drive-page-row-plans')).toBeVisible()

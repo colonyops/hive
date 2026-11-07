@@ -3,7 +3,13 @@ import {
   KeybindingSettings as GetKeybindingSettings,
   SetKeybindingSettings,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
-import { commandPiercesPane, commands, defaultCombosFor, launcherActionID } from '../keybindings/catalog'
+import {
+  commandPiercesPane,
+  commands,
+  defaultCombosFor,
+  launcherActionID,
+  type BindableCommand,
+} from '../keybindings/catalog'
 import { createLogger } from '../lib/log'
 
 const log = createLogger('keybindings')
@@ -453,14 +459,14 @@ const effectiveBindings = computed<Record<string, string[]>>(() => {
 // decides between commands that share a binding (the conflict is surfaced in
 // the settings UI), except that a `terminal-pane` command goes first: it shares
 // its binding with a broader command on purpose (⌘F with Focus search) and has
-// to win while a pane has focus. A multi-step binding is keyed by its full
+// to win while a pane has focus, and a `yieldsBinding` command goes last, so any
+// other command whose context holds takes the binding first. A multi-step binding is keyed by its full
 // space-joined string, so this alone cannot match a sequence's first step —
 // that is what keeps `resolve` from firing early on `g` while `g i` is pending.
 const exactBindings = computed<Map<string, string[]>>(() => {
   const map = new Map<string, string[]>()
-  const ordered = [...commands.value].sort(
-    (a, b) => Number(b.context === 'terminal-pane') - Number(a.context === 'terminal-pane'),
-  )
+  const rank = (command: BindableCommand) => (command.context === 'terminal-pane' ? 0 : command.yieldsBinding ? 2 : 1)
+  const ordered = [...commands.value].sort((a, b) => rank(a) - rank(b))
   for (const command of ordered) {
     for (const binding of effectiveBindings.value[command.id]) {
       const ids = map.get(binding)
@@ -551,10 +557,12 @@ function isOverridden(id: string): boolean {
 function conflicts(binding: string, excludeId?: string): string[] {
   const canon = canonicalizeBinding(binding)
   if (!canon) return []
-  const ownContext = commands.value.find((command) => command.id === excludeId)?.context
+  const own = commands.value.find((command) => command.id === excludeId)
+  const ownContext = own?.context
   const ids: string[] = []
   for (const command of commands.value) {
     if (command.id === excludeId) continue
+    if (own?.yieldsBinding || command.yieldsBinding) continue
     if (ownContext && (ownContext === 'terminal-pane') !== (command.context === 'terminal-pane')) continue
     if (effectiveBindings.value[command.id].includes(canon)) ids.push(command.id)
   }

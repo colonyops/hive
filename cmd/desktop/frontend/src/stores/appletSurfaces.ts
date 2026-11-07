@@ -1,14 +1,21 @@
 import type { Component } from 'vue'
 import IconAppWindow from '~icons/lucide/app-window'
 import IconPanelTop from '~icons/lucide/panel-top'
+import IconPanelsTopLeft from '~icons/lucide/panels-top-left'
 import IconSquareStack from '~icons/lucide/square-stack'
 
-export type AppletSurface = 'tab' | 'popup' | 'titlebar' | 'dropdown'
+export type AppletSurface = 'tab' | 'page' | 'popup' | 'titlebar' | 'dropdown'
 
 /** What applet.yaml says about where an applet shows, read from an Applet or an import preview. */
 interface DeclaresSurfaces {
   entry: string
-  surfaces: { tab: boolean; popup: object | null; titlebar: { entry: string } | null; titlebarPage?: string }
+  surfaces: {
+    tab: boolean
+    page: boolean
+    popup: object | null
+    titlebar: { entry: string } | null
+    titlebarPage?: string
+  }
 }
 
 // A surface an applet's file can name under surfaces:.
@@ -53,6 +60,21 @@ export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
       icon: IconSquareStack,
       description: "In a session's + menu. Opens as a tab beside the session's terminals.",
       page: (applet) => (applet.surfaces.tab ? applet.entry : undefined),
+      available: () => true,
+    },
+  },
+  // A tab of its own in the title bar, app-wide rather than in a session. Like a session tab
+  // it has a close button and leaves Escape to the page.
+  page: {
+    panel: true,
+    persistent: false,
+    takesFocus: false,
+    escapeCloses: false,
+    declared: {
+      label: 'Page',
+      icon: IconPanelsTopLeft,
+      description: "In the title bar's + menu. Opens as a page beside Inbox, Code and Chats, in no session.",
+      page: (applet) => (applet.surfaces.page ? applet.entry : undefined),
       available: () => true,
     },
   },

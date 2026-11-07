@@ -29,6 +29,7 @@ import { applicationSettingsSections, createAppRouter } from '../router'
 import TerminalMode from '../components/TerminalMode.vue'
 import DrivePage from '../components/drive/DrivePage.vue'
 import SettingsView from '../components/SettingsView.vue'
+import ActionRunsView from '../components/ActionRunsView.vue'
 import { viewTab, withDocsScope, type SessionViewKind } from '../components/terminal/panelViews'
 import { newPanelLayout, openTab } from '../lib/panelLayout'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
@@ -129,6 +130,7 @@ const mocks = vi.hoisted(() => ({
   // runtime
   On: vi.fn().mockReturnValue(() => {}),
   Hide: vi.fn(),
+  Close: vi.fn(),
   // A test installs a fake Agents client here; null keeps the real one.
   agentsClient: null as AgentWorkspacesClient | null,
 }))
@@ -290,7 +292,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
 
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
-  Window: { Hide: mocks.Hide },
+  Window: { Hide: mocks.Hide, Close: mocks.Close },
   Call: { ByID: vi.fn() },
 }))
 
@@ -379,8 +381,8 @@ function terminalOnScreen(wrapper: VueWrapper): boolean {
 
 // Same shape as terminalOnScreen: the Agents area is mount-once/v-show too.
 async function openApplicationSettings(wrapper: VueWrapper): Promise<void> {
-  await wrapper.get('[data-testid="titlebar-menu"]').trigger('click')
-  await wrapper.get('[data-testid="application-settings"]').trigger('click')
+  await wrapper.get('[data-testid="titlebar-add-tab"]').trigger('click')
+  await wrapper.get('[data-testid="titlebar-add-tab-settings"]').trigger('click')
 }
 
 function agentsOnScreen(wrapper: VueWrapper): boolean {
@@ -1546,25 +1548,19 @@ describe('App', () => {
       wrapper.unmount()
     })
 
-    // The accepted asymmetry (ADR keybindings-are-chord-sequences-not-a-leader-key):
-    // a sequence cannot start while an overlay owns the screen, so 'g' then 't'
-    // never reaches tasks.toggle once Tasks is already open — only the chord,
-    // which is an ordinary single-combo dispatch, can close it again.
-    it('pins the overlay-toggle asymmetry: g t cannot close Tasks, mod+shift+t can', async () => {
-      const { wrapper } = await mountAppWithRouter()
+    // Tasks is a tab, not an overlay, so a sequence still starts while it is in
+    // front: 'g' then 't' steps back from it as the chord does.
+    it('toggles the Tasks tab with g t as well as mod+shift+t', async () => {
+      const { wrapper, router } = await mountAppWithRouter()
 
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
       await flushPromises()
-      expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
+      expect(router.currentRoute.value.name).toBe('tasks')
 
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g' }))
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 't' }))
       await flushPromises()
-      expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull() // still open
-
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
-      await flushPromises()
-      expect(document.querySelector('[data-testid="tasks-overlay"]')).toBeNull() // the chord does close it
+      expect(router.currentRoute.value.name).toBe('feed')
 
       wrapper.unmount()
     })
@@ -3268,19 +3264,66 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('opens the tasks overlay over the current route without navigating, and closes it on Escape', async () => {
+  it('opens Tasks as a title-bar tab, and closing the tab returns to where it was opened from', async () => {
     const { wrapper, router } = await mountAppWithRouter()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
-    expect(router.currentRoute.value.name).toBe('feed')
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
-    expect(document.querySelector('[data-testid="tasks-view"]')).not.toBeNull()
+    expect(router.currentRoute.value.name).toBe('tasks')
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).not.toBeNull()
+    expect(wrapper.get('[data-testid="titlebar-tab-tasks"]').attributes('aria-selected')).toBe('true')
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.get('[data-testid="titlebar-tab-tasks-close"]').trigger('click')
     await flushPromises()
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).toBeNull()
     expect(router.currentRoute.value.name).toBe('feed')
+    expect(wrapper.find('[data-testid="titlebar-tab-tasks"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('closes only the global tab in front on ⌘W', async () => {
+    mocks.Close.mockClear()
+    const { wrapper, router } = await mountAppWithRouter()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('tasks')
+
+    const close = new KeyboardEvent('keydown', { key: 'w', metaKey: true, cancelable: true })
+    window.dispatchEvent(close)
+    await flushPromises()
+    expect(close.defaultPrevented).toBe(true)
+    expect(router.currentRoute.value.name).toBe('feed')
+    expect(wrapper.find('[data-testid="titlebar-tab-tasks"]').exists()).toBe(false)
+    expect(mocks.Close).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('closes the window on ⌘W with a pinned tab in front', async () => {
+    mocks.Close.mockClear()
+    const { wrapper, router } = await mountAppWithRouter()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', metaKey: true, cancelable: true }))
+    await flushPromises()
+    expect(mocks.Close).toHaveBeenCalledOnce()
+    expect(router.currentRoute.value.name).toBe('feed')
+
+    wrapper.unmount()
+  })
+
+  it('adds a page from the + menu and keeps the strip across a remount', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+
+    await wrapper.get('[data-testid="titlebar-add-tab"]').trigger('click')
+    await wrapper.get('[data-testid="titlebar-add-tab-drive"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('drive')
+
+    await wrapper.get('[data-testid="titlebar-mode-hub"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('feed')
+    expect(wrapper.get('[data-testid="titlebar-tab-drive"]').attributes('aria-selected')).toBe('false')
+    expect(JSON.parse(localStorage.getItem('hive.titlebar.tabs') ?? '[]')).toEqual(['drive'])
 
     wrapper.unmount()
   })
@@ -3293,22 +3336,23 @@ describe('App', () => {
     const matches = results.value.filter((cmd) => cmd.id === 'tasks.toggle' || cmd.id === 'view:tasks')
     expect(matches).toHaveLength(1)
     expect(matches[0].id).toBe('tasks.toggle')
-    expect(matches[0].title).toBe('Toggle Tasks')
+    expect(matches[0].title).toBe('Open Tasks page')
     expect(matches[0].hint).toBe(formatCombo('mod+shift+t'))
 
     wrapper.unmount()
   })
 
-  it('toggles the tasks overlay open and closed with mod+shift+T', async () => {
+  it('brings the Tasks tab forward and steps back from it with mod+shift+T, keeping the tab', async () => {
     const { wrapper } = await mountAppWithRouter()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).not.toBeNull()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).toBeNull()
+    expect(wrapper.find('[data-testid="titlebar-tab-tasks"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
@@ -3382,35 +3426,64 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('opens action runs from its palette row, its g l sequence, and the title bar menu', async () => {
-    const { wrapper } = await mountAppWithRouter()
-    const overlay = () => document.querySelector('[data-testid="action-runs-overlay"]')
+  it('opens Action runs as a tab from its palette row, its g l sequence, and the + menu', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    const shown = () =>
+      router.currentRoute.value.name === 'action-runs' && wrapper.find('[data-testid="action-runs-view"]').exists()
     const { results, query } = useCommandPalette()
     query.value = ''
     const row = results.value.find((cmd) => cmd.id === 'action-runs.toggle')
-    expect(row?.title).toBe('Toggle Action runs')
+    expect(row?.title).toBe('Open Action runs page')
     expect(row?.hint).toBe(formatCombo('g l'))
 
     await row?.run()
     await flushPromises()
-    expect(overlay()).not.toBeNull()
+    expect(shown()).toBe(true)
+    // A tab owns closing: Escape leaves it in front.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
-    expect(overlay()).toBeNull()
+    expect(shown()).toBe(true)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g' }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l' }))
     await flushPromises()
-    expect(overlay()).not.toBeNull()
-    document.querySelector<HTMLButtonElement>('[data-testid="action-runs-close"]')?.click()
-    await flushPromises()
-    expect(overlay()).toBeNull()
+    expect(shown()).toBe(false)
 
-    await wrapper.get('[data-testid="titlebar-menu"]').trigger('click')
-    await wrapper.get('[data-testid="titlebar-menu-action-runs"]').trigger('click')
+    await wrapper.get('[data-testid="titlebar-tab-runs-close"]').trigger('click')
     await flushPromises()
-    expect(overlay()).not.toBeNull()
+    expect(wrapper.find('[data-testid="titlebar-tab-runs"]').exists()).toBe(false)
 
+    await wrapper.get('[data-testid="titlebar-add-tab"]').trigger('click')
+    await wrapper.get('[data-testid="titlebar-add-tab-runs"]').trigger('click')
+    await flushPromises()
+    expect(shown()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('opens Action runs on a run through the route', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    await router.push({ name: 'action-runs', query: { run: '42' } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="action-runs-view"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="titlebar-tab-runs"]').attributes('aria-selected')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('returns to the run picked in the list, not the one Action runs was opened on', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    await router.push({ name: 'action-runs', query: { run: '42' } })
+    await flushPromises()
+
+    wrapper.findComponent(ActionRunsView).vm.$emit('select', 7)
+    await flushPromises()
+    expect(router.currentRoute.value.query.run).toBe('7')
+
+    await wrapper.get('[data-testid="titlebar-mode-hub"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="titlebar-tab-runs"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.run).toBe('7')
     wrapper.unmount()
   })
 
@@ -3530,7 +3603,7 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('suppresses the tasks toggle while a different overlay is open, and while a confirm dialog is stacked inside it', async () => {
+  it('suppresses the tasks toggle while a modal is open, and while a confirm dialog is stacked over the tab', async () => {
     const taskItem = {
       id: 't1',
       repoKey: 'acme/site',
@@ -3555,24 +3628,25 @@ describe('App', () => {
     await flushPromises()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).toBeNull()
     closeReport()
     await flushPromises()
 
     // Opens normally once nothing else is up.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).not.toBeNull()
 
-    // A confirm dialog stacked inside the overlay (its own BaseModal) keeps
-    // the toggle from also closing the overlay underneath it.
-    document.querySelector<HTMLButtonElement>('[data-testid="task-delete"]')!.click()
+    // A confirm dialog stacked over the tab (its own BaseModal) keeps the
+    // toggle from also leaving the tab underneath it.
+    const root: HTMLElement = wrapper.element
+    root.querySelector<HTMLButtonElement>('[data-testid="task-delete"]')!.click()
     await flushPromises()
     expect(document.querySelector('[data-testid="task-delete-confirm"]')).not.toBeNull()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).not.toBeNull()
     expect(document.querySelector('[data-testid="task-delete-confirm"]')).not.toBeNull()
 
     wrapper.unmount()
@@ -3591,7 +3665,7 @@ describe('App', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
 
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).not.toBeNull()
     expect(useTasks().repoKey.value).toBe('acme/site')
 
     wrapper.unmount()
@@ -3605,15 +3679,15 @@ describe('App', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).not.toBeNull()
     expect(useTasks().repoKey.value).toBe('acme/site')
 
-    // The user re-scopes while the overlay is open; only an *opening* toggle
+    // The user re-scopes while the tab is in front; only an *opening* toggle
     // may re-resolve the scope, so closing must not clobber the choice.
     useTasks().setRepoKey('acme/other')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).toBeNull()
     expect(useTasks().repoKey.value).toBe('acme/other')
 
     wrapper.unmount()
@@ -3626,7 +3700,7 @@ describe('App', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
 
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).not.toBeNull()
     expect(useTasks().repoKey.value).toBe('acme/existing')
 
     wrapper.unmount()
@@ -3643,7 +3717,7 @@ describe('App', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', altKey: true, bubbles: true, cancelable: true }))
     await flushPromises()
 
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).not.toBeNull()
     expect(useTasks().repoKey.value).toBe('acme/site')
 
     wrapper.unmount()
@@ -3661,7 +3735,7 @@ describe('App', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', altKey: true, bubbles: true, cancelable: true }))
     await flushPromises()
 
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).not.toBeNull()
     expect(useTasks().repoKey.value).toBe('acme/existing')
 
     wrapper.unmount()
@@ -3924,7 +3998,7 @@ describe('App', () => {
     pane.dispatchEvent(event)
     await flushPromises()
 
-    expect(document.querySelector('[data-testid="tasks-overlay"]')).not.toBeNull()
+    expect(wrapper.element.querySelector('[data-testid="tasks-view"]')).not.toBeNull()
     // Swallowed here so the pane does not also write the meta escape to tmux.
     expect(event.defaultPrevented).toBe(true)
 

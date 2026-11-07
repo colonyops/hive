@@ -3,10 +3,11 @@ import type { OrderDropTarget } from '../lib/listOrder'
 
 export type DropEdge = 'before' | 'after'
 
-/** Which half of the hovered element the pointer is in. */
-export function dropEdge(event: DragEvent): DropEdge {
+/** Which half of the hovered element the pointer is in, along a column or a row. */
+export function dropEdge(event: DragEvent, axis: 'x' | 'y' = 'y'): DropEdge {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
+  const before = axis === 'x' ? event.clientX < rect.left + rect.width / 2 : event.clientY < rect.top + rect.height / 2
+  return before ? 'before' : 'after'
 }
 
 /** The insertion-marker classes for the row `id` under a `{ id, edge }` target. */

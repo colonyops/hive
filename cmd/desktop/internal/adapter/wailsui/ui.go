@@ -302,7 +302,10 @@ func (u *UI) buildWindow() {
 				HideToolbarSeparator: true,
 				ToolbarStyle:         application.MacToolbarStyleUnifiedCompact,
 			},
-			InvisibleTitleBarHeight: 43,
+			// No InvisibleTitleBarHeight: AppKit would take every mouse-down in that band for
+			// a window drag before the page sees it, so a tab could not be dragged and the
+			// palette field could not select text. The title bar's --wails-draggable CSS
+			// moves the window instead, and only from the bar's empty space.
 		},
 	})
 

@@ -125,6 +125,11 @@ export interface BindableCommand {
    * Linux, preserving Control on macOS.
    */
   piercesPane?: boolean | 'non-mac'
+  /**
+   * Gives its binding to any other command whose context holds, and never
+   * conflicts with one: Close page takes ⌘W only where Close window does not.
+   */
+  yieldsBinding?: boolean
 }
 
 // How far the digit row reaches. A session with more windows than this is
@@ -169,8 +174,8 @@ export function sessionViewCommandID(wire: string): string {
   return `session.open-${wire}`
 }
 
-// Unbound: the obvious chords already belong to the app-wide Drive and Tasks
-// overlays and the pane splits. Palette-hidden because the session on screen
+// Unbound: the obvious chords already belong to the Drive and Tasks pages and
+// the pane splits. Palette-hidden because the session on screen
 // contributes a row per view it offers, which a session without the view hides.
 const sessionViewCommands: BindableCommand[] = [
   { wire: 'drive', title: 'Open Drive tab', icon: IconFolderTree, keywords: ['drive', 'documents', 'docs', 'canvas'] },
@@ -838,9 +843,9 @@ export const commandCatalog: BindableCommand[] = [
   // where a user opening the palette to find it would look first.
   {
     id: 'tasks.toggle',
-    title: 'Toggle Tasks',
+    title: 'Open Tasks page',
     group: 'View',
-    keywords: ['tasks', 'honeycomb', 'hc', 'epics'],
+    keywords: ['tasks', 'honeycomb', 'hc', 'epics', 'page', 'toggle'],
     icon: IconListTodo,
     defaultCombos: ['mod+shift+t', 'g t'],
     context: 'global',
@@ -852,9 +857,9 @@ export const commandCatalog: BindableCommand[] = [
   },
   {
     id: 'action-runs.toggle',
-    title: 'Toggle Action runs',
+    title: 'Open Action runs page',
     group: 'View',
-    keywords: ['actions', 'runs', 'jobs', 'logs', 'output', 'stdout', 'debug'],
+    keywords: ['actions', 'runs', 'jobs', 'logs', 'output', 'stdout', 'debug', 'page', 'toggle'],
     icon: IconSquareTerminal,
     defaultCombos: ['g l'],
     context: 'global',
@@ -863,9 +868,21 @@ export const commandCatalog: BindableCommand[] = [
   {
     // Ids are written into users' settings as rebind keys; never rename one.
     id: 'canvas.toggle',
-    title: 'Toggle Drive',
+    title: 'Open Drive page',
     group: 'View',
-    keywords: ['drive', 'canvas', 'canvases', 'wiki', 'page', 'document', 'documents', 'plan', 'report', 'context'],
+    keywords: [
+      'drive',
+      'canvas',
+      'canvases',
+      'wiki',
+      'page',
+      'document',
+      'documents',
+      'plan',
+      'report',
+      'context',
+      'toggle',
+    ],
     icon: IconFolderTree,
     defaultCombos: ['mod+shift+p', 'g v'],
     context: 'global',
@@ -875,6 +892,16 @@ export const commandCatalog: BindableCommand[] = [
     scope: 'goto',
   },
   ...sessionViewCommands,
+  {
+    id: 'page.close',
+    title: 'Close page',
+    group: 'Window',
+    keywords: ['close', 'page', 'tab', 'window'],
+    icon: IconX,
+    defaultCombos: ['mod+w'],
+    context: 'global',
+    yieldsBinding: true,
+  },
   {
     id: 'window.hide',
     title: 'Hide window',

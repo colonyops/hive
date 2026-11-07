@@ -32,6 +32,7 @@ A key Hive does not know is a warning in `applet_list`, and the applet still ope
 - `entry`: the page, default `index.html`.
 - `surfaces`: where the applet shows. List each one it belongs on, and it shows only there. With none listed it is a pop-up. Ask the user if the request does not make it clear.
   - `tab`: in a session's + menu, as a tab beside its terminals. Takes no settings: `tab: {}`.
+  - `page`: in the title bar's + menu, as a tab in the strip beside Inbox, Code and Chats, in no session. Takes no settings: `page: {}`. Use it, without `tab`, for anything that spans sessions, such as a board of every session.
   - `popup`: over the app, from the command palette or a key, with `width` and `height` in pixels. The default fills the window.
   - `titlebar`: a page in the title bar, with `entry` (default: the applet's own `entry`) and `width` in pixels (default 28, one icon button). See "In the title bar".
   - Each takes `enabled: false`, which turns it off and keeps its settings. The switches in Settings > Applets write this, so leave it alone unless the user asks.
@@ -57,8 +58,8 @@ A foreign page in the frame can load any of your pages with a query or hash it c
 - `hive.copy(text)` puts text on the clipboard.
 - `hive.context()` resolves to `{id, title, dir, cwd, sessionSlug}`.
 - `hive.close()` closes the applet's pop-up or tab. In a title bar page it closes the page's dropdown.
-- `hive.surface` is `tab`, `popup`, `titlebar` or `dropdown`, for one file that serves several.
-- `hive.open()` opens the applet from any of them: as a tab if the user added it as one and a session is on screen, otherwise as a pop-up. It closes the pop-up if that is already open.
+- `hive.surface` is `tab`, `page`, `popup`, `titlebar` or `dropdown`, for one file that serves several. In a `page`, `hive.context()` has no session.
+- `hive.open()` opens the applet from any of them: its page if the user has it in the title bar, else a session tab if the file lists one and a session is on screen, else a new page if the file lists `page`, else a pop-up. It closes the pop-up if that is already open.
 - `hive.broadcast(data)` sends to the applet's other open frames, which listen with `hive.on('message', fn)`.
 - `hive.on('session', fn)` reports the slug of the session on screen when it changes. `hive.on` returns a function that stops listening, and does nothing for an event this Hive does not have.
 - `hive.commands()` resolves to Hive's commands as `{id, title, group, keys}`, and `hive.command(id)` runs one and rejects an id that does not exist, so a page can do what the command palette can. A command takes no arguments: `session.new`, for one, opens an empty New session dialog. See "Find a command id".

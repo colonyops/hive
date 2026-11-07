@@ -124,6 +124,11 @@ export const UpdateAvailable = "update:available";
 export const WindowBlur = "window:blur";
 
 /**
+ * Name of the custom event "window:close-request".
+ */
+export const WindowCloseRequest = "window:close-request";
+
+/**
  * Name of the custom event "window:focus".
  */
 export const WindowFocus = "window:focus";

@@ -72,6 +72,9 @@ type Command struct {
 type Surfaces struct {
 	// Tab puts the applet in a session's + menu.
 	Tab *TabSurface `yaml:"tab,omitempty"`
+	// Page puts the applet in the title bar's + menu, as an app-wide tab beside Inbox, Code
+	// and Chats. It is not in any session, so a page for all sessions lists this and not Tab.
+	Page *PageSurface `yaml:"page,omitempty"`
 	// Popup opens the applet over the app, from the palette or a chord.
 	Popup *PopupSurface `yaml:"popup,omitempty"`
 	// Titlebar runs a page in the title bar from the moment the file loads.
@@ -88,6 +91,9 @@ func (s *Surfaces) UnmarshalYAML(node *yaml.Node) error {
 	if s.Tab == nil && hasKey(node, "tab") {
 		s.Tab = &TabSurface{}
 	}
+	if s.Page == nil && hasKey(node, "page") {
+		s.Page = &PageSurface{}
+	}
 	if s.Popup == nil && hasKey(node, "popup") {
 		s.Popup = &PopupSurface{}
 	}
@@ -97,10 +103,17 @@ func (s *Surfaces) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-func (s Surfaces) none() bool { return s.Tab == nil && s.Popup == nil && s.Titlebar == nil }
+func (s Surfaces) none() bool {
+	return s.Tab == nil && s.Page == nil && s.Popup == nil && s.Titlebar == nil
+}
 
-// ShowsTab, ShowsPopup and ShowsTitlebar say whether the surface is listed and not turned off.
+// opens says whether the file lists a surface that shows the applet's own page.
+func (s Surfaces) opens() bool { return s.Tab != nil || s.Page != nil || s.Popup != nil }
+
+// ShowsTab, ShowsPage, ShowsPopup and ShowsTitlebar say whether the surface is listed and not
+// turned off.
 func (s Surfaces) ShowsTab() bool      { return s.Tab != nil && isOn(s.Tab.Enabled) }
+func (s Surfaces) ShowsPage() bool     { return s.Page != nil && isOn(s.Page.Enabled) }
 func (s Surfaces) ShowsPopup() bool    { return s.Popup != nil && isOn(s.Popup.Enabled) }
 func (s Surfaces) ShowsTitlebar() bool { return s.Titlebar != nil && isOn(s.Titlebar.Enabled) }
 
@@ -109,6 +122,11 @@ func isOn(enabled *bool) bool { return enabled == nil || *enabled }
 // TabSurface takes its size from its panel.
 type TabSurface struct {
 	// Enabled false turns the surface off and keeps its settings. Unset is on.
+	Enabled *bool `yaml:"enabled,omitempty"`
+}
+
+// PageSurface takes its size from the frame under the title bar.
+type PageSurface struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
 }
 

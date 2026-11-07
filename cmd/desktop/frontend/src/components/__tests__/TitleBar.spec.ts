@@ -177,67 +177,119 @@ describe('TitleBar', () => {
     expect(wrapper.emitted('open-error-node')).toHaveLength(1)
   })
 
-  it('hides the whole mode group during onboarding, when there is no profile', () => {
-    const wrapper = mount(TitleBar, { props: { mode: 'hub' } })
+  it('hides the tab strip during onboarding, when there is no profile', () => {
+    const wrapper = mount(TitleBar, { props: { activeTab: 'inbox' } })
+    expect(wrapper.find('[data-testid="titlebar-tabs"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="titlebar-mode-hub"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="titlebar-mode-terminal"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="titlebar-mode-agents"]').exists()).toBe(false)
   })
 
-  it('keeps the Inbox|Code toggle live in both modes and reports the pressed one', async () => {
-    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', mode: 'hub' } })
+  it('keeps the pinned tabs live and reports the selected one', async () => {
+    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', activeTab: 'inbox' } })
     const hub = wrapper.get('[data-testid="titlebar-mode-hub"]')
     const terminal = wrapper.get('[data-testid="titlebar-mode-terminal"]')
 
-    expect(hub.attributes('aria-pressed')).toBe('true')
-    expect(terminal.attributes('aria-pressed')).toBe('false')
+    expect(hub.attributes('aria-selected')).toBe('true')
+    expect(terminal.attributes('aria-selected')).toBe('false')
     // Always clickable: an unavailable terminal explains itself inside the mode.
     expect(terminal.attributes('disabled')).toBeUndefined()
+    // Pinned tabs never close.
+    expect(wrapper.find('[data-testid="titlebar-mode-hub-close"]').exists()).toBe(false)
 
     await terminal.trigger('click')
-    expect(wrapper.emitted('set-mode')).toEqual([['terminal']])
+    await wrapper.get('[data-testid="titlebar-mode-agents"]').trigger('click')
+    expect(wrapper.emitted('activate-tab')).toEqual([['code'], ['chats']])
 
-    await wrapper.setProps({ mode: 'terminal' })
-    expect(wrapper.get('[data-testid="titlebar-mode-terminal"]').attributes('aria-pressed')).toBe('true')
-    await wrapper.get('[data-testid="titlebar-mode-hub"]').trigger('click')
-    expect(wrapper.emitted('set-mode')).toEqual([['terminal'], ['hub']])
+    await wrapper.setProps({ activeTab: 'chats' })
+    expect(wrapper.get('[data-testid="titlebar-mode-agents"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-testid="titlebar-mode-hub"]').attributes('aria-selected')).toBe('false')
   })
 
-  it('reports the pressed segment across the Agents mode too', async () => {
-    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', mode: 'hub' } })
-    const hub = wrapper.get('[data-testid="titlebar-mode-hub"]')
-    const agents = wrapper.get('[data-testid="titlebar-mode-agents"]')
+  it('renders the global tabs after the pinned ones, selects, and closes them', async () => {
+    const wrapper = mount(TitleBar, {
+      props: { profileName: 'Triage', activeTab: 'tasks', tabs: ['drive', 'tasks'] },
+    })
+    expect(wrapper.get('[data-testid="titlebar-tab-tasks"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-testid="titlebar-mode-hub"]').attributes('aria-selected')).toBe('false')
 
-    expect(hub.attributes('aria-pressed')).toBe('true')
-    expect(agents.attributes('aria-pressed')).toBe('false')
+    await wrapper.get('[data-testid="titlebar-tab-drive"]').trigger('click')
+    expect(wrapper.emitted('activate-tab')).toEqual([['drive']])
 
-    await agents.trigger('click')
-    expect(wrapper.emitted('set-mode')).toEqual([['agents']])
-
-    await wrapper.setProps({ mode: 'agents' })
-    expect(wrapper.get('[data-testid="titlebar-mode-agents"]').attributes('aria-pressed')).toBe('true')
-    expect(wrapper.get('[data-testid="titlebar-mode-hub"]').attributes('aria-pressed')).toBe('false')
+    await wrapper.get('[data-testid="titlebar-tab-tasks-close"]').trigger('click')
+    expect(wrapper.emitted('close-tab')).toEqual([['tasks']])
+    // Closing must not also select the tab it sits on.
+    expect(wrapper.emitted('activate-tab')).toHaveLength(1)
   })
 
-  it('presses no mode segment while settings are open', () => {
-    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', mode: 'settings' } })
-
-    for (const segment of ['hub', 'terminal', 'agents']) {
-      expect(wrapper.get(`[data-testid="titlebar-mode-${segment}"]`).attributes('aria-pressed')).toBe('false')
-    }
+  it('closes a global tab on a middle click', async () => {
+    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', activeTab: 'inbox', tabs: ['drive'] } })
+    await wrapper.get('[data-testid="titlebar-tab-drive-wrap"]').trigger('auxclick', { button: 1 })
+    expect(wrapper.emitted('close-tab')).toEqual([['drive']])
   })
 
-  it('renders all three segments', async () => {
-    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', mode: 'agents' } })
-    const hub = wrapper.get('[data-testid="titlebar-mode-hub"]')
-    const terminal = wrapper.get('[data-testid="titlebar-mode-terminal"]')
-    const agents = wrapper.get('[data-testid="titlebar-mode-agents"]')
+  it('adds a page from the + menu, marking the ones already open', async () => {
+    const wrapper = mount(TitleBar, {
+      props: { profileName: 'Triage', activeTab: 'inbox', tabs: ['drive'] },
+      attachTo: document.body,
+    })
+    await wrapper.get('[data-testid="titlebar-add-tab"]').trigger('click')
+    expect(wrapper.get('[data-testid="titlebar-add-tab-menu"]').text()).toContain('No applets yet')
+    expect(wrapper.get('[data-testid="titlebar-add-tab-drive"]').attributes('aria-checked')).toBe('true')
 
-    expect(hub.attributes('aria-pressed')).toBe('false')
-    expect(terminal.attributes('aria-pressed')).toBe('false')
-    expect(agents.attributes('aria-pressed')).toBe('true')
+    await wrapper.get('[data-testid="titlebar-add-tab-tasks"]').trigger('click')
+    expect(wrapper.emitted('activate-tab')).toEqual([['tasks']])
+    expect(wrapper.find('[data-testid="titlebar-add-tab-menu"]').exists()).toBe(false)
 
-    await terminal.trigger('click')
-    expect(wrapper.emitted('set-mode')).toEqual([['terminal']])
+    await wrapper.get('[data-testid="titlebar-add-tab"]').trigger('click')
+    await wrapper.get('[data-testid="titlebar-add-tab-manage-applets"]').trigger('click')
+    expect(wrapper.emitted('manage-applets')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('previews a dragged tab in its new place and commits that order on drop', async () => {
+    const wrapper = mount(TitleBar, {
+      props: { profileName: 'Triage', activeTab: 'inbox', tabs: ['drive', 'tasks', 'settings'] },
+    })
+    const tab = (id: string) => wrapper.get(`[data-testid="titlebar-tab-${id}-wrap"]`)
+    const order = () =>
+      wrapper
+        .findAll('[data-testid$="-wrap"]')
+        .map((el) => el.attributes('data-testid')?.replace(/^titlebar-tab-|-wrap$/g, ''))
+
+    await tab('drive').trigger('dragstart', { dataTransfer: { setData: () => {} } })
+    // jsdom rects are zero-sized, so any pointer lands on the after half.
+    await tab('tasks').trigger('dragover', { clientX: 1 })
+    expect(order()).toEqual(['tasks', 'drive', 'settings'])
+    expect(wrapper.emitted('move-tab')).toBeUndefined()
+
+    await wrapper.get('[data-testid="titlebar-global-tabs"]').trigger('drop')
+    expect(wrapper.emitted('move-tab')).toEqual([['drive', 'settings']])
+  })
+
+  it('emits nothing for a drop that leaves the order as it was', async () => {
+    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', activeTab: 'inbox', tabs: ['drive', 'tasks'] } })
+    await wrapper
+      .get('[data-testid="titlebar-tab-drive-wrap"]')
+      .trigger('dragstart', { dataTransfer: { setData: () => {} } })
+    await wrapper.get('[data-testid="titlebar-tab-drive-wrap"]').trigger('dragover', { clientX: 1 })
+    await wrapper.get('[data-testid="titlebar-global-tabs"]').trigger('drop')
+    expect(wrapper.emitted('move-tab')).toBeUndefined()
+  })
+
+  it('closes a tab, or every other tab, from its context menu', async () => {
+    const wrapper = mount(TitleBar, {
+      props: { profileName: 'Triage', activeTab: 'inbox', tabs: ['drive', 'tasks', 'settings'] },
+      attachTo: document.body,
+    })
+    const menu = () => document.querySelector('[data-testid="titlebar-tab-menu"]')
+    await wrapper.get('[data-testid="titlebar-tab-tasks-wrap"]').trigger('contextmenu')
+    ;(document.querySelector('[data-testid="titlebar-tab-menu-close"]') as HTMLElement).click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('close-tab')).toEqual([['tasks']])
+    expect(menu()).toBeNull()
+
+    await wrapper.get('[data-testid="titlebar-tab-tasks-wrap"]').trigger('contextmenu')
+    ;(document.querySelector('[data-testid="titlebar-tab-menu-close-others"]') as HTMLElement).click()
+    expect(wrapper.emitted('close-tab')?.slice(1)).toEqual([['drive'], ['settings']])
+    wrapper.unmount()
   })
 })

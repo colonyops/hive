@@ -2,7 +2,6 @@
 import { onMounted } from 'vue'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import ActionInputsDialog from '../components/ActionInputsDialog.vue'
-import ActionRunsView from '../components/ActionRunsView.vue'
 import ActivityView from '../components/ActivityView.vue'
 import AppletDropdown from '../components/applets/AppletDropdown.vue'
 import AppletHost from '../components/applets/AppletHost.vue'
@@ -10,7 +9,6 @@ import CommandPalette from '../components/CommandPalette.vue'
 import ErrorDialog from '../components/ErrorDialog.vue'
 import ReportProblemDialog from '../components/ReportProblemDialog.vue'
 import SessionLaunchDialog from '../components/SessionLaunchDialog.vue'
-import TasksView from '../components/tasks/TasksView.vue'
 import ToastStack from '../components/ToastStack.vue'
 import UnsavedFlowChangesModal from '../components/UnsavedFlowChangesModal.vue'
 import WhatsNewDialog from '../components/WhatsNewDialog.vue'
@@ -57,7 +55,7 @@ const {
   createProfileError,
 } = feed
 const { pendingNavigation, unsavedChangesBusy } = nav
-const { tasksOpen, activityOpen, actionRunsOpen, actionRunsRunId } = overlays
+const { activityOpen } = overlays
 const { newProfileOpen } = profileActions
 const flowsSession = useFlowsSession()
 const { open: reportDialogOpen } = useReportDialog()
@@ -160,21 +158,6 @@ onMounted(() => {
   />
   <AppletHost />
   <AppletDropdown />
-  <HubOverlay v-if="tasksOpen" label="Tasks" testid="tasks-overlay" @close="tasksOpen = false">
-    <TasksView @close="tasksOpen = false" />
-  </HubOverlay>
-  <HubOverlay v-if="actionRunsOpen" label="Action runs" testid="action-runs-overlay" @close="actionRunsOpen = false">
-    <ActionRunsView
-      :initial-run-id="actionRunsRunId"
-      @close="actionRunsOpen = false"
-      @open-item="
-        (commandId, actionId) => {
-          actionRunsOpen = false
-          nav.openActionRunItem(commandId, actionId)
-        }
-      "
-    />
-  </HubOverlay>
   <HubOverlay v-if="activityOpen" label="Activity" testid="activity-overlay" @close="activityOpen = false">
     <ActivityView
       @close="activityOpen = false"

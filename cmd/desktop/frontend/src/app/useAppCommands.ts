@@ -32,7 +32,10 @@ import {
   zoomTerminalPane,
 } from '../lib/terminalTree'
 import { SESSION_VIEWS } from '../components/terminal/panelViews'
+import { appletTabId } from '../lib/appletTabs'
 import { useApplets } from '../stores/useApplets'
+import { useAppTabs } from '../stores/useAppTabs'
+import { useTasks } from '../stores/useTasks'
 import { useDriveReview } from '../stores/useDriveReview'
 import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { useSessionTabHost } from '../stores/useSessionTabHost'
@@ -101,6 +104,8 @@ export function useAppCommands(deps: AppCommandDeps) {
   })
 
   const applets = useApplets()
+  const tasks = useTasks()
+  const appTabs = useAppTabs()
 
   // Launchers are palette and keymap commands before any pop-up has opened.
   const launchers = useLaunchers()
@@ -142,9 +147,16 @@ export function useAppCommands(deps: AppCommandDeps) {
       void report.reportProblem()
     },
     'report.bundle': report.openBundleDialog,
-    'tasks.toggle': overlays.toggleTasks,
+    'tasks.toggle': () => {
+      // Only opening re-resolves the scope, and no resolved repo leaves the
+      // persisted last-picked scope alone.
+      if (!appMode.tasksActive.value && terminalActive.value && appMode.codeSessionRepoKey.value) {
+        tasks.setRepoKey(appMode.codeSessionRepoKey.value)
+      }
+      appMode.toggleTab('tasks')
+    },
     'canvas.toggle': appMode.toggleDrive,
-    'action-runs.toggle': () => overlays.toggleActionRuns(),
+    'action-runs.toggle': () => appMode.toggleTab('runs'),
     'terminal.popup.toggle': togglePopupTerminal,
     'terminal.toggle-sidebar': appMode.toggleSidebar,
     'view.toggle-panel': appMode.togglePreview,
@@ -190,6 +202,7 @@ export function useAppCommands(deps: AppCommandDeps) {
         sessionServer(onScreenSessionSlug.value),
       ),
     'window.hide': feed.hideWindow,
+    'page.close': appMode.closeFront,
     'view.go-inbox': () => appMode.setMode('hub'),
     'view.go-code': () => appMode.setMode('terminal'),
     'view.go-chats': () => appMode.setMode('agents'),
@@ -221,9 +234,7 @@ export function useAppCommands(deps: AppCommandDeps) {
       if (declared !== null && applets.deliverCommand(applet, declared)) return
       // The palette can open an applet over a hub view, whose own keys would keep
       // acting on rows under it.
-      overlays.tasksOpen.value = false
       overlays.activityOpen.value = false
-      overlays.actionRunsOpen.value = false
       if (declared !== null) applets.openForCommand(applet, declared)
       else applets.toggle(applet)
       return
@@ -272,6 +283,12 @@ export function useAppCommands(deps: AppCommandDeps) {
   useAppPaletteRows(deps, runCommand, contextActive)
   useCommands(applets.pageRows)
   applets.setCommandRunner(runCommand)
+  // An applet's tab in the title bar strip. `add` puts it in the strip when it is not there.
+  applets.setPageTabOpener((id, add) => {
+    if (!add && !appTabs.has(appletTabId(id))) return false
+    appMode.activateTab(appletTabId(id))
+    return true
+  })
   watch(onScreenSessionSlug, applets.setRouteSession, { immediate: true })
 
   return { runCommand, contextActive, popupTerminalMounted }

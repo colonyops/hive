@@ -27,7 +27,11 @@ const WIDTH = 560
 // A title bar page runs from the moment the file lands, so the warning has to say so.
 const titlebarPage = computed(() => props.preview.surfaces.titlebar?.entry)
 const opensAs = computed(() =>
-  [props.preview.surfaces.tab && 'a session tab', props.preview.surfaces.popup && 'a pop-up']
+  [
+    props.preview.surfaces.tab && 'a session tab',
+    props.preview.surfaces.page && 'a page',
+    props.preview.surfaces.popup && 'a pop-up',
+  ]
     .filter(Boolean)
     .join(' or '),
 )

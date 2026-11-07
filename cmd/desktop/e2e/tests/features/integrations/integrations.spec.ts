@@ -11,8 +11,8 @@ test.describe('integrations', { tag: [tag.integrations] }, () => {
     await page.goto('/')
     await expect(page.getByTestId('feed-item')).toHaveCount(6)
 
-    await page.getByTestId('titlebar-menu').click()
-    await page.getByTestId('application-settings').click()
+    await page.getByTestId('titlebar-add-tab').click()
+    await page.getByTestId('titlebar-add-tab-settings').click()
     await page.getByTestId('settings-category-integrations').click()
     await expect(page.getByTestId('settings-integrations')).toBeVisible()
 
@@ -44,8 +44,8 @@ test.describe('integrations', { tag: [tag.integrations] }, () => {
 
   test('the removed placeholder integrations are gone', async ({ page }) => {
     await page.goto('/')
-    await page.getByTestId('titlebar-menu').click()
-    await page.getByTestId('application-settings').click()
+    await page.getByTestId('titlebar-add-tab').click()
+    await page.getByTestId('titlebar-add-tab-settings').click()
     await page.getByTestId('settings-category-integrations').click()
     await expect(page.getByTestId('settings-integrations')).toBeVisible()
 
@@ -58,8 +58,8 @@ test.describe('integrations', { tag: [tag.integrations] }, () => {
 
   test('opens the GitHub drawer and offers to disconnect the connected account', async ({ page }) => {
     await page.goto('/')
-    await page.getByTestId('titlebar-menu').click()
-    await page.getByTestId('application-settings').click()
+    await page.getByTestId('titlebar-add-tab').click()
+    await page.getByTestId('titlebar-add-tab-settings').click()
     await page.getByTestId('settings-category-integrations').click()
 
     await page.getByTestId('integration-github-configure').click()

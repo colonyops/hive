@@ -13,8 +13,11 @@ The visible 1360×864 Hive window uses native hidden-inset titlebar chrome: a
 `MacTitleBar` with `AppearsTransparent`, `HideTitle`, `FullSizeContent`,
 `UseToolbar`, and `HideToolbarSeparator`, pinned to
 `MacToolbarStyleUnifiedCompact` so AppKit cannot drift the toolbar height
-across macOS versions, and `InvisibleTitleBarHeight: 43` so the traffic
-lights center on the 43px HTML titlebar.
+across macOS versions and the traffic lights center on the 43px HTML titlebar.
+The window does not set `InvisibleTitleBarHeight`: AppKit would start a window
+drag on every mouse-down in that band, before the page sees it. The title bar
+marks its empty space `--wails-draggable: drag` and every control `no-drag`, and
+the Wails runtime moves the window from the empty space only.
 
 Closing the window hides it rather than destroying it, via a `WindowClosing`
 hook registered with `RegisterHook`. It must be a hook, not `OnWindowEvent`:
