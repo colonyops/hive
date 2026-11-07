@@ -3570,7 +3570,6 @@ type ChangesResponse struct {
 	Base            string                 `protobuf:"bytes,4,opt,name=base,proto3" json:"base,omitempty"`
 	BranchAvailable bool                   `protobuf:"varint,5,opt,name=branch_available,json=branchAvailable,proto3" json:"branch_available,omitempty"`
 	Files           []*ChangedFile         `protobuf:"bytes,6,rep,name=files,proto3" json:"files,omitempty"`
-	Truncated       bool                   `protobuf:"varint,7,opt,name=truncated,proto3" json:"truncated,omitempty"`
 	Against         string                 `protobuf:"bytes,8,opt,name=against,proto3" json:"against,omitempty"`
 	Commit          string                 `protobuf:"bytes,9,opt,name=commit,proto3" json:"commit,omitempty"`
 	Commits         []*CommitInfo          `protobuf:"bytes,10,rep,name=commits,proto3" json:"commits,omitempty"`
@@ -3648,13 +3647,6 @@ func (x *ChangesResponse) GetFiles() []*ChangedFile {
 		return x.Files
 	}
 	return nil
-}
-
-func (x *ChangesResponse) GetTruncated() bool {
-	if x != nil {
-		return x.Truncated
-	}
-	return false
 }
 
 func (x *ChangesResponse) GetAgainst() string {
@@ -4307,19 +4299,18 @@ const file_hive_daemon_v1_daemon_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\asubject\x18\x02 \x01(\tR\asubject\x12\x16\n" +
 	"\x06author\x18\x03 \x01(\tR\x06author\x12\x12\n" +
-	"\x04unix\x18\x04 \x01(\x03R\x04unix\"\xe4\x02\n" +
+	"\x04unix\x18\x04 \x01(\x03R\x04unix\"\xd7\x02\n" +
 	"\x0fChangesResponse\x12\x1a\n" +
 	"\bresolved\x18\x01 \x01(\bR\bresolved\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12%\n" +
 	"\x0edefault_branch\x18\x03 \x01(\tR\rdefaultBranch\x12\x12\n" +
 	"\x04base\x18\x04 \x01(\tR\x04base\x12)\n" +
 	"\x10branch_available\x18\x05 \x01(\bR\x0fbranchAvailable\x121\n" +
-	"\x05files\x18\x06 \x03(\v2\x1b.hive.daemon.v1.ChangedFileR\x05files\x12\x1c\n" +
-	"\ttruncated\x18\a \x01(\bR\ttruncated\x12\x18\n" +
+	"\x05files\x18\x06 \x03(\v2\x1b.hive.daemon.v1.ChangedFileR\x05files\x12\x18\n" +
 	"\aagainst\x18\b \x01(\tR\aagainst\x12\x16\n" +
 	"\x06commit\x18\t \x01(\tR\x06commit\x124\n" +
 	"\acommits\x18\n" +
-	" \x03(\v2\x1a.hive.daemon.v1.CommitInfoR\acommits\"^\n" +
+	" \x03(\v2\x1a.hive.daemon.v1.CommitInfoR\acommitsJ\x04\b\a\x10\bR\ttruncated\"^\n" +
 	"\bFileDiff\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x14\n" +
 	"\x05state\x18\x02 \x01(\tR\x05state\x12\x12\n" +

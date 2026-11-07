@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	maxChangedFiles = 1000
 	// Rendering is virtualized, so lines cost little: this keeps a diff readable
 	// and git's maxDiffBytes keeps it bounded.
 	maxDiffLines = 20000
@@ -57,12 +56,10 @@ type Changes struct {
 	Commit          string
 	Commits         []git.CommitInfo
 	Files           []git.ChangedFile
-	Truncated       bool
 }
 
 // ReadChanges answers the zero Changes for a session with no checkout, as
-// ReadSession does: there is nothing to read, which is not a failure. Files
-// stops at maxChangedFiles.
+// ReadSession does: there is nothing to read, which is not a failure.
 func (s *Service) ReadChanges(ctx context.Context, sess session.Session, target DiffTarget) (Changes, error) {
 	if sess.State != session.StateActive || sess.Path == "" {
 		return Changes{}, nil
@@ -75,12 +72,7 @@ func (s *Service) ReadChanges(ctx context.Context, sess session.Session, target 
 		return Changes{}, err
 	}
 
-	files := list.files
-	if len(files) > maxChangedFiles {
-		files = files[:maxChangedFiles]
-		changes.Truncated = true
-	}
-	changes.Files = files
+	changes.Files = list.files
 	return changes, nil
 }
 

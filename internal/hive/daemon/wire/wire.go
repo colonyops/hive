@@ -232,7 +232,6 @@ func ChangesToProto(c gitstatus.Changes) *daemonv1.ChangesResponse {
 		Commit:          c.Commit,
 		Commits:         commits,
 		Files:           files,
-		Truncated:       c.Truncated,
 	}
 }
 
@@ -263,7 +262,6 @@ func ChangesFromProto(p *daemonv1.ChangesResponse) gitstatus.Changes {
 		Commit:          p.GetCommit(),
 		Commits:         commits,
 		Files:           files,
-		Truncated:       p.GetTruncated(),
 	}
 }
 

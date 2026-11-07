@@ -59,6 +59,7 @@ const treeRef = ref<{
 const entryMenu = ref<{
   open: (entry: EntryWire, anchor: HTMLElement, toggle?: HTMLElement | null) => void
   newFolder: (dir: string) => void
+  menuPath: string | null
 } | null>(null)
 onMounted(() => {
   if (props.autofocus) searchInput.value?.focus()
@@ -171,9 +172,13 @@ function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | n
         @click="entryMenu?.newFolder('')"
       />
     </div>
+    <!-- Search hits scroll here; the tree is its own scroller, so the sections above it stay put. -->
     <div
-      class="hive-scroll flex min-h-0 flex-1 flex-col overflow-y-auto"
-      :class="treeTitle && !searching ? '' : 'pb-2 pt-1'"
+      class="flex min-h-0 flex-1 flex-col"
+      :class="[
+        treeTitle && !searching ? '' : 'pb-2 pt-1',
+        searching ? 'hive-scroll overflow-y-auto' : 'overflow-hidden',
+      ]"
     >
       <template v-if="searching">
         <InlineError
@@ -213,7 +218,7 @@ function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | n
         <DriveSection
           :bare="!treeTitle"
           :title="treeTitle"
-          class="flex-1"
+          class="min-h-0 flex-1"
           storage-key="hive.drive.files.open"
           :testid="`${testid}-files`"
         >
@@ -234,6 +239,13 @@ function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | n
             :message="error"
             :testid="`${testid}-tree-error`"
           />
+          <EmptyState
+            v-if="empty || noMatches"
+            variant="inline"
+            class="px-3 py-2"
+            :message="empty ? 'No documents yet.' : 'No documents match.'"
+            :data-testid="`${testid}-browse-empty`"
+          />
           <DriveTree
             v-if="tree"
             class="flex-1"
@@ -243,17 +255,11 @@ function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | n
             :selected="selected"
             :filter="filter"
             :compact="compact"
+            :menu-path="entryMenu?.menuPath ?? null"
             :testid="testid"
             @pick="emit('pick', $event)"
             @menu="openMenu"
             @moved="(from, to) => emit('moved', from, to)"
-          />
-          <EmptyState
-            v-if="empty || noMatches"
-            variant="inline"
-            class="px-3 py-2"
-            :message="empty ? 'No documents yet.' : 'No documents match.'"
-            :data-testid="`${testid}-browse-empty`"
           />
         </DriveSection>
       </template>

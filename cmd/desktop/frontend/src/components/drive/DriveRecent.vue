@@ -34,6 +34,7 @@ const isSelected = (hit: HitWire) => hit.space.key === props.space && hit.entry.
   <DriveSection
     v-if="recent.length || recentError"
     title="Recent"
+    class="shrink-0"
     storage-key="hive.drive.recent.open"
     :testid="`${testid}-recent`"
   >
@@ -56,12 +57,7 @@ const isSelected = (hit: HitWire) => hit.space.key === props.space && hit.entry.
       :data-testid="`${testid}-recent-${hitKey(hit)}`"
       @click="emit('open', hit.space.key, hit.entry.path)"
     >
-      <component
-        :is="documentIcon(hit.entry.name, hit.entry.kind).icon"
-        class="size-3.5 shrink-0"
-        :class="documentIcon(hit.entry.name, hit.entry.kind).color"
-        aria-hidden="true"
-      />
+      <component :is="documentIcon(hit.entry.name, hit.entry.kind)" class="size-3.5 shrink-0" aria-hidden="true" />
       <span class="min-w-0 flex-1 truncate">{{ entryLabel(hit.entry) }}</span>
       <span
         v-if="activity.isUnopened(hit.space.key, hit.entry.path)"

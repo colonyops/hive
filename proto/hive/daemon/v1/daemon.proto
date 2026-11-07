@@ -418,7 +418,8 @@ message ChangesResponse {
   string base = 4;
   bool branch_available = 5;
   repeated ChangedFile files = 6;
-  bool truncated = 7;
+  reserved 7;
+  reserved "truncated";
   string against = 8;
   string commit = 9;
   repeated CommitInfo commits = 10;

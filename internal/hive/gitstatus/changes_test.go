@@ -3,7 +3,6 @@ package gitstatus_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"strings"
 	"sync/atomic"
@@ -236,21 +235,6 @@ func TestReadChangesReturnsAFailedRead(t *testing.T) {
 	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", defaultBranch: "main", filesErr: errors.New("bad HEAD")}, 1)
 	_, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch})
 	require.ErrorContains(t, err, "bad HEAD")
-}
-
-func TestReadChangesStopsAtTheFileCap(t *testing.T) {
-	t.Parallel()
-
-	files := make([]git.ChangedFile, 1001)
-	for i := range files {
-		files[i] = git.ChangedFile{Path: fmt.Sprintf("f%d", i), Status: git.FileStatusUntracked}
-	}
-	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", defaultBranch: "main", files: files}, 1)
-
-	got, err := svc.ReadChanges(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseBranch})
-	require.NoError(t, err)
-	assert.Len(t, got.Files, 1000)
-	assert.True(t, got.Truncated)
 }
 
 func TestReadChangesAppliesTheReadTimeout(t *testing.T) {

@@ -692,7 +692,6 @@ export interface SessionChanges {
     "commit": string;
     "commits": SessionCommit[] | null;
     "files": ChangedFile[] | null;
-    "truncated": boolean;
 }
 
 export interface SessionCommit {

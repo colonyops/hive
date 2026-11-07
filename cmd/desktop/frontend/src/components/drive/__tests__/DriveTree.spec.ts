@@ -101,20 +101,14 @@ describe('DriveTree', () => {
   })
 
   it('reveals the selected document by opening its folders and scrolling to it', async () => {
-    const scrolled: string[] = []
-    const original = Element.prototype.scrollIntoView
-    Element.prototype.scrollIntoView = function (this: Element) {
-      scrolled.push(this.getAttribute('data-testid') ?? '')
-    }
-    try {
-      const wrapper = mountTree({ selected: 'plans/old/a.md' })
-      await flushPromises()
-      expect(wrapper.get('[data-testid="t-row-plans/old/a.md"]').attributes('aria-selected')).toBe('true')
-      expect(wrapper.get('[data-testid="t-row-plans/old"]').attributes('aria-expanded')).toBe('true')
-      expect(scrolled).toContain('t-row-plans/old/a.md')
-    } finally {
-      Element.prototype.scrollIntoView = original
-    }
+    const wrapper = mountTree({ selected: 'plans/old/a.md' })
+    const scroller = wrapper.get('[data-testid="t-tree"]').element as HTMLElement
+    Object.defineProperty(scroller, 'clientHeight', { value: 52 })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="t-row-plans/old/a.md"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-testid="t-row-plans/old"]').attributes('aria-expanded')).toBe('true')
+    // The fourth row, brought just into a two-row viewport.
+    expect(scroller.scrollTop).toBe(4 * 26 - 52)
   })
 
   it('emits menu with the row as its anchor on a right click', async () => {

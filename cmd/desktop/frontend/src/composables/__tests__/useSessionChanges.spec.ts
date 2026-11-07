@@ -19,7 +19,6 @@ function answer(branch: string) {
     base: 'branch',
     branchAvailable: true,
     files: [],
-    truncated: false,
   }
 }
 

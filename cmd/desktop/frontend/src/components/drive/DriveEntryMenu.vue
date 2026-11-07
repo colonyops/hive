@@ -175,7 +175,10 @@ function newFolder(dir: string): void {
   newFolderIn.value = dir
 }
 
-defineExpose({ open, newFolder })
+/** The entry the open menu is for, whose row must stay drawn while it anchors the menu. */
+const menuPath = computed(() => (anchor.value ? (target.value?.path ?? null) : null))
+
+defineExpose({ open, newFolder, menuPath })
 </script>
 
 <template>
