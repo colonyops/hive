@@ -13,7 +13,7 @@ const running = {
   server: '',
   repoIdentity: 'r',
   state: 'active',
-  canvasOwner: '',
+  driveSpace: '',
   tags: [],
   createdAt: '',
 }
@@ -25,7 +25,7 @@ const idle = {
   server: '',
   repoIdentity: 'r',
   state: 'active',
-  canvasOwner: '',
+  driveSpace: '',
   tags: [],
   createdAt: '',
 }

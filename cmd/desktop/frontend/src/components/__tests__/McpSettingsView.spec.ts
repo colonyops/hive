@@ -24,13 +24,13 @@ vi.mock('@wailsio/runtime', () => ({
 function entry(id: string, overrides: Record<string, unknown> = {}) {
   return {
     id,
-    title: { 'hive-drive': 'Hive Drive', 'hive-canvas': 'Hive Canvas' }[id] ?? 'Hive Desktop',
+    title: { 'hive-drive': 'Hive Drive' }[id] ?? 'Hive Desktop',
     description: `${id} description`,
     shipped: true,
     stability: 'stable',
     shadows: '',
     transport: 'http',
-    command: `http://127.0.0.1:4821/mcp${{ 'hive-drive': '/drive', 'hive-canvas': '/canvas' }[id] ?? ''}`,
+    command: `http://127.0.0.1:4821/mcp${{ 'hive-drive': '/drive' }[id] ?? ''}`,
     problem: '',
     ...overrides,
   }
@@ -50,7 +50,6 @@ describe('McpSettingsView', () => {
     mocks.SetText.mockResolvedValue(undefined)
     mocks.AddDriveMCP.mockResolvedValue(undefined)
     mocks.mcpCatalogue.mockResolvedValue([
-      entry('hive-canvas'),
       entry('hive-desktop'),
       entry('hive-drive'),
       entry('playwright', { transport: 'stdio', command: 'npx -y @playwright/mcp' }),
@@ -60,18 +59,16 @@ describe('McpSettingsView', () => {
     ])
   })
 
-  it('lists the servers this app hosts with their addresses, the drive first and its older address last', async () => {
+  it('lists the servers this app hosts with their addresses, the drive first', async () => {
     const wrapper = await mountView()
 
     expect(wrapper.get('[data-testid="settings-mcp-hive-drive-url"]').text()).toBe('http://127.0.0.1:4821/mcp/drive')
     expect(wrapper.get('[data-testid="settings-mcp-hive-desktop-url"]').text()).toBe('http://127.0.0.1:4821/mcp')
-    expect(wrapper.get('[data-testid="settings-mcp-hive-canvas-url"]').text()).toBe('http://127.0.0.1:4821/mcp/canvas')
     expect(wrapper.find('[data-testid="settings-mcp-playwright"]').exists()).toBe(false)
     const titles = wrapper.findAll('section').map((section) => section.attributes('data-testid'))
     expect(titles.filter((id) => id?.startsWith('settings-mcp-hive-'))).toEqual([
       'settings-mcp-hive-drive',
       'settings-mcp-hive-desktop',
-      'settings-mcp-hive-canvas',
     ])
   })
 
@@ -111,14 +108,14 @@ describe('McpSettingsView', () => {
 
   it('says why a server has no address instead of offering setup for it', async () => {
     mocks.mcpCatalogue.mockResolvedValue([
-      entry('hive-canvas', { command: '', problem: 'The local HTTP server is disabled.' }),
+      entry('hive-desktop', { command: '', problem: 'The local HTTP server is disabled.' }),
     ])
     const wrapper = await mountView()
 
-    expect(wrapper.get('[data-testid="settings-mcp-hive-canvas-problem"]').text()).toContain(
+    expect(wrapper.get('[data-testid="settings-mcp-hive-desktop-problem"]').text()).toContain(
       'The local HTTP server is disabled.',
     )
-    expect(wrapper.find('[data-testid="settings-mcp-hive-canvas-setup"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="settings-mcp-hive-desktop-setup"]').exists()).toBe(false)
   })
 
   it('says why when the catalogue cannot be read in this build', async () => {

@@ -17,8 +17,6 @@ const (
 	AreaChats Area = "chats"
 	// AreaInbox is a Area of type inbox.
 	AreaInbox Area = "inbox"
-	// AreaCanvas is a Area of type canvas.
-	AreaCanvas Area = "canvas"
 	// AreaDrive is a Area of type drive.
 	AreaDrive Area = "drive"
 )
@@ -29,7 +27,6 @@ var _AreaNames = []string{
 	string(AreaCode),
 	string(AreaChats),
 	string(AreaInbox),
-	string(AreaCanvas),
 	string(AreaDrive),
 }
 
@@ -53,11 +50,10 @@ func (x Area) IsValid() bool {
 }
 
 var _AreaValue = map[string]Area{
-	"code":   AreaCode,
-	"chats":  AreaChats,
-	"inbox":  AreaInbox,
-	"canvas": AreaCanvas,
-	"drive":  AreaDrive,
+	"code":  AreaCode,
+	"chats": AreaChats,
+	"inbox": AreaInbox,
+	"drive": AreaDrive,
 }
 
 // ParseArea attempts to convert a string to a Area.

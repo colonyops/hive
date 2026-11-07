@@ -1675,7 +1675,7 @@ describe('App', () => {
           server: '',
           repoIdentity: 'hay-kot/hive',
           state: 'active',
-          canvasOwner: 'hay-kot/hive',
+          driveSpace: 'hay-kot/hive',
           tags: [],
           createdAt: '2026-10-01T12:00:00Z',
         },
@@ -3418,9 +3418,9 @@ describe('App', () => {
   // way to a document from anywhere, so it opens the full-page view.
   it('lists a drive document as a palette row under its space and opens it full page', async () => {
     const report = {
-      path: 'reports/perf.canvas.json',
-      name: 'perf.canvas.json',
-      kind: 'canvas',
+      path: 'reports/perf.md',
+      name: 'perf.md',
+      kind: 'markdown',
       size: 1,
       modified: '2026-10-01T00:00:00Z',
       created: '2026-10-01T00:00:00Z',
@@ -3434,24 +3434,14 @@ describe('App', () => {
     mocks.DriveDocument.mockResolvedValue({
       space,
       entry: report,
-      markdown: '',
+      markdown: 'p95 is 96ms',
       html: '',
-      canvas: {
-        space: space.key,
-        path: report.path,
-        title: 'Perf report',
-        session: '',
-        hiveSession: '',
-        createdAt: 1,
-        updatedAt: 1,
-        frontmatter: {},
-        blocks: [{ id: 'doc', kind: 'markdown', title: '', body: 'p95 is 96ms', url: '', createdAt: 1, updatedAt: 1 }],
-      },
+      image: '',
     })
     const { wrapper, router } = await mountAppWithRouter()
 
     const palette = useCommandPalette()
-    const documentId = 'document:workspaces/my-workspace:reports/perf.canvas.json'
+    const documentId = 'document:workspaces/my-workspace:reports/perf.md'
     palette.openWithScope('drive')
     await flushPromises()
     const row = palette.results.value.find((candidate) => candidate.id === documentId)
@@ -3474,10 +3464,10 @@ describe('App', () => {
     expect(router.currentRoute.value.name).toBe('drive')
     expect(router.currentRoute.value.query).toEqual({
       space: 'workspaces/my-workspace',
-      doc: 'reports/perf.canvas.json',
+      doc: 'reports/perf.md',
     })
-    expect(mocks.DriveDocument).toHaveBeenCalledWith('workspaces/my-workspace', 'reports/perf.canvas.json')
-    expect(wrapper.find('[data-testid="drive-page-block-doc"]').text()).toContain('p95 is 96ms')
+    expect(mocks.DriveDocument).toHaveBeenCalledWith('workspaces/my-workspace', 'reports/perf.md')
+    expect(wrapper.find('[data-testid="drive-page-markdown"]').text()).toContain('p95 is 96ms')
 
     wrapper.unmount()
   })
@@ -3518,7 +3508,7 @@ describe('App', () => {
         server: '',
         repoIdentity: 'git@github.com:hay-kot/hive.git',
         state: 'active',
-        canvasOwner: 'hay-kot/hive',
+        driveSpace: 'hay-kot/hive',
         tags: [],
         createdAt: '2026-10-01T12:00:00Z',
       },

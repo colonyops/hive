@@ -2536,21 +2536,21 @@ than leaving an unbounded tool set looking identical to a bounded one.
 **Hive Drive** is one document tree under the context root, shown in a Drive
 tab beside a chat or a Code session and in a full-page overlay
 ([ADR hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it](decisions/2026-10-11-hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it.md)).
-A canvas is one document kind in it.
+It has no canvas kind
+([ADR hive-drive-has-no-canvas-document-kind](decisions/2026-11-06-hive-drive-has-no-canvas-document-kind.md)).
 
 **The tree is an engine service.** `internal/domain/drive` holds the model:
 a `Space` (`repository`, `workspace`, `shared`) whose key is its path under
 the root (`owner/repo`, `workspaces/<name>`, `shared`), and an `Entry` whose
-`Kind` comes from the extension (`dir`, `markdown`, `html`, `canvas` for
-`.canvas.json`, `file`). `workspaces` and `shared` are reserved owner names.
+`Kind` comes from the extension (`dir`, `markdown`, `html`, `file`); a
+`.canvas.json` left from an older release is a `file`. `workspaces` and `shared` are reserved owner names.
 `internal/hive/drive.Service` lives on `hive.Engine`, outside the reloaded
 service set, and `Reload` calls its `Reconfigure`. It keeps an in-memory
 snapshot per space, scanned lazily on the first `Tree` or `Search` of that
 space, with front matter read from the head of each markdown file. No index
 sits in `hive.db`. A `Reconfigure` with a new context root publishes one
 `drive.changed` per previously scanned space, with empty paths, so Drive
-tabs refresh. Documents are `.md`, `.html` and `.canvas.json`; `Write`
-accepts only the first two, and a canvas changes through its block methods.
+tabs refresh. Documents are `.md` and `.html`, and `Write` accepts only those.
 A document is identified by `(space, path)`, so a move is a rename.
 
 **A watcher keeps the snapshot current.** `internal/platform/fswatch` adds one
@@ -2584,14 +2584,10 @@ its own session id from
 `HIVE_AGENT_SESSION`, injected at launch via `tmux new-session -e`.
 
 **Agents write through `mcpsrv`.** One app-hosted server, `hive-drive`, mounts
-at `/mcp/drive` and at `/mcp/canvas`; the old address keeps answering for
-existing agent configurations. It has twenty-one tools: the eight canvas tools,
-whose `canvas` argument is a name or a path (`reports/perf` files at
-`reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), five document
-tools: `document_list`, `document_get`, `document_put`, `document_move`
+at `/mcp/drive`. It has sixteen tools: the three `diff_review_*` tools
+(below), five document tools: `document_list`, `document_get`, `document_put`, `document_move`
 and `document_delete`, and eight layout tools: `tab_open` (`view` is `drive`,
-`diff`, `tasks` or `terminal`; `path`, for `drive`, is a document path or a
-canvas name; `window`, `name` and `command`, for `terminal`, pick an existing
+`diff`, `tasks` or `terminal`; `path`, for `drive`, is a document path; `window`, `name` and `command`, for `terminal`, pick an existing
 window or start a new detached one in the checkout, a shell with no command;
 `placement` is `behind`, `beside` or `below`, relative to an optional
 `anchor`), `tab_close` (a terminal needs `window` and is killed through
@@ -2649,29 +2645,13 @@ reread the listing. Applets reach the same service through
 record id, or the caller's working directory. `global` is the `shared` space,
 which sits beside no session and so has no tabs: `tab_open` and `tab_close`
 refuse it, and they refuse `diff` and `tasks` for a chat, which has only Drive.
-The `@global` store is gone, but canvas tool results still name the shared
-space's owner `@global`, so agents and `hive://canvas` links that match on it
-keep working.
 A chat's record names its workspace space. A directory maps to the active hive
 session whose checkout holds it (`Sessions().SessionAtPath`) and from there to
 the repository space; a directory inside no session stays `not_found`. A
-Code session's checkout links its space as `.hive`, and `Prune` skips the
-`canvases/` directory by name. `drive.Author` records which chat or hive
-session wrote a canvas first, and `drive:updated` carries the author of a
-write; the frontend uses it for the unseen dot. A chat's space outlives the
+Code session's checkout links its space as `.hive`. `drive:updated` carries
+the author of a write; the frontend uses it for the unseen dot. A chat's space outlives the
 chat, and deleting a workspace leaves its space behind
 (ADR deleting-a-workspace-deletes-its-directory).
-
-**Three idempotent migrations move older canvases.** Before the first scan of
-a space, and nowhere else, the engine renames `canvases/<name>.json` to
-`<name>.canvas.json` when the file has a `blocks` key. The service records
-each space it has migrated, so the rename runs once per space for the life of
-the service: a rescan after `Reconfigure` or after the watcher recovers does
-not run it again. After the engine starts, the desktop calls
-`ImportLegacyCanvases` for the desktop data directory's `canvases/`, which
-moves to `shared/canvases/`, and for each workspace folder's `canvases/`,
-which moves to `workspaces/<name>/canvases/`. A target that exists is skipped
-and logged; a `.json` that is not a canvas stays as a plain file.
 
 **The frontend** reads the drive through `stores/useDrive.ts` (spaces, trees by
 space key, search; it reloads a space on `drive:updated` and every loaded space
@@ -2706,8 +2686,8 @@ Markdown document is a `review_comments` row in a review session keyed
 holds. `app.ReviewService` owns them over `Engine.Reviews()`. The key is apart
 from the TUI's absolute-path key on purpose: the TUI anchors a comment to a
 rendered line and Desktop to a source line, which the reader learns from the
-`data-source-start`/`data-source-end` attributes `renderCanvasMarkdown` adds
-when it is passed `sourceLines`. A review is never finalized and never cleaned
+`data-source-start`/`data-source-end` attributes the markdown renderer in
+`lib/githubMarkdown.ts` adds when it is passed `sourceLines`. A review is never finalized and never cleaned
 up as stale: Send and Clear delete it, and a rewritten document keeps its
 comments, shown as on an earlier version. Send resolves its target in Go every
 time, to an agent pane that `status.Service.AgentPanes` classifies or the first
@@ -2740,21 +2720,11 @@ it delivered once the paste succeeds. A thread is an ordered list of responses, 
 with an author, kept in browser storage as the user's own comments are. Only the user
 writes one today; an agent that adds to a thread needs it in `hive.db`.
 
-**HTML has two tiers.** A canvas **html block** is the one place
-agent-authored markup reaches the app's DOM
-(ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).
-`cmd/desktop/internal/app/canvas/html.go` declares the element and attribute
-allowlists once; `canvas.SanitizeHTML` builds a deny-by-default bluemonday
-policy from them, `canvas.RejectedHTML` refuses a write that would be stripped
-rather than letting the agent read its source back intact over a broken
-layout, and `styles/canvas-html.css` styles the `hv-` vocabulary from the
-theme tokens. The engine keeps the agent's source; `GetCanvasAt` and
-`canvas.Markdown` are the only two seams that sanitize, so no consumer holds a
-policy of its own. `renderGithubMarkdown` is untouched; it is shared with
-untrusted GitHub bodies and stays as strict as they require, which is why an
-html block renders under its own `.hv-html` scope.
+**An `.html` document is the one place agent-authored markup renders.**
+`renderGithubMarkdown` escapes raw HTML, because it is shared with untrusted
+GitHub bodies, so markdown documents carry no markup of their own.
 
-An **`.html` document** is a whole page. `canvas.WrapDocument` injects a CSP
+An `.html` document is a whole page. `htmldoc.WrapDocument` injects a CSP
 `<meta>` first in `<head>` (`DocumentCSP`: scripts, styles and fetches over
 `https:` only, `data:` only for images, fonts and media, no frames, no form
 submission), and the frontend renders it in
@@ -2765,10 +2735,10 @@ policy: a `srcdoc` frame otherwise resolves links against the app's own URL,
 so a `#fragment` link loaded Hive inside the frame. Against that base a
 fragment scrolls the page and a relative link does nothing. Isolation is the boundary for a document; Hive parses nothing out of it.
 
-A top-level **`mermaid` fence in a markdown block** renders as a diagram. The
-canvas reader splits these fences from the markdown it sends through the shared
-GitHub renderer, so other uses of that renderer still show Mermaid as code. The
-frontend loads Mermaid only when a canvas contains a diagram, serializes renders
+A top-level **`mermaid` fence in a markdown document** renders as a diagram.
+The Drive reader splits these fences from the markdown it sends through the
+shared GitHub renderer, so other uses of that renderer still show Mermaid as
+code. The frontend loads Mermaid only when a document contains a diagram, serializes renders
 because Mermaid's configuration is process-global, and redraws when the app
 theme changes. Each SVG uses its `viewBox` as an unbounded pan-and-zoom plane;
 the viewport fits the diagram on load and caps tall diagrams instead of making
@@ -2777,29 +2747,9 @@ disables HTML labels and interactive links, and limits source size and edge
 count. A parse failure stays local to that fence, and Markdown export preserves
 the original source.
 
-A canvas's `frontmatter` is a flat mapping of agent-editable scalars or scalar
-lists, validated by `drive.ValidateFrontmatter`
-(ADR canvases-carry-front-matter-and-users-can-delete-them). `created_at` and
-`updated_at` are derived from the canvas timestamps and cannot be overwritten.
-`canvas_frontmatter_put` replaces the editable mapping in one atomic file write; an
-empty mapping removes it all. A markdown document's front matter is read-only
-to the app. One localStorage-backed disclosure state expands or collapses the
-properties across every document, and Markdown copy and export prepend the
-combined metadata as YAML.
-
-**The allowlists bound what a block can reach, and nothing else**
-(ADR a-canvas-html-block-is-restricted-by-what-it-can-reach-not-by-how-it-looks).
-A name is refused when it executes, navigates, loads a document, or parses
-differently the second time — `script`, `style` the element, `iframe`,
-`object`, `embed`, `form`, every `on*` handler, `id`, and the svg integration
-points `foreignObject`, `desc` and `title`, whose content drops with `math`
-and `template`. Everything else is the agent's: any class, any `style`, any
-value, eleven svg elements to draw with, and `img`. The `hv-` vocabulary is
-what the stylesheet defines and the doc page teaches, held together by
-`TestHTMLVocabularyIsStyledAndDocumented`, but it gates nothing. What keeps
-that safe is one line of CSS: `contain: layout` on `.hv-html` makes the block
-the containing block for fixed and absolute descendants, so a block that
-positions itself cannot paint outside its panel.
+A markdown document's front matter is read-only to the app. One
+localStorage-backed disclosure state expands or collapses the properties
+across every document.
 
 The agent-workspace watcher is the same `dirwatch.Watcher` that actions and
 flows use, with `WithSubdirectories`: fsnotify is not recursive and the tree
@@ -2966,8 +2916,8 @@ The repo root is an npm workspace (`package.json`, `package-lock.json`, and
 `npm ci` runs once at the root.
 
 `@hive/ui` (`web/packages/ui`) holds what more than one web surface renders
-alike: the theme tokens and palettes (`styles/theme.css`), the markdown and
-canvas HTML styles, the `components/ui` primitives and `AppIcon`, and the
+alike: the theme tokens and palettes (`styles/theme.css`), the markdown
+styles, the `components/ui` primitives and `AppIcon`, and the
 composables and helpers they use (focus, popovers, keyboard navigation,
 clipboard, `seedRef`, `errorText`). It also holds the document renderer: the
 markdown and mermaid renderers with the syntax highlighter, and a props-only

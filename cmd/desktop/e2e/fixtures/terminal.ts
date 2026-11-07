@@ -43,7 +43,7 @@ export function windowState(windowId: string, paneId: string, name: string, acti
 
 export const terminalSession = (id: string, name: string) => ({
   id, name, slug: id, repo: 'git@github.com:acme/site.git', repoIdentity: 'git@github.com:acme/site.git',
-  server: '', state: 'active', canvasOwner: 'acme/site', tags: [], createdAt: '2026-10-01T12:00:00Z',
+  server: '', state: 'active', driveSpace: 'acme/site', tags: [], createdAt: '2026-10-01T12:00:00Z',
 })
 
 /** Answers the app's calls for these sessions, each with these windows. `answers` adds other bindings. */

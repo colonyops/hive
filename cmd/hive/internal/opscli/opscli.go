@@ -323,7 +323,7 @@ func input(c *cli.Command) (map[string]any, error) {
 }
 
 // Kebab spells a json or resource name the way a flag or command is spelled:
-// profileId is profile-id and canvas_block is canvas-block.
+// profileId is profile-id and diff_review is diff-review.
 func Kebab(s string) string {
 	var b strings.Builder
 	for i, r := range s {

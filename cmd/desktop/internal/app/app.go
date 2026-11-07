@@ -1415,10 +1415,6 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 		func() dispatch.SessionCreator { return a.sessions },
 		a.Stores.ItemSessions, a.Activity, cfg.Logger,
 	)
-	// After StartRuntime so the canvases land under the engine's context root.
-	// It runs once per process: ReloadHiveRuntime never repeats it, so a
-	// legacy canvas that appears later moves on the next launch.
-	importLegacyCanvases(ctx, a.logger, a.hive, cfg.Paths)
 	return nil
 }
 

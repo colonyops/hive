@@ -1,14 +1,12 @@
 // Builders for Hive Drive wire values, so a spec states a tree as the paths
 // it holds instead of restating every EntryWire field.
 import type {
-  CanvasWire,
   DocumentWire,
   EntryWire,
   SpaceWire,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 function kindOf(path: string): string {
-  if (path.endsWith('.canvas.json')) return 'canvas'
   if (path.endsWith('.md')) return 'markdown'
   if (path.endsWith('.html')) return 'html'
   return 'file'
@@ -46,7 +44,7 @@ export function space(key: string, name = key): SpaceWire {
 export function documentFor(
   spaceKey: string,
   entry: EntryWire,
-  body: { markdown?: string; html?: string; image?: string; canvas?: Partial<CanvasWire> } = {},
+  body: { markdown?: string; html?: string; image?: string } = {},
 ): DocumentWire {
   return {
     space: space(spaceKey),
@@ -54,19 +52,5 @@ export function documentFor(
     markdown: body.markdown ?? '',
     html: body.html ?? '',
     image: body.image ?? '',
-    canvas: body.canvas
-      ? {
-          space: spaceKey,
-          path: entry.path,
-          title: '',
-          session: '',
-          hiveSession: '',
-          createdAt: 1,
-          updatedAt: 2,
-          frontmatter: {},
-          blocks: [],
-          ...body.canvas,
-        }
-      : null,
   }
 }

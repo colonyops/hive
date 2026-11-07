@@ -1,4 +1,6 @@
-package canvas
+// Package htmldoc prepares an agent's html document to run in the desktop's
+// sandboxed frame.
+package htmldoc
 
 import (
 	"bytes"

@@ -73,7 +73,7 @@ func (s *DriveService) Document(ctx context.Context, space, path string) (_ Docu
 	return documentWireOf(doc), nil
 }
 
-// Markdown is a markdown document's body or a canvas rendered as markdown.
+// Markdown is a markdown document's body.
 func (s *DriveService) Markdown(ctx context.Context, space, path string) (string, error) {
 	markdown, err := s.drive.Markdown(ctx, space, path)
 	return markdown, s.fail(ctx, "markdown", err)

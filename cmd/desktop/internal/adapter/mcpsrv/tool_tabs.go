@@ -58,7 +58,7 @@ type layoutSplit struct {
 type openTabResult struct {
 	Requested string `json:"requested" jsonschema:"The request handed to the UI: open. Delivery is best-effort - it applies only while the user is viewing this chat or session, and there is no acknowledgment either way."`
 	View      string `json:"view"      jsonschema:"The view asked for: drive, diff, tasks, terminal or applet:<id>."`
-	Path      string `json:"path"      jsonschema:"The document or canvas path the tab was asked to show, resolved from path; empty when none was given."`
+	Path      string `json:"path"      jsonschema:"The document path the tab was asked to show, resolved from path; empty when none was given."`
 	Window    string `json:"window"    jsonschema:"The tmux window id (@3) the terminal tab was asked to show, new or existing; empty for the other views."`
 }
 

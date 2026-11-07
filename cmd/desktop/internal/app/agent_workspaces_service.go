@@ -222,7 +222,7 @@ func (s *AgentWorkspacesService) catalogue(ctx context.Context) []agentws.Catalo
 			continue
 		}
 		if stdio != nil {
-			entries[i].Server = stdio.server(serveToolsets(servePathOf(descriptor)))
+			entries[i].Server = stdio.server(serveToolsets(descriptor.RuntimePath))
 			continue
 		}
 		if descriptor.StdioOnly {
@@ -1607,7 +1607,7 @@ func (s *AgentWorkspacesService) launchTerminal(ctx context.Context, rec stores.
 	}
 
 	name := sessionName(rec)
-	// The record id is the canvas tools' caller argument; handing it to the
+	// The record id is the drive tools' caller argument; handing it to the
 	// process at launch is what lets the agent name its own chat without
 	// guessing (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
 	// The token and the URL are what let it end its own chat

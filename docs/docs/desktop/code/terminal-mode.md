@@ -260,7 +260,7 @@ Without it, use the address that **Settings ▸ MCP servers** shows:
 claude mcp add --scope user --transport http hive-drive http://127.0.0.1:<port>/mcp/drive
 ```
 
-The address stays the same across restarts. See [Agents and the layout](agent-layout.md#from-mcp) for `hive mcp serve`. An agent already set up with `/mcp/canvas` keeps working. The server needs the local HTTP server, which is enabled by default. An empty Drive tab in Code links to the same settings page.
+The address stays the same across restarts. See [Agents and the layout](agent-layout.md#from-mcp) for `hive mcp serve`. The server needs the local HTTP server, which is enabled by default. An empty Drive tab in Code links to the same settings page.
 
 Open a session's **Drive** tab with the `+` button on its tab row or its row in the sidebar. A document an agent opens arrives as a Drive tab behind the one you are reading, with a dot until you look at it. A session's documents belong to its repository, so every session of that repository shows the same ones, and they remain after the session is deleted. They are in `<root>/<owner>/<repo>/` under the hive context directory, which `hive drive init` links into a checkout as `.hive`, so a file you write to `.hive/plans/` shows in the tab within a second.
 

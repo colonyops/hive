@@ -2,7 +2,6 @@ package drive
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -79,16 +78,6 @@ func must(space drive.Space, err error) drive.Space {
 	return space
 }
 
-const plan = "canvases/plan.canvas.json"
-
-func blockIDs(c drive.Canvas) []string {
-	ids := make([]string, 0, len(c.Blocks))
-	for _, b := range c.Blocks {
-		ids = append(ids, b.ID)
-	}
-	return ids
-}
-
 // skipIfCaseSensitive skips a test that needs the temp directory to fold
 // case, as APFS and NTFS do by default.
 func skipIfCaseSensitive(t *testing.T, dir string) {
@@ -110,254 +99,6 @@ func paths(entries []drive.Entry) []string {
 	return out
 }
 
-// Canvas operations, by document path.
-
-func TestLoadCanvasAbsentIsNotAnError(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	_, ok, err := f.svc.LoadCanvas(t.Context(), ws, plan)
-	require.NoError(t, err)
-	assert.False(t, ok)
-}
-
-func TestUpsertBlocksAppendsThenUpdatesInPlace(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-
-	c, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "The Plan", "", drive.Block{ID: "plan", Kind: drive.BlockKindMarkdown, Body: "v1"})
-	require.NoError(t, err)
-	require.Len(t, c.Blocks, 1)
-	created := c.Blocks[0].CreatedAt
-	assert.NotZero(t, created)
-	assert.NotZero(t, c.CreatedAt)
-	assert.Equal(t, "chat-1", c.Session)
-	assert.Equal(t, "The Plan", c.Title)
-	assert.Equal(t, ws.Key, c.Space)
-	assert.Equal(t, plan, c.Path)
-
-	c, err = f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "", "", drive.Block{ID: "result", Kind: drive.BlockKindLink, Title: "PR", URL: "https://example.com"})
-	require.NoError(t, err)
-	require.Len(t, c.Blocks, 2)
-	assert.Equal(t, "The Plan", c.Title, "an empty title leaves the stored one")
-
-	c, err = f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-2"}, "Revised", "", drive.Block{ID: "plan", Kind: drive.BlockKindMarkdown, Body: "v2"})
-	require.NoError(t, err)
-	require.Len(t, c.Blocks, 2)
-	assert.Equal(t, "plan", c.Blocks[0].ID, "an updated block keeps its position")
-	assert.Equal(t, "v2", c.Blocks[0].Body)
-	assert.Equal(t, created, c.Blocks[0].CreatedAt, "an updated block keeps its CreatedAt")
-	assert.Greater(t, c.Blocks[0].UpdatedAt, created)
-	assert.Equal(t, "chat-1", c.Session, "the creating session never changes")
-	assert.Equal(t, "Revised", c.Title)
-
-	reloaded, ok, err := f.svc.LoadCanvas(ctx, ws, plan)
-	require.NoError(t, err)
-	require.True(t, ok)
-	assert.Equal(t, c, reloaded)
-	assert.FileExists(t, filepath.Join(f.root, "workspaces", "ws", "canvases", "plan.canvas.json"))
-}
-
-func TestUpsertBlocksBeforeAnchorInsertsAndMoves(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-	author := drive.Author{Session: "chat-1"}
-	_, err := f.svc.UpsertBlocks(ctx, ws, plan, author, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "a"})
-	require.NoError(t, err)
-	c, err := f.svc.UpsertBlocks(ctx, ws, plan, author, "", "", drive.Block{ID: "b", Kind: drive.BlockKindMarkdown, Body: "b"})
-	require.NoError(t, err)
-	created := c.Blocks[1].CreatedAt
-
-	c, err = f.svc.UpsertBlocks(ctx, ws, plan, author, "", "a", drive.Block{ID: "intro", Kind: drive.BlockKindMarkdown, Body: "i"})
-	require.NoError(t, err)
-	assert.Equal(t, []string{"intro", "a", "b"}, blockIDs(c), "a new block inserts before the anchor")
-
-	c, err = f.svc.UpsertBlocks(ctx, ws, plan, author, "", "intro", drive.Block{ID: "b", Kind: drive.BlockKindMarkdown, Body: "b2"})
-	require.NoError(t, err)
-	assert.Equal(t, []string{"b", "intro", "a"}, blockIDs(c), "a reused id moves before the anchor")
-	assert.Equal(t, created, c.Blocks[0].CreatedAt, "a moved block keeps its CreatedAt")
-	assert.Equal(t, "b2", c.Blocks[0].Body)
-
-	_, err = f.svc.UpsertBlocks(ctx, ws, plan, author, "", "ghost", drive.Block{ID: "x", Kind: drive.BlockKindMarkdown, Body: "x"})
-	require.ErrorIs(t, err, drive.ErrAnchorNotFound)
-	c, _, err = f.svc.LoadCanvas(ctx, ws, plan)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"b", "intro", "a"}, blockIDs(c), "a rejected anchor writes nothing")
-
-	_, err = f.svc.UpsertBlocks(ctx, ws, plan, author, "", "b", drive.Block{ID: "b", Kind: drive.BlockKindMarkdown, Body: "b3"})
-	require.ErrorIs(t, err, drive.ErrAnchorNotFound, "a block cannot anchor before itself")
-}
-
-func TestUpsertBlocksBatchIsOneWrite(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	c, err := f.svc.UpsertBlocks(t.Context(), ws, plan, drive.Author{Session: "chat-1"}, "The Plan", "",
-		drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "a"},
-		drive.Block{ID: "b", Kind: drive.BlockKindMarkdown, Body: "b"},
-		drive.Block{ID: "c", Kind: drive.BlockKindLink, Title: "PR", URL: "https://example.com"},
-	)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"a", "b", "c"}, blockIDs(c), "a batch applies in order")
-	assert.Equal(t, c.Blocks[0].UpdatedAt, c.Blocks[2].UpdatedAt, "one write, one stamp")
-	assert.Len(t, f.changes(), 1, "one write, one event")
-}
-
-func TestRemoveBlock(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-	_, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-	require.NoError(t, err)
-
-	c, removed, err := f.svc.RemoveBlock(ctx, ws, plan, "a", drive.Author{})
-	require.NoError(t, err)
-	assert.True(t, removed)
-	assert.Empty(t, c.Blocks)
-
-	_, removed, err = f.svc.RemoveBlock(ctx, ws, plan, "a", drive.Author{})
-	require.NoError(t, err)
-	assert.False(t, removed)
-
-	_, _, err = f.svc.RemoveBlock(ctx, ws, "canvases/other.canvas.json", "a", drive.Author{})
-	require.ErrorIs(t, err, drive.ErrNotFound, "a never-written canvas is not found")
-	assert.Len(t, f.changes(), 2, "a removal that changed nothing publishes nothing")
-}
-
-func TestSetCanvasFrontmatterReplacesEditableFields(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-	first, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "The Plan", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-	require.NoError(t, err)
-
-	fm := drive.Frontmatter{"tags": []any{"release", "desktop"}, "reviewed": true, "score": float64(7)}
-	c, err := f.svc.SetCanvasFrontmatter(ctx, ws, plan, drive.Author{}, fm)
-	require.NoError(t, err)
-	assert.Equal(t, fm, c.Frontmatter)
-	assert.Greater(t, c.UpdatedAt, first.UpdatedAt)
-	fm["tags"].([]any)[0] = "changed"
-	assert.Equal(t, "release", c.Frontmatter["tags"].([]any)[0], "the canvas holds its own copy")
-
-	c, err = f.svc.SetCanvasFrontmatter(ctx, ws, plan, drive.Author{}, drive.Frontmatter{})
-	require.NoError(t, err)
-	assert.Empty(t, c.Frontmatter, "an empty mapping removes every editable field")
-
-	_, err = f.svc.SetCanvasFrontmatter(ctx, ws, plan, drive.Author{}, drive.Frontmatter{"created_at": "yesterday"})
-	require.ErrorIs(t, err, drive.ErrInvalidFrontmatter)
-
-	_, err = f.svc.SetCanvasFrontmatter(ctx, ws, "canvases/ghost.canvas.json", drive.Author{}, drive.Frontmatter{"tags": []any{"x"}})
-	require.ErrorIs(t, err, drive.ErrNotFound)
-}
-
-func TestClearCanvasKeepsTheCanvas(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-	first, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "The Plan", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-	require.NoError(t, err)
-
-	c, err := f.svc.ClearCanvas(ctx, ws, plan, drive.Author{})
-	require.NoError(t, err)
-	assert.Empty(t, c.Blocks)
-	assert.Equal(t, first.CreatedAt, c.CreatedAt, "clear keeps the canvas's CreatedAt")
-	assert.Equal(t, "The Plan", c.Title, "clear keeps the title")
-
-	reloaded, ok, err := f.svc.LoadCanvas(ctx, ws, plan)
-	require.NoError(t, err)
-	require.True(t, ok, "the file survives a clear")
-	assert.Empty(t, reloaded.Blocks)
-
-	_, err = f.svc.ClearCanvas(ctx, ws, "canvases/other.canvas.json", drive.Author{})
-	require.ErrorIs(t, err, drive.ErrNotFound)
-}
-
-func TestListCanvasesOrdersByUpdatedAtDesc(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-	_, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "The Plan", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-	require.NoError(t, err)
-	_, err = f.svc.UpsertBlocks(ctx, ws, "reports/2026/perf.canvas.json", drive.Author{Session: "chat-2"}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-	require.NoError(t, err)
-	_, err = f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "", "", drive.Block{ID: "b", Kind: drive.BlockKindMarkdown, Body: "y"})
-	require.NoError(t, err)
-
-	metas, err := f.svc.ListCanvases(ctx, ws)
-	require.NoError(t, err)
-	require.Len(t, metas, 2)
-	assert.Equal(t, plan, metas[0].Path, "the most recently updated canvas lists first")
-	assert.Equal(t, ws.Key, metas[0].Space)
-	assert.Equal(t, "The Plan", metas[0].Title)
-	assert.Equal(t, "chat-1", metas[0].Session)
-	assert.Equal(t, 2, metas[0].BlockCount)
-	assert.Equal(t, "reports/2026/perf.canvas.json", metas[1].Path, "a canvas under a folder is listed too")
-
-	empty, err := f.svc.ListCanvases(ctx, acme)
-	require.NoError(t, err)
-	assert.Empty(t, empty)
-}
-
-func TestCanvasPathMustBeACanvas(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-	for _, path := range []string{"plan.md", "canvases/plan.json", "../plan.canvas.json"} {
-		_, err := f.svc.UpsertBlocks(ctx, ws, path, drive.Author{}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-		require.ErrorIs(t, err, drive.ErrInvalidPath, "path %q", path)
-	}
-	_, err := f.svc.UpsertBlocks(ctx, drive.Space{Key: "../escape"}, plan, drive.Author{}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-	require.ErrorIs(t, err, drive.ErrInvalidSpace)
-}
-
-func TestCorruptCanvasIsAnErrorNotABlankCanvas(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-	_, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-	require.NoError(t, err)
-	f.write(t, ws, plan, "{not json")
-
-	_, _, err = f.svc.LoadCanvas(ctx, ws, plan)
-	require.Error(t, err)
-	_, err = f.svc.ListCanvases(ctx, ws)
-	require.Error(t, err)
-}
-
-func TestCanvasWritesLeaveNoTempFiles(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-	_, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-	require.NoError(t, err)
-	_, err = f.svc.ClearCanvas(ctx, ws, plan, drive.Author{})
-	require.NoError(t, err)
-
-	entries, err := os.ReadDir(filepath.Join(f.root, "workspaces", "ws", "canvases"))
-	require.NoError(t, err)
-	require.Len(t, entries, 1)
-	assert.Equal(t, "plan.canvas.json", entries[0].Name())
-}
-
-func TestCanvasFileCarriesSpaceAndPath(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	_, err := f.svc.UpsertBlocks(t.Context(), acme, plan, drive.Author{HiveSession: "abc123"}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-	require.NoError(t, err)
-
-	data, err := os.ReadFile(filepath.Join(f.root, "acme", "site", "canvases", "plan.canvas.json"))
-	require.NoError(t, err)
-	var raw map[string]any
-	require.NoError(t, json.Unmarshal(data, &raw))
-	assert.Equal(t, "acme/site", raw["space"])
-	assert.Equal(t, plan, raw["path"])
-	assert.Equal(t, "abc123", raw["hiveSession"])
-	assert.NotContains(t, raw, "workspace")
-	assert.NotContains(t, raw, "name")
-}
-
-// The tree.
-
 func TestTreeListsEveryKindAndSkipsDotEntries(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, nil)
@@ -365,8 +106,7 @@ func TestTreeListsEveryKindAndSkipsDotEntries(t *testing.T) {
 	f.write(t, acme, "plans/notes.md", "no front matter\n")
 	f.write(t, acme, "report.html", "<h1>hi</h1>")
 	f.write(t, acme, "notes.txt", "x")
-	f.write(t, acme, "canvases/perf.canvas.json", `{"title":"Perf","frontmatter":{"ready":true},"blocks":[]}`)
-	f.write(t, acme, "canvases/stray.json", `{"not":"a canvas"}`)
+	f.write(t, acme, "canvases/perf.canvas.json", `{"title":"Perf","blocks":[]}`)
 	f.write(t, acme, ".git/HEAD", "ref")
 	f.write(t, acme, ".DS_Store", "")
 	f.write(t, acme, "kv.json", `{"entries":{}}`)
@@ -403,13 +143,9 @@ func TestTreeListsEveryKindAndSkipsDotEntries(t *testing.T) {
 
 	entry, ok = drive.Find(root, "canvases/perf.canvas.json")
 	require.True(t, ok)
-	assert.Equal(t, drive.KindCanvas, entry.Kind)
-	assert.Equal(t, "Perf", entry.Title)
-	assert.Equal(t, drive.Frontmatter{"ready": true}, entry.Front)
-
-	entry, ok = drive.Find(root, "canvases/stray.json")
-	require.True(t, ok)
-	assert.Equal(t, drive.KindFile, entry.Kind, "a json file without blocks is a plain file")
+	assert.Equal(t, drive.KindFile, entry.Kind, "a leftover canvas file is a plain file")
+	assert.Empty(t, entry.Title)
+	assert.Nil(t, entry.Front)
 
 	_, ok = drive.Find(root, ".git")
 	assert.False(t, ok)
@@ -493,66 +229,6 @@ func TestLocateIsTheFileOnDisk(t *testing.T) {
 	require.ErrorIs(t, err, drive.ErrInvalidPath)
 	_, err = f.svc.Locate(drive.Space{Key: "../x"}, "a.md")
 	require.ErrorIs(t, err, drive.ErrInvalidSpace)
-}
-
-func TestFirstScanRenamesLegacyCanvasesOnce(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	f.write(t, acme, "canvases/plan.json", `{"workspace":"acme/site","name":"plan","title":"Legacy","blocks":[]}`)
-	f.write(t, acme, "canvases/taken.json", `{"blocks":[]}`)
-	f.write(t, acme, "canvases/taken.canvas.json", `{"title":"Already here","blocks":[]}`)
-	f.write(t, acme, "canvases/stray.json", `{"blocks":"no"}`)
-	f.write(t, acme, "canvases/notes.json", `{"a":1}`)
-	f.write(t, acme, "canvases/broken.json", `{`)
-	f.write(t, acme, "other/plan.json", `{"blocks":[]}`)
-
-	root, err := f.svc.Tree(t.Context(), acme)
-	require.NoError(t, err)
-	canvases, ok := drive.Find(root, "canvases")
-	require.True(t, ok)
-	assert.Equal(t, []string{
-		"canvases/broken.json", "canvases/notes.json", "canvases/plan.canvas.json",
-		"canvases/stray.canvas.json", "canvases/taken.canvas.json", "canvases/taken.json",
-	}, paths(canvases.Children))
-	for _, path := range []string{"canvases/notes.json", "canvases/broken.json"} {
-		entry, _ := drive.Find(root, path)
-		assert.Equal(t, drive.KindFile, entry.Kind, "%s holds no canvas and keeps its name", path)
-	}
-	entry, _ := drive.Find(root, "canvases/plan.canvas.json")
-	assert.Equal(t, "Legacy", entry.Title)
-	entry, _ = drive.Find(root, "canvases/taken.canvas.json")
-	assert.Equal(t, "Already here", entry.Title, "an existing target is left alone")
-	entry, _ = drive.Find(root, "canvases/stray.canvas.json")
-	assert.Equal(t, drive.KindCanvas, entry.Kind, "a blocks key of any shape makes a canvas; the kind is by name")
-	entry, _ = drive.Find(root, "other/plan.json")
-	assert.Equal(t, drive.KindFile, entry.Kind, "only canvases/ is migrated")
-
-	listing := func() []string {
-		entries, err := os.ReadDir(filepath.Join(f.root, "acme", "site", "canvases"))
-		require.NoError(t, err)
-		names := make([]string, 0, len(entries))
-		for _, entry := range entries {
-			names = append(names, entry.Name())
-		}
-		return names
-	}
-	f.write(t, acme, "canvases/late.json", `{"blocks":[]}`)
-	f.svc.mu.Lock()
-	delete(f.svc.spaces, acme.Key)
-	f.svc.mu.Unlock()
-	rebuilt, err := f.svc.Tree(t.Context(), acme)
-	require.NoError(t, err)
-	_, ok = drive.Find(rebuilt, "canvases/late.json")
-	assert.True(t, ok, "a rebuilt snapshot does not run the rename again")
-	require.NoError(t, os.Remove(filepath.Join(f.root, "acme", "site", "canvases", "late.json")))
-
-	before := listing()
-	again := newFixture(t, nil)
-	again.svc.cfg = f.svc.cfg
-	root2, err := again.svc.Tree(t.Context(), acme)
-	require.NoError(t, err)
-	assert.Equal(t, paths(flatten(root)), paths(flatten(root2)))
-	assert.Equal(t, before, listing(), "a second scan renames nothing")
 }
 
 // Documents.
@@ -720,27 +396,6 @@ func TestMoveRefusesAKindChange(t *testing.T) {
 	assert.Len(t, f.changes(), 1, "a refusal publishes nothing")
 }
 
-func TestMoveKeepsACanvasAddressable(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-	_, err := f.svc.UpsertBlocks(ctx, acme, plan, drive.Author{}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-	require.NoError(t, err)
-
-	for _, to := range []string{"plans/My Plan.canvas.json", "Plan.canvas.json", "plans/-x.canvas.json"} {
-		_, err := f.svc.Move(ctx, acme, plan, to, drive.Author{})
-		require.ErrorIs(t, err, drive.ErrInvalidPath, to)
-		require.ErrorContains(t, err, "canvas name", to)
-	}
-	assert.FileExists(t, filepath.Join(f.root, "acme", "site", "canvases", "plan.canvas.json"))
-
-	moved, err := f.svc.Move(ctx, acme, plan, "perf.canvas.json", drive.Author{})
-	require.NoError(t, err, "a canvas at the space root is addressable as ./perf")
-	assert.Equal(t, "./perf", drive.CanvasName(moved.Path))
-	_, err = f.svc.Move(ctx, acme, "perf.canvas.json", "reports/2026/perf.canvas.json", drive.Author{})
-	require.NoError(t, err)
-}
-
 func TestMoveRenamesCaseOnlyOnACaseInsensitiveFileSystem(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, nil)
@@ -841,8 +496,6 @@ func TestADirectoryLinkInsideASpaceIsRefused(t *testing.T) {
 	require.ErrorIs(t, err, drive.ErrInvalidPath)
 	require.ErrorIs(t, f.svc.Delete(ctx, acme, "link/secret.md", drive.Author{}), drive.ErrInvalidPath)
 	_, err = f.svc.Move(ctx, acme, "link/secret.md", "stolen.md", drive.Author{})
-	require.ErrorIs(t, err, drive.ErrInvalidPath)
-	_, err = f.svc.UpsertBlocks(ctx, acme, "link/x.canvas.json", drive.Author{}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown})
 	require.ErrorIs(t, err, drive.ErrInvalidPath)
 	assert.FileExists(t, filepath.Join(outside, "secret.md"))
 }
@@ -1033,7 +686,7 @@ func TestSearchMatchesPathAndTitleAcrossSpaces(t *testing.T) {
 	ctx := t.Context()
 	f.write(t, acme, "plans/2026-10-11-drive.md", "---\ntitle: Hive Drive\n---\n")
 	f.write(t, acme, "research/notes.md", "---\ntitle: Drive research\n---\n")
-	f.write(t, acme, "canvases/perf.canvas.json", `{"title":"Perf drive","blocks":[]}`)
+	f.write(t, acme, "reports/perf.md", "---\ntitle: Perf drive\n---\n")
 	f.write(t, ws, "drive-ideas.md", "x")
 	f.write(t, drive.Shared, "misc/other.md", "x")
 
@@ -1045,8 +698,8 @@ func TestSearchMatchesPathAndTitleAcrossSpaces(t *testing.T) {
 		assert.Nil(t, hit.Entry.Children)
 	}
 	assert.Equal(t, []string{
-		"acme/site:canvases/perf.canvas.json",
 		"acme/site:plans/2026-10-11-drive.md",
+		"acme/site:reports/perf.md",
 		"acme/site:research/notes.md",
 		"workspaces/ws:drive-ideas.md",
 	}, got, "spaces in listing order, paths sorted inside a space")
@@ -1105,7 +758,7 @@ func TestRecentListsDocumentsNewestCreatedFirstAcrossSpaces(t *testing.T) {
 		{acme, "plans/old.md"},
 		{drive.Shared, "notes.md"},
 		{ws, "reports/2026/summary.md"},
-		{acme, "canvases/perf.canvas.json"},
+		{acme, "reports/perf.md"},
 	} {
 		f.write(t, doc.space, doc.path, "x")
 		stamp := base.Add(time.Duration(i) * time.Minute)
@@ -1125,12 +778,12 @@ func TestRecentListsDocumentsNewestCreatedFirstAcrossSpaces(t *testing.T) {
 		return got
 	}
 	assert.Equal(t, []string{
-		"acme/site:canvases/perf.canvas.json",
+		"acme/site:reports/perf.md",
 		"workspaces/ws:reports/2026/summary.md",
 		"shared:notes.md",
 		"acme/site:plans/old.md",
 	}, recent(0))
-	assert.Equal(t, []string{"acme/site:canvases/perf.canvas.json", "workspaces/ws:reports/2026/summary.md"}, recent(2))
+	assert.Equal(t, []string{"acme/site:reports/perf.md", "workspaces/ws:reports/2026/summary.md"}, recent(2))
 }
 
 // Reconfigure.
@@ -1172,85 +825,6 @@ func TestReconfigureToANewRootPublishesEveryScannedSpace(t *testing.T) {
 
 	f.svc.Reconfigure(&config.Config{Context: config.ContextConfig{BaseDir: t.TempDir()}}, stubGit{})
 	assert.Equal(t, []events.DriveChangedPayload{{Space: acme.Key}, {Space: ws.Key}}, f.changes())
-}
-
-// Legacy import.
-
-func TestImportLegacyCanvasesMovesRewritesAndRemovesTheEmptySource(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-	from := filepath.Join(t.TempDir(), "canvases")
-	require.NoError(t, os.MkdirAll(from, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(from, "plan.json"), []byte(`{"workspace":"hive","name":"plan","title":"Legacy","session":42,"createdAt":1,"updatedAt":2,"blocks":[{"id":"a","kind":"markdown","body":"x","createdAt":1,"updatedAt":1}]}`), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(from, "report.canvas.json"), []byte(`{"blocks":[]}`), 0o644))
-	f.write(t, ws, "canvases/taken.canvas.json", `{"title":"Already here","blocks":[]}`)
-	require.NoError(t, os.WriteFile(filepath.Join(from, "taken.json"), []byte(`{"blocks":[]}`), 0o644))
-
-	count, err := f.svc.ImportLegacyCanvases(ctx, from, ws)
-	require.NoError(t, err)
-	assert.Equal(t, 2, count)
-
-	c, ok, err := f.svc.LoadCanvas(ctx, ws, "canvases/plan.canvas.json")
-	require.NoError(t, err)
-	require.True(t, ok)
-	assert.Equal(t, "Legacy", c.Title)
-	assert.Equal(t, "42", c.Session)
-	assert.Len(t, c.Blocks, 1)
-	data, err := os.ReadFile(filepath.Join(f.root, "workspaces", "ws", "canvases", "plan.canvas.json"))
-	require.NoError(t, err)
-	assert.Contains(t, string(data), `"space": "workspaces/ws"`)
-	assert.Contains(t, string(data), `"path": "canvases/plan.canvas.json"`)
-	assert.NotContains(t, string(data), `"workspace"`)
-	assert.FileExists(t, filepath.Join(f.root, "workspaces", "ws", "canvases", "report.canvas.json"), "a .canvas.json source keeps its stem")
-
-	c, _, err = f.svc.LoadCanvas(ctx, ws, "canvases/taken.canvas.json")
-	require.NoError(t, err)
-	assert.Equal(t, "Already here", c.Title, "an existing target is kept")
-	assert.FileExists(t, filepath.Join(from, "taken.json"), "a skipped source stays")
-	assert.NoFileExists(t, filepath.Join(from, "plan.json"))
-
-	count, err = f.svc.ImportLegacyCanvases(ctx, from, ws)
-	require.NoError(t, err)
-	assert.Equal(t, 0, count, "a second run finds nothing to move")
-
-	changes := f.changes()
-	require.Len(t, changes, 1)
-	assert.Equal(t, ws.Key, changes[0].Space)
-	assert.ElementsMatch(t, []string{"canvases/plan.canvas.json", "canvases/report.canvas.json"}, changes[0].Paths)
-}
-
-func TestImportLegacyCanvasesRemovesAnEmptiedSourceAndLeavesTheRest(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	ctx := t.Context()
-	from := filepath.Join(t.TempDir(), "canvases")
-	require.NoError(t, os.MkdirAll(from, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(from, "a.json"), []byte(`{"blocks":[]}`), 0o644))
-
-	count, err := f.svc.ImportLegacyCanvases(ctx, from, drive.Shared)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-	assert.NoDirExists(t, from)
-
-	kept := filepath.Join(t.TempDir(), "canvases")
-	require.NoError(t, os.MkdirAll(kept, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(kept, "settings.json"), []byte(`{"theme":"dark"}`), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(kept, "b.json"), []byte(`{"blocks":[]}`), 0o644))
-	count, err = f.svc.ImportLegacyCanvases(ctx, kept, drive.Shared)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-	assert.FileExists(t, filepath.Join(kept, "settings.json"), "a json that is not a canvas stays, and so does its directory")
-
-	count, err = f.svc.ImportLegacyCanvases(ctx, filepath.Join(t.TempDir(), "missing"), drive.Shared)
-	require.NoError(t, err)
-	assert.Equal(t, 0, count)
-
-	root, err := f.svc.Tree(ctx, drive.Shared)
-	require.NoError(t, err)
-	canvases, ok := drive.Find(root, "canvases")
-	require.True(t, ok)
-	assert.Equal(t, []string{"canvases/a.canvas.json", "canvases/b.canvas.json"}, paths(canvases.Children))
 }
 
 // Context directory operations.
@@ -1301,13 +875,13 @@ func TestCreateSymlink(t *testing.T) {
 	require.ErrorContains(t, err, "not a symlink")
 }
 
-func TestPruneRemovesOldEntriesAndKeepsCanvases(t *testing.T) {
+func TestPruneRemovesOldEntries(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, nil)
 	dir, err := f.svc.SpaceDir(acme)
 	require.NoError(t, err)
 	old := time.Now().Add(-48 * time.Hour)
-	for _, name := range []string{"plans", "notes.md", drive.CanvasesDir} {
+	for _, name := range []string{"plans", "notes.md", "canvases"} {
 		path := filepath.Join(dir, name)
 		if filepath.Ext(name) == "" {
 			require.NoError(t, os.MkdirAll(path, 0o755))
@@ -1323,44 +897,21 @@ func TestPruneRemovesOldEntriesAndKeepsCanvases(t *testing.T) {
 
 	removed, err := f.svc.Prune(dir, 24*time.Hour)
 	require.NoError(t, err)
-	assert.Equal(t, 2, removed)
+	assert.Equal(t, 3, removed)
 	assert.NoDirExists(t, filepath.Join(dir, "plans"))
 	assert.NoFileExists(t, filepath.Join(dir, "notes.md"))
 	assert.FileExists(t, filepath.Join(dir, "fresh.md"))
-	assert.DirExists(t, filepath.Join(dir, drive.CanvasesDir), "canvases are durable output, not stale context")
+	assert.NoDirExists(t, filepath.Join(dir, "canvases"), "a canvases folder is pruned like any other")
 
 	root, err := f.svc.Tree(t.Context(), acme)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"canvases", "fresh.md"}, paths(root.Children), "a prune drops the snapshot")
+	assert.Equal(t, []string{"fresh.md"}, paths(root.Children), "a prune drops the snapshot")
 	assert.Len(t, f.changes(), 1)
 
 	removed, err = f.svc.Prune(filepath.Join(f.root, "nowhere"), time.Hour)
 	require.NoError(t, err)
 	assert.Equal(t, 0, removed)
 	assert.Len(t, f.changes(), 1, "nothing removed, nothing published")
-}
-
-func TestPruneKeepsAFolderHoldingACanvasAtAnyDepth(t *testing.T) {
-	t.Parallel()
-	f := newFixture(t, nil)
-	dir, err := f.svc.SpaceDir(acme)
-	require.NoError(t, err)
-	f.write(t, acme, "reports/2026-10/perf.canvas.json", `{"blocks":[]}`)
-	f.write(t, acme, "reports/2026-10/notes.md", "x")
-	f.write(t, acme, "old/notes.md", "x")
-	f.write(t, acme, "root.canvas.json", `{"blocks":[]}`)
-	old := time.Now().Add(-48 * time.Hour)
-	for _, name := range []string{"reports", "old", "root.canvas.json"} {
-		require.NoError(t, os.Chtimes(filepath.Join(dir, name), old, old))
-	}
-
-	removed, err := f.svc.Prune(dir, 24*time.Hour)
-	require.NoError(t, err)
-	assert.Equal(t, 1, removed)
-	assert.NoDirExists(t, filepath.Join(dir, "old"))
-	assert.FileExists(t, filepath.Join(dir, "reports", "2026-10", "perf.canvas.json"))
-	assert.FileExists(t, filepath.Join(dir, "reports", "2026-10", "notes.md"), "a folder holding a canvas is kept whole")
-	assert.FileExists(t, filepath.Join(dir, "root.canvas.json"))
 }
 
 func TestEveryMutationPublishesOnceWithItsAuthor(t *testing.T) {
@@ -1375,16 +926,6 @@ func TestEveryMutationPublishesOnceWithItsAuthor(t *testing.T) {
 		{"write", func() error { _, err := f.svc.Write(ctx, acme, "plans/a.md", author, []byte("x")); return err }},
 		{"create folder", func() error { _, err := f.svc.CreateFolder(ctx, acme, "reports", author); return err }},
 		{"move", func() error { _, err := f.svc.Move(ctx, acme, "plans/a.md", "reports/a.md", author); return err }},
-		{"upsert", func() error {
-			_, err := f.svc.UpsertBlocks(ctx, acme, plan, author, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
-			return err
-		}},
-		{"remove block", func() error { _, _, err := f.svc.RemoveBlock(ctx, acme, plan, "a", author); return err }},
-		{"set front matter", func() error {
-			_, err := f.svc.SetCanvasFrontmatter(ctx, acme, plan, author, drive.Frontmatter{"k": "v"})
-			return err
-		}},
-		{"clear", func() error { _, err := f.svc.ClearCanvas(ctx, acme, plan, author); return err }},
 		{"delete", func() error { return f.svc.Delete(ctx, acme, "reports/a.md", author) }},
 	}
 	for i, step := range steps {

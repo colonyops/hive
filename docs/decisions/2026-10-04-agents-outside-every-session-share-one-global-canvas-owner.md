@@ -1,6 +1,6 @@
 # Agents outside every session share one global canvas owner
 
-- **Status:** accepted; the tool and argument names superseded in part by [every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it](2026-11-03-every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it.md) (`session` is now `caller`)
+- **Status:** accepted; the tool and argument names superseded in part by [every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it](2026-11-03-every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it.md) (`session` is now `caller`); canvases superseded by [hive-drive-has-no-canvas-document-kind](2026-11-06-hive-drive-has-no-canvas-document-kind.md) (`caller: "global"` still resolves to the shared space)
 - **Date:** 2026-10-04
 
 ## Context

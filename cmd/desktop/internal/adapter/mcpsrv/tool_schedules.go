@@ -10,9 +10,8 @@ import (
 	"github.com/colonyops/hive/internal/ops/workspaces"
 )
 
-// The schedule tools answer times as RFC 3339 in local time, unlike the canvas
-// tools' unix milliseconds: cron is local time, and "Friday at 09:00" is what
-// a model reasons about. Running a schedule outside its timetable spawns an
+// The schedule tools answer times as RFC 3339 in local time: cron is local
+// time, and "Friday at 09:00" is what a model reasons about. Running a schedule outside its timetable spawns an
 // agent CLI, which this surface never does (see the package comment).
 
 type listWorkspacesOutput struct {

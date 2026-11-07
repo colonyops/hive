@@ -145,15 +145,8 @@ describe('useReveal', () => {
       await flushPromises()
     }
 
-    await open({ area: 'chats', workspace: 'research', chat: '42', canvas: 'notes' })
-    expect(push).toHaveBeenLastCalledWith({
-      name: 'agents',
-      params: { workspace: 'research' },
-      query: { chat: '42', doc: 'canvases/notes.canvas.json' },
-    })
-
-    await open({ area: 'code', slug: 'web', canvas: '1' })
-    expect(push).toHaveBeenLastCalledWith({ name: 'terminal', params: { slug: 'web' }, query: { doc: '1' } })
+    await open({ area: 'chats', workspace: 'research', chat: '42' })
+    expect(push).toHaveBeenLastCalledWith({ name: 'agents', params: { workspace: 'research' }, query: { chat: '42' } })
 
     await open({ area: 'code', slug: 'web', server: 'local' })
     expect(push).toHaveBeenLastCalledWith({ name: 'terminal', params: { slug: 'web' }, query: {} })
@@ -167,23 +160,6 @@ describe('useReveal', () => {
 
     await open({ area: 'inbox', profile: 'work', feed: 'prs' })
     expect(push).toHaveBeenLastCalledWith({ name: 'feed', params: { profileId: 'work' }, query: { feed: 'prs' } })
-
-    await open({ area: 'canvas', canvas: 'plan', owner: 'colonyops/hive' })
-    expect(openDrive).toHaveBeenLastCalledWith({
-      space: 'colonyops/hive',
-      path: 'canvases/plan.canvas.json',
-      session: null,
-    })
-
-    await open({ area: 'canvas', canvas: 'notes', owner: '@global' })
-    expect(openDrive).toHaveBeenLastCalledWith({ space: 'shared', path: 'canvases/notes.canvas.json', session: null })
-
-    await open({ area: 'canvas', canvas: 'reports/perf', owner: 'demo' })
-    expect(openDrive).toHaveBeenLastCalledWith({
-      space: 'workspaces/demo',
-      path: 'reports/perf.canvas.json',
-      session: null,
-    })
 
     await open({ area: 'drive', space: 'colonyops/hive', path: 'plans/x.md' })
     expect(openDrive).toHaveBeenLastCalledWith({ space: 'colonyops/hive', path: 'plans/x.md', session: null })

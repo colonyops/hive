@@ -680,7 +680,7 @@ describe('TerminalMode', () => {
             repo: '/home/hive/repo.git',
             repoIdentity: '/home/hive/repo.git',
             state: 'active',
-            canvasOwner: '',
+            driveSpace: '',
             tags: [],
             createdAt: '',
           },
@@ -724,7 +724,7 @@ describe('TerminalMode', () => {
           repo: '/home/hive/repo.git',
           repoIdentity: '/home/hive/repo.git',
           state: 'active',
-          canvasOwner: '',
+          driveSpace: '',
           tags: [],
           createdAt: '',
         },
@@ -767,7 +767,7 @@ describe('TerminalMode', () => {
           repo: '/home/hive/repo.git',
           repoIdentity: '/home/hive/repo.git',
           state: 'active',
-          canvasOwner: '',
+          driveSpace: '',
           tags: [],
           createdAt: '',
         },
@@ -859,7 +859,7 @@ describe('TerminalMode', () => {
         repo: remote,
         repoIdentity: 'github.com/grafana/ai-sdk',
         state: 'active',
-        canvasOwner: '',
+        driveSpace: '',
         tags: [],
         createdAt: '',
       },
@@ -870,7 +870,7 @@ describe('TerminalMode', () => {
         repo: 'ssh://git@github.com/grafana/ai-sdk.git',
         repoIdentity: 'github.com/grafana/ai-sdk',
         state: 'active',
-        canvasOwner: '',
+        driveSpace: '',
         tags: [],
         createdAt: '',
       },
@@ -3346,7 +3346,7 @@ describe('TerminalMode', () => {
               repo: '/home/hive/repo.git',
               repoIdentity: '/home/hive/repo.git',
               state: 'active',
-              canvasOwner: '',
+              driveSpace: '',
               tags: [],
               createdAt: '',
             },
@@ -4778,7 +4778,7 @@ describe('TerminalMode', () => {
               repo: '/home/hive/repo.git',
               repoIdentity: '/home/hive/repo.git',
               state: 'active',
-              canvasOwner: '',
+              driveSpace: '',
               tags: [],
               createdAt: '',
             },
@@ -4966,7 +4966,7 @@ describe('TerminalMode', () => {
     })
 
     it('keeps the tab mounted while the active terminal window changes', async () => {
-      const { wrapper, session } = await mountWithDrive('/terminal/hive-fix-parser?doc=canvases%2Fmermaid.canvas.json')
+      const { wrapper, session } = await mountWithDrive('/terminal/hive-fix-parser?doc=plans%2Fmermaid.md')
       const pane = wrapper.get('[data-testid="drive-page"]').element
 
       session.activeWindowId.value = '@2'
@@ -5103,7 +5103,7 @@ describe('TerminalMode', () => {
               repo: '/home/hive/repo.git',
               repoIdentity: '/home/hive/repo.git',
               state: 'active',
-              canvasOwner: '',
+              driveSpace: '',
               tags: [],
               createdAt: '',
             },

@@ -107,7 +107,7 @@ With `base_dir: ~/notes/hive-context`, the layout is:
 
 Each project's `.hive` symlink points to its own subdirectory. A space is a folder under the root: `<owner>/<repo>/` for a repository, `workspaces/<name>/` for a Hive Desktop Chats workspace, and `shared/`. All documents live in one repository that you can push, pull, and browse with standard git tools.
 
-Hive Desktop shows the same files in its Drive view, and Obsidian or git sees the same files the desktop does. A document an agent writes, a file you edit in Obsidian, and a commit pulled by the sync job all appear in the drive within a second. Hive Desktop also stores its canvases here, as `.canvas.json` files, so they are committed with the rest.
+Hive Desktop shows the same files in its Drive view, and Obsidian or git sees the same files the desktop does. A document an agent writes, a file you edit in Obsidian, and a commit pulled by the sync job all appear in the drive within a second.
 
 ## Tips
 

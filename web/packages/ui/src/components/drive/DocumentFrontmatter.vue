@@ -56,7 +56,6 @@ function formatScalar(value: FrontmatterScalar): string {
   return String(value)
 }
 
-// Markdown front matter can nest; a canvas's never does.
 function formatValue(value: FrontmatterValue): string {
   if (Array.isArray(value)) return value.map(formatScalar).join(', ') || 'None'
   if (value !== null && typeof value === 'object') return JSON.stringify(value)

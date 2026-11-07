@@ -127,16 +127,6 @@ export interface AppletChatStart {
     "pinToCode": boolean;
 }
 
-export interface BlockWire {
-    "id": string;
-    "kind": string;
-    "title": string;
-    "body": string;
-    "url": string;
-    "createdAt": number;
-    "updatedAt": number;
-}
-
 /**
  * BuildInfo describes the running desktop build so users can see and report
  * the exact version they are on from the System settings screen.
@@ -167,22 +157,6 @@ export interface BuildInfo {
     "os": string;
     "arch": string;
     "goVersion": string;
-}
-
-/**
- * CanvasWire is one canvas with its html blocks sanitized. Timestamps are
- * unix milliseconds, as the canvas file stores them.
- */
-export interface CanvasWire {
-    "space": string;
-    "path": string;
-    "title": string;
-    "session": string;
-    "hiveSession": string;
-    "createdAt": number;
-    "updatedAt": number;
-    "frontmatter": { [_ in string]?: any } | null;
-    "blocks": BlockWire[] | null;
 }
 
 /**
@@ -282,15 +256,14 @@ export interface DocumentReviewWire {
 
 /**
  * DocumentWire is one document for the reader. Markdown is set for a
- * markdown document, HTML for an html one, Canvas for a canvas; a plain file
- * carries only its entry.
+ * markdown document and HTML for an html one; a plain file carries only its
+ * entry.
  */
 export interface DocumentWire {
     "space": SpaceWire;
     "entry": EntryWire;
     "markdown": string;
     "html": string;
-    "canvas": CanvasWire | null;
     "image": string;
 }
 
@@ -334,7 +307,7 @@ export interface EditorSettings {
 /**
  * EntryWire is one row of a space's tree. Path is relative to the space root
  * with forward slashes, "" for the root itself. Kind is dir, markdown, html,
- * canvas, or file. Created is the zero time where the file system records no
+ * or file. Created is the zero time where the file system records no
  * birth time. Front and Children are never null.
  */
 export interface EntryWire {
@@ -838,7 +811,7 @@ export interface SessionSummary {
     "repo": string;
     "repoIdentity": string;
     "state": string;
-    "canvasOwner": string;
+    "driveSpace": string;
     "tags": string[] | null;
     "createdAt": string;
 }

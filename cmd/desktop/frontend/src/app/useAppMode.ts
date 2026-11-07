@@ -175,7 +175,7 @@ export function useAppMode(
     const chat = recents.value.find((row) => row.slug === slug)
     if (chat) return { space: workspaceSpaceKey(chat.workspace), session: chat.id }
     const row = codeSessions.value.find((session) => session.slug === slug)
-    return row?.canvasOwner ? { space: row.canvasOwner, session: row.id } : null
+    return row?.driveSpace ? { space: row.driveSpace, session: row.id } : null
   })
 
   // One control per frame edge: the right toggle names the detail preview in

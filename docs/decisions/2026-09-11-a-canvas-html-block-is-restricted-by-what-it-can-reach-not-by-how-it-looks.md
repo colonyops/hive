@@ -1,6 +1,6 @@
 # A canvas html block is restricted by what it can reach, not by how it looks
 
-- **Status:** accepted
+- **Status:** superseded by [hive-drive-has-no-canvas-document-kind](2026-11-06-hive-drive-has-no-canvas-document-kind.md)
 - **Date:** 2026-09-11
 
 ## Context

@@ -17,8 +17,6 @@ const (
 	KindMarkdown Kind = "markdown"
 	// KindHtml is a Kind of type html.
 	KindHtml Kind = "html"
-	// KindCanvas is a Kind of type canvas.
-	KindCanvas Kind = "canvas"
 	// KindFile is a Kind of type file.
 	KindFile Kind = "file"
 )
@@ -29,7 +27,6 @@ var _KindNames = []string{
 	string(KindDir),
 	string(KindMarkdown),
 	string(KindHtml),
-	string(KindCanvas),
 	string(KindFile),
 }
 
@@ -56,7 +53,6 @@ var _KindValue = map[string]Kind{
 	"dir":      KindDir,
 	"markdown": KindMarkdown,
 	"html":     KindHtml,
-	"canvas":   KindCanvas,
 	"file":     KindFile,
 }
 

@@ -49,9 +49,8 @@ func (s *DriveService) ListDocuments(ctx context.Context, session, path string, 
 }
 
 // ReadDocument is one markdown, html, or plain UTF-8 file and its bytes, as
-// stored. A canvas is a structure of blocks rather than a body, so it is read
-// with canvas_get. Hive's own state files answer not_found, as they are
-// absent from every listing.
+// stored. Hive's own state files answer not_found, as they are absent from
+// every listing.
 func (s *DriveService) ReadDocument(ctx context.Context, session, path string) (drive.Entry, []byte, error) {
 	d, caller, err := s.open(ctx, session)
 	if err != nil {
@@ -62,9 +61,6 @@ func (s *DriveService) ReadDocument(ctx context.Context, session, path string) (
 	}
 	if drive.IsHiveState(path) {
 		return drive.Entry{}, nil, documentNotFound(caller.space, path)
-	}
-	if drive.KindOf(path) == drive.KindCanvas {
-		return drive.Entry{}, nil, Errorf(KindInvalid, "%q is a canvas; read it with canvas_get and the name %q", path, drive.CanvasName(path))
 	}
 	isDir, err := s.isDir(d, caller.space, path)
 	if err != nil {
@@ -95,8 +91,6 @@ func (s *DriveService) WriteDocument(ctx context.Context, session, path string, 
 	}
 	switch drive.KindOf(path) {
 	case drive.KindMarkdown, drive.KindHtml:
-	case drive.KindCanvas:
-		return drive.Entry{}, Errorf(KindInvalid, "%q is a canvas; write its blocks with canvas_blocks_put and the name %q", path, drive.CanvasName(path))
 	default:
 		return drive.Entry{}, Errorf(KindInvalid, "%q is neither a markdown (.md) nor an html (.html) document", path)
 	}
@@ -133,8 +127,7 @@ func checkFrontmatter(body []byte) error {
 }
 
 // MoveDocument renames a document or a folder inside the calling session's
-// space. The drive refuses a move that changes a document's kind or files a
-// canvas where no canvas name reaches it.
+// space. The drive refuses a move that changes a document's kind.
 func (s *DriveService) MoveDocument(ctx context.Context, session, from, to string) (drive.Entry, error) {
 	d, caller, err := s.open(ctx, session)
 	if err != nil {
@@ -152,8 +145,7 @@ func (s *DriveService) MoveDocument(ctx context.Context, session, from, to strin
 	return entry, nil
 }
 
-// DeleteDocument removes one document, a canvas included, or an empty
-// folder.
+// DeleteDocument removes one document or an empty folder.
 func (s *DriveService) DeleteDocument(ctx context.Context, session, path string) error {
 	d, caller, err := s.open(ctx, session)
 	if err != nil {

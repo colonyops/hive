@@ -1352,11 +1352,6 @@ func TestCatalogueResolvesTheDesktopsOwnEndpoint(t *testing.T) {
 	assert.True(t, byID["hive-drive"].Shipped)
 	assert.Equal(t, testMCPBaseURL+"/mcp/drive", byID["hive-drive"].Command)
 	assert.Empty(t, byID["hive-drive"].Problem)
-
-	require.Contains(t, byID, "hive-canvas")
-	assert.True(t, byID["hive-canvas"].Shipped)
-	assert.Equal(t, testMCPBaseURL+"/mcp/canvas", byID["hive-canvas"].Command)
-	assert.Empty(t, byID["hive-canvas"].Problem)
 }
 
 // With the loopback server down there is no endpoint to resolve, and the entry

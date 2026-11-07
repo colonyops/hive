@@ -25,7 +25,7 @@ func DeriveTitle(docPath string, kind drive.Kind, body []byte) string {
 		title = markdownTitle(head)
 	case drive.KindHtml:
 		title = htmlTitle(head)
-	case drive.KindDir, drive.KindCanvas, drive.KindFile:
+	case drive.KindDir, drive.KindFile:
 	}
 	if title != "" {
 		return title

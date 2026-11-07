@@ -280,20 +280,6 @@ func TestReconfigureMovesTheWatcherToTheNewRoot(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestWatchLeavesALegacyCanvasWrittenLaterAlone(t *testing.T) {
-	f := watching(t)
-
-	f.write(t, acme, "canvases/x.json", `{"blocks":[]}`)
-	waitForPath(t, f, acme, "canvases/x.json", true)
-
-	root, err := f.svc.Tree(t.Context(), acme)
-	require.NoError(t, err)
-	entry, _ := drive.Find(root, "canvases/x.json")
-	assert.Equal(t, drive.KindFile, entry.Kind)
-	assert.FileExists(t, filepath.Join(f.root, "acme", "site", "canvases", "x.json"))
-	assert.NoFileExists(t, filepath.Join(f.root, "acme", "site", "canvases", "x.canvas.json"), "the legacy rename runs only before the first scan")
-}
-
 func TestWatchRestartsWhenTheRootComesBack(t *testing.T) {
 	f := watching(t)
 	first := f.svc.watch

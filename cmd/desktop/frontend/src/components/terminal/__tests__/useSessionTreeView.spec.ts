@@ -13,7 +13,7 @@ function row(id: string, name: string, repo = 'github.com/acme/site'): TerminalS
     server: '',
     repoIdentity: repo,
     state: 'active',
-    canvasOwner: '',
+    driveSpace: '',
     tags: [],
     createdAt: '',
   }

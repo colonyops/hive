@@ -1,7 +1,6 @@
 package drive
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,39 +62,4 @@ func TestParseMarkdownFrontmatterErrors(t *testing.T) {
 			assert.Nil(t, fm)
 		})
 	}
-}
-
-func TestValidateFrontmatter(t *testing.T) {
-	manyKeys := Frontmatter{}
-	for i := range maxFrontmatterKeys + 1 {
-		manyKeys[strings.Repeat("k", i+1)] = i
-	}
-	longList := make([]any, maxFrontmatterList+1)
-	for i := range longList {
-		longList[i] = i
-	}
-	tooLarge := Frontmatter{}
-	for i := range 20 {
-		tooLarge["k"+strings.Repeat("x", i)] = strings.Repeat("y", maxFrontmatterText)
-	}
-
-	for name, fm := range map[string]Frontmatter{
-		"reserved created": {"created_at": "yesterday"},
-		"reserved updated": {"UPDATED_AT": "today"},
-		"bad key":          {"review status": "ready"},
-		"leading dot key":  {".hidden": 1},
-		"long key":         {strings.Repeat("k", maxFrontmatterKeyBytes+1): 1},
-		"nested object":    {"owner": map[string]any{"name": "Ada"}},
-		"nested list":      {"matrix": []any{[]any{"x"}}},
-		"long text":        {"notes": strings.Repeat("x", maxFrontmatterText+1)},
-		"long list":        {"items": longList},
-		"too many keys":    manyKeys,
-		"too large":        tooLarge,
-	} {
-		require.ErrorIs(t, ValidateFrontmatter(fm), ErrInvalidFrontmatter, name)
-	}
-	assert.NoError(t, ValidateFrontmatter(Frontmatter{
-		"tags": []any{"release", "desktop"}, "owner": "Ada", "ready": true, "score": float64(9.5), "note": nil, "n": int64(3),
-	}))
-	assert.NoError(t, ValidateFrontmatter(nil))
 }

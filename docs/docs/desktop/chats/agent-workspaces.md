@@ -86,7 +86,7 @@ Each schedule has its own prompt and controls to:
 - launch once after Hive reopens or skip a run missed while the app was closed;
 - preview upcoming times and inspect recent launched, skipped, or failed runs.
 
-Scheduled chats run unattended. If the previous scheduled chat is still active, Hive skips the next occurrence instead of starting overlapping work. Ask the agent to save durable output to a canvas or workspace file.
+Scheduled chats run unattended. If the previous scheduled chat is still active, Hive skips the next occurrence instead of starting overlapping work. Ask the agent to save durable output to a Drive document or workspace file.
 
 ## Workspace files
 
@@ -113,7 +113,7 @@ The built-in Hive package covers:
 Hive includes these MCP entries:
 
 - **Hive Desktop** for reading and configuring the running app. It requires the local HTTP server, which is enabled by default. Its `session_list` and `session_tags_update` tools let an agent find hive sessions by tag and add or remove tags, so an orchestrating agent can pick up the sessions taged `auto` and retag each one it takes.
-- **Hive Drive** for durable Markdown, HTML, and canvas documents beside a chat.
+- **Hive Drive** for durable Markdown and HTML documents beside a chat.
 - **Hive Chats** for starting chats in other workspaces with an opening prompt, and pinning chats to Code. A started chat runs its workspace's command with that workspace's permission settings, so enable it only in a workspace you trust to start others. It runs through `hive mcp serve` and needs the hive CLI at the app's version.
 - **Playwright** for browser automation. It requires Node.js and a Playwright browser.
 - **Chrome DevTools** for a running Chrome browser. It requires Node.js 20.19 or newer and Chrome.
@@ -122,7 +122,7 @@ You can add HTTP, SSE, and stdio servers to the shared MCP library, then enable 
 
 ## Drive
 
-Drive is the folder tree of documents that agents and you share. It holds Markdown, HTML, and canvas documents in folders, and it outlives any chat. The [hive CLI](../../cli/getting-started/context.md) reads the same tree.
+Drive is the folder tree of documents that agents and you share. It holds Markdown and HTML documents in folders, and it outlives any chat. The [hive CLI](../../cli/getting-started/context.md) reads the same tree.
 
 ### Where it shows
 
@@ -135,11 +135,11 @@ Search in a Drive tab or on the page looks across every space. To open a documen
 
 - **Markdown** (`.md`) renders with its front matter shown above it.
 - **HTML** (`.html`) runs in a sandbox. Scripts run inside the frame. The page cannot call Hive or send requests to localhost. It can load `https:` content.
-- **Canvas** (`.canvas.json`) is a document of blocks that an agent builds: Markdown, Mermaid diagrams, sanitized HTML, and links.
+- Any other file shows in the tree as a plain file. A `.canvas.json` from an earlier release is a plain file.
 
-Use a standalone `mermaid` fence inside a Markdown block for a diagram. Mermaid diagrams follow the current theme. Drag a diagram to pan, use its controls to zoom or fit it, or hold Control/Command while scrolling to zoom around the pointer. An invalid diagram shows an error in place without hiding the rest of the canvas.
+Use a standalone `mermaid` fence in a Markdown document for a diagram. Mermaid diagrams follow the current theme. Drag a diagram to pan, use its controls to zoom or fit it, or hold Control/Command while scrolling to zoom around the pointer. An invalid diagram shows an error in place without hiding the rest of the document.
 
-A Markdown document or a canvas can include front matter such as tags, status, or an owner. Hive displays it above the document. A canvas also shows automatic creation and update times. Collapse **Properties** to hide it; Hive uses that choice for every document. Agents replace a canvas's editable front matter with the `canvas_frontmatter_put` tool; `created_at` and `updated_at` are reserved and updated by Hive. Values can be text, numbers, booleans, empty values, or lists of those values. Copy and save include the metadata as YAML front matter and preserve Mermaid source in a fenced `mermaid` block.
+A Markdown document can include front matter such as tags, status, or an owner. Hive displays it above the document. Collapse **Properties** to hide it; Hive uses that choice for every document.
 
 **Settings ▸ Drive** changes text size, line spacing, and text width for every document, in Chats and in Code. **Settings ▸ Appearance** shows the same text size beside the other areas. The text runs at a narrow reading width by default. **Wide** fits HTML laid out in columns, and **Full** runs to the edges of the view.
 
@@ -177,7 +177,7 @@ A [Code session's](../code/terminal-mode.md#drive) checkout links its space as `
 
 ### Let an agent write
 
-An agent with **Hive Drive** enabled can publish documents beside its chat. The seeded Hive workspace has it on. The MCP server is at `/mcp/drive`; the older address `/mcp/canvas` answers the same server, so existing agent setups keep working. The five document tools are:
+An agent with **Hive Drive** enabled can publish documents beside its chat. The seeded Hive workspace has it on. The MCP server is at `/mcp/drive`. The five document tools are:
 
 - `document_list`
 - `document_get`
@@ -187,7 +187,7 @@ An agent with **Hive Drive** enabled can publish documents beside its chat. The 
 
 The layout tools on the same server (`tab_open`, `tab_close`, `tab_move`, `tab_focus`, `panel_close`, `split_resize`, `split_turn`, and `layout_get`) let the agent arrange the tabs beside its chat, open Drive on a document, and in Code open a terminal. See [Agents and the layout](../code/agent-layout.md).
 
-The eight canvas tools remain. A canvas name can include folders, so `reports/perf` is filed as `reports/perf.canvas.json`, and a bare name is filed under `canvases/`. An agent can only write `.md` and `.html` documents with `document_put`. `document_get` reads markdown, html, and any other text file in the space.
+An agent can only write `.md` and `.html` documents with `document_put`. `document_get` reads markdown, html, and any other text file in the space.
 
 A repository with no documents yet links to the setup in **Settings ▸ MCP servers**.
 

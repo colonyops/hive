@@ -18,8 +18,7 @@ import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { AddDriveMCP } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/agentsservice'
 
 // The drive first: it is the one an agent needs before it can show its work.
-// hive-canvas is the same server at its older address, so it comes last.
-const HOSTED_SERVERS = ['hive-drive', 'hive-desktop', 'hive-canvas']
+const HOSTED_SERVERS = ['hive-drive', 'hive-desktop']
 
 // The shipped catalogue entry carries the live address, so this page never
 // restates the port or a path.

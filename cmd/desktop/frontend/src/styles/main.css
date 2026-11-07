@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "@hive/ui/styles/theme.css";
 @import "@hive/ui/styles/markdown.css";
-@import "@hive/ui/styles/canvas-html.css";
 @import "./terminal-theme.css";
 @import "../assets/fonts/terminal-fonts.css";
 /* Tailwind v4 does not scan the symlinked workspace package on its own. */

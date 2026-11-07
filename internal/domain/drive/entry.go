@@ -11,8 +11,7 @@ import (
 	"unicode/utf8"
 )
 
-// Frontmatter is the metadata a markdown or canvas document carries: a flat
-// map for canvases (ValidateFrontmatter), anything YAML allows for markdown.
+// Frontmatter is the YAML metadata a markdown document carries.
 type Frontmatter map[string]any
 
 // Entry is one row of a space's tree.
@@ -23,9 +22,16 @@ type Entry struct {
 	Size     int64       `json:"size"`
 	Modified time.Time   `json:"modified"`
 	Created  time.Time   `json:"created"`
-	Title    string      `json:"title,omitempty"` // canvas title, or front matter "title"
-	Front    Frontmatter `json:"front,omitempty"` // markdown and canvas only
+	Title    string      `json:"title,omitempty"` // front matter "title"
+	Front    Frontmatter `json:"front,omitempty"` // markdown only
 	Children []Entry     `json:"children,omitempty"`
+}
+
+// Author is who made a change: a chat by its record id, or a hive session by
+// its id. At most one is set; neither is an agent outside both.
+type Author struct {
+	Session     string
+	HiveSession string
 }
 
 var (
@@ -35,7 +41,6 @@ var (
 	ErrExists             = errors.New("drive: already exists")
 	ErrNotEmpty           = errors.New("drive: folder is not empty")
 	ErrNotWritable        = errors.New("drive: only markdown and html documents can be written")
-	ErrAnchorNotFound     = errors.New("drive: anchor block not found")
 	ErrInvalidFrontmatter = errors.New("drive: invalid front matter")
 )
 

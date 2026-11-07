@@ -38,16 +38,14 @@ func (cmd *DesktopCmd) Register(app *cli.Command) *cli.Command {
 Hive Desktop registers hive:// links with the operating system. A link raises
 the window and opens the place it names:
 
-  hive://code/<slug>[?server=<name>][&window=<id>][&canvas=<name>]
-  hive://chats/<workspace>[/<chat-id>][?canvas=<name>]
+  hive://code/<slug>[?server=<name>][&window=<id>]
+  hive://chats/<workspace>[/<chat-id>]
   hive://inbox/<profile>[/<item-id>][?feed=<id>]
-  hive://canvas/<name>?owner=<workspace | owner/repo | @global>
   hive://drive/<space>[/<path>]
 
 <slug> is a tmux session name. server= names a server under servers: in
-config.yaml; without it a code link names a session on this machine. canvas=
-on a code or chats link opens the session's Drive tab. A drive <space> is shared, workspaces/<name>, or
-<owner>/<repo>, and <path> is a document or folder inside it, such as
+config.yaml; without it a code link names a session on this machine. A drive
+<space> is shared, workspaces/<name>, or <owner>/<repo>, and <path> is a document or folder inside it, such as
 hive://drive/colonyops/hive/plans/x.md; with no path the link opens the
 space. Escape each part, so "release plan" is release%20plan.
 

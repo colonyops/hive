@@ -1,6 +1,6 @@
 # Canvas html blocks are sanitized in Go and styled by an app-owned class vocabulary
 
-- **Status:** accepted
+- **Status:** superseded by [hive-drive-has-no-canvas-document-kind](2026-11-06-hive-drive-has-no-canvas-document-kind.md)
 - **Date:** 2026-08-29
 
 ## Context

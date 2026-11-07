@@ -33,7 +33,7 @@ const props = defineProps<{
   /** Lets the user select text to comment on and shows the document's comments. */
   commentable?: boolean
   /**
-   * Derives `-document`, `-markdown`, `-block-<id>` (with `-html` and `-link`), `-frame`, `-image`, `-file`, `-error`,
+   * Derives `-document`, `-markdown`, `-frame`, `-image`, `-file`, `-error`,
    * `-empty`, `-block-comment`, and the comment popover's ids (DriveCommentPopover).
    */
   testid: string

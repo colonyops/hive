@@ -28,8 +28,8 @@ export interface TerminalSessionRow {
   /** git.RemoteIdentity of repo: rows that share it are one repository over different transports. */
   repoIdentity: string
   state: string
-  /** The owner key of the session's canvases, its repository as owner/repo. Empty for a row with none. */
-  canvasOwner: string
+  /** The session's Drive space key. Empty for a row with none. */
+  driveSpace: string
   /** The user's tags on the session. Empty for scratch terminals and pinned chats. */
   tags: readonly string[] | null
   /** Start of the current Hive session lifecycle. Empty for scratch terminals and pinned chats. */
@@ -223,7 +223,7 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
         repo: '',
         repoIdentity: '',
         state: 'active',
-        canvasOwner: '',
+        driveSpace: '',
         tags: [],
         createdAt: '',
       }

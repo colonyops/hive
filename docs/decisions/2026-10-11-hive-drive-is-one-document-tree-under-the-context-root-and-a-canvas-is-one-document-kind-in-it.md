@@ -1,6 +1,6 @@
 # Hive Drive is one document tree under the context root, and a canvas is one document kind in it
 
-- **Status:** accepted; the tool names superseded in part by [every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it](2026-11-03-every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it.md)
+- **Status:** accepted; the tool names superseded in part by [every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it](2026-11-03-every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-is-built-from-it.md); the canvas kind, html blocks, and legacy canvas migrations superseded by [hive-drive-has-no-canvas-document-kind](2026-11-06-hive-drive-has-no-canvas-document-kind.md)
 - **Date:** 2026-10-11
 
 ## Context

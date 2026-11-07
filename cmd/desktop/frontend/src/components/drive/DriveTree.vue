@@ -202,7 +202,6 @@ const renameInput = ref<HTMLInputElement[]>([])
 let committing = false
 
 function stemLength(name: string): number {
-  if (name.endsWith('.canvas.json')) return name.length - '.canvas.json'.length
   const dot = name.lastIndexOf('.')
   return dot > 0 ? dot : name.length
 }

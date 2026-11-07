@@ -7,7 +7,7 @@ import type {
 /** Who wrote a document through an agent: a chat by its record id, or a hive session by its id. */
 export type DriveAuthor = string
 
-export type DriveKind = 'dir' | 'markdown' | 'html' | 'canvas' | 'file'
+export type DriveKind = 'dir' | 'markdown' | 'html' | 'file'
 
 export type SpaceGroup = 'Repositories' | 'Workspaces' | 'Shared'
 
@@ -30,23 +30,9 @@ export function workspaceSpaceKey(dir: string): string {
   return `workspaces/${dir}`
 }
 
-/**
- * Maps the owner key a hive://canvas link and the hive-canvas MCP results
- * still use onto a space key.
- */
-export function ownerToSpaceKey(owner: string): string {
-  if (owner === '@global') return sharedSpaceKey
-  return owner.includes('/') ? owner : workspaceSpaceKey(owner)
-}
-
 export function spaceGroup(key: string): SpaceGroup {
   if (key === sharedSpaceKey) return 'Shared'
   return key.startsWith('workspaces/') ? 'Workspaces' : 'Repositories'
-}
-
-/** The canvas document a bare canvas name is filed under, as drive.CanvasPath does in Go. */
-export function canvasDocumentPath(name: string): string {
-  return name.includes('/') ? `${name}.canvas.json` : `canvases/${name}.canvas.json`
 }
 
 export function isDocument(entry: EntryWire): boolean {
@@ -109,13 +95,9 @@ export function driveEventAuthor(data: unknown): DriveAuthor | null {
   return typeof payload?.session === 'string' && payload.session ? payload.session : null
 }
 
-function isoOrUndefined(unixMs: number): string | undefined {
-  return unixMs > 0 ? new Date(unixMs).toISOString() : undefined
-}
-
 export function toReaderDocument(doc: DocumentWire): ReaderDocument | null {
-  const { entry, canvas } = doc
-  if (entry.kind !== 'markdown' && entry.kind !== 'html' && entry.kind !== 'canvas') return null
+  const { entry } = doc
+  if (entry.kind !== 'markdown' && entry.kind !== 'html') return null
   return {
     entry: {
       path: entry.path,
@@ -126,13 +108,5 @@ export function toReaderDocument(doc: DocumentWire): ReaderDocument | null {
     },
     markdown: doc.markdown,
     html: doc.html,
-    canvas: canvas
-      ? {
-          blocks: (canvas.blocks ?? []).map(({ id, kind, title, body, url }) => ({ id, kind, title, body, url })),
-          frontmatter: canvas.frontmatter ?? undefined,
-          createdAt: isoOrUndefined(canvas.createdAt),
-          updatedAt: isoOrUndefined(canvas.updatedAt),
-        }
-      : undefined,
   }
 }
