@@ -116,6 +116,16 @@ func (s *SessionService) SessionFileContext(ctx context.Context, id string, targ
 	return sessionFileDiffsOf([]gitstatus.FileDiff{diff})[0], nil
 }
 
+// SessionFileImage reads both versions of one changed file, so the view can
+// draw it as an image.
+func (s *SessionService) SessionFileImage(ctx context.Context, id string, target DiffTarget, path string) (SessionFileImage, error) {
+	image, err := s.sessions.SessionFileImage(ctx, id, target.gitstatus(), path)
+	if err != nil {
+		return SessionFileImage{}, err
+	}
+	return sessionFileImageOf(image), nil
+}
+
 // SessionBranches lists the full refs the session's checkout can compare against.
 func (s *SessionService) SessionBranches(ctx context.Context, id string) ([]string, error) {
 	return s.sessions.SessionBranches(ctx, id)

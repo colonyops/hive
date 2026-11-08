@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   tops: new Map<string, number>(),
   SessionFileDiffs: vi.fn(),
   SessionFileContext: vi.fn(),
+  SessionFileImage: vi.fn(),
   OpenSessionInEditor: vi.fn(),
   setRenderOptions: vi.fn(() => Promise.resolve()),
   setOptions: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
   SessionBranches: mocks.SessionBranches,
   SessionFileDiffs: mocks.SessionFileDiffs,
   SessionFileContext: mocks.SessionFileContext,
+  SessionFileImage: mocks.SessionFileImage,
   OpenSessionInEditor: mocks.OpenSessionInEditor,
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reviewservice', () => ({
@@ -114,7 +116,12 @@ interface FakeItem {
   id: string
   collapsed: boolean
   annotations?: { side: string; lineNumber: number; metadata: { commentId: string } }[]
-  fileDiff: { hunks: { hunkContent: unknown[] }[]; deletionLines: string[]; additionLines: string[] }
+  fileDiff: {
+    hunks: { hunkContent: unknown[] }[]
+    deletionLines: string[]
+    additionLines: string[]
+    isPartial?: boolean
+  }
 }
 
 function file(path: string, extra: Record<string, unknown> = {}) {
@@ -1442,5 +1449,50 @@ describe('ChangesView', () => {
       expect(wrapper.find(testid('changes-overview-empty')).exists()).toBe(true)
       wrapper.unmount()
     })
+  })
+  it('hangs an image preview from a placeholder row, and keeps the text diff of an SVG', async () => {
+    mocks.SessionChanges.mockResolvedValue(
+      changes([
+        file('logo.png', { binary: true }),
+        file('new.gif', { binary: true, status: 'untracked' }),
+        file('old.jpg', { binary: true, status: 'deleted' }),
+        file('icon.svg'),
+        file('data.bin', { binary: true }),
+      ]),
+    )
+    mocks.SessionFileDiffs.mockImplementation((_id: string, _target: unknown, paths: string[]) =>
+      Promise.resolve(
+        paths.map((path) =>
+          path.endsWith('.svg')
+            ? { path, text: '@@ -1 +1 @@\n-<svg/>\n+<svg></svg>\n', ...noState }
+            : { path, text: '', state: 'binary', error: '' },
+        ),
+      ),
+    )
+    const wrapper = await mountView()
+    const item = (id: string) => mocks.items.find((candidate) => candidate.id === id)!
+
+    for (const [path, side] of [
+      ['logo.png', 'additions'],
+      ['new.gif', 'additions'],
+      ['old.jpg', 'deletions'],
+    ] as const) {
+      expect(item(path).collapsed).toBe(false)
+      expect(item(path).fileDiff.hunks).toHaveLength(1)
+      expect(item(path).fileDiff.isPartial, 'no context to expand around the placeholder').toBe(false)
+      expect(item(path).annotations).toEqual([{ side, lineNumber: 1, metadata: { commentId: `image:${path}` } }])
+    }
+    expect(item('icon.svg').annotations).toEqual([
+      { side: 'additions', lineNumber: 0, metadata: { commentId: 'image:icon.svg' } },
+    ])
+    expect(item('icon.svg').fileDiff.additionLines.join('')).toContain('<svg></svg>')
+    expect(item('data.bin').annotations).toEqual([])
+    expect(item('data.bin').collapsed).toBe(true)
+    expect(mocks.SessionFileImage, 'a preview reads its image only once CodeView mounts it').not.toHaveBeenCalled()
+    expect(wrapper.find(testid('changes-file-logo.png-note')).exists(), 'the preview replaces the binary note').toBe(
+      false,
+    )
+    expect(wrapper.get(testid('changes-file-data.bin-note')).text()).toBe('Binary file')
+    wrapper.unmount()
   })
 })

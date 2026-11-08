@@ -18,15 +18,17 @@ import { useHiveUiPlatform } from '@hive/ui/platform'
 import AgentCommentCard from './AgentCommentCard.vue'
 import DiffCommentCard from './DiffCommentCard.vue'
 import DiffFileHeader from './DiffFileHeader.vue'
+import DiffImagePreview from './DiffImagePreview.vue'
 import { usePerf } from '../../composables/usePerf'
 import { useToasts } from '../../composables/useToasts'
 import { useScrollGestureSpan } from '../../composables/useScrollGestureSpan'
-import type { DiffEntry } from '../../composables/useFileDiffs'
+import { fileVersion, type DiffEntry } from '../../composables/useFileDiffs'
 import { useSurfaceScale } from '../../stores/useSurfaceScale'
 import { diffThemeName, diffWorkerPool } from '../../lib/diffHighlight'
 import { errorText } from '../../lib/appError'
 import { hunksMatch, wholeFileFromPatch } from '../../lib/diffContext'
 import { gitFileName } from '../../lib/gitTree'
+import { imagePlaceholderPatch, imagePreviewId, imagePreviewKind, isImagePath } from '../../lib/diffImages'
 import {
   diffMetrics,
   diffHasText,
@@ -44,6 +46,7 @@ import type { ChangesComment, ThreadResponse } from '../../stores/useChangesRevi
 import type {
   ChangedFile,
   SessionFileDiff,
+  SessionFileImage,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
@@ -61,6 +64,8 @@ const props = defineProps<{
   activeMatch: DiffSearchMatch | null
   /** Reads a file's diff with the whole file as context, for the lines between hunks. */
   loadWholeFile: (path: string) => Promise<SessionFileDiff>
+  /** Reads both versions of an image file, for its preview. */
+  loadImage?: (path: string) => Promise<SessionFileImage>
   /** Agents' comments by path, each on the row it is drawn under. */
   agentComments?: ReadonlyMap<string, readonly AnchoredAgentComment[]>
   isAgentStale?: (comment: AgentComment) => boolean
@@ -97,8 +102,13 @@ const emit = defineEmits<{
 // mounted file overflowed its slot and the last one lost its bottom rows. Fixing
 // it here lets SCROLLBAR_PX stand in itemMetrics as the file's bottom padding.
 const SCROLLBAR_PX = 8
+// An image's placeholder row exists only to carry its preview (imagePlaceholderPatch).
 const unsafeCss = (separatorPx: number): string => `
   :host { --diffs-bg: var(--color-app); --diffs-scrollbar-gutter-override: ${SCROLLBAR_PX}px; }
+  :host([data-image-preview]) :is([data-column-number], [data-line], [data-gutter-buffer]) { display: none; }
+  :host([data-image-preview]) [data-annotation-content] { left: 0; width: 100%; }
+  :host([data-image-preview]) [data-diff-type=split] { grid-template-columns: 1fr; }
+  :host([data-image-preview]) [data-diff-type=split] > [data-code]:not(:has([data-line-annotation])) { display: none; }
   [data-separator=line-info-basic] { height: ${separatorPx}px; }
   ${SEARCH_HIGHLIGHT_CSS}
 `
@@ -111,6 +121,28 @@ interface CommentAnnotation {
   commentId: string
   /** An agent's comment, which sits on a band of its own so it stands out while scrolling. */
   agent?: boolean
+}
+
+const imageFiles = computed(
+  () => new Map(props.files.filter((file) => isImagePath(file.path)).map((file) => [imagePreviewId(file.path), file])),
+)
+// Held across remounts, so scrolling past an image does not read it again.
+const imageReads = new Map<string, { version: string; read: Promise<SessionFileImage> }>()
+
+function imageLoader(file: ChangedFile): () => Promise<SessionFileImage> {
+  return () => {
+    const version = fileVersion(file)
+    const held = imageReads.get(file.path)
+    if (held && held.version === version) return held.read
+    if (!props.loadImage) return Promise.reject(new Error('image previews are not available here'))
+    const read = props.loadImage(file.path)
+    imageReads.set(file.path, { version, read })
+    // A failed read is not held, so the next mount tries again.
+    read.catch(() => {
+      if (imageReads.get(file.path)?.read === read) imageReads.delete(file.path)
+    })
+    return read
+  }
 }
 
 const root = ref<HTMLElement | null>(null)
@@ -315,8 +347,10 @@ function viewerOptions(): CodeViewOptions<CommentAnnotation, undefined> {
     renderCustomHeader: (_fileDiff: unknown, context: ItemContext) => headerHost(context.item.id),
     renderAnnotation: (annotation: LineAnnotation<CommentAnnotation>) =>
       commentHost(annotation.metadata.commentId, annotation.metadata.agent),
-    onPostRender: (_node: unknown, _instance: unknown, phase: PostRenderPhase, context: ItemContext) => {
+    onPostRender: (node: unknown, _instance: unknown, phase: PostRenderPhase, context: ItemContext) => {
       if (phase === 'unmount') setHeaderMounted(context.item.id, false)
+      else if (node instanceof HTMLElement)
+        node.toggleAttribute('data-image-preview', binaryImages.has(context.item.id))
       queuePaint()
     },
   }
@@ -330,6 +364,13 @@ interface BuiltItem {
   item: CodeViewDiffItem<CommentAnnotation>
 }
 const built = new Map<string, BuiltItem>()
+// Paths whose item is an image preview alone, with no diff rows of its own.
+const binaryImages = new Set<string>()
+
+// Whole, so CodeView offers no context to expand around the placeholder row.
+function imagePlaceholderDiff(file: ChangedFile, cacheKey: string): FileDiffMetadata {
+  return { ...parseFileDiff(file, imagePlaceholderPatch(file), cacheKey), isPartial: false }
+}
 
 // Whole-file diffs for the files highlightsFromWholeFile picks, each for the
 // entry it was read against. Null while the read is in flight.
@@ -360,13 +401,19 @@ function itemFor(file: ChangedFile): CodeViewDiffItem<CommentAnnotation> {
   const current =
     !!held && held.entry === entry && held.open === open && held.comments === comments && held.agents === agents
   if (current && (!wholeDiff || held.item.fileDiff === wholeDiff)) return held.item
+  const image = props.loadImage ? imagePreviewKind(file, entry?.diff) : null
+  if (image === 'binary') binaryImages.add(file.path)
+  else binaryImages.delete(file.path)
   const fileDiff =
     wholeDiff ??
     (held && held.entry === entry
       ? held.item.fileDiff
-      : entry && diffHasText(entry.diff)
-        ? parseFileDiff(file, entry.diff.text, `${props.scope}:${file.path}:${entry.version}`)
-        : emptyFileDiff(file))
+      : image === 'binary'
+        ? imagePlaceholderDiff(file, `${props.scope}:${file.path}:${entry!.version}:image`)
+        : entry && diffHasText(entry.diff)
+          ? parseFileDiff(file, entry.diff.text, `${props.scope}:${file.path}:${entry.version}`)
+          : emptyFileDiff(file))
+  const imageSide = file.status === 'deleted' ? ('deletions' as const) : ('additions' as const)
   if (open && entry && whole?.entry !== entry && highlightsFromWholeFile(fileDiff)) {
     readWholeDiff(file.path, entry, fileDiff)
   }
@@ -375,6 +422,16 @@ function itemFor(file: ChangedFile): CodeViewDiffItem<CommentAnnotation> {
     type: 'diff',
     fileDiff,
     annotations: [
+      ...(image
+        ? [
+            {
+              side: imageSide,
+              // Above the text diff of an SVG; under the placeholder row of any other image.
+              lineNumber: image === 'binary' ? 1 : 0,
+              metadata: { commentId: imagePreviewId(file.path) },
+            },
+          ]
+        : []),
       ...(comments ?? []).map((comment) => ({
         side: comment.endSide,
         lineNumber: comment.endLine,
@@ -402,6 +459,7 @@ let pendingJump: string | null = null
 function syncItems(): void {
   for (const path of built.keys()) if (!fileByPath.value.has(path)) built.delete(path)
   for (const path of wholeDiffs.keys()) if (!fileByPath.value.has(path)) wholeDiffs.delete(path)
+  for (const path of imageReads.keys()) if (!fileByPath.value.has(path)) imageReads.delete(path)
   shown.value = props.files.filter(
     (file) => built.has(file.path) || !props.openPaths.has(file.path) || props.entries.has(file.path),
   )
@@ -597,6 +655,12 @@ watch(
           @update="emit('update-comment', commentById.get(id)!, $event)"
           @remove="emit('remove-comment', commentById.get(id)!)"
           @pick="emit('pick-comment', commentById.get(id)!)"
+        />
+        <DiffImagePreview
+          v-else-if="imageFiles.get(id)"
+          :file="imageFiles.get(id)!"
+          :version="fileVersion(imageFiles.get(id)!)"
+          :load="imageLoader(imageFiles.get(id)!)"
         />
         <AgentCommentCard
           v-else-if="agentById.get(id)"
