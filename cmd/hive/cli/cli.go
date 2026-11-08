@@ -368,6 +368,7 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewDetectCmd(flags, hiveApp).Register(app)
 	app = commands.NewHoneycombCmd(flags, hiveApp).Register(app)
 	app = commands.NewWorkspaceCmd(flags, hiveApp).Register(app)
+	app = commands.NewProjectCmd(flags, hiveApp).Register(app)
 	app = commands.NewInitCmd(flags, hiveApp).Register(app)
 	app = commands.NewDesktopCmd(flags, hiveApp).Register(app)
 	app = commands.NewMCPCmd(flags, hiveApp).Register(app)

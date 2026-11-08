@@ -13,12 +13,16 @@ type Agent struct {
 	// for an agent with no known flag. It is a slice because opencode needs
 	// two arguments.
 	SkipPermissionFlags []string
+	// AddDirFlag grants the agent a directory outside its working directory.
+	// A project session's root needs it: the agent resolves the root's
+	// symlinks and treats the checkouts they name as out of bounds.
+	AddDirFlag string
 }
 
 var known = []Agent{
-	{Name: "claude", Label: "Claude Code", SkipPermissionFlags: []string{"--dangerously-skip-permissions"}},
+	{Name: "claude", Label: "Claude Code", SkipPermissionFlags: []string{"--dangerously-skip-permissions"}, AddDirFlag: "--add-dir"},
 	{Name: "opencode", Label: "OpenCode", SkipPermissionFlags: []string{"--agent", "free-permissions-runner"}},
-	{Name: "codex", Label: "Codex", SkipPermissionFlags: []string{"--full-auto"}},
+	{Name: "codex", Label: "Codex", SkipPermissionFlags: []string{"--full-auto"}, AddDirFlag: "--add-dir"},
 	{Name: "pi", Label: "Pi"},
 	{Name: "amp", Label: "Amp"},
 	{Name: "copilot", Label: "GitHub Copilot"},

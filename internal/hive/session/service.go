@@ -369,8 +369,6 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		return nil, fmt.Errorf("save session: %w", err)
 	}
 
-	// Spawn terminal
-	writeProgressf(progress, "Spawning terminal...")
 	data := SpawnData{
 		Path:       sess.Path,
 		Name:       sess.Name,
@@ -382,6 +380,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	}
 
 	if !opts.SkipSpawn {
+		writeProgressf(progress, "Spawning terminal...")
 		strategy := config.ResolveSpawn(s.config.Rules, remote)
 		renderer, err := s.rendererForAgent(firstNonEmpty(opts.AgentKey, strategy.Agent))
 		if err != nil {

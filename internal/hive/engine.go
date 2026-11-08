@@ -28,6 +28,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	hcsvc "github.com/colonyops/hive/internal/hive/hc"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
+	projectsvc "github.com/colonyops/hive/internal/hive/project"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/session/scripts"
 	statussvc "github.com/colonyops/hive/internal/hive/status"
@@ -77,6 +78,7 @@ type services struct {
 	todos       *todosvc.Service
 	gitStatus   *gitstatus.Service
 	diffReviews *diffreviewsvc.Service
+	projects    *projectsvc.Service
 }
 
 // Engine is the hive engine. Accessors return the services built from the
@@ -210,6 +212,7 @@ func (e *Engine) build(cfg *config.Config) (*services, error) {
 		gitStatus: gitstatus.NewService(p.Logger, gitExec, cfg.Git.StatusWorkers),
 	}
 	set.diffReviews = diffreviewsvc.NewService(p.Logger, store.NewDiffReviewStore(p.DB), set.sessions, set.gitStatus, gitExec)
+	set.projects = projectsvc.NewService(p.Logger, store.NewProjectStore(p.DB), set.sessions, cfg)
 	if p.PaneSource != nil {
 		set.terminal = NewTerminalManager(p.Logger, cfg, p.PaneSource)
 		set.status = statussvc.NewService(p.Logger, set.terminal, cfg.Git.StatusWorkers)
@@ -261,6 +264,9 @@ func (e *Engine) DriveRemote() *driveremote.Service { return e.driveRemote }
 func (e *Engine) Todos() *todosvc.Service { return e.load().todos }
 
 func (e *Engine) GitStatus() *gitstatus.Service { return e.load().gitStatus }
+
+// Projects returns project sessions: one agent root over several sessions.
+func (e *Engine) Projects() *projectsvc.Service { return e.load().projects }
 
 // DiffReviews returns agents' reviews of a session's branch diff.
 func (e *Engine) DiffReviews() *diffreviewsvc.Service { return e.load().diffReviews }

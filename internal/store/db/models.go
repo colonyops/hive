@@ -101,6 +101,23 @@ type Notification struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
+type ProjectSession struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	Project   string `json:"project"`
+	Root      string `json:"root"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+type ProjectSessionRepo struct {
+	ProjectSessionID string `json:"project_session_id"`
+	SessionID        string `json:"session_id"`
+	Dir              string `json:"dir"`
+	Position         int64  `json:"position"`
+}
+
 type ReviewComment struct {
 	ID          string `json:"id"`
 	SessionID   string `json:"session_id"`

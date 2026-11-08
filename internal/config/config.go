@@ -49,6 +49,7 @@ type Config struct {
 	Todos               TodosConfig        `json:"todos"                 yaml:"todos"`
 	Experimental        ExperimentalConfig `json:"experimental"          yaml:"experimental"`
 	Servers             []ServerConfig     `json:"servers"               yaml:"servers"`
+	Projects            []ProjectConfig    `json:"projects"              yaml:"projects"`
 	Workspaces          []string           `json:"workspaces"            yaml:"workspaces"` // parent directories containing git repository folders for new session dialog
 	RepoDirsCompat      []string           `json:"-"                     yaml:"repo_dirs"`  // deprecated: use workspaces instead (kept for backwards compatibility)
 	DataDir             string             `json:"-"                     yaml:"-"`          // set by caller, not from config file
@@ -463,6 +464,7 @@ func (c *Config) Validate() error {
 		c.validateCloneProtocols(),
 		c.validateTerminalConfirm(),
 		c.validateServers(),
+		c.validateProjects(),
 	)
 }
 
@@ -581,6 +583,11 @@ func (c *Config) validateAgents() error {
 		}
 	}
 	return errs.ToError()
+}
+
+// ProjectsDir returns the path that holds the generated roots of project sessions.
+func (c *Config) ProjectsDir() string {
+	return filepath.Join(c.DataDir, "projects")
 }
 
 // ReposDir returns the path where cloned repositories are stored.
