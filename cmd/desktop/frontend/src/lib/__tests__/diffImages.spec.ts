@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { backdropForPixels, imagePreviewKind, imageReads, isImagePath } from '../diffImages'
+import { describe, expect, it } from 'vitest'
+import { backdropForPixels, imagePreviewKind, isImagePath } from '../diffImages'
 
 function pixels(...rgba: [number, number, number, number][]): Uint8ClampedArray {
   return new Uint8ClampedArray(rgba.flat())
@@ -42,40 +42,5 @@ describe('imagePreviewKind', () => {
     expect(imagePreviewKind(file('a.png'), diff('truncated'))).toBeNull()
     expect(imagePreviewKind(file('a.bin'), diff('binary'))).toBeNull()
     expect(isImagePath('dir.png/file')).toBe(false)
-  })
-})
-
-describe('imageReads', () => {
-  const image = { path: 'a.png', state: 'ready', before: null, after: null, error: '' }
-
-  it('reads a path once per version', async () => {
-    const load = vi.fn().mockResolvedValue(image)
-    const reads = imageReads(load)
-
-    await reads.read('a.png', '1')
-    await reads.read('a.png', '1')
-    expect(load).toHaveBeenCalledTimes(1)
-
-    await reads.read('a.png', '2')
-    expect(load).toHaveBeenCalledTimes(2)
-  })
-
-  it('reads again after a failed read', async () => {
-    const load = vi.fn().mockRejectedValueOnce(new Error('daemon away')).mockResolvedValue(image)
-    const reads = imageReads(load)
-
-    await expect(reads.read('a.png', '1')).rejects.toThrow('daemon away')
-    await expect(reads.read('a.png', '1')).resolves.toEqual(image)
-    expect(load).toHaveBeenCalledTimes(2)
-  })
-
-  it('reads a pruned path again', async () => {
-    const load = vi.fn().mockResolvedValue(image)
-    const reads = imageReads(load)
-
-    await reads.read('a.png', '1')
-    reads.prune(() => false)
-    await reads.read('a.png', '1')
-    expect(load).toHaveBeenCalledTimes(2)
   })
 })

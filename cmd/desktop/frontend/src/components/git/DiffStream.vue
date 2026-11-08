@@ -28,7 +28,7 @@ import { diffThemeName, diffWorkerPool } from '../../lib/diffHighlight'
 import { errorText } from '../../lib/appError'
 import { hunksMatch, wholeFileFromPatch } from '../../lib/diffContext'
 import { gitFileName } from '../../lib/gitTree'
-import { imagePlaceholderPatch, imagePreviewId, imagePreviewKind, imageReads, isImagePath } from '../../lib/diffImages'
+import { imagePlaceholderPatch, imagePreviewId, imagePreviewKind, isImagePath } from '../../lib/diffImages'
 import {
   diffMetrics,
   diffHasText,
@@ -127,12 +127,6 @@ interface RowAnnotation {
 const imageFiles = computed(
   () => new Map(props.files.filter((file) => isImagePath(file.path)).map((file) => [imagePreviewId(file.path), file])),
 )
-const reads = imageReads((path) => props.loadImage(path))
-
-function imageLoader(file: ChangedFile): () => Promise<SessionFileImage> {
-  return () => reads.read(file.path, fileVersion(file))
-}
-
 const root = ref<HTMLElement | null>(null)
 const perf = usePerf('changes')
 useScrollGestureSpan(root, (durationMs, attrs) => perf.record('scroll:gesture', durationMs, { ...attrs }))
@@ -447,7 +441,6 @@ let pendingJump: string | null = null
 function syncItems(): void {
   for (const path of built.keys()) if (!fileByPath.value.has(path)) built.delete(path)
   for (const path of wholeDiffs.keys()) if (!fileByPath.value.has(path)) wholeDiffs.delete(path)
-  reads.prune((path) => fileByPath.value.has(path))
   shown.value = props.files.filter(
     (file) => built.has(file.path) || !props.openPaths.has(file.path) || props.entries.has(file.path),
   )
@@ -648,7 +641,7 @@ watch(
           v-else-if="imageFiles.get(id)"
           :file="imageFiles.get(id)!"
           :version="fileVersion(imageFiles.get(id)!)"
-          :load="imageLoader(imageFiles.get(id)!)"
+          :load="() => loadImage(imageFiles.get(id)!.path)"
         />
         <AgentCommentCard
           v-else-if="agentById.get(id)"
