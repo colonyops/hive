@@ -189,3 +189,8 @@ run = "npm run lint"
 description = "Run desktop frontend unit tests (vitest)"
 dir = "{{config_root}}/cmd/desktop/frontend"
 run = "npm test"
+
+["desktop:image-fixtures"]
+description = "Commit image fixtures to a checkout and change them in its working tree, to try the Changes view's image previews"
+usage = 'arg "<checkout>" help="A scratch session checkout to write into"'
+run = 'go run ./cmd/desktop/devtools image-fixtures {{arg(name="checkout")}}'
