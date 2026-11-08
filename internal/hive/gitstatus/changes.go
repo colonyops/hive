@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"net/http"
+	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -355,4 +358,92 @@ func clipDiff(text string) (string, bool) {
 		}
 	}
 	return strings.ToValidUTF8(strings.Join(lines, "\n"), "\uFFFD"), false
+}
+
+// maxImageBytes bounds each side of an image read. Both sides cross the
+// daemon's RPC and the Wails bridge in one message.
+const maxImageBytes = 8 << 20
+
+// FileImageState says what a FileImage holds. TooLarge is a side past
+// maxImageBytes. Unavailable is a path that is not a regular file.
+//
+// ENUM(ready, too_large, unavailable, gone, error)
+type FileImageState string
+
+// ImageVersion is one side of a FileImage. Mime is an image/* type, or empty
+// when neither the bytes nor the extension name an image format.
+type ImageVersion struct {
+	Mime string
+	Data []byte
+}
+
+// FileImage is both versions of an image file across a target. Before is nil
+// for an added file and After is nil for a deleted one.
+type FileImage struct {
+	Path   string
+	State  FileImageState
+	Before *ImageVersion
+	After  *ImageVersion
+	Error  string
+}
+
+// ReadFileImage reads both versions of one path in the current change list, as
+// ReadFileContext does, for a reader that draws the file as an image.
+func (s *Service) ReadFileImage(ctx context.Context, sess session.Session, target DiffTarget, path string) (FileImage, error) {
+	gone := FileImage{Path: path, State: FileImageStateGone}
+	if sess.State != session.StateActive || sess.Path == "" {
+		return gone, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, diffReadTimeout)
+	defer cancel()
+
+	list, err := s.recentList(ctx, sess.Path, target)
+	if err != nil {
+		return FileImage{}, err
+	}
+	idx := slices.IndexFunc(list.files, func(file git.ChangedFile) bool { return file.Path == path })
+	if idx < 0 {
+		return gone, nil
+	}
+	versions, err := s.git.FileVersions(ctx, sess.Path, list.diff, list.files[idx], maxImageBytes)
+	switch {
+	case err == nil:
+	case errors.Is(err, git.ErrFileTooLarge):
+		return FileImage{Path: path, State: FileImageStateTooLarge}, nil
+	case errors.Is(err, git.ErrNoTextDiff):
+		return FileImage{Path: path, State: FileImageStateUnavailable}, nil
+	case errors.Is(err, fs.ErrNotExist):
+		return gone, nil
+	default:
+		s.logger.Debug().Err(err).Str("path", sess.Path).Str("file", path).Msg("git file versions failed")
+		return FileImage{Path: path, State: FileImageStateError, Error: err.Error()}, nil
+	}
+	return FileImage{
+		Path:   path,
+		State:  FileImageStateReady,
+		Before: imageVersion(list.files[idx].OldPath, path, versions.Before),
+		After:  imageVersion(path, path, versions.After),
+	}, nil
+}
+
+func imageVersion(path, fallback string, data []byte) *ImageVersion {
+	if data == nil {
+		return nil
+	}
+	if path == "" {
+		path = fallback
+	}
+	return &ImageVersion{Mime: imageMime(path, data), Data: data}
+}
+
+// unsniffedImages are the formats http.DetectContentType has no signature
+// for. Every other extension must match its bytes, so a file named .png that
+// holds something else is not handed to an <img> as one.
+var unsniffedImages = map[string]string{".svg": "image/svg+xml", ".avif": "image/avif"}
+
+func imageMime(path string, data []byte) string {
+	if sniffed := http.DetectContentType(data); strings.HasPrefix(sniffed, "image/") {
+		return sniffed
+	}
+	return unsniffedImages[strings.ToLower(filepath.Ext(path))]
 }

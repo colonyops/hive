@@ -400,3 +400,69 @@ func TestReadFileDiffsReusesARecentListForTheSameTarget(t *testing.T) {
 		assert.Equal(t, int32(4), lists.Load(), "an old list is read again")
 	})
 }
+
+func TestReadFileImageNamesTheFormatOfEachSide(t *testing.T) {
+	t.Parallel()
+
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+	svg := []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`)
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{
+		branch: "main", defaultBranch: "main",
+		files: []git.ChangedFile{
+			{Path: "logo.svg", OldPath: "old.png", Status: git.FileStatusRenamed},
+			{Path: "added.png", Status: git.FileStatusAdded},
+			{Path: "corrupt.png", Status: git.FileStatusAdded},
+		},
+		versions: map[string]git.FileVersions{
+			"logo.svg":    {Before: png, After: svg},
+			"added.png":   {After: png},
+			"corrupt.png": {After: []byte("not a png")},
+		},
+	}, 1)
+	target := gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}
+
+	renamed, err := svc.ReadFileImage(t.Context(), activeSession(), target, "logo.svg")
+	require.NoError(t, err)
+	assert.Equal(t, gitstatus.FileImage{
+		Path:   "logo.svg",
+		State:  gitstatus.FileImageStateReady,
+		Before: &gitstatus.ImageVersion{Mime: "image/png", Data: png},
+		After:  &gitstatus.ImageVersion{Mime: "image/svg+xml", Data: svg},
+	}, renamed)
+
+	added, err := svc.ReadFileImage(t.Context(), activeSession(), target, "added.png")
+	require.NoError(t, err)
+	assert.Nil(t, added.Before)
+	assert.Equal(t, "image/png", added.After.Mime)
+
+	corrupt, err := svc.ReadFileImage(t.Context(), activeSession(), target, "corrupt.png")
+	require.NoError(t, err)
+	assert.Empty(t, corrupt.After.Mime, "the extension alone does not make a file a PNG")
+
+	unlisted, err := svc.ReadFileImage(t.Context(), activeSession(), target, "../../etc/passwd")
+	require.NoError(t, err)
+	assert.Equal(t, gitstatus.FileImageStateGone, unlisted.State)
+}
+
+func TestReadFileImageReportsAFailedReadOnTheFile(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		err  error
+		want gitstatus.FileImage
+	}{
+		{git.ErrFileTooLarge, gitstatus.FileImage{Path: "a.png", State: gitstatus.FileImageStateTooLarge}},
+		{git.ErrNoTextDiff, gitstatus.FileImage{Path: "a.png", State: gitstatus.FileImageStateUnavailable}},
+		{fs.ErrNotExist, gitstatus.FileImage{Path: "a.png", State: gitstatus.FileImageStateGone}},
+		{errors.New("exit 128"), gitstatus.FileImage{Path: "a.png", State: gitstatus.FileImageStateError, Error: "exit 128"}},
+	} {
+		svc := gitstatus.NewService(zerolog.Nop(), stubGit{
+			branch: "main", defaultBranch: "main",
+			files:       []git.ChangedFile{{Path: "a.png", Status: git.FileStatusModified, Binary: true}},
+			versionsErr: tt.err,
+		}, 1)
+		got, err := svc.ReadFileImage(t.Context(), activeSession(), gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, "a.png")
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, got)
+	}
+}

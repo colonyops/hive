@@ -78,6 +78,10 @@ type DiffRange struct {
 	untracked bool
 	staged    bool
 	commit    string
+	// before and after name where each side's file lives, for FileVersions:
+	// a revision, indexSide, or worktreeSide.
+	before string
+	after  string
 }
 
 // wholeFileContext is a context length past any file a diff read accepts, so
@@ -93,17 +97,17 @@ func (d DiffRange) WholeFile() DiffRange {
 
 // WorkingTree compares the working tree with ref. It lists untracked files.
 func WorkingTree(ref string) DiffRange {
-	return DiffRange{args: []string{ref}, untracked: true}
+	return DiffRange{args: []string{ref}, untracked: true, before: ref, after: worktreeSide}
 }
 
 // Staged compares the index with HEAD.
 func Staged() DiffRange {
-	return DiffRange{args: []string{"--cached", "HEAD"}, staged: true}
+	return DiffRange{args: []string{"--cached", "HEAD"}, staged: true, before: "HEAD", after: indexSide}
 }
 
 // Unstaged compares the working tree with the index. It lists untracked files.
 func Unstaged() DiffRange {
-	return DiffRange{untracked: true}
+	return DiffRange{untracked: true, before: indexSide, after: worktreeSide}
 }
 
 // CommitRange compares a commit with its first parent, or with the empty tree for a
@@ -119,7 +123,7 @@ func (e *Executor) CommitRange(ctx context.Context, dir, commit string) (DiffRan
 		}
 		from = strings.TrimSpace(string(out))
 	}
-	return DiffRange{args: []string{from, commit}, commit: commit}, nil
+	return DiffRange{args: []string{from, commit}, commit: commit, before: from, after: commit}, nil
 }
 
 // read returns stdout alone: git writes warnings to stderr, and those must not

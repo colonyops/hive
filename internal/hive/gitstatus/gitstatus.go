@@ -33,6 +33,7 @@ type Git interface {
 	Branches(ctx context.Context, dir string, limit int) ([]string, error)
 	ChangedFiles(ctx context.Context, dir string, diff git.DiffRange) ([]git.ChangedFile, error)
 	FileDiffs(ctx context.Context, dir string, diff git.DiffRange, files []git.ChangedFile) []git.FileDiffResult
+	FileVersions(ctx context.Context, dir string, diff git.DiffRange, file git.ChangedFile, limit int) (git.FileVersions, error)
 }
 
 // Status is one checkout's git state.

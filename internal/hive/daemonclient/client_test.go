@@ -297,6 +297,16 @@ func TestClientFileContextNamesADaemonThatPredatesIt(t *testing.T) {
 	require.ErrorIs(t, err, ErrFileContextUnsupported)
 }
 
+func TestClientFileImageNamesADaemonThatPredatesIt(t *testing.T) {
+	t.Parallel()
+	path := socketPath(t)
+	serve(t, path, slowServer{}, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop()})
+
+	_, err := client.SessionFileImage(t.Context(), "s1", gitstatus.DiffTarget{}, "a.png")
+	require.ErrorIs(t, err, ErrFileImageUnsupported)
+}
+
 func TestClientGitStatusesNamesADaemonThatPredatesThem(t *testing.T) {
 	t.Parallel()
 	path := socketPath(t)

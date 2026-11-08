@@ -153,6 +153,10 @@ func (*mockGit) Branches(context.Context, string, int) ([]string, error) { retur
 func (*mockGit) FileDiffs(context.Context, string, git.DiffRange, []git.ChangedFile) []git.FileDiffResult {
 	return nil
 }
+
+func (*mockGit) FileVersions(context.Context, string, git.DiffRange, git.ChangedFile, int) (git.FileVersions, error) {
+	return git.FileVersions{}, nil
+}
 func (m *mockGit) IsValidRepo(_ context.Context, _ string) error { return nil }
 
 type testMultiplexer struct{}

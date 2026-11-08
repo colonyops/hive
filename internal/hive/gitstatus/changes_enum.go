@@ -183,3 +183,88 @@ func (x *FileDiffState) UnmarshalText(text []byte) error {
 func (x FileDiffState) AppendText(b []byte) ([]byte, error) {
 	return append(b, x.String()...), nil
 }
+
+const (
+	// FileImageStateReady is a FileImageState of type ready.
+	FileImageStateReady FileImageState = "ready"
+	// FileImageStateTooLarge is a FileImageState of type too_large.
+	FileImageStateTooLarge FileImageState = "too_large"
+	// FileImageStateUnavailable is a FileImageState of type unavailable.
+	FileImageStateUnavailable FileImageState = "unavailable"
+	// FileImageStateGone is a FileImageState of type gone.
+	FileImageStateGone FileImageState = "gone"
+	// FileImageStateError is a FileImageState of type error.
+	FileImageStateError FileImageState = "error"
+)
+
+var ErrInvalidFileImageState = fmt.Errorf("not a valid FileImageState, try [%s]", strings.Join(_FileImageStateNames, ", "))
+
+var _FileImageStateNames = []string{
+	string(FileImageStateReady),
+	string(FileImageStateTooLarge),
+	string(FileImageStateUnavailable),
+	string(FileImageStateGone),
+	string(FileImageStateError),
+}
+
+// FileImageStateNames returns a list of possible string values of FileImageState.
+func FileImageStateNames() []string {
+	tmp := make([]string, len(_FileImageStateNames))
+	copy(tmp, _FileImageStateNames)
+	return tmp
+}
+
+// String implements the Stringer interface.
+func (x FileImageState) String() string {
+	return string(x)
+}
+
+// IsValid provides a quick way to determine if the typed value is
+// part of the allowed enumerated values
+func (x FileImageState) IsValid() bool {
+	_, err := ParseFileImageState(string(x))
+	return err == nil
+}
+
+var _FileImageStateValue = map[string]FileImageState{
+	"ready":       FileImageStateReady,
+	"too_large":   FileImageStateTooLarge,
+	"unavailable": FileImageStateUnavailable,
+	"gone":        FileImageStateGone,
+	"error":       FileImageStateError,
+}
+
+// ParseFileImageState attempts to convert a string to a FileImageState.
+func ParseFileImageState(name string) (FileImageState, error) {
+	if x, ok := _FileImageStateValue[name]; ok {
+		return x, nil
+	}
+	// Case insensitive parse, do a separate lookup to prevent unnecessary cost of lowercasing a string if we don't need to.
+	if x, ok := _FileImageStateValue[strings.ToLower(name)]; ok {
+		return x, nil
+	}
+	return FileImageState(""), fmt.Errorf("%s is %w", name, ErrInvalidFileImageState)
+}
+
+// MarshalText implements the text marshaller method.
+func (x FileImageState) MarshalText() ([]byte, error) {
+	return []byte(string(x)), nil
+}
+
+// UnmarshalText implements the text unmarshaller method.
+func (x *FileImageState) UnmarshalText(text []byte) error {
+	tmp, err := ParseFileImageState(string(text))
+	if err != nil {
+		return err
+	}
+	*x = tmp
+	return nil
+}
+
+// AppendText appends the textual representation of itself to the end of b
+// (allocating a larger slice if necessary) and returns the updated slice.
+//
+// Implementations must not retain b, nor mutate any bytes within b[:len(b)].
+func (x FileImageState) AppendText(b []byte) ([]byte, error) {
+	return append(b, x.String()...), nil
+}

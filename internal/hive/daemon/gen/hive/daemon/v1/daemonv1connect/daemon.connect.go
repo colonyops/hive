@@ -84,6 +84,9 @@ const (
 	// SessionServiceFileContextProcedure is the fully-qualified name of the SessionService's
 	// FileContext RPC.
 	SessionServiceFileContextProcedure = "/hive.daemon.v1.SessionService/FileContext"
+	// SessionServiceFileImageProcedure is the fully-qualified name of the SessionService's FileImage
+	// RPC.
+	SessionServiceFileImageProcedure = "/hive.daemon.v1.SessionService/FileImage"
 	// SessionServiceBranchesProcedure is the fully-qualified name of the SessionService's Branches RPC.
 	SessionServiceBranchesProcedure = "/hive.daemon.v1.SessionService/Branches"
 	// SessionServiceGitStatusesProcedure is the fully-qualified name of the SessionService's
@@ -270,6 +273,8 @@ type SessionServiceClient interface {
 	FileDiffs(context.Context, *connect.Request[v1.FileDiffsRequest]) (*connect.Response[v1.FileDiffsResponse], error)
 	// FileContext reads one file's diff with the whole file as context.
 	FileContext(context.Context, *connect.Request[v1.FileContextRequest]) (*connect.Response[v1.FileContextResponse], error)
+	// FileImage reads both versions of one changed file, to draw it as an image.
+	FileImage(context.Context, *connect.Request[v1.FileImageRequest]) (*connect.Response[v1.FileImageResponse], error)
 	Branches(context.Context, *connect.Request[v1.BranchesRequest]) (*connect.Response[v1.BranchesResponse], error)
 	// GitStatuses reads the checkouts of sessions on the daemon's machine. A
 	// read is shared by every client that asks within a few seconds.
@@ -399,6 +404,12 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("FileContext")),
 			connect.WithClientOptions(opts...),
 		),
+		fileImage: connect.NewClient[v1.FileImageRequest, v1.FileImageResponse](
+			httpClient,
+			baseURL+SessionServiceFileImageProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("FileImage")),
+			connect.WithClientOptions(opts...),
+		),
 		branches: connect.NewClient[v1.BranchesRequest, v1.BranchesResponse](
 			httpClient,
 			baseURL+SessionServiceBranchesProcedure,
@@ -440,6 +451,7 @@ type sessionServiceClient struct {
 	changes           *connect.Client[v1.ChangesRequest, v1.ChangesResponse]
 	fileDiffs         *connect.Client[v1.FileDiffsRequest, v1.FileDiffsResponse]
 	fileContext       *connect.Client[v1.FileContextRequest, v1.FileContextResponse]
+	fileImage         *connect.Client[v1.FileImageRequest, v1.FileImageResponse]
 	branches          *connect.Client[v1.BranchesRequest, v1.BranchesResponse]
 	gitStatuses       *connect.Client[v1.GitStatusesRequest, v1.GitStatusesResponse]
 	startTmux         *connect.Client[v1.StartTmuxRequest, v1.StartTmuxResponse]
@@ -535,6 +547,11 @@ func (c *sessionServiceClient) FileContext(ctx context.Context, req *connect.Req
 	return c.fileContext.CallUnary(ctx, req)
 }
 
+// FileImage calls hive.daemon.v1.SessionService.FileImage.
+func (c *sessionServiceClient) FileImage(ctx context.Context, req *connect.Request[v1.FileImageRequest]) (*connect.Response[v1.FileImageResponse], error) {
+	return c.fileImage.CallUnary(ctx, req)
+}
+
 // Branches calls hive.daemon.v1.SessionService.Branches.
 func (c *sessionServiceClient) Branches(ctx context.Context, req *connect.Request[v1.BranchesRequest]) (*connect.Response[v1.BranchesResponse], error) {
 	return c.branches.CallUnary(ctx, req)
@@ -576,6 +593,8 @@ type SessionServiceHandler interface {
 	FileDiffs(context.Context, *connect.Request[v1.FileDiffsRequest]) (*connect.Response[v1.FileDiffsResponse], error)
 	// FileContext reads one file's diff with the whole file as context.
 	FileContext(context.Context, *connect.Request[v1.FileContextRequest]) (*connect.Response[v1.FileContextResponse], error)
+	// FileImage reads both versions of one changed file, to draw it as an image.
+	FileImage(context.Context, *connect.Request[v1.FileImageRequest]) (*connect.Response[v1.FileImageResponse], error)
 	Branches(context.Context, *connect.Request[v1.BranchesRequest]) (*connect.Response[v1.BranchesResponse], error)
 	// GitStatuses reads the checkouts of sessions on the daemon's machine. A
 	// read is shared by every client that asks within a few seconds.
@@ -701,6 +720,12 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("FileContext")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceFileImageHandler := connect.NewUnaryHandler(
+		SessionServiceFileImageProcedure,
+		svc.FileImage,
+		connect.WithSchema(sessionServiceMethods.ByName("FileImage")),
+		connect.WithHandlerOptions(opts...),
+	)
 	sessionServiceBranchesHandler := connect.NewUnaryHandler(
 		SessionServiceBranchesProcedure,
 		svc.Branches,
@@ -757,6 +782,8 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceFileDiffsHandler.ServeHTTP(w, r)
 		case SessionServiceFileContextProcedure:
 			sessionServiceFileContextHandler.ServeHTTP(w, r)
+		case SessionServiceFileImageProcedure:
+			sessionServiceFileImageHandler.ServeHTTP(w, r)
 		case SessionServiceBranchesProcedure:
 			sessionServiceBranchesHandler.ServeHTTP(w, r)
 		case SessionServiceGitStatusesProcedure:
@@ -842,6 +869,10 @@ func (UnimplementedSessionServiceHandler) FileDiffs(context.Context, *connect.Re
 
 func (UnimplementedSessionServiceHandler) FileContext(context.Context, *connect.Request[v1.FileContextRequest]) (*connect.Response[v1.FileContextResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.FileContext is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) FileImage(context.Context, *connect.Request[v1.FileImageRequest]) (*connect.Response[v1.FileImageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.FileImage is not implemented"))
 }
 
 func (UnimplementedSessionServiceHandler) Branches(context.Context, *connect.Request[v1.BranchesRequest]) (*connect.Response[v1.BranchesResponse], error) {
