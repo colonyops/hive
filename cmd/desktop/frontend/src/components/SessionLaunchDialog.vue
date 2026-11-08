@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, ref, useId, watch, type DeepReadonly } from 'vue'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconCode from '~icons/lucide/code'
+import IconLayers from '~icons/lucide/layers'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPlay from '~icons/lucide/play'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
 import ActionInputFields from './ActionInputFields.vue'
+import ProjectLaunchFields from './ProjectLaunchFields.vue'
 import RepositorySelect from './RepositorySelect.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import AppCheckbox from '@hive/ui/components/ui/AppCheckbox.vue'
@@ -20,6 +22,7 @@ import SegmentedControl, { type SegmentedControlOption } from '@hive/ui/componen
 import TextArea from '@hive/ui/components/ui/TextArea.vue'
 import TextInput from '@hive/ui/components/ui/TextInput.vue'
 import type { InputSpec } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/actions/models'
+import type { ProjectRepoRequest } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import type {
   SessionCreateFailure,
   SessionLaunchOptions,
@@ -30,7 +33,7 @@ import { useSubmitShortcut } from '../composables/useSubmitShortcut'
 import { type ActionInputValues, initialActionInputs, validateActionInputs } from '../lib/actionInputs'
 import { seedRef } from '@hive/ui/lib/seedRef'
 
-type Target = 'repository' | 'workspace'
+type Target = 'repository' | 'project' | 'workspace'
 
 interface SessionLaunchInput {
   repository?: string
@@ -39,6 +42,8 @@ interface SessionLaunchInput {
   prompt?: string
   agent?: string
   pinToCode?: boolean
+  /** A project session: one agent over several repositories. */
+  project?: { definition: string; repos: ProjectRepoRequest[] }
   inputs: ActionInputValues
 }
 
@@ -49,6 +54,8 @@ const props = withDefaults(
     }
     initial?: Partial<Record<'repository' | 'workspace' | 'name' | 'prompt' | 'agent', string>>
     initialTarget?: Target
+    /** The repositories a retried project form starts with. */
+    initialProject?: DeepReadonly<{ definition: string; repos: ProjectRepoRequest[] }> | null
     /** An action's launch renders its own prompt, so only prompt-capable workspaces qualify. */
     action?: { label: string; inputs?: InputSpec[] | null }
     withPrompt?: boolean
@@ -67,6 +74,7 @@ const props = withDefaults(
   {
     initial: () => ({}),
     initialTarget: undefined,
+    initialProject: null,
     action: undefined,
     error: null,
     failure: null,
@@ -88,11 +96,15 @@ const emit = defineEmits<{
 const formId = useId()
 const submitHint = formatCombo('mod+enter')
 const fieldId = computed(() => props.fieldTestid ?? props.testid)
-const targetOptions: SegmentedControlOption<Target>[] = [
+// A project is a local, hand-started thing: no action launches one, and it
+// does not run on a server.
+const offersProject = computed(() => !props.action && props.withPrompt && !props.server)
+const targetOptions = computed<SegmentedControlOption<Target>[]>(() => [
   { value: 'repository', label: 'Code' },
+  ...(offersProject.value ? [{ value: 'project' as const, label: 'Project' }] : []),
   { value: 'workspace', label: 'Chats' },
-]
-const targetIcons = { repository: IconCode, workspace: IconMessagesSquare }
+])
+const targetIcons = { repository: IconCode, project: IconLayers, workspace: IconMessagesSquare }
 const inputs = computed(() => props.action?.inputs ?? [])
 const serverOptions = computed<AppSelectOption[]>(() => [
   { value: '', label: 'This machine' },
@@ -112,6 +124,10 @@ const name = seedRef(() => props.initial.name ?? '')
 const prompt = seedRef(() => props.initial.prompt ?? '')
 const agent = seedRef(() => props.initial.agent ?? '')
 const pinToCode = ref(false)
+const projectDefinition = seedRef(() => props.initialProject?.definition ?? '')
+const projectRepos = seedRef<ProjectRepoRequest[]>(() =>
+  (props.initialProject?.repos ?? []).map((repo) => ({ ...repo })),
+)
 const inputValues = seedRef<ActionInputValues>(() => initialActionInputs(inputs.value))
 const validationError = ref('')
 
@@ -161,6 +177,7 @@ const serverPromptLimit = computed(
 )
 const selectedWorkspace = computed(() => props.options.workspaces?.find((item) => item.dir === workspace.value))
 const canSubmit = computed(() => {
+  if (target.value === 'project') return projectRepos.value.length > 0 && name.value.trim() !== ''
   const selectedTarget = target.value === 'repository' ? repository.value : workspace.value
   if (selectedTarget.trim() === '') return false
   if (name.value.trim() === '') return false
@@ -181,6 +198,10 @@ const workspaceOptions = computed<AppSelectOption[]>(() =>
 )
 
 function validate(sessionName: string): string {
+  if (target.value === 'project' && !projectRepos.value.length) return 'Pick at least one repository.'
+  if (target.value === 'project' && projectRepos.value.some((repo) => !repo.dir.trim())) {
+    return 'Every repository needs a folder name.'
+  }
   if (target.value === 'repository' && !repository.value.trim()) return 'Repository is required.'
   if (target.value === 'workspace' && !workspace.value.trim()) {
     return props.action ? 'A prompt-capable agent workspace is required.' : 'Agent workspace is required.'
@@ -202,7 +223,15 @@ function submit() {
   emit('submit', {
     ...(target.value === 'workspace'
       ? { workspace: workspace.value.trim(), ...(pinToCode.value ? { pinToCode: true } : {}) }
-      : { repository: repository.value.trim(), ...(agent.value ? { agent: agent.value } : {}) }),
+      : target.value === 'project'
+        ? {
+            project: {
+              definition: projectDefinition.value,
+              repos: projectRepos.value.map((repo) => ({ ...repo, dir: repo.dir.trim() })),
+            },
+            ...(agent.value ? { agent: agent.value } : {}),
+          }
+        : { repository: repository.value.trim(), ...(agent.value ? { agent: agent.value } : {}) }),
     name: sessionName,
     ...(props.withPrompt ? { prompt: prompt.value.trim() } : {}),
     inputs: { ...inputValues.value },
@@ -222,7 +251,7 @@ useSubmitShortcut(submit)
   <BaseModal
     :title="action?.label ?? (target === 'workspace' ? 'New chat' : 'New session')"
     :icon="IconPlay"
-    :width="520"
+    :width="target === 'project' ? 640 : 520"
     :busy="busy"
     :close-on-backdrop="false"
     :testid="`${testid}-dialog`"
@@ -234,7 +263,7 @@ useSubmitShortcut(submit)
         v-model="target"
         variant="compact"
         size="sm"
-        :columns="2"
+        :columns="targetOptions.length"
         :options="targetOptions"
         aria-label="Session target"
         :testid="`${fieldId}-target`"
@@ -297,6 +326,14 @@ useSubmitShortcut(submit)
           :server="server"
           :testid="`${fieldId}-repository`"
           @update:model-value="repository = $event"
+        />
+      </FormField>
+      <FormField v-else-if="target === 'project'" label="Repositories">
+        <ProjectLaunchFields
+          v-model:definition="projectDefinition"
+          v-model:repos="projectRepos"
+          :repositories="options.repositories"
+          :testid="fieldId"
         />
       </FormField>
       <FormField
@@ -363,7 +400,7 @@ useSubmitShortcut(submit)
         <IconTriangleAlert class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
         <span>{{ serverPromptLimit }} Shorten this prompt to create the session.</span>
       </p>
-      <FormField v-if="target === 'repository'">
+      <FormField v-if="target === 'repository' || target === 'project'">
         <template #label>Agent <span class="text-text-4">(optional)</span></template>
         <template #default="{ id }">
           <AppSelect
@@ -399,7 +436,17 @@ useSubmitShortcut(submit)
         :disabled="!canSubmit"
         :data-testid="`${testid}-submit`"
       >
-        {{ busy ? 'Creating…' : failure ? 'Try again' : target === 'workspace' ? 'Start chat' : 'Create session' }}
+        {{
+          busy
+            ? 'Creating…'
+            : failure
+              ? 'Try again'
+              : target === 'workspace'
+                ? 'Start chat'
+                : target === 'project'
+                  ? 'Create project'
+                  : 'Create session'
+        }}
         <Kbd v-if="!busy" variant="on-accent">{{ submitHint }}</Kbd>
       </BaseButton>
       <BaseButton variant="secondary" :disabled="busy" :data-testid="`${testid}-cancel`" @click="emit('close')">

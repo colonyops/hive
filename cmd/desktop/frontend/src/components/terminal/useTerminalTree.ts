@@ -13,6 +13,7 @@ import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
 import { useTerminalPinnedChats } from '../../stores/useTerminalPinnedChats'
 import {
+  projectRow,
   serverHue,
   terminalSessionGroups,
   useTerminalSessions,
@@ -63,6 +64,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
   const { client } = useTerminalAvailability()
   const {
     sessions: sessionRows,
+    projects,
     scratch: scratchRow,
     loading: sessionsLoading,
     loaded: sessionsLoaded,
@@ -95,6 +97,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
   const serverSessions = computed(() =>
     servers.value.flatMap((list) => list.sessions.filter((row) => row.state === 'active' && !row.offline)),
   )
+  const projectRows = computed(() => projects.value.map(projectRow))
   const serverNames = computed(() => servers.value.map((list) => list.server.name))
   const offlineServers = computed(() =>
     servers.value
@@ -129,11 +132,12 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
   const attachable = computed(() => [
     ...chatRows.value,
     ...(scratchRow.value ? [scratchRow.value] : []),
+    ...projectRows.value,
     ...activeSessions.value,
     ...serverSessions.value,
   ])
   const sessionGroups = computed(() =>
-    terminalSessionGroups(activeSessions.value, scratchRow.value, chatRows.value, servers.value),
+    terminalSessionGroups(activeSessions.value, scratchRow.value, chatRows.value, servers.value, projects.value),
   )
   const attachedRow = computed(() => attachable.value.find((row) => row.slug === activeSlug.value) ?? null)
 
@@ -145,6 +149,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
   const alwaysSwept = computed(() => [
     ...chatRows.value,
     ...(scratchRow.value ? [scratchRow.value] : []),
+    ...projectRows.value,
     ...serverSessions.value,
   ])
   const prunableCount = computed(() => sessionRows.value.filter((row) => row.state !== 'active').length)
@@ -157,8 +162,14 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     return chatSlugs.value.has(row.slug)
   }
 
+  // A project's agent runs in a tmux session hive's status projection does not
+  // key, so it reads its liveness off the window sweep like a chat.
+  function isProject(row: TerminalSessionRow): boolean {
+    return !!row.project
+  }
+
   function isHiveSession(row: TerminalSessionRow): boolean {
-    return !isScratch(row) && !isChat(row)
+    return !isScratch(row) && !isChat(row) && !isProject(row)
   }
 
   /** A hive session on a server: no local checkout or agents. */
@@ -360,6 +371,7 @@ export function useTerminalTree(options: { pool: TerminalPool; active: () => boo
     sweepListings,
     isScratch,
     isChat,
+    isProject,
     isHiveSession,
     isServerSession,
     servers,

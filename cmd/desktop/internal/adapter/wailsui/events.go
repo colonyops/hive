@@ -46,6 +46,8 @@ func registerEvents() struct{} {
 	// the dialog closed has to arrive at the user, not wait in a list.
 	application.RegisterEvent[string]("sessions:create-failed")
 	application.RegisterEvent[string]("sessions:updated")
+	// projects:progress names the project create whose progress moved.
+	application.RegisterEvent[string]("projects:progress")
 	application.RegisterEvent[string]("tasks:updated")
 	application.RegisterEvent[string]("diff-reviews:updated")
 	// window:focus and window:blur carry the current focus state. Consumers use
@@ -133,6 +135,9 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		}),
 		events.Subscribe(ctx, bus, "wailsui.sessions", events.Coalesce(), func(context.Context, events.SessionsUpdated) {
 			emitSessionsUpdated()
+		}),
+		events.Subscribe(ctx, bus, "wailsui.project-progress", events.Coalesce(), func(_ context.Context, e events.ProjectProgress) {
+			emitProjectProgress(e.Name)
 		}),
 		events.Subscribe(ctx, bus, "wailsui.tasks", events.Coalesce(), func(context.Context, events.TasksUpdated) {
 			emitTasksUpdated()
@@ -295,6 +300,13 @@ func emitJobsUpdated() {
 func emitSessionCreateFailed(name string) {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("sessions:create-failed", name)
+	}
+}
+
+// emitProjectProgress wakes the New project form to re-read its progress.
+func emitProjectProgress(name string) {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("projects:progress", name)
 	}
 }
 

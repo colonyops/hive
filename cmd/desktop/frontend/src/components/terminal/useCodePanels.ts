@@ -18,7 +18,7 @@ const SESSION_GONE = ['not-started', 'terminated', 'completed']
 /** The questions a view asks of a session, answered from the tree's row. */
 export function codeViewHost(
   row: TerminalSessionRow,
-  tree: Pick<TerminalTree, 'isChat' | 'isHiveSession' | 'isServerSession'>,
+  tree: Pick<TerminalTree, 'isChat' | 'isHiveSession' | 'isServerSession' | 'isProject'>,
 ): SessionViewHost {
   return {
     chat: tree.isChat(row),
@@ -26,6 +26,7 @@ export function codeViewHost(
     // server's session has none on this machine.
     localCheckout: tree.isHiveSession(row) && !tree.isServerSession(row),
     drive: !!row.driveSpace,
+    project: tree.isProject(row),
   }
 }
 

@@ -160,6 +160,10 @@ type SessionsService struct {
 	// (ADR a-failed-session-creation-is-a-retryable-draft).
 	failedCreateMu sync.Mutex
 	failedCreate   *dispatch.SessionDraft
+
+	// The last project create, for the form's progress per repository.
+	projectProgressMu sync.Mutex
+	projectProgress   *ProjectCreateProgress
 }
 
 // DefaultAgentReader reads HIVE_DEFAULT_AGENT from the user's resolved
@@ -998,6 +1002,11 @@ func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) (mu
 	}
 	detail, err := s.detailBySlug(ctx, slug)
 	if err != nil {
+		// A project session's terminal belongs to no session row: it runs in
+		// the project's root.
+		if result, found, perr := s.startProjectTmux(ctx, slug); found {
+			return result, perr
+		}
 		return multiplexer.LaunchResult{}, err
 	}
 	if detail.State != session.StateActive {
@@ -1038,6 +1047,9 @@ func (s *SessionsService) SessionDirectory(ctx context.Context, slug string) (st
 	}
 	detail, err := s.detailBySlug(ctx, slug)
 	if err != nil {
+		if root, ok := s.projectRoot(ctx, slug); ok {
+			return root, nil
+		}
 		return "", err
 	}
 	if detail.State != session.StateActive {

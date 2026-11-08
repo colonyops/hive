@@ -87,6 +87,13 @@ const ChangesView = defineAsyncComponent({
   loadingComponent: ChangesLoading,
   delay: 0,
 })
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
+const ProjectChangesView = defineAsyncComponent({
+  loader: () => import('../git/ProjectChangesView.vue'),
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- the type-aware lint cannot read a .vue import
+  loadingComponent: ChangesLoading,
+  delay: 0,
+})
 
 const props = defineProps<{
   paintedActive: boolean
@@ -197,7 +204,10 @@ const serverConnectionIssue = computed(
 const statusBarLocal = computed(() => !!statusBarRow.value && !tree.isServerSession(statusBarRow.value))
 // An offline server's row keeps its bar and the badge that names the server,
 // and asks that server nothing.
-const statusBarSessionId = computed(() => (statusBarRow.value?.offline ? '' : (statusBarRow.value?.id ?? '')))
+// A project row's id is the project's, which no session read answers.
+const statusBarSessionId = computed(() =>
+  statusBarRow.value?.offline || statusBarRow.value?.project ? '' : (statusBarRow.value?.id ?? ''),
+)
 // The server a session runs on is named here, so nobody types into a server's
 // agent thinking it is this machine's.
 const statusBarHost = computed(() => {
@@ -300,6 +310,7 @@ const changesSession = computed(() => {
   const row = panels.row
   return row && tree.isHiveSession(row) && !tree.isServerSession(row) ? row.id : ''
 })
+const changesProject = computed(() => panels.row?.project ?? null)
 const availableViews = computed(() => (panels.row ? panels.viewsFor(panels.row) : []))
 const canAddTerminal = computed(() => !!panels.row && !tree.isChat(panels.row))
 // An agent needs a running tmux session to open in, as the "+" menu says in its own words.
@@ -579,6 +590,11 @@ onBeforeUnmount(() => {
           v-else-if="tab.kind === 'diff' && changesSession"
           :keys-active="viewHasKeys(focused, shown)"
           :session-id="changesSession"
+        />
+        <ProjectChangesView
+          v-else-if="tab.kind === 'diff' && changesProject"
+          :keys-active="viewHasKeys(focused, shown)"
+          :project="changesProject"
         />
         <TasksView v-else-if="tab.kind === 'tasks'" embedded :keys-active="viewHasKeys(focused, shown)" />
       </template>

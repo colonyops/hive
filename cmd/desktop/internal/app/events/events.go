@@ -38,6 +38,10 @@ type SessionCreateFailed struct{ Name string }
 // went away since the last read, whichever process wrote them.
 type SessionsUpdated struct{ Added, Changed, Removed []string }
 
+// ProjectProgress reports that the project create named Name moved a step.
+// The progress is state the reader re-reads.
+type ProjectProgress struct{ Name string }
+
 // TasksUpdated reports that an hc item, comment, or blocker was written since
 // the last read, whichever process wrote it. The read is a fingerprint, so
 // there are no ids to carry.
@@ -141,6 +145,7 @@ func (ActivityAppended) eventName() string       { return "activity.appended" }
 func (JobsUpdated) eventName() string            { return "jobs.updated" }
 func (SessionCreateFailed) eventName() string    { return "session.create-failed" }
 func (SessionsUpdated) eventName() string        { return "sessions.updated" }
+func (ProjectProgress) eventName() string        { return "project.progress" }
 func (TasksUpdated) eventName() string           { return "tasks.updated" }
 func (DiffReviewsUpdated) eventName() string     { return "diff-reviews.updated" }
 func (FlowsUpdated) eventName() string           { return "flows.updated" }

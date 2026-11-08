@@ -39,12 +39,13 @@ describe('SessionLaunchDialog: new session', () => {
   const mountNew = (overrides: Record<string, unknown> = {}) =>
     mountDialog({ initial: blank, withPrompt: true, busy: false, error: null, failure: null, ...overrides })
 
-  it('puts the compact Code and Chats selector with icons in the header', () => {
+  it('puts the compact Code, Project and Chats selector with icons in the header', () => {
     const wrapper = mountNew()
     const selector = wrapper.get('header').get('[data-testid="new-session-target"]')
     expect(selector.text()).toContain('Code')
+    expect(selector.text()).toContain('Project')
     expect(selector.text()).toContain('Chats')
-    expect(selector.findAll('svg')).toHaveLength(2)
+    expect(selector.findAll('svg')).toHaveLength(3)
     expect(wrapper.get('form').find('[data-testid="new-session-target"]').exists()).toBe(false)
   })
 

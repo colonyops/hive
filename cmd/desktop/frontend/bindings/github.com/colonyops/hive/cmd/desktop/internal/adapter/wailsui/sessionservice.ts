@@ -26,11 +26,28 @@ import * as dispatch$0 from "../../app/dispatch/models.js";
 import * as $models from "./models.js";
 
 /**
+ * CreateProject starts a project create as a background job and returns its
+ * id. Progress per repository is read with ProjectCreateProgress after each
+ * projects:progress event.
+ */
+export function CreateProject(req: app$0.CreateProjectRequest): $CancellablePromise<number> {
+    return $Call.ByID(2917374580, req);
+}
+
+/**
  * CreateSession validates the form and starts its repository session or
  * workspace chat as a background job. Its outcome surfaces in the jobs UI.
  */
 export function CreateSession(req: dispatch$0.CreateSessionRequest): $CancellablePromise<number> {
     return $Call.ByID(1294063921, req);
+}
+
+export function DefaultCloneStrategy(remote: string): $CancellablePromise<string> {
+    return $Call.ByID(2583672324, remote);
+}
+
+export function DeleteProject(id: string): $CancellablePromise<number> {
+    return $Call.ByID(3306496081, id);
 }
 
 /**
@@ -89,6 +106,14 @@ export function ItemSessions(itemID: number): $CancellablePromise<app$0.ItemSess
 }
 
 /**
+ * ListProjects returns the project sessions on this machine. Slug is the tmux
+ * target an attach uses, as for a session.
+ */
+export function ListProjects(): $CancellablePromise<app$0.ProjectView[] | null> {
+    return $Call.ByID(674590437);
+}
+
+/**
  * ListServerSessions returns the sessions of each server under servers:, in
  * config order. A server that did not answer has a state, an error, and no
  * sessions. It is a call of its own so the local list never waits on ssh.
@@ -112,12 +137,28 @@ export function OpenSessionInEditor(id: string): $CancellablePromise<void> {
     return $Call.ByID(449770375, id);
 }
 
+export function ProjectCreateProgress(): $CancellablePromise<app$0.ProjectCreateProgress> {
+    return $Call.ByID(752354267);
+}
+
+export function ProjectDefinitions(): $CancellablePromise<app$0.ProjectDefinitionView[] | null> {
+    return $Call.ByID(4142206466);
+}
+
+export function ProjectRisk(id: string): $CancellablePromise<app$0.ProjectRepoRisk[] | null> {
+    return $Call.ByID(4037049135, id);
+}
+
 /**
  * PruneSessions starts the prune of every recycled and corrupted session as a
  * background job and returns the job id.
  */
 export function PruneSessions(): $CancellablePromise<number> {
     return $Call.ByID(315127404);
+}
+
+export function RecycleProject(id: string): $CancellablePromise<number> {
+    return $Call.ByID(2738820749, id);
 }
 
 /**

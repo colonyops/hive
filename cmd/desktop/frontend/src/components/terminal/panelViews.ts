@@ -16,6 +16,8 @@ export interface SessionViewHost {
   localCheckout: boolean
   /** The session has a Drive space of its own to read. */
   drive: boolean
+  /** A project session: one agent over several local checkouts. */
+  project?: boolean
 }
 
 const VIEWS = [
@@ -33,7 +35,7 @@ const VIEWS = [
     label: 'Diff',
     icon: IconFileDiff,
     ownsKeys: true,
-    offeredTo: (host: SessionViewHost) => host.localCheckout,
+    offeredTo: (host: SessionViewHost) => host.localCheckout || !!host.project,
   },
   {
     kind: 'tasks',

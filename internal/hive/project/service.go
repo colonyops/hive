@@ -58,6 +58,31 @@ type CreateOptions struct {
 	Background bool
 	SkipSpawn  bool
 	Progress   io.Writer
+	// OnStep reports each repository as it moves through the create, for a
+	// caller that shows progress per repository.
+	OnStep func(Step)
+}
+
+// StepState is where one repository of a create stands.
+type StepState string
+
+const (
+	StepPending StepState = "pending"
+	StepRunning StepState = "running"
+	StepDone    StepState = "done"
+	StepFailed  StepState = "failed"
+	// StepRemoved is a repository the create checked out, then removed
+	// because another one failed.
+	StepRemoved StepState = "removed"
+)
+
+// Step is the state of one repository of a create. Dir is empty for the
+// root: the links, AGENTS.md, and the agent.
+type Step struct {
+	Dir    string    `json:"dir"`
+	Remote string    `json:"remote"`
+	State  StepState `json:"state"`
+	Detail string    `json:"detail"`
 }
 
 // Child is a project session's repository with its hive session.
@@ -101,12 +126,24 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (project.Sessi
 		Root:    filepath.Join(s.cfg.ProjectsDir(), fmt.Sprintf("%s-%s", slug, id)),
 	}
 
+	step := func(dir, remote string, state StepState, detail string) {
+		if opts.OnStep != nil {
+			opts.OnStep(Step{Dir: dir, Remote: remote, State: state, Detail: detail})
+		}
+	}
+	for _, r := range repos {
+		step(r.dir, r.remote, StepPending, r.strategy)
+	}
+	step("", "", StepPending, "")
+
 	children := make([]Child, 0, len(repos))
 	undo := func() {
-		for _, c := range children {
+		for i, c := range children {
 			if err := s.sessions.DeleteSession(context.WithoutCancel(ctx), c.Session.ID); err != nil {
 				s.log.Warn().Err(err).Str("session_id", c.Session.ID).Msg("remove child of failed project session")
+				continue
 			}
+			step(c.Dir, repos[i].remote, StepRemoved, "")
 		}
 		if err := os.RemoveAll(ps.Root); err != nil {
 			s.log.Warn().Err(err).Str("root", ps.Root).Msg("remove root of failed project session")
@@ -115,6 +152,7 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (project.Sessi
 
 	for _, r := range repos {
 		progressf(opts.Progress, "Checking out %s (%s)...", r.dir, r.remote)
+		step(r.dir, r.remote, StepRunning, r.strategy)
 		sess, err := s.sessions.CreateSession(ctx, sessionsvc.CreateOptions{
 			Name:          fmt.Sprintf("%s-%s", slug, r.dir),
 			Remote:        r.remote,
@@ -124,16 +162,20 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (project.Sessi
 			Progress:      opts.Progress,
 		})
 		if err != nil {
+			step(r.dir, r.remote, StepFailed, err.Error())
 			undo()
 			return project.Session{}, fmt.Errorf("check out %s: %w", r.dir, err)
 		}
+		step(r.dir, r.remote, StepDone, sess.Path)
 		children = append(children, Child{Dir: r.dir, Session: *sess})
 		ps.Repos = append(ps.Repos, project.Repo{Dir: r.dir, SessionID: sess.ID})
 	}
 
 	progressf(opts.Progress, "Writing project root %s...", ps.Root)
+	step("", "", StepRunning, ps.Root)
 	s.fillBranches(ctx, children)
 	if err := writeRoot(ps, children, instructions); err != nil {
+		step("", "", StepFailed, err.Error())
 		undo()
 		return project.Session{}, fmt.Errorf("write project root: %w", err)
 	}
@@ -141,6 +183,7 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (project.Sessi
 	now := time.Now()
 	ps.CreatedAt, ps.UpdatedAt = now, now
 	if err := s.store.Save(ctx, ps); err != nil {
+		step("", "", StepFailed, err.Error())
 		undo()
 		return project.Session{}, err
 	}
@@ -148,9 +191,11 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (project.Sessi
 	if !opts.SkipSpawn {
 		progressf(opts.Progress, "Spawning terminal...")
 		if err := s.sessions.SpawnRoot(ctx, s.rootSpawn(ps, children, opts.Prompt, firstNonEmpty(opts.Agent, agent), opts.Background), false); err != nil {
+			step("", "", StepFailed, err.Error())
 			return ps, err
 		}
 	}
+	step("", "", StepDone, ps.Root)
 	s.log.Info().Str("project_session_id", ps.ID).Str("root", ps.Root).Int("repos", len(ps.Repos)).Msg("project session created")
 	return ps, nil
 }

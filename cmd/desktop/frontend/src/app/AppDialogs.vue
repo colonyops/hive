@@ -9,6 +9,8 @@ import CommandPalette from '../components/CommandPalette.vue'
 import ErrorDialog from '../components/ErrorDialog.vue'
 import ReportProblemDialog from '../components/ReportProblemDialog.vue'
 import SessionLaunchDialog from '../components/SessionLaunchDialog.vue'
+import ProjectProgressDialog from '../components/ProjectProgressDialog.vue'
+import { useProjectCreate } from '../stores/useProjectCreate'
 import ToastStack from '../components/ToastStack.vue'
 import UnsavedFlowChangesModal from '../components/UnsavedFlowChangesModal.vue'
 import WhatsNewDialog from '../components/WhatsNewDialog.vue'
@@ -66,6 +68,7 @@ const {
   options: newSessionOptions,
   initial: newSessionInitial,
   initialTarget: newSessionInitialTarget,
+  openProjectRetry,
   busy: newSessionBusy,
   error: newSessionError,
   failure: newSessionFailure,
@@ -76,6 +79,12 @@ const {
   dismissFailure: dismissNewSessionFailure,
   onCreateFailed: onNewSessionFailed,
 } = useNewSession()
+const {
+  watching: projectWatching,
+  progress: projectProgress,
+  close: closeProjectProgress,
+  retryDraft: newSessionInitialProject,
+} = useProjectCreate()
 // The dialog closed on submit, so the failure has to come to the user.
 useWailsEvent('sessions:create-failed', () => {
   void onNewSessionFailed()
@@ -124,6 +133,7 @@ onMounted(() => {
     :options="newSessionOptions"
     :initial="newSessionInitial"
     :initial-target="newSessionInitialTarget"
+    :initial-project="newSessionInitialProject"
     with-prompt
     :busy="newSessionBusy"
     :error="newSessionError"
@@ -134,6 +144,15 @@ onMounted(() => {
     @close="feedCommands.cancelNewSession"
     @submit="feedCommands.submitNewSession"
     @dismiss-failure="dismissNewSessionFailure"
+  />
+  <ProjectProgressDialog
+    v-if="projectWatching && projectProgress"
+    @retry="
+      () => {
+        closeProjectProgress()
+        void openProjectRetry()
+      }
+    "
   />
   <ConfirmationHost :confirmation="confirmation" />
   <ConfirmationHost :confirmation="actionRerun" />

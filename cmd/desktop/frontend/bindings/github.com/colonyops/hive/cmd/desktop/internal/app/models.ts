@@ -13,6 +13,9 @@ import * as hiveconf$0 from "./hiveconf/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as server$0 from "../../../../internal/domain/server/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as project$0 from "../../../../internal/hive/project/models.js";
 
 export interface ActionRunLocation {
     "itemId": number;
@@ -288,6 +291,14 @@ export interface CommentInput {
     "text": string;
 }
 
+export interface CreateProjectRequest {
+    "name": string;
+    "project": string;
+    "repos": ProjectRepoRequest[] | null;
+    "prompt": string;
+    "agent": string;
+}
+
 export interface DiagnosticsAgents {
     "names": string[] | null;
     "defaultAgent": string;
@@ -492,6 +503,84 @@ export interface PopupLauncher {
      * a launch the core will refuse (ADR quick-terminal-launchers-are-session-scoped).
      */
     "requiresSession": boolean;
+}
+
+/**
+ * ProjectCreateProgress is the state of the last project create. The form
+ * reads it on each projects:progress wake-up.
+ */
+export interface ProjectCreateProgress {
+    "name": string;
+    "slug": string;
+    "steps": project$0.Step[] | null;
+    "done": boolean;
+    "error": string;
+}
+
+/**
+ * ProjectDefinitionView is a project from the projects: section of config.
+ */
+export interface ProjectDefinitionView {
+    "name": string;
+    "agent": string;
+    "repos": ProjectRepoRequest[] | null;
+}
+
+/**
+ * ProjectRepoRequest is one repository of a New project form. An empty Dir
+ * takes the repository name; an empty CloneStrategy takes the rules'.
+ */
+export interface ProjectRepoRequest {
+    "remote": string;
+    "dir": string;
+    "cloneStrategy": string;
+}
+
+/**
+ * ProjectRepoRisk is what recycling or deleting one repository of a project
+ * would discard.
+ */
+export interface ProjectRepoRisk {
+    "dir": string;
+    "cloneStrategy": string;
+    "uncommittedChanges": boolean;
+    "unpushedCommits": boolean;
+
+    /**
+     * RecycleDeletes reports that recycling this session destroys it: hive
+     * routes a worktree session's recycle straight to DeleteSession, because a
+     * worktree has no clone of its own to reset.
+     */
+    "recycleDeletes": boolean;
+}
+
+/**
+ * ProjectRepoView is one repository of a project session: the child hive
+ * session behind it, or Missing when that session is gone.
+ */
+export interface ProjectRepoView {
+    "dir": string;
+    "sessionId": string;
+    "remote": string;
+    "repoIdentity": string;
+    "path": string;
+    "branch": string;
+    "cloneStrategy": string;
+    "missing": boolean;
+}
+
+/**
+ * ProjectView is a project session as the Code tree lists it. Slug is the
+ * tmux session the agent runs in, at Root.
+ */
+export interface ProjectView {
+    "id": string;
+    "name": string;
+    "slug": string;
+    "project": string;
+    "root": string;
+    "repos": ProjectRepoView[] | null;
+    "createdAt": string;
 }
 
 /**

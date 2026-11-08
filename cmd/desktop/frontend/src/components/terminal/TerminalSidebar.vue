@@ -2,6 +2,9 @@
 import { computed, nextTick, proxyRefs, ref, toRef, watch } from 'vue'
 import { useNow } from '@vueuse/core'
 import IconChevronDown from '~icons/lucide/chevron-down'
+import IconLayers from '~icons/lucide/layers'
+import IconRecycle from '~icons/lucide/recycle'
+import ProjectRepoRow from './ProjectRepoRow.vue'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconChevronsDownUp from '~icons/lucide/chevrons-down-up'
@@ -155,6 +158,19 @@ const chatMenuEntries: MenuEntry[] = [
   { kind: 'separator' },
   { kind: 'action', id: 'unpin', label: 'Unpin from Code', icon: IconPinOff, testid: 'terminal-chat-unpin' },
 ]
+
+const projectMenuEntries: MenuEntry[] = [
+  { kind: 'action', id: 'recycle', label: 'Recycle project', icon: IconRecycle, testid: 'terminal-project-recycle' },
+  { kind: 'separator' },
+  { kind: 'action', id: 'delete', label: 'Delete project', icon: IconTrash, testid: 'terminal-project-delete' },
+]
+
+function onProjectMenuSelect(row: TerminalSessionRow, id: string): void {
+  menus.openRow = ''
+  if (!row.project) return
+  if (id === 'recycle') void sessions.requestRecycleProject(row.project)
+  else if (id === 'delete') void sessions.requestDeleteProject(row.project)
+}
 
 function onChatMenuSelect(row: TerminalSessionRow, id: string): void {
   menus.openRow = ''
@@ -369,7 +385,13 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
             class="repo-group"
             role="button"
             tabindex="0"
-            :data-testid="group.kind === 'chats' ? 'terminal-chats-group' : 'terminal-repo-group'"
+            :data-testid="
+              group.kind === 'chats'
+                ? 'terminal-chats-group'
+                : group.kind === 'project'
+                  ? 'terminal-projects-group'
+                  : 'terminal-repo-group'
+            "
             :data-repo="group.key"
             :aria-expanded="view.expansion.expanded(group)"
             @click="view.expansion.toggle(group)"
@@ -484,7 +506,13 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                     role="button"
                     :tabindex="row.offline ? undefined : nav.tabStopKey === `s:${row.id}` ? 0 : -1"
                     :aria-disabled="row.offline || undefined"
-                    :data-testid="group.kind === 'chats' ? 'terminal-chat-row' : 'terminal-session-row'"
+                    :data-testid="
+                      group.kind === 'chats'
+                        ? 'terminal-chat-row'
+                        : group.kind === 'project'
+                          ? 'terminal-project-row'
+                          : 'terminal-session-row'
+                    "
                     :data-slug="row.slug"
                     :data-tree-key="`s:${row.id}`"
                     :data-attached="row.slug === pool.activeSlug"
@@ -494,6 +522,12 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                     @keydown.space.self.prevent="!row.offline && nav.enterSession(row)"
                     @contextmenu.prevent="!row.offline && menus.toggleRow(row, $event)"
                   >
+                    <IconLayers
+                      v-if="row.project"
+                      class="size-3.5 shrink-0"
+                      :class="tree.rowIdle(row) ? 'text-text-4' : 'text-accent'"
+                      aria-hidden="true"
+                    />
                     <span
                       class="min-w-0 truncate text-body"
                       :class="{ 'text-text-3': tree.rowIdle(row) }"
@@ -570,6 +604,16 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                         @select="onChatMenuSelect(row, $event)"
                         @close="menus.openRow = ''"
                       />
+                      <AppMenu
+                        v-else-if="menus.openRow === row.id && row.project"
+                        :entries="projectMenuEntries"
+                        :flip="menus.rowFlip"
+                        width="min(230px, 100%)"
+                        :ignore="[menus.rowToggle(row.id)]"
+                        testid="terminal-project-menu"
+                        @select="onProjectMenuSelect(row, $event)"
+                        @close="menus.openRow = ''"
+                      />
                       <SessionRowMenu
                         v-else-if="menus.openRow === row.id"
                         :session="row"
@@ -588,6 +632,14 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                       />
                     </div>
                   </div>
+                  <template v-if="row.project">
+                    <ProjectRepoRow
+                      v-for="(repo, index) in row.project.repos ?? []"
+                      :key="repo.sessionId"
+                      :repo="repo"
+                      :last="index === (row.project.repos?.length ?? 0) - 1"
+                    />
+                  </template>
                   <Transition name="tree-expand" v-bind="expandHooks">
                     <div v-if="tree.treeItemsFor(row).length && view.expansion.expanded(group)">
                       <TransitionGroup name="tree" tag="div" class="relative flex flex-col pb-1">

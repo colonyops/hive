@@ -48,6 +48,7 @@ function mountPanels(session: FakeSession, recentsLoaded = ref(true), tree: { is
     isChat: () => !!tree.isChat,
     isHiveSession: () => !tree.isChat,
     isServerSession: () => false,
+    isProject: () => false,
   }
   const visibleSlug = ref('hive-one')
   const pool = { visible, visibleSlug }

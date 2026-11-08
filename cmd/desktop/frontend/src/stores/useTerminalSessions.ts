@@ -1,8 +1,10 @@
-import { readonly, ref } from 'vue'
+import { readonly, ref, type DeepReadonly } from 'vue'
 import {
+  ListProjects,
   ListServerSessions,
   ListSessions,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
+import type { ProjectView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { Scratch } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/terminalservice'
 import { repoDisplayName } from '../lib/repositories'
 import { defineStore } from './defineStore'
@@ -40,7 +42,15 @@ export interface TerminalSessionRow {
    * attach to it.
    */
   offline?: boolean
+  /**
+   * Set on a project session's row. Its slug is the tmux session at the
+   * project's root, and its id is the project's, not a hive session's.
+   */
+  project?: ProjectRow
 }
+
+/** A project session as the tree holds it. */
+export type ProjectRow = DeepReadonly<ProjectView>
 
 /**
  * What a section of the sidebar tree is. `repo` is a hive remote and every
@@ -50,7 +60,7 @@ export interface TerminalSessionRow {
  * from tmux directly — and it is a closed union rather than a `pinned` flag
  * because the two non-repo kinds do not render alike.
  */
-export type TerminalSectionKind = 'chats' | 'scratch' | 'repo'
+export type TerminalSectionKind = 'chats' | 'scratch' | 'project' | 'repo'
 
 export interface TerminalServer {
   name: string
@@ -77,6 +87,24 @@ export interface TerminalServerSessions {
 
 const CHATS_GROUP_KEY = 'chats'
 const SCRATCH_GROUP_KEY = 'scratch'
+const PROJECTS_GROUP_KEY = 'projects'
+
+/** A project session as a tree row: one agent, at the project's root. */
+export function projectRow(project: ProjectRow): TerminalSessionRow {
+  return {
+    server: '',
+    id: project.id,
+    name: project.name,
+    slug: project.slug,
+    repo: '',
+    repoIdentity: '',
+    state: 'active',
+    driveSpace: '',
+    tags: [],
+    createdAt: project.createdAt,
+    project,
+  }
+}
 
 /**
  * The tree's repositories, each with this machine's sessions first and then
@@ -160,12 +188,20 @@ export function terminalSessionGroups(
   scratch: TerminalSessionRow | null,
   chats: TerminalSessionRow[],
   servers: readonly { readonly server: TerminalServer; readonly sessions: readonly TerminalSessionRow[] }[] = [],
+  projects: readonly ProjectRow[] = [],
 ): TerminalSessionGroup[] {
   const serverRows = servers.flatMap(({ sessions }) => sessions.filter((row) => row.state === 'active'))
+  // A project's repositories are its own: the project row is where its one
+  // agent runs, so they are not listed again under their repositories.
+  const children = new Set(projects.flatMap((project) => (project.repos ?? []).map((repo) => repo.sessionId)))
   const groups = groupTerminalSessions(
-    [...rows, ...serverRows],
+    [...rows.filter((row) => !children.has(row.id)), ...serverRows],
     servers.map(({ server }) => server.name),
   )
+  if (projects.length) {
+    const sessions = [...projects].sort((a, b) => a.name.localeCompare(b.name)).map(projectRow)
+    groups.unshift({ key: PROJECTS_GROUP_KEY, name: 'Projects', sessions, kind: 'project' })
+  }
   if (scratch) groups.unshift({ key: SCRATCH_GROUP_KEY, name: scratch.name, sessions: [scratch], kind: 'scratch' })
   if (chats.length) groups.unshift({ key: CHATS_GROUP_KEY, name: 'Chats', sessions: chats, kind: 'chats' })
   return groups
@@ -182,10 +218,12 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
   // its id, which no hive session id can collide with. Declared by the core
   // rather than assumed here, because the slug is what an attach addresses.
   const scratch = ref<TerminalSessionRow | null>(null)
+  const projects = ref<ProjectView[]>([])
 
   const rows = useResource<TerminalSessionRow[]>(
     async () => {
-      const [list] = await Promise.all([ListSessions(), loadScratch()])
+      const [list, projectList] = await Promise.all([ListSessions(), loadProjects(), loadScratch()])
+      projects.value = projectList
       return list ?? []
     },
     { initial: [] as TerminalSessionRow[], errorFallback: 'Could not list sessions.' },
@@ -207,6 +245,16 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
     },
     { initial: [] as TerminalServerSessions[], errorFallback: 'Could not list the sessions on servers.' },
   )
+
+  // A failure leaves the tree without its projects rather than without its
+  // sessions; the project's children then show under their repositories.
+  async function loadProjects(): Promise<ProjectView[]> {
+    try {
+      return (await ListProjects()) ?? []
+    } catch {
+      return projects.value
+    }
+  }
 
   // Read once: it is a constant for the run. A failure leaves the tree without
   // its scratch section rather than without its sessions.
@@ -257,6 +305,7 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
 
   return {
     sessions: readonly(rows.data),
+    projects: readonly(projects),
     scratch: readonly(scratch),
     loading: rows.loading,
     loaded: rows.loaded,

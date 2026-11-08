@@ -323,6 +323,45 @@ func TestFailedCreateRemovesTheChildrenItMade(t *testing.T) {
 	assert.Empty(t, f.mux.created)
 }
 
+func TestCreateReportsEachRepoAndTheRollback(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+
+	final := map[string]projectsvc.StepState{}
+	var order []string
+	_, err := f.engine.Projects().Create(ctx, projectsvc.CreateOptions{
+		Name: "steps",
+		Repos: []projectsvc.RepoSpec{
+			{Remote: f.frontend},
+			{Remote: "file:///does/not/exist/backend.git"},
+		},
+		Background: true,
+		OnStep: func(step projectsvc.Step) {
+			final[step.Dir] = step.State
+			order = append(order, step.Dir+"="+string(step.State))
+		},
+	})
+	require.Error(t, err)
+
+	assert.Equal(t, projectsvc.StepRemoved, final["frontend"], "the repo that checked out is reported removed")
+	assert.Equal(t, projectsvc.StepFailed, final["backend"])
+	assert.Equal(t, projectsvc.StepPending, final[""], "the root never started")
+	assert.Equal(t, []string{"frontend=pending", "backend=pending", "=pending"}, order[:3], "every repo is listed before any starts")
+}
+
+func TestCreateReportsTheRootDone(t *testing.T) {
+	f := newFixture(t)
+	final := map[string]projectsvc.StepState{}
+	_, err := f.engine.Projects().Create(t.Context(), projectsvc.CreateOptions{
+		Name:       "done",
+		Repos:      []projectsvc.RepoSpec{{Remote: f.frontend}},
+		Background: true,
+		OnStep:     func(step projectsvc.Step) { final[step.Dir] = step.State },
+	})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]projectsvc.StepState{"frontend": projectsvc.StepDone, "": projectsvc.StepDone}, final)
+}
+
 func TestCreateRejectsTakenNamesAndDirs(t *testing.T) {
 	f := newFixture(t)
 	ctx := t.Context()

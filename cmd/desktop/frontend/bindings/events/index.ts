@@ -84,6 +84,11 @@ export const NotificationActivated = "notification:activated";
 export const NotificationToast = "notification:toast";
 
 /**
+ * Name of the custom event "projects:progress".
+ */
+export const ProjectsProgress = "projects:progress";
+
+/**
  * Name of the custom event "schedules:updated".
  */
 export const SchedulesUpdated = "schedules:updated";

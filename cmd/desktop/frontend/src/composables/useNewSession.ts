@@ -14,6 +14,8 @@ import type {
   SessionLaunchOptions as SessionLaunchOptionsView,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
+import { useProjectCreate } from '../stores/useProjectCreate'
+import type { ProjectRepoRequest } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { useNewSessionServer } from '../stores/useNewSessionServer'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { InboxItem } from '../types/feed'
@@ -26,7 +28,7 @@ interface Draft {
   prompt: string
   agent: string
 }
-export type SessionTarget = 'repository' | 'workspace'
+export type SessionTarget = 'repository' | 'project' | 'workspace'
 
 /** Starts a chat where the opener can show it, instead of as a background job. Resolves to the chat's id, or null when none was created. */
 export type ChatLauncher = (input: { workspace: string; name: string; prompt: string }) => Promise<string | null>
@@ -37,6 +39,8 @@ export interface ChatOpener {
 }
 
 // An activity row's metadata as the bindings give it. Forwarded, never read.
+type ProjectDraft = { definition: string; repos: ProjectRepoRequest[] }
+
 type ActivityMetadata = { [_ in string]?: string } | null
 
 // Module-scoped so the global command, the per-item menu, and the mounted-once
@@ -152,6 +156,7 @@ export function useNewSession() {
     options.value = opts
     initial.value = draft
     initialTarget.value = target
+    useProjectCreate().clearRetry()
     itemIDs.value = [...items]
     failure.value = detail
     formKey.value += 1
@@ -368,8 +373,10 @@ export function useNewSession() {
     prompt?: string
     agent?: string
     pinToCode?: boolean
+    project?: ProjectDraft
   }): Promise<void> {
     if (busy.value) return
+    if (input.project) return submitProject({ ...input, project: input.project })
     if (input.workspace && chatLauncher) {
       const launch = chatLauncher
       cancel()
@@ -412,11 +419,57 @@ export function useNewSession() {
     }
   }
 
+  // The create runs as a job and reports each repository as it goes, so the
+  // form hands over to the progress dialog rather than to a toast.
+  async function submitProject(input: { name: string; prompt?: string; agent?: string; project: ProjectDraft }) {
+    busy.value = true
+    error.value = null
+    try {
+      await useProjectCreate().start({
+        name: input.name,
+        project: input.project.definition,
+        repos: input.project.repos,
+        prompt: input.prompt ?? '',
+        agent: input.agent ?? '',
+      })
+      open.value = false
+      options.value = null
+      failure.value = null
+    } catch (e) {
+      error.value = message(e, 'Could not start the project.')
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Opens the form on the project create that just failed, as it was typed. */
+  async function openProjectRetry(): Promise<void> {
+    const req = useProjectCreate().request.value
+    if (!req || open.value || loading.value) return
+    loading.value = true
+    try {
+      const opts = await resolveOptions()
+      show(
+        { repository: '', workspace: '', name: req.name, prompt: req.prompt, agent: req.agent },
+        opts,
+        [],
+        null,
+        'project',
+      )
+      useProjectCreate().retry({ definition: req.project, repos: (req.repos ?? []).map((repo) => ({ ...repo })) })
+    } catch (e) {
+      showToast(message(e, 'Could not load session options.'), { severity: 'error' })
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     open,
     options,
     initial,
     initialTarget,
+    openProjectRetry,
     server: location.server,
     servers: location.servers,
     selectServer,

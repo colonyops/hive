@@ -2,8 +2,11 @@ import { ref, type DeepReadonly } from 'vue'
 import { useChangesReview } from '../stores/useChangesReview'
 import { useCopyReview } from './useCopyReview'
 import {
+  DeleteProject,
   DeleteSession,
+  ProjectRisk,
   PruneSessions,
+  RecycleProject,
   EditSession,
   RecycleSession,
   SessionDetail,
@@ -13,7 +16,11 @@ import type {
   SessionDetail as SessionDetailView,
   SessionSummary,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
-import type { SessionRisk as SessionRiskView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import type {
+  ProjectRepoRisk,
+  ProjectView,
+  SessionRisk as SessionRiskView,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { appErrorMessage } from '../lib/appError'
 import { useConfirmation, type ConfirmationDetail } from '@hive/ui/composables/useConfirmation'
 import { useToasts } from './useToasts'
@@ -63,6 +70,25 @@ export function riskDetails(risk: SessionRiskView): ConfirmationDetail[] {
       ? { tone: 'danger', text: 'Unpushed commits will be lost.' }
       : { tone: 'ok', text: 'No unpushed commits.' },
   ]
+}
+
+/**
+ * A project's pre-flight, one line per repository, so the confirmation names
+ * the repository that holds the unsaved work.
+ */
+export function projectRiskDetails(
+  risks: readonly ProjectRepoRisk[],
+  operation: 'delete' | 'recycle',
+): ConfirmationDetail[] {
+  return risks.map((risk) => {
+    const lost = [risk.uncommittedChanges && 'uncommitted changes', risk.unpushedCommits && 'unpushed commits'].filter(
+      Boolean,
+    )
+    const fate = operation === 'delete' || risk.recycleDeletes ? 'removed' : 'reset and returned to the pool'
+    return lost.length
+      ? { tone: 'danger', text: `${risk.dir}: ${lost.join(' and ')} will be lost; checkout ${fate}.` }
+      : { tone: 'ok', text: `${risk.dir}: nothing unsaved; checkout ${fate}.` }
+  })
 }
 
 function unsentDetails(count: number): ConfirmationDetail[] {
@@ -174,6 +200,40 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     )
   }
 
+  // A project is one agent over several sessions, so it ends as one: every
+  // repository goes, and the confirmation lists what each one holds.
+  async function requestProjectDestructive(
+    project: DeepReadonly<ProjectView>,
+    operation: 'delete' | 'recycle',
+  ): Promise<void> {
+    let risks: ProjectRepoRisk[]
+    try {
+      risks = (await ProjectRisk(project.id)) ?? []
+    } catch (e) {
+      showToast(message(e, 'Could not check that project for unsaved work.'), { severity: 'error' })
+      return
+    }
+    const repos = project.repos ?? []
+    const unsent = repos.reduce((sum, repo) => sum + changesReview.comments(repo.sessionId).length, 0)
+    const count = repos.length === 1 ? 'its repository' : `all ${repos.length} repositories`
+    confirmation.request({
+      title: operation === 'delete' ? 'Delete this project?' : 'Recycle this project?',
+      description:
+        operation === 'delete'
+          ? `Deleting ${project.name} deletes ${count}, its folder, and its terminal session.`
+          : `Recycling ${project.name} recycles ${count}: full clones go back to the pool and worktrees are deleted.`,
+      details: [...projectRiskDetails(risks, operation), ...unsentDetails(unsent)],
+      confirmLabel: operation === 'delete' ? 'Delete project' : 'Recycle project',
+      onConfirm: async () => {
+        await (operation === 'delete' ? DeleteProject(project.id) : RecycleProject(project.id))
+        for (const repo of repos) changesReview.forget(repo.sessionId)
+        showToast(operation === 'delete' ? `Deleting ${project.name}…` : `Recycling ${project.name}…`, {
+          severity: 'info',
+        })
+      },
+    })
+  }
+
   function requestDelete(session: SessionRow): Promise<void> {
     return requestDestructive(session, 'delete')
   }
@@ -213,5 +273,7 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     requestDelete,
     requestRecycle,
     requestPrune,
+    requestDeleteProject: (project: DeepReadonly<ProjectView>) => requestProjectDestructive(project, 'delete'),
+    requestRecycleProject: (project: DeepReadonly<ProjectView>) => requestProjectDestructive(project, 'recycle'),
   }
 }

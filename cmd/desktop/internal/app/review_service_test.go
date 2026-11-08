@@ -292,6 +292,8 @@ func (f *fakeCodeAgents) ListSessions(context.Context) ([]session.Session, error
 	return f.sessions, nil
 }
 
+func (f *fakeCodeAgents) ProjectSlug(context.Context, string) string { return "" }
+
 func (f *fakeCodeAgents) AgentPanes(_ context.Context, sessions []*session.Session) map[string][]statussvc.AgentPane {
 	out := map[string][]statussvc.AgentPane{}
 	for _, sess := range sessions {

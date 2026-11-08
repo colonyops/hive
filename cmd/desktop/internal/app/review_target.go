@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"maps"
 
 	"golang.org/x/sync/errgroup"
 
@@ -35,12 +36,23 @@ type AgentTarget struct {
 type codeAgents interface {
 	ListSessions(ctx context.Context) ([]session.Session, error)
 	AgentPanes(ctx context.Context, sessions []*session.Session) map[string][]statussvc.AgentPane
+	// ProjectSlug is the tmux session of the project session that holds the
+	// hive session, or "" when none does.
+	ProjectSlug(ctx context.Context, sessionID string) string
 }
 
 type engineCodeAgents struct{ engine *hive.Engine }
 
 func (e engineCodeAgents) ListSessions(ctx context.Context) ([]session.Session, error) {
 	return e.engine.Sessions().ListSessions(ctx)
+}
+
+func (e engineCodeAgents) ProjectSlug(ctx context.Context, sessionID string) string {
+	ps, ok, err := e.engine.Projects().ProjectOf(ctx, sessionID)
+	if err != nil || !ok {
+		return ""
+	}
+	return ps.Slug
 }
 
 func (e engineCodeAgents) AgentPanes(ctx context.Context, sessions []*session.Session) map[string][]statussvc.AgentPane {
@@ -117,6 +129,18 @@ func (s *ReviewService) codeTargets(ctx context.Context, id string) ([]resolvedT
 	for i := range sessions {
 		if sessions[i].State == session.StateActive && (id == "" || sessions[i].ID == id) {
 			active = append(active, &sessions[i])
+		}
+	}
+	// A project's repository has no agent of its own: the agent runs in the
+	// project's tmux session at the root, so Send for one repository goes
+	// there. Only a named session is redirected, or the project's agent would
+	// be listed once per repository.
+	if id != "" && len(active) == 1 {
+		if slug := s.code.ProjectSlug(ctx, id); slug != "" {
+			redirected := *active[0]
+			redirected.Metadata = maps.Clone(redirected.Metadata)
+			redirected.SetMeta(session.MetaTmuxSession, slug)
+			active[0] = &redirected
 		}
 	}
 	panes := s.code.AgentPanes(ctx, active)

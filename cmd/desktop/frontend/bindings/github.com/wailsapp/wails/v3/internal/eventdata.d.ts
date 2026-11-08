@@ -27,6 +27,7 @@ declare module "@wailsio/runtime" {
             "menubar:open": wailsui$0.MenuBarNavigation;
             "notification:activated": wailsui$0.NotificationActivation;
             "notification:toast": wailsui$0.NotificationToast;
+            "projects:progress": string;
             "schedules:updated": string;
             "session:layout": wailsui$0.SessionLayout;
             "sessions:create-failed": string;
