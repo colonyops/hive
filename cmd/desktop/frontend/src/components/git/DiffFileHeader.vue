@@ -7,7 +7,7 @@ import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { documentIcon } from '../drive/driveIcon'
 import type { DiffEntry } from '../../composables/useFileDiffs'
-import { isImagePath } from '../../lib/diffImages'
+import { imagePreviewKind } from '../../lib/diffImages'
 import { diffHasText } from '../../lib/diffItems'
 import { gitFileName, gitStatus } from '../../lib/gitTree'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
@@ -37,7 +37,7 @@ const note = computed(() => {
   if (!props.open || !d || diffHasText(d)) return null
   if (d.state === 'error') return d.error
   // The preview under the header shows what changed.
-  if (d.state === 'binary' && isImagePath(props.file.path)) return null
+  if (imagePreviewKind(props.file, d) === 'binary') return null
   return STATE_NOTES[d.state] ?? 'No content changes'
 })
 </script>

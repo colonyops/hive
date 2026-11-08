@@ -19,7 +19,6 @@ import (
 	"golang.org/x/image/bmp"
 )
 
-// imageFixtureDir is where the fixtures land inside the checkout.
 const imageFixtureDir = "image-fixtures"
 
 // imageFixture is one file the Changes view should draw as an image. base is

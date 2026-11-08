@@ -1,6 +1,7 @@
 import type {
   ChangedFile,
   SessionFileDiff,
+  SessionFileImage,
   SessionImageVersion,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
@@ -45,6 +46,37 @@ export function imageSrc(version: SessionImageVersion): string | null {
 /** The annotation id of a file's image preview, apart from every comment id. */
 export function imagePreviewId(path: string): string {
   return `image:${path}`
+}
+
+export interface ImageReads {
+  /** The held read of path at version, or a new one. */
+  read(path: string, version: string): Promise<SessionFileImage>
+  /** Drops every held read whose path keep rejects. */
+  prune(keep: (path: string) => boolean): void
+}
+
+/**
+ * Image reads held per path and version, so a preview CodeView mounts again
+ * does not read the same bytes twice. A failed read is not held, so the next
+ * mount tries again.
+ */
+export function imageReads(load: (path: string) => Promise<SessionFileImage>): ImageReads {
+  const held = new Map<string, { version: string; read: Promise<SessionFileImage> }>()
+  return {
+    read(path, version) {
+      const current = held.get(path)
+      if (current && current.version === version) return current.read
+      const read = load(path)
+      held.set(path, { version, read })
+      read.catch(() => {
+        if (held.get(path)?.read === read) held.delete(path)
+      })
+      return read
+    },
+    prune(keep) {
+      for (const path of held.keys()) if (!keep(path)) held.delete(path)
+    },
+  }
 }
 
 export type ImageBackdrop = 'light' | 'dark'

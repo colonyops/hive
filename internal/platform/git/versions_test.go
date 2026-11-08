@@ -1,6 +1,8 @@
 package git_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,6 +93,22 @@ func TestFileVersionsKeepsAnEmptyFileApartFromAnAbsentOne(t *testing.T) {
 	versions := fileVersions(t, g, dir, git.WorkingTree("HEAD"), "image.bin")
 	assert.NotNil(t, versions.Before)
 	assert.Empty(t, versions.Before)
+}
+
+func TestFileVersionsRefusesASymlinkInTheWorkingTree(t *testing.T) {
+	t.Parallel()
+	dir, g := newRepo(t)
+	outside := filepath.Join(t.TempDir(), "secret.png")
+	require.NoError(t, os.WriteFile(outside, []byte("outside the checkout"), 0o600))
+	require.NoError(t, os.Remove(filepath.Join(dir, "image.bin")))
+	require.NoError(t, os.Symlink(outside, filepath.Join(dir, "image.bin")))
+
+	files, err := g.ChangedFiles(t.Context(), dir, git.WorkingTree("HEAD"))
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+
+	_, err = g.FileVersions(t.Context(), dir, git.WorkingTree("HEAD"), files[0], 1<<20)
+	require.ErrorIs(t, err, git.ErrNoTextDiff)
 }
 
 func TestFileVersionsRefusesAFileOverTheLimit(t *testing.T) {

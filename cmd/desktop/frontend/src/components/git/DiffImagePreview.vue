@@ -114,18 +114,24 @@ async function decode(version: SessionImageVersion | null): Promise<Decoded | nu
   return { src, dims: { width: img.naturalWidth, height: img.naturalHeight }, version, backdrop: sampleBackdrop(img) }
 }
 
+// A version change starts a new read while the last may be in flight; only the
+// newest one may write, or a slow old read would put back the old pixels.
+let latestRead = 0
+
 async function read(): Promise<void> {
+  const mine = ++latestRead
   loading.value = true
   failure.value = null
   try {
     const next = await props.load()
     const [before, after] = await Promise.all([decode(next.before), decode(next.after)])
+    if (mine !== latestRead) return
     image.value = next
     decoded.value = { before, after }
   } catch (err) {
-    failure.value = errorText(err, 'Could not read this image.')
+    if (mine === latestRead) failure.value = errorText(err, 'Could not read this image.')
   } finally {
-    loading.value = false
+    if (mine === latestRead) loading.value = false
   }
 }
 onMounted(read)

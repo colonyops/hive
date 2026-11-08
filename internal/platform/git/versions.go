@@ -79,15 +79,23 @@ func readWorktreeFile(path string, limit int) ([]byte, error) {
 	if !info.Mode().IsRegular() {
 		return nil, ErrNoTextDiff
 	}
-	if info.Size() > int64(limit) {
-		return nil, ErrFileTooLarge
-	}
-	// O_NONBLOCK because the path can turn into a FIFO after the Lstat.
+	// O_NONBLOCK because the path can turn into a FIFO after the Lstat. The
+	// open does not wait for a writer, and the Stat below refuses the FIFO
+	// before a read can wait for one.
 	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0) //nolint:gosec // git listed this path inside the checkout
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
+	if info, err = f.Stat(); err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, ErrNoTextDiff
+	}
+	if info.Size() > int64(limit) {
+		return nil, ErrFileTooLarge
+	}
 	content, err := io.ReadAll(io.LimitReader(f, int64(limit)+1))
 	if err != nil {
 		return nil, err

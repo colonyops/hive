@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import DiffImagePreview from '../DiffImagePreview.vue'
+import type { SessionFileImage } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 // jsdom decodes nothing, so each test says what a data URL decodes to.
 const decodes = new Map<string, { width: number; height: number } | null>()
@@ -124,5 +125,32 @@ describe('DiffImagePreview', () => {
     await wrapper.setProps({ version: '2' })
     await flushPromises()
     expect(load).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows the newest version when an older read finishes last', async () => {
+    decodes.set(src('base'), { width: 10, height: 10 })
+    decodes.set(src('old'), { width: 10, height: 10 })
+    decodes.set(src('new'), { width: 10, height: 10 })
+    const reads: ((image: SessionFileImage) => void)[] = []
+    const load = vi.fn(() => new Promise<SessionFileImage>((resolve) => reads.push(resolve)))
+    const wrapper = mount(DiffImagePreview, { props: { file: file(), version: '1', load } })
+    await flushPromises()
+    await wrapper.setProps({ version: '2' })
+    await flushPromises()
+    expect(reads).toHaveLength(2)
+
+    const ready = (name: string): SessionFileImage => ({
+      path: 'a.png',
+      state: 'ready',
+      before: version('base'),
+      after: version(name),
+      error: '',
+    })
+    reads[1](ready('new'))
+    await flushPromises()
+    reads[0](ready('old'))
+    await flushPromises()
+
+    expect(wrapper.get(testid('after')).attributes('src')).toBe(src('new'))
   })
 })

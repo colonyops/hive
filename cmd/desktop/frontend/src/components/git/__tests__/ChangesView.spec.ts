@@ -115,7 +115,7 @@ vi.mock('@pierre/diffs', async (importOriginal) => {
 interface FakeItem {
   id: string
   collapsed: boolean
-  annotations?: { side: string; lineNumber: number; metadata: { commentId: string } }[]
+  annotations?: { side: string; lineNumber: number; metadata: { hostId: string } }[]
   fileDiff: {
     hunks: { hunkContent: unknown[] }[]
     deletionLines: string[]
@@ -1314,7 +1314,7 @@ describe('ChangesView', () => {
       })),
     })
     const annotationIds = () =>
-      mocks.items.flatMap((item) => (item.annotations ?? []).map((annotation) => annotation.metadata.commentId))
+      mocks.items.flatMap((item) => (item.annotations ?? []).map((annotation) => annotation.metadata.hostId))
 
     it('draws each comment under its row, and a file comment on the first row', async () => {
       mocks.DiffReviews.mockResolvedValue([agentReview([{}, { kind: 'file', path: 'b.go', startLine: 0, endLine: 0 }])])
@@ -1480,10 +1480,10 @@ describe('ChangesView', () => {
       expect(item(path).collapsed).toBe(false)
       expect(item(path).fileDiff.hunks).toHaveLength(1)
       expect(item(path).fileDiff.isPartial, 'no context to expand around the placeholder').toBe(false)
-      expect(item(path).annotations).toEqual([{ side, lineNumber: 1, metadata: { commentId: `image:${path}` } }])
+      expect(item(path).annotations).toEqual([{ side, lineNumber: 1, metadata: { hostId: `image:${path}` } }])
     }
     expect(item('icon.svg').annotations).toEqual([
-      { side: 'additions', lineNumber: 0, metadata: { commentId: 'image:icon.svg' } },
+      { side: 'additions', lineNumber: 0, metadata: { hostId: 'image:icon.svg' } },
     ])
     expect(item('icon.svg').fileDiff.additionLines.join('')).toContain('<svg></svg>')
     expect(item('data.bin').annotations).toEqual([])
