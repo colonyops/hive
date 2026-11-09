@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import RepositorySelect, { type RepositoryPreset } from './RepositorySelect.vue'
+import { remoteIdentity } from '../lib/repositories'
 import {
   DefaultCloneStrategy,
   ProjectDefinitions,
@@ -61,7 +62,20 @@ async function strategyFor(remote: string): Promise<string> {
   }
 }
 
-async function select(remotes: string[]): Promise<void> {
+// A project holds one checkout of each repository, so a second spelling of
+// a remote already in it is dropped.
+function distinct<T>(items: T[], remote: (item: T) => string): T[] {
+  const seen = new Set<string>()
+  return items.filter((item) => {
+    const identity = remoteIdentity(remote(item))
+    if (seen.has(identity)) return false
+    seen.add(identity)
+    return true
+  })
+}
+
+async function select(picked: string[]): Promise<void> {
+  const remotes = distinct(picked, (remote) => remote)
   const kept = repos.value.filter((repo) => remotes.includes(repo.remote))
   const taken = new Set(kept.map((repo) => repo.dir))
   const added = remotes
@@ -83,7 +97,10 @@ function applyPreset(name: string): void {
   const def = definitions.value.find((candidate) => candidate.name === name)
   if (!def) return
   definition.value = def.name
-  repos.value = (def.repos ?? []).map((repo) => ({ ...repo }))
+  repos.value = distinct(
+    (def.repos ?? []).map((repo) => ({ ...repo })),
+    (repo) => repo.remote,
+  )
   emit('preset', def.name)
 }
 </script>

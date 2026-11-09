@@ -166,39 +166,34 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (project.Sessi
 		}
 	}
 
-	// Each repository checks out in parallel. Two entries for the same
-	// repository run one after the other: a full clone may reuse a recycled
-	// checkout of that repository, and two creates at once could both pick
-	// the same one. A failure stops the checkouts not yet begun, but lets the
+	// Every repository checks out at once; resolveRepos let no repository in
+	// twice. A failure stops the checkouts not yet begun, but lets the
 	// running ones finish: a clone stopped halfway would leave a checkout
 	// that the undo does not know about.
 	var group errgroup.Group
 	var failed atomic.Bool
-	for _, indexes := range sameRepository(repos) {
+	for i, r := range repos {
 		group.Go(func() error {
-			for _, i := range indexes {
-				if failed.Load() || ctx.Err() != nil {
-					return nil
-				}
-				r := repos[i]
-				progressf(progress, "Checking out %s (%s)...", r.dir, r.remote)
-				step(r.dir, r.remote, StepRunning, r.strategy)
-				sess, err := s.sessions.CreateSession(ctx, sessionsvc.CreateOptions{
-					Name:          fmt.Sprintf("%s-%s", slug, r.dir),
-					Remote:        r.remote,
-					Source:        r.source,
-					CloneStrategy: r.strategy,
-					SkipSpawn:     true,
-					Progress:      progress,
-				})
-				if err != nil {
-					failed.Store(true)
-					step(r.dir, r.remote, StepFailed, err.Error())
-					return fmt.Errorf("check out %s: %w", r.dir, err)
-				}
-				results[i] = sess
-				step(r.dir, r.remote, StepDone, sess.Path)
+			if failed.Load() || ctx.Err() != nil {
+				return nil
 			}
+			progressf(progress, "Checking out %s (%s)...", r.dir, r.remote)
+			step(r.dir, r.remote, StepRunning, r.strategy)
+			sess, err := s.sessions.CreateSession(ctx, sessionsvc.CreateOptions{
+				Name:          fmt.Sprintf("%s-%s", slug, r.dir),
+				Remote:        r.remote,
+				Source:        r.source,
+				CloneStrategy: r.strategy,
+				SkipSpawn:     true,
+				Progress:      progress,
+			})
+			if err != nil {
+				failed.Store(true)
+				step(r.dir, r.remote, StepFailed, err.Error())
+				return fmt.Errorf("check out %s: %w", r.dir, err)
+			}
+			results[i] = sess
+			step(r.dir, r.remote, StepDone, sess.Path)
 			return nil
 		})
 	}
@@ -309,6 +304,7 @@ func (s *Service) specs(opts CreateOptions) (specs []RepoSpec, instructions, age
 func (s *Service) resolveRepos(ctx context.Context, specs []RepoSpec) ([]resolvedRepo, error) {
 	out := make([]resolvedRepo, 0, len(specs))
 	dirs := make(map[string]bool, len(specs))
+	remotes := make(map[string]string, len(specs))
 	for _, spec := range specs {
 		remote, source := strings.TrimSpace(spec.Remote), ""
 		if info, err := os.Stat(remote); err == nil && info.IsDir() {
@@ -328,6 +324,15 @@ func (s *Service) resolveRepos(ctx context.Context, specs []RepoSpec) ([]resolve
 			}
 			remote, source = repo.Remote, repo.Source
 		}
+
+		// One checkout per repository: the agent would see two copies of the
+		// same code, and a full clone may reuse a recycled checkout, which two
+		// creates at once could both pick.
+		identity := git.RemoteIdentity(remote)
+		if first, ok := remotes[identity]; ok {
+			return nil, fmt.Errorf("repo %s is in the project twice (also as %s)", spec.Remote, first)
+		}
+		remotes[identity] = spec.Remote
 
 		dir := spec.Dir
 		if dir == "" {
@@ -469,27 +474,6 @@ func (s *Service) fillBranches(ctx context.Context, children []Child) {
 		}
 		c.Branch = branch
 	}
-}
-
-// sameRepository groups the indexes of repos by repository, in the order
-// they first appear.
-func sameRepository(repos []resolvedRepo) [][]int {
-	var groups [][]int
-	at := map[string]int{}
-	for i, r := range repos {
-		key := git.RemoteIdentity(r.remote)
-		if key == "" {
-			key = r.remote
-		}
-		g, ok := at[key]
-		if !ok {
-			g = len(groups)
-			at[key] = g
-			groups = append(groups, nil)
-		}
-		groups[g] = append(groups[g], i)
-	}
-	return groups
 }
 
 type lockedWriter struct {

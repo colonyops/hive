@@ -16,7 +16,7 @@ import IconX from '~icons/lucide/x'
 import type { SessionLaunchRepository } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { useAnchoredPopover } from '@hive/ui/composables/useAnchoredPopover'
 import { useListKeyboardNav } from '@hive/ui/composables/useListKeyboardNav'
-import { highlightSegments, rankRepositories, repoDisplayName, toChoices } from '../lib/repositories'
+import { highlightSegments, rankRepositories, remoteIdentity, repoDisplayName, toChoices } from '../lib/repositories'
 
 export interface RepositoryPreset {
   name: string
@@ -66,8 +66,11 @@ const active = ref(0)
 
 const choices = computed(() => toChoices(props.repositories))
 const ranked = computed(() => rankRepositories(choices.value, query.value, props.multiple ? '' : props.modelValue))
+// In multiple mode another spelling of a selected remote is the same
+// repository, so it reads as selected and a click removes the selected one.
+const selectedIdentities = computed(() => new Set(props.selected.map(remoteIdentity)))
 const isSelected = (remote: string): boolean =>
-  props.multiple ? props.selected.includes(remote) : remote === props.modelValue
+  props.multiple ? selectedIdentities.value.has(remoteIdentity(remote)) : remote === props.modelValue
 // Presets name sets, not repositories, so a query filters them by name only.
 const shownPresets = computed(() => {
   const q = query.value.trim().toLowerCase()
@@ -124,9 +127,12 @@ function toggle(): void {
 
 function choose(remote: string): void {
   if (props.multiple) {
+    const identity = remoteIdentity(remote)
     emit(
       'update:selected',
-      isSelected(remote) ? props.selected.filter((item) => item !== remote) : [...props.selected, remote],
+      isSelected(remote)
+        ? props.selected.filter((item) => remoteIdentity(item) !== identity)
+        : [...props.selected, remote],
     )
     query.value = ''
     searchInput.value?.focus()

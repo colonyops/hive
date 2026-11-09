@@ -21,6 +21,54 @@ export function repoDisplayName(remote: string): string {
   return segments.slice(-2).join('/')
 }
 
+/**
+ * The repository a remote names, the way the core's git.RemoteIdentity reads
+ * it: "git@github.com:Owner/Name.git" and "https://github.com/owner/name"
+ * are one repository. A local path is its own identity.
+ */
+export function remoteIdentity(remote: string): string {
+  const trimmed = remote.trim()
+  const parsed = remoteHostPath(trimmed)
+  if (!parsed) return trimmed
+  let path = parsed.path.replace(/^\/+|\/+$/g, '')
+  if (path.toLowerCase().endsWith('.git')) path = path.slice(0, -4).replace(/\/+$/, '')
+  if (!path) return trimmed
+  const host = parsed.host.toLowerCase()
+  return `${host}/${host === 'github.com' ? path.toLowerCase() : path}`
+}
+
+const DEFAULT_REMOTE_PORTS: Record<string, string> = { ssh: '22', git: '9418', http: '80', https: '443' }
+
+function remoteHostPath(remote: string): { host: string; path: string } | null {
+  if (remote.includes('://')) {
+    let url: URL
+    try {
+      url = new URL(remote)
+    } catch {
+      return null
+    }
+    const scheme = url.protocol.replace(/:$/, '')
+    if (!(scheme in DEFAULT_REMOTE_PORTS) || !url.hostname) return null
+    const host = url.port && url.port !== DEFAULT_REMOTE_PORTS[scheme] ? url.host : url.hostname
+    return { host, path: decodeURIComponent(url.pathname) }
+  }
+  // [user@]host:path is SCP-style SSH only when no slash comes before the
+  // first colon; otherwise it is a local path.
+  const colon = remote.indexOf(':')
+  if (colon <= 0) return null
+  let host = remote.slice(0, colon)
+  const path = remote.slice(colon + 1)
+  if (host.includes('/')) return null
+  const at = host.lastIndexOf('@')
+  const user = at === -1 ? '' : host.slice(0, at)
+  host = host.slice(at + 1)
+  if (!host) return null
+  // A forge serves every repository as git@, so that user drops out; any
+  // other user names a home directory, so it stays for a relative path.
+  if (user && user !== 'git' && !path.startsWith('/')) host = `${user}@${host}`
+  return { host, path }
+}
+
 /** A repository as the picker shows it: what you read, what the form submits. */
 export interface RepositoryChoice {
   /** The git remote — the value a session is created with. */

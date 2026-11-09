@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { fuzzyMatch, highlightSegments, rankRepositories, repoDisplayName, toChoices } from '../repositories'
+import {
+  fuzzyMatch,
+  highlightSegments,
+  rankRepositories,
+  remoteIdentity,
+  repoDisplayName,
+  toChoices,
+} from '../repositories'
 
 describe('repoDisplayName', () => {
   it('reduces every remote spelling to owner/name', () => {
@@ -112,5 +119,18 @@ describe('highlightSegments', () => {
 
   it('returns one plain segment when nothing matched', () => {
     expect(highlightSegments('hive', [])).toEqual([{ text: 'hive', matched: false }])
+  })
+})
+
+describe('remoteIdentity', () => {
+  it.each([
+    ['git@github.com:Hay-Kot/Hive.git', 'github.com/hay-kot/hive'],
+    ['https://github.com/hay-kot/hive', 'github.com/hay-kot/hive'],
+    ['ssh://git@github.com/hay-kot/hive.git/', 'github.com/hay-kot/hive'],
+    ['ssh://gitea@gitea.kotel.app:222/hay-kot/coros.git', 'gitea.kotel.app:222/hay-kot/coros'],
+    ['alice@host:repo', 'alice@host/repo'],
+    ['/home/hive/repo.git', '/home/hive/repo.git'],
+  ])('reads %s as %s', (remote, identity) => {
+    expect(remoteIdentity(remote)).toBe(identity)
   })
 })

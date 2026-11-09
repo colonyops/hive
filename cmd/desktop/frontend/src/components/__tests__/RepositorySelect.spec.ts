@@ -189,6 +189,15 @@ describe('RepositorySelect', () => {
       expect(wrapper.emitted('update:selected')?.[1]).toEqual([[]])
     })
 
+    it('reads another spelling of a selected remote as selected and a click removes it', async () => {
+      const wrapper = mountMultiple(['git@github.com:acme/site.git'])
+      await openList(wrapper)
+      const site = wrapper.findAll('[data-testid="repo-option"]').find((option) => option.text().includes('acme/site'))
+      expect(site?.element.parentElement?.getAttribute('aria-selected')).toBe('true')
+      await site!.trigger('click')
+      expect(wrapper.emitted('update:selected')).toEqual([[[]]])
+    })
+
     it('lists presets above the repositories and emits the one picked', async () => {
       const wrapper = mountMultiple([], [{ name: 'launch', remotes: ['https://github.com/acme/site.git'] }])
       await openList(wrapper)

@@ -374,14 +374,28 @@ func TestCreateRejectsTakenNamesAndDirs(t *testing.T) {
 
 	_, err = f.engine.Projects().Create(ctx, projectsvc.CreateOptions{
 		Name:       "dupe dirs",
-		Repos:      []projectsvc.RepoSpec{{Remote: f.frontend}, {Remote: f.frontend}},
+		Repos:      []projectsvc.RepoSpec{{Remote: f.frontend}, {Remote: f.backend, Dir: "frontend"}},
 		Background: true,
 	})
 	require.ErrorContains(t, err, `dir "frontend"`)
+}
 
-	_, err = f.engine.Projects().Create(ctx, projectsvc.CreateOptions{
-		Name: "two copies", Background: true,
-		Repos: []projectsvc.RepoSpec{{Remote: f.frontend, Dir: "web"}, {Remote: f.frontend, Dir: "web-old"}},
+func TestCreateRefusesTheSameRepositoryTwice(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+
+	_, err := f.engine.Projects().Create(ctx, projectsvc.CreateOptions{
+		Name: "twice",
+		Repos: []projectsvc.RepoSpec{
+			{Remote: f.frontend, Dir: "one"},
+			{Remote: f.frontend, Dir: "two"},
+		},
+		Background: true,
 	})
-	require.NoError(t, err, "the same remote twice works when the dirs differ")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "in the project twice")
+
+	sessions, err := f.engine.Sessions().ListSessions(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, sessions, "nothing is checked out")
 }
