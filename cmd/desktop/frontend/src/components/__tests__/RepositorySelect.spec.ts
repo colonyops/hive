@@ -158,4 +158,46 @@ describe('RepositorySelect', () => {
     expect(empty).toContain('config.yaml on box')
     expect(empty).not.toContain('Settings')
   })
+
+  describe('multiple', () => {
+    function mountMultiple(selected: string[] = [], presets: { name: string; remotes: string[] }[] = []) {
+      return mount(RepositorySelect, {
+        attachTo: document.body,
+        props: { multiple: true, selected, presets, repositories, testid: 'repo' },
+        global: { stubs: { Teleport: true } },
+      })
+    }
+
+    it('shows each selected repository as a chip that removes it', async () => {
+      const wrapper = mountMultiple(['https://github.com/acme/site.git', 'https://github.com/hay-kot/hive.git'])
+      const chips = wrapper.findAll('[data-testid="repo-chip"]')
+      expect(chips.map((chip) => chip.text())).toEqual(['acme/site', 'hay-kot/hive'])
+      await chips[0].get('[data-testid="repo-chip-remove"]').trigger('click')
+      expect(wrapper.emitted('update:selected')).toEqual([[['https://github.com/hay-kot/hive.git']]])
+    })
+
+    it('toggles a repository and stays open for the next pick', async () => {
+      const wrapper = mountMultiple(['https://github.com/acme/site.git'])
+      await openList(wrapper)
+      const options = wrapper.findAll('[data-testid="repo-option"]')
+      await options[1].trigger('click')
+      expect(wrapper.emitted('update:selected')?.[0]).toEqual([
+        ['https://github.com/acme/site.git', 'https://github.com/hay-kot/hive-desktop.git'],
+      ])
+      expect(wrapper.find('[data-testid="repo-popover"]').exists()).toBe(true)
+      await options[0].trigger('click')
+      expect(wrapper.emitted('update:selected')?.[1]).toEqual([[]])
+    })
+
+    it('lists presets above the repositories and emits the one picked', async () => {
+      const wrapper = mountMultiple([], [{ name: 'launch', remotes: ['https://github.com/acme/site.git'] }])
+      await openList(wrapper)
+      const preset = wrapper.get('[data-testid="repo-preset"]')
+      expect(preset.text()).toContain('launch')
+      expect(preset.text()).toContain('site')
+      await preset.trigger('click')
+      expect(wrapper.emitted('preset')).toEqual([['launch']])
+      expect(wrapper.find('[data-testid="repo-popover"]').exists()).toBe(false)
+    })
+  })
 })

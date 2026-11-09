@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
 import ActionInputsDialog from './ActionInputsDialog.vue'
 import ModeSkeleton from './ModeSkeleton.vue'
+import ProjectDetailDialog from './ProjectDetailDialog.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
 import SessionEditDialog from './SessionEditDialog.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
@@ -143,6 +144,7 @@ const { prefetch: prefetchNewSession } = useNewSession()
 onMounted(prefetchNewSession)
 
 const { pendingInputs: actionInputs, inputsBusy, inputsError, cancelInputs, submitInputs } = ops.actions
+const { projectDetail, closeProjectDetail } = sessions
 const { confirmation, detail, closeDetail, editing, editFocus, editBusy, editError, cancelEdit, submitEdit } = sessions
 
 // Every tag already in use is offered, so one spelling spreads instead of
@@ -203,6 +205,7 @@ const knownTags = computed(() => {
       @submit="submitInputs"
     />
     <SessionDetailDialog v-if="detail" :detail="detail" @close="closeDetail" />
+    <ProjectDetailDialog v-if="projectDetail" :project="projectDetail" @close="closeProjectDetail" />
     <SessionEditDialog
       v-if="editing"
       :name="editing.name"

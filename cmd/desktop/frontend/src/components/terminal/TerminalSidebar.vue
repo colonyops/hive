@@ -2,9 +2,9 @@
 import { computed, nextTick, proxyRefs, ref, toRef, watch } from 'vue'
 import { useNow } from '@vueuse/core'
 import IconChevronDown from '~icons/lucide/chevron-down'
+import IconInfo from '~icons/lucide/info'
 import IconLayers from '~icons/lucide/layers'
 import IconRecycle from '~icons/lucide/recycle'
-import ProjectRepoRow from './ProjectRepoRow.vue'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconChevronsDownUp from '~icons/lucide/chevrons-down-up'
@@ -160,6 +160,8 @@ const chatMenuEntries: MenuEntry[] = [
 ]
 
 const projectMenuEntries: MenuEntry[] = [
+  { kind: 'action', id: 'detail', label: 'Project details…', icon: IconInfo, testid: 'terminal-project-detail' },
+  { kind: 'separator' },
   { kind: 'action', id: 'recycle', label: 'Recycle project', icon: IconRecycle, testid: 'terminal-project-recycle' },
   { kind: 'separator' },
   { kind: 'action', id: 'delete', label: 'Delete project', icon: IconTrash, testid: 'terminal-project-delete' },
@@ -168,7 +170,8 @@ const projectMenuEntries: MenuEntry[] = [
 function onProjectMenuSelect(row: TerminalSessionRow, id: string): void {
   menus.openRow = ''
   if (!row.project) return
-  if (id === 'recycle') void sessions.requestRecycleProject(row.project)
+  if (id === 'detail') sessions.openProjectDetail(row.project)
+  else if (id === 'recycle') void sessions.requestRecycleProject(row.project)
   else if (id === 'delete') void sessions.requestDeleteProject(row.project)
 }
 
@@ -632,14 +635,6 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                       />
                     </div>
                   </div>
-                  <template v-if="row.project">
-                    <ProjectRepoRow
-                      v-for="(repo, index) in row.project.repos ?? []"
-                      :key="repo.sessionId"
-                      :repo="repo"
-                      :last="index === (row.project.repos?.length ?? 0) - 1"
-                    />
-                  </template>
                   <Transition name="tree-expand" v-bind="expandHooks">
                     <div v-if="tree.treeItemsFor(row).length && view.expansion.expanded(group)">
                       <TransitionGroup name="tree" tag="div" class="relative flex flex-col pb-1">

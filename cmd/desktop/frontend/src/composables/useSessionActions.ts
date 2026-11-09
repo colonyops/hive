@@ -1,4 +1,4 @@
-import { ref, type DeepReadonly } from 'vue'
+import { ref, shallowRef, type DeepReadonly } from 'vue'
 import { useChangesReview } from '../stores/useChangesReview'
 import { useCopyReview } from './useCopyReview'
 import {
@@ -126,6 +126,9 @@ export function useSessionActions(options: SessionActionOptions = {}) {
   function closeDetail(): void {
     detail.value = null
   }
+
+  // The tree row already carries every repository, so nothing is read here.
+  const projectDetail = shallowRef<DeepReadonly<ProjectView> | null>(null)
 
   function requestEdit(session: SessionRow, focus: EditFocus = 'name'): void {
     editing.value = session
@@ -263,6 +266,9 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     detail,
     openDetail,
     closeDetail,
+    projectDetail,
+    openProjectDetail: (project: DeepReadonly<ProjectView>) => (projectDetail.value = project),
+    closeProjectDetail: () => (projectDetail.value = null),
     editing,
     editFocus,
     editBusy,

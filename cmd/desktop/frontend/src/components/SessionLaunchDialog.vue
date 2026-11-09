@@ -96,13 +96,13 @@ const emit = defineEmits<{
 const formId = useId()
 const submitHint = formatCombo('mod+enter')
 const fieldId = computed(() => props.fieldTestid ?? props.testid)
-// A project is a local, hand-started thing: no action launches one, and it
-// does not run on a server.
-const offersProject = computed(() => !props.action && props.withPrompt && !props.server)
+// No action launches a project: it is started by hand.
+const offersProject = computed(() => !props.action && props.withPrompt)
 const targetOptions = computed<SegmentedControlOption<Target>[]>(() => [
   { value: 'repository', label: 'Code' },
   ...(offersProject.value ? [{ value: 'project' as const, label: 'Project' }] : []),
-  { value: 'workspace', label: 'Chats' },
+  // A chat runs on this machine.
+  ...(props.server ? [] : [{ value: 'workspace' as const, label: 'Chats' }]),
 ])
 const targetIcons = { repository: IconCode, project: IconLayers, workspace: IconMessagesSquare }
 const inputs = computed(() => props.action?.inputs ?? [])
@@ -155,7 +155,7 @@ watch(
 watch(
   () => props.server,
   (server) => {
-    if (server) target.value = 'repository'
+    if (server && target.value === 'workspace') target.value = 'repository'
   },
   { immediate: true },
 )
@@ -251,7 +251,7 @@ useSubmitShortcut(submit)
   <BaseModal
     :title="action?.label ?? (target === 'workspace' ? 'New chat' : 'New session')"
     :icon="IconPlay"
-    :width="target === 'project' ? 640 : 520"
+    :width="520"
     :busy="busy"
     :close-on-backdrop="false"
     :testid="`${testid}-dialog`"
@@ -259,7 +259,7 @@ useSubmitShortcut(submit)
   >
     <template #header-actions>
       <SegmentedControl
-        v-if="!server"
+        v-if="!server || offersProject"
         v-model="target"
         variant="compact"
         size="sm"
@@ -308,7 +308,7 @@ useSubmitShortcut(submit)
       </div>
     </section>
     <form :id="formId" class="flex flex-col gap-3 px-5 py-4" @submit.prevent="submit">
-      <FormField v-if="servers.length && target === 'repository'" v-slot="{ id }" label="Server">
+      <FormField v-if="servers.length && target !== 'workspace'" v-slot="{ id }" label="Server">
         <AppSelect
           :id="id"
           :model-value="server"
@@ -328,12 +328,16 @@ useSubmitShortcut(submit)
           @update:model-value="repository = $event"
         />
       </FormField>
-      <FormField v-else-if="target === 'project'" label="Repositories">
+      <FormField v-else-if="target === 'project'" v-slot="{ id }" label="Repositories">
         <ProjectLaunchFields
+          :id="id"
+          :key="server"
           v-model:definition="projectDefinition"
           v-model:repos="projectRepos"
           :repositories="options.repositories"
+          :server="server"
           :testid="fieldId"
+          @preset="(preset) => !name.trim() && (name = preset)"
         />
       </FormField>
       <FormField
@@ -354,7 +358,7 @@ useSubmitShortcut(submit)
           :disabled="!workspaceOptions.length"
         />
       </FormField>
-      <FormField v-slot="{ id }" label="Session name">
+      <FormField v-slot="{ id }" :label="target === 'project' ? 'Project name' : 'Session name'">
         <!-- A session name slugs into a tmux name and a directory path, so the
              webview's text substitutions must not touch what was typed. -->
         <TextInput

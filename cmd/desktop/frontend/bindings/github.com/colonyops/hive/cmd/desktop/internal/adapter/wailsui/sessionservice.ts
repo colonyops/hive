@@ -42,8 +42,8 @@ export function CreateSession(req: dispatch$0.CreateSessionRequest): $Cancellabl
     return $Call.ByID(1294063921, req);
 }
 
-export function DefaultCloneStrategy(remote: string): $CancellablePromise<string> {
-    return $Call.ByID(2583672324, remote);
+export function DefaultCloneStrategy(server: string, remote: string): $CancellablePromise<string> {
+    return $Call.ByID(2583672324, server, remote);
 }
 
 export function DeleteProject(id: string): $CancellablePromise<number> {
@@ -114,6 +114,14 @@ export function ListProjects(): $CancellablePromise<app$0.ProjectView[] | null> 
 }
 
 /**
+ * ListServerProjects returns the project sessions on every server that
+ * answers, with "<server>:" in front of each id and slug.
+ */
+export function ListServerProjects(): $CancellablePromise<app$0.ProjectView[] | null> {
+    return $Call.ByID(171554182);
+}
+
+/**
  * ListServerSessions returns the sessions of each server under servers:, in
  * config order. A server that did not answer has a state, an error, and no
  * sessions. It is a call of its own so the local list never waits on ssh.
@@ -141,8 +149,8 @@ export function ProjectCreateProgress(): $CancellablePromise<app$0.ProjectCreate
     return $Call.ByID(752354267);
 }
 
-export function ProjectDefinitions(): $CancellablePromise<app$0.ProjectDefinitionView[] | null> {
-    return $Call.ByID(4142206466);
+export function ProjectDefinitions(server: string): $CancellablePromise<app$0.ProjectDefinitionView[] | null> {
+    return $Call.ByID(4142206466, server);
 }
 
 export function ProjectRisk(id: string): $CancellablePromise<app$0.ProjectRepoRisk[] | null> {

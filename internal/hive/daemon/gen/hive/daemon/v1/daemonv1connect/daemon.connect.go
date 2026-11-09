@@ -25,6 +25,8 @@ const (
 	DaemonServiceName = "hive.daemon.v1.DaemonService"
 	// SessionServiceName is the fully-qualified name of the SessionService service.
 	SessionServiceName = "hive.daemon.v1.SessionService"
+	// ProjectServiceName is the fully-qualified name of the ProjectService service.
+	ProjectServiceName = "hive.daemon.v1.ProjectService"
 )
 
 // These constants are the fully-qualified names of the RPCs defined in this package. They're
@@ -92,6 +94,33 @@ const (
 	// SessionServiceStartTmuxProcedure is the fully-qualified name of the SessionService's StartTmux
 	// RPC.
 	SessionServiceStartTmuxProcedure = "/hive.daemon.v1.SessionService/StartTmux"
+	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
+	// ListProjects RPC.
+	ProjectServiceListProjectsProcedure = "/hive.daemon.v1.ProjectService/ListProjects"
+	// ProjectServiceProjectDefinitionsProcedure is the fully-qualified name of the ProjectService's
+	// ProjectDefinitions RPC.
+	ProjectServiceProjectDefinitionsProcedure = "/hive.daemon.v1.ProjectService/ProjectDefinitions"
+	// ProjectServiceDefaultCloneStrategyProcedure is the fully-qualified name of the ProjectService's
+	// DefaultCloneStrategy RPC.
+	ProjectServiceDefaultCloneStrategyProcedure = "/hive.daemon.v1.ProjectService/DefaultCloneStrategy"
+	// ProjectServiceCreateProjectProcedure is the fully-qualified name of the ProjectService's
+	// CreateProject RPC.
+	ProjectServiceCreateProjectProcedure = "/hive.daemon.v1.ProjectService/CreateProject"
+	// ProjectServiceProjectRiskProcedure is the fully-qualified name of the ProjectService's
+	// ProjectRisk RPC.
+	ProjectServiceProjectRiskProcedure = "/hive.daemon.v1.ProjectService/ProjectRisk"
+	// ProjectServiceRecycleProjectProcedure is the fully-qualified name of the ProjectService's
+	// RecycleProject RPC.
+	ProjectServiceRecycleProjectProcedure = "/hive.daemon.v1.ProjectService/RecycleProject"
+	// ProjectServiceDeleteProjectProcedure is the fully-qualified name of the ProjectService's
+	// DeleteProject RPC.
+	ProjectServiceDeleteProjectProcedure = "/hive.daemon.v1.ProjectService/DeleteProject"
+	// ProjectServiceOpenProjectProcedure is the fully-qualified name of the ProjectService's
+	// OpenProject RPC.
+	ProjectServiceOpenProjectProcedure = "/hive.daemon.v1.ProjectService/OpenProject"
+	// ProjectServiceProjectOfProcedure is the fully-qualified name of the ProjectService's ProjectOf
+	// RPC.
+	ProjectServiceProjectOfProcedure = "/hive.daemon.v1.ProjectService/ProjectOf"
 )
 
 // DaemonServiceClient is a client for the hive.daemon.v1.DaemonService service.
@@ -854,4 +883,286 @@ func (UnimplementedSessionServiceHandler) GitStatuses(context.Context, *connect.
 
 func (UnimplementedSessionServiceHandler) StartTmux(context.Context, *connect.Request[v1.StartTmuxRequest]) (*connect.Response[v1.StartTmuxResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.StartTmux is not implemented"))
+}
+
+// ProjectServiceClient is a client for the hive.daemon.v1.ProjectService service.
+type ProjectServiceClient interface {
+	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
+	ProjectDefinitions(context.Context, *connect.Request[v1.ProjectDefinitionsRequest]) (*connect.Response[v1.ProjectDefinitionsResponse], error)
+	DefaultCloneStrategy(context.Context, *connect.Request[v1.DefaultCloneStrategyRequest]) (*connect.Response[v1.DefaultCloneStrategyResponse], error)
+	// CreateProject streams each step of the create, then the project.
+	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.ServerStreamForClient[v1.CreateProjectResponse], error)
+	ProjectRisk(context.Context, *connect.Request[v1.ProjectRiskRequest]) (*connect.Response[v1.ProjectRiskResponse], error)
+	RecycleProject(context.Context, *connect.Request[v1.RecycleProjectRequest]) (*connect.Response[v1.RecycleProjectResponse], error)
+	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
+	// OpenProject starts the project's tmux session in the background.
+	OpenProject(context.Context, *connect.Request[v1.OpenProjectRequest]) (*connect.Response[v1.OpenProjectResponse], error)
+	ProjectOf(context.Context, *connect.Request[v1.ProjectOfRequest]) (*connect.Response[v1.ProjectOfResponse], error)
+}
+
+// NewProjectServiceClient constructs a client for the hive.daemon.v1.ProjectService service. By
+// default, it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped responses,
+// and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the
+// connect.WithGRPC() or connect.WithGRPCWeb() options.
+//
+// The URL supplied here should be the base URL for the Connect or gRPC server (for example,
+// http://api.acme.com or https://acme.com/grpc).
+func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) ProjectServiceClient {
+	baseURL = strings.TrimRight(baseURL, "/")
+	projectServiceMethods := v1.File_hive_daemon_v1_daemon_proto.Services().ByName("ProjectService").Methods()
+	return &projectServiceClient{
+		listProjects: connect.NewClient[v1.ListProjectsRequest, v1.ListProjectsResponse](
+			httpClient,
+			baseURL+ProjectServiceListProjectsProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ListProjects")),
+			connect.WithClientOptions(opts...),
+		),
+		projectDefinitions: connect.NewClient[v1.ProjectDefinitionsRequest, v1.ProjectDefinitionsResponse](
+			httpClient,
+			baseURL+ProjectServiceProjectDefinitionsProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ProjectDefinitions")),
+			connect.WithClientOptions(opts...),
+		),
+		defaultCloneStrategy: connect.NewClient[v1.DefaultCloneStrategyRequest, v1.DefaultCloneStrategyResponse](
+			httpClient,
+			baseURL+ProjectServiceDefaultCloneStrategyProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("DefaultCloneStrategy")),
+			connect.WithClientOptions(opts...),
+		),
+		createProject: connect.NewClient[v1.CreateProjectRequest, v1.CreateProjectResponse](
+			httpClient,
+			baseURL+ProjectServiceCreateProjectProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("CreateProject")),
+			connect.WithClientOptions(opts...),
+		),
+		projectRisk: connect.NewClient[v1.ProjectRiskRequest, v1.ProjectRiskResponse](
+			httpClient,
+			baseURL+ProjectServiceProjectRiskProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ProjectRisk")),
+			connect.WithClientOptions(opts...),
+		),
+		recycleProject: connect.NewClient[v1.RecycleProjectRequest, v1.RecycleProjectResponse](
+			httpClient,
+			baseURL+ProjectServiceRecycleProjectProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RecycleProject")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteProject: connect.NewClient[v1.DeleteProjectRequest, v1.DeleteProjectResponse](
+			httpClient,
+			baseURL+ProjectServiceDeleteProjectProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("DeleteProject")),
+			connect.WithClientOptions(opts...),
+		),
+		openProject: connect.NewClient[v1.OpenProjectRequest, v1.OpenProjectResponse](
+			httpClient,
+			baseURL+ProjectServiceOpenProjectProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("OpenProject")),
+			connect.WithClientOptions(opts...),
+		),
+		projectOf: connect.NewClient[v1.ProjectOfRequest, v1.ProjectOfResponse](
+			httpClient,
+			baseURL+ProjectServiceProjectOfProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ProjectOf")),
+			connect.WithClientOptions(opts...),
+		),
+	}
+}
+
+// projectServiceClient implements ProjectServiceClient.
+type projectServiceClient struct {
+	listProjects         *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
+	projectDefinitions   *connect.Client[v1.ProjectDefinitionsRequest, v1.ProjectDefinitionsResponse]
+	defaultCloneStrategy *connect.Client[v1.DefaultCloneStrategyRequest, v1.DefaultCloneStrategyResponse]
+	createProject        *connect.Client[v1.CreateProjectRequest, v1.CreateProjectResponse]
+	projectRisk          *connect.Client[v1.ProjectRiskRequest, v1.ProjectRiskResponse]
+	recycleProject       *connect.Client[v1.RecycleProjectRequest, v1.RecycleProjectResponse]
+	deleteProject        *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
+	openProject          *connect.Client[v1.OpenProjectRequest, v1.OpenProjectResponse]
+	projectOf            *connect.Client[v1.ProjectOfRequest, v1.ProjectOfResponse]
+}
+
+// ListProjects calls hive.daemon.v1.ProjectService.ListProjects.
+func (c *projectServiceClient) ListProjects(ctx context.Context, req *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error) {
+	return c.listProjects.CallUnary(ctx, req)
+}
+
+// ProjectDefinitions calls hive.daemon.v1.ProjectService.ProjectDefinitions.
+func (c *projectServiceClient) ProjectDefinitions(ctx context.Context, req *connect.Request[v1.ProjectDefinitionsRequest]) (*connect.Response[v1.ProjectDefinitionsResponse], error) {
+	return c.projectDefinitions.CallUnary(ctx, req)
+}
+
+// DefaultCloneStrategy calls hive.daemon.v1.ProjectService.DefaultCloneStrategy.
+func (c *projectServiceClient) DefaultCloneStrategy(ctx context.Context, req *connect.Request[v1.DefaultCloneStrategyRequest]) (*connect.Response[v1.DefaultCloneStrategyResponse], error) {
+	return c.defaultCloneStrategy.CallUnary(ctx, req)
+}
+
+// CreateProject calls hive.daemon.v1.ProjectService.CreateProject.
+func (c *projectServiceClient) CreateProject(ctx context.Context, req *connect.Request[v1.CreateProjectRequest]) (*connect.ServerStreamForClient[v1.CreateProjectResponse], error) {
+	return c.createProject.CallServerStream(ctx, req)
+}
+
+// ProjectRisk calls hive.daemon.v1.ProjectService.ProjectRisk.
+func (c *projectServiceClient) ProjectRisk(ctx context.Context, req *connect.Request[v1.ProjectRiskRequest]) (*connect.Response[v1.ProjectRiskResponse], error) {
+	return c.projectRisk.CallUnary(ctx, req)
+}
+
+// RecycleProject calls hive.daemon.v1.ProjectService.RecycleProject.
+func (c *projectServiceClient) RecycleProject(ctx context.Context, req *connect.Request[v1.RecycleProjectRequest]) (*connect.Response[v1.RecycleProjectResponse], error) {
+	return c.recycleProject.CallUnary(ctx, req)
+}
+
+// DeleteProject calls hive.daemon.v1.ProjectService.DeleteProject.
+func (c *projectServiceClient) DeleteProject(ctx context.Context, req *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error) {
+	return c.deleteProject.CallUnary(ctx, req)
+}
+
+// OpenProject calls hive.daemon.v1.ProjectService.OpenProject.
+func (c *projectServiceClient) OpenProject(ctx context.Context, req *connect.Request[v1.OpenProjectRequest]) (*connect.Response[v1.OpenProjectResponse], error) {
+	return c.openProject.CallUnary(ctx, req)
+}
+
+// ProjectOf calls hive.daemon.v1.ProjectService.ProjectOf.
+func (c *projectServiceClient) ProjectOf(ctx context.Context, req *connect.Request[v1.ProjectOfRequest]) (*connect.Response[v1.ProjectOfResponse], error) {
+	return c.projectOf.CallUnary(ctx, req)
+}
+
+// ProjectServiceHandler is an implementation of the hive.daemon.v1.ProjectService service.
+type ProjectServiceHandler interface {
+	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
+	ProjectDefinitions(context.Context, *connect.Request[v1.ProjectDefinitionsRequest]) (*connect.Response[v1.ProjectDefinitionsResponse], error)
+	DefaultCloneStrategy(context.Context, *connect.Request[v1.DefaultCloneStrategyRequest]) (*connect.Response[v1.DefaultCloneStrategyResponse], error)
+	// CreateProject streams each step of the create, then the project.
+	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest], *connect.ServerStream[v1.CreateProjectResponse]) error
+	ProjectRisk(context.Context, *connect.Request[v1.ProjectRiskRequest]) (*connect.Response[v1.ProjectRiskResponse], error)
+	RecycleProject(context.Context, *connect.Request[v1.RecycleProjectRequest]) (*connect.Response[v1.RecycleProjectResponse], error)
+	DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error)
+	// OpenProject starts the project's tmux session in the background.
+	OpenProject(context.Context, *connect.Request[v1.OpenProjectRequest]) (*connect.Response[v1.OpenProjectResponse], error)
+	ProjectOf(context.Context, *connect.Request[v1.ProjectOfRequest]) (*connect.Response[v1.ProjectOfResponse], error)
+}
+
+// NewProjectServiceHandler builds an HTTP handler from the service implementation. It returns the
+// path on which to mount the handler and the handler itself.
+//
+// By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
+// and JSON codecs. They also support gzip compression.
+func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	projectServiceMethods := v1.File_hive_daemon_v1_daemon_proto.Services().ByName("ProjectService").Methods()
+	projectServiceListProjectsHandler := connect.NewUnaryHandler(
+		ProjectServiceListProjectsProcedure,
+		svc.ListProjects,
+		connect.WithSchema(projectServiceMethods.ByName("ListProjects")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceProjectDefinitionsHandler := connect.NewUnaryHandler(
+		ProjectServiceProjectDefinitionsProcedure,
+		svc.ProjectDefinitions,
+		connect.WithSchema(projectServiceMethods.ByName("ProjectDefinitions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceDefaultCloneStrategyHandler := connect.NewUnaryHandler(
+		ProjectServiceDefaultCloneStrategyProcedure,
+		svc.DefaultCloneStrategy,
+		connect.WithSchema(projectServiceMethods.ByName("DefaultCloneStrategy")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceCreateProjectHandler := connect.NewServerStreamHandler(
+		ProjectServiceCreateProjectProcedure,
+		svc.CreateProject,
+		connect.WithSchema(projectServiceMethods.ByName("CreateProject")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceProjectRiskHandler := connect.NewUnaryHandler(
+		ProjectServiceProjectRiskProcedure,
+		svc.ProjectRisk,
+		connect.WithSchema(projectServiceMethods.ByName("ProjectRisk")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceRecycleProjectHandler := connect.NewUnaryHandler(
+		ProjectServiceRecycleProjectProcedure,
+		svc.RecycleProject,
+		connect.WithSchema(projectServiceMethods.ByName("RecycleProject")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceDeleteProjectHandler := connect.NewUnaryHandler(
+		ProjectServiceDeleteProjectProcedure,
+		svc.DeleteProject,
+		connect.WithSchema(projectServiceMethods.ByName("DeleteProject")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceOpenProjectHandler := connect.NewUnaryHandler(
+		ProjectServiceOpenProjectProcedure,
+		svc.OpenProject,
+		connect.WithSchema(projectServiceMethods.ByName("OpenProject")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceProjectOfHandler := connect.NewUnaryHandler(
+		ProjectServiceProjectOfProcedure,
+		svc.ProjectOf,
+		connect.WithSchema(projectServiceMethods.ByName("ProjectOf")),
+		connect.WithHandlerOptions(opts...),
+	)
+	return "/hive.daemon.v1.ProjectService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case ProjectServiceListProjectsProcedure:
+			projectServiceListProjectsHandler.ServeHTTP(w, r)
+		case ProjectServiceProjectDefinitionsProcedure:
+			projectServiceProjectDefinitionsHandler.ServeHTTP(w, r)
+		case ProjectServiceDefaultCloneStrategyProcedure:
+			projectServiceDefaultCloneStrategyHandler.ServeHTTP(w, r)
+		case ProjectServiceCreateProjectProcedure:
+			projectServiceCreateProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceProjectRiskProcedure:
+			projectServiceProjectRiskHandler.ServeHTTP(w, r)
+		case ProjectServiceRecycleProjectProcedure:
+			projectServiceRecycleProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceDeleteProjectProcedure:
+			projectServiceDeleteProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceOpenProjectProcedure:
+			projectServiceOpenProjectHandler.ServeHTTP(w, r)
+		case ProjectServiceProjectOfProcedure:
+			projectServiceProjectOfHandler.ServeHTTP(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// UnimplementedProjectServiceHandler returns CodeUnimplemented from all methods.
+type UnimplementedProjectServiceHandler struct{}
+
+func (UnimplementedProjectServiceHandler) ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.ProjectService.ListProjects is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ProjectDefinitions(context.Context, *connect.Request[v1.ProjectDefinitionsRequest]) (*connect.Response[v1.ProjectDefinitionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.ProjectService.ProjectDefinitions is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) DefaultCloneStrategy(context.Context, *connect.Request[v1.DefaultCloneStrategyRequest]) (*connect.Response[v1.DefaultCloneStrategyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.ProjectService.DefaultCloneStrategy is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest], *connect.ServerStream[v1.CreateProjectResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.ProjectService.CreateProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ProjectRisk(context.Context, *connect.Request[v1.ProjectRiskRequest]) (*connect.Response[v1.ProjectRiskResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.ProjectService.ProjectRisk is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RecycleProject(context.Context, *connect.Request[v1.RecycleProjectRequest]) (*connect.Response[v1.RecycleProjectResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.ProjectService.RecycleProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) DeleteProject(context.Context, *connect.Request[v1.DeleteProjectRequest]) (*connect.Response[v1.DeleteProjectResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.ProjectService.DeleteProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) OpenProject(context.Context, *connect.Request[v1.OpenProjectRequest]) (*connect.Response[v1.OpenProjectResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.ProjectService.OpenProject is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ProjectOf(context.Context, *connect.Request[v1.ProjectOfRequest]) (*connect.Response[v1.ProjectOfResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.ProjectService.ProjectOf is not implemented"))
 }

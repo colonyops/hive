@@ -103,6 +103,7 @@ type Client struct {
 	protocol   *protocolGate
 	httpClient *http.Client
 	sessions   daemonv1connect.SessionServiceClient
+	projects   daemonv1connect.ProjectServiceClient
 	control    daemonv1connect.DaemonServiceClient
 
 	name          string
@@ -171,21 +172,27 @@ func New(opts Options) *Client {
 	clientOpts := []connect.ClientOption{connect.WithInterceptors(interceptors...)}
 	c.sessions = daemonv1connect.NewSessionServiceClient(c.httpClient, baseURL, clientOpts...)
 	c.control = daemonv1connect.NewDaemonServiceClient(c.httpClient, baseURL, clientOpts...)
+	c.projects = daemonv1connect.NewProjectServiceClient(c.httpClient, baseURL, clientOpts...)
 	return c
 }
 
 var readProcedures = map[string]bool{
-	daemonv1connect.DaemonServiceHelloProcedure:          true,
-	daemonv1connect.DaemonServiceHealthProcedure:         true,
-	daemonv1connect.SessionServiceListProcedure:          true,
-	daemonv1connect.SessionServiceGetProcedure:           true,
-	daemonv1connect.SessionServiceRiskProcedure:          true,
-	daemonv1connect.SessionServiceLaunchOptionsProcedure: true,
-	daemonv1connect.SessionServiceStatusesProcedure:      true,
-	daemonv1connect.SessionServiceChangesProcedure:       true,
-	daemonv1connect.SessionServiceFileDiffsProcedure:     true,
-	daemonv1connect.SessionServiceBranchesProcedure:      true,
-	daemonv1connect.SessionServiceGitStatusesProcedure:   true,
+	daemonv1connect.DaemonServiceHelloProcedure:                 true,
+	daemonv1connect.DaemonServiceHealthProcedure:                true,
+	daemonv1connect.SessionServiceListProcedure:                 true,
+	daemonv1connect.SessionServiceGetProcedure:                  true,
+	daemonv1connect.SessionServiceRiskProcedure:                 true,
+	daemonv1connect.SessionServiceLaunchOptionsProcedure:        true,
+	daemonv1connect.SessionServiceStatusesProcedure:             true,
+	daemonv1connect.SessionServiceChangesProcedure:              true,
+	daemonv1connect.SessionServiceFileDiffsProcedure:            true,
+	daemonv1connect.SessionServiceBranchesProcedure:             true,
+	daemonv1connect.SessionServiceGitStatusesProcedure:          true,
+	daemonv1connect.ProjectServiceListProjectsProcedure:         true,
+	daemonv1connect.ProjectServiceProjectDefinitionsProcedure:   true,
+	daemonv1connect.ProjectServiceDefaultCloneStrategyProcedure: true,
+	daemonv1connect.ProjectServiceProjectRiskProcedure:          true,
+	daemonv1connect.ProjectServiceProjectOfProcedure:            true,
 }
 
 // fileDiffsTimeout outlasts the daemon's own 15s limit on a batch of diffs, so
@@ -208,11 +215,13 @@ func (c *Client) callTimeouts() connect.UnaryInterceptorFunc {
 
 func (c *Client) timeoutFor(procedure string) time.Duration {
 	switch {
-	case procedure == daemonv1connect.SessionServiceDeleteProcedure:
+	case procedure == daemonv1connect.SessionServiceDeleteProcedure,
+		procedure == daemonv1connect.ProjectServiceDeleteProjectProcedure,
+		procedure == daemonv1connect.ProjectServiceRecycleProjectProcedure:
 		return c.deleteTimeout
 	case !readProcedures[procedure]:
 		return 0
-	case procedure == daemonv1connect.SessionServiceRiskProcedure && c.riskTimeout > 0:
+	case (procedure == daemonv1connect.SessionServiceRiskProcedure || procedure == daemonv1connect.ProjectServiceProjectRiskProcedure) && c.riskTimeout > 0:
 		return c.riskTimeout
 	case c.connectTimeout > 0 && c.openConns.Load() == 0:
 		return c.connectTimeout

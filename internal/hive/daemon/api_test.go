@@ -19,6 +19,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
+	projectsvc "github.com/colonyops/hive/internal/hive/project"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
@@ -220,4 +221,50 @@ func TestRecycleThroughTheDaemonStreamsProgressAndSucceeds(t *testing.T) {
 	got, err := client.GetSession(t.Context(), created.ID)
 	require.NoError(t, err)
 	assert.Equal(t, session.StateRecycled, got.State)
+}
+
+func TestClientDrivesTheProjectAPIThroughTheDaemon(t *testing.T) {
+	t.Parallel()
+	client := newClient(t)
+	ctx := t.Context()
+
+	var steps []projectsvc.Step
+	created, err := client.CreateProject(ctx, projectsvc.CreateOptions{
+		Name:      "launch",
+		Repos:     []projectsvc.RepoSpec{{Remote: remote, Dir: "site"}, {Remote: "https://github.com/acme/api"}},
+		SkipSpawn: true,
+		OnStep:    func(step projectsvc.Step) { steps = append(steps, step) },
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "launch", created.Name)
+	require.Len(t, created.Repos, 2)
+	assert.Equal(t, "site", created.Repos[0].Dir)
+	assert.Equal(t, "api", created.Repos[1].Dir)
+	require.NotEmpty(t, steps)
+	last := steps[len(steps)-1]
+	assert.Empty(t, last.Dir, "the root reports last")
+	assert.Equal(t, projectsvc.StepDone, last.State)
+
+	listed, err := client.ListProjects(ctx)
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	assert.Equal(t, created.ID, listed[0].ID)
+
+	slug, found, err := client.ProjectOf(ctx, created.Repos[0].SessionID)
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, created.Slug, slug)
+
+	risks, err := client.ProjectRisk(ctx, created.ID)
+	require.NoError(t, err)
+	require.Len(t, risks, 2)
+	assert.False(t, risks[0].UncommittedChanges)
+
+	require.NoError(t, client.DeleteProject(ctx, created.ID))
+	listed, err = client.ListProjects(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, listed)
+
+	err = client.DeleteProject(ctx, created.ID)
+	require.ErrorIs(t, err, session.ErrNotFound)
 }

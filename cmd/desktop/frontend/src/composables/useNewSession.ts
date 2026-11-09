@@ -427,6 +427,7 @@ export function useNewSession() {
     try {
       await useProjectCreate().start({
         name: input.name,
+        server: location.server.value,
         project: input.project.definition,
         repos: input.project.repos,
         prompt: input.prompt ?? '',
@@ -448,13 +449,14 @@ export function useNewSession() {
     if (!req || open.value || loading.value) return
     loading.value = true
     try {
-      const opts = await resolveOptions()
+      const opts = req.server ? await ServerLaunchOptions(req.server) : await resolveOptions()
       show(
         { repository: '', workspace: '', name: req.name, prompt: req.prompt, agent: req.agent },
         opts,
         [],
         null,
         'project',
+        req.server,
       )
       useProjectCreate().retry({ definition: req.project, repos: (req.repos ?? []).map((repo) => ({ ...repo })) })
     } catch (e) {

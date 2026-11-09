@@ -210,6 +210,10 @@ func (s *SessionsService) startServerTmuxSession(ctx context.Context, server, sl
 	}
 	sess, ok := sessionOfTmuxName(sessions, slug)
 	if !ok {
+		// A project session's terminal belongs to no session row.
+		if result, found, err := s.startProjectTmux(ctx, server, slug); found || err != nil {
+			return result, err
+		}
 		return multiplexer.LaunchResult{}, Errorf(KindNotFound, "no session with slug %q on server %q", slug, server)
 	}
 	result, err := api.StartTmuxSession(ctx, sess.ID)

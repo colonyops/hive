@@ -10,22 +10,49 @@ import { computed, nextTick, ref, useId, watch } from 'vue'
 import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconGitBranch from '~icons/lucide/git-branch'
+import IconLayers from '~icons/lucide/layers'
 import IconSearch from '~icons/lucide/search'
+import IconX from '~icons/lucide/x'
 import type { SessionLaunchRepository } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { useAnchoredPopover } from '@hive/ui/composables/useAnchoredPopover'
 import { useListKeyboardNav } from '@hive/ui/composables/useListKeyboardNav'
 import { highlightSegments, rankRepositories, repoDisplayName, toChoices } from '../lib/repositories'
 
-const props = defineProps<{
-  modelValue: string
-  repositories: SessionLaunchRepository[] | null | undefined
-  testid?: string
-  id?: string
-  /** The server the list comes from, '' for this machine. */
-  server?: string
-}>()
+export interface RepositoryPreset {
+  name: string
+  remotes: readonly string[]
+}
 
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+const props = withDefaults(
+  defineProps<{
+    modelValue?: string
+    repositories: SessionLaunchRepository[] | null | undefined
+    testid?: string
+    id?: string
+    /** The server the list comes from, '' for this machine. */
+    server?: string
+    /** Pick any number of repositories into `selected`; the list stays open between picks. */
+    multiple?: boolean
+    selected?: readonly string[]
+    /** Named sets of repositories, listed above the repositories; one replaces the selection. */
+    presets?: readonly RepositoryPreset[]
+  }>(),
+  {
+    modelValue: '',
+    testid: undefined,
+    id: undefined,
+    server: '',
+    multiple: false,
+    selected: () => [],
+    presets: () => [],
+  },
+)
+
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
+  'update:selected': [value: string[]]
+  preset: [name: string]
+}>()
 
 const listboxId = useId()
 const root = ref<HTMLElement | null>(null)
@@ -38,7 +65,16 @@ const query = ref('')
 const active = ref(0)
 
 const choices = computed(() => toChoices(props.repositories))
-const ranked = computed(() => rankRepositories(choices.value, query.value, props.modelValue))
+const ranked = computed(() => rankRepositories(choices.value, query.value, props.multiple ? '' : props.modelValue))
+const isSelected = (remote: string): boolean =>
+  props.multiple ? props.selected.includes(remote) : remote === props.modelValue
+// Presets name sets, not repositories, so a query filters them by name only.
+const shownPresets = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  return props.presets.filter((preset) => !q || preset.name.toLowerCase().includes(q))
+})
+const presetHint = (preset: RepositoryPreset): string =>
+  preset.remotes.map((remote) => repoDisplayName(remote).split('/').pop() || remote).join(', ')
 
 // A remote that is not on disk yet is still a valid answer, so the typed query
 // stays selectable — but only once it looks like one, or every half-typed name
@@ -46,9 +82,10 @@ const ranked = computed(() => rankRepositories(choices.value, query.value, props
 const custom = computed(() => {
   const value = query.value.trim()
   if (!value || !/[/:.]/.test(value)) return ''
-  return choices.value.some((choice) => choice.remote === value) ? '' : value
+  return choices.value.some((choice) => choice.remote === value) || isSelected(value) ? '' : value
 })
-const rowCount = computed(() => ranked.value.length + (custom.value ? 1 : 0))
+const presetCount = computed(() => shownPresets.value.length)
+const rowCount = computed(() => presetCount.value + ranked.value.length + (custom.value ? 1 : 0))
 
 const selectedLabel = computed(() => repoDisplayName(props.modelValue) || props.modelValue)
 
@@ -57,7 +94,7 @@ const nav = useListKeyboardNav({
   count: () => rowCount.value,
   open: () => open.value,
   homeEnd: () => true,
-  row: (index) => list.value?.children[index]?.firstElementChild,
+  row: (index) => list.value?.querySelectorAll('[role=option]')[index]?.firstElementChild,
 })
 
 const { style: popoverStyle, measure } = useAnchoredPopover(root, popover, open)
@@ -86,12 +123,38 @@ function toggle(): void {
 }
 
 function choose(remote: string): void {
+  if (props.multiple) {
+    emit(
+      'update:selected',
+      isSelected(remote) ? props.selected.filter((item) => item !== remote) : [...props.selected, remote],
+    )
+    query.value = ''
+    searchInput.value?.focus()
+    return
+  }
   if (remote !== props.modelValue) emit('update:modelValue', remote)
   close()
 }
 
+function choosePreset(preset: RepositoryPreset): void {
+  emit('preset', preset.name)
+  close()
+}
+
+function remove(remote: string): void {
+  emit(
+    'update:selected',
+    props.selected.filter((item) => item !== remote),
+  )
+}
+
 function commitActive(): void {
-  const row = ranked.value[active.value]
+  const preset = shownPresets.value[active.value]
+  if (preset) {
+    choosePreset(preset)
+    return
+  }
+  const row = ranked.value[active.value - presetCount.value]
   if (row) {
     choose(row.remote)
     return
@@ -141,7 +204,51 @@ onClickOutside(
     <!-- Keydown is bound where focus actually is — the trigger while closed,
          the search box while open — rather than on this root, which would
          double-handle every key the search box lets bubble. -->
+    <div
+      v-if="multiple"
+      class="flex min-h-10.5 w-full flex-wrap items-center gap-1.5 rounded-lg border bg-app px-2 py-1.75"
+      :class="open ? 'border-accent' : 'border-strong'"
+      :data-testid="testid ? `${testid}-field` : undefined"
+    >
+      <span
+        v-for="remote in selected"
+        :key="remote"
+        class="flex max-w-full min-w-0 items-center gap-1 rounded-md border border-card bg-raised py-0.5 pr-0.5 pl-2 text-small text-text"
+        :title="remote"
+        :data-testid="testid ? `${testid}-chip` : undefined"
+        :data-remote="remote"
+      >
+        <span class="min-w-0 truncate">{{ repoDisplayName(remote) || remote }}</span>
+        <button
+          type="button"
+          class="flex size-4.5 shrink-0 items-center justify-center rounded text-text-4 hover:bg-hover hover:text-text"
+          :aria-label="`Remove ${repoDisplayName(remote) || remote}`"
+          :data-testid="testid ? `${testid}-chip-remove` : undefined"
+          @click="remove(remote)"
+        >
+          <IconX class="size-3" />
+        </button>
+      </span>
+      <button
+        :id="id"
+        ref="trigger"
+        type="button"
+        class="flex min-w-32 flex-1 items-center gap-1.5 rounded px-1 py-0.5 text-left text-body text-text-4 outline-none"
+        :data-testid="testid"
+        aria-label="Add a repository"
+        aria-haspopup="listbox"
+        :aria-expanded="open"
+        :aria-controls="open ? listboxId : undefined"
+        @click="toggle"
+        @keydown="onKeydown"
+      >
+        <IconGitBranch v-if="!selected.length" class="size-4 shrink-0 text-text-3" />
+        <span class="min-w-0 flex-1 truncate">{{ selected.length ? 'Add another…' : 'Choose repositories' }}</span>
+        <IconChevronDown class="size-4 shrink-0 text-text-3 transition-transform" :class="open ? 'rotate-180' : ''" />
+      </button>
+    </div>
     <button
+      v-else
       :id="id"
       ref="trigger"
       type="button"
@@ -178,7 +285,9 @@ onClickOutside(
             ref="searchInput"
             v-model="query"
             type="text"
-            placeholder="Search repositories or paste a remote…"
+            :placeholder="
+              presets.length ? 'Search projects and repositories…' : 'Search repositories or paste a remote…'
+            "
             class="w-0 min-w-0 flex-1 bg-transparent text-body text-text outline-none placeholder:text-text-4"
             :data-testid="testid ? `${testid}-search` : undefined"
             @keydown="onKeydown"
@@ -193,22 +302,44 @@ onClickOutside(
           aria-label="Repository"
         >
           <li
-            v-for="(repo, index) in ranked"
-            :key="repo.remote"
+            v-for="(preset, index) in shownPresets"
+            :key="`preset:${preset.name}`"
             role="option"
-            :aria-selected="repo.remote === modelValue"
+            :aria-selected="false"
           >
             <button
               type="button"
               class="flex w-full items-center gap-2 rounded-md px-2.25 py-1.75 text-left text-body"
+              :class="index === active ? 'bg-hover text-text' : 'text-text-2'"
+              :data-testid="testid ? `${testid}-preset` : undefined"
+              :data-preset="preset.name"
+              :title="preset.remotes.join('\n')"
+              @mousedown.prevent
+              @click="choosePreset(preset)"
+              @mousemove="active = index"
+            >
+              <IconLayers class="size-3.5 shrink-0 text-accent" />
+              <span class="shrink-0">{{ preset.name }}</span>
+              <span class="min-w-0 flex-1 truncate text-right text-caption text-text-4">{{ presetHint(preset) }}</span>
+            </button>
+          </li>
+          <li v-if="presetCount && ranked.length" role="presentation" class="mx-1 my-1 border-t border-row" />
+          <li v-for="(repo, index) in ranked" :key="repo.remote" role="option" :aria-selected="isSelected(repo.remote)">
+            <button
+              type="button"
+              class="flex w-full items-center gap-2 rounded-md px-2.25 py-1.75 text-left text-body"
               :class="
-                index === active ? 'bg-hover text-text' : repo.remote === modelValue ? 'text-text' : 'text-text-2'
+                index + presetCount === active
+                  ? 'bg-hover text-text'
+                  : isSelected(repo.remote)
+                    ? 'text-text'
+                    : 'text-text-2'
               "
               :data-testid="testid ? `${testid}-option` : undefined"
               :title="repo.remote"
               @mousedown.prevent
               @click="choose(repo.remote)"
-              @mousemove="active = index"
+              @mousemove="active = index + presetCount"
             >
               <span class="min-w-0 flex-1 truncate">
                 <span
@@ -219,18 +350,18 @@ onClickOutside(
                 >
               </span>
               <span v-if="repo.hint" class="shrink-0 truncate text-caption text-text-4">{{ repo.hint }}</span>
-              <IconCheck v-if="repo.remote === modelValue" class="size-3.5 shrink-0 text-accent" :stroke-width="3" />
+              <IconCheck v-if="isSelected(repo.remote)" class="size-3.5 shrink-0 text-accent" :stroke-width="3" />
             </button>
           </li>
           <li v-if="custom" role="option" :aria-selected="false">
             <button
               type="button"
               class="flex w-full items-center gap-2 rounded-md px-2.25 py-1.75 text-left text-body"
-              :class="active === ranked.length ? 'bg-hover text-text' : 'text-text-2'"
+              :class="active === presetCount + ranked.length ? 'bg-hover text-text' : 'text-text-2'"
               :data-testid="testid ? `${testid}-custom` : undefined"
               @mousedown.prevent
               @click="choose(custom)"
-              @mousemove="active = ranked.length"
+              @mousemove="active = presetCount + ranked.length"
             >
               <span class="shrink-0 text-text-4">Use</span>
               <span class="min-w-0 flex-1 truncate">{{ custom }}</span>

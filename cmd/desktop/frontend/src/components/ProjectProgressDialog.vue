@@ -2,49 +2,47 @@
 import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import IconCheck from '~icons/lucide/check'
-import IconCircleDot from '~icons/lucide/circle-dot'
+import IconCircleAlert from '~icons/lucide/circle-alert'
+import IconGitBranch from '~icons/lucide/git-branch'
 import IconLayers from '~icons/lucide/layers'
-import IconRotateCcw from '~icons/lucide/rotate-ccw'
+import IconUndo from '~icons/lucide/undo-2'
 import IconX from '~icons/lucide/x'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import BaseModal from '@hive/ui/components/ui/BaseModal.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import Spinner from '@hive/ui/components/ui/Spinner.vue'
 import { useProjectCreate } from '../stores/useProjectCreate'
+import { repoDisplayName } from '../lib/repositories'
 import { StepState } from '../../bindings/github.com/colonyops/hive/internal/hive/project/models'
 
 const emit = defineEmits<{ retry: [] }>()
-const { progress, watching, error, succeeded, failed, close } = useProjectCreate()
+const { progress, request, watching, error, succeeded, failed, close } = useProjectCreate()
 const router = useRouter()
 
 const steps = computed(() =>
   (progress.value?.steps ?? []).map((step) => ({
     ...step,
-    label: step.dir || 'root',
-    what: describe(step.dir, step.state, step.detail, step.remote),
+    key: step.dir || ':root',
+    label: step.dir ? repoDisplayName(step.remote) || step.dir : 'Agent',
+    hint: hint(step.dir, step.state),
   })),
 )
-const ready = computed(() => steps.value.filter((step) => step.dir && step.state === StepState.StepDone).length)
-const total = computed(() => steps.value.filter((step) => step.dir).length)
+const repoSteps = computed(() => steps.value.filter((step) => step.dir))
+const ready = computed(() => repoSteps.value.filter((step) => step.state === StepState.StepDone).length)
+const server = computed(() => request.value?.server ?? '')
 
-function describe(dir: string, state: StepState, detail: string, remote: string): string {
-  if (!dir) {
-    if (state === StepState.StepRunning) return 'Linking repositories, writing AGENTS.md, starting the agent'
-    if (state === StepState.StepDone) return 'Agent started'
-    if (state === StepState.StepFailed) return detail
-    return 'Link repositories, write AGENTS.md, start the agent'
-  }
+function hint(dir: string, state: StepState): string {
   switch (state) {
     case StepState.StepRunning:
-      return `Checking out ${remote} (${detail})`
+      return dir ? 'Checking out…' : 'Starting…'
     case StepState.StepDone:
-      return detail
+      return dir ? 'Ready' : 'Started'
     case StepState.StepFailed:
-      return detail
+      return 'Failed'
     case StepState.StepRemoved:
-      return 'Checked out, then removed'
+      return 'Removed'
     default:
-      return `${remote} (${detail})`
+      return 'Waiting'
   }
 }
 
@@ -64,41 +62,73 @@ watch(
   <BaseModal
     :title="failed ? `${progress?.name} was not created` : `Creating ${progress?.name}`"
     :icon="IconLayers"
-    :width="560"
+    :width="480"
     :close-on-backdrop="false"
     testid="project-progress-dialog"
     @close="close"
   >
+    <section
+      v-if="failed"
+      class="mx-5 mt-4 rounded-lg border border-severity-error-border bg-severity-error-tint px-3.5 py-3"
+      data-testid="project-progress-failure"
+    >
+      <div class="flex items-start gap-2">
+        <IconCircleAlert class="mt-px size-3.75 shrink-0 text-severity-error" />
+        <div class="min-w-0 flex-1">
+          <div class="text-small font-semibold text-severity-error">This project was not created</div>
+          <p class="mt-0.5 break-words text-small leading-[1.45] text-text-2" data-testid="project-progress-error">
+            {{ progress?.error }}
+          </p>
+          <p class="mt-2 text-caption leading-[1.45] text-text-3">
+            Hive removed the repositories it had already checked out.
+          </p>
+        </div>
+      </div>
+    </section>
     <div class="flex flex-col gap-3 px-5 py-4">
-      <InlineError v-if="failed" :message="progress?.error ?? ''" testid="project-progress-error" />
-      <InlineError v-if="error" :message="error" />
-      <div class="overflow-hidden rounded-lg border border-strong">
-        <div
+      <InlineError v-if="error" variant="line" :message="error" />
+      <div v-if="!failed" class="flex items-center justify-between text-caption text-text-3">
+        <span>{{ ready }} of {{ repoSteps.length }} repositories ready</span>
+        <span v-if="server" class="text-text-4">on {{ server }}</span>
+      </div>
+      <ul class="flex flex-col gap-0.5" data-testid="project-progress-steps">
+        <li
           v-for="step in steps"
-          :key="step.label"
-          class="flex items-center gap-2.5 border-b border-border bg-app px-3 py-2 last:border-b-0"
+          :key="step.key"
+          class="flex items-center gap-2.5 rounded-md px-2.25 py-1.75"
+          :class="step.state === StepState.StepRunning ? 'bg-hover' : ''"
           data-testid="project-progress-step"
           :data-dir="step.dir"
           :data-state="step.state"
+          :title="step.detail || step.remote"
         >
-          <Spinner v-if="step.state === 'running'" class="size-3 shrink-0" />
-          <IconCheck v-else-if="step.state === 'done'" class="size-3.5 shrink-0 text-severity-success" />
-          <IconX v-else-if="step.state === 'failed'" class="size-3.5 shrink-0 text-severity-error" />
-          <IconRotateCcw v-else-if="step.state === 'removed'" class="size-3.5 shrink-0 text-text-3" />
-          <IconCircleDot v-else class="size-3.5 shrink-0 text-text-4" />
-          <span class="w-24 shrink-0 truncate font-mono text-caption">{{ step.label }}</span>
-          <span class="min-w-0 flex-1 truncate text-caption text-text-3" :title="step.what">{{ step.what }}</span>
-        </div>
-      </div>
-      <p class="text-caption text-text-3">
-        <template v-if="failed">Hive removed the repositories it had already checked out.</template>
-        <template v-else>{{ ready }} of {{ total }} repositories ready. If one fails, Hive removes the rest.</template>
-      </p>
+          <span class="flex size-4 shrink-0 items-center justify-center">
+            <Spinner v-if="step.state === StepState.StepRunning" class="size-3.5" />
+            <IconCheck v-else-if="step.state === StepState.StepDone" class="size-3.5 text-accent" :stroke-width="3" />
+            <IconX v-else-if="step.state === StepState.StepFailed" class="size-3.5 text-severity-error" />
+            <IconUndo v-else-if="step.state === StepState.StepRemoved" class="size-3.5 text-text-4" />
+            <component :is="step.dir ? IconGitBranch : IconLayers" v-else class="size-3.5 text-text-4" />
+          </span>
+          <span
+            class="min-w-0 flex-1 truncate text-body"
+            :class="
+              step.state === StepState.StepPending || step.state === StepState.StepRemoved ? 'text-text-3' : 'text-text'
+            "
+            >{{ step.label }}</span
+          >
+          <span
+            class="shrink-0 text-caption"
+            :class="step.state === StepState.StepFailed ? 'text-severity-error' : 'text-text-4'"
+            >{{ step.hint }}</span
+          >
+        </li>
+      </ul>
     </div>
     <template #footer>
       <BaseButton v-if="failed" class="flex-1" data-testid="project-progress-retry" @click="emit('retry')">
         Edit and try again
       </BaseButton>
+      <div v-else class="flex-1" />
       <BaseButton variant="secondary" data-testid="project-progress-close" @click="close">
         {{ failed ? 'Close' : 'Run in background' }}
       </BaseButton>

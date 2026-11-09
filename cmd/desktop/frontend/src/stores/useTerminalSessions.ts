@@ -1,6 +1,7 @@
-import { readonly, ref, type DeepReadonly } from 'vue'
+import { computed, readonly, ref, type DeepReadonly } from 'vue'
 import {
   ListProjects,
+  ListServerProjects,
   ListServerSessions,
   ListSessions,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
@@ -92,7 +93,7 @@ const PROJECTS_GROUP_KEY = 'projects'
 /** A project session as a tree row: one agent, at the project's root. */
 export function projectRow(project: ProjectRow): TerminalSessionRow {
   return {
-    server: '',
+    server: project.server,
     id: project.id,
     name: project.name,
     slug: project.slug,
@@ -190,10 +191,12 @@ export function terminalSessionGroups(
   servers: readonly { readonly server: TerminalServer; readonly sessions: readonly TerminalSessionRow[] }[] = [],
   projects: readonly ProjectRow[] = [],
 ): TerminalSessionGroup[] {
-  const serverRows = servers.flatMap(({ sessions }) => sessions.filter((row) => row.state === 'active'))
   // A project's repositories are its own: the project row is where its one
   // agent runs, so they are not listed again under their repositories.
   const children = new Set(projects.flatMap((project) => (project.repos ?? []).map((repo) => repo.sessionId)))
+  const serverRows = servers.flatMap(({ sessions }) =>
+    sessions.filter((row) => row.state === 'active' && !children.has(row.id)),
+  )
   const groups = groupTerminalSessions(
     [...rows.filter((row) => !children.has(row.id)), ...serverRows],
     servers.map(({ server }) => server.name),
@@ -218,12 +221,14 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
   // its id, which no hive session id can collide with. Declared by the core
   // rather than assumed here, because the slug is what an attach addresses.
   const scratch = ref<TerminalSessionRow | null>(null)
-  const projects = ref<ProjectView[]>([])
+  const localProjects = ref<ProjectView[]>([])
+  const serverProjects = ref<ProjectView[]>([])
+  const projects = computed(() => [...localProjects.value, ...serverProjects.value])
 
   const rows = useResource<TerminalSessionRow[]>(
     async () => {
       const [list, projectList] = await Promise.all([ListSessions(), loadProjects(), loadScratch()])
-      projects.value = projectList
+      localProjects.value = projectList
       return list ?? []
     },
     { initial: [] as TerminalSessionRow[], errorFallback: 'Could not list sessions.' },
@@ -236,7 +241,9 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
   const servers = useResource(
     async (): Promise<TerminalServerSessions[]> => {
       const previous = new Map(servers.data.value.map((list) => [list.server.name, list.sessions]))
-      return ((await ListServerSessions()) ?? []).map((list): TerminalServerSessions => {
+      const [lists, remoteProjects] = await Promise.all([ListServerSessions(), loadServerProjects()])
+      serverProjects.value = remoteProjects
+      return (lists ?? []).map((list): TerminalServerSessions => {
         const server = { name: list.server, ssh: list.ssh, state: list.state, error: list.error }
         if (list.state === 'connected') return { server, sessions: list.sessions ?? [] }
         const lastKnown = previous.get(list.server) ?? []
@@ -252,7 +259,15 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
     try {
       return (await ListProjects()) ?? []
     } catch {
-      return projects.value
+      return localProjects.value
+    }
+  }
+
+  async function loadServerProjects(): Promise<ProjectView[]> {
+    try {
+      return (await ListServerProjects()) ?? []
+    } catch {
+      return serverProjects.value
     }
   }
 
@@ -305,7 +320,7 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
 
   return {
     sessions: readonly(rows.data),
-    projects: readonly(projects),
+    projects,
     scratch: readonly(scratch),
     loading: rows.loading,
     loaded: rows.loaded,

@@ -19,6 +19,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemon/daemonpath"
 	"github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1/daemonv1connect"
+	"github.com/colonyops/hive/internal/hive/projectapi"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/pkg/flock"
 	"github.com/colonyops/hive/pkg/logutils"
@@ -136,6 +137,7 @@ func Run(ctx context.Context, opts Options) error {
 	mux := http.NewServeMux()
 	interceptors := connect.WithInterceptors(metrics.interceptor())
 	mux.Handle(daemonv1connect.NewSessionServiceHandler(sessions, interceptors))
+	mux.Handle(daemonv1connect.NewProjectServiceHandler(&projectServer{api: projectapi.NewLocal(engine), writeMu: &sessions.writeMu}, interceptors))
 	mux.Handle(daemonv1connect.NewDaemonServiceHandler(control, interceptors))
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.Handle("GET /metrics", metrics.handler())

@@ -6,6 +6,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/colonyops/hive/internal/domain/project"
 	"github.com/colonyops/hive/internal/domain/session"
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -36,9 +37,9 @@ func ToConnectError(err error) error {
 
 	code := connect.CodeInternal
 	switch {
-	case errors.Is(err, session.ErrNotFound):
+	case errors.Is(err, session.ErrNotFound), errors.Is(err, project.ErrNotFound):
 		code = connect.CodeNotFound
-	case errors.Is(err, session.ErrDuplicateName):
+	case errors.Is(err, session.ErrDuplicateName), errors.Is(err, project.ErrDuplicateName):
 		code = connect.CodeAlreadyExists
 	case errors.Is(err, ErrRemoteRequired), errors.Is(err, session.ErrInvalidTag):
 		code = connect.CodeInvalidArgument

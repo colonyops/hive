@@ -1004,7 +1004,7 @@ func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) (mu
 	if err != nil {
 		// A project session's terminal belongs to no session row: it runs in
 		// the project's root.
-		if result, found, perr := s.startProjectTmux(ctx, slug); found {
+		if result, found, perr := s.startProjectTmux(ctx, session.LocalServer, slug); found {
 			return result, perr
 		}
 		return multiplexer.LaunchResult{}, err

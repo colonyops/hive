@@ -291,8 +291,12 @@ export interface CommentInput {
     "text": string;
 }
 
+/**
+ * CreateProjectRequest is a New project form. Server is "" for this machine.
+ */
 export interface CreateProjectRequest {
     "name": string;
+    "server": string;
     "project": string;
     "repos": ProjectRepoRequest[] | null;
     "prompt": string;
@@ -511,6 +515,7 @@ export interface PopupLauncher {
  */
 export interface ProjectCreateProgress {
     "name": string;
+    "server": string;
     "slug": string;
     "steps": project$0.Step[] | null;
     "done": boolean;
@@ -556,7 +561,8 @@ export interface ProjectRepoRisk {
 
 /**
  * ProjectRepoView is one repository of a project session: the child hive
- * session behind it, or Missing when that session is gone.
+ * session behind it, or Missing when that session is gone. SessionID is in
+ * the "<server>:<id>" form for a project on a server.
  */
 export interface ProjectRepoView {
     "dir": string;
@@ -571,12 +577,14 @@ export interface ProjectRepoView {
 
 /**
  * ProjectView is a project session as the Code tree lists it. Slug is the
- * tmux session the agent runs in, at Root.
+ * tmux session the agent runs in, at Root. ID and Slug carry the
+ * "<server>:" prefix for a project on a server.
  */
 export interface ProjectView {
     "id": string;
     "name": string;
     "slug": string;
+    "server": string;
     "project": string;
     "root": string;
     "repos": ProjectRepoView[] | null;

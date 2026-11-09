@@ -51,6 +51,22 @@ service SessionService {
   rpc StartTmux(StartTmuxRequest) returns (StartTmuxResponse);
 }
 
+// ProjectService is projectapi.API over the wire: project sessions on the
+// daemon's machine.
+service ProjectService {
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc ProjectDefinitions(ProjectDefinitionsRequest) returns (ProjectDefinitionsResponse);
+  rpc DefaultCloneStrategy(DefaultCloneStrategyRequest) returns (DefaultCloneStrategyResponse);
+  // CreateProject streams each step of the create, then the project.
+  rpc CreateProject(CreateProjectRequest) returns (stream CreateProjectResponse);
+  rpc ProjectRisk(ProjectRiskRequest) returns (ProjectRiskResponse);
+  rpc RecycleProject(RecycleProjectRequest) returns (RecycleProjectResponse);
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
+  // OpenProject starts the project's tmux session in the background.
+  rpc OpenProject(OpenProjectRequest) returns (OpenProjectResponse);
+  rpc ProjectOf(ProjectOfRequest) returns (ProjectOfResponse);
+}
+
 message HelloRequest {}
 
 message HelloResponse {
@@ -458,4 +474,124 @@ message BranchesRequest {
 
 message BranchesResponse {
   repeated string refs = 1;
+}
+
+message ProjectRepo {
+  string dir = 1;
+  string session_id = 2;
+  string remote = 3;
+  string path = 4;
+  string branch = 5;
+  string clone_strategy = 6;
+  bool missing = 7;
+}
+
+message Project {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  string definition = 4;
+  string root = 5;
+  repeated ProjectRepo repos = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message ProjectRepoSpec {
+  string remote = 1;
+  string dir = 2;
+  string clone_strategy = 3;
+}
+
+message ProjectDefinition {
+  string name = 1;
+  string agent = 2;
+  repeated ProjectRepoSpec repos = 3;
+}
+
+message ListProjectsRequest {}
+
+message ListProjectsResponse {
+  repeated Project projects = 1;
+}
+
+message ProjectDefinitionsRequest {}
+
+message ProjectDefinitionsResponse {
+  repeated ProjectDefinition definitions = 1;
+}
+
+message DefaultCloneStrategyRequest {
+  string remote = 1;
+}
+
+message DefaultCloneStrategyResponse {
+  string clone_strategy = 1;
+}
+
+message CreateProjectRequest {
+  string name = 1;
+  // definition names a projects: entry. Its repos come before repos.
+  string definition = 2;
+  repeated ProjectRepoSpec repos = 3;
+  string prompt = 4;
+  string agent = 5;
+}
+
+message ProjectStep {
+  // dir is empty for the root: the links, AGENTS.md, and the agent.
+  string dir = 1;
+  string remote = 2;
+  string state = 3;
+  string detail = 4;
+}
+
+message CreateProjectResponse {
+  oneof event {
+    ProjectStep step = 1;
+    // project arrives last, once the create succeeded.
+    Project project = 2;
+  }
+}
+
+message ProjectRiskRequest {
+  string ref = 1;
+}
+
+message ProjectRepoRisk {
+  string dir = 1;
+  string clone_strategy = 2;
+  bool missing = 3;
+  bool uncommitted_changes = 4;
+  bool unpushed_commits = 5;
+}
+
+message ProjectRiskResponse {
+  repeated ProjectRepoRisk repos = 1;
+}
+
+message RecycleProjectRequest {
+  string ref = 1;
+}
+
+message RecycleProjectResponse {}
+
+message DeleteProjectRequest {
+  string ref = 1;
+}
+
+message DeleteProjectResponse {}
+
+message OpenProjectRequest {
+  string ref = 1;
+}
+
+message OpenProjectResponse {}
+
+message ProjectOfRequest {
+  string session_id = 1;
+}
+
+message ProjectOfResponse {
+  string slug = 1;
+  bool found = 2;
 }
