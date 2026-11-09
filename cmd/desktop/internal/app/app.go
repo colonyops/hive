@@ -360,6 +360,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 
 	a.Activity = newActivityService(a.Stores.ActivityEvents, a.Events, cfg.Logger)
 	a.Jobs = newJobService(a.Stores.Jobs, a.Events, cfg.Logger)
+	a.Jobs.CancelInterrupted(ctx)
 	if a.fetchers != nil {
 		a.fetchers.SetRecorder(a.Activity)
 	}

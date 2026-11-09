@@ -60,6 +60,17 @@ func (s *JobStore) SetStatus(ctx context.Context, id int64, status, step, errTex
 	return s.mapper.Err(row, wrap(fmt.Sprintf("setting job %d status to %q", id, status), err))
 }
 
+// CancelUnlinked cancels every queued or running job with no output command
+// and returns how many it cancelled.
+func (s *JobStore) CancelUnlinked(ctx context.Context, step, errText string) (int64, error) {
+	n, err := s.q.Ctx(ctx).CancelUnlinkedActiveJobs(ctx, queries.CancelUnlinkedActiveJobsParams{
+		UpdatedAt: s.now().UnixMilli(),
+		Step:      step,
+		Error:     errText,
+	})
+	return n, wrap("cancelling interrupted jobs", err)
+}
+
 // A missing running job returns found=false without an error.
 func (s *JobStore) FindRunningByCommand(ctx context.Context, commandID int64) (Job, bool, error) {
 	row, err := s.q.Ctx(ctx).FindRunningJobByCommandID(ctx, sql.NullInt64{Int64: commandID, Valid: true})

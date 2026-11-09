@@ -10,6 +10,28 @@ import (
 	"database/sql"
 )
 
+const cancelUnlinkedActiveJobs = `-- name: CancelUnlinkedActiveJobs :execrows
+UPDATE job SET updated_at = ?, status = 'cancelled', step = ?, error = ?
+WHERE status IN ('queued', 'running') AND command_id IS NULL
+`
+
+type CancelUnlinkedActiveJobsParams struct {
+	UpdatedAt int64  `json:"updated_at"`
+	Step      string `json:"step"`
+	Error     string `json:"error"`
+}
+
+// A job with no output_command ran in a goroutine of an earlier run of the
+// app. Nothing resumes it, so at startup it is cancelled instead of showing
+// as active forever.
+func (q *Queries) CancelUnlinkedActiveJobs(ctx context.Context, arg CancelUnlinkedActiveJobsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cancelUnlinkedActiveJobs, arg.UpdatedAt, arg.Step, arg.Error)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const findRunningJobByCommandID = `-- name: FindRunningJobByCommandID :one
 SELECT id, created_at, updated_at, status, label, step, action_id, target, error, command_id FROM job
 WHERE command_id = ? AND status = 'running'

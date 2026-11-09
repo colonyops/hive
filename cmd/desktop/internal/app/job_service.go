@@ -114,6 +114,20 @@ func (s *JobService) Cancel(ctx context.Context, id int64, reason string) {
 	s.setStatus(ctx, id, jobs.JobStatusCancelled, reason)
 }
 
+// CancelInterrupted cancels the jobs an earlier run of the app started with
+// Track and did not finish. Track runs fn in a goroutine of this process, so
+// after a restart nothing will finish them. Call it before the first Track.
+func (s *JobService) CancelInterrupted(ctx context.Context) {
+	n, err := s.store.CancelUnlinked(ctx, jobs.StepFor(jobs.JobStatusCancelled), "Hive Desktop quit before this finished")
+	if err != nil {
+		s.log.Warn().Err(err).Msg("cancelling interrupted jobs failed")
+		return
+	}
+	if n > 0 {
+		s.log.Info().Int64("jobs", n).Msg("cancelled jobs interrupted by the last quit")
+	}
+}
+
 // Track starts fn asynchronously on a context detached from caller
 // cancellation. Persistence failures do not stop fn.
 //

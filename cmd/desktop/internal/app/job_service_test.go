@@ -231,3 +231,28 @@ func TestJobService_FailedWritesAndZeroTransitionsPublishNothing(t *testing.T) {
 	service.Done(t.Context(), 1)
 	requireNoMoreEvents(t, ch)
 }
+
+func TestJobService_CancelInterruptedLeavesOutputCommandJobs(t *testing.T) {
+	t.Parallel()
+	service, _ := newTestJobService(t)
+	ctx := t.Context()
+
+	tracked := service.Begin(ctx, "Create project session", "new-project", "launch")
+	service.setStatus(ctx, tracked, jobs.JobStatusRunning, "")
+	worker := service.Begin(ctx, "Run action", "action", "pr")
+	service.Running(ctx, worker, 42)
+	finished := service.Begin(ctx, "Delete session", "delete", "old")
+	service.Done(ctx, finished)
+
+	service.CancelInterrupted(ctx)
+
+	all, err := service.List(ctx, 0, 0)
+	require.NoError(t, err)
+	status := map[int64]jobs.JobStatus{}
+	for _, job := range all {
+		status[job.ID] = job.Status
+	}
+	assert.Equal(t, jobs.JobStatusCancelled, status[tracked], "a Track job from the last run is cancelled")
+	assert.Equal(t, jobs.JobStatusRunning, status[worker], "an output command job resumes, so it stays running")
+	assert.Equal(t, jobs.JobStatusDone, status[finished])
+}

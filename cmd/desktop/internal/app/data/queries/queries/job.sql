@@ -47,3 +47,10 @@ WHERE id IN (
     ORDER BY id DESC
     LIMIT -1 OFFSET ?
 );
+
+-- name: CancelUnlinkedActiveJobs :execrows
+-- A job with no output_command ran in a goroutine of an earlier run of the
+-- app. Nothing resumes it, so at startup it is cancelled instead of showing
+-- as active forever.
+UPDATE job SET updated_at = ?, status = 'cancelled', step = ?, error = ?
+WHERE status IN ('queued', 'running') AND command_id IS NULL;
