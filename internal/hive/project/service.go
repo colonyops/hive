@@ -10,9 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/project"
@@ -126,49 +129,92 @@ func (s *Service) Create(ctx context.Context, opts CreateOptions) (project.Sessi
 		Root:    filepath.Join(s.cfg.ProjectsDir(), fmt.Sprintf("%s-%s", slug, id)),
 	}
 
+	// The checkouts run at once, so steps and progress lines arrive from
+	// several goroutines; callers get them one at a time.
+	var reportMu sync.Mutex
 	step := func(dir, remote string, state StepState, detail string) {
-		if opts.OnStep != nil {
-			opts.OnStep(Step{Dir: dir, Remote: remote, State: state, Detail: detail})
+		if opts.OnStep == nil {
+			return
 		}
+		reportMu.Lock()
+		defer reportMu.Unlock()
+		opts.OnStep(Step{Dir: dir, Remote: remote, State: state, Detail: detail})
+	}
+	progress := opts.Progress
+	if progress != nil {
+		progress = &lockedWriter{w: progress, mu: &reportMu}
 	}
 	for _, r := range repos {
 		step(r.dir, r.remote, StepPending, r.strategy)
 	}
 	step("", "", StepPending, "")
 
-	children := make([]Child, 0, len(repos))
+	results := make([]*session.Session, len(repos))
 	undo := func() {
-		for i, c := range children {
-			if err := s.sessions.DeleteSession(context.WithoutCancel(ctx), c.Session.ID); err != nil {
-				s.log.Warn().Err(err).Str("session_id", c.Session.ID).Msg("remove child of failed project session")
+		for i, sess := range results {
+			if sess == nil {
 				continue
 			}
-			step(c.Dir, repos[i].remote, StepRemoved, "")
+			if err := s.sessions.DeleteSession(context.WithoutCancel(ctx), sess.ID); err != nil {
+				s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("remove child of failed project session")
+				continue
+			}
+			step(repos[i].dir, repos[i].remote, StepRemoved, "")
 		}
 		if err := os.RemoveAll(ps.Root); err != nil {
 			s.log.Warn().Err(err).Str("root", ps.Root).Msg("remove root of failed project session")
 		}
 	}
 
-	for _, r := range repos {
-		progressf(opts.Progress, "Checking out %s (%s)...", r.dir, r.remote)
-		step(r.dir, r.remote, StepRunning, r.strategy)
-		sess, err := s.sessions.CreateSession(ctx, sessionsvc.CreateOptions{
-			Name:          fmt.Sprintf("%s-%s", slug, r.dir),
-			Remote:        r.remote,
-			Source:        r.source,
-			CloneStrategy: r.strategy,
-			SkipSpawn:     true,
-			Progress:      opts.Progress,
+	// Each repository checks out in parallel. Two entries for the same
+	// repository run one after the other: a full clone may reuse a recycled
+	// checkout of that repository, and two creates at once could both pick
+	// the same one. A failure stops the checkouts not yet begun, but lets the
+	// running ones finish: a clone stopped halfway would leave a checkout
+	// that the undo does not know about.
+	var group errgroup.Group
+	var failed atomic.Bool
+	for _, indexes := range sameRepository(repos) {
+		group.Go(func() error {
+			for _, i := range indexes {
+				if failed.Load() || ctx.Err() != nil {
+					return nil
+				}
+				r := repos[i]
+				progressf(progress, "Checking out %s (%s)...", r.dir, r.remote)
+				step(r.dir, r.remote, StepRunning, r.strategy)
+				sess, err := s.sessions.CreateSession(ctx, sessionsvc.CreateOptions{
+					Name:          fmt.Sprintf("%s-%s", slug, r.dir),
+					Remote:        r.remote,
+					Source:        r.source,
+					CloneStrategy: r.strategy,
+					SkipSpawn:     true,
+					Progress:      progress,
+				})
+				if err != nil {
+					failed.Store(true)
+					step(r.dir, r.remote, StepFailed, err.Error())
+					return fmt.Errorf("check out %s: %w", r.dir, err)
+				}
+				results[i] = sess
+				step(r.dir, r.remote, StepDone, sess.Path)
+			}
+			return nil
 		})
-		if err != nil {
-			step(r.dir, r.remote, StepFailed, err.Error())
-			undo()
-			return project.Session{}, fmt.Errorf("check out %s: %w", r.dir, err)
-		}
-		step(r.dir, r.remote, StepDone, sess.Path)
-		children = append(children, Child{Dir: r.dir, Session: *sess})
-		ps.Repos = append(ps.Repos, project.Repo{Dir: r.dir, SessionID: sess.ID})
+	}
+	err = group.Wait()
+	if err == nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		undo()
+		return project.Session{}, err
+	}
+
+	children := make([]Child, 0, len(repos))
+	for i, r := range repos {
+		children = append(children, Child{Dir: r.dir, Session: *results[i]})
+		ps.Repos = append(ps.Repos, project.Repo{Dir: r.dir, SessionID: results[i].ID})
 	}
 
 	progressf(opts.Progress, "Writing project root %s...", ps.Root)
@@ -423,6 +469,38 @@ func (s *Service) fillBranches(ctx context.Context, children []Child) {
 		}
 		c.Branch = branch
 	}
+}
+
+// sameRepository groups the indexes of repos by repository, in the order
+// they first appear.
+func sameRepository(repos []resolvedRepo) [][]int {
+	var groups [][]int
+	at := map[string]int{}
+	for i, r := range repos {
+		key := git.RemoteIdentity(r.remote)
+		if key == "" {
+			key = r.remote
+		}
+		g, ok := at[key]
+		if !ok {
+			g = len(groups)
+			at[key] = g
+			groups = append(groups, nil)
+		}
+		groups[g] = append(groups[g], i)
+	}
+	return groups
+}
+
+type lockedWriter struct {
+	w  io.Writer
+	mu *sync.Mutex
+}
+
+func (l *lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(p)
 }
 
 func progressf(w io.Writer, format string, args ...any) {
