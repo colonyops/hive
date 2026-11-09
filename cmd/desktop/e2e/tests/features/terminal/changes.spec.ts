@@ -37,6 +37,8 @@ const FILES = [
   file("web/ui/App.vue", "added", 2, 0),
   file("docs/old.png", "deleted", 0, 0, { binary: true }),
 ];
+const ONE_PIXEL_PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 const PATCHES: Record<string, string> = {
   "internal/platform/git/changes.go": [
     "@@ -10,3 +10,5 @@ func (e *Executor) MergeBase() {",
@@ -99,6 +101,7 @@ async function changesFixture(page: Page, sent: unknown[][] = []) {
   const changes = bindingID("sessionservice", "SessionChanges");
   const diffs = bindingID("sessionservice", "SessionFileDiffs");
   const context = bindingID("sessionservice", "SessionFileContext");
+  const image = bindingID("sessionservice", "SessionFileImage");
   const branches = bindingID("sessionservice", "SessionBranches");
   const targets = bindingID("reviewservice", "ChangesTargets");
   const send = bindingID("reviewservice", "SendChanges");
@@ -145,6 +148,14 @@ async function changesFixture(page: Page, sent: unknown[][] = []) {
         text: PATCHES[path] ?? "",
         error: "",
       }));
+    } else if (args?.methodID === image) {
+      answer = {
+        path: args.args[2],
+        state: "ready",
+        before: { mime: "image/png", data: ONE_PIXEL_PNG, size: 70 },
+        after: null,
+        error: "",
+      };
     } else if (args?.methodID === context) {
       const path = args.args[2] as string;
       answer = {
@@ -207,7 +218,9 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
     const stream = page.getByTestId("changes-stream");
     await expect(stream).toContainText("return err");
     await expect(stream).toContainText("package git_test");
-    await expect(stream).toContainText("Binary file");
+    await expect(page.getByTestId("changes-image-docs/old.png")).toContainText(
+      "Deleted",
+    );
     await page.screenshot({
       path: screenshotPath(`changes-unified-${browserName}.png`),
     });
@@ -401,11 +414,18 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
   test("the text size chord scales the diff it was pressed over and keeps its layout (mock terminal)", async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1280, height: 420 });
     await changesFixture(page);
     await openChanges(page);
     const stream = page.getByTestId("changes-stream");
-    const line = stream.locator("[data-line]").first();
+    // docs/old.png sorts first, and its preview would fill most of the short
+    // viewport below, so fold it before the viewport shrinks.
+    const image = page.getByTestId("changes-file-docs/old.png-header");
+    // The pinned copy of this header sits over it and takes a pointer click.
+    await image.dispatchEvent("click");
+    await expect(image).toHaveAttribute("aria-expanded", "false");
+    await page.setViewportSize({ width: 1280, height: 420 });
+    const rows = stream.locator("[data-line]");
+    const line = rows.first();
     await expect(line).toBeVisible();
     // Undefined while the virtualized list mounts or remounts the row.
     const rowHeight = async () => (await line.boundingBox())?.height;
@@ -414,17 +434,15 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
 
     await page.keyboard.press("Control+=");
     await expect.poll(rowHeight).toBe(22);
-    const { sizes, gapless } = await stream
-      .locator("[data-line]")
-      .evaluateAll((rows) => {
-        const boxes = rows.map((row) => row.getBoundingClientRect());
-        return {
-          sizes: [...new Set(boxes.map((box) => box.height))],
-          gapless: boxes
-            .slice(1, 4)
-            .every((box, index) => box.top >= boxes[index].top),
-        };
-      });
+    const { sizes, gapless } = await rows.evaluateAll((elements) => {
+      const boxes = elements.map((row) => row.getBoundingClientRect());
+      return {
+        sizes: [...new Set(boxes.map((box) => box.height))],
+        gapless: boxes
+          .slice(1, 4)
+          .every((box, index) => box.top >= boxes[index].top),
+      };
+    });
     expect(sizes).toEqual([22]);
     expect(gapless).toBe(true);
 
