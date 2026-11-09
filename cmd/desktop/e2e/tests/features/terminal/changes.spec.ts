@@ -304,6 +304,18 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
     );
   }
 
+  // docs/old.png sorts first, and its preview fills most of a 420px viewport,
+  // so the virtualized list would not render the code rows below it. Fold it
+  // while the viewport is still tall.
+  async function openShortChanges(page: Page) {
+    await openChanges(page);
+    const image = page.getByTestId("changes-file-docs/old.png-header");
+    // The pinned copy of this header sits over it and takes a pointer click.
+    await image.dispatchEvent("click");
+    await expect(image).toHaveAttribute("aria-expanded", "false");
+    await page.setViewportSize({ width: 1280, height: 420 });
+  }
+
   test("comments on selected lines and sends the review to the agent (mock terminal)", async ({
     page,
     browserName,
@@ -393,9 +405,8 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
     "steps through hunks in the rendered diff (mock terminal)",
     { tag: [tag.chromiumOnly] },
     async ({ page }) => {
-      await page.setViewportSize({ width: 1280, height: 420 });
       await changesFixture(page);
-      await openChanges(page);
+      await openShortChanges(page);
       const stream = page.getByTestId("changes-stream");
       const top = () => stream.evaluate((element) => element.scrollTop);
       expect(await top()).toBe(0);
@@ -415,15 +426,8 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
     page,
   }) => {
     await changesFixture(page);
-    await openChanges(page);
+    await openShortChanges(page);
     const stream = page.getByTestId("changes-stream");
-    // docs/old.png sorts first, and its preview would fill most of the short
-    // viewport below, so fold it before the viewport shrinks.
-    const image = page.getByTestId("changes-file-docs/old.png-header");
-    // The pinned copy of this header sits over it and takes a pointer click.
-    await image.dispatchEvent("click");
-    await expect(image).toHaveAttribute("aria-expanded", "false");
-    await page.setViewportSize({ width: 1280, height: 420 });
     const rows = stream.locator("[data-line]");
     const line = rows.first();
     await expect(line).toBeVisible();
