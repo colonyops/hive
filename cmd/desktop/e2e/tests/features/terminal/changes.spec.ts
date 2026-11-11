@@ -359,6 +359,16 @@ test.describe("session changes", { tag: [tag.terminal] }, () => {
     });
 
     await page.getByTestId("changes-send").click();
+    await expect(page.getByTestId("panel-tab-window:@1")).toHaveAttribute(
+      "data-shown",
+      "true",
+    );
+    await expect(
+      page.locator(
+        '[data-testid="terminal-pane-host"]:visible .xterm-helper-textarea',
+      ),
+    ).toBeFocused();
+    await page.getByTestId("panel-tab-diff").click();
     await expect(page.getByTestId("changes-send")).toBeHidden();
     expect(sent).toHaveLength(1);
     expect(sent[0][0]).toBe("review");
