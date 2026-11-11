@@ -33,6 +33,7 @@ import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useEditorSettings } from '../../composables/useEditorSettings'
 import { useSessionStatus } from '../../composables/useSessionStatus'
 import { openLink } from '../../composables/useXtermPane'
+import type { AgentTarget } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import type { AgentIconID } from '../../lib/agentIcon'
 import type { DriveScope } from '../../lib/drive'
 import { launcherIconComponent } from '../../lib/launcherIcons'
@@ -48,7 +49,7 @@ import {
   type Panel,
   type PanelTab,
 } from '../../lib/panelLayout'
-import { offscreenWindows, placeWindow, terminalPanel, windowIdOf } from '../../lib/windowTabs'
+import { offscreenWindows, placeWindow, revealWindow, terminalPanel, windowIdOf } from '../../lib/windowTabs'
 import { activePaneOf } from '../../lib/terminalLayout'
 import { terminalTreeFocused } from '../../lib/terminalTree'
 import { useDriveActivity } from '../../stores/useDriveActivity'
@@ -278,6 +279,17 @@ function closePanelTab(panelId: string, tabId: string): void {
   const windowId = windowIdOf(panelById(layout.value, panelId)?.tabs.find((candidate) => candidate.id === tabId))
   if (windowId) void ops.requestCloseWindow(pool.visibleSlug, windowId, windowName(windowId))
   else panels.apply((current) => closeTab(current, panelId, tabId))
+}
+
+// After a review lands, the agent's reply is what the user reads next. The pane
+// is selected a task later because the send dialog, when there was one, hands
+// focus back to its trigger on the tick after it closes.
+function revealAgent(target: AgentTarget): void {
+  const session = visible.value
+  const tab = session?.tabs.value.find((candidate) => candidate.panes.some((pane) => pane.paneId === target.pane))
+  if (!session || !tab) return
+  panels.apply((current) => revealWindow(current, tab.windowId))
+  setTimeout(() => void session.selectPane(target.pane))
 }
 
 function placeWindowHere(windowId: string, panelId: string): void {
@@ -579,6 +591,7 @@ onBeforeUnmount(() => {
           v-else-if="tab.kind === 'diff' && changesSession"
           :keys-active="viewHasKeys(focused, shown)"
           :session-id="changesSession"
+          @sent="revealAgent"
         />
         <TasksView v-else-if="tab.kind === 'tasks'" embedded :keys-active="viewHasKeys(focused, shown)" />
       </template>

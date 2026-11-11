@@ -1134,6 +1134,7 @@ describe('ChangesView', () => {
     expect(mocks.SendChanges).toHaveBeenCalledWith('s1', '%1', [expect.objectContaining({ text: 'rename this' })])
     expect(wrapper.find(testid('changes-send')).exists()).toBe(false)
     expect(wrapper.find(testid('changes-review')).exists()).toBe(false)
+    expect(wrapper.emitted('sent')).toEqual([[agent('%1', 'ready')]])
     wrapper.unmount()
   })
 
