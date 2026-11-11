@@ -35,6 +35,10 @@ func (m *mockGit) ChangedFiles(context.Context, string, git.DiffRange) ([]git.Ch
 func (m *mockGit) FileDiffs(context.Context, string, git.DiffRange, []git.ChangedFile) []git.FileDiffResult {
 	return nil
 }
+
+func (m *mockGit) FileVersions(context.Context, string, git.DiffRange, git.ChangedFile, int) (git.FileVersions, error) {
+	return git.FileVersions{}, nil
+}
 func (m *mockGit) MergeBaseRef(context.Context, string, string) (string, error)  { return "", nil }
 func (m *mockGit) ResolveCommit(context.Context, string, string) (string, error) { return "", nil }
 func (m *mockGit) CommitRange(context.Context, string, string) (git.DiffRange, error) {

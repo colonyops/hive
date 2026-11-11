@@ -738,6 +738,19 @@ export interface SessionFileDiff {
     "error": string;
 }
 
+/**
+ * SessionFileImage is both versions of one image file. State is a
+ * gitstatus.FileImageState. Before is null for an added file and After for a
+ * deleted one.
+ */
+export interface SessionFileImage {
+    "path": string;
+    "state": string;
+    "before": SessionImageVersion | null;
+    "after": SessionImageVersion | null;
+    "error": string;
+}
+
 export interface SessionFilter {
     "match": string;
     "conditions": SessionCondition[] | null;
@@ -770,6 +783,16 @@ export interface SessionGitStatus {
     "repo": string;
     "resolved": boolean;
     "error": string;
+}
+
+/**
+ * SessionImageVersion is one side of a SessionFileImage. Data is base64, ready
+ * for a data: URL. Mime is empty when the bytes are not a known image format.
+ */
+export interface SessionImageVersion {
+    "mime": string;
+    "data": string;
+    "size": number;
 }
 
 /**

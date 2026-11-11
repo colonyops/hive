@@ -70,6 +70,7 @@ import { useChangesViewed } from '../../stores/useChangesViewed'
 import {
   OpenSessionInEditor,
   SessionFileContext,
+  SessionFileImage,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type { ChangedFile } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import type { DiffReviewWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
@@ -1053,6 +1054,7 @@ function openInEditor(): void {
           :search-query="search.debounced.value"
           :active-match="search.active.value"
           :load-whole-file="(path: string) => SessionFileContext(sessionId, target, path)"
+          :load-image="(path: string) => SessionFileImage(sessionId, target, path)"
           @synced="settleReveal"
           @fold="toggleFold"
           @toggle-viewed="toggleViewed"

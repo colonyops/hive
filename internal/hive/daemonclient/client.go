@@ -585,6 +585,19 @@ func (c *Client) SessionFileContext(ctx context.Context, id string, target gitst
 	return wire.FileDiffFromProto(resp.Msg.GetDiff()), nil
 }
 
+func (c *Client) SessionFileImage(ctx context.Context, id string, target gitstatus.DiffTarget, path string) (gitstatus.FileImage, error) {
+	resp, err := retryRead(func() (*connect.Response[daemonv1.FileImageResponse], error) {
+		return c.sessions.FileImage(ctx, connect.NewRequest(&daemonv1.FileImageRequest{Id: id, Target: wire.DiffTargetToProto(target), Path: path}))
+	})
+	if err != nil {
+		if connect.CodeOf(err) == connect.CodeUnimplemented {
+			return gitstatus.FileImage{}, ErrFileImageUnsupported
+		}
+		return gitstatus.FileImage{}, wire.FromConnectError(err)
+	}
+	return wire.FileImageFromProto(resp.Msg), nil
+}
+
 func (c *Client) SessionBranches(ctx context.Context, id string) ([]string, error) {
 	resp, err := retryRead(func() (*connect.Response[daemonv1.BranchesResponse], error) {
 		return c.sessions.Branches(ctx, connect.NewRequest(&daemonv1.BranchesRequest{Id: id}))
@@ -600,6 +613,8 @@ var (
 	ErrGitStatusUnsupported = errors.New("the server's hive is too old to report git status; install the same hive version on both machines")
 	// ErrFileContextUnsupported is a daemon whose hive predates FileContext.
 	ErrFileContextUnsupported = errors.New("the daemon's hive is too old to show the unchanged lines of a diff; update hive and restart its daemon")
+	// ErrFileImageUnsupported is a daemon whose hive predates FileImage.
+	ErrFileImageUnsupported = errors.New("the daemon's hive is too old to show images in a diff; update hive and restart its daemon")
 	// ErrStartTmuxUnsupported is a daemon whose hive predates StartTmux.
 	ErrStartTmuxUnsupported = errors.New("the server's hive is too old to start a terminal; install the same hive version on both machines")
 )

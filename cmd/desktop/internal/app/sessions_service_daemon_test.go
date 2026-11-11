@@ -120,13 +120,30 @@ func TestSessionsServiceEditsTagsOverTheDaemon(t *testing.T) {
 	assert.Equal(t, KindInvalid, KindOf(err))
 }
 
-// oldDaemon answers as a daemon whose hive predates FileContext.
+// oldDaemon answers as a daemon whose hive predates FileContext and FileImage.
 type oldDaemon struct {
 	sessionapi.API
 }
 
 func (oldDaemon) SessionFileContext(context.Context, string, gitstatus.DiffTarget, string) (gitstatus.FileDiff, error) {
 	return gitstatus.FileDiff{}, daemonclient.ErrFileContextUnsupported
+}
+
+func (oldDaemon) SessionFileImage(context.Context, string, gitstatus.DiffTarget, string) (gitstatus.FileImage, error) {
+	return gitstatus.FileImage{}, daemonclient.ErrFileImageUnsupported
+}
+
+func TestSessionFileImageReadsALocalSessionWhenTheDaemonIsTooOld(t *testing.T) {
+	local := newHiveHarness(t, engineOptions{})
+	local.save(t, reviewSession())
+	svc := newSessionsService(SessionsDeps{Hive: local.engine, Sessions: oldDaemon{}, Logger: zerolog.Nop()})
+
+	image, err := svc.SessionFileImage(t.Context(), "s1", gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, "a.png")
+	require.NoError(t, err)
+	assert.Equal(t, "a.png", image.Path)
+
+	_, err = svc.SessionFileImage(t.Context(), "elsewhere", gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}, "a.png")
+	require.ErrorIs(t, err, daemonclient.ErrFileImageUnsupported, "a session the engine does not hold keeps the daemon's answer")
 }
 
 func TestSessionFileContextReadsALocalSessionWhenTheDaemonIsTooOld(t *testing.T) {

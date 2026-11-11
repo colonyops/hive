@@ -60,6 +60,7 @@ type Git interface {
 	ChangedFiles(ctx context.Context, dir string, diff DiffRange) ([]ChangedFile, error)
 	// FileDiffs returns the unified diff of each file, in order.
 	FileDiffs(ctx context.Context, dir string, diff DiffRange, files []ChangedFile) []FileDiffResult
+	FileVersions(ctx context.Context, dir string, diff DiffRange, file ChangedFile, limit int) (FileVersions, error)
 }
 
 // RemoteIdentity returns the key under which remotes that name the same

@@ -207,6 +207,14 @@ export function SessionFileDiffs(id: string, target: $models.DiffTarget, paths: 
 }
 
 /**
+ * SessionFileImage reads both versions of one changed file, so the view can
+ * draw it as an image.
+ */
+export function SessionFileImage(id: string, target: $models.DiffTarget, path: string): $CancellablePromise<$models.SessionFileImage> {
+    return $Call.ByID(3884641108, id, target, path);
+}
+
+/**
  * SessionGitStatus reads the session's checkout for the session status bar.
  * Cheap and local — four git subprocesses — so the bar polls it, unlike
  * SessionPullRequest.

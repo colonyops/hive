@@ -1,6 +1,7 @@
 package wailsui
 
 import (
+	"encoding/base64"
 	"time"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
@@ -274,4 +275,40 @@ func sessionFileDiffsOf(diffs []gitstatus.FileDiff) []SessionFileDiff {
 		out = append(out, SessionFileDiff{Path: d.Path, State: d.State.String(), Text: d.Text, Error: d.Error})
 	}
 	return out
+}
+
+// SessionImageVersion is one side of a SessionFileImage. Data is base64, ready
+// for a data: URL. Mime is empty when the bytes are not a known image format.
+type SessionImageVersion struct {
+	Mime string `json:"mime"`
+	Data string `json:"data"`
+	Size int    `json:"size"`
+}
+
+// SessionFileImage is both versions of one image file. State is a
+// gitstatus.FileImageState. Before is null for an added file and After for a
+// deleted one.
+type SessionFileImage struct {
+	Path   string               `json:"path"`
+	State  string               `json:"state"`
+	Before *SessionImageVersion `json:"before"`
+	After  *SessionImageVersion `json:"after"`
+	Error  string               `json:"error"`
+}
+
+func sessionFileImageOf(image gitstatus.FileImage) SessionFileImage {
+	return SessionFileImage{
+		Path:   image.Path,
+		State:  image.State.String(),
+		Before: sessionImageVersionOf(image.Before),
+		After:  sessionImageVersionOf(image.After),
+		Error:  image.Error,
+	}
+}
+
+func sessionImageVersionOf(v *gitstatus.ImageVersion) *SessionImageVersion {
+	if v == nil {
+		return nil
+	}
+	return &SessionImageVersion{Mime: v.Mime, Data: base64.StdEncoding.EncodeToString(v.Data), Size: len(v.Data)}
 }

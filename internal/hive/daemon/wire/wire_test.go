@@ -71,3 +71,22 @@ func TestInvalidUTF8CanCrossTheWire(t *testing.T) {
 	_, err = proto.Marshal(&daemonv1.BranchesResponse{Refs: wire.RefsToProto([]string{"refs/heads/" + latin1})})
 	require.NoError(t, err)
 }
+
+func TestFileImageSurvivesTheWire(t *testing.T) {
+	t.Parallel()
+
+	image := gitstatus.FileImage{
+		Path:   "logo.png",
+		State:  gitstatus.FileImageStateReady,
+		Before: &gitstatus.ImageVersion{Mime: "image/png", Data: []byte{}},
+		After:  &gitstatus.ImageVersion{Mime: "image/png", Data: []byte("\x89PNG")},
+	}
+	encoded, err := proto.Marshal(wire.FileImageToProto(image))
+	require.NoError(t, err)
+	var decoded daemonv1.FileImageResponse
+	require.NoError(t, proto.Unmarshal(encoded, &decoded))
+	assert.Equal(t, image, wire.FileImageFromProto(&decoded), "an empty side stays a side")
+
+	added := gitstatus.FileImage{Path: "new.png", State: gitstatus.FileImageStateReady, After: image.After}
+	assert.Nil(t, wire.FileImageFromProto(wire.FileImageToProto(added)).Before)
+}

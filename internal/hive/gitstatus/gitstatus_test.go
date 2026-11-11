@@ -40,6 +40,8 @@ type stubGit struct {
 	mergeBaseErr     error
 	files            []git.ChangedFile
 	filesErr         error
+	versions         map[string]git.FileVersions
+	versionsErr      error
 	onDiff           func(git.DiffRange)
 	mergeBaseRef     string
 	mergeBaseRefErr  error
@@ -109,6 +111,10 @@ func (g stubGit) ChangedFiles(ctx context.Context, _ string, diff git.DiffRange)
 		g.onDiff(diff)
 	}
 	return g.files, g.filesErr
+}
+
+func (g stubGit) FileVersions(_ context.Context, _ string, _ git.DiffRange, file git.ChangedFile, _ int) (git.FileVersions, error) {
+	return g.versions[file.Path], g.versionsErr
 }
 
 func (g stubGit) FileDiffs(_ context.Context, _ string, _ git.DiffRange, files []git.ChangedFile) []git.FileDiffResult {
