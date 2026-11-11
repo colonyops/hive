@@ -84,6 +84,7 @@ const props = withDefaults(
   }>(),
   { keysActive: true },
 )
+const emit = defineEmits<{ sent: [target: AgentTarget] }>()
 const openModalCount = useOpenModalCount()
 
 const sessionId = toRef(props, 'sessionId')
@@ -682,6 +683,7 @@ async function deliver(target: AgentTarget): Promise<string | null> {
   stopWalk()
   sendNote.value = ''
   void dropSent(agents, threads)
+  emit('sent', target)
   return null
 }
 
