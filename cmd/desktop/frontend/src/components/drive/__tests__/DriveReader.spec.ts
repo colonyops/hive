@@ -14,6 +14,18 @@ vi.mock(
   () => settingsBindings,
 )
 
+vi.mock('../DriveCodeView.vue', async () => {
+  const { defineComponent, h } = await import('vue')
+  // Marked as a module so defineAsyncComponent unwraps the default export.
+  return {
+    __esModule: true,
+    default: defineComponent({
+      props: ['id', 'name', 'text', 'version', 'testid'],
+      setup: (props) => () => h('pre', { 'data-testid': props.testid, 'data-name': props.name }, props.text),
+    }),
+  }
+})
+
 const paths = new Set(['plans/x.md', 'reports/report.md', 'research/r.md'])
 
 async function mountReader(document: DocumentWire | null, extra: Record<string, unknown> = {}) {
@@ -44,6 +56,14 @@ describe('DriveReader', () => {
 
     expect(wrapper.get('[data-testid="r-image"]').attributes('src')).toBe(image)
     expect(wrapper.get('[data-testid="r-image"]').attributes('alt')).toBe('login.png')
+    expect(wrapper.find('[data-testid="r-file"]').exists()).toBe(false)
+  })
+
+  it('shows a text file in the code view', async () => {
+    const wrapper = await mountReader(documentFor('acme/site', doc('src/main.go'), { text: 'package main\n' }))
+
+    expect(wrapper.get('[data-testid="r-code"]').text()).toBe('package main')
+    expect(wrapper.get('[data-testid="r-code"]').attributes('data-name')).toBe('main.go')
     expect(wrapper.find('[data-testid="r-file"]').exists()).toBe(false)
   })
 

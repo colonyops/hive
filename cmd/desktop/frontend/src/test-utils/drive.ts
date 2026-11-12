@@ -44,7 +44,7 @@ export function space(key: string, name = key): SpaceWire {
 export function documentFor(
   spaceKey: string,
   entry: EntryWire,
-  body: { markdown?: string; html?: string; image?: string } = {},
+  body: { markdown?: string; html?: string; image?: string; text?: string } = {},
 ): DocumentWire {
   return {
     space: space(spaceKey),
@@ -52,5 +52,6 @@ export function documentFor(
     markdown: body.markdown ?? '',
     html: body.html ?? '',
     image: body.image ?? '',
+    text: body.text ?? '',
   }
 }
