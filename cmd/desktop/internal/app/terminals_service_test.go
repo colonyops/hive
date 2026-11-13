@@ -241,6 +241,7 @@ func TestTerminalsStartScratchOpensItInHomeWithoutAskingHive(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, windows, 1)
 
+	assertPaneIn(t, server, ScratchSlug, home)
 	tab, err := terminals.NewWindow(t.Context(), ScratchSlug)
 	require.NoError(t, err)
 	assertPaneIn(t, server, tab, home)
@@ -296,6 +297,7 @@ func TestTerminalsNewWindowWithoutAnAttachOpensWhereTheSessionIs(t *testing.T) {
 
 	_, err := terminals.Start(t.Context(), ScratchSlug)
 	require.NoError(t, err)
+	assertPaneIn(t, server, ScratchSlug, home)
 
 	// No Attach in between: the window is made by a one-shot, and it lands where
 	// the session lives rather than in this process's working directory.
@@ -327,6 +329,7 @@ func TestTerminalsNewWindowFollowsTheActivePane(t *testing.T) {
 	_, err := terminals.Start(t.Context(), ScratchSlug)
 	require.NoError(t, err)
 	require.NoError(t, tmux("new-window", "-t", ScratchSlug, "-c", elsewhere, "-n", "elsewhere", "sh"))
+	assertPaneIn(t, server, ScratchSlug+":elsewhere", elsewhere)
 
 	// Unattached, through the one-shot: tmux resolves the slug to the session's
 	// current window, which is the one it just made.
@@ -563,8 +566,8 @@ func TestTerminals_ServerPaneNeverReadsAsAPrompt(t *testing.T) {
 }
 
 // tmux reads a pane's path from its process's cwd, and a pane that was just
-// forked keeps the server's cwd until its chdir runs. Read once, a slow runner
-// sees the tmuxtest home instead of the pane's directory.
+// forked keeps the server's cwd (the tmuxtest home) until its chdir runs. A
+// test waits on it before reading the path, and before NewWindow copies it.
 func assertPaneIn(t *testing.T, server *tmuxtest.Server, pane, dir string) {
 	t.Helper()
 	want := realpath(t, dir)
