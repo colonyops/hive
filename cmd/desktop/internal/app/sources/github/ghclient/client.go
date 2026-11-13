@@ -382,10 +382,20 @@ func (c *Client) getJSON(ctx context.Context, path string, params url.Values, ou
 // graphQLError is one entry of a GraphQL response's errors array. Path names
 // the field the error nulled, as alias, field, and list index segments.
 type graphQLError struct {
-	Message string `json:"message"`
-	Type    string `json:"type"`
-	Path    []any  `json:"path"`
+	Message string           `json:"message"`
+	Type    graphQLErrorType `json:"type"`
+	Path    []any            `json:"path"`
 }
+
+// graphQLErrorType is the "type" GitHub sets on a GraphQL error. The constants
+// are the types the client acts on; GitHub sends others too.
+type graphQLErrorType string
+
+const (
+	graphQLNotFound    graphQLErrorType = "NOT_FOUND"
+	graphQLForbidden   graphQLErrorType = "FORBIDDEN"
+	graphQLRateLimited graphQLErrorType = "RATE_LIMITED"
+)
 
 // toleratePolicy reports whether a GraphQL error may be ignored, so the
 // partial data beside it is decoded instead of failing the request.
@@ -393,14 +403,14 @@ type toleratePolicy func(graphQLError) bool
 
 // tolerateNotFound accepts NOT_FOUND, which GitHub returns beside a null alias
 // for a deleted or private repository.
-func tolerateNotFound(e graphQLError) bool { return e.Type == "NOT_FOUND" }
+func tolerateNotFound(e graphQLError) bool { return e.Type == graphQLNotFound }
 
 // tolerateForbiddenSearchNode accepts FORBIDDEN on one search result node.
 // GitHub nulls a result in an organization with SAML SSO enforcement when the
 // token has no SSO authorization for it, and returns the other results (#860).
 // FORBIDDEN on a whole search alias stays fatal.
 func tolerateForbiddenSearchNode(e graphQLError) bool {
-	return e.Type == "FORBIDDEN" && len(e.Path) >= 3 && e.Path[1] == "nodes"
+	return e.Type == graphQLForbidden && len(e.Path) >= 3 && e.Path[1] == "nodes"
 }
 
 func (e graphQLError) pathString() string {
@@ -415,7 +425,10 @@ func (e graphQLError) pathString() string {
 // GitHub repeats one cause once per affected node, so errors that share a
 // type and message are listed once with all of their paths.
 func describeGraphQLErrors(errs []graphQLError) string {
-	type cause struct{ typ, message string }
+	type cause struct {
+		typ     graphQLErrorType
+		message string
+	}
 	var order []cause
 	paths := map[cause][]string{}
 	for _, e := range errs {
@@ -431,7 +444,7 @@ func describeGraphQLErrors(errs []graphQLError) string {
 
 	parts := make([]string, 0, len(order))
 	for _, k := range order {
-		head := k.typ
+		head := string(k.typ)
 		if at := paths[k]; len(at) > 0 {
 			head = strings.TrimSpace(head + " at " + strings.Join(at, ", "))
 		}
@@ -477,7 +490,7 @@ func (c *Client) postGraphQL(ctx context.Context, query string, variables map[st
 	}
 	var fatal, tolerated []graphQLError
 	for _, gqlErr := range response.Errors {
-		if gqlErr.Type == "RATE_LIMITED" {
+		if gqlErr.Type == graphQLRateLimited {
 			return sourcehttp.RateLimit(resp.Header)
 		}
 		if tolerate(gqlErr) {
