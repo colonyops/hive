@@ -59,7 +59,7 @@ type PullRequest struct {
 // request, aliased so out[i] answers refs[i].
 //
 // A repository the token cannot see resolves to a null alias rather than
-// failing the batch (postGraphQL's tolerateNotFound), and reports Found: false
+// failing the batch (tolerateNotFound), and reports Found: false
 // like a branch with no pull request. A transport or auth failure is what
 // arrives as an error, for the whole batch.
 func (c *Client) PullRequestsByBranch(ctx context.Context, refs []BranchRef) ([]PullRequest, error) {
@@ -69,7 +69,7 @@ func (c *Client) PullRequestsByBranch(ctx context.Context, refs []BranchRef) ([]
 
 	doc, variables := buildPullRequestQuery(refs)
 	var data map[string]*gqlPRRepository
-	if err := c.postGraphQL(ctx, doc, variables, &data, true); err != nil {
+	if err := c.postGraphQL(ctx, doc, variables, &data, tolerateNotFound); err != nil {
 		return nil, err
 	}
 
