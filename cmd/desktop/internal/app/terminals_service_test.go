@@ -243,7 +243,7 @@ func TestTerminalsStartScratchOpensItInHomeWithoutAskingHive(t *testing.T) {
 
 	tab, err := terminals.NewWindow(t.Context(), ScratchSlug)
 	require.NoError(t, err)
-	assert.Equal(t, realpath(t, home), realpath(t, tmuxFields(t, server, "display-message", "-p", "-t", tab, "#{pane_current_path}")))
+	assertPaneIn(t, server, tab, home)
 
 	started, err = terminals.Start(t.Context(), ScratchSlug)
 	require.NoError(t, err)
@@ -301,7 +301,7 @@ func TestTerminalsNewWindowWithoutAnAttachOpensWhereTheSessionIs(t *testing.T) {
 	// the session lives rather than in this process's working directory.
 	id, err := terminals.NewWindow(t.Context(), ScratchSlug)
 	require.NoError(t, err)
-	assert.Equal(t, realpath(t, home), realpath(t, tmuxFields(t, server, "display-message", "-p", "-t", id, "#{pane_current_path}")))
+	assertPaneIn(t, server, id, home)
 
 	windows, err := terminals.ListAllWindows(t.Context(), []string{ScratchSlug})
 	require.NoError(t, err)
@@ -332,7 +332,7 @@ func TestTerminalsNewWindowFollowsTheActivePane(t *testing.T) {
 	// current window, which is the one it just made.
 	id, err := terminals.NewWindow(t.Context(), ScratchSlug)
 	require.NoError(t, err)
-	assert.Equal(t, realpath(t, elsewhere), realpath(t, tmuxFields(t, server, "display-message", "-p", "-t", id, "#{pane_current_path}")))
+	assertPaneIn(t, server, id, elsewhere)
 
 	// Attached, over the control stream: the same answer, read from the client's
 	// own current window rather than from a target it was handed.
@@ -340,7 +340,7 @@ func TestTerminalsNewWindowFollowsTheActivePane(t *testing.T) {
 	require.NoError(t, err)
 	attached, err := terminals.NewWindow(t.Context(), ScratchSlug)
 	require.NoError(t, err)
-	assert.Equal(t, realpath(t, elsewhere), realpath(t, tmuxFields(t, server, "display-message", "-p", "-t", attached, "#{pane_current_path}")))
+	assertPaneIn(t, server, attached, elsewhere)
 }
 
 // WorkingDirectory is what a launcher with no cwd opens in, and the whole point
@@ -357,14 +357,10 @@ func TestTerminalsWorkingDirectoryIsTheActivePanes(t *testing.T) {
 	_, err := terminals.Start(t.Context(), ScratchSlug)
 	require.NoError(t, err)
 
-	dir, err := terminals.WorkingDirectory(t.Context(), ScratchSlug)
-	require.NoError(t, err)
-	assert.Equal(t, realpath(t, home), realpath(t, dir))
+	assertWorkingDirectory(t, terminals, home)
 
 	require.NoError(t, tmux("new-window", "-t", ScratchSlug, "-c", elsewhere, "-n", "elsewhere", "sh"))
-	dir, err = terminals.WorkingDirectory(t.Context(), ScratchSlug)
-	require.NoError(t, err)
-	assert.Equal(t, realpath(t, elsewhere), realpath(t, dir))
+	assertWorkingDirectory(t, terminals, elsewhere)
 }
 
 // A terminal that is not running has no pane to read. It is KindNotFound rather
@@ -564,4 +560,32 @@ func TestTerminals_ServerPaneNeverReadsAsAPrompt(t *testing.T) {
 	got := terminals.foregroundOf(t.Context(), "box:hive-abc", []tmuxcc.Pane{{ID: "%1", PID: 42, Active: true, Command: "zsh"}})
 
 	assert.Equal(t, WindowForeground{Running: true, Command: "zsh"}, got)
+}
+
+// tmux reads a pane's path from its process's cwd, and a pane that was just
+// forked keeps the server's cwd until its chdir runs. Read once, a slow runner
+// sees the tmuxtest home instead of the pane's directory.
+func assertPaneIn(t *testing.T, server *tmuxtest.Server, pane, dir string) {
+	t.Helper()
+	want := realpath(t, dir)
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		out, err := server.Output("display-message", "-p", "-t", pane, "#{pane_current_path}")
+		require.NoError(c, err)
+		got, err := filepath.EvalSymlinks(strings.TrimSpace(out))
+		require.NoError(c, err)
+		assert.Equal(c, want, got)
+	}, 5*time.Second, 20*time.Millisecond)
+}
+
+// assertWorkingDirectory waits for the reason assertPaneIn gives.
+func assertWorkingDirectory(t *testing.T, terminals *TerminalsService, dir string) {
+	t.Helper()
+	want := realpath(t, dir)
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		got, err := terminals.WorkingDirectory(t.Context(), ScratchSlug)
+		require.NoError(c, err)
+		resolved, err := filepath.EvalSymlinks(got)
+		require.NoError(c, err)
+		assert.Equal(c, want, resolved)
+	}, 5*time.Second, 20*time.Millisecond)
 }
