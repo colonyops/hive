@@ -18,6 +18,7 @@ A link only navigates. It never creates a session, runs a command, or changes da
 | --- | --- |
 | A tmux session in Code | `hive://code/<slug>` |
 | A window in that session | `hive://code/<slug>?window=@3` |
+| A session on a [server](../code/servers.md) | `hive://code/<slug>?server=<name>` |
 | A Chats workspace | `hive://chats/<workspace>` |
 | A chat | `hive://chats/<workspace>/<chat-id>` |
 | A profile's inbox | `hive://inbox/<profile>` |
