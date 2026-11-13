@@ -368,6 +368,41 @@ func TestSearchIssuesBatch_SkipsForbiddenNodes(t *testing.T) {
 	assert.Equal(t, 9, results[1][0].Number)
 }
 
+func TestDescribeGraphQLErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		errs []graphQLError
+		want string
+	}{
+		{
+			name: "repeated cause lists each path once",
+			errs: []graphQLError{
+				{Type: "FORBIDDEN", Path: []any{"s0", "nodes", float64(1)}, Message: "SAML"},
+				{Type: "FORBIDDEN", Path: []any{"s0", "nodes", float64(4)}, Message: "SAML"},
+			},
+			want: "FORBIDDEN at s0.nodes.1, s0.nodes.4: SAML",
+		},
+		{
+			name: "distinct causes",
+			errs: []graphQLError{
+				{Type: "NOT_FOUND", Path: []any{"r0"}, Message: "gone"},
+				{Type: "INTERNAL", Message: "boom"},
+			},
+			want: "NOT_FOUND at r0: gone; INTERNAL: boom",
+		},
+		{name: "bare error", errs: []graphQLError{{}}, want: "request failed"},
+		{name: "message only", errs: []graphQLError{{Message: "bad query"}}, want: "bad query"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, describeGraphQLErrors(tt.errs))
+		})
+	}
+}
+
 func TestSearchIssuesBatch_ForbiddenAliasIsFatal(t *testing.T) {
 	t.Parallel()
 
@@ -391,6 +426,7 @@ func TestSearchIssuesBatch_ForbiddenAliasIsFatal(t *testing.T) {
 
 			_, err := NewClient(WithAPIBase(server.URL)).SearchIssuesBatch(t.Context(), []SearchRequest{{Query: "is:open", Limit: 25}})
 			require.Error(t, err)
+			assert.Contains(t, err.Error(), `search "is:open"`, "the error names the failed search")
 		})
 	}
 }

@@ -12,6 +12,7 @@ package ghclient
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -169,8 +170,8 @@ func (c *Client) SearchIssuesBatch(ctx context.Context, reqs []SearchRequest) ([
 			batch := pages[start:min(start+searchAliasesPerRequest, len(pages))]
 			doc, variables := buildSearchPageQuery(batch)
 			var data map[string]gqlSearchResult
-			if err := c.postGraphQL(ctx, doc, variables, &data, c.tolerateForbiddenSearchNode(ctx)); err != nil {
-				return nil, err
+			if err := c.postGraphQL(ctx, doc, variables, &data, tolerateForbiddenSearchNode); err != nil {
+				return nil, fmt.Errorf("search %s: %w", quotedQueries(batch), err)
 			}
 
 			for i, pageRequest := range batch {
@@ -191,6 +192,14 @@ func (c *Client) SearchIssuesBatch(ctx context.Context, reqs []SearchRequest) ([
 		pages = next
 	}
 	return results, nil
+}
+
+func quotedQueries(pages []searchPageRequest) string {
+	quoted := make([]string, len(pages))
+	for i, page := range pages {
+		quoted[i] = strconv.Quote(page.query)
+	}
+	return strings.Join(quoted, ", ")
 }
 
 func searchItems(nodes []*gqlSearchNode) []SearchItem {
@@ -390,14 +399,50 @@ func tolerateNotFound(e graphQLError) bool { return e.Type == "NOT_FOUND" }
 // GitHub nulls a result in an organization with SAML SSO enforcement when the
 // token has no SSO authorization for it, and returns the other results (#860).
 // FORBIDDEN on a whole search alias stays fatal.
-func (c *Client) tolerateForbiddenSearchNode(ctx context.Context) toleratePolicy {
-	return func(e graphQLError) bool {
-		if e.Type != "FORBIDDEN" || len(e.Path) < 3 || e.Path[1] != "nodes" {
-			return false
-		}
-		c.logger.Debug().Ctx(ctx).Any("path", e.Path).Str("message", e.Message).Msg("github search skipped a forbidden result")
-		return true
+func tolerateForbiddenSearchNode(e graphQLError) bool {
+	return e.Type == "FORBIDDEN" && len(e.Path) >= 3 && e.Path[1] == "nodes"
+}
+
+func (e graphQLError) pathString() string {
+	segments := make([]string, len(e.Path))
+	for i, segment := range e.Path {
+		segments[i] = fmt.Sprint(segment)
 	}
+	return strings.Join(segments, ".")
+}
+
+// describeGraphQLErrors renders errors as "TYPE at path, path: message".
+// GitHub repeats one cause once per affected node, so errors that share a
+// type and message are listed once with all of their paths.
+func describeGraphQLErrors(errs []graphQLError) string {
+	type cause struct{ typ, message string }
+	var order []cause
+	paths := map[cause][]string{}
+	for _, e := range errs {
+		k := cause{e.Type, e.Message}
+		if _, seen := paths[k]; !seen {
+			order = append(order, k)
+			paths[k] = nil
+		}
+		if len(e.Path) > 0 {
+			paths[k] = append(paths[k], e.pathString())
+		}
+	}
+
+	parts := make([]string, 0, len(order))
+	for _, k := range order {
+		head := k.typ
+		if at := paths[k]; len(at) > 0 {
+			head = strings.TrimSpace(head + " at " + strings.Join(at, ", "))
+		}
+		message := cmp.Or(k.message, "request failed")
+		if head == "" {
+			parts = append(parts, message)
+		} else {
+			parts = append(parts, head+": "+message)
+		}
+	}
+	return strings.Join(parts, "; ")
 }
 
 // postGraphQL executes one GraphQL request and decodes the data object into
@@ -430,27 +475,22 @@ func (c *Client) postGraphQL(ctx context.Context, query string, variables map[st
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return c.errs.Errorf("decode graphql: %w", err)
 	}
-	if len(response.Errors) > 0 {
-		messages := make([]string, 0, len(response.Errors))
-		tolerated := 0
-		for _, gqlErr := range response.Errors {
-			if gqlErr.Type == "RATE_LIMITED" {
-				return sourcehttp.RateLimit(resp.Header)
-			}
-			if tolerate(gqlErr) {
-				tolerated++
-				continue
-			}
-			if gqlErr.Message != "" {
-				messages = append(messages, gqlErr.Message)
-			}
+	var fatal, tolerated []graphQLError
+	for _, gqlErr := range response.Errors {
+		if gqlErr.Type == "RATE_LIMITED" {
+			return sourcehttp.RateLimit(resp.Header)
 		}
-		if tolerated < len(response.Errors) {
-			if len(messages) == 0 {
-				messages = append(messages, "request failed")
-			}
-			return c.errs.Errorf("graphql: %s", strings.Join(messages, "; "))
+		if tolerate(gqlErr) {
+			tolerated = append(tolerated, gqlErr)
+		} else {
+			fatal = append(fatal, gqlErr)
 		}
+	}
+	if len(fatal) > 0 {
+		return c.errs.Errorf("graphql: %s", describeGraphQLErrors(fatal))
+	}
+	if len(tolerated) > 0 {
+		c.logger.Debug().Ctx(ctx).Str("errors", describeGraphQLErrors(tolerated)).Msg("github graphql errors tolerated; using partial data")
 	}
 	if len(response.Data) == 0 {
 		return nil
