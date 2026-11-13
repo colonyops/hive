@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import TerminalPane from './TerminalPane.vue'
 import { scrollbarWidthFor, useTerminalScrollbars } from '../stores/useTerminalScrollbars'
+import { useNativeRenderer } from '../stores/useNativeRenderer'
 import { startDrag } from '@hive/ui/composables/useDragGesture'
 import type { TerminalWindowTab, UseTerminalWindows } from '../composables/useTerminalWindows'
 import { dividerTouches, draggedExtent, paneDividers, visiblePaneRects, type PaneDivider } from '../lib/terminalLayout'
@@ -15,7 +16,9 @@ onMounted(() => {
 })
 
 const { showScrollbars } = useTerminalScrollbars()
-const scrollbarWidth = computed(() => scrollbarWidthFor(props.tab, showScrollbars.value))
+const native = useNativeRenderer()
+// A native pane draws no xterm scrollbar, so its box takes no gutter.
+const scrollbarWidth = computed(() => scrollbarWidthFor(props.tab, showScrollbars.value && !native.enabled.value))
 
 const cell = computed(() => props.session.cell.value)
 const dividers = computed(() => paneDividers(props.tab))
@@ -124,6 +127,9 @@ function startDividerDrag(divider: PaneDivider, event: PointerEvent): void {
         :pane="pane"
         :scrollbar-width="scrollbarWidth"
         :active="split && pane.paneId === tab.activePane"
+        :current="pane.paneId === tab.activePane"
+        :slug="session.slug"
+        :on-screen="active && placements.has(pane.paneId)"
         :style="placements.get(pane.paneId)"
         @mount="session.attachPane"
         @select="session.selectPane"

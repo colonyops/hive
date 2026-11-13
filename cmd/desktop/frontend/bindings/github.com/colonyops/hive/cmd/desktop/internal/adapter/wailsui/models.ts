@@ -69,6 +69,7 @@ export interface AppearanceSettings {
     "terminalLineHeight": number;
     "terminalLetterSpacing": number;
     "terminalShowScrollbars": boolean;
+    "terminalNativeRenderer": boolean;
     "terminalMonochromeAgentIcons": boolean;
 
     /**
@@ -434,6 +435,29 @@ export interface MenuBarNavigation {
 }
 
 /**
+ * NativeTerminal is a herdr-core terminal a native tab shows.
+ */
+export interface NativeTerminal {
+    "address": string;
+    "cwd": string;
+}
+
+/**
+ * NativeTerminalTheme is the page's terminal colors, as `#rrggbb`. A color
+ * that is empty or not hex keeps the user's Ghostty color.
+ */
+export interface NativeTerminalTheme {
+    "background": string;
+    "foreground": string;
+    "cursor": string;
+
+    /**
+     * Palette is the 16 ANSI colors, black through bright white.
+     */
+    "palette": string[] | null;
+}
+
+/**
  * NotificationActivation is the notification:activated payload: which
  * workspace and inbox item a clicked notification came from. ItemID is 0 when
  * the notification had no item behind it (an app-level notification, or one
@@ -488,6 +512,17 @@ export interface ObservabilitySettings {
     "otlp": ExportStatus;
     "profiles": ExportStatus;
     "startError": string;
+}
+
+/**
+ * OccluderRect is a page element floating over the terminals, in CSS pixels
+ * from the viewport's top-left.
+ */
+export interface OccluderRect {
+    "x": number;
+    "y": number;
+    "w": number;
+    "h": number;
 }
 
 /**

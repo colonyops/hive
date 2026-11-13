@@ -935,6 +935,35 @@ func (c *Client) Repaint(ctx context.Context) (err error) {
 	return c.paintEveryWindow(ctx)
 }
 
+// RepaintPane snapshots one pane onto the stream, as a first paint would: a
+// renderer that starts drawing a pane mid-session gets its scrollback and
+// screen, then the live output that follows. Held like any first paint, so
+// output cannot overtake the snapshot.
+func (c *Client) RepaintPane(ctx context.Context, pane string) error {
+	rows, ok := paneRows(c.Windows(), pane)
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrUnknownPane, pane)
+	}
+	c.repaintMu.Lock()
+	defer c.repaintMu.Unlock()
+	paintCtx, cancel := context.WithTimeout(ctx, attachTimeout)
+	defer cancel()
+	c.paint.rehold(pane)
+	return c.firstPaint(paintCtx, pane, rows)
+}
+
+func paneRows(windows []Window, pane string) (int, bool) {
+	for _, w := range windows {
+		shown, hidden := paintTargets(w)
+		for _, target := range append(shown, hidden...) {
+			if target.pane == pane {
+				return target.rows, true
+			}
+		}
+	}
+	return 0, false
+}
+
 // resyncOverflow recovers a stream whose backlog crossed the bound rather than
 // ending it. The backlog goes, the stream is marked degraded, and the first
 // paint an attach runs puts every window back on screen. Reusing that path is

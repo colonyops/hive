@@ -6,3 +6,4 @@ frontend/dist/*
 frontend/node_modules
 build/linux/appimage/build
 build/linux/hive-desktop.desktop
+build/ghostty/

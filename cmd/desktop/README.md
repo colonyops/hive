@@ -215,6 +215,7 @@ appearance:
   terminal_line_height: 0 # 1 to 1.6 in tenths; 0 means the default, 1.2 (ADR terminal-line-height-and-letter-spacing)
   terminal_letter_spacing: 0 # extra tracking in device pixels, 0 to 3 (ADR terminal-line-height-and-letter-spacing)
   terminal_show_scrollbars: false # draggable scrollbars in single-pane and zoomed Code terminals; hidden in splits
+  terminal_native_renderer: false # draw Code terminal panes with libghostty instead of xterm.js; tmux still runs them (builds with native terminals only)
   terminal_monochrome_agent_icons: false # draw Code's agent icons in the color of the icons around them
   terminal_show_windows: true # list every active session's windows in the terminal sidebar
   terminal_show_status_bar: true # give the attached session a bar carrying its checkout's git and pull-request state (ADR session-git-and-pull-request-status-is-computed-in-app-not-shelled-out-to-hive-or-gh)

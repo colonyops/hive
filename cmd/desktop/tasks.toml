@@ -39,6 +39,19 @@ test -f ../../launch.env || {
 go run ./devtools run -- wails3 dev -config ./build/config.yml
 """
 
+["desktop:dev:native"]
+description = "Run desktop:dev with native terminal tabs (libghostty + herdr-core) on a dev-only herdr-core session"
+dir = "{{config_root}}"
+# Inline rather than a task env: a nested `mise run` does not inherit it.
+run = [
+  "./cmd/desktop/scripts/build/build-ghostty.sh",
+  "HIVE_BUILD_TAGS=ghostty HC_SESSION=hive-dev mise run desktop:dev",
+]
+
+["desktop:ghostty"]
+description = "Build libghostty at its pinned commit into cmd/desktop/build/ghostty (macOS; needs Zig and the Metal toolchain)"
+run = "./cmd/desktop/scripts/build/build-ghostty.sh"
+
 ["desktop:dev:prepare"]
 description = "Create or reuse this worktree's desktop instance and generate launch.env"
 run = "go run ./cmd/desktop/devtools prepare"

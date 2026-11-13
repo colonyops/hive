@@ -21,6 +21,7 @@ import * as JobService from "./jobservice.js";
 import * as LayoutService from "./layoutservice.js";
 import * as LinkService from "./linkservice.js";
 import * as MenuBarService from "./menubarservice.js";
+import * as NativeTerminalService from "./nativeterminalservice.js";
 import * as NotificationService from "./notificationservice.js";
 import * as ObservabilityService from "./observabilityservice.js";
 import * as PerfService from "./perfservice.js";
@@ -61,6 +62,7 @@ export {
     LayoutService,
     LinkService,
     MenuBarService,
+    NativeTerminalService,
     NotificationService,
     ObservabilityService,
     PerfService,
@@ -112,11 +114,14 @@ export type {
     MarkImageView,
     MenuBarLimits,
     MenuBarNavigation,
+    NativeTerminal,
+    NativeTerminalTheme,
     NotificationActivation,
     NotificationSettings,
     NotificationToast,
     NotifyInput,
     ObservabilitySettings,
+    OccluderRect,
     OnboardingSettings,
     PanelLayoutWire,
     PanelNodeWire,

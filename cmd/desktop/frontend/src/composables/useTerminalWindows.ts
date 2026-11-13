@@ -1,4 +1,4 @@
-import { effectScope, markRaw, nextTick, ref, watch, type Ref } from 'vue'
+import { computed, effectScope, markRaw, nextTick, ref, watch, type Ref } from 'vue'
 import { SearchAddon, type ISearchOptions } from '@xterm/addon-search'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 // Rides the async terminal chunk on purpose: ~10MB of glyphs nobody pays for
@@ -16,6 +16,7 @@ import {
   type WindowState,
 } from '../lib/terminalClient'
 import { resetTerminalFacesForTests } from '../lib/terminalFaces'
+import { useNativeRenderer } from '../stores/useNativeRenderer'
 import { scrollbarWidthFor, useTerminalScrollbars } from '../stores/useTerminalScrollbars'
 import {
   deferHiddenSelectionRedraw,
@@ -112,6 +113,8 @@ export interface TerminalSearch {
 }
 
 export interface UseTerminalWindows {
+  /** The terminal target: a slug, or "<server>:<slug>". */
+  slug: string
   tabs: Ref<TerminalWindowTab[]>
   activeWindowId: Ref<string>
   status: Ref<TerminalStatus>
@@ -260,7 +263,10 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   const cell = ref<CellSize | null>(null)
   const search = ref<TerminalSearch>({ open: false, query: '', matches: 0, index: 0 })
 
-  const { showScrollbars } = useTerminalScrollbars()
+  const { showScrollbars: xtermScrollbars } = useTerminalScrollbars()
+  const native = useNativeRenderer()
+  // A native pane draws no xterm scrollbar, so it takes no gutter.
+  const showScrollbars = computed(() => xtermScrollbars.value && !native.enabled.value)
   const windows = new Map<string, WindowRuntime>()
   const panes = new Map<string, PaneRuntime>()
   const expectedWindowClosures = new Set<string>()
@@ -689,6 +695,16 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   // All panes share font metrics. Prefer an active-window atlas renderer because
   // the DOM renderer's fractional width can drift over many columns.
   function measureCell(): CellSize | null {
+    // Native panes are drawn by libghostty, so tmux's grid is sized by its
+    // cell; xterm's would leave the drawn grid and tmux's apart.
+    if (native.enabled.value) {
+      const nativeCell = native.cell.value
+      if (!nativeCell) return null
+      if (cell.value?.width !== nativeCell.width || cell.value.height !== nativeCell.height) {
+        cell.value = { width: nativeCell.width, height: nativeCell.height }
+      }
+      return nativeCell
+    }
     for (const state of panesToMeasure()) {
       const measured = terminalCellSize(state.term)
       if (!measured) {
@@ -700,6 +716,11 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     }
     return null
   }
+
+  // The first native surface reports its cell after it opens, and switching
+  // renderers changes whose cell sizes the grid: either way tmux's size is
+  // voted again.
+  watch([() => native.enabled.value, () => native.cell.value], scheduleVote)
 
   function panesToMeasure(): PaneRuntime[] {
     const rank = (state: PaneRuntime): number => {
@@ -1351,6 +1372,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   }
 
   return {
+    slug,
     tabs,
     activeWindowId,
     status,

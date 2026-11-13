@@ -15,6 +15,8 @@ import (
 type TerminalTransport struct {
 	Token      string
 	StreamPath string
+	// PaneStreamPath is where a native renderer's bridge reads one pane.
+	PaneStreamPath string
 }
 
 // TerminalAvailability is the frontend's only gate on terminal mode. Reason is

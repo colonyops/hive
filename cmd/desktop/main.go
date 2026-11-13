@@ -15,6 +15,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/adapter/panebridge"
+	"github.com/colonyops/hive/internal/platform/herdrcore/bridge"
+
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -57,6 +60,14 @@ var trayIcon []byte
 var trayIconLinux []byte
 
 func main() {
+	// A native terminal surface runs this executable as its command to reach
+	// a herdr-core terminal; that process is not the app.
+	if code, ok := bridge.Main(os.Args); ok {
+		os.Exit(code)
+	}
+	if code, ok := panebridge.Main(context.Background(), os.Args); ok {
+		os.Exit(code)
+	}
 	// Before settings load: invoked as hive, this executable is the CLI and
 	// must not touch the desktop's state.
 	if filepath.Base(os.Args[0]) == "hive" {
@@ -278,6 +289,10 @@ func main() {
 		terminal = wailsui.TerminalTransport{Token: terminalToken, StreamPath: path}
 		agents = wailsui.AgentsTransport{Token: terminalToken, StreamPath: path}
 		logger.Info().Str("path", path).Msg("terminal WebSocket stream mounted")
+	}
+	if path, handler := httpapi.PaneStreamHandler(core, terminalToken, logger); core.MountAPI(path, handler) {
+		terminal.PaneStreamPath = path
+		logger.Info().Str("path", path).Msg("terminal pane stream mounted")
 	}
 	// The ptyterm data plane. It carries one terminal per socket rather than a
 	// session's window set (ADR terminal-renderer-claimed-on-activation), and is addressed by an id a caller may

@@ -19,7 +19,9 @@ tasks:
           ARCH: '{{.ARCH}}'
           DEV: '{{.DEV}}'
           OUTPUT: '{{.OUTPUT}}'
-          EXTRA_TAGS: '{{.EXTRA_TAGS}}'
+          # HIVE_BUILD_TAGS adds tags `wails3 build` cannot carry: it replaces
+          # EXTRA_TAGS with its own list (`ghostty` for desktop:dev:native).
+          EXTRA_TAGS: '{{.EXTRA_TAGS}}{{if and .EXTRA_TAGS .HIVE_BUILD_TAGS}},{{end}}{{.HIVE_BUILD_TAGS}}'
           OBFUSCATED: '{{.OBFUSCATED}}'
           GARBLE_ARGS: '{{.GARBLE_ARGS}}'
     vars:

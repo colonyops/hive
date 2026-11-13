@@ -38,6 +38,7 @@ dev_mode:
       - frontend
       - "*/web/packages/*"
       - "*/cmd/desktop/bin/*"
+      - "*/cmd/desktop/build/ghostty/*"
       - "*/cmd/hive/*"
       - "*/cmd/tools/*"
       - "*/docs/docs/*"

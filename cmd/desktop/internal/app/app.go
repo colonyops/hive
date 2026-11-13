@@ -139,6 +139,7 @@ type App struct {
 	Sources *SourcesService
 
 	PopupTerminals  *PopupTerminalsService
+	HerdrTerminals  *HerdrTerminalsService
 	Applets         *AppletsService
 	AgentWorkspaces *AgentWorkspacesService
 	Tasks           *TasksService
@@ -560,6 +561,12 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	})
 	a.Terminals = newTerminalsService(TerminalsDeps{Manager: a.terminals, Servers: a.serverTerminals, Starter: a.Sessions, Home: os.UserHomeDir, Logger: cfg.Logger})
 	a.PopupTerminals = newPopupTerminalsService(PopupTerminalsDeps{Manager: a.popupTerminals, Terminals: a.Terminals, Directory: a.Sessions, Catalog: a.actionStore})
+	a.HerdrTerminals = newHerdrTerminalsService(HerdrTerminalsDeps{
+		Environ:   a.execEnv.Environ,
+		LookPath:  a.execEnv.LookPath,
+		Directory: a.Sessions,
+		Logger:    logutils.Component(cfg.Logger, "herdrterminals"),
+	})
 	a.Applets = newAppletsService(AppletsDeps{
 		Catalog:     a.appletStore,
 		Environ:     a.execEnv.Environ,
@@ -832,6 +839,10 @@ func (a *App) Close() error {
 	// The pop-up terminals are this process's children rather than another
 	// server's, so this is not just a detach: whatever is running in them ends
 	// here.
+	// Only the connection: herdr-core keeps the terminals running.
+	if a.HerdrTerminals != nil {
+		_ = a.HerdrTerminals.Close()
+	}
 	if a.popupTerminals != nil {
 		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(a.ctx), 3*time.Second)
 		_ = a.popupTerminals.Stop(stopCtx)

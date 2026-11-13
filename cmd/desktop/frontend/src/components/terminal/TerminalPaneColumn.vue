@@ -62,6 +62,9 @@ import {
   RevealSession,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { appletIdOf, appletTab, appletTabOfId } from '../../lib/appletTabs'
+import { nativeAddressOf } from '../../lib/nativeTerminalTabs'
+import { useNativeTerminals } from '../../stores/useNativeTerminals'
+import NativeTerminalLayer from './NativeTerminalLayer.vue'
 import { useApplets } from '../../stores/useApplets'
 import { useAppletTabHost } from '../applets/useAppletTabHost'
 import { useSessionTabHost } from '../panels/useSessionTabHost'
@@ -250,6 +253,8 @@ function windowName(windowId: string): string {
 function tabLabel(tab: PanelTab): string {
   const windowId = windowIdOf(tab)
   if (windowId) return windowName(windowId)
+  const address = nativeAddressOf(tab)
+  if (address) return `Terminal ${address}`
   return applets.tabTitle(tab) ?? viewOfTab(tab)?.label ?? tab.id
 }
 
@@ -275,10 +280,19 @@ function tabAttention(tab: PanelTab): boolean {
 
 // A running window has a tab and a tree row, so closing its tab closes the window,
 // through the same confirmation as the tree.
+const nativeTerminals = useNativeTerminals()
+
+// Closing a native tab ends its terminal; leaving the session only detaches.
 function closePanelTab(panelId: string, tabId: string): void {
-  const windowId = windowIdOf(panelById(layout.value, panelId)?.tabs.find((candidate) => candidate.id === tabId))
-  if (windowId) void ops.requestCloseWindow(pool.visibleSlug, windowId, windowName(windowId))
-  else panels.apply((current) => closeTab(current, panelId, tabId))
+  const tab = panelById(layout.value, panelId)?.tabs.find((candidate) => candidate.id === tabId)
+  const windowId = windowIdOf(tab)
+  if (windowId) {
+    void ops.requestCloseWindow(pool.visibleSlug, windowId, windowName(windowId))
+    return
+  }
+  const address = nativeAddressOf(tab)
+  if (address) void nativeTerminals.kill(address)
+  panels.apply((current) => closeTab(current, panelId, tabId))
 }
 
 // After a review lands, the agent's reply is what the user reads next. The pane
@@ -603,6 +617,16 @@ onBeforeUnmount(() => {
           :content-key="panels.key"
           :active="active"
           :keys-active="active && !overlayOpen && !terminalTreeFocused"
+          @focus-panel="(panelId) => panels.apply((current) => focusPanel(current, panelId))"
+          @close-tab="closePanelTab"
+        />
+        <NativeTerminalLayer
+          :layout="layout"
+          :region="region"
+          :content-key="panels.key"
+          :active="active && !!visible"
+          :keys-active="active && !overlayOpen && !terminalTreeFocused"
+          :overlay-open="!!overlayOpen"
           @focus-panel="(panelId) => panels.apply((current) => focusPanel(current, panelId))"
           @close-tab="closePanelTab"
         />

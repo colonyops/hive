@@ -1,5 +1,7 @@
 import { computed, watch } from 'vue'
 import { appletTab } from '../../lib/appletTabs'
+import { nativeTerminalTab } from '../../lib/nativeTerminalTabs'
+import { useNativeTerminals } from '../../stores/useNativeTerminals'
 import { openTab } from '../../lib/panelLayout'
 import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
@@ -33,6 +35,7 @@ export function codeViewHost(
 export function useCodePanels(options: { pool: TerminalPool; tree: TerminalTree; ops: TerminalSessionOps }) {
   const { pool, tree, ops } = options
   const layouts = usePanelLayouts()
+  const nativeTerminals = useNativeTerminals()
 
   const row = computed(
     () => tree.attachable.value.find((candidate) => candidate.slug === pool.visibleSlug.value) ?? null,
@@ -81,6 +84,13 @@ export function useCodePanels(options: { pool: TerminalPool; tree: TerminalTree;
     if (target.slug !== pool.visibleSlug.value) ops.selectRow(target.slug)
   }
 
+  async function newNativeTerminal(target: TerminalSessionRow, panel?: string): Promise<void> {
+    const address = await nativeTerminals.start(target.slug)
+    if (!address) return
+    layouts.apply(target.id, (current) => openTab(current, nativeTerminalTab(address), panel))
+    if (target.slug !== pool.visibleSlug.value) ops.selectRow(target.slug)
+  }
+
   // A session deleted or recycled while not on screen says nothing to the watcher
   // in useSessionPanels. A server that has not answered says nothing about its
   // sessions, so layouts wait until every server has, and a pinned chat's row
@@ -104,6 +114,10 @@ export function useCodePanels(options: { pool: TerminalPool; tree: TerminalTree;
     newAgentWindow,
     openViewIn,
     openAppletIn,
+    newNativeTerminal,
+    /** Native terminals run in a session's checkout on this machine. */
+    offersNativeTerminal: (target: TerminalSessionRow): boolean =>
+      nativeTerminals.available.value && codeViewHost(target, tree).localCheckout,
     viewsFor: (target: TerminalSessionRow): SessionViewKind[] => viewsFor(codeViewHost(target, tree)),
   }
 }

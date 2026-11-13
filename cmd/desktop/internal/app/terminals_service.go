@@ -76,6 +76,8 @@ type TerminalsService struct {
 	log        zerolog.Logger
 	// serverSweepBudget is a field so a test need not wait the real one out.
 	serverSweepBudget time.Duration
+	// taps routes natively rendered panes' output out of the session stream.
+	taps paneTaps
 }
 
 type TerminalsDeps struct {
@@ -289,7 +291,14 @@ func (s *TerminalsService) Subscribe(ctx context.Context, target string) (<-chan
 	if err != nil {
 		return nil, nil, terminalError(err, "subscribing to session %q", target)
 	}
-	return events, unsubscribe, nil
+	stop := make(chan struct{})
+	var once sync.Once
+	return s.taps.divert(target, events, stop), func() {
+		once.Do(func() {
+			close(stop)
+			unsubscribe()
+		})
+	}, nil
 }
 
 // Write sends bytes to a pane. The pane is named rather than resolved from a

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
 import IconTerminal from '~icons/lucide/terminal'
+import IconSquareTerminal from '~icons/lucide/square-terminal'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import { agentBrandIcon } from './terminal/agentBrandIcon'
 import type { SessionViewKind } from './terminal/panelViews'
@@ -20,10 +21,13 @@ const props = defineProps<{
   failed: boolean
   views?: { kind: SessionViewKind; label: string; icon: Component }[]
   applets?: readonly Applet[]
+  /** Offer a native terminal: a shell in herdr-core, drawn by libghostty. */
+  nativeTerminal?: boolean
 }>()
 const emit = defineEmits<{
   close: []
   terminal: []
+  nativeTerminal: []
   agent: [profile: string]
   view: [kind: SessionViewKind]
   applet: [id: string]
@@ -59,6 +63,17 @@ const entries = computed<MenuEntry[]>(() => [
     icon: IconTerminal,
     testid: 'new-window-terminal',
   },
+  ...(props.nativeTerminal
+    ? [
+        {
+          kind: 'action' as const,
+          id: 'native-terminal',
+          label: 'New native terminal',
+          icon: IconSquareTerminal,
+          testid: 'new-window-native-terminal',
+        },
+      ]
+    : []),
   ...(props.agents ? agentEntries(props.agents) : []),
   ...(props.views?.length ? [{ kind: 'separator' as const }] : []),
   ...(props.views ?? []).map((view) => ({
@@ -79,6 +94,7 @@ function select(id: string): void {
   }
   emit('close')
   if (id === 'terminal') emit('terminal')
+  else if (id === 'native-terminal') emit('nativeTerminal')
   else if (id.startsWith('agent:')) emit('agent', id.slice(6))
   else if (id.startsWith('view:')) emit('view', id.slice(5) as SessionViewKind)
   else {

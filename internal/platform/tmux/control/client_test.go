@@ -335,6 +335,32 @@ func TestRepaintSnapshotsEveryWindowForTheNextSubscriber(t *testing.T) {
 	require.Equal(t, "$ ", outputData(events, "@2"), "every window is painted, not just the active one")
 }
 
+// A renderer that starts drawing one pane mid-session needs that pane's
+// screen, not the whole session repainted under the renderers already on it.
+func TestRepaintPaneSnapshotsOnlyThatPane(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setWindows("@1 1 %1 120 1 0 b25f,120x1,0,0,1 claude", "@2 0 %2 120 1 0 b25f,120x1,0,0,2 shell")
+	f.setCapture("%1", "FIRST")
+	f.setCapture("%2", "$ ")
+
+	client := attachFake(t, f, Options{})
+	ch, unsubscribe := client.Subscribe()
+	defer unsubscribe()
+	collect(t, ch, outputContains("@2", "$ "))
+
+	f.setCapture("%1", "AGAIN")
+	f.setCapture("%2", "NOT THIS")
+	require.NoError(t, client.RepaintPane(t.Context(), "%1"))
+	f.emit("%output %2 SENTINEL")
+	events := collect(t, ch, outputContains("@2", "SENTINEL"))
+	require.Contains(t, outputData(events, "@1"), "AGAIN")
+	require.NotContains(t, outputData(events, "@2"), "NOT THIS")
+
+	require.ErrorIs(t, client.RepaintPane(t.Context(), "%9"), ErrUnknownPane)
+}
+
 // %window-add carries no name or pane, so it schedules a list-windows on the
 // command worker — never on the reader goroutine.
 func TestWindowAddTriggersReconcile(t *testing.T) {

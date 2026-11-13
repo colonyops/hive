@@ -66,6 +66,7 @@ type AppearanceSettings struct {
 	TerminalLineHeight           float64 `json:"terminalLineHeight"`
 	TerminalLetterSpacing        int     `json:"terminalLetterSpacing"`
 	TerminalShowScrollbars       bool    `json:"terminalShowScrollbars"`
+	TerminalNativeRenderer       bool    `json:"terminalNativeRenderer"`
 	TerminalMonochromeAgentIcons bool    `json:"terminalMonochromeAgentIcons"`
 	// TerminalShowWindows lists every active session's tmux windows in the
 	// terminal sidebar, not just the attached session's. Ships on.
@@ -217,6 +218,7 @@ func (s *SettingsService) AppearanceSettings(ctx context.Context) (AppearanceSet
 		TerminalLineHeight:              current.TerminalLineHeight,
 		TerminalLetterSpacing:           current.TerminalLetterSpacing,
 		TerminalShowScrollbars:          current.TerminalShowScrollbars,
+		TerminalNativeRenderer:          current.TerminalNativeRenderer,
 		TerminalMonochromeAgentIcons:    current.TerminalMonochromeAgentIcons,
 		TerminalShowWindows:             current.TerminalShowWindows,
 		TerminalShowStatusBar:           current.TerminalShowStatusBar,
@@ -294,6 +296,10 @@ func (s *SettingsService) SetTerminalLetterSpacing(ctx context.Context, spacing 
 
 func (s *SettingsService) SetTerminalShowScrollbars(ctx context.Context, show bool) error {
 	return s.settings.SetTerminalShowScrollbars(ctx, show)
+}
+
+func (s *SettingsService) SetTerminalNativeRenderer(ctx context.Context, native bool) error {
+	return s.settings.SetTerminalNativeRenderer(ctx, native)
 }
 
 func (s *SettingsService) SetTerminalMonochromeAgentIcons(ctx context.Context, monochrome bool) error {

@@ -505,6 +505,13 @@ cmd/desktop/internal/
       windowservice.go  tray.go  focusstate.go  updater.go  notify.go
       terminalservice.go          # Available + Endpoint: the terminal's gate and
                                   #   webview bootstrap (ADR terminal-transport)
+      nativeterminalservice.go    # native surfaces: herdr-core tabs, tmux panes,
+                                  #   frames the page reports, theme colors
+    nativeterm/                   # libghostty surfaces in NSViews over the
+                                  #   webview; cgo, `ghostty` build tag, macOS
+                                  #   (ADR native-terminals-are-libghostty-surfaces-over-the-webview-that-run-a-bridge-to-their-backend)
+    panebridge/                   # `--tmux-pane`: a surface's command, relaying
+                                  #   one tmux pane over the pane stream
       e2e/                        # state-reset and smoke middleware
     httpapi/                      # Mounted via ServeHTTP at a Route on the shared
                                   #   loopback http server that also hosts the
@@ -552,6 +559,10 @@ internal/                         # the hive engine both programs run on (see
                                   #   transport, no UI), bin/ (tmuxbin, where the
                                   #   binary is: paths.tmux, then PATH, then
                                   #   package prefixes; ADR tmux-discovery)
+    herdrcore/                    #   herdr-core (`hc`) client: JSON-RPC and the
+                                  #   framed attach protocol; bridge/ is
+                                  #   `--herdr-attach`, hctest/ starts isolated
+                                  #   cores for tests
     fswatch/                      #   one fsnotify watch per directory, re-walked
                                   #   on directory create, debounced to changed
                                   #   directories; Change{Dirs}, Changes(),
@@ -2211,6 +2222,28 @@ special for `behind`, a new split on the anchor for `beside` or `below`,
 whether the tab is already there or the event beat the listing. Each layout
 store reports its map and the key on screen to Go (`lib/layoutReport.ts`,
 `LayoutService.Report`), which is how `layout_get` answers.
+
+#### Native terminals
+
+Native terminals draw with libghostty in an NSView over the webview; the page
+keeps an empty box and reports its rectangle (ADR
+native-terminals-are-libghostty-surfaces-over-the-webview-that-run-a-bridge-to-their-backend).
+A surface can only run a command, so it runs the hive executable in a bridge
+mode that connects to the real backend:
+
+- **tmux panes** (`appearance.terminal_native_renderer`): the bridge reads one
+  pane from `/api/terminal/pane-stream`. `app.PaneTap` takes that pane's output
+  off the session stream while the socket is open, and
+  `tmuxcc.Client.RepaintPane` starts it. tmux keeps the layout, the sizes and the
+  session; `useTerminalWindows.measureCell` sizes pane boxes by Ghostty's cell.
+- **herdr-core tabs** (`hc:<address>` panel tabs): `app.HerdrTerminalsService`
+  starts a shell in herdr-core, which keeps it alive across app restarts; the
+  bridge is `--herdr-attach`. `HC_SESSION` on the app process picks the core,
+  so `desktop:dev:native` never touches the user's own.
+
+Anything the page floats over a surface is hidden behind it, so surfaces hide
+while a modal, the palette or an overlay is open. The build links libghostty
+only with the `ghostty` tag (`mise run desktop:ghostty` builds it).
 
 #### Pop-up terminals
 

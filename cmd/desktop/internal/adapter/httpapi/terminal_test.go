@@ -55,6 +55,8 @@ func newTerminalHarnessOn(t *testing.T, runner tmuxcc.Runner) *terminalHarness {
 	mux.Handle(streamPath, stream)
 	ptyStreamPath, ptyStream := PTYStreamHandler(core, testToken, origins, zerolog.Nop())
 	mux.Handle(ptyStreamPath, ptyStream)
+	panePath, paneHandler := PaneStreamHandler(core, testToken, zerolog.Nop())
+	mux.Handle(panePath, paneHandler)
 
 	h := &terminalHarness{core: core, server: httptest.NewServer(mux)}
 	t.Cleanup(func() {

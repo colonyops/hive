@@ -115,6 +115,10 @@ type Appearance struct {
 	TerminalLetterSpacing int     `yaml:"terminal_letter_spacing,omitempty" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_LETTER_SPACING"`
 	// TerminalShowScrollbars shows scrollbars in single-pane and zoomed Code terminals.
 	TerminalShowScrollbars bool `yaml:"terminal_show_scrollbars,omitempty" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_SHOW_SCROLLBARS"`
+	// TerminalNativeRenderer draws Code terminal panes with libghostty in a
+	// native view over the window instead of xterm.js in the page. tmux still
+	// runs the sessions. Needs a build with native terminals; others ignore it.
+	TerminalNativeRenderer bool `yaml:"terminal_native_renderer,omitempty" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_NATIVE_RENDERER"`
 	// TerminalMonochromeAgentIcons draws Code's agent icons in the color of the
 	// icons around them rather than in full color.
 	TerminalMonochromeAgentIcons bool `yaml:"terminal_monochrome_agent_icons,omitempty" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_MONOCHROME_AGENT_ICONS"`

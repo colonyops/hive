@@ -101,3 +101,38 @@ export function xtermTheme(): ITheme {
   }
   return theme
 }
+
+const ANSI_ORDER = [
+  'black',
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'magenta',
+  'cyan',
+  'white',
+  'brightBlack',
+  'brightRed',
+  'brightGreen',
+  'brightYellow',
+  'brightBlue',
+  'brightMagenta',
+  'brightCyan',
+  'brightWhite',
+] as const satisfies readonly (keyof typeof ANSI_VARS)[]
+
+/**
+ * The palette a native terminal surface draws with: the same colours as
+ * xtermTheme, as `#rrggbb`. Ghostty reads hex only, so a colour the theme
+ * spells another way is sent empty and the surface keeps its own.
+ */
+export function nativeTerminalTheme(): { background: string; foreground: string; cursor: string; palette: string[] } {
+  const theme = xtermTheme()
+  const hex = (color: string | undefined): string => hexOrFallback(color ?? '', '')
+  return {
+    background: hex(theme.background),
+    foreground: hex(theme.foreground),
+    cursor: hex(theme.cursor),
+    palette: ANSI_ORDER.map((key) => hex(theme[key])),
+  }
+}

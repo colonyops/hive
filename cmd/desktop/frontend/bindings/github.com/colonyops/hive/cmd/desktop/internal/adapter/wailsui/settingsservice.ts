@@ -144,6 +144,10 @@ export function SetTerminalMonochromeAgentIcons(monochrome: boolean): $Cancellab
     return $Call.ByID(2415788614, monochrome);
 }
 
+export function SetTerminalNativeRenderer(native: boolean): $CancellablePromise<void> {
+    return $Call.ByID(793841734, native);
+}
+
 export function SetTerminalPoolSize(size: number): $CancellablePromise<void> {
     return $Call.ByID(3334784753, size);
 }

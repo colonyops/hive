@@ -30,6 +30,7 @@ import {
 } from '../stores/useTerminalSessionAge'
 import { useTerminalStatusBar } from '../stores/useTerminalStatusBar'
 import { useTerminalScrollbars } from '../stores/useTerminalScrollbars'
+import { useNativeRenderer } from '../stores/useNativeRenderer'
 import { useTerminalAgentIcons } from '../stores/useTerminalAgentIcons'
 import { useTerminalShowWindows } from '../stores/useTerminalShowWindows'
 
@@ -51,6 +52,7 @@ const {
 } = useTerminalFont()
 const { monospace: fontFamilies } = useInstalledFonts()
 const { showScrollbars, setShowScrollbars } = useTerminalScrollbars()
+const nativeRenderer = useNativeRenderer()
 const { monochrome: monochromeAgentIcons, setMonochrome: setMonochromeAgentIcons } = useTerminalAgentIcons()
 const { showWindows, setShowWindows } = useTerminalShowWindows()
 const { showStatusBar, setShowStatusBar } = useTerminalStatusBar()
@@ -192,6 +194,18 @@ onMounted(() => {
     </SettingsSection>
 
     <SettingsSection title="Appearance" boxed>
+      <SettingsRow
+        v-if="nativeRenderer.available.value"
+        label="Native renderer"
+        hint="Draw Code terminal panes with Ghostty's renderer in a native view instead of in the page. tmux still runs every session, so windows, splits and keybindings stay the same."
+      >
+        <AppSwitch
+          :model-value="nativeRenderer.setting.value"
+          aria-label="Native renderer"
+          testid="settings-terminal-native-renderer"
+          @update:model-value="nativeRenderer.set"
+        />
+      </SettingsRow>
       <SettingsRow
         label="Show scrollbars"
         hint="Show a draggable scrollbar in single-pane and zoomed Code terminals. Scrollbars stay hidden while split panes are visible."

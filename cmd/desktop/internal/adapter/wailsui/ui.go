@@ -198,6 +198,12 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		application.NewService(NewDevToolsService(core.DevTools)),
 		application.NewService(NewTerminalService(core.Terminals, core.Webhooks, opts.Terminal)),
 		application.NewService(NewPopupTerminalService(core.PopupTerminals, core.Webhooks, opts.PopupTerminal)),
+		application.NewService(NewNativeTerminalService(NativeTerminalDeps{
+			Herdr: core.HerdrTerminals, Settings: core.Settings, Webhooks: core.Webhooks, Transport: opts.Terminal,
+			Window: func() *application.WebviewWindow { return u.window },
+			App:    func() *application.App { return u.app },
+			Logger: logutils.Component(u.logger, "nativeterm"),
+		})),
 		application.NewService(NewAgentsService(core.AgentWorkspaces, core.Webhooks, opts.Agents)),
 		application.NewService(u.updater),
 	}
