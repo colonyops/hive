@@ -39,14 +39,15 @@ type HitWire struct {
 }
 
 // DocumentWire is one document for the reader. Markdown is set for a
-// markdown document and HTML for an html one; a plain file carries only its
-// entry.
+// markdown document and HTML for an html one. A plain file carries Image when
+// it is a drawable image, Text when it is text, and otherwise only its entry.
 type DocumentWire struct {
 	Space    SpaceWire `json:"space"`
 	Entry    EntryWire `json:"entry"`
 	Markdown string    `json:"markdown"`
 	HTML     string    `json:"html"`
 	Image    string    `json:"image"`
+	Text     string    `json:"text"`
 }
 
 func spaceWireOf(s drive.Space) SpaceWire {
@@ -82,7 +83,7 @@ func hitWiresOf(hits []drivesvc.Hit) []HitWire {
 }
 
 func documentWireOf(d app.DocumentView) DocumentWire {
-	return DocumentWire{Space: spaceWireOf(d.Space), Entry: entryWireOf(d.Entry), Markdown: d.Markdown, HTML: d.HTML, Image: d.Image}
+	return DocumentWire{Space: spaceWireOf(d.Space), Entry: entryWireOf(d.Entry), Markdown: d.Markdown, HTML: d.HTML, Image: d.Image, Text: d.Text}
 }
 
 func frontOf(fm drive.Frontmatter) map[string]any {

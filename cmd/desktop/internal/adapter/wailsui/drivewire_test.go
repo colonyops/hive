@@ -22,7 +22,7 @@ func TestDriveWireTypesKeepTheirFieldNames(t *testing.T) {
 		{"SpaceWire", SpaceWire{}, sorted("kind", "key", "name")},
 		{"EntryWire", EntryWire{}, sorted("path", "name", "kind", "size", "modified", "created", "title", "front", "children")},
 		{"HitWire", HitWire{}, sorted("space", "entry")},
-		{"DocumentWire", DocumentWire{}, sorted("space", "entry", "markdown", "html", "image")},
+		{"DocumentWire", DocumentWire{}, sorted("space", "entry", "markdown", "html", "image", "text")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, jsonKeys(t, tt.v))
@@ -65,6 +65,11 @@ func TestDocumentWireOfCarriesOneBodyPerKind(t *testing.T) {
 	assert.Equal(t, SpaceWire{Kind: "shared", Key: "shared", Name: "Shared"}, md.Space)
 	assert.Equal(t, "# A", md.Markdown)
 	assert.Empty(t, md.HTML)
+
+	text := documentWireOf(app.DocumentView{Space: space, Entry: drive.Entry{Path: "main.go", Kind: drive.KindFile}, Text: "package main\n"})
+	assert.Equal(t, "package main\n", text.Text)
+	assert.Empty(t, text.Markdown)
+	assert.Empty(t, text.Image)
 }
 
 func TestHitWiresOfIsNeverNull(t *testing.T) {

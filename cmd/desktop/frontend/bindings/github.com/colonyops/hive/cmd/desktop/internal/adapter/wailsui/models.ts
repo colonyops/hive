@@ -256,8 +256,8 @@ export interface DocumentReviewWire {
 
 /**
  * DocumentWire is one document for the reader. Markdown is set for a
- * markdown document and HTML for an html one; a plain file carries only its
- * entry.
+ * markdown document and HTML for an html one. A plain file carries Image when
+ * it is a drawable image, Text when it is text, and otherwise only its entry.
  */
 export interface DocumentWire {
     "space": SpaceWire;
@@ -265,6 +265,7 @@ export interface DocumentWire {
     "markdown": string;
     "html": string;
     "image": string;
+    "text": string;
 }
 
 /**

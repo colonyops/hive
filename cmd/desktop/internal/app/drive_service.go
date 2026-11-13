@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	pathpkg "path"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/rs/zerolog"
 
@@ -108,14 +110,26 @@ func (s *DriveService) Export(ctx context.Context, space, path, dest string) err
 }
 
 // DocumentView is one document as the reader shows it. Exactly one of
-// Markdown and HTML is set for those kinds; a plain file carries
-// only its entry.
+// Markdown and HTML is set for those kinds. A plain file carries Image when it
+// is a drawable image, Text when it is text, and otherwise only its entry.
 type DocumentView struct {
 	Space    drive.Space `json:"space"`
 	Entry    drive.Entry `json:"entry"`
 	Markdown string      `json:"markdown,omitempty"` // raw: the frontend's sanitizing renderer handles it
 	HTML     string      `json:"html,omitempty"`     // CSP meta injected first
 	Image    string      `json:"image,omitempty"`    // data URL; empty for a file that is not a drawable image
+	Text     string      `json:"text,omitempty"`
+}
+
+// maxTextBytes caps the text file a document carries. The reader virtualizes
+// what it draws, but the body still crosses the binding whole, and a larger
+// file is rarely one a person reads in a viewer.
+const maxTextBytes = 4 << 20
+
+// isText reports whether body reads as text: valid UTF-8 with no NUL byte,
+// which binary formats almost always hold early on.
+func isText(body []byte) bool {
+	return utf8.Valid(body) && !bytes.Contains(body, []byte{0})
 }
 
 // maxImageBytes caps the image a document carries. It crosses the binding whole
@@ -203,8 +217,8 @@ func (s *DriveService) Recent(ctx context.Context, limit int) ([]drivesvc.Hit, e
 }
 
 // Document is one document read for the reader. The kind comes from the
-// name, so a plain file is answered from the snapshot without reading what
-// may be a large binary.
+// name, and a plain file is read only when its size allows it to be an image
+// or text the reader shows.
 func (s *DriveService) Document(ctx context.Context, space, path string) (DocumentView, error) {
 	d, parsed, err := s.space(space)
 	if err != nil {
@@ -233,6 +247,16 @@ func (s *DriveService) Document(ctx context.Context, space, path string) (Docume
 				return DocumentView{}, documentError(err, parsed, path)
 			}
 			view.Image = "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(body)
+			return view, nil
+		}
+		if entry.Size <= maxTextBytes {
+			_, body, err := d.Read(ctx, parsed, path)
+			if err != nil {
+				return DocumentView{}, documentError(err, parsed, path)
+			}
+			if isText(body) {
+				view.Text = string(body)
+			}
 		}
 		return view, nil
 	case drive.KindMarkdown, drive.KindHtml, drive.KindDir:

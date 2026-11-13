@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useDebounceFn, useEventListener, useMutationObserver, useResizeObserver, useTimeoutFn } from '@vueuse/core'
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, shallowRef, watch } from 'vue'
 import DocumentReader from '@hive/ui/components/drive/DocumentReader.vue'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
@@ -24,6 +24,10 @@ import {
 } from '../../lib/driveReviewSelection'
 import type { DocumentWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
+// The diff library and its grammars load with the first text file opened, not with the Drive.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- ESLint cannot resolve a .vue module's type
+const DriveCodeView = defineAsyncComponent(() => import('./DriveCodeView.vue'))
+
 const props = defineProps<{
   document: DocumentWire | null
   /** Every document path in the space, which a relative link can name. */
@@ -33,7 +37,7 @@ const props = defineProps<{
   /** Lets the user select text to comment on and shows the document's comments. */
   commentable?: boolean
   /**
-   * Derives `-document`, `-markdown`, `-frame`, `-image`, `-file`, `-error`,
+   * Derives `-document`, `-markdown`, `-frame`, `-image`, `-code`, `-file`, `-error`,
    * `-empty`, `-block-comment`, and the comment popover's ids (DriveCommentPopover).
    */
   testid: string
@@ -334,6 +338,14 @@ function commentOnBlock(): void {
       :alt="document.entry.name"
       class="h-auto max-w-full self-center"
       :data-testid="`${testid}-image`"
+    />
+    <DriveCodeView
+      v-else-if="document?.text"
+      :id="`${document.space.key}:${document.entry.path}`"
+      :name="document.entry.name"
+      :text="document.text"
+      :version="document.entry.modified"
+      :testid="`${testid}-code`"
     />
     <EmptyState
       v-else-if="document"
