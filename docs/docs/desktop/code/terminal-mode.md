@@ -241,7 +241,8 @@ To ask for a review, tell an agent to review the session. An agent in the sessio
 Changes never writes to the checkout, so it's safe to use while an agent works in it. It can't stage or commit. These limits apply:
 
 - A diff over 20,000 changed lines shows **Open in editor** instead. So does a very large file, and the list stops at 1,000 files.
-- Binary files, symlinks, pipes, and nested repositories show a note instead of a diff.
+- A changed image shows both versions side by side or with a swipe, with each version's dimensions and file size. An SVG also keeps its text diff. An image over 8 MiB shows a note.
+- Other binary files, symlinks, pipes, and nested repositories show a note instead of a diff.
 - An unstaged `mv` shows as a delete plus an untracked file.
 - Untracked files have no line counts, so the totals match the status bar.
 - A repository with no commits shows git's error.

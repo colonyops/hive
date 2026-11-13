@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -85,6 +86,27 @@ func main() {
 					}
 					tools := newOnboardingDevtools(worktree, logger)
 					return tools.withLock(func() error { return tools.prepare(true) })
+				},
+			},
+			{
+				Name:      "image-fixtures",
+				Usage:     "commit image fixtures to a checkout, then change them in its working tree",
+				ArgsUsage: "<checkout>",
+				Description: "Stub data for the Changes view's image previews. Point it at a scratch session's checkout: " +
+					"it adds one commit and leaves every kind of image change uncommitted. " +
+					"Undo it with `git reset --hard HEAD~1` in that checkout.",
+				Action: func(_ context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 1 {
+						return cli.Exit("image-fixtures needs the checkout to write into", 2)
+					}
+					changed, err := writeImageFixtures(cmd.Args().First())
+					if err != nil {
+						return err
+					}
+					for _, path := range changed {
+						fmt.Println(path)
+					}
+					return nil
 				},
 			},
 			{

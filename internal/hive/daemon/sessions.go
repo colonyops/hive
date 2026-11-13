@@ -196,6 +196,14 @@ func (s *sessionServer) FileContext(ctx context.Context, req *connect.Request[da
 	return connect.NewResponse(&daemonv1.FileContextResponse{Diff: wire.FileDiffToProto(diff)}), nil
 }
 
+func (s *sessionServer) FileImage(ctx context.Context, req *connect.Request[daemonv1.FileImageRequest]) (*connect.Response[daemonv1.FileImageResponse], error) {
+	image, err := s.api.SessionFileImage(ctx, req.Msg.GetId(), wire.DiffTargetFromProto(req.Msg.GetTarget()), req.Msg.GetPath())
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(wire.FileImageToProto(image)), nil
+}
+
 func (s *sessionServer) Branches(ctx context.Context, req *connect.Request[daemonv1.BranchesRequest]) (*connect.Response[daemonv1.BranchesResponse], error) {
 	refs, err := s.api.SessionBranches(ctx, req.Msg.GetId())
 	if err != nil {

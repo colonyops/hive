@@ -82,6 +82,10 @@ func (*mouseTestGit) Branches(context.Context, string, int) ([]string, error) { 
 func (*mouseTestGit) FileDiffs(context.Context, string, git.DiffRange, []git.ChangedFile) []git.FileDiffResult {
 	return nil
 }
+
+func (*mouseTestGit) FileVersions(context.Context, string, git.DiffRange, git.ChangedFile, int) (git.FileVersions, error) {
+	return git.FileVersions{}, nil
+}
 func (g *mouseTestGit) IsValidRepo(_ context.Context, _ string) error          { return nil }
 func (g *mouseTestGit) CloneBare(_ context.Context, _, _ string) error         { return nil }
 func (g *mouseTestGit) WorktreeAdd(_ context.Context, _, _, _ string) error    { return nil }

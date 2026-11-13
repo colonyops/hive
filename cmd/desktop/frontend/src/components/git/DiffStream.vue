@@ -18,15 +18,17 @@ import { useHiveUiPlatform } from '@hive/ui/platform'
 import AgentCommentCard from './AgentCommentCard.vue'
 import DiffCommentCard from './DiffCommentCard.vue'
 import DiffFileHeader from './DiffFileHeader.vue'
+import DiffImagePreview from './DiffImagePreview.vue'
 import { usePerf } from '../../composables/usePerf'
 import { useToasts } from '../../composables/useToasts'
 import { useScrollGestureSpan } from '../../composables/useScrollGestureSpan'
-import type { DiffEntry } from '../../composables/useFileDiffs'
+import { fileVersion, type DiffEntry } from '../../composables/useFileDiffs'
 import { useSurfaceScale } from '../../stores/useSurfaceScale'
 import { diffThemeName, diffWorkerPool } from '../../lib/diffHighlight'
 import { errorText } from '../../lib/appError'
 import { hunksMatch, wholeFileFromPatch } from '../../lib/diffContext'
 import { gitFileName } from '../../lib/gitTree'
+import { imagePlaceholderPatch, imagePreviewId, imagePreviewKind, isImagePath } from '../../lib/diffImages'
 import {
   diffMetrics,
   diffHasText,
@@ -44,6 +46,7 @@ import type { ChangesComment, ThreadResponse } from '../../stores/useChangesRevi
 import type {
   ChangedFile,
   SessionFileDiff,
+  SessionFileImage,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
@@ -61,6 +64,8 @@ const props = defineProps<{
   activeMatch: DiffSearchMatch | null
   /** Reads a file's diff with the whole file as context, for the lines between hunks. */
   loadWholeFile: (path: string) => Promise<SessionFileDiff>
+  /** Reads both versions of an image file, for its preview. */
+  loadImage: (path: string) => Promise<SessionFileImage>
   /** Agents' comments by path, each on the row it is drawn under. */
   agentComments?: ReadonlyMap<string, readonly AnchoredAgentComment[]>
   isAgentStale?: (comment: AgentComment) => boolean
@@ -97,8 +102,13 @@ const emit = defineEmits<{
 // mounted file overflowed its slot and the last one lost its bottom rows. Fixing
 // it here lets SCROLLBAR_PX stand in itemMetrics as the file's bottom padding.
 const SCROLLBAR_PX = 8
+// An image's placeholder row exists only to carry its preview (imagePlaceholderPatch).
 const unsafeCss = (separatorPx: number): string => `
   :host { --diffs-bg: var(--color-app); --diffs-scrollbar-gutter-override: ${SCROLLBAR_PX}px; }
+  :host([data-image-preview]) :is([data-column-number], [data-line], [data-gutter-buffer]) { display: none; }
+  :host([data-image-preview]) [data-annotation-content] { left: 0; width: 100%; }
+  :host([data-image-preview]) [data-diff-type=split] { grid-template-columns: 1fr; }
+  :host([data-image-preview]) [data-diff-type=split] > [data-code]:not(:has([data-line-annotation])) { display: none; }
   [data-separator=line-info-basic] { height: ${separatorPx}px; }
   ${SEARCH_HIGHLIGHT_CSS}
 `
@@ -106,20 +116,24 @@ const unsafeCss = (separatorPx: number): string => `
 // the code around a hunk without burying it.
 const EXPANSION_LINES = 20
 
-// A saved comment's row, found by id across CodeView remounting it.
-interface CommentAnnotation {
-  commentId: string
+// What hangs under a row: a saved or agent comment, or an image preview, found
+// by id across CodeView remounting it.
+interface RowAnnotation {
+  hostId: string
   /** An agent's comment, which sits on a band of its own so it stands out while scrolling. */
   agent?: boolean
 }
 
+const imageFiles = computed(
+  () => new Map(props.files.filter((file) => isImagePath(file.path)).map((file) => [imagePreviewId(file.path), file])),
+)
 const root = ref<HTMLElement | null>(null)
 const perf = usePerf('changes')
 useScrollGestureSpan(root, (durationMs, attrs) => perf.record('scroll:gesture', durationMs, { ...attrs }))
 const platform = useHiveUiPlatform()
 const log = platform.log('changes')
 const pool = diffWorkerPool(platform.theme.value, log)
-let viewer: CodeView<CommentAnnotation> | null = null
+let viewer: CodeView<RowAnnotation> | null = null
 let scrollTop = 0
 
 // Header hosts stay per path: CodeView asks again each time a file remounts, and
@@ -162,8 +176,8 @@ interface ItemContext {
   item: { id: string }
 }
 
-const commentHosts = new Map<string, HTMLElement>()
-const mountedComments = shallowRef<ReadonlySet<string>>(new Set())
+const annotationHosts = new Map<string, HTMLElement>()
+const mountedAnnotations = shallowRef<ReadonlySet<string>>(new Set())
 const commentById = computed(() => new Map([...props.comments.values()].flat().map((comment) => [comment.id, comment])))
 const agentById = computed(
   () =>
@@ -172,13 +186,13 @@ const agentById = computed(
     ),
 )
 
-function commentHost(id: string, agent = false): HTMLElement {
-  let host = commentHosts.get(id)
+function annotationHost(id: string, agent = false): HTMLElement {
+  let host = annotationHosts.get(id)
   if (!host) {
     host = document.createElement('div')
     host.className = agent ? 'border-y border-border bg-pane px-3 py-2' : 'px-3 py-2'
-    commentHosts.set(id, host)
-    mountedComments.value = new Set([...mountedComments.value, id])
+    annotationHosts.set(id, host)
+    mountedAnnotations.value = new Set([...mountedAnnotations.value, id])
   }
   return host
 }
@@ -286,7 +300,7 @@ async function loadDiffFiles(fileDiff: FileDiffMetadata): Promise<FileDiffLoaded
   }
 }
 
-function viewerOptions(): CodeViewOptions<CommentAnnotation, undefined> {
+function viewerOptions(): CodeViewOptions<RowAnnotation, undefined> {
   const { headerPx, rowPx, separatorPx } = metrics.value
   return {
     diffStyle: props.mode,
@@ -313,10 +327,12 @@ function viewerOptions(): CodeViewOptions<CommentAnnotation, undefined> {
     onGutterUtilityClick: () => {},
     onLineSelectionEnd,
     renderCustomHeader: (_fileDiff: unknown, context: ItemContext) => headerHost(context.item.id),
-    renderAnnotation: (annotation: LineAnnotation<CommentAnnotation>) =>
-      commentHost(annotation.metadata.commentId, annotation.metadata.agent),
-    onPostRender: (_node: unknown, _instance: unknown, phase: PostRenderPhase, context: ItemContext) => {
+    renderAnnotation: (annotation: LineAnnotation<RowAnnotation>) =>
+      annotationHost(annotation.metadata.hostId, annotation.metadata.agent),
+    onPostRender: (node: unknown, _instance: unknown, phase: PostRenderPhase, context: ItemContext) => {
       if (phase === 'unmount') setHeaderMounted(context.item.id, false)
+      else if (node instanceof HTMLElement)
+        node.toggleAttribute('data-image-preview', binaryImages.has(context.item.id))
       queuePaint()
     },
   }
@@ -327,9 +343,16 @@ interface BuiltItem {
   open: boolean
   comments: readonly ChangesComment[] | undefined
   agents: readonly AnchoredAgentComment[] | undefined
-  item: CodeViewDiffItem<CommentAnnotation>
+  item: CodeViewDiffItem<RowAnnotation>
 }
 const built = new Map<string, BuiltItem>()
+// Paths whose item is an image preview alone, with no diff rows of its own.
+const binaryImages = new Set<string>()
+
+// Whole, so CodeView offers no context to expand around the placeholder row.
+function imagePlaceholderDiff(file: ChangedFile, cacheKey: string): FileDiffMetadata {
+  return { ...parseFileDiff(file, imagePlaceholderPatch(file), cacheKey), isPartial: false }
+}
 
 // Whole-file diffs for the files highlightsFromWholeFile picks, each for the
 // entry it was read against. Null while the read is in flight.
@@ -349,7 +372,7 @@ function readWholeDiff(path: string, entry: DiffEntry, partial: FileDiffMetadata
     })
 }
 
-function itemFor(file: ChangedFile): CodeViewDiffItem<CommentAnnotation> {
+function itemFor(file: ChangedFile): CodeViewDiffItem<RowAnnotation> {
   const entry = props.entries.get(file.path)
   const open = props.openPaths.has(file.path)
   const comments = props.comments.get(file.path)
@@ -360,30 +383,46 @@ function itemFor(file: ChangedFile): CodeViewDiffItem<CommentAnnotation> {
   const current =
     !!held && held.entry === entry && held.open === open && held.comments === comments && held.agents === agents
   if (current && (!wholeDiff || held.item.fileDiff === wholeDiff)) return held.item
+  const image = imagePreviewKind(file, entry?.diff)
+  if (image === 'binary') binaryImages.add(file.path)
+  else binaryImages.delete(file.path)
   const fileDiff =
     wholeDiff ??
     (held && held.entry === entry
       ? held.item.fileDiff
-      : entry && diffHasText(entry.diff)
-        ? parseFileDiff(file, entry.diff.text, `${props.scope}:${file.path}:${entry.version}`)
-        : emptyFileDiff(file))
+      : image === 'binary'
+        ? imagePlaceholderDiff(file, `${props.scope}:${file.path}:${entry!.version}:image`)
+        : entry && diffHasText(entry.diff)
+          ? parseFileDiff(file, entry.diff.text, `${props.scope}:${file.path}:${entry.version}`)
+          : emptyFileDiff(file))
+  const imageSide = file.status === 'deleted' ? ('deletions' as const) : ('additions' as const)
   if (open && entry && whole?.entry !== entry && highlightsFromWholeFile(fileDiff)) {
     readWholeDiff(file.path, entry, fileDiff)
   }
-  const item: CodeViewDiffItem<CommentAnnotation> = {
+  const item: CodeViewDiffItem<RowAnnotation> = {
     id: file.path,
     type: 'diff',
     fileDiff,
     annotations: [
+      ...(image
+        ? [
+            {
+              side: imageSide,
+              // Above the text diff of an SVG; under the placeholder row of any other image.
+              lineNumber: image === 'binary' ? 1 : 0,
+              metadata: { hostId: imagePreviewId(file.path) },
+            },
+          ]
+        : []),
       ...(comments ?? []).map((comment) => ({
         side: comment.endSide,
         lineNumber: comment.endLine,
-        metadata: { commentId: comment.id },
+        metadata: { hostId: comment.id },
       })),
       ...(agents ?? []).map((anchored) => ({
         side: anchored.side,
         lineNumber: anchored.line,
-        metadata: { commentId: anchored.comment.id, agent: true },
+        metadata: { hostId: anchored.comment.id, agent: true },
       })),
     ],
     collapsed: !open || fileDiff.hunks.length === 0,
@@ -507,7 +546,7 @@ defineExpose({ focus, scrollToFile, holds, stepHunk, scrollToLine, selectLines, 
 
 onMounted(() => {
   if (!root.value) return
-  const created = new CodeView<CommentAnnotation>(viewerOptions(), pool)
+  const created = new CodeView<RowAnnotation>(viewerOptions(), pool)
   viewer = created
   created.setup(root.value)
   created.subscribeToScroll((top) => {
@@ -588,7 +627,7 @@ watch(
         @comment="emit('comment-file', fileByPath.get(path)!, $event)"
       />
     </Teleport>
-    <Teleport v-for="id in mountedComments" :key="id" :to="commentHosts.get(id)">
+    <Teleport v-for="id in mountedAnnotations" :key="id" :to="annotationHosts.get(id)">
       <div :style="commentZoom">
         <DiffCommentCard
           v-if="commentById.get(id)"
@@ -597,6 +636,12 @@ watch(
           @update="emit('update-comment', commentById.get(id)!, $event)"
           @remove="emit('remove-comment', commentById.get(id)!)"
           @pick="emit('pick-comment', commentById.get(id)!)"
+        />
+        <DiffImagePreview
+          v-else-if="imageFiles.get(id)"
+          :file="imageFiles.get(id)!"
+          :version="fileVersion(imageFiles.get(id)!)"
+          :load="() => loadImage(imageFiles.get(id)!.path)"
         />
         <AgentCommentCard
           v-else-if="agentById.get(id)"
