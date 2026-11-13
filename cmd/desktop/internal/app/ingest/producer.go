@@ -417,7 +417,7 @@ func (pr *Producer) drain(ctx context.Context, instance connector.Instance) (out
 		pr.recordFailure(ctx, id, err)
 		return out, err
 	}
-	pr.clearFailure(id)
+	pr.clearFailure(ctx, id)
 	out.appended++
 	out.lastOffset = offset
 	return out, nil
@@ -533,15 +533,23 @@ func (pr *Producer) recordFailure(ctx context.Context, id string, cause error) {
 	pr.lastFailure[id] = now
 	pr.scheduleMu.Unlock()
 
+	if ctx.Err() == nil {
+		pr.logger.Warn().Ctx(ctx).Err(cause).Str("source", id).Msg("pipeline producer: source is failing")
+	}
 	pr.record(ctx, activity.RefreshFailed(id, cause.Error()))
 }
 
 // clearFailure re-arms the notice for a source that completed a tick, so the
 // next failure is recorded immediately rather than waiting out the interval.
-func (pr *Producer) clearFailure(id string) {
+func (pr *Producer) clearFailure(ctx context.Context, id string) {
 	pr.scheduleMu.Lock()
-	defer pr.scheduleMu.Unlock()
+	_, failing := pr.lastFailure[id]
 	delete(pr.lastFailure, id)
+	pr.scheduleMu.Unlock()
+
+	if failing {
+		pr.logger.Info().Ctx(ctx).Str("source", id).Msg("pipeline producer: source recovered")
+	}
 }
 
 // record forwards an activity event when a recorder is attached. Recording is
