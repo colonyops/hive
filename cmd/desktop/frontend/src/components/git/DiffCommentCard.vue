@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import TextArea from '@hive/ui/components/ui/TextArea.vue'
@@ -27,10 +27,15 @@ const testid = computed(() => `changes-comment-${props.comment.id}`)
 
 const editing = ref(false)
 const draft = ref('')
+const field = ref<{ focus: () => void } | null>(null)
 
-function startEdit(): void {
+// The pencil that was clicked unmounts with this render, so without a focus
+// here the keys typed next reach the view's bare-key bindings instead.
+async function startEdit(): Promise<void> {
   draft.value = props.comment.text
   editing.value = true
+  await nextTick()
+  field.value?.focus()
 }
 
 function save(): void {
@@ -113,7 +118,14 @@ function onKeydown(event: KeyboardEvent): void {
         </span>
       </div>
       <div v-if="editing" class="flex flex-col gap-1 pb-0.5">
-        <TextArea v-model="draft" :rows="2" size="sm" :data-testid="`${testid}-edit-text`" @keydown="onKeydown" />
+        <TextArea
+          ref="field"
+          v-model="draft"
+          :rows="2"
+          size="sm"
+          :data-testid="`${testid}-edit-text`"
+          @keydown="onKeydown"
+        />
         <div class="flex justify-end gap-1.5">
           <BaseButton variant="ghost" size="xs" @click="editing = false">Cancel</BaseButton>
           <BaseButton size="xs" :disabled="!draft.trim()" :data-testid="`${testid}-edit-save`" @click="save">

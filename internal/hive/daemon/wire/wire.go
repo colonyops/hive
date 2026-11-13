@@ -406,3 +406,42 @@ func terminalStatusFromProto(p *daemonv1.TerminalStatus) status.TerminalStatus {
 		Windows:        windows,
 	}
 }
+
+func FileImageToProto(image gitstatus.FileImage) *daemonv1.FileImageResponse {
+	return &daemonv1.FileImageResponse{
+		Path:   validUTF8(image.Path),
+		State:  image.State.String(),
+		Before: imageVersionToProto(image.Before),
+		After:  imageVersionToProto(image.After),
+		Error:  validUTF8(image.Error),
+	}
+}
+
+func imageVersionToProto(v *gitstatus.ImageVersion) *daemonv1.ImageVersion {
+	if v == nil {
+		return nil
+	}
+	return &daemonv1.ImageVersion{Mime: v.Mime, Data: v.Data}
+}
+
+func FileImageFromProto(p *daemonv1.FileImageResponse) gitstatus.FileImage {
+	return gitstatus.FileImage{
+		Path:   p.GetPath(),
+		State:  gitstatus.FileImageState(p.GetState()),
+		Before: imageVersionFromProto(p.GetBefore()),
+		After:  imageVersionFromProto(p.GetAfter()),
+		Error:  p.GetError(),
+	}
+}
+
+func imageVersionFromProto(p *daemonv1.ImageVersion) *gitstatus.ImageVersion {
+	if p == nil {
+		return nil
+	}
+	// proto3 decodes an empty bytes field as nil, and an empty file is still a side.
+	data := p.GetData()
+	if data == nil {
+		data = []byte{}
+	}
+	return &gitstatus.ImageVersion{Mime: p.GetMime(), Data: data}
+}

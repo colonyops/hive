@@ -550,6 +550,28 @@ func (s *SessionsService) SessionFileContext(ctx context.Context, id string, tar
 	return diff, nil
 }
 
+// SessionFileImage reads both versions of one changed file, for drawing it as
+// an image. A daemon older than the RPC falls back to Desktop's own engine, as
+// SessionFileContext does.
+func (s *SessionsService) SessionFileImage(ctx context.Context, id string, target gitstatus.DiffTarget, path string) (gitstatus.FileImage, error) {
+	if strings.TrimSpace(id) == "" {
+		return gitstatus.FileImage{}, Errorf(KindInvalid, "session id is required")
+	}
+	image, err := s.sessions.SessionFileImage(ctx, id, target, path)
+	if errors.Is(err, daemonclient.ErrFileImageUnsupported) && s.hive != nil {
+		if local, localErr := sessionapi.NewLocal(s.hive).SessionFileImage(ctx, id, target, path); !errors.Is(localErr, session.ErrNotFound) {
+			image, err = local, localErr
+		}
+	}
+	if errors.Is(err, session.ErrNotFound) {
+		return gitstatus.FileImage{}, Wrap(err, KindNotFound, "reading %s for session %q", path, id)
+	}
+	if err != nil {
+		return gitstatus.FileImage{}, Wrap(err, KindInternal, "reading %s for session %q", path, id)
+	}
+	return image, nil
+}
+
 // SessionBranches lists the full refs the session's checkout can compare against.
 func (s *SessionsService) SessionBranches(ctx context.Context, id string) ([]string, error) {
 	if strings.TrimSpace(id) == "" {

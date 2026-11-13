@@ -41,6 +41,8 @@ service SessionService {
   rpc FileDiffs(FileDiffsRequest) returns (FileDiffsResponse);
   // FileContext reads one file's diff with the whole file as context.
   rpc FileContext(FileContextRequest) returns (FileContextResponse);
+  // FileImage reads both versions of one changed file, to draw it as an image.
+  rpc FileImage(FileImageRequest) returns (FileImageResponse);
   rpc Branches(BranchesRequest) returns (BranchesResponse);
   // GitStatuses reads the checkouts of sessions on the daemon's machine. A
   // read is shared by every client that asks within a few seconds.
@@ -450,6 +452,25 @@ message FileContextRequest {
 
 message FileContextResponse {
   FileDiff diff = 1;
+}
+
+message FileImageRequest {
+  string id = 1;
+  DiffTarget target = 2;
+  string path = 3;
+}
+
+message ImageVersion {
+  string mime = 1;
+  bytes data = 2;
+}
+
+message FileImageResponse {
+  string path = 1;
+  string state = 2;
+  ImageVersion before = 3;
+  ImageVersion after = 4;
+  string error = 5;
 }
 
 message BranchesRequest {

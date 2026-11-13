@@ -595,6 +595,10 @@ func TestDriveDocumentByKind(t *testing.T) {
 	f.writeDoc(t, "workspaces/ws", "shots/Login.PNG", "png-bytes")
 	f.writeDoc(t, "workspaces/ws", "huge.png", strings.Repeat("x", maxImageBytes+1))
 	f.writeDoc(t, "workspaces/ws", "canvases/plan.canvas.json", `{"blocks":[]}`)
+	f.writeDoc(t, "workspaces/ws", "src/main.go", "package main\n")
+	f.writeDoc(t, "workspaces/ws", "notes", "plain notes\n")
+	f.writeDoc(t, "workspaces/ws", "latin1.txt", "caf\xe9")
+	f.writeDoc(t, "workspaces/ws", "big.log", strings.Repeat("x", maxTextBytes+1))
 
 	md, err := f.svc.Document(ctx, "workspaces/ws", "plans/p.md")
 	require.NoError(t, err)
@@ -615,6 +619,24 @@ func TestDriveDocumentByKind(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, drive.KindFile, leftover.Entry.Kind, "a leftover canvas file is a plain file")
 	assert.Empty(t, leftover.Markdown)
+	assert.JSONEq(t, `{"blocks":[]}`, leftover.Text)
+
+	code, err := f.svc.Document(ctx, "workspaces/ws", "src/main.go")
+	require.NoError(t, err)
+	assert.Equal(t, drive.KindFile, code.Entry.Kind)
+	assert.Equal(t, "package main\n", code.Text)
+
+	notes, err := f.svc.Document(ctx, "workspaces/ws", "notes")
+	require.NoError(t, err)
+	assert.Equal(t, "plain notes\n", notes.Text, "a file with no extension is text when its bytes are")
+
+	latin1, err := f.svc.Document(ctx, "workspaces/ws", "latin1.txt")
+	require.NoError(t, err)
+	assert.Empty(t, latin1.Text, "a file that is not UTF-8 is not shown as text")
+
+	big, err := f.svc.Document(ctx, "workspaces/ws", "big.log")
+	require.NoError(t, err)
+	assert.Empty(t, big.Text, "a text file over the cap stays a plain file")
 
 	file, err := f.svc.Document(ctx, "workspaces/ws", "data.bin")
 	require.NoError(t, err)
@@ -622,11 +644,13 @@ func TestDriveDocumentByKind(t *testing.T) {
 	assert.Empty(t, file.Markdown)
 	assert.Empty(t, file.HTML)
 	assert.Empty(t, file.Image)
+	assert.Empty(t, file.Text, "a file with a NUL byte is binary")
 
 	img, err := f.svc.Document(ctx, "workspaces/ws", "shots/Login.PNG")
 	require.NoError(t, err)
 	assert.Equal(t, drive.KindFile, img.Entry.Kind)
 	assert.Equal(t, "data:image/png;base64,"+base64.StdEncoding.EncodeToString([]byte("png-bytes")), img.Image)
+	assert.Empty(t, img.Text, "an image is never also text")
 
 	huge, err := f.svc.Document(ctx, "workspaces/ws", "huge.png")
 	require.NoError(t, err)

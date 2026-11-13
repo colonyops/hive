@@ -44,6 +44,8 @@ type API interface {
 	SessionFileDiffs(ctx context.Context, id string, target gitstatus.DiffTarget, paths []string) ([]gitstatus.FileDiff, error)
 	// SessionFileContext reads one file's diff with the whole file as context.
 	SessionFileContext(ctx context.Context, id string, target gitstatus.DiffTarget, path string) (gitstatus.FileDiff, error)
+	// SessionFileImage reads both versions of one changed file, to draw it as an image.
+	SessionFileImage(ctx context.Context, id string, target gitstatus.DiffTarget, path string) (gitstatus.FileImage, error)
 	SessionBranches(ctx context.Context, id string) ([]string, error)
 	// GitStatuses reads the checkouts of the sessions ids name on the machine
 	// that holds them, keyed by id. An id with no session is absent.
