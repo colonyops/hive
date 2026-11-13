@@ -101,9 +101,9 @@ homebrew_casks:
     description: "CLI/TUI for managing multiple AI agent sessions in isolated git environments"
     hooks:
       post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/hive"]
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/hive"]
           end
     caveats: "This binary is not signed or notarized. The installer removes the macOS quarantine attribute automatically.\n\nRequires tmux and git to be installed."
 
