@@ -337,6 +337,100 @@ func TestSearchIssuesBatch_RateLimitedGraphQLError(t *testing.T) {
 	assert.Equal(t, time.Unix(resetEpoch, 0), rateErr.ResetAt)
 }
 
+// GitHub nulls a search result in an organization with SAML SSO enforcement
+// that the token has no SSO authorization for, and reports FORBIDDEN on that
+// node. The other results and the other search in the batch must survive.
+func TestSearchIssuesBatch_SkipsForbiddenNodes(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data":{
+				"s0":{"nodes":[{"__typename":"PullRequest","number":1,"repository":{"nameWithOwner":"o/a"}},null,{"__typename":"PullRequest","number":3,"repository":{"nameWithOwner":"o/b"}}]},
+				"s1":{"nodes":[{"__typename":"Issue","number":9,"repository":{"nameWithOwner":"o/c"}}]}
+			},
+			"errors":[{"type":"FORBIDDEN","path":["s0","nodes",1],"message":"Resource protected by organization SAML enforcement."}]
+		}`))
+	}))
+	defer server.Close()
+
+	results, err := NewClient(WithAPIBase(server.URL)).SearchIssuesBatch(t.Context(), []SearchRequest{
+		{Query: "is:pr author:@me", Limit: 25},
+		{Query: "repo:o/c", Limit: 25},
+	})
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	require.Len(t, results[0], 2)
+	assert.Equal(t, 1, results[0][0].Number)
+	assert.Equal(t, 3, results[0][1].Number)
+	require.Len(t, results[1], 1)
+	assert.Equal(t, 9, results[1][0].Number)
+}
+
+func TestDescribeGraphQLErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		errs []graphQLError
+		want string
+	}{
+		{
+			name: "repeated cause lists each path once",
+			errs: []graphQLError{
+				{Type: "FORBIDDEN", Path: []any{"s0", "nodes", float64(1)}, Message: "SAML"},
+				{Type: "FORBIDDEN", Path: []any{"s0", "nodes", float64(4)}, Message: "SAML"},
+			},
+			want: "FORBIDDEN at s0.nodes.1, s0.nodes.4: SAML",
+		},
+		{
+			name: "distinct causes",
+			errs: []graphQLError{
+				{Type: "NOT_FOUND", Path: []any{"r0"}, Message: "gone"},
+				{Type: "INTERNAL", Message: "boom"},
+			},
+			want: "NOT_FOUND at r0: gone; INTERNAL: boom",
+		},
+		{name: "bare error", errs: []graphQLError{{}}, want: "request failed"},
+		{name: "message only", errs: []graphQLError{{Message: "bad query"}}, want: "bad query"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, describeGraphQLErrors(tt.errs))
+		})
+	}
+}
+
+func TestSearchIssuesBatch_ForbiddenAliasIsFatal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		errors string
+	}{
+		{name: "forbidden alias", errors: `[{"type":"FORBIDDEN","path":["s0"],"message":"forbidden"}]`},
+		{name: "forbidden without path", errors: `[{"type":"FORBIDDEN","message":"forbidden"}]`},
+		{name: "not found node", errors: `[{"type":"NOT_FOUND","path":["s0","nodes",0],"message":"gone"}]`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"data":{"s0":null},"errors":` + tt.errors + `}`))
+			}))
+			defer server.Close()
+
+			_, err := NewClient(WithAPIBase(server.URL)).SearchIssuesBatch(t.Context(), []SearchRequest{{Query: "is:open", Limit: 25}})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), `search "is:open"`, "the error names the failed search")
+		})
+	}
+}
+
 func TestSearchIssuesBatch_HTTPErrors(t *testing.T) {
 	t.Parallel()
 

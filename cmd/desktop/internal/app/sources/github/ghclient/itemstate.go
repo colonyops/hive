@@ -45,7 +45,7 @@ func (c *Client) ItemStates(ctx context.Context, refs []ItemRef) ([]ItemState, e
 	for chunk := range slices.Chunk(refs, itemStateChunk) {
 		doc, variables := buildItemStateQuery(chunk)
 		var data map[string]gqlItemResult
-		if err := c.postGraphQL(ctx, doc, variables, &data, true); err != nil {
+		if err := c.postGraphQL(ctx, doc, variables, &data, tolerateNotFound); err != nil {
 			return out, err
 		}
 		for i := range chunk {

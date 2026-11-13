@@ -12,6 +12,7 @@ package ghclient
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -37,9 +38,10 @@ const (
 // Client is a GitHub REST v3 / GraphQL client. The zero value is not usable;
 // construct with NewClient.
 type Client struct {
-	api  *httpclient.Client
-	auth *httpclient.Client
-	errs sourcehttp.Errors
+	api    *httpclient.Client
+	auth   *httpclient.Client
+	errs   sourcehttp.Errors
+	logger zerolog.Logger
 	// token is read per request through bearer, so WithTokenCopy stays a
 	// plain struct copy that shares api/auth and their connection pools.
 	token string
@@ -69,7 +71,7 @@ func WithLogger(logger zerolog.Logger) Option {
 }
 
 func NewClient(opts ...Option) *Client {
-	o := options{apiBase: defaultAPIBase, authBase: defaultAuthBase}
+	o := options{apiBase: defaultAPIBase, authBase: defaultAuthBase, logger: zerolog.Nop()}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -91,7 +93,8 @@ func NewClient(opts ...Option) *Client {
 		},
 			httpclient.Header("Accept", "application/json"),
 		),
-		errs: sourcehttp.Errors{Name: sourceName, Forbidden: forbiddenIsRateLimit},
+		errs:   sourcehttp.Errors{Name: sourceName, Forbidden: forbiddenIsRateLimit},
+		logger: o.logger,
 	}
 }
 
@@ -143,6 +146,9 @@ type searchPageRequest struct {
 // first. GitHub times out when statusCheckRollup is resolved for large search
 // batches, so each request carries at most two aliases with pages of 25.
 // Results map back by request index: out[i] answers reqs[i].
+//
+// A result the token may not read, such as an item in an organization with
+// SAML SSO enforcement, is left out of its search instead of failing the batch.
 func (c *Client) SearchIssuesBatch(ctx context.Context, reqs []SearchRequest) ([][]SearchItem, error) {
 	if len(reqs) == 0 {
 		return nil, nil
@@ -164,8 +170,8 @@ func (c *Client) SearchIssuesBatch(ctx context.Context, reqs []SearchRequest) ([
 			batch := pages[start:min(start+searchAliasesPerRequest, len(pages))]
 			doc, variables := buildSearchPageQuery(batch)
 			var data map[string]gqlSearchResult
-			if err := c.postGraphQL(ctx, doc, variables, &data, false); err != nil {
-				return nil, err
+			if err := c.postGraphQL(ctx, doc, variables, &data, tolerateForbiddenSearchNode); err != nil {
+				return nil, fmt.Errorf("search %s: %w", quotedQueries(batch), err)
 			}
 
 			for i, pageRequest := range batch {
@@ -188,9 +194,20 @@ func (c *Client) SearchIssuesBatch(ctx context.Context, reqs []SearchRequest) ([
 	return results, nil
 }
 
-func searchItems(nodes []gqlSearchNode) []SearchItem {
+func quotedQueries(pages []searchPageRequest) string {
+	quoted := make([]string, len(pages))
+	for i, page := range pages {
+		quoted[i] = strconv.Quote(page.query)
+	}
+	return strings.Join(quoted, ", ")
+}
+
+func searchItems(nodes []*gqlSearchNode) []SearchItem {
 	items := make([]SearchItem, 0, len(nodes))
 	for _, node := range nodes {
+		if node == nil {
+			continue
+		}
 		author := ""
 		if node.Author != nil {
 			author = node.Author.Login
@@ -271,8 +288,8 @@ func buildSearchPageQuery(reqs []searchPageRequest) (doc string, variables map[s
 }
 
 type gqlSearchResult struct {
-	Nodes    []gqlSearchNode `json:"nodes"`
-	PageInfo gqlPageInfo     `json:"pageInfo"`
+	Nodes    []*gqlSearchNode `json:"nodes"`
+	PageInfo gqlPageInfo      `json:"pageInfo"`
 }
 
 type gqlPageInfo struct {
@@ -362,15 +379,90 @@ func (c *Client) getJSON(ctx context.Context, path string, params url.Values, ou
 	return err
 }
 
+// graphQLError is one entry of a GraphQL response's errors array. Path names
+// the field the error nulled, as alias, field, and list index segments.
+type graphQLError struct {
+	Message string           `json:"message"`
+	Type    graphQLErrorType `json:"type"`
+	Path    []any            `json:"path"`
+}
+
+// graphQLErrorType is the "type" GitHub sets on a GraphQL error. The constants
+// are the types the client acts on; GitHub sends others too.
+type graphQLErrorType string
+
+const (
+	graphQLNotFound    graphQLErrorType = "NOT_FOUND"
+	graphQLForbidden   graphQLErrorType = "FORBIDDEN"
+	graphQLRateLimited graphQLErrorType = "RATE_LIMITED"
+)
+
+// toleratePolicy reports whether a GraphQL error may be ignored, so the
+// partial data beside it is decoded instead of failing the request.
+type toleratePolicy func(graphQLError) bool
+
+// tolerateNotFound accepts NOT_FOUND, which GitHub returns beside a null alias
+// for a deleted or private repository.
+func tolerateNotFound(e graphQLError) bool { return e.Type == graphQLNotFound }
+
+// tolerateForbiddenSearchNode accepts FORBIDDEN on one search result node.
+// GitHub nulls a result in an organization with SAML SSO enforcement when the
+// token has no SSO authorization for it, and returns the other results (#860).
+// FORBIDDEN on a whole search alias stays fatal.
+func tolerateForbiddenSearchNode(e graphQLError) bool {
+	return e.Type == graphQLForbidden && len(e.Path) >= 3 && e.Path[1] == "nodes"
+}
+
+func (e graphQLError) pathString() string {
+	segments := make([]string, len(e.Path))
+	for i, segment := range e.Path {
+		segments[i] = fmt.Sprint(segment)
+	}
+	return strings.Join(segments, ".")
+}
+
+// describeGraphQLErrors renders errors as "TYPE at path, path: message".
+// GitHub repeats one cause once per affected node, so errors that share a
+// type and message are listed once with all of their paths.
+func describeGraphQLErrors(errs []graphQLError) string {
+	type cause struct {
+		typ     graphQLErrorType
+		message string
+	}
+	var order []cause
+	paths := map[cause][]string{}
+	for _, e := range errs {
+		k := cause{e.Type, e.Message}
+		if _, seen := paths[k]; !seen {
+			order = append(order, k)
+			paths[k] = nil
+		}
+		if len(e.Path) > 0 {
+			paths[k] = append(paths[k], e.pathString())
+		}
+	}
+
+	parts := make([]string, 0, len(order))
+	for _, k := range order {
+		head := string(k.typ)
+		if at := paths[k]; len(at) > 0 {
+			head = strings.TrimSpace(head + " at " + strings.Join(at, ", "))
+		}
+		message := cmp.Or(k.message, "request failed")
+		if head == "" {
+			parts = append(parts, message)
+		} else {
+			parts = append(parts, head+": "+message)
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
 // postGraphQL executes one GraphQL request and decodes the data object into
 // out. GraphQL reports rate limits in the response body rather than the
-// status, so RATE_LIMITED is mapped here rather than by sourcehttp.
-//
-// When tolerateNotFound is set, a NOT_FOUND error is not fatal: GitHub returns
-// it alongside partial data (the unresolved alias is null) for a deleted or
-// private repository, so out is still decoded and the caller reads the null
-// alias as absent. RATE_LIMITED and every other error type remain fatal.
-func (c *Client) postGraphQL(ctx context.Context, query string, variables map[string]any, out any, tolerateNotFound bool) error {
+// status, so RATE_LIMITED is mapped here rather than by sourcehttp, and is
+// fatal under every policy. Any error that tolerate rejects fails the request.
+func (c *Client) postGraphQL(ctx context.Context, query string, variables map[string]any, out any, tolerate toleratePolicy) error {
 	payload, err := json.Marshal(struct {
 		Query     string         `json:"query"`
 		Variables map[string]any `json:"variables"`
@@ -391,37 +483,27 @@ func (c *Client) postGraphQL(ctx context.Context, query string, variables map[st
 
 	var response struct {
 		Data   json.RawMessage `json:"data"`
-		Errors []struct {
-			Message string `json:"message"`
-			Type    string `json:"type"`
-		} `json:"errors"`
+		Errors []graphQLError  `json:"errors"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return c.errs.Errorf("decode graphql: %w", err)
 	}
-	if len(response.Errors) > 0 {
-		messages := make([]string, 0, len(response.Errors))
-		tolerated := 0
-		for _, gqlErr := range response.Errors {
-			if gqlErr.Type == "RATE_LIMITED" {
-				return sourcehttp.RateLimit(resp.Header)
-			}
-			if tolerateNotFound && gqlErr.Type == "NOT_FOUND" {
-				tolerated++
-				continue
-			}
-			if gqlErr.Message != "" {
-				messages = append(messages, gqlErr.Message)
-			}
+	var fatal, tolerated []graphQLError
+	for _, gqlErr := range response.Errors {
+		if gqlErr.Type == graphQLRateLimited {
+			return sourcehttp.RateLimit(resp.Header)
 		}
-		// Fail unless every error was a tolerated NOT_FOUND; otherwise fall
-		// through to decode the partial data those nulls sit beside.
-		if tolerated < len(response.Errors) {
-			if len(messages) == 0 {
-				messages = append(messages, "request failed")
-			}
-			return c.errs.Errorf("graphql: %s", strings.Join(messages, "; "))
+		if tolerate(gqlErr) {
+			tolerated = append(tolerated, gqlErr)
+		} else {
+			fatal = append(fatal, gqlErr)
 		}
+	}
+	if len(fatal) > 0 {
+		return c.errs.Errorf("graphql: %s", describeGraphQLErrors(fatal))
+	}
+	if len(tolerated) > 0 {
+		c.logger.Debug().Ctx(ctx).Str("errors", describeGraphQLErrors(tolerated)).Msg("github graphql errors tolerated; using partial data")
 	}
 	if len(response.Data) == 0 {
 		return nil
