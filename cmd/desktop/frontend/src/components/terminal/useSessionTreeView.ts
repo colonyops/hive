@@ -1,7 +1,7 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useTreeExpansion } from '../../composables/useTreeExpansion'
 import { matchesSessionFilter, type SessionFilter } from '../../lib/sessionViews'
-import type { TerminalSessionGroup } from '../../stores/useTerminalSessions'
+import type { TerminalSessionGroup, TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { TerminalTree } from './useTerminalTree'
 
 function countSessions(groups: TerminalSessionGroup[]): number {
@@ -99,6 +99,15 @@ export function useSessionTreeView(
     nodes: () => tree.sessionGroups.value,
   })
 
+  // A session's own window rows fold separately from its repo. They default
+  // open; the repo-level setAll covers them so Collapse all folds everything.
+  const sessionExpansion = useTreeExpansion<TerminalSessionRow>('hive.terminal.sidebar.sessions', {
+    key: (row) => row.id,
+    defaultOpen: () => true,
+    filtering: () => !!query.value.trim(),
+    nodes: () => tree.sessionGroups.value.flatMap((group) => group.sessions),
+  })
+
   const noMatchesNote = computed(() => {
     const needle = query.value.trim()
     return needle ? `No sessions match “${needle}”.` : 'No sessions match this view.'
@@ -130,5 +139,5 @@ export function useSessionTreeView(
     return found ? '' : 'no-matches'
   })
 
-  return { query, groups, expansion, viewHiddenCount, noMatchesNote, ready, note }
+  return { query, groups, expansion, sessionExpansion, viewHiddenCount, noMatchesNote, ready, note }
 }

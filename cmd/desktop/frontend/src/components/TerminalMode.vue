@@ -112,6 +112,7 @@ const panels = useCodePanels({ pool, tree, ops })
 const nav = useTreeKeyboardNav({
   groups: view.groups,
   expanded: view.expansion.expanded,
+  sessionExpanded: view.sessionExpansion.expanded,
   rows: tree.attachable,
   attachedRow: tree.attachedRow,
   activeSlug: pool.activeSlug,

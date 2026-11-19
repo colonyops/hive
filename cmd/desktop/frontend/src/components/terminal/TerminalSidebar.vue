@@ -136,8 +136,10 @@ const sidebarMenuEntries = computed<MenuEntry[]>(() => [
 function onSidebarMenuSelect(id: string): void {
   if (viewMenus.onViewSelect(id)) return
   if (id === 'reload') void tree.reloadSessions()
-  else if (id === 'collapse-all' || id === 'expand-all') view.expansion.setAll(id === 'expand-all')
-  else if (id === 'prune' && tree.prunableCount) sessions.requestPrune(tree.prunableCount)
+  else if (id === 'collapse-all' || id === 'expand-all') {
+    view.expansion.setAll(id === 'expand-all')
+    view.sessionExpansion.setAll(id === 'expand-all')
+  } else if (id === 'prune' && tree.prunableCount) sessions.requestPrune(tree.prunableCount)
 }
 
 // A chat's own lifecycle stays in the Chats area, which owns its record; this
@@ -515,6 +517,20 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                     </BaseIconBadge>
                     <SessionTagsIndicator v-if="group.kind === 'repo'" :tags="row.tags" />
                     <span class="flex-1" />
+                    <button
+                      v-if="tree.treeItemsFor(row).length"
+                      type="button"
+                      class="session-fold shrink-0 text-text-4 hover:text-text"
+                      :aria-label="view.sessionExpansion.expanded(row) ? `Collapse ${row.name}` : `Expand ${row.name}`"
+                      :aria-expanded="view.sessionExpansion.expanded(row)"
+                      data-testid="terminal-session-fold"
+                      @click.stop="view.sessionExpansion.toggle(row)"
+                    >
+                      <component
+                        :is="view.sessionExpansion.expanded(row) ? IconChevronDown : IconChevronRight"
+                        class="size-3"
+                      />
+                    </button>
                     <BaseBadge
                       v-if="sessionAgeBadges[row.id]"
                       tone="accent"
@@ -589,7 +605,13 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                     </div>
                   </div>
                   <Transition name="tree-expand" v-bind="expandHooks">
-                    <div v-if="tree.treeItemsFor(row).length && view.expansion.expanded(group)">
+                    <div
+                      v-if="
+                        tree.treeItemsFor(row).length &&
+                        view.expansion.expanded(group) &&
+                        view.sessionExpansion.expanded(row)
+                      "
+                    >
                       <TransitionGroup name="tree" tag="div" class="relative flex flex-col pb-1">
                         <!-- The slot carries the drag and its marker: the row's ::before and
                              ::after draw the tree connector. -->

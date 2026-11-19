@@ -47,13 +47,14 @@ const viewItem = (kind: string, panel = 'p0'): TreeItem => ({
   view: { panel, tab: { id: kind, kind } },
 })
 
-function setup(views: Record<string, TreeItem[]> = {}) {
+function setup(views: Record<string, TreeItem[]> = {}, sessionExpanded?: (row: TerminalSessionRow) => boolean) {
   const windows: Record<string, TreeWindowRow[]> = { '1': [win('@1', true), win('@2')], '2': [win('@9')] }
   const rows = ref<TerminalSessionRow[]>([running, idle])
   const activeSlug = ref('running')
   const options = {
     groups: ref<TerminalSessionGroup[]>([{ key: 'r', name: 'r', kind: 'repo', sessions: [running, idle] }]),
     expanded: () => true,
+    sessionExpanded,
     rows,
     attachedRow: computed(() => rows.value.find((row) => row.slug === activeSlug.value) ?? null),
     activeSlug,
@@ -89,6 +90,19 @@ describe('useTreeKeyboardNav', () => {
     expect(nav.tabStopKey.value).toBe('s:2')
     expect(options.selectSession).toHaveBeenLastCalledWith('idle')
     expect(paneMayAutoFocus.value).toBe(false)
+  })
+
+  it("stops on a folded session's own row instead of its windows", async () => {
+    const { nav } = setup({}, (row) => row.id !== '1')
+    expect(nav.tabStopKey.value).toBe('s:1')
+
+    nav.onKeydown(key('ArrowDown'))
+    await Promise.resolve()
+    expect(nav.tabStopKey.value).toBe('s:1')
+
+    nav.onKeydown(key('ArrowDown'))
+    await Promise.resolve()
+    expect(nav.tabStopKey.value).toBe('s:2')
   })
 
   it('walks a view row between the windows and opens it on Enter', async () => {
