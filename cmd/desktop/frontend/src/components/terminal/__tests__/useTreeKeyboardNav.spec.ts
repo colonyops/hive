@@ -98,11 +98,15 @@ describe('useTreeKeyboardNav', () => {
 
     nav.onKeydown(key('ArrowDown'))
     await Promise.resolve()
-    expect(nav.tabStopKey.value).toBe('s:1')
-
-    nav.onKeydown(key('ArrowDown'))
-    await Promise.resolve()
     expect(nav.tabStopKey.value).toBe('s:2')
+  })
+
+  it("starts from a folded attached session's row, not the first row", async () => {
+    const { nav, options } = setup({}, (row) => row.id !== '2')
+    options.activeSlug.value = 'idle'
+    nav.onKeydown(key('ArrowUp'))
+    await Promise.resolve()
+    expect(nav.tabStopKey.value).toBe('w:1:@2')
   })
 
   it('walks a view row between the windows and opens it on Enter', async () => {

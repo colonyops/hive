@@ -101,12 +101,21 @@ export function useSessionTreeView(
 
   // A session's own window rows fold separately from its repo. They default
   // open; the repo-level setAll covers them so Collapse all folds everything.
-  const sessionExpansion = useTreeExpansion<TerminalSessionRow>('hive.terminal.sidebar.sessions', {
+  // The scratch terminal is exempt: its header is its session row and already
+  // folds the group, so a second fold there could not be reopened.
+  const foldable = () => tree.sessionGroups.value.filter((group) => group.kind !== 'scratch')
+  const sessionFolds = useTreeExpansion<TerminalSessionRow>('hive.terminal.sidebar.sessions', {
     key: (row) => row.id,
     defaultOpen: () => true,
     filtering: () => !!query.value.trim(),
-    nodes: () => tree.sessionGroups.value.flatMap((group) => group.sessions),
+    nodes: () => foldable().flatMap((group) => group.sessions),
   })
+  const sessionExpansion = {
+    ...sessionFolds,
+    expanded: (row: TerminalSessionRow) =>
+      !foldable().some((group) => group.sessions.some((candidate) => candidate.id === row.id)) ||
+      sessionFolds.expanded(row),
+  }
 
   const noMatchesNote = computed(() => {
     const needle = query.value.trim()

@@ -71,6 +71,7 @@ export function useTreeKeyboardNav(options: {
   const selectedKey = computed(() => {
     const row = options.attachedRow.value
     if (!row) return ''
+    if (options.sessionExpanded?.(row) === false) return sessionKey(row)
     const active = options.windowRowsFor(row).find((win) => win.active)
     return active ? windowKey(row, active.windowId) : sessionKey(row)
   })
