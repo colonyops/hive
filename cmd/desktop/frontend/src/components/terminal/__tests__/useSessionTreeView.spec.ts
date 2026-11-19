@@ -65,6 +65,17 @@ const names = (groups: TerminalSessionGroup[]) => groups.map((group) => group.se
 afterEach(() => localStorage.clear())
 
 describe('useSessionTreeView', () => {
+  it('folds a session on its own, and leaves the scratch session open after Collapse all', () => {
+    const { view } = setup()
+    view.sessionExpansion.toggle(parser)
+    expect(view.sessionExpansion.expanded(parser)).toBe(false)
+    expect(view.sessionExpansion.expanded(docs)).toBe(true)
+
+    view.sessionExpansion.setAll(false)
+    expect(view.sessionExpansion.expanded(docs)).toBe(false)
+    expect(view.sessionExpansion.expanded(scratch)).toBe(true)
+  })
+
   it('narrows repo groups by the saved-view filter and counts what it hid', () => {
     const { view } = setup([], true, { match: 'all', conditions: [{ field: 'tag', op: 'any', values: ['auto'] }] })
     expect(names(view.groups.value)).toEqual([['scratch'], ['docs']])

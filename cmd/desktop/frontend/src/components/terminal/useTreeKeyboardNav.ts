@@ -36,6 +36,8 @@ function parseKey(key: string): { kind: string; rowID: string; id: string } {
 export function useTreeKeyboardNav(options: {
   groups: Ref<TerminalSessionGroup[]>
   expanded: (group: TerminalSessionGroup) => boolean
+  /** A folded session shows no window rows, so its own row stands in for them. */
+  sessionExpanded?: (row: TerminalSessionRow) => boolean
   rows: Ref<TerminalSessionRow[]>
   attachedRow: Ref<TerminalSessionRow | null>
   activeSlug: Ref<string>
@@ -57,8 +59,9 @@ export function useTreeKeyboardNav(options: {
       if (!options.expanded(group)) continue
       for (const row of group.sessions) {
         if (row.offline) continue
-        const items = options.treeItemsFor(row)
-        if (!options.rowRunning(row) || !items.length) keys.push(sessionKey(row))
+        const items = options.sessionExpanded?.(row) === false ? [] : options.treeItemsFor(row)
+        if (!options.rowRunning(row) || options.sessionExpanded?.(row) === false || !items.length)
+          keys.push(sessionKey(row))
         for (const item of items) keys.push(item.win ? windowKey(row, item.win.windowId) : viewKey(row, item.tabId))
       }
     }
@@ -68,6 +71,7 @@ export function useTreeKeyboardNav(options: {
   const selectedKey = computed(() => {
     const row = options.attachedRow.value
     if (!row) return ''
+    if (options.sessionExpanded?.(row) === false) return sessionKey(row)
     const active = options.windowRowsFor(row).find((win) => win.active)
     return active ? windowKey(row, active.windowId) : sessionKey(row)
   })

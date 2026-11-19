@@ -136,8 +136,10 @@ const sidebarMenuEntries = computed<MenuEntry[]>(() => [
 function onSidebarMenuSelect(id: string): void {
   if (viewMenus.onViewSelect(id)) return
   if (id === 'reload') void tree.reloadSessions()
-  else if (id === 'collapse-all' || id === 'expand-all') view.expansion.setAll(id === 'expand-all')
-  else if (id === 'prune' && tree.prunableCount) sessions.requestPrune(tree.prunableCount)
+  else if (id === 'collapse-all' || id === 'expand-all') {
+    view.expansion.setAll(id === 'expand-all')
+    view.sessionExpansion.setAll(id === 'expand-all')
+  } else if (id === 'prune' && tree.prunableCount) sessions.requestPrune(tree.prunableCount)
 }
 
 // A chat's own lifecycle stays in the Chats area, which owns its record; this
@@ -308,6 +310,14 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
   const dragged = windowDrag.dragging.value
   return dragged?.slug === slug && dragged.tabId === tabId
 }
+
+// A fold must not hide an agent that is blocked on the user.
+function foldedNeedsApproval(row: TerminalSessionRow): boolean {
+  if (view.sessionExpansion.expanded(row)) return false
+  return tree
+    .treeItemsFor(row)
+    .some((item) => item.win && tree.windowStatus(row, item.win.windowId)?.status === 'approval')
+}
 </script>
 
 <template>
@@ -406,10 +416,9 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                 @click="openNewSession(group.sessions[0].repo)"
               />
             </div>
-            <component
-              :is="view.expansion.expanded(group) ? IconChevronDown : IconChevronRight"
-              class="size-3 shrink-0 text-text-4"
-            />
+            <span class="fold-cell text-text-4">
+              <component :is="view.expansion.expanded(group) ? IconChevronDown : IconChevronRight" class="size-3" />
+            </span>
           </div>
           <!-- The scratch terminal's heading is its session row, so it carries the row's controls and
                is a div: a button cannot hold one. -->
@@ -430,11 +439,7 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
               @contextmenu.prevent="menus.toggleRow(row, $event)"
             >
               <span class="min-w-0 truncate text-body text-text" :title="row.slug">{{ group.name }}</span>
-              <component
-                :is="view.expansion.expanded(group) ? IconChevronDown : IconChevronRight"
-                class="ml-auto size-3 shrink-0 text-text-4"
-              />
-              <div class="row-trailing" data-testid="terminal-session-trailing" @click.stop>
+              <div class="row-trailing row-trailing-fold ml-auto" data-testid="terminal-session-trailing" @click.stop>
                 <IconButton
                   label="New tab"
                   :icon="IconPlus"
@@ -465,6 +470,9 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                   @start="attach.startSession(row.slug)"
                   @kill="ops.requestKill(row)"
                 />
+                <span class="fold-cell row-fold text-text-4" @click="view.expansion.toggle(group)">
+                  <component :is="view.expansion.expanded(group) ? IconChevronDown : IconChevronRight" class="size-3" />
+                </span>
               </div>
             </div>
           </template>
@@ -527,7 +535,12 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                     </BaseBadge>
                     <!-- AppMenu anchors to the positioned row so its panel spans it; the grid
                          overlap keeps this slot from becoming a positioning ancestor. -->
-                    <div v-if="!row.offline" class="row-trailing" data-testid="terminal-session-trailing" @click.stop>
+                    <div
+                      v-if="!row.offline"
+                      class="row-trailing row-trailing-fold"
+                      data-testid="terminal-session-trailing"
+                      @click.stop
+                    >
                       <IconButton
                         v-if="group.kind !== 'chats'"
                         label="New window"
@@ -586,10 +599,27 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
                         @recycle="sessions.requestRecycle(row)"
                         @delete="sessions.requestDelete(row)"
                       />
+                      <IconButton
+                        v-if="tree.treeItemsFor(row).length"
+                        :label="view.sessionExpansion.expanded(row) ? `Collapse ${row.name}` : `Expand ${row.name}`"
+                        :icon="view.sessionExpansion.expanded(row) ? IconChevronDown : IconChevronRight"
+                        size="sm"
+                        class="row-action row-fold"
+                        :class="{ 'row-fold-flagged': foldedNeedsApproval(row) }"
+                        :aria-expanded="view.sessionExpansion.expanded(row)"
+                        data-testid="terminal-session-fold"
+                        @click="view.sessionExpansion.toggle(row)"
+                      />
                     </div>
                   </div>
                   <Transition name="tree-expand" v-bind="expandHooks">
-                    <div v-if="tree.treeItemsFor(row).length && view.expansion.expanded(group)">
+                    <div
+                      v-if="
+                        tree.treeItemsFor(row).length &&
+                        view.expansion.expanded(group) &&
+                        view.sessionExpansion.expanded(row)
+                      "
+                    >
                       <TransitionGroup name="tree" tag="div" class="relative flex flex-col pb-1">
                         <!-- The slot carries the drag and its marker: the row's ::before and
                              ::after draw the tree connector. -->
@@ -981,15 +1011,20 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
   transition: none;
 }
 
-/* The badge sits over the trailing cells left empty at rest and gives way to
-   the controls hover reveals. 40px is both cells plus the status dot's inset,
-   so its right edge lines up with the dots on other rows; a running row keeps
-   its dot and the badge stops 6px short of it. */
+/* The badge sits over the trailing cells left empty at rest, 4px in from the
+   edge, and gives way to the controls hover reveals. A flagged fold chevron
+   stays visible at rest, so the badge steps left of its cell. */
 .session-age {
-  margin-right: -2.5rem;
+  margin-right: -3.625rem;
   position: relative;
   z-index: 1;
   transition: opacity 0.15s ease;
+}
+.session-row:has(.row-fold-flagged) .session-age {
+  margin-right: -2.5rem;
+}
+.session-row-offline .session-age {
+  margin-right: 0;
 }
 .session-row:is(:hover, .menu-open, :has(.row-trailing:focus-within)) .session-age {
   opacity: 0;
@@ -1020,6 +1055,23 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
   flex: none;
   align-self: center;
 }
+/* A third cell on the right holds the fold chevron. It lines up with the
+   window status column below and the group chevrons above. */
+.row-trailing-fold {
+  grid-template-columns: 18px 18px 18px;
+  width: 3.375rem;
+}
+.row-fold {
+  grid-area: 1 / 3;
+}
+.fold-cell {
+  display: flex;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
 .row-lead {
   grid-area: 1 / 1;
 }
@@ -1042,13 +1094,17 @@ function draggingWindowRow(slug: string, tabId: string): boolean {
   opacity: 0;
 }
 .row-action:hover,
-.row-action[aria-expanded='true'] {
+.row-action[aria-haspopup][aria-expanded='true'] {
   background: var(--color-app);
   color: var(--color-text);
 }
 :is(.session-row, .group-row, .window-row):is(:hover, .menu-open) .row-action,
 .row-action:focus-visible {
   opacity: 1;
+}
+.row-fold-flagged {
+  opacity: 1;
+  color: var(--color-severity-warning);
 }
 .window-row.has-swap:hover .window-status,
 .window-row.has-swap .window-trailing:focus-within .window-status {
