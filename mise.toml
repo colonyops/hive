@@ -28,7 +28,7 @@ node = "22.23.4"
 
 # Site Tools (docs/). Zensical itself is pinned in docs/pyproject.toml.
 python = "3.15.2"
-uv = "0.12.23"
+uv = "0.13.7"
 
 # GitHub Tools
 actionlint = "1.7.12"
