@@ -21,10 +21,21 @@ type CommandError struct {
 }
 
 func cappedErrorOutput(output []byte) []byte {
-	if len(output) > maxStderrLen {
-		return output[:maxStderrLen]
+	if len(output) <= maxStderrLen {
+		return output
 	}
-	return output
+	// Prefer the tail: long commands (e.g. git worktree) print progress first
+	// and the actionable failure last. Keep a short marker so callers can see
+	// that earlier output was dropped.
+	const marker = "...\n"
+	keep := maxStderrLen - len(marker)
+	if keep < 1 {
+		return output[len(output)-maxStderrLen:]
+	}
+	out := make([]byte, 0, maxStderrLen)
+	out = append(out, marker...)
+	out = append(out, output[len(output)-keep:]...)
+	return out
 }
 
 // NewCommandError creates a command error with at most 500 bytes of child output.
@@ -71,7 +82,7 @@ func RunSh(ctx context.Context, dir, cmd string) error {
 	if dir != "" {
 		c.Dir = dir
 	}
-	stderr := &HeadWriter{Max: maxStderrLen}
+	stderr := &TailWriter{Max: maxStderrLen}
 	c.Stdout = io.Discard
 	c.Stderr = stderr
 	if err := c.Run(); err != nil {
