@@ -186,6 +186,50 @@ const agentById = computed(
     ),
 )
 
+// CodeView keeps an annotation's wrapper only while its metadata is the same
+// object, so a fresh one on every rebuild would re-wrap every card in the file.
+const annotationMetadata = new Map<string, RowAnnotation>()
+
+function rowAnnotation(hostId: string, agent?: boolean): RowAnnotation {
+  let metadata = annotationMetadata.get(hostId)
+  if (!metadata || metadata.agent !== agent) {
+    metadata = agent ? { hostId, agent } : { hostId }
+    annotationMetadata.set(hostId, metadata)
+  }
+  return metadata
+}
+
+// CodeView still re-wraps a card when the file's diff changes, as it does while
+// an agent edits the file. The move detaches the card and the browser drops the
+// focus of a field in it, so the field takes it back once the card is attached again.
+const focusedInHost = new Map<string, HTMLElement>()
+
+function hostOf(node: EventTarget | null): string | undefined {
+  if (!(node instanceof Node)) return undefined
+  for (const [id, host] of annotationHosts) if (host.contains(node)) return id
+  return undefined
+}
+
+useEventListener(root, 'focusin', (event: FocusEvent) => {
+  const id = hostOf(event.target)
+  if (id && event.target instanceof HTMLElement) focusedInHost.set(id, event.target)
+})
+// A detached card cannot reach the root, so only a focus the user moved lands here.
+useEventListener(root, 'focusout', (event: FocusEvent) => {
+  const id = hostOf(event.target)
+  if (id) focusedInHost.delete(id)
+})
+
+function restoreFocus(id: string, host: HTMLElement): void {
+  const field = focusedInHost.get(id)
+  if (!field) return
+  queueMicrotask(() => {
+    const active = document.activeElement
+    if (active && active !== document.body) return
+    if (host.isConnected && host.contains(field)) field.focus({ preventScroll: true })
+  })
+}
+
 function annotationHost(id: string, agent = false): HTMLElement {
   let host = annotationHosts.get(id)
   if (!host) {
@@ -193,7 +237,7 @@ function annotationHost(id: string, agent = false): HTMLElement {
     host.className = agent ? 'border-y border-border bg-pane px-3 py-2' : 'px-3 py-2'
     annotationHosts.set(id, host)
     mountedAnnotations.value = new Set([...mountedAnnotations.value, id])
-  }
+  } else restoreFocus(id, host)
   return host
 }
 
@@ -410,19 +454,19 @@ function itemFor(file: ChangedFile): CodeViewDiffItem<RowAnnotation> {
               side: imageSide,
               // Above the text diff of an SVG; under the placeholder row of any other image.
               lineNumber: image === 'binary' ? 1 : 0,
-              metadata: { hostId: imagePreviewId(file.path) },
+              metadata: rowAnnotation(imagePreviewId(file.path)),
             },
           ]
         : []),
       ...(comments ?? []).map((comment) => ({
         side: comment.endSide,
         lineNumber: comment.endLine,
-        metadata: { hostId: comment.id },
+        metadata: rowAnnotation(comment.id),
       })),
       ...(agents ?? []).map((anchored) => ({
         side: anchored.side,
         lineNumber: anchored.line,
-        metadata: { hostId: anchored.comment.id, agent: true },
+        metadata: rowAnnotation(anchored.comment.id, true),
       })),
     ],
     collapsed: !open || fileDiff.hunks.length === 0,
