@@ -39,7 +39,14 @@ async function mountAt(path: string) {
   return { router, app }
 }
 
-const ada: Me = { email: 'ada@example.com', policy: 'x', quota: { used: 2048, limit: 4096 } }
+const ada: Me = {
+  id: 'u1',
+  email: 'ada@example.com',
+  display_name: '',
+  policy: 'x',
+  quota: { used: 2048, limit: 4096 },
+  features: [],
+}
 
 describe('drive shell', () => {
   beforeEach(() => {

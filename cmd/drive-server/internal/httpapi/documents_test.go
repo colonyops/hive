@@ -195,7 +195,12 @@ func TestSpacesAndMeUsage(t *testing.T) {
 	}, got)
 
 	me := s.do(http.MethodGet, "/api/v1/me", tok, "")
-	assert.JSONEq(t, `{"email":"dev@example.com","policy":"dev","quota":{"used":8,"limit":1048576}}`, me.Body.String())
+	gotMe := decode[driveapi.Me](t, me)
+	limit := int64(1048576)
+	assert.Equal(t, "dev@example.com", gotMe.Email)
+	assert.Equal(t, "dev", gotMe.Policy)
+	assert.Equal(t, driveapi.Quota{Used: 8, Limit: &limit}, gotMe.Quota)
+	assert.NotEmpty(t, gotMe.ID)
 
 	empty := s.do(http.MethodGet, "/api/v1/shared", s.token(t, "other@example.com", core.ScopeRead), "")
 	assert.JSONEq(t, `[]`, empty.Body.String())

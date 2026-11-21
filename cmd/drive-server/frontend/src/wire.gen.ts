@@ -85,13 +85,33 @@ export interface Share {
  */
 export interface PublicDocument {
   owner_email: string;
+  /**
+   * OwnerName is the owner's display name, else the local part of their
+   * email.
+   */
+  owner_name: string;
   document: Document;
   body?: string;
 }
+/**
+ * FeatureComments in Me.Features means the server serves threads and
+ * presence.
+ */
+export const FeatureComments = "comments";
 export interface Me {
+  id: string;
   email: string;
+  display_name: string;
   policy: string;
   quota: Quota;
+  /**
+   * Features names what this server supports, so a client can tell an
+   * older server from a missing document.
+   */
+  features: string[];
+}
+export interface UpdateMe {
+  display_name: string;
 }
 /**
  * Quota.Limit is nil for an unlimited policy.
@@ -130,6 +150,134 @@ export interface Token {
  */
 export interface CreatedToken extends Token {
   secret: string;
+}
+/**
+ * Anchor is a source line range of a markdown document, 1-based and
+ * inclusive with front matter counted, and the text the author selected.
+ */
+export interface Anchor {
+  start_line: number /* int */;
+  end_line: number /* int */;
+  quote: string;
+}
+/**
+ * Author.ID and Author.Email are empty for an anonymous reader. Agent is the
+ * name of the API token that wrote it, and empty for a browser session.
+ */
+export interface Author {
+  id?: string;
+  name: string;
+  email?: string;
+  agent?: string;
+}
+/**
+ * Comment.Deleted marks a thread's first comment removed while replies
+ * remain; its Body and Author are then empty.
+ */
+export interface Comment {
+  id: string;
+  thread_id: string;
+  author: Author;
+  body: string;
+  deleted?: boolean;
+  created_at: string;
+  edited_at?: string;
+}
+/**
+ * Thread.Anchor is nil for a general thread. Outdated means a push removed
+ * the quoted text; Anchor then holds the lines and quote it last had.
+ * Comments are oldest first.
+ */
+export interface Thread {
+  id: string;
+  author: Author;
+  anchor?: Anchor;
+  outdated: boolean;
+  resolved_at?: string;
+  resolved_by?: Author;
+  comments: Comment[];
+  created_at: string;
+}
+/**
+ * Viewer is who asked for a ThreadList. UserID is empty for an anonymous
+ * reader, and CanComment needs a signed-in principal with push scope.
+ */
+export interface Viewer {
+  user_id?: string;
+  is_owner: boolean;
+  can_comment: boolean;
+}
+/**
+ * ThreadList is what GET .../threads returns: general threads first, then
+ * by start line.
+ */
+export interface ThreadList {
+  document_sha256: string;
+  viewer: Viewer;
+  threads: Thread[];
+}
+/**
+ * CreateThread.DocumentSHA256 is the sha256 of the body the client rendered.
+ * A thread on any other version is refused with a conflict.
+ */
+export interface CreateThread {
+  document_sha256: string;
+  anchor?: Anchor;
+  body: string;
+}
+export interface CommentBody {
+  body: string;
+}
+export interface ThreadStateUpdate {
+  resolved: boolean;
+}
+/**
+ * LineRange is a viewer's selection in presence. It is lines only, so
+ * presence never carries document text.
+ */
+export interface LineRange {
+  start_line: number /* int */;
+  end_line: number /* int */;
+}
+/**
+ * PresenceColors is the size of the presence palette.
+ */
+export const PresenceColors = 12;
+/**
+ * PresenceUpdate is a heartbeat. Token is the secret from the stream's hello
+ * event. Name and Color count only for an anonymous viewer; Color is an
+ * index below PresenceColors.
+ */
+export interface PresenceUpdate {
+  token: string;
+  name?: string;
+  color: number /* int */;
+  selection?: LineRange;
+}
+/**
+ * PresenceViewer.ID is the stream's public id. Self is set only in the list
+ * sent to that viewer's own stream.
+ */
+export interface PresenceViewer {
+  id: string;
+  name: string;
+  color: number /* int */;
+  signed_in: boolean;
+  self?: boolean;
+  selection?: LineRange;
+}
+export interface PresenceSnapshot {
+  viewers: PresenceViewer[];
+}
+/**
+ * StreamHello is the first event of a document stream.
+ */
+export interface StreamHello {
+  id: string;
+  token: string;
+}
+export interface DocumentEvent {
+  sha256: string;
 }
 /**
  * ErrorBody is the JSON shape of every error response. It matches

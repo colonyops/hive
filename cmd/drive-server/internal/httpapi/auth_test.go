@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -212,7 +213,9 @@ func TestMeUnlimitedQuotaIsNull(t *testing.T) {
 
 	rec := s.do(http.MethodGet, "/api/v1/me", s.token(t, "dev@example.com", core.ScopePush), "")
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.JSONEq(t, `{"email":"dev@example.com","policy":"dev","quota":{"used":0,"limit":null}}`, rec.Body.String())
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, map[string]any{"used": float64(0), "limit": nil}, body["quota"])
 }
 
 func TestSessionMintsListsAndRevokesTokens(t *testing.T) {

@@ -15,7 +15,7 @@ func me(docs *core.Documents) errchain.HandlerFunc {
 		if err != nil {
 			return driveapi.Me{}, err
 		}
-		resp := driveapi.Me{Email: p.Email, Policy: p.Policy.Name, Quota: driveapi.Quota{Used: used}}
+		resp := driveapi.Me{ID: p.UserID, Email: p.Email, Policy: p.Policy.Name, Quota: driveapi.Quota{Used: used}, Features: []string{}}
 		if !p.Policy.Quotas.Limit.Unlimited {
 			limit := p.Policy.Quotas.Limit.Bytes
 			resp.Quota.Limit = &limit
