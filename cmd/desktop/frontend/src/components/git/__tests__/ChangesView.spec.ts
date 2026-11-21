@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   scrollTo: vi.fn(),
   setSelectedLines: vi.fn(),
   lineSelectionEnd: null as ((...args: unknown[]) => unknown) | null,
+  // Off by default, as most tests want CodeView never to have mounted a row's annotation.
+  mountAnnotations: false,
   ChangesTargets: vi.fn(),
   ChangesFeedback: vi.fn(),
   SendChanges: vi.fn(),
@@ -96,16 +98,41 @@ vi.mock('@pierre/diffs', async (importOriginal) => {
       }
       for (const item of items) {
         const id = `fake-${item.id}`
-        const body = this.root?.querySelector(`[data-fake="${id}"]`) ?? document.createElement('div')
-        body.setAttribute('data-fake', id)
-        const host = this.options.renderCustomHeader(item.fileDiff, { item })
-        const lines = item.collapsed
+        let body = this.root?.querySelector<HTMLElement>(`[data-fake="${id}"]`)
+        if (!body) {
+          body = document.createElement('div')
+          body.setAttribute('data-fake', id)
+          body.append(this.options.renderCustomHeader(item.fileDiff, { item }), document.createElement('span'))
+          this.root?.append(body)
+        }
+        body.children[1].textContent = item.collapsed
           ? ''
           : item.fileDiff.hunks.flatMap((hunk) => hunk.hunkContent).length
             ? [...item.fileDiff.deletionLines, ...item.fileDiff.additionLines].join('')
             : ''
-        body.replaceChildren(host, document.createTextNode(lines))
-        this.root?.append(body)
+        this.renderAnnotations(body, item)
+      }
+    }
+    // As FileDiff.renderAnnotations: a wrapper stays while its metadata and diff
+    // are the same objects, and is replaced otherwise.
+    wrappers = new Map<string, { element: HTMLElement; metadata: unknown; fileDiff: unknown }>()
+    renderAnnotations(body: HTMLElement, item: FakeItem): void {
+      const stale = new Map([...this.wrappers].filter(([key]) => key.startsWith(`${item.id}\n`)))
+      const shown = item.collapsed || !mocks.mountAnnotations ? [] : (item.annotations ?? [])
+      for (const [index, annotation] of shown.entries()) {
+        const key = `${item.id}\n${index}-${annotation.side}-${annotation.lineNumber}`
+        stale.delete(key)
+        const held = this.wrappers.get(key)
+        if (held && held.metadata === annotation.metadata && held.fileDiff === item.fileDiff) continue
+        held?.element.remove()
+        const element = document.createElement('div')
+        element.append(this.options.renderAnnotation({ ...annotation }))
+        body.append(element)
+        this.wrappers.set(key, { element, metadata: annotation.metadata, fileDiff: item.fileDiff })
+      }
+      for (const [key, { element }] of stale) {
+        element.remove()
+        this.wrappers.delete(key)
       }
     }
   }
@@ -188,6 +215,7 @@ describe('ChangesView', () => {
     resetToastsForTests()
     vi.clearAllMocks()
     mocks.tops.clear()
+    mocks.mountAnnotations = false
     mocks.OpenSessionInEditor.mockResolvedValue(undefined)
     mocks.DiffReviews.mockResolvedValue([])
     mocks.DismissDiffComment.mockResolvedValue(undefined)
@@ -990,6 +1018,51 @@ describe('ChangesView', () => {
     await flushPromises()
     expect(mocks.SessionChanges).toHaveBeenLastCalledWith('s1', { base: 'commit', against: '', commit: 'c3' })
     wrapper.unmount()
+  })
+
+  describe('a comment being edited', () => {
+    async function editFirstComment() {
+      mocks.mountAnnotations = true
+      const wrapper = await mountView()
+      await comment('first')
+      const [saved] = useChangesReview().comments('s1')
+      await wrapper.get(testid(`changes-comment-${saved.id}-edit`)).trigger('click')
+      await flushPromises()
+      const field = document.querySelector<HTMLTextAreaElement>(testid(`changes-comment-${saved.id}-edit-text`))!
+      expect(document.activeElement).toBe(field)
+      return { wrapper, field }
+    }
+
+    it('keeps focus when another file gains a comment', async () => {
+      const { wrapper, field } = await editFirstComment()
+      const span = { startSide: 'additions', startLine: 1, endSide: 'additions', endLine: 1, quote: '' } as const
+      useChangesReview().add('s1', {
+        ...span,
+        path: 'b.go',
+        base: 'branch',
+        version: fileVersion(file('b.go')),
+        text: 'second',
+      })
+      await flushPromises()
+      expect(field.isConnected).toBe(true)
+      expect(document.activeElement).toBe(field)
+      wrapper.unmount()
+    })
+
+    it('takes focus back when its file changes under it', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        const { wrapper, field } = await editFirstComment()
+        mocks.SessionChanges.mockResolvedValue(changes([file('a.go', { stamp: '2' }), file('b.go')]))
+        await vi.advanceTimersByTimeAsync(5_000)
+        await flushPromises()
+        expect(mocks.SessionFileDiffs).toHaveBeenLastCalledWith('s1', expect.anything(), ['a.go'])
+        expect(document.activeElement).toBe(field)
+        wrapper.unmount()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   it('leaves keys alone while a modifier is held', async () => {
