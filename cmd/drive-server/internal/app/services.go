@@ -52,7 +52,7 @@ func OpenServices(ctx context.Context, log zerolog.Logger, cfg config.Config) (*
 		Policies:  policies,
 		Accounts:  accounts,
 		Tokens:    core.NewTokens(store.Tokens(), store.Accounts(), policies),
-		Documents: core.NewDocuments(users.Stores(), store.Shares(), cfg.MaxDocumentSize.Bytes, core.WithBaseURL(cfg.BaseURL)),
+		Documents: core.NewDocuments(log, users.Stores(), store.Shares(), cfg.MaxDocumentSize.Bytes, core.WithBaseURL(cfg.BaseURL)),
 		Shares:    core.NewShares(store.Shares(), store.Accounts(), users.Stores(), policies, core.WithBaseURL(cfg.BaseURL)),
 		Sessions:  sessions,
 		SignIn:    core.NewSignIn(log, store.Codes(), store.Accounts(), store.Outbox(), policies, accounts, sessions, core.WithBaseURL(cfg.BaseURL)),

@@ -9,24 +9,43 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/platform/driveapi"
+	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/colonyops/hive/pkg/randid"
 )
 
 type Documents struct {
+	log     zerolog.Logger
 	users   UserStores
 	shares  ShareStore
+	notify  Notifier
 	maxSize int64
 	baseURL string
 	now     func() time.Time
+	// puts keeps two pushes to one path in order, so each re-anchors from
+	// the version the other left.
+	puts keyLock
+	// beforePut runs between reading the previous version and the upsert.
+	// Tests use it to race a thread against a push.
+	beforePut func()
 }
 
 // NewDocuments returns the document service. A maxDocumentSize of zero or
 // less means no cap.
-func NewDocuments(users UserStores, shares ShareStore, maxDocumentSize int64, opts ...Option) *Documents {
+func NewDocuments(log zerolog.Logger, users UserStores, shares ShareStore, maxDocumentSize int64, opts ...Option) *Documents {
 	o := newOptions(opts)
-	return &Documents{users: users, shares: shares, maxSize: maxDocumentSize, baseURL: o.baseURL, now: o.now}
+	return &Documents{
+		log:     logutils.Component(log, "documents"),
+		users:   users,
+		shares:  shares,
+		notify:  o.notify,
+		maxSize: maxDocumentSize,
+		baseURL: o.baseURL,
+		now:     o.now,
+	}
 }
 
 // MaxDocumentSize is the largest accepted body, or zero for no cap.
@@ -47,11 +66,22 @@ func (d *Documents) Put(ctx context.Context, p Principal, space drive.Space, pat
 	}
 
 	sum := sha256.Sum256(body)
+	unlock := d.puts.lock(p.UserID + "\x00" + space.Key + "\x00" + path)
+	defer unlock()
 	store, release, err := d.users.Open(ctx, p.UserID)
 	if err != nil {
 		return driveapi.Document{}, fmt.Errorf("open user store: %w", err)
 	}
 	defer release()
+
+	prev, prevBody, err := store.Get(ctx, space.Key, path)
+	existed := err == nil
+	if err != nil && !IsNotFound(err) {
+		return driveapi.Document{}, fmt.Errorf("get previous version: %w", err)
+	}
+	if d.beforePut != nil {
+		d.beforePut()
+	}
 
 	doc, err := store.Put(ctx, NewDocument{
 		ID:         randid.UUIDv7(),
@@ -67,7 +97,42 @@ func (d *Documents) Put(ctx context.Context, p Principal, space drive.Space, pat
 	if err != nil {
 		return driveapi.Document{}, fmt.Errorf("put document: %w", err)
 	}
+	if existed && prev.SHA256 != doc.SHA256 {
+		if kind == drive.KindMarkdown {
+			d.reanchor(ctx, p.UserID, doc, prev.SHA256, prevBody, body)
+		}
+		d.notify.DocumentChanged(p.UserID, doc.ID, doc.SHA256)
+	}
 	return toWire(doc), nil
+}
+
+// reanchor moves the threads checked against fromSHA onto doc's version. It
+// runs after the upsert, outside its transaction, so a large diff does not
+// hold the user file's one connection. A thread created on fromSHA while the
+// push ran is still on fromSHA, so it moves too. A failure leaves the
+// threads where they were; the push itself has succeeded.
+func (d *Documents) reanchor(ctx context.Context, userID string, doc Document, fromSHA string, prev, next []byte) {
+	log := d.log.With().Str("document", doc.ID).Logger()
+	threads, release, err := d.users.OpenThreads(ctx, userID)
+	if err != nil {
+		log.Warn().Err(err).Msg("re-anchor: open thread store")
+		return
+	}
+	defer release()
+
+	anchors, err := threads.AnchoredAt(ctx, doc.ID, fromSHA)
+	if err != nil {
+		log.Warn().Err(err).Msg("re-anchor: list anchored threads")
+		return
+	}
+	if len(anchors) == 0 {
+		return
+	}
+	if err := threads.MoveAnchors(ctx, doc.ID, fromSHA, doc.SHA256, Reanchor(prev, next, anchors)); err != nil {
+		log.Warn().Err(err).Msg("re-anchor: move anchors")
+		return
+	}
+	d.notify.ThreadsChanged(userID, doc.ID)
 }
 
 func (d *Documents) Get(ctx context.Context, p Principal, space drive.Space, path string) (driveapi.Document, []byte, error) {
@@ -247,6 +312,7 @@ func (d *Documents) Delete(ctx context.Context, p Principal, space drive.Space, 
 	if _, err := store.Delete(ctx, space.Key, path); err != nil {
 		return notFoundOr(err, "delete document")
 	}
+	d.notify.DocumentClosed(p.UserID, doc.ID)
 	return nil
 }
 
