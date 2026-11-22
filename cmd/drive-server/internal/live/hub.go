@@ -26,7 +26,9 @@ const (
 	// should reconnect.
 	EventClosed = "closed"
 
-	// SelectionTTL is how long a selection outlives its last heartbeat.
+	// SelectionTTL is how long a selection outlives its last heartbeat: a
+	// little over two of the web app's 15s heartbeats, so one lost beat does
+	// not clear it.
 	SelectionTTL = 40 * time.Second
 
 	maxNameRunes = 40

@@ -194,7 +194,7 @@ func (c *Client) Threads(ctx context.Context, space drive.Space, path string) (T
 	return decode[ThreadList](resp)
 }
 
-// Reply adds a comment to one of the caller's own threads.
+// Reply adds a comment to a thread on one of the caller's own documents.
 func (c *Client) Reply(ctx context.Context, threadID, body string) (Comment, error) {
 	resp, err := c.http.Post(ctx, "/api/v1/threads/"+url.PathEscape(threadID)+"/comments",
 		httpclient.JSONBody(CommentBody{Body: body}), httpclient.JSONContent())
@@ -205,7 +205,7 @@ func (c *Client) Reply(ctx context.Context, threadID, body string) (Comment, err
 	return decode[Comment](resp)
 }
 
-// SetResolved resolves or reopens one of the caller's own threads.
+// SetResolved resolves or reopens a thread on one of the caller's own documents.
 func (c *Client) SetResolved(ctx context.Context, threadID string, resolved bool) (Thread, error) {
 	resp, err := c.http.Patch(ctx, "/api/v1/threads/"+url.PathEscape(threadID),
 		httpclient.JSONBody(ThreadStateUpdate{Resolved: resolved}), httpclient.JSONContent())
