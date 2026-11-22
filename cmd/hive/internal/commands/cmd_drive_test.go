@@ -13,7 +13,7 @@ func TestDriveRemoteCommandsTakeDriveServerFlag(t *testing.T) {
 	drive := find(root.Commands, "drive")
 	require.NotNil(t, drive)
 
-	for _, name := range []string{"push", "pull", "share"} {
+	for _, name := range []string{"push", "pull", "share", "comments"} {
 		t.Run(name, func(t *testing.T) {
 			sub := find(drive.Commands, name)
 			require.NotNil(t, sub)
