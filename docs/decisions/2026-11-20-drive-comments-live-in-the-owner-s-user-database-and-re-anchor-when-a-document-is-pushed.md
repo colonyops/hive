@@ -33,9 +33,10 @@ The server is one container with no other services
 - **Re-anchoring runs after the upsert,** outside its transaction, so a large
   diff does not hold the user file's one connection. A per-path lock keeps
   two pushes to one document in order. Each thread records the document
-  version it was checked against, so a push moves exactly the threads on the
-  version it replaced, and a thread is created only against the version the
-  client rendered.
+  version it was checked against, so a push moves the threads on the
+  version it replaced by the line diff, and a thread is created only against
+  the version the client rendered. A thread on any older version, left by a
+  re-anchor that failed, is placed by its quote alone on the next push.
 - **Presence and signals** run through one in-memory hub per process. A
   server-sent event stream carries only signals and presence; content always
   comes from REST, and every stream open re-reads. Presence carries line

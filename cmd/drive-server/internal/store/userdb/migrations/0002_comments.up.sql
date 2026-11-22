@@ -1,6 +1,6 @@
 -- A thread with no start_line is a general thread. anchor_sha256 is the
 -- document version the anchor was last checked against: a push re-anchors
--- exactly the threads still on the version it replaced.
+-- every thread not yet on the new version.
 CREATE TABLE threads (
     id                 TEXT PRIMARY KEY,
     document_id        TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,

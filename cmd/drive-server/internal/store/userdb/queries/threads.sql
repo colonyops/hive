@@ -59,9 +59,9 @@ UPDATE threads
 SET resolved_at = ?, resolved_by = ?, resolved_by_email = ?, resolved_via_token = ?
 WHERE id = ?;
 
--- name: ListAnchoredThreadsAt :many
-SELECT id, start_line, end_line, quote, outdated FROM threads
-WHERE document_id = ? AND anchor_sha256 = ? AND start_line IS NOT NULL;
+-- name: ListAnchoredThreadsBehind :many
+SELECT id, start_line, end_line, quote, outdated, anchor_sha256 FROM threads
+WHERE document_id = ? AND anchor_sha256 <> ? AND start_line IS NOT NULL;
 
 -- name: UpdateThreadAnchor :execrows
 UPDATE threads

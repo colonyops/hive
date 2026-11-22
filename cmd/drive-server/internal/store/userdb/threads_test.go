@@ -175,10 +175,11 @@ func TestMoveAnchorsOnlyMovesThreadsOnTheOldVersion(t *testing.T) {
 	moved := f.newThread(t, &core.ThreadAnchor{StartLine: 3, EndLine: 3, Quote: "one"}, "a")
 	f.newThread(t, nil, "general threads are never anchored")
 
-	anchored, err := f.threads.AnchoredAt(t.Context(), f.doc.ID, "v1")
+	behind, err := f.threads.AnchoredBehind(t.Context(), f.doc.ID, "v2")
 	require.NoError(t, err)
-	require.Len(t, anchored, 1)
-	assert.Equal(t, moved, anchored[0].ThreadID)
+	require.Len(t, behind, 1)
+	require.Len(t, behind["v1"], 1)
+	assert.Equal(t, moved, behind["v1"][0].ThreadID)
 
 	next := core.ThreadAnchor{ThreadID: moved, StartLine: 5, EndLine: 6, Quote: "one", Outdated: true}
 	require.NoError(t, f.threads.MoveAnchors(t.Context(), f.doc.ID, "v1", "v2", []core.ThreadAnchor{next}))
@@ -193,7 +194,7 @@ func TestMoveAnchorsOnlyMovesThreadsOnTheOldVersion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 5, stored.Anchor.StartLine, "a thread already moved off v1 is skipped")
 
-	empty, err := f.threads.AnchoredAt(t.Context(), f.doc.ID, "v1")
+	empty, err := f.threads.AnchoredBehind(t.Context(), f.doc.ID, "v2")
 	require.NoError(t, err)
 	assert.Empty(t, empty)
 }

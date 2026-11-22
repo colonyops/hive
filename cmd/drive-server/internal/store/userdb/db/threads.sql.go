@@ -183,39 +183,41 @@ func (q *Queries) InsertThread(ctx context.Context, arg InsertThreadParams) erro
 	return err
 }
 
-const listAnchoredThreadsAt = `-- name: ListAnchoredThreadsAt :many
-SELECT id, start_line, end_line, quote, outdated FROM threads
-WHERE document_id = ? AND anchor_sha256 = ? AND start_line IS NOT NULL
+const listAnchoredThreadsBehind = `-- name: ListAnchoredThreadsBehind :many
+SELECT id, start_line, end_line, quote, outdated, anchor_sha256 FROM threads
+WHERE document_id = ? AND anchor_sha256 <> ? AND start_line IS NOT NULL
 `
 
-type ListAnchoredThreadsAtParams struct {
+type ListAnchoredThreadsBehindParams struct {
 	DocumentID   string `json:"document_id"`
 	AnchorSha256 string `json:"anchor_sha256"`
 }
 
-type ListAnchoredThreadsAtRow struct {
-	ID        string         `json:"id"`
-	StartLine sql.NullInt64  `json:"start_line"`
-	EndLine   sql.NullInt64  `json:"end_line"`
-	Quote     sql.NullString `json:"quote"`
-	Outdated  int64          `json:"outdated"`
+type ListAnchoredThreadsBehindRow struct {
+	ID           string         `json:"id"`
+	StartLine    sql.NullInt64  `json:"start_line"`
+	EndLine      sql.NullInt64  `json:"end_line"`
+	Quote        sql.NullString `json:"quote"`
+	Outdated     int64          `json:"outdated"`
+	AnchorSha256 string         `json:"anchor_sha256"`
 }
 
-func (q *Queries) ListAnchoredThreadsAt(ctx context.Context, arg ListAnchoredThreadsAtParams) ([]ListAnchoredThreadsAtRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAnchoredThreadsAt, arg.DocumentID, arg.AnchorSha256)
+func (q *Queries) ListAnchoredThreadsBehind(ctx context.Context, arg ListAnchoredThreadsBehindParams) ([]ListAnchoredThreadsBehindRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAnchoredThreadsBehind, arg.DocumentID, arg.AnchorSha256)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListAnchoredThreadsAtRow{}
+	items := []ListAnchoredThreadsBehindRow{}
 	for rows.Next() {
-		var i ListAnchoredThreadsAtRow
+		var i ListAnchoredThreadsBehindRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.StartLine,
 			&i.EndLine,
 			&i.Quote,
 			&i.Outdated,
+			&i.AnchorSha256,
 		); err != nil {
 			return nil, err
 		}

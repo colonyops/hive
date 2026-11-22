@@ -99,18 +99,20 @@ func (d *Documents) Put(ctx context.Context, p Principal, space drive.Space, pat
 	}
 	if existed && prev.SHA256 != doc.SHA256 {
 		if kind == drive.KindMarkdown {
-			d.reanchor(ctx, p.UserID, doc, prev.SHA256, prevBody, body)
+			// The push has committed; a client that hangs up now must not
+			// leave its threads behind.
+			d.reanchor(context.WithoutCancel(ctx), p.UserID, doc, prev.SHA256, prevBody, body)
 		}
 		d.notify.DocumentChanged(p.UserID, doc.ID, doc.SHA256)
 	}
 	return toWire(doc), nil
 }
 
-// reanchor moves the threads checked against fromSHA onto doc's version. It
-// runs after the upsert, outside its transaction, so a large diff does not
-// hold the user file's one connection. A thread created on fromSHA while the
-// push ran is still on fromSHA, so it moves too. A failure leaves the
-// threads where they were; the push itself has succeeded.
+// reanchor moves the document's threads onto doc's version. It runs after
+// the upsert, outside its transaction, so a large diff does not hold the user
+// file's one connection. A thread created on fromSHA while the push ran is
+// still on fromSHA, so it moves too. A failure leaves the threads where they
+// were; the push itself has succeeded, and the next push picks them up.
 func (d *Documents) reanchor(ctx context.Context, userID string, doc Document, fromSHA string, prev, next []byte) {
 	log := d.log.With().Str("document", doc.ID).Logger()
 	threads, release, err := d.users.OpenThreads(ctx, userID)
@@ -120,19 +122,29 @@ func (d *Documents) reanchor(ctx context.Context, userID string, doc Document, f
 	}
 	defer release()
 
-	anchors, err := threads.AnchoredAt(ctx, doc.ID, fromSHA)
+	behind, err := threads.AnchoredBehind(ctx, doc.ID, doc.SHA256)
 	if err != nil {
 		log.Warn().Err(err).Msg("re-anchor: list anchored threads")
 		return
 	}
-	if len(anchors) == 0 {
-		return
+	moved := false
+	for sha, anchors := range behind {
+		if sha != fromSHA {
+			// An earlier re-anchor missed these, so their lines belong to a
+			// version that is gone. Only the quote can place them.
+			for i := range anchors {
+				anchors[i].Outdated = true
+			}
+		}
+		if err := threads.MoveAnchors(ctx, doc.ID, sha, doc.SHA256, Reanchor(prev, next, anchors)); err != nil {
+			log.Warn().Err(err).Msg("re-anchor: move anchors")
+			continue
+		}
+		moved = true
 	}
-	if err := threads.MoveAnchors(ctx, doc.ID, fromSHA, doc.SHA256, Reanchor(prev, next, anchors)); err != nil {
-		log.Warn().Err(err).Msg("re-anchor: move anchors")
-		return
+	if moved {
+		d.notify.ThreadsChanged(userID, doc.ID)
 	}
-	d.notify.ThreadsChanged(userID, doc.ID)
 }
 
 func (d *Documents) Get(ctx context.Context, p Principal, space drive.Space, path string) (driveapi.Document, []byte, error) {

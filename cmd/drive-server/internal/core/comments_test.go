@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -392,6 +393,60 @@ func TestPutReanchorsAThreadCreatedDuringThePush(t *testing.T) {
 	require.Len(t, list.Threads, 1)
 	assert.Equal(t, raced.ID, list.Threads[0].ID)
 	assert.Equal(t, 10, list.Threads[0].Anchor.StartLine)
+}
+
+func TestPutReanchorsAThreadAnEarlierPushMissed(t *testing.T) {
+	c := newCommentsEnv(t)
+	missed := c.thread(t, c.other, anchorAt(8, "Ship it on Friday"), "missed")
+	threads, release, err := c.users.OpenThreads(t.Context(), c.owner.UserID)
+	require.NoError(t, err)
+	stranded := core.ThreadAnchor{ThreadID: missed.ID, StartLine: 2, EndLine: 2, Quote: "Ship it on Friday"}
+	require.NoError(t, threads.MoveAnchors(t.Context(), c.doc.ID, c.doc.SHA256, "a version that is gone", []core.ThreadAnchor{stranded}))
+	release()
+
+	_, err = c.docs.Put(t.Context(), c.owner, drive.Shared, "plan.md", []byte(sharedPlanV2))
+	require.NoError(t, err)
+
+	list := c.list(t, &c.owner)
+	require.Len(t, list.Threads, 1)
+	assert.False(t, list.Threads[0].Outdated)
+	assert.Equal(t, 10, list.Threads[0].Anchor.StartLine, "found by its quote, not its stale lines")
+}
+
+func TestPushesToOnePathRunInOrder(t *testing.T) {
+	c := newCommentsEnv(t)
+	moved := c.thread(t, c.other, anchorAt(8, "Ship it on Friday"), "moves")
+	v3 := "Intro.\n\n" + sharedPlanV2
+
+	var once sync.Once
+	second := make(chan error, 1)
+	core.SetBeforePut(c.docs, func() {
+		once.Do(func() {
+			go func() {
+				_, err := c.docs.Put(t.Context(), c.owner, drive.Shared, "plan.md", []byte(v3))
+				second <- err
+			}()
+			// Without the lock the second push would finish here, and the
+			// first would then overwrite v3 with v2.
+			select {
+			case err := <-second:
+				second <- err
+			case <-time.After(100 * time.Millisecond):
+			}
+		})
+	})
+	_, err := c.docs.Put(t.Context(), c.owner, drive.Shared, "plan.md", []byte(sharedPlanV2))
+	require.NoError(t, err)
+	require.NoError(t, <-second)
+	core.SetBeforePut(c.docs, nil)
+
+	_, body, err := c.docs.Get(t.Context(), c.owner, drive.Shared, "plan.md")
+	require.NoError(t, err)
+	assert.Equal(t, v3, string(body))
+	list := c.list(t, &c.owner)
+	require.Len(t, list.Threads, 1)
+	assert.Equal(t, moved.ID, list.Threads[0].ID)
+	assert.Equal(t, 12, list.Threads[0].Anchor.StartLine)
 }
 
 func TestDeleteClosesTheDocument(t *testing.T) {

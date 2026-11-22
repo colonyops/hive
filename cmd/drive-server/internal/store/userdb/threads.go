@@ -220,20 +220,20 @@ func (u *UserDB) SetResolved(ctx context.Context, id string, by *core.Actor, at 
 	return nil
 }
 
-func (u *UserDB) AnchoredAt(ctx context.Context, documentID, sha string) ([]core.ThreadAnchor, error) {
-	rows, err := u.q.ListAnchoredThreadsAt(ctx, db.ListAnchoredThreadsAtParams{DocumentID: documentID, AnchorSha256: sha})
+func (u *UserDB) AnchoredBehind(ctx context.Context, documentID, sha string) (map[string][]core.ThreadAnchor, error) {
+	rows, err := u.q.ListAnchoredThreadsBehind(ctx, db.ListAnchoredThreadsBehindParams{DocumentID: documentID, AnchorSha256: sha})
 	if err != nil {
 		return nil, wrap("list anchored threads", err)
 	}
-	out := make([]core.ThreadAnchor, len(rows))
-	for i, r := range rows {
-		out[i] = core.ThreadAnchor{
+	out := make(map[string][]core.ThreadAnchor)
+	for _, r := range rows {
+		out[r.AnchorSha256] = append(out[r.AnchorSha256], core.ThreadAnchor{
 			ThreadID:  r.ID,
 			StartLine: int(r.StartLine.Int64),
 			EndLine:   int(r.EndLine.Int64),
 			Quote:     r.Quote.String,
 			Outdated:  r.Outdated != 0,
-		}
+		})
 	}
 	return out, nil
 }

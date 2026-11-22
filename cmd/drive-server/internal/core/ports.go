@@ -215,9 +215,9 @@ type ThreadStore interface {
 	DeleteComment(ctx context.Context, id string, at time.Time) (threadDeleted bool, err error)
 	// SetResolved resolves the thread when by is non-nil, else reopens it.
 	SetResolved(ctx context.Context, id string, by *Actor, at time.Time) error
-	// AnchoredAt returns the document's anchored threads still checked
-	// against sha.
-	AnchoredAt(ctx context.Context, documentID, sha string) ([]ThreadAnchor, error)
+	// AnchoredBehind returns the document's anchored threads not checked
+	// against sha, keyed by the version each one was checked against.
+	AnchoredBehind(ctx context.Context, documentID, sha string) (map[string][]ThreadAnchor, error)
 	// MoveAnchors writes anchors and records them as checked against toSHA.
 	// It skips a thread no longer checked against fromSHA.
 	MoveAnchors(ctx context.Context, documentID, fromSHA, toSHA string, anchors []ThreadAnchor) error
