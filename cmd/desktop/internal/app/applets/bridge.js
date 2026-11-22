@@ -4,9 +4,11 @@
   let nextID = 0
   const pending = new Map()
   const surface = new URLSearchParams(location.search).get('surface') ?? 'popup'
-  const listeners = { message: new Set(), session: new Set(), command: new Set() }
+  const listeners = { message: new Set(), session: new Set(), command: new Set(), render: new Set() }
   // A command can be why this page opened, and arrive before its scripts have listened.
   const heldCommands = []
+  // A render is the page's whole input and each one replaces the last, so only the latest waits.
+  let heldRender = null
 
   const applyTheme = (theme) => {
     for (const [name, value] of Object.entries(theme)) document.documentElement.style.setProperty(name, value)
@@ -24,6 +26,10 @@
     if (data.event) {
       if (data.event === 'command' && listeners.command.size === 0) {
         heldCommands.push(data.data)
+        return
+      }
+      if (data.event === 'render' && listeners.render.size === 0) {
+        heldRender = { data: data.data }
         return
       }
       for (const listener of listeners[data.event] ?? []) listener(data.data)
@@ -75,6 +81,11 @@
       if (!listeners[event]) return () => {}
       listeners[event].add(listener)
       if (event === 'command') heldCommands.splice(0).forEach((id) => listener(id))
+      if (event === 'render' && heldRender) {
+        const { data } = heldRender
+        heldRender = null
+        listener(data)
+      }
       return () => listeners[event].delete(listener)
     },
     broadcast: (data) => call('broadcast', { data }),
@@ -86,6 +97,7 @@
     setCommands: (rows) => call('setCommands', { rows }),
     openPalette: (query = '') => call('openPalette', { query }),
     navigate: (path) => call('navigate', { path }),
+    follow: (href) => call('follow', { href }),
     context: () => call('context'),
     exec: (command, options = {}) => call('exec', { command, ...options }),
     async spawn(command, options = {}) {

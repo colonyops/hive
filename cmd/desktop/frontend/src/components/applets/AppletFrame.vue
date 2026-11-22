@@ -8,7 +8,7 @@ import type { Applet } from '../../../bindings/github.com/colonyops/hive/cmd/des
 import { isEditableTarget } from '../../lib/isEditableTarget'
 import { usePopupTerminal } from '../../stores/usePopupTerminal'
 import { SURFACES, type AppletSurface } from '../../stores/appletSurfaces'
-import { useAppletBridge } from './useAppletBridge'
+import { useAppletBridge, type AppletRender } from './useAppletBridge'
 
 // Hosts one of an applet's pages. The frame has an opaque origin, so a page can do what
 // it likes to itself without reaching Hive's DOM or storage, and what it asks of the
@@ -23,10 +23,26 @@ const props = withDefaults(
     entry?: string
     wantsFocus?: boolean
     onScreen?: boolean
+    render?: AppletRender
+    onFollow?: (href: string) => void
+    testid?: string
   }>(),
-  { surface: 'popup', entry: undefined, wantsFocus: false, onScreen: true },
+  {
+    surface: 'popup',
+    entry: undefined,
+    wantsFocus: false,
+    onScreen: true,
+    render: undefined,
+    onFollow: undefined,
+    testid: undefined,
+  },
 )
-const emit = defineEmits<{ close: []; resize: [size: { width?: number; height?: number }]; focused: [] }>()
+const emit = defineEmits<{
+  close: []
+  resize: [size: { width?: number; height?: number }]
+  focused: []
+  failed: []
+}>()
 
 const rules = computed(() => SURFACES[props.surface])
 const isPopup = computed(() => props.surface === 'popup')
@@ -47,6 +63,11 @@ useAppletBridge({
   onScreen: () => props.onScreen,
   close: () => emit('close'),
   resize: (size) => emit('resize', size),
+  render: () => props.render,
+  onFollow: (href) => {
+    if (!props.onFollow) throw new Error('hive.follow is only for a page shown in a document.')
+    props.onFollow(href)
+  },
 })
 
 // A page's Escape arrives through the bridge. This one is for focus outside the frame.
@@ -88,7 +109,7 @@ useEventListener(frame, 'focus', reportFocus)
 </script>
 
 <template>
-  <div class="relative min-h-0 flex-1" :data-testid="isPopup ? 'applet-page' : undefined">
+  <div class="relative min-h-0 flex-1" :data-testid="testid ?? (isPopup ? 'applet-page' : undefined)">
     <iframe
       ref="frame"
       :key="applet.revision"
@@ -97,8 +118,9 @@ useEventListener(frame, 'focus', reportFocus)
       sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads allow-pointer-lock"
       allow="autoplay; fullscreen; clipboard-read; clipboard-write; camera; microphone; gamepad"
       class="absolute inset-0 size-full border-0"
-      :data-testid="isPopup ? 'applet-frame' : `applet-${surface}-frame`"
+      :data-testid="testid ? `${testid}-frame` : isPopup ? 'applet-frame' : `applet-${surface}-frame`"
       @load="focusFrame"
+      @error="emit('failed')"
     />
     <IconButton
       v-if="isPopup"

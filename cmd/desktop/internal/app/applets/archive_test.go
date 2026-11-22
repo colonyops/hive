@@ -280,6 +280,20 @@ func TestUnpackNeedsNoEntryForATitlebarOnlyApplet(t *testing.T) {
 	assert.Nil(t, archive.Applet.Surfaces.Popup)
 }
 
+func TestUnpackChecksTheMarkdownPage(t *testing.T) {
+	yaml := archiveYAML + "surfaces:\n  markdown:\n    fences: [card]\n    entry: card.html\n"
+	_, err := Unpack(buildZip(t, manifestEntry("radio"),
+		zipEntry{name: "files/applet.yaml", body: yaml},
+		zipEntry{name: "files/index.html"}), "")
+	require.ErrorContains(t, err, `no page "card.html"`)
+
+	archive, err := Unpack(buildZip(t, manifestEntry("radio"),
+		zipEntry{name: "files/applet.yaml", body: yaml},
+		zipEntry{name: "files/card.html"}), "")
+	require.NoError(t, err)
+	assert.Nil(t, archive.Applet.Surfaces.Popup, "a markdown-only archive needs no applet page")
+}
+
 func TestInstallNeverReplacesAndLeavesNothingBehind(t *testing.T) {
 	archive, err := Unpack(buildZip(t, validEntries()...), "")
 	require.NoError(t, err)

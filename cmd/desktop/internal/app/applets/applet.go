@@ -79,6 +79,9 @@ type Surfaces struct {
 	Popup *PopupSurface `yaml:"popup,omitempty"`
 	// Titlebar runs a page in the title bar from the moment the file loads.
 	Titlebar *TitlebarSurface `yaml:"titlebar,omitempty"`
+	// Markdown renders the applet inline in Drive docs, once per fenced block whose
+	// info string is one of Fences. It adds nothing to a menu, the palette or the title bar.
+	Markdown *MarkdownSurface `yaml:"markdown,omitempty"`
 }
 
 // UnmarshalYAML reads a bare "tab:" as asking for the surface. The decoder leaves a pointer
@@ -100,22 +103,26 @@ func (s *Surfaces) UnmarshalYAML(node *yaml.Node) error {
 	if s.Titlebar == nil && hasKey(node, "titlebar") {
 		s.Titlebar = &TitlebarSurface{}
 	}
+	if s.Markdown == nil && hasKey(node, "markdown") {
+		s.Markdown = &MarkdownSurface{}
+	}
 	return nil
 }
 
 func (s Surfaces) none() bool {
-	return s.Tab == nil && s.Page == nil && s.Popup == nil && s.Titlebar == nil
+	return s.Tab == nil && s.Page == nil && s.Popup == nil && s.Titlebar == nil && s.Markdown == nil
 }
 
 // opens says whether the file lists a surface that shows the applet's own page.
 func (s Surfaces) opens() bool { return s.Tab != nil || s.Page != nil || s.Popup != nil }
 
-// ShowsTab, ShowsPage, ShowsPopup and ShowsTitlebar say whether the surface is listed and not
+// ShowsTab, ShowsPage, ShowsPopup, ShowsTitlebar and ShowsMarkdown say whether the surface is listed and not
 // turned off.
 func (s Surfaces) ShowsTab() bool      { return s.Tab != nil && isOn(s.Tab.Enabled) }
 func (s Surfaces) ShowsPage() bool     { return s.Page != nil && isOn(s.Page.Enabled) }
 func (s Surfaces) ShowsPopup() bool    { return s.Popup != nil && isOn(s.Popup.Enabled) }
 func (s Surfaces) ShowsTitlebar() bool { return s.Titlebar != nil && isOn(s.Titlebar.Enabled) }
+func (s Surfaces) ShowsMarkdown() bool { return s.Markdown != nil && isOn(s.Markdown.Enabled) }
 
 func isOn(enabled *bool) bool { return enabled == nil || *enabled }
 
@@ -146,6 +153,23 @@ type TitlebarSurface struct {
 	// Width is the slot's width in pixels until the page asks for another. Zero is
 	// DefaultTitlebarWidth, one icon button.
 	Width int `yaml:"width,omitempty"`
+}
+
+// Body modes of a markdown fence.
+const (
+	MarkdownBodyYAML = "yaml"
+	MarkdownBodyText = "text"
+)
+
+// MarkdownSurface is the page an applet renders for each of its fences in a Drive doc.
+type MarkdownSurface struct {
+	Enabled *bool `yaml:"enabled,omitempty"`
+	// Entry is relative to the applet's directory. Empty uses the applet's Entry, and
+	// the page tells the two apart with hive.surface.
+	Entry  string   `yaml:"entry,omitempty"`
+	Fences []string `yaml:"fences"`
+	// Body is yaml (the default: parsed, and sent to the page as data) or text.
+	Body string `yaml:"body,omitempty"`
 }
 
 // Parse decodes one applet.yaml for the Hive at hostVersion. It reads forward: a later
@@ -189,6 +213,9 @@ func Parse(id string, raw []byte, hostVersion string) (Applet, error) {
 			bar.Width = DefaultTitlebarWidth
 		}
 	}
+	if md := a.Surfaces.Markdown; md != nil && md.Entry == "" {
+		md.Entry = a.Entry
+	}
 	return a, a.Validate()
 }
 
@@ -210,7 +237,39 @@ func (a Applet) Validate() error {
 	case a.Surfaces.Titlebar != nil && a.Surfaces.Titlebar.Width < 0:
 		return errors.New("surfaces.titlebar.width must not be negative")
 	}
+	if err := a.validateMarkdown(); err != nil {
+		return err
+	}
 	return a.validateCommands()
+}
+
+func (a Applet) validateMarkdown() error {
+	md := a.Surfaces.Markdown
+	if md == nil {
+		return nil
+	}
+	if len(md.Fences) == 0 {
+		return errors.New("surfaces.markdown.fences must list at least one fence")
+	}
+	seen := make(map[string]bool, len(md.Fences))
+	for _, fence := range md.Fences {
+		switch {
+		case !slug.Valid(fence):
+			return fmt.Errorf("surfaces.markdown.fences: %q is not a valid slug", fence)
+		case strings.HasPrefix(fence, "hive-"):
+			return fmt.Errorf("surfaces.markdown.fences: %q starts with hive-, which is kept for Hive's own fences", fence)
+		case seen[fence]:
+			return fmt.Errorf("surfaces.markdown.fences: %q is listed twice", fence)
+		}
+		seen[fence] = true
+	}
+	switch {
+	case !filepath.IsLocal(md.Entry):
+		return fmt.Errorf("surfaces.markdown.entry must be a path inside the applet's directory, got %q", md.Entry)
+	case md.Body != "" && md.Body != MarkdownBodyYAML && md.Body != MarkdownBodyText:
+		return fmt.Errorf("surfaces.markdown.body must be %q or %q, got %q", MarkdownBodyYAML, MarkdownBodyText, md.Body)
+	}
+	return nil
 }
 
 func (a Applet) validateCommands() error {

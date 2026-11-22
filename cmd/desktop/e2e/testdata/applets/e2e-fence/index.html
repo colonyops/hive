@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <title>E2E fence</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+        color: var(--hv-text, red);
+        font: 13px sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="card" style="height: 200px">
+      <span id="surface"></span>
+      <span id="lang"></span>
+      <pre id="data"></pre>
+    </div>
+    <script>
+      document.querySelector('#surface').textContent = hive.surface
+      hive.on('render', (render) => {
+        document.querySelector('#lang').textContent = render.lang
+        document.querySelector('#data').textContent = JSON.stringify(render.data)
+        hive.resize({ height: 200 })
+      })
+    </script>
+  </body>
+</html>

@@ -225,6 +225,18 @@ export interface AppletImportPreview {
 }
 
 /**
+ * AppletMarkdownSurface is the fences an applet renders in Drive docs. Fences is what the
+ * applet owns after another applet's claim on the same fence is resolved. Body is "yaml"
+ * or "text".
+ */
+export interface AppletMarkdownSurface {
+    "entry": string;
+    "fences": string[] | null;
+    "body": string;
+    "enabled": boolean;
+}
+
+/**
  * AppletOutput is what a spawned process has done since the last read. Done is set
  * once, on the read that drains the end of its output.
  */
@@ -261,6 +273,12 @@ export interface AppletSurfaces {
     "popup": AppletPopup | null;
     "titlebar": AppletTitlebar | null;
     "titlebarPage": string;
+
+    /**
+     * Markdown is set when the file declares the surface, on or off, so Settings can turn
+     * it back on.
+     */
+    "markdown": AppletMarkdownSurface | null;
 }
 
 /**

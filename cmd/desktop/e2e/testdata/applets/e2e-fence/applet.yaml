@@ -1,0 +1,5 @@
+version: 1
+title: E2E fence
+surfaces:
+  markdown:
+    fences: [e2e-card]

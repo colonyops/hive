@@ -1,10 +1,12 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent, h, ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import bridgeSource from '../../../../../internal/app/applets/bridge.js?raw'
 import { useKeybindings } from '../../../composables/useKeybindings'
 import { resetStores } from '../../../stores/defineStore'
 import { useApplets } from '../../../stores/useApplets'
 import AppletFrame from '../AppletFrame.vue'
+import { useAppletBridge, type AppletBridgeOptions, type AppletRender } from '../useAppletBridge'
 
 // Runs the real bridge.js against the real AppletFrame, so a method name that drifts
 // between the two fails here and not at runtime in a page.
@@ -52,6 +54,7 @@ interface Hive {
   close(): Promise<void>
   on(event: string, listener: (data: unknown) => void): () => void
   setCommands(rows: object[]): Promise<void>
+  follow(href: string): Promise<void>
 }
 
 interface PageWindow {
@@ -96,7 +99,36 @@ function loadPage(storage: Record<string, string> = {}, top?: unknown) {
     props: { applet: applet as never, sessionSlug: 'sess' },
     attachTo: document.body,
   })
-  const frameWindow = wrapper.get('iframe').element.contentWindow as Window
+  return runBridge(wrapper, storage, top)
+}
+
+// A host that passes the bridge options AppletFrame does not yet, with the surface free.
+function loadHostedPage(extra: Partial<AppletBridgeOptions>, surface: AppletBridgeOptions['surface'] = () => 'popup') {
+  const closed = vi.fn()
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        const frame = ref<HTMLIFrameElement | null>(null)
+        useAppletBridge({
+          applet: () => applet as never,
+          frame,
+          surface,
+          sessionSlug: () => 'sess',
+          onScreen: () => true,
+          close: closed,
+          resize: () => {},
+          ...extra,
+        })
+        return () => h('iframe', { ref: frame })
+      },
+    }),
+    { attachTo: document.body },
+  )
+  return { ...runBridge(wrapper), closed }
+}
+
+function runBridge(wrapper: ReturnType<typeof mount>, storage: Record<string, string> = {}, top?: unknown) {
+  const frameWindow = (wrapper.get('iframe').element as HTMLIFrameElement).contentWindow as Window
   const listeners: Record<string, Listener[]> = {}
   const page: PageWindow = {
     __hiveToken: 'secret',
@@ -394,6 +426,85 @@ describe('bridge.js', () => {
       } finally {
         pendingSequence.value = null
         app.stop()
+        vi.useRealTimers()
+      }
+    })
+  })
+
+  describe('render and follow', () => {
+    const first: AppletRender = { data: 'a', source: 's', lang: 'chart', docPath: 'notes/a.md' }
+    const second: AppletRender = { ...first, data: 'b' }
+
+    it('holds only the latest render until a listener subscribes', async () => {
+      const current = ref<AppletRender | undefined>(first)
+      const { wrapper, page } = loadHostedPage({ render: () => current.value })
+      await flushPromises()
+      current.value = second
+      await flushPromises()
+      const heard: unknown[] = []
+      page.hive.on('render', (data) => heard.push(data))
+      expect(heard).toEqual([second])
+
+      current.value = { ...second, data: 'c' }
+      await flushPromises()
+      expect(heard).toEqual([second, { ...second, data: 'c' }])
+      wrapper.unmount()
+    })
+
+    it('sends a render again when the page reloads', async () => {
+      const { wrapper, page } = loadHostedPage({ render: () => first })
+      await flushPromises()
+      const heard: unknown[] = []
+      page.hive.on('render', (data) => heard.push(data))
+      expect(heard).toEqual([first])
+
+      const reloaded = runBridge(wrapper)
+      await flushPromises()
+      const again: unknown[] = []
+      reloaded.page.hive.on('render', (data) => again.push(data))
+      expect(again).toEqual([first])
+      wrapper.unmount()
+    })
+
+    it('sends nothing without a render', async () => {
+      const { wrapper, page } = loadHostedPage({})
+      await flushPromises()
+      const heard: unknown[] = []
+      page.hive.on('render', (data) => heard.push(data))
+      expect(heard).toEqual([])
+      wrapper.unmount()
+    })
+
+    it('hands a followed link to the host, and rejects it when there is no host', async () => {
+      const onFollow = vi.fn()
+      const hosted = loadHostedPage({ onFollow })
+      await hosted.page.hive.follow('other.md')
+      expect(onFollow).toHaveBeenCalledWith('other.md')
+      hosted.wrapper.unmount()
+
+      const bare = loadHostedPage({})
+      await expect(bare.page.hive.follow('other.md')).rejects.toThrow('hive.follow')
+      bare.wrapper.unmount()
+    })
+  })
+
+  describe('Escape by surface', () => {
+    it.each([
+      ['popup', true],
+      ['dropdown', true],
+      ['tab', false],
+      ['page', false],
+      ['titlebar', true],
+    ] as const)('on %s closes: %s', async (surface, closes) => {
+      vi.useFakeTimers()
+      try {
+        const { wrapper, listeners, closed } = loadHostedPage({}, () => surface)
+        listeners.keydown?.[0]?.({ key: 'Escape', defaultPrevented: false })
+        await vi.advanceTimersByTimeAsync(5)
+        await flushPromises()
+        expect(closed).toHaveBeenCalledTimes(closes ? 1 : 0)
+        wrapper.unmount()
+      } finally {
         vi.useRealTimers()
       }
     })

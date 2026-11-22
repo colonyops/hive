@@ -1,10 +1,11 @@
 import type { Component } from 'vue'
 import IconAppWindow from '~icons/lucide/app-window'
+import IconFileText from '~icons/lucide/file-text'
 import IconPanelTop from '~icons/lucide/panel-top'
 import IconPanelsTopLeft from '~icons/lucide/panels-top-left'
 import IconSquareStack from '~icons/lucide/square-stack'
 
-export type AppletSurface = 'tab' | 'page' | 'popup' | 'titlebar' | 'dropdown'
+export type AppletSurface = 'tab' | 'page' | 'popup' | 'titlebar' | 'dropdown' | 'markdown'
 
 /** What applet.yaml says about where an applet shows, read from an Applet or an import preview. */
 interface DeclaresSurfaces {
@@ -15,6 +16,7 @@ interface DeclaresSurfaces {
     popup: object | null
     titlebar: { entry: string } | null
     titlebarPage?: string
+    markdown?: { entry: string; enabled: boolean } | null
   }
 }
 
@@ -109,6 +111,21 @@ export const SURFACES: Record<AppletSurface, AppletSurfaceRules> = {
     persistent: false,
     takesFocus: true,
     escapeCloses: true,
+  },
+  // Inline in a Drive document, once per fenced block. It loads while the user reads, so it must
+  // not take focus, and it has no say over Escape.
+  markdown: {
+    panel: false,
+    persistent: false,
+    takesFocus: false,
+    escapeCloses: false,
+    declared: {
+      label: 'Markdown',
+      icon: IconFileText,
+      description: 'Renders fenced blocks in Drive documents. Adds nothing to a menu or the palette.',
+      page: (applet) => (applet.surfaces.markdown?.enabled ? applet.surfaces.markdown.entry : undefined),
+      available: (applet) => !!applet.surfaces.markdown,
+    },
   },
 }
 

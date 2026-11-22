@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"os"
 	"path/filepath"
@@ -55,6 +56,19 @@ type AppletSurfaces struct {
 	Popup        *AppletPopup    `json:"popup"`
 	Titlebar     *AppletTitlebar `json:"titlebar"`
 	TitlebarPage string          `json:"titlebarPage"`
+	// Markdown is set when the file declares the surface, on or off, so Settings can turn
+	// it back on.
+	Markdown *AppletMarkdownSurface `json:"markdown"`
+}
+
+// AppletMarkdownSurface is the fences an applet renders in Drive docs. Fences is what the
+// applet owns after another applet's claim on the same fence is resolved. Body is "yaml"
+// or "text".
+type AppletMarkdownSurface struct {
+	Entry   string   `json:"entry"`
+	Fences  []string `json:"fences"`
+	Body    string   `json:"body"`
+	Enabled bool     `json:"enabled"`
 }
 
 // AppletPopup sizes the pop-up in pixels. Zero fills the window.
@@ -309,6 +323,14 @@ func appletSurfacesOf(a applets.Applet) AppletSurfaces {
 	}
 	if a.Surfaces.ShowsTitlebar() {
 		out.Titlebar = &AppletTitlebar{Entry: a.Surfaces.Titlebar.Entry, Width: a.Surfaces.Titlebar.Width}
+	}
+	if md := a.Surfaces.Markdown; md != nil {
+		out.Markdown = &AppletMarkdownSurface{
+			Entry:   md.Entry,
+			Fences:  append([]string{}, md.Fences...),
+			Body:    cmp.Or(md.Body, applets.MarkdownBodyYAML),
+			Enabled: a.Surfaces.ShowsMarkdown(),
+		}
 	}
 	return out
 }

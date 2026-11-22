@@ -16,6 +16,7 @@ import { hiveUiPlatform } from './lib/hiveUiPlatform'
 import { captureVueErrors, installErrorCapture } from './lib/log'
 import { startPerfMonitor } from './lib/perfMonitor'
 import { router } from './router'
+import { useMarkdownApplets } from './stores/useMarkdownApplets'
 import { useSurfaceScale } from './stores/useSurfaceScale'
 
 installErrorCapture()
@@ -30,6 +31,7 @@ if (new URLSearchParams(window.location.search).has('diagnostics')) {
   void startPerfMonitor()
 } else {
   initializeKeybindings()
+  useMarkdownApplets()
   const app = createApp(App as Component).use(router)
   installHiveUi(app, hiveUiPlatform)
   captureVueErrors(app)

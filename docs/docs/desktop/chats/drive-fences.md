@@ -81,6 +81,10 @@ Inside a table cell, write the alias pipe as `\|`, as in the table above.
 
 Hive tries the exact path first, then a file name that is unique in the space. A link that matches nothing shows as plain text. Wikilinks work only in Drive documents. In chat messages, task text, and release notes, `[[...]]` stays as written.
 
+## Fences from applets
+
+An [applet](../configuration/applets.md#markdown-fences) can add a fence of its own. Its name cannot start with `hive-`.
+
 ## On a share link
 
 A [share link](../../cli/drive-server/sharing.md) renders all three fences the same way, because their data is in the document. A share link holds one document, so wikilinks show as plain text there.
