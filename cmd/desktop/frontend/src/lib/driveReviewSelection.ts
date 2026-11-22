@@ -4,6 +4,11 @@ export type SourceRange = { startLine: number; endLine: number; context: string 
 function sourceBlock(node: Node, root: HTMLElement): HTMLElement | null {
   const element = node instanceof HTMLElement ? node : node.parentElement
   const block = element?.closest<HTMLElement>('[data-source-start]') ?? null
+  // A rendered fence is one block: its inner markup carries no source lines
+  // worth anchoring to. A fallback code block keeps its own line mapping.
+  const fence = block?.closest<HTMLElement>('.canvas-fence[data-source-start]')
+  if (fence && block !== fence && !block?.hasAttribute('data-source-code-start'))
+    return root.contains(fence) ? fence : null
   return block && root.contains(block) ? block : null
 }
 
@@ -43,6 +48,7 @@ export function selectionToRange(sel: Selection, root: HTMLElement): SourceRange
 // Only a block whose rendering keeps its source line breaks can be narrowed;
 // any other block, a diagram for one, keeps its whole range.
 function lineBreaks(block: HTMLElement): boolean {
+  if (block.matches('.canvas-fence')) return false
   return !!block.querySelector('br, pre') || !!block.closest('pre')
 }
 
@@ -251,7 +257,7 @@ export function pickableBlock(target: EventTarget | null, root: HTMLElement): HT
   if (!(target instanceof Element)) return null
   const block =
     target.closest<HTMLElement>(
-      'table[data-source-start], .markdown-code[data-source-start], .canvas-mermaid[data-source-start]',
+      'table[data-source-start], .markdown-code[data-source-start], .canvas-fence[data-source-start]',
     ) ?? target.closest<HTMLElement>('[data-source-start]')
   if (!block || !root.contains(block) || block === root) return null
   return blockTextRange(block) ? block : null

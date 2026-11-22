@@ -159,6 +159,8 @@ prepare_server_files() {
     local space_dir="${data_dir}/context/e2e/repo"
     mkdir -p "${space_dir}/plans" "${space_dir}/pages"
     cp "${FIXTURES}/drive/plans/2026-10-11-plan.md" "${space_dir}/plans/"
+    cp "${FIXTURES}/drive/plans/fences.md" "${space_dir}/plans/"
+    cp "${FIXTURES}/drive/plans/fence-target.md" "${space_dir}/plans/"
     cp "${FIXTURES}/drive/pages/links.html" "${space_dir}/pages/"
   fi
 }

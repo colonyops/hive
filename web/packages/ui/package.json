@@ -25,7 +25,8 @@
     "markdown-it-task-lists": "^2.1.1",
     "mermaid": "11.17.2",
     "shiki": "4.5.0",
-    "vue": "^3.2.45"
+    "vue": "^3.2.45",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

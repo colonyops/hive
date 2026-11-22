@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { renderCanvasMarkdown, renderGithubMarkdown } from '../githubMarkdown'
+import { renderCanvasMarkdown, renderFenceCode, renderGithubMarkdown } from '../githubMarkdown'
 import { createCodeHighlight } from '../highlight'
 import { fakePlatform } from '../../test-utils/platform'
 
@@ -144,16 +144,34 @@ describe('renderGithubMarkdown', () => {
 })
 
 describe('renderCanvasMarkdown', () => {
-  it('splits standalone Mermaid fences from surrounding markdown', () => {
-    expect(renderCanvasMarkdown('Before\n\n```mermaid\nflowchart LR\nA --> B\n```\n\nAfter')).toEqual([
+  const isFence = (lang: string) => lang === 'mermaid'
+
+  it('splits registered fences from surrounding markdown', () => {
+    expect(renderCanvasMarkdown('Before\n\n```mermaid\nflowchart LR\nA --> B\n```\n\nAfter', { isFence })).toEqual([
       { kind: 'html', html: '<p>Before</p>\n' },
-      { kind: 'mermaid', source: 'flowchart LR\nA --> B\n' },
+      { kind: 'fence', lang: 'mermaid', source: 'flowchart LR\nA --> B\n' },
       { kind: 'html', html: '<p>After</p>\n' },
     ])
   })
 
-  it('leaves non-Mermaid and nested fences as code', () => {
-    const parts = renderCanvasMarkdown('```js\nconst x = 1\n```\n\n> ```mermaid\n> A --> B\n> ```')
+  it('splits nothing without isFence', () => {
+    expect(renderCanvasMarkdown('```mermaid\nA --> B\n```')).toEqual([
+      { kind: 'html', html: expect.stringContaining('language-mermaid') },
+    ])
+  })
+
+  it('matches the lang case-insensitively on the first word of the info string', () => {
+    const parts = renderCanvasMarkdown('```Mermaid title=x\nA\n```', { isFence })
+    expect(parts).toEqual([{ kind: 'fence', lang: 'mermaid', source: 'A\n' }])
+  })
+
+  it('accepts any lang the predicate accepts', () => {
+    const parts = renderCanvasMarkdown('```hive-tree\nfiles: []\n```', { isFence: (lang) => lang.startsWith('hive-') })
+    expect(parts).toEqual([{ kind: 'fence', lang: 'hive-tree', source: 'files: []\n' }])
+  })
+
+  it('leaves unaccepted and nested fences as code', () => {
+    const parts = renderCanvasMarkdown('```js\nconst x = 1\n```\n\n> ```mermaid\n> A --> B\n> ```', { isFence })
     expect(parts).toHaveLength(1)
     expect(parts[0]).toMatchObject({ kind: 'html' })
     expect((parts[0] as { html: string }).html).toContain('language-mermaid')
@@ -162,11 +180,49 @@ describe('renderCanvasMarkdown', () => {
   it('does not change the shared GitHub markdown renderer', () => {
     expect(renderGithubMarkdown('```mermaid\nA --> B\n```')).toContain('language-mermaid')
   })
+
+  it('keeps a fence inside a list item inline', () => {
+    const parts = renderCanvasMarkdown('- item\n\n  ```mermaid\n  A --> B\n  ```', { isFence })
+    expect(parts).toHaveLength(1)
+    expect(parts[0].kind).toBe('html')
+  })
+})
+
+describe('wikilinks in rendered markdown', () => {
+  const paths = new Set(['plans/foo.md', 'my plan.md'])
+  const links = { docPath: 'x.md', paths }
+  const html = (src: string, withLinks = true) => {
+    const part = renderCanvasMarkdown(src, withLinks ? { links } : {})[0]
+    return part.kind === 'html' ? part.html : ''
+  }
+
+  it('links a resolved wikilink and marks a broken one', () => {
+    expect(html('[[plans/foo|Foo]] and [[gone]]')).toBe(
+      '<p><a class="wikilink" href=".hive/plans/foo.md">Foo</a> and <span class="wikilink is-broken">gone</span></p>\n',
+    )
+  })
+
+  it('encodes the href', () => {
+    expect(html('[[my plan]]')).toContain('href=".hive/my%20plan.md"')
+  })
+
+  it('stays text without env.links', () => {
+    expect(html('[[plans/foo]]', false)).toBe('<p>[[plans/foo]]</p>\n')
+  })
+
+  it('stays text in renderGithubMarkdown', () => {
+    expect(renderGithubMarkdown('[[plans/foo]]')).toBe('<p>[[plans/foo]]</p>\n')
+  })
+
+  it('reads an escaped pipe in a table cell as the alias separator', () => {
+    const out = html('| a |\n| - |\n| [[plans/foo\\|Foo]] |\n')
+    expect(out).toContain('<td><a class="wikilink" href=".hive/plans/foo.md">Foo</a></td>')
+  })
 })
 
 describe('renderCanvasMarkdown source lines', () => {
   const html = (src: string, offset = 0) =>
-    renderCanvasMarkdown(src, undefined, { offset })
+    renderCanvasMarkdown(src, { sourceLines: { offset } })
       .map((part) => (part.kind === 'html' ? part.html : ''))
       .join('')
 
@@ -193,9 +249,9 @@ describe('renderCanvasMarkdown source lines', () => {
 
     const { highlight, load, settle } = createCodeHighlight(fakePlatform)
     await load()
-    renderCanvasMarkdown(source, highlight)
+    renderCanvasMarkdown(source, { highlight })
     await settle()
-    const highlighted = renderCanvasMarkdown(source, highlight, { offset: 0 })
+    const highlighted = renderCanvasMarkdown(source, { highlight, sourceLines: { offset: 0 } })
       .map((part) => (part.kind === 'html' ? part.html : ''))
       .join('')
     expect(highlighted).toContain('class="shiki')
@@ -210,9 +266,12 @@ describe('renderCanvasMarkdown source lines', () => {
     )
   })
 
-  it('gives mermaid parts their lines', () => {
-    const parts = renderCanvasMarkdown('Before\n\n```mermaid\ngraph TD\n```\n', undefined, { offset: 2 })
-    expect(parts[1]).toEqual({ kind: 'mermaid', source: 'graph TD\n', lines: [5, 7] })
+  it('gives fence parts their lines and the line their code starts on', () => {
+    const parts = renderCanvasMarkdown('Before\n\n```mermaid\ngraph TD\n```\n', {
+      sourceLines: { offset: 2 },
+      isFence: (lang) => lang === 'mermaid',
+    })
+    expect(parts[1]).toEqual({ kind: 'fence', lang: 'mermaid', source: 'graph TD\n', lines: [5, 7], codeStart: 6 })
   })
 
   it('adds the offset and trims trailing blank lines', () => {
@@ -221,9 +280,24 @@ describe('renderCanvasMarkdown source lines', () => {
 
   it('leaves the output unchanged without sourceLines', () => {
     const source = '# T\n\n- a\n\n```go\nx\n```\n\n<b>x</b>\n\n---\n\n```mermaid\ngraph\n```\n'
-    const parts = renderCanvasMarkdown(source)
+    const parts = renderCanvasMarkdown(source, { isFence: (lang) => lang === 'mermaid' })
     expect(JSON.stringify(parts)).not.toContain('data-source')
-    expect(parts.find((part) => part.kind === 'mermaid')).toEqual({ kind: 'mermaid', source: 'graph\n' })
+    expect(parts.find((part) => part.kind === 'fence')).toEqual({ kind: 'fence', lang: 'mermaid', source: 'graph\n' })
     expect(renderGithubMarkdown(source)).not.toContain('data-source')
+  })
+})
+
+describe('renderFenceCode', () => {
+  it('renders the code block markup with the part lines kept', () => {
+    const html = renderFenceCode({ kind: 'fence', lang: 'hive-tree', source: 'a: <b>\n', lines: [3, 5], codeStart: 4 })
+    expect(html).toContain(
+      '<div class="markdown-code" data-source-start="3" data-source-end="5" data-source-code-start="4">',
+    )
+    expect(html).toContain('markdown-code-copy')
+    expect(html).toContain('a: &lt;b&gt;')
+  })
+
+  it('omits the line attributes without lines', () => {
+    expect(renderFenceCode({ kind: 'fence', lang: 'x', source: 'y\n' })).toMatch(/^<div class="markdown-code"><button/)
   })
 })

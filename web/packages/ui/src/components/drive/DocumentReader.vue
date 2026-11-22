@@ -22,9 +22,18 @@ const props = withDefaults(
     error?: string | null
     /** Marks each markdown block with its source lines (renderCanvasMarkdown). */
     sourceLines?: SourceLines
+    /** Every document path in the space. Turns on [[wikilinks]]; without it they stay plain text. */
+    paths?: ReadonlySet<string>
     bodyClass?: string | Record<string, boolean>
   }>(),
-  { htmlSrc: undefined, testid: 'document', error: null, sourceLines: undefined, bodyClass: undefined },
+  {
+    htmlSrc: undefined,
+    testid: 'document',
+    error: null,
+    sourceLines: undefined,
+    paths: undefined,
+    bodyClass: undefined,
+  },
 )
 const emit = defineEmits<{ (e: 'open-link', target: string): void }>()
 
@@ -83,6 +92,7 @@ const properties = computed<{ frontmatter: Record<string, FrontmatterValue>; cre
       :style="readerStyle"
       :source="markdownBody(document.markdown ?? '')"
       :source-lines="sourceLines"
+      :links="paths ? { docPath: document.entry.path, paths } : undefined"
       :testid="`${testid}-markdown`"
       :data-testid="`${testid}-markdown`"
       @follow="emit('open-link', $event)"

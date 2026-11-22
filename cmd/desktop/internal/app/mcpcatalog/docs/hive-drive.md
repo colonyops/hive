@@ -196,6 +196,77 @@ get the numbers right. A refused review lists every comment to fix and stores
 nothing. Keep each comment to one actionable point and put the overview in
 `summary`. When the review is stored, open the `diff` tab with `tab_open`.
 
+## Fences
+
+Markdown documents render these fences as components. Every body is YAML.
+Unknown keys are ignored. A body that does not parse or validate shows an
+error with the raw source, so the document still reads.
+
+`hive-tree` shows changed files as a collapsible tree. Write a flat list of
+paths; Hive builds the folders. `root` is a prefix. Each file has `path` and
+optionally `status` (`added`, `modified`, `deleted`, `renamed`), `from` (the
+old path of a rename) and `note`:
+
+````markdown
+```hive-tree
+root: web/packages/ui/src
+files:
+  - path: lib/githubMarkdown.ts
+    status: modified
+    note: split on any registered fence
+```
+````
+
+`hive-calls` shows one call tree. Each call has `name` and optionally `at`
+(`path:line`, a path or a package), `kind` (`function`, `method`,
+`component`, `computed`, `external`), `note` (the row's line), `explain`
+(shown when the row is selected), `focus` (start selected), `more` (calls
+left out) and `calls` (children):
+
+````markdown
+```hive-calls
+name: CanvasMarkdown.parts
+at: web/packages/ui/src/components/CanvasMarkdown.vue:22
+calls:
+  - name: isFence
+    at: web/packages/ui/src/components/fences/registry.ts:31
+    focus: true
+    explain: Decides whether a top-level fence becomes a component.
+```
+````
+
+`hive-forge` shows a static list of PR and issue cards. Nothing is fetched on
+render, so write the data when you write the document. `snapshot` is when you
+took it and `host` is the default host. Each item needs `kind` (`pr` or
+`issue`), `ref` (`owner/repo#123`), `title` and `state` (`open`, `draft`,
+`merged`, `closed`); `url`, `author`, `checks`, `diff`, `comments`, `labels`
+and `updated` are optional. Always write `url` for a host other than
+github.com, because Gitea, Forgejo and GitLab lay out their URLs differently:
+
+````markdown
+```hive-forge
+snapshot: 2026-11-22T12:30
+items:
+  - kind: pr
+    ref: infra/deploy#212
+    url: https://gitea.example.com/infra/deploy/pulls/212
+    title: Pin the runner image
+    state: merged
+    checks: 6/6
+```
+````
+
+For a dependency graph, use a Mermaid `flowchart LR` (see below).
+
+## Wikilinks
+
+Link to another document in the same space with `[[plans/auth-rewrite]]`,
+`[[plans/auth-rewrite|the plan]]` for a label, or `[[auth-rewrite]]` by
+basename. `.md` is optional. Inside a table cell, write the alias pipe as
+`\|`. Hive tries the exact path first, then a unique basename in the space.
+A link that matches nothing shows as plain text. Wikilinks work only in Drive
+documents, not in chat, task text or a shared link.
+
 ## Writing a Mermaid diagram
 
 Put a standalone `mermaid` fence in a markdown document:
