@@ -24,6 +24,7 @@ import (
 const (
 	sweepEvery = time.Minute
 	mailEvery  = 5 * time.Second
+	hubEvery   = 10 * time.Second
 )
 
 type Options struct {
@@ -77,6 +78,11 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 	}))
 	mgr.Add(plugs.PluginFunc("sweeper", func(ctx context.Context) error {
 		return svc.Sweeper.Run(ctx, sweepEvery)
+	}))
+	// Plugs stop together, so open streams end here before the HTTP
+	// server's shutdown grace runs out.
+	mgr.Add(plugs.PluginFunc("live", func(ctx context.Context) error {
+		return svc.Live.Run(ctx, hubEvery)
 	}))
 	return mgr.Start(ctx)
 }

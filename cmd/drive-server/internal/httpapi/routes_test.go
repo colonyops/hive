@@ -17,6 +17,9 @@ type routeAuth int
 
 const (
 	public routeAuth = iota
+	// optionalAuth serves anonymous readers and resolves a credential when
+	// one is sent.
+	optionalAuth
 	readScope
 	pushScope
 	sessionOnly
@@ -25,6 +28,7 @@ const (
 // apiRoutes lists every /api/v1 route and the credential it needs.
 var apiRoutes = map[string]routeAuth{
 	"GET /api/v1/me":           readScope,
+	"PATCH /api/v1/me":         sessionOnly,
 	"GET /api/v1/spaces":       readScope,
 	"GET /api/v1/search":       readScope,
 	"GET /api/v1/recent":       readScope,
@@ -36,6 +40,9 @@ var apiRoutes = map[string]routeAuth{
 	"DELETE /api/v1/shared/docs/{path...}":   pushScope,
 	"POST /api/v1/shared/shares/{path...}":   pushScope,
 	"DELETE /api/v1/shared/shares/{path...}": pushScope,
+	"GET /api/v1/shared/threads/{path...}":   readScope,
+	"POST /api/v1/shared/threads/{path...}":  pushScope,
+	"GET /api/v1/shared/events/{path...}":    readScope,
 
 	"GET /api/v1/workspaces/{name}":                     readScope,
 	"GET /api/v1/workspaces/{name}/docs/{path...}":      readScope,
@@ -43,6 +50,9 @@ var apiRoutes = map[string]routeAuth{
 	"DELETE /api/v1/workspaces/{name}/docs/{path...}":   pushScope,
 	"POST /api/v1/workspaces/{name}/shares/{path...}":   pushScope,
 	"DELETE /api/v1/workspaces/{name}/shares/{path...}": pushScope,
+	"GET /api/v1/workspaces/{name}/threads/{path...}":   readScope,
+	"POST /api/v1/workspaces/{name}/threads/{path...}":  pushScope,
+	"GET /api/v1/workspaces/{name}/events/{path...}":    readScope,
 
 	"GET /api/v1/repos/{owner}/{repo}":                     readScope,
 	"GET /api/v1/repos/{owner}/{repo}/docs/{path...}":      readScope,
@@ -50,8 +60,25 @@ var apiRoutes = map[string]routeAuth{
 	"DELETE /api/v1/repos/{owner}/{repo}/docs/{path...}":   pushScope,
 	"POST /api/v1/repos/{owner}/{repo}/shares/{path...}":   pushScope,
 	"DELETE /api/v1/repos/{owner}/{repo}/shares/{path...}": pushScope,
+	"GET /api/v1/repos/{owner}/{repo}/threads/{path...}":   readScope,
+	"POST /api/v1/repos/{owner}/{repo}/threads/{path...}":  pushScope,
+	"GET /api/v1/repos/{owner}/{repo}/events/{path...}":    readScope,
 
-	"GET /api/v1/public/{slug}": public,
+	"GET /api/v1/public/{slug}":         public,
+	"GET /api/v1/public/{slug}/threads": optionalAuth,
+	"GET /api/v1/public/{slug}/events":  optionalAuth,
+	"POST /api/v1/presence":             public,
+
+	"POST /api/v1/threads/{id}/comments": pushScope,
+	"PATCH /api/v1/threads/{id}":         pushScope,
+	"PATCH /api/v1/comments/{id}":        pushScope,
+	"DELETE /api/v1/comments/{id}":       pushScope,
+
+	"POST /api/v1/links/{slug}/threads":               pushScope,
+	"POST /api/v1/links/{slug}/threads/{id}/comments": pushScope,
+	"PATCH /api/v1/links/{slug}/threads/{id}":         pushScope,
+	"PATCH /api/v1/links/{slug}/comments/{id}":        pushScope,
+	"DELETE /api/v1/links/{slug}/comments/{id}":       pushScope,
 
 	"POST /api/v1/auth/code":     public,
 	"POST /api/v1/auth/verify":   public,
@@ -85,7 +112,7 @@ func TestRouteAuth(t *testing.T) {
 	read := s.token(t, "dev@example.com", core.ScopeRead)
 
 	for pattern, auth := range apiRoutes {
-		if auth == public {
+		if auth == public || auth == optionalAuth {
 			continue
 		}
 		t.Run(pattern, func(t *testing.T) {

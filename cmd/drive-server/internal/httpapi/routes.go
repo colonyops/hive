@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/hay-kot/httpkit/errchain"
+	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
 	"github.com/colonyops/hive/pkg/buildinfo"
@@ -15,7 +16,7 @@ type router interface {
 	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
 }
 
-func registerRoutes(mux router, chain *errchain.ErrChain, info buildinfo.Info, svc Services) {
+func registerRoutes(mux router, chain *errchain.ErrChain, log zerolog.Logger, info buildinfo.Info, svc Services) {
 	cookies := newCookies(svc.BaseURL)
 	authenticated := func(scope core.Scope, h errchain.HandlerFunc) http.HandlerFunc {
 		return chain.ToHandlerFunc(h, Authenticate(svc.Tokens, svc.Sessions, cookies.name), Require(scope))
@@ -24,11 +25,21 @@ func registerRoutes(mux router, chain *errchain.ErrChain, info buildinfo.Info, s
 		return chain.ToHandlerFunc(h, Authenticate(svc.Tokens, svc.Sessions, cookies.name), RequireSession())
 	}
 
+	viewer := optionalPrincipal(svc.Tokens, svc.Sessions, cookies.name)
+
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.HandleFunc("GET /version", chain.ToHandlerFunc(version(info)))
-	mux.HandleFunc("GET /api/v1/me", authenticated(core.ScopeRead, me(svc.Documents)))
+	registerMeRoutes(mux, authenticated, sessionOnly, meHandlers{docs: svc.Documents, accounts: svc.Accounts})
 	registerDocumentRoutes(mux, authenticated, svc.Documents)
 	registerShareRoutes(mux, chain, authenticated, svc.Shares)
+	registerCommentRoutes(mux, chain, authenticated, viewer, svc.Comments)
+	registerLiveRoutes(mux, chain, authenticated, viewer, liveHandlers{
+		log:      log,
+		hub:      svc.Live,
+		comments: svc.Comments,
+		accounts: svc.Accounts,
+		trusted:  svc.TrustedProxies,
+	})
 	registerAuthRoutes(mux, chain, sessionOnly, svc, cookies)
 	registerTokenRoutes(mux, sessionOnly, svc.Tokens)
 	if svc.Web != nil {

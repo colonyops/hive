@@ -243,3 +243,44 @@ func TestSearchEndpointValidation(t *testing.T) {
 	assert.Equal(t, http.StatusOK, s.do(http.MethodGet, "/api/v1/search?q=a&limit=9999&space=shared", tok, "").Code)
 	assert.Equal(t, http.StatusUnauthorized, s.do(http.MethodGet, "/api/v1/search?q=a", "", "").Code)
 }
+
+func TestIsolationThreadIDsStayInTheirOwnersFile(t *testing.T) {
+	s := newServer(t)
+	a, b := setupTenants(t, s)
+	docB, _ := sharedMarkdown(t, s, b.token, "b-plan.md")
+	threadB := createThread(t, s, "/api/v1/shared/threads/b-plan.md", b.token, driveapi.CreateThread{DocumentSHA256: docB.SHA256, Body: "B only"})
+
+	for _, c := range []struct{ method, target, body string }{
+		{http.MethodPost, "/api/v1/threads/" + threadB.ID + "/comments", `{"body":"x"}`},
+		{http.MethodPatch, "/api/v1/threads/" + threadB.ID, `{"resolved":true}`},
+		{http.MethodPatch, "/api/v1/comments/" + threadB.Comments[0].ID, `{"body":"x"}`},
+		{http.MethodDelete, "/api/v1/comments/" + threadB.Comments[0].ID, ""},
+	} {
+		rec := s.do(c.method, c.target, a.token, c.body)
+		assert.Equal(t, http.StatusNotFound, rec.Code, "%s %s", c.method, c.target)
+	}
+}
+
+func TestIsolationLinkReachesOnlyItsDocumentsThreads(t *testing.T) {
+	s := newServer(t)
+	a, b := setupTenants(t, s)
+	_, slug := sharedMarkdown(t, s, a.token, "linked.md")
+	private, _ := sharedMarkdown(t, s, a.token, "private.md")
+	threadA := createThread(t, s, "/api/v1/shared/threads/private.md", a.token, driveapi.CreateThread{DocumentSHA256: private.SHA256, Body: "private"})
+
+	for _, c := range []struct{ method, target, body string }{
+		{http.MethodPost, "/api/v1/links/" + slug + "/threads/" + threadA.ID + "/comments", `{"body":"x"}`},
+		{http.MethodPatch, "/api/v1/links/" + slug + "/threads/" + threadA.ID, `{"resolved":true}`},
+		{http.MethodPatch, "/api/v1/links/" + slug + "/comments/" + threadA.Comments[0].ID, `{"body":"x"}`},
+		{http.MethodDelete, "/api/v1/links/" + slug + "/comments/" + threadA.Comments[0].ID, ""},
+	} {
+		for _, tok := range []string{a.token, b.token} {
+			rec := s.do(c.method, c.target, tok, c.body)
+			assert.Equal(t, http.StatusNotFound, rec.Code, "%s %s", c.method, c.target)
+		}
+	}
+
+	rec := s.do(http.MethodGet, "/api/v1/public/"+slug+"/threads", "", "")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "private")
+}

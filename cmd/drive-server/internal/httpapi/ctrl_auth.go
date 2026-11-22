@@ -46,13 +46,15 @@ func registerAuthRoutes(mux router, chain *errchain.ErrChain, sessionOnly func(e
 	mux.HandleFunc("POST /api/v1/auth/sign-out", sessionOnly(h.signOut))
 }
 
-func allow(w http.ResponseWriter, l *guard.Limiter, key string) error {
+const signInLimited = "too many sign-in attempts"
+
+func allow(w http.ResponseWriter, l *guard.Limiter, key, msg string) error {
 	ok, wait := l.Allow(key)
 	if ok {
 		return nil
 	}
-	w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())))
-	return core.NewError(core.KindRateLimited, "too many sign-in attempts")
+	w.Header().Set("Retry-After", strconv.Itoa(max(1, int(wait.Seconds()))))
+	return core.NewError(core.KindRateLimited, msg)
 }
 
 type startRequest driveapi.SignInStart
@@ -74,14 +76,14 @@ func validEmail(email string) error {
 
 func (h authHandlers) start(w http.ResponseWriter, r *http.Request) error {
 	ip := guard.ClientIP(r, h.svc.TrustedProxies)
-	if err := allow(w, h.startPerIP, ip.String()); err != nil {
+	if err := allow(w, h.startPerIP, ip.String(), signInLimited); err != nil {
 		return err
 	}
 	body, err := extractors.Body[startRequest](w, r)
 	if err != nil {
 		return err
 	}
-	if err := allow(w, h.startPerEmail, core.NormalizeEmail(body.Email)); err != nil {
+	if err := allow(w, h.startPerEmail, core.NormalizeEmail(body.Email), signInLimited); err != nil {
 		return err
 	}
 	if err := h.svc.SignIn.Start(r.Context(), body.Email); err != nil {
@@ -95,7 +97,7 @@ func (h authHandlers) verify(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if err := allow(w, h.verifyPerEmail, core.NormalizeEmail(body.Email)); err != nil {
+	if err := allow(w, h.verifyPerEmail, core.NormalizeEmail(body.Email), signInLimited); err != nil {
 		return err
 	}
 	value, err := h.svc.SignIn.Verify(r.Context(), body.Email, strings.TrimSpace(body.Code))

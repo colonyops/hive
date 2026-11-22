@@ -1,10 +1,12 @@
 package httpapi_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -52,6 +54,13 @@ func newServerWithPolicy(t *testing.T, baseURL string, policy config.Policy) *se
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = svc.Close() })
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = svc.Live.Run(ctx, time.Minute)
+	}()
+	t.Cleanup(func() { cancel(); <-done })
 	return &server{
 		h:       httpapi.New(zerolog.Nop(), buildinfo.Info{}, svc.HTTP(baseURL, nil)),
 		svc:     svc,
