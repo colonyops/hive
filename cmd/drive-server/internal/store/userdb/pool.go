@@ -194,6 +194,14 @@ func (s stores) Open(ctx context.Context, userID string) (core.DocumentStore, fu
 	return udb, release, nil
 }
 
+func (s stores) OpenThreads(ctx context.Context, userID string) (core.ThreadStore, func(), error) {
+	udb, release, err := s.p.Open(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return udb, release, nil
+}
+
 func (s stores) Remove(ctx context.Context, userID string) error { return s.p.Remove(ctx, userID) }
 
 func (p *Pool) path(userID string) string { return filepath.Join(p.dir, userID+".db") }

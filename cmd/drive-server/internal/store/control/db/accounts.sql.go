@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const deleteAccountByEmail = `-- name: DeleteAccountByEmail :execrows
@@ -23,7 +24,7 @@ func (q *Queries) DeleteAccountByEmail(ctx context.Context, email string) (int64
 }
 
 const getAccountByEmail = `-- name: GetAccountByEmail :one
-SELECT id, email, created_at, last_sign_in_at FROM accounts WHERE email = ?
+SELECT id, email, created_at, last_sign_in_at, display_name FROM accounts WHERE email = ?
 `
 
 func (q *Queries) GetAccountByEmail(ctx context.Context, email string) (Account, error) {
@@ -34,12 +35,13 @@ func (q *Queries) GetAccountByEmail(ctx context.Context, email string) (Account,
 		&i.Email,
 		&i.CreatedAt,
 		&i.LastSignInAt,
+		&i.DisplayName,
 	)
 	return i, err
 }
 
 const getAccountByID = `-- name: GetAccountByID :one
-SELECT id, email, created_at, last_sign_in_at FROM accounts WHERE id = ?
+SELECT id, email, created_at, last_sign_in_at, display_name FROM accounts WHERE id = ?
 `
 
 func (q *Queries) GetAccountByID(ctx context.Context, id string) (Account, error) {
@@ -50,6 +52,7 @@ func (q *Queries) GetAccountByID(ctx context.Context, id string) (Account, error
 		&i.Email,
 		&i.CreatedAt,
 		&i.LastSignInAt,
+		&i.DisplayName,
 	)
 	return i, err
 }
@@ -72,7 +75,7 @@ func (q *Queries) InsertAccount(ctx context.Context, arg InsertAccountParams) er
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, email, created_at, last_sign_in_at FROM accounts ORDER BY created_at, id
+SELECT id, email, created_at, last_sign_in_at, display_name FROM accounts ORDER BY created_at, id
 `
 
 func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
@@ -89,6 +92,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 			&i.Email,
 			&i.CreatedAt,
 			&i.LastSignInAt,
+			&i.DisplayName,
 		); err != nil {
 			return nil, err
 		}
@@ -101,6 +105,66 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const listAccountsByIDs = `-- name: ListAccountsByIDs :many
+SELECT id, email, created_at, last_sign_in_at, display_name FROM accounts WHERE id IN (/*SLICE:ids*/?)
+`
+
+func (q *Queries) ListAccountsByIDs(ctx context.Context, ids []string) ([]Account, error) {
+	query := listAccountsByIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Account{}
+	for rows.Next() {
+		var i Account
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.CreatedAt,
+			&i.LastSignInAt,
+			&i.DisplayName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setAccountDisplayName = `-- name: SetAccountDisplayName :execrows
+UPDATE accounts SET display_name = ? WHERE id = ?
+`
+
+type SetAccountDisplayNameParams struct {
+	DisplayName string `json:"display_name"`
+	ID          string `json:"id"`
+}
+
+func (q *Queries) SetAccountDisplayName(ctx context.Context, arg SetAccountDisplayNameParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setAccountDisplayName, arg.DisplayName, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setAccountLastSignIn = `-- name: SetAccountLastSignIn :exec

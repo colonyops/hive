@@ -36,6 +36,32 @@ func (a accounts) GetByID(ctx context.Context, id string) (core.Account, error) 
 	return accountFromRow(row), nil
 }
 
+func (a accounts) GetByIDs(ctx context.Context, ids []string) ([]core.Account, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := a.s.q.ListAccountsByIDs(ctx, ids)
+	if err != nil {
+		return nil, wrap("list accounts by id", err)
+	}
+	out := make([]core.Account, len(rows))
+	for i, row := range rows {
+		out[i] = accountFromRow(row)
+	}
+	return out, nil
+}
+
+func (a accounts) SetDisplayName(ctx context.Context, id, name string) error {
+	n, err := a.s.q.SetAccountDisplayName(ctx, db.SetAccountDisplayNameParams{DisplayName: name, ID: id})
+	if err != nil {
+		return wrap("set display name", err)
+	}
+	if n == 0 {
+		return core.ErrNotFound
+	}
+	return nil
+}
+
 func (a accounts) SetLastSignIn(ctx context.Context, id string, at time.Time) error {
 	return wrap("set last sign-in", a.s.q.SetAccountLastSignIn(ctx, db.SetAccountLastSignInParams{
 		LastSignInAt: sql.NullInt64{Int64: toNanos(at), Valid: true},
@@ -76,6 +102,7 @@ func accountFromRow(r db.Account) core.Account {
 	return core.Account{
 		ID:           r.ID,
 		Email:        r.Email,
+		DisplayName:  r.DisplayName,
 		CreatedAt:    fromNanos(r.CreatedAt),
 		LastSignInAt: fromNullNanos(r.LastSignInAt),
 	}

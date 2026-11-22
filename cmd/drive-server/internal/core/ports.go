@@ -10,6 +10,7 @@ import (
 type Account struct {
 	ID           string
 	Email        string
+	DisplayName  string
 	CreatedAt    time.Time
 	LastSignInAt *time.Time
 }
@@ -30,6 +31,9 @@ type AccountStore interface {
 	Insert(ctx context.Context, a Account) error
 	GetByEmail(ctx context.Context, email string) (Account, error)
 	GetByID(ctx context.Context, id string) (Account, error)
+	// GetByIDs returns the accounts that exist among ids, in no order.
+	GetByIDs(ctx context.Context, ids []string) ([]Account, error)
+	SetDisplayName(ctx context.Context, id, name string) error
 	SetLastSignIn(ctx context.Context, id string, at time.Time) error
 	List(ctx context.Context) ([]Account, error)
 	// DeleteByEmail removes the account, and with it everything that
@@ -116,8 +120,107 @@ type UserStores interface {
 	// Open returns userID's store, creating an empty one on first use. The
 	// caller must call release when done; the store stays valid until then.
 	Open(ctx context.Context, userID string) (store DocumentStore, release func(), err error)
+	// OpenThreads is Open for the threads in the same file.
+	OpenThreads(ctx context.Context, userID string) (store ThreadStore, release func(), err error)
 	// Remove deletes everything stored for userID, once its leases are released.
 	Remove(ctx context.Context, userID string) error
+}
+
+// Actor is who made a change, as a thread or comment keeps it. ViaToken is
+// the API token's name, or empty for a browser session.
+type Actor struct {
+	UserID   string
+	Email    string
+	ViaToken string
+}
+
+// ThreadAnchor is the part of a thread that re-anchoring reads and writes.
+type ThreadAnchor struct {
+	ThreadID  string
+	StartLine int
+	EndLine   int
+	Quote     string
+	Outdated  bool
+}
+
+type NewThread struct {
+	ID         string
+	DocumentID string
+	// Anchor is nil for a general thread; its ThreadID is ignored.
+	Anchor    *ThreadAnchor
+	Author    Actor
+	CommentID string
+	Body      string
+	CreatedAt time.Time
+}
+
+type NewComment struct {
+	ID        string
+	ThreadID  string
+	Author    Actor
+	Body      string
+	CreatedAt time.Time
+}
+
+// StoredThread.Comments are oldest first, tombstones included.
+type StoredThread struct {
+	ID         string
+	DocumentID string
+	Anchor     *ThreadAnchor
+	Author     Actor
+	ResolvedAt *time.Time
+	ResolvedBy *Actor
+	CreatedAt  time.Time
+	Comments   []StoredComment
+}
+
+type StoredComment struct {
+	ID        string
+	ThreadID  string
+	Author    Actor
+	Body      string
+	CreatedAt time.Time
+	EditedAt  *time.Time
+	DeletedAt *time.Time
+}
+
+// CommentCaps bound what other people can write into an owner's file.
+type CommentCaps struct {
+	ThreadsPerDocument   int
+	CommentsPerThread    int
+	BodyBytesPerDocument int64
+}
+
+// ErrVersionChanged is what ThreadStore.InsertThread returns when the
+// document is no longer at the version the caller rendered.
+var ErrVersionChanged = NewError(KindConflict, "the document changed; reload it and try again")
+
+// ThreadStore is one user's threads and comments. Like DocumentStore it
+// takes no user id. Methods return ErrNotFound for a missing thread,
+// comment, or document.
+type ThreadStore interface {
+	// InsertThread checks, in its transaction, that the document is at
+	// wantSHA and that caps hold, then stores the thread and its first
+	// comment. The anchor is recorded as checked against wantSHA.
+	InsertThread(ctx context.Context, t NewThread, wantSHA string, caps CommentCaps) error
+	// InsertComment checks caps in its transaction.
+	InsertComment(ctx context.Context, c NewComment, caps CommentCaps) error
+	GetThread(ctx context.Context, id string) (StoredThread, error)
+	ListThreads(ctx context.Context, documentID string) ([]StoredThread, error)
+	GetComment(ctx context.Context, id string) (StoredComment, error)
+	// UpdateComment returns ErrNotFound for a deleted comment.
+	UpdateComment(ctx context.Context, id, body string, at time.Time) error
+	// DeleteComment leaves a tombstone when id is the thread's first comment
+	// and others remain, and removes the thread with its last visible one.
+	DeleteComment(ctx context.Context, id string, at time.Time) (threadDeleted bool, err error)
+	// SetResolved resolves the thread when by is non-nil, else reopens it.
+	SetResolved(ctx context.Context, id string, by *Actor, at time.Time) error
+	// AnchoredAt returns the document's anchored threads still checked
+	// against sha.
+	AnchoredAt(ctx context.Context, documentID, sha string) ([]ThreadAnchor, error)
+	// MoveAnchors writes anchors and records them as checked against toSHA.
+	// It skips a thread no longer checked against fromSHA.
+	MoveAnchors(ctx context.Context, documentID, fromSHA, toSHA string, anchors []ThreadAnchor) error
 }
 
 // ShareLink is the public link to one document. A document has at most one.
