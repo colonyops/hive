@@ -56,17 +56,12 @@ describe('ShareView', () => {
 
   it('reloads an html frame only for a new version', async () => {
     let sha = 'v1'
-    fetchMock.mockImplementation(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            owner_email: 'ada@example.com',
-            document: doc({ path: 'page.html', kind: 'html', sha256: sha }),
-          }),
-          { status: 200 },
-        ),
-      ),
-    )
+    fetchMock.mockImplementation((input) => {
+      const body = (input as string).endsWith('/threads')
+        ? { document_sha256: sha, viewer: { is_owner: false, can_comment: false }, threads: [] }
+        : { owner_email: 'ada@example.com', document: doc({ path: 'page.html', kind: 'html', sha256: sha }) }
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+    })
     const wrapper = await mountShare('abc')
     const src = () => wrapper.get('[data-testid="frame"]').attributes('data-src')
 
