@@ -17,6 +17,7 @@ hive drive share plans/ship.md --expires 7d
 - `--expires none` removes the expiry from an existing link.
 - The server deletes an expired link. Deleting a document deletes its link.
 - Link pages ask search engines not to index them. Treat the link as a secret anyway.
+- Anyone who can sign in to the server can [comment](comments.md) through the link.
 
 ## HTML documents
 

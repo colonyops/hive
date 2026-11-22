@@ -369,7 +369,8 @@ cmd/drive-server/                 # Hive Drive Server: `hive-drive-server`, the 
   internal/
     config/                       # Config, Policy, Size: env, flags, and drive-server.yaml
     app/                          # composition root: the appkit/plugs manager
-    core/                         # accounts, sign-in, tokens, documents, shares
+    core/                         # accounts, sign-in, tokens, documents, shares, comments
+    live/                         # the in-memory hub: document streams and presence
     store/                        # control/ (control.db), userdb/ (users/<id>.db)
     httpapi/                      # ServeMux routes over httpkit errchain and internal/web/mid
     guard/                        # rate limits and client IP

@@ -85,6 +85,7 @@ nav = [
       "cli/drive-server/policies.md",
       "cli/drive-server/cli.md",
       "cli/drive-server/sharing.md",
+      "cli/drive-server/comments.md",
     ]},
     { "FAQ" = "cli/faq.md" },
   ]},

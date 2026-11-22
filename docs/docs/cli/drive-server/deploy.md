@@ -88,7 +88,7 @@ The server refuses to start without a way to send mail. Set `smtp.url`, or pass 
 
 ## Behind a reverse proxy
 
-Terminate TLS at a reverse proxy and forward to port 8080. The server limits sign-in attempts per client address: 3 codes per email per hour, 10 codes per address per hour, and 10 code checks per email in 10 minutes. Behind a proxy, every request seems to come from the proxy, so all users would share one limit.
+Terminate TLS at a reverse proxy and forward to port 8080. The server limits sign-in attempts per client address: 3 codes per email per hour, 10 codes per address per hour, and 10 code checks per email in 10 minutes. Behind a proxy, every request seems to come from the proxy, so all users would share one limit. The same goes for the per-address limits on [comment](comments.md) streams and presence.
 
 Set `trusted_proxies` to the proxy's address range. The server then reads the client address from the right end of `X-Forwarded-For` and skips the trusted entries. Without `trusted_proxies`, the server ignores the header, so a client cannot choose its own limit bucket.
 
