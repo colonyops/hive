@@ -71,8 +71,10 @@ const {
 } = useLoad(() => api.documentBody(props.space.apiPrefix, props.path), 'Could not load the document.', {
   immediate: false,
 })
-// An html document is not fetched here, so its version is the listing's.
-const renderedSha = computed(() => loaded.value?.sha || doc.value?.sha256 || '')
+// An html document is not fetched here, so its version is the listing's
+// until a stream event names a newer one.
+const htmlSha = ref('')
+const renderedSha = computed(() => loaded.value?.sha || htmlSha.value || doc.value?.sha256 || '')
 const htmlVersion = ref(0)
 
 const railOpen = ref(false)
@@ -81,10 +83,13 @@ const collab = useDocumentCollab(
   { kind: 'owner', apiPrefix: props.space.apiPrefix, path: props.path },
   {
     renderedSha,
-    reloadDocument: async () => {
-      if (!started) return
+    reloadDocument: async (sha) => {
+      if (!started || (sha && sha === renderedSha.value)) return
       if (doc.value?.kind === 'markdown') await loadBody()
-      else htmlVersion.value++
+      else {
+        if (sha) htmlSha.value = sha
+        htmlVersion.value++
+      }
     },
     onClosed: () => {
       void router.push(folderRoute.value)

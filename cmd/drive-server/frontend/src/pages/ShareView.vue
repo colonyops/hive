@@ -51,9 +51,12 @@ const collab = useDocumentCollab(
   { kind: 'link', slug: props.slug },
   {
     renderedSha: computed(() => shared.value?.document.sha256 ?? ''),
-    reloadDocument: async () => {
+    reloadDocument: async (sha) => {
+      const shown = shared.value?.document.sha256
+      if (sha && sha === shown) return
       await load.reload()
-      if (isHtml.value) htmlVersion.value++
+      // The frame loads with the page; only a later version reloads it.
+      if (isHtml.value && shown && shared.value?.document.sha256 !== shown) htmlVersion.value++
     },
     onClosed: () => {
       linkClosed.value = true

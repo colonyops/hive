@@ -1,3 +1,4 @@
+import { flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ShareView from '../pages/ShareView.vue'
 import { mountWithRouter } from '../test-utils/mount'
@@ -51,6 +52,32 @@ describe('ShareView', () => {
     wrapper.get('[data-testid="frame"]').element.dispatchEvent(new Event('load'))
     await wrapper.vm.$nextTick()
     expect(reader().classes()).toContain('opacity-100')
+  })
+
+  it('reloads an html frame only for a new version', async () => {
+    let sha = 'v1'
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            owner_email: 'ada@example.com',
+            document: doc({ path: 'page.html', kind: 'html', sha256: sha }),
+          }),
+          { status: 200 },
+        ),
+      ),
+    )
+    const wrapper = await mountShare('abc')
+    const src = () => wrapper.get('[data-testid="frame"]').attributes('data-src')
+
+    FakeEventSource.latest().emit('hello', { id: 'p_1', token: 't', sha256: 'v1' })
+    await flushPromises()
+    expect(src()).toBe('/s/abc/raw')
+
+    sha = 'v2'
+    FakeEventSource.latest().emit('document', { sha256: 'v2' })
+    await flushPromises()
+    expect(src()).toBe('/s/abc/raw?v=1')
   })
 
   it('shows the dead-link state on 404', async () => {

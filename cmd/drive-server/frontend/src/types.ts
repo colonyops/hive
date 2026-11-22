@@ -7,6 +7,7 @@ export type {
   Author,
   Comment,
   CreatedToken,
+  DocumentEvent,
   DocumentKind,
   LineRange,
   Me,

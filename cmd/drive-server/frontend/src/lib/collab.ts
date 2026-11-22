@@ -1,7 +1,16 @@
 import { useDocumentVisibility, useIntervalFn, useThrottleFn, useTimeoutFn } from '@vueuse/core'
 import { onScopeDispose, ref, shallowReadonly, shallowRef, watch, type Ref } from 'vue'
 import { api, ApiError, describeApiError, encodePath } from '../api'
-import type { Anchor, LineRange, PresenceSnapshot, PresenceViewer, StreamHello, Thread, Viewer } from '../types'
+import type {
+  Anchor,
+  DocumentEvent,
+  LineRange,
+  PresenceSnapshot,
+  PresenceViewer,
+  StreamHello,
+  Thread,
+  Viewer,
+} from '../types'
 import { useViewerIdentity } from './identity'
 
 export type CollabTarget = { kind: 'owner'; apiPrefix: string; path: string } | { kind: 'link'; slug: string }
@@ -35,8 +44,12 @@ export function collabRoutes(target: CollabTarget) {
 export interface CollabOptions {
   /** The sha of the body on screen; a new thread is checked against it. */
   renderedSha: Readonly<Ref<string>>
-  /** Fetches the body again: on every stream open and on a document event. */
-  reloadDocument: () => Promise<void>
+  /**
+   * Fetches the body again: on every stream open and on a document event,
+   * with the version the server has. Without one, after a version conflict,
+   * the body must be fetched.
+   */
+  reloadDocument: (sha?: string) => Promise<void>
   /** The document was deleted or its link revoked. */
   onClosed: () => void
 }
@@ -65,14 +78,19 @@ export function useDocumentCollab(target: CollabTarget, opts: CollabOptions) {
   const selection = shallowRef<LineRange | null>(null)
   let source: EventSource | null = null
   let closed = false
+  let loadSeq = 0
 
   async function reloadThreads(): Promise<void> {
+    // Loads overlap when events arrive close together; only the latest may land.
+    const seq = ++loadSeq
     try {
       const list = await api.threads(routes.threads)
+      if (seq !== loadSeq) return
       threads.value = list.threads
       viewer.value = list.viewer
       error.value = null
     } catch (e) {
+      if (seq !== loadSeq) return
       error.value = describeApiError(e, 'Could not load comments.')
     }
   }
@@ -115,14 +133,14 @@ export function useDocumentCollab(target: CollabTarget, opts: CollabOptions) {
       if (visibility.value === 'visible') heartbeat.resume()
       sendPresence()
       void reloadThreads()
-      void opts.reloadDocument()
+      void opts.reloadDocument(hello.sha256)
     })
     es.addEventListener('presence', (event) => {
       viewers.value = (JSON.parse((event as MessageEvent<string>).data) as PresenceSnapshot).viewers
     })
     es.addEventListener('threads', () => void reloadThreads())
-    es.addEventListener('document', () => {
-      void opts.reloadDocument()
+    es.addEventListener('document', (event) => {
+      void opts.reloadDocument((JSON.parse((event as MessageEvent<string>).data) as DocumentEvent).sha256)
       void reloadThreads()
     })
     es.addEventListener('closed', () => {

@@ -69,6 +69,28 @@ describe('useDocumentCollab', () => {
   })
   afterEach(() => vi.useRealTimers())
 
+  it('keeps the newest thread list when loads finish out of order', async () => {
+    const { collab, stream, scope } = start()
+    const pending: Array<(r: Response) => void> = []
+    fetchMock.mockImplementation((input, init) =>
+      (init?.method ?? 'GET') === 'GET' && urlOf(input).endsWith('/threads')
+        ? new Promise<Response>((resolve) => pending.push(resolve))
+        : Promise.resolve(answer(urlOf(input), init)),
+    )
+    const newer: ThreadList = { ...list, threads: [{ id: 'newer' } as ThreadList['threads'][number]] }
+
+    stream.emit('hello', { id: 'p_1', token: 'secret' })
+    stream.emit('threads', {})
+    await flushPromises()
+    expect(pending).toHaveLength(2)
+    pending[1](new Response(JSON.stringify(newer), { status: 200 }))
+    await flushPromises()
+    pending[0](new Response(JSON.stringify(list), { status: 200 }))
+    await flushPromises()
+    expect(collab.threads.value.map((t) => t.id)).toEqual(['newer'])
+    scope.stop()
+  })
+
   it('re-reads threads and the body on every hello, and threads on a threads event', async () => {
     const { collab, reloadDocument, stream, scope } = start()
     expect(stream.url).toBe('/api/v1/public/abc/events')
