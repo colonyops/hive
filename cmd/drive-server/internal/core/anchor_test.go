@@ -55,17 +55,17 @@ func TestReanchor(t *testing.T) {
 		},
 		{
 			name: "of two matches the one nearer the old place wins",
-			prev: "a\nb\nTarget text\nc\nd\ne\n",
-			next: "Target text\na\nb changed\nTarget text\nc\nd\ne\n",
+			prev: "a\nb\nTarget text\nc\n",
+			next: "Target text\na\nb\nTarget text!\nc\n",
 			in:   anchor(3, 3, "Target text"),
 			want: anchor(4, 4, "Target text"),
 		},
 		{
 			name: "a whole-word match beats a match inside a word",
 			prev: "x\none\n",
-			next: "someone\nx\nchanged\none\n",
+			next: "x\nsomeone\ny\nz\none!\n",
 			in:   anchor(2, 2, "one"),
-			want: anchor(4, 4, "one"),
+			want: anchor(5, 5, "one"),
 		},
 		{
 			name: "a quote across list items ignores the bullets and numbers",
