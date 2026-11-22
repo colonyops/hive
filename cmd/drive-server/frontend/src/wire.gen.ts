@@ -275,6 +275,10 @@ export interface PresenceSnapshot {
 export interface StreamHello {
   id: string;
   token: string;
+  /**
+   * SHA256 is the document's version when the stream opened.
+   */
+  sha256: string;
 }
 export interface DocumentEvent {
   sha256: string;

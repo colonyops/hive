@@ -252,7 +252,7 @@ func TestDeadLinkIsNotFound(t *testing.T) {
 	assert.True(t, core.IsKind(err, core.KindNotFound))
 	_, err = c.comments.Reply(t.Context(), c.other, c.slug, th.ID, "x")
 	assert.True(t, core.IsKind(err, core.KindNotFound))
-	_, _, err = c.comments.Locate(t.Context(), nil, core.Target{Slug: c.slug})
+	_, err = c.comments.Locate(t.Context(), nil, core.Target{Slug: c.slug})
 	assert.True(t, core.IsKind(err, core.KindNotFound))
 }
 

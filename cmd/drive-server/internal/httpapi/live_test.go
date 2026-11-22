@@ -9,12 +9,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/cmd/drive-server/internal/config"
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
+	"github.com/colonyops/hive/cmd/drive-server/internal/httpapi"
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/platform/driveapi"
+	"github.com/colonyops/hive/pkg/buildinfo"
 )
 
 type sseEvent struct {
@@ -124,6 +128,22 @@ func TestLinkStreamSignalsPresenceThreadsAndRevoke(t *testing.T) {
 	rec = s.do(http.MethodPut, driveapi.DocPath(drive.Shared, "plan.md"), owner, commentDoc)
 	require.Equal(t, http.StatusOK, rec.Code)
 	next(t, ownerEvents, "document")
+}
+
+func TestLinkStreamClosesWhenThePolicyNoLongerAdmitsTheOwner(t *testing.T) {
+	s := newServer(t)
+	svc := s.svc.HTTP(testBaseURL, nil)
+	svc.LinkCheckEvery = 10 * time.Millisecond
+	srv := httptest.NewServer(httpapi.New(zerolog.Nop(), buildinfo.Info{}, svc))
+	t.Cleanup(srv.Close)
+	owner := s.token(t, "a@example.com", core.ScopePush)
+	_, slug := sharedMarkdown(t, s, owner, "plan.md")
+
+	anon := openStream(t, srv, "/api/v1/public/"+slug+"/events", "")
+	next(t, anon, "hello")
+
+	s.svc.Policies.Swap([]config.Policy{{Name: "other", Matches: []string{"*@elsewhere.test"}}})
+	next(t, anon, "closed")
 }
 
 func TestStreamOfAMissingDocumentIsNotFound(t *testing.T) {

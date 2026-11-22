@@ -109,14 +109,21 @@ func (c *Comments) scopeFor(ctx context.Context, p Principal, slug string) (scop
 	return scope{ownerID: link.UserID, documentID: link.DocumentID}, nil
 }
 
+// Located is the document a stream follows, at its current version.
+type Located struct {
+	OwnerID    string
+	DocumentID string
+	SHA256     string
+}
+
 // Locate returns the document a stream for t follows. It is also how a link
 // stream checks that its link still works.
-func (c *Comments) Locate(ctx context.Context, p *Principal, t Target) (ownerID, documentID string, err error) {
+func (c *Comments) Locate(ctx context.Context, p *Principal, t Target) (Located, error) {
 	a, err := c.resolve(ctx, p, t)
 	if err != nil {
-		return "", "", err
+		return Located{}, err
 	}
-	return a.ownerID, a.doc.ID, nil
+	return Located{OwnerID: a.ownerID, DocumentID: a.doc.ID, SHA256: a.doc.SHA256}, nil
 }
 
 // List returns the document's threads. p is nil for an anonymous reader,

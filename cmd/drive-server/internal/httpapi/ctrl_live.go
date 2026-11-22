@@ -34,8 +34,7 @@ type liveHandlers struct {
 	opens        *guard.Limiter
 	beatPerToken *guard.Limiter
 	beatPerIP    *guard.Limiter
-	// linkCheck is how often a link stream checks that its link still works.
-	linkCheck time.Duration
+	linkCheck    time.Duration
 }
 
 func registerLiveRoutes(mux router, chain *errchain.ErrChain, authenticated authenticatedFunc, viewer viewerFunc, h liveHandlers) {
@@ -88,11 +87,11 @@ func (h liveHandlers) linkStream(viewer viewerFunc) errchain.HandlerFunc {
 
 func (h liveHandlers) stream(w http.ResponseWriter, r *http.Request, p *core.Principal, t core.Target) error {
 	ctx := r.Context()
-	ip := guard.ClientIP(r, h.trusted)
+	ip := guard.LimitKey(guard.ClientIP(r, h.trusted))
 	if err := allow(w, h.opens, ip.String(), "too many streams opened; wait a minute"); err != nil {
 		return err
 	}
-	ownerID, documentID, err := h.comments.Locate(ctx, p, t)
+	doc, err := h.comments.Locate(ctx, p, t)
 	if err != nil {
 		return err
 	}
@@ -104,11 +103,17 @@ func (h liveHandlers) stream(w http.ResponseWriter, r *http.Request, p *core.Pri
 		}
 		v.Name, v.Color, v.SignedIn, v.AccountID = core.ShownName(acct), live.ColorFor(acct.ID), true, acct.ID
 	}
-	hello, events, cancel, err := h.hub.Subscribe(live.Key{OwnerID: ownerID, DocumentID: documentID}, v)
+	hello, events, cancel, err := h.hub.Subscribe(live.Key{OwnerID: doc.OwnerID, DocumentID: doc.DocumentID}, v)
 	if err != nil {
 		return err
 	}
 	defer cancel()
+	// Read the version again now that the stream is subscribed: a push
+	// between the first read and Subscribe sends no event to this stream.
+	if doc, err = h.comments.Locate(ctx, p, t); err != nil {
+		return err
+	}
+	hello.SHA256 = doc.SHA256
 
 	// A stream outlives the server's read timeout; without this net/http
 	// would cancel it when the deadline passes.
@@ -116,6 +121,9 @@ func (h liveHandlers) stream(w http.ResponseWriter, r *http.Request, p *core.Pri
 	if err := rc.SetReadDeadline(time.Time{}); err != nil && !errors.Is(err, http.ErrNotSupported) {
 		return fmt.Errorf("clear read deadline: %w", err)
 	}
+	// The server sets no write timeout, so a keep-alive connection would
+	// carry the last stream write's deadline into its next request.
+	defer func() { _ = rc.SetWriteDeadline(time.Time{}) }()
 	hdr := w.Header()
 	hdr.Set("Content-Type", "text/event-stream")
 	hdr.Set("Cache-Control", "no-store")
@@ -168,7 +176,7 @@ func (h liveHandlers) stream(w http.ResponseWriter, r *http.Request, p *core.Pri
 // linkDead reports whether the link stopped working. A failure that is not a
 // dead link, such as a busy database, keeps the stream open.
 func (h liveHandlers) linkDead(ctx context.Context, p *core.Principal, t core.Target) bool {
-	_, _, err := h.comments.Locate(ctx, p, t)
+	_, err := h.comments.Locate(ctx, p, t)
 	if err != nil && !core.IsKind(err, core.KindNotFound) {
 		h.log.Warn().Err(err).Msg("link stream: check link")
 		return false
@@ -177,7 +185,7 @@ func (h liveHandlers) linkDead(ctx context.Context, p *core.Principal, t core.Ta
 }
 
 func (h liveHandlers) presence(w http.ResponseWriter, r *http.Request) error {
-	ip := guard.ClientIP(r, h.trusted)
+	ip := guard.LimitKey(guard.ClientIP(r, h.trusted))
 	if err := allow(w, h.beatPerIP, ip.String(), "too many presence updates"); err != nil {
 		return err
 	}
@@ -198,9 +206,24 @@ func (h liveHandlers) presence(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// streamWriteTimeout bounds one stream write. Without it a client that
+// stops reading blocks the handler in Write, where it never sees the context
+// end or the hub close its stream.
+const streamWriteTimeout = 10 * time.Second
+
 type sseWriter struct {
 	w  http.ResponseWriter
 	rc *http.ResponseController
+}
+
+func (s sseWriter) write(format string, args ...any) error {
+	if err := s.rc.SetWriteDeadline(time.Now().Add(streamWriteTimeout)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		return fmt.Errorf("set write deadline: %w", err)
+	}
+	if _, err := fmt.Fprintf(s.w, format, args...); err != nil {
+		return err
+	}
+	return s.rc.Flush()
 }
 
 func (s sseWriter) event(name string, data any) error {
@@ -208,15 +231,9 @@ func (s sseWriter) event(name string, data any) error {
 	if err != nil {
 		return fmt.Errorf("encode %s event: %w", name, err)
 	}
-	if _, err := fmt.Fprintf(s.w, "event: %s\ndata: %s\n\n", name, b); err != nil {
-		return err
-	}
-	return s.rc.Flush()
+	return s.write("event: %s\ndata: %s\n\n", name, b)
 }
 
 func (s sseWriter) comment(text string) error {
-	if _, err := fmt.Fprintf(s.w, ": %s\n\n", text); err != nil {
-		return err
-	}
-	return s.rc.Flush()
+	return s.write(": %s\n\n", text)
 }

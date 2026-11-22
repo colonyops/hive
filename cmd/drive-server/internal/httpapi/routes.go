@@ -34,11 +34,12 @@ func registerRoutes(mux router, chain *errchain.ErrChain, log zerolog.Logger, in
 	registerShareRoutes(mux, chain, authenticated, svc.Shares)
 	registerCommentRoutes(mux, chain, authenticated, viewer, svc.Comments)
 	registerLiveRoutes(mux, chain, authenticated, viewer, liveHandlers{
-		log:      log,
-		hub:      svc.Live,
-		comments: svc.Comments,
-		accounts: svc.Accounts,
-		trusted:  svc.TrustedProxies,
+		log:       log,
+		hub:       svc.Live,
+		comments:  svc.Comments,
+		accounts:  svc.Accounts,
+		trusted:   svc.TrustedProxies,
+		linkCheck: svc.LinkCheckEvery,
 	})
 	registerAuthRoutes(mux, chain, sessionOnly, svc, cookies)
 	registerTokenRoutes(mux, sessionOnly, svc.Tokens)

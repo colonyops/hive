@@ -257,6 +257,8 @@ type PresenceSnapshot struct {
 type StreamHello struct {
 	ID    string `json:"id"`
 	Token string `json:"token"`
+	// SHA256 is the document's version when the stream opened.
+	SHA256 string `json:"sha256"`
 }
 
 type DocumentEvent struct {

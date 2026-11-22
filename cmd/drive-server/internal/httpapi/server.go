@@ -45,6 +45,9 @@ type Services struct {
 	BaseURL string
 	// TrustedProxies are the proxies whose X-Forwarded-For names the client.
 	TrustedProxies []netip.Prefix
+	// LinkCheckEvery is how often a stream opened through a share link checks
+	// that the link still works. Zero means 30 seconds.
+	LinkCheckEvery time.Duration
 }
 
 // New returns the server's handler. /healthz, presence heartbeats, and

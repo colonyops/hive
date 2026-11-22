@@ -73,3 +73,13 @@ func ParseProxies(cidrs []string) ([]netip.Prefix, error) {
 	}
 	return out, nil
 }
+
+// LimitKey is the address a per-client limit counts a for. An IPv6 host
+// usually holds a whole /64 and can send from any address in it, so IPv6
+// counts by its /64.
+func LimitKey(a netip.Addr) netip.Addr {
+	if !a.Is6() || a.Is4In6() {
+		return a
+	}
+	return netip.PrefixFrom(a, 64).Masked().Addr()
+}
