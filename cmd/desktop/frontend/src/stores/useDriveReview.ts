@@ -13,7 +13,7 @@ import type { DocumentReviewWire } from '../../bindings/github.com/colonyops/hiv
 import type { AgentTargetRef } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { errorText } from '../lib/appError'
-import type { SourceRange } from '../lib/driveReviewSelection'
+import type { SourceRange } from '@hive/ui/lib/reviewSelection'
 import { defineStore } from './defineStore'
 import { useResource, type Resource } from './useResource'
 

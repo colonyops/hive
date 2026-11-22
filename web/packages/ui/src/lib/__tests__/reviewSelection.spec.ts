@@ -6,8 +6,8 @@ import {
   pickableBlock,
   quoteRange,
   selectionToRange,
-} from '../driveReviewSelection'
-import { renderCanvasMarkdown } from '@hive/ui/lib/githubMarkdown'
+} from '../reviewSelection'
+import { renderCanvasMarkdown } from '../githubMarkdown'
 
 function mountRoot(html: string): HTMLElement {
   const root = document.createElement('div')
@@ -175,6 +175,16 @@ describe('quoteRange', () => {
     const range = quoteRange([root.querySelector('p')!], 'same', 4)
     expect(range?.startContainer).toBe(root.querySelector('p')!.childNodes[2])
     expect(quoteRange([root.querySelector('p')!], 'same')?.startContainer).toBe(root.querySelector('p')!.firstChild)
+  })
+
+  it('ignores case and punctuation only when the match is loose', () => {
+    const root = mountRoot(
+      '<p data-source-start="1" data-source-end="1">Keep the <strong>old</strong> ones, please.</p>',
+    )
+    const p = root.querySelector('p')!
+    expect(quoteRange([p], 'keep the old ones please')).toBeNull()
+    const range = quoteRange([p], 'keep the old ones please', undefined, 'loose')
+    expect(range?.toString()).toBe('Keep the old ones, please')
   })
 })
 

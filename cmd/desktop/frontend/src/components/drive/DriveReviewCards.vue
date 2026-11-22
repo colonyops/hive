@@ -2,12 +2,13 @@
 // The comment cards. Aligned, as on the Drive page, each card sits on the row
 // of the text it quotes and slides down only to clear the card above.
 // Stacked, as over the narrow pane, they follow one another.
-import { useMutationObserver, useResizeObserver } from '@vueuse/core'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
+import CommentCard from '@hive/ui/components/review/CommentCard.vue'
+import CommentEntry from '@hive/ui/components/review/CommentEntry.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import InlineConfirm from '@hive/ui/components/ui/InlineConfirm.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
-import TextArea from '@hive/ui/components/ui/TextArea.vue'
+import { useAlignedCards } from '@hive/ui/composables/useAlignedCards'
 import { relativeAge } from '../../lib/age'
 import { labelOf } from '../../lib/reviewLabels'
 import { useReviewLabels } from '../../stores/useReviewLabels'
@@ -34,7 +35,6 @@ const current = computed(() => review.value.data.value.current)
 
 const error = ref<string | null>(null)
 const editing = ref<string | null>(null)
-const draft = ref('')
 const discarding = ref(false)
 const clearing = ref(false)
 
@@ -62,13 +62,8 @@ function pick(comment: CommentWire): void {
   block(comment.id)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }
 
-function startEdit(comment: CommentWire): void {
-  editing.value = comment.id
-  draft.value = comment.text
-}
-
-async function saveEdit(id: string): Promise<void> {
-  error.value = await store.update(props.space, props.path, id, draft.value)
+async function saveEdit(id: string, text: string): Promise<void> {
+  error.value = await store.update(props.space, props.path, id, text)
   if (!error.value) editing.value = null
 }
 
@@ -83,67 +78,14 @@ async function discard(): Promise<void> {
   if (!error.value) discarding.value = false
 }
 
-// A card's wanted top is its block's, measured against the cards' own box,
-// which scrolls with the document, so scrolling never moves them.
 const cards = ref<HTMLElement | null>(null)
-const cardElements = new Map<string, HTMLElement>()
-const tops = ref<ReadonlyMap<string, number>>(new Map())
-const height = ref(0)
-const CARD_GAP = 8
-// Only a card already on its block slides. One that just mounted, or that
-// waited at a fallback slot while a newly opened document rendered, would
-// otherwise fly across the sidebar to its first real position.
-let anchored = new Set<string>()
-const sliding = ref<ReadonlySet<string>>(new Set())
-
-function cardRef(id: string, element: unknown): void {
-  if (element instanceof HTMLElement) cardElements.set(id, element)
-  else cardElements.delete(id)
-}
-
-function layout(): void {
-  const box = cards.value
-  if (!props.alignTo || !box) return
-  const base = box.getBoundingClientRect().top
-  const next = new Map<string, number>()
-  const nextAnchored = new Set<string>()
-  let floor = 0
-  for (const comment of comments.value) {
-    const target = block(comment.id)
-    if (target) nextAnchored.add(comment.id)
-    const wanted = target ? target.getBoundingClientRect().top - base : floor
-    const top = Math.max(wanted, floor)
-    next.set(comment.id, top)
-    floor = top + (cardElements.get(comment.id)?.offsetHeight ?? 0) + CARD_GAP
-  }
-  sliding.value = new Set([...anchored].filter((id) => nextAnchored.has(id)))
-  anchored = nextAnchored
-  tops.value = next
-  height.value = floor
-}
-
-function relayout(): void {
-  void nextTick(layout)
-}
-
-watch([comments, editing, store.active, () => props.alignTo], relayout, {
-  immediate: true,
-  flush: 'post',
+const aligned = useAlignedCards({
+  cards,
+  ids: () => comments.value.map((c) => c.id),
+  anchor: block,
+  alignTo: () => props.alignTo ?? null,
+  deps: [editing, store.active],
 })
-useResizeObserver(() => props.alignTo ?? null, relayout)
-useResizeObserver(cards, relayout)
-// The reader marks blocks after it renders, and a highlighter that finishes
-// loading renders again.
-useMutationObserver(() => props.alignTo ?? null, relayout, {
-  subtree: true,
-  childList: true,
-  attributes: true,
-  attributeFilter: ['data-review-ids', 'style'],
-})
-
-function cardStyle(id: string): Record<string, string> | undefined {
-  return props.alignTo ? { top: `${tops.value.get(id) ?? 0}px` } : undefined
-}
 </script>
 
 <template>
@@ -182,91 +124,57 @@ function cardStyle(id: string): Record<string, string> | undefined {
       ref="cards"
       class="flex flex-col"
       :class="alignTo ? 'relative' : 'gap-2'"
-      :style="alignTo ? { minHeight: `${height}px` } : undefined"
+      :style="alignTo ? { minHeight: `${aligned.height.value}px` } : undefined"
     >
-      <li
+      <CommentCard
         v-for="(comment, index) in comments"
         :key="comment.id"
-        :ref="(element) => cardRef(comment.id, element)"
-        class="flex cursor-pointer flex-col gap-2 rounded-lg border px-3.5 py-3"
-        :class="[
-          alignTo ? 'absolute inset-x-0' : 'relative',
-          sliding.has(comment.id)
-            ? 'transition-[top,border-color,background-color]'
-            : 'transition-[border-color,background-color]',
-          'duration-150',
-          store.active.value === comment.id
-            ? 'border-accent/45 bg-raised'
-            : store.hovered.value === comment.id
-              ? 'border-strong bg-raised'
-              : 'border-card bg-raised/60',
-        ]"
-        :style="cardStyle(comment.id)"
+        :ref="(card) => aligned.cardRef(comment.id, card)"
+        :aligned="!!alignTo"
+        :top="aligned.tops.value.get(comment.id)"
+        :sliding="aligned.sliding.value.has(comment.id)"
+        :active="store.active.value === comment.id"
+        :hovered="store.hovered.value === comment.id"
         :data-testid="`${testid}-review-card-${index + 1}`"
-        @click="pick(comment)"
-        @mouseenter="store.setHovered(comment.id)"
-        @mouseleave="store.setHovered(null)"
+        @select="pick(comment)"
+        @hover="store.setHovered($event ? comment.id : null)"
       >
-        <span
-          v-if="alignTo && store.active.value === comment.id"
-          class="absolute top-5.5 -left-4 h-px w-3 bg-accent/50"
-          aria-hidden="true"
-        />
-        <div class="flex items-center gap-2">
-          <span
-            class="flex size-4.5 shrink-0 items-center justify-center rounded-full bg-accent font-mono text-micro font-semibold text-accent-contrast"
-            >{{ index + 1 }}</span
-          >
-          <span class="text-small font-semibold text-text">You</span>
-          <span class="text-caption text-text-4">{{ age(comment) }}</span>
-          <span class="ml-auto font-mono text-micro text-text-4" :title="comment.context">{{ lines(comment) }}</span>
-        </div>
-        <div v-if="editing === comment.id" class="flex flex-col gap-1.5" @click.stop>
-          <TextArea v-model="draft" :rows="2" size="sm" :data-testid="`${testid}-review-edit-text-${index + 1}`" />
-          <div class="flex justify-end gap-2">
-            <BaseButton variant="ghost" size="xs" @click="editing = null">Cancel</BaseButton>
-            <BaseButton
-              size="xs"
-              :disabled="!draft.trim()"
-              :data-testid="`${testid}-review-edit-save-${index + 1}`"
-              @click="saveEdit(comment.id)"
-            >
-              Save
-            </BaseButton>
-          </div>
-        </div>
-        <p
-          v-else
-          class="flex items-start gap-1.5 text-small leading-normal break-words whitespace-pre-wrap"
-          :class="store.active.value === comment.id ? 'text-text' : 'text-text-2'"
+        <CommentEntry
+          author="You"
+          :age="age(comment)"
+          :aside="lines(comment)"
+          :aside-title="comment.context"
+          :text="comment.text"
+          :editing="editing === comment.id"
+          can-edit
+          can-delete
+          :active="store.active.value === comment.id"
+          :testids="{
+            edit: `${testid}-review-edit-${index + 1}`,
+            delete: `${testid}-review-delete-${index + 1}`,
+            editText: `${testid}-review-edit-text-${index + 1}`,
+            editSave: `${testid}-review-edit-save-${index + 1}`,
+          }"
+          @edit="editing = comment.id"
+          @cancel="editing = null"
+          @save="saveEdit(comment.id, $event)"
+          @delete="remove(comment.id)"
         >
-          <component
-            :is="labelOf(labels, comment.text)!.icon"
-            v-if="labelOf(labels, comment.text)"
-            class="mt-0.75 size-3.5 shrink-0 text-accent"
-            aria-hidden="true"
-          />
-          <span class="min-w-0">{{ comment.text }}</span>
-        </p>
-        <div v-if="editing !== comment.id" class="flex gap-3.5 pt-0.5 text-caption text-text-3" @click.stop>
-          <button
-            type="button"
-            class="-mx-1 cursor-pointer rounded px-1 hover:bg-chip hover:text-text"
-            :data-testid="`${testid}-review-edit-${index + 1}`"
-            @click="startEdit(comment)"
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            class="-mx-1 ml-auto cursor-pointer rounded px-1 hover:bg-severity-error-tint hover:text-severity-error"
-            :data-testid="`${testid}-review-delete-${index + 1}`"
-            @click="remove(comment.id)"
-          >
-            Delete
-          </button>
-        </div>
-      </li>
+          <template #badge>
+            <span
+              class="flex size-4.5 shrink-0 items-center justify-center rounded-full bg-accent font-mono text-micro font-semibold text-accent-contrast"
+              >{{ index + 1 }}</span
+            >
+          </template>
+          <template v-if="labelOf(labels, comment.text)" #prefix>
+            <component
+              :is="labelOf(labels, comment.text)!.icon"
+              class="mt-0.75 size-3.5 shrink-0 text-accent"
+              aria-hidden="true"
+            />
+          </template>
+        </CommentEntry>
+      </CommentCard>
     </ol>
   </div>
 </template>
