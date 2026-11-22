@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ShareView from '../pages/ShareView.vue'
 import { mountWithRouter } from '../test-utils/mount'
+import { FakeEventSource } from '../test-utils/eventSource'
 import { doc } from './fixtures'
 
 // Stubbing fetch instead of api.ts exercises the real URL and the 404 decoding.
@@ -66,5 +67,22 @@ describe('ShareView', () => {
 
     expect(wrapper.get('[data-testid="share-error"]').text()).toContain('storage offline')
     expect(wrapper.find('[data-testid="share-missing"]').exists()).toBe(false)
+  })
+
+  it('names the owner and shows the dead-link state when the stream closes', async () => {
+    respond(200, {
+      owner_email: 'ada@example.com',
+      owner_name: 'Ada L',
+      document: doc({ path: 'notes/a.md' }),
+      body: 'x',
+    })
+    const wrapper = await mountShare('abc')
+    expect(wrapper.get('[data-testid="share-notice"]').text()).toBe('Shared by Ada L')
+    expect(FakeEventSource.latest().url).toBe('/api/v1/public/abc/events')
+
+    FakeEventSource.latest().emit('closed')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="share-missing"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="document-markdown"]').exists()).toBe(false)
   })
 })

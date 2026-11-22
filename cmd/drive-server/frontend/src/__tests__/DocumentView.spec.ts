@@ -9,6 +9,8 @@ import { doc } from './fixtures'
 
 const mocks = vi.hoisted(() => ({
   documentBody: vi.fn(),
+  threads: vi.fn(),
+  presence: vi.fn(),
   deleteDocument: vi.fn(),
   share: vi.fn(),
   unshare: vi.fn(),
@@ -40,8 +42,14 @@ async function shareAndCopy(wrapper: Awaited<ReturnType<typeof mountView>>['wrap
 describe('DocumentView', () => {
   beforeEach(() => {
     Object.values(mocks).forEach((m) => m.mockReset())
+    mocks.threads.mockResolvedValue({
+      document_sha256: 'abc',
+      viewer: { is_owner: true, can_comment: true },
+      threads: [],
+    })
+    mocks.presence.mockResolvedValue(undefined)
     documents = [doc({ path: 'a.md' }), doc({ path: 'page.html', kind: 'html' })]
-    mocks.documentBody.mockResolvedValue('# Hello\n\nBody text.')
+    mocks.documentBody.mockResolvedValue({ body: '# Hello\n\nBody text.', sha: 'abc' })
     mocks.deleteDocument.mockResolvedValue(undefined)
   })
 

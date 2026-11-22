@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import DocumentReader from '@hive/ui/components/drive/DocumentReader.vue'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
@@ -11,6 +10,7 @@ import type { MenuEntry } from '@hive/ui/types/menu'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import IconBack from '~icons/material-symbols/arrow-back'
+import IconComments from '~icons/material-symbols/comment-outline'
 import IconCode from '~icons/material-symbols/code-blocks'
 import IconFile from '~icons/material-symbols/description'
 import IconAArrowDown from '~icons/material-symbols/text-decrease'
@@ -21,7 +21,10 @@ import IconShare from '~icons/material-symbols/share'
 import IconTrash from '~icons/material-symbols/delete'
 import { api, docUrl } from '../api'
 import Breadcrumb, { type Crumb } from '../components/Breadcrumb.vue'
+import CollabReader from '../components/collab/CollabReader.vue'
+import PresenceAvatars from '../components/collab/PresenceAvatars.vue'
 import SharePopover from '../components/SharePopover.vue'
+import { useDocumentCollab } from '../lib/collab'
 import { useDocumentActions } from '../lib/entryActions'
 import { useLoad } from '../lib/load'
 import { useReaderPrefs } from '../lib/readerPrefs'
@@ -62,12 +65,34 @@ const share = ref<Share | null>(null)
 const shareAnchor = shallowRef<HTMLElement | null>(null)
 const moreAnchor = shallowRef<HTMLElement | null>(null)
 const {
-  data: body,
+  data: loaded,
   error: bodyError,
   reload: loadBody,
 } = useLoad(() => api.documentBody(props.space.apiPrefix, props.path), 'Could not load the document.', {
   immediate: false,
 })
+// An html document is not fetched here, so its version is the listing's.
+const renderedSha = computed(() => loaded.value?.sha || doc.value?.sha256 || '')
+const htmlVersion = ref(0)
+
+const railOpen = ref(false)
+// eslint-disable-next-line vue/no-setup-props-reactivity-loss -- SpaceRoute keys this page by route, so the target never changes
+const collab = useDocumentCollab(
+  { kind: 'owner', apiPrefix: props.space.apiPrefix, path: props.path },
+  {
+    renderedSha,
+    reloadDocument: async () => {
+      if (!started) return
+      if (doc.value?.kind === 'markdown') await loadBody()
+      else htmlVersion.value++
+    },
+    onClosed: () => {
+      void router.push(folderRoute.value)
+      emit('changed')
+    },
+  },
+)
+const openThreads = computed(() => collab.threads.value.filter((t) => !t.resolved_at).length)
 
 // The body loads once, when the document first appears in the list.
 let started = false
@@ -91,10 +116,12 @@ const error = computed(() => {
 const readerDocument = computed<ReaderDocument | null>(() => {
   if (!doc.value) return null
   const entry = { path: doc.value.path, kind: doc.value.kind, modified: doc.value.updated_at }
-  return doc.value.kind === 'markdown' ? { entry, markdown: body.value ?? '' } : { entry }
+  return doc.value.kind === 'markdown' ? { entry, markdown: loaded.value?.body ?? '' } : { entry }
 })
 const htmlSrc = computed(() =>
-  doc.value?.kind === 'html' ? `${docUrl(props.space.apiPrefix, props.path)}?raw=1` : undefined,
+  doc.value?.kind === 'html'
+    ? `${docUrl(props.space.apiPrefix, props.path)}?raw=1${htmlVersion.value ? `&v=${htmlVersion.value}` : ''}`
+    : undefined,
 )
 
 function openLink(href: string): void {
@@ -166,6 +193,18 @@ function onMore(id: string): void {
           <Breadcrumb :items="folderCrumbs" compact />
         </div>
         <div class="flex shrink-0 items-center gap-2" data-testid="share-panel">
+          <PresenceAvatars class="max-sm:hidden" :viewers="collab.viewers.value" :connected="collab.connected.value" />
+          <BaseButton
+            variant="secondary"
+            size="control"
+            :aria-pressed="railOpen"
+            aria-label="Comments"
+            data-testid="comments-toggle"
+            @click="railOpen = !railOpen"
+          >
+            <template #icon><IconComments class="size-4" /></template>
+            <span data-testid="comments-count">{{ openThreads }}</span>
+          </BaseButton>
           <IconButton
             v-if="share"
             label="Copy share link"
@@ -215,18 +254,18 @@ function onMore(id: string): void {
           @close="shareAnchor = null"
         />
       </header>
-      <div class="min-h-0 flex-1" :class="isHtml ? 'overflow-hidden' : 'overflow-y-auto'">
-        <div class="relative" :class="isHtml ? 'h-full' : 'mx-auto max-w-5xl px-6 py-6'">
-          <DocumentReader
-            :document="readerDocument"
-            :font-size-px="prefs.fontSizePx"
-            :line-height="prefs.lineHeight"
-            :html-src="htmlSrc"
-            :paths="paths"
-            @open-link="openLink"
-          />
-        </div>
-      </div>
+      <CollabReader
+        v-model:rail-open="railOpen"
+        :document="readerDocument"
+        :font-size-px="prefs.fontSizePx"
+        :line-height="prefs.lineHeight"
+        :html-src="htmlSrc"
+        :paths="paths"
+        :collab="collab"
+        :sign-in="null"
+        reader-class="mx-auto max-w-5xl px-10 py-6"
+        @open-link="openLink"
+      />
     </template>
     <ConfirmationHost :confirmation="confirmation" />
   </div>

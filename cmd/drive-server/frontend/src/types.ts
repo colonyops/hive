@@ -11,6 +11,7 @@ export type {
   LineRange,
   Me,
   PresenceSnapshot,
+  PresenceUpdate,
   PresenceViewer,
   PublicDocument,
   SearchHit,
