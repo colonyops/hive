@@ -99,13 +99,13 @@ const search = ref('')
 const { sessions } = useTerminalSessions()
 const { statuses: sessionStatuses, retainPolling } = useSessionStatuses()
 const agentBySessionId = computed(() => {
-  const names = new Map(sessions.value.map((row) => [row.id, row.name]))
+  const rows = new Map(sessions.value.map((row) => [row.id, row]))
   const agents = new Map<string, TaskAgent>()
   for (const item of items.value) {
     if (!item.sessionId || agents.has(item.sessionId)) continue
     agents.set(
       item.sessionId,
-      taskAgent(item.sessionId, names.get(item.sessionId), sessionStatuses.value[item.sessionId]),
+      taskAgent(item.sessionId, rows.get(item.sessionId), sessionStatuses.value[item.sessionId]),
     )
   }
   return agents

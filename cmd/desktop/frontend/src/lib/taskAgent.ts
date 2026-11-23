@@ -11,31 +11,53 @@ export interface TaskAgent {
   sessionId: string
   /** The session's name, or its id when no loaded session has it (an ended one). */
   name: string
+  /** The tmux target to open, '' when the session cannot be attached to: it ended, is not active, or is a chat. */
+  slug: string
   activity: AgentActivity
   /** The agent tool in the window that set `activity`, '' when none did. */
   tool: string
+  /** The tmux window that set `activity`, '' when none did. */
+  windowId: string
 }
+
+/** The fields of a loaded session row that a task's agent reads. */
+export interface TaskAgentSession {
+  name: string
+  slug: string
+  state: string
+}
+
+type Activity = Pick<TaskAgent, 'activity' | 'tool' | 'windowId'>
 
 const RANK: Record<string, number> = { ready: 1, active: 2, approval: 3 }
 
 /** A session runs several windows; the one that most needs the user speaks for it. */
-export function sessionActivity(status: SessionStatus | undefined): { activity: AgentActivity; tool: string } {
-  if (!status) return { activity: 'unknown', tool: '' }
-  if (!status.running) return { activity: 'stopped', tool: '' }
-  let best = { activity: 'unknown' as AgentActivity, tool: '' }
+export function sessionActivity(status: SessionStatus | undefined): Activity {
+  if (!status) return { activity: 'unknown', tool: '', windowId: '' }
+  if (!status.running) return { activity: 'stopped', tool: '', windowId: '' }
+  let best: Activity = { activity: 'unknown', tool: '', windowId: '' }
   let bestRank = 0
   for (const window of status.windows ?? []) {
     const rank = RANK[window.status] ?? 0
     if (rank > bestRank) {
       bestRank = rank
-      best = { activity: window.status as AgentActivity, tool: window.tool }
+      best = { activity: window.status as AgentActivity, tool: window.tool, windowId: window.windowId }
     }
   }
   return best
 }
 
-export function taskAgent(sessionId: string, name: string | undefined, status: SessionStatus | undefined): TaskAgent {
-  return { sessionId, name: name || sessionId, ...sessionActivity(status) }
+export function taskAgent(
+  sessionId: string,
+  session: TaskAgentSession | undefined,
+  status: SessionStatus | undefined,
+): TaskAgent {
+  return {
+    sessionId,
+    name: session?.name || sessionId,
+    slug: session?.state === 'active' ? session.slug : '',
+    ...sessionActivity(status),
+  }
 }
 
 export function agentLabel(agent: TaskAgent): string {

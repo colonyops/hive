@@ -117,7 +117,11 @@ const { statuses: sessionStatuses } = useSessionStatuses()
 const agent = computed(() => {
   const id = detail.value?.sessionId
   if (!id) return null
-  return taskAgent(id, sessions.value.find((row) => row.id === id)?.name, sessionStatuses.value[id])
+  return taskAgent(
+    id,
+    sessions.value.find((row) => row.id === id),
+    sessionStatuses.value[id],
+  )
 })
 
 // hc marks an item blocked for open/in_progress direct children OR explicit

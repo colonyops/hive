@@ -17,7 +17,7 @@ describe('sessionActivity', () => {
         { windowId: '@3', status: 'active', tool: 'pi' },
       ],
     }
-    expect(sessionActivity(status)).toEqual({ activity: 'approval', tool: 'codex' })
+    expect(sessionActivity(status)).toEqual({ activity: 'approval', tool: 'codex', windowId: '@2' })
   })
 
   it('is unknown for a running session whose windows report nothing it knows', () => {
@@ -26,16 +26,27 @@ describe('sessionActivity', () => {
 })
 
 describe('taskAgent', () => {
-  it('falls back to the id for a session with no loaded name', () => {
-    expect(taskAgent('abc', undefined, undefined).name).toBe('abc')
+  it('falls back to the id, and cannot be opened, for a session with no loaded row', () => {
+    const agent = taskAgent('abc', undefined, undefined)
+    expect(agent.name).toBe('abc')
+    expect(agent.slug).toBe('')
+  })
+
+  it('opens only an active session', () => {
+    expect(taskAgent('abc', { name: 'auth', slug: 'auth-abc', state: 'active' }, undefined).slug).toBe('auth-abc')
+    expect(taskAgent('abc', { name: 'auth', slug: 'auth-abc', state: 'recycled' }, undefined).slug).toBe('')
   })
 
   it('labels a working agent with its tool and session', () => {
-    const agent = taskAgent('abc', 'auth', {
-      sessionId: 'abc',
-      running: true,
-      windows: [{ windowId: '@1', status: 'active', tool: 'claude' }],
-    })
+    const agent = taskAgent(
+      'abc',
+      { name: 'auth', slug: 'auth', state: 'active' },
+      {
+        sessionId: 'abc',
+        running: true,
+        windows: [{ windowId: '@1', status: 'active', tool: 'claude' }],
+      },
+    )
     expect(agentLabel(agent)).toBe('claude is working in auth')
   })
 })
