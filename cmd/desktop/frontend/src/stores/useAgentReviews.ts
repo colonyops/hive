@@ -1,3 +1,4 @@
+import { useIntervalFn } from '@vueuse/core'
 import { shallowRef } from 'vue'
 import { errorText } from '../lib/appError'
 import { hiveUiPlatform } from '../lib/hiveUiPlatform'
@@ -10,6 +11,13 @@ import type { DiffReviewWire } from '../../bindings/github.com/colonyops/hive/cm
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { defineStore } from './defineStore'
 
+export const SERVER_REVIEW_POLL_MS = 10_000
+
+/** A "<server>:<id>" session keeps its reviews in that server's hive.db. */
+function onServer(sessionId: string): boolean {
+  return sessionId.includes(':')
+}
+
 /**
  * Agents' reviews of a session's branch diff, read from hive.db. Any agent
  * writes them, from the desktop or the hive CLI, so a session's reviews are
@@ -20,6 +28,10 @@ export const useAgentReviews = defineStore('agentReviews', () => {
   const bySession = shallowRef<Readonly<Record<string, readonly DiffReviewWire[]>>>({})
   const errors = shallowRef<Readonly<Record<string, string>>>({})
   const watchers = new Map<string, number>()
+  // A read that began before a dismissal answers with the dismissed comment.
+  // A local write brings an event that corrects it; a server's does not, so
+  // such a read is dropped.
+  const dismissals = new Map<string, number>()
 
   function set<T>(map: Readonly<Record<string, T>>, id: string, value: T | undefined): Record<string, T> {
     const next = { ...map }
@@ -29,8 +41,10 @@ export const useAgentReviews = defineStore('agentReviews', () => {
   }
 
   async function reload(sessionId: string): Promise<void> {
+    const before = dismissals.get(sessionId) ?? 0
     try {
       const list = (await DiffReviews(sessionId)) ?? []
+      if ((dismissals.get(sessionId) ?? 0) !== before) return
       bySession.value = set(bySession.value, sessionId, list)
       errors.value = set(errors.value, sessionId, undefined)
     } catch (err) {
@@ -40,9 +54,24 @@ export const useAgentReviews = defineStore('agentReviews', () => {
     }
   }
 
+  // Nothing tells this app that an agent on a server wrote a review, so a
+  // watched server session is read again on a timer.
+  const serverPoll = useIntervalFn(
+    () => {
+      for (const watched of watchers.keys()) if (onServer(watched)) void reload(watched)
+    },
+    SERVER_REVIEW_POLL_MS,
+    { immediate: false },
+  )
+  function pollServers(): void {
+    if ([...watchers.keys()].some(onServer)) serverPoll.resume()
+    else serverPoll.pause()
+  }
+
   /** Keeps a session's reviews current until the returned stop is called. */
   function watch(sessionId: string): () => void {
     watchers.set(sessionId, (watchers.get(sessionId) ?? 0) + 1)
+    pollServers()
     void reload(sessionId)
     let stopped = false
     return () => {
@@ -51,12 +80,14 @@ export const useAgentReviews = defineStore('agentReviews', () => {
       const left = (watchers.get(sessionId) ?? 1) - 1
       if (left > 0) watchers.set(sessionId, left)
       else watchers.delete(sessionId)
+      pollServers()
     }
   }
 
-  // The event comes from a fingerprint of every review, so it cannot say whose changed.
+  // The event comes from a fingerprint of every review in this machine's
+  // hive.db, so it cannot say whose changed, and says nothing of a server's.
   useWailsEvent('diff-reviews:updated', () => {
-    for (const watched of watchers.keys()) void reload(watched)
+    for (const watched of watchers.keys()) if (!onServer(watched)) void reload(watched)
   })
 
   function reviews(sessionId: string): readonly DiffReviewWire[] {
@@ -66,6 +97,7 @@ export const useAgentReviews = defineStore('agentReviews', () => {
   // The row leaves at once: the walkthrough moves on without waiting for Go. A failed
   // call reads the session again, which puts it back.
   function drop(sessionId: string, keep: (review: DiffReviewWire) => DiffReviewWire | null): void {
+    dismissals.set(sessionId, (dismissals.get(sessionId) ?? 0) + 1)
     bySession.value = set(
       bySession.value,
       sessionId,
@@ -80,7 +112,7 @@ export const useAgentReviews = defineStore('agentReviews', () => {
       return comments.length ? { ...review, comments } : null
     })
     try {
-      await DismissDiffComment(commentId)
+      await DismissDiffComment(sessionId, commentId)
       return null
     } catch (err) {
       void reload(sessionId)
@@ -92,7 +124,7 @@ export const useAgentReviews = defineStore('agentReviews', () => {
   async function dismissReview(sessionId: string, reviewId: string): Promise<string | null> {
     drop(sessionId, (review) => (review.id === reviewId ? null : review))
     try {
-      await DismissDiffReview(reviewId)
+      await DismissDiffReview(sessionId, reviewId)
       return null
     } catch (err) {
       void reload(sessionId)

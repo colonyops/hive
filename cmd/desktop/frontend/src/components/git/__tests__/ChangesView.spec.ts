@@ -1443,12 +1443,12 @@ describe('ChangesView', () => {
       expect(mocks.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ type: 'line', id: 'a.go', lineNumber: 1 }))
 
       await press('d')
-      expect(mocks.DismissDiffComment).toHaveBeenCalledWith('c2')
+      expect(mocks.DismissDiffComment).toHaveBeenCalledWith('s1', 'c2')
       expect(useChangesReview().comments('s1')).toHaveLength(0)
       expect(wrapper.get(testid('changes-walk-position')).text()).toBe('Comment 1 of 1')
 
       await press('d')
-      expect(mocks.DismissDiffComment).toHaveBeenCalledWith('c1')
+      expect(mocks.DismissDiffComment).toHaveBeenCalledWith('s1', 'c1')
       expect(wrapper.find(testid('changes-walk')).exists()).toBe(false)
       wrapper.unmount()
     })
@@ -1465,7 +1465,7 @@ describe('ChangesView', () => {
       expect(mocks.SendChanges).toHaveBeenCalledWith('s1', '%1', [
         expect.objectContaining({ path: 'a.go', endLine: 1, text: 'claude (issue): comment 1', quote: '+new a.go' }),
       ])
-      expect(mocks.DismissDiffComment).toHaveBeenCalledWith('c1')
+      expect(mocks.DismissDiffComment).toHaveBeenCalledWith('s1', 'c1')
       expect(wrapper.find(testid('changes-send')).exists()).toBe(false)
       wrapper.unmount()
     })
@@ -1496,7 +1496,7 @@ describe('ChangesView', () => {
       const wrapper = await mountView()
       await press('w')
       await press('d')
-      expect(mocks.DismissDiffComment).toHaveBeenCalledWith('c1')
+      expect(mocks.DismissDiffComment).toHaveBeenCalledWith('s1', 'c1')
       expect(useChangesReview().threads('s1')).toEqual({})
       wrapper.unmount()
     })
@@ -1538,7 +1538,7 @@ describe('ChangesView', () => {
       await wrapper.get(testid('changes-overview-row')).trigger('click')
       await wrapper.get(testid('agent-review-r1-dismiss-all')).trigger('click')
       await flushPromises()
-      expect(mocks.DismissDiffReview).toHaveBeenCalledWith('r1')
+      expect(mocks.DismissDiffReview).toHaveBeenCalledWith('s1', 'r1')
       expect(wrapper.find(testid('agent-review-r1')).exists()).toBe(false)
       expect(wrapper.find(testid('changes-overview-empty')).exists()).toBe(true)
       wrapper.unmount()

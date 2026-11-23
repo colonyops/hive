@@ -98,6 +98,15 @@ const (
 	// SessionServiceAgentPanesProcedure is the fully-qualified name of the SessionService's AgentPanes
 	// RPC.
 	SessionServiceAgentPanesProcedure = "/hive.daemon.v1.SessionService/AgentPanes"
+	// SessionServiceDiffReviewsProcedure is the fully-qualified name of the SessionService's
+	// DiffReviews RPC.
+	SessionServiceDiffReviewsProcedure = "/hive.daemon.v1.SessionService/DiffReviews"
+	// SessionServiceDismissDiffCommentProcedure is the fully-qualified name of the SessionService's
+	// DismissDiffComment RPC.
+	SessionServiceDismissDiffCommentProcedure = "/hive.daemon.v1.SessionService/DismissDiffComment"
+	// SessionServiceDismissDiffReviewProcedure is the fully-qualified name of the SessionService's
+	// DismissDiffReview RPC.
+	SessionServiceDismissDiffReviewProcedure = "/hive.daemon.v1.SessionService/DismissDiffReview"
 )
 
 // DaemonServiceClient is a client for the hive.daemon.v1.DaemonService service.
@@ -289,6 +298,14 @@ type SessionServiceClient interface {
 	// AgentPanes lists the agent panes of sessions on the daemon's machine,
 	// with pane ids in that machine's tmux, so a client can send text to one.
 	AgentPanes(context.Context, *connect.Request[v1.AgentPanesRequest]) (*connect.Response[v1.AgentPanesResponse], error)
+	// DiffReviews lists the agent reviews of a session's branch diff, oldest
+	// first, from the daemon's hive.db.
+	DiffReviews(context.Context, *connect.Request[v1.DiffReviewsRequest]) (*connect.Response[v1.DiffReviewsResponse], error)
+	// DismissDiffComment removes one agent review comment, and its review with
+	// its last comment.
+	DismissDiffComment(context.Context, *connect.Request[v1.DismissDiffCommentRequest]) (*connect.Response[v1.DismissDiffCommentResponse], error)
+	// DismissDiffReview removes one agent review and its comments.
+	DismissDiffReview(context.Context, *connect.Request[v1.DismissDiffReviewRequest]) (*connect.Response[v1.DismissDiffReviewResponse], error)
 }
 
 // NewSessionServiceClient constructs a client for the hive.daemon.v1.SessionService service. By
@@ -440,34 +457,55 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("AgentPanes")),
 			connect.WithClientOptions(opts...),
 		),
+		diffReviews: connect.NewClient[v1.DiffReviewsRequest, v1.DiffReviewsResponse](
+			httpClient,
+			baseURL+SessionServiceDiffReviewsProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("DiffReviews")),
+			connect.WithClientOptions(opts...),
+		),
+		dismissDiffComment: connect.NewClient[v1.DismissDiffCommentRequest, v1.DismissDiffCommentResponse](
+			httpClient,
+			baseURL+SessionServiceDismissDiffCommentProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("DismissDiffComment")),
+			connect.WithClientOptions(opts...),
+		),
+		dismissDiffReview: connect.NewClient[v1.DismissDiffReviewRequest, v1.DismissDiffReviewResponse](
+			httpClient,
+			baseURL+SessionServiceDismissDiffReviewProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("DismissDiffReview")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // sessionServiceClient implements SessionServiceClient.
 type sessionServiceClient struct {
-	list              *connect.Client[v1.ListRequest, v1.ListResponse]
-	get               *connect.Client[v1.GetRequest, v1.GetResponse]
-	create            *connect.Client[v1.CreateRequest, v1.CreateResponse]
-	createFromRequest *connect.Client[v1.CreateFromRequestRequest, v1.CreateFromRequestResponse]
-	createWithWindows *connect.Client[v1.CreateWithWindowsRequest, v1.CreateWithWindowsResponse]
-	rename            *connect.Client[v1.RenameRequest, v1.RenameResponse]
-	setGroup          *connect.Client[v1.SetGroupRequest, v1.SetGroupResponse]
-	setTags           *connect.Client[v1.SetTagsRequest, v1.SetTagsResponse]
-	editTags          *connect.Client[v1.EditTagsRequest, v1.EditTagsResponse]
-	delete            *connect.Client[v1.DeleteRequest, v1.DeleteResponse]
-	recycle           *connect.Client[v1.RecycleRequest, v1.RecycleResponse]
-	prune             *connect.Client[v1.PruneRequest, v1.PruneResponse]
-	risk              *connect.Client[v1.RiskRequest, v1.RiskResponse]
-	launchOptions     *connect.Client[v1.LaunchOptionsRequest, v1.LaunchOptionsResponse]
-	statuses          *connect.Client[v1.StatusesRequest, v1.StatusesResponse]
-	changes           *connect.Client[v1.ChangesRequest, v1.ChangesResponse]
-	fileDiffs         *connect.Client[v1.FileDiffsRequest, v1.FileDiffsResponse]
-	fileContext       *connect.Client[v1.FileContextRequest, v1.FileContextResponse]
-	fileImage         *connect.Client[v1.FileImageRequest, v1.FileImageResponse]
-	branches          *connect.Client[v1.BranchesRequest, v1.BranchesResponse]
-	gitStatuses       *connect.Client[v1.GitStatusesRequest, v1.GitStatusesResponse]
-	startTmux         *connect.Client[v1.StartTmuxRequest, v1.StartTmuxResponse]
-	agentPanes        *connect.Client[v1.AgentPanesRequest, v1.AgentPanesResponse]
+	list               *connect.Client[v1.ListRequest, v1.ListResponse]
+	get                *connect.Client[v1.GetRequest, v1.GetResponse]
+	create             *connect.Client[v1.CreateRequest, v1.CreateResponse]
+	createFromRequest  *connect.Client[v1.CreateFromRequestRequest, v1.CreateFromRequestResponse]
+	createWithWindows  *connect.Client[v1.CreateWithWindowsRequest, v1.CreateWithWindowsResponse]
+	rename             *connect.Client[v1.RenameRequest, v1.RenameResponse]
+	setGroup           *connect.Client[v1.SetGroupRequest, v1.SetGroupResponse]
+	setTags            *connect.Client[v1.SetTagsRequest, v1.SetTagsResponse]
+	editTags           *connect.Client[v1.EditTagsRequest, v1.EditTagsResponse]
+	delete             *connect.Client[v1.DeleteRequest, v1.DeleteResponse]
+	recycle            *connect.Client[v1.RecycleRequest, v1.RecycleResponse]
+	prune              *connect.Client[v1.PruneRequest, v1.PruneResponse]
+	risk               *connect.Client[v1.RiskRequest, v1.RiskResponse]
+	launchOptions      *connect.Client[v1.LaunchOptionsRequest, v1.LaunchOptionsResponse]
+	statuses           *connect.Client[v1.StatusesRequest, v1.StatusesResponse]
+	changes            *connect.Client[v1.ChangesRequest, v1.ChangesResponse]
+	fileDiffs          *connect.Client[v1.FileDiffsRequest, v1.FileDiffsResponse]
+	fileContext        *connect.Client[v1.FileContextRequest, v1.FileContextResponse]
+	fileImage          *connect.Client[v1.FileImageRequest, v1.FileImageResponse]
+	branches           *connect.Client[v1.BranchesRequest, v1.BranchesResponse]
+	gitStatuses        *connect.Client[v1.GitStatusesRequest, v1.GitStatusesResponse]
+	startTmux          *connect.Client[v1.StartTmuxRequest, v1.StartTmuxResponse]
+	agentPanes         *connect.Client[v1.AgentPanesRequest, v1.AgentPanesResponse]
+	diffReviews        *connect.Client[v1.DiffReviewsRequest, v1.DiffReviewsResponse]
+	dismissDiffComment *connect.Client[v1.DismissDiffCommentRequest, v1.DismissDiffCommentResponse]
+	dismissDiffReview  *connect.Client[v1.DismissDiffReviewRequest, v1.DismissDiffReviewResponse]
 }
 
 // List calls hive.daemon.v1.SessionService.List.
@@ -585,6 +623,21 @@ func (c *sessionServiceClient) AgentPanes(ctx context.Context, req *connect.Requ
 	return c.agentPanes.CallUnary(ctx, req)
 }
 
+// DiffReviews calls hive.daemon.v1.SessionService.DiffReviews.
+func (c *sessionServiceClient) DiffReviews(ctx context.Context, req *connect.Request[v1.DiffReviewsRequest]) (*connect.Response[v1.DiffReviewsResponse], error) {
+	return c.diffReviews.CallUnary(ctx, req)
+}
+
+// DismissDiffComment calls hive.daemon.v1.SessionService.DismissDiffComment.
+func (c *sessionServiceClient) DismissDiffComment(ctx context.Context, req *connect.Request[v1.DismissDiffCommentRequest]) (*connect.Response[v1.DismissDiffCommentResponse], error) {
+	return c.dismissDiffComment.CallUnary(ctx, req)
+}
+
+// DismissDiffReview calls hive.daemon.v1.SessionService.DismissDiffReview.
+func (c *sessionServiceClient) DismissDiffReview(ctx context.Context, req *connect.Request[v1.DismissDiffReviewRequest]) (*connect.Response[v1.DismissDiffReviewResponse], error) {
+	return c.dismissDiffReview.CallUnary(ctx, req)
+}
+
 // SessionServiceHandler is an implementation of the hive.daemon.v1.SessionService service.
 type SessionServiceHandler interface {
 	List(context.Context, *connect.Request[v1.ListRequest]) (*connect.Response[v1.ListResponse], error)
@@ -624,6 +677,14 @@ type SessionServiceHandler interface {
 	// AgentPanes lists the agent panes of sessions on the daemon's machine,
 	// with pane ids in that machine's tmux, so a client can send text to one.
 	AgentPanes(context.Context, *connect.Request[v1.AgentPanesRequest]) (*connect.Response[v1.AgentPanesResponse], error)
+	// DiffReviews lists the agent reviews of a session's branch diff, oldest
+	// first, from the daemon's hive.db.
+	DiffReviews(context.Context, *connect.Request[v1.DiffReviewsRequest]) (*connect.Response[v1.DiffReviewsResponse], error)
+	// DismissDiffComment removes one agent review comment, and its review with
+	// its last comment.
+	DismissDiffComment(context.Context, *connect.Request[v1.DismissDiffCommentRequest]) (*connect.Response[v1.DismissDiffCommentResponse], error)
+	// DismissDiffReview removes one agent review and its comments.
+	DismissDiffReview(context.Context, *connect.Request[v1.DismissDiffReviewRequest]) (*connect.Response[v1.DismissDiffReviewResponse], error)
 }
 
 // NewSessionServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -771,6 +832,24 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("AgentPanes")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceDiffReviewsHandler := connect.NewUnaryHandler(
+		SessionServiceDiffReviewsProcedure,
+		svc.DiffReviews,
+		connect.WithSchema(sessionServiceMethods.ByName("DiffReviews")),
+		connect.WithHandlerOptions(opts...),
+	)
+	sessionServiceDismissDiffCommentHandler := connect.NewUnaryHandler(
+		SessionServiceDismissDiffCommentProcedure,
+		svc.DismissDiffComment,
+		connect.WithSchema(sessionServiceMethods.ByName("DismissDiffComment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	sessionServiceDismissDiffReviewHandler := connect.NewUnaryHandler(
+		SessionServiceDismissDiffReviewProcedure,
+		svc.DismissDiffReview,
+		connect.WithSchema(sessionServiceMethods.ByName("DismissDiffReview")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/hive.daemon.v1.SessionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SessionServiceListProcedure:
@@ -819,6 +898,12 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceStartTmuxHandler.ServeHTTP(w, r)
 		case SessionServiceAgentPanesProcedure:
 			sessionServiceAgentPanesHandler.ServeHTTP(w, r)
+		case SessionServiceDiffReviewsProcedure:
+			sessionServiceDiffReviewsHandler.ServeHTTP(w, r)
+		case SessionServiceDismissDiffCommentProcedure:
+			sessionServiceDismissDiffCommentHandler.ServeHTTP(w, r)
+		case SessionServiceDismissDiffReviewProcedure:
+			sessionServiceDismissDiffReviewHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -918,4 +1003,16 @@ func (UnimplementedSessionServiceHandler) StartTmux(context.Context, *connect.Re
 
 func (UnimplementedSessionServiceHandler) AgentPanes(context.Context, *connect.Request[v1.AgentPanesRequest]) (*connect.Response[v1.AgentPanesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.AgentPanes is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) DiffReviews(context.Context, *connect.Request[v1.DiffReviewsRequest]) (*connect.Response[v1.DiffReviewsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.DiffReviews is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) DismissDiffComment(context.Context, *connect.Request[v1.DismissDiffCommentRequest]) (*connect.Response[v1.DismissDiffCommentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.DismissDiffComment is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) DismissDiffReview(context.Context, *connect.Request[v1.DismissDiffReviewRequest]) (*connect.Response[v1.DismissDiffReviewResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.DismissDiffReview is not implemented"))
 }

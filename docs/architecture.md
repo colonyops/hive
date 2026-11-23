@@ -1619,7 +1619,10 @@ a few seconds. The Changes view reads its diffs the same way
 (`SessionChanges`, `SessionFileDiffs` and the rest). A review sent from it goes
 to an agent pane that the server's daemon names (`sessionapi.API.AgentPanes`),
 and the server's `tmuxcc.Manager` types it in, so a pane id is never read
-against the wrong tmux. Start asks the server to open the session's tmux session by its
+against the wrong tmux. Agent diff reviews of a server session stay in the
+server's hive.db, where its agents write them; `DiffReviewsService` reads and
+dismisses them through the server's session API (`sessionapi.API.DiffReviews`),
+and the frontend polls them because no event crosses from the server. Start asks the server to open the session's tmux session by its
 own rules (`sessionapi.API.StartTmuxSession`); the terminal then attaches over
 ssh. A failed list marks a server's rows offline, which is not the
 same as gone: an attached terminal stays until the server answers without the

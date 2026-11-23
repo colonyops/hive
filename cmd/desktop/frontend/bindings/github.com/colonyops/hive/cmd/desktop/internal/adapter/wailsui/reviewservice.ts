@@ -62,18 +62,18 @@ export function DiffReviews(sessionID: string): $CancellablePromise<$models.Diff
 }
 
 /**
- * DismissDiffComment removes one agent comment. The frontend calls it after Send
+ * DismissDiffComment removes one agent comment of the session. The frontend calls it after Send
  * delivers the comment too.
  */
-export function DismissDiffComment(commentID: string): $CancellablePromise<void> {
-    return $Call.ByID(2930048103, commentID);
+export function DismissDiffComment(sessionID: string, commentID: string): $CancellablePromise<void> {
+    return $Call.ByID(2930048103, sessionID, commentID);
 }
 
 /**
- * DismissDiffReview removes one agent review with all its comments.
+ * DismissDiffReview removes one agent review of the session with all its comments.
  */
-export function DismissDiffReview(reviewID: string): $CancellablePromise<void> {
-    return $Call.ByID(3011899394, reviewID);
+export function DismissDiffReview(sessionID: string, reviewID: string): $CancellablePromise<void> {
+    return $Call.ByID(3011899394, sessionID, reviewID);
 }
 
 /**

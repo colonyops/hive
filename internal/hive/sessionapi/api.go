@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -63,6 +64,14 @@ type API interface {
 	// session with no panes, or whose panes could not be read, is absent.
 	// A machine without terminal status answers ErrStatusUnavailable.
 	AgentPanes(ctx context.Context, ids []string) (map[string][]status.AgentPane, error)
+	// DiffReviews lists the agent reviews of a session's branch diff, oldest
+	// first, from the hive.db of the machine that holds the session.
+	DiffReviews(ctx context.Context, id string) ([]review.DiffReview, error)
+	// DismissDiffComment removes one agent review comment, and its review with
+	// its last comment. An id that names none is review.ErrDiffReviewNotFound.
+	DismissDiffComment(ctx context.Context, commentID string) error
+	// DismissDiffReview removes one agent review and its comments.
+	DismissDiffReview(ctx context.Context, reviewID string) error
 
 	// StatusAvailable must not block: the TUI calls it inside Update. A false
 	// answer can turn true later (the daemon client answers false until its

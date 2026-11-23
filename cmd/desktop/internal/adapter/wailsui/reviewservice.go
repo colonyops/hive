@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
@@ -123,19 +124,21 @@ func (s *ReviewService) DiffReviews(ctx context.Context, sessionID string) ([]Di
 	return out, nil
 }
 
-// DismissDiffComment removes one agent comment. The frontend calls it after Send
+// DismissDiffComment removes one agent comment of the session. The frontend calls it after Send
 // delivers the comment too.
-func (s *ReviewService) DismissDiffComment(ctx context.Context, commentID string) (err error) {
-	ctx, span := startReviewCommand(ctx, "dismiss-diff-comment", "", commentID)
+func (s *ReviewService) DismissDiffComment(ctx context.Context, sessionID, commentID string) (err error) {
+	ctx, span := startReviewCommand(ctx, "dismiss-diff-comment", "", sessionID)
+	span.SetAttributes(attribute.String("review.comment_id", commentID))
 	defer observe.End(span, &err)
-	return s.fail(ctx, "dismiss-diff-comment", s.diffs.Dismiss(ctx, commentID))
+	return s.fail(ctx, "dismiss-diff-comment", s.diffs.Dismiss(ctx, sessionID, commentID))
 }
 
-// DismissDiffReview removes one agent review with all its comments.
-func (s *ReviewService) DismissDiffReview(ctx context.Context, reviewID string) (err error) {
-	ctx, span := startReviewCommand(ctx, "dismiss-diff-review", "", reviewID)
+// DismissDiffReview removes one agent review of the session with all its comments.
+func (s *ReviewService) DismissDiffReview(ctx context.Context, sessionID, reviewID string) (err error) {
+	ctx, span := startReviewCommand(ctx, "dismiss-diff-review", "", sessionID)
+	span.SetAttributes(attribute.String("review.id", reviewID))
 	defer observe.End(span, &err)
-	return s.fail(ctx, "dismiss-diff-review", s.diffs.DismissReview(ctx, reviewID))
+	return s.fail(ctx, "dismiss-diff-review", s.diffs.DismissReview(ctx, sessionID, reviewID))
 }
 
 func startReviewCommand(ctx context.Context, command, space, path string) (context.Context, trace.Span) {
