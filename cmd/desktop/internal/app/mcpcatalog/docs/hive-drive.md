@@ -28,8 +28,11 @@ It is one of three things:
   repository sees the same documents, and nothing is written into the
   checkout itself.
 - Outside a chat and a hive session it is the word `global`, and the space is
-  `shared`. A directory inside no hive session is `not_found`, not global:
-  pass `global` yourself. The shared space sits beside no chat or session and has
+  `shared`. A directory inside no hive session is never global: the document
+  tools file under the repository of its git remote, the space that
+  repository's sessions use, and the tab and review tools answer `not_found`.
+  A directory with no such remote is `not_found`; pass `global` yourself.
+  The shared space sits beside no chat or session and has
   no tabs, so `tab_open` and `tab_close` refuse it; the user reads it in the
   Drive page.
 
