@@ -63,13 +63,15 @@ type processor interface {
 // deriving them from the connector registry is what keeps adding a connector
 // a change to cmd/desktop/internal/app/sources alone.
 var behaviors = buildBehaviors(map[string]behavior{
-	"github-filter":  {processor: newFilterNode},
-	"function":       {processor: newFunctionNode, kvCapable: true},
-	"feed":           {sinks: feedSinks, snapshotReconciled: true},
-	"action":         {sinks: actionSinks},
-	"notify":         {sinks: notifySinks},
-	"launch-session": {sinks: launchSinks},
-	"launch-chat":    {sinks: launchSinks},
+	"github-filter":   {processor: newFilterNode},
+	"function":        {processor: newFunctionNode, kvCapable: true},
+	"feed":            {sinks: feedSinks, snapshotReconciled: true},
+	"action":          {sinks: actionSinks},
+	"notify":          {sinks: notifySinks},
+	"launch-session":  {sinks: launchSinks},
+	"launch-chat":     {sinks: launchSinks},
+	"publish-message": {sinks: publishSinks},
+	"create-task":     {sinks: taskSinks},
 })
 
 // buildBehaviors merges the behaviours declared here with the relay behaviour
@@ -144,8 +146,31 @@ func notifySinks(flowID, nodeID string, _ flow.NodeConfig, msg models.Msg) []mod
 }
 
 func launchSinks(flowID, nodeID string, _ flow.NodeConfig, msg models.Msg) []models.Output {
+	return itemSinks(models.SinkKindLaunch, flowID, nodeID, msg)
+}
+
+func taskSinks(flowID, nodeID string, _ flow.NodeConfig, msg models.Msg) []models.Output {
+	return itemSinks(models.SinkKindTask, flowID, nodeID, msg)
+}
+
+// publishSinks carries the occurrence key: a message is an event, so every
+// update of an item publishes again.
+func publishSinks(flowID, nodeID string, _ flow.NodeConfig, msg models.Msg) []models.Output {
 	return []models.Output{{
-		Sink:        models.Sink{Kind: models.SinkKindLaunch, TargetID: flowID + "/" + nodeID},
+		Sink:          models.Sink{Kind: models.SinkKindPublish, TargetID: flowID + "/" + nodeID},
+		Key:           msg.Key,
+		OccurrenceKey: msg.OccurrenceKey,
+		Payload:       msg.Payload,
+		SourceTopic:   msg.Topic,
+		SourceKind:    msg.SourceKind,
+		SourceScope:   msg.SourceScope,
+	}}
+}
+
+// itemSinks leaves the occurrence key out, so the commit dedups on the item.
+func itemSinks(kind, flowID, nodeID string, msg models.Msg) []models.Output {
+	return []models.Output{{
+		Sink:        models.Sink{Kind: kind, TargetID: flowID + "/" + nodeID},
 		Key:         msg.Key,
 		Payload:     msg.Payload,
 		SourceTopic: msg.Topic,

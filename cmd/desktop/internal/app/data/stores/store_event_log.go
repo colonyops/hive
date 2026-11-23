@@ -294,15 +294,15 @@ func (s *EventLogStore) Commit(ctx context.Context, b models.CommitBatch) error 
 				if err != nil {
 					return fmt.Errorf("encoding notify command %s/%s: %w", out.Sink.TargetID, out.Key, err)
 				}
-				key := notifyDedupKey(out)
+				key := occurrenceDedupKey(out)
 				if err := s.commands.Enqueue(ctx, models.NotifyActionID(out.Sink.TargetID), key, payload, now, models.ItemRef{}); err != nil {
 					return fmt.Errorf("enqueuing notify command %s/%s: %w", out.Sink.TargetID, key, err)
 				}
-			case models.SinkKindLaunch:
+			case models.SinkKindLaunch, models.SinkKindTask, models.SinkKindPublish:
 				ref := models.ItemRef{ProfileID: b.Consumer, SourceKind: out.SourceKind, SourceScope: out.SourceScope, ExternalID: out.Key}
-				key := launchDedupKey(out)
-				if err := s.commands.Enqueue(ctx, models.LaunchActionID(out.Sink.TargetID), key, []byte(out.Payload), now, ref); err != nil {
-					return fmt.Errorf("enqueuing launch command %s/%s: %w", out.Sink.TargetID, key, err)
+				actionID, key := nodeCommand(out)
+				if err := s.commands.Enqueue(ctx, actionID, key, []byte(out.Payload), now, ref); err != nil {
+					return fmt.Errorf("enqueuing %s command %s/%s: %w", out.Sink.Kind, out.Sink.TargetID, key, err)
 				}
 			default:
 				return fmt.Errorf("commit batch: unknown sink kind %q", out.Sink.Kind)
@@ -366,7 +366,7 @@ func (s *EventLogStore) Commit(ctx context.Context, b models.CommitBatch) error 
 // Prefer the classifier occurrence key so unchanged polls deduplicate. Events
 // without one use item identity plus a payload digest; an empty fallback would
 // silence all later notifications for the action.
-func notifyDedupKey(out models.Output) string {
+func occurrenceDedupKey(out models.Output) string {
 	if out.OccurrenceKey != "" {
 		return out.OccurrenceKey
 	}
@@ -374,9 +374,24 @@ func notifyDedupKey(out models.Output) string {
 	return out.Key + "@" + hex.EncodeToString(sum[:8])
 }
 
-// launchDedupKey keys on the item, not the occurrence, so a pull request taking
+// nodeCommand names the synthetic action an inline node's output enqueues and
+// the key it dedups on. A publish dedups on the occurrence because a message
+// reports an event; a launch or a task dedups on the item because it is work
+// that should start once.
+func nodeCommand(out models.Output) (actionID, key string) {
+	switch out.Sink.Kind {
+	case models.SinkKindPublish:
+		return models.PublishActionID(out.Sink.TargetID), occurrenceDedupKey(out)
+	case models.SinkKindTask:
+		return models.TaskActionID(out.Sink.TargetID), itemDedupKey(out)
+	default:
+		return models.LaunchActionID(out.Sink.TargetID), itemDedupKey(out)
+	}
+}
+
+// itemDedupKey keys on the item, not the occurrence, so a pull request taking
 // new commits does not start a session per push.
-func launchDedupKey(out models.Output) string {
+func itemDedupKey(out models.Output) string {
 	if out.Key != "" {
 		return out.Key
 	}

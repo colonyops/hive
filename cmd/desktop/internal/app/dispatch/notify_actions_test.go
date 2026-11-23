@@ -146,13 +146,15 @@ func TestNotifyActionConfig_RequiresATitle(t *testing.T) {
 func TestNotifyRaiserCoversExactlyNotify(t *testing.T) {
 	t.Parallel()
 	sample := map[string]flow.NodeConfig{
-		"feed":           &flow.FeedConfig{},
-		"action":         &flow.ActionConfig{},
-		"notify":         &flow.NotifyConfig{},
-		"function":       &flow.FunctionConfig{},
-		"github-filter":  &flow.GithubFilterConfig{},
-		"launch-session": &flow.LaunchSessionConfig{},
-		"launch-chat":    &flow.LaunchChatConfig{},
+		"feed":            &flow.FeedConfig{},
+		"action":          &flow.ActionConfig{},
+		"notify":          &flow.NotifyConfig{},
+		"function":        &flow.FunctionConfig{},
+		"github-filter":   &flow.GithubFilterConfig{},
+		"launch-session":  &flow.LaunchSessionConfig{},
+		"launch-chat":     &flow.LaunchChatConfig{},
+		"publish-message": &flow.PublishMessageConfig{},
+		"create-task":     &flow.CreateTaskConfig{},
 	}
 	raises := map[string]bool{"notify": true}
 
@@ -242,4 +244,51 @@ func TestFlowActions_UnknownLaunchTargets(t *testing.T) {
 	}
 	_, ok := lister.Get(models.NotifyActionID("triage/review"))
 	assert.False(t, ok, "a launch node is not a notify target")
+}
+
+func hiveNodeFlows() flowListerTest {
+	return flowListerTest{flows: []flow.Flow{{
+		ID: "triage",
+		Nodes: []flow.Node{
+			{ID: "announce", Type: "publish-message", Name: "Announce", Config: &flow.PublishMessageConfig{Topic: "deploys", Message: "{{ .Payload.title }}"}},
+			{ID: "todo", Type: "create-task", Config: &flow.CreateTaskConfig{
+				Title: "Fix {{ .Payload.title }}", Description: "{{ .Payload.url }}", Repo: "{{ .Payload.repo }}", Parent: "hc-epic",
+			}},
+		},
+	}}}
+}
+
+func TestFlowActions_ProjectsAPublishMessageNode(t *testing.T) {
+	t.Parallel()
+	action, ok := NewFlowActions(hiveNodeFlows(), nil).Get(models.PublishActionID("triage/announce"))
+	require.True(t, ok)
+	assert.Equal(t, actions.Action{
+		ID: models.PublishActionID("triage/announce"), Label: "Announce", Type: ActionTypePublishMessage,
+		Config: &actions.PublishMessageConfig{MessageTemplate: "{{ .Payload.title }}", Topic: "deploys"},
+	}, action)
+}
+
+func TestFlowActions_ProjectsACreateTaskNode(t *testing.T) {
+	t.Parallel()
+	action, ok := NewFlowActions(hiveNodeFlows(), nil).Get(models.TaskActionID("triage/todo"))
+	require.True(t, ok)
+	assert.Equal(t, actions.Action{
+		ID: models.TaskActionID("triage/todo"), Label: "Create task todo", Type: ActionTypeCreateTask,
+		Config: &CreateTaskActionConfig{
+			TitleTemplate: "Fix {{ .Payload.title }}", DescriptionTemplate: "{{ .Payload.url }}", RepoTemplate: "{{ .Payload.repo }}", Parent: "hc-epic",
+		},
+	}, action)
+}
+
+// An id that names the wrong kind of node fails its queued command rather
+// than running something else.
+func TestFlowActions_HiveNodeIDsResolveOnlyTheirOwnType(t *testing.T) {
+	t.Parallel()
+	lister := NewFlowActions(hiveNodeFlows(), nil)
+	_, ok := lister.Get(models.PublishActionID("triage/todo"))
+	assert.False(t, ok)
+	_, ok = lister.Get(models.TaskActionID("triage/announce"))
+	assert.False(t, ok)
+	_, ok = lister.Get(models.TaskActionID("triage/missing"))
+	assert.False(t, ok)
 }

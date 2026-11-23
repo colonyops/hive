@@ -63,10 +63,12 @@ type SnapshotItem struct {
 
 // Sink kinds: where a committed Output is written.
 const (
-	SinkKindFeed   = "feed"
-	SinkKindAction = "action"
-	SinkKindNotify = "notify"
-	SinkKindLaunch = "launch"
+	SinkKindFeed    = "feed"
+	SinkKindAction  = "action"
+	SinkKindNotify  = "notify"
+	SinkKindLaunch  = "launch"
+	SinkKindPublish = "publish"
+	SinkKindTask    = "task"
 )
 
 // Sink identifies where an Output is committed. Feed outputs claim immutable
@@ -107,6 +109,27 @@ func LaunchActionID(target string) string { return LaunchActionPrefix + target }
 
 func LaunchActionTarget(actionID string) (string, bool) {
 	target, ok := strings.CutPrefix(actionID, LaunchActionPrefix)
+	return target, ok && target != ""
+}
+
+// PublishActionPrefix is NotifyActionPrefix's counterpart for publish-message
+// nodes.
+const PublishActionPrefix = "publish:"
+
+func PublishActionID(target string) string { return PublishActionPrefix + target }
+
+func PublishActionTarget(actionID string) (string, bool) {
+	target, ok := strings.CutPrefix(actionID, PublishActionPrefix)
+	return target, ok && target != ""
+}
+
+// TaskActionPrefix is NotifyActionPrefix's counterpart for create-task nodes.
+const TaskActionPrefix = "task:"
+
+func TaskActionID(target string) string { return TaskActionPrefix + target }
+
+func TaskActionTarget(actionID string) (string, bool) {
+	target, ok := strings.CutPrefix(actionID, TaskActionPrefix)
 	return target, ok && target != ""
 }
 

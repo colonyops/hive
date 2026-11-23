@@ -65,7 +65,7 @@ type FlowLister interface {
 	List() []flow.Flow
 }
 
-// FlowActions resolves notify and launch node ids from the live flows on each
+// FlowActions resolves notify, launch, publish, and task node ids from the live flows on each
 // lookup, so flow edits apply without a restart, and delegates other ids to the
 // actions.yml catalog.
 type FlowActions struct {
@@ -87,12 +87,23 @@ func (l *FlowActions) Get(id string) (actions.Action, bool) {
 		}
 		return notifyNodeAction(id, node)
 	}
-	if target, ok := models.LaunchActionTarget(id); ok {
+	for _, inline := range []struct {
+		target func(string) (string, bool)
+		action func(string, flow.Node) (actions.Action, bool)
+	}{
+		{models.LaunchActionTarget, launchNodeAction},
+		{models.PublishActionTarget, publishNodeAction},
+		{models.TaskActionTarget, taskNodeAction},
+	} {
+		target, ok := inline.target(id)
+		if !ok {
+			continue
+		}
 		node, found := l.node(target)
 		if !found {
 			return actions.Action{}, false
 		}
-		return launchNodeAction(id, node)
+		return inline.action(id, node)
 	}
 	if l.actions == nil {
 		return actions.Action{}, false

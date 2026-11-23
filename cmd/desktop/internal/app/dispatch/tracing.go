@@ -27,4 +27,5 @@ const (
 	attrSeverity   = "dispatch.notify.severity"
 	attrInApp      = "dispatch.notify.in_app"
 	attrTopic      = "dispatch.message.topic"
+	attrTaskRepo   = "dispatch.task.repo"
 )

@@ -5,8 +5,9 @@ message creates a durable `output_command` for the selected global action.
 Commands deduplicate on `(action_id, msg.Key)`, so retries or duplicate graph
 invocations cannot repeat a side effect.
 
-To start a session or chat from a flow that is the only caller, use a
-`launch-session` or `launch-chat` node instead; it carries the launch details
+To start a session or chat, publish a message, or create a hive task from a
+flow that is the only caller, use a `launch-session`, `launch-chat`,
+`publish-message`, or `create-task` node instead; it carries the details
 itself.
 
 ## Selecting an action
