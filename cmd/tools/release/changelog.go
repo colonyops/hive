@@ -61,7 +61,7 @@ func validateEntries(products []product, version releaseVersion) error {
 
 // releaseNotesBody assembles the GitHub release body for version from every
 // program's embedded entry.
-func releaseNotesBody(version releaseVersion, downloadBase string) (string, error) {
+func releaseNotesBody(version releaseVersion) (string, error) {
 	notes := make([]productNotes, 0, len(products))
 	for _, p := range products {
 		entry, err := releaseEntry(p, version)
@@ -70,7 +70,7 @@ func releaseNotesBody(version releaseVersion, downloadBase string) (string, erro
 		}
 		notes = append(notes, productNotes{product: p, entry: entry})
 	}
-	return renderReleaseNotesBody(version, downloadBase, notes), nil
+	return renderReleaseNotesBody(version, notes), nil
 }
 
 type productNotes struct {
@@ -78,11 +78,11 @@ type productNotes struct {
 	entry   releasenotes.Entry
 }
 
-// renderReleaseNotesBody writes the R2 download header, then each program's
+// renderReleaseNotesBody writes the downloads header, then each program's
 // notes under its own heading.
-func renderReleaseNotesBody(version releaseVersion, downloadBase string, notes []productNotes) string {
+func renderReleaseNotesBody(version releaseVersion, notes []productNotes) string {
 	var b strings.Builder
-	b.WriteString(releaseNotesHeader(version, downloadBase))
+	b.WriteString(releaseNotesHeader(version))
 	for _, n := range notes {
 		fmt.Fprintf(&b, "\n## %s\n\n%s\n", n.product.title, n.entry.Summary)
 		if n.entry.Body != "" {

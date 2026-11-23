@@ -86,6 +86,12 @@ dockers_v2:
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.created: "{{ .Date }}"
 
+# The desktop publish creates the release, with the same notes and the desktop
+# downloads, before it dispatches this workflow. GoReleaser adds the CLI
+# archives to it and must not rewrite the body or remove the desktop assets.
+release:
+  mode: keep-existing
+
 # The release body is every program's promoted release notes, which the
 # publish workflow passes with --release-notes. GoReleaser then builds no
 # commit log, which in this repository would also list every desktop commit.

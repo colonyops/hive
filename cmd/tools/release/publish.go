@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -37,7 +36,6 @@ type publishOptions struct {
 	r2AccountID     string
 	r2AccessKey     string
 	r2SecretKey     string
-	downloadBase    string
 	signCertificate string
 	signPassword    string
 	signIdentity    string
@@ -59,7 +57,7 @@ type publisher struct {
 }
 
 // artifactRole separates the file the in-app updater downloads from the one a
-// human downloads to install. Both live in the same release prefix and the same
+// human downloads to install. Both are assets of the same GitHub release and share a
 // manifest platform entry; only macOS publishes a distinct installer.
 type artifactRole string
 
@@ -73,25 +71,11 @@ const (
 type releaseArtifact struct {
 	platformKey string // manifest platforms key, e.g. "linux-amd64"
 	role        artifactRole
-	name        string // file name within the release prefix
+	name        string // GitHub release asset name
 	path        string // local path
 	checksum    string // hex sha256
 	size        int64
 }
-
-type releaseObject struct {
-	key          string
-	path         string
-	contentType  string
-	cacheControl string
-}
-
-type r2UploadAction int
-
-const (
-	r2UploadObject r2UploadAction = iota
-	r2ReuseObject
-)
 
 func publish(ctx context.Context, args []string) error {
 	options, err := parsePublishOptions(args)
@@ -137,9 +121,8 @@ func publish(ctx context.Context, args []string) error {
 func parsePublishOptions(args []string) (publishOptions, error) {
 	var versionText string
 	options := publishOptions{
-		r2Bucket:     envDefault("R2_BUCKET", defaultR2Bucket),
-		r2AccountID:  envDefault("R2_ACCOUNT_ID", defaultR2AccountID),
-		downloadBase: downloadBaseURL(),
+		r2Bucket:    envDefault("R2_BUCKET", defaultR2Bucket),
+		r2AccountID: envDefault("R2_ACCOUNT_ID", defaultR2AccountID),
 	}
 	for _, arg := range args {
 		switch arg {
@@ -343,8 +326,8 @@ func (p *publisher) preflight(ctx context.Context) error {
 		}
 	}
 	if !p.options.skipUpload {
-		// gh records the release on GitHub after upload; check it here so a missing
-		// or unauthenticated gh aborts before any build or the irreversible upload.
+		// gh creates the release and uploads its assets; check it here so a missing
+		// or unauthenticated gh aborts before any build.
 		tools = append(tools, "curl", "gh")
 	}
 	for _, tool := range tools {
@@ -660,58 +643,38 @@ func fileChecksum(path string) (string, int64, error) {
 	return hex.EncodeToString(hash.Sum(nil)), size, nil
 }
 
+// upload attaches the desktop artifacts to the version's GitHub release, then
+// points every channel manifest at them. The tag and the release come first
+// because a manifest must never name an asset that is not downloadable yet.
 func (p *publisher) upload(ctx context.Context, artifacts []releaseArtifact, currentManifests map[string]channelManifest) error {
-	releasePrefix := "desktop/releases/" + p.options.version.String()
-	objects := make([]releaseObject, 0, len(artifacts)+1)
+	tag := p.options.version.tag()
+	if err := ensureLocalTag(ctx, tag, p.commit); err != nil {
+		return err
+	}
+	if err := ensureOriginTag(ctx, tag, p.commit); err != nil {
+		return err
+	}
+	release, err := p.ensureGitHubRelease(ctx)
+	if err != nil {
+		return err
+	}
+
+	files := make([]releaseFile, 0, len(artifacts)+1)
 	for _, artifact := range artifacts {
-		objects = append(objects, releaseObject{
-			key:          releasePrefix + "/" + artifact.name,
-			path:         artifact.path,
-			contentType:  artifactContentType(artifact.name),
-			cacheControl: "public, max-age=31536000, immutable",
-		})
+		files = append(files, releaseFile{name: artifact.name, path: artifact.path, checksum: artifact.checksum, size: artifact.size})
 	}
-	objects = append(objects, releaseObject{
-		key:          releasePrefix + "/SHA256SUMS",
-		path:         filepath.Join(desktopDir, "bin", "SHA256SUMS"),
-		contentType:  "text/plain",
-		cacheControl: "public, max-age=31536000, immutable",
-	})
-
-	pending := make([]releaseObject, 0, len(objects))
-	for _, object := range objects {
-		exists, err := p.r2Exists(ctx, object.key)
-		if err != nil {
-			return err
-		}
-		matches := false
-		if exists && p.options.resume {
-			matches, err = p.r2ObjectMatches(ctx, object.key, object.path)
-			if err != nil {
-				return err
-			}
-		}
-		action, err := chooseR2UploadAction(exists, matches, p.options.resume, p.options.force)
-		if err != nil {
-			return fmt.Errorf("release %s already has %s in the bucket (immutable): %w", p.options.version, filepath.Base(object.key), err)
-		}
-		if action == r2ReuseObject {
-			fmt.Printf("==> reusing byte-identical R2 object: %s\n", object.key)
-			continue
-		}
-		pending = append(pending, object)
+	sumsPath := filepath.Join(desktopDir, "bin", "SHA256SUMS")
+	sumsChecksum, sumsSize, err := fileChecksum(sumsPath)
+	if err != nil {
+		return err
+	}
+	files = append(files, releaseFile{name: "SHA256SUMS", path: sumsPath, checksum: sumsChecksum, size: sumsSize})
+	if err := p.uploadAssets(ctx, release, files); err != nil {
+		return err
 	}
 
-	if len(pending) > 0 {
-		fmt.Printf("==> uploading artifacts to r2://%s/%s/\n", p.options.r2Bucket, releasePrefix)
-	}
-	for _, object := range pending {
-		if err := p.r2Put(ctx, object.key, object.path, object.contentType, object.cacheControl); err != nil {
-			return err
-		}
-	}
-
-	platforms, err := platformManifests(p.options.downloadBase, releasePrefix, artifacts)
+	assetBase := releaseAssetBase(p.options.version)
+	platforms, err := platformManifests(assetBase, artifacts)
 	if err != nil {
 		return err
 	}
@@ -750,7 +713,7 @@ func (p *publisher) upload(ctx context.Context, artifacts []releaseArtifact, cur
 	}
 	fmt.Printf("Release %s published.\n", p.options.version)
 	for _, artifact := range artifacts {
-		fmt.Printf("  %s (%s): %s/%s/%s\n", artifact.platformKey, artifact.role, p.options.downloadBase, releasePrefix, artifact.name)
+		fmt.Printf("  %s (%s): %s/%s\n", artifact.platformKey, artifact.role, assetBase, artifact.name)
 	}
 	fmt.Printf("  manifests updated: %s\n", strings.Join(manifestChannels, " "))
 	return nil
@@ -759,10 +722,10 @@ func (p *publisher) upload(ctx context.Context, artifacts []releaseArtifact, cur
 // platformManifests folds a release's artifacts into one manifest entry per
 // platform. A platform's update and installer artifacts occupy different fields
 // of the same entry, so the two never overwrite each other.
-func platformManifests(downloadBase, releasePrefix string, artifacts []releaseArtifact) (map[string]platformManifest, error) {
+func platformManifests(assetBase string, artifacts []releaseArtifact) (map[string]platformManifest, error) {
 	platforms := make(map[string]platformManifest)
 	for _, artifact := range artifacts {
-		url := fmt.Sprintf("%s/%s/%s", downloadBase, releasePrefix, artifact.name)
+		url := assetBase + "/" + artifact.name
 		entry := platforms[artifact.platformKey]
 		switch artifact.role {
 		case updateArtifact:
@@ -782,30 +745,6 @@ func platformManifests(downloadBase, releasePrefix string, artifacts []releaseAr
 	return platforms, nil
 }
 
-func artifactContentType(name string) string {
-	switch {
-	case strings.HasSuffix(name, ".zip"):
-		return "application/zip"
-	case strings.HasSuffix(name, ".dmg"):
-		return "application/x-apple-diskimage"
-	default:
-		return "application/gzip"
-	}
-}
-
-func chooseR2UploadAction(exists, matches, resume, force bool) (r2UploadAction, error) {
-	if !exists || force {
-		return r2UploadObject, nil
-	}
-	if resume && matches {
-		return r2ReuseObject, nil
-	}
-	if resume {
-		return r2UploadObject, errors.New("remote object differs from the local resume artifact")
-	}
-	return r2UploadObject, errors.New("use --force to overwrite")
-}
-
 func (p *publisher) r2Endpoint(key string) string {
 	return fmt.Sprintf("https://%s.r2.cloudflarestorage.com/%s/%s", p.options.r2AccountID, p.options.r2Bucket, key)
 }
@@ -815,34 +754,10 @@ func (p *publisher) r2AuthArgs() []string {
 }
 
 func r2CurlRetryArgs() []string {
-	// Every R2 call is idempotent: HEAD/GET have no side effects and PUT writes
-	// the same bytes to the same key. That makes curl's broad transient retry
-	// safe here, including the TLS read failure that motivated resume support.
-	//
-	// Deliberately no --retry-max-time. curl starts that timer before the first
-	// attempt, so any cap short enough to bound a fast HEAD would strip retries
-	// from the 30MB+ artifact PUTs that need them most -- a transfer dying past
-	// the cap gets zero. The attempt count is the bound.
+	// A manifest PUT writes the same bytes to the same key, so curl's broad
+	// transient retry is safe. There is deliberately no --retry-max-time: curl
+	// starts that timer before the first attempt. The attempt count is the bound.
 	return []string{"--retry", "5", "--retry-all-errors", "--retry-delay", "2", "--connect-timeout", "30"}
-}
-
-func (p *publisher) r2Exists(ctx context.Context, key string) (bool, error) {
-	args := []string{"--silent", "--show-error", "--output", "/dev/null", "--write-out", "%{http_code}", "--head"}
-	args = append(args, r2CurlRetryArgs()...)
-	args = append(args, p.r2AuthArgs()...)
-	args = append(args, p.r2Endpoint(key))
-	output, err := commandOutput(ctx, "curl", args...)
-	if err != nil {
-		return false, err
-	}
-	switch strings.TrimSpace(output) {
-	case strconv.Itoa(200):
-		return true, nil
-	case strconv.Itoa(404):
-		return false, nil
-	default:
-		return false, fmt.Errorf("check R2 object: HTTP %s", strings.TrimSpace(output))
-	}
 }
 
 func (p *publisher) r2Put(ctx context.Context, key, path, contentType, cacheControl string) error {
@@ -851,29 +766,6 @@ func (p *publisher) r2Put(ctx context.Context, key, path, contentType, cacheCont
 	args = append(args, p.r2AuthArgs()...)
 	args = append(args, p.r2Endpoint(key))
 	return runCommand(ctx, "curl", args...)
-}
-
-func (p *publisher) r2ObjectMatches(ctx context.Context, key, localPath string) (bool, error) {
-	remotePath := filepath.Join(p.workDir, "remote-"+filepath.Base(key))
-	if err := os.Remove(remotePath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return false, err
-	}
-	args := []string{"--fail", "--silent", "--show-error", "--output", remotePath}
-	args = append(args, r2CurlRetryArgs()...)
-	args = append(args, p.r2AuthArgs()...)
-	args = append(args, p.r2Endpoint(key))
-	if err := runCommand(ctx, "curl", args...); err != nil {
-		return false, fmt.Errorf("download existing R2 object %s: %w", key, err)
-	}
-	remoteChecksum, remoteSize, err := fileChecksum(remotePath)
-	if err != nil {
-		return false, err
-	}
-	localChecksum, localSize, err := fileChecksum(localPath)
-	if err != nil {
-		return false, err
-	}
-	return remoteChecksum == localChecksum && remoteSize == localSize, nil
 }
 
 func runCommand(ctx context.Context, name string, args ...string) error {

@@ -66,37 +66,43 @@ func TestR2CurlRetriesAreBounded(t *testing.T) {
 		}
 	}
 	// curl starts the --retry-max-time timer before the first attempt, so a cap
-	// silently disables retries for the artifact uploads that most need them.
+	// silently disables retries for a slow upload.
 	if slices.Contains(args, "--retry-max-time") {
 		t.Fatalf("r2CurlRetryArgs() = %q, must not cap retry wall-clock", args)
 	}
 }
 
-func TestChooseR2UploadAction(t *testing.T) {
+func TestChooseAssetUpload(t *testing.T) {
 	t.Parallel()
 
+	checksum := strings.Repeat("a", 64)
+	published := releaseAsset{Name: "Hive.zip", State: "uploaded", Size: 10, Digest: "sha256:" + checksum}
+	different := releaseAsset{Name: "Hive.zip", State: "uploaded", Size: 10, Digest: "sha256:" + strings.Repeat("b", 64)}
+	unfinished := releaseAsset{Name: "Hive.zip", State: "starter"}
 	cases := []struct {
-		name            string
-		exists, matches bool
-		resume, force   bool
-		want            r2UploadAction
-		wantErr         bool
+		name          string
+		existing      releaseAsset
+		exists        bool
+		resume, force bool
+		want          assetUploadAction
+		wantErr       bool
 	}{
-		{name: "missing normal object", want: r2UploadObject},
-		{name: "existing normal object conflicts", exists: true, wantErr: true},
-		{name: "matching resume object is reused", exists: true, matches: true, resume: true, want: r2ReuseObject},
-		{name: "different resume object conflicts", exists: true, resume: true, wantErr: true},
-		{name: "force overwrites existing object", exists: true, force: true, want: r2UploadObject},
+		{name: "missing asset", want: assetUpload},
+		{name: "existing asset conflicts", existing: published, exists: true, wantErr: true},
+		{name: "matching resume asset is reused", existing: published, exists: true, resume: true, want: assetReuse},
+		{name: "different resume asset conflicts", existing: different, exists: true, resume: true, wantErr: true},
+		{name: "force replaces an existing asset", existing: published, exists: true, force: true, want: assetReplace},
+		{name: "an unfinished upload is replaced", existing: unfinished, exists: true, want: assetReplace},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := chooseR2UploadAction(testCase.exists, testCase.matches, testCase.resume, testCase.force)
+			got, err := chooseAssetUpload(testCase.existing, testCase.exists, checksum, 10, testCase.resume, testCase.force)
 			if (err != nil) != testCase.wantErr {
-				t.Fatalf("chooseR2UploadAction() error = %v, wantErr %t", err, testCase.wantErr)
+				t.Fatalf("chooseAssetUpload() error = %v, wantErr %t", err, testCase.wantErr)
 			}
 			if err == nil && got != testCase.want {
-				t.Fatalf("chooseR2UploadAction() = %v, want %v", got, testCase.want)
+				t.Fatalf("chooseAssetUpload() = %v, want %v", got, testCase.want)
 			}
 		})
 	}
@@ -151,7 +157,7 @@ func TestWriteChecksumsMatchesSha256sumFormat(t *testing.T) {
 func TestPlatformManifestsPairUpdateAndInstaller(t *testing.T) {
 	t.Parallel()
 
-	platforms, err := platformManifests("https://dl.example.com", "desktop/releases/1.2.3", []releaseArtifact{
+	platforms, err := platformManifests("https://github.com/colonyops/hive/releases/download/v1.2.3", []releaseArtifact{
 		{platformKey: "darwin-universal", role: updateArtifact, name: "Hive-1.2.3-darwin-universal.zip", checksum: strings.Repeat("a", 64), size: 10},
 		{platformKey: "darwin-universal", role: installerArtifact, name: "Hive-1.2.3-darwin-universal.dmg", checksum: strings.Repeat("b", 64), size: 20},
 		{platformKey: "linux-amd64", role: updateArtifact, name: "Hive-1.2.3-linux-amd64.tar.gz", checksum: strings.Repeat("c", 64), size: 30},
@@ -162,15 +168,15 @@ func TestPlatformManifestsPairUpdateAndInstaller(t *testing.T) {
 
 	want := map[string]platformManifest{
 		"darwin-universal": {
-			URL:             "https://dl.example.com/desktop/releases/1.2.3/Hive-1.2.3-darwin-universal.zip",
+			URL:             "https://github.com/colonyops/hive/releases/download/v1.2.3/Hive-1.2.3-darwin-universal.zip",
 			SHA256:          strings.Repeat("a", 64),
 			Size:            10,
-			InstallerURL:    "https://dl.example.com/desktop/releases/1.2.3/Hive-1.2.3-darwin-universal.dmg",
+			InstallerURL:    "https://github.com/colonyops/hive/releases/download/v1.2.3/Hive-1.2.3-darwin-universal.dmg",
 			InstallerSHA256: strings.Repeat("b", 64),
 			InstallerSize:   20,
 		},
 		"linux-amd64": {
-			URL:    "https://dl.example.com/desktop/releases/1.2.3/Hive-1.2.3-linux-amd64.tar.gz",
+			URL:    "https://github.com/colonyops/hive/releases/download/v1.2.3/Hive-1.2.3-linux-amd64.tar.gz",
 			SHA256: strings.Repeat("c", 64),
 			Size:   30,
 		},
@@ -245,7 +251,7 @@ func TestValidateResumeManifestsRejectsConflicts(t *testing.T) {
 func TestPlatformManifestsRejectsARolelessArtifact(t *testing.T) {
 	t.Parallel()
 
-	_, err := platformManifests("https://dl.example.com", "desktop/releases/1.2.3", []releaseArtifact{
+	_, err := platformManifests("https://github.com/colonyops/hive/releases/download/v1.2.3", []releaseArtifact{
 		{platformKey: "darwin-universal", name: "Hive-1.2.3-darwin-universal.zip", checksum: strings.Repeat("a", 64), size: 10},
 	})
 	if err == nil {

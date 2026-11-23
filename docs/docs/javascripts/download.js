@@ -1,7 +1,7 @@
 // Fills the hero download button and the install page's download panel from
-// the release channel manifest on dl.hivedesktop.com. The bucket allows
-// cross-origin reads from this site; without that rule the fetch fails and
-// the fallbacks below apply.
+// the release channel manifest on dl.hivedesktop.com. The manifest bucket
+// allows cross-origin reads from this site; without that rule the fetch fails
+// and the fallbacks below apply.
 //
 // Everything here is an upgrade over markup that already works: the button
 // starts as a link to the install section and the panel starts as a pointer at
@@ -12,10 +12,14 @@
   // after a release has.
   var CHANNEL = "stable";
 
-  // Artifacts are only ever linked from the release bucket. The manifest is
-  // ours, but a download button is the one place a bad URL would matter.
-  var ARTIFACT_ORIGIN = "https://dl.hivedesktop.com";
-  var CHANNELS_BASE = ARTIFACT_ORIGIN + "/desktop/channels/";
+  // Artifacts are only ever linked from this repository's GitHub releases, or
+  // from dl.hivedesktop.com for a manifest rolled back to a release published
+  // before them. The manifest is ours, but a download button is the one place
+  // a bad URL would matter.
+  var MANIFEST_ORIGIN = "https://dl.hivedesktop.com";
+  var CHANNELS_BASE = MANIFEST_ORIGIN + "/desktop/channels/";
+  var RELEASE_ORIGIN = "https://github.com";
+  var RELEASE_PATH = "/colonyops/hive/releases/download/";
 
   // Manifest platform keys, in the order the panel lists them. `match` picks
   // the one a download button offers, first match wins, so every entry has to
@@ -97,7 +101,11 @@
       return false;
     }
     try {
-      return new URL(url).origin === ARTIFACT_ORIGIN;
+      var parsed = new URL(url);
+      if (parsed.origin === RELEASE_ORIGIN) {
+        return parsed.pathname.indexOf(RELEASE_PATH) === 0;
+      }
+      return parsed.origin === MANIFEST_ORIGIN;
     } catch (error) {
       return false;
     }

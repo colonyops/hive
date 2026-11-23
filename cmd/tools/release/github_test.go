@@ -92,19 +92,6 @@ func mustVersion(t *testing.T, value string) releaseVersion {
 	return version
 }
 
-func TestReleaseNotesHeader(t *testing.T) {
-	t.Parallel()
-	header := releaseNotesHeader(mustVersion(t, "0.60.0"), "https://dl.hivedesktop.com")
-	for _, want := range []string{
-		"https://dl.hivedesktop.com/desktop/releases/0.60.0/",
-		"https://dl.hivedesktop.com/desktop/releases/0.60.0/SHA256SUMS",
-	} {
-		if !strings.Contains(header, want) {
-			t.Fatalf("header missing %q:\n%s", want, header)
-		}
-	}
-}
-
 // gh lists recent runs: other tags, and earlier runs for this one. The run to
 // watch is the newest one for the tag created after the previous one.
 func TestNewestRunFor(t *testing.T) {
@@ -129,30 +116,31 @@ func TestNewestRunFor(t *testing.T) {
 	}
 }
 
-// GoReleaser creates the release before the cask publish and the site deploy,
-// so an existing release does not mean the run finished, and a run that
-// failed after creating it cannot be dispatched again.
+// The desktop creates the release, and GoReleaser attaches the CLI archives
+// before the cask publish and the site deploy, so archives that exist do not
+// mean the run finished, and a run that failed after attaching them cannot be
+// dispatched again.
 func TestDecidePublishStep(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name          string
-		run           workflowRun
-		found         bool
-		releaseExists bool
-		want          publishStep
+		name         string
+		run          workflowRun
+		found        bool
+		cliPublished bool
+		want         publishStep
 	}{
-		{name: "no run and no release", want: stepDispatch},
+		{name: "no run and no CLI archives", want: stepDispatch},
 		{name: "a run in progress", run: workflowRun{Status: "in_progress"}, found: true, want: stepWatch},
-		{name: "a queued run", run: workflowRun{Status: "queued"}, found: true, releaseExists: true, want: stepWatch},
-		{name: "a run that succeeded", run: workflowRun{Status: "completed", Conclusion: "success"}, found: true, releaseExists: true, want: stepDone},
-		{name: "a run that failed before the release", run: workflowRun{Status: "completed", Conclusion: "failure"}, found: true, want: stepDispatch},
-		{name: "a run that failed after the release", run: workflowRun{Status: "completed", Conclusion: "failure"}, found: true, releaseExists: true, want: stepRerun},
-		{name: "a cancelled run after the release", run: workflowRun{Status: "completed", Conclusion: "cancelled"}, found: true, releaseExists: true, want: stepRerun},
-		{name: "a release with no run to recover", releaseExists: true, want: stepDone},
+		{name: "a queued run", run: workflowRun{Status: "queued"}, found: true, cliPublished: true, want: stepWatch},
+		{name: "a run that succeeded", run: workflowRun{Status: "completed", Conclusion: "success"}, found: true, cliPublished: true, want: stepDone},
+		{name: "a run that failed before the archives", run: workflowRun{Status: "completed", Conclusion: "failure"}, found: true, want: stepDispatch},
+		{name: "a run that failed after the archives", run: workflowRun{Status: "completed", Conclusion: "failure"}, found: true, cliPublished: true, want: stepRerun},
+		{name: "a cancelled run after the archives", run: workflowRun{Status: "completed", Conclusion: "cancelled"}, found: true, cliPublished: true, want: stepRerun},
+		{name: "archives with no run to recover", cliPublished: true, want: stepDone},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := decidePublishStep(test.run, test.found, test.releaseExists); got != test.want {
+			if got := decidePublishStep(test.run, test.found, test.cliPublished); got != test.want {
 				t.Fatalf("decidePublishStep() = %d, want %d", got, test.want)
 			}
 		})

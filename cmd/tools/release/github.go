@@ -3,27 +3,23 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// publishGitHubRelease records a published version on GitHub and ships the
-// CLI. It tags the release commit v<version>, pushes the tag, and dispatches
-// the publish workflow, which builds the CLI with GoReleaser, creates the one
-// GitHub release for every program, publishes the Homebrew cask, and deploys
-// the site. It waits for the run to finish.
+// publishGitHubRelease ships the CLI for a version whose desktop is already
+// live. It makes sure the v<version> tag is on origin and dispatches the
+// publish workflow, which builds the CLI with GoReleaser, attaches its
+// archives to the release the desktop publish created, publishes the Homebrew
+// cask, and deploys the site. It waits for the run to finish.
 //
-// The desktop artifacts stay in R2 (decision 0003); the release attaches the
-// CLI's archives only. It can be re-run to recover a release whose GitHub
-// step failed after the irreversible R2 upload: an existing tag at the
-// release commit is reused, a run still in progress is watched, a run that
-// succeeded is reported, and a run that failed after GoReleaser created the
-// release is pointed at `gh run rerun --failed`, because a second run would
-// collide with the release's assets.
+// It can be re-run to recover a release whose CLI half failed: an existing tag
+// at the release commit is reused, a run still in progress is watched, a run
+// that succeeded is reported, and a run that failed after GoReleaser attached
+// the CLI archives is pointed at `gh run rerun --failed`, because a second run
+// would collide with those assets.
 //
 // The caller must have already validated that HEAD is the release commit
 // (validatePublishSource); the tag is created there.
@@ -45,11 +41,11 @@ func publishGitHubRelease(ctx context.Context, version releaseVersion) error {
 		return err
 	}
 	run, found := newestRunFor(runs, tag, time.Time{})
-	exists, err := gitHubReleaseExists(ctx, tag)
+	cliPublished, err := cliAssetsPublished(ctx, tag)
 	if err != nil {
 		return err
 	}
-	switch decidePublishStep(run, found, exists) {
+	switch decidePublishStep(run, found, cliPublished) {
 	case stepWatch:
 		fmt.Printf("==> %s run %s for %s is %s\n", publishWorkflow, run.id(), tag, run.Status)
 		return watchWorkflowRun(ctx, run.id(), tag)
@@ -57,12 +53,12 @@ func publishGitHubRelease(ctx context.Context, version releaseVersion) error {
 		if found {
 			fmt.Printf("==> %s run %s already published %s\n", publishWorkflow, run.id(), tag)
 		} else {
-			fmt.Printf("==> GitHub release %s already exists; leaving it unchanged\n", tag)
+			fmt.Printf("==> GitHub release %s already has the CLI archives; leaving it unchanged\n", tag)
 		}
 		return nil
 	case stepRerun:
 		return fmt.Errorf(
-			"%s run %s for %s ended with %s after it created the GitHub release; fix the cause, then re-run its failed jobs with `gh run rerun %s --failed`",
+			"%s run %s for %s ended with %s after it attached the CLI archives; fix the cause, then re-run its failed jobs with `gh run rerun %s --failed`",
 			publishWorkflow, run.id(), tag, run.Conclusion, run.id())
 	default:
 		return dispatchPublishWorkflow(ctx, tag, run.CreatedAt)
@@ -119,23 +115,6 @@ func originTagCommit(ctx context.Context, tag string) (string, error) {
 	return fields[0], nil
 }
 
-func gitHubReleaseExists(ctx context.Context, tag string) (bool, error) {
-	output, err := exec.CommandContext(ctx, "gh", "release", "view", tag, "--json", "tagName").CombinedOutput()
-	if err == nil {
-		return true, nil
-	}
-	// gh returns a non-zero exit both when the release is missing and on real
-	// failures (auth, network), so the message is the only signal.
-	if strings.Contains(string(output), "release not found") {
-		return false, nil
-	}
-	exitErr := new(exec.ExitError)
-	if errors.As(err, &exitErr) {
-		return false, fmt.Errorf("gh release view %s: %s", tag, strings.TrimSpace(string(output)))
-	}
-	return false, fmt.Errorf("gh release view %s: %w", tag, err)
-}
-
 const (
 	publishWorkflow = "publish.yml"
 	// publishRunTitle is the run-name publish.yml sets, which is how a run is
@@ -163,20 +142,20 @@ const (
 )
 
 // decidePublishStep picks what the GitHub step still has to do for a tag,
-// from the newest publish run for it (if any) and whether the GitHub release
-// exists. GoReleaser creates the release part-way through a run, before the
-// Homebrew cask and the site deploy, so a release that exists does not mean
-// the run finished, and a failed run that created the release cannot be
+// from the newest publish run for it (if any) and whether the release already
+// has the CLI archives. GoReleaser attaches them part-way through a run,
+// before the Homebrew cask and the site deploy, so archives that exist do not
+// mean the run finished, and a failed run that attached them cannot be
 // dispatched again.
-func decidePublishStep(run workflowRun, found, releaseExists bool) publishStep {
+func decidePublishStep(run workflowRun, found, cliPublished bool) publishStep {
 	switch {
 	case found && run.Status != "completed":
 		return stepWatch
 	case found && run.Conclusion == "success":
 		return stepDone
-	case found && releaseExists:
+	case found && cliPublished:
 		return stepRerun
-	case releaseExists:
+	case cliPublished:
 		return stepDone
 	default:
 		return stepDispatch
@@ -265,14 +244,12 @@ func watchWorkflowRun(ctx context.Context, runID, tag string) error {
 	return nil
 }
 
-// releaseNotesHeader opens the GitHub release body. It states plainly that the
-// desktop downloads come from R2, not this release's assets.
-func releaseNotesHeader(version releaseVersion, downloadBase string) string {
-	prefix := fmt.Sprintf("%s/desktop/releases/%s", downloadBase, version)
+// releaseNotesHeader opens the GitHub release body. Both programs' downloads
+// are attached, so it names which checksum file belongs to which.
+func releaseNotesHeader(version releaseVersion) string {
 	return fmt.Sprintf(
-		"The hive CLI archives are attached to this release. Hive Desktop downloads are served from Cloudflare R2, not GitHub (decision 0003).\n\n"+
-			"- Desktop artifacts: %s/\n"+
-			"- Desktop checksums: %s/SHA256SUMS\n",
-		prefix, prefix,
+		"Hive Desktop %[1]s and the hive CLI %[1]s are attached to this release. "+
+			"`SHA256SUMS` lists the desktop downloads, and `checksums.txt` lists the CLI archives.\n",
+		version,
 	)
 }
