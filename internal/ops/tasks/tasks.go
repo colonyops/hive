@@ -38,7 +38,9 @@ type TaskCreateIn struct {
 	Type     string           `json:"type,omitempty"     jsonschema:"epic for a root item, or task (default)."`
 	Desc     string           `json:"desc,omitempty"     jsonschema:"The item's description."`
 	ParentID string           `json:"parentId,omitempty" jsonschema:"The parent item's id. A task without children needs one."`
-	Children []map[string]any `json:"children,omitempty" jsonschema:"Items to create under this one, each {title, type, desc, ref, blockers, children}; type defaults to task. ref is a label local to this call; blockers lists the refs that must finish first. Nesting goes up to 10 levels."`
+	Children []map[string]any `json:"children,omitempty" jsonschema:"Items to create under this one, each {title, type, desc, ref, blockers, assignSession, children}; type defaults to task. ref is a label local to this call; blockers lists the refs that must finish first. Nesting goes up to 10 levels."`
+
+	AssignSession string `json:"assignSession,omitempty" jsonschema:"Assign the item to this hive session or chat id (a local:<id> reference is accepted). The session must exist. For a tree, set it on each child instead."`
 }
 
 func (in TaskCreateIn) Validate() error {
@@ -51,6 +53,9 @@ func (in TaskCreateIn) Validate() error {
 	if len(in.Children) > 0 && in.Type != string(hc.ItemTypeEpic) {
 		return errors.New("an item with children is the root of a tree and must be an epic")
 	}
+	if in.AssignSession != "" && len(in.Children) > 0 {
+		return errors.New("assignSession assigns one item; for a tree, set assignSession on each child")
+	}
 	if len(in.Children) == 0 && in.ParentID == "" && in.Type != string(hc.ItemTypeEpic) {
 		return errors.New("a task needs a parentId; use type epic for a root item")
 	}
@@ -62,7 +67,8 @@ var TaskCreate = ops.Spec[TaskCreateIn]{
 	Summary: "Create a task or an epic with its tasks",
 	Guidance: "Create one item, or a tree: an item with children, each of which may have children of its own. " +
 		"task_next walks the tree and hands out only leaf tasks; a parent task resolves when its children are done. " +
-		"To order work, give an item a ref and list that ref in a later item's blockers. " + repoGuidance + " " +
+		"To order work, give an item a ref and list that ref in a later item's blockers. " +
+		"To hand an item to a session you dispatched, set its assignSession. " + repoGuidance + " " +
 		"Answers with every item it created, root first.",
 	Args:   []string{"title"},
 	Fields: ops.Constraints{"type": {Enum: types, Default: string(hc.ItemTypeTask)}},
@@ -104,6 +110,7 @@ type TaskUpdateIn struct {
 	Title         *string `json:"title,omitempty"         jsonschema:"The new title."`
 	Desc          *string `json:"desc,omitempty"          jsonschema:"The new description."`
 	Assign        bool    `json:"assign,omitempty"        jsonschema:"Assign the item to the caller, which must be a hive session or a chat."`
+	AssignSession string  `json:"assignSession,omitempty" jsonschema:"Assign the item to this hive session or chat id (a local:<id> reference is accepted), for a caller that hands out work. The session must exist."`
 	Unassign      bool    `json:"unassign,omitempty"      jsonschema:"Remove the item's assignment."`
 	AddBlocker    string  `json:"addBlocker,omitempty"    jsonschema:"The id of an item that must finish before this one."`
 	RemoveBlocker string  `json:"removeBlocker,omitempty" jsonschema:"The id of a blocker to remove."`
@@ -111,10 +118,10 @@ type TaskUpdateIn struct {
 
 func (in TaskUpdateIn) Validate() error {
 	switch {
-	case in.Status == "" && in.Title == nil && in.Desc == nil && !in.Assign && !in.Unassign && in.AddBlocker == "" && in.RemoveBlocker == "":
-		return errors.New("give at least one of status, title, desc, assign, unassign, addBlocker or removeBlocker")
-	case in.Assign && in.Unassign:
-		return errors.New("assign and unassign cannot be combined")
+	case in.Status == "" && in.Title == nil && in.Desc == nil && !in.Assign && in.AssignSession == "" && !in.Unassign && in.AddBlocker == "" && in.RemoveBlocker == "":
+		return errors.New("give at least one of status, title, desc, assign, assignSession, unassign, addBlocker or removeBlocker")
+	case countTrue(in.Assign, in.AssignSession != "", in.Unassign) > 1:
+		return errors.New("assign, assignSession and unassign cannot be combined")
 	case in.AddBlocker != "" && in.RemoveBlocker != "":
 		return errors.New("addBlocker and removeBlocker cannot be combined")
 	case in.Title != nil && *in.Title == "":
@@ -207,6 +214,16 @@ func (o TaskGetOut) JSONLines() []any { return append([]any{o.Task}, lines(o.Com
 type TaskClearOut struct {
 	Action string `json:"action" jsonschema:"pruned, or would prune for a dry run."`
 	Count  int    `json:"count"`
+}
+
+func countTrue(values ...bool) int {
+	n := 0
+	for _, v := range values {
+		if v {
+			n++
+		}
+	}
+	return n
 }
 
 func lines[T any](items []T) []any {

@@ -93,6 +93,17 @@ hive hc next hc-a1b2c3d4 --assign
 
 This finds the next open leaf task, assigns it to the current session, and sets its status to `in_progress`.
 
+### Assign a task to another session
+
+An orchestrator that runs outside a session can give a task to a session it dispatched:
+
+```bash
+hive hc update hc-e5f6g7h8 --assign-session <session-id>
+hive hc create "Add JWT library" --parent-id hc-a1b2c3d4 --assign-session <session-id>
+```
+
+The session id can be bare or `local:<id>`, and the session must exist. In a tree passed with `--input`, set `"assignSession"` on a child. `--unassign` clears the assignment.
+
 ### Record progress
 
 ```bash

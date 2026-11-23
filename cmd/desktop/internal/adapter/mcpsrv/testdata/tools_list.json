@@ -2654,16 +2654,20 @@
       "idempotentHint": false,
       "readOnlyHint": false
     },
-    "description": "Create a task or an epic with its tasks. Create one item, or a tree: an item with children, each of which may have children of its own. task_next walks the tree and hands out only leaf tasks; a parent task resolves when its children are done. To order work, give an item a ref and list that ref in a later item's blockers. A task belongs to a repository (owner/repo): repo when given, else the remote of the caller's hive session or working directory, else none. Answers with every item it created, root first.",
+    "description": "Create a task or an epic with its tasks. Create one item, or a tree: an item with children, each of which may have children of its own. task_next walks the tree and hands out only leaf tasks; a parent task resolves when its children are done. To order work, give an item a ref and list that ref in a later item's blockers. To hand an item to a session you dispatched, set its assignSession. A task belongs to a repository (owner/repo): repo when given, else the remote of the caller's hive session or working directory, else none. Answers with every item it created, root first.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "assignSession": {
+          "description": "Assign the item to this hive session or chat id (a local:\u003cid\u003e reference is accepted). The session must exist. For a tree, set it on each child instead.",
+          "type": "string"
+        },
         "caller": {
           "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
           "type": "string"
         },
         "children": {
-          "description": "Items to create under this one, each {title, type, desc, ref, blockers, children}; type defaults to task. ref is a label local to this call; blockers lists the refs that must finish first. Nesting goes up to 10 levels.",
+          "description": "Items to create under this one, each {title, type, desc, ref, blockers, assignSession, children}; type defaults to task. ref is a label local to this call; blockers lists the refs that must finish first. Nesting goes up to 10 levels.",
           "items": {
             "additionalProperties": true,
             "type": "object"
@@ -3165,6 +3169,10 @@
         "assign": {
           "description": "Assign the item to the caller, which must be a hive session or a chat.",
           "type": "boolean"
+        },
+        "assignSession": {
+          "description": "Assign the item to this hive session or chat id (a local:\u003cid\u003e reference is accepted), for a caller that hands out work. The session must exist.",
+          "type": "string"
         },
         "caller": {
           "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
