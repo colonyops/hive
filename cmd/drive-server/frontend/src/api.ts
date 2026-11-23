@@ -1,14 +1,19 @@
 import { errorText } from '@hive/ui/lib/errorText'
 import type {
+  Anchor,
+  Comment,
   CreatedToken,
   CreateTokenRequest,
   DriveDocument,
   Me,
+  PresenceUpdate,
   PublicDocument,
   SearchResults,
   Share,
   ShareExpiry,
   SpaceSummary,
+  Thread,
+  ThreadList,
   Token,
 } from './types'
 
@@ -28,7 +33,8 @@ export class ApiError extends Error {
 }
 
 // These answer 401 for a wrong code or a dead link, not for an expired session.
-const sessionless = ['/api/v1/auth/', '/api/v1/public/']
+// Presence names its stream by a secret, so a 401 there says nothing about the session.
+const sessionless = ['/api/v1/auth/', '/api/v1/public/', '/api/v1/presence']
 
 let unauthorized: (() => void) | undefined
 
@@ -81,7 +87,7 @@ async function empty(method: string, path: string, body?: unknown): Promise<void
   await send(method, path, body)
 }
 
-function encodePath(path: string): string {
+export function encodePath(path: string): string {
   return path.split('/').map(encodeURIComponent).join('/')
 }
 
@@ -103,7 +109,11 @@ export const api = {
   recent: (limit = 100) => json<DriveDocument[]>('GET', `/api/v1/recent?limit=${limit}`),
   sharedLinks: () => json<DriveDocument[]>('GET', '/api/v1/shared-links'),
   documents: (apiPrefix: string) => json<DriveDocument[]>('GET', apiPrefix),
-  documentBody: async (apiPrefix: string, path: string) => (await send('GET', docUrl(apiPrefix, path))).text(),
+  /** The body and its sha256 from the ETag, the version a new thread is checked against. */
+  documentBody: async (apiPrefix: string, path: string): Promise<{ body: string; sha: string }> => {
+    const res = await send('GET', docUrl(apiPrefix, path))
+    return { body: await res.text(), sha: (res.headers.get('ETag') ?? '').replace(/^(?:W\/)?"|"$/g, '') }
+  },
   deleteDocument: (apiPrefix: string, path: string) => empty('DELETE', docUrl(apiPrefix, path)),
   share: (apiPrefix: string, path: string, expiresIn: ShareExpiry) =>
     json<Share>('POST', `${apiPrefix}/shares/${encodePath(path)}`, { expires_in: expiresIn || 'none' }),
@@ -114,4 +124,15 @@ export const api = {
   revokeToken: (id: string) => empty('DELETE', `/api/v1/tokens/${encodeURIComponent(id)}`),
 
   publicDocument: (slug: string) => json<PublicDocument>('GET', `/api/v1/public/${encodeURIComponent(slug)}`),
+  updateMe: (displayName: string) => json<Me>('PATCH', '/api/v1/me', { display_name: displayName }),
+
+  // Collab routes take the URLs lib/collab.ts builds for an owner or a link target.
+  threads: (url: string) => json<ThreadList>('GET', url),
+  createThread: (url: string, documentSha: string, anchor: Anchor | null, body: string) =>
+    json<Thread>('POST', url, { document_sha256: documentSha, anchor: anchor ?? undefined, body }),
+  reply: (url: string, body: string) => json<Comment>('POST', url, { body }),
+  setResolved: (url: string, resolved: boolean) => json<Thread>('PATCH', url, { resolved }),
+  editComment: (url: string, body: string) => json<Comment>('PATCH', url, { body }),
+  deleteComment: (url: string) => empty('DELETE', url),
+  presence: (update: PresenceUpdate) => empty('POST', '/api/v1/presence', update),
 }

@@ -17,3 +17,9 @@ DELETE FROM accounts WHERE email = ?;
 
 -- name: SetAccountLastSignIn :exec
 UPDATE accounts SET last_sign_in_at = ? WHERE id = ?;
+
+-- name: ListAccountsByIDs :many
+SELECT * FROM accounts WHERE id IN (sqlc.slice('ids'));
+
+-- name: SetAccountDisplayName :execrows
+UPDATE accounts SET display_name = ? WHERE id = ?;

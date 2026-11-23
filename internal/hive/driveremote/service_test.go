@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -41,6 +42,10 @@ type fakeServer struct {
 	tokens   []string
 	tooLarge map[string]bool
 	rejected bool
+	features []string
+	// threads are the threads of every document, by path.
+	threads map[string][]driveapi.Thread
+	replies []string
 }
 
 func (f *fakeServer) rejectAll() {
@@ -51,10 +56,35 @@ func (f *fakeServer) rejectAll() {
 
 func newFakeServer(t *testing.T) *fakeServer {
 	t.Helper()
-	f := &fakeServer{docs: map[string]string{}, tooLarge: map[string]bool{}}
+	f := &fakeServer{docs: map[string]string{}, tooLarge: map[string]bool{}, features: []string{driveapi.FeatureComments}, threads: map[string][]driveapi.Thread{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", func(w http.ResponseWriter, r *http.Request) {
-		f.writeJSON(w, driveapi.Me{Email: "dev@example.com", Policy: "dev"})
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.writeJSON(w, driveapi.Me{Email: "dev@example.com", Policy: "dev", Features: f.features})
+	})
+	mux.HandleFunc("GET /api/v1/repos/acme/site/threads/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.writeJSON(w, driveapi.ThreadList{Threads: f.threads[r.PathValue("path")]})
+	})
+	mux.HandleFunc("POST /api/v1/threads/{id}/comments", func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		var in driveapi.CommentBody
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		f.replies = append(f.replies, r.PathValue("id")+": "+in.Body)
+		f.writeJSON(w, driveapi.Comment{ID: "c-new", ThreadID: r.PathValue("id"), Body: in.Body})
+	})
+	mux.HandleFunc("PATCH /api/v1/threads/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var in driveapi.ThreadStateUpdate
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		out := driveapi.Thread{ID: r.PathValue("id")}
+		if in.Resolved {
+			now := time.Now()
+			out.ResolvedAt = &now
+		}
+		f.writeJSON(w, out)
 	})
 	mux.HandleFunc("GET /api/v1/repos/acme/site", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()

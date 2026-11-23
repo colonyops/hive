@@ -31,8 +31,11 @@ type Config struct {
 	MaxDocumentSize Size
 	SMTP            SMTP
 	DevLogMail      bool
-	TrustedProxies  []string
-	UserPolicies    []Policy
+	// TrustedProxies are the proxies whose X-Forwarded-For names the client.
+	// Behind a proxy they must be set, or every reader shares the proxy's
+	// address and its rate limits and per-IP stream cap.
+	TrustedProxies []string
+	UserPolicies   []Policy
 }
 
 type SMTP struct {

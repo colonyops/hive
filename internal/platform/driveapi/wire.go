@@ -76,15 +76,31 @@ type Share struct {
 // PublicDocument is what a share link serves to a reader who is not signed
 // in. Body is set for markdown only; HTML is served from the raw route.
 type PublicDocument struct {
-	OwnerEmail string   `json:"owner_email"`
-	Document   Document `json:"document"`
-	Body       string   `json:"body,omitempty"`
+	OwnerEmail string `json:"owner_email"`
+	// OwnerName is the owner's display name, else the local part of their
+	// email.
+	OwnerName string   `json:"owner_name"`
+	Document  Document `json:"document"`
+	Body      string   `json:"body,omitempty"`
 }
 
+// FeatureComments in Me.Features means the server serves threads and
+// presence.
+const FeatureComments = "comments"
+
 type Me struct {
-	Email  string `json:"email"`
-	Policy string `json:"policy"`
-	Quota  Quota  `json:"quota"`
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+	Policy      string `json:"policy"`
+	Quota       Quota  `json:"quota"`
+	// Features names what this server supports, so a client can tell an
+	// older server from a missing document.
+	Features []string `json:"features"`
+}
+
+type UpdateMe struct {
+	DisplayName string `json:"display_name"`
 }
 
 // Quota.Limit is nil for an unlimited policy.
@@ -125,6 +141,128 @@ type Token struct {
 type CreatedToken struct {
 	Secret string `json:"secret"`
 	Token  `tstype:",extends"`
+}
+
+// Anchor is a source line range of a markdown document, 1-based and
+// inclusive with front matter counted, and the text the author selected.
+type Anchor struct {
+	StartLine int    `json:"start_line"`
+	EndLine   int    `json:"end_line"`
+	Quote     string `json:"quote"`
+}
+
+// Author.ID and Author.Email are empty for an anonymous reader. Agent is the
+// name of the API token that wrote it, and empty for a browser session.
+type Author struct {
+	ID    string `json:"id,omitempty"`
+	Name  string `json:"name"`
+	Email string `json:"email,omitempty"`
+	Agent string `json:"agent,omitempty"`
+}
+
+// Comment.Deleted marks a thread's first comment removed while replies
+// remain; its Body and Author are then empty.
+type Comment struct {
+	ID        string     `json:"id"`
+	ThreadID  string     `json:"thread_id"`
+	Author    Author     `json:"author"`
+	Body      string     `json:"body"`
+	Deleted   bool       `json:"deleted,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	EditedAt  *time.Time `json:"edited_at,omitempty"`
+}
+
+// Thread.Anchor is nil for a general thread. Outdated means a push removed
+// the quoted text; Anchor then holds the lines and quote it last had.
+// Comments are oldest first.
+type Thread struct {
+	ID         string     `json:"id"`
+	Author     Author     `json:"author"`
+	Anchor     *Anchor    `json:"anchor,omitempty"`
+	Outdated   bool       `json:"outdated"`
+	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+	ResolvedBy *Author    `json:"resolved_by,omitempty"`
+	Comments   []Comment  `json:"comments"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
+// Viewer is who asked for a ThreadList. UserID is empty for an anonymous
+// reader, and CanComment needs a signed-in principal with push scope.
+type Viewer struct {
+	UserID     string `json:"user_id,omitempty"`
+	IsOwner    bool   `json:"is_owner"`
+	CanComment bool   `json:"can_comment"`
+}
+
+// ThreadList is what GET .../threads returns: general threads first, then
+// by start line.
+type ThreadList struct {
+	DocumentSHA256 string   `json:"document_sha256"`
+	Viewer         Viewer   `json:"viewer"`
+	Threads        []Thread `json:"threads"`
+}
+
+// CreateThread.DocumentSHA256 is the sha256 of the body the client rendered.
+// A thread on any other version is refused with a conflict.
+type CreateThread struct {
+	DocumentSHA256 string  `json:"document_sha256"`
+	Anchor         *Anchor `json:"anchor,omitempty"`
+	Body           string  `json:"body"`
+}
+
+type CommentBody struct {
+	Body string `json:"body"`
+}
+
+type ThreadStateUpdate struct {
+	Resolved bool `json:"resolved"`
+}
+
+// LineRange is a viewer's selection in presence. It is lines only, so
+// presence never carries document text.
+type LineRange struct {
+	StartLine int `json:"start_line"`
+	EndLine   int `json:"end_line"`
+}
+
+// PresenceColors is the size of the presence palette.
+const PresenceColors = 12
+
+// PresenceUpdate is a heartbeat. Token is the secret from the stream's hello
+// event. Name and Color count only for an anonymous viewer; Color is an
+// index below PresenceColors.
+type PresenceUpdate struct {
+	Token     string     `json:"token"`
+	Name      string     `json:"name,omitempty"`
+	Color     int        `json:"color"`
+	Selection *LineRange `json:"selection,omitempty"`
+}
+
+// PresenceViewer.ID is the stream's public id. Self is set only in the list
+// sent to that viewer's own stream.
+type PresenceViewer struct {
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	Color     int        `json:"color"`
+	SignedIn  bool       `json:"signed_in"`
+	Self      bool       `json:"self,omitempty"`
+	Selection *LineRange `json:"selection,omitempty"`
+}
+
+type PresenceSnapshot struct {
+	Viewers []PresenceViewer `json:"viewers"`
+}
+
+// StreamHello is the first event of a document stream.
+type StreamHello struct {
+	ID    string `json:"id"`
+	Token string `json:"token"`
+	// SHA256 is the document's version when the stream opened.
+	SHA256 string `json:"sha256"`
+}
+
+type DocumentEvent struct {
+	SHA256 string `json:"sha256"`
 }
 
 // ErrorBody is the JSON shape of every error response. It matches

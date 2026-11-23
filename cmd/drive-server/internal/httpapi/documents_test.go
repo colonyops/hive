@@ -1,10 +1,12 @@
 package httpapi_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -52,6 +54,13 @@ func newServerWithPolicy(t *testing.T, baseURL string, policy config.Policy) *se
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = svc.Close() })
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = svc.Live.Run(ctx, time.Minute)
+	}()
+	t.Cleanup(func() { cancel(); <-done })
 	return &server{
 		h:       httpapi.New(zerolog.Nop(), buildinfo.Info{}, svc.HTTP(baseURL, nil)),
 		svc:     svc,
@@ -195,7 +204,12 @@ func TestSpacesAndMeUsage(t *testing.T) {
 	}, got)
 
 	me := s.do(http.MethodGet, "/api/v1/me", tok, "")
-	assert.JSONEq(t, `{"email":"dev@example.com","policy":"dev","quota":{"used":8,"limit":1048576}}`, me.Body.String())
+	gotMe := decode[driveapi.Me](t, me)
+	limit := int64(1048576)
+	assert.Equal(t, "dev@example.com", gotMe.Email)
+	assert.Equal(t, "dev", gotMe.Policy)
+	assert.Equal(t, driveapi.Quota{Used: 8, Limit: &limit}, gotMe.Quota)
+	assert.NotEmpty(t, gotMe.ID)
 
 	empty := s.do(http.MethodGet, "/api/v1/shared", s.token(t, "other@example.com", core.ScopeRead), "")
 	assert.JSONEq(t, `[]`, empty.Body.String())

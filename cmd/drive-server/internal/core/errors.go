@@ -40,3 +40,9 @@ func NewError(kind Kind, msg string) *Error {
 var ErrNotFound = NewError(KindNotFound, "not found")
 
 func IsNotFound(err error) bool { return errors.Is(err, ErrNotFound) }
+
+// IsKind reports whether err is, or wraps, an *Error of kind.
+func IsKind(err error, kind Kind) bool {
+	var e *Error
+	return errors.As(err, &e) && e.Kind == kind
+}

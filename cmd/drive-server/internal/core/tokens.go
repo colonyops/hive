@@ -111,7 +111,7 @@ func (t *Tokens) Resolve(ctx context.Context, secret string) (Principal, error) 
 			return Principal{}, fmt.Errorf("touch token: %w", err)
 		}
 	}
-	return Principal{UserID: acct.ID, Email: acct.Email, Scope: tok.Scope, Policy: policy}, nil
+	return Principal{UserID: acct.ID, Email: acct.Email, TokenName: tok.Name, Scope: tok.Scope, Policy: policy}, nil
 }
 
 // MintFor is Mint with an expiry named as the API names it: "", "1d", "7d",

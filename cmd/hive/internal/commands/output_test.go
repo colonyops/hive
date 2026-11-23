@@ -142,6 +142,7 @@ var jsonCommandCases = map[string]failingJSONCase{
 	"drive push":      {args: []string{"drive", "push", "--shared", "--json"}, kind: ops.KindUnauthenticated},
 	"drive pull":      {args: []string{"drive", "pull", "--shared", "--json"}, kind: ops.KindUnauthenticated},
 	"drive share":     {args: []string{"drive", "share", "--shared", "--json", "a.md"}, kind: ops.KindUnauthenticated},
+	"drive comments":  {args: []string{"drive", "comments", "--shared", "--json", "a.md"}, kind: ops.KindUnauthenticated},
 	"x pick":          {args: []string{"x", "pick", "--json"}, kind: ops.KindInvalid},
 	"session list":    {args: []string{"session", "list", "--json"}},
 	"session info":    {args: []string{"session", "info", "--json"}, kind: ops.KindNotFound},

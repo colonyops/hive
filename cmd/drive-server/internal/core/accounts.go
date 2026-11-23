@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/colonyops/hive/pkg/randid"
 )
@@ -90,4 +92,46 @@ func (a *Accounts) Delete(ctx context.Context, email string) error {
 		return fmt.Errorf("remove user documents: %w", err)
 	}
 	return nil
+}
+
+// SetDisplayName sets the caller's display name, trimmed and cut to
+// MaxDisplayName characters. An empty name clears it.
+func (a *Accounts) SetDisplayName(ctx context.Context, p Principal, name string) (Account, error) {
+	name = strings.Join(strings.FieldsFunc(name, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsControl(r) || unicode.Is(unicode.Cf, r)
+	}), " ")
+	if r := []rune(name); len(r) > MaxDisplayName {
+		name = strings.TrimSpace(string(r[:MaxDisplayName]))
+	}
+	if err := a.store.SetDisplayName(ctx, p.UserID, name); err != nil {
+		if IsNotFound(err) {
+			return Account{}, NewError(KindNotFound, "account not found")
+		}
+		return Account{}, fmt.Errorf("set display name: %w", err)
+	}
+	acct, err := a.store.GetByID(ctx, p.UserID)
+	if err != nil {
+		return Account{}, fmt.Errorf("read back account: %w", err)
+	}
+	return acct, nil
+}
+
+// Get returns the caller's account.
+func (a *Accounts) Get(ctx context.Context, p Principal) (Account, error) {
+	acct, err := a.store.GetByID(ctx, p.UserID)
+	if IsNotFound(err) {
+		return Account{}, NewError(KindNotFound, "account not found")
+	}
+	if err != nil {
+		return Account{}, fmt.Errorf("get account: %w", err)
+	}
+	return acct, nil
+}
+
+// ShownName is the name other people see for acct.
+func ShownName(acct Account) string {
+	if acct.DisplayName != "" {
+		return acct.DisplayName
+	}
+	return EmailName(acct.Email)
 }

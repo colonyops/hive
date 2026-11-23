@@ -119,3 +119,24 @@ func TestOpenIsRepeatable(t *testing.T) {
 	_, err = second.Accounts().GetByID(t.Context(), "a1")
 	require.NoError(t, err)
 }
+
+func TestAccountDisplayNameAndGetByIDs(t *testing.T) {
+	accounts := openStore(t).Accounts()
+	require.NoError(t, accounts.Insert(t.Context(), account("a1", "ada@example.com")))
+	require.NoError(t, accounts.Insert(t.Context(), account("b1", "bob@example.com")))
+
+	require.NoError(t, accounts.SetDisplayName(t.Context(), "a1", "Ada"))
+	require.ErrorIs(t, accounts.SetDisplayName(t.Context(), "nobody", "x"), core.ErrNotFound)
+
+	got, err := accounts.GetByIDs(t.Context(), []string{"a1", "b1", "missing"})
+	require.NoError(t, err)
+	names := map[string]string{}
+	for _, a := range got {
+		names[a.ID] = a.DisplayName
+	}
+	assert.Equal(t, map[string]string{"a1": "Ada", "b1": ""}, names)
+
+	none, err := accounts.GetByIDs(t.Context(), nil)
+	require.NoError(t, err)
+	assert.Empty(t, none)
+}

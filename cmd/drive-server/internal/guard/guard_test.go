@@ -82,3 +82,9 @@ func TestParseProxiesRejectsGarbage(t *testing.T) {
 	_, err := guard.ParseProxies([]string{"not-an-ip"})
 	assert.Error(t, err)
 }
+
+func TestLimitKeyCountsIPv6ByItsSlash64(t *testing.T) {
+	assert.Equal(t, netip.MustParseAddr("2001:db8:1:2::"), guard.LimitKey(netip.MustParseAddr("2001:db8:1:2:aaaa::1")))
+	assert.Equal(t, netip.MustParseAddr("203.0.113.9"), guard.LimitKey(netip.MustParseAddr("203.0.113.9")))
+	assert.Equal(t, netip.Addr{}, guard.LimitKey(netip.Addr{}))
+}

@@ -1,6 +1,8 @@
+import { flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ShareView from '../pages/ShareView.vue'
 import { mountWithRouter } from '../test-utils/mount'
+import { FakeEventSource } from '../test-utils/eventSource'
 import { doc } from './fixtures'
 
 // Stubbing fetch instead of api.ts exercises the real URL and the 404 decoding.
@@ -52,6 +54,27 @@ describe('ShareView', () => {
     expect(reader().classes()).toContain('opacity-100')
   })
 
+  it('reloads an html frame only for a new version', async () => {
+    let sha = 'v1'
+    fetchMock.mockImplementation((input) => {
+      const body = (input as string).endsWith('/threads')
+        ? { document_sha256: sha, viewer: { is_owner: false, can_comment: false }, threads: [] }
+        : { owner_email: 'ada@example.com', document: doc({ path: 'page.html', kind: 'html', sha256: sha }) }
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+    })
+    const wrapper = await mountShare('abc')
+    const src = () => wrapper.get('[data-testid="frame"]').attributes('data-src')
+
+    FakeEventSource.latest().emit('hello', { id: 'p_1', token: 't', sha256: 'v1' })
+    await flushPromises()
+    expect(src()).toBe('/s/abc/raw')
+
+    sha = 'v2'
+    FakeEventSource.latest().emit('document', { sha256: 'v2' })
+    await flushPromises()
+    expect(src()).toBe('/s/abc/raw?v=1')
+  })
+
   it('shows the dead-link state on 404', async () => {
     respond(404, { kind: 'not_found', message: 'not found' })
     const wrapper = await mountShare('gone')
@@ -66,5 +89,22 @@ describe('ShareView', () => {
 
     expect(wrapper.get('[data-testid="share-error"]').text()).toContain('storage offline')
     expect(wrapper.find('[data-testid="share-missing"]').exists()).toBe(false)
+  })
+
+  it('names the owner and shows the dead-link state when the stream closes', async () => {
+    respond(200, {
+      owner_email: 'ada@example.com',
+      owner_name: 'Ada L',
+      document: doc({ path: 'notes/a.md' }),
+      body: 'x',
+    })
+    const wrapper = await mountShare('abc')
+    expect(wrapper.get('[data-testid="share-notice"]').text()).toBe('Shared by Ada L')
+    expect(FakeEventSource.latest().url).toBe('/api/v1/public/abc/events')
+
+    FakeEventSource.latest().emit('closed')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="share-missing"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="document-markdown"]').exists()).toBe(false)
   })
 })

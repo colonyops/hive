@@ -5,8 +5,22 @@
 package db
 
 import (
+	"database/sql"
+
 	"github.com/colonyops/hive/internal/domain/drive"
 )
+
+type Comment struct {
+	ID          string        `json:"id"`
+	ThreadID    string        `json:"thread_id"`
+	AuthorID    string        `json:"author_id"`
+	AuthorEmail string        `json:"author_email"`
+	ViaToken    string        `json:"via_token"`
+	Body        string        `json:"body"`
+	CreatedAt   int64         `json:"created_at"`
+	EditedAt    sql.NullInt64 `json:"edited_at"`
+	DeletedAt   sql.NullInt64 `json:"deleted_at"`
+}
 
 type Document struct {
 	ID         string     `json:"id"`
@@ -25,4 +39,22 @@ type DocumentsFt struct {
 	Title      string `json:"title"`
 	Path       string `json:"path"`
 	SearchText string `json:"search_text"`
+}
+
+type Thread struct {
+	ID               string         `json:"id"`
+	DocumentID       string         `json:"document_id"`
+	StartLine        sql.NullInt64  `json:"start_line"`
+	EndLine          sql.NullInt64  `json:"end_line"`
+	Quote            sql.NullString `json:"quote"`
+	AnchorSha256     string         `json:"anchor_sha256"`
+	Outdated         int64          `json:"outdated"`
+	AuthorID         string         `json:"author_id"`
+	AuthorEmail      string         `json:"author_email"`
+	AuthorViaToken   string         `json:"author_via_token"`
+	ResolvedAt       sql.NullInt64  `json:"resolved_at"`
+	ResolvedBy       sql.NullString `json:"resolved_by"`
+	ResolvedByEmail  sql.NullString `json:"resolved_by_email"`
+	ResolvedViaToken string         `json:"resolved_via_token"`
+	CreatedAt        int64          `json:"created_at"`
 }

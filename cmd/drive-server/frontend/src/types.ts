@@ -3,17 +3,29 @@
 import type { CreateToken, Document } from './wire.gen'
 
 export type {
+  Anchor,
+  Author,
+  Comment,
   CreatedToken,
+  DocumentEvent,
   DocumentKind,
+  LineRange,
   Me,
+  PresenceSnapshot,
+  PresenceUpdate,
+  PresenceViewer,
   PublicDocument,
   SearchHit,
   SearchResults,
   Share,
   ShareExpiry,
   SpaceSummary,
+  StreamHello,
+  Thread,
+  ThreadList,
   Token,
   TokenScope,
+  Viewer,
 } from './wire.gen'
 
 // Renamed so it does not shadow the DOM's Document.

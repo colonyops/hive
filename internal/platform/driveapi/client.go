@@ -184,6 +184,38 @@ func (c *Client) Share(ctx context.Context, space drive.Space, path, expiresIn s
 	return decode[Share](resp)
 }
 
+// Threads lists the document's threads, general ones first.
+func (c *Client) Threads(ctx context.Context, space drive.Space, path string) (ThreadList, error) {
+	resp, err := c.http.Get(ctx, SpacePrefix(space)+"/threads/"+escapePath(path))
+	if err != nil {
+		return ThreadList{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return decode[ThreadList](resp)
+}
+
+// Reply adds a comment to a thread on one of the caller's own documents.
+func (c *Client) Reply(ctx context.Context, threadID, body string) (Comment, error) {
+	resp, err := c.http.Post(ctx, "/api/v1/threads/"+url.PathEscape(threadID)+"/comments",
+		httpclient.JSONBody(CommentBody{Body: body}), httpclient.JSONContent())
+	if err != nil {
+		return Comment{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return decode[Comment](resp)
+}
+
+// SetResolved resolves or reopens a thread on one of the caller's own documents.
+func (c *Client) SetResolved(ctx context.Context, threadID string, resolved bool) (Thread, error) {
+	resp, err := c.http.Patch(ctx, "/api/v1/threads/"+url.PathEscape(threadID),
+		httpclient.JSONBody(ThreadStateUpdate{Resolved: resolved}), httpclient.JSONContent())
+	if err != nil {
+		return Thread{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return decode[Thread](resp)
+}
+
 // The caller closes the body.
 func decode[T any](resp *http.Response) (T, error) {
 	var zero T

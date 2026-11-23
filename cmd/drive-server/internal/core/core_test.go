@@ -18,6 +18,8 @@ import (
 	"github.com/colonyops/hive/internal/platform/sqlite"
 )
 
+var testCommentCaps = core.CommentCaps{ThreadsPerDocument: 3, CommentsPerThread: 3, BodyBytesPerDocument: 200}
+
 const (
 	testMaxDocumentSize = 1024
 	testBaseURL         = "https://drive.test"
@@ -52,7 +54,35 @@ type env struct {
 	sessions *core.Sessions
 	signIn   *core.SignIn
 	users    core.UserStores
+	comments *core.Comments
+	notes    *notes
 	clock    *clock
+}
+
+// notes records what a service told its Notifier.
+type notes struct {
+	mu     sync.Mutex
+	events []string
+}
+
+func (n *notes) add(e string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.events = append(n.events, e)
+}
+
+func (n *notes) DocumentChanged(_, documentID, _ string) { n.add("document " + documentID) }
+func (n *notes) DocumentClosed(_, documentID string)     { n.add("closed " + documentID) }
+func (n *notes) LinkClosed(_, documentID string)         { n.add("link closed " + documentID) }
+func (n *notes) ThreadsChanged(_, documentID string)     { n.add("threads " + documentID) }
+
+// Take returns the events since the last call.
+func (n *notes) Take() []string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	out := n.events
+	n.events = nil
+	return out
 }
 
 func newEnv(t *testing.T, ps ...config.Policy) *env {
@@ -66,9 +96,11 @@ func newEnv(t *testing.T, ps ...config.Policy) *env {
 	t.Cleanup(func() { _ = pool.Close() })
 
 	c := &clock{now: time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)}
+	rec := &notes{}
 	policies := core.NewPolicies(ps)
 	accounts := core.NewAccounts(store.Accounts(), pool.Stores(), policies, core.WithClock(c.Now))
 	sessions := core.NewSessions(store.Sessions(), store.Accounts(), policies, core.WithClock(c.Now))
+	shares := core.NewShares(store.Shares(), store.Accounts(), pool.Stores(), policies, core.WithClock(c.Now), core.WithBaseURL(testBaseURL), core.WithNotifier(rec))
 	return &env{
 		dataDir:  dir,
 		sessions: sessions,
@@ -77,8 +109,10 @@ func newEnv(t *testing.T, ps ...config.Policy) *env {
 		policies: policies,
 		accounts: accounts,
 		tokens:   core.NewTokens(store.Tokens(), store.Accounts(), policies, core.WithClock(c.Now)),
-		docs:     core.NewDocuments(pool.Stores(), store.Shares(), testMaxDocumentSize, core.WithClock(c.Now), core.WithBaseURL(testBaseURL)),
-		shares:   core.NewShares(store.Shares(), store.Accounts(), pool.Stores(), policies, core.WithClock(c.Now), core.WithBaseURL(testBaseURL)),
+		docs:     core.NewDocuments(zerolog.Nop(), pool.Stores(), store.Shares(), testMaxDocumentSize, core.WithClock(c.Now), core.WithBaseURL(testBaseURL), core.WithNotifier(rec)),
+		shares:   shares,
+		comments: core.NewComments(pool.Stores(), shares, store.Accounts(), core.WithClock(c.Now), core.WithNotifier(rec), core.WithCommentCaps(testCommentCaps)),
+		notes:    rec,
 		sweeper:  core.NewSweeper(zerolog.Nop(), store.Shares(), store.Codes(), store.Sessions(), core.WithClock(c.Now)),
 		users:    pool.Stores(),
 		clock:    c,

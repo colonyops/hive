@@ -77,6 +77,7 @@ in a git repository to create a .hive symlink pointing to its space.
 			cmd.pushCmd(),
 			cmd.pullCmd(),
 			cmd.shareCmd(),
+			cmd.commentsCmd(),
 		},
 	})
 

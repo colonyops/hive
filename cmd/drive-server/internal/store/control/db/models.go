@@ -15,6 +15,7 @@ type Account struct {
 	Email        string        `json:"email"`
 	CreatedAt    int64         `json:"created_at"`
 	LastSignInAt sql.NullInt64 `json:"last_sign_in_at"`
+	DisplayName  string        `json:"display_name"`
 }
 
 type ApiToken struct {

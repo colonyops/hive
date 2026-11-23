@@ -53,6 +53,28 @@ func TestClientAgainstServer(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, docs[0].Shared)
 			assert.Equal(t, share.URL, docs[0].Shared.URL)
+
+			rec := s.do(http.MethodPost, driveapi.SpacePrefix(space)+"/threads/plans/my%20plan%20%231.md", tok,
+				jsonBody(t, driveapi.CreateThread{DocumentSHA256: put.SHA256, Body: "first"}))
+			require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+
+			list, err := client.Threads(ctx, space, path)
+			require.NoError(t, err)
+			require.Len(t, list.Threads, 1)
+			assert.Equal(t, put.SHA256, list.DocumentSHA256)
+			thread := list.Threads[0]
+
+			reply, err := client.Reply(ctx, thread.ID, "second")
+			require.NoError(t, err)
+			assert.Equal(t, thread.ID, reply.ThreadID)
+			assert.Equal(t, "test", reply.Author.Agent)
+
+			resolved, err := client.SetResolved(ctx, thread.ID, true)
+			require.NoError(t, err)
+			assert.NotNil(t, resolved.ResolvedAt)
+			reopened, err := client.SetResolved(ctx, thread.ID, false)
+			require.NoError(t, err)
+			assert.Nil(t, reopened.ResolvedAt)
 		})
 	}
 
@@ -61,6 +83,7 @@ func TestClientAgainstServer(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "dev@example.com", me.Email)
 		assert.Positive(t, me.Quota.Used)
+		assert.Contains(t, me.Features, driveapi.FeatureComments)
 	})
 
 	t.Run("share link serves the document", func(t *testing.T) {

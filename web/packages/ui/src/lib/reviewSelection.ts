@@ -74,7 +74,7 @@ function lineAt(block: HTMLElement, node: Node, offset: number): number {
 
 const commentClass = 'has-review-comment'
 
-type LineComment = { id: string; startLine: number; endLine: number }
+export type LineComment = { id: string; startLine: number; endLine: number }
 
 /**
  * Marks the blocks under root that each comment covers: the innermost blocks
@@ -105,10 +105,29 @@ export function markReviewedBlocks(root: HTMLElement, comments: readonly LineCom
   }
 }
 
-type QuotedComment = LineComment & { context: string }
+export type QuotedComment = LineComment & { context: string }
 
 export type HighlightBox = { top: number; left: number; width: number; height: number }
 export type ReviewHighlight = { id: string; boxes: HighlightBox[] }
+
+/**
+ * How quoteRange compares text. strict ignores whitespace only. loose also
+ * ignores case and everything but letters and digits, the rule the drive
+ * server re-anchors a quote by, so a quote the server keeps anchored still
+ * highlights after punctuation around it changed.
+ */
+export type QuoteMatch = 'strict' | 'loose'
+
+const looseKeep = /[\p{L}\p{N}]/u
+
+function foldQuote(text: string, match: QuoteMatch): string {
+  return match === 'loose'
+    ? [...text]
+        .filter((ch) => looseKeep.test(ch))
+        .join('')
+        .toLowerCase()
+    : text.replace(/\s+/g, '')
+}
 
 /**
  * The range of quote's text inside blocks, matched with whitespace ignored:
@@ -116,8 +135,13 @@ export type ReviewHighlight = { id: string; boxes: HighlightBox[] }
  * text does not hold. Where the quote repeats, the first match that starts on
  * startLine wins, else the first match. Null when the quote is not there.
  */
-export function quoteRange(blocks: readonly HTMLElement[], quote: string, startLine?: number): Range | null {
-  const target = quote.replace(/\s+/g, '')
+export function quoteRange(
+  blocks: readonly HTMLElement[],
+  quote: string,
+  startLine?: number,
+  match: QuoteMatch = 'strict',
+): Range | null {
+  const target = foldQuote(quote, match)
   if (!target) return null
   let text = ''
   const positions: { block: HTMLElement; node: Text; offset: number }[] = []
@@ -126,9 +150,11 @@ export function quoteRange(blocks: readonly HTMLElement[], quote: string, startL
     for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
       const value = node.data
       for (let offset = 0; offset < value.length; offset++) {
-        if (/\s/.test(value[offset])) continue
-        text += value[offset]
-        positions.push({ block, node, offset })
+        const folded = foldQuote(value[offset], match)
+        for (const ch of folded) {
+          text += ch
+          positions.push({ block, node, offset })
+        }
       }
     }
   }
@@ -191,13 +217,14 @@ export function reviewHighlights(
   root: HTMLElement,
   layer: HTMLElement,
   comments: readonly QuotedComment[],
+  match: QuoteMatch = 'strict',
 ): ReviewHighlight[] {
   const base = layer.getBoundingClientRect()
   const highlights: ReviewHighlight[] = []
   for (const comment of comments) {
     const blocks = [...root.querySelectorAll<HTMLElement>(`[data-review-ids~="${CSS.escape(comment.id)}"]`)]
     if (!blocks.length) continue
-    const range = quoteRange(blocks, comment.context, comment.startLine)
+    const range = quoteRange(blocks, comment.context, comment.startLine, match)
     const rects = range ? lineBoxes([...range.getClientRects()]) : blocks.map((block) => block.getBoundingClientRect())
     highlights.push({
       id: comment.id,

@@ -40,3 +40,34 @@
 .drive-search input {
   font-size: var(--text-lead);
 }
+
+/* Presence colors: one per viewer, indexed by PresenceViewer.color (0..11). White initials sit on
+   them, so the light set is a step darker and the dark set a step lighter than their hue. */
+:root {
+  --presence-0: oklch(0.55 0.17 25);
+  --presence-1: oklch(0.56 0.15 55);
+  --presence-2: oklch(0.55 0.13 85);
+  --presence-3: oklch(0.54 0.14 135);
+  --presence-4: oklch(0.54 0.12 165);
+  --presence-5: oklch(0.54 0.11 195);
+  --presence-6: oklch(0.54 0.14 235);
+  --presence-7: oklch(0.52 0.17 265);
+  --presence-8: oklch(0.52 0.18 295);
+  --presence-9: oklch(0.54 0.18 325);
+  --presence-10: oklch(0.55 0.17 355);
+  --presence-11: oklch(0.5 0.03 255);
+}
+[data-theme*="dark"] {
+  --presence-0: oklch(0.64 0.17 25);
+  --presence-1: oklch(0.66 0.15 55);
+  --presence-2: oklch(0.66 0.13 85);
+  --presence-3: oklch(0.64 0.14 135);
+  --presence-4: oklch(0.64 0.12 165);
+  --presence-5: oklch(0.64 0.11 195);
+  --presence-6: oklch(0.64 0.14 235);
+  --presence-7: oklch(0.62 0.17 265);
+  --presence-8: oklch(0.62 0.18 295);
+  --presence-9: oklch(0.64 0.18 325);
+  --presence-10: oklch(0.65 0.17 355);
+  --presence-11: oklch(0.6 0.03 255);
+}

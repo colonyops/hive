@@ -19,6 +19,6 @@ func (p *patternRecorder) HandleFunc(pattern string, _ func(http.ResponseWriter,
 // RoutePatterns lists every pattern New registers.
 func RoutePatterns(svc Services) []string {
 	var rec patternRecorder
-	registerRoutes(&rec, errchain.New(mid.Errors(zerolog.Nop(), mapError)), buildinfo.Info{}, svc)
+	registerRoutes(&rec, errchain.New(mid.Errors(zerolog.Nop(), mapError)), zerolog.Nop(), buildinfo.Info{}, svc)
 	return rec
 }

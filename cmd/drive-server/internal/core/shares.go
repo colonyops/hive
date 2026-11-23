@@ -25,13 +25,14 @@ type Shares struct {
 	accounts AccountStore
 	users    UserStores
 	policies *Policies
+	notify   Notifier
 	baseURL  string
 	now      func() time.Time
 }
 
 func NewShares(links ShareStore, accounts AccountStore, users UserStores, policies *Policies, opts ...Option) *Shares {
 	o := newOptions(opts)
-	return &Shares{links: links, accounts: accounts, users: users, policies: policies, baseURL: o.baseURL, now: o.now}
+	return &Shares{links: links, accounts: accounts, users: users, policies: policies, notify: o.notify, baseURL: o.baseURL, now: o.now}
 }
 
 // Create returns the document's share link, making one when it has none. A
@@ -96,6 +97,7 @@ func (s *Shares) Revoke(ctx context.Context, p Principal, space drive.Space, pat
 	if err := s.links.DeleteByDocument(ctx, p.UserID, doc.ID); err != nil {
 		return fmt.Errorf("revoke share link: %w", err)
 	}
+	s.notify.LinkClosed(p.UserID, doc.ID)
 	return nil
 }
 
@@ -103,30 +105,10 @@ func (s *Shares) Revoke(ctx context.Context, p Principal, space drive.Space, pat
 // a link stops working is the same not_found, so a caller cannot tell a
 // revoked link from a guessed one.
 func (s *Shares) Resolve(ctx context.Context, slug string) (Account, driveapi.Document, []byte, error) {
-	notFound := NewError(KindNotFound, "link not found")
-
-	link, err := s.links.GetBySlug(ctx, slug)
-	if IsNotFound(err) {
-		return Account{}, driveapi.Document{}, nil, notFound
-	}
+	link, owner, err := s.resolveLink(ctx, slug)
 	if err != nil {
-		return Account{}, driveapi.Document{}, nil, fmt.Errorf("get share link: %w", err)
+		return Account{}, driveapi.Document{}, nil, err
 	}
-	if link.ExpiresAt != nil && !s.now().Before(*link.ExpiresAt) {
-		return Account{}, driveapi.Document{}, nil, notFound
-	}
-
-	owner, err := s.accounts.GetByID(ctx, link.UserID)
-	if IsNotFound(err) {
-		return Account{}, driveapi.Document{}, nil, notFound
-	}
-	if err != nil {
-		return Account{}, driveapi.Document{}, nil, fmt.Errorf("get link owner: %w", err)
-	}
-	if _, ok := s.policies.Match(owner.Email); !ok {
-		return Account{}, driveapi.Document{}, nil, notFound
-	}
-
 	store, release, err := s.users.Open(ctx, link.UserID)
 	if err != nil {
 		return Account{}, driveapi.Document{}, nil, fmt.Errorf("open user store: %w", err)
@@ -135,13 +117,42 @@ func (s *Shares) Resolve(ctx context.Context, slug string) (Account, driveapi.Do
 
 	doc, body, err := store.GetByID(ctx, link.DocumentID)
 	if IsNotFound(err) {
-		return Account{}, driveapi.Document{}, nil, notFound
+		return Account{}, driveapi.Document{}, nil, errLinkNotFound()
 	}
 	if err != nil {
 		return Account{}, driveapi.Document{}, nil, fmt.Errorf("get shared document: %w", err)
 	}
 	return owner, toWire(doc), body, nil
 }
+
+// resolveLink returns the live link for slug and its owner: not expired, and
+// owned by an account a policy still admits.
+func (s *Shares) resolveLink(ctx context.Context, slug string) (ShareLink, Account, error) {
+	link, err := s.links.GetBySlug(ctx, slug)
+	if IsNotFound(err) {
+		return ShareLink{}, Account{}, errLinkNotFound()
+	}
+	if err != nil {
+		return ShareLink{}, Account{}, fmt.Errorf("get share link: %w", err)
+	}
+	if link.ExpiresAt != nil && !s.now().Before(*link.ExpiresAt) {
+		return ShareLink{}, Account{}, errLinkNotFound()
+	}
+
+	owner, err := s.accounts.GetByID(ctx, link.UserID)
+	if IsNotFound(err) {
+		return ShareLink{}, Account{}, errLinkNotFound()
+	}
+	if err != nil {
+		return ShareLink{}, Account{}, fmt.Errorf("get link owner: %w", err)
+	}
+	if _, ok := s.policies.Match(owner.Email); !ok {
+		return ShareLink{}, Account{}, errLinkNotFound()
+	}
+	return link, owner, nil
+}
+
+func errLinkNotFound() error { return NewError(KindNotFound, "link not found") }
 
 func (s *Shares) document(ctx context.Context, p Principal, space drive.Space, path string) (Document, error) {
 	if err := drive.ValidatePath(path); err != nil {

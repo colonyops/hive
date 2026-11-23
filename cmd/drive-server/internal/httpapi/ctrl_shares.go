@@ -72,7 +72,7 @@ func (h shareHandlers) public(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	out := driveapi.PublicDocument{OwnerEmail: owner.Email, Document: doc}
+	out := driveapi.PublicDocument{OwnerEmail: owner.Email, OwnerName: core.ShownName(owner), Document: doc}
 	if doc.Kind == drive.KindMarkdown {
 		out.Body = string(body)
 	}

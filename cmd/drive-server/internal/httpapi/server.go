@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
+	"github.com/colonyops/hive/cmd/drive-server/internal/live"
 	"github.com/colonyops/hive/internal/web/mid"
 	"github.com/colonyops/hive/pkg/buildinfo"
 )
@@ -33,6 +34,9 @@ type Services struct {
 	SignIn    *core.SignIn
 	Documents *core.Documents
 	Shares    *core.Shares
+	Accounts  *core.Accounts
+	Comments  *core.Comments
+	Live      *live.Hub
 
 	// Web is the built web UI. When nil, no UI route is registered.
 	Web fs.FS
@@ -41,17 +45,21 @@ type Services struct {
 	BaseURL string
 	// TrustedProxies are the proxies whose X-Forwarded-For names the client.
 	TrustedProxies []netip.Prefix
+	// LinkCheckEvery is how often a stream opened through a share link checks
+	// that the link still works. Zero means 30 seconds.
+	LinkCheckEvery time.Duration
 }
 
-// New returns the server's handler. /healthz is quiet in the request log
-// unless it fails, so a probe loop does not flood it.
+// New returns the server's handler. /healthz, presence heartbeats, and
+// stream opens are quiet in the request log unless they fail, so a probe
+// loop or an open page does not flood it.
 func New(log zerolog.Logger, info buildinfo.Info, svc Services) http.Handler {
 	chain := errchain.New(mid.Errors(log, mapError))
 	mux := http.NewServeMux()
-	registerRoutes(mux, chain, info, svc)
+	registerRoutes(mux, chain, log, info, svc)
 	// Cookie requests are cross-origin-checked here; bearer calls send no
 	// Origin and pass.
-	return mid.Logger(log, "/healthz")(recoverPanics(log)(http.NewCrossOriginProtection().Handler(mux)))
+	return mid.QuietLogger(log, isQuiet)(recoverPanics(log)(http.NewCrossOriginProtection().Handler(mux)))
 }
 
 // Serve runs h on ln until ctx is done, then gives in-flight requests

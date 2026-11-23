@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   recent: vi.fn(),
   sharedLinks: vi.fn(),
   documentBody: vi.fn(),
+  threads: vi.fn(),
+  presence: vi.fn(),
   search: vi.fn(),
 }))
 vi.mock('../api', async (importOriginal) => ({ ...(await importOriginal<typeof import('../api')>()), api: mocks }))
@@ -39,12 +41,25 @@ async function mountAt(path: string) {
   return { router, app }
 }
 
-const ada: Me = { email: 'ada@example.com', policy: 'x', quota: { used: 2048, limit: 4096 } }
+const ada: Me = {
+  id: 'u1',
+  email: 'ada@example.com',
+  display_name: '',
+  policy: 'x',
+  quota: { used: 2048, limit: 4096 },
+  features: [],
+}
 
 describe('drive shell', () => {
   beforeEach(() => {
     forgetSignIn()
     Object.values(mocks).forEach((m) => m.mockReset())
+    mocks.threads.mockResolvedValue({
+      document_sha256: 'abc',
+      viewer: { is_owner: true, can_comment: true },
+      threads: [],
+    })
+    mocks.presence.mockResolvedValue(undefined)
     mocks.me.mockResolvedValue(ada)
     mocks.spaces.mockResolvedValue([
       { space: 'acme/notes', kind: 'repository', documents: 3, bytes: 3000 },
@@ -61,7 +76,7 @@ describe('drive shell', () => {
             ],
       ),
     )
-    mocks.documentBody.mockResolvedValue('# Hello')
+    mocks.documentBody.mockResolvedValue({ body: '# Hello', sha: 'abc' })
     mocks.recent.mockResolvedValue([
       doc({ path: 'plan.md', title: 'Plan' }),
       doc({ space: 'workspaces/scratch', path: 'todo.md', title: 'Todo' }),

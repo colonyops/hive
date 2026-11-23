@@ -96,3 +96,19 @@ func bearer(r *http.Request) string {
 	}
 	return strings.TrimSpace(value)
 }
+
+// optionalPrincipal is resolvePrincipal for a route that also serves
+// anonymous readers. Only an unauthenticated outcome (no credential, or a bad
+// one) is anonymous; any other failure fails the request.
+func optionalPrincipal(tokens *core.Tokens, sessions *core.Sessions, cookieName string) viewerFunc {
+	return func(r *http.Request) (*core.Principal, error) {
+		p, err := resolvePrincipal(r, tokens, sessions, cookieName)
+		if core.IsKind(err, core.KindUnauthenticated) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return &p, nil
+	}
+}

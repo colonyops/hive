@@ -7,7 +7,14 @@ import { forgetSignIn, router, signedInUser } from '../router'
 const fetchMock = vi.fn<typeof fetch>()
 vi.stubGlobal('fetch', fetchMock)
 
-const me = { email: 'ada@example.com', policy: 'default', quota: { used: 0, limit: null } }
+const me = {
+  id: 'u1',
+  email: 'ada@example.com',
+  display_name: '',
+  policy: 'default',
+  quota: { used: 0, limit: null },
+  features: [],
+}
 const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 })
 const unauthorized = () =>
   new Response(JSON.stringify({ kind: 'unauthenticated', message: 'sign in' }), { status: 401 })

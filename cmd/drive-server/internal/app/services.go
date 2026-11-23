@@ -13,6 +13,7 @@ import (
 	"github.com/colonyops/hive/cmd/drive-server/internal/config"
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
 	"github.com/colonyops/hive/cmd/drive-server/internal/httpapi"
+	"github.com/colonyops/hive/cmd/drive-server/internal/live"
 	"github.com/colonyops/hive/cmd/drive-server/internal/store/control"
 	"github.com/colonyops/hive/cmd/drive-server/internal/store/userdb"
 	"github.com/colonyops/hive/pkg/logutils"
@@ -30,6 +31,8 @@ type Services struct {
 	Tokens    *core.Tokens
 	Documents *core.Documents
 	Shares    *core.Shares
+	Comments  *core.Comments
+	Live      *live.Hub
 	Sessions  *core.Sessions
 	SignIn    *core.SignIn
 	Sweeper   *core.Sweeper
@@ -48,12 +51,16 @@ func OpenServices(ctx context.Context, log zerolog.Logger, cfg config.Config) (*
 	policies := core.NewPolicies(cfg.UserPolicies)
 	accounts := core.NewAccounts(store.Accounts(), users.Stores(), policies)
 	sessions := core.NewSessions(store.Sessions(), store.Accounts(), policies)
+	hub := live.NewHub(nil, live.DefaultCaps)
+	shares := core.NewShares(store.Shares(), store.Accounts(), users.Stores(), policies, core.WithBaseURL(cfg.BaseURL), core.WithNotifier(hub))
 	return &Services{
 		Policies:  policies,
 		Accounts:  accounts,
 		Tokens:    core.NewTokens(store.Tokens(), store.Accounts(), policies),
-		Documents: core.NewDocuments(users.Stores(), store.Shares(), cfg.MaxDocumentSize.Bytes, core.WithBaseURL(cfg.BaseURL)),
-		Shares:    core.NewShares(store.Shares(), store.Accounts(), users.Stores(), policies, core.WithBaseURL(cfg.BaseURL)),
+		Documents: core.NewDocuments(log, users.Stores(), store.Shares(), cfg.MaxDocumentSize.Bytes, core.WithBaseURL(cfg.BaseURL), core.WithNotifier(hub)),
+		Shares:    shares,
+		Comments:  core.NewComments(users.Stores(), shares, store.Accounts(), core.WithNotifier(hub)),
+		Live:      hub,
 		Sessions:  sessions,
 		SignIn:    core.NewSignIn(log, store.Codes(), store.Accounts(), store.Outbox(), policies, accounts, sessions, core.WithBaseURL(cfg.BaseURL)),
 		Sweeper:   core.NewSweeper(log, store.Shares(), store.Codes(), store.Sessions()),
@@ -72,6 +79,9 @@ func (s *Services) HTTP(baseURL string, trustedProxies []netip.Prefix) httpapi.S
 		SignIn:         s.SignIn,
 		Documents:      s.Documents,
 		Shares:         s.Shares,
+		Accounts:       s.Accounts,
+		Comments:       s.Comments,
+		Live:           s.Live,
 		BaseURL:        baseURL,
 		TrustedProxies: trustedProxies,
 	}
