@@ -111,6 +111,15 @@ function terminalDir(cwd: unknown, context: { cwd: string }): string {
   return asked.startsWith('/') || asked.startsWith('~') ? asked : `${context.cwd}/${asked}`
 }
 
+/** What a markdown fence hands its page: the fence body, and where it sits. */
+export interface AppletRender {
+  /** The parsed YAML body, or the raw text for a text-body fence. */
+  data: unknown
+  source: string
+  lang: string
+  docPath: string
+}
+
 export interface AppletBridgeOptions {
   // A frame's host keys it by applet id, so the id cannot change under it.
   applet: () => Applet
@@ -120,6 +129,8 @@ export interface AppletBridgeOptions {
   onScreen: () => boolean
   close: () => void
   resize: (size: { width?: number; height?: number }) => void
+  render?: () => AppletRender | undefined
+  onFollow?: (href: string) => void
 }
 
 // What window.hive reaches, for one frame. The window does not prove who is asking,
@@ -157,6 +168,14 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     post({ event: 'command', data: command })
   }
 
+  function deliverRender(): void {
+    const render = options.render?.()
+    if (!render || !pageReady) return
+    // Copied field by field: a reactive object from the host cannot be cloned onto the port.
+    const { data, source, lang, docPath } = render
+    post({ event: 'render', data: { data, source, lang, docPath } })
+  }
+
   const handle: AppletFrameHandle = {
     surface: options.surface(),
     post,
@@ -170,6 +189,9 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
   watch(options.onScreen, (shown) => {
     if (shown) applets.frameShown(id, handle)
   })
+
+  // A page that reloads says ready again, and gets the render then.
+  watch(() => options.render?.(), deliverRender)
 
   watch(options.sessionSlug, (slug) => {
     post({ event: 'session', data: slug })
@@ -257,8 +279,14 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     close: () => options.close(),
     // Asked of the host because a page reached by a link in the frame cannot read its
     // surface. A tab leaves the key alone: it sits beside terminals and has a close button.
+    // A markdown fence sits inside a document, which has nothing of its own to close.
     escape() {
-      if (options.surface() !== 'tab' && options.surface() !== 'page') options.close()
+      const surface = options.surface()
+      if (surface !== 'tab' && surface !== 'page' && surface !== 'markdown') options.close()
+    },
+    follow(args) {
+      if (!options.onFollow) throw new Error('hive.follow is only for a page shown in a document.')
+      options.onFollow(String(args.href))
     },
     open: () => applets.runCommand(appletCommandID(id)),
     dropdown(args) {
@@ -282,6 +310,7 @@ export function useAppletBridge(options: AppletBridgeOptions): void {
     ready() {
       pageReady = true
       queuedCommands.splice(0).forEach(postCommand)
+      deliverRender()
     },
     command(args) {
       const commandID = String(args.id)

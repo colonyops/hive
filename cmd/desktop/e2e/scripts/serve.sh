@@ -161,6 +161,7 @@ prepare_server_files() {
     cp "${FIXTURES}/drive/plans/2026-10-11-plan.md" "${space_dir}/plans/"
     cp "${FIXTURES}/drive/plans/fences.md" "${space_dir}/plans/"
     cp "${FIXTURES}/drive/plans/fence-target.md" "${space_dir}/plans/"
+    cp "${FIXTURES}/drive/plans/applet-fence.md" "${space_dir}/plans/"
     cp "${FIXTURES}/drive/pages/links.html" "${space_dir}/pages/"
   fi
 }

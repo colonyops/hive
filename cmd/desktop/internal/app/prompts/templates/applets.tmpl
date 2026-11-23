@@ -35,6 +35,7 @@ A key Hive does not know is a warning in `applet_list`, and the applet still ope
   - `page`: in the title bar's + menu, as a tab in the strip beside Inbox, Code and Chats, in no session. Takes no settings: `page: {}`. Use it, without `tab`, for anything that spans sessions, such as a board of every session.
   - `popup`: over the app, from the command palette or a key, with `width` and `height` in pixels. The default fills the window.
   - `titlebar`: a page in the title bar, with `entry` (default: the applet's own `entry`) and `width` in pixels (default 28, one icon button). See "In the title bar".
+  - `markdown`: inline in Drive documents, once for each fenced block whose info string is in `fences`. It adds nothing to a menu, the palette or the title bar, so an applet with only this surface has no pop-up. See "In a Drive doc".
   - Each takes `enabled: false`, which turns it off and keeps its settings. The switches in Settings > Applets write this, so leave it alone unless the user asks.
 - `commands`: palette rows the user can bind to a key, each with `id` (a slug), `title`, and optional `icon` and `keywords`. See "In the command palette".
 
@@ -58,7 +59,7 @@ A foreign page in the frame can load any of your pages with a query or hash it c
 - `hive.copy(text)` puts text on the clipboard.
 - `hive.context()` resolves to `{id, title, dir, cwd, sessionSlug}`.
 - `hive.close()` closes the applet's pop-up or tab. In a title bar page it closes the page's dropdown.
-- `hive.surface` is `tab`, `page`, `popup`, `titlebar` or `dropdown`, for one file that serves several. In a `page`, `hive.context()` has no session.
+- `hive.surface` is `tab`, `page`, `popup`, `titlebar`, `dropdown` or `markdown`, for one file that serves several. In a `page`, `hive.context()` has no session.
 - `hive.open()` opens the applet from any of them: its page if the user has it in the title bar, else a session tab if the file lists one and a session is on screen, else a new page if the file lists `page`, else a pop-up. It closes the pop-up if that is already open.
 - `hive.broadcast(data)` sends to the applet's other open frames, which listen with `hive.on('message', fn)`.
 - `hive.on('session', fn)` reports the slug of the session on screen when it changes. `hive.on` returns a function that stops listening, and does nothing for an event this Hive does not have.
@@ -136,6 +137,42 @@ until the applet is turned off, so keep what it polls cheap.
 
 If the applet is only for the title bar, the palette still opens its `entry` as a pop-up, so
 make that page useful too: settings or a larger view.
+
+## In a Drive doc
+
+Use `surfaces.markdown` to give agents a fenced block of your own to write in Drive documents. Hive renders the applet's page inline for each block.
+
+```yaml
+version: 1
+hive: ">=0.75"
+title: PR card
+surfaces:
+  markdown:
+    fences: [pr-card]
+    # entry: card.html   optional, default: the applet's own entry
+    # body: text         optional, default: yaml
+```
+
+- Set `hive: ">=0.75"`, so an older Hive refuses the file and does not turn it into a pop-up.
+- `fences`: required, one or more slugs. A fence cannot start with `hive-`, which Hive keeps for its own, and cannot repeat in the file. If two applets list the same fence, the one with the first id (sorted) gets it, and the other gets a warning in `applet_list`.
+- `entry`: the page. It defaults to the applet's `entry`, and `hive.surface === 'markdown'` tells the two apart.
+- `body`: `yaml` (the default) or `text`.
+
+A doc uses it like this:
+
+````markdown
+```pr-card
+repo: colonyops/hive
+number: 872
+```
+````
+
+The page gets each block through `hive.on('render', ({data, source, lang, docPath}) => ...)`. `lang` is the fence, `source` is the raw body and `docPath` is the doc's path in the space. `data` is the body parsed as YAML, so the page does not parse it. With `body: text`, `data` is the raw string. The page also gets the latest `render` if it subscribes after the event, and again when the block's body changes. Do not assume it fires once.
+
+- `hive.follow(href)` opens a link with the same rules as a link in the doc, so a relative path or `.hive/...` opens that doc.
+- The block starts short and does not grow by itself. Measure the content and call `hive.resize({height})` in pixels, again whenever the content changes.
+- Each block is its own frame with the full bridge, as in any other surface.
+- A body that fails to parse as YAML shows the plain code block and never reaches the page.
 
 ## In the command palette
 

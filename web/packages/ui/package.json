@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./platform": "./src/platform.ts",
+    "./components/fences/registry": "./src/components/fences/registry.ts",
     "./components/*": "./src/components/*",
     "./composables/*": "./src/composables/*.ts",
     "./lib/*": "./src/lib/*.ts",

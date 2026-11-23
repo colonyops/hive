@@ -62,6 +62,7 @@ surfaces:
 | `page` | In the title bar's **+** menu, as a page beside Inbox, Code, and Chats. It belongs to no session | None | From opening the page until you close it, behind other pages too |
 | `popup` | Over the app, from the palette or a key | `width` and `height` in pixels. Unset fills the window | While it is open |
 | `titlebar` | In the title bar | `entry`, default the applet's own page, and `width` in pixels, default 28 | From the moment the file is valid, whenever Hive is open |
+| `markdown` | Inside Drive documents, once per fenced block | `fences`, `entry`, and `body` | While a document with its block is open |
 
 List `page` and not `tab` for an applet that spans every session, such as a board of all your sessions, so it stays out of each session's **+** menu. A page stays in the title bar across restarts, and you can drag it to reorder it. It does not run at launch: it starts the first time you open it, then keeps running while you are on other tabs.
 
@@ -193,6 +194,39 @@ The slot is 28px tall, and a page with a transparent background sits directly on
 | `hive.dropdown({entry, width, height})` | Opens a dropdown under the bar, or closes it if it is open |
 
 A dropdown loads again each time it opens, so put anything that has to keep going, such as audio, in the title bar page and talk to it with `hive.broadcast`. `localStorage` is shared between an applet's frames. Closing a pop-up, tab or dropdown stops only the `hive.spawn` processes it started. A `hive.exec` already running finishes or times out.
+
+### Markdown fences
+
+Use this to draw a fenced block in a Drive document, such as a card or a chart. List the fence names under `markdown`. Each block whose info string is one of them shows the applet's page inside the document.
+
+```yaml
+version: 1
+hive: ">=0.75"
+title: PR card
+surfaces:
+  markdown:
+    fences: [pr-card]
+```
+
+`entry` defaults to the applet's own page. `body` is `yaml` by default: Hive parses the block and sends the result to the page. Set `body: text` to send the raw text.
+
+The page gets a `render` event on load and each time the block changes. It carries `data`, `source`, `lang`, and `docPath`, the path of the document.
+
+```js
+hive.on('render', ({ data }) => {
+  document.querySelector('#title').textContent = data.title
+  hive.resize({ height: document.body.scrollHeight })
+})
+```
+
+| Call | What it does |
+| --- | --- |
+| `hive.resize({height})` | Sets the height of the block. It starts at 120 pixels |
+| `hive.follow(href)` | Opens a link the way a link in the document opens |
+
+Fence names must be slugs, and a name that starts with `hive-` is reserved for the built-in fences. When two applets claim one name, the first by applet id renders it, and the other gets a warning. A block shows its code when the page fails to load. <kbd>esc</kbd> in the page does not close anything.
+
+An applet with only `markdown` has no row to open it in the palette and no entry in a **+** menu. Commands it lists still show. Write `hive: ">=0.75"` so an older Hive refuses the file instead of treating it as a pop-up. See [Fences and Links](../chats/drive-fences.md) for the built-in fences.
 
 ### Palette commands
 

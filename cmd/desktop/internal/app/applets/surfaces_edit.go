@@ -15,13 +15,14 @@ const (
 	SurfacePage     = "page"
 	SurfacePopup    = "popup"
 	SurfaceTitlebar = "titlebar"
+	SurfaceMarkdown = "markdown"
 )
 
 // SetSurface returns raw with one surface turned on or off, keeping the file's comments.
 // Off is enabled: false rather than a removed key, so a pop-up keeps its size and a title
 // bar keeps its page for when the surface comes back.
 func SetSurface(raw []byte, surface string, on bool) ([]byte, error) {
-	if !slices.Contains([]string{SurfaceTab, SurfacePage, SurfacePopup, SurfaceTitlebar}, surface) {
+	if !slices.Contains([]string{SurfaceTab, SurfacePage, SurfacePopup, SurfaceTitlebar, SurfaceMarkdown}, surface) {
 		return nil, fmt.Errorf("no surface %q", surface)
 	}
 	var doc yaml.Node
@@ -43,6 +44,9 @@ func SetSurface(raw []byte, surface string, on bool) ([]byte, error) {
 	if mapValue(surfaces, surface) == nil {
 		if surface == SurfaceTitlebar {
 			return nil, errors.New("this file has no title bar page. Add surfaces.titlebar with its entry")
+		}
+		if surface == SurfaceMarkdown {
+			return nil, errors.New("this file has no markdown fences. Add surfaces.markdown with its fences")
 		}
 		setMapValue(surfaces, surface, emptyMapping())
 	}

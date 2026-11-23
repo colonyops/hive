@@ -50,6 +50,13 @@ func TestSetSurface(t *testing.T) {
 		assert.True(t, on.ShowsTab())
 		assert.False(t, edit(t, minimal+"\nsurfaces:\n  page: {}\n", SurfacePage, false).ShowsPage())
 	})
+	t.Run("turns markdown off and on, and keeps its fences", func(t *testing.T) {
+		body := minimal + "\nsurfaces:\n  markdown: {fences: [card]}\n"
+		off := edit(t, body, SurfaceMarkdown, false)
+		assert.False(t, off.ShowsMarkdown())
+		assert.Equal(t, []string{"card"}, off.Markdown.Fences)
+		assert.True(t, edit(t, body, SurfaceMarkdown, true).ShowsMarkdown())
+	})
 	t.Run("a bare key takes the switch", func(t *testing.T) {
 		assert.False(t, edit(t, minimal+"\nsurfaces:\n  tab:\n", SurfaceTab, false).ShowsTab())
 	})
@@ -63,6 +70,7 @@ func TestSetSurface(t *testing.T) {
 		body, surface, want string
 	}{
 		"a title bar with no page":      {minimal, SurfaceTitlebar, "no title bar page"},
+		"markdown with no fences":       {minimal, SurfaceMarkdown, "no markdown fences"},
 		"a surface that does not exist": {minimal, "sidebar", "no surface"},
 		"an alias it would also change": {minimal + "\nx: &shared {}\nsurfaces: {tab: *shared}\n", SurfaceTab, "edit it by hand"},
 	} {

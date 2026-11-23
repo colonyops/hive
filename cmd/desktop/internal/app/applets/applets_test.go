@@ -238,6 +238,80 @@ func TestParseSurfaces(t *testing.T) {
 	})
 }
 
+func TestParseMarkdownSurface(t *testing.T) {
+	parse := func(t *testing.T, markdown string) (Applet, error) {
+		t.Helper()
+		return Parse("thing", []byte(minimal+"entry: app.html\nsurfaces:\n  markdown:\n"+markdown), "")
+	}
+	t.Run("a markdown-only applet is not a pop-up, and takes the applet's page", func(t *testing.T) {
+		a, err := parse(t, "    fences: [pr-card]\n")
+		require.NoError(t, err)
+		assert.Equal(t, Surfaces{Markdown: &MarkdownSurface{Entry: "app.html", Fences: []string{"pr-card"}}}, a.Surfaces)
+		assert.True(t, a.Surfaces.ShowsMarkdown())
+		assert.False(t, a.Surfaces.opens())
+	})
+	t.Run("keeps its own page and body", func(t *testing.T) {
+		a, err := parse(t, "    fences: [pr-card]\n    entry: card.html\n    body: text\n")
+		require.NoError(t, err)
+		assert.Equal(t, &MarkdownSurface{Entry: "card.html", Fences: []string{"pr-card"}, Body: "text"}, a.Surfaces.Markdown)
+	})
+	t.Run("can be turned off", func(t *testing.T) {
+		a, err := parse(t, "    fences: [pr-card]\n    enabled: false\n")
+		require.NoError(t, err)
+		assert.False(t, a.Surfaces.ShowsMarkdown())
+	})
+	t.Run("a bare key is refused for want of fences", func(t *testing.T) {
+		_, err := Parse("thing", []byte(minimal+"surfaces:\n  markdown:\n"), "")
+		assert.ErrorContains(t, err, "surfaces.markdown.fences")
+	})
+	t.Run("sits beside another surface", func(t *testing.T) {
+		a, err := Parse("thing", []byte(minimal+"surfaces:\n  tab: {}\n  markdown: {fences: [x]}\n"), "")
+		require.NoError(t, err)
+		assert.True(t, a.Surfaces.ShowsTab())
+		assert.True(t, a.Surfaces.ShowsMarkdown())
+		assert.Nil(t, a.Surfaces.Popup)
+	})
+	for name, tc := range map[string]struct{ markdown, want string }{
+		"no fences":               {"    fences: []\n", "surfaces.markdown.fences"},
+		"a fence that is no slug": {"    fences: [Pr_Card]\n", "not a valid slug"},
+		"a hive- fence":           {"    fences: [hive-card]\n", "hive-"},
+		"a repeated fence":        {"    fences: [a, b, a]\n", "listed twice"},
+		"a page outside":          {"    fences: [a]\n    entry: ../x.html\n", "surfaces.markdown.entry"},
+		"an unknown body mode":    {"    fences: [a]\n    body: json\n", "surfaces.markdown.body"},
+	} {
+		t.Run("refuses "+name, func(t *testing.T) {
+			_, err := parse(t, tc.markdown)
+			assert.ErrorContains(t, err, tc.want)
+		})
+	}
+}
+
+func TestStoreGivesAFenceToTheFirstApplet(t *testing.T) {
+	root := t.TempDir()
+	store := NewStore(root, "")
+	write(t, root, "b-card", minimal+"surfaces:\n  markdown: {fences: [card, only-b]}\n")
+	write(t, root, "a-card", minimal+"surfaces:\n  markdown: {fences: [card]}\n")
+	require.NoError(t, store.Reload())
+
+	winner, _ := store.Get("a-card")
+	assert.Equal(t, []string{"card"}, winner.Surfaces.Markdown.Fences)
+	assert.Empty(t, winner.Warnings)
+	loser, _ := store.Get("b-card")
+	assert.Equal(t, []string{"only-b"}, loser.Surfaces.Markdown.Fences)
+	require.Len(t, loser.Warnings, 1)
+	assert.Contains(t, loser.Warnings[0], `"card" (used by a-card)`)
+
+	require.NoError(t, store.Reload())
+	loser, _ = store.Get("b-card")
+	assert.Len(t, loser.Warnings, 1, "a reload does not repeat the warning")
+
+	write(t, root, "a-card", minimal+"surfaces:\n  markdown: {fences: [card], enabled: false}\n")
+	require.NoError(t, store.Reload())
+	loser, _ = store.Get("b-card")
+	assert.Equal(t, []string{"card", "only-b"}, loser.Surfaces.Markdown.Fences, "a turned-off applet holds no fence")
+	assert.Empty(t, loser.Warnings)
+}
+
 func TestParseCommands(t *testing.T) {
 	applet, err := Parse("radio", []byte(minimal+"commands:\n  - id: next\n    title: Next station\n    icon: play\n    keywords: [skip]\n"), "")
 	require.NoError(t, err)

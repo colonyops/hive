@@ -20,6 +20,7 @@ export type {
     AppletExportPreview,
     AppletFile,
     AppletImportPreview,
+    AppletMarkdownSurface,
     AppletOutput,
     AppletPopup,
     AppletProcess,

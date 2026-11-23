@@ -434,6 +434,9 @@ func parseArchiveApplet(id string, files []ArchiveFile, hiveVersion string) (App
 	if bar := applet.Surfaces.Titlebar; bar != nil && !has(filepath.ToSlash(bar.Entry)) {
 		return Applet{}, fmt.Errorf("this file has no page %q, which its %s shows in the title bar", bar.Entry, FileName)
 	}
+	if md := applet.Surfaces.Markdown; md != nil && !has(filepath.ToSlash(md.Entry)) {
+		return Applet{}, fmt.Errorf("this file has no page %q, which its %s renders in Drive docs", md.Entry, FileName)
+	}
 	return applet, nil
 }
 

@@ -115,10 +115,54 @@ func (s *Store) Reload() error {
 			next[id] = entry
 		}
 	}
+	resolveFenceClaims(next)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.entries = next
 	return nil
+}
+
+// resolveFenceClaims gives each markdown fence to the first enabled applet by id and takes it
+// from the others, so a page that renders a doc sees one owner per fence. The loser keeps
+// running and learns why from a warning. A file with an error keeps its last good copy
+// and takes no part, so fixing the file is what settles the claim.
+func resolveFenceClaims(entries map[string]Entry) {
+	ids := make([]string, 0, len(entries))
+	for id := range entries {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	owner := map[string]string{}
+	for _, id := range ids {
+		entry := entries[id]
+		if entry.Err != nil || !entry.Applet.Surfaces.ShowsMarkdown() {
+			continue
+		}
+		var kept, lost []string
+		for _, fence := range entry.Applet.Surfaces.Markdown.Fences {
+			if _, taken := owner[fence]; taken {
+				lost = append(lost, fence)
+				continue
+			}
+			owner[fence] = id
+			kept = append(kept, fence)
+		}
+		if len(lost) == 0 {
+			continue
+		}
+		// Copied so the surface the parse returned is not shared with the entry that
+		// the catalog hands out.
+		md := *entry.Applet.Surfaces.Markdown
+		md.Fences = kept
+		entry.Applet.Surfaces.Markdown = &md
+		details := make([]string, len(lost))
+		for i, fence := range lost {
+			details[i] = fmt.Sprintf("%q (used by %s)", fence, owner[fence])
+		}
+		entry.Applet.Warnings = append(slices.Clone(entry.Applet.Warnings),
+			"another applet already renders "+strings.Join(details, ", ")+", so this one does not")
+		entries[id] = entry
+	}
 }
 
 func newestChange(dir string) int64 {
