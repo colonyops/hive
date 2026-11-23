@@ -58,6 +58,10 @@ func TestDrivePutWritesWithTheDesktopClosed(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	require.Len(t, lines, 1, "one line per child of the root")
 	assert.Contains(t, lines[0], `"path":"reports"`)
+
+	out, err = runRoot(t, driveRoot(a), "drive", "list", "--caller", "global", "reports/probe.md")
+	require.NoError(t, err)
+	assert.Contains(t, out, `"path":"reports/probe.md"`, "a document path lists that document alone")
 }
 
 // The desktop's TestWriteDocumentRefusals checks the same text over MCP.

@@ -132,8 +132,14 @@ type DocumentListOut struct {
 	Detail   string `json:"detail"   jsonschema:"The level this answer used: children or tree."`
 }
 
-// JSONLines prints one line per child, as a CLI list does.
-func (o DocumentListOut) JSONLines() []any { return o.Children }
+// JSONLines prints one line per child, as a CLI list does, and a document
+// path as its own entry.
+func (o DocumentListOut) JSONLines() []any {
+	if o.Kind != domain.KindDir.String() {
+		return []any{o.DocumentEntry}
+	}
+	return o.Children
+}
 
 type DocumentGetOut struct {
 	DocumentEntry

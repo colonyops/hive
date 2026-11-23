@@ -37,11 +37,11 @@ func TestPutDocumentRefusals(t *testing.T) {
 	ctx := t.Context()
 
 	_, err := f.svc.PutDocument(ctx, chatCaller, "notes.txt", []byte("x"))
-	requireOpError(t, err, ops.KindInvalid)
+	_ = requireOpError(t, err, ops.KindInvalid)
 	_, err = f.svc.PutDocument(ctx, chatCaller, "a.md", []byte{0xff})
-	requireOpError(t, err, ops.KindInvalid)
+	_ = requireOpError(t, err, ops.KindInvalid)
 	_, err = f.svc.PutDocument(ctx, chatCaller, "../a.md", []byte("x"))
-	requireOpError(t, err, ops.KindInvalid)
+	_ = requireOpError(t, err, ops.KindInvalid)
 
 	_, err = f.svc.PutDocument(ctx, chatCaller, "plans/a.md", []byte("---\ntitle: [unclosed\n---\nbody\n"))
 	assert.Contains(t, requireOpError(t, err, ops.KindInvalid).Msg, "front matter does not parse: ", "the parser's reason crosses")
@@ -74,12 +74,12 @@ func TestGetDocument(t *testing.T) {
 
 	for _, path := range []string{"kv.json", "plans/kv.json.lock", "ghost.md"} {
 		_, _, err = f.svc.GetDocument(ctx, chatCaller, path)
-		requireOpError(t, err, ops.KindNotFound)
+		_ = requireOpError(t, err, ops.KindNotFound)
 	}
 	_, _, err = f.svc.GetDocument(ctx, chatCaller, "reports")
-	requireOpError(t, err, ops.KindInvalid)
+	_ = requireOpError(t, err, ops.KindInvalid)
 	_, _, err = f.svc.GetDocument(ctx, chatCaller, "bin.dat")
-	requireOpError(t, err, ops.KindInvalid)
+	_ = requireOpError(t, err, ops.KindInvalid)
 }
 
 func TestListDocuments(t *testing.T) {
@@ -135,7 +135,7 @@ func TestDeleteDocument(t *testing.T) {
 	err = f.svc.DeleteDocument(ctx, chatCaller, "plans")
 	assert.Contains(t, requireOpError(t, err, ops.KindInvalid).Msg, "is not empty")
 	require.NoError(t, f.svc.DeleteDocument(ctx, chatCaller, "plans/a.md"))
-	requireOpError(t, f.svc.DeleteDocument(ctx, chatCaller, "plans/a.md"), ops.KindNotFound)
+	_ = requireOpError(t, f.svc.DeleteDocument(ctx, chatCaller, "plans/a.md"), ops.KindNotFound)
 }
 
 func TestCallersAndTheirSpaces(t *testing.T) {
@@ -148,7 +148,7 @@ func TestCallersAndTheirSpaces(t *testing.T) {
 	require.NotNil(t, c.Session)
 
 	_, err = f.svc.SessionCaller(session.Session{ID: "zzz", Name: "scratch"})
-	requireOpError(t, err, ops.KindInvalid)
+	_ = requireOpError(t, err, ops.KindInvalid)
 
 	c, err = ChatCaller(Chat{ID: "1", Workspace: "ws"})
 	require.NoError(t, err)
@@ -156,5 +156,5 @@ func TestCallersAndTheirSpaces(t *testing.T) {
 	assert.Equal(t, drive.Author{Session: "1"}, c.Author)
 
 	_, err = ChatCaller(Chat{ID: "1", Workspace: "../x"})
-	requireOpError(t, err, ops.KindInvalid)
+	_ = requireOpError(t, err, ops.KindInvalid)
 }

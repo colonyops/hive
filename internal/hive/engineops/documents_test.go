@@ -110,7 +110,7 @@ func TestADirectoryInsideNoSessionIsItsRemotesRepository(t *testing.T) {
 	assert.Equal(t, ops.KindNotFound, kindOf(t, err), "a directory with no remote names no space")
 }
 
-func TestOversizedBodyIsRefusedBeforeTheCaller(t *testing.T) {
+func TestOversizedBodyIsRefusedWithoutAWrite(t *testing.T) {
 	f := newFixture(t)
 	_, err := f.h.DocumentPut(t.Context(), driveops.DocumentPutIn{
 		Caller: "global", Path: "big.md", Body: strings.Repeat("x", drivesvc.MaxDocumentBytes+1),

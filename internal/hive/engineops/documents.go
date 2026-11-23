@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colonyops/hive/internal/domain/drive"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	"github.com/colonyops/hive/internal/ops"
 	driveops "github.com/colonyops/hive/internal/ops/drive"
@@ -24,14 +23,13 @@ func (h *Handlers) driveCaller(ctx context.Context, value string) (drivesvc.Call
 	if err == nil || !ok || opErr.Kind != ops.KindNotFound || !filepath.IsAbs(dir) {
 		return c, err
 	}
-	repo := h.repo(ctx, "", caller{Dir: dir})
-	owner, name, found := strings.Cut(repo, "/")
-	if !found {
+	remote, remoteErr := h.engine.Git().RemoteURL(ctx, dir)
+	if remoteErr != nil {
+		h.log.Debug().Err(remoteErr).Str("dir", dir).Msg("no git remote for the drive caller's directory")
 		return drivesvc.Caller{}, err
 	}
-	space, spaceErr := drive.RepositorySpace(owner, name)
-	if spaceErr != nil {
-		h.log.Debug().Err(spaceErr).Str("dir", dir).Msg("the directory's remote names no drive space")
+	space, found := h.engine.Drive().SpaceForRemote(remote)
+	if !found {
 		return drivesvc.Caller{}, err
 	}
 	return drivesvc.Caller{Space: space}, nil

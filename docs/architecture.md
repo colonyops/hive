@@ -2668,7 +2668,10 @@ which sits beside no session and so has no tabs: `tab_open` and `tab_close`
 refuse it, and they refuse `diff` and `tasks` for a chat, which has only Drive.
 A chat's record names its workspace space. A directory maps to the active hive
 session whose checkout holds it (`Sessions().SessionAtPath`) and from there to
-the repository space; a directory inside no session stays `not_found`. A
+the repository space. A directory inside no session is the repository space
+of its git remote for the `document_*` tools and `not_found` for the tab and
+diff review tools, which act on a session
+(ADR a-drive-document-call-from-a-directory-inside-no-hive-session-files-under-the-repository-of-its-git-remote). A
 Code session's checkout links its space as `.hive`. `drive:updated` carries
 the author of a write; the frontend uses it for the unseen dot. A chat's space outlives the
 chat, and deleting a workspace leaves its space behind
