@@ -87,6 +87,22 @@ hive drive prune --older-than 30d
 
 `hive drive spaces` prints each space's kind and key, such as `repository  my-org/my-repo`, `workspace  workspaces/hive`, and `shared  shared`. Another repository or the shared space is `hive drive --repo owner/repo ls` or `hive drive --shared ls`. A Chats workspace is `hive drive --workspace hive ls`. `--all` cannot combine with `--repo`, `--shared`, or `--workspace`. `prune` removes files older than the given age.
 
+### Writing Documents
+
+`hive drive list`, `get`, `put`, `move` and `delete` run the document tools an agent has on the Hive Drive MCP server, and work with Hive Desktop closed. They file under the caller's space: the repository of the hive session you run them in, the repository of the current directory's git remote, or the shared space with `--caller global`. In a Hive chat they need Hive Desktop running, because it holds the chat's workspace.
+
+```bash
+hive drive put plans/auth.md --body "# Auth plan"
+hive drive put plans/auth.md --input @plan.json   # {"body": "..."} for a long document
+hive drive get plans/auth.md
+hive drive list plans --detail tree
+hive drive move plans/auth.md archive/auth.md
+hive drive delete archive/auth.md
+hive drive put --caller global notes.md --body "shared notes"
+```
+
+Each command prints JSON Lines; `list` prints one line per entry. A body is capped at 2 MiB, and markdown front matter must parse and close within the first 8 KiB. `--repo`, `--shared` and `--workspace` apply to `ls` only.
+
 ### Finding Documents
 
 ```bash

@@ -55,7 +55,7 @@ A refused request prints the reason, such as `invalid: a chat has only a Drive t
 | `unauthenticated` | 6 |
 | any other failure | 1 |
 
-`hive dt` has a command for every tool on the Hive Desktop and Hive Drive servers, not only the layout tools: `hive dt document put`, `hive dt inbox list`, `hive dt schedule list`, and so on. Run `hive dt --help` for the list.
+`hive dt` has a command for every tool on the Hive Desktop and Hive Drive servers that needs the running app, not only the layout tools: `hive dt inbox list`, `hive dt schedule list`, and so on. Run `hive dt --help` for the list. The document tools are `hive drive list`, `get`, `put`, `move` and `delete`, which work with Hive Desktop closed.
 
 ## From MCP
 

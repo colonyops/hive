@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -14,8 +15,10 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/opscli"
 	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/hive/engineops"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/ops/catalog"
+	driveops "github.com/colonyops/hive/internal/ops/drive"
 	"github.com/colonyops/hive/internal/ops/tasks"
 )
 
@@ -123,8 +126,59 @@ func engineCallerFlag() cli.Flag {
 	}
 }
 
-func (cmd *EngineCmd) run(ctx context.Context, _ *cli.Command, info ops.Info, args map[string]any) (any, error) {
+func (cmd *EngineCmd) run(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) (any, error) {
+	if info.Toolset == driveops.Toolset {
+		if err := refuseSpaceFlags(c); err != nil {
+			return nil, err
+		}
+		if cmd.isChat(ctx, args) {
+			return cmd.forward(ctx, info, args)
+		}
+	}
 	return callEngine(ctx, cmd.app, info.Name, args)
+}
+
+// refuseSpaceFlags rejects the hive drive flags that pick a space by name. A
+// document operation files under its caller's space, and a flag that parsed
+// but did nothing would write somewhere the user did not ask for.
+func refuseSpaceFlags(c *cli.Command) error {
+	for _, name := range []string{"repo", "shared", "workspace"} {
+		if c.IsSet(name) {
+			return invalidf("--%s picks a space for hive drive ls and the other listing commands; this command files under its caller's space, so pass --caller instead", name)
+		}
+	}
+	return nil
+}
+
+// isChat reports whether a document call comes from a chat. Chat records live
+// in the desktop's store, so only the running desktop can file its documents.
+func (cmd *EngineCmd) isChat(ctx context.Context, args map[string]any) bool {
+	value, _ := args["caller"].(string)
+	c, err := cmd.app.Sessions().ResolveCaller(ctx, value, "", "")
+	return err == nil && c.Kind == sessionsvc.CallerKindChat
+}
+
+// forward runs a document call on the running desktop, as hive dt does.
+func (cmd *EngineCmd) forward(ctx context.Context, info ops.Info, args map[string]any) (any, error) {
+	res, err := NewDesktopClient(cmd.app.Config.DataDir, "", cmd.app.Build.Version).Call(ctx, info.Toolset.MCPPath, info.ToolName, args)
+	if err != nil {
+		return nil, err
+	}
+	if res.IsError {
+		return nil, toolError(res, info.ToolName)
+	}
+	if info.Name != driveops.DocumentList.Name {
+		return toolResultValue(res), nil
+	}
+	var out driveops.DocumentListOut
+	raw, err := json.Marshal(res.StructuredContent)
+	if err != nil {
+		return nil, fmt.Errorf("encode %s result: %w", info.ToolName, err)
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("decode %s result: %w", info.ToolName, err)
+	}
+	return out, nil
 }
 
 // print renders a task list, a task or an epic context for a person at a
