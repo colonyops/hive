@@ -3,13 +3,42 @@ package engineops
 import (
 	"cmp"
 	"context"
+	"errors"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/colonyops/hive/internal/domain/drive"
+	drivesvc "github.com/colonyops/hive/internal/hive/drive"
+	"github.com/colonyops/hive/internal/ops"
 	driveops "github.com/colonyops/hive/internal/ops/drive"
 )
 
+// driveCaller is the Drive caller of a document operation. A path inside no
+// session is the repository of its git remote, the space the sessions of that
+// repository use; a directory with no such remote stays not_found.
+func (h *Handlers) driveCaller(ctx context.Context, value string) (drivesvc.Caller, error) {
+	c, err := h.engine.DriveCaller(ctx, value)
+	dir := strings.TrimSpace(value)
+	opErr, ok := errors.AsType[*ops.Error](err)
+	if err == nil || !ok || opErr.Kind != ops.KindNotFound || !filepath.IsAbs(dir) {
+		return c, err
+	}
+	repo := h.repo(ctx, "", caller{Dir: dir})
+	owner, name, found := strings.Cut(repo, "/")
+	if !found {
+		return drivesvc.Caller{}, err
+	}
+	space, spaceErr := drive.RepositorySpace(owner, name)
+	if spaceErr != nil {
+		h.log.Debug().Err(spaceErr).Str("dir", dir).Msg("the directory's remote names no drive space")
+		return drivesvc.Caller{}, err
+	}
+	return drivesvc.Caller{Space: space}, nil
+}
+
 func (h *Handlers) DocumentList(ctx context.Context, in driveops.DocumentListIn) (driveops.DocumentListOut, error) {
-	c, err := h.engine.DriveCaller(ctx, in.Caller)
+	c, err := h.driveCaller(ctx, in.Caller)
 	if err != nil {
 		return driveops.DocumentListOut{}, err
 	}
@@ -26,7 +55,7 @@ func (h *Handlers) DocumentList(ctx context.Context, in driveops.DocumentListIn)
 }
 
 func (h *Handlers) DocumentGet(ctx context.Context, in driveops.DocumentGetIn) (driveops.DocumentGetOut, error) {
-	c, err := h.engine.DriveCaller(ctx, in.Caller)
+	c, err := h.driveCaller(ctx, in.Caller)
 	if err != nil {
 		return driveops.DocumentGetOut{}, err
 	}
@@ -38,7 +67,7 @@ func (h *Handlers) DocumentGet(ctx context.Context, in driveops.DocumentGetIn) (
 }
 
 func (h *Handlers) DocumentPut(ctx context.Context, in driveops.DocumentPutIn) (driveops.DocumentEntry, error) {
-	c, err := h.engine.DriveCaller(ctx, in.Caller)
+	c, err := h.driveCaller(ctx, in.Caller)
 	if err != nil {
 		return driveops.DocumentEntry{}, err
 	}
@@ -50,7 +79,7 @@ func (h *Handlers) DocumentPut(ctx context.Context, in driveops.DocumentPutIn) (
 }
 
 func (h *Handlers) DocumentMove(ctx context.Context, in driveops.DocumentMoveIn) (driveops.DocumentEntry, error) {
-	c, err := h.engine.DriveCaller(ctx, in.Caller)
+	c, err := h.driveCaller(ctx, in.Caller)
 	if err != nil {
 		return driveops.DocumentEntry{}, err
 	}
@@ -62,7 +91,7 @@ func (h *Handlers) DocumentMove(ctx context.Context, in driveops.DocumentMoveIn)
 }
 
 func (h *Handlers) DocumentDelete(ctx context.Context, in driveops.DocumentDeleteIn) (driveops.DocumentDeleteOut, error) {
-	c, err := h.engine.DriveCaller(ctx, in.Caller)
+	c, err := h.driveCaller(ctx, in.Caller)
 	if err != nil {
 		return driveops.DocumentDeleteOut{}, err
 	}

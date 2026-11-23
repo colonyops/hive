@@ -69,7 +69,7 @@ func (ctrl *DriveController) Handler() http.Handler {
 // Controller.register: metadata only, thin handlers, descriptions written for
 // a model.
 func (ctrl *DriveController) register(srv *mcp.Server) {
-	ctrl.registerDocuments(srv)
+	mountEngine(srv, ctrl.core, ctrl.log, DrivePathPrefix, ctrl.toolError)
 	ctrl.registerTabs(srv)
 	ctrl.registerReviews(srv)
 }

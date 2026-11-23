@@ -22,6 +22,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
+	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	hiveevents "github.com/colonyops/hive/internal/hive/events"
 )
 
@@ -101,6 +102,7 @@ func (s *driveSignals) requireNoUpdates(t *testing.T, msg string) {
 
 type driveFixture struct {
 	svc       *DriveService
+	docs      agentDocuments
 	signals   *driveSignals
 	harness   *hiveHarness
 	terminals *fakeTerminals
@@ -172,7 +174,10 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 	t.Cleanup(cancelTabbed)
 
 	contextRoot := t.TempDir()
-	h := newHiveHarness(t, engineOptions{cfg: func(cfg *config.Config) { cfg.Context.BaseDir = contextRoot }})
+	h := newHiveHarness(t, engineOptions{
+		cfg:   func(cfg *config.Config) { cfg.Context.BaseDir = contextRoot },
+		chats: chatRecords{fakeChatSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}}},
+	})
 	h.save(t, hiveSessions...)
 	forwardDriveChanges(t.Context(), h.engine.Bus(), bus)
 	go h.engine.Bus().Start(t.Context())
@@ -182,9 +187,8 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 		names:   map[string]string{"@3": "claude", "@4": "logs"},
 	}
 	svc := newDriveService(DriveDeps{
-		Engine:   func() *hive.Engine { return h.engine },
-		Sessions: fakeChatSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
-		Events:   bus,
+		Engine: func() *hive.Engine { return h.engine },
+		Events: bus,
 	})
 	layouts := newLayoutsService(LayoutsDeps{
 		Callers: svc, Terminals: terminals, Events: bus,
@@ -195,7 +199,7 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 			return nil
 		},
 	})
-	return driveFixture{svc: svc, signals: signals, harness: h, terminals: terminals, layouts: layouts}
+	return driveFixture{svc: svc, docs: agentDocuments{svc}, signals: signals, harness: h, terminals: terminals, layouts: layouts}
 }
 
 func (f driveFixture) contextDir() string { return f.harness.cfg.ContextDir() }
@@ -209,19 +213,83 @@ func mustSpace(space drive.Space, err error) drive.Space {
 
 var wsSpace = mustSpace(drive.WorkspaceSpace("ws"))
 
+// agentDocuments runs the engine's document calls for a caller the desktop
+// resolves, as an agent's tool call does, so the tab and review tests can set
+// up documents.
+type agentDocuments struct{ svc *DriveService }
+
+func (a agentDocuments) caller(ctx context.Context, session string) (drivesvc.Caller, *drivesvc.Service, error) {
+	c, err := a.svc.resolve(ctx, session)
+	if err != nil {
+		return drivesvc.Caller{}, nil, err
+	}
+	return drivesvc.Caller{Space: c.space, Author: c.author}, a.svc.engine().Drive(), nil
+}
+
+func (a agentDocuments) ListDocuments(ctx context.Context, session, path string, tree bool) (drive.Space, drive.Entry, error) {
+	c, d, err := a.caller(ctx, session)
+	if err != nil {
+		return drive.Space{}, drive.Entry{}, err
+	}
+	entry, err := d.ListDocuments(ctx, c, path, tree)
+	return c.Space, entry, opErr(err)
+}
+
+func (a agentDocuments) ReadDocument(ctx context.Context, session, path string) (drive.Entry, []byte, error) {
+	c, d, err := a.caller(ctx, session)
+	if err != nil {
+		return drive.Entry{}, nil, err
+	}
+	entry, body, err := d.GetDocument(ctx, c, path)
+	return entry, body, opErr(err)
+}
+
+func (a agentDocuments) WriteDocument(ctx context.Context, session, path string, body []byte) (drive.Entry, error) {
+	c, d, err := a.caller(ctx, session)
+	if err != nil {
+		return drive.Entry{}, err
+	}
+	entry, err := d.PutDocument(ctx, c, path, body)
+	return entry, opErr(err)
+}
+
+func (a agentDocuments) MoveDocument(ctx context.Context, session, from, to string) (drive.Entry, error) {
+	c, d, err := a.caller(ctx, session)
+	if err != nil {
+		return drive.Entry{}, err
+	}
+	entry, err := d.MoveDocument(ctx, c, from, to)
+	return entry, opErr(err)
+}
+
+func (a agentDocuments) DeleteDocument(ctx context.Context, session, path string) error {
+	c, d, err := a.caller(ctx, session)
+	if err != nil {
+		return err
+	}
+	return opErr(d.DeleteDocument(ctx, c, path))
+}
+
+func opErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fromOpError(err, "drive call")
+}
+
 func TestDocumentsOfAnUnknownSessionAreNotFound(t *testing.T) {
 	f := newDriveFixture(t)
 	ctx := t.Context()
 
-	_, _, err := f.svc.ListDocuments(ctx, "99", "", false)
+	_, _, err := f.docs.ListDocuments(ctx, "99", "", false)
 	assert.Equal(t, KindNotFound, KindOf(err))
-	_, _, err = f.svc.ReadDocument(ctx, "99", "plan.md")
+	_, _, err = f.docs.ReadDocument(ctx, "99", "plan.md")
 	assert.Equal(t, KindNotFound, KindOf(err))
-	_, err = f.svc.WriteDocument(ctx, "99", "plan.md", []byte("x"))
+	_, err = f.docs.WriteDocument(ctx, "99", "plan.md", []byte("x"))
 	assert.Equal(t, KindNotFound, KindOf(err))
-	_, err = f.svc.MoveDocument(ctx, "99", "plan.md", "b.md")
+	_, err = f.docs.MoveDocument(ctx, "99", "plan.md", "b.md")
 	assert.Equal(t, KindNotFound, KindOf(err))
-	assert.Equal(t, KindNotFound, KindOf(f.svc.DeleteDocument(ctx, "99", "plan.md")))
+	assert.Equal(t, KindNotFound, KindOf(f.docs.DeleteDocument(ctx, "99", "plan.md")))
 }
 
 func TestOpenTabResolvesAndPublishes(t *testing.T) {
@@ -234,7 +302,7 @@ func TestOpenTabResolvesAndPublishes(t *testing.T) {
 	_, err = f.openTab(ctx, "1", "drive", "ghost", "")
 	assert.Equal(t, KindNotFound, KindOf(err), "an unknown path is not found")
 
-	_, err = f.svc.WriteDocument(ctx, "1", "plans/auth.md", []byte("x"))
+	_, err = f.docs.WriteDocument(ctx, "1", "plans/auth.md", []byte("x"))
 	require.NoError(t, err)
 	path, err = f.openTab(ctx, "1", "drive", "plans/auth.md", "beside")
 	require.NoError(t, err)
@@ -413,7 +481,7 @@ func TestOneWritePublishesOneDriveChangedWithItsAuthor(t *testing.T) {
 	f := newDriveFixture(t)
 	ctx := t.Context()
 
-	_, err := f.svc.WriteDocument(ctx, "1", "plan.md", []byte("x"))
+	_, err := f.docs.WriteDocument(ctx, "1", "plan.md", []byte("x"))
 	require.NoError(t, err)
 	f.harness.engine.Bus().PublishDriveChanged(hiveevents.DriveChangedPayload{Space: "sentinel"})
 
@@ -436,14 +504,14 @@ func TestDocumentFromAHiveSessionIsFiledUnderItsRepository(t *testing.T) {
 	f := newDriveFixture(t, siteSession)
 	ctx := t.Context()
 
-	_, err := f.svc.WriteDocument(ctx, "/work/site-abc123/cmd/api", "plan.md", []byte("x"))
+	_, err := f.docs.WriteDocument(ctx, "/work/site-abc123/cmd/api", "plan.md", []byte("x"))
 	require.NoError(t, err)
 	require.FileExists(t, filepath.Join(f.contextDir(), "acme", "site", "plan.md"))
 
 	updates := f.signals.waitUpdates(t, 1)
 	assert.Equal(t, events.DriveChanged{Space: "acme/site", Paths: []string{"plan.md"}, HiveSession: "abc123"}, updates[0])
 
-	_, body, err := f.svc.ReadDocument(ctx, "/work/site-abc123", "plan.md")
+	_, body, err := f.docs.ReadDocument(ctx, "/work/site-abc123", "plan.md")
 	require.NoError(t, err)
 	assert.Equal(t, "x", string(body))
 }
@@ -458,32 +526,12 @@ func TestHiveSessionsOfOneRepositoryShareItsDocuments(t *testing.T) {
 	f := newDriveFixture(t, siteSession, other)
 	ctx := t.Context()
 
-	_, err := f.svc.WriteDocument(ctx, siteSession.Path, "plan.md", []byte("x"))
+	_, err := f.docs.WriteDocument(ctx, siteSession.Path, "plan.md", []byte("x"))
 	require.NoError(t, err)
 
-	_, body, err := f.svc.ReadDocument(ctx, other.Path, "plan.md")
+	_, body, err := f.docs.ReadDocument(ctx, other.Path, "plan.md")
 	require.NoError(t, err)
 	assert.Equal(t, "x", string(body))
-}
-
-func TestCallerResolvesAChatWithoutTheHiveEngine(t *testing.T) {
-	svc := newDriveService(DriveDeps{
-		Engine:   func() *hive.Engine { return nil },
-		Sessions: fakeChatSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
-		Events:   newTestBus(t),
-	})
-	ctx := t.Context()
-
-	chat, err := svc.resolve(ctx, "1")
-	require.NoError(t, err)
-	assert.Equal(t, "1", chat.author.Session)
-
-	global, err := svc.resolve(ctx, "global")
-	require.NoError(t, err)
-	assert.Equal(t, drive.Shared, global.space)
-
-	_, err = svc.resolve(ctx, "abc123")
-	assert.Equal(t, KindUnavailable, KindOf(err), "a hive session needs the engine")
 }
 
 func TestSessionArgumentThatResolvesToNothing(t *testing.T) {
@@ -494,20 +542,20 @@ func TestSessionArgumentThatResolvesToNothing(t *testing.T) {
 	f := newDriveFixture(t, siteSession, noRemote)
 	ctx := t.Context()
 
-	_, err := f.svc.WriteDocument(ctx, "/somewhere/else", "plan.md", []byte("x"))
+	_, err := f.docs.WriteDocument(ctx, "/somewhere/else", "plan.md", []byte("x"))
 	assert.Equal(t, KindNotFound, KindOf(err), "a directory in no checkout is not filed as shared")
 	require.ErrorContains(t, err, "global", "the error names the way out")
 
-	_, err = f.svc.WriteDocument(ctx, "site-abc123", "plan.md", []byte("x"))
+	_, err = f.docs.WriteDocument(ctx, "site-abc123", "plan.md", []byte("x"))
 	assert.Equal(t, KindNotFound, KindOf(err), "not a chat id or an absolute path, so a session id that names no session")
 
-	_, err = f.svc.WriteDocument(ctx, "abc123", "plan.md", []byte("x"))
+	_, err = f.docs.WriteDocument(ctx, "abc123", "plan.md", []byte("x"))
 	require.NoError(t, err, "a Code session's HIVE_AGENT_SESSION is its session id")
 
-	_, err = f.svc.WriteDocument(ctx, "/work/scratch", "plan.md", []byte("x"))
+	_, err = f.docs.WriteDocument(ctx, "/work/scratch", "plan.md", []byte("x"))
 	assert.Equal(t, KindInvalid, KindOf(err), "a session whose remote names no repository")
 
-	_, err = f.svc.WriteDocument(ctx, " 1 ", "plan.md", []byte("x"))
+	_, err = f.docs.WriteDocument(ctx, " 1 ", "plan.md", []byte("x"))
 	require.NoError(t, err, "a chat id still resolves, as HIVE_AGENT_SESSION carries it")
 }
 
@@ -515,9 +563,9 @@ func TestAgentsOutsideEverySessionShareTheSharedSpace(t *testing.T) {
 	f := newDriveFixture(t, siteSession)
 	ctx := t.Context()
 
-	_, err := f.svc.WriteDocument(ctx, "global", "notes.md", []byte("x"))
+	_, err := f.docs.WriteDocument(ctx, "global", "notes.md", []byte("x"))
 	require.NoError(t, err)
-	_, err = f.svc.WriteDocument(ctx, " global ", "notes.md", []byte("y"))
+	_, err = f.docs.WriteDocument(ctx, " global ", "notes.md", []byte("y"))
 	require.NoError(t, err, "a second global agent writes to the same document")
 
 	root, err := f.svc.Tree(ctx, drive.SharedKey)
@@ -547,15 +595,12 @@ func TestOpenTabNamesTheHiveSession(t *testing.T) {
 func TestDriveIsUnavailableBeforeTheEngineStarts(t *testing.T) {
 	t.Parallel()
 	svc := newDriveService(DriveDeps{
-		Engine:   func() *hive.Engine { return nil },
-		Sessions: fakeChatSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
-		Events:   newTestBus(t),
+		Engine: func() *hive.Engine { return nil },
+		Events: newTestBus(t),
 	})
 	ctx := t.Context()
 
-	_, _, err := svc.ReadDocument(ctx, "1", "plan.md")
-	assert.Equal(t, KindUnavailable, KindOf(err))
-	_, err = svc.WriteDocument(ctx, "/work/site-abc123", "plan.md", []byte("x"))
+	_, err := svc.tabCaller(ctx, "1")
 	assert.Equal(t, KindUnavailable, KindOf(err))
 	_, err = svc.Spaces(ctx)
 	assert.Equal(t, KindUnavailable, KindOf(err))
@@ -908,4 +953,12 @@ func TestDriveLocateAndReveal(t *testing.T) {
 	assert.Equal(t, []string{filepath.Join(spaceDir, "plans")}, revealed)
 	assert.Equal(t, KindNotFound, KindOf(f.svc.Reveal(ctx, "workspaces/ws", "ghost.md")))
 	assert.Len(t, revealed, 1, "a path that is not there is never handed to the file manager")
+}
+
+// errorMessage is what the UI shows: the message alone, without the cause.
+func errorMessage(t *testing.T, err error) string {
+	t.Helper()
+	appErr, ok := errors.AsType[*Error](err)
+	require.True(t, ok, "%v is not an app error", err)
+	return appErr.Msg
 }

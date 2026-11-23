@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
+	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	"github.com/colonyops/hive/internal/hive/events"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/store"
@@ -88,6 +89,7 @@ type engineOptions struct {
 	mux   sessionsvc.Multiplexer
 	exec  executil.Executor
 	panes terminal.PaneSource
+	chats drivesvc.Chats
 }
 
 type hiveHarness struct {
@@ -132,6 +134,7 @@ func newHiveHarness(t *testing.T, opts engineOptions) *hiveHarness {
 		PaneSource: opts.panes,
 		DataDir:    dataDir,
 		Logger:     zerolog.Nop(),
+		Chats:      opts.chats,
 	})
 	require.NoError(t, err)
 	return h
