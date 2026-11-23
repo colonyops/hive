@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 )
@@ -27,7 +28,7 @@ func TestSentinelsSurviveTheWire(t *testing.T) {
 		{fmt.Errorf("get session: %w", session.ErrNotFound), session.ErrNotFound, connect.CodeNotFound},
 		{fmt.Errorf("rename: %w", session.ErrDuplicateName), session.ErrDuplicateName, connect.CodeAlreadyExists},
 		{wire.ErrRemoteRequired, wire.ErrRemoteRequired, connect.CodeInvalidArgument},
-		{fmt.Errorf("%w: it is empty", session.ErrInvalidTag), session.ErrInvalidTag, connect.CodeInvalidArgument},
+		{fmt.Errorf("%w: it is empty", tagset.ErrInvalid), tagset.ErrInvalid, connect.CodeInvalidArgument},
 		{fmt.Errorf("session is recycled: %w", session.ErrNotActive), session.ErrNotActive, connect.CodeFailedPrecondition},
 		{errors.New("disk full"), nil, connect.CodeInternal},
 	} {
@@ -41,8 +42,8 @@ func TestSentinelsSurviveTheWire(t *testing.T) {
 }
 
 func TestInvalidArgumentSentinelsStayApart(t *testing.T) {
-	require.NotErrorIs(t, roundTrip(fmt.Errorf("%w: it is empty", session.ErrInvalidTag)), wire.ErrRemoteRequired)
-	require.NotErrorIs(t, roundTrip(wire.ErrRemoteRequired), session.ErrInvalidTag)
+	require.NotErrorIs(t, roundTrip(fmt.Errorf("%w: it is empty", tagset.ErrInvalid)), wire.ErrRemoteRequired)
+	require.NotErrorIs(t, roundTrip(wire.ErrRemoteRequired), tagset.ErrInvalid)
 }
 
 func TestLaunchErrorKeepsEveryFieldAndItsCause(t *testing.T) {

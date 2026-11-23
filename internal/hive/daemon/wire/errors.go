@@ -8,6 +8,7 @@ import (
 
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 )
@@ -41,14 +42,14 @@ func ToConnectError(err error) error {
 		code = connect.CodeNotFound
 	case errors.Is(err, session.ErrDuplicateName):
 		code = connect.CodeAlreadyExists
-	case errors.Is(err, ErrRemoteRequired), errors.Is(err, session.ErrInvalidTag):
+	case errors.Is(err, ErrRemoteRequired), errors.Is(err, tagset.ErrInvalid):
 		code = connect.CodeInvalidArgument
 	case hasLaunch || hasCreate, errors.Is(err, session.ErrNotActive):
 		code = connect.CodeFailedPrecondition
 	}
 
 	out := connect.NewError(code, err)
-	if errors.Is(err, session.ErrInvalidTag) {
+	if errors.Is(err, tagset.ErrInvalid) {
 		addDetail(out, &daemonv1.InvalidTagDetail{})
 	}
 	if hasLaunch {
@@ -90,7 +91,7 @@ func errText(err error) string {
 
 // FromConnectError rebuilds the Go error a client expects from a Connect
 // error. errors.Is matches session.ErrNotFound, session.ErrDuplicateName,
-// session.ErrInvalidTag, session.ErrNotActive, and ErrRemoteRequired by code
+// tagset.ErrInvalid, session.ErrNotActive, and ErrRemoteRequired by code
 // and detail;
 // errors.As finds a rebuilt LaunchError or CreateSessionError;
 // connect.CodeOf still reads the code.
@@ -157,7 +158,7 @@ func sentinelFor(code connect.Code, invalidTag, launchOrCreate bool) error {
 		return session.ErrDuplicateName
 	case connect.CodeInvalidArgument:
 		if invalidTag {
-			return session.ErrInvalidTag
+			return tagset.ErrInvalid
 		}
 		return ErrRemoteRequired
 	case connect.CodeFailedPrecondition:

@@ -35,7 +35,7 @@ func (h *Handlers) TaskCreate(ctx context.Context, in tasks.TaskCreateIn) (tasks
 			}
 		}
 		item, err := h.engine.HC().CreateItem(ctx, repo, hc.CreateItemInput{
-			Title: in.Title, Desc: in.Desc, Type: itemType, ParentID: in.ParentID, SessionID: assignee,
+			Title: in.Title, Desc: in.Desc, Type: itemType, ParentID: in.ParentID, SessionID: assignee, Tags: in.Tags,
 		})
 		if err != nil {
 			return tasks.TaskListOut{}, opError(err, "create item")
@@ -43,7 +43,7 @@ func (h *Handlers) TaskCreate(ctx context.Context, in tasks.TaskCreateIn) (tasks
 		return tasks.TaskListOut{Tasks: []hc.Item{item}}, nil
 	}
 
-	root := hc.CreateInput{Ref: in.Ref, Title: in.Title, Desc: in.Desc, Type: itemType}
+	root := hc.CreateInput{Ref: in.Ref, Title: in.Title, Desc: in.Desc, Type: itemType, Tags: in.Tags}
 	if root.Children, err = decodeChildren(in.Children); err != nil {
 		return tasks.TaskListOut{}, err
 	}
@@ -111,7 +111,7 @@ func (h *Handlers) TaskList(ctx context.Context, in tasks.TaskListIn) (tasks.Tas
 	if err != nil {
 		return tasks.TaskListOut{}, err
 	}
-	filter := hc.ListFilter{EpicID: in.EpicID, SessionID: sessionID}
+	filter := hc.ListFilter{EpicID: in.EpicID, SessionID: sessionID, Tags: in.Tags}
 	if !in.AllRepos {
 		filter.RepoKey = h.scope(ctx, in.Repo, in.EpicID, c)
 	}
@@ -231,10 +231,11 @@ func (h *Handlers) TaskUpdate(ctx context.Context, in tasks.TaskUpdateIn) (hc.It
 		update.SessionID = &empty
 	}
 	update.Title, update.Desc = in.Title, in.Desc
+	update.ClearTags, update.AddTags, update.RemoveTags = in.ClearTags, in.AddTag, in.RemoveTag
 
 	// Field changes go first so that a refused one leaves the blockers as
 	// they were.
-	fields := update != (hc.ItemUpdate{})
+	fields := !update.IsZero()
 	var item hc.Item
 	if fields {
 		var err error

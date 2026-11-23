@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 )
 
 type editSessionField int
@@ -82,13 +83,13 @@ func (mc *ModalCoordinator) editSessionRequest() (editSessionRequest, error) {
 	if err := session.ValidateName(name); err != nil {
 		return editSessionRequest{}, err
 	}
-	tags, err := session.ParseTags(mc.EditTags.Value())
+	tags, err := tagset.Parse(mc.EditTags.Value())
 	if err != nil {
 		return editSessionRequest{}, err
 	}
 	// A stored tag that predates validation does not normalize, and the
 	// parsed tags can never equal it, so any save rewrites the tags.
-	original, err := session.NormalizeTags(mc.EditOrigTags)
+	original, err := tagset.Normalize(mc.EditOrigTags)
 	return editSessionRequest{
 		sessionID: mc.EditSessionID,
 		name:      name,

@@ -38,7 +38,8 @@ type TaskCreateIn struct {
 	Type     string           `json:"type,omitempty"     jsonschema:"epic for a root item, or task (default)."`
 	Desc     string           `json:"desc,omitempty"     jsonschema:"The item's description."`
 	ParentID string           `json:"parentId,omitempty" jsonschema:"The parent item's id. A task without children needs one."`
-	Children []map[string]any `json:"children,omitempty" jsonschema:"Items to create under this one, each {title, type, desc, ref, blockers, assignSession, children}; type defaults to task. ref is a label local to this call; blockers lists the refs that must finish first. Nesting goes up to 10 levels."`
+	Tags     []string         `json:"tags,omitempty"     jsonschema:"Tags for the item. Tags compare case-insensitively, keep the first spelling, are at most 40 characters and cannot contain commas."`
+	Children []map[string]any `json:"children,omitempty" jsonschema:"Items to create under this one, each {title, type, desc, tags, ref, blockers, assignSession, children}; type defaults to task. ref is a label local to this call; blockers lists the refs that must finish first. Nesting goes up to 10 levels."`
 
 	AssignSession string `json:"assignSession,omitempty" jsonschema:"Assign the item to this hive session or chat id (a local:<id> reference is accepted). The session must exist. For a tree, set it on each child instead."`
 }
@@ -75,12 +76,13 @@ var TaskCreate = ops.Spec[TaskCreateIn]{
 }
 
 type TaskListIn struct {
-	Caller    string `json:"caller"              jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value."`
-	EpicID    string `json:"epicId,omitempty"    jsonschema:"Only the items of this epic."`
-	Status    string `json:"status,omitempty"    jsonschema:"Only items in this status, or all."`
-	SessionID string `json:"sessionId,omitempty" jsonschema:"Only items assigned to this session or chat id. A local:<id> reference is accepted."`
-	Repo      string `json:"repo,omitempty"      jsonschema:"Only items of this repository, as owner/repo. Defaults to the caller session's repository."`
-	AllRepos  bool   `json:"allRepos,omitempty"  jsonschema:"Items of every repository; repo is ignored."`
+	Caller    string   `json:"caller"              jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value."`
+	EpicID    string   `json:"epicId,omitempty"    jsonschema:"Only the items of this epic."`
+	Status    string   `json:"status,omitempty"    jsonschema:"Only items in this status, or all."`
+	SessionID string   `json:"sessionId,omitempty" jsonschema:"Only items assigned to this session or chat id. A local:<id> reference is accepted."`
+	Repo      string   `json:"repo,omitempty"      jsonschema:"Only items of this repository, as owner/repo. Defaults to the caller session's repository."`
+	AllRepos  bool     `json:"allRepos,omitempty"  jsonschema:"Items of every repository; repo is ignored."`
+	Tags      []string `json:"tags,omitempty"      jsonschema:"Only items carrying every one of these tags. Tags compare case-insensitively."`
 }
 
 var TaskList = ops.Spec[TaskListIn]{
@@ -104,22 +106,26 @@ var TaskGet = ops.Spec[TaskGetIn]{
 }
 
 type TaskUpdateIn struct {
-	Caller        string  `json:"caller"                  jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value."`
-	TaskID        string  `json:"taskId"                  jsonschema:"The item's id."`
-	Status        string  `json:"status,omitempty"        jsonschema:"The new status."`
-	Title         *string `json:"title,omitempty"         jsonschema:"The new title."`
-	Desc          *string `json:"desc,omitempty"          jsonschema:"The new description."`
-	Assign        bool    `json:"assign,omitempty"        jsonschema:"Assign the item to the caller, which must be a hive session or a chat."`
-	AssignSession string  `json:"assignSession,omitempty" jsonschema:"Assign the item to this hive session or chat id (a local:<id> reference is accepted), for a caller that hands out work. The session must exist."`
-	Unassign      bool    `json:"unassign,omitempty"      jsonschema:"Remove the item's assignment."`
-	AddBlocker    string  `json:"addBlocker,omitempty"    jsonschema:"The id of an item that must finish before this one."`
-	RemoveBlocker string  `json:"removeBlocker,omitempty" jsonschema:"The id of a blocker to remove."`
+	Caller        string   `json:"caller"                  jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value."`
+	TaskID        string   `json:"taskId"                  jsonschema:"The item's id."`
+	Status        string   `json:"status,omitempty"        jsonschema:"The new status."`
+	Title         *string  `json:"title,omitempty"         jsonschema:"The new title."`
+	Desc          *string  `json:"desc,omitempty"          jsonschema:"The new description."`
+	Assign        bool     `json:"assign,omitempty"        jsonschema:"Assign the item to the caller, which must be a hive session or a chat."`
+	AssignSession string   `json:"assignSession,omitempty" jsonschema:"Assign the item to this hive session or chat id (a local:<id> reference is accepted), for a caller that hands out work. The session must exist."`
+	Unassign      bool     `json:"unassign,omitempty"      jsonschema:"Remove the item's assignment."`
+	AddBlocker    string   `json:"addBlocker,omitempty"    jsonschema:"The id of an item that must finish before this one."`
+	RemoveBlocker string   `json:"removeBlocker,omitempty" jsonschema:"The id of a blocker to remove."`
+	ClearTags     bool     `json:"clearTags,omitempty"     jsonschema:"Remove every tag, before addTag and removeTag apply."`
+	AddTag        []string `json:"addTag,omitempty"        jsonschema:"Tags to add. A tag the item already carries is kept as it is."`
+	RemoveTag     []string `json:"removeTag,omitempty"     jsonschema:"Tags to remove, after the adds. A tag the item does not carry is ignored."`
 }
 
 func (in TaskUpdateIn) Validate() error {
 	switch {
-	case in.Status == "" && in.Title == nil && in.Desc == nil && !in.Assign && in.AssignSession == "" && !in.Unassign && in.AddBlocker == "" && in.RemoveBlocker == "":
-		return errors.New("give at least one of status, title, desc, assign, assignSession, unassign, addBlocker or removeBlocker")
+	case in.Status == "" && in.Title == nil && in.Desc == nil && !in.Assign && in.AssignSession == "" && !in.Unassign && in.AddBlocker == "" && in.RemoveBlocker == "" &&
+		!in.ClearTags && len(in.AddTag) == 0 && len(in.RemoveTag) == 0:
+		return errors.New("give at least one of status, title, desc, assign, assignSession, unassign, addBlocker, removeBlocker, clearTags, addTag or removeTag")
 	case countTrue(in.Assign, in.AssignSession != "", in.Unassign) > 1:
 		return errors.New("assign, assignSession and unassign cannot be combined")
 	case in.AddBlocker != "" && in.RemoveBlocker != "":
@@ -132,9 +138,10 @@ func (in TaskUpdateIn) Validate() error {
 
 var TaskUpdate = ops.Spec[TaskUpdateIn]{
 	Name: "task.update", Owner: ops.OwnerEngine, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
-	Summary: "Change a task's status, text, assignment or blockers",
+	Summary: "Change a task's status, text, assignment, tags or blockers",
 	Guidance: "Apply the changes given and answer with the item as it is now. Setting an epic to done or cancelled " +
-		"sets every unfinished item under it the same way. A blocker that would make a cycle is a conflict, and the " +
+		"sets every unfinished item under it the same way. Tag changes apply in order: clearTags, then addTag, then removeTag; " +
+		"two agents that each add a tag both keep theirs. A blocker that would make a cycle is a conflict, and the " +
 		"other changes of the call are kept.",
 	Args:   []string{"taskId"},
 	Fields: ops.Constraints{"status": {Enum: statuses}},

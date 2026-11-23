@@ -15,6 +15,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/platform/git"
@@ -388,7 +389,7 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 		return invalidf("nothing to update: provide --name, --group, --clear-group, or a tag flag")
 	}
 	// Checked before any write, so a bad tag leaves the session untouched.
-	addTags, err := session.NormalizeTags(cmd.updateAddTags)
+	addTags, err := tagset.Normalize(cmd.updateAddTags)
 	if err != nil {
 		return err
 	}

@@ -181,6 +181,9 @@ func renderColoredTree(w io.Writer, items []hc.Item) {
 		if item.Blocked {
 			extras = append(extras, warningStyle.Render("[blocked]"))
 		}
+		if len(item.Tags) > 0 {
+			extras = append(extras, mutedStyle.Render(formatTags(item.Tags)))
+		}
 
 		line := prefix + mutedStyle.Render(connector) + symbol + " " + title + " " + id
 		if len(extras) > 0 {
@@ -206,6 +209,10 @@ func renderColoredTree(w io.Writer, items []hc.Item) {
 	for _, root := range roots {
 		walk(root, "", "")
 	}
+}
+
+func formatTags(tags []string) string {
+	return "#" + strings.Join(tags, " #")
 }
 
 // renderMarkdown renders markdown to w using glamour when w is a TTY,
@@ -256,6 +263,9 @@ func renderItem(w io.Writer, item hc.Item, comments []hc.Comment, epicTitle stri
 		statusLine += " " + assignStyle.Render("→ "+item.SessionID)
 	}
 	_, _ = fmt.Fprintf(w, "%s%s\n", indent, statusLine)
+	if len(item.Tags) > 0 {
+		_, _ = fmt.Fprintf(w, "%s%s\n", indent, mutedStyle.Render(formatTags(item.Tags)))
+	}
 
 	// Epic breadcrumb
 	if epicTitle != "" {

@@ -27,7 +27,7 @@ Every command prints JSON Lines when stdout is not a terminal, as for an agent o
 hive hc create <title> --type epic                     Create an epic                  task_create
 hive hc create <title> --parent-id <id>                Create a task under a parent    task_create
 hive hc create --input -                               Create a tree from stdin JSON   task_create
-hive hc list [epic-id] [--status all]                  List items (open by default)    task_list
+hive hc list [epic-id] [--status all] [--tags t]       List items (open by default)    task_list
 hive hc get <task-id>                                  Show item, then its comments    task_get
 hive hc update <task-id> [--status s] [--assign] ...   Change an item                  task_update
 hive hc next <epic-id> [--assign]                      Next actionable task, or claim  task_next
@@ -136,7 +136,8 @@ Each command takes its fields as flags, or the whole input as JSON with `--input
 - `--desc <text>` — item description
 - `--parent-id <id>` — parent item (required for a task with no children)
 - `--assign-session <id>` — assign the item to a session or chat (bare id or `local:<id>`); the session must exist. Not with `children`: set it on each child instead
-- `children` — set through `--input`: a list of `{title, type, desc, ref, blockers, assignSession, children}`. An item with children must be an epic. `ref` is a label local to the call; `blockers` lists refs that must finish first.
+- `--tags <tag>` — tags for the item, repeatable
+- `children` — set through `--input`: a list of `{title, type, desc, tags, ref, blockers, assignSession, children}`. An item with children must be an epic. `ref` is a label local to the call; `blockers` lists refs that must finish first.
 - `--repo owner/repo` — the repository (default: from the caller)
 
 Output: every created item, root first.
@@ -146,6 +147,7 @@ Output: every created item, root first.
 - `[epic-id]` — filter by epic (returns children only, not the epic itself)
 - `--status open|in_progress|done|cancelled|all` — default: open
 - `--session-id <id>` — filter by assignee (bare or `local:<id>`)
+- `--tags <tag>` — only items carrying every tag given, repeatable
 - `--all-repos` — every repository
 
 ### `hive hc get <task-id>`
@@ -164,6 +166,8 @@ Output: the item first, then comments in chronological order.
 `--assign`, `--assign-session`, and `--unassign` are mutually exclusive.
 - `--add-blocker <id>` — an item that must finish first; a cycle is a conflict (exit 4)
 - `--remove-blocker <id>` — remove an explicit blocker
+- `--add-tag <tag>` / `--remove-tag <tag>` — add or remove tags, repeatable
+- `--clear-tags` — remove every tag (applies before the adds and removes)
 
 **Cascade**: when an epic transitions to `done` or `cancelled`, all non-terminal descendants are automatically set to the same status. Items already in a terminal state are not changed.
 
@@ -211,6 +215,7 @@ Output: `{"action":"pruned","count":N}` (`"would prune"` for a dry run)
   "desc": "Optional description",
   "type": "task",
   "status": "in_progress",
+  "tags": ["backend"],
   "depth": 1,
   "created_at": "2026-01-01T00:00:00Z",
   "updated_at": "2026-01-01T01:00:00Z"
@@ -219,6 +224,7 @@ Output: `{"action":"pruned","count":N}` (`"would prune"` for a dry run)
 
 Epics have `type: "epic"` and empty `epic_id` (they are their own root).
 
+Tags compare case-insensitively, keep the first spelling, are at most 40 characters and cannot contain commas.
 ## Comment Structure
 
 ```json

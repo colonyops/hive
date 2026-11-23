@@ -1,14 +1,14 @@
 -- HC Items
 
 -- name: CreateHCItem :exec
-INSERT INTO hc_items (id, repo_key, epic_id, parent_id, session_id, title, desc, type, status, depth, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO hc_items (id, repo_key, epic_id, parent_id, session_id, title, desc, type, status, depth, tags, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetHCItem :one
 SELECT * FROM hc_items WHERE id = ?;
 
 -- name: UpdateHCItem :exec
-UPDATE hc_items SET status = ?, session_id = ?, title = ?, desc = ?, updated_at = ? WHERE id = ?;
+UPDATE hc_items SET status = ?, session_id = ?, title = ?, desc = ?, tags = ?, updated_at = ? WHERE id = ?;
 
 -- name: UpdateHCItemStatusByEpicID :exec
 UPDATE hc_items

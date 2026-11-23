@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 )
 
 func TestClientCLI_UpdatesTagsOnAServer(t *testing.T) {
@@ -64,10 +65,10 @@ func TestClientCLI_RejectsAnInvalidTagBeforeWriting(t *testing.T) {
 	created := serverA.CreateSession(t, "cli-bad-tag")
 	serverA.Hive(t, "session", "update", created.ID, "--add-tag", "keep").Ok(t)
 
-	tooLong := strings.Repeat("x", session.MaxTagLength+1)
+	tooLong := strings.Repeat("x", tagset.MaxLength+1)
 	failed := NewClient(t).HiveOn(serverA, "session", "update", created.ID, "--clear-tags", "--add-tag", tooLong).Fails(t)
 
-	assert.Contains(t, failed.Stderr, session.ErrInvalidTag.Error())
+	assert.Contains(t, failed.Stderr, tagset.ErrInvalid.Error())
 	assert.Equal(t, []string{"keep"}, serverA.Show(t, created.ID).Tags)
 }
 
@@ -99,9 +100,9 @@ func TestSessionAPI_RejectsAnInvalidTag(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = api.SetSessionTags(ctx, created.ID, []string{"a,b"})
-	require.ErrorIs(t, err, session.ErrInvalidTag)
+	require.ErrorIs(t, err, tagset.ErrInvalid)
 	_, err = api.EditSessionTags(ctx, created.ID, []string{"a,b"}, nil)
-	require.ErrorIs(t, err, session.ErrInvalidTag)
+	require.ErrorIs(t, err, tagset.ErrInvalid)
 
 	assert.Equal(t, []string{"keep"}, serverA.Show(t, created.ID).Tags)
 }

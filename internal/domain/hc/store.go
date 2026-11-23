@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/colonyops/hive/internal/domain/tagset"
 )
 
 // ErrNotFound is returned when a requested item does not exist.
@@ -74,11 +76,35 @@ type Fingerprint struct {
 }
 
 // ItemUpdate carries partial updates to an Item. Nil pointer fields are not changed.
+// The tag edits apply in order: ClearTags, then AddTags, then RemoveTags.
 type ItemUpdate struct {
-	Status    *Status
-	SessionID *string
-	Title     *string
-	Desc      *string
+	Status     *Status
+	SessionID  *string
+	Title      *string
+	Desc       *string
+	ClearTags  bool
+	AddTags    []string
+	RemoveTags []string
+}
+
+// IsZero reports whether the update changes nothing.
+func (u ItemUpdate) IsZero() bool {
+	return u.Status == nil && u.SessionID == nil && u.Title == nil && u.Desc == nil &&
+		!u.ClearTags && len(u.AddTags) == 0 && len(u.RemoveTags) == 0
+}
+
+// EditsTags reports whether the update changes the item's tags.
+func (u ItemUpdate) EditsTags() bool {
+	return u.ClearTags || len(u.AddTags) > 0 || len(u.RemoveTags) > 0
+}
+
+// ApplyTags returns tags after the update's tag edits. An invalid added tag
+// is an error wrapping tagset.ErrInvalid.
+func (u ItemUpdate) ApplyTags(tags []string) ([]string, error) {
+	if u.ClearTags {
+		tags = nil
+	}
+	return tagset.Edit(tags, u.AddTags, u.RemoveTags)
 }
 
 // ListFilter controls which items are returned by ListItems.
@@ -87,6 +113,8 @@ type ListFilter struct {
 	EpicID    string
 	SessionID string
 	Status    *Status
+	// Tags keeps only items carrying every one of these tags.
+	Tags []string
 }
 
 // Matches reports whether item satisfies all non-zero filter fields.
@@ -103,7 +131,7 @@ func (f ListFilter) Matches(item Item) bool {
 	if f.Status != nil && item.Status != *f.Status {
 		return false
 	}
-	return true
+	return item.HasAllTags(f.Tags)
 }
 
 // NextFilter selects candidate items for NextItem.

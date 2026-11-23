@@ -41,6 +41,10 @@ func renderDetailContent(logger zerolog.Logger, item *hc.Item, comments []hc.Com
 	// Title
 	b.WriteString(styles.TextForegroundBoldStyle.Render(item.Title))
 	b.WriteString("\n")
+	if len(item.Tags) > 0 {
+		b.WriteString(styles.TextMutedStyle.Render("#" + strings.Join(item.Tags, " #")))
+		b.WriteString("\n")
+	}
 
 	// Description (rendered as markdown via glamour)
 	if item.Desc != "" {

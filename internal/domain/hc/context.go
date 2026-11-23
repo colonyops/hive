@@ -33,6 +33,9 @@ func (c ContextBlock) String() string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "# %s\n\n", c.Epic.Title)
+	if len(c.Epic.Tags) > 0 {
+		fmt.Fprintf(&b, "**Tags:**%s\n\n", markdownTags(c.Epic.Tags))
+	}
 	if c.Epic.Desc != "" {
 		fmt.Fprintf(&b, "%s\n\n", c.Epic.Desc)
 	}
@@ -43,7 +46,7 @@ func (c ContextBlock) String() string {
 	if len(c.MyTasks) > 0 {
 		fmt.Fprintf(&b, "## My Tasks\n\n")
 		for _, t := range c.MyTasks {
-			fmt.Fprintf(&b, "- [%s] **%s** (`%s`)\n", t.Item.Status, t.Item.Title, t.Item.ID)
+			fmt.Fprintf(&b, "- [%s] **%s** (`%s`)%s\n", t.Item.Status, t.Item.Title, t.Item.ID, markdownTags(t.Item.Tags))
 			if t.LatestComment.Message != "" {
 				fmt.Fprintf(&b, "  > %s\n", t.LatestComment.Message)
 			}
@@ -55,10 +58,18 @@ func (c ContextBlock) String() string {
 		fmt.Fprintf(&b, "## Other Open Tasks\n\n")
 		for _, item := range treeOrder(c.AllOpenTasks) {
 			indent := strings.Repeat("  ", max(0, item.Depth-1))
-			fmt.Fprintf(&b, "%s- [%s] %s (`%s`)\n", indent, item.Status, item.Title, item.ID)
+			fmt.Fprintf(&b, "%s- [%s] %s (`%s`)%s\n", indent, item.Status, item.Title, item.ID, markdownTags(item.Tags))
 		}
 	}
 
+	return b.String()
+}
+
+func markdownTags(tags []string) string {
+	var b strings.Builder
+	for _, tag := range tags {
+		fmt.Fprintf(&b, " `#%s`", tag)
+	}
 	return b.String()
 }
 

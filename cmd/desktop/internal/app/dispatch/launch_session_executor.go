@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
@@ -190,7 +191,7 @@ func renderTags(templates []string, data OutputData) ([]string, error) {
 		}
 		rendered = append(rendered, tag)
 	}
-	tags, err := session.NormalizeTags(rendered)
+	tags, err := tagset.Normalize(rendered)
 	if err != nil {
 		return nil, fmt.Errorf("launch-session: tags: %w", err)
 	}

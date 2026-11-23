@@ -410,3 +410,35 @@ func TestMountedToolsAnswer(t *testing.T) {
 	require.True(t, ok, text)
 	assert.Equal(t, ops.KindNotFound, kind)
 }
+
+func TestTaskTags(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+
+	created, err := f.h.TaskCreate(ctx, tasks.TaskCreateIn{
+		Caller: f.sess.ID, Title: "UI", Type: "epic", Tags: []string{"frontend"},
+		Children: children(t, `[{"title":"Button","tags":["Frontend","small"]},{"title":"API"}]`),
+	})
+	require.NoError(t, err)
+	require.Len(t, created.Tasks, 3)
+	assert.Equal(t, []string{"frontend"}, created.Tasks[0].Tags)
+	assert.Equal(t, []string{"Frontend", "small"}, created.Tasks[1].Tags)
+
+	list, err := f.h.TaskList(ctx, tasks.TaskListIn{Caller: f.sess.ID, Tags: []string{"FRONTEND"}})
+	require.NoError(t, err)
+	assert.Len(t, list.Tasks, 2, "the epic and the tagged child")
+
+	api := created.Tasks[2]
+	updated, err := f.h.TaskUpdate(ctx, tasks.TaskUpdateIn{Caller: f.sess.ID, TaskID: api.ID, AddTag: []string{"backend"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"backend"}, updated.Tags)
+
+	updated, err = f.h.TaskUpdate(ctx, tasks.TaskUpdateIn{Caller: f.sess.ID, TaskID: api.ID, ClearTags: true})
+	require.NoError(t, err)
+	assert.Empty(t, updated.Tags)
+
+	_, err = f.h.TaskUpdate(ctx, tasks.TaskUpdateIn{Caller: f.sess.ID, TaskID: api.ID, AddTag: []string{"a,b"}})
+	assert.Equal(t, ops.KindInvalid, kindOf(t, err))
+	_, err = f.h.TaskCreate(ctx, tasks.TaskCreateIn{Caller: f.sess.ID, Title: "Bad", Type: "epic", Tags: []string{"a,b"}})
+	assert.Equal(t, ops.KindInvalid, kindOf(t, err))
+}

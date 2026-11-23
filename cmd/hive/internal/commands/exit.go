@@ -15,6 +15,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
 	"github.com/colonyops/hive/internal/hive/diffreview"
 	"github.com/colonyops/hive/internal/hive/driveremote"
@@ -147,7 +148,7 @@ func ErrorKind(err error) ops.Kind {
 		errors.Is(err, drive.ErrNotFound),
 		errors.Is(err, kv.ErrNotFound):
 		return ops.KindNotFound
-	case errors.Is(err, session.ErrInvalidTag),
+	case errors.Is(err, tagset.ErrInvalid),
 		errors.Is(err, wire.ErrRemoteRequired),
 		errors.Is(err, hc.ErrInvalidItemType),
 		errors.Is(err, hc.ErrInvalidStatus),

@@ -16,6 +16,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 	"github.com/colonyops/hive/internal/hive"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/ops"
@@ -170,7 +171,8 @@ func opError(err error, what string) error {
 		kind = ops.KindNotFound
 	case errors.Is(err, hc.ErrCyclicDependency):
 		kind = ops.KindConflict
-	case errors.Is(err, hc.ErrInvalidTree), errors.Is(err, hc.ErrInvalidItemType), errors.Is(err, hc.ErrInvalidStatus):
+	case errors.Is(err, hc.ErrInvalidTree), errors.Is(err, hc.ErrInvalidItemType), errors.Is(err, hc.ErrInvalidStatus),
+		errors.Is(err, tagset.ErrInvalid):
 		kind = ops.KindInvalid
 	}
 	return ops.Errorf(kind, "%s: %v", what, err)

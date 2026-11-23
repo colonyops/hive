@@ -19,6 +19,7 @@ import (
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/platform/workspace"
@@ -66,7 +67,7 @@ type CreateOptions struct {
 	// When non-empty, the spawn templates use that profile's command/flags instead
 	// of the process-wide default. Must match a key in config.Agents.Profiles.
 	AgentKey string
-	// Tags are normalized with session.NormalizeTags; an invalid tag
+	// Tags are normalized with tagset.Normalize; an invalid tag
 	// fails the create.
 	Tags []string
 	// Env holds KEY=VALUE pairs for the session's tmux environment.
@@ -236,7 +237,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	if err := session.ValidateName(opts.Name); err != nil {
 		return nil, err
 	}
-	tags, err := session.NormalizeTags(opts.Tags)
+	tags, err := tagset.Normalize(opts.Tags)
 	if err != nil {
 		return nil, err
 	}
@@ -621,7 +622,7 @@ func (s *Service) SetSessionGroup(ctx context.Context, id, group string) error {
 
 // SetSessionTags replaces a session's tags.
 func (s *Service) SetSessionTags(ctx context.Context, id string, tags []string) (session.Session, error) {
-	normalized, err := session.NormalizeTags(tags)
+	normalized, err := tagset.Normalize(tags)
 	if err != nil {
 		return session.Session{}, err
 	}
