@@ -96,7 +96,7 @@ describe('DocumentReader', () => {
   it('renders a fenced Mermaid diagram in markdown as a themed SVG', async () => {
     const wrapper = await mountReader(markdownDocument('```mermaid\nflowchart LR\nA --> B\n```'))
     expect(mermaid.render).toHaveBeenCalledWith('flowchart LR\nA --> B\n', expect.objectContaining({ darkMode: true }))
-    expect(wrapper.get('[data-testid="r-markdown-mermaid-0"]').text()).toContain('Request')
+    expect(wrapper.get('[data-testid="r-markdown-fence-0-mermaid"]').text()).toContain('Request')
   })
 
   it('applies the reading settings to the markdown body', async () => {

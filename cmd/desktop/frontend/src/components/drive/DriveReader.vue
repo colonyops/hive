@@ -190,7 +190,7 @@ function pointBlock(block: HTMLElement | null): void {
   const base = root.value.getBoundingClientRect()
   const rect = block.getBoundingClientRect()
   const lineHeight = Number.parseFloat(getComputedStyle(block).lineHeight) || handleSize
-  const firstLine = block.matches('.markdown-code, table, .canvas-mermaid') ? handleSize + 8 : lineHeight
+  const firstLine = block.matches('.markdown-code, table, .canvas-fence') ? handleSize + 8 : lineHeight
   // The reader's own padding is the gutter; the narrow pane's is thinner
   // than the handle, which then overlaps the text's edge rather than clips.
   const gutter = base.left - (root.value.parentElement?.getBoundingClientRect().left ?? base.left)
@@ -260,6 +260,7 @@ function commentOnBlock(): void {
     :error="error"
     :loading="loading"
     :source-lines="sourceLines"
+    :paths="paths"
     :body-class="{ 'cursor-pointer': !!reviewStore.hovered.value }"
     @open-link="follow"
   >

@@ -222,6 +222,7 @@ function onMore(id: string): void {
             :font-size-px="prefs.fontSizePx"
             :line-height="prefs.lineHeight"
             :html-src="htmlSrc"
+            :paths="paths"
             @open-link="openLink"
           />
         </div>

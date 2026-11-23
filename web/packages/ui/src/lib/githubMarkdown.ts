@@ -22,8 +22,9 @@
 import MarkdownIt from 'markdown-it'
 import type { RenderRule } from 'markdown-it/lib/renderer.mjs'
 import type StateBlock from 'markdown-it/lib/rules_block/state_block.mjs'
-import type Token from 'markdown-it/lib/token.mjs'
+import Token from 'markdown-it/lib/token.mjs'
 import taskLists from 'markdown-it-task-lists'
+import { wikilinks, type WikilinkEnv } from './wikilinks'
 
 /**
  * Highlighted HTML for a fence, or null to keep markdown-it's escaped
@@ -218,6 +219,7 @@ const md = new MarkdownIt({
   .use(taskLists)
   .use(githubExtensions)
   .use(sourceLineAttrs)
+  .use(wikilinks)
 
 // Every code block carries a copy button. The HTML lands in a host through
 // v-html, so the button is plain markup with inline lucide icons, and the
@@ -245,7 +247,8 @@ function withCopyButton(rule: RenderRule): RenderRule {
   return (tokens, index, options, env, self) =>
     `<div class="markdown-code"${codeSourceAttrs(tokens[index], env as SourceEnv)}>${codeCopyButton}${rule(tokens, index, options, env, self)}</div>`
 }
-md.renderer.rules.fence = withCopyButton(md.renderer.rules.fence!)
+const baseFenceRule = md.renderer.rules.fence!
+md.renderer.rules.fence = withCopyButton(baseFenceRule)
 md.renderer.rules.code_block = withCopyButton(md.renderer.rules.code_block!)
 
 // Enabling HTML lets the parser distinguish comments from text. Keep the
@@ -272,33 +275,50 @@ export function renderGithubMarkdown(src: string, highlight?: Highlight): string
 }
 
 export type CanvasMarkdownPart =
-  { kind: 'html'; html: string } | { kind: 'mermaid'; source: string; lines?: [number, number] }
+  | { kind: 'html'; html: string }
+  | { kind: 'fence'; lang: string; source: string; lines?: [number, number]; codeStart?: number }
 
-function isTopLevelMermaidFence(token: Token): boolean {
-  return token.type === 'fence' && token.level === 0 && token.info.trim().toLowerCase() === 'mermaid'
+export interface CanvasRenderOptions {
+  highlight?: Highlight
+  sourceLines?: SourceLines
+  /** Top-level fences whose lang this accepts become fence parts. Default: none. */
+  isFence?: (lang: string) => boolean
+  /** Turns [[wikilinks]] on. Without it the wikilink rule does nothing. */
+  links?: { docPath: string; paths: ReadonlySet<string> }
 }
 
-export function renderCanvasMarkdown(
-  src: string,
-  highlight?: Highlight,
-  sourceLines?: SourceLines,
-): CanvasMarkdownPart[] {
-  if (!src.trim()) return []
+/** The first word of a fence's info string, lowercased. */
+function fenceLang(token: Token): string {
+  return token.info.trim().split(/\s+/, 1)[0].toLowerCase()
+}
 
-  return withHighlight(highlight, () => {
-    const env: SourceEnv = sourceLines ? { sourceLines: { ...sourceLines, lines: src.split(/\r?\n/) } } : {}
+export function renderCanvasMarkdown(src: string, options: CanvasRenderOptions = {}): CanvasMarkdownPart[] {
+  if (!src.trim()) return []
+  const { sourceLines, isFence, links } = options
+
+  return withHighlight(options.highlight, () => {
+    const env: SourceEnv & WikilinkEnv = sourceLines
+      ? { sourceLines: { ...sourceLines, lines: src.split(/\r?\n/) } }
+      : {}
+    if (links) env.links = links
     const tokens = md.parse(src, env)
     const parts: CanvasMarkdownPart[] = []
     let htmlStart = 0
 
     for (let index = 0; index < tokens.length; index++) {
       const token = tokens[index]
-      if (!isTopLevelMermaidFence(token)) continue
+      if (token.type !== 'fence' || token.level !== 0) continue
+      const lang = fenceLang(token)
+      if (!lang || !isFence?.(lang)) continue
 
       const html = md.renderer.render(tokens.slice(htmlStart, index), md.options, env)
       if (html) parts.push({ kind: 'html', html })
       const lines = sourceRange(token, env)
-      parts.push(lines ? { kind: 'mermaid', source: token.content, lines } : { kind: 'mermaid', source: token.content })
+      parts.push(
+        lines
+          ? { kind: 'fence', lang, source: token.content, lines, codeStart: lines[0] + 1 }
+          : { kind: 'fence', lang, source: token.content },
+      )
       htmlStart = index + 1
     }
 
@@ -306,4 +326,19 @@ export function renderCanvasMarkdown(
     if (html) parts.push({ kind: 'html', html })
     return parts
   })
+}
+
+/**
+ * The code block a fence part shows when nothing renders it: the same markup
+ * a code fence gets in the html parts, with the part's source lines kept.
+ */
+export function renderFenceCode(part: Extract<CanvasMarkdownPart, { kind: 'fence' }>, highlight?: Highlight): string {
+  const token = new Token('fence', 'code', 0)
+  token.info = part.lang
+  token.content = part.source
+  const attrs = part.lines
+    ? ` data-source-start="${part.lines[0]}" data-source-end="${part.lines[1]}" data-source-code-start="${part.codeStart ?? part.lines[0] + 1}"`
+    : ''
+  const code = withHighlight(highlight, () => baseFenceRule([token], 0, md.options, {}, md.renderer))
+  return `<div class="markdown-code"${attrs}>${codeCopyButton}${code}</div>`
 }

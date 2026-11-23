@@ -36,6 +36,7 @@ nav = [
     ]},
     { "Chats" = [
       "desktop/chats/agent-workspaces.md",
+      "desktop/chats/drive-fences.md",
     ]},
     { "Configuration" = [
       "desktop/configuration/settings.md",

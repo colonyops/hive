@@ -4,16 +4,15 @@ import { computed, nextTick, ref, watch } from 'vue'
 import IconMaximize from '~icons/lucide/maximize'
 import IconMinus from '~icons/lucide/minus'
 import IconPlus from '~icons/lucide/plus'
-import InlineError from './ui/InlineError.vue'
-import IconButton from './ui/IconButton.vue'
-import { renderMermaid, type MermaidPalette } from '../lib/mermaid'
-import { useHiveUiPlatform } from '../platform'
-import { lightThemes } from '../lib/themes'
+import InlineError from '../ui/InlineError.vue'
+import IconButton from '../ui/IconButton.vue'
+import { renderMermaid, type MermaidPalette } from '../../lib/mermaid'
+import { useHiveUiPlatform } from '../../platform'
+import { lightThemes } from '../../lib/themes'
+import type { FenceProps } from './registry'
 
-const props = defineProps<{
-  source: string
-  testid: string
-}>()
+// eslint-disable-next-line vue/no-unused-properties -- data and ctx are part of the FenceProps contract
+const props = defineProps<FenceProps<string>>()
 
 type Bounds = { x: number; y: number; width: number; height: number }
 type Point = { x: number; y: number }
@@ -35,6 +34,7 @@ const dragging = ref(false)
 const dragStart = ref<{ pointer: Point; view: Bounds } | null>(null)
 const { theme } = useHiveUiPlatform()
 let revision = 0
+const mermaidTestid = computed(() => `${props.testid}-mermaid`)
 
 const viewBox = computed(() => {
   const bounds = viewBounds.value
@@ -226,14 +226,14 @@ watch([() => props.source, theme], () => void render(), { immediate: true, flush
 </script>
 
 <template>
-  <div ref="root" class="canvas-mermaid" :data-testid="testid">
+  <div ref="root" class="canvas-mermaid" :data-testid="mermaidTestid">
     <template v-if="svg">
       <div
         ref="viewport"
         class="canvas-mermaid-viewport"
         :class="{ 'is-dragging': dragging }"
         :style="{ height: `${viewportHeight}px` }"
-        :data-testid="`${testid}-viewport`"
+        :data-testid="`${mermaidTestid}-viewport`"
         role="region"
         aria-label="Interactive Mermaid diagram. Drag to pan, use Control or Command with scroll to zoom, and press 0 to fit."
         tabindex="0"
@@ -247,36 +247,41 @@ watch([() => props.source, theme], () => void render(), { immediate: true, flush
       >
         <!-- eslint-disable-next-line vue/no-v-html -- Mermaid sanitizes generated SVG with securityLevel=strict and disables links. -->
         <div ref="svgHost" class="canvas-mermaid-svg" v-html="svg" />
-        <div class="canvas-mermaid-controls" :data-testid="`${testid}-controls`" @pointerdown.stop>
+        <div class="canvas-mermaid-controls" :data-testid="`${mermaidTestid}-controls`" @pointerdown.stop>
           <IconButton
             label="Zoom out"
             :icon="IconMinus"
             size="sm"
             :disabled="zoom <= minZoom"
-            :data-testid="`${testid}-zoom-out`"
+            :data-testid="`${mermaidTestid}-zoom-out`"
             @click="zoomBy(0.8)"
           />
-          <output class="canvas-mermaid-zoom" :data-testid="`${testid}-zoom`">{{ zoomLabel }}</output>
+          <output class="canvas-mermaid-zoom" :data-testid="`${mermaidTestid}-zoom`">{{ zoomLabel }}</output>
           <IconButton
             label="Zoom in"
             :icon="IconPlus"
             size="sm"
             :disabled="zoom >= maxZoom"
-            :data-testid="`${testid}-zoom-in`"
+            :data-testid="`${mermaidTestid}-zoom-in`"
             @click="zoomBy(1.25)"
           />
-          <IconButton label="Fit diagram" :icon="IconMaximize" size="sm" :data-testid="`${testid}-fit`" @click="fit" />
+          <IconButton
+            label="Fit diagram"
+            :icon="IconMaximize"
+            size="sm"
+            :data-testid="`${mermaidTestid}-fit`"
+            @click="fit"
+          />
         </div>
       </div>
     </template>
-    <InlineError v-else-if="error" :message="error" variant="banner" :testid="`${testid}-error`" />
+    <InlineError v-else-if="error" :message="error" variant="banner" :testid="`${mermaidTestid}-error`" />
   </div>
 </template>
 
 <style scoped>
 .canvas-mermaid {
   width: 100%;
-  margin: 0.75em 0;
 }
 .canvas-mermaid-viewport {
   position: relative;

@@ -29,7 +29,7 @@ function select(start: Node, startOffset: number, end: Node, endOffset: number):
 const text = (root: HTMLElement, selector: string) => root.querySelector(selector)!.firstChild!
 
 const rendered = (source: string) =>
-  renderCanvasMarkdown(source, undefined, { offset: 0 })
+  renderCanvasMarkdown(source, { sourceLines: { offset: 0 } })
     .map((part) => (part.kind === 'html' ? part.html : ''))
     .join('')
 
@@ -41,7 +41,11 @@ Step two.</p>
     <li data-source-start="9" data-source-end="9">a</li>
     <li data-source-start="10" data-source-end="11"><p>b</p></li>
   </ul>
-  <div class="canvas-mermaid" data-source-start="13" data-source-end="15"><svg><text>Graph</text></svg></div>
+  <div class="canvas-fence" data-fence-lang="mermaid" data-source-start="13" data-source-end="15"><div class="canvas-mermaid"><svg><text>Graph</text></svg></div></div>
+  <div class="canvas-fence" data-fence-lang="hive-tree" data-source-start="17" data-source-end="21"><ul><li><span>a.ts</span></li><li><span>b.ts</span></li></ul></div>
+  <div class="canvas-fence" data-fence-lang="nope" data-source-start="23" data-source-end="27"><div class="markdown-code" data-source-start="23" data-source-end="27" data-source-code-start="24"><pre><code>one
+two
+three</code></pre></div></div>
 `
 
 afterEach(() => {
@@ -92,6 +96,26 @@ describe('selectionToRange', () => {
     const root = mountRoot(body)
     const range = selectionToRange(select(text(root, 'p'), 0, root.querySelector('text')!.firstChild!, 5), root)
     expect(range).toMatchObject({ startLine: 6, endLine: 15 })
+  })
+
+  it('maps a selection inside a rendered fence to the whole block', () => {
+    const root = mountRoot(body)
+    const node = root.querySelector('li:last-child span')!.firstChild!
+    expect(selectionToRange(select(node, 0, node, 2), root)).toMatchObject({ startLine: 17, endLine: 21 })
+    const graph = root.querySelector('text')!.firstChild!
+    expect(selectionToRange(select(graph, 0, graph, 3), root)).toMatchObject({ startLine: 13, endLine: 15 })
+  })
+
+  it('keeps the line mapping inside a fallback code block of a fence', () => {
+    const root = mountRoot(body)
+    const node = root.querySelector('code')!.firstChild!
+    expect(selectionToRange(select(node, 4, node, 7), root)).toMatchObject({ startLine: 25, endLine: 25 })
+  })
+
+  it('picks a rendered fence whole and a fallback code block as the code block', () => {
+    const root = mountRoot(body)
+    expect(pickableBlock(root.querySelector('li span'), root)).toBe(root.querySelector('[data-fence-lang="hive-tree"]'))
+    expect(pickableBlock(root.querySelector('code'), root)).toBe(root.querySelector('.markdown-code'))
   })
 
   it('is null for a collapsed selection', () => {

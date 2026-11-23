@@ -2948,6 +2948,15 @@ The boundary is a lint rule. `web/packages/ui/eslint.config.js` forbids
 (`**/cmd/**`, `**/frontend/**`). The package's specs run against a fake
 platform (`src/test-setup.ts`), never the Wails runtime.
 
+The package holds no shared state, and a lint rule rejects module-level
+reactive state, with one exception: the markdown fence registry
+(`components/fences/registry.ts`). `CanvasMarkdown` splits a document on
+every fence the registry knows, so a host that registers or unregisters a
+fence at runtime (an applet fence on the desktop) re-splits every open
+document. Built-in fences register in `components/fences/builtins.ts`; a host
+calls `registerFence` for its own (ADR
+drive-markdown-fences-render-through-one-registry-in-hive-ui-and-take-yaml-bodies).
+
 The desktop keeps what is specific to it: the `--hv-term-*` ANSI palettes
 (`src/styles/terminal-theme.css`, one block per theme), the terminal fonts,
 and its own `main.css`. `themeCss.spec.ts` stays in the desktop and asserts
