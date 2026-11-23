@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import IconBan from '~icons/lucide/ban'
 import IconLayers from '~icons/lucide/layers'
-import IconTerminal from '~icons/lucide/terminal'
 import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
 import type { TaskItem } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { relativeAge } from '../../lib/age'
+import type { TaskAgent } from '../../lib/taskAgent'
+import { isTerminalStatus } from '../../lib/tasksPresentation'
+import TaskAgentBadge from './TaskAgentBadge.vue'
 import TaskStatusIcon from './TaskStatusIcon.vue'
 
 defineProps<{
@@ -13,7 +15,7 @@ defineProps<{
   dragging: boolean
   counts?: { done: number; total: number }
   parentTitle?: string
-  sessionName?: string
+  agent?: TaskAgent
 }>()
 const emit = defineEmits<{ select: [id: string]; dragstart: [event: DragEvent]; dragend: [] }>()
 </script>
@@ -35,12 +37,6 @@ const emit = defineEmits<{ select: [id: string]; dragstart: [event: DragEvent]; 
   >
     <div class="flex items-center gap-1.5 font-mono text-caption text-text-4">
       <span class="min-w-0 flex-1 truncate">{{ item.id }}</span>
-      <IconTerminal
-        v-if="item.sessionId"
-        class="size-3 shrink-0"
-        :aria-label="`Session ${sessionName || item.sessionId}`"
-        data-testid="task-card-session"
-      />
       <span :title="new Date(item.updatedAt).toLocaleString()">{{ relativeAge(Date.parse(item.updatedAt)) }}</span>
     </div>
 
@@ -54,7 +50,10 @@ const emit = defineEmits<{ select: [id: string]; dragstart: [event: DragEvent]; 
       >
     </div>
 
-    <div v-if="item.type === 'epic' || parentTitle || item.blocked" class="flex flex-wrap items-center gap-1.5">
+    <div
+      v-if="item.type === 'epic' || parentTitle || item.blocked || agent"
+      class="flex flex-wrap items-center gap-1.5"
+    >
       <span
         v-if="item.type === 'epic'"
         class="inline-flex items-center gap-1 rounded-full bg-accent-tint px-2 py-0.5 text-caption font-medium text-accent"
@@ -82,6 +81,7 @@ const emit = defineEmits<{ select: [id: string]; dragstart: [event: DragEvent]; 
       >
         <IconBan class="size-2.5" aria-hidden="true" />Blocked
       </BaseBadge>
+      <TaskAgentBadge v-if="agent" :agent="agent" :live="!isTerminalStatus(item.status)" testid="task-card-session" />
     </div>
   </div>
 </template>

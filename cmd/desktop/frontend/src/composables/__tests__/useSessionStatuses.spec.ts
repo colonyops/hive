@@ -45,6 +45,27 @@ describe('useSessionStatuses', () => {
     expect(pollIntervalMs.value).toBe(1750)
   })
 
+  it('keeps polling while a view retains it, even after terminal mode stops', async () => {
+    mocks.SessionStatuses.mockResolvedValue({ items: [], pollIntervalMs: 1500 })
+    const { startPolling, stopPolling, retainPolling } = useSessionStatuses()
+
+    startPolling()
+    const release = retainPolling()
+    stopPolling()
+    await vi.waitFor(() => expect(mocks.SessionStatuses).toHaveBeenCalled())
+    const calls = mocks.SessionStatuses.mock.calls.length
+
+    vi.useFakeTimers()
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(mocks.SessionStatuses.mock.calls.length).toBeGreaterThan(calls)
+
+    release()
+    release()
+    const afterRelease = mocks.SessionStatuses.mock.calls.length
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(mocks.SessionStatuses.mock.calls.length).toBe(afterRelease)
+  })
+
   it('keeps the last good snapshot when a poll fails', async () => {
     mocks.SessionStatuses.mockResolvedValueOnce({
       items: [{ sessionId: 's1', running: true, windows: [{ windowId: '@1', status: 'ready', tool: 'codex' }] }],

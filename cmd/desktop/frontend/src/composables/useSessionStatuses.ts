@@ -23,7 +23,15 @@ let activeRequest: ReturnType<typeof SessionStatuses> | undefined
 let serverPollTimer: ReturnType<typeof setTimeout> | undefined
 let activeServerRequest: ReturnType<typeof ServerSessionStatuses> | undefined
 let pollingRequested = false
+// Views other than terminal mode that show live statuses. Terminal mode starts
+// and stops the loop itself, so a view that only reads the dots holds a count
+// instead and cannot stop the loop out from under terminal mode.
+let retainers = 0
 let visibilityWatched = false
+
+function wanted(): boolean {
+  return pollingRequested || retainers > 0
+}
 
 function cancelActiveRequest(): void {
   const request = activeRequest
@@ -105,20 +113,44 @@ function restartPoll(): void {
 // Each poll walks the process table and spawns tmux, and nobody sees the dots
 // of a hidden window, so the loop parks until the window shows again.
 function onVisibilityChange(): void {
-  if (pollingRequested && !document.hidden) restartPoll()
+  if (wanted() && !document.hidden) restartPoll()
+}
+
+function watchVisibility(): void {
+  if (visibilityWatched) return
+  visibilityWatched = true
+  document.addEventListener('visibilitychange', onVisibilityChange)
 }
 
 function startPolling(): void {
   pollingRequested = true
-  if (!visibilityWatched) {
-    visibilityWatched = true
-    document.addEventListener('visibilitychange', onVisibilityChange)
-  }
+  watchVisibility()
   restartPoll()
 }
 
 function stopPolling(): void {
   pollingRequested = false
+  if (retainers > 0) return
+  haltPolling()
+}
+
+/** Keeps the loop running until the returned release is called. */
+function retainPolling(): () => void {
+  retainers++
+  if (retainers === 1 && !pollingRequested) {
+    watchVisibility()
+    restartPoll()
+  }
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    retainers--
+    if (!wanted()) haltPolling()
+  }
+}
+
+function haltPolling(): void {
   ++pollGeneration
   ++requestSequence
   clearTimers()
@@ -132,11 +164,13 @@ export function useSessionStatuses(): {
   reload: () => Promise<void>
   startPolling: () => void
   stopPolling: () => void
+  retainPolling: () => () => void
 } {
-  return { statuses, loaded, pollIntervalMs, reload, startPolling, stopPolling }
+  return { statuses, loaded, pollIntervalMs, reload, startPolling, stopPolling, retainPolling }
 }
 
 export function resetSessionStatusesForTests(): void {
+  retainers = 0
   stopPolling()
   localItems = []
   serverItems = []
