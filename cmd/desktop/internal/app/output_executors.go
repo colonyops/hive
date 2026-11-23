@@ -13,19 +13,20 @@ import (
 // buildSources/sourceFactories uses for the connector registry.
 //
 // The map is not a mirror of the actions.yml catalog: dispatch.ActionTypeNotify
-// is the flow notify terminal's own action type. A notify node's config lives
-// in its flow, not in actions.yml, so it has no registry entry in package
-// actions and never will — FlowActions resolves it from the live flow
-// set instead (see buildOutputWorker). The invariant the test holds is
+// and dispatch.ActionTypeCreateTask belong to flow terminals. Their config
+// lives in the flow, not in actions.yml, so they have no registry entry in
+// package actions and never will -- FlowActions resolves them from the live
+// flow set instead (see buildOutputWorker). The invariant the test holds is
 // therefore coverage of actions.Types(), not set equality with this map's
 // keys.
 //
-// "shell" and "publish-message" stay as literals: package actions has no
-// exported name for them, only the registry key Types() derives from.
+// "shell" stays a literal: package actions has no exported name for it, only
+// the registry key Types() derives from.
 func outputExecutors(
 	launcher dispatch.SessionLauncher,
 	workspaceLauncher dispatch.WorkspaceSessionLauncher,
 	messages func() dispatch.MessageService,
+	tasks func() dispatch.TaskCreator,
 	notifier dispatch.SystemNotifier,
 	gate dispatch.NotificationGate,
 	items dispatch.InboxItemLocator,
@@ -33,10 +34,11 @@ func outputExecutors(
 	logger zerolog.Logger,
 ) map[string]dispatch.Executor {
 	return map[string]dispatch.Executor{
-		dispatch.ActionTypeLaunchSession: dispatch.NewLaunchSessionExecutor(logger, launcher, workspaceLauncher, env),
-		"shell":                          dispatch.NewShellExecutor(logger, env),
-		"publish-message":                dispatch.NewPublishMessageExecutor(messages),
-		"clipboard":                      dispatch.NewClipboardExecutor(),
-		dispatch.ActionTypeNotify:        dispatch.NewNotifyExecutor(notifier, gate, items, logger),
+		dispatch.ActionTypeLaunchSession:  dispatch.NewLaunchSessionExecutor(logger, launcher, workspaceLauncher, env),
+		"shell":                           dispatch.NewShellExecutor(logger, env),
+		dispatch.ActionTypePublishMessage: dispatch.NewPublishMessageExecutor(messages),
+		dispatch.ActionTypeCreateTask:     dispatch.NewCreateTaskExecutor(tasks),
+		"clipboard":                       dispatch.NewClipboardExecutor(),
+		dispatch.ActionTypeNotify:         dispatch.NewNotifyExecutor(notifier, gate, items, logger),
 	}
 }

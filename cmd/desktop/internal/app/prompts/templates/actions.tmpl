@@ -11,6 +11,8 @@ A **launcher** opens the pop-up terminal into a program and is documented under
 
 A flow that is the only place a session or chat starts does not need an action:
 its `launch-session` and `launch-chat` nodes carry the launch details inline.
+The same holds for a message: a flow `publish-message` node carries its topic
+and template inline.
 Write a `launch-session` action when the same launch is also offered from the
 item menu, and point a flow `action` node at it.
 {{template "yaml-strict" .}}

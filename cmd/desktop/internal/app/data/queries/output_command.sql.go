@@ -407,7 +407,7 @@ WHERE id IN (
     WHERE oc.status IN ('done', 'failed', 'cancelled')
       AND instr(oc.action_id, ':') > 0
       AND NOT (
-          oc.action_id LIKE 'launch:%'
+          (oc.action_id LIKE 'launch:%' OR oc.action_id LIKE 'task:%')
           AND EXISTS (
               SELECT 1 FROM inbox_item i
               WHERE i.profile_id = oc.profile_id
@@ -420,9 +420,9 @@ WHERE id IN (
 )
 `
 
-// Commands notify and launch nodes enqueue. They are bounded apart from action
-// runs so a busy notify flow cannot push run history out. A launch row is a
-// launch node's once-per-item guard, so it survives while its item exists.
+// Commands flow nodes enqueue. They are bounded apart from action runs so a
+// busy notify flow cannot push run history out. A launch or task row is its
+// node's once-per-item guard, so it survives while its item exists.
 // The match skips source_scope because a rescope leaves it behind.
 func (q *Queries) PruneTerminalNodeCommands(ctx context.Context, offset int64) error {
 	_, err := q.db.ExecContext(ctx, pruneTerminalNodeCommands, offset)

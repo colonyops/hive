@@ -652,3 +652,48 @@ func TestCommit_LaunchOutput_DedupsOnTheItemAndCarriesItsRef(t *testing.T) {
 	}))
 	assert.Equal(t, 2, countOutputCommands(t, db, ctx), "each launch node launches once for the item")
 }
+
+// A create-task node files one task per item however often it changes.
+func TestCommit_TaskOutput_DedupsOnTheItem(t *testing.T) {
+	t.Parallel()
+	st, db := openTestStores(t)
+	ctx := t.Context()
+
+	taskOutput := func(occurrence string) models.Output {
+		return models.Output{
+			Sink: models.Sink{Kind: models.SinkKindTask, TargetID: "flow-1/todo"}, Key: "acme/api#7", OccurrenceKey: occurrence,
+			SourceKind: "github", SourceScope: "source-a", Payload: []byte(`{"num":7}`),
+		}
+	}
+	require.NoError(t, st.EventLog.Commit(ctx, models.CommitBatch{Consumer: "flow-1", UpToOffset: 1, Outputs: []models.Output{taskOutput("occ-1")}}))
+	require.NoError(t, st.EventLog.Commit(ctx, models.CommitBatch{Consumer: "flow-1", UpToOffset: 2, Outputs: []models.Output{taskOutput("occ-2")}}))
+	assert.Equal(t, 1, countOutputCommands(t, db, ctx))
+
+	var actionID, key, externalID string
+	require.NoError(t, db.Conn().QueryRowContext(ctx, `SELECT action_id, key, external_id FROM output_command`).Scan(&actionID, &key, &externalID))
+	assert.Equal(t, []string{models.TaskActionID("flow-1/todo"), "acme/api#7", "acme/api#7"}, []string{actionID, key, externalID})
+}
+
+// A message reports an event, so each new occurrence of an item publishes.
+func TestCommit_PublishOutput_DedupsOnTheOccurrence(t *testing.T) {
+	t.Parallel()
+	st, db := openTestStores(t)
+	ctx := t.Context()
+
+	publishOutput := func(occurrence string) models.Output {
+		return models.Output{
+			Sink: models.Sink{Kind: models.SinkKindPublish, TargetID: "flow-1/announce"}, Key: "acme/api#7", OccurrenceKey: occurrence,
+			SourceKind: "github", SourceScope: "source-a", Payload: []byte(`{"num":7}`),
+		}
+	}
+	for offset, occurrence := range []string{"occ-1", "occ-1", "occ-2"} {
+		require.NoError(t, st.EventLog.Commit(ctx, models.CommitBatch{
+			Consumer: "flow-1", UpToOffset: int64(offset + 1), Outputs: []models.Output{publishOutput(occurrence)},
+		}))
+	}
+	assert.Equal(t, 2, countOutputCommands(t, db, ctx))
+
+	var actionID string
+	require.NoError(t, db.Conn().QueryRowContext(ctx, `SELECT DISTINCT action_id FROM output_command`).Scan(&actionID))
+	assert.Equal(t, models.PublishActionID("flow-1/announce"), actionID)
+}

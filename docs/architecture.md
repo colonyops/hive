@@ -2021,6 +2021,15 @@ the item key rather than the occurrence key, so one item launches once per
 node however often it changes. That command row is the only guard, so
 retention keeps a terminal `launch:` row while its item exists.
 
+**A flow `publish-message` or `create-task` node is an inline action the same
+way** ([ADR flow-publish-message-and-create-task-nodes-are-inline-actions](decisions/2026-11-23-flow-publish-message-and-create-task-nodes-are-inline-actions.md)).
+A `publish-message` node commits a `publish` output under `publish:<flow>/<node>`
+that `FlowActions` projects onto the catalog's publish-message executor; it
+dedups on the occurrence key, because a message reports an event. A
+`create-task` node commits a `task` output under `task:<flow>/<node>` that runs
+the create-task executor, which has no `actions.yml` type; it dedups on the item
+key like a launch, and retention keeps its row while the item exists.
+
 **A repository `launch-session` action's `post_hook` runs after the session
 exists, and its failure is not the action's.** The hook is a shell command rendered over the
 same data as the action's other templates with `.Session` bound to the session

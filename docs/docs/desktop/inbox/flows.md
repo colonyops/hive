@@ -19,6 +19,8 @@ Open a workspace's flow editor to add nodes and connect them. Select **Deploy** 
 - **Action** nodes run a named action.
 - **Launch session** nodes start a coding session in a repository.
 - **Launch chat** nodes open a chat in an agent workspace.
+- **Publish message** nodes publish a message to a hive messaging topic.
+- **Create task** nodes create a hive task.
 
 The editor and YAML file are two views of the same flow. Changes reload when the file is saved. If validation fails, Hive keeps the last valid version active and reports the error in Activity.
 
@@ -66,6 +68,26 @@ A launch node starts work for each item that reaches it, once per item. A pull r
 `launch-session` takes `repo` and `prompt`, plus an optional `agent`, `sessionName`, and `tags`. Set `repo` to `{{ .ItemRemote }}` to work in the item's own repository, to a remote URL to work in one fixed repository, or to any template that renders a remote URL. `{{ .ItemRemote }}` follows `git.clone_protocol` and `rules[].clone_protocol` in the hive `config.yaml`; a fixed URL is never rewritten. An item whose repository renders blank fails its launch, and the failure shows in Activity. `sessionName` becomes a slug of at most 60 characters. When it is empty or has no letters or digits, the session is named after the node and the item instead. When another active session already has the name, Hive adds the launch's command id, such as `review-hive-118`, so `review-{{ .Payload.repo }}` can start one session for each pull request in a repository. A retry of the same launch uses the same name, so it never starts a second session. `tags` is a list of templates, each rendered into one tag on the session; an entry that renders blank is dropped, and a tag longer than 40 characters or with a comma fails the launch. `launch-chat` takes `workspace` and `prompt`. The templates see the same item fields as a `launch-session` action, so fence outside content as [Actions](actions.md) describes.
 
 Use an **Action** node instead when the same launch also appears in the item menu. Then you define it once in `actions.yml`.
+
+## Message agents and create tasks
+
+A publish-message node sends a message to a hive messaging topic for each new version of an item, so agents and scripts that read the topic with `hive msg` hear about it. A create-task node creates one hive task per item, which an agent can claim with `hive hc next`.
+
+```yaml
+  - id: announce
+    type: publish-message
+    topic: reviews
+    message: "Review requested on {{ .Payload.repo }}#{{ .Payload.num }}"
+  - id: todo
+    type: create-task
+    title: "Review {{ .Payload.repo }}#{{ .Payload.num }}"
+    repo: "{{ .Payload.repo }}"
+    description: "{{ .Payload.url }}"
+```
+
+`publish-message` takes `topic` and `message`. The topic is a literal, with no wildcards or templates. The node publishes again when the item changes, such as when a pull request gets a new commit. The sender is `hive-desktop`.
+
+`create-task` takes `title`, plus an optional `description`, `repo`, and `parent`. `repo` must render as `owner/repo`; leave it empty for a task with no repository. `parent` is the id of an existing epic or task. A pull request that keeps changing still creates one task. Fence outside content in the templates as [Actions](actions.md) describes. A failed publish or task shows in Activity.
 
 ## Flow files
 

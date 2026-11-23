@@ -206,7 +206,7 @@ func TestPrune_BoundsOnlyTerminalHistory(t *testing.T) {
 	})
 }
 
-func TestPrune_KeepsLaunchCommandsWhileTheirItemExists(t *testing.T) {
+func TestPrune_KeepsLaunchAndTaskCommandsWhileTheirItemExists(t *testing.T) {
 	t.Parallel()
 	database := openTestDB(t)
 	ctx := t.Context()
@@ -223,6 +223,9 @@ func TestPrune_KeepsLaunchCommandsWhileTheirItemExists(t *testing.T) {
 	}
 	enqueue(models.LaunchActionID("flow/live-launch"), "live", "live")
 	enqueue(models.LaunchActionID("flow/gone-launch"), "gone", "gone")
+	enqueue(models.TaskActionID("flow/live-task"), "live", "live")
+	enqueue(models.TaskActionID("flow/gone-task"), "gone", "gone")
+	enqueue(models.PublishActionID("flow/live-publish"), "live", "live")
 	enqueue("action", "newest", "")
 
 	require.NoError(t, database.Prune(ctx, RetentionPolicy{ActionRunLimit: 1}))
@@ -237,7 +240,7 @@ func TestPrune_KeepsLaunchCommandsWhileTheirItemExists(t *testing.T) {
 		actionIDs = append(actionIDs, actionID)
 	}
 	require.NoError(t, rows.Err())
-	assert.Equal(t, []string{models.LaunchActionID("flow/live-launch"), "action"}, actionIDs)
+	assert.Equal(t, []string{models.LaunchActionID("flow/live-launch"), models.TaskActionID("flow/live-task"), "action"}, actionIDs)
 }
 
 func TestPrune_BoundsActionRunsApartFromNodeCommands(t *testing.T) {

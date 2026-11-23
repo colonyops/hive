@@ -5,12 +5,14 @@ describe('byType', () => {
   it('discovers exactly the node types with app modules (index.ts)', () => {
     expect(Object.keys(byType).sort()).toEqual([
       'action',
+      'create-task',
       'feed',
       'function',
       'github-filter',
       'launch-chat',
       'launch-session',
       'notify',
+      'publish-message',
       'sources.exec',
       'sources.gitea',
       'sources.github',
@@ -61,10 +63,12 @@ describe('palette', () => {
     expect(palette.Process.map((d) => d.type).sort()).toEqual(['function', 'github-filter'])
     expect(palette.Destinations.map((d) => d.type).sort()).toEqual([
       'action',
+      'create-task',
       'feed',
       'launch-chat',
       'launch-session',
       'notify',
+      'publish-message',
     ])
   })
 })
