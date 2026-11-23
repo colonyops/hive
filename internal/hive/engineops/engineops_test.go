@@ -331,6 +331,9 @@ func TestMountedToolsAnswer(t *testing.T) {
 		"todo_create":      {"caller": f.sess.ID, "title": "x"},
 		"todo_list":        {},
 		"task_clear":       {"caller": f.sess.ID, "dryRun": true},
+		"document_put":     {"caller": "global", "path": "a.md", "body": "x"},
+		"document_list":    {"caller": "global", "detail": "tree"},
+		"document_get":     {"caller": "global", "path": "a.md"},
 	} {
 		res := call(tool, args)
 		assert.False(t, res.IsError, "%s: %v", tool, res.Content)

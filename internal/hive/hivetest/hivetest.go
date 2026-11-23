@@ -13,6 +13,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
+	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	"github.com/colonyops/hive/internal/hive/events/testbus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/credentials"
@@ -74,6 +75,8 @@ type Options struct {
 	Mux sessionsvc.Multiplexer
 	// Credentials nil leaves the engine without a drive server client.
 	Credentials credentials.Store
+	// Chats nil refuses chat callers of Drive operations.
+	Chats drivesvc.Chats
 }
 
 type Harness struct {
@@ -109,6 +112,7 @@ func NewEngine(t *testing.T, opts Options) Harness {
 		Logger:     zerolog.Nop(),
 
 		Credentials: opts.Credentials,
+		Chats:       opts.Chats,
 	})
 	require.NoError(t, err)
 	return h

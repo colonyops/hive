@@ -62,6 +62,9 @@ type Ports struct {
 	Logger zerolog.Logger
 	// Credentials holds the drive server token. Nil disables DriveRemote.
 	Credentials credentials.Store
+	// Chats looks up a chat for a Drive call. Nil refuses chat callers: the
+	// hive CLI has no chat records.
+	Chats drivesvc.Chats
 }
 
 // services is everything one config decides. It is never mutated after

@@ -22,10 +22,11 @@ import (
 // engineNamespaces puts each engine resource below the command group that
 // already holds it: task_comment.create is hive hc comment create.
 var engineNamespaces = map[string][]string{
-	"task":    {"hc"},
-	"message": {"msg"},
-	"topic":   {"msg", "topic"},
-	"todo":    {"todo"},
+	"task":     {"hc"},
+	"message":  {"msg"},
+	"topic":    {"msg", "topic"},
+	"todo":     {"todo"},
+	"document": {"drive"},
 }
 
 var engineAliases = map[string][]string{
