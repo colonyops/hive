@@ -44,6 +44,7 @@ func TestCreateTaskExecutor_RendersTheTaskOverTheItem(t *testing.T) {
 		DescriptionTemplate: "  {{ .Payload.url }}\n",
 		RepoTemplate:        "{{ .Payload.repo }}",
 		Parent:              "hc-epic",
+		Tags:                []string{"triage"},
 	})
 	data := OutputData{Payload: map[string]any{"title": "flaky\ntest", "url": "https://x/1", "repo": "acme/api"}}
 
@@ -51,7 +52,7 @@ func TestCreateTaskExecutor_RendersTheTaskOverTheItem(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, result.Attempted)
 	assert.Equal(t, "acme/api", creator.repoKey)
-	assert.Equal(t, hc.CreateItemInput{Title: "Fix flaky test", Desc: "https://x/1", Type: hc.ItemTypeTask, ParentID: "hc-epic"}, creator.input)
+	assert.Equal(t, hc.CreateItemInput{Title: "Fix flaky test", Desc: "https://x/1", Type: hc.ItemTypeTask, ParentID: "hc-epic", Tags: []string{"triage"}}, creator.input)
 }
 
 func TestCreateTaskExecutor_AllowsNoRepository(t *testing.T) {

@@ -83,6 +83,7 @@ A publish-message node sends a message to a hive messaging topic for each new ve
     title: "Review {{ .Payload.repo }}#{{ .Payload.num }}"
     repo: "{{ .Payload.repo }}"
     description: "{{ .Payload.url }}"
+    tags: [review]
 ```
 
 `publish-message` takes `topic` and `message`. The topic is a literal, with no wildcards or templates. The node publishes again when the item changes, such as when a pull request gets a new commit. The sender is `hive-desktop`.

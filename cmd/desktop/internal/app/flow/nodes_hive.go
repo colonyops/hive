@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/colonyops/hive/internal/domain/tagset"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -42,6 +43,8 @@ type CreateTaskConfig struct {
 	Repo string `json:"repo,omitempty" yaml:"repo,omitempty"`
 	// Parent is the literal id of an existing epic or task.
 	Parent string `json:"parent,omitempty" yaml:"parent,omitempty"`
+	// Tags are literal, like Parent: the author picks them, not the item.
+	Tags []string `json:"tags,omitempty" yaml:"tags,omitempty"`
 }
 
 func (c *CreateTaskConfig) Inputs() int  { return 1 }
@@ -62,6 +65,14 @@ func (c *CreateTaskConfig) Validate(Refs) error {
 	}
 	if c.Parent != strings.TrimSpace(c.Parent) || strings.ContainsAny(c.Parent, " \t\n") || strings.Contains(c.Parent, "{{") {
 		return fmt.Errorf("parent: %q is not a task id", c.Parent)
+	}
+	for _, tag := range c.Tags {
+		if strings.Contains(tag, "{{") {
+			return fmt.Errorf("tags: %q must be a literal tag, not a template", tag)
+		}
+	}
+	if _, err := tagset.Normalize(c.Tags); err != nil {
+		return fmt.Errorf("tags: %w", err)
 	}
 	return nil
 }

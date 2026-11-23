@@ -35,6 +35,7 @@ func taskNodeAction(id string, node flow.Node) (actions.Action, bool) {
 		ID: id, Label: label, Type: ActionTypeCreateTask,
 		Config: &CreateTaskActionConfig{
 			TitleTemplate: cfg.Title, DescriptionTemplate: cfg.Description, RepoTemplate: cfg.Repo, Parent: cfg.Parent,
+			Tags: cfg.Tags,
 		},
 	}, true
 }

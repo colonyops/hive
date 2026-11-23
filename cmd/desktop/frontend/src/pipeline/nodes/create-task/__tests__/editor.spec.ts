@@ -22,9 +22,19 @@ describe('create-task editor', () => {
     expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ title: 't', parent: 'hc-a1' })
   })
 
+  it('splits the tags on commas and drops empty ones', async () => {
+    const wrapper = mount(Editor, { props: { config: { title: 't' } } })
+    const input = wrapper.get('[data-testid="create-task-node-editor-tags"]')
+    await input.setValue('triage, from-flow,, ')
+    expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ title: 't', tags: ['triage', 'from-flow'] })
+    await input.setValue(' ')
+    expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ title: 't', tags: undefined })
+  })
+
   it('requires a title and a literal parent', () => {
     expect(validate(defaults)).toEqual(['title is required'])
     expect(validate({ title: 't', parent: '{{ .Key }}' })).toEqual(['parent must be a task id'])
-    expect(validate({ title: 't', parent: 'hc-a1', repo: '{{ .Payload.repo }}' })).toEqual([])
+    expect(validate({ title: 't', parent: 'hc-a1', repo: '{{ .Payload.repo }}', tags: ['triage'] })).toEqual([])
+    expect(validate({ title: 't', tags: ['{{ .Key }}'] })).toEqual(['tags must be literal tags, not templates'])
   })
 })

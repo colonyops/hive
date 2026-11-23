@@ -11,9 +11,22 @@ export interface Config {
   description?: string
   repo?: string
   parent?: string
+  tags?: string[]
 }
 
 export const unread = false
+
+/** Mirrors Go's tagset.MaxLength. */
+const MAX_TAG_LENGTH = 40
+
+/** Splits the comma-separated tags field. A comma cannot be part of a tag. */
+export function parseTags(text: string): string[] | undefined {
+  const tags = text
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0)
+  return tags.length > 0 ? tags : undefined
+}
 
 // ── App-registry metadata ───────────────────────────────────────────────────
 
@@ -35,5 +48,9 @@ export function validate(config: Config): string[] {
   if (!config.title?.trim()) errors.push('title is required')
   const parent = config.parent ?? ''
   if (/\s/.test(parent) || parent.includes('{{')) errors.push('parent must be a task id')
+  const tags = config.tags ?? []
+  if (tags.some((tag) => tag.includes('{{'))) errors.push('tags must be literal tags, not templates')
+  else if (tags.some((tag) => [...tag].length > MAX_TAG_LENGTH))
+    errors.push(`tags must be at most ${MAX_TAG_LENGTH} characters`)
   return errors
 }

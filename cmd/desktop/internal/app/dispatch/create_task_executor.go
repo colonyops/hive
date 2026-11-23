@@ -30,6 +30,7 @@ type CreateTaskActionConfig struct {
 	DescriptionTemplate string
 	RepoTemplate        string
 	Parent              string
+	Tags                []string
 }
 
 func (c *CreateTaskActionConfig) Validate() error {
@@ -91,7 +92,7 @@ func (e *CreateTaskExecutor) Execute(ctx context.Context, action actions.Action,
 	runLog := RunLogFrom(ctx)
 	runLog.Systemf("Creating task %q", title)
 	item, err := e.create(ctx, repo, hc.CreateItemInput{
-		Title: title, Desc: strings.TrimSpace(desc), Type: hc.ItemTypeTask, ParentID: cfg.Parent,
+		Title: title, Desc: strings.TrimSpace(desc), Type: hc.ItemTypeTask, ParentID: cfg.Parent, Tags: cfg.Tags,
 	})
 	if err != nil {
 		return ExecutionResult{Attempted: true}, err
