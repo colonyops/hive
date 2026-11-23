@@ -3,6 +3,7 @@ package mcpsrv_test
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/apptest"
@@ -67,6 +68,16 @@ func TestDriveToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 		require.True(t, ok, "tool %s input schema is not an object", tool.Name)
 		assert.Equal(t, "object", schema["type"], "tool %s input schema is not type object", tool.Name)
 	}
+}
+
+func TestDriveToolsMatchGolden(t *testing.T) {
+	t.Parallel()
+	_, session := testDriveSession(t)
+
+	res, err := session.ListTools(t.Context(), nil)
+	require.NoError(t, err)
+	sort.Slice(res.Tools, func(i, j int) bool { return res.Tools[i].Name < res.Tools[j].Name })
+	assertGoldenJSON(t, "drive_tools_list.json", res.Tools)
 }
 
 func TestTabToolsReportTheAsk(t *testing.T) {
