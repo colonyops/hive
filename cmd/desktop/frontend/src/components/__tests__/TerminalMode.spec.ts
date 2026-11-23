@@ -4816,6 +4816,9 @@ describe('TerminalMode', () => {
       const diff = wrapper.get('[data-testid="session-status-diff"]')
       expect(diff.text()).toBe('+3−1')
       expect(diff.element.tagName).toBe('BUTTON')
+      await diff.trigger('click')
+      await flushPromises()
+      expect(wrapper.find('[data-testid="panel-tab-diff"]').exists()).toBe(true)
 
       const calls = mocks.SessionGitStatus.mock.calls.length
       mocks.ListServerSessions.mockResolvedValue([
@@ -4826,6 +4829,7 @@ describe('TerminalMode', () => {
       await flushPromises()
       expect(wrapper.get('[data-testid="session-status-host"]').text()).toBe('box')
       expect(mocks.SessionGitStatus.mock.calls.length).toBe(calls)
+      expect(wrapper.find('[data-testid="changes-view"]').exists()).toBe(false)
 
       wrapper.unmount()
     })

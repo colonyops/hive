@@ -577,7 +577,6 @@ func (s *SessionsService) SessionBranches(ctx context.Context, id string) ([]str
 	return refs, nil
 }
 
-// readTarget resolves the session of a checkout read.
 func (s *SessionsService) readTarget(id string) (sessionTarget, error) {
 	if strings.TrimSpace(id) == "" {
 		return sessionTarget{}, Errorf(KindInvalid, "session id is required")

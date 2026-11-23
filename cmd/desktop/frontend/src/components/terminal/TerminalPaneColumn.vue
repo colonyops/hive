@@ -310,6 +310,8 @@ watch(
   },
 )
 
+// An offline server's rows are not attachable, so panels.row is null and the
+// Diff tab asks that server nothing.
 const changesSession = computed(() => {
   const row = panels.row
   return row && tree.isHiveSession(row) ? row.id : ''

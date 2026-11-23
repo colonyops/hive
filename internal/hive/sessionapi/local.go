@@ -151,6 +151,9 @@ func (l *Local) StartTmuxSession(ctx context.Context, id string) (multiplexer.La
 }
 
 func (l *Local) AgentPanes(ctx context.Context, ids []string) (map[string][]status.AgentPane, error) {
+	if !l.engine.Status().Available() {
+		return nil, ErrStatusUnavailable
+	}
 	all, err := l.engine.Sessions().ListSessions(ctx)
 	if err != nil {
 		return nil, err

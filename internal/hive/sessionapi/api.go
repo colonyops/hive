@@ -19,6 +19,10 @@ import (
 // as with a slow repository. A caller can offer to go on without the check.
 var ErrRiskCheckTimedOut = errors.New("the risk check timed out")
 
+// ErrStatusUnavailable is a machine whose hive cannot read its terminals, so
+// it cannot say which agents run there.
+var ErrStatusUnavailable = errors.New("hive on this machine cannot read tmux, so it cannot find the agents")
+
 // API creates every session in the background, whatever opts.Background
 // says: the implementation may run in a daemon with no terminal. A caller
 // that wants the session in front attaches or switches to the one returned.
@@ -57,6 +61,7 @@ type API interface {
 	// AgentPanes lists the agent panes of the active sessions ids name, keyed
 	// by id, with pane ids in the tmux of the machine that holds them. A
 	// session with no panes, or whose panes could not be read, is absent.
+	// A machine without terminal status answers ErrStatusUnavailable.
 	AgentPanes(ctx context.Context, ids []string) (map[string][]status.AgentPane, error)
 
 	// StatusAvailable must not block: the TUI calls it inside Update. A false
