@@ -2,6 +2,7 @@
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import type { TaskItem } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { useDragReorder } from '../../composables/useDragReorder'
+import type { TaskAgent } from '../../lib/taskAgent'
 import { statusMeta, type TaskBoardColumn, type TaskStatus } from '../../lib/tasksPresentation'
 import TaskBoardCard from './TaskBoardCard.vue'
 import TaskStatusIcon from './TaskStatusIcon.vue'
@@ -11,7 +12,7 @@ defineProps<{
   selectedId: string | null
   countsById: Map<string, { done: number; total: number }>
   parentTitleById: Map<string, string>
-  sessionNameById: Map<string, string>
+  agentBySessionId: Map<string, TaskAgent>
 }>()
 const emit = defineEmits<{
   select: [id: string]
@@ -61,7 +62,7 @@ const drag = useDragReorder<TaskItem, TaskStatus>({
           :dragging="drag.dragging.value?.id === item.id"
           :counts="countsById.get(item.id)"
           :parent-title="parentTitleById.get(item.parentId)"
-          :session-name="sessionNameById.get(item.sessionId)"
+          :agent="agentBySessionId.get(item.sessionId)"
           @select="emit('select', $event)"
           @dragstart="drag.start($event, item)"
           @dragend="drag.end"

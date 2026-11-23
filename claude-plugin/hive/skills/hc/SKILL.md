@@ -135,7 +135,8 @@ Each command takes its fields as flags, or the whole input as JSON with `--input
 - `--type epic|task` — item type (default: task)
 - `--desc <text>` — item description
 - `--parent-id <id>` — parent item (required for a task with no children)
-- `children` — set through `--input`: a list of `{title, type, desc, ref, blockers, children}`. An item with children must be an epic. `ref` is a label local to the call; `blockers` lists refs that must finish first.
+- `--assign-session <id>` — assign the item to a session or chat (bare id or `local:<id>`); the session must exist. Not with `children`: set it on each child instead
+- `children` — set through `--input`: a list of `{title, type, desc, ref, blockers, assignSession, children}`. An item with children must be an epic. `ref` is a label local to the call; `blockers` lists refs that must finish first.
 - `--repo owner/repo` — the repository (default: from the caller)
 
 Output: every created item, root first.
@@ -157,7 +158,10 @@ Output: the item first, then comments in chronological order.
 - `--title <text>` — new title (empty string rejected)
 - `--desc <text>` — new description (empty string clears it)
 - `--assign` — assign to the caller (a session or chat)
+- `--assign-session <id>` — assign to a named session or chat (bare id or `local:<id>`); the session must exist. An orchestrator outside a session uses this to hand out work
 - `--unassign` — remove the assignment
+
+`--assign`, `--assign-session`, and `--unassign` are mutually exclusive.
 - `--add-blocker <id>` — an item that must finish first; a cycle is a conflict (exit 4)
 - `--remove-blocker <id>` — remove an explicit blocker
 

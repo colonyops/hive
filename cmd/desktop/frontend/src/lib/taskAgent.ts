@@ -1,0 +1,77 @@
+import type { SessionStatus } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+
+/**
+ * What the agent in a task's session is doing. `stopped` is a session with no
+ * tmux session; `unknown` is one with no status yet, or one this machine does
+ * not poll.
+ */
+export type AgentActivity = 'active' | 'approval' | 'ready' | 'stopped' | 'unknown'
+
+export interface TaskAgent {
+  sessionId: string
+  /** The session's name, or its id when no loaded session has it (an ended one). */
+  name: string
+  /** The tmux target to open, '' when the session cannot be attached to: it ended, is not active, or is a chat. */
+  slug: string
+  activity: AgentActivity
+  /** The agent tool in the window that set `activity`, '' when none did. */
+  tool: string
+  /** The tmux window that set `activity`, '' when none did. */
+  windowId: string
+}
+
+/** The fields of a loaded session row that a task's agent reads. */
+export interface TaskAgentSession {
+  name: string
+  slug: string
+  state: string
+}
+
+type Activity = Pick<TaskAgent, 'activity' | 'tool' | 'windowId'>
+
+const RANK: Record<string, number> = { ready: 1, active: 2, approval: 3 }
+
+/** A session runs several windows; the one that most needs the user speaks for it. */
+export function sessionActivity(status: SessionStatus | undefined): Activity {
+  if (!status) return { activity: 'unknown', tool: '', windowId: '' }
+  if (!status.running) return { activity: 'stopped', tool: '', windowId: '' }
+  let best: Activity = { activity: 'unknown', tool: '', windowId: '' }
+  let bestRank = 0
+  for (const window of status.windows ?? []) {
+    const rank = RANK[window.status] ?? 0
+    if (rank > bestRank) {
+      bestRank = rank
+      best = { activity: window.status as AgentActivity, tool: window.tool, windowId: window.windowId }
+    }
+  }
+  return best
+}
+
+export function taskAgent(
+  sessionId: string,
+  session: TaskAgentSession | undefined,
+  status: SessionStatus | undefined,
+): TaskAgent {
+  return {
+    sessionId,
+    name: session?.name || sessionId,
+    slug: session?.state === 'active' ? session.slug : '',
+    ...sessionActivity(status),
+  }
+}
+
+export function agentLabel(agent: TaskAgent): string {
+  const who = agent.tool || 'Agent'
+  switch (agent.activity) {
+    case 'active':
+      return `${who} is working in ${agent.name}`
+    case 'approval':
+      return `${who} needs approval in ${agent.name}`
+    case 'ready':
+      return `${who} is ready in ${agent.name}`
+    case 'stopped':
+      return `Assigned to ${agent.name}, which is not running`
+    default:
+      return `Assigned to ${agent.name}`
+  }
+}

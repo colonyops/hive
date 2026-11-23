@@ -26,6 +26,8 @@ import type { TaskItem } from '../../../bindings/github.com/colonyops/hive/cmd/d
 import { useToasts } from '../../composables/useToasts'
 import { useTasks } from '../../stores/useTasks'
 import { useTerminalSessions } from '../../stores/useTerminalSessions'
+import { useSessionStatuses } from '../../composables/useSessionStatuses'
+import { taskAgent, type TaskAgent } from '../../lib/taskAgent'
 import { errorText } from '../../lib/appError'
 import { isEditableTarget } from '../../lib/isEditableTarget'
 import {
@@ -93,9 +95,21 @@ const search = ref('')
 
 // TerminalMode keeps the session list loaded (it mounts once at app start),
 // so this reads the singleton rather than fetching. An id with no loaded row
-// — an ended session — falls back to the raw id in the row's tooltip.
+// (an ended session) falls back to the raw id.
 const { sessions } = useTerminalSessions()
-const sessionNameById = computed(() => new Map(sessions.value.map((row) => [row.id, row.name])))
+const { statuses: sessionStatuses, retainPolling } = useSessionStatuses()
+const agentBySessionId = computed(() => {
+  const rows = new Map(sessions.value.map((row) => [row.id, row]))
+  const agents = new Map<string, TaskAgent>()
+  for (const item of items.value) {
+    if (!item.sessionId || agents.has(item.sessionId)) continue
+    agents.set(
+      item.sessionId,
+      taskAgent(item.sessionId, rows.get(item.sessionId), sessionStatuses.value[item.sessionId]),
+    )
+  }
+  return agents
+})
 
 const parentTitleById = computed(() => new Map(items.value.map((item) => [item.id, item.title])))
 const countsById = computed(() => subtaskCounts(items.value))
@@ -381,11 +395,14 @@ async function requestPrune(): Promise<void> {
 
 useEscapeToClose(() => emit('close'), { enabled: () => !props.embedded })
 
+let releaseStatuses: (() => void) | undefined
 onMounted(() => {
   startLiveUpdates()
+  releaseStatuses = retainPolling()
 })
 onUnmounted(() => {
   stopLiveUpdates()
+  releaseStatuses?.()
 })
 </script>
 
@@ -547,7 +564,7 @@ onUnmounted(() => {
           :selected-id="selectedId"
           :counts-by-id="countsById"
           :parent-title-by-id="parentTitleById"
-          :session-name-by-id="sessionNameById"
+          :agent-by-session-id="agentBySessionId"
           @select="openPeek"
           @move="moveTask"
           @show-more="showMore"
@@ -563,7 +580,7 @@ onUnmounted(() => {
             :collapsed="isCollapsed(row.node.item.id)"
             :counts="row.node.children.length ? row.node.counts : undefined"
             :selected="row.node.item.id === selectedId"
-            :session-name="sessionNameById.get(row.node.item.sessionId)"
+            :agent="agentBySessionId.get(row.node.item.sessionId)"
             @select="selectRow"
             @toggle="toggleCollapsed"
             @status="statusChange.request"

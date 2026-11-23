@@ -161,6 +161,73 @@ func TestTaskRefusals(t *testing.T) {
 	assert.Equal(t, ops.KindInvalid, kindOf(t, err))
 }
 
+func TestAssignSession(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	created, err := f.h.TaskCreate(ctx, tasks.TaskCreateIn{Caller: "global", Title: "Epic", Type: "epic"})
+	require.NoError(t, err)
+	epic := created.Tasks[0]
+
+	for _, value := range []string{f.sess.ID, "local:" + f.sess.ID, chatID} {
+		got, err := f.h.TaskCreate(ctx, tasks.TaskCreateIn{Caller: "global", Title: "t", ParentID: epic.ID, AssignSession: value})
+		require.NoError(t, err, value)
+		want := f.sess.ID
+		if value == chatID {
+			want = chatID
+		}
+		assert.Equal(t, want, got.Tasks[0].SessionID, value)
+		assert.Equal(t, hc.StatusOpen, got.Tasks[0].Status, "assigning does not start the task")
+	}
+
+	task, err := f.h.TaskCreate(ctx, tasks.TaskCreateIn{Caller: "global", Title: "free", ParentID: epic.ID})
+	require.NoError(t, err)
+	id := task.Tasks[0].ID
+	updated, err := f.h.TaskUpdate(ctx, tasks.TaskUpdateIn{Caller: "global", TaskID: id, AssignSession: "local:" + f.sess.ID})
+	require.NoError(t, err, "a global caller can assign work")
+	assert.Equal(t, f.sess.ID, updated.SessionID)
+	cleared, err := f.h.TaskUpdate(ctx, tasks.TaskUpdateIn{Caller: "global", TaskID: id, Unassign: true})
+	require.NoError(t, err)
+	assert.Empty(t, cleared.SessionID)
+
+	tree, err := f.h.TaskCreate(ctx, tasks.TaskCreateIn{
+		Caller: "global", Title: "Tree", Type: "epic",
+		Children: children(t, `[{"title":"mine","assignSession":"local:`+f.sess.ID+`","children":[{"title":"deep","assignSession":"`+chatID+`"}]},{"title":"free"}]`),
+	})
+	require.NoError(t, err)
+	owners := map[string]string{}
+	for _, item := range tree.Tasks {
+		owners[item.Title] = item.SessionID
+	}
+	assert.Equal(t, map[string]string{"Tree": "", "mine": f.sess.ID, "deep": chatID, "free": ""}, owners)
+
+	for name, value := range map[string]string{"unknown": "zzz999", "other server": "server-b:" + f.sess.ID, "path": f.outside, "global": "global"} {
+		_, err = f.h.TaskUpdate(ctx, tasks.TaskUpdateIn{TaskID: id, AssignSession: value})
+		want := ops.KindInvalid
+		if name == "unknown" {
+			want = ops.KindNotFound
+		}
+		assert.Equal(t, want, kindOf(t, err), name)
+	}
+
+	_, err = f.h.TaskCreate(ctx, tasks.TaskCreateIn{Caller: "global", Title: "x", ParentID: epic.ID, AssignSession: "zzz999"})
+	assert.Equal(t, ops.KindNotFound, kindOf(t, err))
+
+	_, err = f.h.TaskCreate(ctx, tasks.TaskCreateIn{
+		Caller: "global", Title: "Bad", Type: "epic", Children: children(t, `[{"title":"t","assignSession":"zzz999"}]`),
+	})
+	assert.Equal(t, ops.KindNotFound, kindOf(t, err))
+	all, err := f.h.TaskList(ctx, tasks.TaskListIn{Caller: "global", AllRepos: true, Status: tasks.StatusAll})
+	require.NoError(t, err)
+	for _, item := range all.Tasks {
+		assert.NotEqual(t, "Bad", item.Title, "a refused tree writes nothing")
+	}
+
+	require.Error(t, tasks.TaskUpdateIn{TaskID: id, AssignSession: f.sess.ID, Assign: true}.Validate())
+	require.Error(t, tasks.TaskUpdateIn{TaskID: id, AssignSession: f.sess.ID, Unassign: true}.Validate())
+	require.NoError(t, tasks.TaskUpdateIn{TaskID: id, AssignSession: f.sess.ID}.Validate())
+	require.Error(t, tasks.TaskCreateIn{Title: "T", Type: "epic", AssignSession: f.sess.ID, Children: []map[string]any{{"title": "c"}}}.Validate())
+}
+
 func TestAChatClaimsATask(t *testing.T) {
 	f := newFixture(t)
 	ctx := t.Context()

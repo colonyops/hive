@@ -16,7 +16,6 @@ import IconChevronRight from '~icons/lucide/chevron-right'
 import IconLayers from '~icons/lucide/layers'
 import IconCircleDot from '~icons/lucide/circle-dot'
 import IconLink2 from '~icons/lucide/link-2'
-import IconTerminal from '~icons/lucide/terminal'
 import IconTrash2 from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
@@ -27,13 +26,23 @@ import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useCodeCopy } from '@hive/ui/composables/useCodeCopy'
 import { useTasks } from '../../stores/useTasks'
 import { useTerminalSessions } from '../../stores/useTerminalSessions'
+import { useSessionStatuses } from '../../composables/useSessionStatuses'
+import { taskAgent } from '../../lib/taskAgent'
 import { relativeAgo } from '../../lib/age'
 import { renderGithubMarkdown } from '@hive/ui/lib/githubMarkdown'
 import { useCodeHighlight } from '@hive/ui/lib/highlight'
 import { externalMarkdownHref } from '@hive/ui/lib/markdownLinks'
-import { checkpointBody, isCheckpoint, matchesTaskFilter, statusMeta, TASK_STATUSES } from '../../lib/tasksPresentation'
+import {
+  checkpointBody,
+  isCheckpoint,
+  isTerminalStatus,
+  matchesTaskFilter,
+  statusMeta,
+  TASK_STATUSES,
+} from '../../lib/tasksPresentation'
 import type { TaskComment } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
+import TaskAgentBadge from './TaskAgentBadge.vue'
 import TaskStatusIcon from './TaskStatusIcon.vue'
 import { taskStatusIcon } from './taskStatusIcon'
 import { useTaskDelete } from './useTaskDelete'
@@ -100,14 +109,19 @@ function onBodyClick(event: MouseEvent): void {
   if (href) void Browser.OpenURL(href)
 }
 
-// The name of the linked session, from the same singleton the terminal
-// sidebar renders; an ended session has no loaded row, so the raw id stands
-// in rather than hiding the linkage.
+// The session name comes from the same singleton the terminal sidebar renders;
+// an ended session has no loaded row, so the raw id stands in rather than
+// hiding the assignment. TasksView keeps the status poll running.
 const { sessions } = useTerminalSessions()
-const sessionLabel = computed(() => {
+const { statuses: sessionStatuses } = useSessionStatuses()
+const agent = computed(() => {
   const id = detail.value?.sessionId
-  if (!id) return ''
-  return sessions.value.find((row) => row.id === id)?.name ?? id
+  if (!id) return null
+  return taskAgent(
+    id,
+    sessions.value.find((row) => row.id === id),
+    sessionStatuses.value[id],
+  )
 })
 
 // hc marks an item blocked for open/in_progress direct children OR explicit
@@ -246,16 +260,12 @@ watch(selectedId, () => {
                 aria-hidden="true"
               />{{ typeLabel }}
             </span>
-            <span
-              v-if="detail.sessionId"
-              class="inline-flex h-7.75 min-w-0 max-w-55 items-center gap-1.5 rounded-md border border-card px-2.5 text-caption text-text-2"
-              :title="`Session ${sessionLabel}`"
-              data-testid="task-detail-session"
-            >
-              <IconTerminal class="size-3.5 shrink-0 text-text-4" aria-hidden="true" /><span class="truncate">{{
-                sessionLabel
-              }}</span>
-            </span>
+            <TaskAgentBadge
+              v-if="agent"
+              :agent="agent"
+              :live="!isTerminalStatus(detail.status)"
+              testid="task-detail-session"
+            />
           </div>
           <InlineError
             v-if="statusError"

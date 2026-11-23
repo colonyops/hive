@@ -3,10 +3,13 @@ package engineops
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/colonyops/hive/internal/domain/hc"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/ops/tasks"
 )
@@ -25,8 +28,14 @@ func (h *Handlers) TaskCreate(ctx context.Context, in tasks.TaskCreateIn) (tasks
 	}
 
 	if len(in.Children) == 0 {
+		var assignee string
+		if in.AssignSession != "" {
+			if assignee, err = h.assignee(ctx, in.AssignSession); err != nil {
+				return tasks.TaskListOut{}, err
+			}
+		}
 		item, err := h.engine.HC().CreateItem(ctx, repo, hc.CreateItemInput{
-			Title: in.Title, Desc: in.Desc, Type: itemType, ParentID: in.ParentID,
+			Title: in.Title, Desc: in.Desc, Type: itemType, ParentID: in.ParentID, SessionID: assignee,
 		})
 		if err != nil {
 			return tasks.TaskListOut{}, opError(err, "create item")
@@ -36,6 +45,9 @@ func (h *Handlers) TaskCreate(ctx context.Context, in tasks.TaskCreateIn) (tasks
 
 	root := hc.CreateInput{Ref: in.Ref, Title: in.Title, Desc: in.Desc, Type: itemType}
 	if root.Children, err = decodeChildren(in.Children); err != nil {
+		return tasks.TaskListOut{}, err
+	}
+	if err := h.resolveAssignees(ctx, root.Children); err != nil {
 		return tasks.TaskListOut{}, err
 	}
 	items, err := h.engine.HC().CreateBulk(ctx, repo, root)
@@ -55,6 +67,11 @@ func decodeChildren(children []map[string]any) ([]hc.CreateInput, error) {
 		}
 		nested, _ := child["children"].([]any)
 		delete(child, "children")
+		assignSession, ok := child["assignSession"].(string)
+		if _, present := child["assignSession"]; present && !ok {
+			return nil, ops.Errorf(ops.KindInvalid, "children: assignSession is not a string")
+		}
+		delete(child, "assignSession")
 		raw, err := json.Marshal(child)
 		if err != nil {
 			return nil, ops.Errorf(ops.KindInvalid, "children: %v", err)
@@ -66,6 +83,7 @@ func decodeChildren(children []map[string]any) ([]hc.CreateInput, error) {
 		if strings.TrimSpace(in.Title) == "" {
 			return nil, ops.Errorf(ops.KindInvalid, "children: every item needs a title")
 		}
+		in.SessionID = assignSession
 		if len(nested) > 0 {
 			maps := make([]map[string]any, 0, len(nested))
 			for _, n := range nested {
@@ -116,6 +134,48 @@ func (h *Handlers) TaskList(ctx context.Context, in tasks.TaskListIn) (tasks.Tas
 	return tasks.TaskListOut{Tasks: nonNil(items)}, nil
 }
 
+// resolveAssignees replaces each child's assignSession with the id it names,
+// before anything is written, so one unknown session fails the whole tree.
+func (h *Handlers) resolveAssignees(ctx context.Context, items []hc.CreateInput) error {
+	for i := range items {
+		if items[i].SessionID != "" {
+			id, err := h.assignee(ctx, items[i].SessionID)
+			if err != nil {
+				return ops.Errorf(errKind(err), "children: item %q: %v", items[i].Title, err)
+			}
+			items[i].SessionID = id
+		}
+		if err := h.resolveAssignees(ctx, items[i].Children); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// assignee resolves assignSession to the id of a session or chat. An item
+// assigned to an id that names neither would never match task_list's
+// sessionId or task_next's assign, so the call fails instead.
+func (h *Handlers) assignee(ctx context.Context, value string) (string, error) {
+	if filepath.IsAbs(value) || value == sessionsvc.CallerGlobal {
+		return "", ops.Errorf(ops.KindInvalid, "assignSession %q is not a session or chat id", value)
+	}
+	c, err := h.resolve(ctx, value)
+	if err != nil {
+		return "", err
+	}
+	if c.ID == "" {
+		return "", ops.Errorf(ops.KindInvalid, "assignSession %q is not a session or chat id", value)
+	}
+	return c.ID, nil
+}
+
+func errKind(err error) ops.Kind {
+	if opErr, ok := errors.AsType[*ops.Error](err); ok {
+		return opErr.Kind
+	}
+	return ops.KindInternal
+}
+
 // localSessionID strips the local: qualifier. Items live on this machine, so
 // an id qualified with any other server can never match.
 func localSessionID(value string) (string, error) {
@@ -158,6 +218,13 @@ func (h *Handlers) TaskUpdate(ctx context.Context, in tasks.TaskUpdateIn) (hc.It
 			return hc.Item{}, err
 		}
 		update.SessionID = &c.ID
+	}
+	if in.AssignSession != "" {
+		id, err := h.assignee(ctx, in.AssignSession)
+		if err != nil {
+			return hc.Item{}, err
+		}
+		update.SessionID = &id
 	}
 	if in.Unassign {
 		empty := ""

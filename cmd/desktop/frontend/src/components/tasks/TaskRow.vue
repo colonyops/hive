@@ -9,17 +9,17 @@ import IconCopy from '~icons/lucide/copy'
 import IconEllipsis from '~icons/lucide/ellipsis'
 import IconLayers from '~icons/lucide/layers'
 import IconRotateCcw from '~icons/lucide/rotate-ccw'
-import IconTerminal from '~icons/lucide/terminal'
 import IconTrash2 from '~icons/lucide/trash-2'
 import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
-import AppTooltip from '@hive/ui/components/ui/AppTooltip.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import type { TaskItem } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { relativeAge } from '../../lib/age'
+import type { TaskAgent } from '../../lib/taskAgent'
 import { doneToggleStatus, isTerminalStatus, statusMeta, TASK_STATUSES } from '../../lib/tasksPresentation'
 import { taskStatusIcon } from './taskStatusIcon'
+import TaskAgentBadge from './TaskAgentBadge.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -30,15 +30,15 @@ const props = withDefaults(
     collapsed?: boolean
     /** [done/total] over the item's descendants, when it has any. */
     counts?: { done: number; total: number }
-    /** Display name for the linked session; absent when it isn't loaded (e.g. ended). */
-    sessionName?: string
+    /** The session the item is assigned to, with its live agent status. */
+    agent?: TaskAgent
   }>(),
   {
     depth: 0,
     expandable: false,
     collapsed: false,
     counts: undefined,
-    sessionName: undefined,
+    agent: undefined,
   },
 )
 const emit = defineEmits<{
@@ -173,14 +173,7 @@ function onMenuSelect(id: string): void {
       <IconBan class="size-2.5" aria-hidden="true" />Blocked
     </BaseBadge>
 
-    <AppTooltip v-if="item.sessionId" :text="`Linked to session ${sessionName || item.sessionId}`">
-      <span
-        class="inline-flex shrink-0 items-center gap-1 text-micro text-text-4"
-        :aria-label="`Session ${sessionName || item.sessionId}`"
-        data-testid="task-row-session"
-        ><IconTerminal class="size-3" aria-hidden="true"
-      /></span>
-    </AppTooltip>
+    <TaskAgentBadge v-if="agent" :agent="agent" :live="!closed" testid="task-row-session" />
 
     <!-- The age and the actions share one fixed cell, so hovering a row never
          reflows its title. -->

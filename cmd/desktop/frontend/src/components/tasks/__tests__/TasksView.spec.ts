@@ -16,6 +16,12 @@ const mocks = vi.hoisted(() => ({
   On: vi.fn(() => () => {}),
   SetText: vi.fn(),
   OpenURL: vi.fn(),
+  SessionStatuses: vi.fn(),
+  ServerSessionStatuses: vi.fn(),
+  ListSessions: vi.fn(),
+  ListServerSessions: vi.fn(),
+  Scratch: vi.fn(),
+  push: vi.fn(),
 }))
 
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/tasksservice', () => ({
@@ -26,6 +32,16 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
   PruneTasks: mocks.PruneTasks,
   TaskRepoKeys: mocks.TaskRepoKeys,
 }))
+vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
+  SessionStatuses: mocks.SessionStatuses,
+  ServerSessionStatuses: mocks.ServerSessionStatuses,
+  ListSessions: mocks.ListSessions,
+  ListServerSessions: mocks.ListServerSessions,
+}))
+vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/terminalservice', () => ({
+  Scratch: mocks.Scratch,
+}))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: mocks.push }) }))
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
   Clipboard: { SetText: mocks.SetText },
@@ -34,7 +50,9 @@ vi.mock('@wailsio/runtime', () => ({
 
 import TasksView from '../TasksView.vue'
 import { useTasks } from '../../../stores/useTasks'
+import { useTerminalSessions } from '../../../stores/useTerminalSessions'
 import { resetToastsForTests, useToasts } from '../../../composables/useToasts'
+import { resetSessionStatusesForTests } from '../../../composables/useSessionStatuses'
 
 interface TaskOverrides {
   status: string
@@ -80,6 +98,9 @@ describe('TasksView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetToastsForTests()
+    resetSessionStatusesForTests()
+    mocks.SessionStatuses.mockResolvedValue({ items: [], pollIntervalMs: 1500 })
+    mocks.ServerSessionStatuses.mockResolvedValue([])
     mocks.On.mockReturnValue(() => {})
     mocks.ListTasks.mockResolvedValue([])
     mocks.TaskRepoKeys.mockResolvedValue([])
@@ -100,6 +121,71 @@ describe('TasksView', () => {
     expect(rows[1].text()).toContain('Task t1')
     expect(rows[0].attributes('data-id')).toBe('e1')
     expect(rows[1].attributes('data-id')).toBe('t1')
+  })
+
+  it('shows the live agent status of the session a task is assigned to', async () => {
+    mocks.SessionStatuses.mockResolvedValue({
+      items: [{ sessionId: 's1', running: true, windows: [{ windowId: '@1', status: 'active', tool: 'claude' }] }],
+      pollIntervalMs: 1500,
+    })
+    mocks.ListTasks.mockResolvedValue([
+      task('t1', { status: 'in_progress', sessionId: 's1' }),
+      task('t2', { status: 'open' }),
+    ])
+    const wrapper = mount(TasksView)
+    await flushPromises()
+
+    const badge = wrapper.get('[data-id="t1"] [data-testid="task-row-session"]')
+    expect(badge.attributes('data-activity')).toBe('active')
+    expect(badge.text()).toBe('s1')
+    expect(wrapper.find('[data-id="t2"] [data-testid="task-row-session"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('opens the agent window of an active session from its chip, without selecting the row', async () => {
+    mocks.Scratch.mockResolvedValue(null)
+    mocks.ListSessions.mockResolvedValue([
+      { server: '', id: 's1', name: 'auth', slug: 'auth-s1', state: 'active' },
+      { server: '', id: 's2', name: 'old', slug: 'old-s2', state: 'recycled' },
+    ])
+    await useTerminalSessions().reload()
+    mocks.SessionStatuses.mockResolvedValue({
+      items: [{ sessionId: 's1', running: true, windows: [{ windowId: '@3', status: 'approval', tool: 'claude' }] }],
+      pollIntervalMs: 1500,
+    })
+    mocks.ListTasks.mockResolvedValue([
+      task('t1', { status: 'in_progress', sessionId: 's1' }),
+      task('t2', { status: 'in_progress', sessionId: 's2' }),
+    ])
+    const wrapper = mount(TasksView)
+    await flushPromises()
+    const { selectedId, select } = useTasks()
+    select('t2')
+    await flushPromises()
+
+    const chip = wrapper.get('[data-id="t1"] [data-testid="task-row-session"]')
+    expect(chip.element.tagName).toBe('BUTTON')
+    await chip.trigger('click')
+    expect(mocks.push).toHaveBeenCalledWith({ name: 'terminal', params: { slug: 'auth-s1' }, query: { window: '@3' } })
+    expect(selectedId.value).toBe('t2')
+
+    expect(wrapper.get('[data-id="t2"] [data-testid="task-row-session"]').element.tagName).toBe('SPAN')
+    wrapper.unmount()
+  })
+
+  it('does not show live activity on a closed task', async () => {
+    mocks.SessionStatuses.mockResolvedValue({
+      items: [{ sessionId: 's1', running: true, windows: [{ windowId: '@1', status: 'active', tool: 'claude' }] }],
+      pollIntervalMs: 1500,
+    })
+    mocks.ListTasks.mockResolvedValue([task('t1', { status: 'done', sessionId: 's1' })])
+    const { setFilter } = useTasks()
+    setFilter('all')
+    const wrapper = mount(TasksView)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="task-row-session"]').attributes('data-activity')).toBe('unknown')
+    wrapper.unmount()
   })
 
   it('shows the no-data hint when the repo has no tasks at all', async () => {
