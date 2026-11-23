@@ -151,8 +151,14 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
   })
 
   test('shows the diff of the checkout on the server', async ({ page }) => {
-    const sessions = JSON.parse(onServer('hive session list --json')) as { name: string; path: string }[]
-    const changed = `${sessions.find((s) => s.name === SESSION)!.path}/e2e-remote-change.txt`
+    // The list leaves the path out; show has it.
+    const listed = onServer('hive session list --json')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { id: string; name: string })
+    const id = listed.find((s) => s.name === SESSION)!.id
+    const shown = JSON.parse(onServer(`hive session show ${id} --json`)) as { path: string }
+    const changed = `${shown.path}/e2e-remote-change.txt`
     onServer(`printf 'one\\ntwo\\n' > ${changed}`)
     try {
       await stubTerminals(page)
