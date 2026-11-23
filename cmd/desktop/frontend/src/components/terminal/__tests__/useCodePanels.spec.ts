@@ -5,8 +5,8 @@ import { openTab, panelsOf, splitPanel } from '../../../lib/panelLayout'
 import { paneMayAutoFocus } from '../../../lib/terminalTree'
 import { focusedWindow, placeWindow } from '../../../lib/windowTabs'
 import { usePanelLayouts } from '../../../stores/usePanelLayouts'
-import { viewTab } from '../panelViews'
-import { useCodePanels } from '../useCodePanels'
+import { viewTab, viewsFor } from '../panelViews'
+import { codeViewHost, useCodePanels } from '../useCodePanels'
 
 const KEY = 'session-1'
 
@@ -56,6 +56,20 @@ function mountPanels(session: FakeSession, recentsLoaded = ref(true), tree: { is
   const panels = scope.run(() => useCodePanels({ pool, tree: fakeTree, ops } as any))!
   return { panels, ops, rows, scope, row, visibleSlug }
 }
+
+describe('codeViewHost', () => {
+  const tree = (server: boolean) => ({ isChat: () => false, isHiveSession: () => true, isServerSession: () => server })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the host reads only the tree's answers
+  const row = { id: 'box:s1', slug: 'box:hive-one' } as any
+
+  it('offers Diff for a server session, which reads the checkout on the server', () => {
+    expect(viewsFor(codeViewHost(row, tree(true)))).toEqual(['diff'])
+  })
+
+  it('offers Diff and Tasks for a local session', () => {
+    expect(viewsFor(codeViewHost(row, tree(false)))).toEqual(['diff', 'tasks'])
+  })
+})
 
 describe('useCodePanels', () => {
   beforeEach(() => {

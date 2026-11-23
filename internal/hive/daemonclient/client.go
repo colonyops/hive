@@ -186,6 +186,7 @@ var readProcedures = map[string]bool{
 	daemonv1connect.SessionServiceFileDiffsProcedure:     true,
 	daemonv1connect.SessionServiceBranchesProcedure:      true,
 	daemonv1connect.SessionServiceGitStatusesProcedure:   true,
+	daemonv1connect.SessionServiceAgentPanesProcedure:    true,
 }
 
 // fileDiffsTimeout outlasts the daemon's own 15s limit on a batch of diffs, so
@@ -617,6 +618,8 @@ var (
 	ErrFileImageUnsupported = errors.New("the daemon's hive is too old to show images in a diff; update hive and restart its daemon")
 	// ErrStartTmuxUnsupported is a daemon whose hive predates StartTmux.
 	ErrStartTmuxUnsupported = errors.New("the server's hive is too old to start a terminal; install the same hive version on both machines")
+	// ErrAgentPanesUnsupported is a daemon whose hive predates AgentPanes.
+	ErrAgentPanesUnsupported = errors.New("the server's hive is too old to list its agents; install the same hive version on both machines")
 )
 
 // GitStatuses reports a daemon that predates the RPC as such, so a user
@@ -635,6 +638,22 @@ func (c *Client) GitStatuses(ctx context.Context, ids []string) (map[string]gits
 		return nil, wire.FromConnectError(err)
 	}
 	return wire.GitStatusesFromProto(resp.Msg.GetStatuses()), nil
+}
+
+func (c *Client) AgentPanes(ctx context.Context, ids []string) (map[string][]status.AgentPane, error) {
+	if len(ids) == 0 {
+		return map[string][]status.AgentPane{}, nil
+	}
+	resp, err := retryRead(func() (*connect.Response[daemonv1.AgentPanesResponse], error) {
+		return c.sessions.AgentPanes(ctx, connect.NewRequest(&daemonv1.AgentPanesRequest{SessionIds: ids}))
+	})
+	if err != nil {
+		if connect.CodeOf(err) == connect.CodeUnimplemented {
+			return nil, ErrAgentPanesUnsupported
+		}
+		return nil, wire.FromConnectError(err)
+	}
+	return wire.AgentPanesFromProto(resp.Msg.GetSessions()), nil
 }
 
 // StartTmuxSession is not retried: a second start after a lost answer could

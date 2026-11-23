@@ -95,6 +95,9 @@ const (
 	// SessionServiceStartTmuxProcedure is the fully-qualified name of the SessionService's StartTmux
 	// RPC.
 	SessionServiceStartTmuxProcedure = "/hive.daemon.v1.SessionService/StartTmux"
+	// SessionServiceAgentPanesProcedure is the fully-qualified name of the SessionService's AgentPanes
+	// RPC.
+	SessionServiceAgentPanesProcedure = "/hive.daemon.v1.SessionService/AgentPanes"
 )
 
 // DaemonServiceClient is a client for the hive.daemon.v1.DaemonService service.
@@ -283,6 +286,9 @@ type SessionServiceClient interface {
 	// in the background, by that machine's rules. It creates the session
 	// and starts the agent when no tmux session runs.
 	StartTmux(context.Context, *connect.Request[v1.StartTmuxRequest]) (*connect.Response[v1.StartTmuxResponse], error)
+	// AgentPanes lists the agent panes of sessions on the daemon's machine,
+	// with pane ids in that machine's tmux, so a client can send text to one.
+	AgentPanes(context.Context, *connect.Request[v1.AgentPanesRequest]) (*connect.Response[v1.AgentPanesResponse], error)
 }
 
 // NewSessionServiceClient constructs a client for the hive.daemon.v1.SessionService service. By
@@ -428,6 +434,12 @@ func NewSessionServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(sessionServiceMethods.ByName("StartTmux")),
 			connect.WithClientOptions(opts...),
 		),
+		agentPanes: connect.NewClient[v1.AgentPanesRequest, v1.AgentPanesResponse](
+			httpClient,
+			baseURL+SessionServiceAgentPanesProcedure,
+			connect.WithSchema(sessionServiceMethods.ByName("AgentPanes")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -455,6 +467,7 @@ type sessionServiceClient struct {
 	branches          *connect.Client[v1.BranchesRequest, v1.BranchesResponse]
 	gitStatuses       *connect.Client[v1.GitStatusesRequest, v1.GitStatusesResponse]
 	startTmux         *connect.Client[v1.StartTmuxRequest, v1.StartTmuxResponse]
+	agentPanes        *connect.Client[v1.AgentPanesRequest, v1.AgentPanesResponse]
 }
 
 // List calls hive.daemon.v1.SessionService.List.
@@ -567,6 +580,11 @@ func (c *sessionServiceClient) StartTmux(ctx context.Context, req *connect.Reque
 	return c.startTmux.CallUnary(ctx, req)
 }
 
+// AgentPanes calls hive.daemon.v1.SessionService.AgentPanes.
+func (c *sessionServiceClient) AgentPanes(ctx context.Context, req *connect.Request[v1.AgentPanesRequest]) (*connect.Response[v1.AgentPanesResponse], error) {
+	return c.agentPanes.CallUnary(ctx, req)
+}
+
 // SessionServiceHandler is an implementation of the hive.daemon.v1.SessionService service.
 type SessionServiceHandler interface {
 	List(context.Context, *connect.Request[v1.ListRequest]) (*connect.Response[v1.ListResponse], error)
@@ -603,6 +621,9 @@ type SessionServiceHandler interface {
 	// in the background, by that machine's rules. It creates the session
 	// and starts the agent when no tmux session runs.
 	StartTmux(context.Context, *connect.Request[v1.StartTmuxRequest]) (*connect.Response[v1.StartTmuxResponse], error)
+	// AgentPanes lists the agent panes of sessions on the daemon's machine,
+	// with pane ids in that machine's tmux, so a client can send text to one.
+	AgentPanes(context.Context, *connect.Request[v1.AgentPanesRequest]) (*connect.Response[v1.AgentPanesResponse], error)
 }
 
 // NewSessionServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -744,6 +765,12 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 		connect.WithSchema(sessionServiceMethods.ByName("StartTmux")),
 		connect.WithHandlerOptions(opts...),
 	)
+	sessionServiceAgentPanesHandler := connect.NewUnaryHandler(
+		SessionServiceAgentPanesProcedure,
+		svc.AgentPanes,
+		connect.WithSchema(sessionServiceMethods.ByName("AgentPanes")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/hive.daemon.v1.SessionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SessionServiceListProcedure:
@@ -790,6 +817,8 @@ func NewSessionServiceHandler(svc SessionServiceHandler, opts ...connect.Handler
 			sessionServiceGitStatusesHandler.ServeHTTP(w, r)
 		case SessionServiceStartTmuxProcedure:
 			sessionServiceStartTmuxHandler.ServeHTTP(w, r)
+		case SessionServiceAgentPanesProcedure:
+			sessionServiceAgentPanesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -885,4 +914,8 @@ func (UnimplementedSessionServiceHandler) GitStatuses(context.Context, *connect.
 
 func (UnimplementedSessionServiceHandler) StartTmux(context.Context, *connect.Request[v1.StartTmuxRequest]) (*connect.Response[v1.StartTmuxResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.StartTmux is not implemented"))
+}
+
+func (UnimplementedSessionServiceHandler) AgentPanes(context.Context, *connect.Request[v1.AgentPanesRequest]) (*connect.Response[v1.AgentPanesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hive.daemon.v1.SessionService.AgentPanes is not implemented"))
 }

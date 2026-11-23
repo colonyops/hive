@@ -24,6 +24,8 @@ const props = defineProps<{
   viewed?: ReadonlySet<string>
   /** How many review comments each file holds. */
   commentCounts?: ReadonlyMap<string, number>
+  /** The checkout is on a server, which this machine's editor cannot open. */
+  serverCheckout?: boolean
 }>()
 const emit = defineEmits<{ pick: [path: string]; 'open-editor': [] }>()
 
@@ -117,16 +119,20 @@ function rowTitle(file: ChangedFile): string {
 
 const clipboard = useClipboard()
 
-const menuEntries: MenuEntry[] = [
+const menuEntries = computed<MenuEntry[]>(() => [
   { kind: 'action', id: 'copy-path', label: 'Copy path', icon: IconClipboardCopy, testid: 'changes-copy-path' },
-  {
-    kind: 'action',
-    id: 'open-editor',
-    label: 'Open in editor',
-    icon: IconExternalLink,
-    testid: 'changes-open-editor',
-  },
-]
+  ...(props.serverCheckout
+    ? []
+    : [
+        {
+          kind: 'action' as const,
+          id: 'open-editor',
+          label: 'Open in editor',
+          icon: IconExternalLink,
+          testid: 'changes-open-editor',
+        },
+      ]),
+])
 
 function openMenu(file: ChangedFile, event: MouseEvent): void {
   const toggle = event.currentTarget as HTMLElement

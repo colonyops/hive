@@ -83,6 +83,9 @@ func TestClientDrivesTheSessionAPIThroughTheDaemon(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "spawned", windowed.Name)
 
+	_, err = client.AgentPanes(ctx, []string{created.ID})
+	require.ErrorContains(t, err, "cannot find the agents", "a daemon without terminal status says so, not that no agent runs")
+
 	statuses, err := client.GitStatuses(ctx, []string{created.ID, "no-such-session"})
 	require.NoError(t, err)
 	require.Len(t, statuses, 1, "an id with no session is absent")

@@ -37,6 +37,13 @@ type codeAgents interface {
 	AgentPanes(ctx context.Context, sessions []*session.Session) map[string][]statussvc.AgentPane
 }
 
+// serverAgents reaches the agents of a session on a server: its panes, read
+// by the server's daemon, and the server's tmux to type into them.
+type serverAgents interface {
+	SessionAgentPanes(ctx context.Context, server, id string) (session.Session, []statussvc.AgentPane, error)
+	Input(ctx context.Context, server string) (agentInput, error)
+}
+
 type engineCodeAgents struct{ engine *hive.Engine }
 
 func (e engineCodeAgents) ListSessions(ctx context.Context) ([]session.Session, error) {
@@ -52,6 +59,8 @@ func (e engineCodeAgents) AgentPanes(ctx context.Context, sessions []*session.Se
 type resolvedTarget struct {
 	AgentTarget
 	deliverTo string
+	// server is the server whose tmux holds deliverTo, or "" for this machine.
+	server string
 }
 
 // AgentTargets lists the agents that can take text: classified agent panes in
@@ -104,8 +113,12 @@ func (s *ReviewService) resolveTarget(ctx context.Context, ref AgentTargetRef) (
 }
 
 // codeTargets lists the agent panes of active Code sessions, or of the one
-// session id when it is set.
+// session id when it is set. An id that names a server lists that session's
+// panes on the server; the list of every session stays on this machine.
 func (s *ReviewService) codeTargets(ctx context.Context, id string) ([]resolvedTarget, error) {
+	if ref, err := session.ParseRef(id, session.LocalServer); id != "" && err == nil && ref.Server != session.LocalServer {
+		return s.serverCodeTargets(ctx, id, ref)
+	}
 	if s.code == nil {
 		return nil, nil
 	}
@@ -123,30 +136,57 @@ func (s *ReviewService) codeTargets(ctx context.Context, id string) ([]resolvedT
 
 	var targets []resolvedTarget
 	for _, sess := range active {
-		for _, pane := range panes[sess.ID] {
-			status := pane.Status.Simplified()
-			if pane.Tool == "" || !sendable(status) {
-				continue
-			}
-			label := sess.Name
-			if repo := git.ExtractRepoName(sess.Remote); repo != "" {
-				label = repo + " / " + label
-			}
-			if pane.WindowName != "" {
-				label += " · " + pane.WindowName
-			}
-			targets = append(targets, resolvedTarget{
-				Kind:      AgentTargetSession,
-				ID:        sess.ID,
-				Pane:      pane.PaneID,
-				Label:     label,
-				Status:    string(status),
-				deliverTo: pane.PaneID,
-			})
-		}
+		targets = append(targets, paneTargets(sess, sess.ID, panes[sess.ID])...)
 	}
 	disambiguateLabels(targets)
 	return targets, nil
+}
+
+func (s *ReviewService) serverCodeTargets(ctx context.Context, id string, ref session.Ref) ([]resolvedTarget, error) {
+	if s.servers == nil {
+		return nil, Errorf(KindUnavailable, "sending to an agent on a server is not available")
+	}
+	sess, panes, err := s.servers.SessionAgentPanes(ctx, ref.Server, ref.ID)
+	if err != nil {
+		return nil, err
+	}
+	if sess.State != session.StateActive {
+		return nil, nil
+	}
+	targets := paneTargets(&sess, id, panes)
+	for i := range targets {
+		targets[i].server = ref.Server
+	}
+	disambiguateLabels(targets)
+	return targets, nil
+}
+
+// paneTargets turns a session's agent panes into targets under id, the id the
+// frontend knows the session by.
+func paneTargets(sess *session.Session, id string, panes []statussvc.AgentPane) []resolvedTarget {
+	var targets []resolvedTarget
+	for _, pane := range panes {
+		status := pane.Status.Simplified()
+		if pane.Tool == "" || !sendable(status) {
+			continue
+		}
+		label := sess.Name
+		if repo := git.ExtractRepoName(sess.Remote); repo != "" {
+			label = repo + " / " + label
+		}
+		if pane.WindowName != "" {
+			label += " · " + pane.WindowName
+		}
+		targets = append(targets, resolvedTarget{
+			Kind:      AgentTargetSession,
+			ID:        id,
+			Pane:      pane.PaneID,
+			Label:     label,
+			Status:    string(status),
+			deliverTo: pane.PaneID,
+		})
+	}
+	return targets
 }
 
 // disambiguateLabels names the pane where two agents would otherwise read the

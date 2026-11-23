@@ -247,6 +247,14 @@ func (s *sessionServer) StartTmux(ctx context.Context, req *connect.Request[daem
 	return connect.NewResponse(&daemonv1.StartTmuxResponse{Created: result.Created, Completed: result.Completed}), nil
 }
 
+func (s *sessionServer) AgentPanes(ctx context.Context, req *connect.Request[daemonv1.AgentPanesRequest]) (*connect.Response[daemonv1.AgentPanesResponse], error) {
+	panes, err := s.api.AgentPanes(ctx, req.Msg.GetSessionIds())
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(&daemonv1.AgentPanesResponse{Sessions: wire.AgentPanesToProto(panes)}), nil
+}
+
 // lineWriter sends each complete line written to it. The session service
 // writes progress with or without a trailing newline, so Flush sends the
 // rest.

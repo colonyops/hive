@@ -194,7 +194,7 @@ const layout = panels.layout
 const openChat = computed(() => recents.value.find((row) => row.id === openSessionId.value) ?? null)
 const chatAgent = computed(() => (openChat.value ? agentIconID(openChat.value.agent) : undefined))
 // A chat reads its workspace's space and has no checkout of its own.
-const chatViews = viewsFor({ chat: true, localCheckout: false, drive: true })
+const chatViews = viewsFor({ chat: true, checkout: false, localCheckout: false, drive: true })
 const paneShown = computed(() => (paneWindowId.value ? !!panels.windowPanel.value : true))
 const paneRegionPanel = computed(() => panels.windowPanel.value ?? panels.statusPanel.value)
 

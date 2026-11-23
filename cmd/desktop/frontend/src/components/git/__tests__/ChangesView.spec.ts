@@ -171,7 +171,7 @@ function changes(files: unknown[], extra: Record<string, unknown> = {}) {
 }
 const noState = { state: 'text', error: '' }
 
-async function mountView(props: { keysActive?: boolean } = {}) {
+async function mountView(props: { keysActive?: boolean; serverCheckout?: boolean } = {}) {
   const wrapper = mount(ChangesView, { props: { sessionId: 's1', ...props }, attachTo: document.body })
   await flushPromises()
   await flushPromises()
@@ -730,6 +730,26 @@ describe('ChangesView', () => {
 
     await wrapper.get(testid('changes-file-big-header')).get('button').trigger('click')
     expect(mocks.OpenSessionInEditor).toHaveBeenCalledWith('s1')
+    wrapper.unmount()
+  })
+
+  it('reads a server session where it is and offers no editor for it', async () => {
+    mocks.SessionChanges.mockResolvedValue(changes([file('big')]))
+    mocks.SessionFileDiffs.mockResolvedValue([{ path: 'big', text: '', state: 'truncated', error: '' }])
+    const wrapper = mount(ChangesView, {
+      props: { sessionId: 'box:s1', serverCheckout: true },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    await flushPromises()
+    expect(mocks.SessionChanges).toHaveBeenLastCalledWith('box:s1', { base: 'branch', against: '', commit: '' })
+    expect(wrapper.get(testid('changes-file-big-note')).text()).toContain('too large')
+    expect(wrapper.get(testid('changes-file-big-header')).text()).not.toContain('Open in editor')
+
+    await wrapper.get(testid('changes-row-big-menu')).trigger('click')
+    await flushPromises()
+    expect(document.querySelector(testid('changes-copy-path'))).not.toBeNull()
+    expect(document.querySelector(testid('changes-open-editor'))).toBeNull()
     wrapper.unmount()
   })
 

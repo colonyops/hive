@@ -1615,7 +1615,11 @@ so the local list never waits on ssh. Status follows the same rule:
 the server fleet. Data that lives in the checkout, such as git status, is read
 on the server through that API (`sessionapi.API.GitStatuses`), never through a
 local path. The daemon shares one git read between the clients that ask within
-a few seconds. Start asks the server to open the session's tmux session by its
+a few seconds. The Changes view reads its diffs the same way
+(`SessionChanges`, `SessionFileDiffs` and the rest). A review sent from it goes
+to an agent pane that the server's daemon names (`sessionapi.API.AgentPanes`),
+and the server's `tmuxcc.Manager` types it in, so a pane id is never read
+against the wrong tmux. Start asks the server to open the session's tmux session by its
 own rules (`sessionapi.API.StartTmuxSession`); the terminal then attaches over
 ssh. A failed list marks a server's rows offline, which is not the
 same as gone: an attached terminal stays until the server answers without the

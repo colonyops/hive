@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -28,6 +29,27 @@ func changesFixture(input *fakeAgentInput) *ReviewService {
 		},
 	}
 	return newReviewService(ReviewDeps{Code: code, Input: input})
+}
+
+type fakeServerAgents struct {
+	sess  session.Session
+	panes []statussvc.AgentPane
+	err   error
+	input *fakeAgentInput
+	asked []string
+}
+
+func (f *fakeServerAgents) SessionAgentPanes(_ context.Context, server, id string) (session.Session, []statussvc.AgentPane, error) {
+	f.asked = append(f.asked, server+":"+id)
+	return f.sess, f.panes, f.err
+}
+
+func (f *fakeServerAgents) Input(context.Context, string) (agentInput, error) { return f.input, nil }
+
+func serverChangesFixture(local *fakeAgentInput, servers *fakeServerAgents) *ReviewService {
+	svc := changesFixture(local)
+	svc.servers = servers
+	return svc
 }
 
 func diffComment(text string) DiffCommentInput {
@@ -140,4 +162,57 @@ func TestChangesTargetsTellApartAgentsThatReadTheSame(t *testing.T) {
 		labels = append(labels, target.Label)
 	}
 	assert.Equal(t, []string{"one · claude (%1)", "one · claude (%2)", "one · codex"}, labels)
+}
+
+func TestChangesTargetsOfAServerSessionComeFromTheServer(t *testing.T) {
+	t.Parallel()
+	servers := &fakeServerAgents{
+		sess: session.Session{ID: "s1", Name: "remote", State: session.StateActive, Remote: "https://github.com/acme/site"},
+		panes: []statussvc.AgentPane{
+			{PaneID: "%4", WindowName: "claude", Tool: "claude", Status: terminal.StatusReady},
+			{PaneID: "%5", Tool: "", Status: terminal.StatusReady},
+		},
+	}
+	targets, err := serverChangesFixture(&fakeAgentInput{}, servers).ChangesTargets(t.Context(), "box:s1")
+	require.NoError(t, err)
+	require.Len(t, targets, 1)
+	assert.Equal(t, "box:s1", targets[0].ID, "the target keeps the id the Code view knows")
+	assert.Equal(t, "%4", targets[0].Pane)
+	assert.Equal(t, "site / remote · claude", targets[0].Label)
+	assert.Equal(t, []string{"box:s1"}, servers.asked)
+}
+
+func TestSendChangesToAServerSessionTypesIntoTheServersTmux(t *testing.T) {
+	t.Parallel()
+	local, remote := &fakeAgentInput{}, &fakeAgentInput{}
+	servers := &fakeServerAgents{
+		sess:  session.Session{ID: "s1", Name: "remote", State: session.StateActive},
+		panes: []statussvc.AgentPane{{PaneID: "%1", Tool: "claude", Status: terminal.StatusReady}},
+		input: remote,
+	}
+	svc := serverChangesFixture(local, servers)
+
+	require.NoError(t, svc.SendChanges(t.Context(), "box:s1", "%1", []DiffCommentInput{diffComment("rename")}))
+
+	assert.Empty(t, local.sent, "pane %1 of this machine is another pane")
+	require.Len(t, remote.sent, 1)
+	assert.Equal(t, "%1", remote.sent[0].pane)
+	assert.Contains(t, remote.sent[0].text, "rename")
+}
+
+func TestSendChangesToAServerSessionFails(t *testing.T) {
+	t.Parallel()
+	for name, servers := range map[string]*fakeServerAgents{
+		"unreachable": {err: Errorf(KindUnavailable, "server down")},
+		"recycled":    {sess: session.Session{ID: "s1", State: session.StateRecycled}, panes: []statussvc.AgentPane{{PaneID: "%1", Tool: "claude", Status: terminal.StatusReady}}},
+		"on a prompt": {sess: session.Session{ID: "s1", State: session.StateActive}, panes: []statussvc.AgentPane{{PaneID: "%1", Tool: "claude", Status: terminal.StatusApproval}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			servers.input = &fakeAgentInput{}
+			err := serverChangesFixture(&fakeAgentInput{}, servers).SendChanges(t.Context(), "box:s1", "%1", []DiffCommentInput{diffComment("x")})
+			require.Error(t, err)
+			assert.Empty(t, servers.input.sent)
+		})
+	}
 }

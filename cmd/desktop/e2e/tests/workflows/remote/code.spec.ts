@@ -147,11 +147,38 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
     await expect(page.getByTestId('session-status-branch')).toHaveText('main', { timeout: 30_000 })
     await expect(page.getByTestId('terminal-pane-statusbar-reveal')).toHaveCount(0)
     await expect(page.getByTestId('terminal-pane-statusbar-open-editor')).toHaveCount(0)
-    await expect(page.getByTestId('terminal-statusbar-changes')).toHaveCount(0)
     await expect(page.getByTestId('session-status-host')).toHaveText('server-a')
   })
 
-  test('gives a server session tabs and a split, without the views that need a checkout', async ({ page, browserName }) => {
+  test('shows the diff of the checkout on the server', async ({ page }) => {
+    // The list leaves the path out; show has it.
+    const listed = onServer('hive session list --json')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { id: string; name: string })
+    const id = listed.find((s) => s.name === SESSION)!.id
+    const shown = JSON.parse(onServer(`hive session show ${id} --json`)) as { path: string }
+    const changed = `${shown.path}/e2e-remote-change.txt`
+    onServer(`printf 'one\\ntwo\\n' > ${changed}`)
+    try {
+      await stubTerminals(page)
+      await page.goto(`/#/terminal/${SLUG}`)
+      await findSession(page)
+      await expect(sessionRow(page)).toBeVisible({ timeout: 30_000 })
+
+      await page.getByTestId('panel-tab-add-p0').click()
+      await page.getByTestId('new-window-view-diff').click()
+      await expect(page.getByTestId('changes-view')).toBeVisible()
+      await expect(page.getByTestId('changes-row-e2e-remote-change.txt')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('changes-row-e2e-remote-change.txt-menu').click()
+      await expect(page.getByTestId('changes-copy-path')).toBeVisible()
+      await expect(page.getByTestId('changes-open-editor')).toHaveCount(0)
+    } finally {
+      onServer(`rm -f ${changed}`)
+    }
+  })
+
+  test('gives a server session tabs and a split, without the views that read this machine', async ({ page, browserName }) => {
     await stubTerminals(page)
     await page.goto(`/#/terminal/${SLUG}`)
     await findSession(page)
@@ -161,7 +188,7 @@ test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () 
 
     await page.getByTestId('panel-tab-add-p0').click()
     await expect(page.getByTestId('new-window-terminal')).toBeVisible()
-    await expect(page.getByTestId('new-window-view-diff')).toHaveCount(0)
+    await expect(page.getByTestId('new-window-view-diff')).toBeVisible()
     await expect(page.getByTestId('new-window-view-tasks')).toHaveCount(0)
     await page.keyboard.press('Escape')
 

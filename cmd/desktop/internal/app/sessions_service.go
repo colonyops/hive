@@ -494,17 +494,15 @@ func (s *SessionsService) SessionGitStatus(ctx context.Context, id string) (gits
 
 // SessionChanges lists what differs in the session's checkout. It goes through
 // the session API rather than the in-process engine, so it reads the checkout
-// on the machine that holds it.
+// on the machine that holds it, a server's included.
 func (s *SessionsService) SessionChanges(ctx context.Context, id string, target gitstatus.DiffTarget) (gitstatus.Changes, error) {
-	if strings.TrimSpace(id) == "" {
-		return gitstatus.Changes{}, Errorf(KindInvalid, "session id is required")
-	}
-	changes, err := s.sessions.SessionChanges(ctx, id, target)
-	if errors.Is(err, session.ErrNotFound) {
-		return gitstatus.Changes{}, Wrap(err, KindNotFound, "reading changes for session %q", id)
-	}
+	to, err := s.readTarget(id)
 	if err != nil {
-		return gitstatus.Changes{}, Wrap(err, KindInternal, "reading changes for session %q", id)
+		return gitstatus.Changes{}, err
+	}
+	changes, err := to.api.SessionChanges(ctx, to.id, target)
+	if err != nil {
+		return gitstatus.Changes{}, to.wrap(err, kindOfRead(err), "reading changes for session %q", id)
 	}
 	return changes, nil
 }
@@ -513,15 +511,13 @@ func (s *SessionsService) SessionChanges(ctx context.Context, id string, target 
 // the session API as SessionChanges does. The caller asks for a batch because one
 // git diff answers it.
 func (s *SessionsService) SessionFileDiffs(ctx context.Context, id string, target gitstatus.DiffTarget, paths []string) ([]gitstatus.FileDiff, error) {
-	if strings.TrimSpace(id) == "" {
-		return nil, Errorf(KindInvalid, "session id is required")
-	}
-	diffs, err := s.sessions.SessionFileDiffs(ctx, id, target, paths)
-	if errors.Is(err, session.ErrNotFound) {
-		return nil, Wrap(err, KindNotFound, "reading diffs for session %q", id)
-	}
+	to, err := s.readTarget(id)
 	if err != nil {
-		return nil, Wrap(err, KindInternal, "reading diffs for session %q", id)
+		return nil, err
+	}
+	diffs, err := to.api.SessionFileDiffs(ctx, to.id, target, paths)
+	if err != nil {
+		return nil, to.wrap(err, kindOfRead(err), "reading diffs for session %q", id)
 	}
 	return diffs, nil
 }
@@ -529,23 +525,21 @@ func (s *SessionsService) SessionFileDiffs(ctx context.Context, id string, targe
 // SessionFileContext reads one file's diff with the whole file as context, for
 // showing the unchanged lines a diff leaves out.
 func (s *SessionsService) SessionFileContext(ctx context.Context, id string, target gitstatus.DiffTarget, path string) (gitstatus.FileDiff, error) {
-	if strings.TrimSpace(id) == "" {
-		return gitstatus.FileDiff{}, Errorf(KindInvalid, "session id is required")
+	to, err := s.readTarget(id)
+	if err != nil {
+		return gitstatus.FileDiff{}, err
 	}
-	diff, err := s.sessions.SessionFileContext(ctx, id, target, path)
+	diff, err := to.api.SessionFileContext(ctx, to.id, target, path)
 	// The daemon is a separate install and can be older than Desktop. Desktop
 	// keeps its own engine open, which can read a local session's checkout.
-	// A session on another machine is not in it, and then the daemon's answer stands.
-	if errors.Is(err, daemonclient.ErrFileContextUnsupported) && s.hive != nil {
-		if local, localErr := sessionapi.NewLocal(s.hive).SessionFileContext(ctx, id, target, path); !errors.Is(localErr, session.ErrNotFound) {
+	// A server's session is not in it, and then the server's answer stands.
+	if errors.Is(err, daemonclient.ErrFileContextUnsupported) && to.local() && s.hive != nil {
+		if local, localErr := sessionapi.NewLocal(s.hive).SessionFileContext(ctx, to.id, target, path); !errors.Is(localErr, session.ErrNotFound) {
 			diff, err = local, localErr
 		}
 	}
-	if errors.Is(err, session.ErrNotFound) {
-		return gitstatus.FileDiff{}, Wrap(err, KindNotFound, "reading %s for session %q", path, id)
-	}
 	if err != nil {
-		return gitstatus.FileDiff{}, Wrap(err, KindInternal, "reading %s for session %q", path, id)
+		return gitstatus.FileDiff{}, to.wrap(err, kindOfRead(err), "reading %s for session %q", path, id)
 	}
 	return diff, nil
 }
@@ -554,37 +548,47 @@ func (s *SessionsService) SessionFileContext(ctx context.Context, id string, tar
 // an image. A daemon older than the RPC falls back to Desktop's own engine, as
 // SessionFileContext does.
 func (s *SessionsService) SessionFileImage(ctx context.Context, id string, target gitstatus.DiffTarget, path string) (gitstatus.FileImage, error) {
-	if strings.TrimSpace(id) == "" {
-		return gitstatus.FileImage{}, Errorf(KindInvalid, "session id is required")
+	to, err := s.readTarget(id)
+	if err != nil {
+		return gitstatus.FileImage{}, err
 	}
-	image, err := s.sessions.SessionFileImage(ctx, id, target, path)
-	if errors.Is(err, daemonclient.ErrFileImageUnsupported) && s.hive != nil {
-		if local, localErr := sessionapi.NewLocal(s.hive).SessionFileImage(ctx, id, target, path); !errors.Is(localErr, session.ErrNotFound) {
+	image, err := to.api.SessionFileImage(ctx, to.id, target, path)
+	if errors.Is(err, daemonclient.ErrFileImageUnsupported) && to.local() && s.hive != nil {
+		if local, localErr := sessionapi.NewLocal(s.hive).SessionFileImage(ctx, to.id, target, path); !errors.Is(localErr, session.ErrNotFound) {
 			image, err = local, localErr
 		}
 	}
-	if errors.Is(err, session.ErrNotFound) {
-		return gitstatus.FileImage{}, Wrap(err, KindNotFound, "reading %s for session %q", path, id)
-	}
 	if err != nil {
-		return gitstatus.FileImage{}, Wrap(err, KindInternal, "reading %s for session %q", path, id)
+		return gitstatus.FileImage{}, to.wrap(err, kindOfRead(err), "reading %s for session %q", path, id)
 	}
 	return image, nil
 }
 
 // SessionBranches lists the full refs the session's checkout can compare against.
 func (s *SessionsService) SessionBranches(ctx context.Context, id string) ([]string, error) {
-	if strings.TrimSpace(id) == "" {
-		return nil, Errorf(KindInvalid, "session id is required")
-	}
-	refs, err := s.sessions.SessionBranches(ctx, id)
-	if errors.Is(err, session.ErrNotFound) {
-		return nil, Wrap(err, KindNotFound, "reading branches for session %q", id)
-	}
+	to, err := s.readTarget(id)
 	if err != nil {
-		return nil, Wrap(err, KindInternal, "reading branches for session %q", id)
+		return nil, err
+	}
+	refs, err := to.api.SessionBranches(ctx, to.id)
+	if err != nil {
+		return nil, to.wrap(err, kindOfRead(err), "reading branches for session %q", id)
 	}
 	return refs, nil
+}
+
+func (s *SessionsService) readTarget(id string) (sessionTarget, error) {
+	if strings.TrimSpace(id) == "" {
+		return sessionTarget{}, Errorf(KindInvalid, "session id is required")
+	}
+	return s.apiTarget(id)
+}
+
+func kindOfRead(err error) Kind {
+	if errors.Is(err, session.ErrNotFound) {
+		return KindNotFound
+	}
+	return KindInternal
 }
 
 // SessionPullRequest resolves the pull request for a branch SessionGitStatus

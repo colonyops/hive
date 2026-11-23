@@ -51,6 +51,9 @@ service SessionService {
   // in the background, by that machine's rules. It creates the session
   // and starts the agent when no tmux session runs.
   rpc StartTmux(StartTmuxRequest) returns (StartTmuxResponse);
+  // AgentPanes lists the agent panes of sessions on the daemon's machine,
+  // with pane ids in that machine's tmux, so a client can send text to one.
+  rpc AgentPanes(AgentPanesRequest) returns (AgentPanesResponse);
 }
 
 message HelloRequest {}
@@ -303,6 +306,27 @@ message StartTmuxRequest {
 message StartTmuxResponse {
   bool created = 1;
   bool completed = 2;
+}
+
+message AgentPanesRequest {
+  repeated string session_ids = 1;
+}
+
+message AgentPanesResponse {
+  // sessions is keyed by session id. A session that does not exist, or whose
+  // panes could not be read, is absent.
+  map<string, AgentPaneList> sessions = 1;
+}
+
+message AgentPaneList {
+  repeated AgentPane panes = 1;
+}
+
+message AgentPane {
+  string pane_id = 1;
+  string window_name = 2;
+  string status = 3;
+  string tool = 4;
 }
 
 message GitStatusesRequest {

@@ -50,6 +50,7 @@ type ReviewDeps struct {
 	Reviews review.Store
 	Drive   *DriveService
 	Code    codeAgents
+	Servers serverAgents
 	Chats   chatAgents
 	Input   agentInput
 	Logger  zerolog.Logger
@@ -68,6 +69,7 @@ type ReviewService struct {
 	reviews     review.Store
 	drive       *DriveService
 	code        codeAgents
+	servers     serverAgents
 	chats       chatAgents
 	input       agentInput
 	submitDelay time.Duration
@@ -79,6 +81,7 @@ func newReviewService(d ReviewDeps) *ReviewService {
 		reviews:     d.Reviews,
 		drive:       d.Drive,
 		code:        d.Code,
+		servers:     d.Servers,
 		chats:       d.Chats,
 		input:       d.Input,
 		submitDelay: sendSubmitDelay,

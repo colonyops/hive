@@ -150,6 +150,27 @@ func (l *Local) StartTmuxSession(ctx context.Context, id string) (multiplexer.La
 	return l.engine.Sessions().OpenTmuxSession(ctx, sess.Name, sess.Path, sess.Remote, "", true)
 }
 
+func (l *Local) AgentPanes(ctx context.Context, ids []string) (map[string][]status.AgentPane, error) {
+	if !l.engine.Status().Available() {
+		return nil, ErrStatusUnavailable
+	}
+	all, err := l.engine.Sessions().ListSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	wanted := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		wanted[id] = true
+	}
+	var active []*session.Session
+	for i := range all {
+		if wanted[all[i].ID] && all[i].State == session.StateActive {
+			active = append(active, &all[i])
+		}
+	}
+	return l.engine.Status().AgentPanes(ctx, active), nil
+}
+
 func (l *Local) StatusAvailable() bool {
 	return l.engine.Status().Available()
 }

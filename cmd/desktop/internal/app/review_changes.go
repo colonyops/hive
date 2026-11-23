@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/terminal"
@@ -72,8 +73,25 @@ func (s *ReviewService) deliver(ctx context.Context, to AgentTargetRef, text str
 	if target.Status == string(terminal.StatusApproval) {
 		return Errorf(KindConflict, "%s is waiting on a prompt", target.Label)
 	}
-	return Wrap(s.input.SendText(ctx, target.deliverTo, []byte(text), s.submitDelay), KindInternal, "sending the feedback to %s", target.Label)
+	if target.server == "" {
+		return Wrap(s.input.SendText(ctx, target.deliverTo, []byte(text), s.submitDelay), KindInternal, "sending the feedback to %s", target.Label)
+	}
+	input, err := s.servers.Input(ctx, target.server)
+	if err != nil {
+		return err
+	}
+	// ssh to a frozen server blocks until its keepalive gives up, and the
+	// Send button waits on this call.
+	ctx, cancel := context.WithTimeout(ctx, serverSendTimeout+s.submitDelay)
+	defer cancel()
+	if err := input.SendText(ctx, target.deliverTo, []byte(text), s.submitDelay); err != nil {
+		return serverError(err, KindUnavailable, "sending the feedback to %s on server %q", target.Label, target.server)
+	}
+	return nil
 }
+
+// serverSendTimeout bounds the three tmux commands of a send over ssh.
+const serverSendTimeout = 15 * time.Second
 
 func diffComments(comments []DiffCommentInput) ([]review.DiffComment, error) {
 	converted := make([]review.DiffComment, 0, len(comments))
