@@ -2,13 +2,10 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/rs/zerolog"
@@ -17,16 +14,10 @@ import (
 	"charm.land/glamour/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/cmd/hive/internal/app"
-	"github.com/colonyops/hive/cmd/hive/internal/opscli"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui"
 	"github.com/colonyops/hive/internal/domain/hc"
-	"github.com/colonyops/hive/internal/hive/engineops"
-	sessionsvc "github.com/colonyops/hive/internal/hive/session"
-	"github.com/colonyops/hive/internal/ops"
-	"github.com/colonyops/hive/internal/ops/tasks"
 	"github.com/colonyops/hive/internal/platform/git"
-	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/timeutil"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
@@ -51,18 +42,14 @@ func (cmd *HoneycombCmd) Register(app *cli.Command) *cli.Command {
 		Description: `hc (Honeycomb) is a task tracking system for LLM agents — like GitHub Issues,
 but scoped to a repository and designed for machine consumption.
 
-Session ID and repo key are auto-detected from the working directory.`,
+Run it with no subcommand to open the task browser. The subcommands are the
+tasks operations of the catalog, the same ones Hive Desktop serves over MCP.
+They print JSON Lines; list, get and context get print a tree, a styled item
+or markdown when stdout is a terminal.
+
+The caller and the repository come from --caller, else $HIVE_AGENT_SESSION,
+else the working directory.`,
 		Action: cmd.run,
-		Commands: []*cli.Command{
-			cmd.createCmd(),
-			cmd.listCmd(),
-			cmd.showCmd(),
-			cmd.updateCmd(),
-			cmd.nextCmd(),
-			cmd.commentCmd(),
-			cmd.contextCmd(),
-			cmd.pruneCmd(),
-		},
 	})
 	return app
 }
@@ -88,28 +75,6 @@ func (cmd *HoneycombCmd) logger() *zerolog.Logger {
 	return &logger
 }
 
-func (cmd *HoneycombCmd) ops() *engineops.Handlers {
-	return engineops.New(cmd.app.Logger, cmd.app.Engine)
-}
-
-// childMaps hands a bulk create's children to task_create, which takes them
-// as JSON objects because a recursive type has no inferred schema.
-func childMaps(children []hc.CreateInput) ([]map[string]any, error) {
-	raw, err := json.Marshal(children)
-	if err != nil {
-		return nil, fmt.Errorf("encode children: %w", err)
-	}
-	var out []map[string]any
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, fmt.Errorf("encode children: %w", err)
-	}
-	return out, nil
-}
-
-func (cmd *HoneycombCmd) detectSession(ctx context.Context) string {
-	return callingSessionID(ctx, cmd.app, "", "cli.hc")
-}
-
 func (cmd *HoneycombCmd) detectRepoKey(ctx context.Context) string {
 	url, err := cmd.app.Sessions().Git().RemoteURL(ctx, ".")
 	if err != nil {
@@ -121,208 +86,6 @@ func (cmd *HoneycombCmd) detectRepoKey(ctx context.Context) string {
 		return ""
 	}
 	return owner + "/" + repoName
-}
-
-func (cmd *HoneycombCmd) createCmd() *cli.Command {
-	var (
-		flagType     string
-		flagDesc     string
-		flagParentID string
-	)
-	bulk := iojson.FileReader[hc.CreateInput]{}
-	return &cli.Command{
-		Name:      "create",
-		Aliases:   []string{"new", "add"},
-		Usage:     "Create a task or epic",
-		UsageText: "hive hc create [title] [--type epic|task] [--desc <desc>] [--parent <id>]",
-		Description: `Creates a single item from flags, or a bulk tree from JSON (--file or stdin).
-
-Tasks can nest under other tasks using "children" to create subtrees. The "next"
-command walks the tree and only returns leaf tasks — parent tasks act as groupings
-that resolve when all their children are done. Nesting supports up to 10 levels.
-
-Bulk JSON format (pipe or --file):
-  {
-    "title": "Auth System",
-    "type": "epic",
-    "desc": "Implement full auth stack",
-    "children": [
-      {"title": "JWT middleware", "type": "task"},
-      {"title": "Login endpoint", "type": "task", "desc": "POST /auth/login"},
-      {
-        "title": "OAuth integration",
-        "type": "task",
-        "children": [
-          {"title": "Google provider", "type": "task"},
-          {"title": "GitHub provider", "type": "task"}
-        ]
-      }
-    ]
-  }
-
-To express blocker dependencies between items in a bulk create, use "ref" and "blockers":
-  {
-    "title": "Auth System",
-    "type": "epic",
-    "children": [
-      {"ref": "jwt", "title": "JWT middleware", "type": "task"},
-      {"title": "Login endpoint", "type": "task", "blockers": ["jwt"]}
-    ]
-  }
-The "ref" field is a local label (not stored); "blockers" lists refs that must complete first.
-
-Examples:
-  hive hc create "Implement auth" --type task --parent hc-abc123
-  echo '{"title":"Auth System","type":"epic","children":[...]}' | hive hc create
-  hive hc create --file epic.json`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "type", Usage: "item type (epic, task)", Value: "task", Destination: &flagType},
-			&cli.StringFlag{Name: "desc", Aliases: []string{"d"}, Usage: "item description", Destination: &flagDesc},
-			&cli.StringFlag{Name: "parent", Aliases: []string{"p"}, Usage: "parent item ID", Destination: &flagParentID},
-			bulk.Flag(),
-		},
-		Metadata: alwaysJSON(),
-		Action: func(ctx context.Context, c *cli.Command) error {
-			repoKey := cmd.detectRepoKey(ctx)
-			if repoKey == "" {
-				cmd.logger().Warn().Msg("could not detect repo key; items will not be scoped to a repository")
-			}
-
-			if c.NArg() == 0 {
-				input, err := bulk.Read()
-				if err != nil {
-					return fmt.Errorf("read input: %w", err)
-				}
-				if input.Type != hc.ItemTypeEpic {
-					return fmt.Errorf("create bulk: root item must be of type epic, got %q", input.Type)
-				}
-				children, err := childMaps(input.Children)
-				if err != nil {
-					return err
-				}
-				out, err := cmd.ops().TaskCreate(ctx, tasks.TaskCreateIn{
-					Caller: sessionsvc.CallerGlobal, Repo: repoKey,
-					Ref: input.Ref, Title: input.Title, Type: string(input.Type), Desc: input.Desc, Children: children,
-				})
-				if err != nil {
-					return err
-				}
-				return opscli.Print(c.Root().Writer, out)
-			}
-
-			itemType, err := hc.ParseItemType(flagType)
-			if err != nil {
-				return invalidf("invalid type %q: valid values are epic, task", flagType)
-			}
-
-			if itemType == hc.ItemTypeTask && flagParentID == "" {
-				return fmt.Errorf("tasks require a --parent; use --type epic to create a root item")
-			}
-
-			out, err := cmd.ops().TaskCreate(ctx, tasks.TaskCreateIn{
-				Caller: sessionsvc.CallerGlobal, Repo: repoKey,
-				Title: c.Args().First(), Desc: flagDesc, Type: string(itemType), ParentID: flagParentID,
-			})
-			if err != nil {
-				return err
-			}
-			return opscli.Print(c.Root().Writer, out)
-		},
-	}
-}
-
-func (cmd *HoneycombCmd) listCmd() *cli.Command {
-	var (
-		flagStatus   string
-		flagSession  string
-		flagJSON     bool
-		flagAll      bool
-		flagAllRepos bool
-	)
-	return &cli.Command{
-		Name:      "list",
-		Aliases:   []string{"ls"},
-		Usage:     "List items (defaults to open items)",
-		UsageText: "hive hc list [epic-id] [--status <status>] [--all] [--all-repos] [--session-id <id>] [--json]",
-		Description: `Lists items as a colored tree. Optional positional arg filters by epic ID.
-
-By default only open items are shown. Use --all to show all statuses,
-or --status to filter by a specific status.
-
-Use --all-repos to list items across all repos (ignores CWD repo detection).
-
-With --json, outputs flat JSON lines instead of the tree view.
-
---session-id takes a bare session id or local:<id>. Items live on this
-machine, so an id qualified with another server is an error.
-
-Examples:
-  hive hc list
-  hive hc list --all
-  hive hc list --all-repos --json
-  hive hc list --all-repos --status in_progress --json
-  hive hc list hc-abc123
-  hive hc list --status done
-  hive hc list --session-id local:abc123
-  hive hc list --json hc-abc123`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "status", Usage: "filter by status (open, in_progress, done, cancelled)", Destination: &flagStatus},
-			&cli.BoolFlag{Name: "all", Usage: "show all statuses (overrides default open filter)", Destination: &flagAll},
-			&cli.BoolFlag{Name: "all-repos", Usage: "list items across all repos, ignoring CWD repo detection", Destination: &flagAllRepos},
-			&cli.StringFlag{Name: "session-id", Usage: "filter by session id (bare or local:<id>)", Destination: &flagSession},
-			&cli.BoolFlag{Name: "json", Usage: "output as JSON lines", Destination: &flagJSON},
-		},
-		Action: func(ctx context.Context, c *cli.Command) error {
-			var repoKey string
-			if !flagAllRepos {
-				repoKey = cmd.detectRepoKey(ctx)
-			}
-			sessionID, err := parseHCSessionID(flagSession)
-			if err != nil {
-				return err
-			}
-			in := tasks.TaskListIn{
-				Caller: sessionsvc.CallerGlobal, Repo: repoKey, AllRepos: repoKey == "",
-				EpicID: c.Args().First(), SessionID: sessionID,
-			}
-			switch {
-			case flagStatus != "":
-				if _, err := hc.ParseStatus(flagStatus); err != nil {
-					return invalidf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
-				}
-				in.Status = flagStatus
-			case flagAll:
-				in.Status = tasks.StatusAll
-			}
-
-			out, err := cmd.ops().TaskList(ctx, in)
-			if err != nil {
-				return err
-			}
-			if flagJSON {
-				return opscli.Print(c.Root().Writer, out)
-			}
-			renderColoredTree(c.Root().Writer, out.Tasks)
-			return nil
-		},
-	}
-}
-
-// parseHCSessionID strips the local: qualifier. Honeycomb items live on this
-// machine, so an id qualified with any other server can never match.
-func parseHCSessionID(value string) (string, error) {
-	server, id, qualified := strings.Cut(value, ":")
-	switch {
-	case !qualified:
-		return value, nil
-	case server == "local":
-		return id, nil
-	default:
-		return "", &ops.Error{
-			Kind: ops.KindInvalid,
-			Msg:  fmt.Sprintf("--session-id %q names server %q; honeycomb items live on this machine, so use a bare id or local:<id>", value, server),
-		}
-	}
 }
 
 type treeNode struct {
@@ -459,65 +222,6 @@ func renderMarkdown(w io.Writer, markdown string) {
 	_, _ = fmt.Fprint(w, markdown)
 }
 
-func (cmd *HoneycombCmd) showCmd() *cli.Command {
-	var flagJSON bool
-	return &cli.Command{
-		Name:      "show",
-		Aliases:   []string{"view", "get"},
-		Usage:     "Show an item and its comments",
-		UsageText: "hive hc show <id> [--json]",
-		Description: `Shows an item with its comments in a styled view.
-
-With --json, outputs the item and comments as JSON lines (original behavior).
-
-Examples:
-  hive hc show hc-abc123
-  hive hc show hc-abc123 --json`,
-		Flags: []cli.Flag{
-			&cli.BoolFlag{Name: "json", Usage: "output as JSON lines", Destination: &flagJSON},
-		},
-		Action: func(ctx context.Context, c *cli.Command) error {
-			if c.NArg() < 1 {
-				return invalidf("item ID required as argument")
-			}
-			id := c.Args().First()
-
-			out, err := cmd.ops().TaskGet(ctx, tasks.TaskGetIn{TaskID: id})
-			if err != nil {
-				return err
-			}
-			if flagJSON {
-				return opscli.Print(c.Root().Writer, out)
-			}
-			item, comments := out.Task, out.Comments
-
-			// Resolve epic title for breadcrumb
-			var epicTitle string
-			if item.EpicID != "" {
-				epic, err := cmd.app.HC().GetItem(ctx, item.EpicID)
-				if err != nil {
-					cmd.logger().Debug().Err(err).Str("epic_id", item.EpicID).Msg("failed to resolve epic title")
-				} else {
-					epicTitle = epic.Title
-				}
-			}
-
-			var blockers []hc.Item
-			for _, blockerID := range item.BlockerIDs {
-				b, err := cmd.app.HC().GetItem(ctx, blockerID)
-				if err != nil {
-					cmd.logger().Debug().Err(err).Str("blocker_id", blockerID).Msg("failed to fetch blocker item")
-					continue
-				}
-				blockers = append(blockers, b)
-			}
-
-			renderItem(c.Root().Writer, item, comments, epicTitle, blockers)
-			return nil
-		},
-	}
-}
-
 // terminalWidth returns the terminal width from w if it's a TTY, or 80 as a default.
 func terminalWidth(w io.Writer) int {
 	if f, ok := w.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
@@ -633,259 +337,5 @@ func renderItem(w io.Writer, item hc.Item, comments []hc.Comment, epicTitle stri
 				_, _ = fmt.Fprintf(w, "%s%s\n", pipePrefix, fgStyle.Render(line))
 			}
 		}
-	}
-}
-
-func (cmd *HoneycombCmd) updateCmd() *cli.Command {
-	var (
-		flagStatus        string
-		flagAssign        bool
-		flagUnassign      bool
-		flagAddBlocker    string
-		flagRemoveBlocker string
-		flagTitle         string
-		flagDesc          string
-	)
-	return &cli.Command{
-		Name:      "update",
-		Aliases:   []string{"set", "edit"},
-		Usage:     "Update an item's status, title, desc, or session assignment",
-		UsageText: "hive hc update <id> [--status <status>] [--assign] [--unassign] [--add-blocker <id>] [--remove-blocker <id>] [--title <title>] [--desc <desc>]",
-		Description: `Updates an item's status, title, description, and/or session assignment.
-
-Status values: open, in_progress, done, cancelled
-
-Examples:
-  hive hc update hc-abc123 --status done
-  hive hc update hc-abc123 --status in_progress --assign
-  hive hc update hc-abc123 --unassign
-  hive hc update hc-abc123 --add-blocker hc-dep456
-  hive hc update hc-abc123 --remove-blocker hc-dep456
-  hive hc update hc-abc123 --title "new title"
-  hive hc update hc-abc123 --desc "new description"`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "status", Usage: "new status (open, in_progress, done, cancelled)", Destination: &flagStatus},
-			&cli.BoolFlag{Name: "assign", Usage: "assign to current session", Destination: &flagAssign},
-			&cli.BoolFlag{Name: "unassign", Usage: "remove session assignment", Destination: &flagUnassign},
-			&cli.StringFlag{Name: "add-blocker", Usage: "add an explicit blocker (item ID that must complete first)", Destination: &flagAddBlocker},
-			&cli.StringFlag{Name: "remove-blocker", Usage: "remove an explicit blocker by item ID", Destination: &flagRemoveBlocker},
-			&cli.StringFlag{Name: "title", Usage: "new title for the item", Destination: &flagTitle},
-			&cli.StringFlag{Name: "desc", Usage: "new description for the item", Destination: &flagDesc},
-		},
-		Metadata: alwaysJSON(),
-		Action: func(ctx context.Context, c *cli.Command) error {
-			if c.NArg() < 1 {
-				return invalidf("item ID required as argument")
-			}
-			id := c.Args().First()
-
-			if flagStatus == "" && !flagAssign && !flagUnassign && flagAddBlocker == "" && flagRemoveBlocker == "" && !c.IsSet("title") && !c.IsSet("desc") {
-				return invalidf("at least one of --status, --assign, --unassign, --add-blocker, --remove-blocker, --title, or --desc is required")
-			}
-
-			if flagAddBlocker != "" && flagRemoveBlocker != "" {
-				return invalidf("--add-blocker and --remove-blocker are mutually exclusive")
-			}
-
-			in := tasks.TaskUpdateIn{
-				Caller: sessionsvc.CallerGlobal, TaskID: id, Status: flagStatus,
-				Assign: flagAssign, Unassign: flagUnassign, AddBlocker: flagAddBlocker, RemoveBlocker: flagRemoveBlocker,
-			}
-			if flagStatus != "" {
-				if _, err := hc.ParseStatus(flagStatus); err != nil {
-					return invalidf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
-				}
-			}
-			if flagAssign && flagUnassign {
-				return invalidf("--assign and --unassign are mutually exclusive")
-			}
-			if flagAssign {
-				if in.Caller = cmd.detectSession(ctx); in.Caller == "" {
-					return fmt.Errorf("could not detect current session; use 'hive session' to verify")
-				}
-			}
-			if c.IsSet("title") {
-				if flagTitle == "" {
-					return invalidf("--title cannot be empty")
-				}
-				in.Title = &flagTitle
-			}
-			if c.IsSet("desc") {
-				in.Desc = &flagDesc
-			}
-
-			item, err := cmd.ops().TaskUpdate(ctx, in)
-			if err != nil {
-				return err
-			}
-			return iojson.WriteLine(c.Root().Writer, item)
-		},
-	}
-}
-
-func (cmd *HoneycombCmd) nextCmd() *cli.Command {
-	var flagAssign bool
-	return &cli.Command{
-		Name:      "next",
-		Usage:     "Get the next actionable task in an epic",
-		UsageText: "hive hc next <epic-id> [--assign]",
-		Description: `Returns the next actionable leaf task in the given epic.
-
-Actionable means the task has status open or in_progress and no open/in_progress children.
-
-With --assign, resumes an in_progress task for the current session, or claims the next open task.
-
-Examples:
-  hive hc next hc-epic123
-  hive hc next hc-epic123 --assign`,
-		Flags: []cli.Flag{
-			&cli.BoolFlag{Name: "assign", Usage: "assign item to current session and set in_progress", Destination: &flagAssign},
-		},
-		Metadata: alwaysJSON(),
-		Action: func(ctx context.Context, c *cli.Command) error {
-			if c.NArg() < 1 {
-				return invalidf("epic ID required as argument")
-			}
-
-			in := tasks.TaskNextIn{
-				Caller: sessionsvc.CallerGlobal, EpicID: c.Args().First(), Repo: cmd.detectRepoKey(ctx), Assign: flagAssign,
-			}
-			if flagAssign {
-				if in.Caller = cmd.detectSession(ctx); in.Caller == "" {
-					return fmt.Errorf("could not detect current session; use 'hive session' to verify")
-				}
-			}
-
-			item, err := cmd.ops().TaskNext(ctx, in)
-			if opErr, ok := errors.AsType[*ops.Error](err); ok && strings.HasPrefix(opErr.Msg, engineops.NoActionableTask) {
-				return fmt.Errorf("no actionable tasks found")
-			}
-			if err != nil {
-				return err
-			}
-			return iojson.WriteLine(c.Root().Writer, item)
-		},
-	}
-}
-
-func (cmd *HoneycombCmd) commentCmd() *cli.Command {
-	return &cli.Command{
-		Name:      "comment",
-		Usage:     "Add a comment to an item",
-		UsageText: "hive hc comment <id> <message>",
-		Description: `Attaches a comment to an item.
-
-Use for recording progress notes, decisions, or handoff context.
-
-Examples:
-  hive hc comment hc-abc123 "Decided to use JWT for auth"
-  hive hc comment hc-abc123 "Stopping here — middleware wired, handlers pending"`,
-		Metadata: alwaysJSON(),
-		Action: func(ctx context.Context, c *cli.Command) error {
-			if c.NArg() < 2 {
-				return invalidf("item ID and message required as arguments")
-			}
-
-			comment, err := cmd.ops().TaskCommentCreate(ctx, tasks.TaskCommentCreateIn{
-				TaskID: c.Args().Get(0), Message: strings.Join(c.Args().Slice()[1:], " "),
-			})
-			if err != nil {
-				return err
-			}
-
-			return iojson.WriteLine(c.Root().Writer, comment)
-		},
-	}
-}
-
-func (cmd *HoneycombCmd) contextCmd() *cli.Command {
-	var flagJSON bool
-	return &cli.Command{
-		Name:      "context",
-		Usage:     "Show context block for an epic",
-		UsageText: "hive hc context <epic-id> [--json]",
-		Description: `Assembles and displays the context block for an epic.
-
-The context block contains the epic title, task counts by status, tasks assigned
-to the current session (with latest comment), and all open/in-progress tasks.
-
-Without --json, outputs a markdown representation suitable for AI agent consumption.
-With --json, outputs a single JSON line.
-
-Examples:
-  hive hc context hc-epic123
-  hive hc context hc-epic123 --json`,
-		Flags: []cli.Flag{
-			&cli.BoolFlag{Name: "json", Usage: "output as JSON", Destination: &flagJSON},
-		},
-		Action: func(ctx context.Context, c *cli.Command) error {
-			if c.NArg() < 1 {
-				return invalidf("epic ID required as argument")
-			}
-
-			epicID := c.Args().First()
-			caller := cmd.detectSession(ctx)
-			if caller == "" {
-				caller = sessionsvc.CallerGlobal
-			}
-			cb, err := cmd.ops().TaskContextGet(ctx, tasks.TaskContextGetIn{Caller: caller, EpicID: epicID})
-			if err != nil {
-				return err
-			}
-
-			if flagJSON {
-				return iojson.WriteLine(c.Root().Writer, cb)
-			}
-
-			renderMarkdown(c.Root().Writer, cb.String())
-			return nil
-		},
-	}
-}
-
-func (cmd *HoneycombCmd) pruneCmd() *cli.Command {
-	var (
-		flagOlderThan string
-		flagStatuses  []string
-		flagDryRun    bool
-	)
-	return &cli.Command{
-		Name:      "prune",
-		Usage:     "Remove old completed items",
-		UsageText: "hive hc prune [--older-than <duration>] [--status <status>...] [--dry-run]",
-		Description: `Removes items older than the specified duration with matching statuses.
-
-Defaults to removing all done and cancelled items.
-
-Examples:
-  hive hc prune
-  hive hc prune --older-than 24h
-  hive hc prune --dry-run`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "older-than", Usage: "only remove items older than this duration (e.g. 24h, 168h)", Value: "0", Destination: &flagOlderThan},
-			&cli.StringSliceFlag{Name: "status", Usage: "statuses to prune (default: done, cancelled)", Destination: &flagStatuses},
-			&cli.BoolFlag{Name: "dry-run", Usage: "show what would be pruned without removing", Destination: &flagDryRun},
-		},
-		Metadata: alwaysJSON(),
-		Action: func(ctx context.Context, c *cli.Command) error {
-			if _, err := time.ParseDuration(flagOlderThan); err != nil {
-				return invalidf("invalid duration %q: %w", flagOlderThan, err)
-			}
-			for _, s := range flagStatuses {
-				if _, err := hc.ParseStatus(s); err != nil {
-					return invalidf("invalid status %q: valid values are open, in_progress, done, cancelled", s)
-				}
-			}
-
-			repoKey := cmd.detectRepoKey(ctx)
-			out, err := cmd.ops().TaskClear(ctx, tasks.TaskClearIn{
-				Caller: sessionsvc.CallerGlobal, OlderThan: flagOlderThan, Statuses: flagStatuses,
-				Repo: repoKey, AllRepos: repoKey == "", DryRun: flagDryRun,
-			})
-			if err != nil {
-				return err
-			}
-			return iojson.WriteLine(c.Root().Writer, out)
-		},
 	}
 }

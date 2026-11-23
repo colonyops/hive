@@ -137,7 +137,7 @@ usercommands:
     exit: "true"
 
   msg:
-    sh: 'hive msg pub -t agent.{{ .ID }}.inbox {{ join .Args " " | shq }}'
+    sh: 'hive msg create --topics agent.{{ .ID }}.inbox --payload {{ join .Args " " | shq }}'
     help: "Send message to session inbox"
 ```
 

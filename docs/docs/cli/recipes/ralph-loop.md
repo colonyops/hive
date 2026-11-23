@@ -35,7 +35,7 @@ echo '{
     {"title": "Fix pagination bug", "type": "task"},
     {"title": "Add rate limiting middleware", "type": "task"}
   ]
-}' | hive hc create
+}' | hive hc create --input -
 ```
 
 Note the epic ID from the output (e.g., `hc-a1b2c3d4`).

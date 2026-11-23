@@ -31,15 +31,15 @@ type Caller func(c *cli.Command) (string, error)
 // Run runs one engine operation in-process and returns its answer.
 type Run func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) (any, error)
 
-// DesktopCommands builds `<resource-kebab> <verb>` groups for every
-// desktop-owned op. It fails on an op whose input has a field the CLI cannot
-// spell, so a bad spec fails the first test rather than a user's call.
+// DesktopCommands builds a command group for every desktop-owned op, at
+// Path below the parent. It fails on an op whose input has a field the CLI
+// cannot spell, so a bad spec fails the first test rather than a user's call.
 //
 // reserved names the flags of the parent command. urfave/cli resolves a flag
 // name from the nearest command first, so a field flag with a reserved name
 // would hide the parent's flag from the command.
 func DesktopCommands(list []ops.Op, call Call, caller Caller, reserved ...string) ([]*cli.Command, error) {
-	return commands(list, ops.OwnerDesktop, func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) error {
+	return commands(list, ops.OwnerDesktop, Path, nil, func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) error {
 		out, err := call(ctx, c, info.Toolset.MCPPath, info.ToolName, args)
 		if err != nil {
 			return err
@@ -48,16 +48,35 @@ func DesktopCommands(list []ops.Op, call Call, caller Caller, reserved ...string
 	}, caller, reserved)
 }
 
-// EngineCommands builds `<resource-kebab> <verb>` groups for every
-// engine-owned op. Each prints its answer with Print.
-func EngineCommands(list []ops.Op, run Run, caller Caller, reserved ...string) ([]*cli.Command, error) {
-	return commands(list, ops.OwnerEngine, func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) error {
-		out, err := run(ctx, c, info, args)
+// Engine says how EngineCommands names, runs and prints the engine ops.
+type Engine struct {
+	Run Run
+	// Print writes an answer. Nil prints it with Print.
+	Print func(ctx context.Context, c *cli.Command, info ops.Info, out any) error
+	// Path places an op's command below the root. Nil is Path.
+	Path func(ops.Info) []string
+	// Aliases are other names for an op's command, by op name.
+	Aliases  map[string][]string
+	Caller   Caller
+	Reserved []string
+}
+
+// EngineCommands builds a command group for every engine-owned op.
+func EngineCommands(list []ops.Op, e Engine) ([]*cli.Command, error) {
+	path, print := e.Path, e.Print
+	if path == nil {
+		path = Path
+	}
+	if print == nil {
+		print = func(_ context.Context, c *cli.Command, _ ops.Info, out any) error { return Print(c.Root().Writer, out) }
+	}
+	return commands(list, ops.OwnerEngine, path, e.Aliases, func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) error {
+		out, err := e.Run(ctx, c, info, args)
 		if err != nil {
 			return err
 		}
-		return Print(c.Root().Writer, out)
-	}, caller, reserved)
+		return print(ctx, c, info, out)
+	}, e.Caller, e.Reserved)
 }
 
 // JSONLines is an answer the CLI prints as one JSON line per value, such as a
@@ -79,8 +98,8 @@ func Print(w io.Writer, out any) error {
 	return nil
 }
 
-func commands(list []ops.Op, owner ops.Owner, run func(context.Context, *cli.Command, ops.Info, map[string]any) error, caller Caller, reserved []string) ([]*cli.Command, error) {
-	var groups []*cli.Command
+func commands(list []ops.Op, owner ops.Owner, path func(ops.Info) []string, aliases map[string][]string, run func(context.Context, *cli.Command, ops.Info, map[string]any) error, caller Caller, reserved []string) ([]*cli.Command, error) {
+	root := &cli.Command{}
 	for _, op := range list {
 		info := op.Info()
 		if info.Owner != owner {
@@ -92,24 +111,49 @@ func commands(list []ops.Op, owner ops.Owner, run func(context.Context, *cli.Com
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", info.Name, err)
 		}
-		group := findOrAdd(&groups, Kebab(info.Resource))
-		group.Commands = append(group.Commands, cmd)
+		p := path(info)
+		cmd.Name, cmd.Aliases = p[len(p)-1], aliases[info.Name]
+		parent := root
+		for i, name := range p[:len(p)-1] {
+			usage := "Operations on " + strings.Join(p[:i+1], " ")
+			if i == len(p)-2 {
+				usage = "Operations on " + strings.ReplaceAll(info.Resource, "_", " ")
+			}
+			if parent, err = group(parent, name, usage); err != nil {
+				return nil, fmt.Errorf("%s: %w", info.Name, err)
+			}
+		}
+		if slices.ContainsFunc(parent.Commands, func(c *cli.Command) bool { return c.Name == cmd.Name }) {
+			return nil, fmt.Errorf("%s: %s is already a command", info.Name, strings.Join(p, " "))
+		}
+		parent.Commands = append(parent.Commands, cmd)
 	}
-	return groups, nil
+	return root.Commands, nil
 }
 
-// Path is the command path of an op below its parent: resource, then verb.
-func Path(info ops.Info) []string { return []string{Kebab(info.Resource), info.Verb} }
-
-func findOrAdd(groups *[]*cli.Command, name string) *cli.Command {
-	for _, g := range *groups {
-		if g.Name == name {
-			return g
-		}
+// Path is the command path of an op below its parent: one group for each
+// word of the resource, then the verb. diff_review.put is diff review put.
+func Path(info ops.Info) []string {
+	words := strings.Split(info.Resource, "_")
+	for i, w := range words {
+		words[i] = Kebab(w)
 	}
-	g := &cli.Command{Name: name, Usage: "Operations on " + strings.ReplaceAll(name, "-", " ")}
-	*groups = append(*groups, g)
-	return g
+	return append(words, info.Verb)
+}
+
+func group(parent *cli.Command, name, usage string) (*cli.Command, error) {
+	for _, c := range parent.Commands {
+		if c.Name != name {
+			continue
+		}
+		if c.Action != nil {
+			return nil, fmt.Errorf("%s is both a command and a group", name)
+		}
+		return c, nil
+	}
+	g := &cli.Command{Name: name, Usage: usage}
+	parent.Commands = append(parent.Commands, g)
+	return g, nil
 }
 
 const inputFlag = "input"
@@ -127,7 +171,8 @@ func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) 
 		if i < 0 {
 			return nil, fmt.Errorf("arg %q names no field", name)
 		}
-		if fields[i].Kind() != reflect.String && !isNumber(fields[i].Kind()) {
+		last := len(positional) == len(info.Args)-1
+		if fields[i].Kind() != reflect.String && !isNumber(fields[i].Kind()) && (!last || !isStrings(fields[i])) {
 			return nil, fmt.Errorf("arg %q: kind %v cannot be positional", name, fields[i].Kind())
 		}
 		positional = append(positional, fields[i])
@@ -153,6 +198,7 @@ func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) 
 		flags = append(flags, flag)
 	}
 
+	variadic := len(positional) > 0 && isStrings(positional[len(positional)-1])
 	usage := make([]string, len(positional))
 	for i, f := range positional {
 		if f.Required {
@@ -160,6 +206,9 @@ func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) 
 		} else {
 			usage[i] = "[" + Kebab(f.Name) + "]"
 		}
+	}
+	if variadic {
+		usage[len(usage)-1] += "..."
 	}
 	description := info.Guidance
 	if len(nested) > 0 {
@@ -177,10 +226,14 @@ func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) 
 			if err != nil {
 				return err
 			}
-			if c.Args().Len() > len(positional) {
+			if c.Args().Len() > len(positional) && !variadic {
 				return ops.Errorf(ops.KindInvalid, "%s takes at most %d argument(s): %s", info.Name, len(positional), strings.Join(usage, " "))
 			}
-			for i, f := range positional[:c.Args().Len()] {
+			for i, f := range positional[:min(c.Args().Len(), len(positional))] {
+				if variadic && i == len(positional)-1 {
+					args[f.Name] = c.Args().Slice()[i:]
+					break
+				}
 				v, err := parseArg(f, c.Args().Get(i))
 				if err != nil {
 					return err
@@ -251,6 +304,10 @@ func spell(f ops.Field, info ops.Info) string {
 		return f.Name + " (set it with --input)"
 	}
 	return "--" + Kebab(f.Name)
+}
+
+func isStrings(f ops.Field) bool {
+	return f.Kind() == reflect.Slice && f.Type.Elem().Kind() == reflect.String
 }
 
 func isNumber(k reflect.Kind) bool {

@@ -16,8 +16,8 @@ Hive includes a built-in task tracker designed for multi-agent coordination. The
 
 [Hive Desktop](../../desktop/code/terminal-mode.md#tasks) reads the same task tree from its Code area.
 
-!!! tip "`hive task` and the MCP tools"
-    The same operations are `hive task create`, `list`, `get`, `update`, `next` and `clear`, `hive task-comment create` and `hive task-context get`. They print JSON Lines and take a JSON input with `--input`, so `hive task create --input -` reads the trees below from stdin. Hive Desktop serves them to agents as MCP tools with the same names (`task_next`, `task_update`), so an agent in a Hive chat can claim a task too.
+!!! tip "The MCP tools"
+    `hive hc create`, `list`, `get`, `update`, `next`, `clear`, `comment create` and `context get` run the same operations Hive Desktop serves to agents as MCP tools (`task_next`, `task_update`), so an agent in a Hive chat can claim a task too. Each takes its whole input as JSON with `--input`, so `hive hc create --input -` reads the trees below from stdin. They print JSON Lines when stdout is not a terminal.
 
 ## Quick Start
 
@@ -32,7 +32,7 @@ echo '{
     {"title": "Implement login endpoint", "type": "task"},
     {"title": "Add session middleware", "type": "task"}
   ]
-}' | hive hc create
+}' | hive hc create --input -
 ```
 
 Tasks can be nested under other tasks using `children` to break work into subtrees. `hive hc next` walks the tree and only returns leaf tasks with no incomplete children, so parent tasks act as groupings that resolve automatically when their subtasks are done.
@@ -51,7 +51,7 @@ echo '{
       {"title": "Build dashboard", "type": "task"}
     ]}
   ]
-}' | hive hc create
+}' | hive hc create --input -
 ```
 
 ### Express blocker dependencies
@@ -67,7 +67,7 @@ echo '{
     {"ref": "db", "title": "User schema migration", "type": "task"},
     {"title": "Login endpoint", "type": "task", "blockers": ["jwt", "db"]}
   ]
-}' | hive hc create
+}' | hive hc create --input -
 ```
 
 To add or remove blockers after creation:
@@ -96,7 +96,7 @@ This finds the next open leaf task, assigns it to the current session, and sets 
 ### Record progress
 
 ```bash
-hive hc comment hc-e5f6g7h8 "JWT validation working, added RS256 support"
+hive hc comment create hc-e5f6g7h8 "JWT validation working, added RS256 support"
 ```
 
 ### Complete the task
@@ -122,9 +122,9 @@ hive hc update hc-e5f6g7h8 --title "New title" --status done  # combine with oth
 ### Check epic progress
 
 ```bash
-hive hc context hc-a1b2c3d4
+hive hc context get hc-a1b2c3d4
 ```
 
-Renders a markdown summary with task counts, your assigned tasks, and open work — designed for AI agent consumption.
+Prints the epic, task counts, your assigned tasks, and open work: markdown at a terminal, one JSON object for an agent or a pipe.
 
 Run `hive hc --help` for the full list of subcommands and flags.

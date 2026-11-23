@@ -39,9 +39,9 @@ a-workspace-declares-its-own-authority).
 
 `stable`. Each tool is declared once in the operation catalog, with a
 noun-first name (`inbox_list`, `schedule_put`), and the same operation is a
-`hive dt` command (`hive dt inbox list`). An engine operation is a top-level
-command instead, which needs no running app (`task_next` is
-`hive task next`).
+`hive dt` command (`hive dt inbox list`). An engine operation is a command of
+the hive CLI's `hc`, `msg` or `todo` group instead, which needs no running app
+(`task_next` is `hive hc next`).
 
 ## What it needs
 

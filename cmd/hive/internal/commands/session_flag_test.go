@@ -33,23 +33,8 @@ func TestNoCommandHasASessionFlag(t *testing.T) {
 	walk(root.Name, root)
 }
 
-func TestParseHCSessionID(t *testing.T) {
-	t.Parallel()
-
-	for value, want := range map[string]string{"": "", "abc": "abc", "local:abc": "abc"} {
-		got, err := parseHCSessionID(value)
-		require.NoError(t, err, value)
-		assert.Equal(t, want, got, value)
-	}
-
-	_, err := parseHCSessionID("other:abc")
-	var opsErr *ops.Error
-	require.ErrorAs(t, err, &opsErr)
-	assert.Equal(t, ops.KindInvalid, opsErr.Kind)
-	assert.Contains(t, opsErr.Msg, "this machine")
-}
-
 func TestHCListSessionID(t *testing.T) {
+	t.Setenv("HIVE_AGENT_SESSION", "")
 	a := testApp(t)
 	ctx := t.Context()
 
@@ -63,10 +48,10 @@ func TestHCListSessionID(t *testing.T) {
 	_, err = a.HC().UpdateItem(ctx, mine.ID, hc.ItemUpdate{SessionID: &owner})
 	require.NoError(t, err)
 
-	register := NewHoneycombCmd(&Flags{}, a).Register
+	register := func(root *cli.Command) *cli.Command { return registerCommands(root, a) }
 
 	for _, value := range []string{"sess1", "local:sess1"} {
-		out, err := runRoot(t, register, "hc", "list", "--all-repos", "--json", "--session-id", value)
+		out, err := runRoot(t, register, "hc", "list", "--all-repos", "--status", "all", "--session-id", value)
 		require.NoError(t, err, value)
 		assert.Equal(t, 1, strings.Count(out, "\n"), "%s: %s", value, out)
 		assert.Contains(t, out, mine.ID)

@@ -58,6 +58,7 @@ type MessageReadPutIn struct {
 var MessageReadPut = ops.Spec[MessageReadPutIn]{
 	Name: "message_read.put", Owner: ops.OwnerEngine, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSession,
 	Summary:  "Mark messages read",
+	Args:     []string{"messageIds"},
 	Guidance: "Mark the messages read for the caller, so an unread read skips them, and answer with the ids and the reader.",
 }
 

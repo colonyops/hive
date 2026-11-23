@@ -26,7 +26,7 @@
 
 **Solutions:**
 - Check default timeout: `--wait` defaults to 24h, set explicit `--timeout`
-- Verify topic exists: use `hive msg list` to check topics
+- Verify topic exists: use `hive msg topic list` to check topics
 - Test with short timeout: use `--timeout 5s` to debug
 - Check polling: verify no errors in polling loop
 

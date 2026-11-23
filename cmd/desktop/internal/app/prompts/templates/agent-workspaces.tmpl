@@ -87,7 +87,7 @@ A chat started with `chat_create` (the `hive-chats` MCP server), `hive dt chat c
 an applet's `hive.startChat` is not a scheduled chat. Hive passes the prompt as written
 and does not tell the agent to end the session, so use it for a chat that keeps running,
 such as an orchestrator. The same callers pin and unpin chats in the Code sidebar with
-`chat_pin_put` and `chat_pin_delete`, `hive dt chat-pin`, or `hive.pinChat`.
+`chat_pin_put` and `chat_pin_delete`, `hive dt chat pin`, or `hive.pinChat`.
 
 To let a workspace's own agent start chats in other workspaces, add `hive-chats` to its
 `mcps:`. Each started chat runs its own workspace's command and permission settings.

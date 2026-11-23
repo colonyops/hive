@@ -115,7 +115,7 @@ hive session list --json
 
 Then send to their inbox:
 ` + "```bash" + `
-hive msg pub -t agent.{their-id}.inbox "your message"
+hive msg create --topics agent.{their-id}.inbox --payload "your message"
 ` + "```" + `
 
 ## Messaging Conventions
@@ -162,8 +162,9 @@ I completed the authentication refactor. Tests are passing.
 | ` + "`hive msg sub -t TOPIC`" + ` | Subscribe to a topic |
 | ` + "`hive msg sub -t TOPIC --listen`" + ` | Poll a topic for new messages |
 | ` + "`hive msg inbox`" + ` | Read your unread inbox messages |
-| ` + "`hive msg pub -t TOPIC MSG`" + ` | Publish a message |
-| ` + "`hive msg topic`" + ` | Generate a new topic ID |
+| ` + "`hive msg create --topics TOPIC --payload MSG`" + ` | Publish a message |
+| ` + "`hive msg list --topic TOPIC`" + ` | Read a topic's messages |
+| ` + "`hive msg topic new`" + ` | Generate a new topic ID |
 `
 	_, _ = fmt.Fprintln(w, guide)
 }
@@ -351,7 +352,7 @@ usercommands:
     help: "Send /tidy to Claude session"
     confirm: "Commit and push changes?"
   msg:
-    sh: 'hive msg pub -t agent.{{ .ID }}.inbox "{{ range .Args }}{{ . }} {{ end }}"'
+    sh: 'hive msg create --topics agent.{{ .ID }}.inbox --payload "{{ range .Args }}{{ . }} {{ end }}"'
     help: "Send message to session inbox"
 
 # Press : in TUI to open command palette

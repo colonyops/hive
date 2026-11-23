@@ -14,7 +14,7 @@ func TestMsgPubSub(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	_, err := h.Run("msg", "pub", "--topic", "test.pubsub", "--sender", "test", "hello world")
+	_, err := h.Run("msg", "create", "--topics", "test.pubsub", "--sender", "test", "--payload", "hello world")
 	require.NoError(t, err)
 
 	lines, err := h.RunJSONLines("msg", "sub", "--topic", "test.pubsub")
@@ -28,7 +28,7 @@ func TestMsgPubConfirmation(t *testing.T) {
 	h := NewHarness(t)
 
 	// pub now returns JSON confirmation on stdout
-	lines, err := h.RunJSONLines("msg", "pub", "--topic", "test.confirm", "--sender", "tester", "-m", "hello")
+	lines, err := h.RunJSONLines("msg", "create", "--topics", "test.confirm", "--sender", "tester", "--payload", "hello")
 	require.NoError(t, err)
 	require.Len(t, lines, 1)
 
@@ -43,12 +43,12 @@ func TestMsgList(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	_, err := h.Run("msg", "pub", "--topic", "test.list-a", "--sender", "test", "msg-a")
+	_, err := h.Run("msg", "create", "--topics", "test.list-a", "--sender", "test", "--payload", "msg-a")
 	require.NoError(t, err)
-	_, err = h.Run("msg", "pub", "--topic", "test.list-b", "--sender", "test", "msg-b")
+	_, err = h.Run("msg", "create", "--topics", "test.list-b", "--sender", "test", "--payload", "msg-b")
 	require.NoError(t, err)
 
-	lines, err := h.RunJSONLines("msg", "list")
+	lines, err := h.RunJSONLines("msg", "topic", "list")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(lines), 2)
 
@@ -66,10 +66,10 @@ func TestMsgListEnriched(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	_, err := h.Run("msg", "pub", "--topic", "test.enriched", "--sender", "enricher", "payload")
+	_, err := h.Run("msg", "create", "--topics", "test.enriched", "--sender", "enricher", "--payload", "payload")
 	require.NoError(t, err)
 
-	lines, err := h.RunJSONLines("msg", "list")
+	lines, err := h.RunJSONLines("msg", "topic", "list")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(lines), 1)
 
@@ -92,7 +92,7 @@ func TestMsgTopic(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	out, err := h.RunStdout("msg", "topic")
+	out, err := h.RunStdout("msg", "topic", "new")
 	require.NoError(t, err, "msg topic: %s", out)
 	topic := strings.TrimSpace(out)
 	assert.NotEmpty(t, topic)
@@ -124,7 +124,7 @@ func TestMsgInbox(t *testing.T) {
 	require.True(t, ok, "session missing 'inbox' string field: %v", lines[0])
 	require.NotEmpty(t, inboxTopic)
 
-	_, err = h.Run("msg", "pub", "--topic", inboxTopic, "--sender", "test", "inbox message")
+	_, err = h.Run("msg", "create", "--topics", inboxTopic, "--sender", "test", "--payload", "inbox message")
 	require.NoError(t, err)
 
 	subLines, err := h.RunJSONLines("msg", "sub", "--topic", inboxTopic)

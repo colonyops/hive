@@ -51,23 +51,23 @@ This example is simple, but I've used this system at work to debug complex issue
 
 ```bash
 # Generate a unique topic for collaboration
-hive msg topic                    # outputs: agent.x7k2
+hive msg topic new                # outputs: agent.x7k2
 
 # Agent A publishes a question
-hive msg pub -t agent.x7k2 -m "What fields are in the User struct?"
+hive msg create --topics agent.x7k2 --payload "What fields are in the User struct?"
 
 # Agent B subscribes and waits for messages
 hive msg sub -t agent.x7k2 --wait
 
 # Agent B responds
-hive msg pub -t agent.x7k2 -m "User struct has: ID, Email, Name, CreatedAt"
+hive msg create --topics agent.x7k2 --payload "User struct has: ID, Email, Name, CreatedAt"
 
 # Agent A receives the response
 hive msg sub -t agent.x7k2 --tail 1
 ```
 
-!!! tip "`hive message` and the MCP tools"
-    The same operations are `hive message create --topics <topic> --payload <text>`, `hive message list` (with `--inbox`, `--unread`, `--tail` and `--wait <seconds>`), `hive message-read put` and `hive topic list`. Hive Desktop serves them to agents as MCP tools (`message_create`, `message_list`), and an agent in a Hive chat has the inbox `agent.<chat-id>.inbox`.
+!!! tip "The MCP tools"
+    `hive msg create`, `hive msg list` (with `--topic`, `--inbox`, `--unread`, `--tail` and `--wait <seconds>`), `hive msg read put <message-id>...` and `hive msg topic list` run the same operations Hive Desktop serves to agents as MCP tools (`message_create`, `message_list`). An agent in a Hive chat has the inbox `agent.<chat-id>.inbox`.
 
 !!! tip "Blocking vs polling"
     Use `--wait` to block until a message arrives — useful for agents that need to synchronize. Use `--tail N` to poll for the most recent messages without blocking.

@@ -1,7 +1,7 @@
 ---
 name: hc
 description: |
-  Use `hive task` commands (or the task_* MCP tools) to track tasks and epics for agent workflows.
+  Use `hive hc` commands (or the task_* MCP tools) to track tasks and epics for agent workflows.
   Like GitHub Issues but scoped to a repository and designed for machine consumption.
 
   Use when:
@@ -21,40 +21,38 @@ The caller (who claims a task) is `--caller`, else `$HIVE_AGENT_SESSION`, else t
 
 ## Quick Reference
 
-Every command prints JSON Lines. Over MCP (Hive Desktop's `hive-desktop` server, or `hive mcp serve --toolset tasks`) the same operations are tools with the names in the last column.
+Every command prints JSON Lines when stdout is not a terminal, as for an agent or a pipe. At a terminal, `list` prints a tree, `get` a styled item and `context get` markdown. Over MCP (Hive Desktop's `hive-desktop` server, or `hive mcp serve --toolset tasks`) the same operations are tools with the names in the last column.
 
 ```
-hive task create <title> --type epic                     Create an epic                  task_create
-hive task create <title> --parent-id <id>                Create a task under a parent    task_create
-hive task create --input -                               Create a tree from stdin JSON   task_create
-hive task list [epic-id] [--status all]                  List items (open by default)    task_list
-hive task get <task-id>                                  Show item, then its comments    task_get
-hive task update <task-id> [--status s] [--assign] ...   Change an item                  task_update
-hive task next <epic-id> [--assign]                      Next actionable task, or claim  task_next
-hive task-comment create <task-id> "<message>"           Add a comment                   task_comment_create
-hive task-context get <epic-id>                          Epic context block (JSON)       task_context_get
-hive task clear [--older-than 24h] [--dry-run]           Remove finished items           task_clear
+hive hc create <title> --type epic                     Create an epic                  task_create
+hive hc create <title> --parent-id <id>                Create a task under a parent    task_create
+hive hc create --input -                               Create a tree from stdin JSON   task_create
+hive hc list [epic-id] [--status all]                  List items (open by default)    task_list
+hive hc get <task-id>                                  Show item, then its comments    task_get
+hive hc update <task-id> [--status s] [--assign] ...   Change an item                  task_update
+hive hc next <epic-id> [--assign]                      Next actionable task, or claim  task_next
+hive hc comment create <task-id> "<message>"           Add a comment                   task_comment_create
+hive hc context get <epic-id>                          Epic context block              task_context_get
+hive hc clear [--older-than 24h] [--dry-run]           Remove finished items           task_clear
 ```
-
-The older `hive hc` commands still work with their own flags and output (`hive hc next <epic> --assign`, `hive hc comment <id> <message>`, `hive hc context <epic>` as markdown, `hive hc list` as a tree). They will be removed later, so prefer the commands above.
 
 ## Workflow for Worker Agents
 
 ### 1. Check context at start of session
 
 ```bash
-hive task-context get <epic-id>
+hive hc context get <epic-id>
 ```
 
 ### 2. Claim the next available task
 
 ```bash
 # Get and assign in one step
-hive task next <epic-id> --assign
+hive hc next <epic-id> --assign
 
 # Or get first, then assign
-hive task next <epic-id>
-hive task update <task-id> --assign --status in_progress
+hive hc next <epic-id>
+hive hc update <task-id> --assign --status in_progress
 ```
 
 ### 3. Record progress (use sparingly)
@@ -67,7 +65,7 @@ Good reasons to comment:
 - A blocker or external dependency was discovered
 
 ```bash
-hive task-comment create <task-id> "Switched to optimistic locking — pessimistic caused deadlocks under load"
+hive hc comment create <task-id> "Switched to optimistic locking — pessimistic caused deadlocks under load"
 ```
 
 ### 4. Record a handoff checkpoint when stopping mid-task
@@ -75,13 +73,13 @@ hive task-comment create <task-id> "Switched to optimistic locking — pessimist
 One comment at stop time, prefixed with `CHECKPOINT:`, is enough. Include what is done and what remains.
 
 ```bash
-hive task-comment create <task-id> "CHECKPOINT: DB schema done, need to wire API handlers next"
+hive hc comment create <task-id> "CHECKPOINT: DB schema done, need to wire API handlers next"
 ```
 
 ### 5. Mark task complete
 
 ```bash
-hive task update <task-id> --status done
+hive hc update <task-id> --status done
 ```
 
 ## Workflow for Conductor Agents
@@ -98,7 +96,7 @@ echo '{
     {"title": "Implement logout endpoint", "type": "task"},
     {"title": "Add session middleware", "type": "task"}
   ]
-}' | hive task create --input -
+}' | hive hc create --input -
 ```
 
 All items are output as JSON lines (one per line):
@@ -111,28 +109,28 @@ All items are output as JSON lines (one per line):
 ### Create a single item
 
 ```bash
-hive task create "Fix login redirect" --parent-id <epic-id>
-hive task create "New feature epic" --type epic
+hive hc create "Fix login redirect" --parent-id <epic-id>
+hive hc create "New feature epic" --type epic
 ```
 
 ### Monitor progress
 
 ```bash
 # List all open tasks for an epic
-hive task list <epic-id>
+hive hc list <epic-id>
 
 # List items assigned to a specific session
-hive task list --session-id <session-id>
+hive hc list --session-id <session-id>
 
 # Show item + full comment history
-hive task get <task-id>
+hive hc get <task-id>
 ```
 
 ## Command Reference
 
 Each command takes its fields as flags, or the whole input as JSON with `--input` (inline, `@file`, or `-` for stdin). A refused call prints `{"kind": ..., "message": ...}` and exits with a code for the kind: invalid 2, not_found 3, conflict 4, unavailable 5.
 
-### `hive task create [title]`
+### `hive hc create [title]`
 
 - `--type epic|task` — item type (default: task)
 - `--desc <text>` — item description
@@ -142,18 +140,18 @@ Each command takes its fields as flags, or the whole input as JSON with `--input
 
 Output: every created item, root first.
 
-### `hive task list [epic-id]`
+### `hive hc list [epic-id]`
 
 - `[epic-id]` — filter by epic (returns children only, not the epic itself)
 - `--status open|in_progress|done|cancelled|all` — default: open
 - `--session-id <id>` — filter by assignee (bare or `local:<id>`)
 - `--all-repos` — every repository
 
-### `hive task get <task-id>`
+### `hive hc get <task-id>`
 
 Output: the item first, then comments in chronological order.
 
-### `hive task update <task-id>`
+### `hive hc update <task-id>`
 
 - `--status open|in_progress|done|cancelled` — new status
 - `--title <text>` — new title (empty string rejected)
@@ -165,34 +163,33 @@ Output: the item first, then comments in chronological order.
 
 **Cascade**: when an epic transitions to `done` or `cancelled`, all non-terminal descendants are automatically set to the same status. Items already in a terminal state are not changed.
 
-### `hive task next <epic-id>`
+### `hive hc next <epic-id>`
 
 Returns the next actionable leaf task (open/in_progress, no open/in_progress children or blockers).
 
 - `--assign` — resume a task already in progress for the caller, else claim the next open one and set it in_progress
 
-No actionable task is not_found (exit 3). `hive hc next` exits 1 for the same case.
+No actionable task is not_found (exit 3).
 
-### `hive task-comment create <task-id> <message>`
+### `hive hc comment create <task-id> <message>`
 
 Quote the message: it is one argument.
 
 Use sparingly — comments accumulate in the context block and are visible to every subsequent agent reading this epic. Prefer one meaningful note over several incremental ones. For handoffs, prefix with `CHECKPOINT:`.
 
-### `hive task-context get <epic-id>`
+### `hive hc context get <epic-id>`
 
-Returns the context block as one JSON object:
+Returns the context block as one JSON object (markdown at a terminal):
 - `epic` — the epic item
 - `counts` — task counts by status
 - `my_tasks` — the caller's tasks, each with its latest comment
 - `all_open_tasks` — every open or in-progress task
 
-`hive hc context <epic-id>` renders the same block as markdown.
-
-### `hive task clear`
+### `hive hc clear`
 
 - `--older-than <duration>` — only items older than this (default: any age)
 - `--statuses <status>` — statuses to remove, repeatable (default: done, cancelled)
+- `--all-repos` — every repository; needed outside a git repository
 - `--dry-run` — count without removing
 
 Output: `{"action":"pruned","count":N}` (`"would prune"` for a dry run)

@@ -17,15 +17,15 @@ Wait for messages on specific topics, enabling synchronization between agents an
 
 ## How It Works
 
-`hive message list --topic <topic> --wait <seconds>` polls the topic every 500ms until:
+`hive msg list --topic <topic> --wait <seconds>` polls the topic every 500ms until:
 - A message published after the call started arrives (prints it, exit 0)
 - The wait ends (prints `{"status":"timeout",...}`, exit 0)
 
-The wait is at most 86400 seconds (24h). Over MCP the same call is the `message_list` tool with `wait`; keep it short there, because an MCP client may give up on a long call. Reading marks nothing read: mark a message read with `hive message-read put --message-ids <id>`.
+The wait is at most 86400 seconds (24h). Over MCP the same call is the `message_list` tool with `wait`; keep it short there, because an MCP client may give up on a long call. Reading marks nothing read: mark a message read with `hive msg read put <id>`.
 
-### Older Spelling: `hive msg sub --wait`
+### `hive msg sub --wait`
 
-`hive msg sub --wait` still works. It takes a Go duration (`--timeout 2m`, default 24h), exits 1 on timeout, and can mark the message read with `--ack`, so it suits a shell `if`. The examples below use it.
+`hive msg sub --wait` takes a Go duration (`--timeout 2m`, default 24h), exits 1 on timeout, and can mark the message read with `--ack`, so it suits a shell `if`. The examples below use it.
 
 ## Commands
 
@@ -123,7 +123,7 @@ Exit code is 1 on timeout.
 
 ```bash
 # Complete work, notify, and wait for acknowledgment
-hive msg pub --topic agent.bob.inbox -m "Feature X ready. Branch: feat/x"
+hive msg create --topics agent.bob.inbox --payload "Feature X ready. Branch: feat/x"
 hive msg sub --wait --topic agent.bob.inbox.ack --timeout 2m
 ```
 
@@ -131,7 +131,7 @@ hive msg sub --wait --topic agent.bob.inbox.ack --timeout 2m
 
 ```bash
 # Send request
-hive msg pub --topic coordinator.requests -m "Need assignment: task-type-X"
+hive msg create --topics coordinator.requests --payload "Need assignment: task-type-X"
 
 # Wait for response
 hive msg sub --wait --topic agent.myself.inbox --timeout 1m

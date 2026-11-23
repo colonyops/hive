@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"time"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
-	"github.com/colonyops/hive/cmd/hive/internal/opscli"
 	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/hive/engineops"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
@@ -33,12 +31,6 @@ type MsgCmd struct {
 	flags *Flags
 	app   *app.App
 
-	// pub flags
-	pubTopics  []string
-	pubFile    string
-	pubSender  string
-	pubMessage string
-
 	// sub flags
 	subTopic   string
 	subTimeout string
@@ -57,7 +49,6 @@ type MsgCmd struct {
 	inboxTail    int
 
 	// topic flags
-	topicNew    bool
 	topicPrefix string
 }
 
@@ -81,72 +72,13 @@ The sender is auto-detected from the current working directory's hive session.
 Output format: All commands produce JSON Lines (one JSON object per line) on stdout.
 Warnings and errors are written to stderr.`,
 		Commands: []*cli.Command{
-			cmd.pubCmd(),
 			cmd.subCmd(),
 			cmd.inboxCmd(),
-			cmd.listCmd(),
 			cmd.topicCmd(),
 		},
 	})
 
 	return app
-}
-
-func (cmd *MsgCmd) pubCmd() *cli.Command {
-	return &cli.Command{
-		Name:      "pub",
-		Metadata:  alwaysJSON(),
-		Usage:     "Publish a message to topic(s)",
-		UsageText: "hive msg pub --topic <topic> [--topic <topic2>] [-m message | message | -f file | stdin]",
-		Description: `Publishes a message to the specified topic(s).
-
-The message can be provided as:
-- Inline with -m/--message flag (recommended)
-- A positional command-line argument
-- From a file with -f/--file
-- From stdin if no other source is provided
-
-Only one message source may be used. An error is returned if multiple are provided.
-
-The sender is auto-detected from the current hive session, or can be overridden with --sender.
-Topic supports wildcards for publishing to multiple topics (e.g., agent.*.inbox).
-
-Output: JSON confirmation line with status, resolved topics, and sender.
-
-Examples:
-  hive msg pub --topic build.started -m "Build starting"
-  hive msg pub -t agent.abc.inbox -t agent.xyz.inbox -m "Hello all"
-  hive msg pub -t "agent.*.inbox" -m "Broadcast message"
-  echo "Hello" | hive msg pub --topic greetings
-  hive msg pub --topic logs -f build.log`,
-		Flags: []cli.Flag{
-			&cli.StringSliceFlag{
-				Name:        "topic",
-				Aliases:     []string{"t"},
-				Usage:       "topic(s) to publish to (supports wildcards, repeatable)",
-				Required:    true,
-				Destination: &cmd.pubTopics,
-			},
-			&cli.StringFlag{
-				Name:        "message",
-				Aliases:     []string{"m"},
-				Usage:       "inline message content",
-				Destination: &cmd.pubMessage,
-			},
-			&cli.StringFlag{
-				Name:        "file",
-				Aliases:     []string{"f"},
-				Usage:       "read message from file",
-				Destination: &cmd.pubFile,
-			},
-			&cli.StringFlag{
-				Name:        "sender",
-				Usage:       "override sender ID (default: auto-detect from session)",
-				Destination: &cmd.pubSender,
-			},
-		},
-		Action: cmd.runPub,
-	}
 }
 
 func (cmd *MsgCmd) subCmd() *cli.Command {
@@ -222,29 +154,19 @@ Examples:
 	}
 }
 
-func (cmd *MsgCmd) listCmd() *cli.Command {
+func (cmd *MsgCmd) topicCmd() *cli.Command {
 	return &cli.Command{
-		Name:      "list",
-		Metadata:  alwaysJSON(),
-		Usage:     "List all topics with activity info",
-		UsageText: "hive msg list",
-		Description: `Lists all topics with message counts, activity timestamps, and unread counts.
-
-Output: One JSON object per line (JSON Lines format).
-Fields: name, message_count, unread_count, last_activity, last_sender.
-unread_count is included when running from a hive session directory.
-
-Examples:
-  hive msg list`,
-		Action: cmd.runList,
+		Name:     "topic",
+		Usage:    "Operations on topics",
+		Commands: []*cli.Command{cmd.topicNewCmd()},
 	}
 }
 
-func (cmd *MsgCmd) topicCmd() *cli.Command {
+func (cmd *MsgCmd) topicNewCmd() *cli.Command {
 	return &cli.Command{
-		Name:      "topic",
+		Name:      "new",
 		Usage:     "Generate a random topic ID",
-		UsageText: "hive msg topic [--prefix <prefix>]",
+		UsageText: "hive msg topic new [--prefix <prefix>]",
 		Description: `Generates a random topic ID for inter-agent communication.
 
 The generated topic ID follows the format "<prefix>.<4-char-alphanumeric>".
@@ -254,15 +176,10 @@ in your config file, or overridden with --prefix.
 Output: Plain text topic ID.
 
 Examples:
-  hive msg topic              # outputs: agent.x7k2 (using config prefix)
-  hive msg topic --prefix task   # outputs: task.x7k2
-  hive msg topic --prefix ""     # outputs: x7k2 (no prefix)`,
+  hive msg topic new                # outputs: agent.x7k2 (using config prefix)
+  hive msg topic new --prefix task  # outputs: task.x7k2
+  hive msg topic new --prefix ""    # outputs: x7k2 (no prefix)`,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:        "new",
-				Usage:       "generate a new random topic ID (default behavior)",
-				Destination: &cmd.topicNew,
-			},
 			&cli.StringFlag{
 				Name:        "prefix",
 				Usage:       "topic prefix (overrides config, use empty string for no prefix)",
@@ -291,74 +208,6 @@ func (cmd *MsgCmd) runTopic(_ context.Context, c *cli.Command) error {
 
 	_, err := fmt.Fprintln(c.Root().Writer, topicID)
 	return err
-}
-
-func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
-	topics := cmd.pubTopics
-	if len(topics) == 0 {
-		return invalidf("at least one topic required")
-	}
-
-	// Determine message content — exactly one source allowed
-	payload, err := cmd.resolvePayload(c)
-	if err != nil {
-		return err
-	}
-
-	// Auto-detect session and set sender
-	sessionID := callingSessionID(ctx, cmd.app, "", "cli.msg") // best-effort: the sender label
-	sender := cmd.pubSender
-	if sessionID != "" && sender == "" {
-		sender = sessionID // Auto-set sender = session_id
-	}
-
-	caller := sessionID
-	if caller == "" {
-		caller = sessionsvc.CallerGlobal
-	}
-	out, err := cmd.ops().MessageCreate(ctx, msgops.MessageCreateIn{Caller: caller, Topics: topics, Payload: payload, Sender: sender})
-	if err != nil {
-		return err
-	}
-	return iojson.WriteLine(c.Root().Writer, out)
-}
-
-// resolvePayload determines the message content from exactly one source.
-func (cmd *MsgCmd) resolvePayload(c *cli.Command) (string, error) {
-	sources := 0
-	if cmd.pubMessage != "" {
-		sources++
-	}
-	if c.NArg() >= 1 {
-		sources++
-	}
-	if cmd.pubFile != "" {
-		sources++
-	}
-
-	if sources > 1 {
-		return "", fmt.Errorf("multiple message sources provided; use only one of: -m flag, positional argument, -f file, or stdin")
-	}
-
-	switch {
-	case cmd.pubMessage != "":
-		return cmd.pubMessage, nil
-	case c.NArg() >= 1:
-		return c.Args().Get(0), nil
-	case cmd.pubFile != "":
-		data, err := os.ReadFile(cmd.pubFile)
-		if err != nil {
-			return "", fmt.Errorf("read file: %w", err)
-		}
-		return string(data), nil
-	default:
-		// Read from stdin
-		data, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return "", fmt.Errorf("read stdin: %w", err)
-		}
-		return string(data), nil
-	}
 }
 
 func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
@@ -490,18 +339,6 @@ func (cmd *MsgCmd) handleTimeout(c *cli.Command, topic string, duration time.Dur
 		Duration: duration.String(),
 	})
 	return errAlreadyReported
-}
-
-func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
-	caller := callingSessionID(ctx, cmd.app, "", "cli.msg") // best-effort: unread counts
-	if caller == "" {
-		caller = sessionsvc.CallerGlobal
-	}
-	out, err := cmd.ops().TopicList(ctx, msgops.TopicListIn{Caller: caller})
-	if err != nil {
-		return err
-	}
-	return opscli.Print(c.Root().Writer, out)
 }
 
 func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) error {

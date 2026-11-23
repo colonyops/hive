@@ -14,7 +14,7 @@ func TestTodoCRUD(t *testing.T) {
 	h := NewHarness(t)
 
 	// Add a todo
-	lines, err := h.RunJSONLines("todo", "add", "--title", "Review docs", "--source", "human")
+	lines, err := h.RunJSONLines("todo", "create", "--title", "Review docs", "--source", "human")
 	require.NoError(t, err)
 	require.Len(t, lines, 1)
 

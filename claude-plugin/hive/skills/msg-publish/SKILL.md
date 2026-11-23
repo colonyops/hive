@@ -26,68 +26,39 @@ Over MCP (Hive Desktop's `hive-desktop` server, or `hive mcp serve --toolset mes
 
 ## Commands
 
-### Publish a Message (Recommended)
+### Publish a Message
 
 ```bash
-hive message create --topics <topic> --payload "message content"
+hive msg create --topics <topic> --payload "message content"
 ```
 
 **Examples:**
 ```bash
 # Send to specific agent's inbox
-hive message create --topics agent.abc123.inbox --payload "Task completed, ready for review"
+hive msg create --topics agent.abc123.inbox --payload "Task completed, ready for review"
 
 # Send to multiple topics
-hive message create --topics agent.123.inbox --topics agent.456.inbox --payload "Important update"
+hive msg create --topics agent.123.inbox --topics agent.456.inbox --payload "Important update"
 ```
 
-### Older Spelling: `hive msg pub`
+### Publish a File or Command Output
 
-`hive msg pub` still works and prints the same line. It is the one to use for a payload from stdin or a file:
+`--payload` takes the whole message as one argument, so read a file or a command's output into it:
 
 ```bash
-hive msg pub --topic <topic> -m "message content"
+hive msg create --topics agent.abc.inbox --payload "$(cat handoff-context.md)"
 ```
 
-### Publish from Stdin
-
-```bash
-echo "Status update" | hive msg pub --topic notifications
-cat report.txt | hive msg pub --topic reports
-```
-
-### Publish from File
-
-```bash
-hive msg pub --topic agent.abc.inbox -f handoff-context.md
-```
-
-### Publish with Positional Argument
-
-```bash
-hive msg pub --topic <topic> "message content"
-```
-
-Note: Prefer `-m` over positional args to avoid flag collision with single-character messages.
+`hive msg pub` is an alias of `hive msg create` and takes the same flags.
 
 ### Broadcast with Wildcards
 
 ```bash
 # Broadcast to all agent inboxes
-hive message create --topics "agent.*.inbox" --payload "System maintenance in 5 minutes"
+hive msg create --topics "agent.*.inbox" --payload "System maintenance in 5 minutes"
 ```
 
 Wildcard `*` matches any characters within a segment. Topics are expanded at publish time.
-
-## Message Sources (`hive msg pub`)
-
-Only one source may be used per publish:
-- `-m` / `--message` flag (recommended)
-- Positional argument
-- `-f` / `--file` flag
-- Stdin (default when no other source)
-
-An error is returned if multiple sources are provided.
 
 ## Topic Patterns
 
@@ -100,7 +71,7 @@ Agent inboxes follow: `agent.<session-id>.inbox`
 hive ls
 
 # Send to specific agent
-hive message create --topics agent.abc123.inbox --payload "Message"
+hive msg create --topics agent.abc123.inbox --payload "Message"
 ```
 
 ### Custom Topics
@@ -108,8 +79,8 @@ hive message create --topics agent.abc123.inbox --payload "Message"
 Create any topic name for specific use cases:
 
 ```bash
-hive message create --topics deploy.started --payload "Deployment initiated"
-hive message create --topics build.events --payload "Test suite running"
+hive msg create --topics deploy.started --payload "Deployment initiated"
+hive msg create --topics build.events --payload "Test suite running"
 ```
 
 ### Topic Naming Conventions
@@ -126,13 +97,13 @@ Avoid generic names, special characters besides `.`, `-`, `_`.
 
 ```bash
 # Complete work and notify next agent
-hive message create --topics agent.xyz789.inbox --payload "Auth implementation complete. See PR #123. Tests passing."
+hive msg create --topics agent.xyz789.inbox --payload "Auth implementation complete. See PR #123. Tests passing."
 ```
 
 ### Notify Multiple Topics
 
 ```bash
-hive message create \
+hive msg create \
   --topics agent.abc.inbox \
   --topics agent.xyz.inbox \
   --topics coordinator.updates \
@@ -142,13 +113,13 @@ hive message create \
 ### Send Command Output
 
 ```bash
-go test -v ./... | hive msg pub --topic test.results
+hive msg create --topics test.results --payload "$(go test -v ./... 2>&1)"
 ```
 
 ### Override Sender ID
 
 ```bash
-hive message create --topics test.channel --sender "custom-agent-id" --payload "Test message"
+hive msg create --topics test.channel --sender "custom-agent-id" --payload "Test message"
 ```
 
 ## Additional Resources

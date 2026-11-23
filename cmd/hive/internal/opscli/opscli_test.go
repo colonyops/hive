@@ -52,6 +52,67 @@ func run(t *testing.T, stdin string, args ...string) (map[string]any, string, er
 	return got, out.String(), err
 }
 
+func TestPathNestsTheWordsOfTheResource(t *testing.T) {
+	assert.Equal(t, []string{"diff", "review", "put"}, opscli.Path(ops.Info{Resource: "diff_review", Verb: "put"}))
+	assert.Equal(t, []string{"session", "list"}, opscli.Path(ops.Info{Resource: "session", Verb: "list"}))
+}
+
+type readIn struct {
+	Caller string   `json:"caller"`
+	IDs    []string `json:"ids"`
+}
+
+var markRead = ops.Spec[readIn]{
+	Name: "message_read.put", Owner: ops.OwnerEngine, Effect: ops.EffectWrite,
+	Toolset: ops.Toolset{Name: "messages", MCPPath: "/mcp"},
+	Summary: "Mark read", Args: []string{"ids"},
+}
+
+var listMessages = ops.Spec[struct{}]{
+	Name: "message.list", Owner: ops.OwnerEngine, Effect: ops.EffectRead,
+	Toolset: ops.Toolset{Name: "messages", MCPPath: "/mcp"},
+	Summary: "List",
+}
+
+func engineRoot(t *testing.T, e opscli.Engine) (*cli.Command, *bytes.Buffer) {
+	t.Helper()
+	groups, err := opscli.EngineCommands([]ops.Op{markRead, listMessages}, e)
+	require.NoError(t, err)
+	var out bytes.Buffer
+	return &cli.Command{Name: "hive", Writer: &out, Commands: groups}, &out
+}
+
+func TestEngineCommandsNestBelowTheirPathWithAliases(t *testing.T) {
+	var got map[string]any
+	root, out := engineRoot(t, opscli.Engine{
+		Run: func(_ context.Context, _ *cli.Command, _ ops.Info, args map[string]any) (any, error) {
+			got = args
+			return map[string]any{"ok": true}, nil
+		},
+		Path:    func(info ops.Info) []string { return append([]string{"msg"}, opscli.Path(info)[1:]...) },
+		Aliases: map[string][]string{"message_read.put": {"ack"}},
+		Caller:  func(*cli.Command) (string, error) { return "me", nil },
+	})
+
+	require.NoError(t, root.Run(context.Background(), []string{"hive", "msg", "read", "ack", "a", "b", "c"}))
+	assert.Equal(t, map[string]any{"caller": "me", "ids": []string{"a", "b", "c"}}, got)
+	assert.JSONEq(t, `{"ok":true}`, out.String())
+
+	require.NoError(t, root.Run(context.Background(), []string{"hive", "msg", "list"}))
+}
+
+func TestTwoOpsCannotShareAPath(t *testing.T) {
+	_, err := opscli.EngineCommands([]ops.Op{markRead, listMessages}, opscli.Engine{
+		Path: func(info ops.Info) []string {
+			if info.Name == "message.list" {
+				return []string{"message", "read"}
+			}
+			return opscli.Path(info)
+		},
+	})
+	require.ErrorContains(t, err, "message read is already a command")
+}
+
 func TestKebab(t *testing.T) {
 	assert.Equal(t, "profile-id", opscli.Kebab("profileId"))
 	assert.Equal(t, "canvas-block", opscli.Kebab("canvas_block"))
@@ -62,7 +123,7 @@ func TestInputFileForNestedFields(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "in.json")
 	require.NoError(t, os.WriteFile(file, []byte(`{"blocks":[{"id":"a"}],"front":{"x":1}}`), 0o600))
 
-	got, out, err := run(t, "", "canvas-blocks", "put", "plan", "--input", "@"+file, "--item-id", "7", "--tags", "a", "--tags", "b")
+	got, out, err := run(t, "", "canvas", "blocks", "put", "plan", "--input", "@"+file, "--item-id", "7", "--tags", "a", "--tags", "b")
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"ok":true}`, out)
 	assert.Equal(t, map[string]any{
@@ -72,13 +133,13 @@ func TestInputFileForNestedFields(t *testing.T) {
 }
 
 func TestInputFromStdin(t *testing.T) {
-	got, _, err := run(t, `{"canvas":"plan","blocks":[]}`, "canvas-blocks", "put", "--input", "-")
+	got, _, err := run(t, `{"canvas":"plan","blocks":[]}`, "canvas", "blocks", "put", "--input", "-")
 	require.NoError(t, err)
 	assert.Equal(t, "plan", got["canvas"])
 }
 
 func TestMissingRequiredFieldIsInvalid(t *testing.T) {
-	_, _, err := run(t, "", "canvas-blocks", "put", "plan")
+	_, _, err := run(t, "", "canvas", "blocks", "put", "plan")
 	require.EqualError(t, err, "invalid: blocks (set it with --input) is required")
 }
 
@@ -87,7 +148,7 @@ func TestNestedFieldsHaveNoFlagAndSayHowToSetThem(t *testing.T) {
 	groups, err := opscli.DesktopCommands([]ops.Op{put}, nil, nil)
 	require.NoError(t, err)
 	root := &cli.Command{Name: "hive", Writer: &help, Commands: groups}
-	require.NoError(t, root.Run(context.Background(), []string{"hive", "canvas-blocks", "put", "--help"}))
+	require.NoError(t, root.Run(context.Background(), []string{"hive", "canvas", "blocks", "put", "--help"}))
 	assert.Contains(t, help.String(), "Set blocks, front with --input.")
 	assert.NotContains(t, help.String(), "--blocks")
 	assert.Contains(t, help.String(), "--tags")
@@ -100,7 +161,7 @@ func TestAFieldFlagMustNotHideAParentFlag(t *testing.T) {
 }
 
 func TestInputNullIsInvalid(t *testing.T) {
-	_, _, err := run(t, "", "canvas-blocks", "put", "--input", "null")
+	_, _, err := run(t, "", "canvas", "blocks", "put", "--input", "null")
 	require.EqualError(t, err, "invalid: --input is not a JSON object")
 }
 
@@ -113,7 +174,7 @@ func TestCrossFieldRulesRunBeforeTheCall(t *testing.T) {
 		}, nil)
 	require.NoError(t, err)
 	root := &cli.Command{Name: "hive", Writer: &bytes.Buffer{}, Commands: groups}
-	err = root.Run(context.Background(), []string{"hive", "session-tags", "update", "s1"})
+	err = root.Run(context.Background(), []string{"hive", "session", "tags", "update", "s1"})
 	require.EqualError(t, err, "invalid: provide add or remove")
 	assert.False(t, called)
 }

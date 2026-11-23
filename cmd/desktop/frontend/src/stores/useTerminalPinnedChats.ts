@@ -29,7 +29,7 @@ function forgetLegacyPins(): void {
 }
 
 // Which agent chats the Code view lists above its session tree. The chat
-// record holds the pin, so an agent, an applet or `hive dt chat-pin` can pin a
+// record holds the pin, so an agent, an applet or `hive dt chat pin` can pin a
 // chat too. Pin order is pin time, which keeps the user's insertion order:
 // re-sorting on activity would move a row out from under the pointer.
 export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {

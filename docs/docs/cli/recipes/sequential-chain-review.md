@@ -61,7 +61,7 @@ usercommands:
           2. Analyse thoroughly for: logic correctness, error handling, edge cases, naming
              clarity, test coverage, API design, and any potential bugs.
           3. Publish your complete findings:
-             hive msg pub --topic review-{{ .ID }}.codex "your detailed findings"
+             hive msg create --topics review-{{ .ID }}.codex --payload "your detailed findings"
 
           Be thorough. The next reviewer will read your report and challenge it.'
 
@@ -82,7 +82,7 @@ usercommands:
           5. For each of codex'"'"'s findings: agree, refute, or deepen it with evidence
              from the diff.
           6. Publish your combined analysis:
-             hive msg pub --topic review-{{ .ID }}.agent "your analysis"
+             hive msg create --topics review-{{ .ID }}.agent --payload "your analysis"
 
           Be critical. Do not simply restate what codex said.'
 
