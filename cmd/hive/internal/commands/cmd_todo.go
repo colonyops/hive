@@ -7,8 +7,10 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/todo"
+	"github.com/colonyops/hive/internal/hive/engineops"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/ops/todos"
 	"github.com/colonyops/hive/pkg/iojson"
-	"github.com/colonyops/hive/pkg/randid"
 	"github.com/urfave/cli/v3"
 )
 
@@ -17,16 +19,9 @@ type TodoCmd struct {
 	flags *Flags
 	app   *app.App
 
-	// add flags
 	addTitle  string
 	addURI    string
 	addSource string
-
-	// update flags
-	updateStatus string
-
-	// list flags
-	listStatus string
 }
 
 // NewTodoCmd creates a new todo command.
@@ -44,11 +39,12 @@ func (cmd *TodoCmd) Register(app *cli.Command) *cli.Command {
 Agents create todos to request human attention (code review, document review, etc.).
 The operator manages them through the TUI action panel or CLI commands.
 
+create, list and update are the todos operations of the catalog, the same
+ones Hive Desktop serves over MCP. add is the older spelling of create.
+
 Session ID is auto-detected from the current working directory.`,
 		Commands: []*cli.Command{
 			cmd.addCmd(),
-			cmd.listCmd(),
-			cmd.updateCmd(),
 		},
 	})
 
@@ -97,157 +93,19 @@ Examples:
 	}
 }
 
-func (cmd *TodoCmd) listCmd() *cli.Command {
-	return &cli.Command{
-		Name:      "list",
-		Metadata:  alwaysJSON(),
-		Usage:     "List todo items",
-		UsageText: "hive todo list [--status <status>]",
-		Description: `Lists todo items as JSON lines.
-
-Examples:
-  hive todo list
-  hive todo list --status pending`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:        "status",
-				Usage:       fmt.Sprintf("filter by status (%s)", strings.Join(todo.StatusNames(), ", ")),
-				Destination: &cmd.listStatus,
-			},
-		},
-		Action: cmd.runList,
-	}
-}
-
-func (cmd *TodoCmd) updateCmd() *cli.Command {
-	return &cli.Command{
-		Name:      "update",
-		Metadata:  alwaysJSON(),
-		Usage:     "Update a todo item's status",
-		UsageText: "hive todo update <id> --status <status>",
-		Description: `Updates a todo item's status.
-
-Status values:
-  acknowledged - Operator has seen the item
-  completed    - Item is done
-  dismissed    - Item is not needed
-
-Examples:
-  hive todo update abc123 --status acknowledged
-  hive todo update abc123 --status completed`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:        "status",
-				Usage:       fmt.Sprintf("new status (%s)", strings.Join(todo.StatusNames(), ", ")),
-				Required:    true,
-				Destination: &cmd.updateStatus,
-			},
-		},
-		Action: cmd.runUpdate,
-	}
-}
-
 func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
-	src, err := todo.ParseSource(cmd.addSource)
-	if err != nil {
+	if _, err := todo.ParseSource(cmd.addSource); err != nil {
 		return invalidf("invalid source %q: valid values are %s", cmd.addSource, strings.Join(todo.SourceNames(), ", "))
 	}
-
-	// Auto-detect session ID (best-effort)
-	sessionID := callingSessionID(ctx, cmd.app, "", "cli.todo")
-
-	// Determine URI
-	uri := cmd.addURI
-	if uri == "" && sessionID != "" {
-		uri = "session://" + sessionID
+	caller := callingSessionID(ctx, cmd.app, "", "cli.todo")
+	if caller == "" {
+		caller = sessionsvc.CallerGlobal
 	}
-
-	var ref todo.Ref
-	if uri != "" {
-		var parseErr error
-		ref, parseErr = todo.ParseRef(uri)
-		if parseErr != nil {
-			return invalidf("invalid URI %q: %w", uri, parseErr)
-		}
-	}
-
-	todoID := randid.Generate(8)
-	var td todo.Todo
-	switch src {
-	case todo.SourceAgent:
-		td, err = todo.NewAgentTodo(todoID, cmd.addTitle, sessionID, ref)
-	case todo.SourceHuman:
-		td, err = todo.NewHumanTodo(todoID, cmd.addTitle, ref)
-	case todo.SourceSystem:
-		td, err = todo.NewSystemTodo(todoID, cmd.addTitle, ref)
-	default:
-		err = fmt.Errorf("invalid source %q", src)
-	}
+	created, err := engineops.New(cmd.app.Logger, cmd.app.Engine).TodoCreate(ctx, todos.TodoCreateIn{
+		Caller: caller, Title: cmd.addTitle, URI: cmd.addURI, Source: cmd.addSource,
+	})
 	if err != nil {
 		return err
 	}
-
-	created, err := cmd.app.Todos().Add(ctx, td)
-	if err != nil {
-		return err
-	}
-
 	return iojson.WriteLine(c.Root().Writer, created)
-}
-
-func (cmd *TodoCmd) runList(ctx context.Context, c *cli.Command) error {
-	filter := todo.ListFilter{}
-
-	if cmd.listStatus != "" {
-		status, err := todo.ParseStatus(cmd.listStatus)
-		if err != nil {
-			return invalidf("invalid status %q: valid values are %s", cmd.listStatus, strings.Join(todo.StatusNames(), ", "))
-		}
-		filter.Status = &status
-	}
-
-	items, err := cmd.app.Todos().List(ctx, filter)
-	if err != nil {
-		return fmt.Errorf("list todos: %w", err)
-	}
-
-	for _, item := range items {
-		if err := iojson.WriteLine(c.Root().Writer, item); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (cmd *TodoCmd) runUpdate(ctx context.Context, c *cli.Command) error {
-	if c.NArg() < 1 {
-		return invalidf("todo ID required as argument")
-	}
-
-	id := c.Args().First()
-	status, err := todo.ParseStatus(cmd.updateStatus)
-	if err != nil {
-		return invalidf("invalid status %q: valid values are %s", cmd.updateStatus, strings.Join(todo.StatusNames(), ", "))
-	}
-
-	var updated todo.Todo
-	switch status {
-	case todo.StatusAcknowledged:
-		updated, err = cmd.app.Todos().Acknowledge(ctx, id)
-	case todo.StatusCompleted:
-		updated, err = cmd.app.Todos().Complete(ctx, id)
-	case todo.StatusDismissed:
-		updated, err = cmd.app.Todos().Dismiss(ctx, id)
-	case todo.StatusPending:
-		return fmt.Errorf("cannot set status back to pending")
-	default:
-		return fmt.Errorf("unsupported status %q", status)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return iojson.WriteLine(c.Root().Writer, updated)
 }

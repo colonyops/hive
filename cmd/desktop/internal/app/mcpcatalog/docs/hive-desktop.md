@@ -4,7 +4,10 @@ The `hive-desktop` MCP server is this install itself. It is how a workspace's
 agent observes and operates the running app — reading the inbox, feeds,
 profiles and action catalog, forcing a source refresh, and dry-running a flow
 — instead of reading `desktop-pipeline.db` or editing config files blind
-(ADR mcp-replaces-the-agent-facing-http-api).
+(ADR mcp-replaces-the-agent-facing-http-api). It also serves the hive engine's
+tasks, messages and todos, so a chat agent can claim a task (`task_next`),
+publish to another agent's inbox (`message_create`) and ask the operator for
+attention (`todo_create`).
 
 It is the only shipped entry that is not a third-party program: there is
 nothing to install and nothing to fetch, because the server is already running
@@ -36,7 +39,9 @@ a-workspace-declares-its-own-authority).
 
 `stable`. Each tool is declared once in the operation catalog, with a
 noun-first name (`inbox_list`, `schedule_put`), and the same operation is a
-`hive dt` command (`hive dt inbox list`).
+`hive dt` command (`hive dt inbox list`). An engine operation is a top-level
+command instead, which needs no running app (`task_next` is
+`hive task next`).
 
 ## What it needs
 

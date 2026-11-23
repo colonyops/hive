@@ -17,11 +17,15 @@ Wait for messages on specific topics, enabling synchronization between agents an
 
 ## How It Works
 
-The `hive msg sub --wait` command polls the specified topic every 500ms until:
-- A message arrives (success, exit 0)
-- The timeout is reached (prints JSON status, exit 1)
+`hive message list --topic <topic> --wait <seconds>` polls the topic every 500ms until:
+- A message published after the call started arrives (prints it, exit 0)
+- The wait ends (prints `{"status":"timeout",...}`, exit 0)
 
-Default timeout is 24h for `--wait` mode. Messages are NOT acknowledged unless `--ack` is used.
+The wait is at most 86400 seconds (24h). Over MCP the same call is the `message_list` tool with `wait`; keep it short there, because an MCP client may give up on a long call. Reading marks nothing read: mark a message read with `hive message-read put --message-ids <id>`.
+
+### Older Spelling: `hive msg sub --wait`
+
+`hive msg sub --wait` still works. It takes a Go duration (`--timeout 2m`, default 24h), exits 1 on timeout, and can mark the message read with `--ack`, so it suits a shell `if`. The examples below use it.
 
 ## Commands
 

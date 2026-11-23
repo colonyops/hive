@@ -10,8 +10,12 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/cmd/hive/internal/opscli"
 	"github.com/colonyops/hive/internal/domain/messaging"
+	"github.com/colonyops/hive/internal/hive/engineops"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	msgops "github.com/colonyops/hive/internal/ops/messages"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/urfave/cli/v3"
@@ -19,6 +23,10 @@ import (
 
 func (cmd *MsgCmd) messages() *msgsvc.Service {
 	return cmd.app.Messages()
+}
+
+func (cmd *MsgCmd) ops() *engineops.Handlers {
+	return engineops.New(cmd.app.Logger, cmd.app.Engine)
 }
 
 type MsgCmd struct {
@@ -286,8 +294,6 @@ func (cmd *MsgCmd) runTopic(_ context.Context, c *cli.Command) error {
 }
 
 func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
-	msgs := cmd.messages()
-
 	topics := cmd.pubTopics
 	if len(topics) == 0 {
 		return invalidf("at least one topic required")
@@ -306,29 +312,15 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 		sender = sessionID // Auto-set sender = session_id
 	}
 
-	msg := messaging.Message{
-		Payload:   payload,
-		Sender:    sender,
-		SessionID: sessionID,
+	caller := sessionID
+	if caller == "" {
+		caller = sessionsvc.CallerGlobal
 	}
-
-	result, err := msgs.Publish(ctx, msg, topics)
+	out, err := cmd.ops().MessageCreate(ctx, msgops.MessageCreateIn{Caller: caller, Topics: topics, Payload: payload, Sender: sender})
 	if err != nil {
-		return fmt.Errorf("publish message: %w", err)
+		return err
 	}
-
-	// Print confirmation
-	type pubConfirmation struct {
-		Status string   `json:"status"`
-		Topics []string `json:"topics"`
-		Sender string   `json:"sender,omitempty"`
-	}
-	confirmation := pubConfirmation{
-		Status: "ok",
-		Topics: result.Topics,
-		Sender: sender,
-	}
-	return iojson.WriteLine(c.Root().Writer, confirmation)
+	return iojson.WriteLine(c.Root().Writer, out)
 }
 
 // resolvePayload determines the message content from exactly one source.
@@ -387,29 +379,16 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 		return cmd.listenForMessages(ctx, c, msgs, topic, cmd.subAck)
 	}
 
-	// Default: return messages immediately
-	messages, err := msgs.Subscribe(ctx, topic, time.Time{})
+	out, err := cmd.ops().MessageList(ctx, msgops.MessageListIn{Caller: sessionsvc.CallerGlobal, Topic: topic, Tail: cmd.subTail})
 	if err != nil {
-		if errors.Is(err, messaging.ErrTopicNotFound) {
-			return nil // No messages, no output
-		}
-		return fmt.Errorf("subscribe: %w", err)
-	}
-
-	// Apply --tail N limit if specified
-	if cmd.subTail > 0 && len(messages) > cmd.subTail {
-		messages = messages[len(messages)-cmd.subTail:]
-	}
-
-	if err := cmd.printMessages(c.Root().Writer, messages); err != nil {
 		return err
 	}
-
-	// Acknowledge only when --ack is set
-	if cmd.subAck && len(messages) > 0 {
-		cmd.acknowledgeMessages(ctx, msgs, messages)
+	if err := cmd.printMessages(c.Root().Writer, out.Messages); err != nil {
+		return err
 	}
-
+	if cmd.subAck && len(out.Messages) > 0 {
+		cmd.acknowledgeMessages(ctx, msgs, out.Messages)
+	}
 	return nil
 }
 
@@ -514,59 +493,15 @@ func (cmd *MsgCmd) handleTimeout(c *cli.Command, topic string, duration time.Dur
 }
 
 func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
-	msgs := cmd.messages()
-
-	topics, err := msgs.ListTopics(ctx)
+	caller := callingSessionID(ctx, cmd.app, "", "cli.msg") // best-effort: unread counts
+	if caller == "" {
+		caller = sessionsvc.CallerGlobal
+	}
+	out, err := cmd.ops().TopicList(ctx, msgops.TopicListIn{Caller: caller})
 	if err != nil {
-		return fmt.Errorf("list topics: %w", err)
+		return err
 	}
-
-	if len(topics) == 0 {
-		return nil // No topics, no output
-	}
-
-	sessionID := callingSessionID(ctx, cmd.app, "", "cli.msg") // best-effort: unread counts
-
-	type topicInfo struct {
-		Name         string `json:"name"`
-		MessageCount int    `json:"message_count"`
-		UnreadCount  int    `json:"unread_count"`
-		LastActivity string `json:"last_activity,omitempty"`
-		LastSender   string `json:"last_sender,omitempty"`
-	}
-
-	var infos []topicInfo
-	for _, t := range topics {
-		info := topicInfo{Name: t}
-
-		messages, err := msgs.Subscribe(ctx, t, time.Time{})
-		if err != nil && !errors.Is(err, messaging.ErrTopicNotFound) {
-			return fmt.Errorf("get messages for topic %s: %w", t, err)
-		}
-		info.MessageCount = len(messages)
-
-		if len(messages) > 0 {
-			last := messages[len(messages)-1]
-			info.LastActivity = last.CreatedAt.UTC().Format(time.RFC3339)
-			info.LastSender = last.Sender
-		}
-
-		if sessionID != "" {
-			unread, err := msgs.GetUnread(ctx, sessionID, t)
-			if err == nil {
-				info.UnreadCount = len(unread)
-			}
-		}
-
-		infos = append(infos, info)
-	}
-
-	for _, info := range infos {
-		if err := iojson.WriteLine(c.Root().Writer, info); err != nil {
-			return err
-		}
-	}
-	return nil
+	return opscli.Print(c.Root().Writer, out)
 }
 
 func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) error {
@@ -687,32 +622,15 @@ func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
 		return cmd.listenForMessages(ctx, c, msgs, inboxTopic, cmd.inboxAck)
 	}
 
-	var messages []messaging.Message
-	var msgErr error
-
-	if cmd.inboxAll {
-		messages, msgErr = msgs.Subscribe(ctx, inboxTopic, time.Time{})
-	} else {
-		messages, msgErr = msgs.GetUnread(ctx, sessionID, inboxTopic)
-	}
-
-	if msgErr != nil && !errors.Is(msgErr, messaging.ErrTopicNotFound) {
-		return fmt.Errorf("get inbox: %w", msgErr)
-	}
-
-	// Apply --tail N limit
-	if cmd.inboxTail > 0 && len(messages) > cmd.inboxTail {
-		messages = messages[len(messages)-cmd.inboxTail:]
-	}
-
-	if err := cmd.printMessages(c.Root().Writer, messages); err != nil {
+	out, err := cmd.ops().MessageList(ctx, msgops.MessageListIn{Caller: sessionID, Inbox: true, Unread: !cmd.inboxAll, Tail: cmd.inboxTail})
+	if err != nil {
 		return err
 	}
-
-	// Acknowledge only when --ack is set
-	if cmd.inboxAck && len(messages) > 0 {
-		cmd.acknowledgeMessages(ctx, msgs, messages)
+	if err := cmd.printMessages(c.Root().Writer, out.Messages); err != nil {
+		return err
 	}
-
+	if cmd.inboxAck && len(out.Messages) > 0 {
+		cmd.acknowledgeMessages(ctx, msgs, out.Messages)
+	}
 	return nil
 }

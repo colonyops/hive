@@ -22,21 +22,31 @@ Messages are published to named topics. The sender is auto-detected from the cur
 
 Output: JSON confirmation line with status, resolved topics, and sender.
 
+Over MCP (Hive Desktop's `hive-desktop` server, or `hive mcp serve --toolset messages`) the same operation is the `message_create` tool. In a Hive chat the sender is the chat's id.
+
 ## Commands
 
-### Publish with -m Flag (Recommended)
+### Publish a Message (Recommended)
 
 ```bash
-hive msg pub --topic <topic> -m "message content"
+hive message create --topics <topic> --payload "message content"
 ```
 
 **Examples:**
 ```bash
 # Send to specific agent's inbox
-hive msg pub --topic agent.abc123.inbox -m "Task completed, ready for review"
+hive message create --topics agent.abc123.inbox --payload "Task completed, ready for review"
 
 # Send to multiple topics
-hive msg pub -t agent.123.inbox -t agent.456.inbox -m "Important update"
+hive message create --topics agent.123.inbox --topics agent.456.inbox --payload "Important update"
+```
+
+### Older Spelling: `hive msg pub`
+
+`hive msg pub` still works and prints the same line. It is the one to use for a payload from stdin or a file:
+
+```bash
+hive msg pub --topic <topic> -m "message content"
 ```
 
 ### Publish from Stdin
@@ -64,12 +74,12 @@ Note: Prefer `-m` over positional args to avoid flag collision with single-chara
 
 ```bash
 # Broadcast to all agent inboxes
-hive msg pub -t "agent.*.inbox" -m "System maintenance in 5 minutes"
+hive message create --topics "agent.*.inbox" --payload "System maintenance in 5 minutes"
 ```
 
 Wildcard `*` matches any characters within a segment. Topics are expanded at publish time.
 
-## Message Sources
+## Message Sources (`hive msg pub`)
 
 Only one source may be used per publish:
 - `-m` / `--message` flag (recommended)
@@ -90,7 +100,7 @@ Agent inboxes follow: `agent.<session-id>.inbox`
 hive ls
 
 # Send to specific agent
-hive msg pub --topic agent.abc123.inbox -m "Message"
+hive message create --topics agent.abc123.inbox --payload "Message"
 ```
 
 ### Custom Topics
@@ -98,8 +108,8 @@ hive msg pub --topic agent.abc123.inbox -m "Message"
 Create any topic name for specific use cases:
 
 ```bash
-hive msg pub --topic deploy.started -m "Deployment initiated"
-hive msg pub --topic build.events -m "Test suite running"
+hive message create --topics deploy.started --payload "Deployment initiated"
+hive message create --topics build.events --payload "Test suite running"
 ```
 
 ### Topic Naming Conventions
@@ -116,17 +126,17 @@ Avoid generic names, special characters besides `.`, `-`, `_`.
 
 ```bash
 # Complete work and notify next agent
-hive msg pub --topic agent.xyz789.inbox -m "Auth implementation complete. See PR #123. Tests passing."
+hive message create --topics agent.xyz789.inbox --payload "Auth implementation complete. See PR #123. Tests passing."
 ```
 
 ### Notify Multiple Topics
 
 ```bash
-hive msg pub \
-  -t agent.abc.inbox \
-  -t agent.xyz.inbox \
-  -t coordinator.updates \
-  -m "Feature X ready for review"
+hive message create \
+  --topics agent.abc.inbox \
+  --topics agent.xyz.inbox \
+  --topics coordinator.updates \
+  --payload "Feature X ready for review"
 ```
 
 ### Send Command Output
@@ -138,7 +148,7 @@ go test -v ./... | hive msg pub --topic test.results
 ### Override Sender ID
 
 ```bash
-hive msg pub --topic test.channel --sender "custom-agent-id" -m "Test message"
+hive message create --topics test.channel --sender "custom-agent-id" --payload "Test message"
 ```
 
 ## Additional Resources

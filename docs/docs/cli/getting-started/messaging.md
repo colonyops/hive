@@ -66,6 +66,9 @@ hive msg pub -t agent.x7k2 -m "User struct has: ID, Email, Name, CreatedAt"
 hive msg sub -t agent.x7k2 --tail 1
 ```
 
+!!! tip "`hive message` and the MCP tools"
+    The same operations are `hive message create --topics <topic> --payload <text>`, `hive message list` (with `--inbox`, `--unread`, `--tail` and `--wait <seconds>`), `hive message-read put` and `hive topic list`. Hive Desktop serves them to agents as MCP tools (`message_create`, `message_list`), and an agent in a Hive chat has the inbox `agent.<chat-id>.inbox`.
+
 !!! tip "Blocking vs polling"
     Use `--wait` to block until a message arrives — useful for agents that need to synchronize. Use `--tail N` to poll for the most recent messages without blocking.
 

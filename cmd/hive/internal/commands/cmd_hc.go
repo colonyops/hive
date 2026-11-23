@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,10 +17,14 @@ import (
 	"charm.land/glamour/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/cmd/hive/internal/opscli"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui"
 	"github.com/colonyops/hive/internal/domain/hc"
+	"github.com/colonyops/hive/internal/hive/engineops"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/ops"
+	"github.com/colonyops/hive/internal/ops/tasks"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/timeutil"
@@ -81,6 +86,24 @@ func (cmd *HoneycombCmd) run(ctx context.Context, c *cli.Command) error {
 func (cmd *HoneycombCmd) logger() *zerolog.Logger {
 	logger := logutils.Component(cmd.app.Logger, "cli.hc")
 	return &logger
+}
+
+func (cmd *HoneycombCmd) ops() *engineops.Handlers {
+	return engineops.New(cmd.app.Logger, cmd.app.Engine)
+}
+
+// childMaps hands a bulk create's children to task_create, which takes them
+// as JSON objects because a recursive type has no inferred schema.
+func childMaps(children []hc.CreateInput) ([]map[string]any, error) {
+	raw, err := json.Marshal(children)
+	if err != nil {
+		return nil, fmt.Errorf("encode children: %w", err)
+	}
+	var out []map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("encode children: %w", err)
+	}
+	return out, nil
 }
 
 func (cmd *HoneycombCmd) detectSession(ctx context.Context) string {
@@ -170,16 +193,21 @@ Examples:
 				if err != nil {
 					return fmt.Errorf("read input: %w", err)
 				}
-				items, err := cmd.app.HC().CreateBulk(ctx, repoKey, input)
+				if input.Type != hc.ItemTypeEpic {
+					return fmt.Errorf("create bulk: root item must be of type epic, got %q", input.Type)
+				}
+				children, err := childMaps(input.Children)
 				if err != nil {
-					return fmt.Errorf("create bulk: %w", err)
+					return err
 				}
-				for _, item := range items {
-					if err := iojson.WriteLine(c.Root().Writer, item); err != nil {
-						return err
-					}
+				out, err := cmd.ops().TaskCreate(ctx, tasks.TaskCreateIn{
+					Caller: sessionsvc.CallerGlobal, Repo: repoKey,
+					Ref: input.Ref, Title: input.Title, Type: string(input.Type), Desc: input.Desc, Children: children,
+				})
+				if err != nil {
+					return err
 				}
-				return nil
+				return opscli.Print(c.Root().Writer, out)
 			}
 
 			itemType, err := hc.ParseItemType(flagType)
@@ -191,17 +219,14 @@ Examples:
 				return fmt.Errorf("tasks require a --parent; use --type epic to create a root item")
 			}
 
-			item, err := cmd.app.HC().CreateItem(ctx, repoKey, hc.CreateItemInput{
-				Title:    c.Args().First(),
-				Desc:     flagDesc,
-				Type:     itemType,
-				ParentID: flagParentID,
+			out, err := cmd.ops().TaskCreate(ctx, tasks.TaskCreateIn{
+				Caller: sessionsvc.CallerGlobal, Repo: repoKey,
+				Title: c.Args().First(), Desc: flagDesc, Type: string(itemType), ParentID: flagParentID,
 			})
 			if err != nil {
-				return fmt.Errorf("create item: %w", err)
+				return err
 			}
-
-			return iojson.WriteLine(c.Root().Writer, item)
+			return opscli.Print(c.Root().Writer, out)
 		},
 	}
 }
@@ -256,38 +281,28 @@ Examples:
 			if err != nil {
 				return err
 			}
-			filter := hc.ListFilter{
-				RepoKey:   repoKey,
-				EpicID:    c.Args().First(),
-				SessionID: sessionID,
+			in := tasks.TaskListIn{
+				Caller: sessionsvc.CallerGlobal, Repo: repoKey, AllRepos: repoKey == "",
+				EpicID: c.Args().First(), SessionID: sessionID,
 			}
 			switch {
 			case flagStatus != "":
-				status, err := hc.ParseStatus(flagStatus)
-				if err != nil {
+				if _, err := hc.ParseStatus(flagStatus); err != nil {
 					return invalidf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
 				}
-				filter.Status = &status
-			case !flagAll:
-				open := hc.StatusOpen
-				filter.Status = &open
+				in.Status = flagStatus
+			case flagAll:
+				in.Status = tasks.StatusAll
 			}
 
-			items, err := cmd.app.HC().ListItems(ctx, filter)
+			out, err := cmd.ops().TaskList(ctx, in)
 			if err != nil {
-				return fmt.Errorf("list items: %w", err)
+				return err
 			}
-
 			if flagJSON {
-				for _, item := range items {
-					if err := iojson.WriteLine(c.Root().Writer, item); err != nil {
-						return err
-					}
-				}
-				return nil
+				return opscli.Print(c.Root().Writer, out)
 			}
-
-			renderColoredTree(c.Root().Writer, items)
+			renderColoredTree(c.Root().Writer, out.Tasks)
 			return nil
 		},
 	}
@@ -467,27 +482,14 @@ Examples:
 			}
 			id := c.Args().First()
 
-			item, err := cmd.app.HC().GetItem(ctx, id)
+			out, err := cmd.ops().TaskGet(ctx, tasks.TaskGetIn{TaskID: id})
 			if err != nil {
-				return fmt.Errorf("get item %q: %w", id, err)
+				return err
 			}
-
-			comments, err := cmd.app.HC().ListComments(ctx, id)
-			if err != nil {
-				return fmt.Errorf("list comments for %q: %w", id, err)
-			}
-
 			if flagJSON {
-				if err := iojson.WriteLine(c.Root().Writer, item); err != nil {
-					return err
-				}
-				for _, comment := range comments {
-					if err := iojson.WriteLine(c.Root().Writer, comment); err != nil {
-						return err
-					}
-				}
-				return nil
+				return opscli.Print(c.Root().Writer, out)
 			}
+			item, comments := out.Task, out.Comments
 
 			// Resolve epic title for breadcrumb
 			var epicTitle string
@@ -685,80 +687,37 @@ Examples:
 				return invalidf("--add-blocker and --remove-blocker are mutually exclusive")
 			}
 
-			// Apply item field updates first so that if they fail, no blocker
-			// mutations are committed and the caller sees a clean error.
-			var item hc.Item
-			hasUpdate := flagStatus != "" || flagAssign || flagUnassign || c.IsSet("title") || c.IsSet("desc")
-			if hasUpdate {
-				var update hc.ItemUpdate
-
-				if flagStatus != "" {
-					status, err := hc.ParseStatus(flagStatus)
-					if err != nil {
-						return invalidf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
-					}
-					update.Status = &status
-				}
-
-				if flagAssign && flagUnassign {
-					return invalidf("--assign and --unassign are mutually exclusive")
-				}
-
-				if flagAssign {
-					sessionID := cmd.detectSession(ctx)
-					if sessionID == "" {
-						return fmt.Errorf("could not detect current session; use 'hive session' to verify")
-					}
-					update.SessionID = &sessionID
-				}
-
-				if flagUnassign {
-					empty := ""
-					update.SessionID = &empty
-				}
-
-				if c.IsSet("title") {
-					if flagTitle == "" {
-						return invalidf("--title cannot be empty")
-					}
-					update.Title = &flagTitle
-				}
-				if c.IsSet("desc") {
-					update.Desc = &flagDesc
-				}
-
-				var err error
-				item, err = cmd.app.HC().UpdateItem(ctx, id, update)
-				if err != nil {
-					return fmt.Errorf("update item %q: %w", id, err)
+			in := tasks.TaskUpdateIn{
+				Caller: sessionsvc.CallerGlobal, TaskID: id, Status: flagStatus,
+				Assign: flagAssign, Unassign: flagUnassign, AddBlocker: flagAddBlocker, RemoveBlocker: flagRemoveBlocker,
+			}
+			if flagStatus != "" {
+				if _, err := hc.ParseStatus(flagStatus); err != nil {
+					return invalidf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
 				}
 			}
-
-			if flagAddBlocker != "" {
-				if err := cmd.app.HC().AddBlocker(ctx, flagAddBlocker, id); err != nil {
-					if errors.Is(err, hc.ErrCyclicDependency) {
-						return fmt.Errorf("cannot add blocker: would create a cyclic dependency")
-					}
-					return fmt.Errorf("add blocker: %w", err)
+			if flagAssign && flagUnassign {
+				return invalidf("--assign and --unassign are mutually exclusive")
+			}
+			if flagAssign {
+				if in.Caller = cmd.detectSession(ctx); in.Caller == "" {
+					return fmt.Errorf("could not detect current session; use 'hive session' to verify")
 				}
 			}
-
-			if flagRemoveBlocker != "" {
-				if err := cmd.app.HC().RemoveBlocker(ctx, flagRemoveBlocker, id); err != nil {
-					return fmt.Errorf("remove blocker: %w", err)
+			if c.IsSet("title") {
+				if flagTitle == "" {
+					return invalidf("--title cannot be empty")
 				}
+				in.Title = &flagTitle
+			}
+			if c.IsSet("desc") {
+				in.Desc = &flagDesc
 			}
 
-			// Re-fetch after any blocker mutation so blocker_ids reflects the
-			// current state; UpdateItem returns the row before edges are written.
-			if !hasUpdate || flagAddBlocker != "" || flagRemoveBlocker != "" {
-				var err error
-				item, err = cmd.app.HC().GetItem(ctx, id)
-				if err != nil {
-					return fmt.Errorf("get item %q: %w", id, err)
-				}
+			item, err := cmd.ops().TaskUpdate(ctx, in)
+			if err != nil {
+				return err
 			}
-
 			return iojson.WriteLine(c.Root().Writer, item)
 		},
 	}
@@ -788,39 +747,22 @@ Examples:
 				return invalidf("epic ID required as argument")
 			}
 
-			filter := hc.NextFilter{
-				EpicID:  c.Args().First(),
-				RepoKey: cmd.detectRepoKey(ctx),
+			in := tasks.TaskNextIn{
+				Caller: sessionsvc.CallerGlobal, EpicID: c.Args().First(), Repo: cmd.detectRepoKey(ctx), Assign: flagAssign,
 			}
-
 			if flagAssign {
-				filter.SessionID = cmd.detectSession(ctx)
-				if filter.SessionID == "" {
+				if in.Caller = cmd.detectSession(ctx); in.Caller == "" {
 					return fmt.Errorf("could not detect current session; use 'hive session' to verify")
 				}
 			}
 
-			item, found, err := cmd.app.HC().Next(ctx, filter)
-			if err != nil {
-				return fmt.Errorf("next item: %w", err)
-			}
-			if !found {
+			item, err := cmd.ops().TaskNext(ctx, in)
+			if opErr, ok := errors.AsType[*ops.Error](err); ok && strings.HasPrefix(opErr.Msg, engineops.NoActionableTask) {
 				return fmt.Errorf("no actionable tasks found")
 			}
-
-			if flagAssign && item.Status != hc.StatusInProgress {
-				sessionID := filter.SessionID
-				statusInProgress := hc.StatusInProgress
-				updated, err := cmd.app.HC().UpdateItem(ctx, item.ID, hc.ItemUpdate{
-					Status:    &statusInProgress,
-					SessionID: &sessionID,
-				})
-				if err != nil {
-					return fmt.Errorf("assign item: %w", err)
-				}
-				item = updated
+			if err != nil {
+				return err
 			}
-
 			return iojson.WriteLine(c.Root().Writer, item)
 		},
 	}
@@ -844,9 +786,11 @@ Examples:
 				return invalidf("item ID and message required as arguments")
 			}
 
-			comment, err := cmd.app.HC().AddComment(ctx, c.Args().Get(0), strings.Join(c.Args().Slice()[1:], " "))
+			comment, err := cmd.ops().TaskCommentCreate(ctx, tasks.TaskCommentCreateIn{
+				TaskID: c.Args().Get(0), Message: strings.Join(c.Args().Slice()[1:], " "),
+			})
 			if err != nil {
-				return fmt.Errorf("add comment to %q: %w", c.Args().Get(0), err)
+				return err
 			}
 
 			return iojson.WriteLine(c.Root().Writer, comment)
@@ -880,9 +824,13 @@ Examples:
 			}
 
 			epicID := c.Args().First()
-			cb, err := cmd.app.HC().Context(ctx, epicID, cmd.detectSession(ctx))
+			caller := cmd.detectSession(ctx)
+			if caller == "" {
+				caller = sessionsvc.CallerGlobal
+			}
+			cb, err := cmd.ops().TaskContextGet(ctx, tasks.TaskContextGetIn{Caller: caller, EpicID: epicID})
 			if err != nil {
-				return fmt.Errorf("get context for epic %q: %w", epicID, err)
+				return err
 			}
 
 			if flagJSON {
@@ -920,43 +868,24 @@ Examples:
 		},
 		Metadata: alwaysJSON(),
 		Action: func(ctx context.Context, c *cli.Command) error {
-			olderThan, err := time.ParseDuration(flagOlderThan)
-			if err != nil {
+			if _, err := time.ParseDuration(flagOlderThan); err != nil {
 				return invalidf("invalid duration %q: %w", flagOlderThan, err)
 			}
-
-			statuses := make([]hc.Status, 0, len(flagStatuses))
-			if len(flagStatuses) == 0 {
-				statuses = []hc.Status{hc.StatusDone, hc.StatusCancelled}
-			} else {
-				for _, s := range flagStatuses {
-					status, err := hc.ParseStatus(s)
-					if err != nil {
-						return invalidf("invalid status %q: valid values are open, in_progress, done, cancelled", s)
-					}
-					statuses = append(statuses, status)
+			for _, s := range flagStatuses {
+				if _, err := hc.ParseStatus(s); err != nil {
+					return invalidf("invalid status %q: valid values are open, in_progress, done, cancelled", s)
 				}
 			}
 
-			count, err := cmd.app.HC().Prune(ctx, hc.PruneOpts{
-				OlderThan: olderThan,
-				Statuses:  statuses,
-				RepoKey:   cmd.detectRepoKey(ctx),
-				DryRun:    flagDryRun,
+			repoKey := cmd.detectRepoKey(ctx)
+			out, err := cmd.ops().TaskClear(ctx, tasks.TaskClearIn{
+				Caller: sessionsvc.CallerGlobal, OlderThan: flagOlderThan, Statuses: flagStatuses,
+				Repo: repoKey, AllRepos: repoKey == "", DryRun: flagDryRun,
 			})
 			if err != nil {
-				return fmt.Errorf("prune: %w", err)
+				return err
 			}
-
-			action := "pruned"
-			if flagDryRun {
-				action = "would prune"
-			}
-
-			return iojson.WriteLine(c.Root().Writer, map[string]any{
-				"action": action,
-				"count":  count,
-			})
+			return iojson.WriteLine(c.Root().Writer, out)
 		},
 	}
 }

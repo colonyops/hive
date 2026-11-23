@@ -21,6 +21,23 @@ Each hive session has a unique inbox topic (`agent.<id>.inbox`). Other agents pu
 
 By default, messages are NOT marked as read. Use `--ack` to acknowledge messages.
 
+## The Inbox Operations
+
+```bash
+# Unread messages in your inbox
+hive message list --inbox --unread
+
+# Every message in your inbox
+hive message list --inbox
+
+# Mark messages read
+hive message-read put --message-ids <id> --message-ids <id2>
+```
+
+Over MCP (Hive Desktop's `hive-desktop` server, or `hive mcp serve --toolset messages`) these are the `message_list` and `message_read_put` tools. In a Hive chat the inbox is `agent.<chat-id>.inbox`.
+
+The `hive msg inbox` commands below still work, and `--ack` reads and marks read in one step.
+
 ## Commands
 
 ### Read Unread Messages (Default)

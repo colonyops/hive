@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/adapter/mcpsrv"
-	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/ops/catalog"
 )
 
@@ -26,7 +25,7 @@ func TestServedToolsAreTheCatalog(t *testing.T) {
 		t.Run(path, func(t *testing.T) {
 			var want []string
 			for _, op := range catalog.All() {
-				if info := op.Info(); info.Owner == ops.OwnerDesktop && info.Toolset.MCPPath == path {
+				if info := op.Info(); info.Toolset.MCPPath == path {
 					want = append(want, info.ToolName)
 				}
 			}

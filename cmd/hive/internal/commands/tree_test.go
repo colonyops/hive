@@ -39,6 +39,7 @@ func registerCommands(root *cli.Command, a *app.App) *cli.Command {
 		NewExperimentalCmd(flags, a).Register,
 		NewDaemonCmd(flags, a).Register,
 		NewServersCmd(flags, a).Register,
+		NewEngineCmd(flags, a).Register,
 	} {
 		root = register(root)
 	}

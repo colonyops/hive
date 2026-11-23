@@ -16,6 +16,9 @@ Hive includes a built-in task tracker designed for multi-agent coordination. The
 
 [Hive Desktop](../../desktop/code/terminal-mode.md#tasks) reads the same task tree from its Code area.
 
+!!! tip "`hive task` and the MCP tools"
+    The same operations are `hive task create`, `list`, `get`, `update`, `next` and `clear`, `hive task-comment create` and `hive task-context get`. They print JSON Lines and take a JSON input with `--input`, so `hive task create --input -` reads the trees below from stdin. Hive Desktop serves them to agents as MCP tools with the same names (`task_next`, `task_update`), so an agent in a Hive chat can claim a task too.
+
 ## Quick Start
 
 ### Create an epic with tasks

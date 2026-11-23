@@ -47,11 +47,27 @@ func TestEveryDesktopOpHasACommand(t *testing.T) {
 	}
 }
 
-func find(cmds []*cli.Command, name string) *cli.Command {
-	for _, c := range cmds {
-		if c.Name == name {
-			return c
+// TestEveryEngineOpHasACommand fails when an engine operation in the catalog
+// has no `hive <resource> <verb>`, or when its help drifts from the spec.
+func TestEveryEngineOpHasACommand(t *testing.T) {
+	a := outputTestApp(t)
+	for _, op := range catalog.All() {
+		info := op.Info()
+		if info.Owner != ops.OwnerEngine {
+			continue
 		}
+		t.Run(info.Name, func(t *testing.T) {
+			var help bytes.Buffer
+			root := registerCommands(&cli.Command{Name: "hive", Writer: &help}, a)
+			path := opscli.Path(info)
+			group := find(root.Commands, path[0])
+			require.NotNil(t, group, "no hive %s", path[0])
+			require.NotNil(t, find(group.Commands, path[1]), "no hive %s %s", path[0], path[1])
+
+			require.NoError(t, root.Run(context.Background(), []string{"hive", path[0], path[1], "--help"}))
+			assert.Contains(t, help.String(), info.Summary)
+			assert.Contains(t, help.String(), info.Guidance[:min(len(info.Guidance), 60)])
+			assert.Contains(t, help.String(), "--caller", "the group carries --caller")
+		})
 	}
-	return nil
 }

@@ -56,12 +56,17 @@ func NewDesktopClient(dataDir, urlOverride, version string) *DesktopClient {
 // reachable (a desktopNotRunningError or *desktopUnreachableError), or it
 // answered with a protocol error, such as a tool this desktop does not have.
 func (d *DesktopClient) Call(ctx context.Context, mcpPath, tool string, args map[string]any) (*mcp.CallToolResult, error) {
+	return d.CallWithin(ctx, desktopCallTimeout, mcpPath, tool, args)
+}
+
+// CallWithin is Call with its own timeout, for a call that waits on purpose.
+func (d *DesktopClient) CallWithin(ctx context.Context, timeout time.Duration, mcpPath, tool string, args map[string]any) (*mcp.CallToolResult, error) {
 	baseURL, token, err := d.endpoint()
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, desktopCallTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	// The standalone SSE stream carries server-initiated messages, which a
@@ -72,7 +77,7 @@ func (d *DesktopClient) Call(ctx context.Context, mcpPath, tool string, args map
 	auth := &bearerTransport{token: token}
 	transport := &mcp.StreamableClientTransport{
 		Endpoint:             strings.TrimRight(baseURL, "/") + mcpPath,
-		HTTPClient:           &http.Client{Timeout: desktopCallTimeout, Transport: auth},
+		HTTPClient:           &http.Client{Timeout: timeout, Transport: auth},
 		MaxRetries:           -1,
 		DisableStandaloneSSE: true,
 	}

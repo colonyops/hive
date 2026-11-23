@@ -28,6 +28,9 @@ type Call func(ctx context.Context, c *cli.Command, mcpPath, tool string, args m
 // Caller resolves the caller field of an input.
 type Caller func(c *cli.Command) (string, error)
 
+// Run runs one engine operation in-process and returns its answer.
+type Run func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) (any, error)
+
 // DesktopCommands builds `<resource-kebab> <verb>` groups for every
 // desktop-owned op. It fails on an op whose input has a field the CLI cannot
 // spell, so a bad spec fails the first test rather than a user's call.
@@ -36,18 +39,55 @@ type Caller func(c *cli.Command) (string, error)
 // name from the nearest command first, so a field flag with a reserved name
 // would hide the parent's flag from the command.
 func DesktopCommands(list []ops.Op, call Call, caller Caller, reserved ...string) ([]*cli.Command, error) {
+	return commands(list, ops.OwnerDesktop, func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) error {
+		out, err := call(ctx, c, info.Toolset.MCPPath, info.ToolName, args)
+		if err != nil {
+			return err
+		}
+		return iojson.WriteLine(c.Root().Writer, out)
+	}, caller, reserved)
+}
+
+// EngineCommands builds `<resource-kebab> <verb>` groups for every
+// engine-owned op. Each prints its answer with Print.
+func EngineCommands(list []ops.Op, run Run, caller Caller, reserved ...string) ([]*cli.Command, error) {
+	return commands(list, ops.OwnerEngine, func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) error {
+		out, err := run(ctx, c, info, args)
+		if err != nil {
+			return err
+		}
+		return Print(c.Root().Writer, out)
+	}, caller, reserved)
+}
+
+// JSONLines is an answer the CLI prints as one JSON line per value, such as a
+// list printed one element per line.
+type JSONLines interface{ JSONLines() []any }
+
+// Print writes out as JSON Lines: each of its JSONLines when it has them,
+// else out itself on one line.
+func Print(w io.Writer, out any) error {
+	lines, ok := out.(JSONLines)
+	if !ok {
+		return iojson.WriteLine(w, out)
+	}
+	for _, line := range lines.JSONLines() {
+		if err := iojson.WriteLine(w, line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func commands(list []ops.Op, owner ops.Owner, run func(context.Context, *cli.Command, ops.Info, map[string]any) error, caller Caller, reserved []string) ([]*cli.Command, error) {
 	var groups []*cli.Command
 	for _, op := range list {
 		info := op.Info()
-		if info.Owner != ops.OwnerDesktop {
+		if info.Owner != owner {
 			continue
 		}
 		cmd, err := command(op, func(ctx context.Context, c *cli.Command, args map[string]any) error {
-			out, err := call(ctx, c, info.Toolset.MCPPath, info.ToolName, args)
-			if err != nil {
-				return err
-			}
-			return iojson.WriteLine(c.Root().Writer, out)
+			return run(ctx, c, info, args)
 		}, caller, reserved)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", info.Name, err)

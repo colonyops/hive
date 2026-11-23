@@ -13,8 +13,11 @@ import (
 	"github.com/colonyops/hive/internal/ops/flows"
 	"github.com/colonyops/hive/internal/ops/inbox"
 	"github.com/colonyops/hive/internal/ops/layout"
+	"github.com/colonyops/hive/internal/ops/messages"
 	"github.com/colonyops/hive/internal/ops/reviews"
 	"github.com/colonyops/hive/internal/ops/sessions"
+	"github.com/colonyops/hive/internal/ops/tasks"
+	"github.com/colonyops/hive/internal/ops/todos"
 	"github.com/colonyops/hive/internal/ops/workspaces"
 )
 
@@ -23,5 +26,6 @@ func All() []ops.Op {
 		layout.All(), drive.All(), reviews.All(),
 		inbox.All(), sessions.All(), actions.All(), diagnostics.All(),
 		flows.All(), workspaces.All(), chats.All(),
+		tasks.All(), messages.All(), todos.All(),
 	)
 }

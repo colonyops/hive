@@ -78,7 +78,8 @@ func (ctrl *Controller) Server() *mcp.Server {
 		Version: version,
 		Description: "Observe and operate the running Hive Desktop app: read its inbox, " +
 			"feeds, profiles and action catalog, force a source refresh, dry-run a flow, " +
-			"and manage the scheduled chats of its agent workspaces.",
+			"manage the scheduled chats of its agent workspaces, and work the hive " +
+			"engine's tasks, messages and todos.",
 	}, nil)
 	ctrl.register(srv)
 	return srv

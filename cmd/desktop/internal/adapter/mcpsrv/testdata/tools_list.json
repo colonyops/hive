@@ -946,6 +946,224 @@
       "idempotentHint": false,
       "readOnlyHint": false
     },
+    "description": "Publish a message to topics. Store the message on every topic named and answer with the topics it reached. Another agent's inbox is agent.\u003csession-id\u003e.inbox.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "payload": {
+          "description": "The message.",
+          "type": "string"
+        },
+        "sender": {
+          "description": "Who the message is from. Defaults to the caller's session or chat id.",
+          "type": "string"
+        },
+        "topics": {
+          "description": "The topics to publish to. A topic may hold a * wildcard, such as agent.*.inbox, to reach every topic it matches.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "caller",
+        "topics",
+        "payload"
+      ],
+      "type": "object"
+    },
+    "name": "message_create",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "sender": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "topics": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "topics"
+      ],
+      "type": "object"
+    },
+    "title": "Publish a message to topics"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read messages from a topic or your inbox. Answer with the messages, oldest first. Reading marks nothing read; call message_read_put with the ids you handled. With wait, answer with the first new message, or with none and timedOut when the wait ends. Keep a wait short over MCP: a client may give up on a long call.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "inbox": {
+          "description": "Read the caller's own inbox, agent.\u003cid\u003e.inbox, instead of topic.",
+          "type": "boolean"
+        },
+        "tail": {
+          "description": "Only the last n messages.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "topic": {
+          "description": "An exact topic, a prefix.* pattern, or * (default) for every topic.",
+          "type": "string"
+        },
+        "unread": {
+          "description": "Only messages the caller has not marked read. Needs a session or chat caller.",
+          "type": "boolean"
+        },
+        "wait": {
+          "description": "Seconds to wait for the first message that arrives after the call starts. 0 (default) answers at once.",
+          "maximum": 86400,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "caller"
+      ],
+      "type": "object"
+    },
+    "name": "message_list",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "messages": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "string"
+              },
+              "sender": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              },
+              "topic": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "topic",
+              "payload",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "timedOut": {
+          "type": "boolean"
+        },
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "messages"
+      ],
+      "type": "object"
+    },
+    "title": "Read messages from a topic or your inbox"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Mark messages read. Mark the messages read for the caller, so an unread read skips them, and answer with the ids and the reader.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "messageIds": {
+          "description": "The ids of the messages to mark read.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "caller",
+        "messageIds"
+      ],
+      "type": "object"
+    },
+    "name": "message_read_put",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "messageIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "reader": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "messageIds",
+        "reader"
+      ],
+      "type": "object"
+    },
+    "title": "Mark messages read"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
     "description": "Clear a source node's feed mark. Clear a source node's feed-mark image so its items revert to the node's icon.",
     "inputSchema": {
       "additionalProperties": false,
@@ -2010,6 +2228,1363 @@
       "type": "object"
     },
     "title": "Desktop status"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Remove finished tasks. Delete done and cancelled items, or the statuses given, and answer with how many it removed. A task belongs to a repository (owner/repo): repo when given, else the remote of the caller's hive session or working directory, else none. A caller that names no repository must pass allRepos to clear every repository.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "allRepos": {
+          "description": "Remove the finished tasks of every repository; repo is ignored.",
+          "type": "boolean"
+        },
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "dryRun": {
+          "description": "Count what would be removed and remove nothing.",
+          "type": "boolean"
+        },
+        "olderThan": {
+          "description": "Only items last changed longer ago than this Go duration, such as 24h. Default: any age.",
+          "type": "string"
+        },
+        "repo": {
+          "description": "Only items of this repository, as owner/repo. Defaults to the caller session's repository.",
+          "type": "string"
+        },
+        "statuses": {
+          "description": "The statuses to remove. Default: done and cancelled.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "caller"
+      ],
+      "type": "object"
+    },
+    "name": "task_clear",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "description": "pruned, or would prune for a dry run.",
+          "type": "string"
+        },
+        "count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "action",
+        "count"
+      ],
+      "type": "object"
+    },
+    "title": "Remove finished tasks"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Comment on a task. Attach a progress note, a decision or a handoff to an item, and answer with the comment.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "description": "The comment. Start it with CHECKPOINT: to leave a handoff note for the next agent.",
+          "type": "string"
+        },
+        "taskId": {
+          "description": "The item's id.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "taskId",
+        "message"
+      ],
+      "type": "object"
+    },
+    "name": "task_comment_create",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "item_id": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "item_id",
+        "message",
+        "created_at"
+      ],
+      "type": "object"
+    },
+    "title": "Comment on a task"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read an epic's context block. Answer with the epic, its task counts by status, the caller's tasks with their latest comment, and every open or in-progress task.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "epicId": {
+          "description": "The epic's id.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "epicId"
+      ],
+      "type": "object"
+    },
+    "name": "task_context_get",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "all_open_tasks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "blocker_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "depth": {
+                "type": "integer"
+              },
+              "desc": {
+                "type": "string"
+              },
+              "epic_id": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "parent_id": {
+                "type": "string"
+              },
+              "repo_key": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "repo_key",
+              "epic_id",
+              "parent_id",
+              "session_id",
+              "title",
+              "desc",
+              "type",
+              "status",
+              "depth",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "counts": {
+          "additionalProperties": false,
+          "properties": {
+            "cancelled": {
+              "type": "integer"
+            },
+            "done": {
+              "type": "integer"
+            },
+            "in_progress": {
+              "type": "integer"
+            },
+            "open": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "open",
+            "in_progress",
+            "done",
+            "cancelled"
+          ],
+          "type": "object"
+        },
+        "epic": {
+          "additionalProperties": false,
+          "properties": {
+            "blocker_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "depth": {
+              "type": "integer"
+            },
+            "desc": {
+              "type": "string"
+            },
+            "epic_id": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "parent_id": {
+              "type": "string"
+            },
+            "repo_key": {
+              "type": "string"
+            },
+            "session_id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "repo_key",
+            "epic_id",
+            "parent_id",
+            "session_id",
+            "title",
+            "desc",
+            "type",
+            "status",
+            "depth",
+            "created_at",
+            "updated_at"
+          ],
+          "type": "object"
+        },
+        "my_tasks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "item": {
+                "additionalProperties": false,
+                "properties": {
+                  "blocker_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "depth": {
+                    "type": "integer"
+                  },
+                  "desc": {
+                    "type": "string"
+                  },
+                  "epic_id": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "parent_id": {
+                    "type": "string"
+                  },
+                  "repo_key": {
+                    "type": "string"
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "repo_key",
+                  "epic_id",
+                  "parent_id",
+                  "session_id",
+                  "title",
+                  "desc",
+                  "type",
+                  "status",
+                  "depth",
+                  "created_at",
+                  "updated_at"
+                ],
+                "type": "object"
+              },
+              "latest_comment": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "item_id": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "item_id",
+                  "message",
+                  "created_at"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "item",
+              "latest_comment"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "epic",
+        "counts",
+        "my_tasks",
+        "all_open_tasks"
+      ],
+      "type": "object"
+    },
+    "title": "Read an epic's context block"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Create a task or an epic with its tasks. Create one item, or a tree: an item with children, each of which may have children of its own. task_next walks the tree and hands out only leaf tasks; a parent task resolves when its children are done. To order work, give an item a ref and list that ref in a later item's blockers. A task belongs to a repository (owner/repo): repo when given, else the remote of the caller's hive session or working directory, else none. Answers with every item it created, root first.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "children": {
+          "description": "Items to create under this one, each {title, type, desc, ref, blockers, children}; type defaults to task. ref is a label local to this call; blockers lists the refs that must finish first. Nesting goes up to 10 levels.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "desc": {
+          "description": "The item's description.",
+          "type": "string"
+        },
+        "parentId": {
+          "description": "The parent item's id. A task without children needs one.",
+          "type": "string"
+        },
+        "ref": {
+          "description": "A label for this item that a child's blockers may name. Not stored.",
+          "type": "string"
+        },
+        "repo": {
+          "description": "The repository the items belong to, as owner/repo. Defaults to the caller session's repository.",
+          "type": "string"
+        },
+        "title": {
+          "description": "The item's title.",
+          "type": "string"
+        },
+        "type": {
+          "default": "task",
+          "description": "epic for a root item, or task (default).",
+          "enum": [
+            "epic",
+            "task"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "title"
+      ],
+      "type": "object"
+    },
+    "name": "task_create",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "tasks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "blocker_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "depth": {
+                "type": "integer"
+              },
+              "desc": {
+                "type": "string"
+              },
+              "epic_id": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "parent_id": {
+                "type": "string"
+              },
+              "repo_key": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "repo_key",
+              "epic_id",
+              "parent_id",
+              "session_id",
+              "title",
+              "desc",
+              "type",
+              "status",
+              "depth",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "tasks"
+      ],
+      "type": "object"
+    },
+    "title": "Create a task or an epic with its tasks"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read a task or an epic with its comments. Answers with the item and its comments, oldest first. A comment that starts with CHECKPOINT is a handoff note.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "taskId": {
+          "description": "The item's id.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "taskId"
+      ],
+      "type": "object"
+    },
+    "name": "task_get",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "comments": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "item_id": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "item_id",
+              "message",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "task": {
+          "additionalProperties": false,
+          "properties": {
+            "blocker_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "depth": {
+              "type": "integer"
+            },
+            "desc": {
+              "type": "string"
+            },
+            "epic_id": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "parent_id": {
+              "type": "string"
+            },
+            "repo_key": {
+              "type": "string"
+            },
+            "session_id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "repo_key",
+            "epic_id",
+            "parent_id",
+            "session_id",
+            "title",
+            "desc",
+            "type",
+            "status",
+            "depth",
+            "created_at",
+            "updated_at"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "task",
+        "comments"
+      ],
+      "type": "object"
+    },
+    "title": "Read a task or an epic with its comments"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List tasks and epics. List items, open ones by default. A task belongs to a repository (owner/repo): repo when given, else the remote of the caller's hive session or working directory, else none. An epicId already scopes the read, so only an explicit repo narrows it. An empty list means nothing matched.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "allRepos": {
+          "description": "Items of every repository; repo is ignored.",
+          "type": "boolean"
+        },
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "epicId": {
+          "description": "Only the items of this epic.",
+          "type": "string"
+        },
+        "repo": {
+          "description": "Only items of this repository, as owner/repo. Defaults to the caller session's repository.",
+          "type": "string"
+        },
+        "sessionId": {
+          "description": "Only items assigned to this session or chat id. A local:\u003cid\u003e reference is accepted.",
+          "type": "string"
+        },
+        "status": {
+          "default": "open",
+          "description": "Only items in this status, or all.",
+          "enum": [
+            "all",
+            "open",
+            "in_progress",
+            "done",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller"
+      ],
+      "type": "object"
+    },
+    "name": "task_list",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "tasks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "blocker_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "depth": {
+                "type": "integer"
+              },
+              "desc": {
+                "type": "string"
+              },
+              "epic_id": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "parent_id": {
+                "type": "string"
+              },
+              "repo_key": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "repo_key",
+              "epic_id",
+              "parent_id",
+              "session_id",
+              "title",
+              "desc",
+              "type",
+              "status",
+              "depth",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "tasks"
+      ],
+      "type": "object"
+    },
+    "title": "List tasks and epics"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Get the next actionable task of an epic. Answer with the next leaf task of the epic that is open or in progress and has no unfinished children or blockers. Without assign it changes nothing. With assign it claims the task for the caller, which must be a hive session or a chat. No actionable task is not_found. An epicId already scopes the read, so only an explicit repo narrows it.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "assign": {
+          "description": "Claim the task: resume one already in progress for the caller, else assign the next open one to the caller and set it in progress.",
+          "type": "boolean"
+        },
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "epicId": {
+          "description": "The epic to take work from.",
+          "type": "string"
+        },
+        "repo": {
+          "description": "Only tasks of this repository, as owner/repo. Defaults to the caller session's repository.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "epicId"
+      ],
+      "type": "object"
+    },
+    "name": "task_next",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "blocker_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "depth": {
+          "type": "integer"
+        },
+        "desc": {
+          "type": "string"
+        },
+        "epic_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "parent_id": {
+          "type": "string"
+        },
+        "repo_key": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "repo_key",
+        "epic_id",
+        "parent_id",
+        "session_id",
+        "title",
+        "desc",
+        "type",
+        "status",
+        "depth",
+        "created_at",
+        "updated_at"
+      ],
+      "type": "object"
+    },
+    "title": "Get the next actionable task of an epic"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Change a task's status, text, assignment or blockers. Apply the changes given and answer with the item as it is now. Setting an epic to done or cancelled sets every unfinished item under it the same way. A blocker that would make a cycle is a conflict, and the other changes of the call are kept.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "addBlocker": {
+          "description": "The id of an item that must finish before this one.",
+          "type": "string"
+        },
+        "assign": {
+          "description": "Assign the item to the caller, which must be a hive session or a chat.",
+          "type": "boolean"
+        },
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "desc": {
+          "description": "The new description.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "removeBlocker": {
+          "description": "The id of a blocker to remove.",
+          "type": "string"
+        },
+        "status": {
+          "description": "The new status.",
+          "enum": [
+            "open",
+            "in_progress",
+            "done",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "taskId": {
+          "description": "The item's id.",
+          "type": "string"
+        },
+        "title": {
+          "description": "The new title.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "unassign": {
+          "description": "Remove the item's assignment.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "caller",
+        "taskId"
+      ],
+      "type": "object"
+    },
+    "name": "task_update",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "blocker_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "depth": {
+          "type": "integer"
+        },
+        "desc": {
+          "type": "string"
+        },
+        "epic_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "parent_id": {
+          "type": "string"
+        },
+        "repo_key": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "repo_key",
+        "epic_id",
+        "parent_id",
+        "session_id",
+        "title",
+        "desc",
+        "type",
+        "status",
+        "depth",
+        "created_at",
+        "updated_at"
+      ],
+      "type": "object"
+    },
+    "title": "Change a task's status, text, assignment or blockers"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Ask the operator for attention. Add a pending todo to the operator's list, such as a document to review, and answer with it. An agent todo records the caller's session or chat. Agents are rate limited.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "source": {
+          "default": "agent",
+          "description": "Who raised it.",
+          "enum": [
+            "agent",
+            "human",
+            "system"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "description": "What the operator should do.",
+          "type": "string"
+        },
+        "uri": {
+          "description": "What it is about, as scheme://value: review://.hive/plans/x.md, session://\u003cid\u003e, https://... Defaults to session://\u003cid\u003e for a hive session caller.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "title"
+      ],
+      "type": "object"
+    },
+    "name": "todo_create",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "completed_at": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "session_id",
+        "source",
+        "title",
+        "uri",
+        "status",
+        "created_at",
+        "updated_at"
+      ],
+      "type": "object"
+    },
+    "title": "Ask the operator for attention"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List operator todos. Answer with the todos. An empty list means nothing matched.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "description": "Only todos in this status.",
+          "enum": [
+            "pending",
+            "acknowledged",
+            "completed",
+            "dismissed"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "todo_list",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "todos": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "completed_at": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "session_id",
+              "source",
+              "title",
+              "uri",
+              "status",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "todos"
+      ],
+      "type": "object"
+    },
+    "title": "List operator todos"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Change a todo's status. Move a todo to acknowledged, completed or dismissed and answer with it. A todo cannot go back to pending.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "description": "acknowledged once seen, completed when done, dismissed when not needed.",
+          "enum": [
+            "acknowledged",
+            "completed",
+            "dismissed"
+          ],
+          "type": "string"
+        },
+        "todoId": {
+          "description": "The todo's id.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "todoId",
+        "status"
+      ],
+      "type": "object"
+    },
+    "name": "todo_update",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "completed_at": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "session_id",
+        "source",
+        "title",
+        "uri",
+        "status",
+        "created_at",
+        "updated_at"
+      ],
+      "type": "object"
+    },
+    "title": "Change a todo's status"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List message topics. Answer with every topic, its message count and last activity, and its unread count for a session or chat caller.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller"
+      ],
+      "type": "object"
+    },
+    "name": "topic_list",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "topics": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "last_activity": {
+                "type": "string"
+              },
+              "last_sender": {
+                "type": "string"
+              },
+              "message_count": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "unread_count": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "message_count",
+              "unread_count"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "topics"
+      ],
+      "type": "object"
+    },
+    "title": "List message topics"
   },
   {
     "annotations": {

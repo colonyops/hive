@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -40,14 +41,16 @@ func (cmd *MCPCmd) Register(app *cli.Command) *cli.Command {
 		Commands: []*cli.Command{
 			{
 				Name:  "serve",
-				Usage: "Serve Hive Desktop's tools over stdio",
+				Usage: "Serve Hive's tools over stdio",
 				Description: `Runs an MCP server on stdin and stdout that forwards each tool call to the
 running Hive Desktop, so an agent needs no port. Add it to the agent's config:
 
   Claude Code: claude mcp add hive-drive -- hive mcp serve --toolset drive,layout
   Codex:       codex mcp add hive-drive -- hive mcp serve --toolset drive,layout
 
-The tools are the same ones "hive dt" calls. --toolset picks which (default:
+The tools are the same ones "hive dt" calls, plus the engine operations
+behind "hive task", "hive message", "hive topic" and "hive todo", which the
+desktop also serves. --toolset picks which (default:
 all). The server finds the desktop through the endpoint file in --data-dir on
 every call, so a desktop restart needs no reconnect. While the desktop is not
 running, a call answers "unavailable: Hive Desktop is not running".`,
@@ -103,8 +106,10 @@ func splitToolsets(values []string) []string {
 	return names
 }
 
-// newMCPServer mounts a forwarding tool for each desktop-owned catalog
-// operation in the named toolsets, or in all of them when toolsets is empty.
+// newMCPServer mounts a forwarding tool for each catalog operation in the
+// named toolsets, or in all of them when toolsets is empty. Engine operations
+// are forwarded too, to the desktop that mounts them, until this server runs
+// them in-process (#796).
 func newMCPServer(client *DesktopClient, caller string, toolsets []string, version string, log zerolog.Logger) (*mcp.Server, error) {
 	selected, err := selectOps(toolsets)
 	if err != nil {
@@ -126,9 +131,6 @@ func selectOps(toolsets []string) ([]ops.Op, error) {
 	var valid []string
 	for _, op := range catalog.All() {
 		info := op.Info()
-		if info.Owner != ops.OwnerDesktop {
-			continue
-		}
 		served = append(served, op)
 		if !slices.Contains(valid, info.Toolset.Name) {
 			valid = append(valid, info.Toolset.Name)
@@ -177,7 +179,7 @@ func forwardHandler(client *DesktopClient, caller string, info ops.Info, log zer
 			return refusal(ops.KindInvalid, err.Error()), nil
 		}
 
-		res, err := client.Call(ctx, info.Toolset.MCPPath, info.ToolName, args)
+		res, err := client.CallWithin(ctx, forwardTimeout(args), info.Toolset.MCPPath, info.ToolName, args)
 		if err == nil {
 			return res, nil
 		}
@@ -215,6 +217,15 @@ func forwardedArgs(raw json.RawMessage, info ops.Info, caller string) (map[strin
 		args[ops.CallerField] = caller
 	}
 	return args, nil
+}
+
+// forwardTimeout gives a call that waits, such as message_list with wait, its
+// wait on top of the usual timeout.
+func forwardTimeout(args map[string]any) time.Duration {
+	if wait, ok := args["wait"].(float64); ok && wait > 0 {
+		return desktopCallTimeout + time.Duration(wait)*time.Second
+	}
+	return desktopCallTimeout
 }
 
 func refusal(kind ops.Kind, msg string) *mcp.CallToolResult {

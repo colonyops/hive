@@ -144,7 +144,7 @@ func validateBatchBlockerRefs(entries []createInputEntry) ([][2]string, error) {
 // atomic call. The root node must be of type epic.
 func (s *Service) CreateBulk(ctx context.Context, repoKey string, input hc.CreateInput) ([]hc.Item, error) {
 	if input.Type != hc.ItemTypeEpic {
-		return nil, fmt.Errorf("root item must be of type epic, got %q", input.Type)
+		return nil, fmt.Errorf("%w: root item must be of type epic, got %q", hc.ErrInvalidTree, input.Type)
 	}
 
 	now := time.Now()
@@ -155,7 +155,7 @@ func (s *Service) CreateBulk(ctx context.Context, repoKey string, input hc.Creat
 
 	edges, err := validateBatchBlockerRefs(entries)
 	if err != nil {
-		return nil, fmt.Errorf("validate blocker refs: %w", err)
+		return nil, fmt.Errorf("%w: validate blocker refs: %w", hc.ErrInvalidTree, err)
 	}
 
 	items := make([]hc.Item, len(entries))
