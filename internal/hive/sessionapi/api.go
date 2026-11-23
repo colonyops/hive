@@ -54,6 +54,10 @@ type API interface {
 	// background on the machine that holds it, and starts its agent when no
 	// tmux session runs. A client attaches to it afterwards.
 	StartTmuxSession(ctx context.Context, id string) (multiplexer.LaunchResult, error)
+	// AgentPanes lists the agent panes of the active sessions ids name, keyed
+	// by id, with pane ids in the tmux of the machine that holds them. A
+	// session with no panes, or whose panes could not be read, is absent.
+	AgentPanes(ctx context.Context, ids []string) (map[string][]status.AgentPane, error)
 
 	// StatusAvailable must not block: the TUI calls it inside Update. A false
 	// answer can turn true later (the daemon client answers false until its

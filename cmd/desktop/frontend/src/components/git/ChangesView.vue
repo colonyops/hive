@@ -81,6 +81,8 @@ const props = withDefaults(
     sessionId: string
     /** A tab is mounted while another shows, and its bare keys must not fire from there. */
     keysActive?: boolean
+    /** The session's checkout is on a server: every read goes there, and this machine's editor cannot open it. */
+    serverCheckout?: boolean
   }>(),
   { keysActive: true },
 )
@@ -1019,6 +1021,7 @@ function openInEditor(): void {
             :selected="overviewOpen ? null : current"
             :viewed="viewedPaths"
             :comment-counts="commentCounts"
+            :server-checkout="serverCheckout"
             @pick="pickFile"
             @open-editor="openInEditor"
           />
@@ -1057,6 +1060,7 @@ function openInEditor(): void {
           :active-match="search.active.value"
           :load-whole-file="(path: string) => SessionFileContext(sessionId, target, path)"
           :load-image="(path: string) => SessionFileImage(sessionId, target, path)"
+          :server-checkout="serverCheckout"
           @synced="settleReveal"
           @fold="toggleFold"
           @toggle-viewed="toggleViewed"

@@ -317,6 +317,16 @@ func TestClientGitStatusesNamesADaemonThatPredatesThem(t *testing.T) {
 	require.ErrorIs(t, err, ErrGitStatusUnsupported)
 }
 
+func TestClientAgentPanesNamesADaemonThatPredatesThem(t *testing.T) {
+	t.Parallel()
+	path := socketPath(t)
+	serve(t, path, slowServer{}, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop()})
+
+	_, err := client.AgentPanes(t.Context(), []string{"s1"})
+	require.ErrorIs(t, err, ErrAgentPanesUnsupported)
+}
+
 func TestClientDeleteTimeoutBoundsADelete(t *testing.T) {
 	t.Parallel()
 	const timeout = 50 * time.Millisecond

@@ -1,10 +1,10 @@
-import { execFileSync } from 'node:child_process'
-import { type Page, type Route } from '@playwright/test'
-import { screenshotPath } from '../../../fixtures/paths.js'
-import { serverURL } from '../../../fixtures/servers.js'
-import { expect, resetServerState, tag, test } from '../../../fixtures/test.js'
-import { bindingID } from '../../../fixtures/wails.js'
-import { mockTerminalAPI } from '../../../fixtures/terminal.js'
+import { execFileSync } from "node:child_process";
+import { type Page, type Route } from "@playwright/test";
+import { screenshotPath } from "../../../fixtures/paths.js";
+import { serverURL } from "../../../fixtures/servers.js";
+import { expect, resetServerState, tag, test } from "../../../fixtures/test.js";
+import { bindingID } from "../../../fixtures/wails.js";
+import { mockTerminalAPI } from "../../../fixtures/terminal.js";
 
 // The Code view against a real server: server-a from test/remote, reached over
 // ssh the way the app reaches it. scripts/serve.sh writes the ssh config the
@@ -14,183 +14,278 @@ import { mockTerminalAPI } from '../../../fixtures/terminal.js'
 // terminal control plane are answered here; the session list, create, and
 // delete go to server-a. test/remote/terminal_test.go runs the terminal of a
 // server session over ssh.
-const SSH_CONFIG_GLOB = '/tmp/hive-desktop-e2e.*/remote/ssh/config'
-const SESSION = `e2e-remote-${Date.now().toString(36)}`
-const SLUG = `server-a:${SESSION}`
+const SSH_CONFIG_GLOB = "/tmp/hive-desktop-e2e.*/remote/ssh/config";
+const SESSION = `e2e-remote-${Date.now().toString(36)}`;
+const SLUG = `server-a:${SESSION}`;
 
 function onServer(command: string): string {
-  const config = execFileSync('bash', ['-c', `ls ${SSH_CONFIG_GLOB} | head -1`]).toString().trim()
-  return execFileSync('ssh', ['-F', config, '-T', '-o', 'BatchMode=yes', 'server-a', '--', command], {
-    timeout: 20_000,
-  }).toString()
+  const config = execFileSync("bash", ["-c", `ls ${SSH_CONFIG_GLOB} | head -1`])
+    .toString()
+    .trim();
+  return execFileSync(
+    "ssh",
+    ["-F", config, "-T", "-o", "BatchMode=yes", "server-a", "--", command],
+    {
+      timeout: 20_000,
+    },
+  ).toString();
 }
 
 function sessionRow(page: Page) {
-  return page.locator(`[data-testid="terminal-session-row"][data-slug="${SLUG}"]`)
+  return page.locator(
+    `[data-testid="terminal-session-row"][data-slug="${SLUG}"]`,
+  );
 }
 
 // Records each attach so a test can see which terminal the row opened.
 async function stubTerminals(page: Page): Promise<string[]> {
-  const attached: string[] = []
-  const available = bindingID('terminalservice', 'Available')
-  const scratch = bindingID('terminalservice', 'Scratch')
-  await page.route('**/wails/runtime', async (route) => {
-    const id = route.request().postDataJSON()?.args?.methodID
-    if (id === available) return route.fulfill({ json: { available: true, reason: '' } })
-    if (id === scratch) return route.fulfill({ json: { slug: '', name: '' } })
-    return route.fallback()
-  })
+  const attached: string[] = [];
+  const available = bindingID("terminalservice", "Available");
+  const scratch = bindingID("terminalservice", "Scratch");
+  await page.route("**/wails/runtime", async (route) => {
+    const id = route.request().postDataJSON()?.args?.methodID;
+    if (id === available)
+      return route.fulfill({ json: { available: true, reason: "" } });
+    if (id === scratch) return route.fulfill({ json: { slug: "", name: "" } });
+    return route.fallback();
+  });
   await mockTerminalAPI(page, {
     attach: (route: Route) => {
-      attached.push(route.request().postDataJSON().slug)
-      return { windows: [] }
+      attached.push(route.request().postDataJSON().slug);
+      return { windows: [] };
     },
-    'windows/list': { sessions: {} },
-  })
-  await page.routeWebSocket('**/api/terminal/stream?*', () => {})
-  return attached
+    "windows/list": { sessions: {} },
+  });
+  await page.routeWebSocket("**/api/terminal/stream?*", () => {});
+  return attached;
 }
 
 // A query opens every group it matches, so the session's row renders in
 // whichever repository group it joined.
 async function findSession(page: Page): Promise<void> {
-  await page.getByTestId('terminal-sessions-filter').fill(SESSION)
+  await page.getByTestId("terminal-sessions-filter").fill(SESSION);
 }
 
-test.describe('sessions on a server', { tag: [tag.terminal, tag.critical] }, () => {
-  test.use({ server: 'remote', serverStateReset: 'per-file' })
-  test.describe.configure({ mode: 'serial', retries: 0 })
-  test.beforeAll(async ({ browserName }) => {
-    await resetServerState(serverURL('remote', browserName))
-  })
-  test.afterAll(() => {
-    try {
-      onServer(`hive session delete --force ${SESSION}`)
-    } catch {
-      // The journey deletes it; this only catches a run that stopped early.
-    }
-  })
+test.describe(
+  "sessions on a server",
+  { tag: [tag.terminal, tag.critical] },
+  () => {
+    test.use({ server: "remote", serverStateReset: "per-file" });
+    test.describe.configure({ mode: "serial", retries: 0 });
+    test.beforeAll(async ({ browserName }) => {
+      await resetServerState(serverURL("remote", browserName));
+    });
+    test.afterAll(() => {
+      try {
+        onServer(`hive session delete --force ${SESSION}`);
+      } catch {
+        // The journey deletes it; this only catches a run that stopped early.
+      }
+    });
 
-  // A clone on a CI runner can take most of a minute.
-  test.setTimeout(120_000)
+    // A clone on a CI runner can take most of a minute.
+    test.setTimeout(120_000);
 
-  test('reports an offline server without holding up the tree', async ({ page }) => {
-    await stubTerminals(page)
-    await page.goto('/#/terminal')
+    test("reports an offline server without holding up the tree", async ({
+      page,
+    }) => {
+      await stubTerminals(page);
+      await page.goto("/#/terminal");
 
-    await expect(page.getByTestId('terminal-mode')).toBeVisible()
-    await expect(page.getByTestId('terminal-sessions-loading')).toBeHidden()
-    const status = page.getByTestId('terminal-server-status')
-    await expect(status).toHaveAttribute('aria-label', /gone offline/, { timeout: 30_000 })
-    await expect(status).not.toHaveAttribute('aria-label', /server-a offline/)
-    await expect(page.getByTestId('toast').filter({ hasText: 'gone is offline' })).toHaveCount(1)
+      await expect(page.getByTestId("terminal-mode")).toBeVisible();
+      await expect(page.getByTestId("terminal-sessions-loading")).toBeHidden();
+      const status = page.getByTestId("terminal-server-status");
+      await expect(status).toHaveAttribute("aria-label", /gone offline/, {
+        timeout: 30_000,
+      });
+      await expect(status).not.toHaveAttribute(
+        "aria-label",
+        /server-a offline/,
+      );
+      await expect(
+        page.getByTestId("toast").filter({ hasText: "gone is offline" }),
+      ).toHaveCount(1);
 
-    await status.hover()
-    await expect(page.getByTestId('app-tooltip')).toContainText('gone offline')
-  })
+      await status.hover();
+      await expect(page.getByTestId("app-tooltip")).toContainText(
+        "gone offline",
+      );
+    });
 
-  test('refuses a prompt too long for a server before submit', async ({ page }) => {
-    await stubTerminals(page)
-    await page.goto('/#/terminal')
-    await expect(page.getByTestId('terminal-server-status')).toBeVisible({ timeout: 30_000 })
-    await page.getByTestId('terminal-new-session').click()
-    await expect(page.getByTestId('new-session-dialog')).toBeVisible()
-    await page.getByTestId('new-session-name').fill(`${SESSION}-long`)
-    await page.getByTestId('new-session-prompt').fill('x'.repeat(33 * 1024))
-    await expect(page.getByTestId('new-session-prompt-file-warning')).toBeVisible()
+    test("refuses a prompt too long for a server before submit", async ({
+      page,
+    }) => {
+      await stubTerminals(page);
+      await page.goto("/#/terminal");
+      await expect(page.getByTestId("terminal-server-status")).toBeVisible({
+        timeout: 30_000,
+      });
+      await page.getByTestId("terminal-new-session").click();
+      await expect(page.getByTestId("new-session-dialog")).toBeVisible();
+      await page.getByTestId("new-session-name").fill(`${SESSION}-long`);
+      await page.getByTestId("new-session-prompt").fill("x".repeat(33 * 1024));
+      await expect(
+        page.getByTestId("new-session-prompt-file-warning"),
+      ).toBeVisible();
 
-    await page.getByTestId('new-session-server').click()
-    await page.getByTestId('new-session-server-option-server-a').click()
-    await page.getByTestId('new-session-repository').click()
-    await page.getByTestId('new-session-repository-search').fill('/home/hive/repo.git')
-    await page.getByTestId('new-session-repository-custom').click()
+      await page.getByTestId("new-session-server").click();
+      await page.getByTestId("new-session-server-option-server-a").click();
+      await page.getByTestId("new-session-repository").click();
+      await page
+        .getByTestId("new-session-repository-search")
+        .fill("/home/hive/repo.git");
+      await page.getByTestId("new-session-repository-custom").click();
 
-    await expect(page.getByTestId('new-session-prompt-server-limit')).toContainText('at most 32 KiB')
-    await expect(page.getByTestId('new-session-prompt-file-warning')).toHaveCount(0)
-    await expect(page.getByTestId('new-session-submit')).toBeDisabled()
-    expect(onServer(`hive session list --json`)).not.toContain(`"name":"${SESSION}-long"`)
-  })
+      await expect(
+        page.getByTestId("new-session-prompt-server-limit"),
+      ).toContainText("at most 32 KiB");
+      await expect(
+        page.getByTestId("new-session-prompt-file-warning"),
+      ).toHaveCount(0);
+      await expect(page.getByTestId("new-session-submit")).toBeDisabled();
+      expect(onServer(`hive session list --json`)).not.toContain(
+        `"name":"${SESSION}-long"`,
+      );
+    });
 
-  test('creates a session on the server chosen in the form', async ({ page }) => {
-    await stubTerminals(page)
-    await page.goto('/#/terminal')
-    await expect(page.getByTestId('terminal-server-status')).toBeVisible({ timeout: 30_000 })
-    await page.getByTestId('terminal-new-session').click()
+    test("creates a session on the server chosen in the form", async ({
+      page,
+    }) => {
+      await stubTerminals(page);
+      await page.goto("/#/terminal");
+      await expect(page.getByTestId("terminal-server-status")).toBeVisible({
+        timeout: 30_000,
+      });
+      await page.getByTestId("terminal-new-session").click();
 
-    await expect(page.getByTestId('new-session-dialog')).toBeVisible()
-    await page.getByTestId('new-session-server').click()
-    await page.getByTestId('new-session-server-option-server-a').click()
-    await page.getByTestId('new-session-repository').click()
-    await page.getByTestId('new-session-repository-search').fill('/home/hive/repo.git')
-    await page.getByTestId('new-session-repository-custom').click()
-    await page.getByTestId('new-session-name').fill(SESSION)
-    await page.getByTestId('new-session-submit').click()
-    await expect(page.getByTestId('new-session-dialog')).toBeHidden()
+      await expect(page.getByTestId("new-session-dialog")).toBeVisible();
+      await page.getByTestId("new-session-server").click();
+      await page.getByTestId("new-session-server-option-server-a").click();
+      await page.getByTestId("new-session-repository").click();
+      await page
+        .getByTestId("new-session-repository-search")
+        .fill("/home/hive/repo.git");
+      await page.getByTestId("new-session-repository-custom").click();
+      await page.getByTestId("new-session-name").fill(SESSION);
+      await page.getByTestId("new-session-submit").click();
+      await expect(page.getByTestId("new-session-dialog")).toBeHidden();
 
-    await findSession(page)
-    await expect(sessionRow(page)).toBeVisible({ timeout: 60_000 })
-    await expect(sessionRow(page).getByTestId('terminal-session-host')).toHaveAttribute('data-server', 'server-a')
-    expect(onServer(`hive session list --json`)).toContain(`"name":"${SESSION}"`)
-  })
+      await findSession(page);
+      await expect(sessionRow(page)).toBeVisible({ timeout: 60_000 });
+      await expect(
+        sessionRow(page).getByTestId("terminal-session-host"),
+      ).toHaveAttribute("data-server", "server-a");
+      expect(onServer(`hive session list --json`)).toContain(
+        `"name":"${SESSION}"`,
+      );
+    });
 
-  test('opens the session as that server\'s terminal', async ({ page }) => {
-    const attached = await stubTerminals(page)
-    await page.goto('/#/terminal')
-    await findSession(page)
-    await sessionRow(page).click()
+    test("opens the session as that server's terminal", async ({ page }) => {
+      const attached = await stubTerminals(page);
+      await page.goto("/#/terminal");
+      await findSession(page);
+      await sessionRow(page).click();
 
-    await expect(page).toHaveURL(new RegExp(`/terminal/${SLUG}$`))
-    await expect.poll(() => attached).toContain(SLUG)
+      await expect(page).toHaveURL(new RegExp(`/terminal/${SLUG}$`));
+      await expect.poll(() => attached).toContain(SLUG);
 
-    // The status bar reads the checkout on the server, and offers nothing
-    // that would act on this machine.
-    await expect(page.getByTestId('session-status-branch')).toHaveText('main', { timeout: 30_000 })
-    await expect(page.getByTestId('terminal-pane-statusbar-reveal')).toHaveCount(0)
-    await expect(page.getByTestId('terminal-pane-statusbar-open-editor')).toHaveCount(0)
-    await expect(page.getByTestId('terminal-statusbar-changes')).toHaveCount(0)
-    await expect(page.getByTestId('session-status-host')).toHaveText('server-a')
-  })
+      // The status bar reads the checkout on the server, and offers nothing
+      // that would act on this machine.
+      await expect(page.getByTestId("session-status-branch")).toHaveText(
+        "main",
+        { timeout: 30_000 },
+      );
+      await expect(
+        page.getByTestId("terminal-pane-statusbar-reveal"),
+      ).toHaveCount(0);
+      await expect(
+        page.getByTestId("terminal-pane-statusbar-open-editor"),
+      ).toHaveCount(0);
+      await expect(page.getByTestId("session-status-host")).toHaveText(
+        "server-a",
+      );
+    });
 
-  test('gives a server session tabs and a split, without the views that need a checkout', async ({ page, browserName }) => {
-    await stubTerminals(page)
-    await page.goto(`/#/terminal/${SLUG}`)
-    await findSession(page)
-    await expect(sessionRow(page)).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByTestId('panel-tab-add-p0')).toBeVisible()
-    await expect(page.getByTestId('session-status-host')).toHaveText('server-a')
+    test("shows the diff of the checkout on the server", async ({ page }) => {
+      const path = (
+        JSON.parse(onServer("hive session list --json")) as {
+          name: string;
+          path: string;
+        }[]
+      ).find((s) => s.name === SESSION)!.path;
+      onServer(`printf 'one\\ntwo\\n' > ${path}/e2e-remote-change.txt`);
+      await stubTerminals(page);
+      await page.goto(`/#/terminal/${SLUG}`);
+      await findSession(page);
+      await expect(sessionRow(page)).toBeVisible({ timeout: 30_000 });
 
-    await page.getByTestId('panel-tab-add-p0').click()
-    await expect(page.getByTestId('new-window-terminal')).toBeVisible()
-    await expect(page.getByTestId('new-window-view-diff')).toHaveCount(0)
-    await expect(page.getByTestId('new-window-view-tasks')).toHaveCount(0)
-    await page.keyboard.press('Escape')
+      await page.getByTestId("panel-tab-add-p0").click();
+      await page.getByTestId("new-window-view-diff").click();
+      await expect(page.getByTestId("changes-view")).toBeVisible();
+      await expect(
+        page.getByTestId("changes-row-e2e-remote-change.txt"),
+      ).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId("changes-row-e2e-remote-change.txt-menu").click();
+      await expect(page.getByTestId("changes-copy-path")).toBeVisible();
+      await expect(page.getByTestId("changes-open-editor")).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      onServer(`rm -f ${path}/e2e-remote-change.txt`);
+    });
 
-    await page.getByTestId('panel-split-row-p0').click()
-    await expect(page.getByTestId('panel-picker')).toBeVisible()
-    const before = (await page.getByTestId('panel-p0').boundingBox())!
-    const divider = (await page.getByTestId('panel-divider-s1').boundingBox())!
-    await page.mouse.move(divider.x + 3, divider.y + 100)
-    await page.mouse.down()
-    await page.mouse.move(divider.x + 103, divider.y + 100, { steps: 8 })
-    await page.mouse.up()
-    expect((await page.getByTestId('panel-p0').boundingBox())!.width).toBeCloseTo(before.width + 100, -1)
-    await page.screenshot({ path: screenshotPath(`session-tabs-server-${browserName}.png`) })
-    await page.getByTestId('panel-picker-cancel').click()
-  })
+    test("gives a server session tabs and a split, without the views that read this machine", async ({
+      page,
+      browserName,
+    }) => {
+      await stubTerminals(page);
+      await page.goto(`/#/terminal/${SLUG}`);
+      await findSession(page);
+      await expect(sessionRow(page)).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("panel-tab-add-p0")).toBeVisible();
+      await expect(page.getByTestId("session-status-host")).toHaveText(
+        "server-a",
+      );
 
-  test('deletes the session on the server', async ({ page }) => {
-    await stubTerminals(page)
-    await page.goto('/#/terminal')
-    await findSession(page)
-    const row = sessionRow(page)
-    await row.hover()
-    await row.getByTestId('terminal-session-menu-toggle').click()
-    // The server starts its own terminal, so a stopped one offers Start.
-    await expect(page.getByTestId('session-menu-start')).toHaveCount(1)
-    await page.getByTestId('session-menu-delete').click()
-    await page.getByTestId('session-confirmation-confirm').click()
+      await page.getByTestId("panel-tab-add-p0").click();
+      await expect(page.getByTestId("new-window-terminal")).toBeVisible();
+      await expect(page.getByTestId("new-window-view-diff")).toBeVisible();
+      await expect(page.getByTestId("new-window-view-tasks")).toHaveCount(0);
+      await page.keyboard.press("Escape");
 
-    await expect(row).toBeHidden({ timeout: 60_000 })
-    expect(onServer(`hive session list --json`)).not.toContain(`"name":"${SESSION}"`)
-  })
-})
+      await page.getByTestId("panel-split-row-p0").click();
+      await expect(page.getByTestId("panel-picker")).toBeVisible();
+      const before = (await page.getByTestId("panel-p0").boundingBox())!;
+      const divider = (await page
+        .getByTestId("panel-divider-s1")
+        .boundingBox())!;
+      await page.mouse.move(divider.x + 3, divider.y + 100);
+      await page.mouse.down();
+      await page.mouse.move(divider.x + 103, divider.y + 100, { steps: 8 });
+      await page.mouse.up();
+      expect(
+        (await page.getByTestId("panel-p0").boundingBox())!.width,
+      ).toBeCloseTo(before.width + 100, -1);
+      await page.screenshot({
+        path: screenshotPath(`session-tabs-server-${browserName}.png`),
+      });
+      await page.getByTestId("panel-picker-cancel").click();
+    });
+
+    test("deletes the session on the server", async ({ page }) => {
+      await stubTerminals(page);
+      await page.goto("/#/terminal");
+      await findSession(page);
+      const row = sessionRow(page);
+      await row.hover();
+      await row.getByTestId("terminal-session-menu-toggle").click();
+      // The server starts its own terminal, so a stopped one offers Start.
+      await expect(page.getByTestId("session-menu-start")).toHaveCount(1);
+      await page.getByTestId("session-menu-delete").click();
+      await page.getByTestId("session-confirmation-confirm").click();
+
+      await expect(row).toBeHidden({ timeout: 60_000 });
+      expect(onServer(`hive session list --json`)).not.toContain(
+        `"name":"${SESSION}"`,
+      );
+    });
+  },
+);

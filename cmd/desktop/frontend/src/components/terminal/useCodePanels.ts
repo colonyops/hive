@@ -24,6 +24,7 @@ export function codeViewHost(
     chat: tree.isChat(row),
     // A pinned chat and the scratch terminal have no session checkout, and a
     // server's session has none on this machine.
+    checkout: tree.isHiveSession(row),
     localCheckout: tree.isHiveSession(row) && !tree.isServerSession(row),
     drive: !!row.driveSpace,
   }

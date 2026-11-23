@@ -194,8 +194,10 @@ const footerRow = computed(() => {
 const serverConnectionIssue = computed(
   () => showStatusBar.value && (tree.offlineServers.length > 0 || !!tree.serversError),
 )
-// A server session's checkout is on the server: Changes and Tasks read this machine.
+// A server session's checkout is on the server: Tasks read this machine.
 const statusBarLocal = computed(() => !!statusBarRow.value && !tree.isServerSession(statusBarRow.value))
+// Changes reads the checkout where it is, but an offline server answers nothing.
+const statusBarChanges = computed(() => !!statusBarRow.value && !statusBarRow.value.offline)
 // An offline server's row keeps its bar and the badge that names the server,
 // and asks that server nothing.
 const statusBarSessionId = computed(() => (statusBarRow.value?.offline ? '' : (statusBarRow.value?.id ?? '')))
@@ -310,13 +312,16 @@ watch(
 
 const changesSession = computed(() => {
   const row = panels.row
-  return row && tree.isHiveSession(row) && !tree.isServerSession(row) ? row.id : ''
+  return row && tree.isHiveSession(row) ? row.id : ''
 })
+const changesOnServer = computed(() => !!panels.row && tree.isServerSession(panels.row))
 const availableViews = computed(() => (panels.row ? panels.viewsFor(panels.row) : []))
 const canAddTerminal = computed(() => !!panels.row && !tree.isChat(panels.row))
 // An agent needs a running tmux session to open in, as the "+" menu says in its own words.
 const agents = computed(() =>
-  changesSession.value && panels.row && tree.rowRunning(panels.row) && !ops.agentWindowBusy ? ops.agentProfiles : [],
+  changesSession.value && !changesOnServer.value && panels.row && tree.rowRunning(panels.row) && !ops.agentWindowBusy
+    ? ops.agentProfiles
+    : [],
 )
 
 const pickerWindows = computed(() =>
@@ -591,6 +596,7 @@ onBeforeUnmount(() => {
           v-else-if="tab.kind === 'diff' && changesSession"
           :keys-active="viewHasKeys(focused, shown)"
           :session-id="changesSession"
+          :server-checkout="changesOnServer"
           @sent="revealAgent"
         />
         <TasksView v-else-if="tab.kind === 'tasks'" embedded :keys-active="viewHasKeys(focused, shown)" />
@@ -885,7 +891,7 @@ onBeforeUnmount(() => {
           :git="sessionGit"
           :pull-request="sessionPullRequest"
           :pull-request-error="sessionPullRequestError"
-          :can-open-changes="statusBarLocal"
+          :can-open-changes="statusBarChanges"
           @refresh-pull-request="refreshSessionStatus({ refreshPullRequest: true })"
           @open-changes="openDiff"
         />

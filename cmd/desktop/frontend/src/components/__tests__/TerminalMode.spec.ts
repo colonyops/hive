@@ -4813,10 +4813,9 @@ describe('TerminalMode', () => {
       expect(wrapper.find('[data-testid="terminal-pane-statusbar-reveal"]').exists()).toBe(false)
       expect(wrapper.find('[data-testid="terminal-statusbar-action-open-ci"]').exists()).toBe(false)
       expect(wrapper.find('[data-testid="terminal-statusbar-tasks"]').exists()).toBe(false)
-      expect(wrapper.find('[data-testid="terminal-statusbar-changes"]').exists()).toBe(false)
       const diff = wrapper.get('[data-testid="session-status-diff"]')
       expect(diff.text()).toBe('+3−1')
-      expect(diff.element.tagName).toBe('SPAN')
+      expect(diff.element.tagName).toBe('BUTTON')
 
       const calls = mocks.SessionGitStatus.mock.calls.length
       mocks.ListServerSessions.mockResolvedValue([
@@ -5087,7 +5086,7 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
-    it("refuses a view the session cannot show, as the picker does for a server's session", async () => {
+    it("opens Diff for a server's session and refuses Tasks, as the picker does", async () => {
       mocks.ListServerSessions.mockResolvedValue([
         {
           server: 'box',
@@ -5116,7 +5115,7 @@ describe('TerminalMode', () => {
       fireWails('session:layout', { session: 'box:9', verb: 'open', view: 'tasks', placement: 'beside' })
       await flushPromises()
 
-      expect(wrapper.find('[data-testid="panel-tab-diff"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="panel-tab-diff"]').exists()).toBe(true)
       expect(wrapper.find('[data-testid="panel-tab-tasks"]').exists()).toBe(false)
       expect(wrapper.findAll('section[data-panel]')).toHaveLength(1)
 

@@ -156,6 +156,22 @@ func slugServer(slug string) (string, bool) {
 // target resolves an id from the Code view. "<server>:<id>" is a session on
 // that server and a bare id is local, the form ParseRef reads.
 func (s *SessionsService) target(ctx context.Context, id string) (sessionTarget, error) {
+	target, err := s.apiTarget(id)
+	if err != nil || target.local() || s.serverTmux == nil {
+		return target, err
+	}
+	tmux, err := s.serverTmux(ctx, target.server)
+	if err != nil {
+		return sessionTarget{}, err
+	}
+	target.tmux = tmux
+	return target, nil
+}
+
+// apiTarget resolves an id as target does, without the server's tmux, for a
+// call that needs only the session API: a server whose tmux cannot be reached
+// still answers it.
+func (s *SessionsService) apiTarget(id string) (sessionTarget, error) {
 	ref, err := session.ParseRef(id, session.LocalServer)
 	if err != nil {
 		return sessionTarget{}, Wrap(err, KindInvalid, "session id")
@@ -167,15 +183,7 @@ func (s *SessionsService) target(ctx context.Context, id string) (sessionTarget,
 	if err != nil {
 		return sessionTarget{}, err
 	}
-	target := sessionTarget{api: api, id: ref.ID, server: ref.Server}
-	if s.serverTmux != nil {
-		tmux, err := s.serverTmux(ctx, ref.Server)
-		if err != nil {
-			return sessionTarget{}, err
-		}
-		target.tmux = tmux
-	}
-	return target, nil
+	return sessionTarget{api: api, id: ref.ID, server: ref.Server}, nil
 }
 
 func (s *SessionsService) serverAPI(name string) (sessionapi.API, error) {

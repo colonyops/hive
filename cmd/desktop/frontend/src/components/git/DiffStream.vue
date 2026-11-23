@@ -73,6 +73,8 @@ const props = defineProps<{
   focusedAgent?: string | null
   /** The responses under each agent comment, by comment id. */
   agentThreads?: Readonly<Record<string, readonly ThreadResponse[]>>
+  /** The checkout is on a server, which this machine's editor cannot open. */
+  serverCheckout?: boolean
 }>()
 const emit = defineEmits<{
   'update:current': [path: string]
@@ -652,6 +654,7 @@ watch(
         :open="openPaths.has(pinnedFile.path)"
         :viewed="viewedPaths.has(pinnedFile.path)"
         test-prefix="changes-pinned"
+        :server-checkout="serverCheckout"
         @fold="emit('fold', pinnedFile!)"
         @toggle-viewed="emit('toggle-viewed', pinnedFile!)"
         @open-editor="emit('open-editor')"
@@ -665,6 +668,7 @@ watch(
         :entry="entries.get(path)"
         :open="openPaths.has(path)"
         :viewed="viewedPaths.has(path)"
+        :server-checkout="serverCheckout"
         @fold="emit('fold', fileByPath.get(path)!)"
         @toggle-viewed="emit('toggle-viewed', fileByPath.get(path)!)"
         @open-editor="emit('open-editor')"

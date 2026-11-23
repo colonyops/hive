@@ -581,6 +581,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Reviews: a.hive.Reviews(),
 		Drive:   a.Drive,
 		Code:    engineCodeAgents{engine: a.hive},
+		Servers: fleetAgents{api: a.Sessions.serverAPI, terminals: a.serverTerminals},
 		Chats:   a.AgentWorkspaces,
 		Input:   a.terminals,
 		Logger:  cfg.Logger,

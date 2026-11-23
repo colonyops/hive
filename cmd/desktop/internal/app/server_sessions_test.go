@@ -21,6 +21,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/daemon"
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
 	"github.com/colonyops/hive/internal/hive/hivetest"
 	"github.com/colonyops/hive/internal/hive/servers"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -290,6 +291,29 @@ func TestServerStateOf(t *testing.T) {
 	incompatible := fmt.Errorf("hello: %w", &wire.IncompatibleError{DaemonVersion: "old"})
 	assert.Equal(t, server.StateIncompatible, serverStateOf(incompatible))
 	assert.Equal(t, server.StateOffline, serverStateOf(errors.New("exit status 255")))
+}
+
+func TestServerSessions_ReadTheChangesOfAServerSessionOnTheServer(t *testing.T) {
+	f := newServerFixture(t)
+	id := f.create(t, "review")
+	ref := "box:" + id
+	uncommitted := gitstatus.DiffTarget{Base: gitstatus.DiffBaseUncommitted}
+
+	// The local engine has no session with this id, so each answer is the server's.
+	_, err := f.svc.SessionChanges(t.Context(), ref, uncommitted)
+	require.NoError(t, err)
+	_, err = f.svc.SessionFileDiffs(t.Context(), ref, uncommitted, []string{"a.txt"})
+	require.NoError(t, err)
+	_, err = f.svc.SessionBranches(t.Context(), ref)
+	require.NoError(t, err)
+	_, err = f.svc.SessionChanges(t.Context(), id, uncommitted)
+	assert.Equal(t, KindNotFound, KindOf(err), "a bare id is a local session")
+
+	_, err = f.svc.SessionChanges(t.Context(), "box:missing", uncommitted)
+	assert.Equal(t, KindNotFound, KindOf(err))
+	_, err = f.svc.SessionFileContext(t.Context(), "down:"+id, uncommitted, "a.txt")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	require.ErrorContains(t, err, "Connection refused")
 }
 
 func TestServerSessions_GitStatusFailures(t *testing.T) {

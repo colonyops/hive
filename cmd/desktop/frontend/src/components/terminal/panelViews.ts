@@ -12,6 +12,8 @@ import { tabById, withTabParams, type PanelLayout, type PanelTab } from '../../l
 export interface SessionViewHost {
   /** A pinned chat in Code, or the open chat in Chats. */
   chat: boolean
+  /** A hive session, with its checkout on this machine or on a server. */
+  checkout: boolean
   /** A hive session with its checkout on this machine. */
   localCheckout: boolean
   /** The session has a Drive space of its own to read. */
@@ -33,7 +35,7 @@ const VIEWS = [
     label: 'Diff',
     icon: IconFileDiff,
     ownsKeys: true,
-    offeredTo: (host: SessionViewHost) => host.localCheckout,
+    offeredTo: (host: SessionViewHost) => host.checkout,
   },
   {
     kind: 'tasks',

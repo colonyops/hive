@@ -72,7 +72,13 @@ func (s *ReviewService) deliver(ctx context.Context, to AgentTargetRef, text str
 	if target.Status == string(terminal.StatusApproval) {
 		return Errorf(KindConflict, "%s is waiting on a prompt", target.Label)
 	}
-	return Wrap(s.input.SendText(ctx, target.deliverTo, []byte(text), s.submitDelay), KindInternal, "sending the feedback to %s", target.Label)
+	input := s.input
+	if target.server != "" {
+		if input, err = s.servers.Input(ctx, target.server); err != nil {
+			return err
+		}
+	}
+	return Wrap(input.SendText(ctx, target.deliverTo, []byte(text), s.submitDelay), KindInternal, "sending the feedback to %s", target.Label)
 }
 
 func diffComments(comments []DiffCommentInput) ([]review.DiffComment, error) {

@@ -19,6 +19,8 @@ const props = defineProps<{
   viewed: boolean
   /** Prefixes the test ids, because the pinned header repeats a file's header in the stream. */
   testPrefix?: string
+  /** The checkout is on a server, which this machine's editor cannot open. */
+  serverCheckout?: boolean
 }>()
 const emit = defineEmits<{ fold: []; 'toggle-viewed': []; 'open-editor': []; comment: [rect: DOMRect] }>()
 
@@ -79,7 +81,7 @@ const note = computed(() => {
       >{{ note }}</span
     >
     <BaseButton
-      v-if="open && diff?.state === 'truncated'"
+      v-if="open && diff?.state === 'truncated' && !serverCheckout"
       variant="secondary"
       size="xs"
       @click.stop="emit('open-editor')"
