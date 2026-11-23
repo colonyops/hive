@@ -17,7 +17,7 @@ import (
 )
 
 // TestEveryDesktopOpHasACommand fails when a desktop operation in the
-// catalog has no `hive dt <resource> <verb>`, or when its help drifts from
+// catalog has no command below `hive dt`, or when its help drifts from
 // the spec.
 func TestEveryDesktopOpHasACommand(t *testing.T) {
 	root := NewDesktopCmd(&Flags{}, &app.App{Config: &config.Config{}}).Register(&cli.Command{Name: "hive"})
