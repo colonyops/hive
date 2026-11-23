@@ -64,7 +64,7 @@ fi
 SAFE_BRANCH=$(echo "$CURRENT_BRANCH" | tr '/' '-')
 
 # Generate unique session ID for reviewer
-NEW_SESSION=$(hive msg topic --prefix "")
+NEW_SESSION=$(hive msg topic new --prefix "")
 
 # Create new review session
 BATCH_JSON=$(cat <<EOF
@@ -142,7 +142,7 @@ The reviewer will analyze your code and send feedback to your inbox.
 
 1. **Session Creation**: `hive batch` creates a new session with a unique inbox
 2. **Inbox Setup**: The reviewer session is prompted to listen on `agent.{session-id}.inbox`
-3. **Context Sharing**: Your session sends review instructions via `hive msg pub`
+3. **Context Sharing**: Your session sends review instructions via `hive msg create`
 4. **Response Loop**: You check your inbox for the reviewer's feedback
 5. **Async Communication**: Both agents work independently, coordinated via messaging
 

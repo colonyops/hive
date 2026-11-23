@@ -186,7 +186,7 @@ func TestClientCLI_RecyclesASession(t *testing.T) {
 
 func TestClientCLI_ANewSessionOnARecycledCloneIsANewSession(t *testing.T) {
 	first := serverA.CreateSession(t, "first-task")
-	serverA.Hive(t, "msg", "pub", "--topic", "agent."+first.ID+".inbox", "-m", "for first-task").Ok(t)
+	serverA.Hive(t, "msg", "create", "--topics", "agent."+first.ID+".inbox", "--payload", "for first-task").Ok(t)
 	client := NewClient(t)
 	client.HiveOn(serverA, "session", "recycle", first.ID).Ok(t)
 

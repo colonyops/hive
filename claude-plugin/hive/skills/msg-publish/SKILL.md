@@ -22,62 +22,43 @@ Messages are published to named topics. The sender is auto-detected from the cur
 
 Output: JSON confirmation line with status, resolved topics, and sender.
 
+Over MCP (Hive Desktop's `hive-desktop` server, or `hive mcp serve --toolset messages`) the same operation is the `message_create` tool. In a Hive chat the sender is the chat's id.
+
 ## Commands
 
-### Publish with -m Flag (Recommended)
+### Publish a Message
 
 ```bash
-hive msg pub --topic <topic> -m "message content"
+hive msg create --topics <topic> --payload "message content"
 ```
 
 **Examples:**
 ```bash
 # Send to specific agent's inbox
-hive msg pub --topic agent.abc123.inbox -m "Task completed, ready for review"
+hive msg create --topics agent.abc123.inbox --payload "Task completed, ready for review"
 
 # Send to multiple topics
-hive msg pub -t agent.123.inbox -t agent.456.inbox -m "Important update"
+hive msg create --topics agent.123.inbox --topics agent.456.inbox --payload "Important update"
 ```
 
-### Publish from Stdin
+### Publish a File or Command Output
+
+`--payload` takes the whole message as one argument, so read a file or a command's output into it:
 
 ```bash
-echo "Status update" | hive msg pub --topic notifications
-cat report.txt | hive msg pub --topic reports
+hive msg create --topics agent.abc.inbox --payload "$(cat handoff-context.md)"
 ```
 
-### Publish from File
-
-```bash
-hive msg pub --topic agent.abc.inbox -f handoff-context.md
-```
-
-### Publish with Positional Argument
-
-```bash
-hive msg pub --topic <topic> "message content"
-```
-
-Note: Prefer `-m` over positional args to avoid flag collision with single-character messages.
+`hive msg pub` is an alias of `hive msg create` and takes the same flags.
 
 ### Broadcast with Wildcards
 
 ```bash
 # Broadcast to all agent inboxes
-hive msg pub -t "agent.*.inbox" -m "System maintenance in 5 minutes"
+hive msg create --topics "agent.*.inbox" --payload "System maintenance in 5 minutes"
 ```
 
 Wildcard `*` matches any characters within a segment. Topics are expanded at publish time.
-
-## Message Sources
-
-Only one source may be used per publish:
-- `-m` / `--message` flag (recommended)
-- Positional argument
-- `-f` / `--file` flag
-- Stdin (default when no other source)
-
-An error is returned if multiple sources are provided.
 
 ## Topic Patterns
 
@@ -90,7 +71,7 @@ Agent inboxes follow: `agent.<session-id>.inbox`
 hive ls
 
 # Send to specific agent
-hive msg pub --topic agent.abc123.inbox -m "Message"
+hive msg create --topics agent.abc123.inbox --payload "Message"
 ```
 
 ### Custom Topics
@@ -98,8 +79,8 @@ hive msg pub --topic agent.abc123.inbox -m "Message"
 Create any topic name for specific use cases:
 
 ```bash
-hive msg pub --topic deploy.started -m "Deployment initiated"
-hive msg pub --topic build.events -m "Test suite running"
+hive msg create --topics deploy.started --payload "Deployment initiated"
+hive msg create --topics build.events --payload "Test suite running"
 ```
 
 ### Topic Naming Conventions
@@ -116,29 +97,29 @@ Avoid generic names, special characters besides `.`, `-`, `_`.
 
 ```bash
 # Complete work and notify next agent
-hive msg pub --topic agent.xyz789.inbox -m "Auth implementation complete. See PR #123. Tests passing."
+hive msg create --topics agent.xyz789.inbox --payload "Auth implementation complete. See PR #123. Tests passing."
 ```
 
 ### Notify Multiple Topics
 
 ```bash
-hive msg pub \
-  -t agent.abc.inbox \
-  -t agent.xyz.inbox \
-  -t coordinator.updates \
-  -m "Feature X ready for review"
+hive msg create \
+  --topics agent.abc.inbox \
+  --topics agent.xyz.inbox \
+  --topics coordinator.updates \
+  --payload "Feature X ready for review"
 ```
 
 ### Send Command Output
 
 ```bash
-go test -v ./... | hive msg pub --topic test.results
+hive msg create --topics test.results --payload "$(go test -v ./... 2>&1)"
 ```
 
 ### Override Sender ID
 
 ```bash
-hive msg pub --topic test.channel --sender "custom-agent-id" -m "Test message"
+hive msg create --topics test.channel --sender "custom-agent-id" --payload "Test message"
 ```
 
 ## Additional Resources

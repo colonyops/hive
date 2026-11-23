@@ -201,7 +201,7 @@ Arguments passed in the command palette are available via the `.Args` template v
 usercommands:
   msg:
     sh: |
-      hive msg pub -t agent.{{ .ID }}.inbox {{ join .Args " " | shq }}
+      hive msg create --topics agent.{{ .ID }}.inbox --payload {{ join .Args " " | shq }}
     help: "Send message to session inbox"
 ```
 

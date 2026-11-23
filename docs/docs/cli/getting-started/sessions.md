@@ -162,16 +162,12 @@ A short flag has the same meaning in every hive command. A flag that is not in t
 | Short | Long        | Used by                                      |
 | ----- | ----------- | -------------------------------------------- |
 | `-a`  | `--agent`   | `new`, `batch`, `session create`             |
-| `-d`  | `--desc`    | `hc create`                                  |
-| `-f`  | `--file`    | `batch`, `hc create`, `msg pub`, `review`    |
+| `-f`  | `--file`    | `batch`, `review`                            |
 | `-l`  | `--listen`  | `msg inbox`, `msg sub`                       |
-| `-m`  | `--message` | `msg pub`                                    |
 | `-n`  | `--tail`    | `msg inbox`, `msg sub`                       |
-| `-p`  | `--parent`  | `hc create`                                  |
 | `-r`  | `--remote`  | `new`, `session create`                      |
-| `-s`  | `--source`  | `new`, `session create`, `todo add`          |
-| `-t`  | `--topic`   | `msg pub`, `msg sub`                         |
-| `-u`  | `--uri`     | `todo add`                                   |
+| `-s`  | `--source`  | `new`, `session create`                      |
+| `-t`  | `--topic`   | `msg sub`                                    |
 | `-w`  | `--wait`    | `msg inbox`, `msg sub`                       |
 
-Commands generated for Hive Desktop (`hive dt`) follow the same table and have no other short flags.
+Commands generated from operations (`hive dt`, and `hive hc`, `hive msg` and `hive todo` other than `msg sub` and `msg inbox`) follow the same table and have no other short flags.

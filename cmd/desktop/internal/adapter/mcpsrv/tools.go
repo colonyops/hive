@@ -52,4 +52,6 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 	mcpops.Mount(srv, workspaces.ScheduleDelete, ctrl.RemoveSchedule, ctrl.toolError)
 	mcpops.Mount(srv, workspaces.SchedulePreview, ctrl.PreviewSchedule, ctrl.toolError)
 	mcpops.Mount(srv, workspaces.ScheduleRunList, ctrl.ScheduleRuns, ctrl.toolError)
+
+	ctrl.registerEngine(srv, PathPrefix)
 }

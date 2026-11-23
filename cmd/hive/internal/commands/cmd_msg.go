@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"time"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/messaging"
+	"github.com/colonyops/hive/internal/hive/engineops"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	msgops "github.com/colonyops/hive/internal/ops/messages"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/urfave/cli/v3"
@@ -21,15 +23,13 @@ func (cmd *MsgCmd) messages() *msgsvc.Service {
 	return cmd.app.Messages()
 }
 
+func (cmd *MsgCmd) ops() *engineops.Handlers {
+	return engineops.New(cmd.app.Logger, cmd.app.Engine)
+}
+
 type MsgCmd struct {
 	flags *Flags
 	app   *app.App
-
-	// pub flags
-	pubTopics  []string
-	pubFile    string
-	pubSender  string
-	pubMessage string
 
 	// sub flags
 	subTopic   string
@@ -49,7 +49,6 @@ type MsgCmd struct {
 	inboxTail    int
 
 	// topic flags
-	topicNew    bool
 	topicPrefix string
 }
 
@@ -73,72 +72,13 @@ The sender is auto-detected from the current working directory's hive session.
 Output format: All commands produce JSON Lines (one JSON object per line) on stdout.
 Warnings and errors are written to stderr.`,
 		Commands: []*cli.Command{
-			cmd.pubCmd(),
 			cmd.subCmd(),
 			cmd.inboxCmd(),
-			cmd.listCmd(),
 			cmd.topicCmd(),
 		},
 	})
 
 	return app
-}
-
-func (cmd *MsgCmd) pubCmd() *cli.Command {
-	return &cli.Command{
-		Name:      "pub",
-		Metadata:  alwaysJSON(),
-		Usage:     "Publish a message to topic(s)",
-		UsageText: "hive msg pub --topic <topic> [--topic <topic2>] [-m message | message | -f file | stdin]",
-		Description: `Publishes a message to the specified topic(s).
-
-The message can be provided as:
-- Inline with -m/--message flag (recommended)
-- A positional command-line argument
-- From a file with -f/--file
-- From stdin if no other source is provided
-
-Only one message source may be used. An error is returned if multiple are provided.
-
-The sender is auto-detected from the current hive session, or can be overridden with --sender.
-Topic supports wildcards for publishing to multiple topics (e.g., agent.*.inbox).
-
-Output: JSON confirmation line with status, resolved topics, and sender.
-
-Examples:
-  hive msg pub --topic build.started -m "Build starting"
-  hive msg pub -t agent.abc.inbox -t agent.xyz.inbox -m "Hello all"
-  hive msg pub -t "agent.*.inbox" -m "Broadcast message"
-  echo "Hello" | hive msg pub --topic greetings
-  hive msg pub --topic logs -f build.log`,
-		Flags: []cli.Flag{
-			&cli.StringSliceFlag{
-				Name:        "topic",
-				Aliases:     []string{"t"},
-				Usage:       "topic(s) to publish to (supports wildcards, repeatable)",
-				Required:    true,
-				Destination: &cmd.pubTopics,
-			},
-			&cli.StringFlag{
-				Name:        "message",
-				Aliases:     []string{"m"},
-				Usage:       "inline message content",
-				Destination: &cmd.pubMessage,
-			},
-			&cli.StringFlag{
-				Name:        "file",
-				Aliases:     []string{"f"},
-				Usage:       "read message from file",
-				Destination: &cmd.pubFile,
-			},
-			&cli.StringFlag{
-				Name:        "sender",
-				Usage:       "override sender ID (default: auto-detect from session)",
-				Destination: &cmd.pubSender,
-			},
-		},
-		Action: cmd.runPub,
-	}
 }
 
 func (cmd *MsgCmd) subCmd() *cli.Command {
@@ -214,29 +154,19 @@ Examples:
 	}
 }
 
-func (cmd *MsgCmd) listCmd() *cli.Command {
+func (cmd *MsgCmd) topicCmd() *cli.Command {
 	return &cli.Command{
-		Name:      "list",
-		Metadata:  alwaysJSON(),
-		Usage:     "List all topics with activity info",
-		UsageText: "hive msg list",
-		Description: `Lists all topics with message counts, activity timestamps, and unread counts.
-
-Output: One JSON object per line (JSON Lines format).
-Fields: name, message_count, unread_count, last_activity, last_sender.
-unread_count is included when running from a hive session directory.
-
-Examples:
-  hive msg list`,
-		Action: cmd.runList,
+		Name:     "topic",
+		Usage:    "Operations on topics",
+		Commands: []*cli.Command{cmd.topicNewCmd()},
 	}
 }
 
-func (cmd *MsgCmd) topicCmd() *cli.Command {
+func (cmd *MsgCmd) topicNewCmd() *cli.Command {
 	return &cli.Command{
-		Name:      "topic",
+		Name:      "new",
 		Usage:     "Generate a random topic ID",
-		UsageText: "hive msg topic [--prefix <prefix>]",
+		UsageText: "hive msg topic new [--prefix <prefix>]",
 		Description: `Generates a random topic ID for inter-agent communication.
 
 The generated topic ID follows the format "<prefix>.<4-char-alphanumeric>".
@@ -246,15 +176,10 @@ in your config file, or overridden with --prefix.
 Output: Plain text topic ID.
 
 Examples:
-  hive msg topic              # outputs: agent.x7k2 (using config prefix)
-  hive msg topic --prefix task   # outputs: task.x7k2
-  hive msg topic --prefix ""     # outputs: x7k2 (no prefix)`,
+  hive msg topic new                # outputs: agent.x7k2 (using config prefix)
+  hive msg topic new --prefix task  # outputs: task.x7k2
+  hive msg topic new --prefix ""    # outputs: x7k2 (no prefix)`,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:        "new",
-				Usage:       "generate a new random topic ID (default behavior)",
-				Destination: &cmd.topicNew,
-			},
 			&cli.StringFlag{
 				Name:        "prefix",
 				Usage:       "topic prefix (overrides config, use empty string for no prefix)",
@@ -285,90 +210,6 @@ func (cmd *MsgCmd) runTopic(_ context.Context, c *cli.Command) error {
 	return err
 }
 
-func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
-	msgs := cmd.messages()
-
-	topics := cmd.pubTopics
-	if len(topics) == 0 {
-		return invalidf("at least one topic required")
-	}
-
-	// Determine message content — exactly one source allowed
-	payload, err := cmd.resolvePayload(c)
-	if err != nil {
-		return err
-	}
-
-	// Auto-detect session and set sender
-	sessionID := callingSessionID(ctx, cmd.app, "", "cli.msg") // best-effort: the sender label
-	sender := cmd.pubSender
-	if sessionID != "" && sender == "" {
-		sender = sessionID // Auto-set sender = session_id
-	}
-
-	msg := messaging.Message{
-		Payload:   payload,
-		Sender:    sender,
-		SessionID: sessionID,
-	}
-
-	result, err := msgs.Publish(ctx, msg, topics)
-	if err != nil {
-		return fmt.Errorf("publish message: %w", err)
-	}
-
-	// Print confirmation
-	type pubConfirmation struct {
-		Status string   `json:"status"`
-		Topics []string `json:"topics"`
-		Sender string   `json:"sender,omitempty"`
-	}
-	confirmation := pubConfirmation{
-		Status: "ok",
-		Topics: result.Topics,
-		Sender: sender,
-	}
-	return iojson.WriteLine(c.Root().Writer, confirmation)
-}
-
-// resolvePayload determines the message content from exactly one source.
-func (cmd *MsgCmd) resolvePayload(c *cli.Command) (string, error) {
-	sources := 0
-	if cmd.pubMessage != "" {
-		sources++
-	}
-	if c.NArg() >= 1 {
-		sources++
-	}
-	if cmd.pubFile != "" {
-		sources++
-	}
-
-	if sources > 1 {
-		return "", fmt.Errorf("multiple message sources provided; use only one of: -m flag, positional argument, -f file, or stdin")
-	}
-
-	switch {
-	case cmd.pubMessage != "":
-		return cmd.pubMessage, nil
-	case c.NArg() >= 1:
-		return c.Args().Get(0), nil
-	case cmd.pubFile != "":
-		data, err := os.ReadFile(cmd.pubFile)
-		if err != nil {
-			return "", fmt.Errorf("read file: %w", err)
-		}
-		return string(data), nil
-	default:
-		// Read from stdin
-		data, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return "", fmt.Errorf("read stdin: %w", err)
-		}
-		return string(data), nil
-	}
-}
-
 func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 	msgs := cmd.messages()
 
@@ -387,29 +228,16 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 		return cmd.listenForMessages(ctx, c, msgs, topic, cmd.subAck)
 	}
 
-	// Default: return messages immediately
-	messages, err := msgs.Subscribe(ctx, topic, time.Time{})
+	out, err := cmd.ops().MessageList(ctx, msgops.MessageListIn{Caller: sessionsvc.CallerGlobal, Topic: topic, Tail: cmd.subTail})
 	if err != nil {
-		if errors.Is(err, messaging.ErrTopicNotFound) {
-			return nil // No messages, no output
-		}
-		return fmt.Errorf("subscribe: %w", err)
-	}
-
-	// Apply --tail N limit if specified
-	if cmd.subTail > 0 && len(messages) > cmd.subTail {
-		messages = messages[len(messages)-cmd.subTail:]
-	}
-
-	if err := cmd.printMessages(c.Root().Writer, messages); err != nil {
 		return err
 	}
-
-	// Acknowledge only when --ack is set
-	if cmd.subAck && len(messages) > 0 {
-		cmd.acknowledgeMessages(ctx, msgs, messages)
+	if err := cmd.printMessages(c.Root().Writer, out.Messages); err != nil {
+		return err
 	}
-
+	if cmd.subAck && len(out.Messages) > 0 {
+		cmd.acknowledgeMessages(ctx, msgs, out.Messages)
+	}
 	return nil
 }
 
@@ -511,62 +339,6 @@ func (cmd *MsgCmd) handleTimeout(c *cli.Command, topic string, duration time.Dur
 		Duration: duration.String(),
 	})
 	return errAlreadyReported
-}
-
-func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
-	msgs := cmd.messages()
-
-	topics, err := msgs.ListTopics(ctx)
-	if err != nil {
-		return fmt.Errorf("list topics: %w", err)
-	}
-
-	if len(topics) == 0 {
-		return nil // No topics, no output
-	}
-
-	sessionID := callingSessionID(ctx, cmd.app, "", "cli.msg") // best-effort: unread counts
-
-	type topicInfo struct {
-		Name         string `json:"name"`
-		MessageCount int    `json:"message_count"`
-		UnreadCount  int    `json:"unread_count"`
-		LastActivity string `json:"last_activity,omitempty"`
-		LastSender   string `json:"last_sender,omitempty"`
-	}
-
-	var infos []topicInfo
-	for _, t := range topics {
-		info := topicInfo{Name: t}
-
-		messages, err := msgs.Subscribe(ctx, t, time.Time{})
-		if err != nil && !errors.Is(err, messaging.ErrTopicNotFound) {
-			return fmt.Errorf("get messages for topic %s: %w", t, err)
-		}
-		info.MessageCount = len(messages)
-
-		if len(messages) > 0 {
-			last := messages[len(messages)-1]
-			info.LastActivity = last.CreatedAt.UTC().Format(time.RFC3339)
-			info.LastSender = last.Sender
-		}
-
-		if sessionID != "" {
-			unread, err := msgs.GetUnread(ctx, sessionID, t)
-			if err == nil {
-				info.UnreadCount = len(unread)
-			}
-		}
-
-		infos = append(infos, info)
-	}
-
-	for _, info := range infos {
-		if err := iojson.WriteLine(c.Root().Writer, info); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) error {
@@ -687,32 +459,15 @@ func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
 		return cmd.listenForMessages(ctx, c, msgs, inboxTopic, cmd.inboxAck)
 	}
 
-	var messages []messaging.Message
-	var msgErr error
-
-	if cmd.inboxAll {
-		messages, msgErr = msgs.Subscribe(ctx, inboxTopic, time.Time{})
-	} else {
-		messages, msgErr = msgs.GetUnread(ctx, sessionID, inboxTopic)
-	}
-
-	if msgErr != nil && !errors.Is(msgErr, messaging.ErrTopicNotFound) {
-		return fmt.Errorf("get inbox: %w", msgErr)
-	}
-
-	// Apply --tail N limit
-	if cmd.inboxTail > 0 && len(messages) > cmd.inboxTail {
-		messages = messages[len(messages)-cmd.inboxTail:]
-	}
-
-	if err := cmd.printMessages(c.Root().Writer, messages); err != nil {
+	out, err := cmd.ops().MessageList(ctx, msgops.MessageListIn{Caller: sessionID, Inbox: true, Unread: !cmd.inboxAll, Tail: cmd.inboxTail})
+	if err != nil {
 		return err
 	}
-
-	// Acknowledge only when --ack is set
-	if cmd.inboxAck && len(messages) > 0 {
-		cmd.acknowledgeMessages(ctx, msgs, messages)
+	if err := cmd.printMessages(c.Root().Writer, out.Messages); err != nil {
+		return err
 	}
-
+	if cmd.inboxAck && len(out.Messages) > 0 {
+		cmd.acknowledgeMessages(ctx, msgs, out.Messages)
+	}
 	return nil
 }

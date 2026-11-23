@@ -740,6 +740,10 @@ func (a *App) Start(ctx context.Context) error {
 // RuntimePaths returns the immutable location snapshot used by this process.
 func (a *App) RuntimePaths() settings.Paths { return a.paths }
 
+// Engine is the hive engine, for the adapters that serve its operations. It
+// is nil until New has started it.
+func (a *App) Engine() *hive.Engine { return a.hive }
+
 // HiveDataDir is the engine's data directory, the one the hive CLI shares.
 func (a *App) HiveDataDir() string { return a.hiveDataDir }
 

@@ -33,7 +33,7 @@ func TestRunTopic_DefaultPrefix(t *testing.T) {
 	}
 	cmd.Register(app)
 
-	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic"}))
+	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic", "new"}))
 
 	output := buf.String()
 	// Remove trailing newline
@@ -65,7 +65,7 @@ func TestRunTopic_CustomPrefixFlag(t *testing.T) {
 	}
 	cmd.Register(app)
 
-	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic", "--prefix", "task"}))
+	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic", "new", "--prefix", "task"}))
 
 	output := buf.String()
 	if len(output) > 0 && output[len(output)-1] == '\n' {
@@ -96,7 +96,7 @@ func TestRunTopic_EmptyPrefixFlag(t *testing.T) {
 	}
 	cmd.Register(app)
 
-	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic", "--prefix", ""}))
+	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic", "new", "--prefix", ""}))
 
 	output := buf.String()
 	if len(output) > 0 && output[len(output)-1] == '\n' {
@@ -130,7 +130,7 @@ func TestRunTopic_EmptyConfigPrefix(t *testing.T) {
 	}
 	cmd.Register(app)
 
-	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic"}))
+	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic", "new"}))
 
 	output := buf.String()
 	if len(output) > 0 && output[len(output)-1] == '\n' {
@@ -165,7 +165,7 @@ func TestRunTopic_Uniqueness(t *testing.T) {
 		}
 		cmd.Register(app)
 
-		require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic"}))
+		require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic", "new"}))
 
 		output := buf.String()
 		if len(output) > 0 && output[len(output)-1] == '\n' {

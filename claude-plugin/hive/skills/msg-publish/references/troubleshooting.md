@@ -7,14 +7,14 @@
 **Solutions:**
 - Verify topic name: check recipient's session ID with `hive ls`
 - Correct format: use `agent.<session-id>.inbox` for direct messages
-- Check topics: `hive msg list` shows all topics with message counts
+- Check topics: `hive msg topic list` shows all topics with message counts
 
 ## Wildcard Not Expanding
 
 **Problem:** Wildcard pattern doesn't match expected topics
 
 **Solutions:**
-- Check existing topics: `hive msg list`
+- Check existing topics: `hive msg topic list`
 - Verify pattern syntax: wildcards only work within segments
 - Create topics first: topics must exist to be matched
 
@@ -32,14 +32,5 @@
 **Problem:** Publishing large content fails or truncates
 
 **Solutions:**
-- Use file-based publishing: `hive msg pub -t topic -f large-file.md`
-- Pipe content: `cat report.txt | hive msg pub -t topic`
+- Read the file into the payload: `hive msg create --topics topic --payload "$(cat large-file.md)"`
 - Split large messages across multiple publishes
-
-## Multiple Source Error
-
-**Problem:** "multiple message sources provided" error
-
-**Solutions:**
-- Use only one of: `-m` flag, positional argument, `-f` file, or stdin
-- Prefer `-m` flag for inline messages

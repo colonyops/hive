@@ -26,7 +26,7 @@ func TestSubDefaultDoesNotAcknowledge(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	_, err := h.Run("msg", "pub", "--topic", "test.noack", "--sender", "test", "noack msg")
+	_, err := h.Run("msg", "create", "--topics", "test.noack", "--sender", "test", "--payload", "noack msg")
 	require.NoError(t, err)
 
 	// Default sub should return the message without acknowledging
@@ -47,7 +47,7 @@ func TestSubTail(t *testing.T) {
 	h := NewHarness(t)
 
 	for i, msg := range []string{"first", "second", "third", "fourth"} {
-		_, err := h.Run("msg", "pub", "--topic", "test.tail", "--sender", "test", msg)
+		_, err := h.Run("msg", "create", "--topics", "test.tail", "--sender", "test", "--payload", msg)
 		require.NoError(t, err, "pub message %d", i)
 	}
 
@@ -63,7 +63,7 @@ func TestSubDeprecatedLastFlag(t *testing.T) {
 	h := NewHarness(t)
 
 	for _, msg := range []string{"a", "b", "c"} {
-		_, err := h.Run("msg", "pub", "--topic", "test.last", "--sender", "test", "-m", msg)
+		_, err := h.Run("msg", "create", "--topics", "test.last", "--sender", "test", "--payload", msg)
 		require.NoError(t, err)
 	}
 
@@ -78,7 +78,7 @@ func TestSubSenderField(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	_, err := h.Run("msg", "pub", "--topic", "test.sender", "--sender", "agent-foo", "hello")
+	_, err := h.Run("msg", "create", "--topics", "test.sender", "--sender", "agent-foo", "--payload", "hello")
 	require.NoError(t, err)
 
 	lines, err := h.RunJSONLines("msg", "sub", "--topic", "test.sender")
@@ -91,11 +91,11 @@ func TestSubWildcard(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	_, err := h.Run("msg", "pub", "--topic", "wild.alpha", "--sender", "test", "msg-alpha")
+	_, err := h.Run("msg", "create", "--topics", "wild.alpha", "--sender", "test", "--payload", "msg-alpha")
 	require.NoError(t, err)
-	_, err = h.Run("msg", "pub", "--topic", "wild.beta", "--sender", "test", "msg-beta")
+	_, err = h.Run("msg", "create", "--topics", "wild.beta", "--sender", "test", "--payload", "msg-beta")
 	require.NoError(t, err)
-	_, err = h.Run("msg", "pub", "--topic", "other.gamma", "--sender", "test", "msg-gamma")
+	_, err = h.Run("msg", "create", "--topics", "other.gamma", "--sender", "test", "--payload", "msg-gamma")
 	require.NoError(t, err)
 
 	// Wildcard "wild.*" should match alpha and beta but not gamma
@@ -112,9 +112,9 @@ func TestSubAllTopics(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	_, err := h.Run("msg", "pub", "--topic", "all.one", "--sender", "test", "one")
+	_, err := h.Run("msg", "create", "--topics", "all.one", "--sender", "test", "--payload", "one")
 	require.NoError(t, err)
-	_, err = h.Run("msg", "pub", "--topic", "all.two", "--sender", "test", "two")
+	_, err = h.Run("msg", "create", "--topics", "all.two", "--sender", "test", "--payload", "two")
 	require.NoError(t, err)
 
 	// No --topic defaults to "*" (all topics)
@@ -149,13 +149,13 @@ func TestWildcardPublish(t *testing.T) {
 	inbox2 := sessions[1]["inbox"].(string)
 
 	// Seed the inbox topics so they exist for wildcard expansion
-	_, err = h.Run("msg", "pub", "--topic", inbox1, "--sender", "test", "seed1")
+	_, err = h.Run("msg", "create", "--topics", inbox1, "--sender", "test", "--payload", "seed1")
 	require.NoError(t, err)
-	_, err = h.Run("msg", "pub", "--topic", inbox2, "--sender", "test", "seed2")
+	_, err = h.Run("msg", "create", "--topics", inbox2, "--sender", "test", "--payload", "seed2")
 	require.NoError(t, err)
 
 	// Wildcard publish to all inbox topics
-	_, err = h.Run("msg", "pub", "--topic", "agent.*.inbox", "--sender", "test", "broadcast")
+	_, err = h.Run("msg", "create", "--topics", "agent.*.inbox", "--sender", "test", "--payload", "broadcast")
 	require.NoError(t, err)
 
 	// Both inboxes should have the broadcast message
@@ -198,7 +198,7 @@ func TestInboxUnreadTracking(t *testing.T) {
 	dir := sessionDir(t, h)
 
 	// Publish a message to the inbox
-	_, err = h.Run("msg", "pub", "--topic", inboxTopic, "--sender", "test", "unread msg")
+	_, err = h.Run("msg", "create", "--topics", inboxTopic, "--sender", "test", "--payload", "unread msg")
 	require.NoError(t, err)
 
 	// Read inbox with --ack from session dir (acknowledges)
@@ -209,6 +209,37 @@ func TestInboxUnreadTracking(t *testing.T) {
 
 	// Second read should return empty (already acknowledged)
 	lines, err = h.RunJSONLinesInDir(dir, "msg", "inbox")
+	require.NoError(t, err)
+	assert.Empty(t, lines)
+}
+
+func TestMsgListUnreadAndReadPut(t *testing.T) {
+	t.Parallel()
+	h := NewHarness(t)
+	repo := createBareRepo(t, "readput-repo")
+
+	_, err := h.Run("new", "--remote", repo, "readput-test")
+	require.NoError(t, err)
+
+	sessions, err := h.RunJSONLines("ls", "--json")
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+
+	inboxTopic := sessions[0]["inbox"].(string)
+	dir := sessionDir(t, h)
+
+	_, err = h.Run("msg", "create", "--topics", inboxTopic, "--sender", "test", "--payload", "to mark")
+	require.NoError(t, err)
+
+	lines, err := h.RunJSONLinesInDir(dir, "msg", "list", "--inbox", "--unread")
+	require.NoError(t, err)
+	require.Len(t, lines, 1)
+	assert.Equal(t, "to mark", lines[0]["payload"])
+
+	_, err = h.RunJSONLinesInDir(dir, "msg", "read", "put", lines[0]["id"].(string))
+	require.NoError(t, err)
+
+	lines, err = h.RunJSONLinesInDir(dir, "msg", "list", "--inbox", "--unread")
 	require.NoError(t, err)
 	assert.Empty(t, lines)
 }
@@ -228,7 +259,7 @@ func TestInboxAllShowsAcknowledged(t *testing.T) {
 	inboxTopic := sessions[0]["inbox"].(string)
 	dir := sessionDir(t, h)
 
-	_, err = h.Run("msg", "pub", "--topic", inboxTopic, "--sender", "test", "acked msg")
+	_, err = h.Run("msg", "create", "--topics", inboxTopic, "--sender", "test", "--payload", "acked msg")
 	require.NoError(t, err)
 
 	// Read and acknowledge
@@ -258,7 +289,7 @@ func TestInboxDefaultDoesNotAcknowledge(t *testing.T) {
 	inboxTopic := sessions[0]["inbox"].(string)
 	dir := sessionDir(t, h)
 
-	_, err = h.Run("msg", "pub", "--topic", inboxTopic, "--sender", "test", "dflt msg")
+	_, err = h.Run("msg", "create", "--topics", inboxTopic, "--sender", "test", "--payload", "dflt msg")
 	require.NoError(t, err)
 
 	// Default inbox (no --ack) should not acknowledge
@@ -290,7 +321,7 @@ func TestInboxWithCallerFlag(t *testing.T) {
 	sessionID := sessions[0]["id"].(string)
 	sessionName := sessions[0]["name"].(string)
 
-	_, err = h.Run("msg", "pub", "--topic", inboxTopic, "--sender", "test", "session-flag msg")
+	_, err = h.Run("msg", "create", "--topics", inboxTopic, "--sender", "test", "--payload", "session-flag msg")
 	require.NoError(t, err)
 
 	// Use --caller with ID (no need to be in session dir)
@@ -322,7 +353,7 @@ func TestInboxTail(t *testing.T) {
 	dir := sessionDir(t, h)
 
 	for _, msg := range []string{"first", "second", "third"} {
-		_, err = h.Run("msg", "pub", "--topic", inboxTopic, "--sender", "test", msg)
+		_, err = h.Run("msg", "create", "--topics", inboxTopic, "--sender", "test", "--payload", msg)
 		require.NoError(t, err)
 	}
 
@@ -333,12 +364,12 @@ func TestInboxTail(t *testing.T) {
 	assert.Equal(t, "third", lines[1]["payload"])
 }
 
-func TestPubFromStdin(t *testing.T) {
+func TestMsgCreateFromInputOnStdin(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	out, err := h.RunWithStdin("stdin payload", "msg", "pub", "--topic", "test.stdin", "--sender", "test")
-	require.NoError(t, err, "pub from stdin: %s", out)
+	out, err := h.RunWithStdin(`{"topics":["test.stdin"],"payload":"stdin payload","sender":"test"}`, "msg", "create", "--input", "-")
+	require.NoError(t, err, "create from stdin: %s", out)
 
 	lines, err := h.RunJSONLines("msg", "sub", "--topic", "test.stdin")
 	require.NoError(t, err)
@@ -350,7 +381,7 @@ func TestPubWithMessageFlag(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	_, err := h.Run("msg", "pub", "--topic", "test.mflag", "--sender", "test", "-m", "inline msg")
+	_, err := h.Run("msg", "create", "--topics", "test.mflag", "--sender", "test", "--payload", "inline msg")
 	require.NoError(t, err)
 
 	lines, err := h.RunJSONLines("msg", "sub", "--topic", "test.mflag")
@@ -363,7 +394,7 @@ func TestMessageFieldCompleteness(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	_, err := h.Run("msg", "pub", "--topic", "test.fields", "--sender", "field-check", "field payload")
+	_, err := h.Run("msg", "create", "--topics", "test.fields", "--sender", "field-check", "--payload", "field payload")
 	require.NoError(t, err)
 
 	lines, err := h.RunJSONLines("msg", "sub", "--topic", "test.fields")
@@ -382,7 +413,7 @@ func TestMsgTopicCustomPrefix(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	out, err := h.RunStdout("msg", "topic", "--prefix", "custom")
+	out, err := h.RunStdout("msg", "topic", "new", "--prefix", "custom")
 	require.NoError(t, err)
 	topic := strings.TrimSpace(out)
 	assert.True(t, len(topic) > 0, "topic should not be empty")
@@ -393,7 +424,7 @@ func TestMsgTopicEmptyPrefix(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	out, err := h.RunStdout("msg", "topic", "--prefix", "")
+	out, err := h.RunStdout("msg", "topic", "new", "--prefix", "")
 	require.NoError(t, err)
 	topic := strings.TrimSpace(out)
 	assert.True(t, len(topic) > 0, "topic should not be empty")
@@ -404,7 +435,7 @@ func TestPubToMultipleTopics(t *testing.T) {
 	t.Parallel()
 	h := NewHarness(t)
 
-	_, err := h.Run("msg", "pub", "--topic", "multi.a", "--topic", "multi.b", "--sender", "test", "multi msg")
+	_, err := h.Run("msg", "create", "--topics", "multi.a", "--topics", "multi.b", "--sender", "test", "--payload", "multi msg")
 	require.NoError(t, err)
 
 	linesA, err := h.RunJSONLines("msg", "sub", "--topic", "multi.a")

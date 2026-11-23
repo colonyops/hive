@@ -418,7 +418,7 @@ When adding a new overridable key, do not add a new `if keyStr == "X"` block in 
 
 ```bash
 # Conductor: create work (simple)
-echo '{"title":"Epic","type":"epic","children":[{"title":"Task","type":"task"}]}' | hive hc create
+echo '{"title":"Epic","type":"epic","children":[{"title":"Task","type":"task"}]}' | hive hc create --input -
 
 # Conductor: create work with blocker dependencies (ref/blockers are local labels, not stored)
 echo '{
@@ -428,14 +428,14 @@ echo '{
     {"ref": "jwt", "title": "JWT middleware", "type": "task"},
     {"title": "Login endpoint", "type": "task", "blockers": ["jwt"]}
   ]
-}' | hive hc create
+}' | hive hc create --input -
 
 # Worker: claim next task
 hive hc next <epic-id> --assign
 
 # Worker: record progress
-hive hc comment <id> "implemented X"
-hive hc comment <id> "CHECKPOINT: stopping here, Y still needed"
+hive hc comment create <id> "implemented X"
+hive hc comment create <id> "CHECKPOINT: stopping here, Y still needed"
 
 # Worker: complete task
 hive hc update <id> --status done
@@ -444,30 +444,30 @@ hive hc update <id> --status done
 hive hc update <id> --add-blocker <blocker-id>    # mark task as blocked by another
 hive hc update <id> --remove-blocker <blocker-id>  # remove a blocker
 
-# Get context for an epic (markdown for AI consumption)
-hive hc context <epic-id>
+# Get context for an epic (JSON for agents, markdown at a terminal)
+hive hc context get <epic-id>
 
 # List tasks
 hive hc list                          # open items (default)
-hive hc list --all                    # all items regardless of status
+hive hc list --status all             # all items regardless of status
 hive hc list <epic-id>                # open items under an epic
 hive hc list --status done            # filter by specific status
-hive hc list --session <session-id>   # filter by session
+hive hc list --session-id <session-id>  # filter by session
 ```
 
 #### Key Commands
 
 | Command | Purpose |
 | ------- | ------- |
-| `hive hc create [title]` | Single item (positional) or bulk tree (stdin JSON) |
-| `hive hc list [epic-id]` | List open items (use `--all` for everything) |
-| `hive hc show <id>` | Item + comments as JSON lines |
+| `hive hc create [title]` | Single item (positional) or bulk tree (`--input -` reads JSON from stdin) |
+| `hive hc list [epic-id]` | List open items (`--status all` for everything) |
+| `hive hc get <id>` | Item + comments as JSON lines |
 | `hive hc update <id>` | Update status (`--status`), assign (`--assign`/`--unassign`), manage blockers (`--add-blocker`/`--remove-blocker`) |
 | `hive hc next <epic-id>` | Next actionable leaf task; `--assign` to claim |
-| `hive hc comment <id> <msg>` | Add a comment |
-| `hive hc comment <id> "CHECKPOINT: msg"` | Handoff checkpoint |
-| `hive hc context <epic-id>` | Epic context block; `--json` for JSON output |
-| `hive hc prune` | Remove old completed items |
+| `hive hc comment create <id> "<msg>"` | Add a comment |
+| `hive hc comment create <id> "CHECKPOINT: msg"` | Handoff checkpoint |
+| `hive hc context get <epic-id>` | Epic context block |
+| `hive hc clear` | Remove old completed items |
 
 See `claude-plugin/hive/skills/hc/SKILL.md` for the full agent usage guide.
 

@@ -52,11 +52,13 @@ Additional behavior:
 
 ## Create Todos
 
-Use `hive todo add` to create a todo item:
+Use `hive todo create` to create a todo item (`hive todo add` is an alias):
 
 ```bash
-hive todo add --title "Review plan" --uri "review://.hive/plans/auth.md"
+hive todo create --title "Review plan" --uri "review://.hive/plans/auth.md"
 ```
+
+`hive todo list` and `hive todo update <id> --status <status>` read and close them. Hive Desktop serves the same operations to agents as the `todo_create`, `todo_list` and `todo_update` MCP tools.
 
 Sources:
 
@@ -77,7 +79,7 @@ Recommended final-step template for skills:
 ```text
 Last step (required):
 If work is complete and needs human follow-up (or is blocked on human input), create one todo before your final response:
-hive todo add --title "<actionable human task>" --uri "review://<path>"
+hive todo create --title "<actionable human task>" --uri "review://<path>"
 ```
 
 Recommended URI choices:
@@ -90,7 +92,7 @@ Example skill footer:
 
 ```bash
 # Final step: request human follow-up when needed
-hive todo add --title "Review auth rollout plan" --uri "review://.hive/plans/auth-rollout.md"
+hive todo create --title "Review auth rollout plan" --uri "review://.hive/plans/auth-rollout.md"
 ```
 
 ## List Todos

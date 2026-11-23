@@ -24,7 +24,7 @@ func (f fakeHiveCLI) Usable(context.Context) (string, bool) { return f.path, f.o
 
 func TestServeToolsetsFollowTheOperationCatalogue(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, []string{"actions", "diagnostics", "flows", "inbox", "sessions", "workspaces"}, serveToolsets("/mcp"))
+	assert.Equal(t, []string{"actions", "diagnostics", "flows", "inbox", "messages", "sessions", "tasks", "todos", "workspaces"}, serveToolsets("/mcp"))
 	assert.Equal(t, []string{"drive", "layout"}, serveToolsets("/mcp/drive"))
 
 	for id, want := range map[string]string{"hive-desktop": "/mcp", "hive-drive": "/mcp/drive"} {
@@ -47,7 +47,7 @@ func TestCataloguePicksStdioWhenHiveIsUsable(t *testing.T) {
 	assert.Equal(t, mcpcatalog.Server{
 		Transport: mcpcatalog.TransportStdio,
 		Command:   "/opt/bin/hive",
-		Args:      []string{"--data-dir", "/data/hive", "mcp", "serve", "--toolset", "actions,diagnostics,flows,inbox,sessions,workspaces"},
+		Args:      []string{"--data-dir", "/data/hive", "mcp", "serve", "--toolset", "actions,diagnostics,flows,inbox,messages,sessions,tasks,todos,workspaces"},
 	}, byID["hive-desktop"])
 	assert.Equal(t, mcpcatalog.TransportStdio, byID["hive-drive"].Transport)
 	assert.Empty(t, byID["hive-drive"].URL)

@@ -56,7 +56,7 @@ usercommands:
           3. Read their findings. Identify gaps, contradictions, and areas needing deeper
              investigation.
           4. Send targeted follow-up questions to each agent:
-             hive msg pub --topic review-{{ .ID }}.feedback "your questions"
+             hive msg create --topics review-{{ .ID }}.feedback --payload "your questions"
           5. Wait for updated responses and repeat steps 2-4 until satisfied.
           6. Produce a final written summary of all findings.'
 
@@ -71,7 +71,7 @@ usercommands:
           2. Analyse for logic correctness, error handling, naming, test coverage, and
              API design.
           3. Publish your findings:
-             hive msg pub --topic review-{{ .ID }}.codex "your findings"
+             hive msg create --topics review-{{ .ID }}.codex --payload "your findings"
           4. Wait for follow-up from the leader:
              hive msg sub --topic review-{{ .ID }}.feedback --wait
           5. Address the follow-up, publish an updated report to the same topic, then wait
@@ -89,7 +89,7 @@ usercommands:
           2. Analyse for security issues, architectural concerns, dependency risks, and
              design patterns.
           3. Publish your findings:
-             hive msg pub --topic review-{{ .ID }}.cursor "your findings"
+             hive msg create --topics review-{{ .ID }}.cursor --payload "your findings"
           4. Wait for follow-up from the leader:
              hive msg sub --topic review-{{ .ID }}.feedback --wait
           5. Address the follow-up, publish an updated report to the same topic, then wait

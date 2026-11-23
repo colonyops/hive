@@ -112,7 +112,7 @@ workspaces:
 
 ## Output and exit codes
 
-Commands print results to stdout and progress or warnings to stderr. A command with a `--json` flag prints human-readable text by default. With `--json`, stdout carries JSON Lines: one compact JSON value per line. Commands that always print JSON, such as `hive batch`, `hive config`, `hive hc update`, `hive msg pub`, and `hive desktop` operations, take no flag.
+Commands print results to stdout and progress or warnings to stderr. A command with a `--json` flag prints human-readable text by default. With `--json`, stdout carries JSON Lines: one compact JSON value per line. Commands that always print JSON, such as `hive batch`, `hive config`, `hive msg create`, and `hive desktop` operations, take no flag. The `hive hc`, `hive msg` and `hive todo` operations print JSON Lines when stdout is not a terminal, and `hive hc list`, `get` and `context get` print a tree, a styled item or markdown at a terminal.
 
 When a command fails in JSON mode, stderr carries one line, `{"kind": "...", "message": "..."}`, and nothing is added to stdout. Without JSON mode, stderr carries the message as text. The exit code follows the kind:
 

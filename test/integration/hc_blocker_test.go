@@ -19,11 +19,11 @@ func createBlockerFixture(t *testing.T, h *Harness) (epicID, task1ID, task2ID st
 	require.NoError(t, err)
 	epicID = epicLines[0]["id"].(string)
 
-	t1Lines, err := h.RunJSONLines("hc", "create", "Blocker Task", "--type", "task", "--parent", epicID)
+	t1Lines, err := h.RunJSONLines("hc", "create", "Blocker Task", "--type", "task", "--parent-id", epicID)
 	require.NoError(t, err)
 	task1ID = t1Lines[0]["id"].(string)
 
-	t2Lines, err := h.RunJSONLines("hc", "create", "Blocked Task", "--type", "task", "--parent", epicID)
+	t2Lines, err := h.RunJSONLines("hc", "create", "Blocked Task", "--type", "task", "--parent-id", epicID)
 	require.NoError(t, err)
 	task2ID = t2Lines[0]["id"].(string)
 
@@ -41,7 +41,7 @@ func TestHCUpdateAddBlocker(t *testing.T) {
 	require.Len(t, lines, 1)
 
 	// Fetch the blocked item and verify blocker_ids
-	showLines, err := h.RunJSONLines("hc", "show", blockedID, "--json")
+	showLines, err := h.RunJSONLines("hc", "get", blockedID)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(showLines), 1)
 
@@ -64,7 +64,7 @@ func TestHCUpdateRemoveBlocker(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify blocker_ids is now absent/empty
-	showLines, err := h.RunJSONLines("hc", "show", blockedID, "--json")
+	showLines, err := h.RunJSONLines("hc", "get", blockedID)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(showLines), 1)
 
@@ -94,23 +94,7 @@ func TestHCUpdateAddBlocker_MutuallyExclusive(t *testing.T) {
 
 	out, err := h.Run("hc", "update", task2ID, "--add-blocker", task1ID, "--remove-blocker", task1ID)
 	require.Error(t, err, "--add-blocker and --remove-blocker together should fail")
-	assert.Contains(t, out, "mutually exclusive")
-}
-
-func TestHCShowBlockers(t *testing.T) {
-	t.Parallel()
-	h := NewHarness(t)
-	_, blockerID, blockedID := createBlockerFixture(t, h)
-
-	// Wire the blocker relationship
-	_, err := h.RunJSONLines("hc", "update", blockedID, "--add-blocker", blockerID)
-	require.NoError(t, err)
-
-	// Plain text show should contain "Blockers"
-	out, err := h.RunStdout("hc", "show", blockedID)
-	require.NoError(t, err)
-	assert.Contains(t, out, "Blockers (1)", "plain text show should render blockers section")
-	assert.Contains(t, out, blockerID, "blocker ID should appear in output")
+	assert.Contains(t, out, "cannot be combined")
 }
 
 func TestHCCreateBulk_Blockers(t *testing.T) {
@@ -126,7 +110,7 @@ func TestHCCreateBulk_Blockers(t *testing.T) {
 		]
 	}`
 
-	out, err := h.RunWithStdin(input, "hc", "create")
+	out, err := h.RunWithStdin(input, "hc", "create", "--input", "-")
 	require.NoError(t, err)
 
 	lines, err := parseJSONLines(strings.TrimSpace(out))
@@ -147,7 +131,7 @@ func TestHCCreateBulk_Blockers(t *testing.T) {
 	require.NotEmpty(t, jwtID, "JWT middleware task should be created")
 
 	// Verify that Login endpoint has JWT middleware as a blocker
-	showLines, err := h.RunJSONLines("hc", "show", loginID, "--json")
+	showLines, err := h.RunJSONLines("hc", "get", loginID)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(showLines), 1)
 
@@ -167,7 +151,7 @@ func TestHCBlocker_ClearsWhenBlockerDone(t *testing.T) {
 	require.NoError(t, err)
 
 	// Confirm blocker is present
-	showLines, err := h.RunJSONLines("hc", "show", blockedID, "--json")
+	showLines, err := h.RunJSONLines("hc", "get", blockedID)
 	require.NoError(t, err)
 	blockerIDs, ok := showLines[0]["blocker_ids"].([]any)
 	require.True(t, ok)
@@ -178,7 +162,7 @@ func TestHCBlocker_ClearsWhenBlockerDone(t *testing.T) {
 	require.NoError(t, err)
 
 	// blocker_ids should now be absent — done blockers are filtered at read time
-	showLines, err = h.RunJSONLines("hc", "show", blockedID, "--json")
+	showLines, err = h.RunJSONLines("hc", "get", blockedID)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(showLines), 1)
 	idList, _ := showLines[0]["blocker_ids"].([]any)
@@ -197,7 +181,7 @@ func TestHCUpdateCombined_StatusAndBlocker(t *testing.T) {
 	assert.Equal(t, "in_progress", lines[0]["status"], "status should be updated")
 
 	// Verify the blocker edge was also wired.
-	showLines, err := h.RunJSONLines("hc", "show", blockedID, "--json")
+	showLines, err := h.RunJSONLines("hc", "get", blockedID)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(showLines), 1)
 

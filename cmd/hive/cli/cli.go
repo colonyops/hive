@@ -377,6 +377,7 @@ Run 'hive new' to create a new session from the current repository.`,
 
 	// Register TUI flags on root command
 	app.Flags = append(app.Flags, tuiCmd.Flags()...)
+	app = commands.NewEngineCmd(flags, hiveApp).Register(app)
 
 	// Set TUI as default action when no subcommand is provided
 	app.Action = func(ctx context.Context, c *cli.Command) error {

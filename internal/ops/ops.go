@@ -50,7 +50,7 @@ const CallerField = "caller"
 // Verbs is the closed verb vocabulary. put creates or replaces.
 var Verbs = []string{
 	"list", "get", "create", "put", "update", "delete", "clear",
-	"open", "close", "move", "focus", "resize", "turn", "preview", "refresh",
+	"open", "close", "move", "focus", "resize", "turn", "preview", "refresh", "next",
 }
 
 // Spec declares one operation with input type In. The output type is not part

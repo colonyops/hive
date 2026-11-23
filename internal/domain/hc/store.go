@@ -12,6 +12,9 @@ var ErrNotFound = errors.New("not found")
 // ErrCyclicDependency is returned when an AddBlocker call would create a cycle.
 var ErrCyclicDependency = errors.New("cyclic dependency")
 
+// ErrInvalidTree is returned when a bulk create input cannot be created as given.
+var ErrInvalidTree = errors.New("invalid item tree")
+
 // Store persists hc items and comments to durable storage.
 type Store interface {
 	// CreateItems persists one or more items atomically.

@@ -13,7 +13,7 @@ Chats, or in the Code sidebar when it is pinned.
 | `chat_pin_delete` | Unpin a chat. |
 
 The same operations are `hive dt chat list`, `hive dt chat create`, and
-`hive dt chat-pin put|delete`.
+`hive dt chat pin put|delete`.
 
 ## Authority
 

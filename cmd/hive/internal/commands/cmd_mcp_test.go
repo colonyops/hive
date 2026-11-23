@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog"
@@ -111,13 +112,12 @@ func TestMCPServeDefaultsToEveryToolset(t *testing.T) {
 	listed, err := cs.ListTools(t.Context(), nil)
 	require.NoError(t, err)
 
-	var desktopOps int
-	for _, op := range catalog.All() {
-		if op.Info().Owner == ops.OwnerDesktop {
-			desktopOps++
-		}
-	}
-	assert.Len(t, listed.Tools, desktopOps)
+	assert.Len(t, listed.Tools, len(catalog.All()), "desktop and engine ops alike")
+}
+
+func TestMCPServeGivesAWaitItsTime(t *testing.T) {
+	assert.Equal(t, desktopCallTimeout, forwardTimeout(map[string]any{}))
+	assert.Equal(t, desktopCallTimeout+30*time.Second, forwardTimeout(map[string]any{"wait": float64(30)}))
 }
 
 func TestMCPServeForwardsCallerOnlyWhereDeclared(t *testing.T) {
@@ -151,9 +151,6 @@ func TestMCPServeForwardsCallerOnlyWhereDeclared(t *testing.T) {
 func TestForwardedArgsMatchEachOpsCallerField(t *testing.T) {
 	for _, op := range catalog.All() {
 		info := op.Info()
-		if info.Owner != ops.OwnerDesktop {
-			continue
-		}
 		schema, err := op.InputSchema()
 		require.NoError(t, err)
 		_, declared := schema.Properties[ops.CallerField]

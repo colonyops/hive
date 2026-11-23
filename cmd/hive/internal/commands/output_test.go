@@ -101,6 +101,7 @@ func outputTestApp(t *testing.T) *app.App {
 	t.Helper()
 	t.Setenv("HIVE_DRIVE_SERVER", "")
 	t.Setenv("HIVE_DRIVE_TOKEN", "")
+	t.Setenv("HIVE_AGENT_SESSION", "")
 	cfg := &config.Config{Config: *hivetest.LoadConfig(t, t.TempDir())}
 	h := hivetest.NewEngine(t, hivetest.Options{Config: &cfg.Config, Credentials: credentials.NewMemoryStore()})
 	a := app.NewApp(zerolog.Nop(), h.Engine, cfg, nil, nil, nil, nil, "")
@@ -152,9 +153,6 @@ var jsonCommandCases = map[string]failingJSONCase{
 	"session delete":  {args: []string{"session", "delete", "--json", "missing"}, kind: ops.KindNotFound},
 	"session recycle": {args: []string{"session", "recycle", "--json", "missing"}, kind: ops.KindNotFound},
 	"ls":              {args: []string{"ls", "--json"}},
-	"hc list":         {args: []string{"hc", "list", "--json"}},
-	"hc show":         {args: []string{"hc", "show", "--json", "missing"}, kind: ops.KindNotFound},
-	"hc context":      {args: []string{"hc", "context", "--json", "missing"}, kind: ops.KindNotFound},
 	"workspace list":  {args: []string{"workspace", "list", "--json"}},
 	"x assess watch":  {args: []string{"x", "assess", "watch", "--json"}, kind: ops.KindInvalid},
 	"x assess replay": {args: []string{"x", "assess", "replay", "--json"}, kind: ops.KindInvalid},
@@ -227,7 +225,7 @@ func TestAlwaysJSONCommandsReportErrorKinds(t *testing.T) {
 	}{
 		"batch":         {[]string{"batch", "-f", t.TempDir() + "/missing.json"}, ops.KindInvalid},
 		"detect":        {[]string{"detect"}, ops.KindInvalid},
-		"hc prune":      {[]string{"hc", "prune", "--older-than", "soon"}, ops.KindInvalid},
+		"hc clear":      {[]string{"hc", "clear", "--older-than", "soon", "--all-repos"}, ops.KindInvalid},
 		"hc update":     {[]string{"hc", "update", "missing", "--status", "done"}, ops.KindNotFound},
 		"todo update":   {[]string{"todo", "update", "--status", "bogus", "1"}, ops.KindInvalid},
 		"x assess file": {[]string{"x", "assess", "file"}, ops.KindInvalid},
