@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
@@ -127,6 +128,7 @@ func (s *ReviewService) DiffReviews(ctx context.Context, sessionID string) ([]Di
 // delivers the comment too.
 func (s *ReviewService) DismissDiffComment(ctx context.Context, sessionID, commentID string) (err error) {
 	ctx, span := startReviewCommand(ctx, "dismiss-diff-comment", "", sessionID)
+	span.SetAttributes(attribute.String("review.comment_id", commentID))
 	defer observe.End(span, &err)
 	return s.fail(ctx, "dismiss-diff-comment", s.diffs.Dismiss(ctx, sessionID, commentID))
 }
@@ -134,6 +136,7 @@ func (s *ReviewService) DismissDiffComment(ctx context.Context, sessionID, comme
 // DismissDiffReview removes one agent review of the session with all its comments.
 func (s *ReviewService) DismissDiffReview(ctx context.Context, sessionID, reviewID string) (err error) {
 	ctx, span := startReviewCommand(ctx, "dismiss-diff-review", "", sessionID)
+	span.SetAttributes(attribute.String("review.id", reviewID))
 	defer observe.End(span, &err)
 	return s.fail(ctx, "dismiss-diff-review", s.diffs.DismissReview(ctx, sessionID, reviewID))
 }

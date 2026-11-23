@@ -104,7 +104,11 @@ describe('useAgentReviews', () => {
 
       const stopServer = store.watch('box:s2')
       await vi.advanceTimersByTimeAsync(SERVER_REVIEW_POLL_MS)
-      expect((mocks.DiffReviews.mock.calls as unknown as [string][]).map(([id]) => id)).toEqual(['s1', 'box:s2', 'box:s2'])
+      expect((mocks.DiffReviews.mock.calls as unknown as [string][]).map(([id]) => id)).toEqual([
+        's1',
+        'box:s2',
+        'box:s2',
+      ])
 
       stopServer()
       await vi.advanceTimersByTimeAsync(SERVER_REVIEW_POLL_MS * 2)
@@ -125,5 +129,40 @@ describe('useAgentReviews', () => {
     expect(await store.dismissReview('box:s2', 'r1')).toBeNull()
     expect(mocks.DismissDiffReview).toHaveBeenCalledWith('box:s2', 'r1')
     expect(store.reviews('box:s2')).toEqual([])
+  })
+
+  it('drops a read that began before a dismissal, so the comment stays gone', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.DiffReviews.mockResolvedValueOnce([review('r1', ['c1', 'c2'])])
+      const store = useAgentReviews()
+      store.watch('box:s1')
+      await vi.advanceTimersByTimeAsync(0)
+
+      let answer: (list: unknown) => void = () => {}
+      mocks.DiffReviews.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+      await vi.advanceTimersByTimeAsync(SERVER_REVIEW_POLL_MS)
+      expect(mocks.DiffReviews).toHaveBeenCalledTimes(2)
+
+      await store.dismiss('box:s1', 'c1')
+      answer([review('r1', ['c1', 'c2'])])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(store.reviews('box:s1')[0].comments?.map((comment) => comment.id)).toEqual(['c2'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('leaves a server session to its poll when this machine says a review changed', async () => {
+    mocks.DiffReviews.mockResolvedValue([])
+    const store = useAgentReviews()
+    store.watch('s1')
+    store.watch('box:s2')
+    await flushPromises()
+    mocks.DiffReviews.mockClear()
+
+    fire()
+    await flushPromises()
+    expect((mocks.DiffReviews.mock.calls as unknown as [string][]).map(([id]) => id)).toEqual(['s1'])
   })
 })

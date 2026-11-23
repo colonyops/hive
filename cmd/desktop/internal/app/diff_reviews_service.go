@@ -152,8 +152,9 @@ func (s *DiffReviewsService) List(ctx context.Context, sessionID string) ([]revi
 	return out, nil
 }
 
-// Dismiss removes one agent comment of the session: the user dismissed it, or
-// Send delivered it.
+// Dismiss removes one agent comment: the user dismissed it, or Send delivered
+// it. sessionID only says which machine holds the comment; the comment id
+// alone names it, on a server as here.
 func (s *DiffReviewsService) Dismiss(ctx context.Context, sessionID, commentID string) error {
 	server, _, err := s.onServer(sessionID)
 	if err != nil {
@@ -174,7 +175,8 @@ func (s *DiffReviewsService) Dismiss(ctx context.Context, sessionID, commentID s
 	return nil
 }
 
-// DismissReview removes one review of the session with every comment it still has.
+// DismissReview removes one review with every comment it still has. sessionID
+// only says which machine holds it, as for Dismiss.
 func (s *DiffReviewsService) DismissReview(ctx context.Context, sessionID, reviewID string) error {
 	server, _, err := s.onServer(sessionID)
 	if err != nil {

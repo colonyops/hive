@@ -693,8 +693,8 @@ func dismissError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if connect.CodeOf(err) == connect.CodeNotFound {
-		return fmt.Errorf("%w: %w", review.ErrDiffReviewNotFound, wire.FromConnectError(err))
+	if connectErr, ok := errors.AsType[*connect.Error](err); ok && connectErr.Code() == connect.CodeNotFound {
+		return fmt.Errorf("%w: %s", review.ErrDiffReviewNotFound, connectErr.Message())
 	}
 	return diffReviewError(err)
 }

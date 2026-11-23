@@ -92,7 +92,9 @@ func TestClientDrivesTheSessionAPIThroughTheDaemon(t *testing.T) {
 	assert.Empty(t, reviews)
 	_, err = client.DiffReviews(ctx, "no-such-session")
 	require.ErrorIs(t, err, session.ErrNotFound)
-	require.ErrorIs(t, client.DismissDiffComment(ctx, "no-such-comment"), review.ErrDiffReviewNotFound)
+	err = client.DismissDiffComment(ctx, "no-such-comment")
+	require.ErrorIs(t, err, review.ErrDiffReviewNotFound)
+	require.NotErrorIs(t, err, session.ErrNotFound, "a dismiss names no session, so no session is missing")
 	require.ErrorIs(t, client.DismissDiffReview(ctx, "no-such-review"), review.ErrDiffReviewNotFound)
 
 	statuses, err := client.GitStatuses(ctx, []string{created.ID, "no-such-session"})

@@ -28,6 +28,10 @@ export const useAgentReviews = defineStore('agentReviews', () => {
   const bySession = shallowRef<Readonly<Record<string, readonly DiffReviewWire[]>>>({})
   const errors = shallowRef<Readonly<Record<string, string>>>({})
   const watchers = new Map<string, number>()
+  // A read that began before a dismissal answers with the dismissed comment.
+  // A local write brings an event that corrects it; a server's does not, so
+  // such a read is dropped.
+  const dismissals = new Map<string, number>()
 
   function set<T>(map: Readonly<Record<string, T>>, id: string, value: T | undefined): Record<string, T> {
     const next = { ...map }
@@ -37,8 +41,10 @@ export const useAgentReviews = defineStore('agentReviews', () => {
   }
 
   async function reload(sessionId: string): Promise<void> {
+    const before = dismissals.get(sessionId) ?? 0
     try {
       const list = (await DiffReviews(sessionId)) ?? []
+      if ((dismissals.get(sessionId) ?? 0) !== before) return
       bySession.value = set(bySession.value, sessionId, list)
       errors.value = set(errors.value, sessionId, undefined)
     } catch (err) {
@@ -78,9 +84,10 @@ export const useAgentReviews = defineStore('agentReviews', () => {
     }
   }
 
-  // The event comes from a fingerprint of every review, so it cannot say whose changed.
+  // The event comes from a fingerprint of every review in this machine's
+  // hive.db, so it cannot say whose changed, and says nothing of a server's.
   useWailsEvent('diff-reviews:updated', () => {
-    for (const watched of watchers.keys()) void reload(watched)
+    for (const watched of watchers.keys()) if (!onServer(watched)) void reload(watched)
   })
 
   function reviews(sessionId: string): readonly DiffReviewWire[] {
@@ -90,6 +97,7 @@ export const useAgentReviews = defineStore('agentReviews', () => {
   // The row leaves at once: the walkthrough moves on without waiting for Go. A failed
   // call reads the session again, which puts it back.
   function drop(sessionId: string, keep: (review: DiffReviewWire) => DiffReviewWire | null): void {
+    dismissals.set(sessionId, (dismissals.get(sessionId) ?? 0) + 1)
     bySession.value = set(
       bySession.value,
       sessionId,
