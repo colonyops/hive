@@ -21,13 +21,25 @@ import (
 // so the hive CLI writes them too; the hive.db probe reports those writes.
 type DiffReviewsService struct {
 	engine  func() *hive.Engine
+	servers func(server string) (serverDiffReviews, error)
 	callers *DriveService
 	chats   chatSessionResolver
 	logger  zerolog.Logger
 }
 
+// serverDiffReviews is the review store of a server, which its agents write
+// with the hive CLI there.
+type serverDiffReviews interface {
+	DiffReviews(ctx context.Context, id string) ([]review.DiffReview, error)
+	DismissDiffComment(ctx context.Context, commentID string) error
+	DismissDiffReview(ctx context.Context, reviewID string) error
+}
+
 type DiffReviewsDeps struct {
-	Engine  func() *hive.Engine
+	Engine func() *hive.Engine
+	// Servers reaches the session API of a server under servers:. nil means
+	// no session on a server has reviews to show.
+	Servers func(server string) (serverDiffReviews, error)
 	Callers *DriveService
 	Chats   chatSessionResolver
 	Logger  zerolog.Logger
@@ -35,7 +47,7 @@ type DiffReviewsDeps struct {
 
 func newDiffReviewsService(d DiffReviewsDeps) *DiffReviewsService {
 	return &DiffReviewsService{
-		engine: d.Engine, callers: d.Callers, chats: d.Chats,
+		engine: d.Engine, servers: d.Servers, callers: d.Callers, chats: d.Chats,
 		logger: logutils.Component(d.Logger, "desktop.diff-reviews"),
 	}
 }
@@ -113,8 +125,22 @@ func (s *DiffReviewsService) Clear(ctx context.Context, caller, sessionRef, auth
 	return n, nil
 }
 
-// List is the Diff view's read of one session's reviews.
+// List is the Diff view's read of one session's reviews. A "<server>:<id>"
+// session's reviews are in that server's hive.db.
 func (s *DiffReviewsService) List(ctx context.Context, sessionID string) ([]review.DiffReview, error) {
+	server, id, err := s.onServer(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if server != nil {
+		readCtx, cancel := context.WithTimeout(ctx, serverReadTimeout)
+		defer cancel()
+		out, err := server.DiffReviews(readCtx, id)
+		if err != nil {
+			return nil, serverDiffReviewError(err, "reading the agent reviews of session %q", sessionID)
+		}
+		return out, nil
+	}
 	engine, err := s.service()
 	if err != nil {
 		return nil, err
@@ -126,8 +152,18 @@ func (s *DiffReviewsService) List(ctx context.Context, sessionID string) ([]revi
 	return out, nil
 }
 
-// Dismiss removes one agent comment: the user dismissed it, or Send delivered it.
-func (s *DiffReviewsService) Dismiss(ctx context.Context, commentID string) error {
+// Dismiss removes one agent comment of the session: the user dismissed it, or
+// Send delivered it.
+func (s *DiffReviewsService) Dismiss(ctx context.Context, sessionID, commentID string) error {
+	server, _, err := s.onServer(sessionID)
+	if err != nil {
+		return err
+	}
+	if server != nil {
+		writeCtx, cancel := context.WithTimeout(ctx, serverReadTimeout)
+		defer cancel()
+		return serverDiffReviewError(server.DismissDiffComment(writeCtx, commentID), "dismissing a comment of session %q", sessionID)
+	}
 	engine, err := s.service()
 	if err != nil {
 		return err
@@ -138,8 +174,17 @@ func (s *DiffReviewsService) Dismiss(ctx context.Context, commentID string) erro
 	return nil
 }
 
-// DismissReview removes one review with every comment it still has.
-func (s *DiffReviewsService) DismissReview(ctx context.Context, reviewID string) error {
+// DismissReview removes one review of the session with every comment it still has.
+func (s *DiffReviewsService) DismissReview(ctx context.Context, sessionID, reviewID string) error {
+	server, _, err := s.onServer(sessionID)
+	if err != nil {
+		return err
+	}
+	if server != nil {
+		writeCtx, cancel := context.WithTimeout(ctx, serverReadTimeout)
+		defer cancel()
+		return serverDiffReviewError(server.DismissDiffReview(writeCtx, reviewID), "dismissing a review of session %q", sessionID)
+	}
 	engine, err := s.service()
 	if err != nil {
 		return err
@@ -182,6 +227,39 @@ func (s *DiffReviewsService) target(ctx context.Context, engine *hive.Engine, ca
 		return session.Session{}, "", Wrap(err, KindInternal, "finding hive session %q", ref)
 	}
 	return target, author, nil
+}
+
+// onServer resolves a "<server>:<id>" session id to that server's reviews and
+// the session's id there. A local session id resolves to nil.
+func (s *DiffReviewsService) onServer(sessionID string) (serverDiffReviews, string, error) {
+	ref, err := session.ParseRef(sessionID, session.LocalServer)
+	if err != nil {
+		return nil, "", Wrap(err, KindInvalid, "session id")
+	}
+	if ref.Server == session.LocalServer {
+		return nil, "", nil
+	}
+	if s.servers == nil {
+		return nil, "", Errorf(KindUnavailable, "agent reviews of a session on a server are not available")
+	}
+	server, err := s.servers(ref.Server)
+	if err != nil {
+		return nil, "", err
+	}
+	return server, ref.ID, nil
+}
+
+func serverDiffReviewError(err error, format string, args ...any) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, review.ErrDiffReviewNotFound):
+		return Errorf(KindNotFound, "that review or comment is gone from the server; it may have been dismissed")
+	case errors.Is(err, session.ErrNotFound):
+		return Wrap(err, KindNotFound, format, args...)
+	default:
+		return serverError(err, KindUnavailable, format, args...)
+	}
 }
 
 func diffReviewError(err error, subject string) error {

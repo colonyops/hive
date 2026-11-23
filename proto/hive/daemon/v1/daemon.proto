@@ -54,6 +54,14 @@ service SessionService {
   // AgentPanes lists the agent panes of sessions on the daemon's machine,
   // with pane ids in that machine's tmux, so a client can send text to one.
   rpc AgentPanes(AgentPanesRequest) returns (AgentPanesResponse);
+  // DiffReviews lists the agent reviews of a session's branch diff, oldest
+  // first, from the daemon's hive.db.
+  rpc DiffReviews(DiffReviewsRequest) returns (DiffReviewsResponse);
+  // DismissDiffComment removes one agent review comment, and its review with
+  // its last comment.
+  rpc DismissDiffComment(DismissDiffCommentRequest) returns (DismissDiffCommentResponse);
+  // DismissDiffReview removes one agent review and its comments.
+  rpc DismissDiffReview(DismissDiffReviewRequest) returns (DismissDiffReviewResponse);
 }
 
 message HelloRequest {}
@@ -328,6 +336,51 @@ message AgentPane {
   string status = 3;
   string tool = 4;
 }
+
+message DiffReviewsRequest {
+  string session_id = 1;
+}
+
+message DiffReviewsResponse {
+  repeated DiffReview reviews = 1;
+}
+
+message DiffReview {
+  string id = 1;
+  string session_id = 2;
+  string author = 3;
+  string agent = 4;
+  string head = 5;
+  string summary = 6;
+  google.protobuf.Timestamp created_at = 7;
+  repeated DiffReviewComment comments = 8;
+}
+
+message DiffReviewComment {
+  string id = 1;
+  string review_id = 2;
+  string kind = 3;
+  string path = 4;
+  string start_side = 5;
+  int32 start_line = 6;
+  string end_side = 7;
+  int32 end_line = 8;
+  string quote = 9;
+  string text = 10;
+  string severity = 11;
+}
+
+message DismissDiffCommentRequest {
+  string comment_id = 1;
+}
+
+message DismissDiffCommentResponse {}
+
+message DismissDiffReviewRequest {
+  string review_id = 1;
+}
+
+message DismissDiffReviewResponse {}
 
 message GitStatusesRequest {
   repeated string session_ids = 1;

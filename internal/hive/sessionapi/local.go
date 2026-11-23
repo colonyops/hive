@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
@@ -169,6 +170,18 @@ func (l *Local) AgentPanes(ctx context.Context, ids []string) (map[string][]stat
 		}
 	}
 	return l.engine.Status().AgentPanes(ctx, active), nil
+}
+
+func (l *Local) DiffReviews(ctx context.Context, id string) ([]review.DiffReview, error) {
+	return l.engine.DiffReviews().List(ctx, id)
+}
+
+func (l *Local) DismissDiffComment(ctx context.Context, commentID string) error {
+	return l.engine.DiffReviews().Dismiss(ctx, commentID)
+}
+
+func (l *Local) DismissDiffReview(ctx context.Context, reviewID string) error {
+	return l.engine.DiffReviews().DismissReview(ctx, reviewID)
 }
 
 func (l *Local) StatusAvailable() bool {

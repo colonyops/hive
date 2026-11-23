@@ -24,9 +24,9 @@ On a server's session you can:
 - start it when its terminal stopped; the server opens the session's tmux windows and agent from its own `rules:`
 - rename it, edit its tags, recycle it, and delete it
 - see its branch, line counts, uncommitted changes, and pull request in the status bar
-- open **Changes** to read its diff and send a review to its agent
+- open **Changes** to read its diff, see and dismiss the comments its agent wrote, and send a review to its agent
 
-Changes reads the checkout on the server, and a review goes to the agent through the server's tmux. To send one, the server needs the same hive version as your machine. Comments that an agent on the server adds to the diff with `hive review diff put` do not show yet.
+Changes reads the checkout on the server, and a review goes to the agent through the server's tmux. Comments that an agent on the server adds to the diff with `hive review diff put` stay in the server's hive, and Changes reads them again every 10 seconds while it is open. To send a review or to see agent comments, the server needs the same hive version as your machine.
 
 Open in editor, Show in Finder, agent windows, configured actions, and the Tasks tab run on your machine, so Code does not offer them for a server's session. Code refuses an image pasted into its terminal, and a pop-up terminal in its directory, because the file or the terminal would be on your machine, not on the server. A create on a server does not take an agent workspace, and the dialog refuses a prompt above 32 KiB.
 

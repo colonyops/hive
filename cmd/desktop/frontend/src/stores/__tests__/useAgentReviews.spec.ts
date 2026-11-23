@@ -1,6 +1,6 @@
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAgentReviews } from '../useAgentReviews'
+import { SERVER_REVIEW_POLL_MS, useAgentReviews } from '../useAgentReviews'
 import { resetStores } from '../defineStore'
 
 const mocks = vi.hoisted(() => ({
@@ -75,6 +75,7 @@ describe('useAgentReviews', () => {
     await flushPromises()
 
     expect(await store.dismiss('s1', 'c1')).toBeNull()
+    expect(mocks.DismissDiffComment).toHaveBeenCalledWith('s1', 'c1')
     expect(store.reviews('s1')[0].comments?.map((comment) => comment.id)).toEqual(['c2'])
     await store.dismiss('s1', 'c2')
     expect(store.reviews('s1')).toEqual([])
@@ -90,5 +91,39 @@ describe('useAgentReviews', () => {
     expect(await store.dismiss('s1', 'c1')).toBe('gone wrong')
     await flushPromises()
     expect(store.reviews('s1')).toHaveLength(1)
+  })
+
+  it('reads a watched server session again on a timer, and stops when it is unwatched', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.DiffReviews.mockResolvedValue([review('r1', ['c1'])])
+      const store = useAgentReviews()
+      const stopLocal = store.watch('s1')
+      await vi.advanceTimersByTimeAsync(SERVER_REVIEW_POLL_MS)
+      expect(mocks.DiffReviews).toHaveBeenCalledTimes(1)
+
+      const stopServer = store.watch('box:s2')
+      await vi.advanceTimersByTimeAsync(SERVER_REVIEW_POLL_MS)
+      expect((mocks.DiffReviews.mock.calls as unknown as [string][]).map(([id]) => id)).toEqual(['s1', 'box:s2', 'box:s2'])
+
+      stopServer()
+      await vi.advanceTimersByTimeAsync(SERVER_REVIEW_POLL_MS * 2)
+      expect(mocks.DiffReviews).toHaveBeenCalledTimes(3)
+      stopLocal()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('names the session when it dismisses a whole review', async () => {
+    mocks.DiffReviews.mockResolvedValue([review('r1', ['c1'])])
+    mocks.DismissDiffReview.mockResolvedValue(undefined)
+    const store = useAgentReviews()
+    store.watch('box:s2')
+    await flushPromises()
+
+    expect(await store.dismissReview('box:s2', 'r1')).toBeNull()
+    expect(mocks.DismissDiffReview).toHaveBeenCalledWith('box:s2', 'r1')
+    expect(store.reviews('box:s2')).toEqual([])
   })
 })

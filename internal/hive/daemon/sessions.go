@@ -255,6 +255,28 @@ func (s *sessionServer) AgentPanes(ctx context.Context, req *connect.Request[dae
 	return connect.NewResponse(&daemonv1.AgentPanesResponse{Sessions: wire.AgentPanesToProto(panes)}), nil
 }
 
+func (s *sessionServer) DiffReviews(ctx context.Context, req *connect.Request[daemonv1.DiffReviewsRequest]) (*connect.Response[daemonv1.DiffReviewsResponse], error) {
+	reviews, err := s.api.DiffReviews(ctx, req.Msg.GetSessionId())
+	if err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(&daemonv1.DiffReviewsResponse{Reviews: wire.DiffReviewsToProto(reviews)}), nil
+}
+
+func (s *sessionServer) DismissDiffComment(ctx context.Context, req *connect.Request[daemonv1.DismissDiffCommentRequest]) (*connect.Response[daemonv1.DismissDiffCommentResponse], error) {
+	if err := s.api.DismissDiffComment(ctx, req.Msg.GetCommentId()); err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(&daemonv1.DismissDiffCommentResponse{}), nil
+}
+
+func (s *sessionServer) DismissDiffReview(ctx context.Context, req *connect.Request[daemonv1.DismissDiffReviewRequest]) (*connect.Response[daemonv1.DismissDiffReviewResponse], error) {
+	if err := s.api.DismissDiffReview(ctx, req.Msg.GetReviewId()); err != nil {
+		return nil, wire.ToConnectError(err)
+	}
+	return connect.NewResponse(&daemonv1.DismissDiffReviewResponse{}), nil
+}
+
 // lineWriter sends each complete line written to it. The session service
 // writes progress with or without a trailing newline, so Flush sends the
 // rest.

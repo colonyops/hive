@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemon/daemonpath"
 	daemonv1 "github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1"
@@ -187,6 +188,7 @@ var readProcedures = map[string]bool{
 	daemonv1connect.SessionServiceBranchesProcedure:      true,
 	daemonv1connect.SessionServiceGitStatusesProcedure:   true,
 	daemonv1connect.SessionServiceAgentPanesProcedure:    true,
+	daemonv1connect.SessionServiceDiffReviewsProcedure:   true,
 }
 
 // fileDiffsTimeout outlasts the daemon's own 15s limit on a batch of diffs, so
@@ -620,6 +622,8 @@ var (
 	ErrStartTmuxUnsupported = errors.New("the server's hive is too old to start a terminal; install the same hive version on both machines")
 	// ErrAgentPanesUnsupported is a daemon whose hive predates AgentPanes.
 	ErrAgentPanesUnsupported = errors.New("the server's hive is too old to list its agents; install the same hive version on both machines")
+	// ErrDiffReviewsUnsupported is a daemon whose hive predates the diff review RPCs.
+	ErrDiffReviewsUnsupported = errors.New("the server's hive is too old to share agent reviews; install the same hive version on both machines")
 )
 
 // GitStatuses reports a daemon that predates the RPC as such, so a user
@@ -654,6 +658,45 @@ func (c *Client) AgentPanes(ctx context.Context, ids []string) (map[string][]sta
 		return nil, wire.FromConnectError(err)
 	}
 	return wire.AgentPanesFromProto(resp.Msg.GetSessions()), nil
+}
+
+func (c *Client) DiffReviews(ctx context.Context, id string) ([]review.DiffReview, error) {
+	resp, err := retryRead(func() (*connect.Response[daemonv1.DiffReviewsResponse], error) {
+		return c.sessions.DiffReviews(ctx, connect.NewRequest(&daemonv1.DiffReviewsRequest{SessionId: id}))
+	})
+	if err != nil {
+		return nil, diffReviewError(err)
+	}
+	return wire.DiffReviewsFromProto(resp.Msg.GetReviews()), nil
+}
+
+func (c *Client) DismissDiffComment(ctx context.Context, commentID string) error {
+	_, err := c.sessions.DismissDiffComment(ctx, connect.NewRequest(&daemonv1.DismissDiffCommentRequest{CommentId: commentID}))
+	return dismissError(err)
+}
+
+func (c *Client) DismissDiffReview(ctx context.Context, reviewID string) error {
+	_, err := c.sessions.DismissDiffReview(ctx, connect.NewRequest(&daemonv1.DismissDiffReviewRequest{ReviewId: reviewID}))
+	return dismissError(err)
+}
+
+func diffReviewError(err error) error {
+	if connect.CodeOf(err) == connect.CodeUnimplemented {
+		return ErrDiffReviewsUnsupported
+	}
+	return wire.FromConnectError(err)
+}
+
+// dismissError reads a not-found as the review or comment gone: a dismiss
+// names no session, so the session cannot be what is missing.
+func dismissError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if connect.CodeOf(err) == connect.CodeNotFound {
+		return fmt.Errorf("%w: %w", review.ErrDiffReviewNotFound, wire.FromConnectError(err))
+	}
+	return diffReviewError(err)
 }
 
 // StartTmuxSession is not retried: a second start after a lost answer could

@@ -327,6 +327,18 @@ func TestClientAgentPanesNamesADaemonThatPredatesThem(t *testing.T) {
 	require.ErrorIs(t, err, ErrAgentPanesUnsupported)
 }
 
+func TestClientDiffReviewsNamesADaemonThatPredatesThem(t *testing.T) {
+	t.Parallel()
+	path := socketPath(t)
+	serve(t, path, slowServer{}, 0)
+	client := New(Options{Dialer: UnixDialer(path), Logger: zerolog.Nop()})
+
+	_, err := client.DiffReviews(t.Context(), "s1")
+	require.ErrorIs(t, err, ErrDiffReviewsUnsupported)
+	require.ErrorIs(t, client.DismissDiffComment(t.Context(), "c1"), ErrDiffReviewsUnsupported)
+	require.ErrorIs(t, client.DismissDiffReview(t.Context(), "r1"), ErrDiffReviewsUnsupported)
+}
+
 func TestClientDeleteTimeoutBoundsADelete(t *testing.T) {
 	t.Parallel()
 	const timeout = 50 * time.Millisecond

@@ -573,6 +573,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.Tasks = newTasksService(a.hive)
 	a.DiffReviews = newDiffReviewsService(DiffReviewsDeps{
 		Engine:  func() *hive.Engine { return a.hive },
+		Servers: func(server string) (serverDiffReviews, error) { return a.Sessions.serverAPI(server) },
 		Callers: a.Drive,
 		Chats:   a.Stores.AgentSessions,
 		Logger:  cfg.Logger,

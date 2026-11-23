@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
@@ -85,6 +86,14 @@ func TestClientDrivesTheSessionAPIThroughTheDaemon(t *testing.T) {
 
 	_, err = client.AgentPanes(ctx, []string{created.ID})
 	require.ErrorContains(t, err, "cannot find the agents", "a daemon without terminal status says so, not that no agent runs")
+
+	reviews, err := client.DiffReviews(ctx, created.ID)
+	require.NoError(t, err)
+	assert.Empty(t, reviews)
+	_, err = client.DiffReviews(ctx, "no-such-session")
+	require.ErrorIs(t, err, session.ErrNotFound)
+	require.ErrorIs(t, client.DismissDiffComment(ctx, "no-such-comment"), review.ErrDiffReviewNotFound)
+	require.ErrorIs(t, client.DismissDiffReview(ctx, "no-such-review"), review.ErrDiffReviewNotFound)
 
 	statuses, err := client.GitStatuses(ctx, []string{created.ID, "no-such-session"})
 	require.NoError(t, err)
