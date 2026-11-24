@@ -13,8 +13,9 @@ import (
 
 var Toolset = ops.Toolset{Name: "sessions", MCPPath: "/mcp"}
 
-// ControlToolset holds the operations that start a process, so they are
-// served only on the token-guarded server (ADR
+// ControlToolset holds the operations that start a process or destroy a
+// checkout (create, start, recycle, delete), so they are served only on the
+// token-guarded server (ADR
 // chat-control-is-served-on-a-token-guarded-mcp-server-whose-token-the-endpoint-file-carries).
 var ControlToolset = ops.Toolset{Name: "session-control", MCPPath: "/mcp/sessions"}
 
@@ -125,7 +126,7 @@ type SessionDeleteIn struct {
 }
 
 var SessionDelete = ops.Spec[SessionDeleteIn]{
-	Name: "session.delete", Owner: ops.OwnerEngine, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "session.delete", Owner: ops.OwnerEngine, Effect: ops.EffectWrite, Toolset: ControlToolset,
 	Summary: "Delete a session and its directory",
 	Guidance: "Remove a session, its clone and its tmux session for good, and answer with its server, id and deleted. " + refGuidance + " " +
 		riskGuidance + " To keep the clone for reuse, use session_recycle.",
@@ -139,7 +140,7 @@ type SessionRecycleIn struct {
 }
 
 var SessionRecycle = ops.Spec[SessionRecycleIn]{
-	Name: "session.recycle", Owner: ops.OwnerEngine, Effect: ops.EffectWrite, Toolset: Toolset,
+	Name: "session.recycle", Owner: ops.OwnerEngine, Effect: ops.EffectWrite, Toolset: ControlToolset,
 	Summary: "Recycle a session so its clone can be reused",
 	Guidance: "Reset a full-clone session's checkout so a new session can reuse it, and answer with the recycled session. " +
 		"A worktree session loses its checkout and record and keeps the shared bare clone; the answer is then its server, id and deleted. " +
@@ -151,7 +152,7 @@ type SessionCreateIn struct {
 	Caller        string   `json:"caller"                  jsonschema:"Who is calling. In a hive session it is the absolute path of your working directory; outside one it is that directory too. The source directory and the remote default to it."`
 	Name          string   `json:"name"                    jsonschema:"The session's name."`
 	Server        string   `json:"server,omitempty"        jsonschema:"The server under servers: in config.yaml to create the session on: local (default) for this machine."`
-	Remote        string   `json:"remote,omitempty"        jsonschema:"The git remote URL to clone. Defaults to the origin of the source directory."`
+	Remote        string   `json:"remote,omitempty"        jsonschema:"The git remote URL to clone. Defaults to the origin of the caller's directory."`
 	Source        string   `json:"source,omitempty"        jsonschema:"An absolute directory whose files copy rules read. Defaults to the caller's directory. A server cannot read it, so a create on a server takes none."`
 	Background    bool     `json:"background,omitempty"    jsonschema:"Do not attach a terminal to the new session. An MCP call always creates in the background."`
 	CloneStrategy string   `json:"cloneStrategy,omitempty" jsonschema:"full or worktree. Defaults to the repository's rule."`

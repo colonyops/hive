@@ -17,6 +17,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/ops/catalog"
+	"github.com/colonyops/hive/internal/ops/sessions"
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
@@ -179,7 +180,7 @@ func forwardHandler(client *DesktopClient, caller string, info ops.Info, log zer
 			return refusal(ops.KindInvalid, err.Error()), nil
 		}
 
-		res, err := client.CallWithin(ctx, forwardTimeout(args), info.Toolset.MCPPath, info.ToolName, args)
+		res, err := client.CallWithin(ctx, forwardTimeout(info, args), info.Toolset.MCPPath, info.ToolName, args)
 		if err == nil {
 			return res, nil
 		}
@@ -220,8 +221,14 @@ func forwardedArgs(raw json.RawMessage, info ops.Info, caller string) (map[strin
 }
 
 // forwardTimeout gives a call that waits, such as message_list with wait, its
-// wait on top of the usual timeout.
-func forwardTimeout(args map[string]any) time.Duration {
+// wait on top of the usual timeout. A session-control call clones, runs rules
+// or checks a checkout for unsaved work, which takes minutes on a big
+// repository; a timeout there makes an agent retry an operation that is still
+// running.
+func forwardTimeout(info ops.Info, args map[string]any) time.Duration {
+	if info.Toolset == sessions.ControlToolset {
+		return sessionControlTimeout
+	}
 	if wait, ok := args["wait"].(float64); ok && wait > 0 {
 		return desktopCallTimeout + time.Duration(wait)*time.Second
 	}

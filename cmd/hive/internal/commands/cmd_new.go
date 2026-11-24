@@ -95,21 +95,18 @@ func createSessionFromFlags(ctx context.Context, a *app.App, name string, f *cre
 }
 
 // createSession runs session.create with the CLI's defaults: the working
-// directory is the caller, never HIVE_AGENT_SESSION, and a create on this
-// machine copies from it.
+// directory is the caller, never HIVE_AGENT_SESSION, so the remote and the
+// copy source default to it.
 func createSession(ctx context.Context, a *app.App, args map[string]any, progress io.Writer) (sessions.SessionOut, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return sessions.SessionOut{}, fmt.Errorf("determine the current directory: %w", err)
 	}
-	if _, ok := args[ops.CallerField]; !ok {
+	_, callerGiven := args[ops.CallerField]
+	if !callerGiven {
 		args[ops.CallerField] = wd
 	}
-	if server, _ := args["server"].(string); server == "" || server == session.LocalServer {
-		source, _ := args["source"].(string)
-		if source == "" {
-			source = wd
-		}
+	if source, _ := args["source"].(string); source != "" {
 		abs, err := filepath.Abs(source)
 		if err != nil {
 			return sessions.SessionOut{}, fmt.Errorf("resolve source directory: %w", err)

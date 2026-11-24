@@ -1,23 +1,28 @@
 # Hive Sessions
 
-The `hive-sessions` MCP server creates and starts hive sessions, on this
-machine or on a server from the `servers:` list in the hive config. It is how
-an orchestrator agent hands a repository task to a new coding agent.
+The `hive-sessions` MCP server creates, starts, recycles and deletes hive
+sessions, on this machine or on a server from the `servers:` list in the hive
+config. It is how an orchestrator agent hands a repository task to a new
+coding agent and cleans up after it.
 
 | Tool | What it does |
 | --- | --- |
 | `session_create` | Create a session: `name`, optional `remote`, `source`, `server`, `agent` and `tags`. It starts in the background. |
 | `session_start` | Start the agent of a session that has no running terminal. |
+| `session_recycle` | Reset a full-clone session's checkout for reuse. Refuses on unsaved work unless `force`. |
+| `session_delete` | Delete a session, its clone and its tmux session. Refuses on unsaved work unless `force`. |
 
-The same operations are `hive session create` and `hive session start`. The
-read and tag tools (`session_list`, `session_get`, `session_tags_update`)
-are on `hive-desktop`.
+The same operations are `hive session create`, `start`, `recycle` and
+`delete`. The tools that read and edit a session record (`session_list`,
+`session_get`, `session_update`, `session_tags_update`) are on
+`hive-desktop`.
 
 ## Authority
 
 `session_create` clones a repository and runs the agent command of the hive
-config in it, on any configured server. Grant `hive-sessions` only to a
-workspace you trust to start agents.
+config in it, on any configured server. `session_recycle` runs the recycle
+commands, and `session_delete` removes the checkout. Grant `hive-sessions`
+only to a workspace you trust to start agents and to remove their work.
 
 ## Launch
 

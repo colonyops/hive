@@ -53,12 +53,13 @@ var registry = map[string]Descriptor{
 		RuntimePath: "/mcp/chats",
 		StdioOnly:   true,
 	},
-	// Session create and start, on the chats token. Its own entry, because
-	// creating a session runs an agent command on any repository or server.
+	// Session create, start, recycle and delete, on the chats token. Its own
+	// entry, because these run commands and remove checkouts on any
+	// repository or server.
 	"hive-sessions": {
 		Type:        "hive-sessions",
 		Title:       "Hive Sessions",
-		Description: "Create and start hive sessions on this machine or on a configured server. A started session runs its agent command in a new terminal.",
+		Description: "Create, start, recycle and delete hive sessions on this machine or on a configured server. A started session runs its agent command in a new terminal.",
 		Stability:   StabilityStable,
 		Server:      Server{Transport: TransportHttp},
 		RuntimeURL:  true,

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/tagset"
@@ -97,6 +98,12 @@ type serverListing struct {
 
 // listEachServer reads the sessions of the named server, or of this machine
 // and every server at once.
+// serverListTimeout bounds one server's part of a list that reads every
+// server, so a stuck server costs the list seconds and not the client's connect
+// timeout. A fresh ssh connection is about 14 round trips, so a shorter bound
+// reports a healthy server on a slow link as offline.
+const serverListTimeout = 10 * time.Second
+
 func (h *Handlers) listEachServer(ctx context.Context, server string) ([]serverListing, error) {
 	fleet := h.currentFleet()
 	if server != "" || fleet == nil || len(fleet.Servers()) == 0 {
@@ -122,6 +129,8 @@ func (h *Handlers) listEachServer(ctx context.Context, server string) ([]serverL
 	})
 	for i, srv := range remotes {
 		wg.Go(func() {
+			ctx, cancel := context.WithTimeout(ctx, serverListTimeout)
+			defer cancel()
 			list, err := srv.Client().ListSessions(ctx)
 			out[i+1] = serverListing{server: srv.Config().Name, sessions: list, err: err}
 		})
@@ -151,20 +160,16 @@ func (h *Handlers) SessionList(ctx context.Context, in sessions.SessionListIn) (
 		}
 		var mine []sessions.SessionOut
 		for _, s := range listing.sessions {
-			if !s.HasAllTags(in.Tags) {
+			// A corrupted session is reported whatever the tag filter, so
+			// a filtered list still says it needs a prune.
+			if in.State == "" && s.State == session.StateCorrupted {
+				out.Corrupted = append(out.Corrupted, h.listedSession(ctx, listing.server, s))
 				continue
 			}
-			item := h.listedSession(ctx, listing.server, s)
-			switch {
-			case in.State != "":
-				if string(s.State) == in.State {
-					mine = append(mine, item)
-				}
-			case s.State == session.StateCorrupted:
-				out.Corrupted = append(out.Corrupted, item)
-			default:
-				mine = append(mine, item)
+			if !s.HasAllTags(in.Tags) || (in.State != "" && string(s.State) != in.State) {
+				continue
 			}
+			mine = append(mine, h.listedSession(ctx, listing.server, s))
 		}
 		slices.SortStableFunc(mine, func(a, b sessions.SessionOut) int { return strings.Compare(a.Repo, b.Repo) })
 		out.Sessions = append(out.Sessions, mine...)
@@ -293,7 +298,11 @@ func (h *Handlers) SessionRecycle(ctx context.Context, in sessions.SessionRecycl
 	case errors.Is(err, session.ErrNotFound):
 		return sessions.SessionRecycleOut{Deleted: &sessions.SessionDeletedOut{Server: ref.Server, ID: ref.ID, Deleted: true}}, nil
 	case err != nil:
-		return sessions.SessionRecycleOut{}, opError(err, "get session after recycle")
+		// The recycle is done; failing now would make a caller retry it.
+		h.log.Warn().Err(err).Str("session", ref.String()).Msg("read session after recycle")
+		return sessions.SessionRecycleOut{Session: &sessions.SessionOut{
+			Server: ref.Server, ID: ref.ID, State: string(session.StateRecycled), Tags: []string{},
+		}}, nil
 	}
 	out := sessionOut(ref.Server, s)
 	return sessions.SessionRecycleOut{Session: &out}, nil
@@ -354,7 +363,7 @@ func (h *Handlers) SessionCreate(ctx context.Context, in sessions.SessionCreateI
 		opts.Source = dir
 	}
 	if opts.Remote == "" {
-		from := cmpOr(opts.Source, dir)
+		from := cmpOr(dir, opts.Source)
 		if from == "" {
 			return sessions.SessionOut{}, ops.Errorf(ops.KindInvalid, "remote is required when the caller names no directory")
 		}

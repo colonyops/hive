@@ -2672,10 +2672,10 @@ reread the listing. Applets reach the same service through
 `hive.exec` passes (ADR chat-control-is-served-on-a-token-guarded-mcp-server-whose-token-the-endpoint-file-carries).
 
 **Session control is a second guarded server.** `hive-sessions` mounts at
-`/mcp/sessions` with the `session-control` engine toolset: `session_create`
-and `session_start`. It checks the chats token with the same `guard`, so
+`/mcp/sessions` with the `session-control` engine toolset: `session_create`,
+`session_start`, `session_recycle` and `session_delete`. It checks the chats token with the same `guard`, so
 `hive mcp serve` needs nothing new, and its `StdioOnly` catalogue entry is a
-grant apart from `hive-chats`. The read and tag session tools are on `/mcp`.
+grant apart from `hive-chats`. The tools that read and edit a session record are on `/mcp`.
 Both reach the fleet: `mountEngine` passes `engineops.WithFleet(App.HiveServers)`,
 so a session id is `<server>:<id>` and `session_list` reads every configured
 server (ADR session-operations-route-through-the-server-fleet-and-a-generated-command-keeps-the-spellings-of-the-command-it-replaces).

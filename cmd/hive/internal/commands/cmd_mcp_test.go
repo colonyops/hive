@@ -19,6 +19,7 @@ import (
 	"github.com/colonyops/hive/internal/ops/catalog"
 	"github.com/colonyops/hive/internal/ops/layout"
 	"github.com/colonyops/hive/internal/ops/mcpops"
+	"github.com/colonyops/hive/internal/ops/sessions"
 	"github.com/colonyops/hive/internal/platform/desktopendpoint"
 )
 
@@ -116,8 +117,9 @@ func TestMCPServeDefaultsToEveryToolset(t *testing.T) {
 }
 
 func TestMCPServeGivesAWaitItsTime(t *testing.T) {
-	assert.Equal(t, desktopCallTimeout, forwardTimeout(map[string]any{}))
-	assert.Equal(t, desktopCallTimeout+30*time.Second, forwardTimeout(map[string]any{"wait": float64(30)}))
+	assert.Equal(t, desktopCallTimeout, forwardTimeout(ops.Info{}, map[string]any{}))
+	assert.Equal(t, desktopCallTimeout+30*time.Second, forwardTimeout(ops.Info{}, map[string]any{"wait": float64(30)}))
+	assert.Equal(t, sessionControlTimeout, forwardTimeout(sessions.SessionCreate.Info(), map[string]any{}))
 }
 
 func TestMCPServeForwardsCallerOnlyWhereDeclared(t *testing.T) {

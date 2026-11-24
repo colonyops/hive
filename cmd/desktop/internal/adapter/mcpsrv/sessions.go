@@ -17,8 +17,9 @@ const SessionsPathPrefix = "/mcp/sessions"
 // sessionsServerName is also the id a workspace names in its mcps: list.
 const sessionsServerName = "hive-sessions"
 
-// SessionsController serves the session operations that start a process
-// (session_create, session_start). It shares the chats server's token but is
+// SessionsController serves the session operations that start a process or
+// remove a checkout (session_create, session_start, session_recycle,
+// session_delete). It shares the chats server's token but is
 // its own server and catalogue entry, so granting hive-chats does not also
 // grant creating sessions on every repository and server.
 type SessionsController struct {
@@ -46,7 +47,7 @@ func (ctrl *SessionsController) Server() *mcp.Server {
 		Name:    sessionsServerName,
 		Title:   "Hive Sessions",
 		Version: version,
-		Description: "Create and start hive sessions on this machine or on a configured server. " +
+		Description: "Create, start, recycle and delete hive sessions on this machine or on a configured server. " +
 			"A started session runs its agent command in a new terminal.",
 	}, nil)
 	mountEngine(srv, ctrl.core, ctrl.base, SessionsPathPrefix, ctrl.toolError)

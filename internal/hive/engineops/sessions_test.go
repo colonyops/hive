@@ -125,6 +125,22 @@ func TestSessionListFiltersByTagsAndState(t *testing.T) {
 	assert.Empty(t, out.Sessions)
 }
 
+func TestSessionListReportsCorruptedSessionsWhateverTheTags(t *testing.T) {
+	harness := hivetest.NewEngine(t, hivetest.Options{})
+	broken := session.Session{
+		ID: "bad001", Name: "broken", Slug: "broken", Path: t.TempDir(), State: session.StateCorrupted,
+		Remote: "git@github.com:acme/widgets.git", CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, store.NewSessionStore(harness.DB).Save(t.Context(), broken))
+	h := engineops.New(zerolog.Nop(), harness.Engine)
+
+	out, err := h.SessionList(t.Context(), sessions.SessionListIn{Tags: []string{"auto"}})
+	require.NoError(t, err)
+	assert.Empty(t, out.Sessions)
+	require.Len(t, out.Corrupted, 1)
+	assert.Equal(t, broken.ID, out.Corrupted[0].ID)
+}
+
 func TestSessionGetTakesServerQualifiedIDs(t *testing.T) {
 	f := newFleetFixture(t)
 

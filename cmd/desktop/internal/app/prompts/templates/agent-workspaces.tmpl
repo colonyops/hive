@@ -91,8 +91,8 @@ such as an orchestrator. The same callers pin and unpin chats in the Code sideba
 
 To let a workspace's own agent start chats in other workspaces, add `hive-chats` to its
 `mcps:`. Each started chat runs its own workspace's command and permission settings.
-To let it create and start hive sessions (`session_create`, `session_start`), add
-`hive-sessions`.
+To let it create, start, recycle and delete hive sessions (`session_create`,
+`session_start`, `session_recycle`, `session_delete`), add `hive-sessions`.
 
 ### Prompt template variables
 
