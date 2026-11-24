@@ -21,5 +21,5 @@ The desktop owned `session_list` and `session_tags_update`, and they read only t
 
 - `session_list` and `session_tags_update` answer the CLI shape: `repo` is the repository name and `remote` its URL, keys are snake_case, and the tags update answers the session itself. Corrupted sessions are in `corrupted` unless `state` asks for them.
 - `hive dt session list` and `hive dt session tags update` are gone; `hive session list` and `hive session tags update` replace them.
-- Piped `hive ls` and `hive session list` print JSON Lines, not the table. A risk refusal exits 4 and an unknown server exits 3, where both exited 1.
+- Piped `hive ls` and `hive session list` print JSON Lines, not the table, and a failing command prints its error as one `{"kind","message"}` line on stderr instead of text. The message text stays, the `hive servers ls` hint for an unreachable server included, because `ops.Wrap` keeps the cause for the CLI. A risk refusal exits 4 and an unknown server exits 3, where both exited 1.
 - A later replacement of hand-written commands must carry their flags as hidden spellings, with a test that runs each scripted form.

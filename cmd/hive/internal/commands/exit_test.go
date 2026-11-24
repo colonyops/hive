@@ -123,6 +123,10 @@ func TestReportErrorNamesTheServersCommandForAnUnreachableServer(t *testing.T) {
 	require.NoError(t, json.Unmarshal(line.Bytes(), &got))
 	assert.Equal(t, ops.KindUnavailable, got.Kind)
 	assert.Contains(t, got.Message, "hive servers ls")
+
+	var wrapped bytes.Buffer
+	ReportError(&wrapped, &ReportedError{Err: ops.Wrap(ops.KindUnavailable, cause, "get session: %v", cause), Kind: ops.KindUnavailable})
+	assert.Contains(t, wrapped.String(), "hive servers ls", "an engine operation's error keeps its cause")
 }
 
 func TestDocMessagingNamesRealFlags(t *testing.T) {

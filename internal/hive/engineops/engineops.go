@@ -221,5 +221,5 @@ func opError(err error, what string) error {
 	case errors.As(err, new(*wire.UnreachableError)):
 		kind = ops.KindUnavailable
 	}
-	return ops.Errorf(kind, "%s: %v", what, err)
+	return ops.Wrap(kind, err, "%s: %v", what, err)
 }

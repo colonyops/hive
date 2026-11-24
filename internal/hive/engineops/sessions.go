@@ -39,7 +39,7 @@ func (h *Handlers) sessionAPI(server string) (sessionapi.API, error) {
 			return srv.Client(), nil
 		}
 	}
-	return nil, ops.Errorf(ops.KindNotFound, "server %q is not under servers: in config.yaml", server)
+	return nil, ops.Errorf(ops.KindNotFound, "unknown server %q: it is not under servers: in config.yaml", server)
 }
 
 // target reads a session id, "<server>:<id>" or a bare id on server, and

@@ -97,6 +97,19 @@ func DecodeJSONLines[T any](t *testing.T, r Result) []T {
 	}
 }
 
+// ErrorMessage is the message of the {"kind","message"} line a failing
+// command prints on stderr when its output is not a terminal.
+func ErrorMessage(t *testing.T, r Result) string {
+	t.Helper()
+	lines := strings.Split(strings.TrimSpace(r.Stderr), "\n")
+	var line struct {
+		Kind    string `json:"kind"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(lines[len(lines)-1]), &line), "stderr:\n%s", r.Stderr)
+	return line.Message
+}
+
 // Session is the JSON that `hive session show --json` and its siblings
 // print.
 type Session struct {

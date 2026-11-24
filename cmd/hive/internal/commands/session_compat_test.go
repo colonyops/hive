@@ -195,6 +195,9 @@ func TestSessionCommandsKeepTheirSpellings(t *testing.T) {
 	t.Run("unknown server", func(t *testing.T) {
 		r := runForOutputTest(t, a, "session", "show", "nowhere:"+localID, "--json")
 		assert.Equal(t, 3, r.code)
+		var line errorLine
+		require.NoError(t, json.Unmarshal([]byte(r.reported), &line))
+		assert.Contains(t, line.Message, `unknown server "nowhere"`)
 	})
 }
 
