@@ -3,7 +3,6 @@ package engineops
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -11,11 +10,14 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/ops"
+	"github.com/colonyops/hive/internal/ops/messages"
 	"github.com/colonyops/hive/internal/ops/sessions"
+	"github.com/colonyops/hive/internal/ops/tasks"
 )
 
 // CallOn runs op on the named server, or on the server of a "<server>:<id>"
@@ -47,9 +49,7 @@ func (h *Handlers) CallOn(ctx context.Context, op Op, server string, args map[st
 		args[ops.CallerField] = callerThere(caller)
 	}
 	call := daemonclient.EngineCall{Tool: info.ToolName, Args: args, Read: info.Effect == ops.EffectRead}
-	if wait, ok := args["wait"].(float64); ok && wait > 0 {
-		call.Wait = time.Duration(wait * float64(time.Second))
-	}
+	call.Wait = waitOf(args)
 	res, err := client.CallEngine(ctx, call)
 	if err != nil {
 		return nil, opError(err, fmt.Sprintf("%s on %s", info.ToolName, target))
@@ -57,7 +57,52 @@ func (h *Handlers) CallOn(ctx context.Context, op Op, server string, args map[st
 	if res.IsError {
 		return nil, refusedOn(res, target)
 	}
-	return op.Decode(res)
+	out, err := op.Decode(res)
+	if err != nil {
+		return nil, err
+	}
+	return restoreHidden(out, call), nil
+}
+
+// restoreHidden sets the answer fields that do not cross as JSON. Blocked
+// follows from the listed items: a task's open blockers are in blocker_ids,
+// and its open children are in the same list.
+func restoreHidden(out any, call daemonclient.EngineCall) any {
+	switch out := out.(type) {
+	case tasks.TaskListOut:
+		markBlocked(out.Tasks)
+		return out
+	case messages.MessageListOut:
+		out.Wait = call.Wait
+		return out
+	}
+	return out
+}
+
+func markBlocked(items []hc.Item) {
+	openChildren := map[string]bool{}
+	for _, item := range items {
+		if item.ParentID != "" && (item.Status == hc.StatusOpen || item.Status == hc.StatusInProgress) {
+			openChildren[item.ParentID] = true
+		}
+	}
+	for i := range items {
+		items[i].Blocked = len(items[i].BlockerIDs) > 0 || openChildren[items[i].ID]
+	}
+}
+
+// waitOf reads the seconds a call waits on purpose, as the CLI (int64) and
+// MCP (float64) decode them.
+func waitOf(args map[string]any) time.Duration {
+	switch wait := args["wait"].(type) {
+	case float64:
+		return time.Duration(wait * float64(time.Second))
+	case int64:
+		return time.Duration(wait) * time.Second
+	case int:
+		return time.Duration(wait) * time.Second
+	}
+	return 0
 }
 
 // routeServer is the server a call runs on: server, else the server of a
@@ -147,7 +192,7 @@ func decodeResult[Out any](res *mcp.CallToolResult) (any, error) {
 		return out, nil
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, ops.Errorf(ops.KindInternal, "decode the server's answer: %v", errors.Unwrap(err))
+		return nil, ops.Errorf(ops.KindInternal, "decode the server's answer: %v", err)
 	}
 	return out, nil
 }

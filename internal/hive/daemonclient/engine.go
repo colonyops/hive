@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/colonyops/hive/internal/hive/daemon/wire"
@@ -60,8 +62,16 @@ func (c *Client) CallEngine(ctx context.Context, call EngineCall) (*mcp.CallTool
 	if err != nil {
 		return nil, c.explainEngine(ctx, err, call, began)
 	}
-	defer func() { _ = cs.Close() }()
+	defer func() {
+		if err := cs.Close(); err != nil {
+			c.logger.Debug().Err(err).Str("tool", call.Tool).Msg("close the engine call's MCP session")
+		}
+	}()
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: call.Tool, Arguments: call.Args})
+	var rpcErr *jsonrpc.Error
+	if errors.As(err, &rpcErr) && rpcErr.Code == jsonrpc.CodeInvalidParams && strings.HasPrefix(rpcErr.Message, "unknown tool") {
+		return nil, &wire.UnknownToolError{Tool: call.Tool, DaemonVersion: info.Version, ClientVersion: c.clientVersion}
+	}
 	if err != nil {
 		return nil, c.explainEngine(ctx, err, call, began)
 	}

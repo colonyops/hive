@@ -89,6 +89,18 @@ func TestCallEngineRefusesADaemonOutsideTheCatalogRange(t *testing.T) {
 	}
 }
 
+func TestCallEngineNamesBothVersionsForAToolTheDaemonLacks(t *testing.T) {
+	t.Parallel()
+	path, _, _ := serveEngine(t, wire.CatalogVersion)
+
+	_, err := engineClient(path).CallEngine(t.Context(), EngineCall{Tool: "added_later"})
+
+	var unknown *wire.UnknownToolError
+	require.ErrorAs(t, err, &unknown)
+	assert.Contains(t, err.Error(), "v0.1.0")
+	assert.Contains(t, err.Error(), "v0.9.0")
+}
+
 func TestCallEngineNamesTheServerWhenItCannotReachIt(t *testing.T) {
 	t.Parallel()
 	client := New(Options{Dialer: UnixDialer(socketPath(t)), Logger: zerolog.Nop(), CheckProtocol: true, Name: "box"})

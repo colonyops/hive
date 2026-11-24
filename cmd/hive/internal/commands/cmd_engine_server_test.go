@@ -23,6 +23,14 @@ func TestEngineCommandsTakeServer(t *testing.T) {
 	}
 }
 
+func TestRemoteDriveCommandsStillRefuseSpaceFlags(t *testing.T) {
+	_, err := runRoot(t, driveRoot(testApp(t)), "drive", "--shared", "put", "--server", "nowhere", "a.md", "--body", "x")
+
+	require.Error(t, err)
+	assert.Equal(t, ops.KindInvalid, ErrorKind(err))
+	assert.Contains(t, err.Error(), "--shared")
+}
+
 func TestEngineCommandsReadHiveServer(t *testing.T) {
 	t.Setenv("HIVE_SERVER", "nowhere")
 

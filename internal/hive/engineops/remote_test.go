@@ -9,6 +9,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/hive/engineops"
 	"github.com/colonyops/hive/internal/ops"
+	"github.com/colonyops/hive/internal/ops/messages"
 	"github.com/colonyops/hive/internal/ops/tasks"
 )
 
@@ -98,4 +99,23 @@ func TestCallOnRunsALocalQualifiedCallerHere(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, f.local.ID, out.(hc.Item).SessionID)
+}
+
+func TestCallOnRestoresTheFieldsThatDoNotCrossAsJSON(t *testing.T) {
+	f := newFleetFixture(t)
+	epic := createEpicOn(t, f, "box", "global")
+
+	out, err := f.h.CallOn(t.Context(), opNamed(t, f.h, tasks.TaskList.Name), "box", map[string]any{"caller": "global", "repo": "acme/site"})
+	require.NoError(t, err)
+	listed := out.(tasks.TaskListOut)
+	require.Len(t, listed.Tasks, 2)
+	assert.Equal(t, epic.ID, listed.Tasks[0].ID)
+	assert.True(t, listed.Tasks[0].Blocked, "the epic has an open child")
+	assert.False(t, listed.Tasks[1].Blocked)
+
+	out, err = f.h.CallOn(t.Context(), opNamed(t, f.h, messages.MessageList.Name), "box", map[string]any{"caller": "global", "topic": "quiet", "wait": int64(1)})
+	require.NoError(t, err)
+	waited := out.(messages.MessageListOut)
+	assert.True(t, waited.TimedOut)
+	assert.Equal(t, "1s", waited.JSONLines()[0].(messages.TimeoutLine).Duration)
 }

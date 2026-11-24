@@ -20,7 +20,9 @@ const (
 // still calls. Raise CatalogVersion for a change that breaks an older peer's
 // engine calls, such as a renamed tool or a changed field meaning, and
 // MinCatalogVersion too when this client cannot work around it. A new tool or
-// field raises neither.
+// field raises neither: an older daemon answers a new tool with an
+// *UnknownToolError, and refuses a new input field as invalid, so a client
+// sends a new field only when its caller set it.
 //
 // Catalog 0 is a daemon that serves no engine operations. Its session calls
 // still work: the catalog range does not gate them.
@@ -68,6 +70,19 @@ func (e *CatalogError) Error() string {
 	}
 	return fmt.Sprintf("daemon hive %s serves operation catalog %d; this hive %s calls catalog %d to %d; install the same hive version on both machines",
 		orUnknown(e.DaemonVersion), e.DaemonCatalog, orUnknown(e.ClientVersion), MinCatalogVersion, CatalogVersion)
+}
+
+// UnknownToolError is an engine tool the daemon does not have, as an older
+// hive of the same catalog lacks a tool added since.
+type UnknownToolError struct {
+	Tool          string
+	DaemonVersion string
+	ClientVersion string
+}
+
+func (e *UnknownToolError) Error() string {
+	return fmt.Sprintf("daemon hive %s has no %s, which this hive %s calls; install the same hive version on both machines",
+		orUnknown(e.DaemonVersion), e.Tool, orUnknown(e.ClientVersion))
 }
 
 // CheckCatalog returns a *CatalogError for a daemon catalog outside

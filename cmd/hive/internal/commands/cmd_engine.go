@@ -231,11 +231,11 @@ func (cmd *EngineCmd) run(ctx context.Context, c *cli.Command, info ops.Info, ar
 	if remote {
 		dropLocalCaller(args)
 	}
-	if info.Toolset == driveops.Toolset && !remote {
+	if info.Toolset == driveops.Toolset {
 		if err := refuseSpaceFlags(c); err != nil {
 			return nil, err
 		}
-		if cmd.isChat(ctx, args) {
+		if !remote && cmd.isChat(ctx, args) {
 			return cmd.forward(ctx, info, args)
 		}
 	}
@@ -245,16 +245,12 @@ func (cmd *EngineCmd) run(ctx context.Context, c *cli.Command, info ops.Info, ar
 	return callEngineOn(ctx, cmd.app, info.Name, server, args, c.Root().ErrWriter)
 }
 
-// dropLocalCaller turns a caller that came from HIVE_AGENT_SESSION into the
-// working directory: that id names a session on this machine, and a path
-// crosses to a server as global.
+// dropLocalCaller makes a caller that came from HIVE_AGENT_SESSION global:
+// that id names a session or chat on this machine, not on a server.
 func dropLocalCaller(args map[string]any) {
 	env := strings.TrimSpace(os.Getenv(sessionsvc.AgentSessionEnv))
-	if caller, ok := args[ops.CallerField].(string); !ok || env == "" || caller != env {
-		return
-	}
-	if wd, err := os.Getwd(); err == nil {
-		args[ops.CallerField] = wd
+	if caller, ok := args[ops.CallerField].(string); ok && env != "" && caller == env {
+		args[ops.CallerField] = sessionsvc.CallerGlobal
 	}
 }
 
@@ -333,7 +329,7 @@ func (cmd *EngineCmd) print(ctx context.Context, c *cli.Command, info ops.Info, 
 	case tasks.TaskListOut:
 		renderColoredTree(w, out.Tasks)
 	case tasks.TaskGetOut:
-		cmd.renderTask(ctx, w, out)
+		cmd.renderTask(ctx, w, out, c.String(serverFlagName))
 	case hc.ContextBlock:
 		renderMarkdown(w, out.String())
 	default:
@@ -342,11 +338,23 @@ func (cmd *EngineCmd) print(ctx context.Context, c *cli.Command, info ops.Info, 
 	return nil
 }
 
-func (cmd *EngineCmd) renderTask(ctx context.Context, w io.Writer, out tasks.TaskGetOut) {
+// renderTask looks up the task's epic and blockers on the server that holds
+// the task.
+func (cmd *EngineCmd) renderTask(ctx context.Context, w io.Writer, out tasks.TaskGetOut, server string) {
 	item := out.Task
+	getItem := cmd.app.HC().GetItem
+	if server != "" && server != session.LocalServer {
+		getItem = func(ctx context.Context, id string) (hc.Item, error) {
+			got, err := callEngineOn(ctx, cmd.app, tasks.TaskGet.Name, server, map[string]any{"taskId": id}, io.Discard)
+			if err != nil {
+				return hc.Item{}, err
+			}
+			return got.(tasks.TaskGetOut).Task, nil
+		}
+	}
 	var epicTitle string
 	if item.EpicID != "" {
-		if epic, err := cmd.app.HC().GetItem(ctx, item.EpicID); err != nil {
+		if epic, err := getItem(ctx, item.EpicID); err != nil {
 			cmd.app.Logger.Debug().Err(err).Str("epic_id", item.EpicID).Msg("failed to resolve epic title")
 		} else {
 			epicTitle = epic.Title
@@ -354,7 +362,7 @@ func (cmd *EngineCmd) renderTask(ctx context.Context, w io.Writer, out tasks.Tas
 	}
 	var blockers []hc.Item
 	for _, id := range item.BlockerIDs {
-		b, err := cmd.app.HC().GetItem(ctx, id)
+		b, err := getItem(ctx, id)
 		if err != nil {
 			cmd.app.Logger.Debug().Err(err).Str("blocker_id", id).Msg("failed to fetch blocker item")
 			continue

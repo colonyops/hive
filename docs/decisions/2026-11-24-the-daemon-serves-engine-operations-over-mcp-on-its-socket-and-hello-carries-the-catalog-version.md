@@ -19,6 +19,7 @@ A server's daemon served only `SessionService` and its control calls, so `--serv
 
 ## Consequences
 
-- A new engine operation needs no wire change: a server of the same catalog serves it by name.
+- A new engine operation needs no wire change. An older hive of the same catalog lacks it and answers `unavailable` with both hive versions; a new input field that an older hive does not know is refused as `invalid`, and the CLI sends a field only when its flag is set.
+- A remote answer is decoded into the handler's own type. Fields that do not cross as JSON are set again on the client: `blocked` from the listed tasks, and a message wait from the request.
 - `hive mcp serve` and the desktop do not reach servers for these operations yet: their tools have no `server` field.
 - A remote caller that is a path acts as `global` on the server, so `task_next --assign` on a server needs `--caller <server>:<session id>`.

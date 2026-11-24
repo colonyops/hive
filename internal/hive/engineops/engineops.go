@@ -222,7 +222,8 @@ func opError(err error, what string) error {
 	case errors.Is(err, hc.ErrInvalidTree), errors.Is(err, hc.ErrInvalidItemType), errors.Is(err, hc.ErrInvalidStatus),
 		errors.Is(err, tagset.ErrInvalid), errors.Is(err, wire.ErrRemoteRequired):
 		kind = ops.KindInvalid
-	case errors.As(err, new(*wire.UnreachableError)), errors.As(err, new(*wire.CatalogError)):
+	case errors.As(err, new(*wire.UnreachableError)), errors.As(err, new(*wire.CatalogError)),
+		errors.As(err, new(*wire.IncompatibleError)), errors.As(err, new(*wire.UnknownToolError)):
 		kind = ops.KindUnavailable
 	}
 	return ops.Wrap(kind, err, "%s: %v", what, err)
