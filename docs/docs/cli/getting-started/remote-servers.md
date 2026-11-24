@@ -50,6 +50,20 @@ Every session command except `hive session info` takes `--server <name>` (or `HI
 - `--source` is refused, so the `copy:` files in the server's rules are not copied.
 - An attach runs `ssh -t <host> -- tmux attach-session`. Inside tmux, it opens a new window so you keep the current one.
 
+## Tasks, messages, todos and documents on a server
+
+The `hive hc`, `hive msg`, `hive todo` and `hive drive` commands that run catalog operations also take `--server <name>` (or `HIVE_SERVER`). They then run on the server's own hive.db and Drive:
+
+```sh
+hive hc next --server box <epic-id>
+hive drive list --server box reports
+```
+
+- A `--caller box:<session id>` picks the server too, and acts as that session there, as `hive hc next --assign` needs.
+- A caller that is a path on your machine, such as the working directory, acts as `global` on the server.
+- `hive msg sub`, `hive msg inbox` and the hand-written `hive drive` commands stay on this machine.
+- A server whose hive does not serve these commands answers `unavailable` with both hive versions. Install the same hive version on both machines.
+
 The TUI lists only the sessions on its own machine. To use it with a server's sessions, open a second terminal, run `ssh <host>`, and run `hive` there.
 
 ## Server states
