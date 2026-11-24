@@ -22,10 +22,11 @@ import (
 type versionedServer struct {
 	daemonv1connect.UnimplementedDaemonServiceHandler
 	protocol int32
+	catalog  int32
 }
 
 func (s versionedServer) Hello(context.Context, *connect.Request[daemonv1.HelloRequest]) (*connect.Response[daemonv1.HelloResponse], error) {
-	return connect.NewResponse(&daemonv1.HelloResponse{Version: "v0.1.0", ProtocolVersion: s.protocol}), nil
+	return connect.NewResponse(&daemonv1.HelloResponse{Version: "v0.1.0", ProtocolVersion: s.protocol, CatalogVersion: s.catalog}), nil
 }
 
 // serveBoth serves the daemon service and the session service on path.

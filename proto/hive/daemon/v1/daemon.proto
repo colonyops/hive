@@ -75,6 +75,9 @@ message HelloResponse {
   // protocol_version is the daemon's wire protocol. A client refuses a daemon
   // outside the range it supports. Daemons before the field send 0.
   int32 protocol_version = 6;
+  // catalog_version is the revision of the operation catalog the daemon
+  // serves at /mcp. Daemons that serve no engine operations send 0.
+  int32 catalog_version = 7;
 }
 
 message HealthRequest {}

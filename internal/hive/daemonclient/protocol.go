@@ -47,6 +47,7 @@ type protocolGate struct {
 	mu      sync.Mutex
 	checked bool
 	err     error
+	info    Info
 }
 
 func (g *protocolGate) reset() {
@@ -54,12 +55,23 @@ func (g *protocolGate) reset() {
 	defer g.mu.Unlock()
 	g.checked = false
 	g.err = nil
+	g.info = Info{}
 }
 
 func (g *protocolGate) verdict() (checked bool, err error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.checked, g.err
+}
+
+// checkedInfo is check, answering the Hello of the connection it checked.
+func (g *protocolGate) checkedInfo(ctx context.Context) (Info, error) {
+	if err := g.check(ctx); err != nil {
+		return Info{}, err
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.info, nil
 }
 
 func (g *protocolGate) check(ctx context.Context) error {
@@ -85,7 +97,7 @@ func (g *protocolGate) check(ctx context.Context) error {
 	}
 	err = wire.CheckProtocol(info.ProtocolVersion, info.Version, g.clientVersion)
 	g.mu.Lock()
-	g.checked, g.err = true, err
+	g.checked, g.err, g.info = true, err, info
 	g.mu.Unlock()
 	return err
 }

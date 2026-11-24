@@ -19,3 +19,16 @@ func TestCheckProtocol(t *testing.T) {
 		assert.Contains(t, err.Error(), "v0.68.0")
 	}
 }
+
+func TestCheckCatalog(t *testing.T) {
+	require.NoError(t, CheckCatalog(CatalogVersion, "v1", "v1"))
+
+	for _, catalog := range []int{0, MinCatalogVersion - 1, CatalogVersion + 1} {
+		err := CheckCatalog(catalog, "v0.60.0", "v0.68.0")
+		var refused *CatalogError
+		require.ErrorAs(t, err, &refused, "catalog %d", catalog)
+		assert.Contains(t, err.Error(), "v0.60.0")
+		assert.Contains(t, err.Error(), "v0.68.0")
+	}
+	assert.Contains(t, CheckCatalog(0, "v0.60.0", "v0.68.0").Error(), "serves no engine operations")
+}

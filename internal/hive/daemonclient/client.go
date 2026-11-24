@@ -108,6 +108,7 @@ type Client struct {
 
 	name          string
 	failureDetail func() string
+	clientVersion string
 
 	checkBeforeChange bool
 	readTimeout       time.Duration
@@ -133,6 +134,7 @@ func New(opts Options) *Client {
 
 		name:          opts.Name,
 		failureDetail: opts.FailureDetail,
+		clientVersion: opts.ClientVersion,
 
 		checkBeforeChange: opts.ReadTimeout > 0,
 		readTimeout:       opts.ReadTimeout,
@@ -247,6 +249,9 @@ type Info struct {
 	DataDir         string
 	StartedAt       time.Time
 	StatusAvailable bool
+	// CatalogVersion is the catalog the daemon serves at wire.EnginePath; 0
+	// serves none.
+	CatalogVersion int
 }
 
 // AgentCheck is where the daemon finds an agent profile's command. Path is
@@ -298,6 +303,7 @@ func (c *Client) helloOnce(ctx context.Context) (Info, error) {
 		StartedAt:       msg.GetStartedAt().AsTime().Local(),
 		StatusAvailable: msg.GetStatusAvailable(),
 		ProtocolVersion: int(msg.GetProtocolVersion()),
+		CatalogVersion:  int(msg.GetCatalogVersion()),
 	}, nil
 }
 
