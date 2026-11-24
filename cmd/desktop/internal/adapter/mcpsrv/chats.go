@@ -81,10 +81,15 @@ func (ctrl *ChatsController) Handler() http.Handler {
 		func(*http.Request) *mcp.Server { return srv },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
 	)
+	return guard(chatsServerName, ctrl.token, inner)
+}
+
+// guard refuses a request that does not present token as its bearer token.
+func guard(serverName, token string, inner http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		presented, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if !ok || subtle.ConstantTimeCompare([]byte(strings.TrimSpace(presented)), []byte(ctrl.token)) != 1 {
-			http.Error(w, "unauthenticated: hive-chats needs the bearer token from the desktop endpoint file; use hive mcp serve or hive dt", http.StatusUnauthorized)
+		if !ok || subtle.ConstantTimeCompare([]byte(strings.TrimSpace(presented)), []byte(token)) != 1 {
+			http.Error(w, "unauthenticated: "+serverName+" needs the bearer token from the desktop endpoint file; use hive mcp serve or hive dt", http.StatusUnauthorized)
 			return
 		}
 		inner.ServeHTTP(w, r)

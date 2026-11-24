@@ -16,7 +16,7 @@ func (ctrl *Controller) registerEngine(srv *mcp.Server, path string) {
 }
 
 func mountEngine(srv *mcp.Server, core *app.App, log zerolog.Logger, path string, mapErr func(error) error) {
-	for _, op := range engineops.New(log, core.Engine()).Ops() {
+	for _, op := range engineops.New(log, core.Engine(), engineops.WithFleet(core.HiveServers)).Ops() {
 		if op.Spec.Info().Toolset.MCPPath == path {
 			op.Mount(srv, mapErr)
 		}

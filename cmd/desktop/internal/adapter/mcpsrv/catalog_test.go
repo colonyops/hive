@@ -19,9 +19,12 @@ func TestServedToolsAreTheCatalog(t *testing.T) {
 	_, app := testSession(t)
 	_, drive := testDriveSession(t)
 	_, chats := testChatsSession(t)
+	_, sessions := testSessionsSession(t)
 
-	sessions := map[string]*mcp.ClientSession{mcpsrv.PathPrefix: app, mcpsrv.DrivePathPrefix: drive, mcpsrv.ChatsPathPrefix: chats}
-	for path, session := range sessions {
+	servers := map[string]*mcp.ClientSession{
+		mcpsrv.PathPrefix: app, mcpsrv.DrivePathPrefix: drive, mcpsrv.ChatsPathPrefix: chats, mcpsrv.SessionsPathPrefix: sessions,
+	}
+	for path, session := range servers {
 		t.Run(path, func(t *testing.T) {
 			var want []string
 			for _, op := range catalog.All() {
