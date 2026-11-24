@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   PruneSessions: vi.fn(),
   RecycleSession: vi.fn(),
   EditSession: vi.fn(),
+  RenameSession: vi.fn(),
   SessionDetail: vi.fn(),
   SessionRisk: vi.fn(),
 }))
@@ -142,6 +143,23 @@ describe('useSessionActions destructive operations', () => {
 
     expect(actions.confirmation.options.value).not.toBeNull()
     expect(actions.confirmation.error.value).toBe('sessions are unavailable')
+  })
+})
+
+describe('useSessionActions rename', () => {
+  it.each(['  ', ' review 81 '])('skips an empty or unchanged draft (%j)', async (draft) => {
+    const onChanged = vi.fn()
+    await useSessionActions({ onChanged }).renameSession(session, draft)
+    expect(mocks.RenameSession).not.toHaveBeenCalled()
+    expect(onChanged).not.toHaveBeenCalled()
+  })
+
+  it('shows the reason for a refused rename without reloading', async () => {
+    mocks.RenameSession.mockRejectedValueOnce(new Error('that name is already taken'))
+    const onChanged = vi.fn()
+    await useSessionActions({ onChanged }).renameSession(session, 'review 82')
+    expect(onChanged).not.toHaveBeenCalled()
+    expect(useToasts().toasts.value[0]?.message).toBe('that name is already taken')
   })
 })
 

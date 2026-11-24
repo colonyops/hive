@@ -191,6 +191,12 @@ func (s *SessionService) DismissFailedSession(ctx context.Context) error {
 	return s.sessions.DismissFailedSession(ctx)
 }
 
+// RenameSession changes the name and terminal target without changing tags.
+func (s *SessionService) RenameSession(ctx context.Context, id, name string) error {
+	_, err := s.sessions.RenameSession(ctx, id, name)
+	return err
+}
+
 // EditSession renames a session and replaces its tags, and returns its new
 // summary. The slug in it is the new tmux target: renaming re-slugs, so an
 // attached caller has to re-attach under the name that comes back.

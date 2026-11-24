@@ -6,6 +6,7 @@ import {
   PruneSessions,
   EditSession,
   RecycleSession,
+  RenameSession,
   SessionDetail,
   SessionRisk,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
@@ -131,6 +132,17 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     }
   }
 
+  async function renameSession(session: SessionRow, draft: string): Promise<void> {
+    const name = draft.trim()
+    if (!name || name === session.name) return
+    try {
+      await RenameSession(session.id, name)
+      options.onChanged?.()
+    } catch (e) {
+      showToast(message(e, 'Could not rename that session.'), { severity: 'error' })
+    }
+  }
+
   async function requestDestructive(session: SessionRow, operation: 'delete' | 'recycle'): Promise<void> {
     let risk: SessionRiskView
     try {
@@ -210,6 +222,7 @@ export function useSessionActions(options: SessionActionOptions = {}) {
     requestEdit,
     cancelEdit,
     submitEdit,
+    renameSession,
     requestDelete,
     requestRecycle,
     requestPrune,

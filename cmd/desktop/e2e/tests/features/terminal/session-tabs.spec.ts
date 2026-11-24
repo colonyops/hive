@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test'
 import { screenshotPath } from '../../../fixtures/paths.js'
 import { expect, tag, test } from '../../../fixtures/test.js'
-import { dismissSizeBanner, mockTerminal, windowState } from '../../../fixtures/terminal.js'
+import { dismissSizeBanner, mockTerminal, terminalSession, windowState } from '../../../fixtures/terminal.js'
 import { bindingID } from '../../../fixtures/wails.js'
 
 // perf/session-tabs-scrollback.perf.ts checks what a drag does to a real terminal's scrollback.
@@ -70,6 +70,35 @@ test.describe('session tabs', { tag: [tag.terminal] }, () => {
   // The tab row's FLIP slides a moved tab for 150ms, and a drag aimed at a sliding
   // tab lands in the wrong gap.
   test.use({ contextOptions: { reducedMotion: 'reduce' } })
+
+  test('renames a session in place with a double-click', async ({ page }) => {
+    let session = terminalSession('review', 'Review')
+    await mockTerminal(page, { sessions: [session], windows: WINDOWS })
+    const listID = bindingID('sessionservice', 'ListSessions')
+    const renameID = bindingID('sessionservice', 'RenameSession')
+    await page.route('**/wails/runtime', async (route) => {
+      const request = route.request().postDataJSON()?.args
+      if (request?.methodID === listID) return route.fulfill({ json: [session] })
+      if (request?.methodID === renameID) {
+        expect(request.args).toEqual(['review', 'Updated review'])
+        session = { ...session, name: 'Updated review', slug: 'updated-review' }
+        return route.fulfill({ json: null })
+      }
+      return route.fallback()
+    })
+    await page.goto('/#/terminal/review')
+
+    await page.getByTestId('terminal-session-name').dblclick()
+    const input = page.getByTestId('terminal-session-rename-input')
+    await expect(input).toBeFocused()
+    await expect(input).toHaveValue('Review')
+    expect(await input.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd])).toEqual([0, 6])
+    await input.fill('Updated review')
+    await input.press('Enter')
+
+    await expect(page.getByTestId('terminal-session-name')).toHaveText('Updated review')
+    await expect(page).toHaveURL((url) => url.hash === '#/terminal/updated-review?window=@1')
+  })
 
   test('opens each tab once, and restores a session after another', { tag: [tag.chromiumOnly] }, async ({ page, browserName }) => {
     await fixture(page)

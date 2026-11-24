@@ -47,6 +47,8 @@ A setup command that exits successfully does not stop healthy panes. If every co
 
 For repository sessions, the optional status bar shows the branch, changes against the default branch including uncommitted work, whether there is uncommitted work, and unpushed commits. Select the line counts to [review the changes](#changes). Connected GitHub, Gitea, and Forgejo repositories also show pull request, review, and check state. Use the status bar to open the checkout in your editor or file manager. Actions that target `statusbar` add buttons of their own; see [Where actions run](../inbox/actions.md#where-actions-run).
 
+Double-click a session name in the sidebar to rename it. Press <kbd>Enter</kbd> or click away to save, or press <kbd>Esc</kbd> to cancel. The checkout stays in place, and any open terminal reconnects under the new name.
+
 ### Tags
 
 Tags are short words you put on a session, such as `auto` or `backend`. A session row with tags shows a tag icon; hover it to read them. The status bar above the terminal lists the attached session's tags. **Edit session…** in the session menu or the command palette changes a session's name and tags in one dialog; clicking the tags in the status bar opens it on the tags. Press <kbd>Enter</kbd> or type a comma to add a tag, and <kbd>Backspace</kbd> to remove the last one. Tags already used on other sessions are suggested.

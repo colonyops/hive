@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, proxyRefs, ref, toRef, watch } from 'vue'
+import { computed, nextTick, proxyRefs, ref, toRef, useTemplateRef, watch } from 'vue'
 import { useNow } from '@vueuse/core'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconCircleAlert from '~icons/lucide/circle-alert'
@@ -41,7 +41,7 @@ import { useSelectionRail } from '@hive/ui/composables/useSelectionRail'
 import type { OrderDropTarget } from '../../lib/listOrder'
 import { closeTab, moveTabBeside, focusedTab } from '../../lib/panelLayout'
 import { focusedWindow, windowIdOfTab, windowOrder } from '../../lib/windowTabs'
-import { terminalTreeFocused } from '../../lib/terminalTree'
+import { paneMayAutoFocus, terminalTreeFocused } from '../../lib/terminalTree'
 import { usePanelLayouts } from '../../stores/usePanelLayouts'
 import { sessionAgeDays, useTerminalSessionAge } from '../../stores/useTerminalSessionAge'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
@@ -59,6 +59,33 @@ const props = defineProps<{ active: boolean }>()
 const { monochrome: monochromeAgentIcons } = useTerminalAgentIcons()
 const { pool, tree, view, viewMenus, nav, attach, ops, rename, sessions, panels } = useTerminalModeContext()
 const applets = useApplets()
+
+const sessionRename = ref<{ id: string; name: string } | null>(null)
+const sessionRenameInputs = useTemplateRef<HTMLInputElement[]>('sessionRenameInput')
+
+async function startSessionRename(row: TerminalSessionRow): Promise<void> {
+  if (!tree.isHiveSession(row) || row.offline) return
+  paneMayAutoFocus.value = false
+  sessionRename.value = { id: row.id, name: row.name }
+  await nextTick()
+  const input = sessionRenameInputs.value?.[0]
+  input?.focus()
+  input?.select()
+}
+
+function commitSessionRename(row: TerminalSessionRow): void {
+  const draft = sessionRename.value
+  if (draft?.id !== row.id) return
+  sessionRename.value = null
+  if (!row.offline) void sessions.renameSession(row, draft.name)
+}
+
+watch(
+  () => props.active,
+  (active) => {
+    if (!active) sessionRename.value = null
+  },
+)
 
 function viewRowLabel(tab: PanelTab): string {
   return applets.tabTitle(tab) ?? viewOfTab(tab)?.label ?? tab.id
@@ -502,10 +529,29 @@ function foldedNeedsApproval(row: TerminalSessionRow): boolean {
                     @keydown.space.self.prevent="!row.offline && nav.enterSession(row)"
                     @contextmenu.prevent="!row.offline && menus.toggleRow(row, $event)"
                   >
+                    <input
+                      v-if="sessionRename && sessionRename.id === row.id && !row.offline"
+                      ref="sessionRenameInput"
+                      v-model="sessionRename.name"
+                      class="min-w-0 flex-1 bg-transparent text-body text-text outline-none"
+                      aria-label="Session name"
+                      data-testid="terminal-session-rename-input"
+                      autocapitalize="off"
+                      autocorrect="off"
+                      spellcheck="false"
+                      @click.stop
+                      @dblclick.stop
+                      @keydown.enter.stop.prevent="commitSessionRename(row)"
+                      @keydown.esc.stop.prevent="sessionRename = null"
+                      @blur="commitSessionRename(row)"
+                    />
                     <span
+                      v-else
                       class="min-w-0 truncate text-body"
                       :class="{ 'text-text-3': tree.rowIdle(row) }"
                       :title="row.repo ? `${row.slug}\n${row.repo}` : row.slug"
+                      data-testid="terminal-session-name"
+                      @dblclick.stop="startSessionRename(row)"
                       >{{ row.name }}</span
                     >
                     <BaseIconBadge
@@ -522,7 +568,7 @@ function foldedNeedsApproval(row: TerminalSessionRow): boolean {
                       <component :is="row.offline ? IconCircleAlert : IconServer" class="size-3" aria-hidden="true" />
                     </BaseIconBadge>
                     <SessionTagsIndicator v-if="group.kind === 'repo'" :tags="row.tags" />
-                    <span class="flex-1" />
+                    <span v-if="sessionRename?.id !== row.id || row.offline" class="flex-1" />
                     <BaseBadge
                       v-if="sessionAgeBadges[row.id]"
                       tone="accent"

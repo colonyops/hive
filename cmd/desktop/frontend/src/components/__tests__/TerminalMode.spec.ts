@@ -52,6 +52,7 @@ const mocks = vi.hoisted(() => ({
   RevealSession: vi.fn(),
   SessionRisk: vi.fn(),
   EditSession: vi.fn(),
+  RenameSession: vi.fn(),
   DeleteSession: vi.fn(),
   RecycleSession: vi.fn(),
   PruneSessions: vi.fn(),
@@ -135,6 +136,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   RevealSession: mocks.RevealSession,
   SessionRisk: mocks.SessionRisk,
   EditSession: mocks.EditSession,
+  RenameSession: mocks.RenameSession,
   DeleteSession: mocks.DeleteSession,
   RecycleSession: mocks.RecycleSession,
   PruneSessions: mocks.PruneSessions,
@@ -742,6 +744,8 @@ describe('TerminalMode', () => {
     if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
     const row = wrapper.get('[data-slug="box:remote-work"]')
     expect(row.attributes('aria-disabled')).toBe('true')
+    await row.get('[data-testid="terminal-session-name"]').trigger('dblclick')
+    expect(row.find('[data-testid="terminal-session-rename-input"]').exists()).toBe(false)
     expect(row.find('[data-testid="terminal-session-trailing"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="terminal-server-status"]').attributes('aria-label')).toContain(
       'box offline · 1 session',
@@ -2474,6 +2478,57 @@ describe('TerminalMode', () => {
     wrapper.unmount()
   })
 
+  it.each(['keydown.enter', 'blur'])('renames only the session name inline on %s', async (event) => {
+    const { wrapper, router } = await mountAvailable()
+    const row = wrapper.get('[data-slug="hive-fix-parser"][data-testid="terminal-session-row"]')
+    const name = row.get('[data-testid="terminal-session-name"]')
+    await name.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.params.slug).toBe('hive-fix-parser')
+    expect(row.find('[data-testid="terminal-session-rename-input"]').exists()).toBe(false)
+
+    await name.trigger('dblclick')
+    const input = row.get<HTMLInputElement>('[data-testid="terminal-session-rename-input"]')
+    expect(input.element.value).toBe('fix the parser')
+    await input.setValue('  parse it  ')
+    mocks.RenameSession.mockImplementationOnce(() => {
+      mocks.ListSessions.mockResolvedValue([
+        {
+          id: '1',
+          name: 'parse it',
+          slug: 'parse-it',
+          repo: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
+          state: 'active',
+        },
+      ])
+    })
+    await input.trigger(event)
+    if (event !== 'blur') await input.trigger('blur')
+    await flushPromises()
+
+    expect(mocks.RenameSession).toHaveBeenCalledExactlyOnceWith('1', 'parse it')
+    expect(mocks.EditSession).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.params.slug).toBe('parse-it')
+    expect(wrapper.get('[data-slug="parse-it"] [data-testid="terminal-session-name"]').text()).toBe('parse it')
+    expect(wrapper.find('[data-testid="terminal-session-rename-input"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('discards a session rename on Escape even if the field loses focus', async () => {
+    const { wrapper } = await mountAvailable()
+    const row = wrapper.get('[data-slug="hive-fix-parser"][data-testid="terminal-session-row"]')
+    await row.get('[data-testid="terminal-session-name"]').trigger('dblclick')
+    const input = row.get('[data-testid="terminal-session-rename-input"]')
+    await input.setValue('not saved')
+    await input.trigger('keydown.esc')
+    await input.trigger('blur')
+
+    expect(mocks.RenameSession).not.toHaveBeenCalled()
+    expect(row.get('[data-testid="terminal-session-name"]').text()).toBe('fix the parser')
+    wrapper.unmount()
+  })
+
   it('re-attaches under the new slug when the attached session is renamed', async () => {
     mocks.EditSession.mockResolvedValue({
       id: '1',
@@ -3118,6 +3173,13 @@ describe('TerminalMode', () => {
       ])
       expect(sections[0].text()).toContain('Chats')
       expect(chatRows(wrapper).map((row) => row.text())).toContain('api-refactor')
+      wrapper.unmount()
+    })
+
+    it('does not rename a pinned chat from its Code row', async () => {
+      const { wrapper } = await mountWithPinnedChat()
+      await chatRows(wrapper)[0].get('[data-testid="terminal-session-name"]').trigger('dblclick')
+      expect(wrapper.find('[data-testid="terminal-session-rename-input"]').exists()).toBe(false)
       wrapper.unmount()
     })
 

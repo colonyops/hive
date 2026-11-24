@@ -128,6 +128,13 @@ export function RecycleSession(id: string): $CancellablePromise<number> {
 }
 
 /**
+ * RenameSession changes the name and terminal target without changing tags.
+ */
+export function RenameSession(id: string, name: string): $CancellablePromise<void> {
+    return $Call.ByID(1421514279, id, name);
+}
+
+/**
  * RenderTerminalClipboardAction returns the text a clipboard action renders
  * for a terminal target. The frontend writes it through the native Wails
  * clipboard; the core produces the text and never touches the clipboard.
