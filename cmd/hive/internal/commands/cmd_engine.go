@@ -15,10 +15,12 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/opscli"
 	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/hive/engineops"
+	"github.com/colonyops/hive/internal/hive/servers"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/ops/catalog"
 	driveops "github.com/colonyops/hive/internal/ops/drive"
+	"github.com/colonyops/hive/internal/ops/sessions"
 	"github.com/colonyops/hive/internal/ops/tasks"
 )
 
@@ -30,6 +32,7 @@ var engineNamespaces = map[string][]string{
 	"topic":    {"msg", "topic"},
 	"todo":     {"todo"},
 	"document": {"drive"},
+	"session":  {"session"},
 }
 
 var engineAliases = map[string][]string{
@@ -38,6 +41,18 @@ var engineAliases = map[string][]string{
 	"task.clear":     {"prune"},
 	"message.create": {"pub"},
 	"todo.create":    {"add"},
+	"session.list":   {"ls"},
+	"session.get":    {"show"},
+}
+
+// jsonFlag is the switch the hand-written session commands had. The
+// generated ones keep it hidden: it forces JSON at a terminal.
+const jsonFlag = "json"
+
+// legacyAliases keep the short spellings of the hand-written session create
+// flags, by op name and field flag, so a script that used them still runs.
+var legacyAliases = map[string]map[string][]string{
+	"session.create": {"remote": {"r"}, "source": {"s"}, "agent": {"a"}, "background": {"bg"}},
 }
 
 func enginePath(info ops.Info) []string {
@@ -73,6 +88,7 @@ func (cmd *EngineCmd) Register(root *cli.Command) *cli.Command {
 		Print:    cmd.print,
 		Path:     enginePath,
 		Aliases:  engineAliases,
+		JoinRest: map[string]bool{sessions.SessionCreate.Name: true},
 		Caller:   desktopCaller,
 		Reserved: reserved,
 	})
@@ -90,7 +106,54 @@ func (cmd *EngineCmd) Register(root *cli.Command) *cli.Command {
 			existing.Flags = append(existing.Flags, engineCallerFlag())
 		}
 	}
+	keepSessionSpellings(root)
 	return root
+}
+
+// keepSessionSpellings gives the generated session commands the spellings of
+// the hand-written ones they replaced: a hidden --json, HIVE_SERVER for
+// --server, the short create flags, and the hidden root hive ls.
+func keepSessionSpellings(root *cli.Command) {
+	for _, op := range catalog.All() {
+		info := op.Info()
+		if info.Toolset != sessions.Toolset && info.Toolset != sessions.ControlToolset {
+			continue
+		}
+		c := lookupPath(root, enginePath(info))
+		if c == nil {
+			panic(fmt.Sprintf("no command for %s", info.Name))
+		}
+		c.Flags = append(c.Flags, &cli.BoolFlag{Name: jsonFlag, Usage: "write JSON even at a terminal", Hidden: true})
+		for _, f := range c.Flags {
+			switch f := f.(type) {
+			case *cli.StringFlag:
+				if f.Name == "server" {
+					f.Sources = cli.EnvVars("HIVE_SERVER")
+				}
+				f.Aliases = append(f.Aliases, legacyAliases[info.Name][f.Name]...)
+			case *cli.BoolFlag:
+				f.Aliases = append(f.Aliases, legacyAliases[info.Name][f.Name]...)
+			}
+		}
+	}
+	list := lookupPath(root, enginePath(sessions.SessionList.Info()))
+	root.Commands = append(root.Commands, &cli.Command{
+		Name:     "ls",
+		Usage:    "List all sessions (alias for 'session list')",
+		Hidden:   true,
+		Flags:    list.Flags,
+		Action:   list.Action,
+		Metadata: list.Metadata,
+	})
+}
+
+func lookupPath(c *cli.Command, path []string) *cli.Command {
+	for _, name := range path {
+		if c = find(c.Commands, name); c == nil {
+			return nil
+		}
+	}
+	return c
 }
 
 func markJSON(c *cli.Command) {
@@ -135,7 +198,28 @@ func (cmd *EngineCmd) run(ctx context.Context, c *cli.Command, info ops.Info, ar
 			return cmd.forward(ctx, info, args)
 		}
 	}
-	return callEngine(ctx, cmd.app, info.Name, args)
+	if info.Name == sessions.SessionCreate.Name {
+		return cmd.createSession(ctx, c, args)
+	}
+	return callEngine(ctx, cmd.app, info.Name, args, c.Root().ErrWriter)
+}
+
+// createSession runs hive session create like hive new: from the working
+// directory, and attached afterwards unless --background is set.
+func (cmd *EngineCmd) createSession(ctx context.Context, c *cli.Command, args map[string]any) (any, error) {
+	if explicit, _ := args[ops.CallerField].(string); !c.IsSet(callerFlag) || explicit == os.Getenv("HIVE_AGENT_SESSION") {
+		delete(args, ops.CallerField)
+	}
+	created, err := createSession(ctx, cmd.app, args, c.Root().ErrWriter)
+	if err != nil {
+		return nil, err
+	}
+	if background, _ := args["background"].(bool); !background {
+		if err := attachCreated(ctx, cmd.app, created, c.Root().ErrWriter); err != nil {
+			return nil, err
+		}
+	}
+	return created, nil
 }
 
 // refuseSpaceFlags rejects the hive drive flags that pick a space by name. A
@@ -183,8 +267,11 @@ func (cmd *EngineCmd) forward(ctx context.Context, info ops.Info, args map[strin
 
 // print renders a task list, a task or an epic context for a person at a
 // terminal, and writes JSON Lines everywhere else.
-func (cmd *EngineCmd) print(ctx context.Context, c *cli.Command, _ ops.Info, out any) error {
+func (cmd *EngineCmd) print(ctx context.Context, c *cli.Command, info ops.Info, out any) error {
 	w := c.Root().Writer
+	if info.Toolset == sessions.Toolset || info.Toolset == sessions.ControlToolset {
+		return cmd.printSessionOp(c, info, out, isTerminal(w) && !c.Bool(jsonFlag))
+	}
 	if !isTerminal(w) {
 		return opscli.Print(w, out)
 	}
@@ -228,9 +315,12 @@ func isTerminal(w io.Writer) bool {
 	return ok && term.IsTerminal(int(f.Fd())) //nolint:gosec // a file descriptor fits in int
 }
 
-// callEngine runs the named engine operation in this process.
-func callEngine(ctx context.Context, a *app.App, name string, args map[string]any) (any, error) {
-	for _, op := range engineops.New(a.Logger, a.Engine).Ops() {
+// callEngine runs the named engine operation in this process. Session
+// operations reach every server through a.Servers, and write their progress
+// to progress.
+func callEngine(ctx context.Context, a *app.App, name string, args map[string]any, progress io.Writer) (any, error) {
+	fleet := engineops.WithFleet(func() *servers.Fleet { return a.Servers })
+	for _, op := range engineops.New(a.Logger, a.Engine, fleet, engineops.WithProgress(progress)).Ops() {
 		if op.Spec.Info().Name == name {
 			return op.Call(ctx, args)
 		}

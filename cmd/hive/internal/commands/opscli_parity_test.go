@@ -102,10 +102,21 @@ func TestEngineCommandPaths(t *testing.T) {
 		{"drive", "put"},
 		{"drive", "move"},
 		{"drive", "delete"},
+		{"session", "list"},
+		{"session", "get"},
+		{"session", "update"},
+		{"session", "tags", "update"},
+		{"session", "delete"},
+		{"session", "recycle"},
+		{"session", "create"},
+		{"session", "start"},
+		{"session", "info"},
+		{"session", "attach"},
+		{"ls"},
 	} {
 		assert.NotNil(t, lookup(root, path), "no hive %v", path)
 	}
-	for _, name := range []string{"task", "task-comment", "task-context", "message", "message-read", "topic"} {
+	for _, name := range []string{"task", "task-comment", "task-context", "message", "message-read", "topic", "session-tags"} {
 		assert.Nil(t, find(root.Commands, name), "hive %s is a root command", name)
 	}
 }

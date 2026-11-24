@@ -167,11 +167,12 @@ func TestInputNullIsInvalid(t *testing.T) {
 
 func TestCrossFieldRulesRunBeforeTheCall(t *testing.T) {
 	called := false
-	groups, err := opscli.DesktopCommands([]ops.Op{sessions.SessionTagsUpdate},
-		func(context.Context, *cli.Command, string, string, map[string]any) (any, error) {
+	groups, err := opscli.EngineCommands([]ops.Op{sessions.SessionTagsUpdate}, opscli.Engine{
+		Run: func(context.Context, *cli.Command, ops.Info, map[string]any) (any, error) {
 			called = true
 			return nil, nil
-		}, nil)
+		},
+	})
 	require.NoError(t, err)
 	root := &cli.Command{Name: "hive", Writer: &bytes.Buffer{}, Commands: groups}
 	err = root.Run(context.Background(), []string{"hive", "session", "tags", "update", "s1"})

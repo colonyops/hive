@@ -54,7 +54,11 @@ func WithFleet(fleet func() *servers.Fleet) Option {
 
 // WithProgress receives the progress lines of a session create or recycle.
 func WithProgress(w io.Writer) Option {
-	return func(h *Handlers) { h.progress = w }
+	return func(h *Handlers) {
+		if w != nil {
+			h.progress = w
+		}
+	}
 }
 
 func New(log zerolog.Logger, engine *hive.Engine, opts ...Option) *Handlers {

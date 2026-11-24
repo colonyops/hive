@@ -39,7 +39,7 @@ type Run func(ctx context.Context, c *cli.Command, info ops.Info, args map[strin
 // name from the nearest command first, so a field flag with a reserved name
 // would hide the parent's flag from the command.
 func DesktopCommands(list []ops.Op, call Call, caller Caller, reserved ...string) ([]*cli.Command, error) {
-	return commands(list, ops.OwnerDesktop, Path, nil, func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) error {
+	return commands(list, ops.OwnerDesktop, Path, nil, nil, func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) error {
 		out, err := call(ctx, c, info.Toolset.MCPPath, info.ToolName, args)
 		if err != nil {
 			return err
@@ -56,7 +56,10 @@ type Engine struct {
 	// Path places an op's command below the root. Nil is Path.
 	Path func(ops.Info) []string
 	// Aliases are other names for an op's command, by op name.
-	Aliases  map[string][]string
+	Aliases map[string][]string
+	// JoinRest names the ops whose last positional string argument takes the
+	// rest of the words, joined by spaces, as in hive session create fix the bug.
+	JoinRest map[string]bool
 	Caller   Caller
 	Reserved []string
 }
@@ -70,7 +73,7 @@ func EngineCommands(list []ops.Op, e Engine) ([]*cli.Command, error) {
 	if print == nil {
 		print = func(_ context.Context, c *cli.Command, _ ops.Info, out any) error { return Print(c.Root().Writer, out) }
 	}
-	return commands(list, ops.OwnerEngine, path, e.Aliases, func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) error {
+	return commands(list, ops.OwnerEngine, path, e.Aliases, e.JoinRest, func(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) error {
 		out, err := e.Run(ctx, c, info, args)
 		if err != nil {
 			return err
@@ -98,7 +101,7 @@ func Print(w io.Writer, out any) error {
 	return nil
 }
 
-func commands(list []ops.Op, owner ops.Owner, path func(ops.Info) []string, aliases map[string][]string, run func(context.Context, *cli.Command, ops.Info, map[string]any) error, caller Caller, reserved []string) ([]*cli.Command, error) {
+func commands(list []ops.Op, owner ops.Owner, path func(ops.Info) []string, aliases map[string][]string, joinRest map[string]bool, run func(context.Context, *cli.Command, ops.Info, map[string]any) error, caller Caller, reserved []string) ([]*cli.Command, error) {
 	root := &cli.Command{}
 	for _, op := range list {
 		info := op.Info()
@@ -107,7 +110,7 @@ func commands(list []ops.Op, owner ops.Owner, path func(ops.Info) []string, alia
 		}
 		cmd, err := command(op, func(ctx context.Context, c *cli.Command, args map[string]any) error {
 			return run(ctx, c, info, args)
-		}, caller, reserved)
+		}, caller, reserved, joinRest[info.Name])
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", info.Name, err)
 		}
@@ -158,7 +161,7 @@ func group(parent *cli.Command, name, usage string) (*cli.Command, error) {
 
 const inputFlag = "input"
 
-func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) error, caller Caller, reserved []string) (*cli.Command, error) {
+func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) error, caller Caller, reserved []string, joinRest bool) (*cli.Command, error) {
 	info := op.Info()
 	fields, err := ops.Fields(op)
 	if err != nil {
@@ -199,6 +202,10 @@ func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) 
 	}
 
 	variadic := len(positional) > 0 && isStrings(positional[len(positional)-1])
+	if joinRest && (len(positional) == 0 || positional[len(positional)-1].Kind() != reflect.String) {
+		return nil, fmt.Errorf("JoinRest needs a last positional string argument")
+	}
+	rest := variadic || joinRest
 	usage := make([]string, len(positional))
 	for i, f := range positional {
 		if f.Required {
@@ -207,7 +214,7 @@ func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) 
 			usage[i] = "[" + Kebab(f.Name) + "]"
 		}
 	}
-	if variadic {
+	if rest {
 		usage[len(usage)-1] += "..."
 	}
 	description := info.Guidance
@@ -226,12 +233,16 @@ func command(op ops.Op, run func(context.Context, *cli.Command, map[string]any) 
 			if err != nil {
 				return err
 			}
-			if c.Args().Len() > len(positional) && !variadic {
+			if c.Args().Len() > len(positional) && !rest {
 				return ops.Errorf(ops.KindInvalid, "%s takes at most %d argument(s): %s", info.Name, len(positional), strings.Join(usage, " "))
 			}
 			for i, f := range positional[:min(c.Args().Len(), len(positional))] {
 				if variadic && i == len(positional)-1 {
 					args[f.Name] = c.Args().Slice()[i:]
+					break
+				}
+				if joinRest && i == len(positional)-1 {
+					args[f.Name] = strings.Join(c.Args().Slice()[i:], " ")
 					break
 				}
 				v, err := parseArg(f, c.Args().Get(i))

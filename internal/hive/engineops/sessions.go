@@ -334,13 +334,13 @@ func (h *Handlers) SessionCreate(ctx context.Context, in sessions.SessionCreateI
 	if err := h.checkAgent(ctx, api, server, in.Agent); err != nil {
 		return sessions.SessionOut{}, err
 	}
-	if in.Source != "" && !filepath.IsAbs(in.Source) {
-		return sessions.SessionOut{}, ops.Errorf(ops.KindInvalid, "source %q is not an absolute path", in.Source)
-	}
 	// A server cannot read a path on this machine, so a create there gets no
 	// source and its copy: rules copy nothing.
 	if in.Source != "" && onServer {
-		return sessions.SessionOut{}, ops.Errorf(ops.KindInvalid, "source names a directory on this machine, which server %s cannot read", server)
+		return sessions.SessionOut{}, ops.Errorf(ops.KindInvalid, "--source names a directory on this machine, which server %s cannot read", server)
+	}
+	if in.Source != "" && !filepath.IsAbs(in.Source) {
+		return sessions.SessionOut{}, ops.Errorf(ops.KindInvalid, "source %q is not an absolute path", in.Source)
 	}
 	dir, err := h.callerDir(ctx, in.Caller)
 	if err != nil {
