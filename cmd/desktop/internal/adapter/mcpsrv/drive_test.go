@@ -2,6 +2,7 @@ package mcpsrv_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
+	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 )
 
 type documentView struct {
@@ -97,6 +99,13 @@ func TestWriteDocumentRefusals(t *testing.T) {
 
 	text = callErr(t, session, "document_put", map[string]any{"caller": id, "path": "notes.txt", "body": "x"})
 	assert.Contains(t, text, "invalid")
+
+	// The hive CLI runs the same handler with the desktop closed; its
+	// TestDrivePutRefusesTheSameOversizedBody checks the same text.
+	text = callErr(t, session, "document_put", map[string]any{
+		"caller": id, "path": "big.md", "body": strings.Repeat("x", drivesvc.MaxDocumentBytes+1),
+	})
+	assert.Equal(t, "invalid: document is too large (2097152 bytes max)", text)
 }
 
 func TestListDocuments(t *testing.T) {

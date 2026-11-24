@@ -114,13 +114,6 @@ func (s *Service) callerAtPath(ctx context.Context, path string) (Caller, error)
 	return Caller{Kind: CallerKindSession, Session: sess}, nil
 }
 
-// LooksLikeChatID reports whether value has the form of a chat id. It needs no
-// store, for a program that runs without the engine and has no sessions to
-// prefer.
-func LooksLikeChatID(value string) bool {
-	return isChatUUID(value) || isLegacyChatAlias(value)
-}
-
 func isChatUUID(value string) bool {
 	_, err := uuid.Parse(value)
 	return err == nil

@@ -387,6 +387,8 @@ func TestMountedToolsAnswer(t *testing.T) {
 	raw, _ := json.Marshal(res.StructuredContent)
 	require.NoError(t, json.Unmarshal(raw, &created))
 	epicID := created.Tasks[0].ID
+	res = call("document_put", map[string]any{"caller": "global", "path": "a.md", "body": "x"})
+	require.False(t, res.IsError, "%v", res.Content)
 
 	for tool, args := range map[string]map[string]any{
 		"task_next":        {"caller": f.sess.ID, "epicId": epicID, "assign": true},
@@ -398,6 +400,8 @@ func TestMountedToolsAnswer(t *testing.T) {
 		"todo_create":      {"caller": f.sess.ID, "title": "x"},
 		"todo_list":        {},
 		"task_clear":       {"caller": f.sess.ID, "dryRun": true},
+		"document_list":    {"caller": "global", "detail": "tree"},
+		"document_get":     {"caller": "global", "path": "a.md"},
 	} {
 		res := call(tool, args)
 		assert.False(t, res.IsError, "%s: %v", tool, res.Content)

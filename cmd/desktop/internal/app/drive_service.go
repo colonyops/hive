@@ -18,7 +18,6 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/htmldoc"
 	"github.com/colonyops/hive/internal/domain/drive"
-	hivesession "github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -34,24 +33,37 @@ type chatSessionResolver interface {
 	Get(ctx context.Context, id string) (stores.AgentSession, error)
 }
 
+// chatRecords gives the engine the chats it cannot look up itself, so a
+// chat's Drive calls file under its workspace.
+type chatRecords struct{ sessions chatSessionResolver }
+
+func (c chatRecords) Chat(ctx context.Context, id string) (drivesvc.Chat, error) {
+	rec, err := c.sessions.Get(ctx, id)
+	if stores.IsNotFound(err) {
+		return drivesvc.Chat{}, ops.Errorf(ops.KindNotFound, "session %q not found", id)
+	}
+	if err != nil {
+		return drivesvc.Chat{}, err
+	}
+	return drivesvc.Chat{ID: rec.ID, Workspace: rec.Workspace}, nil
+}
+
 // DriveService is the desktop's door onto Hive Drive. Agents read and write
 // documents through the hive-drive MCP tools; the UI reads
 // and reorganizes a space by its key.
 type DriveService struct {
 	// engine is read per call: it starts after the services are built, and
 	// every method answers KindUnavailable until it has.
-	engine   func() *hive.Engine
-	sessions chatSessionResolver
-	events   *events.Bus
-	reveal   func(string) error
-	logger   zerolog.Logger
+	engine func() *hive.Engine
+	events *events.Bus
+	reveal func(string) error
+	logger zerolog.Logger
 }
 
 type DriveDeps struct {
-	Engine   func() *hive.Engine
-	Sessions chatSessionResolver
-	Events   *events.Bus
-	Logger   zerolog.Logger
+	Engine func() *hive.Engine
+	Events *events.Bus
+	Logger zerolog.Logger
 	// Reveal shows an absolute path in the file manager; nil is osopen.Reveal.
 	Reveal func(string) error
 }
@@ -60,7 +72,7 @@ func newDriveService(d DriveDeps) *DriveService {
 	if d.Reveal == nil {
 		d.Reveal = osopen.Reveal
 	}
-	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, logger: logutils.Component(d.Logger, "desktop.drive")}
+	return &DriveService{engine: d.Engine, events: d.Events, reveal: d.Reveal, logger: logutils.Component(d.Logger, "desktop.drive")}
 }
 
 // driveCaller is who a tool call comes from and the space its documents
@@ -524,21 +536,8 @@ func (s *DriveService) engineDrive() (*drivesvc.Service, error) {
 	return engine.Drive(), nil
 }
 
-func (s *DriveService) open(ctx context.Context, session string) (*drivesvc.Service, driveCaller, error) {
-	d, err := s.engineDrive()
-	if err != nil {
-		return nil, driveCaller{}, err
-	}
-	caller, err := s.resolve(ctx, session)
-	if err != nil {
-		return nil, driveCaller{}, err
-	}
-	return d, caller, nil
-}
-
 func (s *DriveService) tabCaller(ctx context.Context, session string) (driveCaller, error) {
-	_, caller, err := s.open(ctx, session)
-	return caller, err
+	return s.resolve(ctx, session)
 }
 
 // resolveTabPath checks that path is a document in the caller's space, the
@@ -562,70 +561,31 @@ func (s *DriveService) resolveTabPath(_ context.Context, caller driveCaller, pat
 	return path, nil
 }
 
-// resolve reads the tool's caller argument through the engine's ResolveCaller.
-// A chat is the one kind the engine cannot look up: its record lives in the
-// desktop's store.
-//
-// A directory inside no session stays not_found rather than falling back to
-// the shared space: until the hive engine starts, every directory is inside
-// no session, and a session's agent would file its documents where its Drive tab
-// never looks (ADR agents-outside-every-session-share-one-global-canvas-owner).
+// resolve reads a tool's caller argument through the engine's DriveCaller.
 func (s *DriveService) resolve(ctx context.Context, session string) (driveCaller, error) {
 	engine := s.engine()
 	if engine == nil {
-		// A chat and global need no hive engine, so they still resolve before it runs.
-		value := strings.TrimSpace(session)
-		switch {
-		case value == sessionsvc.CallerGlobal:
-			return driveCaller{space: drive.Shared}, nil
-		case sessionsvc.LooksLikeChatID(value):
-			return s.chatCaller(ctx, value)
-		}
-		return driveCaller{}, Errorf(KindUnavailable, "hive sessions are not available in this build")
+		return driveCaller{}, Errorf(KindUnavailable, "the Hive runtime is not open")
 	}
-	caller, err := engine.Sessions().ResolveCaller(ctx, session, "", "")
+	c, err := engine.DriveCaller(ctx, session)
 	if err != nil {
-		if opErr, ok := errors.AsType[*ops.Error](err); ok {
-			return driveCaller{}, Errorf(Kind(opErr.Kind), "%s", opErr.Msg)
-		}
-		return driveCaller{}, Wrap(err, KindInternal, "resolving caller %q", session)
+		return driveCaller{}, fromOpError(err, "resolving caller %q", session)
 	}
-	switch caller.Kind {
-	case sessionsvc.CallerKindGlobal:
-		return driveCaller{space: drive.Shared}, nil
-	case sessionsvc.CallerKindChat:
-		return s.chatCaller(ctx, caller.ChatID)
-	case sessionsvc.CallerKindSession:
-		return hiveSessionCaller(engine, caller.Session)
+	caller := driveCaller{space: c.Space, author: c.Author}
+	if c.Session != nil {
+		caller.checkout = c.Session.Path
+		caller.tmuxSession = sessionsvc.Target(*c.Session).Session
 	}
-	return driveCaller{}, Errorf(KindInternal, "caller %q resolved to an unknown kind %q", session, caller.Kind)
+	return caller, nil
 }
 
-func hiveSessionCaller(engine *hive.Engine, sess hivesession.Session) (driveCaller, error) {
-	space, ok := engine.Drive().SpaceForRemote(sess.Remote)
-	if !ok {
-		return driveCaller{}, Errorf(KindInvalid,
-			"hive session %q has a remote with no owner and repository to file documents under", sess.Name)
+// fromOpError keeps an engine refusal's kind and message; anything else is
+// internal.
+func fromOpError(err error, format string, args ...any) error {
+	if opErr, ok := errors.AsType[*ops.Error](err); ok {
+		return Errorf(Kind(opErr.Kind), "%s", opErr.Msg)
 	}
-	return driveCaller{
-		space: space, author: drive.Author{HiveSession: sess.ID},
-		checkout: sess.Path, tmuxSession: sessionsvc.Target(sess).Session,
-	}, nil
-}
-
-func (s *DriveService) chatCaller(ctx context.Context, chatID string) (driveCaller, error) {
-	rec, err := s.sessions.Get(ctx, chatID)
-	if stores.IsNotFound(err) {
-		return driveCaller{}, Errorf(KindNotFound, "session %q not found", chatID)
-	}
-	if err != nil {
-		return driveCaller{}, Wrap(err, KindInternal, "loading session %q", chatID)
-	}
-	space, err := drive.WorkspaceSpace(rec.Workspace)
-	if err != nil {
-		return driveCaller{}, Errorf(KindInvalid, "workspace %q is not a valid workspace directory name", rec.Workspace)
-	}
-	return driveCaller{space: space, author: drive.Author{Session: rec.ID}}, nil
+	return Wrap(err, KindInternal, format, args...)
 }
 
 func parseSpace(key string) (drive.Space, error) {

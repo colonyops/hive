@@ -28,11 +28,13 @@ const driveServerName = "hive-drive"
 type DriveController struct {
 	core *app.App
 	log  zerolog.Logger
+	// base has no cmp label, for engineops to add its own.
+	base zerolog.Logger
 	opts Options
 }
 
 func NewDrive(core *app.App, log zerolog.Logger, opts Options) *DriveController {
-	return &DriveController{core: core, log: logutils.Component(log, "mcp.drive"), opts: opts}
+	return &DriveController{core: core, log: logutils.Component(log, "mcp.drive"), base: log, opts: opts}
 }
 
 // Server builds the drive MCP server with its tool table registered.
@@ -69,7 +71,7 @@ func (ctrl *DriveController) Handler() http.Handler {
 // Controller.register: metadata only, thin handlers, descriptions written for
 // a model.
 func (ctrl *DriveController) register(srv *mcp.Server) {
-	ctrl.registerDocuments(srv)
+	mountEngine(srv, ctrl.core, ctrl.base, DrivePathPrefix, ctrl.toolError)
 	ctrl.registerTabs(srv)
 	ctrl.registerReviews(srv)
 }

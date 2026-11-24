@@ -1,0 +1,1222 @@
+[
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Remove reviews of a Code session's diff. Remove the reviews of a Code session: every one, or only author's. Use it to withdraw a review that no longer applies; to correct one, send diff_review_put again instead. Answers with how many reviews it removed.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "author": {
+          "description": "Remove only this author's review. Omit it to remove every review of the session.",
+          "type": "string"
+        },
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "sessionId": {
+          "description": "The Code session whose diff this is, by id (from session_list) or name. Omit it in a hive session to mean your own; a Hive chat must name one.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller"
+      ],
+      "type": "object"
+    },
+    "name": "diff_review_clear",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "removed": {
+          "description": "How many reviews were removed; 0 when none matched.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "removed"
+      ],
+      "type": "object"
+    },
+    "title": "Remove reviews of a Code session's diff"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read the reviews of a Code session's diff. List the agent reviews stored for a Code session, each with the comments the user has not dismissed or sent yet. A dismissed or sent comment is gone, so compare with what you wrote to see what is still waiting. An empty list means no review is waiting.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "sessionId": {
+          "description": "The Code session whose diff this is, by id (from session_list) or name. Omit it in a hive session to mean your own; a Hive chat must name one.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller"
+      ],
+      "type": "object"
+    },
+    "name": "diff_review_get",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "reviews": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "agent": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string"
+              },
+              "comments": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "endLine": {
+                      "type": "integer"
+                    },
+                    "endSide": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "quote": {
+                      "description": "The rows the comment covers, as patch text, quoted when the review was written.",
+                      "type": "string"
+                    },
+                    "severity": {
+                      "type": "string"
+                    },
+                    "startLine": {
+                      "type": "integer"
+                    },
+                    "startSide": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "path",
+                    "severity",
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "head": {
+                "description": "The session's HEAD commit when the review was written.",
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "author",
+              "head",
+              "createdAt",
+              "comments"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "reviews"
+      ],
+      "type": "object"
+    },
+    "title": "Read the reviews of a Code session's diff"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Review a Code session's branch diff. Store your review of a Code session's changes: the branch against its base, as the Diff view's Branch comparison shows it, which is what a pull request shows. The user reads each comment inline under its lines and dismisses the ones they disagree with; Send delivers the rest to the session's agent with their own comments. A review replaces your earlier one for the session, so send the whole review each time. Every comment names a file in that diff; a lines comment names rows the diff shows, changed or context, and Hive quotes them for you. Read the diff with git diff $(git merge-base HEAD \u003cbase\u003e) in the checkout to get the line numbers right. A refused review lists every comment that needs fixing, and stores nothing. Keep comments actionable, one point each; put praise and the overview in summary. Open the diff tab with tab_open view diff when you are done.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "description": "Which coding agent you are: claude, codex or pi. The Diff view draws its mark beside each comment.",
+          "enum": [
+            "claude",
+            "codex",
+            "pi"
+          ],
+          "type": "string"
+        },
+        "author": {
+          "description": "Who the review is from, as the user sees it. A second review from the same author replaces the first. Defaults to the chat's workspace, or to agent in a hive session.",
+          "type": "string"
+        },
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "comments": {
+          "description": "The inline comments, in reading order. A review needs a summary or at least one comment.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "endLine": {
+                "description": "Last line of the run, inclusive. Defaults to startLine.",
+                "type": "integer"
+              },
+              "endSide": {
+                "description": "additions or deletions for endLine. Defaults to startSide.",
+                "type": "string"
+              },
+              "kind": {
+                "description": "lines (default) for a run of rows, or file for the whole file, which takes no lines.",
+                "type": "string"
+              },
+              "path": {
+                "description": "The file's path in the repository, as the branch diff lists it.",
+                "type": "string"
+              },
+              "severity": {
+                "description": "issue (a bug or a real risk), suggestion (default; a change worth making) or note (context, no change asked).",
+                "type": "string"
+              },
+              "startLine": {
+                "description": "First line of the run. With startSide additions it is the line as the branch has it now; with deletions, as the base had it.",
+                "type": "integer"
+              },
+              "startSide": {
+                "description": "additions (default) or deletions: which version startLine counts in. Use deletions for a removed line.",
+                "type": "string"
+              },
+              "text": {
+                "description": "The comment, in Markdown. Say what to change and why; unless the user dismisses it, it goes to the session's agent with their own comments.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "sessionId": {
+          "description": "The Code session whose diff this is, by id (from session_list) or name. Omit it in a hive session to mean your own; a Hive chat must name one.",
+          "type": "string"
+        },
+        "summary": {
+          "description": "The overall verdict in a few sentences, in Markdown: what the change does well, and the issues that matter most.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller"
+      ],
+      "type": "object"
+    },
+    "name": "diff_review_put",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "comments": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "endLine": {
+                "type": "integer"
+              },
+              "endSide": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "quote": {
+                "description": "The rows the comment covers, as patch text, quoted when the review was written.",
+                "type": "string"
+              },
+              "severity": {
+                "type": "string"
+              },
+              "startLine": {
+                "type": "integer"
+              },
+              "startSide": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "path",
+              "severity",
+              "text"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "head": {
+          "description": "The session's HEAD commit when the review was written.",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "author",
+        "head",
+        "createdAt",
+        "comments"
+      ],
+      "type": "object"
+    },
+    "title": "Review a Code session's branch diff"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Delete a document. Delete one document or an empty folder. A folder with anything in it is refused; there is no recursive delete and no trash. Answers with the path it deleted, deleted true, and when. Only delete what you made obsolete yourself; the user may be keeping the rest.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The document, or empty folder, to delete.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "document_delete",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "description": "When it was deleted.",
+          "type": "string"
+        },
+        "deleted": {
+          "description": "Always true: a delete that did not happen is an error.",
+          "type": "boolean"
+        },
+        "path": {
+          "description": "The path that was deleted.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "deleted",
+        "at"
+      ],
+      "type": "object"
+    },
+    "title": "Delete a document"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read a document. Read one markdown or html document, or any other UTF-8 text file in the space, as stored, front matter included, with its entry. A folder is listed with document_list, and a binary file is refused. Use this before rewriting a document another chat or the user may have changed.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Document path inside the space, forward slashes; it must exist.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "document_get",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "The document as stored, front matter included.",
+          "type": "string"
+        },
+        "front": {
+          "additionalProperties": true,
+          "description": "Front matter of a markdown document.",
+          "type": "object"
+        },
+        "kind": {
+          "description": "dir, markdown, html, or file.",
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "description": "Path inside the space, forward slashes; empty for the space root.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Bytes on disk; 0 for a folder.",
+          "type": "integer"
+        },
+        "title": {
+          "description": "The title key of a markdown document's front matter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "name",
+        "size",
+        "modified",
+        "body"
+      ],
+      "type": "object"
+    },
+    "title": "Read a document"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List documents. List a folder of Hive Drive, the document tree the user sees in the Drive tab of this chat or Code session. Your session decides the space: a chat's workspace, a hive session's repository (the folder a checkout links as .hive), or the shared space for global. Each entry has a kind (dir, markdown, html, or file for anything else), its path inside the space, name, title, size and modified time; markdown entries carry their front matter as front. An empty path is the space root. detail defaults to children, one level down; pass tree for the whole subtree. A folder that does not exist is not_found; a document path lists that document alone.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "detail": {
+          "default": "children",
+          "description": "children (default) lists one level; tree lists the whole subtree.",
+          "enum": [
+            "children",
+            "tree"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "description": "Folder to list, forward slashes, relative to the space root; empty is the space root.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller"
+      ],
+      "type": "object"
+    },
+    "name": "document_list",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "children": {
+          "description": "Entries inside a folder, folders first, each with kind, path, name, title, size, modified and front, and its own children under detail tree.",
+          "items": true,
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "detail": {
+          "description": "The level this answer used: children or tree.",
+          "type": "string"
+        },
+        "front": {
+          "additionalProperties": true,
+          "description": "Front matter of a markdown document.",
+          "type": "object"
+        },
+        "kind": {
+          "description": "dir, markdown, html, or file.",
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "description": "Path inside the space, forward slashes; empty for the space root.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Bytes on disk; 0 for a folder.",
+          "type": "integer"
+        },
+        "space": {
+          "description": "The space listed: owner/repo, workspaces/\u003cname\u003e, or shared.",
+          "type": "string"
+        },
+        "title": {
+          "description": "The title key of a markdown document's front matter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "kind",
+        "path",
+        "name",
+        "size",
+        "modified",
+        "children",
+        "detail"
+      ],
+      "type": "object"
+    },
+    "title": "List documents"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Move a document. Rename or move one document or a whole folder inside this space, creating the folders above the target. The target must not exist, and a document keeps its extension. Answers with the entry at its new path. Only move what you wrote or were asked to move; the user may have filed the rest on purpose.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "from": {
+          "description": "The document or folder to move, by its path in the space.",
+          "type": "string"
+        },
+        "to": {
+          "description": "Its new path. Must not exist; a document keeps its extension.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "name": "document_move",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "front": {
+          "additionalProperties": true,
+          "description": "Front matter of a markdown document.",
+          "type": "object"
+        },
+        "kind": {
+          "description": "dir, markdown, html, or file.",
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "description": "Path inside the space, forward slashes; empty for the space root.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Bytes on disk; 0 for a folder.",
+          "type": "integer"
+        },
+        "title": {
+          "description": "The title key of a markdown document's front matter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "name",
+        "size",
+        "modified"
+      ],
+      "type": "object"
+    },
+    "title": "Move a document"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Write a document. Create or replace a whole markdown (.md) or html (.html) document in Hive Drive. Folders in the path are created as needed, so file a plan as plans/auth-rewrite.md or a report as reports/2026-10/perf.md. A markdown body may open with YAML front matter between --- lines; title sets the name the user sees, and front matter that does not parse is refused rather than saved. An html document renders as a page of its own in a sandboxed frame: inline styles and scripts run; other scripts, styles and fetches load only over https; images, fonts and media load over https or as data: URLs; forms and frames do not work; a #fragment link scrolls the page and a relative link does nothing. The body is capped at 2 MiB. Answers with the entry as stored. No Drive tab opens by itself; use tab_open when the user should look now.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "The whole document. Markdown may start with YAML front matter.",
+          "type": "string"
+        },
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Document path inside the space, forward slashes, ending in .md or .html; folders are created as needed.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "path",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "document_put",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "front": {
+          "additionalProperties": true,
+          "description": "Front matter of a markdown document.",
+          "type": "object"
+        },
+        "kind": {
+          "description": "dir, markdown, html, or file.",
+          "type": "string"
+        },
+        "modified": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "description": "Path inside the space, forward slashes; empty for the space root.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Bytes on disk; 0 for a folder.",
+          "type": "integer"
+        },
+        "title": {
+          "description": "The title key of a markdown document's front matter.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "path",
+        "name",
+        "size",
+        "modified"
+      ],
+      "type": "object"
+    },
+    "title": "Write a document"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read the panel layout. Read the panel layout of this chat or Code session as the app last reported it: each panel with its tabs, which tab is shown, which panel has focus, and the splits that join the panels. Each tab is spelled the way the tab tools take it, so you can pass it back. A Code session's terminal tabs carry the tmux window name. known is false when the app has not reported this layout yet, for instance just after it started or when the session has never been open in Code; then act without it. onScreen says whether the user is looking at this session now. Call it first when you are not sure what is open.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller"
+      ],
+      "type": "object"
+    },
+    "name": "layout_get",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "focusedPanel": {
+          "description": "The id of the panel that has focus.",
+          "type": "string"
+        },
+        "known": {
+          "description": "False when the app has not reported this layout yet; every other field is then empty.",
+          "type": "boolean"
+        },
+        "note": {
+          "description": "Why the layout is not known, when known is false.",
+          "type": "string"
+        },
+        "onScreen": {
+          "description": "Whether the user is looking at this chat or session now.",
+          "type": "boolean"
+        },
+        "panels": {
+          "description": "The panels, each with its tabs.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "tabs": {
+                "description": "In tab order.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "description": "drive, diff, tasks, terminal or applet.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "description": "The tmux window name of a Code session's terminal.",
+                      "type": "string"
+                    },
+                    "shown": {
+                      "description": "Whether this is the tab its panel shows.",
+                      "type": "boolean"
+                    },
+                    "tab": {
+                      "description": "The tab spelled the way the tab tools take it: a window id (@80), applet:\u003cid\u003e, or drive, diff, tasks, terminal.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "tab",
+                    "kind",
+                    "shown"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "tabs"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "splits": {
+          "description": "The splits that join the panels.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "axis": {
+                "description": "row for side by side, column for stacked.",
+                "type": "string"
+              },
+              "first": {
+                "description": "The id of the panel or split on the first side.",
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "ratio": {
+                "description": "The share the first side gets.",
+                "type": "number"
+              },
+              "second": {
+                "description": "The id of the panel or split on the second side.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "axis",
+              "ratio",
+              "first",
+              "second"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "known",
+        "onScreen",
+        "focusedPanel",
+        "panels",
+        "splits"
+      ],
+      "type": "object"
+    },
+    "title": "Read the panel layout"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Close a panel. Ask Hive to close the panel that holds a tab. Its tabs join the neighbouring panel and none of them close. The last panel stays.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "tab": {
+          "description": "A tab in the panel to act on. drive, diff or tasks name that view. terminal names a chat's one terminal. applet:\u003cid\u003e names that applet's tab. Anything else is a tmux window of a Code session, by id (@3) or exact name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "tab"
+      ],
+      "type": "object"
+    },
+    "name": "panel_close",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "requested": {
+          "description": "The request handed to the UI: the verb. Delivery is best-effort - it applies only while the user is viewing this chat or session, and there is no acknowledgment either way.",
+          "type": "string"
+        },
+        "tab": {
+          "description": "The tab the request acted on, spelled as given.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requested",
+        "tab"
+      ],
+      "type": "object"
+    },
+    "title": "Close a panel"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Resize a split. Ask Hive to resize the nearest split of the panel that holds a tab. share, from 0.2 to 0.8, is the share of the split that the side holding the tab gets.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "share": {
+          "description": "The share of the nearest split that the side holding the tab gets, from 0.2 to 0.8.",
+          "maximum": 0.8,
+          "minimum": 0.2,
+          "type": "number"
+        },
+        "tab": {
+          "description": "A tab in the panel whose side of the split to size. drive, diff or tasks name that view. terminal names a chat's one terminal. applet:\u003cid\u003e names that applet's tab. Anything else is a tmux window of a Code session, by id (@3) or exact name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "tab",
+        "share"
+      ],
+      "type": "object"
+    },
+    "name": "split_resize",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "requested": {
+          "description": "The request handed to the UI: the verb. Delivery is best-effort - it applies only while the user is viewing this chat or session, and there is no acknowledgment either way.",
+          "type": "string"
+        },
+        "tab": {
+          "description": "The tab the request acted on, spelled as given.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requested",
+        "tab"
+      ],
+      "type": "object"
+    },
+    "title": "Resize a split"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Turn a split. Ask Hive to turn the nearest split of the panel that holds a tab between side by side and stacked.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "tab": {
+          "description": "A tab in the panel to act on. drive, diff or tasks name that view. terminal names a chat's one terminal. applet:\u003cid\u003e names that applet's tab. Anything else is a tmux window of a Code session, by id (@3) or exact name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "tab"
+      ],
+      "type": "object"
+    },
+    "name": "split_turn",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "requested": {
+          "description": "The request handed to the UI: the verb. Delivery is best-effort - it applies only while the user is viewing this chat or session, and there is no acknowledgment either way.",
+          "type": "string"
+        },
+        "tab": {
+          "description": "The tab the request acted on, spelled as given.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requested",
+        "tab"
+      ],
+      "type": "object"
+    },
+    "title": "Turn a split"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Close a tab. Ask Hive to close this chat or Code session's tab for a view (drive, diff, tasks or applet:\u003cid\u003e), wherever it sits. Closing an applet's tab ends its page. Like tab_open, the tab closes only while the user is viewing this chat or session. Documents are untouched; this closes the tab, not the content. view terminal needs window (a tmux window of the Code session, by id or exact name) and kills that window through tmux whether or not the session is on screen: it ends what runs in it, and the tab goes with it. Only close a window you started. A chat's terminal is the chat, so tab_close refuses it.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "view": {
+          "description": "drive, diff, tasks, terminal or applet:\u003cid\u003e. The tab for drive, diff, tasks or an applet closes wherever it sits. terminal kills the tmux window named by window.",
+          "type": "string"
+        },
+        "window": {
+          "description": "Terminal only, and required for it: the window of the Code session to kill, by tmux id (@3) or exact name. It ends what runs in it. A chat's terminal is refused.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "view"
+      ],
+      "type": "object"
+    },
+    "name": "tab_close",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "requested": {
+          "description": "The request handed to the UI: close (a terminal is killed in tmux instead, with no UI request). Delivery is best-effort - it applies only while the user is viewing this chat or session, and there is no acknowledgment either way.",
+          "type": "string"
+        },
+        "view": {
+          "description": "The view asked to close: drive, diff, tasks, terminal or applet:\u003cid\u003e.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requested",
+        "view"
+      ],
+      "type": "object"
+    },
+    "title": "Close a tab"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Bring a tab to the front. Ask Hive to bring a tab forward and focus its panel; a terminal window is also selected in tmux. This one takes the screen: use it when the user asked to see something, not to show off a result. For a result use tab_open, which leaves the focus where it is.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "tab": {
+          "description": "A tab in the panel to act on. drive, diff or tasks name that view. terminal names a chat's one terminal. applet:\u003cid\u003e names that applet's tab. Anything else is a tmux window of a Code session, by id (@3) or exact name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "tab"
+      ],
+      "type": "object"
+    },
+    "name": "tab_focus",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "requested": {
+          "description": "The request handed to the UI: the verb. Delivery is best-effort - it applies only while the user is viewing this chat or session, and there is no acknowledgment either way.",
+          "type": "string"
+        },
+        "tab": {
+          "description": "The tab the request acted on, spelled as given.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requested",
+        "tab"
+      ],
+      "type": "object"
+    },
+    "title": "Bring a tab to the front"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Move a tab. Ask Hive to move a tab within this chat or Code session's panels. tab is a tab reference. placement behind (the default) puts it in the anchor's panel right after the anchor, or at the end of the focused panel with no anchor. beside and below split the anchor's panel (or the focused one) and move the tab into the new panel. It applies only while the user is viewing this chat or session, and takes neither the keyboard nor the focus.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor": {
+          "description": "The tab to place relative to, spelled like tab. Omit for the tab in front of the focused panel.",
+          "type": "string"
+        },
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "placement": {
+          "default": "behind",
+          "description": "behind (default) puts the tab in the anchor's panel right after the anchor, or at the end of the focused panel. beside and below split the anchor's panel (or the focused one) and move the tab into the new panel.",
+          "enum": [
+            "behind",
+            "beside",
+            "below"
+          ],
+          "type": "string"
+        },
+        "tab": {
+          "description": "The tab to move. drive, diff or tasks name that view. terminal names a chat's one terminal. applet:\u003cid\u003e names that applet's tab. Anything else is a tmux window of a Code session, by id (@3) or exact name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "tab"
+      ],
+      "type": "object"
+    },
+    "name": "tab_move",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "requested": {
+          "description": "The request handed to the UI: the verb. Delivery is best-effort - it applies only while the user is viewing this chat or session, and there is no acknowledgment either way.",
+          "type": "string"
+        },
+        "tab": {
+          "description": "The tab the request acted on, spelled as given.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requested",
+        "tab"
+      ],
+      "type": "object"
+    },
+    "title": "Move a tab"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Open a tab or terminal beside the session. Ask Hive to open a tab beside this chat or Code session. view is drive (the session's documents), diff (the Code session's changes), tasks (its task board), terminal (a tmux window of the Code session) or applet:\u003cid\u003e (an applet whose applet.yaml lists surfaces.tab; opening it runs its page). The tab applies only while the user is viewing this chat or session, and there is no acknowledgment; a terminal's tmux window is started whether or not they are. A chat has drive and applets; diff, tasks and terminal belong to a Code session. The shared space (global) sits beside no session, so it has no tabs; the user reads it in the Drive page. path, for drive only, shows one document by its path in the space; it must exist. Omit it to leave the tab on its own pick. terminal starts a new window in the session's checkout, a shell with nothing running in it, or places one that exists. It opens detached, so it never takes the keyboard or the screen. It takes no command: run your own work yourself, and open a terminal for the user to type in. window, for terminal only, places an existing window of the session by tmux id (@3) or exact name instead of starting one, and excludes name. name, for terminal only, names the new window. The session must be running; start it in Code first. placement behind (the default) adds the tab behind the tab in front, with an unseen dot, and never takes the screen; beside splits the panel in front and opens the tab next to it, and below splits it downward, so the user sees it at once. All leave the keyboard where it is, and a tab that is already open stays where it is under any. anchor, a tab reference (drive, diff, tasks, terminal, or a window by id or name), is the tab to place relative to instead of the tab in front of the focused panel. Call it when you finish something worth looking at now, not on every write: a write while a Drive tab is open behind another tab already lights a dot on it. Use beside or below only for a result the user asked to see side by side with the terminal. If you are not sure what is open, call layout_get first.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor": {
+          "description": "The tab to place relative to: drive, diff, tasks, terminal (a chat's one terminal), applet:\u003cid\u003e, or a window of the Code session by id (@3) or exact name. Omit for the tab in front of the focused panel.",
+          "type": "string"
+        },
+        "caller": {
+          "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Terminal only: the name of the new window. The window is a shell in the session's checkout with nothing running in it.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Drive only: the document to show, by its path in the space. It must exist. Omit to leave the tab on its own pick.",
+          "type": "string"
+        },
+        "placement": {
+          "default": "behind",
+          "description": "behind (default) adds the tab behind the tab in front, with an unseen dot, and never takes the screen. beside splits the panel in front and opens the tab next to it; below splits it downward. A tab that is already open stays where it is.",
+          "enum": [
+            "behind",
+            "beside",
+            "below"
+          ],
+          "type": "string"
+        },
+        "view": {
+          "description": "drive, diff, tasks, terminal or applet:\u003cid\u003e. Drive is the session's documents; Diff is the Code session's changes; Tasks is its task board; Terminal is a tmux window of the Code session; applet:\u003cid\u003e is an applet that lists surfaces.tab.",
+          "type": "string"
+        },
+        "window": {
+          "description": "Terminal only: an existing window of the session, by tmux id (@3) or exact window name. It is placed instead of starting one, so name must be empty.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "caller",
+        "view"
+      ],
+      "type": "object"
+    },
+    "name": "tab_open",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "The document path the tab was asked to show, resolved from path; empty when none was given.",
+          "type": "string"
+        },
+        "requested": {
+          "description": "The request handed to the UI: open. Delivery is best-effort - it applies only while the user is viewing this chat or session, and there is no acknowledgment either way.",
+          "type": "string"
+        },
+        "view": {
+          "description": "The view asked for: drive, diff, tasks, terminal or applet:\u003cid\u003e.",
+          "type": "string"
+        },
+        "window": {
+          "description": "The tmux window id (@3) the terminal tab was asked to show, new or existing; empty for the other views.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requested",
+        "view",
+        "path",
+        "window"
+      ],
+      "type": "object"
+    },
+    "title": "Open a tab or terminal beside the session"
+  }
+]

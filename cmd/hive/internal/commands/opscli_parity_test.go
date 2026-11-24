@@ -97,6 +97,11 @@ func TestEngineCommandPaths(t *testing.T) {
 		{"todo", "create"},
 		{"todo", "list"},
 		{"todo", "update"},
+		{"drive", "list"},
+		{"drive", "get"},
+		{"drive", "put"},
+		{"drive", "move"},
+		{"drive", "delete"},
 	} {
 		assert.NotNil(t, lookup(root, path), "no hive %v", path)
 	}

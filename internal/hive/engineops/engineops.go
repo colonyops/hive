@@ -20,6 +20,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/ops"
+	driveops "github.com/colonyops/hive/internal/ops/drive"
 	"github.com/colonyops/hive/internal/ops/mcpops"
 	"github.com/colonyops/hive/internal/ops/messages"
 	"github.com/colonyops/hive/internal/ops/tasks"
@@ -59,6 +60,9 @@ func (h *Handlers) Ops() []Op {
 		bind(h, messages.MessageCreate, h.MessageCreate), bind(h, messages.MessageList, h.MessageList),
 		bind(h, messages.MessageReadPut, h.MessageReadPut), bind(h, messages.TopicList, h.TopicList),
 		bind(h, todos.TodoCreate, h.TodoCreate), bind(h, todos.TodoList, h.TodoList), bind(h, todos.TodoUpdate, h.TodoUpdate),
+		bind(h, driveops.DocumentList, h.DocumentList), bind(h, driveops.DocumentGet, h.DocumentGet),
+		bind(h, driveops.DocumentPut, h.DocumentPut), bind(h, driveops.DocumentMove, h.DocumentMove),
+		bind(h, driveops.DocumentDelete, h.DocumentDelete),
 	}
 }
 

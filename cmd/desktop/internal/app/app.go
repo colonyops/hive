@@ -501,10 +501,9 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.Observability = newObservabilityService(cfg.SettingsStore, cfg.Settings.Telemetry, cfg.TelemetryRuntime)
 	a.DevTools = newDevToolsService(cfg.Settings.Development.DevTools.Enabled)
 	a.Drive = newDriveService(DriveDeps{
-		Engine:   func() *hive.Engine { return a.hive },
-		Sessions: a.Stores.AgentSessions,
-		Events:   a.Events,
-		Logger:   cfg.Logger,
+		Engine: func() *hive.Engine { return a.hive },
+		Events: a.Events,
+		Logger: cfg.Logger,
 	})
 	a.Layouts = newLayoutsService(LayoutsDeps{
 		Callers:   a.Drive,
@@ -1385,6 +1384,7 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 		Logger:   a.logger,
 
 		Credentials: a.credentials,
+		Chats:       chatRecords{a.Stores.AgentSessions},
 	}
 	// Mock modes have no tmux to read, so status stays off.
 	if a.mock == "" {

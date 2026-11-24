@@ -2,7 +2,12 @@
 // served on the drive MCP server.
 package drive
 
-import "github.com/colonyops/hive/internal/ops"
+import (
+	"time"
+
+	domain "github.com/colonyops/hive/internal/domain/drive"
+	"github.com/colonyops/hive/internal/ops"
+)
 
 var Toolset = ops.Toolset{Name: "drive", MCPPath: "/mcp/drive"}
 
@@ -26,7 +31,7 @@ type DocumentListIn struct {
 }
 
 var DocumentList = ops.Spec[DocumentListIn]{
-	Name: "document.list", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
+	Name: "document.list", Owner: ops.OwnerEngine, Effect: ops.EffectRead, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "List documents",
 	Guidance: "List a folder of Hive Drive, the document tree the user sees in the Drive tab of this chat or Code session. " +
 		"Your session decides the space: a chat's workspace, a hive session's repository (the folder a checkout links as .hive), " +
@@ -44,7 +49,7 @@ type DocumentGetIn struct {
 }
 
 var DocumentGet = ops.Spec[DocumentGetIn]{
-	Name: "document.get", Owner: ops.OwnerDesktop, Effect: ops.EffectRead, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
+	Name: "document.get", Owner: ops.OwnerEngine, Effect: ops.EffectRead, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Read a document",
 	Guidance: "Read one markdown or html document, or any other UTF-8 text file in the space, as stored, front matter " +
 		"included, with its entry. A folder is listed with document_list, and a binary file is refused. Use this before rewriting a document another chat or the " +
@@ -59,7 +64,7 @@ type DocumentPutIn struct {
 }
 
 var DocumentPut = ops.Spec[DocumentPutIn]{
-	Name: "document.put", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
+	Name: "document.put", Owner: ops.OwnerEngine, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Write a document",
 	Guidance: "Create or replace a whole markdown (.md) or html (.html) document in Hive Drive. Folders in the path are " +
 		"created as needed, so file a plan as plans/auth-rewrite.md or a report as reports/2026-10/perf.md. A markdown " +
@@ -79,7 +84,7 @@ type DocumentMoveIn struct {
 }
 
 var DocumentMove = ops.Spec[DocumentMoveIn]{
-	Name: "document.move", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
+	Name: "document.move", Owner: ops.OwnerEngine, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Move a document",
 	Guidance: "Rename or move one document or a whole folder inside this space, creating the folders " +
 		"above the target. The target must not exist, and a document keeps its extension. Answers with the entry at its new " +
@@ -93,10 +98,71 @@ type DocumentDeleteIn struct {
 }
 
 var DocumentDelete = ops.Spec[DocumentDeleteIn]{
-	Name: "document.delete", Owner: ops.OwnerDesktop, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
+	Name: "document.delete", Owner: ops.OwnerEngine, Effect: ops.EffectWrite, Toolset: Toolset, Caller: ops.CallerRuleSessionOrGlobal,
 	Summary: "Delete a document",
 	Guidance: "Delete one document or an empty folder. A folder with anything in it is refused; there " +
 		"is no recursive delete and no trash. Answers with the path it deleted, deleted true, and when. Only delete what you made obsolete " +
 		"yourself; the user may be keeping the rest.",
 	Args: []string{"path"},
+}
+
+// DocumentEntry is one entry of a space as the document operations answer it.
+type DocumentEntry struct {
+	Kind     string         `json:"kind"            jsonschema:"dir, markdown, html, or file."`
+	Path     string         `json:"path"            jsonschema:"Path inside the space, forward slashes; empty for the space root."`
+	Name     string         `json:"name"`
+	Title    string         `json:"title,omitempty" jsonschema:"The title key of a markdown document's front matter."`
+	Size     int64          `json:"size"            jsonschema:"Bytes on disk; 0 for a folder."`
+	Modified time.Time      `json:"modified"`
+	Front    map[string]any `json:"front,omitempty" jsonschema:"Front matter of a markdown document."`
+}
+
+// DocumentNode is a listed entry with its own children.
+type DocumentNode struct {
+	DocumentEntry
+	Children []DocumentNode `json:"children,omitempty"`
+}
+
+// DocumentListOut answers document_list. Children is typed loosely because
+// schema inference refuses a recursive type; each one is a DocumentNode.
+type DocumentListOut struct {
+	Space string `json:"space" jsonschema:"The space listed: owner/repo, workspaces/<name>, or shared."`
+	DocumentEntry
+	Children []any  `json:"children" jsonschema:"Entries inside a folder, folders first, each with kind, path, name, title, size, modified and front, and its own children under detail tree."`
+	Detail   string `json:"detail"   jsonschema:"The level this answer used: children or tree."`
+}
+
+// JSONLines prints one line per child, as a CLI list does, and a document
+// path as its own entry.
+func (o DocumentListOut) JSONLines() []any {
+	if o.Kind != domain.KindDir.String() {
+		return []any{o.DocumentEntry}
+	}
+	return o.Children
+}
+
+type DocumentGetOut struct {
+	DocumentEntry
+	Body string `json:"body" jsonschema:"The document as stored, front matter included."`
+}
+
+type DocumentDeleteOut struct {
+	Path    string    `json:"path"    jsonschema:"The path that was deleted."`
+	Deleted bool      `json:"deleted" jsonschema:"Always true: a delete that did not happen is an error."`
+	At      time.Time `json:"at"      jsonschema:"When it was deleted."`
+}
+
+func EntryOf(e domain.Entry) DocumentEntry {
+	return DocumentEntry{
+		Kind: e.Kind.String(), Path: e.Path, Name: e.Name, Title: e.Title,
+		Size: e.Size, Modified: e.Modified, Front: e.Front,
+	}
+}
+
+func NodeOf(e domain.Entry) DocumentNode {
+	node := DocumentNode{DocumentEntry: EntryOf(e)}
+	for _, child := range e.Children {
+		node.Children = append(node.Children, NodeOf(child))
+	}
+	return node
 }
