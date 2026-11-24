@@ -48,9 +48,9 @@ func TestSessionCreateNoName(t *testing.T) {
 func TestSessionLsEmpty(t *testing.T) {
 	h := NewHarness(t)
 
-	out, err := h.Run("ls")
+	out, err := h.RunStdout("ls")
 	require.NoError(t, err, "hive ls on empty should succeed: %s", out)
-	assert.Contains(t, out, "No sessions found")
+	assert.Empty(t, strings.TrimSpace(out), "a pipe gets JSON Lines, and an empty list has none")
 }
 
 func TestSessionLsJSON(t *testing.T) {
