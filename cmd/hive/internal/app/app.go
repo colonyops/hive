@@ -65,6 +65,10 @@ type App struct {
 	Sources     *sources.Registry
 	// Servers is the local session API and each server under servers:.
 	Servers *servers.Fleet
+	// OpenEngine starts the hive runtime for a command that skipped it at
+	// startup and opens it only when a call needs it. The caller closes the
+	// runtime. It is nil when the engine already runs.
+	OpenEngine func(ctx context.Context) (*hive.Runtime, error)
 
 	sessions     sessionapi.API
 	targetServer string

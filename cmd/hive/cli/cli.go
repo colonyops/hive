@@ -132,6 +132,43 @@ func skipsEngine(path []string) bool {
 	return len(path) > 0 && (path[0] == "daemon" || path[0] == "servers" || path[0] == "mcp")
 }
 
+// startRuntime opens hive.db and builds the engine. The engine writes command
+// output to out.
+func startRuntime(
+	ctx context.Context,
+	logger zerolog.Logger,
+	cfg *config.Config,
+	dataDir string,
+	info buildinfo.Info,
+	exec executil.Executor,
+	tmuxClient *tmuxexec.Client,
+	out io.Writer,
+) (*hive.Runtime, error) {
+	rt, err := hive.StartRuntime(ctx, &cfg.Config, hive.RuntimeOptions{
+		ScriptsVersion: info.Version,
+		Ports: hive.Ports{
+			Executor:   exec,
+			Mux:        tmuxClient,
+			PaneSource: tmuxClient,
+			DataDir:    dataDir,
+			Styler:     styles.CLIOutputStyler{},
+			Stdout:     out,
+			Stderr:     os.Stderr,
+			Logger:     logger,
+			Credentials: credentials.NewKeychainStoreWithService(
+				filepath.Join(dataDir, "drive", "credentials.json"),
+				os.Getenv(credentials.EnvKeyringService),
+			),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	events.RegisterDebugLogger(logger, rt.Bus())
+	hive.NewNotificationRouter(rt.Bus()).Register()
+	return rt, nil
+}
+
 // Main runs the hive CLI and exits the process.
 func Main() {
 	Run(buildinfo.Resolve(version, commit, date))
@@ -247,33 +284,20 @@ Run 'hive new' to create a new session from the current repository.`,
 				// No engine, so no local session API: these commands reach
 				// only the daemon on this machine or on a server.
 				hiveApp.Servers = servers.New(logger, nil, cfg.Servers, info.Version)
+				// The protocol of hive mcp serve owns stdout.
+				hiveApp.OpenEngine = func(ctx context.Context) (*hive.Runtime, error) {
+					tmuxClient := tmuxexec.NewDefault(logger)
+					return startRuntime(ctx, logger, cfg, flags.DataDir, info, &executil.RealExecutor{}, tmuxClient, os.Stderr)
+				}
 				return ctx, nil
 			}
 
 			exec := &executil.RealExecutor{}
 			tmuxClient := tmuxexec.NewDefault(logger)
-			hiveRuntime, err = hive.StartRuntime(ctx, &cfg.Config, hive.RuntimeOptions{
-				ScriptsVersion: info.Version,
-				Ports: hive.Ports{
-					Executor:   exec,
-					Mux:        tmuxClient,
-					PaneSource: tmuxClient,
-					DataDir:    flags.DataDir,
-					Styler:     styles.CLIOutputStyler{},
-					Stdout:     os.Stdout,
-					Stderr:     os.Stderr,
-					Logger:     logger,
-					Credentials: credentials.NewKeychainStoreWithService(
-						filepath.Join(flags.DataDir, "drive", "credentials.json"),
-						os.Getenv(credentials.EnvKeyringService),
-					),
-				},
-			})
+			hiveRuntime, err = startRuntime(ctx, logger, cfg, flags.DataDir, info, exec, tmuxClient, os.Stdout)
 			if err != nil {
 				return ctx, err
 			}
-			events.RegisterDebugLogger(logger, hiveRuntime.Bus())
-			hive.NewNotificationRouter(hiveRuntime.Bus()).Register()
 
 			engine := hiveRuntime.Engine()
 			kvStore := engine.KV()

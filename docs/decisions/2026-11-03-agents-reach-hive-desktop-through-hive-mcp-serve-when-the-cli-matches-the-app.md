@@ -9,14 +9,16 @@ Agent configurations held the desktop's loopback address with its port. A port c
 
 ## Decision
 
-**`hive mcp serve` is a stdio MCP server that forwards catalog operations to the running desktop.**
+**`hive mcp serve` is a stdio MCP server for the operation catalog. It runs engine operations itself and forwards desktop operations to the running desktop.**
 
 - It serves the desktop-owned ops of the `--toolset`s it is given (default: all), with the desktop's names, descriptions and schemas.
 - It removes `caller` from each schema and fills it from `--caller`, `HIVE_AGENT_SESSION`, or the working directory.
-- It reads the endpoint file on every call, so a desktop restart needs no reconnect. While the desktop is down, a call answers `unavailable: Hive Desktop is not running` as a tool error.
-- It does not open `hive.db` or start the engine.
+- **Engine operations run in-process** (#796), on the handler table the desktop mounts (ADR engine-operations-run-from-one-handler-table-that-the-desktop-mounts-and-the-hive-cli-calls-in-process), so they work while the desktop is closed. The session handlers reach the fleet as the CLI's session commands do: through the daemon when `experimental.daemon` is on (ADR a-hive-daemon-owns-session-writes-and-agent-status-behind-an-experimental-flag), and through every server under `servers:`.
+- **`hive.db` opens on the first engine call and stays open** until the server exits. A server with only desktop toolsets never opens it. An open that fails answers `unavailable` and is tried again on the next call. The open runs the migrations every hive command runs. A long-lived server is like the TUI: a newer desktop that migrates the database later does not restart it, so migrations must stay additive.
+- **`session-control` stays forwarded.** Its server is token-guarded, and the token is the grant a workspace holds for it (ADR session-operations-route-through-the-server-fleet-and-a-generated-command-keeps-the-spellings-of-the-command-it-replaces). It needs the running desktop.
+- Desktop operations go to the desktop. It reads the endpoint file on every call, so a desktop restart needs no reconnect. While the desktop is down, a call answers `unavailable: Hive Desktop is not running` as a tool error.
 
-**The desktop writes this form only when the CLI matches the app.** The three hive catalogue entries, and Settings ▸ MCP servers ▸ Add, use `hive --data-dir <dir> mcp serve --toolset <list>` when `hive` (`daemon.hive_path`, else the login-shell PATH) reports the same version as the app. Otherwise they keep the HTTP address. The toolset list comes from the catalog by `MCPPath`. A CLI of another version compiles another catalog, so a mismatch would advertise tools the desktop does not have.
+**The desktop writes this form only when the CLI matches the app.** The three hive catalogue entries, and Settings ▸ MCP servers ▸ Add, use `hive --data-dir <dir> mcp serve --toolset <list>` when `hive` (`daemon.hive_path`, else the login-shell PATH) reports the same version as the app. Otherwise they keep the HTTP address. The toolset list comes from the catalog by `MCPPath`. A CLI of another version compiles another catalog, so a mismatch would advertise tools the desktop does not have. An engine toolset that both servers offer goes in the stdio form whenever it is written: that form keeps working while the desktop is closed.
 
 **Exec operations are not part of this decision.** The catalog has none. They arrive with #500, together with the token they need.
 

@@ -2648,8 +2648,10 @@ the catalogue is rendered; a pinning test in `mcpsrv` keeps those paths
 agreeing with the adapter's constants. `hive mcp serve` is the stdio form of the
 same servers: it lists the catalog ops of the `--toolset`s it is given, drops
 `caller` from their schemas, fills it from `--caller`, `HIVE_AGENT_SESSION` or
-the working directory, and forwards each call to the toolset's `MCPPath`
-through the endpoint file, answering `unavailable` while the desktop is down.
+the working directory. It runs engine ops in-process on a `hive.db` it opens on
+the first engine call (`cmd/hive/internal/commands/mcp_engine.go`), and
+forwards `session-control` and desktop ops to the toolset's `MCPPath` through
+the endpoint file, answering `unavailable` while the desktop is down.
 The catalogue renders the four hive entries in that form when
 `hiveCLIResolver` finds a `hive` (`daemon.hive_path`, else the login-shell
 PATH) whose `--version` equals the app's, and as the HTTP address otherwise,

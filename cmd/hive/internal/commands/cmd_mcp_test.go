@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/internal/hive/engineops"
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/ops/actions"
 	"github.com/colonyops/hive/internal/ops/catalog"
@@ -66,9 +68,23 @@ func mountRecorded[In any](t *testing.T, f *fakeDesktop, srv *mcp.Server, path s
 	}, func(err error) error { return err })
 }
 
+// connectServe serves toolsets with an engine that fails the test if a call
+// opens it.
 func connectServe(t *testing.T, dataDir string, toolsets ...string) *mcp.ClientSession {
 	t.Helper()
-	srv, err := newMCPServer(NewDesktopClient(dataDir, "", "test"), "agent-1", toolsets, "test", zerolog.Nop())
+	return connectServeWith(t, dataDir, newLocalEngine(t.Context(), noEngine(t), "test", zerolog.Nop()), "agent-1", toolsets...)
+}
+
+func noEngine(t *testing.T) engineOpener {
+	return func(context.Context) (*engineops.Handlers, func() error, error) {
+		t.Error("the call opened the engine")
+		return nil, nil, errors.New("no engine in this test")
+	}
+}
+
+func connectServeWith(t *testing.T, dataDir string, engine *localEngine, caller string, toolsets ...string) *mcp.ClientSession {
+	t.Helper()
+	srv, err := newMCPServer(NewDesktopClient(dataDir, "", "test"), engine, caller, toolsets, "test", zerolog.Nop())
 	require.NoError(t, err)
 	ct, st := mcp.NewInMemoryTransports()
 	_, err = srv.Connect(t.Context(), st, nil)
@@ -192,7 +208,7 @@ func TestMCPServeRefusedConnectionIsUnavailable(t *testing.T) {
 }
 
 func TestMCPServeUnknownToolset(t *testing.T) {
-	_, err := newMCPServer(NewDesktopClient(t.TempDir(), "", "test"), "c", []string{"layout", "nope"}, "test", zerolog.Nop())
+	_, err := newMCPServer(NewDesktopClient(t.TempDir(), "", "test"), nil, "c", []string{"layout", "nope"}, "test", zerolog.Nop())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `unknown toolset "nope"`)
 	for _, name := range []string{"inbox", "sessions", "actions", "diagnostics", "flows", "workspaces", "drive", "layout"} {

@@ -21,5 +21,5 @@ ADR every-operation-is-declared-once-as-a-spec-in-internal-ops-and-each-surface-
 ## Consequences
 
 - A new engine operation is one spec and one `bind` line in `Handlers.Ops()`. Tests fail when `Ops()` and the engine ops of `catalog.All()` differ, when a server does not serve its toolsets, and when one has no command.
-- `hive mcp serve` forwards engine operations to the desktop until it runs them in-process (#796). A forwarded call with `wait` gets that many seconds over the 10s timeout.
+- `hive mcp serve` runs engine operations in-process, except `session-control` (ADR agents-reach-hive-desktop-through-hive-mcp-serve-when-the-cli-matches-the-app). A forwarded call with `wait` gets that many seconds over the 10s timeout.
 - The rename breaks scripts that used the old flags (`hc create --parent`, `hc list --all`, `msg pub -t`, `todo add -u`). Refusals carry the kind of the operation (`hc next` with no task exits 3, a blocker cycle exits 4) where they exited 1.
