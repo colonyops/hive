@@ -16,8 +16,10 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/engineops"
 	"github.com/colonyops/hive/internal/hive/hivetest"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/ops/catalog"
 	"github.com/colonyops/hive/internal/ops/tasks"
+	"github.com/colonyops/hive/internal/platform/desktopendpoint"
 	"github.com/colonyops/hive/internal/store"
 )
 
@@ -40,9 +42,15 @@ func newEngineFixture(t *testing.T) *engineFixture {
 	return &engineFixture{handlers: engineops.New(zerolog.Nop(), harness.Engine), harness: harness, sess: sess}
 }
 
-func (f *engineFixture) open(context.Context) (*engineops.Handlers, func() error, error) {
+func (f *engineFixture) open(context.Context) (*openedEngine, error) {
 	f.opens++
-	return f.handlers, func() error { f.closes++; return nil }, nil
+	return &openedEngine{
+		handlers: f.handlers,
+		resolve: func(ctx context.Context, caller string) (sessionsvc.Caller, error) {
+			return f.harness.Engine.Sessions().ResolveCaller(ctx, caller, "", "")
+		},
+		close: func() error { f.closes++; return nil },
+	}, nil
 }
 
 func resultText(res *mcp.CallToolResult) string {
@@ -111,10 +119,10 @@ func TestMCPServeRefusesAnInvalidEngineCall(t *testing.T) {
 func TestMCPServeOpensTheEngineAgainAfterAFailure(t *testing.T) {
 	f := newEngineFixture(t)
 	fail := true
-	open := func(ctx context.Context) (*engineops.Handlers, func() error, error) {
+	open := func(ctx context.Context) (*openedEngine, error) {
 		if fail {
 			fail = false
-			return nil, nil, errors.New("database is locked")
+			return nil, errors.New("database is locked")
 		}
 		return f.open(ctx)
 	}
@@ -128,6 +136,28 @@ func TestMCPServeOpensTheEngineAgainAfterAFailure(t *testing.T) {
 	res, err = cs.CallTool(t.Context(), &mcp.CallToolParams{Name: "task_list", Arguments: map[string]any{}})
 	require.NoError(t, err)
 	require.False(t, res.IsError, resultText(res))
+}
+
+func TestMCPServeForwardsAChatsDocumentsToTheDesktop(t *testing.T) {
+	const chatID = "0b5f3c2e-7a41-4d8e-9c3a-2f6d1e8b4a90"
+	f := newEngineFixture(t)
+	fake := newFakeDesktop(t)
+	dataDir := t.TempDir()
+	require.NoError(t, desktopendpoint.Write(dataDir, desktopendpoint.Endpoint{URL: fake.srv.URL, PID: 1}))
+	cs := connectServeWith(t, dataDir, newLocalEngine(t.Context(), f.open, "test", zerolog.Nop()), chatID, "drive")
+
+	res, err := cs.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "document_put",
+		Arguments: map[string]any{"path": "notes.md", "body": "# Notes"},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError, resultText(res))
+
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	require.Len(t, fake.calls["/mcp/drive"], 1)
+	assert.Equal(t, "document_put", fake.calls["/mcp/drive"][0].Tool)
+	assert.Equal(t, chatID, fake.calls["/mcp/drive"][0].Args["caller"])
 }
 
 func TestMCPServeForwardsSessionControlToTheDesktop(t *testing.T) {

@@ -17,9 +17,11 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/hive/engineops"
 	"github.com/colonyops/hive/internal/hive/servers"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/ops/catalog"
+	driveops "github.com/colonyops/hive/internal/ops/drive"
 	"github.com/colonyops/hive/internal/ops/sessions"
 	"github.com/colonyops/hive/pkg/logutils"
 )
@@ -107,23 +109,28 @@ func (cmd *MCPCmd) runServe(ctx context.Context, c *cli.Command) error {
 // openEngine composes the engine handlers as the CLI's session commands do:
 // session reads go through the daemon when experimental.daemon is on, and
 // through every server under servers:.
-func (cmd *MCPCmd) openEngine(ctx context.Context) (*engineops.Handlers, func() error, error) {
+func (cmd *MCPCmd) openEngine(ctx context.Context) (*openedEngine, error) {
 	if cmd.app.OpenEngine == nil {
-		return nil, nil, errors.New("this hive has no engine to open")
+		return nil, errors.New("this hive has no engine to open")
 	}
 	rt, err := cmd.app.OpenEngine(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	var local sessionapi.API = sessionapi.NewLocal(rt.Engine())
 	if cmd.app.Config.Experimental.Daemon {
 		local = cmd.app.DaemonClient(true)
 	}
 	fleet := servers.New(cmd.app.Logger, local, cmd.app.Config.Servers, cmd.app.Build.Version)
-	handlers := engineops.New(cmd.app.Logger, rt.Engine(), engineops.WithFleet(func() *servers.Fleet { return fleet }))
-	return handlers, func() error {
-		fleet.Close()
-		return rt.Close()
+	return &openedEngine{
+		handlers: engineops.New(cmd.app.Logger, rt.Engine(), engineops.WithFleet(func() *servers.Fleet { return fleet })),
+		resolve: func(ctx context.Context, caller string) (sessionsvc.Caller, error) {
+			return rt.Engine().Sessions().ResolveCaller(ctx, caller, "", "")
+		},
+		close: func() error {
+			fleet.Close()
+			return rt.Close()
+		},
 	}, nil
 }
 
@@ -154,7 +161,7 @@ func newMCPServer(client *DesktopClient, engine *localEngine, caller string, too
 			return nil, err
 		}
 		if runsInProcess(op.Info()) {
-			srv.AddTool(tool, engineHandler(engine, caller, op.Info()))
+			srv.AddTool(tool, engineHandler(engine, client, caller, op.Info(), log))
 		} else {
 			srv.AddTool(tool, forwardHandler(client, caller, op.Info(), log))
 		}
@@ -237,11 +244,21 @@ func forwardHandler(client *DesktopClient, caller string, info ops.Info, log zer
 	}
 }
 
-func engineHandler(engine *localEngine, caller string, info ops.Info) mcp.ToolHandler {
+func engineHandler(engine *localEngine, client *DesktopClient, caller string, info ops.Info, log zerolog.Logger) mcp.ToolHandler {
+	forward := forwardHandler(client, caller, info, log)
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args, err := forwardedArgs(req.Params.Arguments, info, caller)
 		if err != nil {
 			return refusal(ops.KindInvalid, err.Error()), nil
+		}
+		if info.Toolset == driveops.Toolset {
+			chat, err := engine.IsChat(ctx, caller)
+			if refused, ok := errors.AsType[*ops.Error](err); ok {
+				return refusal(refused.Kind, refused.Msg), nil
+			}
+			if chat {
+				return forward(ctx, req)
+			}
 		}
 		res, err := engine.Call(ctx, info.ToolName, args)
 		if refused, ok := errors.AsType[*ops.Error](err); ok {

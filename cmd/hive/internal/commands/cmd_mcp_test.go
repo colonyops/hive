@@ -15,10 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/internal/hive/engineops"
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/ops/actions"
 	"github.com/colonyops/hive/internal/ops/catalog"
+	driveops "github.com/colonyops/hive/internal/ops/drive"
 	"github.com/colonyops/hive/internal/ops/layout"
 	"github.com/colonyops/hive/internal/ops/mcpops"
 	"github.com/colonyops/hive/internal/ops/sessions"
@@ -46,6 +46,7 @@ func newFakeDesktop(t *testing.T) *fakeDesktop {
 
 	drive := mcp.NewServer(&mcp.Implementation{Name: "fake", Version: "test"}, nil)
 	mountRecorded(t, f, drive, "/mcp/drive", layout.TabOpen)
+	mountRecorded(t, f, drive, "/mcp/drive", driveops.DocumentPut)
 	mux.Handle("/mcp/drive", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return drive }, nil))
 
 	f.srv = httptest.NewServer(mux)
@@ -76,9 +77,9 @@ func connectServe(t *testing.T, dataDir string, toolsets ...string) *mcp.ClientS
 }
 
 func noEngine(t *testing.T) engineOpener {
-	return func(context.Context) (*engineops.Handlers, func() error, error) {
+	return func(context.Context) (*openedEngine, error) {
 		t.Error("the call opened the engine")
-		return nil, nil, errors.New("no engine in this test")
+		return nil, errors.New("no engine in this test")
 	}
 }
 

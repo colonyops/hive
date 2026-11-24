@@ -2650,7 +2650,8 @@ same servers: it lists the catalog ops of the `--toolset`s it is given, drops
 `caller` from their schemas, fills it from `--caller`, `HIVE_AGENT_SESSION` or
 the working directory. It runs engine ops in-process on a `hive.db` it opens on
 the first engine call (`cmd/hive/internal/commands/mcp_engine.go`), and
-forwards `session-control` and desktop ops to the toolset's `MCPPath` through
+forwards `session-control`, a chat's Drive calls, and desktop ops to the
+toolset's `MCPPath` through
 the endpoint file, answering `unavailable` while the desktop is down.
 The catalogue renders the four hive entries in that form when
 `hiveCLIResolver` finds a `hive` (`daemon.hive_path`, else the login-shell

@@ -9,13 +9,20 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/hive/engineops"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/ops/sessions"
 )
 
-// engineOpener builds the engine handlers and answers the function that
-// closes what it opened.
-type engineOpener func(ctx context.Context) (*engineops.Handlers, func() error, error)
+// openedEngine is what an engineOpener built: the handlers, the caller
+// resolution of their engine, and the function that closes them.
+type openedEngine struct {
+	handlers *engineops.Handlers
+	resolve  func(ctx context.Context, caller string) (sessionsvc.Caller, error)
+	close    func() error
+}
+
+type engineOpener func(ctx context.Context) (*openedEngine, error)
 
 // runsInProcess reports whether hive mcp serve runs an operation on its own
 // engine. Session control stays with the desktop: its server is guarded by a
@@ -41,7 +48,7 @@ type localEngine struct {
 
 	mu      sync.Mutex
 	session *mcp.ClientSession
-	close   func() error
+	opened  *openedEngine
 }
 
 func newLocalEngine(ctx context.Context, open engineOpener, version string, log zerolog.Logger) *localEngine {
@@ -51,25 +58,47 @@ func newLocalEngine(ctx context.Context, open engineOpener, version string, log 
 // Call runs one engine tool. An engine that does not open is an *ops.Error
 // of kind unavailable.
 func (e *localEngine) Call(ctx context.Context, tool string, args map[string]any) (*mcp.CallToolResult, error) {
-	cs, err := e.connect()
+	cs, _, err := e.connect()
 	if err != nil {
 		return nil, err
 	}
 	return cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
 }
 
-func (e *localEngine) connect() (*mcp.ClientSession, error) {
+// IsChat reports whether caller is a chat. Chat records live in the
+// desktop's store, so only the running desktop can file a chat's documents,
+// as hive drive does.
+func (e *localEngine) IsChat(ctx context.Context, caller string) (bool, error) {
+	_, opened, err := e.connect()
+	if err != nil {
+		return false, err
+	}
+	c, err := opened.resolve(ctx, caller)
+	return err == nil && c.Kind == sessionsvc.CallerKindChat, nil
+}
+
+func (e *localEngine) connect() (*mcp.ClientSession, *openedEngine, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.session != nil {
-		return e.session, nil
+		return e.session, e.opened, nil
 	}
 
-	handlers, closeEngine, err := e.open(e.ctx)
+	opened, err := e.open(e.ctx)
 	if err != nil {
 		e.log.Warn().Err(err).Msg("open the hive engine")
-		return nil, ops.Wrap(ops.KindUnavailable, err, "open the hive engine: %v", err)
+		return nil, nil, ops.Wrap(ops.KindUnavailable, err, "open the hive engine: %v", err)
 	}
+	cs, err := e.mount(opened.handlers)
+	if err != nil {
+		e.log.Warn().Err(err).Msg("connect to the in-process engine server")
+		return nil, nil, ops.Wrap(ops.KindUnavailable, err, "start the hive engine: %v", errors.Join(err, opened.close()))
+	}
+	e.session, e.opened = cs, opened
+	return cs, opened, nil
+}
+
+func (e *localEngine) mount(handlers *engineops.Handlers) (*mcp.ClientSession, error) {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "hive", Version: e.version}, nil)
 	for _, op := range handlers.Ops() {
 		if runsInProcess(op.Spec.Info()) {
@@ -78,19 +107,14 @@ func (e *localEngine) connect() (*mcp.ClientSession, error) {
 	}
 	ct, st := mcp.NewInMemoryTransports()
 	ss, err := srv.Connect(e.ctx, st, nil)
-	if err == nil {
-		var cs *mcp.ClientSession
-		cs, err = mcp.NewClient(&mcp.Implementation{Name: "hive", Version: e.version}, nil).Connect(e.ctx, ct, nil)
-		if err == nil {
-			e.session = cs
-			e.close = func() error {
-				return errors.Join(cs.Close(), closeEngine())
-			}
-			return cs, nil
-		}
-		_ = ss.Close()
+	if err != nil {
+		return nil, err
 	}
-	return nil, errors.Join(err, closeEngine())
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "hive", Version: e.version}, nil).Connect(e.ctx, ct, nil)
+	if err != nil {
+		return nil, errors.Join(err, ss.Close())
+	}
+	return cs, nil
 }
 
 // internalError answers an error the handlers did not classify. Its text is
@@ -104,10 +128,10 @@ func (e *localEngine) internalError(err error) error {
 func (e *localEngine) Close() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.close == nil {
+	if e.session == nil {
 		return nil
 	}
-	err := e.close()
-	e.session, e.close = nil, nil
+	err := errors.Join(e.session.Close(), e.opened.close())
+	e.session, e.opened = nil, nil
 	return err
 }
