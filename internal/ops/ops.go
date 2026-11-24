@@ -51,6 +51,7 @@ const CallerField = "caller"
 var Verbs = []string{
 	"list", "get", "create", "put", "update", "delete", "clear",
 	"open", "close", "move", "focus", "resize", "turn", "preview", "refresh", "next",
+	"recycle", "start",
 }
 
 // Spec declares one operation with input type In. The output type is not part

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"path/filepath"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -18,11 +19,14 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/tagset"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/daemon/wire"
+	"github.com/colonyops/hive/internal/hive/servers"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/ops"
 	driveops "github.com/colonyops/hive/internal/ops/drive"
 	"github.com/colonyops/hive/internal/ops/mcpops"
 	"github.com/colonyops/hive/internal/ops/messages"
+	"github.com/colonyops/hive/internal/ops/sessions"
 	"github.com/colonyops/hive/internal/ops/tasks"
 	"github.com/colonyops/hive/internal/ops/todos"
 	"github.com/colonyops/hive/internal/platform/git"
@@ -32,12 +36,40 @@ import (
 // Handlers runs the engine operations. Every error it returns is an
 // *ops.Error.
 type Handlers struct {
-	engine *hive.Engine
-	log    zerolog.Logger
+	engine   *hive.Engine
+	log      zerolog.Logger
+	fleet    func() *servers.Fleet
+	progress io.Writer
 }
 
-func New(log zerolog.Logger, engine *hive.Engine) *Handlers {
-	return &Handlers{engine: engine, log: logutils.Component(log, "engineops")}
+// Option changes how New builds the handlers.
+type Option func(*Handlers)
+
+// WithFleet routes the session operations through the fleet fleet returns,
+// read on every call because a client rebuilds its fleet on a config reload.
+// Without it they reach this engine only, as session.LocalServer.
+func WithFleet(fleet func() *servers.Fleet) Option {
+	return func(h *Handlers) { h.fleet = fleet }
+}
+
+// WithProgress receives the progress lines of a session create or recycle.
+func WithProgress(w io.Writer) Option {
+	return func(h *Handlers) { h.progress = w }
+}
+
+func New(log zerolog.Logger, engine *hive.Engine, opts ...Option) *Handlers {
+	h := &Handlers{engine: engine, log: logutils.Component(log, "engineops"), progress: io.Discard}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
+}
+
+func (h *Handlers) currentFleet() *servers.Fleet {
+	if h.fleet == nil {
+		return nil
+	}
+	return h.fleet()
 }
 
 // Op is one engine operation bound to its handler.
@@ -63,6 +95,10 @@ func (h *Handlers) Ops() []Op {
 		bind(h, driveops.DocumentList, h.DocumentList), bind(h, driveops.DocumentGet, h.DocumentGet),
 		bind(h, driveops.DocumentPut, h.DocumentPut), bind(h, driveops.DocumentMove, h.DocumentMove),
 		bind(h, driveops.DocumentDelete, h.DocumentDelete),
+		bind(h, sessions.SessionList, h.SessionList), bind(h, sessions.SessionGet, h.SessionGet),
+		bind(h, sessions.SessionUpdate, h.SessionUpdate), bind(h, sessions.SessionTagsUpdate, h.SessionTagsUpdate),
+		bind(h, sessions.SessionDelete, h.SessionDelete), bind(h, sessions.SessionRecycle, h.SessionRecycle),
+		bind(h, sessions.SessionCreate, h.SessionCreate), bind(h, sessions.SessionStart, h.SessionStart),
 	}
 }
 
@@ -173,11 +209,13 @@ func opError(err error, what string) error {
 	case errors.Is(err, hc.ErrNotFound), errors.Is(err, messaging.ErrTopicNotFound),
 		errors.Is(err, session.ErrNotFound), errors.Is(err, sql.ErrNoRows):
 		kind = ops.KindNotFound
-	case errors.Is(err, hc.ErrCyclicDependency):
+	case errors.Is(err, hc.ErrCyclicDependency), errors.Is(err, session.ErrDuplicateName):
 		kind = ops.KindConflict
 	case errors.Is(err, hc.ErrInvalidTree), errors.Is(err, hc.ErrInvalidItemType), errors.Is(err, hc.ErrInvalidStatus),
-		errors.Is(err, tagset.ErrInvalid):
+		errors.Is(err, tagset.ErrInvalid), errors.Is(err, wire.ErrRemoteRequired):
 		kind = ops.KindInvalid
+	case errors.As(err, new(*wire.UnreachableError)):
+		kind = ops.KindUnavailable
 	}
 	return ops.Errorf(kind, "%s: %v", what, err)
 }
