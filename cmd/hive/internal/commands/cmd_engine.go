@@ -142,7 +142,9 @@ func keepSessionSpellings(root *cli.Command) {
 		Usage:    "List all sessions (alias for 'session list')",
 		Hidden:   true,
 		Flags:    list.Flags,
+		Before:   list.Before,
 		Action:   list.Action,
+		After:    list.After,
 		Metadata: list.Metadata,
 	})
 }

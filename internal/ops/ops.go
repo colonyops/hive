@@ -85,6 +85,13 @@ type Spec[In any] struct {
 // before the handler, and the CLI calls it before it dials the desktop.
 type Validator interface{ Validate() error }
 
+// OutputSchemer is implemented by an output whose Go type does not describe
+// the JSON it writes, such as one with its own MarshalJSON. Mount advertises
+// its schema instead of the one its type gives.
+type OutputSchemer interface {
+	OutputSchema() (*jsonschema.Schema, error)
+}
+
 // Info is a Spec with its type parameter erased.
 type Info struct {
 	Name     string

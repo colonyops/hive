@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -240,6 +242,46 @@ func TestSessionRecycleOutMarshalsOneShape(t *testing.T) {
 	require.NoError(t, json.Unmarshal(kept, &fields))
 	assert.Equal(t, "a1", fields["id"])
 	assert.NotContains(t, fields, "deleted")
+}
+
+func TestSessionRecycleAdvertisesTheSchemaOfBothShapes(t *testing.T) {
+	f := newFixture(t)
+	srv := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "test"}, nil)
+	for _, op := range f.h.Ops() {
+		if op.Spec.Info().Name == sessions.SessionRecycle.Name {
+			op.Mount(srv, func(err error) error { return err })
+		}
+	}
+	ct, st := mcp.NewInMemoryTransports()
+	_, err := srv.Connect(t.Context(), st, nil)
+	require.NoError(t, err)
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "test"}, nil).Connect(t.Context(), ct, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+
+	listed, err := cs.ListTools(t.Context(), nil)
+	require.NoError(t, err)
+	require.Len(t, listed.Tools, 1)
+	raw, err := json.Marshal(listed.Tools[0].OutputSchema)
+	require.NoError(t, err)
+	var schema jsonschema.Schema
+	require.NoError(t, json.Unmarshal(raw, &schema))
+	resolved, err := schema.Resolve(nil)
+	require.NoError(t, err)
+
+	now := time.Now()
+	for name, out := range map[string]sessions.SessionRecycleOut{
+		"kept": {Session: &sessions.SessionOut{
+			Server: "local", ID: "a1", Name: "worker", Tags: []string{}, CreatedAt: now, UpdatedAt: now,
+		}},
+		"deleted": {Deleted: &sessions.SessionDeletedOut{Server: "box", ID: "a1", Deleted: true}},
+	} {
+		encoded, err := json.Marshal(out)
+		require.NoError(t, err)
+		var value map[string]any
+		require.NoError(t, json.Unmarshal(encoded, &value))
+		assert.NoError(t, resolved.Validate(value), name)
+	}
 }
 
 func TestSessionOpsWithoutAFleetReachThisEngine(t *testing.T) {

@@ -96,14 +96,14 @@ type serverListing struct {
 	err      error
 }
 
-// listEachServer reads the sessions of the named server, or of this machine
-// and every server at once.
 // serverListTimeout bounds one server's part of a list that reads every
 // server, so a stuck server costs the list seconds and not the client's connect
 // timeout. A fresh ssh connection is about 14 round trips, so a shorter bound
 // reports a healthy server on a slow link as offline.
 const serverListTimeout = 10 * time.Second
 
+// listEachServer reads the sessions of the named server, or of this machine
+// and every server at once.
 func (h *Handlers) listEachServer(ctx context.Context, server string) ([]serverListing, error) {
 	fleet := h.currentFleet()
 	if server != "" || fleet == nil || len(fleet.Servers()) == 0 {

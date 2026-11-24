@@ -8,6 +8,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
+
 	"github.com/colonyops/hive/internal/ops"
 )
 
@@ -241,6 +243,19 @@ func (o SessionRecycleOut) MarshalJSON() ([]byte, error) {
 		return json.Marshal(o.Deleted)
 	}
 	return json.Marshal(o.Session)
+}
+
+// OutputSchema is one of the two shapes MarshalJSON writes.
+func (SessionRecycleOut) OutputSchema() (*jsonschema.Schema, error) {
+	kept, err := jsonschema.For[SessionOut](nil)
+	if err != nil {
+		return nil, err
+	}
+	deleted, err := jsonschema.For[SessionDeletedOut](nil)
+	if err != nil {
+		return nil, err
+	}
+	return &jsonschema.Schema{Type: "object", OneOf: []*jsonschema.Schema{kept, deleted}}, nil
 }
 
 type SessionStartOut struct {
