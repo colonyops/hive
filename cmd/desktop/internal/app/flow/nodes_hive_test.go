@@ -28,6 +28,7 @@ func TestCreateTaskConfig_Validate(t *testing.T) {
 	require.NoError(t, (&CreateTaskConfig{Title: "Fix {{ .Payload.title }}"}).Validate(nil))
 	require.NoError(t, (&CreateTaskConfig{
 		Title: "t", Description: "{{ .Payload.url }}", Repo: "{{ .Payload.repo }}", Parent: "hc-abc123",
+		Tags: []string{"triage", "from-flow"},
 	}).Validate(nil))
 
 	for name, cfg := range map[string]CreateTaskConfig{
@@ -37,6 +38,8 @@ func TestCreateTaskConfig_Validate(t *testing.T) {
 		"broken repo":         {Title: "t", Repo: "{{"},
 		"templated parent":    {Title: "t", Parent: "{{ .Key }}"},
 		"parent with a space": {Title: "t", Parent: "hc 1"},
+		"templated tag":       {Title: "t", Tags: []string{"{{ .Key }}"}},
+		"tag with a comma":    {Title: "t", Tags: []string{"a,b"}},
 	} {
 		assert.Errorf(t, cfg.Validate(nil), "%s", name)
 	}

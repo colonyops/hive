@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { TextField, TextareaField } from '../../fields'
-import type { Config } from './config'
+import { parseTags, type Config } from './config'
 
 const props = defineProps<{ config: Config; errors?: string[] }>()
 const emit = defineEmits<{ 'update:config': [config: Config] }>()
@@ -12,6 +13,24 @@ function fieldError(key: keyof Config): string | undefined {
 
 function set<K extends keyof Config>(key: K, value: Config[K]) {
   emit('update:config', { ...props.config, [key]: value })
+}
+
+// Kept apart from config.tags so a trailing comma survives while typing;
+// resynced only when the config changes from outside the field.
+const tagsText = ref('')
+watch(
+  () => props.config.tags,
+  (tags) => {
+    if ((parseTags(tagsText.value) ?? []).join(',') !== (tags ?? []).join(',')) {
+      tagsText.value = (tags ?? []).join(', ')
+    }
+  },
+  { immediate: true },
+)
+
+function setTags(text: string) {
+  tagsText.value = text
+  set('tags', parseTags(text))
 }
 
 function setOptional(key: 'description' | 'repo' | 'parent', value: string) {
@@ -65,6 +84,17 @@ function setOptional(key: 'description' | 'repo' | 'parent', value: string) {
       :error="fieldError('parent')"
       testid="create-task-node-editor-parent"
       @update:model-value="setOptional('parent', $event.trim())"
+    />
+
+    <TextField
+      label="Tags"
+      :model-value="tagsText"
+      placeholder="triage, from-flow"
+      hint="Optional tags for the task, separated by commas."
+      monospace
+      :error="fieldError('tags')"
+      testid="create-task-node-editor-tags"
+      @update:model-value="setTags($event)"
     />
   </div>
 </template>

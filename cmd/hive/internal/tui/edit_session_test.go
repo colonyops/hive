@@ -12,6 +12,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 	"github.com/colonyops/hive/internal/store"
 	"github.com/colonyops/hive/internal/store/db"
 )
@@ -122,7 +123,7 @@ func TestEditSessionKeepsInvalidInputOpen(t *testing.T) {
 		nameValue string
 		tagsValue string
 	}{
-		{"tag too long", "alpha", "auto, " + strings.Repeat("x", session.MaxTagLength+1)},
+		{"tag too long", "alpha", "auto, " + strings.Repeat("x", tagset.MaxLength+1)},
 		{"empty name", "  ", "auto"},
 	}
 	for _, tt := range tests {

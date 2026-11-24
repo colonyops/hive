@@ -14,6 +14,9 @@ agent can claim it with `hive hc next`.
   not render as `owner/repo` fails the task.
 - `parent` -- the id of an existing epic or task to file the task under,
   such as `hc-a1b2c3`. It is a literal, not a template.
+- `tags` -- a list of tags for the task. Each one is a literal, not a
+  template, of at most 40 characters and with no commas. `hive hc list
+  --tags` finds the tasks that carry them.
 
 ```yaml
 - id: triage-task
@@ -21,6 +24,7 @@ agent can claim it with `hive hc next`.
   title: "Triage {{ .Payload.title }}"
   repo: "{{ .Payload.repo }}"
   parent: hc-a1b2c3
+  tags: [triage, from-flow]
   description: |
     {{ .Payload.url }}
 

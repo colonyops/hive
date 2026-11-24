@@ -7,6 +7,7 @@ type CreateInput struct {
 	Title     string        `json:"title"`
 	Desc      string        `json:"desc,omitempty"`
 	Type      ItemType      `json:"type"`
+	Tags      []string      `json:"tags,omitempty"`
 	SessionID string        `json:"-"` // set from task_create's assignSession, which a caller must resolve first
 	Children  []CreateInput `json:"children,omitempty"`
 	Blockers  []string      `json:"blockers,omitempty"` // refs of items that must complete before this one
@@ -19,4 +20,5 @@ type CreateItemInput struct {
 	Type      ItemType
 	ParentID  string
 	SessionID string
+	Tags      []string
 }

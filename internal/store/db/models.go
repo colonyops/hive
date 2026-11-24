@@ -64,6 +64,7 @@ type HcItem struct {
 	Depth     int64       `json:"depth"`
 	CreatedAt int64       `json:"created_at"`
 	UpdatedAt int64       `json:"updated_at"`
+	Tags      string      `json:"tags"`
 }
 
 type HcTaskBlocker struct {

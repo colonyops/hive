@@ -21,6 +21,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
@@ -941,7 +942,7 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 // changed, and returns the session. The tags are checked before the rename,
 // so a bad tag cannot leave the edit half done.
 func (s *SessionsService) EditSession(ctx context.Context, id, name string, tags []string) (session.Session, error) {
-	normalized, err := session.NormalizeTags(tags)
+	normalized, err := tagset.Normalize(tags)
 	if err != nil {
 		return session.Session{}, Errorf(KindInvalid, "%s", err)
 	}
@@ -994,7 +995,7 @@ func (s *SessionsService) saveTags(ctx context.Context, id string, save func(ses
 	}
 	saved, err := save(target)
 	switch {
-	case errors.Is(err, session.ErrInvalidTag):
+	case errors.Is(err, tagset.ErrInvalid):
 		return session.Session{}, Errorf(KindInvalid, "%s", err)
 	case errors.Is(err, session.ErrNotFound):
 		return session.Session{}, Wrap(err, KindNotFound, "session %q not found", id)

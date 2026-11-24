@@ -1,0 +1,1 @@
+ALTER TABLE hc_items ADD COLUMN tags TEXT NOT NULL DEFAULT '[]';

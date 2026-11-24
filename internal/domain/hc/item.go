@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/hay-kot/criterio"
+
+	"github.com/colonyops/hive/internal/domain/tagset"
 )
 
 // ItemType categorizes an item as an epic or a task.
@@ -40,6 +42,7 @@ type Item struct {
 	Desc       string    `json:"desc"`
 	Type       ItemType  `json:"type"`
 	Status     Status    `json:"status"`
+	Tags       []string  `json:"tags"`
 	Blocked    bool      `json:"-"`                     // computed at read time: true when the item has open/in_progress children or open/in_progress explicit blockers
 	BlockerIDs []string  `json:"blocker_ids,omitempty"` // explicit blocker item IDs (open/in_progress only)
 	Depth      int       `json:"depth"`                 // 0 for epics/roots
@@ -50,6 +53,12 @@ type Item struct {
 // IsEpic reports whether the item is an epic.
 func (i Item) IsEpic() bool {
 	return i.Type == ItemTypeEpic
+}
+
+// HasAllTags reports whether the item carries every tag in required,
+// ignoring case.
+func (i Item) HasAllTags(required []string) bool {
+	return tagset.ContainsAll(i.Tags, required)
 }
 
 // IsRoot reports whether the item has no parent.

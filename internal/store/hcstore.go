@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -34,26 +35,56 @@ func (s *HCStore) CreateItems(ctx context.Context, items []hc.Item) error {
 
 	return s.db.WithinTx(ctx, func(ctx context.Context, q *db.DB) error {
 		for _, item := range items {
-			err := q.CreateHCItem(ctx, db.CreateHCItemParams{
-				ID:        item.ID,
-				RepoKey:   item.RepoKey,
-				EpicID:    item.EpicID,
-				ParentID:  item.ParentID,
-				SessionID: item.SessionID,
-				Title:     item.Title,
-				Desc:      item.Desc,
-				Type:      item.Type,
-				Status:    item.Status,
-				Depth:     int64(item.Depth),
-				CreatedAt: item.CreatedAt.UnixNano(),
-				UpdatedAt: item.UpdatedAt.UnixNano(),
-			})
-			if err != nil {
-				return fmt.Errorf("create hc item %q: %w", item.ID, err)
+			if err := createHCItem(ctx, q, item); err != nil {
+				return err
 			}
 		}
 		return nil
 	})
+}
+
+func createHCItem(ctx context.Context, q *db.DB, item hc.Item) error {
+	tags, err := encodeHCTags(item.Tags)
+	if err != nil {
+		return fmt.Errorf("create hc item %q: %w", item.ID, err)
+	}
+	if err := q.CreateHCItem(ctx, db.CreateHCItemParams{
+		ID:        item.ID,
+		RepoKey:   item.RepoKey,
+		EpicID:    item.EpicID,
+		ParentID:  item.ParentID,
+		SessionID: item.SessionID,
+		Title:     item.Title,
+		Desc:      item.Desc,
+		Type:      item.Type,
+		Status:    item.Status,
+		Depth:     int64(item.Depth),
+		Tags:      tags,
+		CreatedAt: item.CreatedAt.UnixNano(),
+		UpdatedAt: item.UpdatedAt.UnixNano(),
+	}); err != nil {
+		return fmt.Errorf("create hc item %q: %w", item.ID, err)
+	}
+	return nil
+}
+
+func encodeHCTags(tags []string) (string, error) {
+	if len(tags) == 0 {
+		return "[]", nil
+	}
+	data, err := json.Marshal(tags)
+	if err != nil {
+		return "", fmt.Errorf("encode tags: %w", err)
+	}
+	return string(data), nil
+}
+
+func decodeHCTags(id, raw string) ([]string, error) {
+	tags := []string{}
+	if err := json.Unmarshal([]byte(raw), &tags); err != nil {
+		return nil, fmt.Errorf("decode tags of hc item %q: %w", id, err)
+	}
+	return tags, nil
 }
 
 // GetItem retrieves a single HC item by ID.
@@ -100,12 +131,27 @@ func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdat
 		if update.Desc != nil {
 			newDesc = *update.Desc
 		}
+		newTags := existing.Tags
+		if update.EditsTags() {
+			current, err := decodeHCTags(id, existing.Tags)
+			if err != nil {
+				return err
+			}
+			edited, err := update.ApplyTags(current)
+			if err != nil {
+				return err
+			}
+			if newTags, err = encodeHCTags(edited); err != nil {
+				return err
+			}
+		}
 
 		if err := q.UpdateHCItem(ctx, db.UpdateHCItemParams{
 			Status:    newStatus,
 			SessionID: newSessionID,
 			Title:     newTitle,
 			Desc:      newDesc,
+			Tags:      newTags,
 			UpdatedAt: time.Now().UnixNano(),
 			ID:        id,
 		}); err != nil {
@@ -157,7 +203,10 @@ func (s *HCStore) ListItems(ctx context.Context, filter hc.ListFilter) ([]hc.Ite
 
 	result := make([]hc.Item, 0, len(rows))
 	for _, row := range rows {
-		item := buildHCItem(row, blockedSet)
+		item, err := buildHCItem(row, blockedSet)
+		if err != nil {
+			return nil, err
+		}
 		if !filter.Matches(item) {
 			continue
 		}
@@ -501,7 +550,11 @@ func (s *HCStore) fetchBlockedSet(ctx context.Context) (map[string]struct{}, err
 // buildHCItemWithBlockers converts a database row to hc.Item.
 // blockedSet contains IDs that are blocked (by children or explicit blockers).
 // blockerIDsMap maps item ID to its explicit open blocker IDs.
-func buildHCItemWithBlockers(row db.HcItem, blockedSet map[string]struct{}, blockerIDsMap map[string][]string) hc.Item {
+func buildHCItemWithBlockers(row db.HcItem, blockedSet map[string]struct{}, blockerIDsMap map[string][]string) (hc.Item, error) {
+	tags, err := decodeHCTags(row.ID, row.Tags)
+	if err != nil {
+		return hc.Item{}, err
+	}
 	_, blocked := blockedSet[row.ID]
 	return hc.Item{
 		ID:         row.ID,
@@ -513,16 +566,17 @@ func buildHCItemWithBlockers(row db.HcItem, blockedSet map[string]struct{}, bloc
 		Desc:       row.Desc,
 		Type:       row.Type,
 		Status:     row.Status,
+		Tags:       tags,
 		Blocked:    blocked,
 		BlockerIDs: blockerIDsMap[row.ID],
 		Depth:      int(row.Depth),
 		CreatedAt:  time.Unix(0, row.CreatedAt),
 		UpdatedAt:  time.Unix(0, row.UpdatedAt),
-	}
+	}, nil
 }
 
 // buildHCItem converts a database row to hc.Item using the pre-fetched blocked set.
-func buildHCItem(row db.HcItem, blockedSet map[string]struct{}) hc.Item {
+func buildHCItem(row db.HcItem, blockedSet map[string]struct{}) (hc.Item, error) {
 	return buildHCItemWithBlockers(row, blockedSet, map[string][]string{})
 }
 
@@ -548,7 +602,7 @@ func (s *HCStore) fetchHCItem(ctx context.Context, row db.HcItem) (hc.Item, erro
 		blockerIDsMap[row.ID] = blockerIDs
 	}
 
-	return buildHCItemWithBlockers(row, blockedSet, blockerIDsMap), nil
+	return buildHCItemWithBlockers(row, blockedSet, blockerIDsMap)
 }
 
 // CreateBulkWithEdges creates items and wires their explicit blocker edges atomically.
@@ -561,21 +615,8 @@ func (s *HCStore) CreateBulkWithEdges(ctx context.Context, items []hc.Item, edge
 	}
 	return s.db.WithinTx(ctx, func(ctx context.Context, q *db.DB) error {
 		for _, item := range items {
-			if err := q.CreateHCItem(ctx, db.CreateHCItemParams{
-				ID:        item.ID,
-				RepoKey:   item.RepoKey,
-				EpicID:    item.EpicID,
-				ParentID:  item.ParentID,
-				SessionID: item.SessionID,
-				Title:     item.Title,
-				Desc:      item.Desc,
-				Type:      item.Type,
-				Status:    item.Status,
-				Depth:     int64(item.Depth),
-				CreatedAt: item.CreatedAt.UnixNano(),
-				UpdatedAt: item.UpdatedAt.UnixNano(),
-			}); err != nil {
-				return fmt.Errorf("create hc item %q: %w", item.ID, err)
+			if err := createHCItem(ctx, q, item); err != nil {
+				return err
 			}
 		}
 		for _, edge := range edges {

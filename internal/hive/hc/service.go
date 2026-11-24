@@ -11,6 +11,7 @@ import (
 	"github.com/colonyops/hive/pkg/logutils"
 
 	"github.com/colonyops/hive/internal/domain/hc"
+	"github.com/colonyops/hive/internal/domain/tagset"
 	"github.com/rs/zerolog"
 )
 
@@ -34,6 +35,10 @@ func (s *Service) CreateItem(ctx context.Context, repoKey string, input hc.Creat
 	if input.Title == "" {
 		return hc.Item{}, fmt.Errorf("title is required")
 	}
+	tags, err := normalizeTags(input.Tags)
+	if err != nil {
+		return hc.Item{}, err
+	}
 
 	now := time.Now()
 	item := hc.Item{
@@ -45,6 +50,7 @@ func (s *Service) CreateItem(ctx context.Context, repoKey string, input hc.Creat
 		ParentID:  input.ParentID,
 		SessionID: input.SessionID,
 		Status:    hc.StatusOpen,
+		Tags:      tags,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -69,6 +75,15 @@ func (s *Service) CreateItem(ctx context.Context, repoKey string, input hc.Creat
 	}
 
 	return item, nil
+}
+
+// normalizeTags keeps a created item's tags a JSON array, as a stored item's are.
+func normalizeTags(tags []string) ([]string, error) {
+	out, err := tagset.Normalize(tags)
+	if out == nil && err == nil {
+		out = []string{}
+	}
+	return out, err
 }
 
 // createInputEntry pairs a CreateInput with its generated hc.Item.
@@ -152,6 +167,11 @@ func (s *Service) CreateBulk(ctx context.Context, repoKey string, input hc.Creat
 	now := time.Now()
 	var entries []createInputEntry
 	for entry := range walkCreateInputWithEntry(input, repoKey, "", "", 0, now) {
+		tags, err := normalizeTags(entry.input.Tags)
+		if err != nil {
+			return nil, fmt.Errorf("item %q: %w", entry.input.Title, err)
+		}
+		entry.item.Tags = tags
 		entries = append(entries, entry)
 	}
 

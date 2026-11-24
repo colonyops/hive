@@ -18,6 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -144,7 +145,7 @@ func TestClientEditsTagsThroughTheDaemon(t *testing.T) {
 	assert.Equal(t, edited.Tags, got.Tags)
 
 	_, err = client.SetSessionTags(ctx, created.ID, []string{"a,b"})
-	require.ErrorIs(t, err, session.ErrInvalidTag)
+	require.ErrorIs(t, err, tagset.ErrInvalid)
 	_, err = client.EditSessionTags(ctx, "missing", []string{"x"}, nil)
 	require.ErrorIs(t, err, session.ErrNotFound)
 }

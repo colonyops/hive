@@ -2413,6 +2413,15 @@
               "status": {
                 "type": "string"
               },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "title": {
                 "type": "string"
               },
@@ -2433,6 +2442,7 @@
               "desc",
               "type",
               "status",
+              "tags",
               "depth",
               "created_at",
               "updated_at"
@@ -2507,6 +2517,15 @@
             "status": {
               "type": "string"
             },
+            "tags": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
             "title": {
               "type": "string"
             },
@@ -2527,6 +2546,7 @@
             "desc",
             "type",
             "status",
+            "tags",
             "depth",
             "created_at",
             "updated_at"
@@ -2576,6 +2596,15 @@
                   "status": {
                     "type": "string"
                   },
+                  "tags": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
                   "title": {
                     "type": "string"
                   },
@@ -2596,6 +2625,7 @@
                   "desc",
                   "type",
                   "status",
+                  "tags",
                   "depth",
                   "created_at",
                   "updated_at"
@@ -2667,7 +2697,7 @@
           "type": "string"
         },
         "children": {
-          "description": "Items to create under this one, each {title, type, desc, ref, blockers, assignSession, children}; type defaults to task. ref is a label local to this call; blockers lists the refs that must finish first. Nesting goes up to 10 levels.",
+          "description": "Items to create under this one, each {title, type, desc, tags, ref, blockers, assignSession, children}; type defaults to task. ref is a label local to this call; blockers lists the refs that must finish first. Nesting goes up to 10 levels.",
           "items": {
             "additionalProperties": true,
             "type": "object"
@@ -2692,6 +2722,16 @@
         "repo": {
           "description": "The repository the items belong to, as owner/repo. Defaults to the caller session's repository.",
           "type": "string"
+        },
+        "tags": {
+          "description": "Tags for the item. Tags compare case-insensitively, keep the first spelling, are at most 40 characters and cannot contain commas.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "title": {
           "description": "The item's title.",
@@ -2757,6 +2797,15 @@
               "status": {
                 "type": "string"
               },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "title": {
                 "type": "string"
               },
@@ -2777,6 +2826,7 @@
               "desc",
               "type",
               "status",
+              "tags",
               "depth",
               "created_at",
               "updated_at"
@@ -2888,6 +2938,15 @@
             "status": {
               "type": "string"
             },
+            "tags": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
             "title": {
               "type": "string"
             },
@@ -2908,6 +2967,7 @@
             "desc",
             "type",
             "status",
+            "tags",
             "depth",
             "created_at",
             "updated_at"
@@ -2963,6 +3023,16 @@
             "cancelled"
           ],
           "type": "string"
+        },
+        "tags": {
+          "description": "Only items carrying every one of these tags. Tags compare case-insensitively.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         }
       },
       "required": [
@@ -3014,6 +3084,15 @@
               "status": {
                 "type": "string"
               },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "title": {
                 "type": "string"
               },
@@ -3034,6 +3113,7 @@
               "desc",
               "type",
               "status",
+              "tags",
               "depth",
               "created_at",
               "updated_at"
@@ -3125,6 +3205,15 @@
         "status": {
           "type": "string"
         },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "title": {
           "type": "string"
         },
@@ -3145,6 +3234,7 @@
         "desc",
         "type",
         "status",
+        "tags",
         "depth",
         "created_at",
         "updated_at"
@@ -3158,13 +3248,23 @@
       "idempotentHint": false,
       "readOnlyHint": false
     },
-    "description": "Change a task's status, text, assignment or blockers. Apply the changes given and answer with the item as it is now. Setting an epic to done or cancelled sets every unfinished item under it the same way. A blocker that would make a cycle is a conflict, and the other changes of the call are kept.",
+    "description": "Change a task's status, text, assignment, tags or blockers. Apply the changes given and answer with the item as it is now. Setting an epic to done or cancelled sets every unfinished item under it the same way. Tag changes apply in order: clearTags, then addTag, then removeTag; two agents that each add a tag both keep theirs. A blocker that would make a cycle is a conflict, and the other changes of the call are kept.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "addBlocker": {
           "description": "The id of an item that must finish before this one.",
           "type": "string"
+        },
+        "addTag": {
+          "description": "Tags to add. A tag the item already carries is kept as it is.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "assign": {
           "description": "Assign the item to the caller, which must be a hive session or a chat.",
@@ -3178,6 +3278,10 @@
           "description": "Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory; outside one it is global. Never guess or reuse another value.",
           "type": "string"
         },
+        "clearTags": {
+          "description": "Remove every tag, before addTag and removeTag apply.",
+          "type": "boolean"
+        },
         "desc": {
           "description": "The new description.",
           "type": [
@@ -3188,6 +3292,16 @@
         "removeBlocker": {
           "description": "The id of a blocker to remove.",
           "type": "string"
+        },
+        "removeTag": {
+          "description": "Tags to remove, after the adds. A tag the item does not carry is ignored.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "status": {
           "description": "The new status.",
@@ -3261,6 +3375,15 @@
         "status": {
           "type": "string"
         },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "title": {
           "type": "string"
         },
@@ -3281,13 +3404,14 @@
         "desc",
         "type",
         "status",
+        "tags",
         "depth",
         "created_at",
         "updated_at"
       ],
       "type": "object"
     },
-    "title": "Change a task's status, text, assignment or blockers"
+    "title": "Change a task's status, text, assignment, tags or blockers"
   },
   {
     "annotations": {

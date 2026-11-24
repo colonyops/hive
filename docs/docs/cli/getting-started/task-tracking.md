@@ -77,6 +77,19 @@ hive hc update <id> --add-blocker <blocker-id>    # mark task as blocked by anot
 hive hc update <id> --remove-blocker <blocker-id>  # remove a blocker
 ```
 
+### Tag items
+
+Tags group items across epics, for example by area (`frontend`) or by state (`needs-review`). They work like session tags: they compare case-insensitively, keep the first spelling, are at most 40 characters, and cannot contain commas.
+
+```bash
+hive hc create "Fix button focus" --parent-id <epic-id> --tags frontend --tags small
+hive hc update <id> --add-tag needs-review --remove-tag small
+hive hc update <id> --clear-tags
+hive hc list --tags frontend --status all      # items carrying every tag given
+```
+
+In a bulk create, give any item a `tags` list: `{"title": "Login", "type": "task", "tags": ["backend"]}`.
+
 Output is JSON lines — one per created item:
 
 ```

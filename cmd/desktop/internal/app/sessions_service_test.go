@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/tagset"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/promptfile"
 	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
@@ -1055,7 +1056,7 @@ func TestSessionsService_EditSessionChecksTagsBeforeRenaming(t *testing.T) {
 
 func TestSessionsService_EditSessionTagsClassifiesErrors(t *testing.T) {
 	h := newHiveHarness(t, engineOptions{})
-	legacy := strings.Repeat("x", session.MaxTagLength+1)
+	legacy := strings.Repeat("x", tagset.MaxLength+1)
 	h.save(t, session.Session{ID: "s1", Name: "review", Slug: "review", State: session.StateRecycled, Tags: []string{"auto", legacy}})
 	svc := newSessionsService(SessionsDeps{Hive: h.engine})
 

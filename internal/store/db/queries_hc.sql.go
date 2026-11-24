@@ -58,8 +58,8 @@ func (q *Queries) CountHCOpenChildren(ctx context.Context, parentID string) (int
 
 const createHCItem = `-- name: CreateHCItem :exec
 
-INSERT INTO hc_items (id, repo_key, epic_id, parent_id, session_id, title, desc, type, status, depth, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO hc_items (id, repo_key, epic_id, parent_id, session_id, title, desc, type, status, depth, tags, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateHCItemParams struct {
@@ -73,6 +73,7 @@ type CreateHCItemParams struct {
 	Type      hc.ItemType `json:"type"`
 	Status    hc.Status   `json:"status"`
 	Depth     int64       `json:"depth"`
+	Tags      string      `json:"tags"`
 	CreatedAt int64       `json:"created_at"`
 	UpdatedAt int64       `json:"updated_at"`
 }
@@ -90,6 +91,7 @@ func (q *Queries) CreateHCItem(ctx context.Context, arg CreateHCItemParams) erro
 		arg.Type,
 		arg.Status,
 		arg.Depth,
+		arg.Tags,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -129,7 +131,7 @@ func (q *Queries) DeleteHCItemsByStatusOlderThan(ctx context.Context, arg Delete
 }
 
 const getHCItem = `-- name: GetHCItem :one
-SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items WHERE id = ?
+SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at, tags FROM hc_items WHERE id = ?
 `
 
 func (q *Queries) GetHCItem(ctx context.Context, id string) (HcItem, error) {
@@ -148,6 +150,7 @@ func (q *Queries) GetHCItem(ctx context.Context, id string) (HcItem, error) {
 		&i.Depth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Tags,
 	)
 	return i, err
 }
@@ -242,7 +245,7 @@ func (q *Queries) ListAllHCBlockerEdges(ctx context.Context) ([]HcTaskBlocker, e
 }
 
 const listAllHCItems = `-- name: ListAllHCItems :many
-SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items ORDER BY created_at DESC
+SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at, tags FROM hc_items ORDER BY created_at DESC
 `
 
 func (q *Queries) ListAllHCItems(ctx context.Context) ([]HcItem, error) {
@@ -267,6 +270,7 @@ func (q *Queries) ListAllHCItems(ctx context.Context) ([]HcItem, error) {
 			&i.Depth,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Tags,
 		); err != nil {
 			return nil, err
 		}
@@ -282,7 +286,7 @@ func (q *Queries) ListAllHCItems(ctx context.Context) ([]HcItem, error) {
 }
 
 const listAllHCItemsByStatus = `-- name: ListAllHCItemsByStatus :many
-SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items WHERE status = ? ORDER BY created_at DESC
+SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at, tags FROM hc_items WHERE status = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListAllHCItemsByStatus(ctx context.Context, status hc.Status) ([]HcItem, error) {
@@ -307,6 +311,7 @@ func (q *Queries) ListAllHCItemsByStatus(ctx context.Context, status hc.Status) 
 			&i.Depth,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Tags,
 		); err != nil {
 			return nil, err
 		}
@@ -409,7 +414,7 @@ func (q *Queries) ListHCComments(ctx context.Context, itemID string) ([]HcCommen
 }
 
 const listHCEpics = `-- name: ListHCEpics :many
-SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items WHERE type = 'epic' ORDER BY created_at DESC
+SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at, tags FROM hc_items WHERE type = 'epic' ORDER BY created_at DESC
 `
 
 func (q *Queries) ListHCEpics(ctx context.Context) ([]HcItem, error) {
@@ -434,6 +439,7 @@ func (q *Queries) ListHCEpics(ctx context.Context) ([]HcItem, error) {
 			&i.Depth,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Tags,
 		); err != nil {
 			return nil, err
 		}
@@ -449,7 +455,7 @@ func (q *Queries) ListHCEpics(ctx context.Context) ([]HcItem, error) {
 }
 
 const listHCEpicsByRepo = `-- name: ListHCEpicsByRepo :many
-SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items WHERE type = 'epic' AND repo_key = ? ORDER BY created_at DESC
+SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at, tags FROM hc_items WHERE type = 'epic' AND repo_key = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListHCEpicsByRepo(ctx context.Context, repoKey string) ([]HcItem, error) {
@@ -474,6 +480,7 @@ func (q *Queries) ListHCEpicsByRepo(ctx context.Context, repoKey string) ([]HcIt
 			&i.Depth,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Tags,
 		); err != nil {
 			return nil, err
 		}
@@ -585,7 +592,7 @@ func (q *Queries) ListHCItemsBlockedBy(ctx context.Context, blockerID string) ([
 }
 
 const listHCItemsByEpic = `-- name: ListHCItemsByEpic :many
-SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items WHERE epic_id = ? ORDER BY depth ASC, created_at ASC
+SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at, tags FROM hc_items WHERE epic_id = ? ORDER BY depth ASC, created_at ASC
 `
 
 func (q *Queries) ListHCItemsByEpic(ctx context.Context, epicID string) ([]HcItem, error) {
@@ -610,6 +617,7 @@ func (q *Queries) ListHCItemsByEpic(ctx context.Context, epicID string) ([]HcIte
 			&i.Depth,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Tags,
 		); err != nil {
 			return nil, err
 		}
@@ -625,7 +633,7 @@ func (q *Queries) ListHCItemsByEpic(ctx context.Context, epicID string) ([]HcIte
 }
 
 const listHCItemsByEpicAndStatus = `-- name: ListHCItemsByEpicAndStatus :many
-SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items WHERE epic_id = ? AND status = ? ORDER BY depth ASC, created_at ASC
+SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at, tags FROM hc_items WHERE epic_id = ? AND status = ? ORDER BY depth ASC, created_at ASC
 `
 
 type ListHCItemsByEpicAndStatusParams struct {
@@ -655,6 +663,7 @@ func (q *Queries) ListHCItemsByEpicAndStatus(ctx context.Context, arg ListHCItem
 			&i.Depth,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Tags,
 		); err != nil {
 			return nil, err
 		}
@@ -670,7 +679,7 @@ func (q *Queries) ListHCItemsByEpicAndStatus(ctx context.Context, arg ListHCItem
 }
 
 const listHCItemsByRepo = `-- name: ListHCItemsByRepo :many
-SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items WHERE repo_key = ? ORDER BY created_at ASC
+SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at, tags FROM hc_items WHERE repo_key = ? ORDER BY created_at ASC
 `
 
 func (q *Queries) ListHCItemsByRepo(ctx context.Context, repoKey string) ([]HcItem, error) {
@@ -695,6 +704,7 @@ func (q *Queries) ListHCItemsByRepo(ctx context.Context, repoKey string) ([]HcIt
 			&i.Depth,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Tags,
 		); err != nil {
 			return nil, err
 		}
@@ -710,7 +720,7 @@ func (q *Queries) ListHCItemsByRepo(ctx context.Context, repoKey string) ([]HcIt
 }
 
 const listHCItemsBySession = `-- name: ListHCItemsBySession :many
-SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items WHERE session_id = ? ORDER BY created_at ASC
+SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at, tags FROM hc_items WHERE session_id = ? ORDER BY created_at ASC
 `
 
 func (q *Queries) ListHCItemsBySession(ctx context.Context, sessionID string) ([]HcItem, error) {
@@ -735,6 +745,7 @@ func (q *Queries) ListHCItemsBySession(ctx context.Context, sessionID string) ([
 			&i.Depth,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Tags,
 		); err != nil {
 			return nil, err
 		}
@@ -807,7 +818,7 @@ func (q *Queries) ListHCRepoKeys(ctx context.Context) ([]string, error) {
 }
 
 const nextHCItemForSession = `-- name: NextHCItemForSession :one
-SELECT outer_item.id, outer_item.repo_key, outer_item.epic_id, outer_item.parent_id, outer_item.session_id, outer_item.title, outer_item."desc", outer_item.type, outer_item.status, outer_item.depth, outer_item.created_at, outer_item.updated_at FROM hc_items AS outer_item
+SELECT outer_item.id, outer_item.repo_key, outer_item.epic_id, outer_item.parent_id, outer_item.session_id, outer_item.title, outer_item."desc", outer_item.type, outer_item.status, outer_item.depth, outer_item.created_at, outer_item.updated_at, outer_item.tags FROM hc_items AS outer_item
 WHERE outer_item.session_id = ?
   AND outer_item.status = 'open'
   AND outer_item.id NOT IN (
@@ -839,12 +850,13 @@ func (q *Queries) NextHCItemForSession(ctx context.Context, sessionID string) (H
 		&i.Depth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Tags,
 	)
 	return i, err
 }
 
 const nextHCItemForSessionInEpic = `-- name: NextHCItemForSessionInEpic :one
-SELECT outer_item.id, outer_item.repo_key, outer_item.epic_id, outer_item.parent_id, outer_item.session_id, outer_item.title, outer_item."desc", outer_item.type, outer_item.status, outer_item.depth, outer_item.created_at, outer_item.updated_at FROM hc_items AS outer_item
+SELECT outer_item.id, outer_item.repo_key, outer_item.epic_id, outer_item.parent_id, outer_item.session_id, outer_item.title, outer_item."desc", outer_item.type, outer_item.status, outer_item.depth, outer_item.created_at, outer_item.updated_at, outer_item.tags FROM hc_items AS outer_item
 WHERE outer_item.session_id = ?
   AND outer_item.epic_id = ?
   AND outer_item.status = 'open'
@@ -882,6 +894,7 @@ func (q *Queries) NextHCItemForSessionInEpic(ctx context.Context, arg NextHCItem
 		&i.Depth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Tags,
 	)
 	return i, err
 }
@@ -920,7 +933,7 @@ func (q *Queries) RemoveHCBlocker(ctx context.Context, arg RemoveHCBlockerParams
 }
 
 const resumeHCItemForSession = `-- name: ResumeHCItemForSession :one
-SELECT outer_item.id, outer_item.repo_key, outer_item.epic_id, outer_item.parent_id, outer_item.session_id, outer_item.title, outer_item."desc", outer_item.type, outer_item.status, outer_item.depth, outer_item.created_at, outer_item.updated_at FROM hc_items AS outer_item
+SELECT outer_item.id, outer_item.repo_key, outer_item.epic_id, outer_item.parent_id, outer_item.session_id, outer_item.title, outer_item."desc", outer_item.type, outer_item.status, outer_item.depth, outer_item.created_at, outer_item.updated_at, outer_item.tags FROM hc_items AS outer_item
 WHERE outer_item.session_id = ?
   AND outer_item.status = 'in_progress'
   AND outer_item.id NOT IN (
@@ -947,12 +960,13 @@ func (q *Queries) ResumeHCItemForSession(ctx context.Context, sessionID string) 
 		&i.Depth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Tags,
 	)
 	return i, err
 }
 
 const resumeHCItemForSessionInEpic = `-- name: ResumeHCItemForSessionInEpic :one
-SELECT outer_item.id, outer_item.repo_key, outer_item.epic_id, outer_item.parent_id, outer_item.session_id, outer_item.title, outer_item."desc", outer_item.type, outer_item.status, outer_item.depth, outer_item.created_at, outer_item.updated_at FROM hc_items AS outer_item
+SELECT outer_item.id, outer_item.repo_key, outer_item.epic_id, outer_item.parent_id, outer_item.session_id, outer_item.title, outer_item."desc", outer_item.type, outer_item.status, outer_item.depth, outer_item.created_at, outer_item.updated_at, outer_item.tags FROM hc_items AS outer_item
 WHERE outer_item.session_id = ?
   AND outer_item.epic_id = ?
   AND outer_item.status = 'in_progress'
@@ -985,12 +999,13 @@ func (q *Queries) ResumeHCItemForSessionInEpic(ctx context.Context, arg ResumeHC
 		&i.Depth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Tags,
 	)
 	return i, err
 }
 
 const updateHCItem = `-- name: UpdateHCItem :exec
-UPDATE hc_items SET status = ?, session_id = ?, title = ?, desc = ?, updated_at = ? WHERE id = ?
+UPDATE hc_items SET status = ?, session_id = ?, title = ?, desc = ?, tags = ?, updated_at = ? WHERE id = ?
 `
 
 type UpdateHCItemParams struct {
@@ -998,6 +1013,7 @@ type UpdateHCItemParams struct {
 	SessionID string    `json:"session_id"`
 	Title     string    `json:"title"`
 	Desc      string    `json:"desc"`
+	Tags      string    `json:"tags"`
 	UpdatedAt int64     `json:"updated_at"`
 	ID        string    `json:"id"`
 }
@@ -1008,6 +1024,7 @@ func (q *Queries) UpdateHCItem(ctx context.Context, arg UpdateHCItemParams) erro
 		arg.SessionID,
 		arg.Title,
 		arg.Desc,
+		arg.Tags,
 		arg.UpdatedAt,
 		arg.ID,
 	)
