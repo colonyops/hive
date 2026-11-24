@@ -106,6 +106,11 @@ func Run(ctx context.Context, opts Options) error {
 
 	startedAt := time.Now()
 	engine := runtime.Engine()
+	// The daemon serves Drive at wire.EnginePath for as long as it runs, and
+	// the server's CLI and agents write documents beside it.
+	if err := engine.Drive().Watch(runCtx); err != nil {
+		logger.Warn().Err(err).Msg("drive watcher unavailable; documents written by other processes stay unlisted")
+	}
 	api := sessionapi.NewLocal(engine)
 	metrics := newMetrics(logger, startedAt, api.ListSessions)
 	loop := newStatusLoop(statusLoopDeps{
