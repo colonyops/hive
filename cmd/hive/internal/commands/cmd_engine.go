@@ -64,8 +64,8 @@ func enginePath(info ops.Info) []string {
 	return append(slices.Clone(ns), p[1:]...)
 }
 
-// EngineCmd adds the catalog's engine operations to the hc, msg and todo
-// groups. They run in this process.
+// EngineCmd adds the catalog's engine operations to the groups
+// engineNamespaces names. They run in this process.
 type EngineCmd struct {
 	flags *Flags
 	app   *app.App

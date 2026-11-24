@@ -112,9 +112,10 @@ The built-in Hive package covers:
 
 Hive includes these MCP entries:
 
-- **Hive Desktop** for reading and configuring the running app. It requires the local HTTP server, which is enabled by default. Its `session_list` and `session_tags_update` tools let an agent find hive sessions by tag and add or remove tags, so an orchestrating agent can pick up the sessions taged `auto` and retag each one it takes.
+- **Hive Desktop** for reading and configuring the running app. It requires the local HTTP server, which is enabled by default. Its `session_list` and `session_tags_update` tools let an agent find hive sessions by tag and add or remove tags, so an orchestrating agent can pick up the sessions tagged `auto` and retag each one it takes. They reach this machine and every server in the hive config's `servers:` list, and a session id from another server is `<server>:<id>`.
 - **Hive Drive** for durable Markdown and HTML documents beside a chat.
 - **Hive Chats** for starting chats in other workspaces with an opening prompt, and pinning chats to Code. A started chat runs its workspace's command with that workspace's permission settings, so enable it only in a workspace you trust to start others. It runs through `hive mcp serve` and needs the hive CLI at the app's version.
+- **Hive Sessions** for creating and starting hive sessions on this machine or on a configured server. A created session runs the agent command of the hive config, so enable it only in a workspace you trust to start agents. Like Hive Chats, it runs through `hive mcp serve` and needs the hive CLI at the app's version.
 - **Playwright** for browser automation. It requires Node.js and a Playwright browser.
 - **Chrome DevTools** for a running Chrome browser. It requires Node.js 20.19 or newer and Chrome.
 

@@ -41,6 +41,8 @@ servers:
 | `hive new --server box --remote <url> <name>` | Creates a session on `box` with the server's rules, then attaches. With `--background` or no terminal, it prints the attach command instead |
 | `hive session attach box:<id>` | Opens the session's terminal, and starts it first when its tmux session ended. When all of the session's commands finished, there is no terminal to open, and hive says so |
 | `hive session show\|update\|delete\|recycle box:<id>` | Acts on the session on `box` |
+| `hive session tags update box:<id> --add <tag> --remove <tag>` | Adds and then removes tags on the session on `box` |
+| `hive session start box:<id>` | Starts the agent of a session on `box` that has no running terminal, without attaching |
 
 Every session command except `hive session info` takes `--server <name>` (or `HIVE_SERVER`), and then a bare id names a session on that server. `--server local` means this machine.
 
@@ -59,6 +61,6 @@ The TUI lists only the sessions on its own machine. To use it with a server's se
 | offline | ssh or the daemon did not answer | Read the ssh error that hive shows. Check that `ssh <host>` works without a prompt and that hive is on the server's PATH, or set `binary:`. |
 | incompatible | The server's hive speaks another protocol version | Install the same hive version on both machines |
 
-An offline server does not stop the rest: `hive session list` prints a warning and lists the other sessions. A server that hangs can delay a list by up to 10 seconds. `hive session list --server <name>` fails when that server is offline.
+An offline server does not stop the rest: `hive session list` prints a warning and lists the other sessions. When stdout is not a terminal, `hive session list` and `hive ls` print one JSON line per session instead of the table, as `--json` does. A server that hangs can delay a list by up to 10 seconds. `hive session list --server <name>` fails when that server is offline.
 
 Hive Desktop reads the same `servers:` list. See [Servers in Code](../../desktop/code/servers.md).

@@ -67,8 +67,8 @@ Wildcard `*` matches any characters within a segment. Topics are expanded at pub
 Agent inboxes follow: `agent.<session-id>.inbox`
 
 ```bash
-# Find session IDs
-hive ls
+# Find session IDs (one JSON line per session when piped)
+hive ls --json | jq -r '.id + "  " + .name'
 
 # Send to specific agent
 hive msg create --topics agent.abc123.inbox --payload "Message"
