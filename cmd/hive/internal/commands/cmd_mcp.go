@@ -15,8 +15,13 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/internal/hive/engineops"
+	"github.com/colonyops/hive/internal/hive/servers"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/internal/ops"
 	"github.com/colonyops/hive/internal/ops/catalog"
+	driveops "github.com/colonyops/hive/internal/ops/drive"
 	"github.com/colonyops/hive/internal/ops/sessions"
 	"github.com/colonyops/hive/pkg/logutils"
 )
@@ -43,18 +48,23 @@ func (cmd *MCPCmd) Register(app *cli.Command) *cli.Command {
 			{
 				Name:  "serve",
 				Usage: "Serve Hive's tools over stdio",
-				Description: `Runs an MCP server on stdin and stdout that forwards each tool call to the
-running Hive Desktop, so an agent needs no port. Add it to the agent's config:
+				Description: `Runs an MCP server on stdin and stdout, so an agent needs no port. Add it to
+the agent's config:
 
-  Claude Code: claude mcp add hive-drive -- hive mcp serve --toolset drive,layout
-  Codex:       codex mcp add hive-drive -- hive mcp serve --toolset drive,layout
+  Claude Code: claude mcp add hive -- hive mcp serve --toolset tasks,messages
+  Codex:       codex mcp add hive -- hive mcp serve --toolset tasks,messages
 
-The tools are the same ones "hive dt" calls, plus the engine operations
-behind "hive task", "hive message", "hive topic" and "hive todo", which the
-desktop also serves. --toolset picks which (default:
-all). The server finds the desktop through the endpoint file in --data-dir on
-every call, so a desktop restart needs no reconnect. While the desktop is not
-running, a call answers "unavailable: Hive Desktop is not running".`,
+The tools are the engine operations behind "hive hc", "hive msg", "hive todo",
+"hive session" and "hive drive", and the desktop tools "hive dt" calls.
+--toolset picks which (default: all).
+
+Engine operations run in this process on hive.db in --data-dir, so they work
+while Hive Desktop is closed. The database opens on the first such call and
+stays open. Session create, start, recycle and delete (the session-control
+toolset) and the desktop tools go to the running desktop. The server finds it
+through the endpoint file on every call, so a desktop restart needs no
+reconnect. While the desktop is not running, those calls answer
+"unavailable: Hive Desktop is not running".`,
 				Flags: []cli.Flag{
 					&cli.StringSliceFlag{
 						Name:  toolsetFlag,
@@ -85,14 +95,43 @@ func (cmd *MCPCmd) runServe(ctx context.Context, c *cli.Command) error {
 	}
 	client := NewDesktopClient(cmd.app.Config.DataDir, c.String(desktopURLFlag), cmd.app.Build.Version)
 	log := logutils.Component(cmd.app.Logger, "cli.mcp")
-	srv, err := newMCPServer(client, caller, splitToolsets(c.StringSlice(toolsetFlag)), cmd.app.Build.Version, log)
+	engine := newLocalEngine(ctx, cmd.openEngine, cmd.app.Build.Version, log)
+	srv, err := newMCPServer(client, engine, caller, splitToolsets(c.StringSlice(toolsetFlag)), cmd.app.Build.Version, log)
 	if err != nil {
 		return err
 	}
 	log.Info().Str("caller", caller).Msg("serving MCP on stdio")
 	// The protocol owns stdout. Logs go to the log file, so nothing else may
 	// print there while this runs.
-	return srv.Run(ctx, &mcp.StdioTransport{})
+	return errors.Join(srv.Run(ctx, &mcp.StdioTransport{}), engine.Close())
+}
+
+// openEngine composes the engine handlers as the CLI's session commands do:
+// session reads go through the daemon when experimental.daemon is on, and
+// through every server under servers:.
+func (cmd *MCPCmd) openEngine(ctx context.Context) (*openedEngine, error) {
+	if cmd.app.OpenEngine == nil {
+		return nil, errors.New("this hive has no engine to open")
+	}
+	rt, err := cmd.app.OpenEngine(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var local sessionapi.API = sessionapi.NewLocal(rt.Engine())
+	if cmd.app.Config.Experimental.Daemon {
+		local = cmd.app.DaemonClient(true)
+	}
+	fleet := servers.New(cmd.app.Logger, local, cmd.app.Config.Servers, cmd.app.Build.Version)
+	return &openedEngine{
+		handlers: engineops.New(cmd.app.Logger, rt.Engine(), engineops.WithFleet(func() *servers.Fleet { return fleet })),
+		resolve: func(ctx context.Context, caller string) (sessionsvc.Caller, error) {
+			return rt.Engine().Sessions().ResolveCaller(ctx, caller, "", "")
+		},
+		close: func() error {
+			fleet.Close()
+			return rt.Close()
+		},
+	}, nil
 }
 
 func splitToolsets(values []string) []string {
@@ -107,11 +146,10 @@ func splitToolsets(values []string) []string {
 	return names
 }
 
-// newMCPServer mounts a forwarding tool for each catalog operation in the
-// named toolsets, or in all of them when toolsets is empty. Engine operations
-// are forwarded too, to the desktop that mounts them, until this server runs
-// them in-process (#796).
-func newMCPServer(client *DesktopClient, caller string, toolsets []string, version string, log zerolog.Logger) (*mcp.Server, error) {
+// newMCPServer mounts a tool for each catalog operation in the named
+// toolsets, or in all of them when toolsets is empty. An operation that
+// runsInProcess goes to engine; any other is forwarded to the desktop.
+func newMCPServer(client *DesktopClient, engine *localEngine, caller string, toolsets []string, version string, log zerolog.Logger) (*mcp.Server, error) {
 	selected, err := selectOps(toolsets)
 	if err != nil {
 		return nil, err
@@ -122,7 +160,11 @@ func newMCPServer(client *DesktopClient, caller string, toolsets []string, versi
 		if err != nil {
 			return nil, err
 		}
-		srv.AddTool(tool, forwardHandler(client, caller, op.Info(), log))
+		if runsInProcess(op.Info()) {
+			srv.AddTool(tool, engineHandler(engine, client, caller, op.Info(), log))
+		} else {
+			srv.AddTool(tool, forwardHandler(client, caller, op.Info(), log))
+		}
 	}
 	return srv, nil
 }
@@ -199,6 +241,30 @@ func forwardHandler(client *DesktopClient, caller string, info ops.Info, log zer
 		}
 		log.Warn().Err(err).Str("tool", info.ToolName).Msg("desktop call failed")
 		return nil, err
+	}
+}
+
+func engineHandler(engine *localEngine, client *DesktopClient, caller string, info ops.Info, log zerolog.Logger) mcp.ToolHandler {
+	forward := forwardHandler(client, caller, info, log)
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args, err := forwardedArgs(req.Params.Arguments, info, caller)
+		if err != nil {
+			return refusal(ops.KindInvalid, err.Error()), nil
+		}
+		if info.Toolset == driveops.Toolset {
+			chat, err := engine.IsChat(ctx, caller)
+			if refused, ok := errors.AsType[*ops.Error](err); ok {
+				return refusal(refused.Kind, refused.Msg), nil
+			}
+			if chat {
+				return forward(ctx, req)
+			}
+		}
+		res, err := engine.Call(ctx, info.ToolName, args)
+		if refused, ok := errors.AsType[*ops.Error](err); ok {
+			return refusal(refused.Kind, refused.Msg), nil
+		}
+		return res, err
 	}
 }
 

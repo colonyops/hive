@@ -26,8 +26,8 @@ type HiveCLI interface {
 }
 
 // hiveCLIResolver resolves hive the way the daemon does (daemon.hive_path,
-// else the login-shell PATH). `hive mcp serve` proxies to this desktop, so a
-// binary of another version could speak a different operation catalogue.
+// else the login-shell PATH). `hive mcp serve` serves this desktop's operation
+// catalogue, so a binary of another version could speak a different one.
 type hiveCLIResolver struct {
 	configuredPath func(context.Context) string
 	execEnv        *execenv.Resolver
