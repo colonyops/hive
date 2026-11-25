@@ -55,56 +55,60 @@ async function createThread(anchor: Anchor, text: string): Promise<string | null
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1" :class="isHtml ? '' : 'overflow-y-auto'" data-testid="collab-scroll">
-    <div class="min-w-0 flex-1" :class="isHtml ? 'relative overflow-hidden' : ''">
-      <div class="relative" :class="isHtml ? 'h-full' : readerClass">
-        <DocumentReader
-          ref="reader"
-          :class="documentClass"
-          :document="document"
-          :font-size-px="fontSizePx"
-          :line-height="lineHeight"
-          :html-src="htmlSrc"
-          :paths="paths"
-          :source-lines="sourceLines"
-          :body-class="{ 'cursor-pointer': !!hoveredId }"
-          @open-link="emit('open-link', $event)"
-        >
-          <DocumentOverlay
-            v-if="!isHtml"
-            :root="root"
-            :body="body"
-            :threads="collab.threads.value"
-            :viewers="collab.viewers.value"
-            :active-id="activeId"
-            :hovered-id="hoveredId"
-            :can-comment="!!collab.viewer.value?.can_comment"
-            :submit="createThread"
-            @selection="collab.setSelection"
-            @select="select"
-            @hover="hoveredId = $event"
-          />
-        </DocumentReader>
+  <div class="flex min-h-0 flex-1 flex-col" :class="isHtml ? '' : 'overflow-y-auto'" data-testid="collab-scroll">
+    <!-- A flex row stretches its items only to its own height. Growing with the
+         document lets the comments column run to the end of a long one. -->
+    <div class="flex" :class="isHtml ? 'min-h-0 flex-1' : 'shrink-0 grow'">
+      <div class="min-w-0 flex-1" :class="isHtml ? 'relative overflow-hidden' : ''">
+        <div class="relative" :class="isHtml ? 'h-full' : readerClass">
+          <DocumentReader
+            ref="reader"
+            :class="documentClass"
+            :document="document"
+            :font-size-px="fontSizePx"
+            :line-height="lineHeight"
+            :html-src="htmlSrc"
+            :paths="paths"
+            :source-lines="sourceLines"
+            :body-class="{ 'cursor-pointer': !!hoveredId }"
+            @open-link="emit('open-link', $event)"
+          >
+            <DocumentOverlay
+              v-if="!isHtml"
+              :root="root"
+              :body="body"
+              :threads="collab.threads.value"
+              :viewers="collab.viewers.value"
+              :active-id="activeId"
+              :hovered-id="hoveredId"
+              :can-comment="!!collab.viewer.value?.can_comment"
+              :submit="createThread"
+              @selection="collab.setSelection"
+              @select="select"
+              @hover="hoveredId = $event"
+            />
+          </DocumentReader>
+        </div>
       </div>
-    </div>
-    <div
-      v-if="railOpen"
-      class="relative w-96 shrink-0 border-l border-row max-md:w-80"
-      :class="isHtml ? 'overflow-y-auto' : ''"
-    >
-      <CommentRail
-        :threads="collab.threads.value"
-        :viewer="collab.viewer.value"
-        :collab="collab"
-        :active-id="activeId"
-        :hovered-id="hoveredId"
-        :align-to="isHtml ? null : root"
-        :sign-in="signIn"
-        :error="collab.error.value"
-        @select="activeId = $event"
-        @hover="hoveredId = $event"
-        @close="railOpen = false"
-      />
+      <div
+        v-if="railOpen"
+        class="relative flex w-96 shrink-0 flex-col border-l border-row max-md:w-80"
+        :class="isHtml ? 'overflow-y-auto' : ''"
+      >
+        <CommentRail
+          :threads="collab.threads.value"
+          :viewer="collab.viewer.value"
+          :collab="collab"
+          :active-id="activeId"
+          :hovered-id="hoveredId"
+          :align-to="isHtml ? null : root"
+          :sign-in="signIn"
+          :error="collab.error.value"
+          @select="activeId = $event"
+          @hover="hoveredId = $event"
+          @close="railOpen = false"
+        />
+      </div>
     </div>
   </div>
 </template>

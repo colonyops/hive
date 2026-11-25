@@ -76,7 +76,7 @@ function select(id: string): void {
 </script>
 
 <template>
-  <aside class="flex min-h-full flex-col bg-pane" data-testid="comment-rail">
+  <aside class="flex flex-1 flex-col bg-pane" data-testid="comment-rail">
     <header class="sticky top-0 z-10 flex h-11 shrink-0 items-center gap-2 border-b border-row bg-pane px-4">
       <span class="text-small font-semibold text-text">Comments</span>
       <span class="rounded bg-chip px-1.5 py-0.5 font-mono text-micro leading-none text-text-2">{{
