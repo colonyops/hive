@@ -743,6 +743,9 @@ func (a *App) RuntimePaths() settings.Paths { return a.paths }
 // is nil until New has started it.
 func (a *App) Engine() *hive.Engine { return a.hive }
 
+// HiveServers is the current server fleet; a config reload replaces it.
+func (a *App) HiveServers() *servers.Fleet { return a.hiveServers.Load() }
+
 // HiveDataDir is the engine's data directory, the one the hive CLI shares.
 func (a *App) HiveDataDir() string { return a.hiveDataDir }
 

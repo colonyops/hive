@@ -53,7 +53,7 @@ func MountResult[In, Out any](srv *mcp.Server, s ops.Spec[In], h func(context.Co
 		panic(fmt.Sprintf("%s: input schema: %v", s.Name, err))
 	}
 	if reflect.TypeFor[Out]() != reflect.TypeFor[any]() {
-		output, err := jsonschema.ForType(reflect.TypeFor[Out](), &jsonschema.ForOptions{})
+		output, err := outputSchema[Out]()
 		if err != nil {
 			panic(fmt.Sprintf("%s: output schema: %v", s.Name, err))
 		}
@@ -85,6 +85,13 @@ func MountResult[In, Out any](srv *mcp.Server, s ops.Spec[In], h func(context.Co
 		return res, out, nil
 	}
 	srv.AddTool(tool, instrumentRaw(tool.Name, call))
+}
+
+func outputSchema[Out any]() (*jsonschema.Schema, error) {
+	if schemer, ok := any(*new(Out)).(ops.OutputSchemer); ok {
+		return schemer.OutputSchema()
+	}
+	return jsonschema.ForType(reflect.TypeFor[Out](), &jsonschema.ForOptions{})
 }
 
 // decode checks each constraint before the whole schema, because the

@@ -12,6 +12,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/hive/hivetest"
+	"github.com/colonyops/hive/internal/hive/servers"
 )
 
 type attachCountingMux struct {
@@ -30,20 +31,11 @@ func TestCreateSessionFromFlagsAttaches(t *testing.T) {
 	mux := &attachCountingMux{}
 	h := hivetest.NewEngine(t, hivetest.Options{Config: &cfg.Config, Mux: mux})
 	a := app.NewApp(zerolog.Nop(), h.Engine, cfg, nil, nil, nil, nil, "")
+	a.Servers = servers.New(zerolog.Nop(), a.SessionAPI(), nil, "test")
 
 	flags := &createSessionFlags{remote: "https://github.com/acme/site", source: t.TempDir()}
 	sess, err := createSessionFromFlags(t.Context(), a, "front", flags, nil)
 	require.NoError(t, err)
 	require.NotNil(t, sess)
 	assert.Equal(t, 1, mux.attaches)
-}
-
-func TestIsLocalPath(t *testing.T) {
-	t.Parallel()
-	for _, remote := range []string{"/srv/repo.git", "./repo", "../repo", "~/repo", "file:///srv/repo.git"} {
-		assert.True(t, isLocalPath(remote), remote)
-	}
-	for _, remote := range []string{"git@github.com:colonyops/hive.git", "https://github.com/colonyops/hive.git", "ssh://git@host/repo.git"} {
-		assert.False(t, isLocalPath(remote), remote)
-	}
 }

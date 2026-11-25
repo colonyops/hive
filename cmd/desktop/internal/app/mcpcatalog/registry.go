@@ -53,6 +53,19 @@ var registry = map[string]Descriptor{
 		RuntimePath: "/mcp/chats",
 		StdioOnly:   true,
 	},
+	// Session create, start, recycle and delete, on the chats token. Its own
+	// entry, because these run commands and remove checkouts on any
+	// repository or server.
+	"hive-sessions": {
+		Type:        "hive-sessions",
+		Title:       "Hive Sessions",
+		Description: "Create, start, recycle and delete hive sessions on this machine or on a configured server. A started session runs its agent command in a new terminal.",
+		Stability:   StabilityStable,
+		Server:      Server{Transport: TransportHttp},
+		RuntimeURL:  true,
+		RuntimePath: "/mcp/sessions",
+		StdioOnly:   true,
+	},
 	"chrome-devtools": {
 		Type:        "chrome-devtools",
 		Title:       "Chrome DevTools",

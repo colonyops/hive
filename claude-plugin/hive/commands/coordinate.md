@@ -12,7 +12,7 @@ Establish coordination with other hive agents based on the provided context: $AR
    Run `hive session info --json` to get current session ID and inbox topic.
 
 2. **Discover other sessions:**
-   Run `hive ls` to see available sessions and their status.
+   Run `hive ls --json` to see available sessions and their status, one JSON line per session (`id`, `name`, `repo`, `state`, `inbox`).
 
 3. **Check inbox for existing messages:**
    Run `hive msg inbox` to see if other agents have already sent coordination messages.

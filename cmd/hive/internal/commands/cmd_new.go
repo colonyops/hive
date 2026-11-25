@@ -6,13 +6,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/ops"
+	"github.com/colonyops/hive/internal/ops/sessions"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
 )
@@ -71,101 +72,92 @@ func sessionCreateFlags(f *createSessionFlags) []cli.Flag {
 	}
 }
 
-// createSessionFromFlags validates the shared create flags and creates the
-// session. Progress may be nil (service output then goes to the service's
-// default writers).
-func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *createSessionFlags, progress io.Writer) (*session.Session, error) {
-	if err := checkAgent(ctx, app, f.agent); err != nil {
-		return nil, err
-	}
-
-	// A server cannot read a path on this machine, so a create there gets no
-	// source and its copy: rules copy nothing.
-	source := f.source
-	switch {
-	case source != "" && app.TargetsServer():
-		return nil, fmt.Errorf("--source names a directory on this machine, which the server cannot read")
-	case source == "" && !app.TargetsServer():
-		var err error
-		source, err = os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("determine source directory: %w", err)
+// createSessionFromFlags creates the session hive new names, then attaches
+// to it unless --background is set.
+func createSessionFromFlags(ctx context.Context, a *app.App, name string, f *createSessionFlags, progress io.Writer) (*sessions.SessionOut, error) {
+	args := map[string]any{"name": name, "background": f.background, "server": a.DefaultServer()}
+	for key, value := range map[string]string{"remote": f.remote, "source": f.source, "cloneStrategy": f.cloneStrategy, "agent": f.agent} {
+		if value != "" {
+			args[key] = value
 		}
 	}
-
-	opts := sessionsvc.CreateOptions{
-		Name:          name,
-		Remote:        f.remote,
-		Source:        source,
-		Background:    f.background,
-		CloneStrategy: f.cloneStrategy,
-		AgentKey:      f.agent,
-		Tags:          f.tags,
-		Progress:      progress,
+	if len(f.tags) > 0 {
+		args["tags"] = f.tags
 	}
-	if err := resolveCreateLocation(ctx, app, &opts); err != nil {
-		return nil, err
-	}
-	if app.TargetsServer() && f.remote == "" && isLocalPath(opts.Remote) {
-		return nil, fmt.Errorf("this checkout's remote %q is a path on this machine, which the server cannot clone; pass --remote with a URL the server can reach", opts.Remote)
-	}
-	sess, err := app.SessionAPI().CreateSession(ctx, opts)
+	created, err := createSession(ctx, a, args, progress)
 	if err != nil {
-		return nil, fmt.Errorf("create session: %w", err)
+		return nil, err
 	}
-	switch {
-	case f.background:
-	case app.TargetsServer() && canAttach():
-		if err := app.AttachServerSession(ctx, app.DefaultServer(), *sess); err != nil {
-			return sess, fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
-		}
-	case app.TargetsServer():
-		showRemoteAttach(app, *sess, progress)
-	case canAttach():
-		if err := app.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(*sess), multiplexer.AttachStreams{}); err != nil {
-			return sess, fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
-		}
+	if f.background {
+		return &created, nil
 	}
-	return sess, nil
+	return &created, attachCreated(ctx, a, created, progress)
 }
 
-// checkAgent refuses an agent profile that the machine which spawns the
-// session does not have.
-func checkAgent(ctx context.Context, app *app.App, agent string) error {
-	if agent == "" {
-		return nil
-	}
-	if !app.TargetsServer() {
-		if _, ok := app.Config.Agents.Profiles[agent]; !ok {
-			return invalidf("unknown agent %q", agent)
-		}
-		return nil
-	}
-	options, err := app.SessionAPI().SessionLaunchOptions(ctx)
+// createSession runs session.create with the CLI's defaults: the working
+// directory is the caller, never HIVE_AGENT_SESSION, so the remote and the
+// copy source default to it.
+func createSession(ctx context.Context, a *app.App, args map[string]any, progress io.Writer) (sessions.SessionOut, error) {
+	wd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("read the agent profiles of server %s: %w", app.DefaultServer(), err)
+		return sessions.SessionOut{}, fmt.Errorf("determine the current directory: %w", err)
 	}
-	if !slices.Contains(options.Agents, agent) {
-		return fmt.Errorf("server %s has no agent %q; its agents are %s", app.DefaultServer(), agent, strings.Join(options.Agents, ", "))
+	_, callerGiven := args[ops.CallerField]
+	if !callerGiven {
+		args[ops.CallerField] = wd
+	}
+	if source, _ := args["source"].(string); source != "" {
+		abs, err := filepath.Abs(source)
+		if err != nil {
+			return sessions.SessionOut{}, fmt.Errorf("resolve source directory: %w", err)
+		}
+		args["source"] = abs
+	}
+	out, err := callEngine(ctx, a, sessions.SessionCreate.Name, args, progress)
+	if err != nil {
+		return sessions.SessionOut{}, err
+	}
+	return out.(sessions.SessionOut), nil
+}
+
+// attachCreated shows a new session: it switches or attaches this terminal
+// to it, or, with no terminal for a server's session, says how to attach.
+func attachCreated(ctx context.Context, a *app.App, created sessions.SessionOut, progress io.Writer) error {
+	onServer := created.Server != session.LocalServer
+	if !onServer && !canAttach() {
+		return nil
+	}
+	if onServer && !canAttach() {
+		showRemoteAttach(created, progress)
+		return nil
+	}
+	api, err := a.ServerAPI(created.Server)
+	if err != nil {
+		return err
+	}
+	sess, err := api.GetSession(ctx, created.ID)
+	if err != nil {
+		return fmt.Errorf("session %s was created, but reading it back failed: %w", created.Name, err)
+	}
+	if onServer {
+		err = a.AttachServerSession(ctx, created.Server, sess)
+	} else {
+		err = a.Sessions().AttachOrSwitch(ctx, sessionsvc.Target(sess), multiplexer.AttachStreams{})
+	}
+	if err != nil {
+		return fmt.Errorf("session %s was created, but attaching to it failed: %w", sess.Name, err)
 	}
 	return nil
 }
 
 // showRemoteAttach prints how to reach a new session on a server when there
 // is no terminal to attach.
-func showRemoteAttach(app *app.App, sess session.Session, progress io.Writer) {
+func showRemoteAttach(created sessions.SessionOut, progress io.Writer) {
 	if progress == nil {
 		progress = os.Stderr
 	}
-	ref := session.Ref{Server: app.DefaultServer(), ID: sess.ID}
+	ref := session.Ref{Server: created.Server, ID: created.ID}
 	_, _ = fmt.Fprintf(progress, "Attach with: hive session attach %s\n", ref)
-}
-
-// isLocalPath reports whether a git remote names a path on this machine
-// instead of a URL another machine can clone.
-func isLocalPath(remote string) bool {
-	return strings.HasPrefix(remote, "/") || strings.HasPrefix(remote, ".") ||
-		strings.HasPrefix(remote, "~") || strings.HasPrefix(remote, "file://")
 }
 
 // canAttach reports whether a tmux client can show the new session: inside

@@ -25,6 +25,7 @@ func driveRoot(a *app.App) func(*cli.Command) *cli.Command {
 			NewHoneycombCmd(flags, a).Register,
 			NewMsgCmd(flags, a).Register,
 			NewTodoCmd(flags, a).Register,
+			NewSessionCmd(flags, a).Register,
 			NewEngineCmd(flags, a).Register,
 		} {
 			root = register(root)

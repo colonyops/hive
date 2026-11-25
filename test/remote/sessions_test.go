@@ -297,8 +297,8 @@ func TestClientCLI_NamesAStoppedServerInTheError(t *testing.T) {
 	failed := NewClient(t).Hive("session", "show", "--json", serverB.Name+":abc123").Fails(t)
 
 	assert.Empty(t, strings.TrimSpace(failed.Stdout), "stdout is for JSON")
-	assert.Contains(t, failed.Stderr, serverB.Name)
-	assert.Contains(t, failed.Stderr, "hive servers ls")
+	assert.Contains(t, ErrorMessage(t, failed), serverB.Name)
+	assert.Contains(t, ErrorMessage(t, failed), "hive servers ls")
 }
 
 func TestClientCLI_TheRiskCheckOutlastsASlowGit(t *testing.T) {
@@ -350,7 +350,7 @@ func TestClientCLI_WorksWhenTheServerShellPrintsText(t *testing.T) {
 func TestClientCLI_RefusesARefToAServerNotInTheConfig(t *testing.T) {
 	failed := NewClient(t).Hive("session", "show", "gone:abc123").Fails(t)
 
-	assert.Contains(t, failed.Stderr, `unknown server "gone"`)
+	assert.Contains(t, ErrorMessage(t, failed), `unknown server "gone"`)
 }
 
 func TestClientCLI_ListsSessionsWithTheirServer(t *testing.T) {
@@ -372,8 +372,8 @@ func TestClientCLI_ListsTheSessionsOfEveryServer(t *testing.T) {
 	assert.Contains(t, listed, sessionWithServer{Server: serverB.Name, ID: onB.ID, Name: "every-b"})
 	assert.NotContains(t, r.Stdout, `"inbox"`, "a message from this machine cannot reach a server's inbox")
 
-	table := client.Hive("session", "list").Ok(t)
-	assert.Contains(t, table.Stdout, "SERVER")
+	piped := DecodeJSONLines[sessionWithServer](t, client.Hive("session", "list").Ok(t))
+	assert.Contains(t, piped, sessionWithServer{Server: serverA.Name, ID: onA.ID, Name: "every-a"}, "a pipe gets JSON Lines without --json")
 
 	local := client.Hive("session", "list", "--server", "local", "--json").Ok(t)
 	assert.Empty(t, strings.TrimSpace(local.Stdout), "the client has no sessions of its own")
@@ -403,7 +403,7 @@ func TestClientCLI_ServerFlagPicksTheServer(t *testing.T) {
 	assert.Equal(t, created.ID, shown.ID)
 
 	failed := client.Hive("session", "show", "--server", "nowhere", created.ID).Fails(t)
-	assert.Contains(t, failed.Stdout+failed.Stderr, `unknown server "nowhere"`)
+	assert.Contains(t, ErrorMessage(t, failed), `unknown server "nowhere"`)
 
 	client.Hive("new", "--server", serverA.Name, "--background", "--remote", tFixtureRepo, "via-new").Ok(t)
 	var made bool

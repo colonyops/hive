@@ -2067,12 +2067,115 @@
       "idempotentHint": false,
       "readOnlyHint": true
     },
-    "description": "List hive sessions. List hive sessions newest first, with each one's tags and state; slug is the tmux session name an attach targets. tags keeps only sessions that carry every tag given, compared case-insensitively, so polling with a tag such as auto finds the sessions waiting for an agent to pick them up. state keeps only active, recycled or corrupted sessions. An empty list means no session matched, not that hive is unreachable: a failed read is an error.",
+    "description": "Show one hive session. A sessionId is a bare id on server (default local) or \u003cserver\u003e:\u003cid\u003e. Answers with the session: server, id, name, slug, repo (the repository name), remote, path, inbox, state, group, clone_strategy, tags, created_at and updated_at.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "server": {
+          "description": "The server under servers: in config.yaml that holds the session: local (default) for this machine. A sessionId of the form \u003cserver\u003e:\u003cid\u003e wins over it.",
+          "type": "string"
+        },
+        "sessionId": {
+          "description": "The session id from session_list, or \u003cserver\u003e:\u003cid\u003e for a session on a server.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "type": "object"
+    },
+    "name": "session_get",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "clone_strategy": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "inbox": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "server": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
         "state": {
-          "description": "Only sessions in this state: active, recycled or corrupted.",
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unread": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "server",
+        "id",
+        "name",
+        "slug",
+        "repo",
+        "remote",
+        "path",
+        "state",
+        "tags",
+        "created_at",
+        "updated_at"
+      ],
+      "type": "object"
+    },
+    "title": "Show one hive session"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List hive sessions on this machine and every server. List hive sessions: this machine's first, then each server's under servers: in config.yaml in config order, each sorted by repository. Each session names its server; slug is the tmux session name an attach targets, and inbox and unread are given for this machine's sessions only. tags keeps only sessions that carry every tag given, compared case-insensitively, so polling with a tag such as auto finds the sessions waiting for an agent to pick them up. state keeps only active, recycled or corrupted sessions; without it, corrupted sessions are listed apart under corrupted. A server that does not answer is listed under offline with its error and does not fail the call; this machine, or the one server named, failing is an error. An empty list means no session matched.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "server": {
+          "description": "Only the sessions of this server under servers: in config.yaml; local is this machine. Without it the list holds this machine and every server.",
+          "type": "string"
+        },
+        "state": {
+          "description": "Only sessions in this state. Without it the list holds active and recycled sessions, and corrupted ones are reported apart.",
           "enum": [
             "active",
             "recycled",
@@ -2094,14 +2197,203 @@
       "type": "object"
     },
     "name": "session_list",
-    "title": "List hive sessions"
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "corrupted": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "clone_strategy": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "inbox": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "remote": {
+                "type": "string"
+              },
+              "repo": {
+                "type": "string"
+              },
+              "server": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "unread": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "server",
+              "id",
+              "name",
+              "slug",
+              "repo",
+              "remote",
+              "path",
+              "state",
+              "tags",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "offline": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "server": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "server",
+              "error"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "sessions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "clone_strategy": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "inbox": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "remote": {
+                "type": "string"
+              },
+              "repo": {
+                "type": "string"
+              },
+              "server": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "unread": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "server",
+              "id",
+              "name",
+              "slug",
+              "repo",
+              "remote",
+              "path",
+              "state",
+              "tags",
+              "created_at",
+              "updated_at"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "sessions"
+      ],
+      "type": "object"
+    },
+    "title": "List hive sessions on this machine and every server"
   },
   {
     "annotations": {
       "idempotentHint": false,
       "readOnlyHint": false
     },
-    "description": "Add and remove a session's tags. Add tags to one hive session and then remove tags from it, leaving its other tags in place, and return the session. Use one call to swap a tag, for example remove auto and add claimed when an orchestrator picks a session up; two agents that each add a tag both keep theirs. Tags compare case-insensitively, keep the first spelling, are at most 40 characters and cannot contain commas. This changes the session record only: it starts, stops and attaches nothing.",
+    "description": "Add and remove a session's tags. Add tags to one hive session and then remove tags from it, leaving its other tags in place, and answer with the session. A sessionId is a bare id on server (default local) or \u003cserver\u003e:\u003cid\u003e. Use one call to swap a tag, for example remove auto and add claimed when an orchestrator picks a session up; two agents that each add a tag both keep theirs. Tags compare case-insensitively, keep the first spelling, are at most 40 characters and cannot contain commas. This changes the session record only: it starts, stops and attaches nothing.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -2125,8 +2417,12 @@
             "array"
           ]
         },
+        "server": {
+          "description": "The server under servers: in config.yaml that holds the session: local (default) for this machine. A sessionId of the form \u003cserver\u003e:\u003cid\u003e wins over it.",
+          "type": "string"
+        },
         "sessionId": {
-          "description": "Session id, from session_list.",
+          "description": "The session id from session_list, or \u003cserver\u003e:\u003cid\u003e for a session on a server.",
           "type": "string"
         }
       },
@@ -2136,7 +2432,215 @@
       "type": "object"
     },
     "name": "session_tags_update",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "clone_strategy": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "inbox": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "server": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unread": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "server",
+        "id",
+        "name",
+        "slug",
+        "repo",
+        "remote",
+        "path",
+        "state",
+        "tags",
+        "created_at",
+        "updated_at"
+      ],
+      "type": "object"
+    },
     "title": "Add and remove a session's tags"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Rename a session, change its group or edit its tags. Change a session's name, group or tags and answer with the session. A sessionId is a bare id on server (default local) or \u003cserver\u003e:\u003cid\u003e. Tag edits apply in order: clearTags, then addTag, then removeTag. Tags compare case-insensitively, keep the first spelling, are at most 40 characters and cannot contain commas. This changes the session record only: it starts, stops and attaches nothing.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "addTag": {
+          "description": "Tags to add.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "clearGroup": {
+          "description": "Take the session out of its group.",
+          "type": "boolean"
+        },
+        "clearTags": {
+          "description": "Remove every tag before the adds.",
+          "type": "boolean"
+        },
+        "group": {
+          "description": "Put the session in this group.",
+          "type": "string"
+        },
+        "name": {
+          "description": "A new name; the slug follows it.",
+          "type": "string"
+        },
+        "removeTag": {
+          "description": "Tags to remove, after the adds.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "server": {
+          "description": "The server under servers: in config.yaml that holds the session: local (default) for this machine. A sessionId of the form \u003cserver\u003e:\u003cid\u003e wins over it.",
+          "type": "string"
+        },
+        "sessionId": {
+          "description": "The session id from session_list, or \u003cserver\u003e:\u003cid\u003e for a session on a server.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "type": "object"
+    },
+    "name": "session_update",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "clone_strategy": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "inbox": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "server": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "unread": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "server",
+        "id",
+        "name",
+        "slug",
+        "repo",
+        "remote",
+        "path",
+        "state",
+        "tags",
+        "created_at",
+        "updated_at"
+      ],
+      "type": "object"
+    },
+    "title": "Rename a session, change its group or edit its tags"
   },
   {
     "annotations": {

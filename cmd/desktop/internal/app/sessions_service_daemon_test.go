@@ -3,20 +3,17 @@ package app
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemon"
+	"github.com/colonyops/hive/internal/hive/daemon/daemontest"
 	"github.com/colonyops/hive/internal/hive/daemonclient"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
-	"github.com/colonyops/hive/internal/hive/hivetest"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
-	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
 
 // runTestDaemon serves a daemon over its own hive.db, so anything the
@@ -27,42 +24,9 @@ func runTestDaemon(t *testing.T, mux *fakeMux) *daemonclient.Client {
 	return daemonclient.New(daemonclient.Options{Dialer: daemonclient.UnixDialer(runTestDaemonSocket(t, mux)), Logger: zerolog.Nop()})
 }
 
-// runTestDaemonSocket is runTestDaemon's daemon, answered by its socket path.
 func runTestDaemonSocket(t *testing.T, mux *fakeMux, configure ...func(*daemon.Options)) string {
 	t.Helper()
-	dataDir := t.TempDir()
-	ctx, cancel := context.WithCancel(t.Context())
-	ready := make(chan string, 1)
-	done := make(chan error, 1)
-	opts := daemon.Options{
-		Config:  hivetest.LoadConfig(t, dataDir),
-		Ports:   hive.Ports{Executor: &executiltest.Exec{}, Mux: mux, DataDir: dataDir, Logger: zerolog.Nop()},
-		Version: "test",
-		OnReady: func(path string) { ready <- path },
-	}
-	for _, apply := range configure {
-		apply(&opts)
-	}
-	go func() {
-		done <- daemon.Run(ctx, opts)
-	}()
-	t.Cleanup(func() {
-		cancel()
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			t.Error("daemon did not stop")
-		}
-	})
-	select {
-	case socket := <-ready:
-		return socket
-	case err := <-done:
-		t.Fatalf("daemon exited before it listened: %v", err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("daemon did not start listening")
-	}
-	return ""
+	return daemontest.Socket(t, mux, configure...)
 }
 
 func TestSessionsServiceRunsOverTheDaemon(t *testing.T) {

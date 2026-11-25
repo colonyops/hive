@@ -10,7 +10,6 @@ import (
 	"github.com/colonyops/hive/internal/ops/diagnostics"
 	"github.com/colonyops/hive/internal/ops/inbox"
 	"github.com/colonyops/hive/internal/ops/mcpops"
-	"github.com/colonyops/hive/internal/ops/sessions"
 )
 
 // register mounts every tool this adapter serves. The tool table is the
@@ -25,9 +24,6 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 	mcpops.Mount(srv, inbox.InboxEventList, ctrl.ListInboxItemEvents, ctrl.toolError)
 	mcpops.Mount(srv, inbox.InboxSessionList, ctrl.ListItemSessions, ctrl.toolError)
 	mcpops.Mount(srv, inbox.SourceRefresh, ctrl.RefreshSources, ctrl.toolError)
-
-	mcpops.Mount(srv, sessions.SessionList, ctrl.ListSessions, ctrl.toolError)
-	mcpops.Mount(srv, sessions.SessionTagsUpdate, ctrl.EditSessionTags, ctrl.toolError)
 
 	mcpops.Mount(srv, actions.ActionList, ctrl.ListActions, ctrl.toolError)
 	mcpops.Mount(srv, actions.ActionRunList, ctrl.ListActionRuns, ctrl.toolError)

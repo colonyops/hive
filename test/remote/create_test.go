@@ -19,8 +19,7 @@ func TestClientCLI_CreateUsesTheServerAgentProfiles(t *testing.T) {
 	serverA.DeleteOnCleanup(t, DecodeJSON[Session](t, r).ID)
 
 	failed := client.HiveOn(serverA, "session", "create", "--background", "--remote", tFixtureRepo, "--agent", "nope", "no-agent").Fails(t)
-	// hive prints its errors to stdout.
-	assert.Contains(t, failed.Stdout+failed.Stderr, `server server-a has no agent "nope"`)
+	assert.Contains(t, ErrorMessage(t, failed), `server server-a has no agent "nope"`)
 }
 
 func TestClientCLI_CreatePrintsHowToAttach(t *testing.T) {

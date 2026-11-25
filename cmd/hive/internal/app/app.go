@@ -149,12 +149,6 @@ func (a *App) DefaultServer() string {
 	return session.LocalServer
 }
 
-// TargetsServer reports whether SessionAPI reaches a server, where paths and
-// tmux sessions on this machine mean nothing.
-func (a *App) TargetsServer() bool {
-	return a.targetServer != ""
-}
-
 // DaemonClient reaches the daemon for this data directory. It needs only the
 // logger, the config, and ConfigPath, so commands that skip the engine can
 // call it. With autoStart, a dial that finds no daemon starts this binary as

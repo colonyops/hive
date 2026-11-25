@@ -267,6 +267,9 @@ func main() {
 	if core.MountAPI(mcpsrv.ChatsPathPrefix, mcpsrv.NewChats(core, logger, mcpsrv.Options{Version: build.Version}, chatsToken).Handler()) {
 		logger.Info().Str("path", mcpsrv.ChatsPathPrefix).Msg("chats MCP server mounted")
 	}
+	if core.MountAPI(mcpsrv.SessionsPathPrefix, mcpsrv.NewSessions(core, logger, mcpsrv.Options{Version: build.Version}, chatsToken).Handler()) {
+		logger.Info().Str("path", mcpsrv.SessionsPathPrefix).Msg("sessions MCP server mounted")
+	}
 	terminal := wailsui.TerminalTransport{}
 	popupTerminal := wailsui.PopupTerminalTransport{}
 	agents := wailsui.AgentsTransport{}

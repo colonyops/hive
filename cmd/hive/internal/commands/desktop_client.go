@@ -23,6 +23,9 @@ import (
 
 const (
 	desktopCallTimeout = 10 * time.Second
+	// sessionControlTimeout is above the daemon client's delete and risk-check
+	// bounds and leaves room for a clone.
+	sessionControlTimeout = 10 * time.Minute
 
 	callerFlag      = "caller"
 	desktopURLFlag  = "desktop-url"

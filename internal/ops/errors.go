@@ -49,11 +49,21 @@ func ParseKind(msg string) (Kind, bool) {
 
 // Error is an error with a Kind.
 type Error struct {
-	Kind Kind
-	Msg  string
+	Kind  Kind
+	Msg   string
+	cause error
 }
 
 func (e *Error) Error() string { return string(e.Kind) + ": " + e.Msg }
+
+// Unwrap returns the error Wrap was given, so a caller in the same process
+// can still match it with errors.As. It never crosses a wire.
+func (e *Error) Unwrap() error { return e.cause }
+
+// Wrap is Errorf with cause kept for errors.Is and errors.As.
+func Wrap(kind Kind, cause error, format string, args ...any) *Error {
+	return &Error{Kind: kind, Msg: fmt.Sprintf(format, args...), cause: cause}
+}
 
 func Errorf(kind Kind, format string, args ...any) *Error {
 	return &Error{Kind: kind, Msg: fmt.Sprintf(format, args...)}
