@@ -19,6 +19,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/daemon/daemonpath"
 	"github.com/colonyops/hive/internal/hive/daemon/gen/hive/daemon/v1/daemonv1connect"
+	"github.com/colonyops/hive/internal/hive/daemon/wire"
 	"github.com/colonyops/hive/internal/hive/sessionapi"
 	"github.com/colonyops/hive/pkg/flock"
 	"github.com/colonyops/hive/pkg/logutils"
@@ -105,6 +106,11 @@ func Run(ctx context.Context, opts Options) error {
 
 	startedAt := time.Now()
 	engine := runtime.Engine()
+	// The daemon serves Drive at wire.EnginePath for as long as it runs, and
+	// the server's CLI and agents write documents beside it.
+	if err := engine.Drive().Watch(runCtx); err != nil {
+		logger.Warn().Err(err).Msg("drive watcher unavailable; documents written by other processes stay unlisted")
+	}
 	api := sessionapi.NewLocal(engine)
 	metrics := newMetrics(logger, startedAt, api.ListSessions)
 	loop := newStatusLoop(statusLoopDeps{
@@ -137,6 +143,7 @@ func Run(ctx context.Context, opts Options) error {
 	interceptors := connect.WithInterceptors(metrics.interceptor())
 	mux.Handle(daemonv1connect.NewSessionServiceHandler(sessions, interceptors))
 	mux.Handle(daemonv1connect.NewDaemonServiceHandler(control, interceptors))
+	mux.Handle(wire.EnginePath, engineHandler(logger, engine, opts.Version))
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.Handle("GET /metrics", metrics.handler())
 

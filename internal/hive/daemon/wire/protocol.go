@@ -15,6 +15,22 @@ const (
 	MinProtocolVersion = 0
 )
 
+// CatalogVersion is the revision of the operation catalog this build serves
+// at the daemon's /mcp and calls there. MinCatalogVersion is the oldest it
+// still calls. Raise CatalogVersion for a change that breaks an older peer's
+// engine calls, such as a renamed tool or a changed field meaning, and
+// MinCatalogVersion too when this client cannot work around it. A new tool or
+// field raises neither: an older daemon answers a new tool with an
+// *UnknownToolError, and refuses a new input field as invalid, so a client
+// sends a new field only when its caller set it.
+//
+// Catalog 0 is a daemon that serves no engine operations. Its session calls
+// still work: the catalog range does not gate them.
+const (
+	CatalogVersion    = 1
+	MinCatalogVersion = 1
+)
+
 // IncompatibleError is a daemon whose protocol this client does not support.
 type IncompatibleError struct {
 	DaemonProtocol int
@@ -32,6 +48,48 @@ func (e *IncompatibleError) Error() string {
 func CheckProtocol(daemonProtocol int, daemonVersion, clientVersion string) error {
 	if daemonProtocol < MinProtocolVersion || daemonProtocol > ProtocolVersion {
 		return &IncompatibleError{DaemonProtocol: daemonProtocol, DaemonVersion: daemonVersion, ClientVersion: clientVersion}
+	}
+	return nil
+}
+
+// EnginePath is where a daemon serves the engine operations of the catalog,
+// over MCP on the same connection as its Connect services.
+const EnginePath = "/mcp"
+
+// CatalogError is a daemon whose catalog this client does not call.
+type CatalogError struct {
+	DaemonCatalog int
+	DaemonVersion string
+	ClientVersion string
+}
+
+func (e *CatalogError) Error() string {
+	if e.DaemonCatalog == 0 {
+		return fmt.Sprintf("daemon hive %s serves no engine operations; this hive %s calls catalog %d to %d; install the same hive version on both machines",
+			orUnknown(e.DaemonVersion), orUnknown(e.ClientVersion), MinCatalogVersion, CatalogVersion)
+	}
+	return fmt.Sprintf("daemon hive %s serves operation catalog %d; this hive %s calls catalog %d to %d; install the same hive version on both machines",
+		orUnknown(e.DaemonVersion), e.DaemonCatalog, orUnknown(e.ClientVersion), MinCatalogVersion, CatalogVersion)
+}
+
+// UnknownToolError is an engine tool the daemon does not have, as an older
+// hive of the same catalog lacks a tool added since.
+type UnknownToolError struct {
+	Tool          string
+	DaemonVersion string
+	ClientVersion string
+}
+
+func (e *UnknownToolError) Error() string {
+	return fmt.Sprintf("daemon hive %s has no %s, which this hive %s calls; install the same hive version on both machines",
+		orUnknown(e.DaemonVersion), e.Tool, orUnknown(e.ClientVersion))
+}
+
+// CheckCatalog returns a *CatalogError for a daemon catalog outside
+// MinCatalogVersion to CatalogVersion.
+func CheckCatalog(daemonCatalog int, daemonVersion, clientVersion string) error {
+	if daemonCatalog < MinCatalogVersion || daemonCatalog > CatalogVersion {
+		return &CatalogError{DaemonCatalog: daemonCatalog, DaemonVersion: daemonVersion, ClientVersion: clientVersion}
 	}
 	return nil
 }

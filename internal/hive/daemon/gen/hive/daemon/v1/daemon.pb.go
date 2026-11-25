@@ -69,8 +69,11 @@ type HelloResponse struct {
 	// protocol_version is the daemon's wire protocol. A client refuses a daemon
 	// outside the range it supports. Daemons before the field send 0.
 	ProtocolVersion int32 `protobuf:"varint,6,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// catalog_version is the revision of the operation catalog the daemon
+	// serves at /mcp. Daemons that serve no engine operations send 0.
+	CatalogVersion int32 `protobuf:"varint,7,opt,name=catalog_version,json=catalogVersion,proto3" json:"catalog_version,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *HelloResponse) Reset() {
@@ -141,6 +144,13 @@ func (x *HelloResponse) GetStatusAvailable() bool {
 func (x *HelloResponse) GetProtocolVersion() int32 {
 	if x != nil {
 		return x.ProtocolVersion
+	}
+	return 0
+}
+
+func (x *HelloResponse) GetCatalogVersion() int32 {
+	if x != nil {
+		return x.CatalogVersion
 	}
 	return 0
 }
@@ -4901,7 +4911,7 @@ var File_hive_daemon_v1_daemon_proto protoreflect.FileDescriptor
 const file_hive_daemon_v1_daemon_proto_rawDesc = "" +
 	"\n" +
 	"\x1bhive/daemon/v1/daemon.proto\x12\x0ehive.daemon.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x0e\n" +
-	"\fHelloRequest\"\xe7\x01\n" +
+	"\fHelloRequest\"\x90\x02\n" +
 	"\rHelloResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x10\n" +
 	"\x03pid\x18\x02 \x01(\x05R\x03pid\x12\x19\n" +
@@ -4909,7 +4919,8 @@ const file_hive_daemon_v1_daemon_proto_rawDesc = "" +
 	"\n" +
 	"started_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12)\n" +
 	"\x10status_available\x18\x05 \x01(\bR\x0fstatusAvailable\x12)\n" +
-	"\x10protocol_version\x18\x06 \x01(\x05R\x0fprotocolVersion\"\x0f\n" +
+	"\x10protocol_version\x18\x06 \x01(\x05R\x0fprotocolVersion\x12'\n" +
+	"\x0fcatalog_version\x18\a \x01(\x05R\x0ecatalogVersion\"\x0f\n" +
 	"\rHealthRequest\"\xc8\x03\n" +
 	"\x0eHealthResponse\x12\x13\n" +
 	"\x05db_ok\x18\x01 \x01(\bR\x04dbOk\x12\x19\n" +

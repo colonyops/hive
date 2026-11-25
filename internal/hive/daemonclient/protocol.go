@@ -47,6 +47,7 @@ type protocolGate struct {
 	mu      sync.Mutex
 	checked bool
 	err     error
+	info    Info
 }
 
 func (g *protocolGate) reset() {
@@ -54,40 +55,48 @@ func (g *protocolGate) reset() {
 	defer g.mu.Unlock()
 	g.checked = false
 	g.err = nil
+	g.info = Info{}
 }
 
-func (g *protocolGate) verdict() (checked bool, err error) {
+func (g *protocolGate) verdict() (checked bool, info Info, err error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return g.checked, g.err
+	return g.checked, g.info, g.err
 }
 
 func (g *protocolGate) check(ctx context.Context) error {
-	if checked, err := g.verdict(); checked {
-		return err
+	_, err := g.checkedInfo(ctx)
+	return err
+}
+
+// checkedInfo is check, answering the Hello it checked. It reads both under
+// one lock, so a dial that resets the gate cannot hand back an empty Hello.
+func (g *protocolGate) checkedInfo(ctx context.Context) (Info, error) {
+	if checked, info, err := g.verdict(); checked {
+		return info, err
 	}
 	g.slow.Lock()
 	defer g.slow.Unlock()
-	if checked, err := g.verdict(); checked {
-		return err
+	if checked, info, err := g.verdict(); checked {
+		return info, err
 	}
 	// Not under mu: Hello may dial, and a dial calls reset. One attempt: the read
 	// behind this check retries by itself, and two retries multiply the wait.
 	info, err := g.client.helloOnce(ctx)
 	if err != nil {
 		// Not recorded: a transport failure says nothing about the protocol.
-		return err
+		return Info{}, err
 	}
 	if g.replaceOlder {
 		if info, err = g.replaceIfOlder(ctx, info); err != nil {
-			return err
+			return Info{}, err
 		}
 	}
 	err = wire.CheckProtocol(info.ProtocolVersion, info.Version, g.clientVersion)
 	g.mu.Lock()
-	g.checked, g.err = true, err
+	g.checked, g.err, g.info = true, err, info
 	g.mu.Unlock()
-	return err
+	return info, err
 }
 
 // replaceIfOlder stops a daemon that is an older release than this client and

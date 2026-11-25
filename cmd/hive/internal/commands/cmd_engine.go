@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
@@ -14,6 +15,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/opscli"
 	"github.com/colonyops/hive/internal/domain/hc"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/engineops"
 	"github.com/colonyops/hive/internal/hive/servers"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -107,7 +109,36 @@ func (cmd *EngineCmd) Register(root *cli.Command) *cli.Command {
 		}
 	}
 	keepSessionSpellings(root)
+	addServerFlags(root)
 	return root
+}
+
+// addServerFlags gives every generated engine command outside the session
+// toolsets the --server of the session commands, so --server picks the
+// server the same way for every engine operation.
+func addServerFlags(root *cli.Command) {
+	for _, op := range catalog.All() {
+		info := op.Info()
+		if info.Owner != ops.OwnerEngine || isSessionOp(info) {
+			continue
+		}
+		c := lookupPath(root, enginePath(info))
+		if c == nil {
+			panic(fmt.Sprintf("no command for %s", info.Name))
+		}
+		if slices.ContainsFunc(c.Flags, func(f cli.Flag) bool { return slices.Contains(f.Names(), serverFlagName) }) {
+			panic(fmt.Sprintf("hive %s already has --%s", strings.Join(enginePath(info), " "), serverFlagName))
+		}
+		c.Flags = append(c.Flags, &cli.StringFlag{
+			Name:    serverFlagName,
+			Usage:   "run on the named server under servers: (local is this machine)",
+			Sources: cli.EnvVars("HIVE_SERVER"),
+		})
+	}
+}
+
+func isSessionOp(info ops.Info) bool {
+	return info.Toolset == sessions.Toolset || info.Toolset == sessions.ControlToolset
 }
 
 // keepSessionSpellings gives the generated session commands the spellings of
@@ -127,7 +158,7 @@ func keepSessionSpellings(root *cli.Command) {
 		for _, f := range c.Flags {
 			switch f := f.(type) {
 			case *cli.StringFlag:
-				if f.Name == "server" {
+				if f.Name == serverFlagName {
 					f.Sources = cli.EnvVars("HIVE_SERVER")
 				}
 				f.Aliases = append(f.Aliases, legacyAliases[info.Name][f.Name]...)
@@ -192,18 +223,35 @@ func engineCallerFlag() cli.Flag {
 }
 
 func (cmd *EngineCmd) run(ctx context.Context, c *cli.Command, info ops.Info, args map[string]any) (any, error) {
+	server := ""
+	if !isSessionOp(info) {
+		server = c.String(serverFlagName)
+	}
+	remote := server != "" && server != session.LocalServer
+	if remote {
+		dropLocalCaller(args)
+	}
 	if info.Toolset == driveops.Toolset {
 		if err := refuseSpaceFlags(c); err != nil {
 			return nil, err
 		}
-		if cmd.isChat(ctx, args) {
+		if !remote && cmd.isChat(ctx, args) {
 			return cmd.forward(ctx, info, args)
 		}
 	}
 	if info.Name == sessions.SessionCreate.Name {
 		return cmd.createSession(ctx, c, args)
 	}
-	return callEngine(ctx, cmd.app, info.Name, args, c.Root().ErrWriter)
+	return callEngineOn(ctx, cmd.app, info.Name, server, args, c.Root().ErrWriter)
+}
+
+// dropLocalCaller makes a caller that came from HIVE_AGENT_SESSION global:
+// that id names a session or chat on this machine, not on a server.
+func dropLocalCaller(args map[string]any) {
+	env := strings.TrimSpace(os.Getenv(sessionsvc.AgentSessionEnv))
+	if caller, ok := args[ops.CallerField].(string); ok && env != "" && caller == env {
+		args[ops.CallerField] = sessionsvc.CallerGlobal
+	}
 }
 
 // createSession runs hive session create like hive new: from the working
@@ -281,7 +329,7 @@ func (cmd *EngineCmd) print(ctx context.Context, c *cli.Command, info ops.Info, 
 	case tasks.TaskListOut:
 		renderColoredTree(w, out.Tasks)
 	case tasks.TaskGetOut:
-		cmd.renderTask(ctx, w, out)
+		cmd.renderTask(ctx, w, out, c.String(serverFlagName))
 	case hc.ContextBlock:
 		renderMarkdown(w, out.String())
 	default:
@@ -290,11 +338,23 @@ func (cmd *EngineCmd) print(ctx context.Context, c *cli.Command, info ops.Info, 
 	return nil
 }
 
-func (cmd *EngineCmd) renderTask(ctx context.Context, w io.Writer, out tasks.TaskGetOut) {
+// renderTask looks up the task's epic and blockers on the server that holds
+// the task.
+func (cmd *EngineCmd) renderTask(ctx context.Context, w io.Writer, out tasks.TaskGetOut, server string) {
 	item := out.Task
+	getItem := cmd.app.HC().GetItem
+	if server != "" && server != session.LocalServer {
+		getItem = func(ctx context.Context, id string) (hc.Item, error) {
+			got, err := callEngineOn(ctx, cmd.app, tasks.TaskGet.Name, server, map[string]any{"taskId": id}, io.Discard)
+			if err != nil {
+				return hc.Item{}, err
+			}
+			return got.(tasks.TaskGetOut).Task, nil
+		}
+	}
 	var epicTitle string
 	if item.EpicID != "" {
-		if epic, err := cmd.app.HC().GetItem(ctx, item.EpicID); err != nil {
+		if epic, err := getItem(ctx, item.EpicID); err != nil {
 			cmd.app.Logger.Debug().Err(err).Str("epic_id", item.EpicID).Msg("failed to resolve epic title")
 		} else {
 			epicTitle = epic.Title
@@ -302,7 +362,7 @@ func (cmd *EngineCmd) renderTask(ctx context.Context, w io.Writer, out tasks.Tas
 	}
 	var blockers []hc.Item
 	for _, id := range item.BlockerIDs {
-		b, err := cmd.app.HC().GetItem(ctx, id)
+		b, err := getItem(ctx, id)
 		if err != nil {
 			cmd.app.Logger.Debug().Err(err).Str("blocker_id", id).Msg("failed to fetch blocker item")
 			continue
@@ -321,10 +381,17 @@ func isTerminal(w io.Writer) bool {
 // operations reach every server through a.Servers, and write their progress
 // to progress.
 func callEngine(ctx context.Context, a *app.App, name string, args map[string]any, progress io.Writer) (any, error) {
+	return callEngineOn(ctx, a, name, "", args, progress)
+}
+
+// callEngineOn is callEngine on the named server, or on the server of a
+// qualified caller when server is empty.
+func callEngineOn(ctx context.Context, a *app.App, name, server string, args map[string]any, progress io.Writer) (any, error) {
 	fleet := engineops.WithFleet(func() *servers.Fleet { return a.Servers })
-	for _, op := range engineops.New(a.Logger, a.Engine, fleet, engineops.WithProgress(progress)).Ops() {
+	handlers := engineops.New(a.Logger, a.Engine, fleet, engineops.WithProgress(progress))
+	for _, op := range handlers.Ops() {
 		if op.Spec.Info().Name == name {
-			return op.Call(ctx, args)
+			return handlers.CallOn(ctx, op, server, args)
 		}
 	}
 	return nil, fmt.Errorf("no engine operation %s", name)

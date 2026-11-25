@@ -84,6 +84,9 @@ type Op struct {
 	Call func(ctx context.Context, args map[string]any) (any, error)
 	// Mount registers the operation as a tool on srv.
 	Mount func(srv *mcp.Server, mapErr func(error) error)
+	// Decode reads another server's tool result as the handler's answer, so a
+	// surface shows a remote answer as it shows a local one.
+	Decode func(res *mcp.CallToolResult) (any, error)
 }
 
 // Ops lists every engine operation of the catalog with its handler.
@@ -126,7 +129,8 @@ func bind[In, Out any](handlers *Handlers, s ops.Spec[In], h func(context.Contex
 			}
 			return h(ctx, in)
 		},
-		Mount: func(srv *mcp.Server, mapErr func(error) error) { mcpops.Mount(srv, s, h, mapErr) },
+		Mount:  func(srv *mcp.Server, mapErr func(error) error) { mcpops.Mount(srv, s, h, mapErr) },
+		Decode: decodeResult[Out],
 	}
 }
 
@@ -218,7 +222,8 @@ func opError(err error, what string) error {
 	case errors.Is(err, hc.ErrInvalidTree), errors.Is(err, hc.ErrInvalidItemType), errors.Is(err, hc.ErrInvalidStatus),
 		errors.Is(err, tagset.ErrInvalid), errors.Is(err, wire.ErrRemoteRequired):
 		kind = ops.KindInvalid
-	case errors.As(err, new(*wire.UnreachableError)):
+	case errors.As(err, new(*wire.UnreachableError)), errors.As(err, new(*wire.CatalogError)),
+		errors.As(err, new(*wire.IncompatibleError)), errors.As(err, new(*wire.UnknownToolError)):
 		kind = ops.KindUnavailable
 	}
 	return ops.Wrap(kind, err, "%s: %v", what, err)

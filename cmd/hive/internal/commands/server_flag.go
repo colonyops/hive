@@ -8,11 +8,13 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 )
 
+const serverFlagName = "server"
+
 // serverFlag picks the server under servers: that a session command acts on.
 // A bare session id then names a session there; "<server>:<id>" still wins.
 func serverFlag(dest *string) cli.Flag {
 	return &cli.StringFlag{
-		Name:        "server",
+		Name:        serverFlagName,
 		Usage:       "act on the named server under servers: (local is this machine)",
 		Sources:     cli.EnvVars("HIVE_SERVER"),
 		Destination: dest,

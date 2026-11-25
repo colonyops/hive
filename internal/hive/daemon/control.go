@@ -49,6 +49,7 @@ func (c *controlServer) Hello(context.Context, *connect.Request[daemonv1.HelloRe
 		StartedAt:       timestamppb.New(c.startedAt),
 		StatusAvailable: c.api.StatusAvailable(),
 		ProtocolVersion: wire.ProtocolVersion,
+		CatalogVersion:  wire.CatalogVersion,
 	}), nil
 }
 
